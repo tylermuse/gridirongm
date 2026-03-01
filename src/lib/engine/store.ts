@@ -51,6 +51,7 @@ interface GameStore extends LeagueState {
     counterpartTeamId: string,
   ) => boolean;
   respondToTradeProposal: (proposalId: string, accept: boolean) => boolean;
+  solicitTradingBlockProposals: (playerIds: string[], pickIds: string[], seekPositions: Position[]) => void;
   // PRD-07: Scouting
   setScoutingLevel: (level: 0 | 1 | 2 | 3 | 4) => void;
   deepScoutPlayer: (playerId: string) => void;
@@ -518,12 +519,73 @@ function computeSeasonAwards(state: LeagueState): { award: string; playerId: str
   }
 
   const rookies = activePlayers.filter(p => p.experience === 1 && p.stats.gamesPlayed >= 10);
-  if (rookies.length > 0) {
-    const roy = rookies.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
-    awards.push({ award: 'Rookie of the Year', playerId: roy.id, teamId: roy.teamId! });
+  const offensiveRookies = rookies.filter(p => ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position));
+  if (offensiveRookies.length > 0) {
+    const oroy = offensiveRookies.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+    awards.push({ award: 'Offensive ROY', playerId: oroy.id, teamId: oroy.teamId! });
+  }
+  const defensiveRookies = rookies.filter(p => ['DL', 'LB', 'CB', 'S'].includes(p.position));
+  if (defensiveRookies.length > 0) {
+    const droy = defensiveRookies.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+    awards.push({ award: 'Defensive ROY', playerId: droy.id, teamId: droy.teamId! });
   }
 
   return awards;
+}
+
+// ---------------------------------------------------------------------------
+// All-League / All-Rookie team selection
+// ---------------------------------------------------------------------------
+
+/** Positional slot counts for All-League teams (mirrors NFL All-Pro format). */
+const ALL_LEAGUE_SLOTS: { position: Position; count: number }[] = [
+  { position: 'QB', count: 1 },
+  { position: 'RB', count: 1 },
+  { position: 'WR', count: 3 },
+  { position: 'TE', count: 1 },
+  { position: 'OL', count: 2 },
+  { position: 'DL', count: 2 },
+  { position: 'LB', count: 3 },
+  { position: 'CB', count: 2 },
+  { position: 'S', count: 1 },
+  { position: 'K', count: 1 },
+  { position: 'P', count: 1 },
+];
+
+function computeAllLeagueTeams(state: LeagueState): {
+  first: { position: Position; playerId: string; teamId: string }[];
+  second: { position: Position; playerId: string; teamId: string }[];
+  allRookie: { position: Position; playerId: string; teamId: string }[];
+} {
+  const activePlayers = state.players.filter(p => !p.retired && p.teamId && p.stats.gamesPlayed >= 10);
+  const rookies = activePlayers.filter(p => p.experience === 1);
+
+  const first: { position: Position; playerId: string; teamId: string }[] = [];
+  const second: { position: Position; playerId: string; teamId: string }[] = [];
+  const allRookie: { position: Position; playerId: string; teamId: string }[] = [];
+
+  for (const { position, count } of ALL_LEAGUE_SLOTS) {
+    const posPlayers = activePlayers
+      .filter(p => p.position === position)
+      .sort((a, b) => b.ratings.overall - a.ratings.overall);
+
+    for (let i = 0; i < count && i < posPlayers.length; i++) {
+      first.push({ position, playerId: posPlayers[i].id, teamId: posPlayers[i].teamId! });
+    }
+    for (let i = count; i < count * 2 && i < posPlayers.length; i++) {
+      second.push({ position, playerId: posPlayers[i].id, teamId: posPlayers[i].teamId! });
+    }
+
+    // All-Rookie: 1 per position
+    const posRookies = rookies
+      .filter(p => p.position === position)
+      .sort((a, b) => b.ratings.overall - a.ratings.overall);
+    if (posRookies.length > 0) {
+      allRookie.push({ position, playerId: posRookies[0].id, teamId: posRookies[0].teamId! });
+    }
+  }
+
+  return { first, second, allRookie };
 }
 
 // ---------------------------------------------------------------------------
@@ -618,6 +680,7 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   tradeProposals: [],
   scoutingLevel: 1,
   draftScoutingData: {},
+  finalsMvpPlayerId: null,
 };
 
 export const useGameStore = create<GameStore>()(
@@ -653,6 +716,7 @@ export const useGameStore = create<GameStore>()(
             tradeProposals: [],
             scoutingLevel: 1,
             draftScoutingData: {},
+            finalsMvpPlayerId: null,
           });
           return;
         } catch (error) {
@@ -709,6 +773,7 @@ export const useGameStore = create<GameStore>()(
           tradeProposals: [],
           scoutingLevel: 1,
           draftScoutingData: {},
+          finalsMvpPlayerId: null,
         });
       },
 
@@ -907,6 +972,7 @@ export const useGameStore = create<GameStore>()(
             : existingChampions;
 
         let newNewsItems = state.newsItems;
+        let finalsMvpPlayerId = state.finalsMvpPlayerId;
         if (superBowl?.winnerId && !existingChampions.find(c => c.season === state.season)) {
           const champTeam = state.teams.find(t => t.id === superBowl.winnerId);
           if (champTeam) {
@@ -919,9 +985,29 @@ export const useGameStore = create<GameStore>()(
               isUserTeam: champTeam.id === state.userTeamId,
             })];
           }
+          // Determine Finals MVP: best performer from winning team in the SB game
+          if (matchupId === 'super-bowl') {
+            const winnerRoster = state.players.filter(p => p.teamId === winnerId);
+            const winnerIds = new Set(winnerRoster.map(p => p.id));
+            let bestScore = -1;
+            let bestId = '';
+            for (const [pid, stats] of Object.entries(result.playerStats)) {
+              if (!winnerIds.has(pid)) continue;
+              const s = stats as Partial<PlayerStats>;
+              const score = (s.passYards ?? 0) * 0.04 + (s.passTDs ?? 0) * 6
+                + (s.rushYards ?? 0) * 0.1 + (s.rushTDs ?? 0) * 6
+                + (s.receivingYards ?? 0) * 0.1 + (s.receivingTDs ?? 0) * 6
+                + (s.tackles ?? 0) * 1 + (s.sacks ?? 0) * 3 + (s.defensiveINTs ?? 0) * 5;
+              if (score > bestScore) {
+                bestScore = score;
+                bestId = pid;
+              }
+            }
+            if (bestId) finalsMvpPlayerId = bestId;
+          }
         }
 
-        set({ playoffBracket: updatedBracket, champions: newChampions, newsItems: newNewsItems });
+        set({ playoffBracket: updatedBracket, champions: newChampions, newsItems: newNewsItems, finalsMvpPlayerId });
       },
 
       simNextPlayoffGame: () => {
@@ -1523,6 +1609,106 @@ export const useGameStore = create<GameStore>()(
         return success;
       },
 
+      solicitTradingBlockProposals: (blockedPlayerIds: string[], blockedPickIds: string[], seekPositions: Position[]) => {
+        const state = get();
+        if (state.phase !== 'regular' || state.week > 12) return;
+
+        const blockedPlayers = blockedPlayerIds
+          .map(id => state.players.find(p => p.id === id))
+          .filter((p): p is Player => !!p && p.teamId === state.userTeamId);
+        const userTeam = state.teams.find(t => t.id === state.userTeamId);
+        const blockedPicks = blockedPickIds
+          .map(id => userTeam?.draftPicks.find(pk => pk.id === id))
+          .filter((pk): pk is DraftPick => !!pk);
+
+        if (blockedPlayers.length === 0 && blockedPicks.length === 0) return;
+
+        const totalBlockedValue = blockedPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
+          + blockedPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
+
+        const blockedPositions = new Set(blockedPlayers.map(p => p.position));
+        const seekPosSet = new Set(seekPositions);
+        const proposals: TradeProposal[] = [];
+
+        const aiTeams = state.teams.filter(t => t.id !== state.userTeamId);
+        for (const aiTeam of aiTeams) {
+          const aiRoster = state.players.filter(p => p.teamId === aiTeam.id && !p.retired && !p.injury);
+
+          // Interest: does the AI need any of the blocked positions?
+          const needsBlockedPos = [...blockedPositions].some(pos => {
+            const count = aiRoster.filter(p => p.position === pos).length;
+            return count <= ROSTER_LIMITS[pos].min;
+          });
+
+          // 60% chance if they need the position, 15% random interest otherwise
+          if (!needsBlockedPos && Math.random() > 0.15) continue;
+          if (needsBlockedPos && Math.random() > 0.60) continue;
+
+          // Build offer: prefer players at positions the user seeks
+          const offerCandidates = aiRoster
+            .filter(p => !blockedPositions.has(p.position)) // don't offer same position back
+            .sort((a, b) => {
+              const aSeek = seekPosSet.has(a.position) ? 1 : 0;
+              const bSeek = seekPosSet.has(b.position) ? 1 : 0;
+              if (aSeek !== bSeek) return bSeek - aSeek;
+              return b.ratings.overall - a.ratings.overall;
+            });
+
+          // Find combination of players/picks matching ~85-110% of blocked value
+          const offeredPlayerIds: string[] = [];
+          const offeredPickIds: string[] = [];
+          let offeredValue = 0;
+          const targetMin = totalBlockedValue * 0.85;
+          const targetMax = totalBlockedValue * 1.10;
+
+          for (const candidate of offerCandidates) {
+            if (offeredValue >= targetMin) break;
+            const v = playerTradeValue(candidate);
+            if (offeredValue + v <= targetMax * 1.2) {
+              offeredPlayerIds.push(candidate.id);
+              offeredValue += v;
+            }
+          }
+
+          // Add picks to fill value gap if needed
+          if (offeredValue < targetMin) {
+            const aiPicks = aiTeam.draftPicks
+              .filter(pk => pk.year >= state.season)
+              .sort((a, b) => pickTradeValue(b) - pickTradeValue(a));
+            for (const pk of aiPicks) {
+              if (offeredValue >= targetMin) break;
+              offeredPickIds.push(pk.id);
+              offeredValue += pickTradeValue(pk);
+            }
+          }
+
+          if (offeredValue < targetMin * 0.5) continue; // Can't match value at all
+          if (offeredPlayerIds.length === 0 && offeredPickIds.length === 0) continue;
+
+          const ratio = offeredValue / Math.max(1, totalBlockedValue);
+          const valueAssessment: TradeProposal['valueAssessment'] =
+            ratio >= 0.9 && ratio <= 1.1 ? 'fair' :
+            ratio > 1.1 ? 'lopsided-you-win' : 'lopsided-they-win';
+
+          proposals.push({
+            id: uuid(),
+            season: state.season,
+            week: state.week,
+            proposingTeamId: aiTeam.id,
+            offeredPlayerIds,
+            offeredPickIds,
+            requestedPlayerIds: blockedPlayerIds,
+            requestedPickIds: blockedPickIds,
+            status: 'pending',
+            valueAssessment,
+          });
+        }
+
+        // Clear old pending proposals from trading block and add new ones
+        const existingNonPending = state.tradeProposals.filter(p => p.status !== 'pending');
+        set({ tradeProposals: [...existingNonPending, ...proposals] });
+      },
+
       // PRD-07: Set scouting level
       setScoutingLevel: (level: 0 | 1 | 2 | 3 | 4) => {
         set({ scoutingLevel: level });
@@ -1600,10 +1786,29 @@ export const useGameStore = create<GameStore>()(
         }
 
         const champion = state.champions.find(c => c.season === state.season);
+
+        // Best record per conference (before records reset)
+        const afcTeams = state.teams.filter(t => t.conference === 'AFC');
+        const nfcTeams = state.teams.filter(t => t.conference === 'NFC');
+        const bestAfc = afcTeams.sort((a, b) => b.record.wins - a.record.wins || a.record.losses - b.record.losses)[0];
+        const bestNfc = nfcTeams.sort((a, b) => b.record.wins - a.record.wins || a.record.losses - b.record.losses)[0];
+
+        // All-League teams
+        const { first: allLeagueFirst, second: allLeagueSecond, allRookie: allRookieTeam } = computeAllLeagueTeams(state);
+
         const newSummary: import('@/types').SeasonSummary = {
           season: state.season,
           championTeamId: champion?.teamId ?? '',
+          finalsMvpId: state.finalsMvpPlayerId ?? '',
           awards,
+          bestRecord: {
+            afc: { teamId: bestAfc?.id ?? '', wins: bestAfc?.record.wins ?? 0, losses: bestAfc?.record.losses ?? 0 },
+            nfc: { teamId: bestNfc?.id ?? '', wins: bestNfc?.record.wins ?? 0, losses: bestNfc?.record.losses ?? 0 },
+          },
+          allLeagueFirst,
+          allLeagueSecond,
+          allRookieTeam,
+          retiredPlayers: [], // populated after development runs below
           statLeaders: {
             passYards: (() => {
               const top = state.players.reduce((best, p) =>
@@ -1707,6 +1912,21 @@ export const useGameStore = create<GameStore>()(
           p.retired && !previouslyRetiredIds.has(p.id) ? { ...p, teamId: null } : p,
         );
 
+        // Populate retired players in the season summary (notable retirees only)
+        const newlyRetiredAll = developedPlayers.filter(
+          p => p.retired && !previouslyRetiredIds.has(p.id),
+        );
+        newSummary.retiredPlayers = newlyRetiredAll
+          .filter(p => p.ratings.overall >= 65 || p.experience >= 5)
+          .sort((a, b) => b.ratings.overall - a.ratings.overall)
+          .map(p => ({
+            playerId: p.id,
+            name: `${p.firstName} ${p.lastName}`,
+            position: p.position,
+            teamId: p.teamId ?? '',
+            age: p.age,
+          }));
+
         const newSchedule = generateSchedule(newTeams, newSeason);
 
         set({
@@ -1725,6 +1945,7 @@ export const useGameStore = create<GameStore>()(
           resigningPlayers: [],
           tradeProposals: [],
           draftScoutingData: {},
+          finalsMvpPlayerId: null,
         });
       },
 

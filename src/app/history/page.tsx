@@ -6,6 +6,7 @@ import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import type { SeasonSummary, AllLeagueEntry } from '@/types';
 
 const PLAYOFF_LABELS: Record<string, string> = {
   missed: 'Missed Playoffs',
@@ -25,6 +26,42 @@ const RESULT_VARIANTS: Record<string, 'green' | 'blue' | 'red' | 'default'> = {
   champion: 'green',
 };
 
+function PlayerLink({ playerId, children }: { playerId: string; children: React.ReactNode }) {
+  return (
+    <Link href={`/player/${playerId}`} className="text-blue-400 hover:text-blue-300 transition-colors">
+      {children}
+    </Link>
+  );
+}
+
+function AllLeagueList({
+  title,
+  entries,
+  playerName,
+  teamAbbr,
+}: {
+  title: string;
+  entries: AllLeagueEntry[];
+  playerName: (id: string) => string;
+  teamAbbr: (id: string) => string;
+}) {
+  if (entries.length === 0) return null;
+  return (
+    <Card>
+      <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+      <div className="space-y-1">
+        {entries.map((e, i) => (
+          <div key={i} className="flex items-center gap-2 text-sm border-t border-[var(--border)] pt-1.5 first:border-t-0 first:pt-0">
+            <span className="text-[var(--text-sec)] w-7 shrink-0 font-mono text-xs">{e.position}</span>
+            <PlayerLink playerId={e.playerId}>{playerName(e.playerId)}</PlayerLink>
+            <span className="text-xs text-[var(--text-sec)]">({teamAbbr(e.teamId)})</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 export default function HistoryPage() {
   const { seasonHistory, players, teams, userTeamId, season } = useGameStore();
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
@@ -34,6 +71,11 @@ export default function HistoryPage() {
   function playerName(playerId: string) {
     const p = players.find(pl => pl.id === playerId);
     return p ? `${p.firstName} ${p.lastName}` : '—';
+  }
+
+  function playerPosition(playerId: string) {
+    const p = players.find(pl => pl.id === playerId);
+    return p?.position ?? '?';
   }
 
   function teamAbbr(teamId: string) {
@@ -51,7 +93,7 @@ export default function HistoryPage() {
 
   return (
     <GameShell>
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <h2 className="text-2xl font-black mb-2">Season History</h2>
         <p className="text-[var(--text-sec)] text-sm mb-6">
           Currently in Season {season}. {seasonHistory.length} season{seasonHistory.length !== 1 ? 's' : ''} completed.
@@ -60,12 +102,11 @@ export default function HistoryPage() {
         {seasonHistory.length === 0 ? (
           <Card>
             <div className="text-center py-16 text-[var(--text-sec)]">
-              <div className="text-4xl mb-3">🗃️</div>
               <p>No completed seasons yet. Finish your first season to see history here.</p>
             </div>
           </Card>
         ) : (
-          <div className="grid grid-cols-[1fr_1.5fr] gap-6">
+          <div className="grid grid-cols-[240px_1fr] gap-6">
             {/* Season list */}
             <div className="space-y-2">
               {[...seasonHistory].reverse().map(summary => {
@@ -89,7 +130,7 @@ export default function HistoryPage() {
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-[var(--text-sec)]">
-                        Your record: {summary.userRecord.wins}-{summary.userRecord.losses}
+                        {summary.userRecord.wins}-{summary.userRecord.losses}
                       </span>
                       {champTeam && (
                         <div className="flex items-center gap-1">
@@ -109,78 +150,181 @@ export default function HistoryPage() {
             </div>
 
             {/* Season detail */}
-            <div className="space-y-4">
-              {!selected ? (
-                <Card>
-                  <div className="text-center py-12 text-[var(--text-sec)]">
-                    Select a season to view details.
-                  </div>
-                </Card>
-              ) : (
-                <>
-                  {/* Champion */}
-                  <Card>
-                    <CardHeader><CardTitle>Season {selected.season} Champion</CardTitle></CardHeader>
-                    <div
-                      className="rounded-xl p-4 flex items-center gap-3"
-                      style={{ backgroundColor: teamColor(selected.championTeamId) + '22', borderLeft: `4px solid ${teamColor(selected.championTeamId)}` }}
-                    >
-                      <div
-                        className="w-10 h-10 rounded-lg font-black text-white flex items-center justify-center text-sm"
-                        style={{ backgroundColor: teamColor(selected.championTeamId) }}
-                      >
-                        {teamAbbr(selected.championTeamId)}
-                      </div>
-                      <div>
-                        <div className="font-bold">{teamName(selected.championTeamId)}</div>
-                        <div className="text-xs text-[var(--text-sec)]">Super Bowl Champions</div>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Awards */}
-                  {selected.awards.length > 0 && (
-                    <Card>
-                      <CardHeader><CardTitle>Awards</CardTitle></CardHeader>
-                      <div className="space-y-2">
-                        {selected.awards.map((a, i) => (
-                          <div key={i} className="flex items-center justify-between text-sm border-t border-[var(--border)] pt-2 first:border-t-0 first:pt-0">
-                            <div className="text-[var(--text-sec)]">{a.award}</div>
-                            <div className="font-semibold">
-                              <Link href={`/player/${a.playerId}`} className="hover:text-blue-400 transition-colors">
-                                {playerName(a.playerId)}
-                              </Link>
-                              <span className="ml-1 text-xs text-[var(--text-sec)]">({teamAbbr(a.teamId)})</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </Card>
-                  )}
-
-                  {/* Stat leaders */}
-                  <Card>
-                    <CardHeader><CardTitle>Stat Leaders</CardTitle></CardHeader>
-                    <div className="space-y-2">
-                      {Object.entries(selected.statLeaders).map(([cat, data]) => (
-                        <div key={cat} className="flex items-center justify-between text-sm border-t border-[var(--border)] pt-2 first:border-t-0 first:pt-0">
-                          <div className="text-[var(--text-sec)] capitalize">{cat.replace(/([A-Z])/g, ' $1').trim()}</div>
-                          <div>
-                            <Link href={`/player/${data.playerId}`} className="font-semibold hover:text-blue-400 transition-colors">
-                              {playerName(data.playerId)}
-                            </Link>
-                            <span className="ml-2 text-xs font-mono text-[var(--text-sec)]">{data.value}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                </>
-              )}
-            </div>
+            {!selected ? (
+              <Card>
+                <div className="text-center py-12 text-[var(--text-sec)]">
+                  Select a season to view details.
+                </div>
+              </Card>
+            ) : (
+              <SeasonDetail
+                selected={selected}
+                playerName={playerName}
+                playerPosition={playerPosition}
+                teamAbbr={teamAbbr}
+                teamColor={teamColor}
+                teamName={teamName}
+              />
+            )}
           </div>
         )}
       </div>
     </GameShell>
+  );
+}
+
+function SeasonDetail({
+  selected,
+  playerName,
+  playerPosition,
+  teamAbbr,
+  teamColor,
+  teamName,
+}: {
+  selected: SeasonSummary;
+  playerName: (id: string) => string;
+  playerPosition: (id: string) => string;
+  teamAbbr: (id: string) => string;
+  teamColor: (id: string) => string;
+  teamName: (id: string) => string;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      {/* Column 1: Champs + Awards */}
+      <div className="space-y-4">
+        {/* League Champs */}
+        <Card>
+          <CardHeader><CardTitle>League Champs</CardTitle></CardHeader>
+          <div
+            className="rounded-xl p-4 flex items-center gap-3"
+            style={{ backgroundColor: teamColor(selected.championTeamId) + '22', borderLeft: `4px solid ${teamColor(selected.championTeamId)}` }}
+          >
+            <div
+              className="w-10 h-10 rounded-lg font-black text-white flex items-center justify-center text-sm"
+              style={{ backgroundColor: teamColor(selected.championTeamId) }}
+            >
+              {teamAbbr(selected.championTeamId)}
+            </div>
+            <div>
+              <div className="font-bold">{teamName(selected.championTeamId)}</div>
+              <div className="text-xs text-[var(--text-sec)]">Super Bowl Champions</div>
+            </div>
+          </div>
+          {selected.finalsMvpId && (
+            <div className="mt-3 text-sm">
+              <span className="text-[var(--text-sec)]">Finals MVP: </span>
+              <span className="font-semibold">
+                {playerPosition(selected.finalsMvpId)}{' '}
+                <PlayerLink playerId={selected.finalsMvpId}>{playerName(selected.finalsMvpId)}</PlayerLink>
+                <span className="ml-1 text-xs text-[var(--text-sec)]">({teamAbbr(selected.championTeamId)})</span>
+              </span>
+            </div>
+          )}
+        </Card>
+
+        {/* Best Record */}
+        {selected.bestRecord && (
+          <Card>
+            <CardHeader><CardTitle>Best Record</CardTitle></CardHeader>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--text-sec)]">AFC:</span>
+                <span className="font-semibold">
+                  {teamName(selected.bestRecord.afc.teamId)}{' '}
+                  <span className="text-xs text-[var(--text-sec)]">
+                    ({selected.bestRecord.afc.wins}-{selected.bestRecord.afc.losses})
+                  </span>
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--text-sec)]">NFC:</span>
+                <span className="font-semibold">
+                  {teamName(selected.bestRecord.nfc.teamId)}{' '}
+                  <span className="text-xs text-[var(--text-sec)]">
+                    ({selected.bestRecord.nfc.wins}-{selected.bestRecord.nfc.losses})
+                  </span>
+                </span>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Individual Awards */}
+        {selected.awards.length > 0 && (
+          <Card>
+            <CardHeader><CardTitle>Awards</CardTitle></CardHeader>
+            <div className="space-y-2">
+              {selected.awards.map((a, i) => (
+                <div key={i} className="border-t border-[var(--border)] pt-2 first:border-t-0 first:pt-0">
+                  <div className="text-xs text-[var(--text-sec)] mb-0.5">{a.award}</div>
+                  <div className="text-sm font-semibold">
+                    {playerPosition(a.playerId)}{' '}
+                    <PlayerLink playerId={a.playerId}>{playerName(a.playerId)}</PlayerLink>
+                    <span className="ml-1 text-xs text-[var(--text-sec)]">({teamAbbr(a.teamId)})</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Stat leaders */}
+        <Card>
+          <CardHeader><CardTitle>Stat Leaders</CardTitle></CardHeader>
+          <div className="space-y-2">
+            {Object.entries(selected.statLeaders).map(([cat, data]) => (
+              <div key={cat} className="flex items-center justify-between text-sm border-t border-[var(--border)] pt-2 first:border-t-0 first:pt-0">
+                <div className="text-[var(--text-sec)] capitalize">{cat.replace(/([A-Z])/g, ' $1').trim()}</div>
+                <div>
+                  <PlayerLink playerId={data.playerId}>{playerName(data.playerId)}</PlayerLink>
+                  <span className="ml-2 text-xs font-mono text-[var(--text-sec)]">{data.value.toLocaleString()}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* Column 2: All-League Teams + Retired */}
+      <div className="space-y-4">
+        <AllLeagueList
+          title="All-League 1st Team"
+          entries={selected.allLeagueFirst ?? []}
+          playerName={playerName}
+          teamAbbr={teamAbbr}
+        />
+        <AllLeagueList
+          title="All-League 2nd Team"
+          entries={selected.allLeagueSecond ?? []}
+          playerName={playerName}
+          teamAbbr={teamAbbr}
+        />
+        <AllLeagueList
+          title="All-Rookie Team"
+          entries={selected.allRookieTeam ?? []}
+          playerName={playerName}
+          teamAbbr={teamAbbr}
+        />
+
+        {/* Retired Players */}
+        {(selected.retiredPlayers ?? []).length > 0 && (
+          <Card>
+            <CardHeader><CardTitle>Retired Players</CardTitle></CardHeader>
+            <div className="space-y-1">
+              {selected.retiredPlayers.map((r, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm border-t border-[var(--border)] pt-1.5 first:border-t-0 first:pt-0">
+                  <span className="text-[var(--text-sec)] w-7 shrink-0 font-mono text-xs">{r.position}</span>
+                  <PlayerLink playerId={r.playerId}>{r.name}</PlayerLink>
+                  {r.teamId && (
+                    <span className="text-xs text-[var(--text-sec)]">({teamAbbr(r.teamId)})</span>
+                  )}
+                  <span className="text-xs text-[var(--text-sec)] ml-auto">age: {r.age}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+      </div>
+    </div>
   );
 }

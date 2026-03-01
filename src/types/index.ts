@@ -166,10 +166,33 @@ export interface NewsItem {
   isUserTeam: boolean;
 }
 
+export interface AllLeagueEntry {
+  position: Position;
+  playerId: string;
+  teamId: string;
+}
+
+export interface RetiredPlayerEntry {
+  playerId: string;
+  name: string;
+  position: Position;
+  teamId: string;
+  age: number;
+}
+
 export interface SeasonSummary {
   season: number;
   championTeamId: string;
+  finalsMvpId: string;
   awards: { award: string; playerId: string; teamId: string }[];
+  bestRecord: {
+    afc: { teamId: string; wins: number; losses: number };
+    nfc: { teamId: string; wins: number; losses: number };
+  };
+  allLeagueFirst: AllLeagueEntry[];
+  allLeagueSecond: AllLeagueEntry[];
+  allRookieTeam: AllLeagueEntry[];
+  retiredPlayers: RetiredPlayerEntry[];
   statLeaders: Record<string, { playerId: string; value: number }>;
   userRecord: { wins: number; losses: number };
   userPlayoffResult: 'missed' | 'wildcard' | 'divisional' | 'conference' | 'runnerup' | 'champion';
@@ -228,6 +251,8 @@ export interface LeagueState {
   scoutingLevel: 0 | 1 | 2 | 3 | 4;
   /** Scouting data keyed by prospect player ID */
   draftScoutingData: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }>;
+  /** Player ID of the Super Bowl MVP (set when SB is played, consumed when season summary is created) */
+  finalsMvpPlayerId: string | null;
 }
 
 export interface DraftSelection {

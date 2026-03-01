@@ -7,7 +7,8 @@ import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import type { Player, DraftPick } from '@/types';
+import type { Player, DraftPick, Position } from '@/types';
+import { POSITIONS } from '@/types';
 
 function ratingColor(val: number): string {
   if (val >= 80) return 'text-green-400';
@@ -39,6 +40,7 @@ export default function TradesPage() {
   const {
     phase, week, players, teams, userTeamId,
     tradeProposals, executeTrade, respondToTradeProposal,
+    solicitTradingBlockProposals,
   } = useGameStore();
 
   const [selectedTeamId, setSelectedTeamId] = useState('');
@@ -47,7 +49,13 @@ export default function TradesPage() {
   const [receivedPlayerIds, setReceivedPlayerIds] = useState<string[]>([]);
   const [receivedPickIds, setReceivedPickIds] = useState<string[]>([]);
   const [tradeResult, setTradeResult] = useState<'accepted' | 'rejected' | null>(null);
-  const [activeTab, setActiveTab] = useState<'propose' | 'incoming'>('incoming');
+  const [activeTab, setActiveTab] = useState<'incoming' | 'propose' | 'block'>('incoming');
+
+  // Trading block state
+  const [blockedPlayerIds, setBlockedPlayerIds] = useState<string[]>([]);
+  const [blockedPickIds, setBlockedPickIds] = useState<string[]>([]);
+  const [seekPositions, setSeekPositions] = useState<Position[]>([]);
+  const [blockSolicited, setBlockSolicited] = useState(false);
 
   const userTeam = teams.find(t => t.id === userTeamId);
   const aiTeams = teams.filter(t => t.id !== userTeamId).sort((a, b) => a.abbreviation.localeCompare(b.abbreviation));
@@ -121,6 +129,12 @@ export default function TradesPage() {
     }
   }
 
+  function handleSolicitProposals() {
+    solicitTradingBlockProposals(blockedPlayerIds, blockedPickIds, seekPositions);
+    setBlockSolicited(true);
+    setActiveTab('incoming');
+  }
+
   return (
     <GameShell>
       <div className="max-w-6xl mx-auto">
@@ -135,7 +149,7 @@ export default function TradesPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-6 w-fit">
-          {(['incoming', 'propose'] as const).map(tab => (
+          {(['incoming', 'block', 'propose'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -152,40 +166,39 @@ export default function TradesPage() {
                     </span>
                   )}
                 </span>
-              ) : 'Propose Trade'}
+              ) : tab === 'block' ? 'Trading Block' : 'Propose Trade'}
             </button>
           ))}
         </div>
 
-        {/* Incoming offers */}
+        {/* ─── Incoming offers ─── */}
         {activeTab === 'incoming' && (
           <div className="space-y-4">
             {pendingProposals.length === 0 ? (
               <Card>
                 <div className="text-center py-12 text-[var(--text-sec)]">
-                  <div className="text-4xl mb-3">📭</div>
                   <p>No incoming trade proposals.</p>
                   {isTradeOpen && (
-                    <p className="text-sm mt-1">AI teams may propose trades during the regular season.</p>
+                    <p className="text-sm mt-1">Use the Trading Block to solicit offers, or AI teams may propose trades during the season.</p>
                   )}
                 </div>
               </Card>
             ) : (
               pendingProposals.map(proposal => {
                 const proposingTeam = teams.find(t => t.id === proposal.proposingTeamId);
-                const offeredPlayers = proposal.offeredPlayerIds.map(id => players.find(p => p.id === id)).filter(Boolean) as Player[];
-                const requestedPlayers = proposal.requestedPlayerIds.map(id => players.find(p => p.id === id)).filter(Boolean) as Player[];
-                const offeredPicks = proposal.offeredPickIds.map(id =>
+                const offPlayers = proposal.offeredPlayerIds.map(id => players.find(p => p.id === id)).filter(Boolean) as Player[];
+                const reqPlayers = proposal.requestedPlayerIds.map(id => players.find(p => p.id === id)).filter(Boolean) as Player[];
+                const offPicks = proposal.offeredPickIds.map(id =>
                   proposingTeam?.draftPicks.find(pk => pk.id === id),
                 ).filter(Boolean) as DraftPick[];
-                const requestedPicks = proposal.requestedPickIds.map(id =>
+                const reqPicks = proposal.requestedPickIds.map(id =>
                   userTeam?.draftPicks.find(pk => pk.id === id),
                 ).filter(Boolean) as DraftPick[];
 
-                const proposedOfferedValue = offeredPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
-                  + offeredPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
-                const proposedRequestedValue = requestedPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
-                  + requestedPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
+                const proposedOfferedValue = offPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
+                  + offPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
+                const proposedRequestedValue = reqPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
+                  + reqPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
 
                 return (
                   <Card key={proposal.id}>
@@ -206,7 +219,7 @@ export default function TradesPage() {
                     <div className="grid grid-cols-2 gap-4 mb-4">
                       <div>
                         <div className="text-xs font-bold text-green-400 mb-2">You Receive ({proposedOfferedValue} pts)</div>
-                        {offeredPlayers.map(p => (
+                        {offPlayers.map(p => (
                           <div key={p.id} className="flex items-center gap-2 mb-1">
                             <Badge size="sm">{p.position}</Badge>
                             <Link href={`/player/${p.id}`} className="text-sm hover:text-blue-400">
@@ -215,18 +228,18 @@ export default function TradesPage() {
                             <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
                           </div>
                         ))}
-                        {offeredPicks.map(pk => (
+                        {offPicks.map(pk => (
                           <div key={pk.id} className="text-sm text-[var(--text-sec)]">
                             Round {pk.round} Pick ({pickTradeValue(pk)} pts)
                           </div>
                         ))}
-                        {offeredPlayers.length === 0 && offeredPicks.length === 0 && (
+                        {offPlayers.length === 0 && offPicks.length === 0 && (
                           <span className="text-sm text-[var(--text-sec)]">Nothing</span>
                         )}
                       </div>
                       <div>
                         <div className="text-xs font-bold text-red-400 mb-2">You Send ({proposedRequestedValue} pts)</div>
-                        {requestedPlayers.map(p => (
+                        {reqPlayers.map(p => (
                           <div key={p.id} className="flex items-center gap-2 mb-1">
                             <Badge size="sm">{p.position}</Badge>
                             <Link href={`/player/${p.id}`} className="text-sm hover:text-blue-400">
@@ -235,12 +248,12 @@ export default function TradesPage() {
                             <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
                           </div>
                         ))}
-                        {requestedPicks.map(pk => (
+                        {reqPicks.map(pk => (
                           <div key={pk.id} className="text-sm text-[var(--text-sec)]">
                             Round {pk.round} Pick ({pickTradeValue(pk)} pts)
                           </div>
                         ))}
-                        {requestedPlayers.length === 0 && requestedPicks.length === 0 && (
+                        {reqPlayers.length === 0 && reqPicks.length === 0 && (
                           <span className="text-sm text-[var(--text-sec)]">Nothing</span>
                         )}
                       </div>
@@ -292,15 +305,140 @@ export default function TradesPage() {
           </div>
         )}
 
-        {/* Propose trade */}
+        {/* ─── Trading Block ─── */}
+        {activeTab === 'block' && (
+          <div>
+            {!isTradeOpen ? (
+              <Card>
+                <div className="text-center py-8 text-[var(--text-sec)]">
+                  <p className="font-semibold">Trade window is closed.</p>
+                  <p className="text-sm mt-1">Trades are allowed during Weeks 1-12 of the regular season.</p>
+                </div>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-[var(--text-sec)]">
+                  Select players and picks to put on the trading block, choose what you want in return, then ask for proposals.
+                </p>
+
+                <div className="grid grid-cols-[1fr_280px] gap-4">
+                  {/* Left: Players + Picks to put on block */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Players &amp; Picks on the Block</CardTitle>
+                      <span className="text-xs text-[var(--text-sec)]">
+                        {blockedPlayerIds.length} player{blockedPlayerIds.length !== 1 ? 's' : ''},
+                        {' '}{blockedPickIds.length} pick{blockedPickIds.length !== 1 ? 's' : ''}
+                      </span>
+                    </CardHeader>
+
+                    <div className="mb-3">
+                      <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Players</div>
+                      <div className="max-h-[400px] overflow-y-auto space-y-0">
+                        {userRoster.map(p => (
+                          <label key={p.id} className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
+                            <input
+                              type="checkbox"
+                              checked={blockedPlayerIds.includes(p.id)}
+                              onChange={() => togglePlayerSelect(p.id, blockedPlayerIds, setBlockedPlayerIds)}
+                              className="accent-blue-500"
+                            />
+                            <Badge size="sm">{p.position}</Badge>
+                            <span className="text-sm flex-1">{p.firstName} {p.lastName}</span>
+                            <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                            <span className="text-xs text-[var(--text-sec)] w-10 text-right">{p.age}y</span>
+                            <span className="text-xs text-[var(--text-sec)] w-14 text-right">${(p.contract.salary / 1_000_000).toFixed(1)}M</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {userTeam && userTeam.draftPicks.length > 0 && (
+                      <div>
+                        <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Draft Picks</div>
+                        {userTeam.draftPicks
+                          .filter(pk => pk.year >= (useGameStore.getState().season))
+                          .sort((a, b) => a.year - b.year || a.round - b.round)
+                          .map(pk => (
+                          <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
+                            <input
+                              type="checkbox"
+                              checked={blockedPickIds.includes(pk.id)}
+                              onChange={() => togglePickSelect(pk.id, blockedPickIds, setBlockedPickIds)}
+                              className="accent-blue-500"
+                            />
+                            <span className="text-sm flex-1">{pk.year} Round {pk.round}</span>
+                            <span className="text-xs text-[var(--text-sec)]">~{pickTradeValue(pk)} pts</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+
+                  {/* Right: Seek preferences + Submit */}
+                  <div className="space-y-4">
+                    <Card>
+                      <CardHeader><CardTitle>Seeking in Return</CardTitle></CardHeader>
+                      <p className="text-xs text-[var(--text-sec)] mb-3">
+                        Select positions you want. AI teams will prioritize offering these.
+                      </p>
+                      <div className="grid grid-cols-3 gap-1">
+                        {POSITIONS.map(pos => (
+                          <label key={pos} className="flex items-center gap-1.5 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
+                            <input
+                              type="checkbox"
+                              checked={seekPositions.includes(pos)}
+                              onChange={() => {
+                                if (seekPositions.includes(pos)) {
+                                  setSeekPositions(seekPositions.filter(p => p !== pos));
+                                } else {
+                                  setSeekPositions([...seekPositions, pos]);
+                                }
+                              }}
+                              className="accent-blue-500"
+                            />
+                            <span className="text-xs font-medium">{pos}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </Card>
+
+                    <Card>
+                      <div className="text-center">
+                        <div className="text-sm text-[var(--text-sec)] mb-3">
+                          {blockedPlayerIds.length + blockedPickIds.length === 0
+                            ? 'Select players or picks to put on the block'
+                            : `${blockedPlayerIds.length + blockedPickIds.length} asset${blockedPlayerIds.length + blockedPickIds.length !== 1 ? 's' : ''} on the block`}
+                        </div>
+                        <Button
+                          onClick={handleSolicitProposals}
+                          disabled={blockedPlayerIds.length === 0 && blockedPickIds.length === 0}
+                          className="w-full"
+                        >
+                          Ask for Proposals
+                        </Button>
+                        {blockSolicited && (
+                          <p className="text-xs text-green-400 mt-2">
+                            Proposals generated! Check Incoming Offers.
+                          </p>
+                        )}
+                      </div>
+                    </Card>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── Propose trade ─── */}
         {activeTab === 'propose' && (
           <div>
             {!isTradeOpen && (
               <Card>
                 <div className="text-center py-8 text-[var(--text-sec)]">
-                  <div className="text-3xl mb-2">🔒</div>
                   <p className="font-semibold">Trade window is closed.</p>
-                  <p className="text-sm mt-1">Trades are allowed during Weeks 1–12 of the regular season.</p>
+                  <p className="text-sm mt-1">Trades are allowed during Weeks 1-12 of the regular season.</p>
                 </div>
               </Card>
             )}
