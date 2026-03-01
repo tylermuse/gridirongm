@@ -1,0 +1,278 @@
+export type Position =
+  | 'QB' | 'RB' | 'WR' | 'TE' | 'OL'
+  | 'DL' | 'LB' | 'CB' | 'S'
+  | 'K' | 'P';
+
+export const POSITIONS: Position[] = [
+  'QB', 'RB', 'WR', 'TE', 'OL',
+  'DL', 'LB', 'CB', 'S',
+  'K', 'P',
+];
+
+export const ROSTER_LIMITS: Record<Position, { min: number; max: number }> = {
+  QB: { min: 1, max: 3 },
+  RB: { min: 2, max: 4 },
+  WR: { min: 3, max: 6 },
+  TE: { min: 1, max: 3 },
+  OL: { min: 5, max: 8 },
+  DL: { min: 4, max: 7 },
+  LB: { min: 3, max: 6 },
+  CB: { min: 3, max: 5 },
+  S: { min: 2, max: 4 },
+  K: { min: 1, max: 1 },
+  P: { min: 1, max: 1 },
+};
+
+export interface PlayerRatings {
+  overall: number;
+  speed: number;
+  strength: number;
+  agility: number;
+  awareness: number;
+  stamina: number;
+  // Offense
+  throwing: number;
+  catching: number;
+  carrying: number;
+  blocking: number;
+  // Defense
+  tackling: number;
+  coverage: number;
+  passRush: number;
+  // Special
+  kicking: number;
+}
+
+export interface PlayerStats {
+  gamesPlayed: number;
+  // Passing
+  passAttempts: number;
+  passCompletions: number;
+  passYards: number;
+  passTDs: number;
+  interceptions: number;
+  // Rushing
+  rushAttempts: number;
+  rushYards: number;
+  rushTDs: number;
+  fumbles: number;
+  // Receiving
+  targets: number;
+  receptions: number;
+  receivingYards: number;
+  receivingTDs: number;
+  // Defense
+  tackles: number;
+  sacks: number;
+  defensiveINTs: number;
+  forcedFumbles: number;
+  // Kicking
+  fieldGoalAttempts: number;
+  fieldGoalsMade: number;
+  extraPointAttempts: number;
+  extraPointsMade: number;
+}
+
+export interface Contract {
+  salary: number;
+  yearsLeft: number;
+}
+
+export interface Player {
+  id: string;
+  firstName: string;
+  lastName: string;
+  position: Position;
+  age: number;
+  experience: number;
+  ratings: PlayerRatings;
+  potential: number;
+  /** Season-end OVR snapshots recorded each offseason before development runs. */
+  ratingHistory: { season: number; overall: number }[];
+  stats: PlayerStats;
+  careerStats: PlayerStats;
+  contract: Contract;
+  teamId: string | null;
+  draftYear: number | null;
+  draftPick: number | null;
+  retired: boolean;
+  injury: { type: string; weeksLeft: number } | null;
+  /** Currently on Injured Reserve */
+  onIR: boolean;
+  /** Scouting label assigned at draft (cosmetic flavor) */
+  scoutingLabel?: string;
+}
+
+export interface TeamRecord {
+  wins: number;
+  losses: number;
+  ties: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  streak: number;
+  divisionWins: number;
+  divisionLosses: number;
+}
+
+export interface Team {
+  id: string;
+  city: string;
+  name: string;
+  abbreviation: string;
+  conference: 'AFC' | 'NFC';
+  division: 'North' | 'South' | 'East' | 'West';
+  primaryColor: string;
+  secondaryColor: string;
+  record: TeamRecord;
+  salaryCap: number;
+  totalPayroll: number;
+  roster: string[];
+  draftPicks: DraftPick[];
+  /** Ordered player IDs per position; index 0 = starter */
+  depthChart: Record<Position, string[]>;
+}
+
+export interface DraftPick {
+  id: string;
+  year: number;
+  round: number;
+  originalTeamId: string;
+  ownerTeamId: string;
+  pick?: number;
+  playerId?: string;
+}
+
+export interface GameResult {
+  id: string;
+  week: number;
+  season: number;
+  homeTeamId: string;
+  awayTeamId: string;
+  homeScore: number;
+  awayScore: number;
+  played: boolean;
+  playerStats: Record<string, Partial<PlayerStats>>;
+}
+
+export interface NewsItem {
+  id: string;
+  season: number;
+  week: number;
+  type: 'injury' | 'trade' | 'signing' | 'release' | 'performance' | 'milestone' | 'system';
+  teamId?: string;
+  playerIds?: string[];
+  headline: string;
+  body?: string;
+  isUserTeam: boolean;
+}
+
+export interface SeasonSummary {
+  season: number;
+  championTeamId: string;
+  awards: { award: string; playerId: string; teamId: string }[];
+  statLeaders: Record<string, { playerId: string; value: number }>;
+  userRecord: { wins: number; losses: number };
+  userPlayoffResult: 'missed' | 'wildcard' | 'divisional' | 'conference' | 'runnerup' | 'champion';
+}
+
+export interface TradeProposal {
+  id: string;
+  season: number;
+  week: number;
+  /** The AI team proposing the trade */
+  proposingTeamId: string;
+  /** What the AI offers to the user */
+  offeredPlayerIds: string[];
+  offeredPickIds: string[];
+  /** What the AI wants from the user */
+  requestedPlayerIds: string[];
+  requestedPickIds: string[];
+  /** 'pending' | 'accepted' | 'rejected' */
+  status: 'pending' | 'accepted' | 'rejected';
+  valueAssessment: 'fair' | 'lopsided-you-win' | 'lopsided-they-win';
+}
+
+export interface ResigningEntry {
+  playerId: string;
+  askingSalary: number;
+  askingYears: number;
+}
+
+export interface LeagueState {
+  season: number;
+  week: number;
+  phase: 'preseason' | 'regular' | 'playoffs' | 'resigning' | 'draft' | 'freeAgency' | 'offseason';
+  userTeamId: string;
+  teams: Team[];
+  players: Player[];
+  schedule: GameResult[];
+  draftOrder: string[];
+  draftResults: DraftSelection[];
+  freeAgents: string[];
+  playoffBracket: PlayoffMatchup[] | null;
+  /** Per-conference seed order: index 0 = seed 1, index 6 = seed 7 (array of team IDs) */
+  playoffSeeds: { AFC: string[]; NFC: string[] } | null;
+  /** Championship history across all seasons */
+  champions: { season: number; teamId: string }[];
+  /** News feed items */
+  newsItems: NewsItem[];
+  /** Season-end summaries for history */
+  seasonHistory: SeasonSummary[];
+  /** Save version for migration detection */
+  saveVersion: number;
+  /** Players up for re-signing (user team, yearsLeft === 1) */
+  resigningPlayers: ResigningEntry[];
+  /** Incoming AI trade proposals */
+  tradeProposals: TradeProposal[];
+  /** Scouting budget level (0=cheap, 4=maximum) */
+  scoutingLevel: 0 | 1 | 2 | 3 | 4;
+  /** Scouting data keyed by prospect player ID */
+  draftScoutingData: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }>;
+}
+
+export interface DraftSelection {
+  overallPick: number;
+  round: number;
+  pickInRound: number;
+  teamId: string;
+  playerId: string;
+}
+
+export interface PlayoffMatchup {
+  id: string;
+  /** 1 = Wild Card, 2 = Divisional, 3 = Conference Championship, 4 = Super Bowl */
+  round: number;
+  conference: 'AFC' | 'NFC' | 'Super Bowl';
+  homeTeamId: string | null;
+  awayTeamId: string | null;
+  homeSeed: number | null;
+  awaySeed: number | null;
+  homeScore: number | null;
+  awayScore: number | null;
+  winnerId: string | null;
+  /** ID of a prior matchup whose winner fills the home slot */
+  homeFeedsFrom?: string;
+  /** ID of a prior matchup whose winner fills the away slot */
+  awayFeedsFrom?: string;
+  /** When true, the lower seed (better team) is assigned home field once both teams are known */
+  seedDeterminesHome?: boolean;
+}
+
+export function emptyStats(): PlayerStats {
+  return {
+    gamesPlayed: 0,
+    passAttempts: 0, passCompletions: 0, passYards: 0, passTDs: 0, interceptions: 0,
+    rushAttempts: 0, rushYards: 0, rushTDs: 0, fumbles: 0,
+    targets: 0, receptions: 0, receivingYards: 0, receivingTDs: 0,
+    tackles: 0, sacks: 0, defensiveINTs: 0, forcedFumbles: 0,
+    fieldGoalAttempts: 0, fieldGoalsMade: 0, extraPointAttempts: 0, extraPointsMade: 0,
+  };
+}
+
+export function emptyRecord(): TeamRecord {
+  return {
+    wins: 0, losses: 0, ties: 0,
+    pointsFor: 0, pointsAgainst: 0,
+    streak: 0, divisionWins: 0, divisionLosses: 0,
+  };
+}

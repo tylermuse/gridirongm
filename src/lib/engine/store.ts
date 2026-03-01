@@ -1,0 +1,1755 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+function uuid(): string {
+  return crypto.randomUUID();
+}
+import type {
+  LeagueState, Team, Player, GameResult, PlayerStats,
+  NewsItem, TradeProposal, ResigningEntry, DraftPick,
+} from '@/types';
+import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, type Position } from '@/types';
+import { NFL_TEAMS } from '@/lib/data/teams';
+import { loadFbgmLeagueFromUrl } from '@/lib/data/fbgmRoster';
+import { generateRoster, generateDraftClass } from './playerGen';
+import { generateSchedule } from './schedule';
+import { simulateGame } from './simulate';
+import { developPlayers } from './development';
+
+const SAVE_VERSION = 2;
+
+interface GameStore extends LeagueState {
+  initialized: boolean;
+  newLeague: (teamId: string) => Promise<void>;
+  resetLeague: () => void;
+  simWeek: () => void;
+  simToWeek: (targetWeek: number) => void;
+  advanceToPlayoffs: () => void;
+  simPlayoffGame: (matchupId: string) => void;
+  simNextPlayoffGame: () => void;
+  simAllPlayoffGames: () => void;
+  // PRD-03: Re-signing phase
+  advanceToResigning: () => void;
+  resignPlayer: (playerId: string, salary: number, years: number) => boolean;
+  passOnResigning: (playerId: string) => void;
+  advanceToDraft: () => void;
+  draftPlayer: (playerId: string) => void;
+  simDraftPick: () => void;
+  simToUserDraftPick: () => void;
+  simToEndDraft: () => void;
+  advanceToFreeAgency: () => void;
+  signFreeAgent: (playerId: string, salary: number, years: number) => boolean;
+  releasePlayer: (playerId: string) => void;
+  placeOnIR: (playerId: string) => void;
+  activateFromIR: (playerId: string) => void;
+  startNewSeason: () => void;
+  // PRD-04: Trades
+  executeTrade: (
+    offeredPlayerIds: string[],
+    offeredPickIds: string[],
+    receivedPlayerIds: string[],
+    receivedPickIds: string[],
+    counterpartTeamId: string,
+  ) => boolean;
+  respondToTradeProposal: (proposalId: string, accept: boolean) => boolean;
+  // PRD-07: Scouting
+  setScoutingLevel: (level: 0 | 1 | 2 | 3 | 4) => void;
+  deepScoutPlayer: (playerId: string) => void;
+  // PRD-13: Depth chart
+  reorderDepthChart: (position: Position, playerIds: string[]) => void;
+  resetDepthChart: (position: Position) => void;
+  saveToSlot: (slot: 1 | 2) => void;
+  loadFromSlot: (slot: 1 | 2) => void;
+  getTeam: (id: string) => Team | undefined;
+  getPlayer: (id: string) => Player | undefined;
+  getTeamRoster: (teamId: string) => Player[];
+  getWeekGames: (week: number) => GameResult[];
+}
+
+// ---------------------------------------------------------------------------
+// Stat helpers
+// ---------------------------------------------------------------------------
+
+function addStats(target: PlayerStats, source: Partial<PlayerStats>): PlayerStats {
+  const result = { ...target };
+  for (const key of Object.keys(source) as (keyof PlayerStats)[]) {
+    (result[key] as number) += (source[key] as number) ?? 0;
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Depth chart helpers (PRD-13)
+// ---------------------------------------------------------------------------
+
+function buildDefaultDepthChart(players: Player[]): Record<Position, string[]> {
+  return POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
+    acc[pos] = players
+      .filter(p => p.position === pos)
+      .sort((a, b) => b.ratings.overall - a.ratings.overall)
+      .map(p => p.id);
+    return acc;
+  }, {} as Record<Position, string[]>);
+}
+
+/** Sort roster so depth-chart starter appears first — used before simulateGame */
+function sortRosterByDepthChart(
+  roster: Player[],
+  depthChart: Record<Position, string[]>,
+): Player[] {
+  return [...roster].sort((a, b) => {
+    const ai = depthChart[a.position]?.indexOf(a.id) ?? 999;
+    const bi = depthChart[b.position]?.indexOf(b.id) ?? 999;
+    return ai - bi;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Auto-draft helper
+// ---------------------------------------------------------------------------
+
+function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | undefined {
+  const roster = state.players.filter((player) => player.teamId === pickingTeamId);
+  const countByPosition = POSITIONS.reduce<Record<Position, number>>((acc, position) => {
+    acc[position] = roster.filter((player) => player.position === position).length;
+    return acc;
+  }, {} as Record<Position, number>);
+
+  const topOvrByPosition = POSITIONS.reduce<Record<Position, number>>((acc, position) => {
+    const top = roster
+      .filter((player) => player.position === position)
+      .sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+    acc[position] = top?.ratings.overall ?? 0;
+    return acc;
+  }, {} as Record<Position, number>);
+
+  const prospects = state.freeAgents
+    .map((id) => state.players.find((player) => player.id === id))
+    .filter((player): player is Player => Boolean(player));
+  if (prospects.length === 0) return undefined;
+
+  const ranked = prospects
+    .map((prospect) => {
+      const limits = ROSTER_LIMITS[prospect.position];
+      const count = countByPosition[prospect.position];
+      const minNeed = Math.max(0, limits.min - count);
+      const depthNeed = Math.max(0, Math.ceil((limits.min + limits.max) / 2) - count);
+      const qualityNeed = Math.max(0, 72 - topOvrByPosition[prospect.position]);
+      const needScore = minNeed * 30 + depthNeed * 8 + qualityNeed;
+      const score = prospect.ratings.overall * 2 + prospect.potential + needScore;
+      return { playerId: prospect.id, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  return ranked[0]?.playerId;
+}
+
+// ---------------------------------------------------------------------------
+// Injury helpers (PRD-09)
+// ---------------------------------------------------------------------------
+
+const INJURY_TYPES: { type: string; minWeeks: number; maxWeeks: number; prob: number }[] = [
+  { type: 'Sprain', minWeeks: 1, maxWeeks: 2, prob: 0.50 },
+  { type: 'Muscle Pull', minWeeks: 2, maxWeeks: 4, prob: 0.25 },
+  { type: 'Fracture', minWeeks: 4, maxWeeks: 8, prob: 0.15 },
+  { type: 'ACL Tear', minWeeks: 10, maxWeeks: 10, prob: 0.10 },
+];
+
+function rollInjuryType(): { type: string; weeksLeft: number } {
+  const r = Math.random();
+  let cumulative = 0;
+  for (const entry of INJURY_TYPES) {
+    cumulative += entry.prob;
+    if (r < cumulative) {
+      const weeksLeft = entry.minWeeks + Math.floor(Math.random() * (entry.maxWeeks - entry.minWeeks + 1));
+      return { type: entry.type, weeksLeft };
+    }
+  }
+  return { type: 'Sprain', weeksLeft: 1 };
+}
+
+function generateInjuries(
+  players: Player[],
+  playerIdsWhoPlayed: Set<string>,
+): Map<string, { type: string; weeksLeft: number }> {
+  const injuries = new Map<string, { type: string; weeksLeft: number }>();
+  for (const p of players) {
+    if (!playerIdsWhoPlayed.has(p.id)) continue;
+    if (p.injury && p.injury.weeksLeft > 0) continue;
+    let chance = 0.012;
+    if (p.age >= 30) chance *= 1.3;
+    if (p.ratings.stamina < 60) chance *= 1.2;
+    // PRD-07: injury history label → 20% higher first-year chance
+    if (p.scoutingLabel === 'Injury history' && p.experience <= 1) chance *= 1.2;
+    if (Math.random() < chance) {
+      injuries.set(p.id, rollInjuryType());
+    }
+  }
+  return injuries;
+}
+
+// ---------------------------------------------------------------------------
+// News helpers (PRD-08)
+// ---------------------------------------------------------------------------
+
+function makeNews(fields: Omit<NewsItem, 'id'>): NewsItem {
+  return { id: uuid(), ...fields };
+}
+
+function generateWeekNews(
+  state: LeagueState,
+  updatedGames: GameResult[],
+  newInjuries: Map<string, { type: string; weeksLeft: number }>,
+): NewsItem[] {
+  const news: NewsItem[] = [];
+  const { season, week, userTeamId, players, teams } = state;
+
+  // Top passer of the week
+  let topPasser: { playerId: string; yards: number; teamId: string } | null = null;
+  for (const game of updatedGames) {
+    for (const [pid, stats] of Object.entries(game.playerStats)) {
+      if ((stats.passYards ?? 0) > (topPasser?.yards ?? 250)) {
+        const p = players.find(pl => pl.id === pid);
+        if (p && p.teamId) {
+          topPasser = { playerId: pid, yards: stats.passYards ?? 0, teamId: p.teamId };
+        }
+      }
+    }
+  }
+  if (topPasser) {
+    const p = players.find(pl => pl.id === topPasser!.playerId);
+    const t = teams.find(t => t.id === topPasser!.teamId);
+    if (p && t) {
+      news.push(makeNews({
+        season, week, type: 'performance',
+        teamId: t.id,
+        playerIds: [p.id],
+        headline: `${p.firstName} ${p.lastName} threw for ${topPasser.yards} yards in ${t.abbreviation}'s Week ${week} game.`,
+        isUserTeam: t.id === userTeamId,
+      }));
+    }
+  }
+
+  // Injury news for notable players
+  for (const [pid, inj] of newInjuries.entries()) {
+    const p = players.find(pl => pl.id === pid);
+    if (p && p.teamId && p.ratings.overall >= 75) {
+      const t = teams.find(t => t.id === p.teamId);
+      if (t) {
+        news.push(makeNews({
+          season, week, type: 'injury',
+          teamId: t.id,
+          playerIds: [p.id],
+          headline: `${p.firstName} ${p.lastName} suffered a ${inj.type}. Expected to miss ${inj.weeksLeft} week${inj.weeksLeft > 1 ? 's' : ''}.`,
+          isUserTeam: t.id === userTeamId,
+        }));
+      }
+    }
+  }
+
+  // Upsets: lower-OVR team wins by 10+
+  for (const game of updatedGames) {
+    if (!game.played) continue;
+    const homeTeam = teams.find(t => t.id === game.homeTeamId);
+    const awayTeam = teams.find(t => t.id === game.awayTeamId);
+    if (!homeTeam || !awayTeam) continue;
+    const homeRoster = players.filter(p => p.teamId === game.homeTeamId);
+    const awayRoster = players.filter(p => p.teamId === game.awayTeamId);
+    const homeOvr = homeRoster.reduce((s, p) => s + p.ratings.overall, 0) / Math.max(1, homeRoster.length);
+    const awayOvr = awayRoster.reduce((s, p) => s + p.ratings.overall, 0) / Math.max(1, awayRoster.length);
+    const margin = Math.abs(game.homeScore - game.awayScore);
+    if (margin >= 10) {
+      const winner = game.homeScore > game.awayScore ? homeTeam : awayTeam;
+      const loser = game.homeScore > game.awayScore ? awayTeam : homeTeam;
+      const winnerOvr = game.homeScore > game.awayScore ? homeOvr : awayOvr;
+      const loserOvr = game.homeScore > game.awayScore ? awayOvr : homeOvr;
+      if (winnerOvr < loserOvr - 5) {
+        const winScore = game.homeScore > game.awayScore ? game.homeScore : game.awayScore;
+        const loseScore = game.homeScore > game.awayScore ? game.awayScore : game.homeScore;
+        news.push(makeNews({
+          season, week, type: 'performance',
+          teamId: winner.id,
+          headline: `Upset alert: ${winner.abbreviation} defeated ${loser.abbreviation} ${winScore}-${loseScore}.`,
+          isUserTeam: winner.id === userTeamId || loser.id === userTeamId,
+        }));
+      }
+    }
+  }
+
+  return news;
+}
+
+// ---------------------------------------------------------------------------
+// Trade value formula (PRD-04)
+// ---------------------------------------------------------------------------
+
+const PICK_VALUES = [150, 90, 55, 35, 20, 10, 5]; // Rounds 1-7
+
+function playerTradeValue(player: Player): number {
+  const ageMultiplier =
+    player.age <= 25 ? 1.2 :
+    player.age <= 29 ? 1.0 :
+    player.age <= 33 ? 0.7 : 0.3;
+  return (player.ratings.overall * 2 + player.potential * 0.5) * ageMultiplier;
+}
+
+function pickTradeValue(pick: DraftPick): number {
+  return PICK_VALUES[(pick.round - 1)] ?? 5;
+}
+
+// ---------------------------------------------------------------------------
+// Scouting helpers (PRD-07)
+// ---------------------------------------------------------------------------
+
+const SCOUTING_ERRORS = [12, 8, 5, 3, 1]; // Indexed by scoutingLevel
+
+function gaussianScout(): number {
+  const u1 = Math.random();
+  const u2 = Math.random();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+function computeScoutingData(
+  prospects: Player[],
+  scoutingLevel: number,
+): Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }> {
+  const error = SCOUTING_ERRORS[scoutingLevel] ?? 12;
+  const data: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }> = {};
+  for (const p of prospects) {
+    const noise = Math.round(gaussianScout() * error);
+    const scoutedOvr = Math.max(20, Math.min(99, p.ratings.overall + noise));
+    data[p.id] = { scoutedOvr, error, deepScouted: false };
+  }
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Re-signing helpers (PRD-03)
+// ---------------------------------------------------------------------------
+
+function estimateSalary(overall: number): number {
+  return Math.round(Math.max(0.5, ((overall - 40) / 60) * 15) * 10) / 10;
+}
+
+function computeResigningEntry(player: Player, team: Team): ResigningEntry {
+  const base = estimateSalary(player.ratings.overall);
+  const winPct = team.record.wins / Math.max(1, team.record.wins + team.record.losses);
+  let mult = 1.0;
+  if (winPct < 0.4) mult *= 1.15;
+  if (winPct > 0.65) mult *= 0.90;
+  if (player.age >= 32) mult *= 0.85;
+  if (player.experience > 4) mult *= 0.92;
+  const askingSalary = Math.round(base * mult * 10) / 10;
+  const askingYears = player.age >= 32 ? 1 : player.age >= 28 ? 2 : 3;
+  return { playerId: player.id, askingSalary, askingYears };
+}
+
+// ---------------------------------------------------------------------------
+// Playoff helpers
+// ---------------------------------------------------------------------------
+
+function winPct(t: Team): number {
+  return t.record.wins / Math.max(1, t.record.wins + t.record.losses);
+}
+
+function pointDiff(t: Team): number {
+  return t.record.pointsFor - t.record.pointsAgainst;
+}
+
+function teamCompareFn(a: Team, b: Team): number {
+  return winPct(b) - winPct(a) || pointDiff(b) - pointDiff(a);
+}
+
+function computePlayoffSeeds(teams: Team[]): { AFC: string[]; NFC: string[] } {
+  const result: { AFC: string[]; NFC: string[] } = { AFC: [], NFC: [] };
+  const divisions = ['North', 'South', 'East', 'West'] as const;
+
+  for (const conf of ['AFC', 'NFC'] as const) {
+    const confTeams = teams.filter(t => t.conference === conf);
+
+    const divWinners = divisions
+      .map(div => [...confTeams.filter(t => t.division === div)].sort(teamCompareFn)[0])
+      .filter(Boolean)
+      .sort(teamCompareFn);
+
+    const divWinnerIds = new Set(divWinners.map(t => t.id));
+
+    const wildCards = confTeams
+      .filter(t => !divWinnerIds.has(t.id))
+      .sort(teamCompareFn)
+      .slice(0, 3);
+
+    result[conf] = [...divWinners, ...wildCards].map(t => t.id);
+  }
+
+  return result;
+}
+
+function buildBracket(seeds: { AFC: string[]; NFC: string[] }, _teams: Team[]): import('@/types').PlayoffMatchup[] {
+  const matchups: import('@/types').PlayoffMatchup[] = [];
+
+  for (const conf of ['AFC', 'NFC'] as const) {
+    const s = seeds[conf];
+    const c = conf.toLowerCase();
+
+    matchups.push({
+      id: `${c}-wc-0`, round: 1, conference: conf,
+      homeTeamId: s[1] ?? null, awayTeamId: s[6] ?? null,
+      homeSeed: 2, awaySeed: 7,
+      homeScore: null, awayScore: null, winnerId: null,
+    });
+    matchups.push({
+      id: `${c}-wc-1`, round: 1, conference: conf,
+      homeTeamId: s[2] ?? null, awayTeamId: s[5] ?? null,
+      homeSeed: 3, awaySeed: 6,
+      homeScore: null, awayScore: null, winnerId: null,
+    });
+    matchups.push({
+      id: `${c}-wc-2`, round: 1, conference: conf,
+      homeTeamId: s[3] ?? null, awayTeamId: s[4] ?? null,
+      homeSeed: 4, awaySeed: 5,
+      homeScore: null, awayScore: null, winnerId: null,
+    });
+
+    matchups.push({
+      id: `${c}-div-0`, round: 2, conference: conf,
+      homeTeamId: s[0] ?? null, awayTeamId: null,
+      homeSeed: 1, awaySeed: null,
+      homeScore: null, awayScore: null, winnerId: null,
+      awayFeedsFrom: `${c}-wc-0`,
+    });
+    matchups.push({
+      id: `${c}-div-1`, round: 2, conference: conf,
+      homeTeamId: null, awayTeamId: null,
+      homeSeed: null, awaySeed: null,
+      homeScore: null, awayScore: null, winnerId: null,
+      homeFeedsFrom: `${c}-wc-1`,
+      awayFeedsFrom: `${c}-wc-2`,
+      seedDeterminesHome: true,
+    });
+
+    matchups.push({
+      id: `${c}-conf`, round: 3, conference: conf,
+      homeTeamId: null, awayTeamId: null,
+      homeSeed: null, awaySeed: null,
+      homeScore: null, awayScore: null, winnerId: null,
+      homeFeedsFrom: `${c}-div-0`,
+      awayFeedsFrom: `${c}-div-1`,
+      seedDeterminesHome: true,
+    });
+  }
+
+  matchups.push({
+    id: 'super-bowl', round: 4, conference: 'Super Bowl',
+    homeTeamId: null, awayTeamId: null,
+    homeSeed: null, awaySeed: null,
+    homeScore: null, awayScore: null, winnerId: null,
+    homeFeedsFrom: 'afc-conf',
+    awayFeedsFrom: 'nfc-conf',
+  });
+
+  return matchups;
+}
+
+function propagateWinner(
+  matchups: import('@/types').PlayoffMatchup[],
+  decidedId: string,
+  winnerId: string,
+  playoffSeeds: { AFC: string[]; NFC: string[] },
+): import('@/types').PlayoffMatchup[] {
+  const teamSeedMap = new Map<string, number>();
+  for (const teamIds of Object.values(playoffSeeds)) {
+    teamIds.forEach((id, idx) => teamSeedMap.set(id, idx + 1));
+  }
+
+  const winnerSeed = teamSeedMap.get(winnerId) ?? null;
+
+  return matchups.map(m => {
+    let updated = { ...m };
+
+    if (m.homeFeedsFrom === decidedId) {
+      updated = { ...updated, homeTeamId: winnerId, homeSeed: winnerSeed };
+    }
+    if (m.awayFeedsFrom === decidedId) {
+      updated = { ...updated, awayTeamId: winnerId, awaySeed: winnerSeed };
+    }
+
+    if (
+      updated.seedDeterminesHome &&
+      updated.homeTeamId &&
+      updated.awayTeamId &&
+      (m.homeTeamId === null || m.awayTeamId === null)
+    ) {
+      const hs = teamSeedMap.get(updated.homeTeamId) ?? 99;
+      const as_ = teamSeedMap.get(updated.awayTeamId) ?? 99;
+      if (hs > as_) {
+        [updated.homeTeamId, updated.awayTeamId] = [updated.awayTeamId!, updated.homeTeamId!];
+        [updated.homeSeed, updated.awaySeed] = [updated.awaySeed, updated.homeSeed];
+      }
+    }
+
+    return updated;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Season awards (PRD-10 prep)
+// ---------------------------------------------------------------------------
+
+function computeSeasonAwards(state: LeagueState): { award: string; playerId: string; teamId: string }[] {
+  const awards: { award: string; playerId: string; teamId: string }[] = [];
+  const activePlayers = state.players.filter(p => !p.retired && p.teamId);
+
+  const withGames = (pos: string[]) =>
+    activePlayers.filter(p => pos.includes(p.position) && p.stats.gamesPlayed >= 10);
+
+  const offensivePlayers = withGames(['QB', 'RB', 'WR', 'TE', 'OL']);
+  if (offensivePlayers.length > 0) {
+    const mvp = offensivePlayers.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+    awards.push({ award: 'MVP', playerId: mvp.id, teamId: mvp.teamId! });
+  }
+
+  const defensivePlayers = withGames(['DL', 'LB', 'CB', 'S']);
+  if (defensivePlayers.length > 0) {
+    const dpoy = defensivePlayers.sort((a, b) =>
+      (b.stats.tackles + b.stats.sacks * 5 + b.stats.defensiveINTs * 4) -
+      (a.stats.tackles + a.stats.sacks * 5 + a.stats.defensiveINTs * 4)
+    )[0];
+    awards.push({ award: 'Defensive POY', playerId: dpoy.id, teamId: dpoy.teamId! });
+  }
+
+  const rookies = activePlayers.filter(p => p.experience === 1 && p.stats.gamesPlayed >= 10);
+  if (rookies.length > 0) {
+    const roy = rookies.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+    awards.push({ award: 'Rookie of the Year', playerId: roy.id, teamId: roy.teamId! });
+  }
+
+  return awards;
+}
+
+// ---------------------------------------------------------------------------
+// AI trade proposal generation (PRD-04)
+// ---------------------------------------------------------------------------
+
+function generateAITradeProposals(state: LeagueState): TradeProposal[] {
+  if (state.week > 12) return []; // Trade deadline after week 12
+  const proposals: TradeProposal[] = [];
+  const userTeam = state.teams.find(t => t.id === state.userTeamId);
+  if (!userTeam) return [];
+
+  const aiTeams = state.teams.filter(t => t.id !== state.userTeamId);
+
+  // Each AI team has a 4% chance per week of proposing a trade
+  for (const aiTeam of aiTeams) {
+    if (Math.random() > 0.04) continue;
+    if (state.tradeProposals.filter(p => p.proposingTeamId === aiTeam.id && p.status === 'pending').length > 0) continue;
+
+    // Find a user player the AI wants (highest OVR user player that fits AI need)
+    const userPlayers = state.players.filter(p => p.teamId === state.userTeamId);
+    if (userPlayers.length === 0) continue;
+
+    // AI wants a player that fills a positional need
+    const aiRoster = state.players.filter(p => p.teamId === aiTeam.id);
+    const aiNeedPos = POSITIONS.find(pos => {
+      const count = aiRoster.filter(p => p.position === pos).length;
+      return count < ROSTER_LIMITS[pos].min;
+    });
+
+    const targetPlayer = aiNeedPos
+      ? userPlayers.filter(p => p.position === aiNeedPos).sort((a, b) => b.ratings.overall - a.ratings.overall)[0]
+      : userPlayers.sort((a, b) => b.ratings.overall - a.ratings.overall)[Math.floor(Math.random() * 3)];
+
+    if (!targetPlayer) continue;
+
+    const targetValue = playerTradeValue(targetPlayer);
+
+    // AI offers a player of similar value from their roster
+    const aiPlayers = aiRoster.filter(p => !p.retired && !p.injury);
+    const aiOffer = aiPlayers
+      .map(p => ({ player: p, diff: Math.abs(playerTradeValue(p) - targetValue * 0.9) }))
+      .sort((a, b) => a.diff - b.diff)[0]?.player;
+
+    if (!aiOffer) continue;
+
+    const offeredValue = playerTradeValue(aiOffer);
+    const ratio = offeredValue / Math.max(1, targetValue);
+    const valueAssessment: TradeProposal['valueAssessment'] =
+      ratio >= 0.9 ? 'fair' :
+      ratio >= 0.7 ? 'lopsided-they-win' : 'lopsided-they-win';
+
+    proposals.push({
+      id: uuid(),
+      season: state.season,
+      week: state.week,
+      proposingTeamId: aiTeam.id,
+      offeredPlayerIds: [aiOffer.id],
+      offeredPickIds: [],
+      requestedPlayerIds: [targetPlayer.id],
+      requestedPickIds: [],
+      status: 'pending',
+      valueAssessment,
+    });
+  }
+
+  return proposals;
+}
+
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
+
+const EMPTY_LEAGUE_STATE: LeagueState = {
+  season: 2026,
+  week: 1,
+  phase: 'preseason',
+  userTeamId: '',
+  teams: [],
+  players: [],
+  schedule: [],
+  draftOrder: [],
+  draftResults: [],
+  freeAgents: [],
+  playoffBracket: null,
+  playoffSeeds: null,
+  champions: [],
+  newsItems: [],
+  seasonHistory: [],
+  saveVersion: SAVE_VERSION,
+  resigningPlayers: [],
+  tradeProposals: [],
+  scoutingLevel: 1,
+  draftScoutingData: {},
+};
+
+export const useGameStore = create<GameStore>()(
+  persist(
+    (set, get) => ({
+      initialized: false,
+      ...EMPTY_LEAGUE_STATE,
+
+      newLeague: async (userTeamId: string) => {
+        try {
+          const imported = await loadFbgmLeagueFromUrl();
+          const userTeam = imported.teams.find((t) => t.abbreviation === userTeamId) ?? imported.teams[0];
+          const schedule = generateSchedule(imported.teams, imported.season);
+          set({
+            initialized: true,
+            season: imported.season,
+            week: 1,
+            phase: 'regular',
+            userTeamId: userTeam.id,
+            teams: imported.teams,
+            players: imported.players,
+            schedule,
+            draftOrder: [],
+            draftResults: [],
+            freeAgents: [],
+            playoffBracket: null,
+            playoffSeeds: null,
+            champions: [],
+            newsItems: [],
+            seasonHistory: [],
+            saveVersion: SAVE_VERSION,
+            resigningPlayers: [],
+            tradeProposals: [],
+            scoutingLevel: 1,
+            draftScoutingData: {},
+          });
+          return;
+        } catch (error) {
+          console.warn('Failed to import FBGM roster, falling back to generated league.', error);
+        }
+
+        const allPlayers: Player[] = [];
+        const teams: Team[] = NFL_TEAMS.map(t => {
+          const id = uuid();
+          const tierMean = 55 + Math.random() * 20;
+          const roster = generateRoster(id, tierMean);
+          allPlayers.push(...roster);
+
+          return {
+            id,
+            ...t,
+            record: emptyRecord(),
+            salaryCap: 225,
+            totalPayroll: roster.reduce((sum, p) => sum + p.contract.salary, 0),
+            roster: roster.map(p => p.id),
+            draftPicks: [1, 2, 3, 4, 5, 6, 7].map(round => ({
+              id: uuid(),
+              year: 2026,
+              round,
+              originalTeamId: id,
+              ownerTeamId: id,
+            })),
+            depthChart: buildDefaultDepthChart(roster),
+          };
+        });
+
+        const userTeam = teams.find(t => t.abbreviation === userTeamId) ?? teams[0];
+        const schedule = generateSchedule(teams, 2026);
+
+        set({
+          initialized: true,
+          season: 2026,
+          week: 1,
+          phase: 'regular',
+          userTeamId: userTeam.id,
+          teams,
+          players: allPlayers,
+          schedule,
+          draftOrder: [],
+          draftResults: [],
+          freeAgents: [],
+          playoffBracket: null,
+          playoffSeeds: null,
+          champions: [],
+          newsItems: [],
+          seasonHistory: [],
+          saveVersion: SAVE_VERSION,
+          resigningPlayers: [],
+          tradeProposals: [],
+          scoutingLevel: 1,
+          draftScoutingData: {},
+        });
+      },
+
+      resetLeague: () => {
+        set({ initialized: false, ...EMPTY_LEAGUE_STATE });
+      },
+
+      simWeek: () => {
+        const state = get();
+        if (state.phase !== 'regular') return;
+
+        const weekGames = state.schedule.filter(g => g.week === state.week && !g.played);
+        if (weekGames.length === 0) return;
+
+        const updatedGames = weekGames.map(game => {
+          const homeTeam = state.teams.find(t => t.id === game.homeTeamId);
+          const awayTeam = state.teams.find(t => t.id === game.awayTeamId);
+          const homeRosterRaw = state.players.filter(p => p.teamId === game.homeTeamId);
+          const awayRosterRaw = state.players.filter(p => p.teamId === game.awayTeamId);
+          // PRD-13: respect depth chart order
+          const homeRoster = homeTeam?.depthChart
+            ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart)
+            : homeRosterRaw;
+          const awayRoster = awayTeam?.depthChart
+            ? sortRosterByDepthChart(awayRosterRaw, awayTeam.depthChart)
+            : awayRosterRaw;
+          return simulateGame(game, homeRoster, awayRoster);
+        });
+
+        const newSchedule = state.schedule.map(g => {
+          const updated = updatedGames.find(u => u.id === g.id);
+          return updated ?? g;
+        });
+
+        // Update team records
+        const newTeams = state.teams.map(team => {
+          const teamGames = updatedGames.filter(
+            g => g.homeTeamId === team.id || g.awayTeamId === team.id,
+          );
+          const record = { ...team.record };
+          for (const game of teamGames) {
+            const isHome = game.homeTeamId === team.id;
+            const teamScore = isHome ? game.homeScore : game.awayScore;
+            const oppScore = isHome ? game.awayScore : game.homeScore;
+            record.pointsFor += teamScore;
+            record.pointsAgainst += oppScore;
+
+            if (teamScore > oppScore) {
+              record.wins += 1;
+              record.streak = record.streak >= 0 ? record.streak + 1 : 1;
+            } else {
+              record.losses += 1;
+              record.streak = record.streak <= 0 ? record.streak - 1 : -1;
+            }
+
+            const opponent = state.teams.find(t => t.id === (isHome ? game.awayTeamId : game.homeTeamId));
+            if (opponent && opponent.conference === team.conference && opponent.division === team.division) {
+              if (teamScore > oppScore) record.divisionWins += 1;
+              else record.divisionLosses += 1;
+            }
+          }
+          return { ...team, record };
+        });
+
+        // Update player season stats
+        const newPlayers = state.players.map(p => {
+          const allGameStats = updatedGames.reduce<Partial<PlayerStats>>((acc, game) => {
+            const s = game.playerStats[p.id];
+            if (s) {
+              for (const key of Object.keys(s) as (keyof PlayerStats)[]) {
+                (acc[key] as number) = ((acc[key] as number) ?? 0) + ((s[key] as number) ?? 0);
+              }
+            }
+            return acc;
+          }, {});
+
+          if (Object.keys(allGameStats).length === 0) return p;
+
+          return {
+            ...p,
+            stats: addStats(p.stats, allGameStats),
+            careerStats: addStats(p.careerStats, allGameStats),
+          };
+        });
+
+        // PRD-09: Injury generation + decrement
+        const playerIdsWhoPlayed = new Set<string>();
+        for (const game of updatedGames) {
+          for (const pid of Object.keys(game.playerStats)) {
+            playerIdsWhoPlayed.add(pid);
+          }
+        }
+
+        const newInjuries = generateInjuries(newPlayers, playerIdsWhoPlayed);
+
+        const injuredPlayers = newPlayers.map(p => {
+          let injury = p.injury;
+          if (injury && injury.weeksLeft > 0) {
+            injury = { ...injury, weeksLeft: injury.weeksLeft - 1 };
+            if (injury.weeksLeft <= 0) injury = null;
+          }
+          const newInj = newInjuries.get(p.id);
+          if (newInj && !injury) {
+            injury = newInj;
+          }
+          return { ...p, injury };
+        });
+
+        // PRD-08: News generation
+        const weekNews = generateWeekNews(state, updatedGames, newInjuries);
+
+        // PRD-04: Generate AI trade proposals (weeks 1-12 only)
+        const newTradeProposals = state.week <= 12
+          ? generateAITradeProposals({ ...state, teams: newTeams, players: injuredPlayers })
+          : [];
+
+        const maxWeek = Math.max(...state.schedule.map(g => g.week));
+        const nextWeek = state.week + 1;
+        const isSeasonOver = nextWeek > maxWeek;
+
+        set({
+          schedule: newSchedule,
+          teams: newTeams,
+          players: injuredPlayers,
+          week: isSeasonOver ? state.week : nextWeek,
+          phase: isSeasonOver ? 'playoffs' : 'regular',
+          newsItems: [...state.newsItems, ...weekNews],
+          tradeProposals: [...state.tradeProposals, ...newTradeProposals],
+        });
+
+        if (isSeasonOver) {
+          get().advanceToPlayoffs();
+        }
+      },
+
+      simToWeek: (targetWeek: number) => {
+        while (get().week < targetWeek && get().phase === 'regular') {
+          get().simWeek();
+        }
+      },
+
+      advanceToPlayoffs: () => {
+        const state = get();
+        const seeds = computePlayoffSeeds(state.teams);
+        const bracket = buildBracket(seeds, state.teams);
+        set({ phase: 'playoffs', playoffSeeds: seeds, playoffBracket: bracket });
+      },
+
+      simPlayoffGame: (matchupId: string) => {
+        const state = get();
+        if (!state.playoffBracket || !state.playoffSeeds) return;
+
+        const matchup = state.playoffBracket.find(m => m.id === matchupId);
+        if (!matchup || matchup.winnerId || !matchup.homeTeamId || !matchup.awayTeamId) return;
+
+        const homeTeam = state.teams.find(t => t.id === matchup.homeTeamId);
+        const awayTeam = state.teams.find(t => t.id === matchup.awayTeamId);
+        const homeRosterRaw = state.players.filter(p => p.teamId === matchup.homeTeamId);
+        const awayRosterRaw = state.players.filter(p => p.teamId === matchup.awayTeamId);
+        const homeRoster = homeTeam?.depthChart
+          ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart)
+          : homeRosterRaw;
+        const awayRoster = awayTeam?.depthChart
+          ? sortRosterByDepthChart(awayRosterRaw, awayTeam.depthChart)
+          : awayRosterRaw;
+
+        const tempGame: GameResult = {
+          id: matchupId,
+          week: 99,
+          season: state.season,
+          homeTeamId: matchup.homeTeamId,
+          awayTeamId: matchup.awayTeamId,
+          homeScore: 0,
+          awayScore: 0,
+          played: false,
+          playerStats: {},
+        };
+
+        const result = simulateGame(tempGame, homeRoster, awayRoster);
+        const winnerId =
+          result.homeScore >= result.awayScore ? matchup.homeTeamId : matchup.awayTeamId;
+
+        let updatedBracket = state.playoffBracket.map(m =>
+          m.id === matchupId
+            ? { ...m, homeScore: result.homeScore, awayScore: result.awayScore, winnerId }
+            : m,
+        );
+
+        updatedBracket = propagateWinner(updatedBracket, matchupId, winnerId, state.playoffSeeds);
+
+        const superBowl = updatedBracket.find(m => m.id === 'super-bowl');
+        const existingChampions = state.champions ?? [];
+        const newChampions =
+          superBowl?.winnerId && !existingChampions.find(c => c.season === state.season)
+            ? [...existingChampions, { season: state.season, teamId: superBowl.winnerId }]
+            : existingChampions;
+
+        let newNewsItems = state.newsItems;
+        if (superBowl?.winnerId && !existingChampions.find(c => c.season === state.season)) {
+          const champTeam = state.teams.find(t => t.id === superBowl.winnerId);
+          if (champTeam) {
+            newNewsItems = [...newNewsItems, makeNews({
+              season: state.season,
+              week: 99,
+              type: 'milestone',
+              teamId: champTeam.id,
+              headline: `${champTeam.city} ${champTeam.name} win Super Bowl ${state.season}!`,
+              isUserTeam: champTeam.id === state.userTeamId,
+            })];
+          }
+        }
+
+        set({ playoffBracket: updatedBracket, champions: newChampions, newsItems: newNewsItems });
+      },
+
+      simNextPlayoffGame: () => {
+        const state = get();
+        if (!state.playoffBracket) return;
+        const next = state.playoffBracket
+          .filter(m => !m.winnerId && m.homeTeamId && m.awayTeamId)
+          .sort((a, b) => a.round - b.round)[0];
+        if (next) get().simPlayoffGame(next.id);
+      },
+
+      simAllPlayoffGames: () => {
+        let guard = 0;
+        while (guard < 200) {
+          guard++;
+          const state = get();
+          const next = state.playoffBracket
+            ?.filter(m => !m.winnerId && m.homeTeamId && m.awayTeamId)
+            .sort((a, b) => a.round - b.round)[0];
+          if (!next) break;
+          get().simPlayoffGame(next.id);
+        }
+      },
+
+      // PRD-03: Advance from playoffs to re-signing phase
+      advanceToResigning: () => {
+        const state = get();
+        const userTeam = state.teams.find(t => t.id === state.userTeamId);
+        if (!userTeam) return;
+
+        const expiringPlayers = state.players.filter(
+          p => p.teamId === state.userTeamId && p.contract.yearsLeft === 1 && !p.retired,
+        );
+
+        const resigningPlayers = expiringPlayers.map(p => computeResigningEntry(p, userTeam));
+
+        set({ phase: 'resigning', resigningPlayers });
+      },
+
+      // PRD-03: User re-signs a player
+      resignPlayer: (playerId: string, salary: number, years: number) => {
+        const state = get();
+        const entry = state.resigningPlayers.find(e => e.playerId === playerId);
+        if (!entry) return false;
+
+        const userTeam = state.teams.find(t => t.id === state.userTeamId);
+        if (!userTeam) return false;
+
+        // Cap check
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return false;
+
+        const capSpaceNeeded = salary - player.contract.salary;
+        if (capSpaceNeeded > 0 && userTeam.totalPayroll + capSpaceNeeded > userTeam.salaryCap) {
+          return false;
+        }
+
+        // Offer must meet asking price
+        if (salary < entry.askingSalary) {
+          return false;
+        }
+
+        const newNewsItems = [...state.newsItems, makeNews({
+          season: state.season,
+          week: 0,
+          type: 'signing',
+          teamId: state.userTeamId,
+          playerIds: [playerId],
+          headline: `You re-signed ${player.firstName} ${player.lastName} to a $${salary}M/yr, ${years}-year extension.`,
+          isUserTeam: true,
+        })];
+
+        set({
+          players: state.players.map(p =>
+            p.id === playerId ? { ...p, contract: { salary, yearsLeft: years } } : p,
+          ),
+          teams: state.teams.map(t =>
+            t.id === state.userTeamId
+              ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + capSpaceNeeded) }
+              : t,
+          ),
+          resigningPlayers: state.resigningPlayers.filter(e => e.playerId !== playerId),
+          newsItems: newNewsItems,
+        });
+        return true;
+      },
+
+      // PRD-03: User passes on re-signing (player will enter FA)
+      passOnResigning: (playerId: string) => {
+        const state = get();
+        // Set yearsLeft = 0 so they get picked up by advanceToFreeAgency
+        set({
+          players: state.players.map(p =>
+            p.id === playerId ? { ...p, contract: { ...p.contract, yearsLeft: 0 } } : p,
+          ),
+          resigningPlayers: state.resigningPlayers.filter(e => e.playerId !== playerId),
+        });
+      },
+
+      advanceToDraft: () => {
+        const state = get();
+        // PRD-03: AI teams re-sign their own expiring players when coming from resigning phase
+        let updatedPlayers = [...state.players];
+        let updatedTeams = [...state.teams];
+
+        if (state.phase === 'resigning') {
+          // Handle remaining unsigned user players
+          const unhandledUserExpiring = state.resigningPlayers.map(e => e.playerId);
+          updatedPlayers = updatedPlayers.map(p =>
+            unhandledUserExpiring.includes(p.id) ? { ...p, contract: { ...p.contract, yearsLeft: 0 } } : p,
+          );
+
+          // AI teams auto-resign their own expiring players
+          const aiTeams = updatedTeams.filter(t => t.id !== state.userTeamId);
+          for (const aiTeam of aiTeams) {
+            const expiringFromAI = updatedPlayers.filter(
+              p => p.teamId === aiTeam.id && p.contract.yearsLeft === 1 && !p.retired,
+            );
+            for (const player of expiringFromAI) {
+              const marketSalary = estimateSalary(player.ratings.overall);
+              const capSpace = aiTeam.salaryCap - aiTeam.totalPayroll;
+              // 70% chance if cap space available
+              if (capSpace >= marketSalary && Math.random() < 0.70) {
+                const newYears = 1 + Math.floor(Math.random() * 3);
+                const salaryDiff = marketSalary - player.contract.salary;
+                updatedPlayers = updatedPlayers.map(p =>
+                  p.id === player.id ? { ...p, contract: { salary: marketSalary, yearsLeft: newYears } } : p,
+                );
+                updatedTeams = updatedTeams.map(t =>
+                  t.id === aiTeam.id ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + salaryDiff) } : t,
+                );
+              } else {
+                // Let contract expire
+                updatedPlayers = updatedPlayers.map(p =>
+                  p.id === player.id ? { ...p, contract: { ...p.contract, yearsLeft: 0 } } : p,
+                );
+              }
+            }
+          }
+        }
+
+        // Find/generate draft class
+        const allImportedProspects = updatedPlayers
+          .filter(
+            (p) =>
+              p.teamId === null &&
+              p.experience === 0 &&
+              p.draftYear !== null &&
+              p.contract.yearsLeft === 0 &&
+              p.draftYear >= state.season,
+          )
+          .sort((a, b) => b.ratings.overall - a.ratings.overall);
+        const targetDraftYear = allImportedProspects.reduce<number | null>(
+          (minYear, prospect) =>
+            minYear === null || (prospect.draftYear as number) < minYear
+              ? (prospect.draftYear as number)
+              : minYear,
+          null,
+        ) ?? state.season;
+        const importedDraftClass = allImportedProspects.filter(
+          (prospect) => prospect.draftYear === targetDraftYear,
+        );
+
+        const draftClass = importedDraftClass.length > 0
+          ? importedDraftClass
+          : generateDraftClass(224).map((player) => ({
+              ...player,
+              draftYear: targetDraftYear,
+            }));
+
+        const sortedTeams = [...updatedTeams].sort((a, b) => {
+          const aWinPct = a.record.wins / Math.max(1, a.record.wins + a.record.losses);
+          const bWinPct = b.record.wins / Math.max(1, b.record.wins + b.record.losses);
+          return aWinPct - bWinPct;
+        });
+        const rounds = 7;
+        const draftOrder = Array.from({ length: rounds }, () => sortedTeams.map((team) => team.id)).flat();
+
+        // PRD-07: Compute scouting data for draft prospects
+        const scoutingData = computeScoutingData(draftClass, state.scoutingLevel);
+
+        const finalPlayers = importedDraftClass.length > 0
+          ? updatedPlayers
+          : [...updatedPlayers, ...draftClass];
+
+        set({
+          phase: 'draft',
+          players: finalPlayers,
+          teams: updatedTeams,
+          freeAgents: draftClass.map(p => p.id),
+          draftOrder,
+          draftResults: [],
+          resigningPlayers: [],
+          draftScoutingData: scoutingData,
+        });
+      },
+
+      draftPlayer: (playerId: string) => {
+        const state = get();
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return;
+
+        const currentPickTeamId = state.draftOrder[0];
+        if (!currentPickTeamId) return;
+        const totalPicks = state.teams.length * 7;
+        const overallPick = totalPicks - state.draftOrder.length + 1;
+        const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
+        const round = Math.ceil(overallPick / state.teams.length);
+
+        const rookieSalary = Math.round((5 - (state.freeAgents.indexOf(playerId) / 50)) * 10) / 10;
+        const finalSalary = Math.max(0.5, rookieSalary);
+
+        const pickingTeam = state.teams.find(t => t.id === currentPickTeamId);
+        if (pickingTeam && currentPickTeamId === state.userTeamId) {
+          if (pickingTeam.totalPayroll + finalSalary > pickingTeam.salaryCap) {
+            console.warn('Cap space exceeded when drafting player');
+          }
+        }
+
+        let newNewsItems = state.newsItems;
+        if (overallPick <= 10 || currentPickTeamId === state.userTeamId) {
+          const pickingTeamObj = state.teams.find(t => t.id === currentPickTeamId);
+          newNewsItems = [...newNewsItems, makeNews({
+            season: state.season,
+            week: 0,
+            type: 'signing',
+            teamId: currentPickTeamId,
+            playerIds: [playerId],
+            headline: `${pickingTeamObj?.abbreviation ?? '???'} selects ${player.firstName} ${player.lastName} (${player.position}) with pick #${overallPick} in Round ${round}.`,
+            isUserTeam: currentPickTeamId === state.userTeamId,
+          })];
+        }
+
+        // PRD-13: Update depth chart for drafting team
+        const updatedTeams = state.teams.map(t => {
+          if (t.id !== currentPickTeamId) return t;
+          const chart = { ...t.depthChart };
+          chart[player.position] = [...(chart[player.position] ?? []), playerId];
+          return { ...t, roster: [...t.roster, playerId], totalPayroll: t.totalPayroll + finalSalary, depthChart: chart };
+        });
+
+        set({
+          players: state.players.map(p =>
+            p.id === playerId
+              ? {
+                  ...p,
+                  teamId: currentPickTeamId,
+                  draftYear: state.season,
+                  draftPick: overallPick,
+                  contract: { salary: finalSalary, yearsLeft: 4 },
+                }
+              : p,
+          ),
+          teams: updatedTeams,
+          freeAgents: state.freeAgents.filter(id => id !== playerId),
+          draftOrder: state.draftOrder.slice(1),
+          draftResults: [
+            ...state.draftResults,
+            { overallPick, round, pickInRound, teamId: currentPickTeamId, playerId },
+          ],
+          newsItems: newNewsItems,
+        });
+      },
+
+      simDraftPick: () => {
+        const state = get();
+        if (state.phase !== 'draft') return;
+        const currentPickTeamId = state.draftOrder[0];
+        if (!currentPickTeamId) return;
+        const playerId = autoDraftPlayerId(state, currentPickTeamId);
+        if (!playerId) return;
+        get().draftPlayer(playerId);
+      },
+
+      simToUserDraftPick: () => {
+        let guard = 0;
+        while (guard < 5000) {
+          guard += 1;
+          const state = get();
+          if (state.phase !== 'draft') return;
+          if (state.draftOrder.length === 0 || state.freeAgents.length === 0) return;
+          if (state.draftOrder[0] === state.userTeamId) return;
+          get().simDraftPick();
+        }
+      },
+
+      simToEndDraft: () => {
+        let guard = 0;
+        while (guard < 5000) {
+          guard += 1;
+          const state = get();
+          if (state.phase !== 'draft') return;
+          if (state.draftOrder.length === 0 || state.freeAgents.length === 0) return;
+          get().simDraftPick();
+        }
+      },
+
+      advanceToFreeAgency: () => {
+        const state = get();
+        const expiredPlayers = state.players.filter(
+          p => p.teamId && p.contract.yearsLeft <= 0,
+        );
+
+        const releaseNews: NewsItem[] = expiredPlayers
+          .filter(p => p.ratings.overall >= 75)
+          .map(p => {
+            const t = state.teams.find(t => t.id === p.teamId);
+            return makeNews({
+              season: state.season,
+              week: 0,
+              type: 'release',
+              teamId: p.teamId!,
+              playerIds: [p.id],
+              headline: `${p.firstName} ${p.lastName} (${p.position}, ${t?.abbreviation ?? '?'}) enters free agency.`,
+              isUserTeam: p.teamId === state.userTeamId,
+            });
+          });
+
+        set({
+          phase: 'freeAgency',
+          players: state.players.map(p =>
+            p.contract.yearsLeft <= 0 ? { ...p, teamId: null } : p,
+          ),
+          teams: state.teams.map(t => {
+            const expiredFromTeam = expiredPlayers.filter(ep => t.roster.includes(ep.id));
+            const salaryReduction = expiredFromTeam.reduce((sum, p) => sum + p.contract.salary, 0);
+            const newRoster = t.roster.filter(pid => !expiredPlayers.find(ep => ep.id === pid));
+            // Remove expired players from depth chart
+            const newDepthChart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
+              acc[pos] = (t.depthChart[pos] ?? []).filter(
+                pid => !expiredPlayers.find(ep => ep.id === pid),
+              );
+              return acc;
+            }, {} as Record<Position, string[]>);
+            return {
+              ...t,
+              roster: newRoster,
+              totalPayroll: Math.max(0, t.totalPayroll - salaryReduction),
+              depthChart: newDepthChart,
+            };
+          }),
+          freeAgents: expiredPlayers.map(p => p.id),
+          newsItems: [...state.newsItems, ...releaseNews],
+        });
+      },
+
+      signFreeAgent: (playerId: string, salary: number, years: number) => {
+        const state = get();
+        const userTeam = state.teams.find(t => t.id === state.userTeamId);
+        if (userTeam && userTeam.totalPayroll + salary > userTeam.salaryCap) {
+          return false;
+        }
+
+        const player = state.players.find(p => p.id === playerId);
+
+        let newNewsItems = state.newsItems;
+        if (player) {
+          newNewsItems = [...newNewsItems, makeNews({
+            season: state.season,
+            week: state.week,
+            type: 'signing',
+            teamId: state.userTeamId,
+            playerIds: [playerId],
+            headline: `You signed ${player.firstName} ${player.lastName} (${player.position}) to a $${salary}M/yr deal.`,
+            isUserTeam: true,
+          })];
+        }
+
+        // PRD-13: Add player to depth chart (at the end)
+        const updatedTeams = state.teams.map(t => {
+          if (t.id !== state.userTeamId) return t;
+          const chart = { ...t.depthChart };
+          if (player) {
+            chart[player.position] = [...(chart[player.position] ?? []), playerId];
+          }
+          return { ...t, roster: [...t.roster, playerId], totalPayroll: t.totalPayroll + salary, depthChart: chart };
+        });
+
+        set({
+          players: state.players.map(p =>
+            p.id === playerId
+              ? { ...p, teamId: state.userTeamId, contract: { salary, yearsLeft: years } }
+              : p,
+          ),
+          teams: updatedTeams,
+          freeAgents: state.freeAgents.filter(id => id !== playerId),
+          newsItems: newNewsItems,
+        });
+        return true;
+      },
+
+      releasePlayer: (playerId: string) => {
+        const state = get();
+        const player = state.players.find(p => p.id === playerId);
+        if (!player || player.teamId !== state.userTeamId) return;
+
+        const releaseNews = makeNews({
+          season: state.season,
+          week: state.week,
+          type: 'release',
+          teamId: state.userTeamId,
+          playerIds: [playerId],
+          headline: `You released ${player.firstName} ${player.lastName} (${player.position}). He is now a free agent.`,
+          isUserTeam: true,
+        });
+
+        const updatedTeams = state.teams.map(t => {
+          if (t.id !== state.userTeamId) return t;
+          const chart = { ...t.depthChart };
+          chart[player.position] = (chart[player.position] ?? []).filter(id => id !== playerId);
+          return {
+            ...t,
+            roster: t.roster.filter(id => id !== playerId),
+            totalPayroll: Math.max(0, t.totalPayroll - player.contract.salary),
+            depthChart: chart,
+          };
+        });
+
+        set({
+          players: state.players.map(p =>
+            p.id === playerId ? { ...p, teamId: null, onIR: false } : p,
+          ),
+          teams: updatedTeams,
+          freeAgents: [...state.freeAgents, playerId],
+          newsItems: [...state.newsItems, releaseNews],
+        });
+      },
+
+      placeOnIR: (playerId: string) => {
+        const state = get();
+        const player = state.players.find(p => p.id === playerId);
+        if (!player || player.teamId !== state.userTeamId) return;
+        if (!player.injury || player.injury.weeksLeft < 4) return;
+        set({
+          players: state.players.map(p =>
+            p.id === playerId ? { ...p, onIR: true } : p,
+          ),
+        });
+      },
+
+      activateFromIR: (playerId: string) => {
+        const state = get();
+        const player = state.players.find(p => p.id === playerId);
+        if (!player || !player.onIR) return;
+        if (player.injury && player.injury.weeksLeft > 2) return;
+        set({
+          players: state.players.map(p =>
+            p.id === playerId ? { ...p, onIR: false } : p,
+          ),
+        });
+      },
+
+      // PRD-04: Execute a trade
+      executeTrade: (
+        offeredPlayerIds,
+        offeredPickIds,
+        receivedPlayerIds,
+        receivedPickIds,
+        counterpartTeamId,
+      ) => {
+        const state = get();
+        if (state.week > 12) return false; // Past trade deadline
+
+        const userTeam = state.teams.find(t => t.id === state.userTeamId);
+        const aiTeam = state.teams.find(t => t.id === counterpartTeamId);
+        if (!userTeam || !aiTeam) return false;
+
+        // Evaluate trade values
+        const offeredValue = offeredPlayerIds.reduce((sum, id) => {
+          const p = state.players.find(pl => pl.id === id);
+          return sum + (p ? playerTradeValue(p) : 0);
+        }, 0) + offeredPickIds.reduce((sum, id) => {
+          const pick = userTeam.draftPicks.find(pk => pk.id === id);
+          return sum + (pick ? pickTradeValue(pick) : 0);
+        }, 0);
+
+        const receivedValue = receivedPlayerIds.reduce((sum, id) => {
+          const p = state.players.find(pl => pl.id === id);
+          return sum + (p ? playerTradeValue(p) : 0);
+        }, 0) + receivedPickIds.reduce((sum, id) => {
+          const pick = aiTeam.draftPicks.find(pk => pk.id === id);
+          return sum + (pick ? pickTradeValue(pick) : 0);
+        }, 0);
+
+        // AI accepts if within 10% value
+        if (offeredValue < receivedValue * 0.90) return false;
+
+        // Execute the trade
+        const offeredPlayerIdsSet = new Set(offeredPlayerIds);
+        const receivedPlayerIdsSet = new Set(receivedPlayerIds);
+        const offeredPickIdsSet = new Set(offeredPickIds);
+        const receivedPickIdsSet = new Set(receivedPickIds);
+
+        const updatedPlayers = state.players.map(p => {
+          if (offeredPlayerIdsSet.has(p.id)) return { ...p, teamId: counterpartTeamId };
+          if (receivedPlayerIdsSet.has(p.id)) return { ...p, teamId: state.userTeamId };
+          return p;
+        });
+
+        const offeredSalary = offeredPlayerIds.reduce((sum, id) => {
+          const p = state.players.find(pl => pl.id === id);
+          return sum + (p?.contract.salary ?? 0);
+        }, 0);
+        const receivedSalary = receivedPlayerIds.reduce((sum, id) => {
+          const p = state.players.find(pl => pl.id === id);
+          return sum + (p?.contract.salary ?? 0);
+        }, 0);
+
+        const updatedTeams = state.teams.map(t => {
+          if (t.id === state.userTeamId) {
+            const newRoster = [
+              ...t.roster.filter(id => !offeredPlayerIdsSet.has(id)),
+              ...receivedPlayerIds,
+            ];
+            const newPicks = [
+              ...t.draftPicks.filter(pk => !offeredPickIdsSet.has(pk.id)),
+              ...aiTeam.draftPicks.filter(pk => receivedPickIdsSet.has(pk.id)).map(pk => ({
+                ...pk, ownerTeamId: state.userTeamId,
+              })),
+            ];
+            // Rebuild depth chart for user team
+            const allPlayers = updatedPlayers.filter(p => newRoster.includes(p.id));
+            return {
+              ...t,
+              roster: newRoster,
+              draftPicks: newPicks,
+              totalPayroll: t.totalPayroll - offeredSalary + receivedSalary,
+              depthChart: buildDefaultDepthChart(allPlayers),
+            };
+          }
+          if (t.id === counterpartTeamId) {
+            const newRoster = [
+              ...t.roster.filter(id => !receivedPlayerIdsSet.has(id)),
+              ...offeredPlayerIds,
+            ];
+            const newPicks = [
+              ...t.draftPicks.filter(pk => !receivedPickIdsSet.has(pk.id)),
+              ...userTeam.draftPicks.filter(pk => offeredPickIdsSet.has(pk.id)).map(pk => ({
+                ...pk, ownerTeamId: counterpartTeamId,
+              })),
+            ];
+            return {
+              ...t,
+              roster: newRoster,
+              draftPicks: newPicks,
+              totalPayroll: t.totalPayroll - receivedSalary + offeredSalary,
+            };
+          }
+          return t;
+        });
+
+        const tradeNews = makeNews({
+          season: state.season,
+          week: state.week,
+          type: 'trade',
+          teamId: state.userTeamId,
+          playerIds: [...offeredPlayerIds, ...receivedPlayerIds],
+          headline: `Trade: You send ${offeredPlayerIds.length > 0 ? offeredPlayerIds.map(id => state.players.find(p => p.id === id)?.lastName ?? '?').join(', ') : 'picks'} to ${aiTeam.abbreviation} for ${receivedPlayerIds.length > 0 ? receivedPlayerIds.map(id => state.players.find(p => p.id === id)?.lastName ?? '?').join(', ') : 'picks'}.`,
+          isUserTeam: true,
+        });
+
+        set({
+          players: updatedPlayers,
+          teams: updatedTeams,
+          newsItems: [...state.newsItems, tradeNews],
+        });
+
+        return true;
+      },
+
+      respondToTradeProposal: (proposalId: string, accept: boolean) => {
+        const state = get();
+        const proposal = state.tradeProposals.find(p => p.id === proposalId);
+        if (!proposal || proposal.status !== 'pending') return false;
+
+        if (!accept) {
+          set({
+            tradeProposals: state.tradeProposals.map(p =>
+              p.id === proposalId ? { ...p, status: 'rejected' } : p,
+            ),
+          });
+          return true;
+        }
+
+        const success = get().executeTrade(
+          proposal.offeredPlayerIds,
+          proposal.offeredPickIds,
+          proposal.requestedPlayerIds,
+          proposal.requestedPickIds,
+          proposal.proposingTeamId,
+        );
+
+        set({
+          tradeProposals: state.tradeProposals.map(p =>
+            p.id === proposalId ? { ...p, status: accept && success ? 'accepted' : 'rejected' } : p,
+          ),
+        });
+
+        return success;
+      },
+
+      // PRD-07: Set scouting level
+      setScoutingLevel: (level: 0 | 1 | 2 | 3 | 4) => {
+        set({ scoutingLevel: level });
+      },
+
+      // PRD-07: Deep scout a prospect
+      deepScoutPlayer: (playerId: string) => {
+        const state = get();
+        const scoutData = state.draftScoutingData[playerId];
+        if (!scoutData) return;
+
+        const deepScoutedCount = Object.values(state.draftScoutingData).filter(d => d.deepScouted).length;
+        if (deepScoutedCount >= 5) return; // Max 5 deep scouts
+
+        set({
+          draftScoutingData: {
+            ...state.draftScoutingData,
+            [playerId]: { ...scoutData, deepScouted: true, error: Math.ceil(scoutData.error / 2) },
+          },
+        });
+      },
+
+      // PRD-13: Reorder depth chart position
+      reorderDepthChart: (position: Position, playerIds: string[]) => {
+        const state = get();
+        const updatedTeams = state.teams.map(t => {
+          if (t.id !== state.userTeamId) return t;
+          return {
+            ...t,
+            depthChart: { ...t.depthChart, [position]: playerIds },
+          };
+        });
+        set({ teams: updatedTeams });
+      },
+
+      // PRD-13: Reset depth chart position to OVR order
+      resetDepthChart: (position: Position) => {
+        const state = get();
+        const updatedTeams = state.teams.map(t => {
+          if (t.id !== state.userTeamId) return t;
+          const sorted = state.players
+            .filter(p => p.teamId === state.userTeamId && p.position === position)
+            .sort((a, b) => b.ratings.overall - a.ratings.overall)
+            .map(p => p.id);
+          return {
+            ...t,
+            depthChart: { ...t.depthChart, [position]: sorted },
+          };
+        });
+        set({ teams: updatedTeams });
+      },
+
+      startNewSeason: () => {
+        const state = get();
+        const newSeason = state.season + 1;
+        const previouslyRetiredIds = new Set(state.players.filter(p => p.retired).map(p => p.id));
+
+        const awards = computeSeasonAwards(state);
+        const userTeamObj = state.teams.find(t => t.id === state.userTeamId);
+
+        let userPlayoffResult: import('@/types').SeasonSummary['userPlayoffResult'] = 'missed';
+        if (state.playoffBracket && state.playoffSeeds) {
+          const userInPlayoffs = Object.values(state.playoffSeeds).flat().includes(state.userTeamId);
+          if (userInPlayoffs) {
+            const sbGame = state.playoffBracket.find(m => m.id === 'super-bowl');
+            const confGames = state.playoffBracket.filter(m => m.round === 3);
+            const divGames = state.playoffBracket.filter(m => m.round === 2);
+
+            if (sbGame?.winnerId === state.userTeamId) userPlayoffResult = 'champion';
+            else if (sbGame?.homeTeamId === state.userTeamId || sbGame?.awayTeamId === state.userTeamId) userPlayoffResult = 'runnerup';
+            else if (confGames.some(m => m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId)) userPlayoffResult = 'conference';
+            else if (divGames.some(m => m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId)) userPlayoffResult = 'divisional';
+            else userPlayoffResult = 'wildcard';
+          }
+        }
+
+        const champion = state.champions.find(c => c.season === state.season);
+        const newSummary: import('@/types').SeasonSummary = {
+          season: state.season,
+          championTeamId: champion?.teamId ?? '',
+          awards,
+          statLeaders: {
+            passYards: (() => {
+              const top = state.players.reduce((best, p) =>
+                p.stats.passYards > (best?.stats.passYards ?? 0) ? p : best, state.players[0]);
+              return top ? { playerId: top.id, value: top.stats.passYards } : { playerId: '', value: 0 };
+            })(),
+            rushYards: (() => {
+              const top = state.players.reduce((best, p) =>
+                p.stats.rushYards > (best?.stats.rushYards ?? 0) ? p : best, state.players[0]);
+              return top ? { playerId: top.id, value: top.stats.rushYards } : { playerId: '', value: 0 };
+            })(),
+            sacks: (() => {
+              const top = state.players.reduce((best, p) =>
+                p.stats.sacks > (best?.stats.sacks ?? 0) ? p : best, state.players[0]);
+              return top ? { playerId: top.id, value: top.stats.sacks } : { playerId: '', value: 0 };
+            })(),
+          },
+          userRecord: {
+            wins: userTeamObj?.record.wins ?? 0,
+            losses: userTeamObj?.record.losses ?? 0,
+          },
+          userPlayoffResult,
+        };
+
+        const agedPlayers = state.players.map(p => {
+          if (p.retired) return p;
+
+          if (p.teamId === null) {
+            const isFutureProspect =
+              p.draftYear !== null && p.draftYear >= newSeason && p.experience === 0;
+            if (!isFutureProspect) {
+              return { ...p, retired: true, stats: emptyStats() };
+            }
+          }
+
+          const isUnsignedFutureProspect =
+            p.teamId === null &&
+            p.contract.yearsLeft <= 0 &&
+            p.draftYear !== null &&
+            p.draftYear >= newSeason;
+
+          return {
+            ...p,
+            age: p.age + 1,
+            experience: isUnsignedFutureProspect ? 0 : p.experience + 1,
+            stats: emptyStats(),
+            injury: null,
+            onIR: false,
+            contract: isUnsignedFutureProspect
+              ? p.contract
+              : { ...p.contract, yearsLeft: p.contract.yearsLeft - 1 },
+          };
+        });
+
+        const developedPlayers = developPlayers(agedPlayers, state.season);
+
+        const retirementNews: NewsItem[] = developedPlayers
+          .filter(p => p.retired && !previouslyRetiredIds.has(p.id))
+          .filter(p => p.ratings.overall >= 70)
+          .map(p => makeNews({
+            season: state.season,
+            week: 0,
+            type: 'milestone',
+            playerIds: [p.id],
+            headline: `${p.firstName} ${p.lastName} announces retirement after ${p.experience} season${p.experience !== 1 ? 's' : ''}.`,
+            isUserTeam: false,
+          }));
+
+        const newlyRetiredOnTeam = developedPlayers.filter(
+          p => p.retired && !previouslyRetiredIds.has(p.id) && p.teamId !== null,
+        );
+        const newlyRetiredOnTeamIds = new Set(newlyRetiredOnTeam.map(p => p.id));
+
+        const newTeams = state.teams.map(t => {
+          const retiredFromTeam = newlyRetiredOnTeam.filter(p => t.roster.includes(p.id));
+          const salaryReduction = retiredFromTeam.reduce((sum, p) => sum + p.contract.salary, 0);
+          const newRoster = t.roster.filter(pid => !newlyRetiredOnTeamIds.has(pid));
+          // Remove retired from depth chart
+          const newDepthChart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
+            acc[pos] = (t.depthChart[pos] ?? []).filter(pid => !newlyRetiredOnTeamIds.has(pid));
+            return acc;
+          }, {} as Record<Position, string[]>);
+          return {
+            ...t,
+            record: emptyRecord(),
+            roster: newRoster,
+            totalPayroll: Math.max(0, t.totalPayroll - salaryReduction),
+            depthChart: newDepthChart,
+            // Refresh picks for new season
+            draftPicks: [...t.draftPicks, ...[1, 2, 3, 4, 5, 6, 7].map(round => ({
+              id: uuid(),
+              year: newSeason,
+              round,
+              originalTeamId: t.id,
+              ownerTeamId: t.id,
+            }))],
+          };
+        });
+
+        const finalPlayers = developedPlayers.map(p =>
+          p.retired && !previouslyRetiredIds.has(p.id) ? { ...p, teamId: null } : p,
+        );
+
+        const newSchedule = generateSchedule(newTeams, newSeason);
+
+        set({
+          season: newSeason,
+          week: 1,
+          phase: 'regular',
+          players: finalPlayers,
+          teams: newTeams,
+          schedule: newSchedule,
+          draftResults: [],
+          freeAgents: [],
+          playoffBracket: null,
+          playoffSeeds: null,
+          newsItems: retirementNews,
+          seasonHistory: [...state.seasonHistory, newSummary],
+          resigningPlayers: [],
+          tradeProposals: [],
+          draftScoutingData: {},
+        });
+      },
+
+      saveToSlot: (slot: 1 | 2) => {
+        const stored = localStorage.getItem('gridiron-gm-autosave');
+        if (stored) {
+          localStorage.setItem(`gridiron-gm-save-${slot}`, stored);
+        }
+      },
+
+      loadFromSlot: (slot: 1 | 2) => {
+        const data = localStorage.getItem(`gridiron-gm-save-${slot}`);
+        if (!data) return;
+        localStorage.setItem('gridiron-gm-autosave', data);
+        window.location.reload();
+      },
+
+      getTeam: (id: string) => get().teams.find(t => t.id === id),
+      getPlayer: (id: string) => get().players.find(p => p.id === id),
+      getTeamRoster: (teamId: string) => get().players.filter(p => p.teamId === teamId),
+      getWeekGames: (week: number) => get().schedule.filter(g => g.week === week),
+    }),
+    {
+      name: 'gridiron-gm-autosave',
+      version: SAVE_VERSION,
+    },
+  ),
+);
