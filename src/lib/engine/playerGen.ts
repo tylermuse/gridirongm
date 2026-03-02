@@ -176,14 +176,20 @@ const SCOUTING_LABELS = [
   'Injury history', 'Combine standout', 'Character concerns',
 ];
 
-/** Generates a class of draft prospects. */
+/** Generates a class of draft prospects.
+ *  Top picks should be mid-level starter quality (~75-80 OVR),
+ *  declining through mid-round role players (~55-65) to late-round
+ *  projects (~35-45). This mirrors real NFL draft talent distribution.
+ */
 export function generateDraftClass(count: number): Player[] {
   const prospects: Player[] = [];
   const positions: Position[] = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K'];
 
   for (let i = 0; i < count; i++) {
     const position = positions[Math.floor(Math.random() * positions.length)];
-    const talent = gaussian(50 - (i / count) * 25, 10);
+    // Talent curve: top picks ~78, mid-round ~55, late-round ~35
+    const progress = i / count;
+    const talent = gaussian(78 - progress * 45, 7);
     const player = generatePlayer(position, talent, { age: 21 + Math.floor(Math.random() * 2), experience: 0 });
     player.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
     player.scoutingLabel = SCOUTING_LABELS[Math.floor(Math.random() * SCOUTING_LABELS.length)];

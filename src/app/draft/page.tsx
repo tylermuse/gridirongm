@@ -22,17 +22,46 @@ function ratingColor(val: number): string {
 }
 
 function expectedOvrForPick(overallPick: number, totalPicks: number): number {
+  // Mirrors the talent curve in generateDraftClass: top picks ~78, late ~33
   const progress = (overallPick - 1) / Math.max(1, totalPicks - 1);
-  return Math.round(84 - progress * 26);
+  return Math.round(78 - progress * 45);
 }
 
 function pickGrade(overallPick: number, totalPicks: number, playerOvr: number): string {
-  const delta = playerOvr - expectedOvrForPick(overallPick, totalPicks);
-  if (delta >= 7) return 'A';
+  const expected = expectedOvrForPick(overallPick, totalPicks);
+  const delta = playerOvr - expected;
+  if (delta >= 10) return 'A+';
+  if (delta >= 6) return 'A';
   if (delta >= 3) return 'B+';
   if (delta >= 0) return 'B';
-  if (delta >= -3) return 'C+';
-  if (delta >= -6) return 'C';
+  if (delta >= -3) return 'B-';
+  if (delta >= -6) return 'C+';
+  if (delta >= -9) return 'C';
+  if (delta >= -12) return 'C-';
+  return 'D';
+}
+
+function gradeValue(grade: string): number {
+  const map: Record<string, number> = { 'A+': 12, 'A': 11, 'B+': 10, 'B': 9, 'B-': 8, 'C+': 7, 'C': 6, 'C-': 5, 'D': 3 };
+  return map[grade] ?? 5;
+}
+
+function gradeColor(grade: string): string {
+  if (grade.startsWith('A')) return 'text-green-400';
+  if (grade === 'B+' || grade === 'B') return 'text-blue-400';
+  if (grade === 'B-' || grade === 'C+') return 'text-amber-400';
+  return 'text-red-400';
+}
+
+function teamDraftGrade(avgVal: number): string {
+  if (avgVal >= 10.5) return 'A+';
+  if (avgVal >= 9.5) return 'A';
+  if (avgVal >= 8.5) return 'B+';
+  if (avgVal >= 7.5) return 'B';
+  if (avgVal >= 6.5) return 'B-';
+  if (avgVal >= 5.5) return 'C+';
+  if (avgVal >= 4.5) return 'C';
+  if (avgVal >= 3.5) return 'C-';
   return 'D';
 }
 
@@ -616,9 +645,10 @@ export default function DraftPage() {
                     <td className="py-2">{row.player ? `${row.player.firstName} ${row.player.lastName}` : '--'}</td>
                     <td className="py-2 text-center">{row.player ? <Badge>{row.player.position}</Badge> : '--'}</td>
                     <td className="py-2 text-center">
-                      {row.player ? (
-                        <Badge variant="blue">{pickGrade(row.overallPick, totalPicks, row.player.ratings.overall)}</Badge>
-                      ) : (
+                      {row.player ? (() => {
+                        const g = pickGrade(row.overallPick, totalPicks, row.player.ratings.overall);
+                        return <span className={`font-bold text-xs ${gradeColor(g)}`}>{g}</span>;
+                      })() : (
                         '--'
                       )}
                     </td>
@@ -628,6 +658,72 @@ export default function DraftPage() {
             </table>
           </Card>
         </div>
+
+        {/* Draft Recap - Team Grades (shown when draft is complete) */}
+        {draftComplete && draftResults.length > 0 && (() => {
+          // Compute team grades
+          const teamGrades = teams.map(t => {
+            const teamPicks = draftResults.filter(r => r.teamId === t.id);
+            if (teamPicks.length === 0) return { team: t, grade: 'N/A', avgVal: 0, picks: 0, bestPick: null as null | { player: Player | undefined; grade: string; overallPick: number } };
+            const grades = teamPicks.map(p => {
+              const pl = players.find(pp => pp.id === p.playerId);
+              const g = pl ? pickGrade(p.overallPick, totalPicks, pl.ratings.overall) : 'C';
+              return { grade: g, val: gradeValue(g), player: pl, overallPick: p.overallPick };
+            });
+            const avgVal = grades.reduce((s, g) => s + g.val, 0) / grades.length;
+            const best = grades.sort((a, b) => b.val - a.val)[0];
+            return {
+              team: t,
+              grade: teamDraftGrade(avgVal),
+              avgVal,
+              picks: teamPicks.length,
+              bestPick: best ? { player: best.player, grade: best.grade, overallPick: best.overallPick } : null,
+            };
+          }).sort((a, b) => b.avgVal - a.avgVal);
+
+          return (
+            <Card className="col-span-12">
+              <CardHeader>
+                <CardTitle>Draft Recap — Team Grades</CardTitle>
+              </CardHeader>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
+                    <th className="text-left pb-2 pl-3">#</th>
+                    <th className="text-left pb-2">Team</th>
+                    <th className="text-center pb-2">Grade</th>
+                    <th className="text-center pb-2">Picks</th>
+                    <th className="text-left pb-2">Best Pick</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teamGrades.map((tg, idx) => (
+                    <tr key={tg.team.id} className={`border-t border-[var(--border)] ${tg.team.id === userTeamId ? 'bg-blue-500/10' : ''}`}>
+                      <td className="py-1.5 pl-3 text-[var(--text-sec)] text-xs">{idx + 1}</td>
+                      <td className="py-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded flex items-center justify-center text-[9px] font-black text-white shrink-0" style={{ backgroundColor: tg.team.primaryColor }}>
+                            {tg.team.abbreviation}
+                          </div>
+                          <span className={`font-medium ${tg.team.id === userTeamId ? 'text-blue-400' : ''}`}>{tg.team.city} {tg.team.name}</span>
+                        </div>
+                      </td>
+                      <td className={`py-1.5 text-center font-black text-lg ${gradeColor(tg.grade)}`}>{tg.grade}</td>
+                      <td className="py-1.5 text-center text-[var(--text-sec)]">{tg.picks}</td>
+                      <td className="py-1.5 text-sm">
+                        {tg.bestPick?.player ? (
+                          <span>
+                            #{tg.bestPick.overallPick} {tg.bestPick.player.firstName} {tg.bestPick.player.lastName} ({tg.bestPick.player.position}, {tg.bestPick.player.ratings.overall} OVR) — <span className={gradeColor(tg.bestPick.grade)}>{tg.bestPick.grade}</span>
+                          </span>
+                        ) : '--'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          );
+        })()}
 
         <div className="grid grid-cols-12 gap-4">
           {/* Your Needs */}
@@ -673,9 +769,10 @@ export default function DraftPage() {
                       <div className="text-xs text-[var(--text-sec)]">{player ? `${player.position} ${player.ratings.overall} · Pot: ${potentialLabel(player.potential, player.experience)}` : '--'}</div>
                     </div>
                   </div>
-                  <Badge variant="blue">
-                    {player ? pickGrade(pick.overallPick, totalPicks, player.ratings.overall) : '--'}
-                  </Badge>
+                  {player ? (() => {
+                    const g = pickGrade(pick.overallPick, totalPicks, player.ratings.overall);
+                    return <span className={`font-bold text-xs ${gradeColor(g)}`}>{g}</span>;
+                  })() : <span className="text-[var(--text-sec)]">--</span>}
                 </div>
               ))}
             </div>
