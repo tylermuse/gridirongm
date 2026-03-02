@@ -49,14 +49,19 @@ export function TopBar() {
   const handleSimWeek = useCallback(() => {
     const beforeIds = new Set(useGameStore.getState().tradeProposals.filter(p => p.status === 'pending').map(p => p.id));
     simWeek();
-    if (!useGameStore.getState().suppressTradePopups) {
-      const afterProposals = useGameStore.getState().tradeProposals.filter(p => p.status === 'pending');
+    const afterState = useGameStore.getState();
+    if (!afterState.suppressTradePopups) {
+      const afterProposals = afterState.tradeProposals.filter(p => p.status === 'pending');
       const newIds = afterProposals.filter(p => !beforeIds.has(p.id)).map(p => p.id);
       if (newIds.length > 0) {
         setNewProposalIds(newIds);
       }
     }
-  }, [simWeek]);
+    // Auto-redirect to playoffs when regular season ends
+    if (afterState.phase === 'playoffs') {
+      router.push('/playoffs');
+    }
+  }, [simWeek, router]);
 
   const handleSimToDeadline = useCallback(() => {
     const deadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
@@ -65,7 +70,11 @@ export function TopBar() {
       if (useGameStore.getState().phase !== 'regular') break;
       useGameStore.getState().simWeek();
     }
-  }, [leagueSettings]);
+    // Auto-redirect to playoffs if season ended during sim
+    if (useGameStore.getState().phase === 'playoffs') {
+      router.push('/playoffs');
+    }
+  }, [leagueSettings, router]);
 
   const handleSimSeason = useCallback(() => {
     const store = useGameStore.getState();
@@ -73,7 +82,11 @@ export function TopBar() {
     for (let w = store.week; w <= max; w++) {
       useGameStore.getState().simWeek();
     }
-  }, []);
+    // Auto-redirect to playoffs when season ends
+    if (useGameStore.getState().phase === 'playoffs') {
+      router.push('/playoffs');
+    }
+  }, [router]);
 
   // Phase banner context
   let bannerText = '';

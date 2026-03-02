@@ -19,6 +19,22 @@ function ratingColor(val: number): string {
   return 'text-red-400';
 }
 
+function positionStats(p: { position: string; stats: { gamesPlayed: number; passYards: number; passTDs: number; interceptions: number; rushYards: number; rushTDs: number; receptions: number; receivingYards: number; receivingTDs: number; tackles: number; sacks: number; defensiveINTs: number; fieldGoalsMade: number; fieldGoalAttempts: number } }): string {
+  const s = p.stats;
+  if (s.gamesPlayed === 0) return 'No games played';
+  switch (p.position) {
+    case 'QB': return `${s.gamesPlayed} GP · ${s.passYards} YDS · ${s.passTDs} TD · ${s.interceptions} INT`;
+    case 'RB': return `${s.gamesPlayed} GP · ${s.rushYards} YDS · ${s.rushTDs} TD · ${s.receptions} REC`;
+    case 'WR': case 'TE': return `${s.gamesPlayed} GP · ${s.receptions} REC · ${s.receivingYards} YDS · ${s.receivingTDs} TD`;
+    case 'OL': return `${s.gamesPlayed} GP`;
+    case 'DL': case 'LB': return `${s.gamesPlayed} GP · ${s.tackles} TKL · ${s.sacks} SCK`;
+    case 'CB': case 'S': return `${s.gamesPlayed} GP · ${s.tackles} TKL · ${s.defensiveINTs} INT`;
+    case 'K': return `${s.gamesPlayed} GP · ${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG`;
+    case 'P': return `${s.gamesPlayed} GP`;
+    default: return `${s.gamesPlayed} GP`;
+  }
+}
+
 type ReSignResult = 'accepted' | 'rejected' | 'passed';
 type NegMode = 'extend' | 'restructure';
 
@@ -320,6 +336,10 @@ export default function ReSignPage() {
                         <span className={potentialColor(player.potential, player.experience)}>
                           {potentialLabel(player.potential, player.experience)}
                         </span>
+                      </div>
+                      <div className="mt-1.5 text-xs text-[var(--text-sec)]">
+                        <span className="text-[10px] uppercase tracking-wider text-[var(--text-sec)]/60 mr-2">Last Season</span>
+                        {positionStats(player)}
                       </div>
                       <div className="mt-2 p-2 bg-[var(--surface-2)] rounded-lg inline-flex items-center gap-2">
                         <span className="text-xs text-[var(--text-sec)]">Asking:</span>

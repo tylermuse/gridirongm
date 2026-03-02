@@ -19,6 +19,22 @@ function ratingColor(val: number): string {
   return 'text-red-400';
 }
 
+function positionStats(p: { position: string; stats: { gamesPlayed: number; passYards: number; passTDs: number; interceptions: number; rushYards: number; rushTDs: number; receptions: number; receivingYards: number; receivingTDs: number; tackles: number; sacks: number; defensiveINTs: number; fieldGoalsMade: number; fieldGoalAttempts: number } }): string {
+  const s = p.stats;
+  if (s.gamesPlayed === 0) return '—';
+  switch (p.position) {
+    case 'QB': return `${s.passYards} YDS / ${s.passTDs} TD / ${s.interceptions} INT`;
+    case 'RB': return `${s.rushYards} YDS / ${s.rushTDs} TD`;
+    case 'WR': case 'TE': return `${s.receptions} REC / ${s.receivingYards} YDS / ${s.receivingTDs} TD`;
+    case 'OL': return `${s.gamesPlayed} GP`;
+    case 'DL': case 'LB': return `${s.tackles} TKL / ${s.sacks} SCK`;
+    case 'CB': case 'S': return `${s.tackles} TKL / ${s.defensiveINTs} INT`;
+    case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG`;
+    case 'P': return `${s.gamesPlayed} GP`;
+    default: return `${s.gamesPlayed} GP`;
+  }
+}
+
 function estimateSalary(overall: number, position?: string): number {
   const POSITION_SALARY_MULT: Record<string, number> = {
     QB: 1.6, WR: 1.0, CB: 1.0, DL: 1.05, LB: 0.95, OL: 1.0,
@@ -378,6 +394,7 @@ export default function FreeAgencyPage() {
                     <th className="text-center pb-3">Age</th>
                     <th className="text-center pb-3">OVR</th>
                     <th className="text-center pb-3">POT</th>
+                    <th className="text-left pb-3">Last Season</th>
                     <th className="text-right pb-3">Market</th>
                     <th className="text-right pb-3 pr-2">Action</th>
                   </tr>
@@ -406,6 +423,9 @@ export default function FreeAgencyPage() {
                         <td className={`py-2.5 text-center text-xs ${potentialColor(p.potential, p.experience)}`}>
                           {potentialLabel(p.potential, p.experience)}
                         </td>
+                        <td className="py-2.5 text-left text-xs text-[var(--text-sec)]">
+                          {positionStats(p)}
+                        </td>
                         <td className="py-2.5 text-right font-mono">${salary}M/yr</td>
                         <td className="py-2.5 text-right pr-2">
                           <Button
@@ -421,7 +441,7 @@ export default function FreeAgencyPage() {
                   })}
                   {agents.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="text-center py-8 text-[var(--text-sec)]">
+                      <td colSpan={8} className="text-center py-8 text-[var(--text-sec)]">
                         No free agents match your filters.
                       </td>
                     </tr>
