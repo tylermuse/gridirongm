@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -8,7 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { POSITIONS, ROSTER_LIMITS } from '@/types';
-import type { Player, Position } from '@/types';
+import type { Player, Position, Team } from '@/types';
 
 const SCOUTING_LEVEL_LABELS = ['Budget ($2M)', 'Standard ($4M)', 'Enhanced ($6M)', 'Elite ($8M)', 'Maximum ($10M)'];
 
@@ -33,6 +34,278 @@ function pickGrade(overallPick: number, totalPicks: number, playerOvr: number): 
   if (delta >= -6) return 'C';
   return 'D';
 }
+
+// ---------------------------------------------------------------------------
+// On The Clock card component
+// ---------------------------------------------------------------------------
+
+function ProspectCard({
+  label,
+  player,
+  posRank,
+  ovrRank,
+  teamColor,
+}: {
+  label: string;
+  player: Player | null | undefined;
+  posRank: number;
+  ovrRank: number;
+  teamColor: string;
+}) {
+  if (!player) return null;
+  return (
+    <div className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+      <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider px-4 pt-3 pb-1">
+        {label}
+      </div>
+      <div className="px-4 pb-3">
+        <div className="flex items-center gap-3 mb-3">
+          {/* Player avatar placeholder */}
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-black text-white shrink-0"
+            style={{ backgroundColor: teamColor }}
+          >
+            {player.firstName[0]}{player.lastName[0]}
+          </div>
+          <div className="min-w-0">
+            <div className="font-bold text-base truncate">
+              {player.firstName} {player.lastName}
+            </div>
+            <div className="text-xs text-[var(--text-sec)]">
+              Age {player.age} · Exp {player.experience}yr
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white"
+            style={{ backgroundColor: teamColor }}
+          >
+            {player.position}
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-black">{posRank}</div>
+            <div className="text-[10px] text-[var(--text-sec)] uppercase">Pos Rk</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-black">{ovrRank}</div>
+            <div className="text-[10px] text-[var(--text-sec)] uppercase">Ovr Rk</div>
+          </div>
+          <div className="text-center">
+            <div className={`text-lg font-black ${ratingColor(player.ratings.overall)}`}>
+              {player.ratings.overall}
+            </div>
+            <div className="text-[10px] text-[var(--text-sec)] uppercase">Grade</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OnTheClockSection({
+  currentTeam,
+  currentRound,
+  currentPickInRound,
+  currentOverallPick,
+  bestAvailable,
+  bestFit,
+  needs,
+  nextPickTeam,
+  nextPickOverall,
+  nextPickNeeds,
+  allProspects,
+  draftComplete,
+  isUserPick,
+  simDraftPick,
+  simToUserDraftPick,
+  simToEndDraft,
+  advanceToFreeAgency,
+}: {
+  currentTeam: Team | undefined;
+  currentRound: number;
+  currentPickInRound: number;
+  currentOverallPick: number;
+  bestAvailable: Player | undefined;
+  bestFit: Player | null | undefined;
+  needs: { position: Position; needScore: number; count: number; limits: { min: number; max: number } }[];
+  nextPickTeam: Team | undefined;
+  nextPickOverall: number;
+  nextPickNeeds: { position: Position; needScore: number }[];
+  allProspects: Player[];
+  draftComplete: boolean;
+  isUserPick: boolean;
+  simDraftPick: () => void;
+  simToUserDraftPick: () => void;
+  simToEndDraft: () => void;
+  advanceToFreeAgency: () => void;
+}) {
+  const canSimulate = !draftComplete;
+
+  // Compute ranks for best available and best fit
+  function getPositionRank(player: Player): number {
+    const samePosProspects = allProspects.filter(p => p.position === player.position);
+    return samePosProspects.findIndex(p => p.id === player.id) + 1;
+  }
+  function getOverallRank(player: Player): number {
+    return allProspects.findIndex(p => p.id === player.id) + 1;
+  }
+
+  const teamColor = currentTeam?.primaryColor ?? '#374151';
+  const nextPickRound = Math.ceil(nextPickOverall / 32) || 1;
+  const nextPickInRound = ((nextPickOverall - 1) % 32) + 1;
+
+  return (
+    <div className="space-y-0">
+      {/* On The Clock Header */}
+      <div
+        className="rounded-t-xl border border-[var(--border)] px-5 py-4"
+        style={{ borderLeft: `4px solid ${teamColor}` }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            {/* Team badge */}
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-black text-white shrink-0"
+              style={{ backgroundColor: teamColor }}
+            >
+              {currentTeam?.abbreviation ?? '--'}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-black text-lg">On The Clock</span>
+                {isUserPick && (
+                  <Badge variant="green" size="sm">Your Pick</Badge>
+                )}
+              </div>
+              <div className="text-sm text-[var(--text-sec)]">
+                {currentTeam ? `${currentTeam.city} ${currentTeam.name}` : 'Draft Complete'}
+              </div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-sm font-bold">
+              Round {currentRound}, Pick {currentPickInRound}
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <Button onClick={simDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
+                Sim Pick
+              </Button>
+              <Button onClick={simToUserDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
+                To My Pick
+              </Button>
+              <Button onClick={simToEndDraft} size="sm" variant="secondary" disabled={!canSimulate}>
+                Sim All
+              </Button>
+              {draftComplete && (
+                <Button onClick={advanceToFreeAgency} size="sm">
+                  Free Agency →
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Needs Row */}
+      <div className="border-x border-[var(--border)] px-5 py-3 bg-[var(--surface)]" style={{ borderLeft: `4px solid ${teamColor}` }}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-[var(--text-sec)] uppercase">Needs</span>
+            <div className="flex gap-1">
+              {needs.map(need => (
+                <Badge
+                  key={need.position}
+                  variant={need.needScore >= 40 ? 'red' : need.needScore >= 25 ? 'amber' : 'default'}
+                  size="sm"
+                >
+                  {need.position}
+                </Badge>
+              ))}
+            </div>
+          </div>
+          <div className="text-xs text-[var(--text-sec)]">
+            {currentTeam
+              ? `${currentTeam.record.wins}-${currentTeam.record.losses}, ${currentTeam.conference} ${currentTeam.division}`
+              : '--'}
+          </div>
+        </div>
+      </div>
+
+      {/* Best Available + Best Fit */}
+      {!draftComplete && (
+        <div
+          className="border-x border-[var(--border)] px-5 py-4 bg-[var(--surface-2)]"
+          style={{ borderLeft: `4px solid ${teamColor}` }}
+        >
+          <div className="flex gap-4">
+            {bestAvailable && (
+              <ProspectCard
+                label="Best Available"
+                player={bestAvailable}
+                posRank={getPositionRank(bestAvailable)}
+                ovrRank={getOverallRank(bestAvailable)}
+                teamColor="#6b7280"
+              />
+            )}
+            {bestFit && bestFit.id !== bestAvailable?.id && (
+              <ProspectCard
+                label="Best Fit"
+                player={bestFit}
+                posRank={getPositionRank(bestFit)}
+                ovrRank={getOverallRank(bestFit)}
+                teamColor={teamColor}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Next Pick Preview */}
+      {nextPickTeam && !draftComplete && (
+        <div
+          className="rounded-b-xl border border-[var(--border)] px-5 py-3 bg-[var(--surface)]"
+          style={{ borderLeft: `4px solid ${nextPickTeam.primaryColor ?? '#374151'}` }}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="text-xs font-bold text-[var(--text-sec)] uppercase">Next Pick</div>
+              <div
+                className="w-6 h-6 rounded flex items-center justify-center text-[10px] font-black text-white"
+                style={{ backgroundColor: nextPickTeam.primaryColor ?? '#374151' }}
+              >
+                {nextPickTeam.abbreviation.slice(0, 2)}
+              </div>
+              <div>
+                <span className="text-sm font-semibold">{nextPickTeam.city} {nextPickTeam.name}</span>
+                <div className="text-xs text-[var(--text-sec)]">
+                  Needs: {nextPickNeeds.slice(0, 3).map(n => n.position).join(', ')}
+                </div>
+              </div>
+            </div>
+            <div className="text-xs font-bold text-[var(--text-sec)]">
+              Round {nextPickRound}, Pick {nextPickInRound}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Draft complete state */}
+      {draftComplete && (
+        <div className="rounded-b-xl border border-[var(--border)] px-5 py-4 bg-[var(--surface)]">
+          <div className="text-center">
+            <span className="font-bold text-green-400">Draft Complete!</span>
+            <span className="text-sm text-[var(--text-sec)] ml-2">Advance to Free Agency to continue.</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Draft Page
+// ---------------------------------------------------------------------------
 
 export default function DraftPage() {
   const {
@@ -64,7 +337,6 @@ export default function DraftPage() {
     return (
       <GameShell>
         <div className="max-w-4xl mx-auto text-center py-20">
-          <div className="text-5xl mb-4">🎯</div>
           <h2 className="text-2xl font-black mb-3">NFL Draft</h2>
           <p className="text-[var(--text-sec)] mb-6">
             {phase === 'regular' ? 'The draft begins after the playoffs. Sim the season and compete for a title first.' :
@@ -124,7 +396,8 @@ export default function DraftPage() {
 
   const currentTeam = teams.find((team) => team.id === currentPickTeamId);
   const nextPickTeam = teams.find((team) => team.id === draftOrder[1]);
-  const currentTeamNeeds = currentPickTeamId ? getTeamNeeds(currentPickTeamId).slice(0, 3) : [];
+  const currentTeamNeeds = currentPickTeamId ? getTeamNeeds(currentPickTeamId) : [];
+  const nextPickNeeds = draftOrder[1] ? getTeamNeeds(draftOrder[1]).slice(0, 3) : [];
   const myNeeds = getTeamNeeds(userTeamId).slice(0, 5);
   const bestAvailable = allProspects[0];
   const bestFit = !currentPickTeamId
@@ -158,82 +431,34 @@ export default function DraftPage() {
       return { pick, player, team };
     });
 
-  const canSimulate = !draftComplete;
-
   return (
     <GameShell>
       <div className="max-w-7xl mx-auto space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-2xl font-black">NFL Draft</h2>
-            {!draftComplete ? (
-              <p className="text-sm text-[var(--text-sec)]">
-                Round {currentRound}, Pick {currentPickInRound}
-              </p>
-            ) : (
-              <p className="text-sm text-[var(--text-sec)]">Draft complete</p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={simDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
-              Sim one pick
-            </Button>
-            <Button onClick={simToUserDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
-              To your next pick
-            </Button>
-            <Button onClick={simToEndDraft} size="sm" variant="secondary" disabled={!canSimulate}>
-              To end of draft
-            </Button>
-            {draftComplete && (
-              <Button onClick={advanceToFreeAgency} size="sm">
-                Start Free Agency
-              </Button>
-            )}
-          </div>
-        </div>
+        <h2 className="text-2xl font-black">NFL Draft</h2>
 
-        <Card>
-          <div className="grid grid-cols-12 gap-3 text-sm">
-            <div className="col-span-12 lg:col-span-4">
-              <div className="text-xs text-[var(--text-sec)]">On the clock</div>
-              <div className="font-bold">
-                {currentTeam ? `${currentTeam.city} ${currentTeam.name}` : 'Draft complete'}
-              </div>
-              <div className="text-xs text-[var(--text-sec)]">
-                {currentTeam
-                  ? `${currentTeam.record.wins}-${currentTeam.record.losses} (${currentTeam.conference} ${currentTeam.division})`
-                  : '--'}
-              </div>
-            </div>
-            <div className="col-span-12 lg:col-span-4">
-              <div className="text-xs text-[var(--text-sec)]">Team needs</div>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {currentTeamNeeds.map((need) => (
-                  <Badge
-                    key={need.position}
-                    variant={need.needScore >= 40 ? 'red' : need.needScore >= 25 ? 'amber' : 'default'}
-                  >
-                    {need.position}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-            <div className="col-span-12 lg:col-span-4 text-left lg:text-right">
-              <div className="text-xs text-[var(--text-sec)]">Best available / best fit</div>
-              <div className="text-sm">
-                {bestAvailable ? `${bestAvailable.lastName} (${bestAvailable.position}, ${bestAvailable.ratings.overall})` : '--'}
-              </div>
-              <div className="text-xs text-[var(--text-sec)]">
-                Fit: {bestFit ? `${bestFit.lastName} (${bestFit.position}, ${bestFit.ratings.overall})` : '--'}
-              </div>
-              <div className="text-xs text-[var(--text-sec)]">
-                Next: {nextPickTeam ? `${nextPickTeam.abbreviation} (#${currentOverallPick + 1})` : '--'}
-              </div>
-            </div>
-          </div>
-        </Card>
+        {/* On The Clock */}
+        <OnTheClockSection
+          currentTeam={currentTeam}
+          currentRound={currentRound}
+          currentPickInRound={currentPickInRound}
+          currentOverallPick={currentOverallPick}
+          bestAvailable={bestAvailable}
+          bestFit={bestFit}
+          needs={currentTeamNeeds.slice(0, 5)}
+          nextPickTeam={nextPickTeam}
+          nextPickOverall={currentOverallPick + 1}
+          nextPickNeeds={nextPickNeeds}
+          allProspects={allProspects}
+          draftComplete={draftComplete}
+          isUserPick={isUserPick}
+          simDraftPick={simDraftPick}
+          simToUserDraftPick={simToUserDraftPick}
+          simToEndDraft={simToEndDraft}
+          advanceToFreeAgency={advanceToFreeAgency}
+        />
 
         <div className="grid grid-cols-12 gap-4">
+          {/* Top Prospects */}
           <Card className="col-span-12 lg:col-span-6">
             <CardHeader>
               <CardTitle>Top Prospects</CardTitle>
@@ -330,6 +555,7 @@ export default function DraftPage() {
             </table>
           </Card>
 
+          {/* Draft Results */}
           <Card className="col-span-12 lg:col-span-6">
             <CardHeader>
               <CardTitle>Draft Results</CardTitle>
@@ -384,6 +610,7 @@ export default function DraftPage() {
         </div>
 
         <div className="grid grid-cols-12 gap-4">
+          {/* Your Needs */}
           <Card className="col-span-12 lg:col-span-6">
             <CardHeader>
               <CardTitle>Your Needs</CardTitle>
@@ -403,6 +630,7 @@ export default function DraftPage() {
             </div>
           </Card>
 
+          {/* Recent Picks */}
           <Card className="col-span-12 lg:col-span-6">
             <CardHeader>
               <CardTitle>Recent Picks</CardTitle>
@@ -411,9 +639,19 @@ export default function DraftPage() {
               {recentPicks.length === 0 && <div className="text-[var(--text-sec)]">No picks yet.</div>}
               {recentPicks.map(({ pick, player, team }) => (
                 <div key={pick.overallPick} className="flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold">#{pick.overallPick} {team?.abbreviation ?? '--'} - {player?.lastName ?? '--'}</div>
-                    <div className="text-xs text-[var(--text-sec)]">{player ? `${player.position} ${player.ratings.overall} · Pot: ${potentialLabel(player.potential, player.experience)}` : '--'}</div>
+                  <div className="flex items-center gap-2">
+                    {team && (
+                      <div
+                        className="w-5 h-5 rounded flex items-center justify-center text-[8px] font-black text-white"
+                        style={{ backgroundColor: team.primaryColor }}
+                      >
+                        {team.abbreviation.slice(0, 2)}
+                      </div>
+                    )}
+                    <div>
+                      <div className="font-semibold">#{pick.overallPick} {team?.abbreviation ?? '--'} - {player?.lastName ?? '--'}</div>
+                      <div className="text-xs text-[var(--text-sec)]">{player ? `${player.position} ${player.ratings.overall} · Pot: ${potentialLabel(player.potential, player.experience)}` : '--'}</div>
+                    </div>
                   </div>
                   <Badge variant="blue">
                     {player ? pickGrade(pick.overallPick, totalPicks, player.ratings.overall) : '--'}
@@ -423,40 +661,6 @@ export default function DraftPage() {
             </div>
           </Card>
         </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Full Round Board (Detail)</CardTitle>
-          </CardHeader>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
-                <th className="text-left pb-2 pl-2">Pick</th>
-                <th className="text-left pb-2">Team</th>
-                <th className="text-left pb-2">Player</th>
-                <th className="text-center pb-2">Pos</th>
-                <th className="text-center pb-2">OVR</th>
-              </tr>
-            </thead>
-            <tbody>
-              {draftResults.map((pick) => {
-                const team = teams.find((t) => t.id === pick.teamId);
-                const player = players.find((p) => p.id === pick.playerId);
-                return (
-                  <tr key={pick.overallPick} className="border-t border-[var(--border)]">
-                    <td className="py-2 pl-2 text-[var(--text-sec)]">{pick.pickInRound} ({pick.overallPick})</td>
-                    <td className="py-2 font-semibold">{team?.abbreviation ?? '--'}</td>
-                    <td className="py-2">{player ? `${player.firstName} ${player.lastName}` : '--'}</td>
-                    <td className="py-2 text-center">{player ? <Badge>{player.position}</Badge> : '--'}</td>
-                    <td className={`py-2 text-center ${player ? ratingColor(player.ratings.overall) : 'text-[var(--text-sec)]'}`}>
-                      {player?.ratings.overall ?? '--'}
-                    </td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </Card>
       </div>
     </GameShell>
   );
