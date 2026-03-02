@@ -219,7 +219,12 @@ export function TopBar() {
                   <Button size="sm" variant="secondary">Go to Draft</Button>
                 </Link>
                 <Button
-                  onClick={() => { useGameStore.getState().advanceToFreeAgency(); router.push('/free-agency'); }}
+                  onClick={() => {
+                    // Finish remaining draft picks first, then advance to FA
+                    useGameStore.getState().simToEndDraft();
+                    useGameStore.getState().advanceToFreeAgency();
+                    router.push('/free-agency');
+                  }}
                   variant="secondary"
                   size="sm"
                 >
@@ -229,9 +234,6 @@ export function TopBar() {
             )}
             {phase === 'freeAgency' && (
               <>
-                <Link href="/free-agency">
-                  <Button size="sm" variant="secondary">Go to FA</Button>
-                </Link>
                 <Button onClick={() => { startNewSeason(); router.push('/'); }} size="sm">
                   Start New Season →
                 </Button>

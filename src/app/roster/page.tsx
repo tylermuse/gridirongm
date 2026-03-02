@@ -140,10 +140,7 @@ export default function RosterPage() {
         case 'pos': {
           const pi = POSITIONS.indexOf(a.position) - POSITIONS.indexOf(b.position);
           if (pi !== 0) return dir * pi;
-          // Within same position, sort by depth chart order then OVR
-          const aDepth = getDepthIndex(a);
-          const bDepth = getDepthIndex(b);
-          if (aDepth !== bDepth) return aDepth - bDepth;
+          // Within same position, sort by OVR (best first)
           return b.ratings.overall - a.ratings.overall;
         }
         case 'age': return dir * (a.age - b.age);

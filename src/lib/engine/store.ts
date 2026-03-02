@@ -373,17 +373,13 @@ const POSITION_SALARY_MULTIPLIER: Partial<Record<Position, number>> = {
 };
 
 function estimateSalary(overall: number, position?: Position): number {
-  // Exponential curve: low-end players get minimum, elite players get $30-50M
-  // Formula: base = ((ovr - 40) / 60) ^ 1.8 * 35
-  // At OVR 40: $0  → clamped to minimum
-  // At OVR 65: ~$3.4M
-  // At OVR 75: ~$9.3M
-  // At OVR 80: ~$14M
-  // At OVR 85: ~$19.5M
-  // At OVR 90: ~$26M
-  // At OVR 95: ~$32.5M
+  // Exponential curve: low-end players get minimum, elite players get $35-50M
+  // Formula: base = ((ovr - 40) / 60) ^ 1.6 * 38
+  // At OVR 50: ~$2M    At OVR 60: ~$5.7M   At OVR 65: ~$8M
+  // At OVR 70: ~$12.5M At OVR 75: ~$16M     At OVR 80: ~$20.6M
+  // At OVR 85: ~$25.5M At OVR 90: ~$31M     At OVR 95: ~$36.5M
   const normalized = Math.max(0, (overall - 40) / 60);
-  const baseSalary = Math.max(LEAGUE_MINIMUM_SALARY, Math.pow(normalized, 1.8) * 35);
+  const baseSalary = Math.max(LEAGUE_MINIMUM_SALARY, Math.pow(normalized, 1.6) * 38);
 
   // Position multiplier — QBs command the most, K/P the least
   const posMult = position ? (POSITION_SALARY_MULTIPLIER[position] ?? 1.0) : 1.0;
@@ -1414,29 +1410,115 @@ export const useGameStore = create<GameStore>()(
       },
 
       simToUserDraftPick: () => {
-        for (let guard = 0; guard < 5000; guard++) {
-          const s = get();
-          if (s.phase !== 'draft') return;
-          if (s.draftOrder.length === 0 || s.freeAgents.length === 0) return;
-          if (s.draftOrder[0] === s.userTeamId) return;
-          // Inline auto-draft to avoid stale closure issues
-          const pickTeam = s.draftOrder[0];
-          const pid = autoDraftPlayerId(s, pickTeam);
-          if (!pid) return;
-          get().draftPlayer(pid);
+        const state = get();
+        if (state.phase !== 'draft') return;
+
+        // Compute all picks in a single pass, then call set() ONCE
+        let draftOrder = [...state.draftOrder];
+        let freeAgentIds = [...state.freeAgents];
+        let players = [...state.players];
+        let teams = [...state.teams];
+        let draftResults = [...state.draftResults];
+        let newsItems = [...state.newsItems];
+        const totalPicks = state.teams.length * 7;
+
+        for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
+          const pickTeam = draftOrder[0];
+          if (pickTeam === state.userTeamId) break; // Stop at user's pick
+
+          const fakeState = { ...state, draftOrder, freeAgents: freeAgentIds, players, teams } as LeagueState;
+          const pid = autoDraftPlayerId(fakeState, pickTeam);
+          if (!pid) break;
+
+          const player = players.find(p => p.id === pid);
+          if (!player) break;
+
+          const overallPick = totalPicks - draftOrder.length + 1;
+          const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
+          const round = Math.ceil(overallPick / state.teams.length);
+          const rookieSalary = Math.max(0.5, Math.round((5 - (freeAgentIds.indexOf(pid) / 50)) * 10) / 10);
+
+          players = players.map(p =>
+            p.id === pid
+              ? { ...p, teamId: pickTeam, draftYear: state.season, draftPick: overallPick, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4 } }
+              : p,
+          );
+          teams = teams.map(t => {
+            if (t.id !== pickTeam) return t;
+            const chart = { ...t.depthChart };
+            chart[player.position] = [...(chart[player.position] ?? []), pid];
+            return { ...t, roster: [...t.roster, pid], totalPayroll: t.totalPayroll + rookieSalary, depthChart: chart };
+          });
+          freeAgentIds = freeAgentIds.filter(id => id !== pid);
+          draftOrder = draftOrder.slice(1);
+          draftResults = [...draftResults, { overallPick, round, pickInRound, teamId: pickTeam, playerId: pid }];
+
+          if (overallPick <= 10 || pickTeam === state.userTeamId) {
+            const pickTeamObj = teams.find(t => t.id === pickTeam);
+            newsItems = [...newsItems, makeNews({
+              season: state.season, week: 0, type: 'signing', teamId: pickTeam, playerIds: [pid],
+              headline: `${pickTeamObj?.abbreviation ?? '???'} selects ${player.firstName} ${player.lastName} (${player.position}) with pick #${overallPick} in Round ${round}.`,
+              isUserTeam: pickTeam === state.userTeamId,
+            })];
+          }
         }
+
+        set({ players, teams, freeAgents: freeAgentIds, draftOrder, draftResults, newsItems });
       },
 
       simToEndDraft: () => {
-        for (let guard = 0; guard < 5000; guard++) {
-          const s = get();
-          if (s.phase !== 'draft') return;
-          if (s.draftOrder.length === 0 || s.freeAgents.length === 0) return;
-          const pickTeam = s.draftOrder[0];
-          const pid = autoDraftPlayerId(s, pickTeam);
-          if (!pid) return;
-          get().draftPlayer(pid);
+        const state = get();
+        if (state.phase !== 'draft') return;
+
+        // Compute ALL remaining picks in a single pass, then call set() ONCE
+        let draftOrder = [...state.draftOrder];
+        let freeAgentIds = [...state.freeAgents];
+        let players = [...state.players];
+        let teams = [...state.teams];
+        let draftResults = [...state.draftResults];
+        let newsItems = [...state.newsItems];
+        const totalPicks = state.teams.length * 7;
+
+        for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
+          const pickTeam = draftOrder[0];
+          const fakeState = { ...state, draftOrder, freeAgents: freeAgentIds, players, teams } as LeagueState;
+          const pid = autoDraftPlayerId(fakeState, pickTeam);
+          if (!pid) break;
+
+          const player = players.find(p => p.id === pid);
+          if (!player) break;
+
+          const overallPick = totalPicks - draftOrder.length + 1;
+          const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
+          const round = Math.ceil(overallPick / state.teams.length);
+          const rookieSalary = Math.max(0.5, Math.round((5 - (freeAgentIds.indexOf(pid) / 50)) * 10) / 10);
+
+          players = players.map(p =>
+            p.id === pid
+              ? { ...p, teamId: pickTeam, draftYear: state.season, draftPick: overallPick, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4 } }
+              : p,
+          );
+          teams = teams.map(t => {
+            if (t.id !== pickTeam) return t;
+            const chart = { ...t.depthChart };
+            chart[player.position] = [...(chart[player.position] ?? []), pid];
+            return { ...t, roster: [...t.roster, pid], totalPayroll: t.totalPayroll + rookieSalary, depthChart: chart };
+          });
+          freeAgentIds = freeAgentIds.filter(id => id !== pid);
+          draftOrder = draftOrder.slice(1);
+          draftResults = [...draftResults, { overallPick, round, pickInRound, teamId: pickTeam, playerId: pid }];
+
+          if (overallPick <= 10 || pickTeam === state.userTeamId) {
+            const pickTeamObj = teams.find(t => t.id === pickTeam);
+            newsItems = [...newsItems, makeNews({
+              season: state.season, week: 0, type: 'signing', teamId: pickTeam, playerIds: [pid],
+              headline: `${pickTeamObj?.abbreviation ?? '???'} selects ${player.firstName} ${player.lastName} (${player.position}) with pick #${overallPick} in Round ${round}.`,
+              isUserTeam: pickTeam === state.userTeamId,
+            })];
+          }
         }
+
+        set({ players, teams, freeAgents: freeAgentIds, draftOrder, draftResults, newsItems });
       },
 
       advanceToFreeAgency: () => {
@@ -1459,6 +1541,12 @@ export const useGameStore = create<GameStore>()(
               isUserTeam: p.teamId === state.userTeamId,
             });
           });
+
+        // Include undrafted players (still in freeAgents from draft) as UDFAs
+        const undraftedIds = state.freeAgents.filter(id => {
+          const p = state.players.find(pl => pl.id === id);
+          return p && !p.teamId;
+        });
 
         set({
           phase: 'freeAgency',
@@ -1483,7 +1571,7 @@ export const useGameStore = create<GameStore>()(
               depthChart: newDepthChart,
             };
           }),
-          freeAgents: expiredPlayers.map(p => p.id),
+          freeAgents: [...expiredPlayers.map(p => p.id), ...undraftedIds],
           newsItems: [...state.newsItems, ...releaseNews],
         });
       },
@@ -1542,31 +1630,33 @@ export const useGameStore = create<GameStore>()(
       /** AI teams sign free agents — called after user makes a signing. */
       aiSignFreeAgents: () => {
         const state = get();
-        const aiTeams = state.teams.filter(t => t.id !== state.userTeamId);
+        const aiTeamIds = state.teams.filter(t => t.id !== state.userTeamId).map(t => t.id);
         let currentPlayers = [...state.players];
         let currentFreeAgents = [...state.freeAgents];
         let currentTeams = [...state.teams];
         const newNews: NewsItem[] = [];
 
-        // Every AI team gets a chance to sign one free agent per "day"
-        // Shuffle for fairness (different team gets first pick each time)
-        const shuffledTeams = [...aiTeams].sort(() => Math.random() - 0.5);
+        // Pick 3-5 random AI teams to sign a player this "day"
+        const shuffled = [...aiTeamIds].sort(() => Math.random() - 0.5);
+        const signingTeams = shuffled.slice(0, 3 + Math.floor(Math.random() * 3));
 
-        for (const aiTeam of shuffledTeams) {
+        for (const aiTeamId of signingTeams) {
           if (currentFreeAgents.length === 0) break;
 
-          const teamData = currentTeams.find(t => t.id === aiTeam.id);
+          const teamData = currentTeams.find(t => t.id === aiTeamId);
           if (!teamData) continue;
           const capSpace = teamData.salaryCap - teamData.totalPayroll;
-          if (capSpace < LEAGUE_MINIMUM_SALARY) continue;
 
           // Find positions the team needs (below minimum roster limit)
-          const rosterPlayers = currentPlayers.filter(p => p.teamId === aiTeam.id && !p.retired);
+          const rosterPlayers = currentPlayers.filter(p => p.teamId === aiTeamId && !p.retired);
           const needPositions: Position[] = [];
           for (const pos of POSITIONS) {
             const count = rosterPlayers.filter(p => p.position === pos).length;
             if (count < ROSTER_LIMITS[pos].min) needPositions.push(pos);
           }
+
+          // Total roster size check — skip if already at 53
+          if (rosterPlayers.length >= 53) continue;
 
           // Find best available free agent the team can afford
           const availableFAs = currentFreeAgents
@@ -1574,7 +1664,8 @@ export const useGameStore = create<GameStore>()(
             .filter((p): p is Player => !!p && !p.retired)
             .filter(p => {
               const salary = estimateSalary(p.ratings.overall, p.position);
-              return salary <= capSpace;
+              // AI teams can sign if salary fits in cap, or sign for minimum if over cap
+              return salary <= capSpace || (capSpace >= LEAGUE_MINIMUM_SALARY && salary <= LEAGUE_MINIMUM_SALARY * 2);
             })
             .sort((a, b) => {
               // Prioritize needed positions, then overall rating
@@ -1586,18 +1677,20 @@ export const useGameStore = create<GameStore>()(
           const target = availableFAs[0];
           if (!target) continue;
 
-          const salary = estimateSalary(target.ratings.overall, target.position);
+          const marketSalary = estimateSalary(target.ratings.overall, target.position);
+          // If team can't afford market rate, sign at minimum
+          const salary = marketSalary <= capSpace ? marketSalary : LEAGUE_MINIMUM_SALARY;
           const years = target.age >= 32 ? 1 : target.age >= 28 ? 2 : 3;
 
           // Sign the player
           currentPlayers = currentPlayers.map(p =>
             p.id === target.id
-              ? { ...p, teamId: aiTeam.id, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years } }
+              ? { ...p, teamId: aiTeamId, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years } }
               : p,
           );
           currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
           currentTeams = currentTeams.map(t => {
-            if (t.id !== aiTeam.id) return t;
+            if (t.id !== aiTeamId) return t;
             const chart = { ...t.depthChart };
             chart[target.position] = [...(chart[target.position] ?? []), target.id];
             return { ...t, roster: [...t.roster, target.id], totalPayroll: t.totalPayroll + salary, depthChart: chart };
@@ -1607,21 +1700,20 @@ export const useGameStore = create<GameStore>()(
             season: state.season,
             week: state.week,
             type: 'signing',
-            teamId: aiTeam.id,
+            teamId: aiTeamId,
             playerIds: [target.id],
             headline: `${teamData.city} ${teamData.name} signed ${target.firstName} ${target.lastName} (${target.position}, ${target.ratings.overall} OVR) to a $${salary}M/yr, ${years}-year deal.`,
             isUserTeam: false,
           }));
         }
 
-        if (newNews.length > 0) {
-          set({
-            players: currentPlayers,
-            freeAgents: currentFreeAgents,
-            teams: currentTeams,
-            newsItems: [...state.newsItems, ...newNews],
-          });
-        }
+        // Always update state — even if no signings, update freeAgents list to reflect changes
+        set({
+          players: currentPlayers,
+          freeAgents: currentFreeAgents,
+          teams: currentTeams,
+          newsItems: [...state.newsItems, ...newNews],
+        });
       },
 
       releasePlayer: (playerId: string) => {

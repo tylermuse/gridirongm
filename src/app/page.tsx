@@ -77,6 +77,7 @@ function TeamPicker() {
 function Dashboard() {
   const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, champions } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const userTeam = teams.find(t => t.id === userTeamId)!;
   const roster = players.filter(p => p.teamId === userTeamId);
 
@@ -264,7 +265,8 @@ function Dashboard() {
                 {conferenceTeams.map((t, i) => (
                   <tr
                     key={t.id}
-                    className={`border-t border-[var(--border)] ${t.id === userTeamId ? 'text-blue-400 font-semibold' : ''}`}
+                    className={`border-t border-[var(--border)] ${t.id === userTeamId ? 'text-blue-400 font-semibold' : ''} cursor-pointer hover:bg-[var(--surface-2)]`}
+                    onClick={() => setViewTeamId(t.id)}
                   >
                     <td className="py-1.5 text-left">{i + 1}. {t.abbreviation}</td>
                     <td className="py-1.5 text-center">{t.record.wins}</td>
@@ -277,30 +279,175 @@ function Dashboard() {
             </table>
           </Card>
 
-          {/* Key players */}
+          {/* Team Leaders */}
           <Card>
-            <CardHeader><CardTitle>Key Players</CardTitle></CardHeader>
-            <div className="space-y-2">
-              {topPlayers.map(p => (
-                <div key={p.id} className="flex items-center justify-between text-sm">
-                  <div>
-                    <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-400 transition-colors">
-                      {p.firstName} {p.lastName}
-                    </button>
-                    <Badge variant="default" size="sm">{p.position}</Badge>
+            <CardHeader><CardTitle>Team Leaders</CardTitle></CardHeader>
+            <div className="space-y-3">
+              {(() => {
+                const gp = Math.max(1, userTeam.record.wins + userTeam.record.losses);
+                const qb = roster.filter(p => p.position === 'QB').sort((a, b) => b.stats.passYards - a.stats.passYards)[0];
+                const rb = roster.filter(p => p.position === 'RB').sort((a, b) => b.stats.rushYards - a.stats.rushYards)[0];
+                const wr = roster.filter(p => ['WR', 'TE'].includes(p.position)).sort((a, b) => b.stats.receivingYards - a.stats.receivingYards)[0];
+                const def = roster.filter(p => ['DL', 'LB', 'CB', 'S'].includes(p.position)).sort((a, b) => b.stats.tackles - a.stats.tackles)[0];
+                const leaders = [
+                  qb && { label: 'Passing', player: qb, stat: `${qb.stats.passYards} YDS, ${qb.stats.passTDs} TD` },
+                  rb && { label: 'Rushing', player: rb, stat: `${rb.stats.rushYards} YDS, ${rb.stats.rushTDs} TD` },
+                  wr && { label: 'Receiving', player: wr, stat: `${wr.stats.receivingYards} YDS, ${wr.stats.receivingTDs} TD` },
+                  def && { label: 'Defense', player: def, stat: `${def.stats.tackles} TKL, ${def.stats.sacks} SCK` },
+                ].filter(Boolean) as { label: string; player: typeof qb; stat: string }[];
+                return leaders.map(l => (
+                  <div key={l.label} className="flex items-center justify-between text-sm">
+                    <div>
+                      <div className="text-xs text-[var(--text-sec)]">{l.label}</div>
+                      <button onClick={() => setSelectedPlayerId(l.player!.id)} className="font-semibold hover:text-blue-400 transition-colors">
+                        {l.player!.firstName} {l.player!.lastName}
+                      </button>
+                    </div>
+                    <div className="text-xs text-right text-[var(--text-sec)]">{l.stat}</div>
                   </div>
-                  <div className="flex items-center gap-3 text-xs">
-                    <span className="text-[var(--text-sec)]">OVR</span>
-                    <span className={`font-bold ${p.ratings.overall >= 80 ? 'text-green-400' : p.ratings.overall >= 65 ? 'text-amber-400' : 'text-[var(--text-sec)]'}`}>
-                      {p.ratings.overall}
-                    </span>
-                  </div>
+                ));
+              })()}
+            </div>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          {/* Team Stats */}
+          <Card>
+            <CardHeader><CardTitle>Team Stats</CardTitle></CardHeader>
+            {(() => {
+              const gp = Math.max(1, userTeam.record.wins + userTeam.record.losses);
+              const ppg = (userTeam.record.pointsFor / gp).toFixed(1);
+              const pag = (userTeam.record.pointsAgainst / gp).toFixed(1);
+              const totalPassYds = roster.reduce((s, p) => s + p.stats.passYards, 0);
+              const totalRushYds = roster.reduce((s, p) => s + p.stats.rushYards, 0);
+              return (
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">PPG</span><span className="font-bold">{ppg}</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Opp PPG</span><span className="font-bold">{pag}</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Pass YDS/G</span><span className="font-bold">{(totalPassYds / gp).toFixed(0)}</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Rush YDS/G</span><span className="font-bold">{(totalRushYds / gp).toFixed(0)}</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Total YDS</span><span className="font-bold">{(totalPassYds + totalRushYds).toLocaleString()}</span></div>
                 </div>
-              ))}
+              );
+            })()}
+          </Card>
+
+          {/* Finances */}
+          <Card>
+            <CardHeader><CardTitle>Finances</CardTitle></CardHeader>
+            {(() => {
+              const capSpace = Math.round((userTeam.salaryCap - userTeam.totalPayroll) * 10) / 10;
+              const deadCapTotal = (userTeam.deadCap ?? []).reduce((sum: number, dc: { amount: number }) => sum + dc.amount, 0);
+              return (
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Salary Cap</span><span className="font-bold">${userTeam.salaryCap}M</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Payroll</span><span className="font-bold">${Math.round(userTeam.totalPayroll)}M</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Cap Space</span><span className={`font-bold ${capSpace < 10 ? 'text-red-400' : 'text-green-400'}`}>${capSpace}M</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Dead Cap</span><span className="font-bold text-amber-400">${Math.round(deadCapTotal * 10) / 10}M</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Roster</span><span className="font-bold">{roster.length} / 53</span></div>
+                </div>
+              );
+            })()}
+          </Card>
+
+          {/* League Leaders */}
+          <Card>
+            <CardHeader><CardTitle>League Leaders</CardTitle></CardHeader>
+            <div className="space-y-3">
+              {(() => {
+                const allActive = players.filter(p => p.teamId && !p.retired);
+                const passLeader = allActive.filter(p => p.position === 'QB').sort((a, b) => b.stats.passYards - a.stats.passYards)[0];
+                const rushLeader = allActive.sort((a, b) => b.stats.rushYards - a.stats.rushYards)[0];
+                const recLeader = allActive.sort((a, b) => b.stats.receivingYards - a.stats.receivingYards)[0];
+                const sackLeader = allActive.sort((a, b) => b.stats.sacks - a.stats.sacks)[0];
+                const leaders = [
+                  passLeader && { label: 'Pass YDS', player: passLeader, stat: `${passLeader.stats.passYards}` },
+                  rushLeader && { label: 'Rush YDS', player: rushLeader, stat: `${rushLeader.stats.rushYards}` },
+                  recLeader && { label: 'Rec YDS', player: recLeader, stat: `${recLeader.stats.receivingYards}` },
+                  sackLeader && { label: 'Sacks', player: sackLeader, stat: `${sackLeader.stats.sacks}` },
+                ].filter(Boolean) as { label: string; player: typeof passLeader; stat: string }[];
+                return leaders.map(l => {
+                  const t = teams.find(t => t.id === l.player!.teamId);
+                  return (
+                    <div key={l.label} className="flex items-center justify-between text-sm">
+                      <div>
+                        <div className="text-xs text-[var(--text-sec)]">{l.label}</div>
+                        <button onClick={() => setSelectedPlayerId(l.player!.id)} className="font-semibold hover:text-blue-400 transition-colors">
+                          {l.player!.firstName[0]}. {l.player!.lastName}
+                        </button>
+                        <span className="text-xs text-[var(--text-sec)] ml-1">{t?.abbreviation}</span>
+                      </div>
+                      <div className="text-xs font-bold">{l.stat}</div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </Card>
         </div>
       </div>
+
+      {/* Team Roster Modal */}
+      {viewTeamId && (() => {
+        const vt = teams.find(t => t.id === viewTeamId);
+        if (!vt) return null;
+        const teamRoster = players
+          .filter(p => p.teamId === viewTeamId && !p.retired)
+          .sort((a, b) => {
+            const pi = (['QB','RB','WR','TE','OL','DL','LB','CB','S','K','P'] as string[]).indexOf(a.position) - (['QB','RB','WR','TE','OL','DL','LB','CB','S','K','P'] as string[]).indexOf(b.position);
+            return pi !== 0 ? pi : b.ratings.overall - a.ratings.overall;
+          });
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setViewTeamId(null)}>
+            <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] max-w-3xl w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-black text-white" style={{ backgroundColor: vt.primaryColor }}>
+                    {vt.abbreviation}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black">{vt.city} {vt.name}</h3>
+                    <div className="text-xs text-[var(--text-sec)]">{vt.record.wins}-{vt.record.losses} · Cap: ${Math.round(vt.totalPayroll)}M / ${vt.salaryCap}M</div>
+                  </div>
+                </div>
+                <button onClick={() => setViewTeamId(null)} className="text-[var(--text-sec)] hover:text-white text-xl">✕</button>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[var(--text-sec)] text-xs border-b border-[var(--border)]">
+                    <th className="text-left px-4 py-2">Player</th>
+                    <th className="text-center px-2 py-2">POS</th>
+                    <th className="text-center px-2 py-2">AGE</th>
+                    <th className="text-center px-2 py-2">OVR</th>
+                    <th className="text-right px-4 py-2">Contract</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teamRoster.map(p => (
+                    <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)]">
+                      <td className="px-4 py-1.5">
+                        <button onClick={() => { setViewTeamId(null); setSelectedPlayerId(p.id); }} className="hover:text-blue-400 transition-colors font-medium">
+                          {p.firstName} {p.lastName}
+                        </button>
+                      </td>
+                      <td className="text-center px-2 py-1.5"><Badge variant="default" size="sm">{p.position}</Badge></td>
+                      <td className="text-center px-2 py-1.5">{p.age}</td>
+                      <td className="text-center px-2 py-1.5">
+                        <span className={`font-bold ${p.ratings.overall >= 80 ? 'text-green-400' : p.ratings.overall >= 65 ? 'text-blue-400' : p.ratings.overall >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                          {p.ratings.overall}
+                        </span>
+                      </td>
+                      <td className="text-right px-4 py-1.5 text-[var(--text-sec)]">${p.contract.salary}M × {p.contract.yearsLeft}yr</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
   );

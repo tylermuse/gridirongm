@@ -25,7 +25,7 @@ function estimateSalary(overall: number, position?: string): number {
     S: 0.9, TE: 0.85, RB: 0.8, K: 0.25, P: 0.25,
   };
   const normalized = Math.max(0, (overall - 40) / 60);
-  const baseSalary = Math.max(LEAGUE_MINIMUM_SALARY, Math.pow(normalized, 1.8) * 35);
+  const baseSalary = Math.max(LEAGUE_MINIMUM_SALARY, Math.pow(normalized, 1.6) * 38);
   const posMult = position ? (POSITION_SALARY_MULT[position] ?? 1.0) : 1.0;
   let salary = baseSalary * posMult;
   if (position === 'K' || position === 'P') salary = Math.min(salary, 5.0);
