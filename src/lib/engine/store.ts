@@ -1183,32 +1183,116 @@ export const useGameStore = create<GameStore>()(
       },
 
       simAllPlayoffGames: () => {
-        let guard = 0;
-        while (guard < 200) {
-          guard++;
-          const state = get();
-          const next = state.playoffBracket
-            ?.filter(m => !m.winnerId && m.homeTeamId && m.awayTeamId)
+        const state = get();
+        if (!state.playoffBracket || !state.playoffSeeds) return;
+
+        let bracket = [...state.playoffBracket.map(m => ({ ...m }))];
+        let champions = state.champions ?? [];
+        let newsItems = state.newsItems;
+        let finalsMvpPlayerId = state.finalsMvpPlayerId;
+
+        for (let guard = 0; guard < 200; guard++) {
+          const next = bracket
+            .filter(m => !m.winnerId && m.homeTeamId && m.awayTeamId)
             .sort((a, b) => a.round - b.round)[0];
           if (!next) break;
-          get().simPlayoffGame(next.id);
+
+          const homeRosterRaw = state.players.filter(p => p.teamId === next.homeTeamId);
+          const awayRosterRaw = state.players.filter(p => p.teamId === next.awayTeamId);
+          const homeTeam = state.teams.find(t => t.id === next.homeTeamId);
+          const awayTeam = state.teams.find(t => t.id === next.awayTeamId);
+          const homeRoster = homeTeam?.depthChart ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart) : homeRosterRaw;
+          const awayRoster = awayTeam?.depthChart ? sortRosterByDepthChart(awayRosterRaw, awayTeam.depthChart) : awayRosterRaw;
+
+          const tempGame: GameResult = {
+            id: next.id, week: 99, season: state.season,
+            homeTeamId: next.homeTeamId!, awayTeamId: next.awayTeamId!,
+            homeScore: 0, awayScore: 0, played: false, playerStats: {},
+          };
+          const result = simulateGame(tempGame, homeRoster, awayRoster);
+          const winnerId = result.homeScore >= result.awayScore ? next.homeTeamId! : next.awayTeamId!;
+
+          // Update bracket in local array
+          bracket = bracket.map(m =>
+            m.id === next.id ? { ...m, homeScore: result.homeScore, awayScore: result.awayScore, winnerId } : m,
+          );
+          bracket = propagateWinner(bracket, next.id, winnerId, state.playoffSeeds);
+
+          // Check Super Bowl
+          const superBowl = bracket.find(m => m.id === 'super-bowl');
+          if (superBowl?.winnerId && !champions.find(c => c.season === state.season)) {
+            champions = [...champions, { season: state.season, teamId: superBowl.winnerId }];
+            const champTeam = state.teams.find(t => t.id === superBowl.winnerId);
+            if (champTeam) {
+              newsItems = [...newsItems, makeNews({
+                season: state.season, week: 99, type: 'milestone', teamId: champTeam.id,
+                headline: `${champTeam.city} ${champTeam.name} win Super Bowl ${state.season}!`,
+                isUserTeam: champTeam.id === state.userTeamId,
+              })];
+            }
+            if (next.id === 'super-bowl') {
+              const winnerRoster = state.players.filter(p => p.teamId === winnerId);
+              const winnerIds = new Set(winnerRoster.map(p => p.id));
+              let bestScore = -1;
+              let bestId = '';
+              for (const [pid, stats] of Object.entries(result.playerStats)) {
+                if (!winnerIds.has(pid)) continue;
+                const s = stats as Partial<PlayerStats>;
+                const score = (s.passYards ?? 0) * 0.04 + (s.passTDs ?? 0) * 6
+                  + (s.rushYards ?? 0) * 0.1 + (s.rushTDs ?? 0) * 6
+                  + (s.receivingYards ?? 0) * 0.1 + (s.receivingTDs ?? 0) * 6
+                  + (s.tackles ?? 0) * 1 + (s.sacks ?? 0) * 3 + (s.defensiveINTs ?? 0) * 5;
+                if (score > bestScore) { bestScore = score; bestId = pid; }
+              }
+              if (bestId) finalsMvpPlayerId = bestId;
+            }
+          }
         }
+
+        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId });
       },
 
       /** Sim all games in the current playoff round (e.g. all Wild Card games). */
       simPlayoffRound: () => {
         const state = get();
-        if (!state.playoffBracket) return;
-        // Find the current round (lowest round number with unplayed games)
+        if (!state.playoffBracket || !state.playoffSeeds) return;
         const unplayed = state.playoffBracket
           .filter(m => !m.winnerId && m.homeTeamId && m.awayTeamId);
         if (unplayed.length === 0) return;
         const currentRound = Math.min(...unplayed.map(m => m.round));
-        // Sim all games in that round
         const roundGames = unplayed.filter(m => m.round === currentRound);
+
+        let bracket = [...state.playoffBracket.map(m => ({ ...m }))];
+        let champions = state.champions ?? [];
+        let newsItems = state.newsItems;
+        let finalsMvpPlayerId = state.finalsMvpPlayerId;
+
         for (const game of roundGames) {
-          get().simPlayoffGame(game.id);
+          const matchup = bracket.find(m => m.id === game.id);
+          if (!matchup || !matchup.homeTeamId || !matchup.awayTeamId) continue;
+
+          const homeRosterRaw = state.players.filter(p => p.teamId === matchup.homeTeamId);
+          const awayRosterRaw = state.players.filter(p => p.teamId === matchup.awayTeamId);
+          const homeTeam = state.teams.find(t => t.id === matchup.homeTeamId);
+          const awayTeam = state.teams.find(t => t.id === matchup.awayTeamId);
+          const homeRoster = homeTeam?.depthChart ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart) : homeRosterRaw;
+          const awayRoster = awayTeam?.depthChart ? sortRosterByDepthChart(awayRosterRaw, awayTeam.depthChart) : awayRosterRaw;
+
+          const tempGame: GameResult = {
+            id: matchup.id, week: 99, season: state.season,
+            homeTeamId: matchup.homeTeamId!, awayTeamId: matchup.awayTeamId!,
+            homeScore: 0, awayScore: 0, played: false, playerStats: {},
+          };
+          const result = simulateGame(tempGame, homeRoster, awayRoster);
+          const winnerId = result.homeScore >= result.awayScore ? matchup.homeTeamId! : matchup.awayTeamId!;
+
+          bracket = bracket.map(m =>
+            m.id === matchup.id ? { ...m, homeScore: result.homeScore, awayScore: result.awayScore, winnerId } : m,
+          );
+          bracket = propagateWinner(bracket, matchup.id, winnerId, state.playoffSeeds);
         }
+
+        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId });
       },
 
       // PRD-03: Advance from playoffs to re-signing phase

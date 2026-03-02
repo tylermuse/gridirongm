@@ -258,7 +258,9 @@ export default function PlayoffsPage() {
     advanceToDraft,
   } = useGameStore();
 
-  if (phase !== 'playoffs') {
+  // Show bracket if it exists (persists through resigning/draft/FA until new season)
+  // Only show "not started" message if there's no bracket at all
+  if (phase !== 'playoffs' && !playoffBracket) {
     return (
       <GameShell>
         <div className="max-w-4xl mx-auto text-center py-20">
@@ -314,7 +316,7 @@ export default function PlayoffsPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {!sbDone && (
+            {!sbDone && phase === 'playoffs' && (
               <>
                 <Button
                   onClick={simNextPlayoffGame}
