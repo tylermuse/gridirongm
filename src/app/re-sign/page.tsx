@@ -97,20 +97,23 @@ export default function ReSignPage() {
       setOfferSalary(entry.askingSalary);
       setOfferYears(entry.askingYears);
     } else {
-      // Restructure: player's current contract spread over more years for lower annual hit
-      // Player wants at least the same total guaranteed money
+      // Restructure: converts salary to signing bonus prorated over more years.
+      // Player gets more total guaranteed money (security), team gets lower annual cap hit.
+      // Total contract value increases ~15-25% because player demands extra years of security.
       const currentSalary = player.contract.salary;
       const currentYearsLeft = player.contract.yearsLeft;
-      const totalRemaining = currentSalary * currentYearsLeft;
-      // Offer to spread remaining money over more years = lower annual cap hit
-      const newYears = currentYearsLeft + 2;
-      const newAnnual = Math.round((totalRemaining / newYears) * 10) / 10;
+      const addedYears = Math.max(1, Math.min(3, currentYearsLeft <= 1 ? 2 : 1));
+      const newYears = currentYearsLeft + addedYears;
+      // Player wants ~85-90% of current annual salary (slight discount for extra years/security)
+      const discountPct = 0.85 + (addedYears === 1 ? 0.05 : 0);
+      const newAnnual = Math.round(currentSalary * discountPct * 10) / 10;
+      const capSaved = Math.round((currentSalary - newAnnual) * 10) / 10;
 
       const neg = initNegotiation(player, newAnnual);
       neg.askingYears = newYears;
       neg.messages = [{
         sender: 'player',
-        text: `I'd consider restructuring. My current deal is $${currentSalary}M/yr with ${currentYearsLeft} year${currentYearsLeft > 1 ? 's' : ''} left. I'd want around $${newAnnual}M/yr if you extend me to ${newYears} years.`,
+        text: `I'd consider restructuring. My current deal is $${currentSalary}M/yr with ${currentYearsLeft} year${currentYearsLeft > 1 ? 's' : ''} left. I'd take $${newAnnual}M/yr if you extend me to ${newYears} years — that saves you $${capSaved}M/yr in cap space.`,
         type: 'neutral',
       }];
       setNegotiation(neg);
