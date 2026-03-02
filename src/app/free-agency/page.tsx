@@ -19,8 +19,12 @@ function ratingColor(val: number): string {
   return 'text-red-400';
 }
 
-function estimateSalary(overall: number): number {
-  return Math.round(Math.max(LEAGUE_MINIMUM_SALARY, ((overall - 40) / 60) * 15) * 10) / 10;
+function estimateSalary(overall: number, position?: string): number {
+  const baseSalary = Math.max(LEAGUE_MINIMUM_SALARY, ((overall - 40) / 60) * 15);
+  if (position === 'K' || position === 'P') {
+    return Math.round(Math.min(baseSalary * 0.35, 3.0) * 10) / 10;
+  }
+  return Math.round(baseSalary * 10) / 10;
 }
 
 export default function FreeAgencyPage() {
@@ -31,6 +35,7 @@ export default function FreeAgencyPage() {
   const [offerSalary, setOfferSalary] = useState(0);
   const [offerYears, setOfferYears] = useState(3);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [walkedAwayIds, setWalkedAwayIds] = useState<Set<string>>(new Set());
 
   if (phase !== 'freeAgency') {
     return (
@@ -71,17 +76,17 @@ export default function FreeAgencyPage() {
     .filter(Boolean)
     .sort((a, b) => b.ratings.overall - a.ratings.overall);
 
-  let filteredAgents = allAgents;
+  let filteredAgents = allAgents.filter(p => !walkedAwayIds.has(p.id));
   if (filterPos !== 'ALL') {
     filteredAgents = filteredAgents.filter(p => p.position === filterPos);
   }
   if (affordableOnly) {
-    filteredAgents = filteredAgents.filter(p => estimateSalary(p.ratings.overall) <= Math.max(capSpace, LEAGUE_MINIMUM_SALARY));
+    filteredAgents = filteredAgents.filter(p => estimateSalary(p.ratings.overall, p.position) <= Math.max(capSpace, LEAGUE_MINIMUM_SALARY));
   }
   const agents = filteredAgents.slice(0, 60);
 
   function startNegotiation(player: typeof agents[0]) {
-    const salary = estimateSalary(player.ratings.overall);
+    const salary = estimateSalary(player.ratings.overall, player.position);
     const neg = initNegotiation(player, salary);
     setNegotiation(neg);
     setOfferSalary(salary);
@@ -96,6 +101,13 @@ export default function FreeAgencyPage() {
     if (updated.outcome === 'accepted') {
       signFreeAgent(updated.playerId, updated.currentOfferSalary, updated.currentOfferYears);
     }
+  }
+
+  function walkAway() {
+    if (negotiation) {
+      setWalkedAwayIds(prev => new Set(prev).add(negotiation.playerId));
+    }
+    setNegotiation(null);
   }
 
   function closeNegotiation() {
@@ -290,7 +302,7 @@ export default function FreeAgencyPage() {
                       <div className="text-sm text-red-300">
                         {negotiation.playerName} rejected your offer and walked away.
                       </div>
-                      <Button size="sm" variant="secondary" onClick={closeNegotiation} className="mt-3">Dismiss</Button>
+                      <Button size="sm" variant="secondary" onClick={walkAway} className="mt-3">Dismiss</Button>
                     </div>
                   )}
 
@@ -343,7 +355,7 @@ export default function FreeAgencyPage() {
                         <Button onClick={submitOffer}>
                           Make Offer
                         </Button>
-                        <Button variant="ghost" onClick={closeNegotiation}>Walk Away</Button>
+                        <Button variant="ghost" onClick={walkAway}>Walk Away</Button>
                       </div>
                     </div>
                   )}
@@ -367,7 +379,7 @@ export default function FreeAgencyPage() {
                 </thead>
                 <tbody>
                   {agents.map(p => {
-                    const salary = estimateSalary(p.ratings.overall);
+                    const salary = estimateSalary(p.ratings.overall, p.position);
                     const canAfford = !overCap || salary <= LEAGUE_MINIMUM_SALARY;
                     return (
                       <tr

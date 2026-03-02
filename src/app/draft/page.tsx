@@ -248,9 +248,9 @@ function OnTheClockSection({
                 teamColor="#6b7280"
               />
             )}
-            {bestFit && bestFit.id !== bestAvailable?.id && (
+            {bestFit && (
               <ProspectCard
-                label="Best Fit"
+                label={bestFit.id === bestAvailable?.id ? "Best Fit (Same)" : "Best Fit"}
                 player={bestFit}
                 posRank={getPositionRank(bestFit)}
                 ovrRank={getOverallRank(bestFit)}
@@ -383,7 +383,12 @@ export default function DraftPage() {
   const allProspects = freeAgents
     .map((id) => players.find((player) => player.id === id))
     .filter((player): player is Player => Boolean(player))
-    .sort((a, b) => b.ratings.overall - a.ratings.overall);
+    .sort((a, b) => {
+      // K/P are least valuable — push them way down the draft board
+      const aOvr = (a.position === 'K' || a.position === 'P') ? a.ratings.overall * 0.5 : a.ratings.overall;
+      const bOvr = (b.position === 'K' || b.position === 'P') ? b.ratings.overall * 0.5 : b.ratings.overall;
+      return bOvr - aOvr;
+    });
 
   const prospects = allProspects
     .filter((player) => positionFilter === 'ALL' || player.position === positionFilter)
@@ -406,7 +411,12 @@ export default function DraftPage() {
         const needs = getTeamNeeds(currentPickTeamId);
         const aNeed = needs.find((n) => n.position === a.position)?.needScore ?? 0;
         const bNeed = needs.find((n) => n.position === b.position)?.needScore ?? 0;
-        return (b.ratings.overall + b.potential * 0.4 + bNeed * 0.2) - (a.ratings.overall + a.potential * 0.4 + aNeed * 0.2);
+        let aScore = a.ratings.overall + a.potential * 0.4 + aNeed * 0.2;
+        let bScore = b.ratings.overall + b.potential * 0.4 + bNeed * 0.2;
+        // K/P are least valuable — heavily penalize in draft rankings
+        if (a.position === 'K' || a.position === 'P') aScore *= 0.5;
+        if (b.position === 'K' || b.position === 'P') bScore *= 0.5;
+        return bScore - aScore;
       })[0];
 
   const orderedTeamIds = [

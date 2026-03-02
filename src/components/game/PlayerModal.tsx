@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
+import { calculateDeadCap, calculateCapSavings } from '@/types';
 import type { Position, PlayerRatings } from '@/types';
 
 function ratingColor(val: number) {
@@ -141,6 +142,22 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
               <span className={`text-sm ${potentialColor(player.potential, player.experience)}`}>
                 POT: {potentialLabel(player.potential, player.experience)}
               </span>
+              {player.mood !== undefined && (
+                <span className={`text-sm ${
+                  player.mood >= 75 ? 'text-green-400' :
+                  player.mood >= 50 ? 'text-amber-400' :
+                  'text-red-400'
+                }`}>
+                  {player.mood >= 75 ? '😊' : player.mood >= 50 ? '😐' : '😠'} {
+                    player.mood >= 90 ? 'Ecstatic' :
+                    player.mood >= 75 ? 'Happy' :
+                    player.mood >= 60 ? 'Content' :
+                    player.mood >= 45 ? 'Unhappy' :
+                    player.mood >= 25 ? 'Frustrated' :
+                    'Holdout Risk'
+                  }
+                </span>
+              )}
             </div>
 
             {/* Injury */}
@@ -169,11 +186,22 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                     </Button>
                   )}
                 </div>
-                {player.contract.salary > 0 && (
-                  <div className="text-xs text-green-400 mt-1">
-                    Saves ${player.contract.salary}M/yr cap space
-                  </div>
-                )}
+                {player.contract.salary > 0 && (() => {
+                  const deadCap = calculateDeadCap(player.contract);
+                  const savings = calculateCapSavings(player.contract);
+                  return deadCap > 0 ? (
+                    <div className="text-xs mt-1 space-y-0.5">
+                      <div className="text-red-400">Dead cap: ${deadCap}M</div>
+                      <div className={savings > 0 ? 'text-green-400' : 'text-red-400'}>
+                        Cap savings: ${savings > 0 ? savings : 0}M
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-green-400 mt-1">
+                      Saves ${player.contract.salary}M/yr cap space
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>

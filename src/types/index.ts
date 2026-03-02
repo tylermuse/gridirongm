@@ -76,6 +76,10 @@ export interface PlayerStats {
 export interface Contract {
   salary: number;
   yearsLeft: number;
+  /** Total guaranteed money remaining on the contract (dead cap if released) */
+  guaranteed: number;
+  /** Original total years of the contract (for dead-cap proration) */
+  totalYears?: number;
 }
 
 export interface Player {
@@ -101,6 +105,12 @@ export interface Player {
   onIR: boolean;
   /** Scouting label assigned at draft (cosmetic flavor) */
   scoutingLabel?: string;
+  /**
+   * Player sentiment / mood (0-100).
+   * Affected by: team winning, playing time (depth chart), contract satisfaction, team location.
+   * Low sentiment → holdouts, locker room problems, unlikely to re-sign.
+   */
+  mood: number;
 }
 
 export interface TeamRecord {
@@ -112,6 +122,12 @@ export interface TeamRecord {
   streak: number;
   divisionWins: number;
   divisionLosses: number;
+}
+
+export interface DeadCapEntry {
+  playerName: string;
+  amount: number;
+  yearsLeft: number;
 }
 
 export interface Team {
@@ -130,6 +146,38 @@ export interface Team {
   draftPicks: DraftPick[];
   /** Ordered player IDs per position; index 0 = starter */
   depthChart: Record<Position, string[]>;
+  /** Dead cap charges from released players */
+  deadCap: DeadCapEntry[];
+}
+
+/**
+ * Calculates the dead cap hit when releasing a player.
+ * NFL-style: all remaining guaranteed money accelerates onto the current year's cap.
+ * Simplified: guaranteed = ~50% of total contract value for first contract, decreasing over time.
+ */
+export function calculateDeadCap(contract: Contract): number {
+  const guaranteed = contract.guaranteed ?? 0;
+  return Math.round(guaranteed * 10) / 10;
+}
+
+/**
+ * Calculates the actual cap savings from releasing a player.
+ * Savings = annual salary - dead cap hit (can be negative in year 1 of big deals!)
+ */
+export function calculateCapSavings(contract: Contract): number {
+  const deadCap = calculateDeadCap(contract);
+  const savings = contract.salary - deadCap;
+  return Math.round(savings * 10) / 10;
+}
+
+/**
+ * Generates a guaranteed amount for a new contract.
+ * NFL-style: ~40-60% of total contract value is guaranteed.
+ */
+export function generateGuaranteed(salary: number, years: number): number {
+  const totalValue = salary * years;
+  const guaranteedPct = years <= 1 ? 1.0 : years <= 2 ? 0.65 : years <= 3 ? 0.50 : 0.40;
+  return Math.round(totalValue * guaranteedPct * 10) / 10;
 }
 
 export interface DraftPick {

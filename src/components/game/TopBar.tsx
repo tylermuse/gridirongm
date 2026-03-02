@@ -2,11 +2,13 @@
 
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
 import { TradeProposalPopup } from './TradeProposalPopup';
 
 export function TopBar() {
+  const router = useRouter();
   const {
     phase,
     week,
@@ -181,7 +183,7 @@ export function TopBar() {
                   </>
                 )}
                 <Button
-                  onClick={advanceToResigning}
+                  onClick={() => { advanceToResigning(); router.push('/re-sign'); }}
                   size="sm"
                   variant={superBowlDone ? 'primary' : 'secondary'}
                 >
@@ -195,7 +197,7 @@ export function TopBar() {
                   <Button size="sm" variant="secondary">Go to Re-signing</Button>
                 </Link>
                 <Button
-                  onClick={advanceToDraft}
+                  onClick={() => { advanceToDraft(); router.push('/draft'); }}
                   size="sm"
                 >
                   {resigningPlayers.length === 0 ? 'Advance to Draft →' : 'Skip to Draft'}
@@ -208,7 +210,7 @@ export function TopBar() {
                   <Button size="sm" variant="secondary">Go to Draft</Button>
                 </Link>
                 <Button
-                  onClick={() => useGameStore.getState().advanceToFreeAgency()}
+                  onClick={() => { useGameStore.getState().advanceToFreeAgency(); router.push('/free-agency'); }}
                   variant="secondary"
                   size="sm"
                 >
@@ -221,7 +223,7 @@ export function TopBar() {
                 <Link href="/free-agency">
                   <Button size="sm" variant="secondary">Go to FA</Button>
                 </Link>
-                <Button onClick={startNewSeason} size="sm">
+                <Button onClick={() => { startNewSeason(); router.push('/'); }} size="sm">
                   Start New Season →
                 </Button>
               </>

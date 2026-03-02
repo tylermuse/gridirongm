@@ -101,16 +101,24 @@ export function generatePlayer(
     ratingHistory: [],
     stats: emptyStats(),
     careerStats: emptyStats(),
-    contract: {
-      salary,
-      yearsLeft: Math.ceil(Math.random() * 4),
-    },
+    contract: (() => {
+      const yearsLeft = Math.ceil(Math.random() * 4);
+      const totalValue = salary * yearsLeft;
+      const guaranteedPct = yearsLeft <= 1 ? 1.0 : yearsLeft <= 2 ? 0.65 : yearsLeft <= 3 ? 0.50 : 0.40;
+      return {
+        salary,
+        yearsLeft,
+        guaranteed: Math.round(totalValue * guaranteedPct * 10) / 10,
+        totalYears: yearsLeft,
+      };
+    })(),
     teamId: options.teamId ?? null,
     draftYear: null,
     draftPick: null,
     retired: false,
     injury: null,
     onIR: false,
+    mood: 60 + Math.floor(Math.random() * 30), // 60-90 initial mood
   };
 }
 
@@ -155,7 +163,7 @@ export function generateDraftClass(count: number): Player[] {
     const position = positions[Math.floor(Math.random() * positions.length)];
     const talent = gaussian(50 - (i / count) * 25, 10);
     const player = generatePlayer(position, talent, { age: 21 + Math.floor(Math.random() * 2), experience: 0 });
-    player.contract = { salary: 0, yearsLeft: 0 };
+    player.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
     player.scoutingLabel = SCOUTING_LABELS[Math.floor(Math.random() * SCOUTING_LABELS.length)];
     prospects.push(player);
   }

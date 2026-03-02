@@ -143,10 +143,12 @@ function mapRatings(ratings: FbgmRating): { ratings: PlayerRatings; potential: n
 function mapContract(
   contract: FbgmPlayer['contract'],
   season: number,
-): { salary: number; yearsLeft: number } {
+): { salary: number; yearsLeft: number; guaranteed: number; totalYears: number } {
   const salary = Math.max(0.5, Math.round(((contract?.amount ?? 500) / 1000) * 10) / 10);
   const yearsLeft = Math.max(1, (contract?.exp ?? season) - season + 1);
-  return { salary, yearsLeft };
+  const totalValue = salary * yearsLeft;
+  const guaranteedPct = yearsLeft <= 1 ? 1.0 : yearsLeft <= 2 ? 0.65 : yearsLeft <= 3 ? 0.50 : 0.40;
+  return { salary, yearsLeft, guaranteed: Math.round(totalValue * guaranteedPct * 10) / 10, totalYears: yearsLeft };
 }
 
 export interface ImportedLeagueData {
@@ -228,6 +230,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
         : null,
       ratingHistory: [],
       onIR: false,
+      mood: 60 + Math.floor(Math.random() * 30),
     });
   }
 
@@ -258,7 +261,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       potential,
       stats: emptyStats(),
       careerStats: emptyStats(),
-      contract: { salary: 0, yearsLeft: 0 },
+      contract: { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 },
       teamId: null,
       draftYear,
       draftPick: null,
@@ -266,6 +269,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       injury: null,
       ratingHistory: [],
       onIR: false,
+      mood: 70,
     });
   }
 
@@ -303,6 +307,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
         ownerTeamId: team.id,
       })),
       depthChart,
+      deadCap: [],
     };
   });
 
