@@ -769,6 +769,137 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   suppressTradePopups: false,
 };
 
+// ---------------------------------------------------------------------------
+// Pure function: simulate one week of games (no store dependency)
+// Returns state patch + whether season is over, or null if nothing to sim
+// ---------------------------------------------------------------------------
+function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; isSeasonOver: boolean } | null {
+  if (state.phase !== 'regular') return null;
+
+  const weekGames = state.schedule.filter(g => g.week === state.week && !g.played);
+  if (weekGames.length === 0) return null;
+
+  const updatedGames = weekGames.map(game => {
+    const homeTeam = state.teams.find(t => t.id === game.homeTeamId);
+    const awayTeam = state.teams.find(t => t.id === game.awayTeamId);
+    const homeRosterRaw = state.players.filter(p => p.teamId === game.homeTeamId);
+    const awayRosterRaw = state.players.filter(p => p.teamId === game.awayTeamId);
+    const homeRoster = homeTeam?.depthChart
+      ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart)
+      : homeRosterRaw;
+    const awayRoster = awayTeam?.depthChart
+      ? sortRosterByDepthChart(awayRosterRaw, awayTeam.depthChart)
+      : awayRosterRaw;
+    return simulateGame(game, homeRoster, awayRoster);
+  });
+
+  const newSchedule = state.schedule.map(g => {
+    const updated = updatedGames.find(u => u.id === g.id);
+    return updated ?? g;
+  });
+
+  const newTeams = state.teams.map(team => {
+    const teamGames = updatedGames.filter(
+      g => g.homeTeamId === team.id || g.awayTeamId === team.id,
+    );
+    const record = { ...team.record };
+    for (const game of teamGames) {
+      const isHome = game.homeTeamId === team.id;
+      const teamScore = isHome ? game.homeScore : game.awayScore;
+      const oppScore = isHome ? game.awayScore : game.homeScore;
+      record.pointsFor += teamScore;
+      record.pointsAgainst += oppScore;
+      if (teamScore > oppScore) {
+        record.wins += 1;
+        record.streak = record.streak >= 0 ? record.streak + 1 : 1;
+      } else {
+        record.losses += 1;
+        record.streak = record.streak <= 0 ? record.streak - 1 : -1;
+      }
+      const opponent = state.teams.find(t => t.id === (isHome ? game.awayTeamId : game.homeTeamId));
+      if (opponent && opponent.conference === team.conference && opponent.division === team.division) {
+        if (teamScore > oppScore) record.divisionWins += 1;
+        else record.divisionLosses += 1;
+      }
+    }
+    return { ...team, record };
+  });
+
+  const newPlayers = state.players.map(p => {
+    const allGameStats = updatedGames.reduce<Partial<PlayerStats>>((acc, game) => {
+      const s = game.playerStats[p.id];
+      if (s) {
+        for (const key of Object.keys(s) as (keyof PlayerStats)[]) {
+          (acc[key] as number) = ((acc[key] as number) ?? 0) + ((s[key] as number) ?? 0);
+        }
+      }
+      return acc;
+    }, {});
+    if (Object.keys(allGameStats).length === 0) return p;
+    return { ...p, stats: addStats(p.stats, allGameStats), careerStats: addStats(p.careerStats, allGameStats) };
+  });
+
+  const playerIdsWhoPlayed = new Set<string>();
+  for (const game of updatedGames) {
+    for (const pid of Object.keys(game.playerStats)) {
+      playerIdsWhoPlayed.add(pid);
+    }
+  }
+  const newInjuries = generateInjuries(newPlayers, playerIdsWhoPlayed);
+  const injuredPlayers = newPlayers.map(p => {
+    let injury = p.injury;
+    if (injury && injury.weeksLeft > 0) {
+      injury = { ...injury, weeksLeft: injury.weeksLeft - 1 };
+      if (injury.weeksLeft <= 0) injury = null;
+    }
+    const newInj = newInjuries.get(p.id);
+    if (newInj && !injury) injury = newInj;
+    return { ...p, injury };
+  });
+
+  const weekNews = generateWeekNews(state, updatedGames, newInjuries);
+
+  const newTradeProposals = state.week <= 12
+    ? generateAITradeProposals({ ...state, teams: newTeams, players: injuredPlayers })
+    : [];
+
+  const moodUpdatedPlayers = injuredPlayers.map(p => {
+    if (!p.teamId) return p;
+    const team = newTeams.find(t => t.id === p.teamId);
+    if (!team) return p;
+    let moodDelta = 0;
+    const wp = team.record.wins / Math.max(1, team.record.wins + team.record.losses);
+    if (wp >= 0.6) moodDelta += 1;
+    else if (wp <= 0.35) moodDelta -= 2;
+    const depthPos = team.depthChart[p.position]?.indexOf(p.id) ?? -1;
+    if (depthPos === 0) moodDelta += 1;
+    else if (depthPos > 2) moodDelta -= 1;
+    const marketSalary = estimateSalary(p.ratings.overall, p.position);
+    if (p.contract.salary < marketSalary * 0.7) moodDelta -= 1;
+    if (team.record.streak >= 3) moodDelta += 1;
+    if (team.record.streak <= -3) moodDelta -= 1;
+    const newMood = Math.max(0, Math.min(100, (p.mood ?? 70) + moodDelta));
+    return { ...p, mood: newMood };
+  });
+
+  const maxWeek = Math.max(...state.schedule.map(g => g.week));
+  const nextWeek = state.week + 1;
+  const isSeasonOver = nextWeek > maxWeek;
+
+  return {
+    patch: {
+      schedule: newSchedule,
+      teams: newTeams,
+      players: moodUpdatedPlayers,
+      week: isSeasonOver ? state.week : nextWeek,
+      phase: isSeasonOver ? 'playoffs' : 'regular',
+      newsItems: [...state.newsItems, ...weekNews],
+      tradeProposals: [...state.tradeProposals, ...newTradeProposals],
+    },
+    isSeasonOver,
+  };
+}
+
 export const useGameStore = create<GameStore>()(
   persist(
     (set, get) => ({
@@ -875,163 +1006,48 @@ export const useGameStore = create<GameStore>()(
       simWeek: () => {
         const state = get();
         if (state.phase !== 'regular') return;
-
-        const weekGames = state.schedule.filter(g => g.week === state.week && !g.played);
-        if (weekGames.length === 0) return;
-
-        const updatedGames = weekGames.map(game => {
-          const homeTeam = state.teams.find(t => t.id === game.homeTeamId);
-          const awayTeam = state.teams.find(t => t.id === game.awayTeamId);
-          const homeRosterRaw = state.players.filter(p => p.teamId === game.homeTeamId);
-          const awayRosterRaw = state.players.filter(p => p.teamId === game.awayTeamId);
-          // PRD-13: respect depth chart order
-          const homeRoster = homeTeam?.depthChart
-            ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart)
-            : homeRosterRaw;
-          const awayRoster = awayTeam?.depthChart
-            ? sortRosterByDepthChart(awayRosterRaw, awayTeam.depthChart)
-            : awayRosterRaw;
-          return simulateGame(game, homeRoster, awayRoster);
-        });
-
-        const newSchedule = state.schedule.map(g => {
-          const updated = updatedGames.find(u => u.id === g.id);
-          return updated ?? g;
-        });
-
-        // Update team records
-        const newTeams = state.teams.map(team => {
-          const teamGames = updatedGames.filter(
-            g => g.homeTeamId === team.id || g.awayTeamId === team.id,
-          );
-          const record = { ...team.record };
-          for (const game of teamGames) {
-            const isHome = game.homeTeamId === team.id;
-            const teamScore = isHome ? game.homeScore : game.awayScore;
-            const oppScore = isHome ? game.awayScore : game.homeScore;
-            record.pointsFor += teamScore;
-            record.pointsAgainst += oppScore;
-
-            if (teamScore > oppScore) {
-              record.wins += 1;
-              record.streak = record.streak >= 0 ? record.streak + 1 : 1;
-            } else {
-              record.losses += 1;
-              record.streak = record.streak <= 0 ? record.streak - 1 : -1;
-            }
-
-            const opponent = state.teams.find(t => t.id === (isHome ? game.awayTeamId : game.homeTeamId));
-            if (opponent && opponent.conference === team.conference && opponent.division === team.division) {
-              if (teamScore > oppScore) record.divisionWins += 1;
-              else record.divisionLosses += 1;
-            }
-          }
-          return { ...team, record };
-        });
-
-        // Update player season stats
-        const newPlayers = state.players.map(p => {
-          const allGameStats = updatedGames.reduce<Partial<PlayerStats>>((acc, game) => {
-            const s = game.playerStats[p.id];
-            if (s) {
-              for (const key of Object.keys(s) as (keyof PlayerStats)[]) {
-                (acc[key] as number) = ((acc[key] as number) ?? 0) + ((s[key] as number) ?? 0);
-              }
-            }
-            return acc;
-          }, {});
-
-          if (Object.keys(allGameStats).length === 0) return p;
-
-          return {
-            ...p,
-            stats: addStats(p.stats, allGameStats),
-            careerStats: addStats(p.careerStats, allGameStats),
-          };
-        });
-
-        // PRD-09: Injury generation + decrement
-        const playerIdsWhoPlayed = new Set<string>();
-        for (const game of updatedGames) {
-          for (const pid of Object.keys(game.playerStats)) {
-            playerIdsWhoPlayed.add(pid);
-          }
-        }
-
-        const newInjuries = generateInjuries(newPlayers, playerIdsWhoPlayed);
-
-        const injuredPlayers = newPlayers.map(p => {
-          let injury = p.injury;
-          if (injury && injury.weeksLeft > 0) {
-            injury = { ...injury, weeksLeft: injury.weeksLeft - 1 };
-            if (injury.weeksLeft <= 0) injury = null;
-          }
-          const newInj = newInjuries.get(p.id);
-          if (newInj && !injury) {
-            injury = newInj;
-          }
-          return { ...p, injury };
-        });
-
-        // PRD-08: News generation
-        const weekNews = generateWeekNews(state, updatedGames, newInjuries);
-
-        // PRD-04: Generate AI trade proposals (weeks 1-12 only)
-        const newTradeProposals = state.week <= 12
-          ? generateAITradeProposals({ ...state, teams: newTeams, players: injuredPlayers })
-          : [];
-
-        // Update player mood/sentiment based on team performance, depth chart, and contract
-        const moodUpdatedPlayers = injuredPlayers.map(p => {
-          if (!p.teamId) return p;
-          const team = newTeams.find(t => t.id === p.teamId);
-          if (!team) return p;
-
-          let moodDelta = 0;
-          // Winning boosts mood, losing drops it
-          const winPct = team.record.wins / Math.max(1, team.record.wins + team.record.losses);
-          if (winPct >= 0.6) moodDelta += 1;
-          else if (winPct <= 0.35) moodDelta -= 2;
-
-          // Depth chart position — starters are happy, bench players are not
-          const depthPos = team.depthChart[p.position]?.indexOf(p.id) ?? -1;
-          if (depthPos === 0) moodDelta += 1; // starter
-          else if (depthPos > 2) moodDelta -= 1; // deep bench
-
-          // Contract dissatisfaction — underpaid players lose mood
-          const marketSalary = estimateSalary(p.ratings.overall, p.position);
-          if (p.contract.salary < marketSalary * 0.7) moodDelta -= 1;
-
-          // Streak effects
-          if (team.record.streak >= 3) moodDelta += 1;
-          if (team.record.streak <= -3) moodDelta -= 1;
-
-          const newMood = Math.max(0, Math.min(100, (p.mood ?? 70) + moodDelta));
-          return { ...p, mood: newMood };
-        });
-
-        const maxWeek = Math.max(...state.schedule.map(g => g.week));
-        const nextWeek = state.week + 1;
-        const isSeasonOver = nextWeek > maxWeek;
-
-        set({
-          schedule: newSchedule,
-          teams: newTeams,
-          players: moodUpdatedPlayers,
-          week: isSeasonOver ? state.week : nextWeek,
-          phase: isSeasonOver ? 'playoffs' : 'regular',
-          newsItems: [...state.newsItems, ...weekNews],
-          tradeProposals: [...state.tradeProposals, ...newTradeProposals],
-        });
-
-        if (isSeasonOver) {
+        const result = simulateOneWeek(state);
+        if (!result) return;
+        set(result.patch);
+        if (result.isSeasonOver) {
           get().advanceToPlayoffs();
         }
       },
 
       simToWeek: (targetWeek: number) => {
-        while (get().week < targetWeek && get().phase === 'regular') {
-          get().simWeek();
+        // Compute all weeks in a single pass to avoid stale get() issues
+        let current = get();
+        if (current.phase !== 'regular') return;
+
+        let schedule = [...current.schedule];
+        let teams = [...current.teams];
+        let players = [...current.players];
+        let week = current.week;
+        let newsItems = [...current.newsItems];
+        let tradeProposals = [...current.tradeProposals];
+        let isSeasonOver = false;
+
+        for (let guard = 0; guard < 200 && week < targetWeek; guard++) {
+          const fakeState = { ...current, schedule, teams, players, week, newsItems, tradeProposals, phase: 'regular' as const } as LeagueState;
+          const result = simulateOneWeek(fakeState);
+          if (!result) break;
+
+          schedule = result.patch.schedule as typeof schedule;
+          teams = result.patch.teams as typeof teams;
+          players = result.patch.players as typeof players;
+          week = result.patch.week as number;
+          newsItems = result.patch.newsItems as typeof newsItems;
+          tradeProposals = result.patch.tradeProposals as typeof tradeProposals;
+
+          if (result.isSeasonOver) {
+            isSeasonOver = true;
+            break;
+          }
+        }
+
+        set({ schedule, teams, players, week, newsItems, tradeProposals, phase: isSeasonOver ? 'playoffs' : 'regular' });
+        if (isSeasonOver) {
+          get().advanceToPlayoffs();
         }
       },
 

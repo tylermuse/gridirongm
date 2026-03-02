@@ -64,13 +64,9 @@ export function TopBar() {
   }, [simWeek, router]);
 
   const handleSimToDeadline = useCallback(() => {
-    const deadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
-    const store = useGameStore.getState();
-    for (let w = store.week; w <= deadlineWeek; w++) {
-      if (useGameStore.getState().phase !== 'regular') break;
-      useGameStore.getState().simWeek();
-    }
-    // Auto-redirect to playoffs if season ended during sim
+    const deadlineWeek = (leagueSettings?.tradeDeadlineWeek ?? 12) + 1;
+    // simToWeek computes all weeks in a single set() call — no stale state
+    useGameStore.getState().simToWeek(deadlineWeek);
     if (useGameStore.getState().phase === 'playoffs') {
       router.push('/playoffs');
     }
@@ -79,10 +75,8 @@ export function TopBar() {
   const handleSimSeason = useCallback(() => {
     const store = useGameStore.getState();
     const max = Math.max(...store.schedule.map(g => g.week));
-    for (let w = store.week; w <= max; w++) {
-      useGameStore.getState().simWeek();
-    }
-    // Auto-redirect to playoffs when season ends
+    // simToWeek computes all weeks in a single set() call — no stale state
+    useGameStore.getState().simToWeek(max + 1);
     if (useGameStore.getState().phase === 'playoffs') {
       router.push('/playoffs');
     }
