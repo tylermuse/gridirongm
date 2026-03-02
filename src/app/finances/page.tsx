@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useGameStore, computeLuxuryTax, LUXURY_TAX_RATE } from '@/lib/engine/store';
+import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -22,6 +22,7 @@ export default function FinancesPage() {
   const { teams, players, userTeamId, releasePlayer } = useGameStore();
   const userTeam = teams.find(t => t.id === userTeamId);
   const [confirmRelease, setConfirmRelease] = useState<string | null>(null);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   if (!userTeam) {
     return (
@@ -157,9 +158,9 @@ export default function FinancesPage() {
                   {expiring.map(p => (
                     <tr key={p.id} className="border-t border-[var(--border)]">
                       <td className="py-2">
-                        <Link href={`/player/${p.id}`} className="font-semibold hover:text-blue-400 transition-colors">
+                        <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-400 transition-colors">
                           {p.firstName} {p.lastName}
-                        </Link>
+                        </button>
                         <div className="text-xs text-[var(--text-sec)]">{p.position} · Age {p.age}</div>
                       </td>
                       <td className={`py-2 text-center font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
@@ -189,9 +190,9 @@ export default function FinancesPage() {
                 {topSalaries.map(p => (
                   <tr key={p.id} className="border-t border-[var(--border)]">
                     <td className="py-2">
-                      <Link href={`/player/${p.id}`} className="font-semibold hover:text-blue-400 transition-colors">
+                      <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-400 transition-colors">
                         {p.firstName} {p.lastName}
-                      </Link>
+                      </button>
                       <div className="text-xs text-[var(--text-sec)]">{p.position} · {p.contract.yearsLeft}yr</div>
                     </td>
                     <td className={`py-2 text-center font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
@@ -215,6 +216,7 @@ export default function FinancesPage() {
           </Card>
         </div>
       </div>
+      <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
   );
 }

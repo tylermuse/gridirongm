@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
+import { PlayerModal } from '@/components/game/PlayerModal';
 import { LEAGUE_MINIMUM_SALARY, computeLuxuryTax, LUXURY_TAX_RATE } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -30,6 +31,7 @@ export default function ReSignPage() {
   const [offerSalary, setOfferSalary] = useState(0);
   const [offerYears, setOfferYears] = useState(3);
   const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   if (phase !== 'resigning') {
     return (
@@ -305,9 +307,9 @@ export default function ReSignPage() {
                     {/* Player info */}
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <Link href={`/player/${player.id}`} className="font-bold text-lg hover:text-blue-400 transition-colors">
+                        <button onClick={() => setSelectedPlayerId(player.id)} className="font-bold text-lg hover:text-blue-400 transition-colors">
                           {player.firstName} {player.lastName}
-                        </Link>
+                        </button>
                         <Badge>{player.position}</Badge>
                         <span className={`font-bold ${ratingColor(player.ratings.overall)}`}>{player.ratings.overall} OVR</span>
                       </div>
@@ -402,6 +404,7 @@ export default function ReSignPage() {
           </Card>
         )}
       </div>
+      <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
   );
 }

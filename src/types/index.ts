@@ -279,6 +279,8 @@ export interface LeagueState {
   finalsMvpPlayerId: string | null;
   /** Configurable league settings */
   leagueSettings: LeagueSettings;
+  /** Suppress trade proposal popup notifications */
+  suppressTradePopups: boolean;
 }
 
 export interface DraftSelection {

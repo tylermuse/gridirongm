@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
+import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -61,6 +61,7 @@ export default function RosterPage() {
   const [sortBy, setSortBy] = useState<'overall' | 'age' | 'salary'>('overall');
   const [viewMode, setViewMode] = useState<'depth' | 'table' | 'injuries'>('depth');
   const [confirmRelease, setConfirmRelease] = useState<string | null>(null);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   // Drag state
   const [dragPosition, setDragPosition] = useState<Position | null>(null);
@@ -195,14 +196,13 @@ export default function RosterPage() {
                               {player.ratings.overall}
                             </span>
                           </div>
-                          <Link
-                            href={`/player/${player.id}`}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setSelectedPlayerId(player.id); }}
                             className="text-xs font-semibold truncate block hover:text-blue-400 transition-colors"
-                            onClick={e => e.stopPropagation()}
                           >
                             {isProBowl && <span className="text-amber-400 mr-0.5">★</span>}
                             {player.firstName[0]}. {player.lastName}
-                          </Link>
+                          </button>
                           <div className="text-[10px] text-[var(--text-sec)] mt-0.5 truncate">
                             {getPositionStat(player)}
                           </div>
@@ -306,10 +306,10 @@ export default function RosterPage() {
                   {filteredRoster.map(p => (
                     <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
                       <td className="py-2.5 pl-2">
-                        <Link href={`/player/${p.id}`} className="font-semibold hover:text-blue-400 transition-colors">
+                        <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-400 transition-colors">
                           {proBowlPlayerIds.has(p.id) && <span className="text-amber-400 mr-1">★</span>}
                           {p.firstName} {p.lastName}
-                        </Link>
+                        </button>
                         {p.injury && (
                           <span className="block text-xs text-red-400">{p.injury.type} ({p.injury.weeksLeft}w)</span>
                         )}
@@ -386,10 +386,10 @@ export default function RosterPage() {
                     {injuredPlayers.map(p => (
                       <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
                         <td className="py-2.5 pl-2">
-                          <Link href={`/player/${p.id}`} className="font-semibold hover:text-blue-400 transition-colors">
+                          <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-400 transition-colors">
                             {proBowlPlayerIds.has(p.id) && <span className="text-amber-400 mr-1">★</span>}
                             {p.firstName} {p.lastName}
-                          </Link>
+                          </button>
                         </td>
                         <td className="py-2.5 text-center"><Badge>{p.position}</Badge></td>
                         <td className={`py-2.5 text-center font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
@@ -424,6 +424,7 @@ export default function RosterPage() {
           </div>
         )}
       </div>
+      <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
   );
 }

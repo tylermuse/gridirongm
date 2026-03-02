@@ -1,8 +1,10 @@
 'use client';
 
+import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
+import { TradeProposalPopup } from './TradeProposalPopup';
 
 export function TopBar() {
   const {
@@ -18,6 +20,7 @@ export function TopBar() {
     draftOrder,
     resigningPlayers,
     tradeProposals,
+    suppressTradePopups,
     simWeek,
     simNextPlayoffGame,
     simAllPlayoffGames,
@@ -26,6 +29,8 @@ export function TopBar() {
     advanceToFreeAgency,
     startNewSeason,
   } = useGameStore();
+
+  const [newProposalIds, setNewProposalIds] = useState<string[]>([]);
 
   const superBowlDone = !!playoffBracket?.find(m => m.id === 'super-bowl')?.winnerId;
   const nextPlayoffGame = playoffBracket
@@ -36,6 +41,26 @@ export function TopBar() {
   const maxWeek = schedule.length > 0 ? Math.max(...schedule.map(g => g.week)) : 18;
 
   const pendingTradeCount = tradeProposals.filter(p => p.status === 'pending').length;
+
+  const handleSimWeek = useCallback(() => {
+    const beforeIds = new Set(useGameStore.getState().tradeProposals.filter(p => p.status === 'pending').map(p => p.id));
+    simWeek();
+    if (!useGameStore.getState().suppressTradePopups) {
+      const afterProposals = useGameStore.getState().tradeProposals.filter(p => p.status === 'pending');
+      const newIds = afterProposals.filter(p => !beforeIds.has(p.id)).map(p => p.id);
+      if (newIds.length > 0) {
+        setNewProposalIds(newIds);
+      }
+    }
+  }, [simWeek]);
+
+  const handleSimSeason = useCallback(() => {
+    const store = useGameStore.getState();
+    const max = Math.max(...store.schedule.map(g => g.week));
+    for (let w = store.week; w <= max; w++) {
+      useGameStore.getState().simWeek();
+    }
+  }, []);
 
   // Phase banner context
   let bannerText = '';
@@ -81,121 +106,125 @@ export function TopBar() {
   }
 
   return (
-    <header className="border-b border-[var(--border)] bg-[var(--surface)] sticky top-0 z-10">
-      <div className="h-14 flex items-center justify-between px-6">
-        <div className="text-sm text-[var(--text-sec)]">
-          {phase === 'regular' && `Week ${week} · Regular Season`}
-          {phase === 'playoffs' && 'Playoffs'}
-          {phase === 'resigning' && 'Re-signing Window'}
-          {phase === 'draft' && `NFL Draft · Season ${season}`}
-          {phase === 'freeAgency' && 'Free Agency'}
-          {phase === 'offseason' && 'Offseason'}
-        </div>
+    <>
+      <header className="border-b border-[var(--border)] bg-[var(--surface)] sticky top-0 z-10">
+        <div className="h-14 flex items-center justify-between px-6">
+          <div className="text-sm text-[var(--text-sec)]">
+            {phase === 'regular' && `Week ${week} · Regular Season`}
+            {phase === 'playoffs' && 'Playoffs'}
+            {phase === 'resigning' && 'Re-signing Window'}
+            {phase === 'draft' && `NFL Draft · Season ${season}`}
+            {phase === 'freeAgency' && 'Free Agency'}
+            {phase === 'offseason' && 'Offseason'}
+          </div>
 
-        <div className="flex items-center gap-2">
-          {phase === 'regular' && (
-            <>
-              {pendingTradeCount > 0 && (
-                <Link href="/trades">
-                  <Button size="sm" variant="secondary">
-                    Trades ({pendingTradeCount})
-                  </Button>
+          <div className="flex items-center gap-2">
+            {phase === 'regular' && (
+              <>
+                {pendingTradeCount > 0 && (
+                  <Link href="/trades">
+                    <Button size="sm" variant="secondary">
+                      Trades ({pendingTradeCount})
+                    </Button>
+                  </Link>
+                )}
+                <Button onClick={handleSimWeek} size="sm">
+                  Sim Week {week}
+                </Button>
+                <Button
+                  onClick={handleSimSeason}
+                  variant="secondary"
+                  size="sm"
+                >
+                  Sim Season
+                </Button>
+              </>
+            )}
+            {phase === 'playoffs' && (
+              <>
+                {!superBowlDone && (
+                  <>
+                    <Button
+                      onClick={simNextPlayoffGame}
+                      size="sm"
+                      disabled={!nextPlayoffGame}
+                    >
+                      Sim Next Game
+                    </Button>
+                    <Button
+                      onClick={simAllPlayoffGames}
+                      size="sm"
+                      variant="secondary"
+                      disabled={!nextPlayoffGame}
+                    >
+                      Sim All Games
+                    </Button>
+                  </>
+                )}
+                <Button
+                  onClick={advanceToResigning}
+                  size="sm"
+                  variant={superBowlDone ? 'primary' : 'secondary'}
+                >
+                  {superBowlDone ? 'Advance to Re-signing →' : 'Skip to Re-signing'}
+                </Button>
+              </>
+            )}
+            {phase === 'resigning' && (
+              <>
+                <Link href="/re-sign">
+                  <Button size="sm" variant="secondary">Go to Re-signing</Button>
                 </Link>
-              )}
-              <Button onClick={simWeek} size="sm">
-                Sim Week {week}
-              </Button>
-              <Button
-                onClick={() => {
-                  const store = useGameStore.getState();
-                  const max = Math.max(...store.schedule.map(g => g.week));
-                  for (let w = store.week; w <= max; w++) {
-                    useGameStore.getState().simWeek();
-                  }
-                }}
-                variant="secondary"
-                size="sm"
-              >
-                Sim Season
-              </Button>
-            </>
-          )}
-          {phase === 'playoffs' && (
-            <>
-              {!superBowlDone && (
-                <>
-                  <Button
-                    onClick={simNextPlayoffGame}
-                    size="sm"
-                    disabled={!nextPlayoffGame}
-                  >
-                    Sim Next Game
-                  </Button>
-                  <Button
-                    onClick={simAllPlayoffGames}
-                    size="sm"
-                    variant="secondary"
-                    disabled={!nextPlayoffGame}
-                  >
-                    Sim All Games
-                  </Button>
-                </>
-              )}
-              <Button
-                onClick={advanceToResigning}
-                size="sm"
-                variant={superBowlDone ? 'primary' : 'secondary'}
-              >
-                {superBowlDone ? 'Advance to Re-signing →' : 'Skip to Re-signing'}
-              </Button>
-            </>
-          )}
-          {phase === 'resigning' && (
-            <>
-              <Link href="/re-sign">
-                <Button size="sm" variant="secondary">Go to Re-signing</Button>
-              </Link>
-              <Button
-                onClick={advanceToDraft}
-                size="sm"
-              >
-                {resigningPlayers.length === 0 ? 'Advance to Draft →' : 'Skip to Draft'}
-              </Button>
-            </>
-          )}
-          {phase === 'draft' && (
-            <>
-              <Link href="/draft">
-                <Button size="sm" variant="secondary">Go to Draft</Button>
-              </Link>
-              <Button
-                onClick={() => useGameStore.getState().advanceToFreeAgency()}
-                variant="secondary"
-                size="sm"
-              >
-                Skip to Free Agency
-              </Button>
-            </>
-          )}
-          {phase === 'freeAgency' && (
-            <>
-              <Link href="/free-agency">
-                <Button size="sm" variant="secondary">Go to FA</Button>
-              </Link>
-              <Button onClick={startNewSeason} size="sm">
-                Start New Season →
-              </Button>
-            </>
-          )}
+                <Button
+                  onClick={advanceToDraft}
+                  size="sm"
+                >
+                  {resigningPlayers.length === 0 ? 'Advance to Draft →' : 'Skip to Draft'}
+                </Button>
+              </>
+            )}
+            {phase === 'draft' && (
+              <>
+                <Link href="/draft">
+                  <Button size="sm" variant="secondary">Go to Draft</Button>
+                </Link>
+                <Button
+                  onClick={() => useGameStore.getState().advanceToFreeAgency()}
+                  variant="secondary"
+                  size="sm"
+                >
+                  Skip to Free Agency
+                </Button>
+              </>
+            )}
+            {phase === 'freeAgency' && (
+              <>
+                <Link href="/free-agency">
+                  <Button size="sm" variant="secondary">Go to FA</Button>
+                </Link>
+                <Button onClick={startNewSeason} size="sm">
+                  Start New Season →
+                </Button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Phase context banner */}
-      {bannerText && (
-        <div className="px-6 py-1.5 bg-[var(--surface-2)] border-t border-[var(--border)] text-xs text-[var(--text-sec)]">
-          {bannerText}
-        </div>
+        {/* Phase context banner */}
+        {bannerText && (
+          <div className="px-6 py-1.5 bg-[var(--surface-2)] border-t border-[var(--border)] text-xs text-[var(--text-sec)]">
+            {bannerText}
+          </div>
+        )}
+      </header>
+
+      {/* Trade proposal popup */}
+      {newProposalIds.length > 0 && (
+        <TradeProposalPopup
+          proposalIds={newProposalIds}
+          onClose={() => setNewProposalIds([])}
+        />
       )}
-    </header>
+    </>
   );
 }

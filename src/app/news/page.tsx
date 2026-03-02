@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
+import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Badge } from '@/components/ui/Badge';
 import type { NewsItem } from '@/types';
@@ -32,6 +32,7 @@ type FilterTab = 'all' | 'myteam' | 'transactions' | 'injuries';
 export default function NewsPage() {
   const { newsItems, teams, players, userTeamId } = useGameStore();
   const [filter, setFilter] = useState<FilterTab>('all');
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   const userTeam = teams.find(t => t.id === userTeamId);
 
@@ -140,9 +141,9 @@ export default function NewsPage() {
                           const p = players.find(pl => pl.id === pid);
                           if (!p) return null;
                           return (
-                            <Link key={pid} href={`/player/${pid}`} className="text-xs text-blue-400 hover:underline">
+                            <button key={pid} onClick={() => setSelectedPlayerId(pid)} className="text-xs text-blue-400 hover:underline">
                               {p.firstName} {p.lastName}
-                            </Link>
+                            </button>
                           );
                         })}
                       </div>
@@ -154,6 +155,7 @@ export default function NewsPage() {
           </div>
         )}
       </div>
+      <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
   );
 }

@@ -69,6 +69,7 @@ interface GameStore extends LeagueState {
   reorderDepthChart: (position: Position, playerIds: string[]) => void;
   resetDepthChart: (position: Position) => void;
   updateLeagueSettings: (settings: Partial<LeagueSettings>) => void;
+  setSuppressTradePopups: (val: boolean) => void;
   saveToSlot: (slot: 1 | 2) => void;
   loadFromSlot: (slot: 1 | 2) => void;
   getTeam: (id: string) => Team | undefined;
@@ -715,6 +716,7 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   draftScoutingData: {},
   finalsMvpPlayerId: null,
   leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
+  suppressTradePopups: false,
 };
 
 export const useGameStore = create<GameStore>()(
@@ -752,6 +754,7 @@ export const useGameStore = create<GameStore>()(
             draftScoutingData: {},
             finalsMvpPlayerId: null,
             leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
+            suppressTradePopups: false,
           });
           return;
         } catch (error) {
@@ -810,6 +813,7 @@ export const useGameStore = create<GameStore>()(
           draftScoutingData: {},
           finalsMvpPlayerId: null,
           leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
+          suppressTradePopups: false,
         });
       },
 
@@ -2034,6 +2038,10 @@ export const useGameStore = create<GameStore>()(
           updatedTeams = state.teams.map(t => ({ ...t, salaryCap: updates.salaryCap! }));
         }
         set({ leagueSettings: newSettings, teams: updatedTeams });
+      },
+
+      setSuppressTradePopups: (val: boolean) => {
+        set({ suppressTradePopups: val });
       },
 
       saveToSlot: (slot: 1 | 2) => {

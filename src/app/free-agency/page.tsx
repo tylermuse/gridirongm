@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
+import { PlayerModal } from '@/components/game/PlayerModal';
 import { LEAGUE_MINIMUM_SALARY, LUXURY_TAX_RATE, computeLuxuryTax } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -30,6 +30,7 @@ export default function FreeAgencyPage() {
   const [negotiation, setNegotiation] = useState<NegotiationState | null>(null);
   const [offerSalary, setOfferSalary] = useState(0);
   const [offerYears, setOfferYears] = useState(3);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   if (phase !== 'freeAgency') {
     return (
@@ -376,9 +377,9 @@ export default function FreeAgencyPage() {
                         }`}
                       >
                         <td className="py-2.5 pl-2">
-                          <Link href={`/player/${p.id}`} className="font-semibold hover:text-blue-400 transition-colors">
+                          <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-400 transition-colors">
                             {p.firstName} {p.lastName}
-                          </Link>
+                          </button>
                         </td>
                         <td className="py-2.5 text-center"><Badge>{p.position}</Badge></td>
                         <td className="py-2.5 text-center">{p.age}</td>
@@ -414,6 +415,7 @@ export default function FreeAgencyPage() {
           </div>
         </div>
       </div>
+      <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
   );
 }

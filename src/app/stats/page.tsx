@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
+import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -31,6 +31,7 @@ export default function StatsPage() {
   const { players, teams, userTeamId, week } = useGameStore();
   const [tab, setTab] = useState<Tab>('leaders');
   const [statCat, setStatCat] = useState<StatCategory>('passYards');
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   const activePlayers = players.filter(p => !p.retired && p.teamId && p.stats.gamesPlayed >= 1);
 
@@ -124,9 +125,9 @@ export default function StatsPage() {
                     >
                       <td className="py-2.5 text-center text-[var(--text-sec)] text-xs">{i + 1}</td>
                       <td className="py-2.5">
-                        <Link href={`/player/${p.id}`} className={`font-semibold hover:text-blue-400 transition-colors ${isUser ? 'text-blue-300' : ''}`}>
+                        <button onClick={() => setSelectedPlayerId(p.id)} className={`font-semibold hover:text-blue-400 transition-colors ${isUser ? 'text-blue-300' : ''}`}>
                           {p.firstName} {p.lastName}
-                        </Link>
+                        </button>
                         {isUser && <span className="ml-1 text-xs text-blue-400">(You)</span>}
                       </td>
                       <td className="py-2.5 text-center"><Badge>{p.position}</Badge></td>
@@ -261,6 +262,7 @@ export default function StatsPage() {
           </Card>
         )}
       </div>
+      <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
   );
 }

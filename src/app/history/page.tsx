@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
+import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -26,11 +26,11 @@ const RESULT_VARIANTS: Record<string, 'green' | 'blue' | 'red' | 'default'> = {
   champion: 'green',
 };
 
-function PlayerLink({ playerId, children }: { playerId: string; children: React.ReactNode }) {
+function PlayerLink({ playerId, children, onSelect }: { playerId: string; children: React.ReactNode; onSelect: (id: string) => void }) {
   return (
-    <Link href={`/player/${playerId}`} className="text-blue-400 hover:text-blue-300 transition-colors">
+    <button onClick={() => onSelect(playerId)} className="text-blue-400 hover:text-blue-300 transition-colors">
       {children}
-    </Link>
+    </button>
   );
 }
 
@@ -39,11 +39,13 @@ function AllLeagueList({
   entries,
   playerName,
   teamAbbr,
+  onSelectPlayer,
 }: {
   title: string;
   entries: AllLeagueEntry[];
   playerName: (id: string) => string;
   teamAbbr: (id: string) => string;
+  onSelectPlayer: (id: string) => void;
 }) {
   if (entries.length === 0) return null;
   return (
@@ -53,7 +55,7 @@ function AllLeagueList({
         {entries.map((e, i) => (
           <div key={i} className="flex items-center gap-2 text-sm border-t border-[var(--border)] pt-1.5 first:border-t-0 first:pt-0">
             <span className="text-[var(--text-sec)] w-7 shrink-0 font-mono text-xs">{e.position}</span>
-            <PlayerLink playerId={e.playerId}>{playerName(e.playerId)}</PlayerLink>
+            <PlayerLink playerId={e.playerId} onSelect={onSelectPlayer}>{playerName(e.playerId)}</PlayerLink>
             <span className="text-xs text-[var(--text-sec)]">({teamAbbr(e.teamId)})</span>
           </div>
         ))}
@@ -65,6 +67,7 @@ function AllLeagueList({
 export default function HistoryPage() {
   const { seasonHistory, players, teams, userTeamId, season } = useGameStore();
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   const selected = seasonHistory.find(s => s.season === selectedSeason);
 
@@ -164,11 +167,13 @@ export default function HistoryPage() {
                 teamAbbr={teamAbbr}
                 teamColor={teamColor}
                 teamName={teamName}
+                onSelectPlayer={setSelectedPlayerId}
               />
             )}
           </div>
         )}
       </div>
+      <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
   );
 }
@@ -180,6 +185,7 @@ function SeasonDetail({
   teamAbbr,
   teamColor,
   teamName,
+  onSelectPlayer,
 }: {
   selected: SeasonSummary;
   playerName: (id: string) => string;
@@ -187,6 +193,7 @@ function SeasonDetail({
   teamAbbr: (id: string) => string;
   teamColor: (id: string) => string;
   teamName: (id: string) => string;
+  onSelectPlayer: (id: string) => void;
 }) {
   return (
     <div className="grid grid-cols-2 gap-4">
@@ -215,7 +222,7 @@ function SeasonDetail({
               <span className="text-[var(--text-sec)]">Finals MVP: </span>
               <span className="font-semibold">
                 {playerPosition(selected.finalsMvpId)}{' '}
-                <PlayerLink playerId={selected.finalsMvpId}>{playerName(selected.finalsMvpId)}</PlayerLink>
+                <PlayerLink playerId={selected.finalsMvpId} onSelect={onSelectPlayer}>{playerName(selected.finalsMvpId)}</PlayerLink>
                 <span className="ml-1 text-xs text-[var(--text-sec)]">({teamAbbr(selected.championTeamId)})</span>
               </span>
             </div>
@@ -259,7 +266,7 @@ function SeasonDetail({
                   <div className="text-xs text-[var(--text-sec)] mb-0.5">{a.award}</div>
                   <div className="text-sm font-semibold">
                     {playerPosition(a.playerId)}{' '}
-                    <PlayerLink playerId={a.playerId}>{playerName(a.playerId)}</PlayerLink>
+                    <PlayerLink playerId={a.playerId} onSelect={onSelectPlayer}>{playerName(a.playerId)}</PlayerLink>
                     <span className="ml-1 text-xs text-[var(--text-sec)]">({teamAbbr(a.teamId)})</span>
                   </div>
                 </div>
@@ -276,7 +283,7 @@ function SeasonDetail({
               <div key={cat} className="flex items-center justify-between text-sm border-t border-[var(--border)] pt-2 first:border-t-0 first:pt-0">
                 <div className="text-[var(--text-sec)] capitalize">{cat.replace(/([A-Z])/g, ' $1').trim()}</div>
                 <div>
-                  <PlayerLink playerId={data.playerId}>{playerName(data.playerId)}</PlayerLink>
+                  <PlayerLink playerId={data.playerId} onSelect={onSelectPlayer}>{playerName(data.playerId)}</PlayerLink>
                   <span className="ml-2 text-xs font-mono text-[var(--text-sec)]">{data.value.toLocaleString()}</span>
                 </div>
               </div>
@@ -292,18 +299,21 @@ function SeasonDetail({
           entries={selected.allLeagueFirst ?? []}
           playerName={playerName}
           teamAbbr={teamAbbr}
+          onSelectPlayer={onSelectPlayer}
         />
         <AllLeagueList
           title="All-League 2nd Team"
           entries={selected.allLeagueSecond ?? []}
           playerName={playerName}
           teamAbbr={teamAbbr}
+          onSelectPlayer={onSelectPlayer}
         />
         <AllLeagueList
           title="All-Rookie Team"
           entries={selected.allRookieTeam ?? []}
           playerName={playerName}
           teamAbbr={teamAbbr}
+          onSelectPlayer={onSelectPlayer}
         />
 
         {/* Retired Players */}
@@ -314,7 +324,7 @@ function SeasonDetail({
               {selected.retiredPlayers.map((r, i) => (
                 <div key={i} className="flex items-center gap-2 text-sm border-t border-[var(--border)] pt-1.5 first:border-t-0 first:pt-0">
                   <span className="text-[var(--text-sec)] w-7 shrink-0 font-mono text-xs">{r.position}</span>
-                  <PlayerLink playerId={r.playerId}>{r.name}</PlayerLink>
+                  <PlayerLink playerId={r.playerId} onSelect={onSelectPlayer}>{r.name}</PlayerLink>
                   {r.teamId && (
                     <span className="text-xs text-[var(--text-sec)]">({teamAbbr(r.teamId)})</span>
                   )}

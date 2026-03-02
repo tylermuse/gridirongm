@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
+import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -50,6 +50,7 @@ export default function TradesPage() {
   const [receivedPickIds, setReceivedPickIds] = useState<string[]>([]);
   const [tradeResult, setTradeResult] = useState<'accepted' | 'rejected' | null>(null);
   const [activeTab, setActiveTab] = useState<'incoming' | 'propose' | 'block'>('incoming');
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   // Trading block state
   const [blockedPlayerIds, setBlockedPlayerIds] = useState<string[]>([]);
@@ -237,9 +238,9 @@ export default function TradesPage() {
                         {offPlayers.map(p => (
                           <div key={p.id} className="flex items-center gap-2 mb-1">
                             <Badge size="sm">{p.position}</Badge>
-                            <Link href={`/player/${p.id}`} className="text-sm hover:text-blue-400">
+                            <button onClick={() => setSelectedPlayerId(p.id)} className="text-sm hover:text-blue-400">
                               {p.firstName} {p.lastName}
-                            </Link>
+                            </button>
                             <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
                           </div>
                         ))}
@@ -257,9 +258,9 @@ export default function TradesPage() {
                         {reqPlayers.map(p => (
                           <div key={p.id} className="flex items-center gap-2 mb-1">
                             <Badge size="sm">{p.position}</Badge>
-                            <Link href={`/player/${p.id}`} className="text-sm hover:text-blue-400">
+                            <button onClick={() => setSelectedPlayerId(p.id)} className="text-sm hover:text-blue-400">
                               {p.firstName} {p.lastName}
-                            </Link>
+                            </button>
                             <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
                           </div>
                         ))}
@@ -614,6 +615,7 @@ export default function TradesPage() {
           </div>
         )}
       </div>
+      <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
+import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -75,6 +76,7 @@ function TeamPicker() {
 
 function Dashboard() {
   const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, champions } = useGameStore();
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const userTeam = teams.find(t => t.id === userTeamId)!;
   const roster = players.filter(p => p.teamId === userTeamId);
 
@@ -282,9 +284,9 @@ function Dashboard() {
               {topPlayers.map(p => (
                 <div key={p.id} className="flex items-center justify-between text-sm">
                   <div>
-                    <Link href={`/player/${p.id}`} className="font-semibold hover:text-blue-400 transition-colors">
+                    <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-400 transition-colors">
                       {p.firstName} {p.lastName}
-                    </Link>
+                    </button>
                     <Badge variant="default" size="sm">{p.position}</Badge>
                   </div>
                   <div className="flex items-center gap-3 text-xs">
@@ -299,6 +301,7 @@ function Dashboard() {
           </Card>
         </div>
       </div>
+      <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
   );
 }
