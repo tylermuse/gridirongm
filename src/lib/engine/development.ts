@@ -194,7 +194,17 @@ export function developPlayers(
       ratings.overall = recalculateOverall(ratings, p.position);
     }
 
-    return { ...p, ratings, ratingHistory };
+    // Adjust potential based on age — past-prime players should lose upside
+    let newPotential = p.potential;
+    if (p.age >= 30) {
+      // Potential decays towards current OVR (or below) as player ages
+      const targetPot = Math.min(ratings.overall, p.potential);
+      const decay = p.age >= 34 ? 3 : p.age >= 32 ? 2 : 1;
+      newPotential = Math.max(targetPot - decay, Math.round(ratings.overall * 0.9));
+      newPotential = clamp(newPotential);
+    }
+
+    return { ...p, ratings, potential: newPotential, ratingHistory };
   });
 }
 

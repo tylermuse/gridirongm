@@ -283,7 +283,7 @@ export interface LeagueSettings {
 
 export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
   salaryCap: 300,
-  capGrowthRate: 5,
+  capGrowthRate: 8,
   luxuryTaxRate: 1.5,
   leagueMinSalary: 0.75,
   tradeDeadlineWeek: 12,

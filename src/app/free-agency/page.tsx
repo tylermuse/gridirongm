@@ -20,11 +20,16 @@ function ratingColor(val: number): string {
 }
 
 function estimateSalary(overall: number, position?: string): number {
-  const baseSalary = Math.max(LEAGUE_MINIMUM_SALARY, ((overall - 40) / 60) * 15);
-  if (position === 'K' || position === 'P') {
-    return Math.round(Math.min(baseSalary * 0.35, 3.0) * 10) / 10;
-  }
-  return Math.round(baseSalary * 10) / 10;
+  const POSITION_SALARY_MULT: Record<string, number> = {
+    QB: 1.6, WR: 1.0, CB: 1.0, DL: 1.05, LB: 0.95, OL: 1.0,
+    S: 0.9, TE: 0.85, RB: 0.8, K: 0.25, P: 0.25,
+  };
+  const normalized = Math.max(0, (overall - 40) / 60);
+  const baseSalary = Math.max(LEAGUE_MINIMUM_SALARY, Math.pow(normalized, 1.8) * 35);
+  const posMult = position ? (POSITION_SALARY_MULT[position] ?? 1.0) : 1.0;
+  let salary = baseSalary * posMult;
+  if (position === 'K' || position === 'P') salary = Math.min(salary, 5.0);
+  return Math.round(salary * 10) / 10;
 }
 
 export default function FreeAgencyPage() {

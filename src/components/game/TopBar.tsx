@@ -26,6 +26,7 @@ export function TopBar() {
     leagueSettings,
     simWeek,
     simNextPlayoffGame,
+    simPlayoffRound,
     simAllPlayoffGames,
     advanceToResigning,
     advanceToDraft,
@@ -173,12 +174,20 @@ export function TopBar() {
                       Sim Next Game
                     </Button>
                     <Button
+                      onClick={simPlayoffRound}
+                      size="sm"
+                      variant="secondary"
+                      disabled={!nextPlayoffGame}
+                    >
+                      Sim Round
+                    </Button>
+                    <Button
                       onClick={simAllPlayoffGames}
                       size="sm"
                       variant="secondary"
                       disabled={!nextPlayoffGame}
                     >
-                      Sim All Games
+                      Sim All
                     </Button>
                   </>
                 )}

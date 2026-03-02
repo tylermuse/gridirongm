@@ -70,11 +70,19 @@ function randomAge(experience: number): number {
 }
 
 function randomSalary(overall: number, position: Position): number {
-  const baseSalary = 0.5;
-  const ratingBonus = Math.pow((overall - 40) / 60, 2) * 28;
-  const positionMultiplier = position === 'QB' ? 1.8 : position === 'K' || position === 'P' ? 0.4 : 1.0;
+  // Match estimateSalary curve from store.ts for consistency
+  const POSITION_SALARY_MULT: Record<string, number> = {
+    QB: 1.6, WR: 1.0, CB: 1.0, DL: 1.05, LB: 0.95, OL: 1.0,
+    S: 0.9, TE: 0.85, RB: 0.8, K: 0.25, P: 0.25,
+  };
+  const normalized = Math.max(0, (overall - 40) / 60);
+  const baseSalary = Math.max(0.75, Math.pow(normalized, 1.8) * 35);
+  const posMult = POSITION_SALARY_MULT[position] ?? 1.0;
+  let salary = baseSalary * posMult;
+  if (position === 'K' || position === 'P') salary = Math.min(salary, 5.0);
+  // Add ±20% noise for variety
   const noise = 0.8 + Math.random() * 0.4;
-  return Math.round((baseSalary + ratingBonus * positionMultiplier) * noise * 10) / 10;
+  return Math.round(salary * noise * 10) / 10;
 }
 
 export function generatePlayer(
@@ -86,7 +94,21 @@ export function generatePlayer(
   const age = options.age ?? randomAge(experience);
   const { firstName, lastName } = randomName();
   const ratings = generateRatings(position, talentMean);
-  const potential = clamp(ratings.overall + Math.round(gaussian(8, 6)) - Math.max(0, age - 27) * 2);
+  // Potential peaks around age 27-29. Past prime, potential drops sharply (can't grow past peak).
+  // Young players: potential = OVR + bonus (room to grow)
+  // Prime (27-29): potential ≈ OVR (already near peak)
+  // Past prime (30+): potential = OVR or lower (declining, no upside)
+  let potentialBonus: number;
+  if (age <= 25) {
+    potentialBonus = Math.round(gaussian(10, 5)); // Big upside for young players
+  } else if (age <= 29) {
+    potentialBonus = Math.round(gaussian(3, 3)); // Small upside in prime
+  } else if (age <= 32) {
+    potentialBonus = Math.round(gaussian(-2, 2)); // Slightly below current OVR
+  } else {
+    potentialBonus = Math.round(gaussian(-5, 3)); // Well below current OVR — clearly declining
+  }
+  const potential = clamp(ratings.overall + potentialBonus);
   const salary = randomSalary(ratings.overall, position);
 
   return {

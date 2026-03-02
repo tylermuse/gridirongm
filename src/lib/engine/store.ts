@@ -36,6 +36,7 @@ interface GameStore extends LeagueState {
   advanceToPlayoffs: () => void;
   simPlayoffGame: (matchupId: string) => void;
   simNextPlayoffGame: () => void;
+  simPlayoffRound: () => void;
   simAllPlayoffGames: () => void;
   // PRD-03: Re-signing phase
   advanceToResigning: () => void;
@@ -48,6 +49,7 @@ interface GameStore extends LeagueState {
   simToEndDraft: () => void;
   advanceToFreeAgency: () => void;
   signFreeAgent: (playerId: string, salary: number, years: number) => boolean;
+  aiSignFreeAgents: () => void;
   releasePlayer: (playerId: string) => void;
   placeOnIR: (playerId: string) => void;
   activateFromIR: (playerId: string) => void;
@@ -344,13 +346,55 @@ function computeScoutingData(
 // Re-signing helpers (PRD-03)
 // ---------------------------------------------------------------------------
 
+/**
+ * Estimates market salary for a player based on overall rating and position.
+ * Calibrated to real NFL salary ranges:
+ *   - Elite QB (95+):  ~$45-50M   (Mahomes/Burrow tier)
+ *   - Elite WR (93+):  ~$27-30M   (CeeDee Lamb tier)
+ *   - Elite DL (93+):  ~$25-28M
+ *   - Good starter (80): ~$10-14M
+ *   - Backup (65):     ~$2-4M
+ *   - K/P:             capped at $5M max
+ *
+ * Uses an exponential curve so elite players command disproportionately more.
+ */
+const POSITION_SALARY_MULTIPLIER: Partial<Record<Position, number>> = {
+  QB: 1.6,
+  WR: 1.0,
+  CB: 1.0,
+  DL: 1.05,
+  LB: 0.95,
+  OL: 1.0,
+  S: 0.9,
+  TE: 0.85,
+  RB: 0.8,
+  K: 0.25,
+  P: 0.25,
+};
+
 function estimateSalary(overall: number, position?: Position): number {
-  const baseSalary = Math.max(LEAGUE_MINIMUM_SALARY, ((overall - 40) / 60) * 15);
-  // K/P salary is capped much lower — they're the least valuable positions
+  // Exponential curve: low-end players get minimum, elite players get $30-50M
+  // Formula: base = ((ovr - 40) / 60) ^ 1.8 * 35
+  // At OVR 40: $0  → clamped to minimum
+  // At OVR 65: ~$3.4M
+  // At OVR 75: ~$9.3M
+  // At OVR 80: ~$14M
+  // At OVR 85: ~$19.5M
+  // At OVR 90: ~$26M
+  // At OVR 95: ~$32.5M
+  const normalized = Math.max(0, (overall - 40) / 60);
+  const baseSalary = Math.max(LEAGUE_MINIMUM_SALARY, Math.pow(normalized, 1.8) * 35);
+
+  // Position multiplier — QBs command the most, K/P the least
+  const posMult = position ? (POSITION_SALARY_MULTIPLIER[position] ?? 1.0) : 1.0;
+  let salary = baseSalary * posMult;
+
+  // K/P hard cap at $5M
   if (position === 'K' || position === 'P') {
-    return Math.round(Math.min(baseSalary * 0.35, 3.0) * 10) / 10;
+    salary = Math.min(salary, 5.0);
   }
-  return Math.round(baseSalary * 10) / 10;
+
+  return Math.round(salary * 10) / 10;
 }
 
 function computeResigningEntry(player: Player, team: Team): ResigningEntry {
@@ -1112,6 +1156,22 @@ export const useGameStore = create<GameStore>()(
         }
       },
 
+      /** Sim all games in the current playoff round (e.g. all Wild Card games). */
+      simPlayoffRound: () => {
+        const state = get();
+        if (!state.playoffBracket) return;
+        // Find the current round (lowest round number with unplayed games)
+        const unplayed = state.playoffBracket
+          .filter(m => !m.winnerId && m.homeTeamId && m.awayTeamId);
+        if (unplayed.length === 0) return;
+        const currentRound = Math.min(...unplayed.map(m => m.round));
+        // Sim all games in that round
+        const roundGames = unplayed.filter(m => m.round === currentRound);
+        for (const game of roundGames) {
+          get().simPlayoffGame(game.id);
+        }
+      },
+
       // PRD-03: Advance from playoffs to re-signing phase
       advanceToResigning: () => {
         const state = get();
@@ -1472,7 +1532,102 @@ export const useGameStore = create<GameStore>()(
           freeAgents: state.freeAgents.filter(id => id !== playerId),
           newsItems: newNewsItems,
         });
+
+        // After user signs, AI teams make 1-3 signings (simulating one "day" of FA)
+        get().aiSignFreeAgents();
+
         return true;
+      },
+
+      /** AI teams sign free agents — called after user makes a signing. */
+      aiSignFreeAgents: () => {
+        const state = get();
+        const aiTeams = state.teams.filter(t => t.id !== state.userTeamId);
+        let currentPlayers = [...state.players];
+        let currentFreeAgents = [...state.freeAgents];
+        let currentTeams = [...state.teams];
+        const newNews: NewsItem[] = [];
+
+        // Each AI team has a chance to sign 0-2 free agents per "day"
+        const signingsPerDay = 2 + Math.floor(Math.random() * 3); // 2-4 total AI signings
+        let signingsMade = 0;
+
+        // Shuffle AI teams for fairness
+        const shuffledTeams = [...aiTeams].sort(() => Math.random() - 0.5);
+
+        for (const aiTeam of shuffledTeams) {
+          if (signingsMade >= signingsPerDay) break;
+          if (currentFreeAgents.length === 0) break;
+
+          const teamData = currentTeams.find(t => t.id === aiTeam.id);
+          if (!teamData) continue;
+          const capSpace = teamData.salaryCap - teamData.totalPayroll;
+          if (capSpace < LEAGUE_MINIMUM_SALARY) continue;
+
+          // Find positions the team needs (below minimum roster limit)
+          const rosterPlayers = currentPlayers.filter(p => p.teamId === aiTeam.id && !p.retired);
+          const needPositions: Position[] = [];
+          for (const pos of POSITIONS) {
+            const count = rosterPlayers.filter(p => p.position === pos).length;
+            if (count < ROSTER_LIMITS[pos].min) needPositions.push(pos);
+          }
+
+          // Find best available free agent the team can afford
+          const availableFAs = currentFreeAgents
+            .map(id => currentPlayers.find(p => p.id === id))
+            .filter((p): p is Player => !!p && !p.retired)
+            .filter(p => {
+              const salary = estimateSalary(p.ratings.overall, p.position);
+              return salary <= capSpace;
+            })
+            .sort((a, b) => {
+              // Prioritize needed positions, then overall rating
+              const aNeeded = needPositions.includes(a.position) ? 100 : 0;
+              const bNeeded = needPositions.includes(b.position) ? 100 : 0;
+              return (bNeeded + b.ratings.overall) - (aNeeded + a.ratings.overall);
+            });
+
+          const target = availableFAs[0];
+          if (!target) continue;
+
+          const salary = estimateSalary(target.ratings.overall, target.position);
+          const years = target.age >= 32 ? 1 : target.age >= 28 ? 2 : 3;
+
+          // Sign the player
+          currentPlayers = currentPlayers.map(p =>
+            p.id === target.id
+              ? { ...p, teamId: aiTeam.id, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years } }
+              : p,
+          );
+          currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
+          currentTeams = currentTeams.map(t => {
+            if (t.id !== aiTeam.id) return t;
+            const chart = { ...t.depthChart };
+            chart[target.position] = [...(chart[target.position] ?? []), target.id];
+            return { ...t, roster: [...t.roster, target.id], totalPayroll: t.totalPayroll + salary, depthChart: chart };
+          });
+
+          newNews.push(makeNews({
+            season: state.season,
+            week: state.week,
+            type: 'signing',
+            teamId: aiTeam.id,
+            playerIds: [target.id],
+            headline: `${teamData.city} ${teamData.name} signed ${target.firstName} ${target.lastName} (${target.position}, ${target.ratings.overall} OVR) to a $${salary}M/yr, ${years}-year deal.`,
+            isUserTeam: false,
+          }));
+
+          signingsMade++;
+        }
+
+        if (signingsMade > 0) {
+          set({
+            players: currentPlayers,
+            freeAgents: currentFreeAgents,
+            teams: currentTeams,
+            newsItems: [...state.newsItems, ...newNews],
+          });
+        }
       },
 
       releasePlayer: (playerId: string) => {
