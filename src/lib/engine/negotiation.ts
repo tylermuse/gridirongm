@@ -111,8 +111,8 @@ export function processOffer(
   const roll = Math.random();
 
   if (satisfaction >= 0.95) {
-    /* ── Very good offer ─────────────────────── */
-    if (roll < 0.90) {
+    /* ── Very good offer — at or above asking ── */
+    if (roll < 0.85) {
       next.outcome = 'accepted';
       next.messages.push({
         sender: 'player',
@@ -132,9 +132,9 @@ export function processOffer(
         type: 'counter',
       });
     }
-  } else if (satisfaction >= 0.80) {
-    /* ── Decent offer — counter or accept ──── */
-    const acceptChance = (satisfaction - 0.80) * 3 + 0.10;
+  } else if (satisfaction >= 0.88) {
+    /* ── Close to asking — may accept ────────── */
+    const acceptChance = (satisfaction - 0.88) * 5 + 0.15;
     if (roll < acceptChance) {
       next.outcome = 'accepted';
       next.messages.push({
@@ -161,32 +161,23 @@ export function processOffer(
         type: 'counter',
       });
     }
-  } else if (satisfaction >= 0.60) {
-    /* ── Below market — skeptical ────────────── */
-    if (roll < 0.05) {
-      next.outcome = 'accepted';
-      next.messages.push({
-        sender: 'player',
-        text: `It's below what I was hoping for, but I believe in this team. Let's do it.`,
-        type: 'result',
-      });
-    } else {
-      const gap = state.askingSalary - offeredSalary;
-      const counterSalary = r1(state.askingSalary - gap * 0.2);
-      next.askingSalary = counterSalary;
-      next.messages.push({
-        sender: 'player',
-        text: pick([
-          `That's well below market value. The lowest I'd consider is ${fmtSalary(counterSalary)} for ${fmtYears(state.askingYears)}.`,
-          `I don't think that reflects my value. I need at least ${fmtSalary(counterSalary)}.`,
-          `My agent says that's way too low. We'd need ${fmtSalary(counterSalary)} minimum.`,
-        ]),
-        type: 'negative',
-      });
-    }
+  } else if (satisfaction >= 0.75) {
+    /* ── Below market — skeptical, will counter ── */
+    const gap = state.askingSalary - offeredSalary;
+    const counterSalary = r1(state.askingSalary - gap * 0.15);
+    next.askingSalary = counterSalary;
+    next.messages.push({
+      sender: 'player',
+      text: pick([
+        `That's below what I'm worth. I'd need at least ${fmtSalary(counterSalary)} for ${fmtYears(state.askingYears)}.`,
+        `I don't think that reflects my value. How about ${fmtSalary(counterSalary)}?`,
+        `My agent says we need ${fmtSalary(counterSalary)} minimum.`,
+      ]),
+      type: 'negative',
+    });
   } else {
-    /* ── Insulting offer ─────────────────────── */
-    if (roll < 0.80 || next.patience <= 0) {
+    /* ── Lowball offer — reject or stern counter ─ */
+    if (roll < 0.70 || next.patience <= 0) {
       next.outcome = 'rejected';
       next.messages.push({
         sender: 'player',
@@ -198,7 +189,7 @@ export function processOffer(
         type: 'result',
       });
     } else {
-      const counterSalary = r1(state.askingSalary * 0.95);
+      const counterSalary = r1(state.askingSalary * 0.97);
       next.askingSalary = counterSalary;
       next.messages.push({
         sender: 'player',
@@ -213,7 +204,7 @@ export function processOffer(
 
   /* ── Force resolution at max rounds ────────── */
   if (next.outcome === 'pending' && next.round >= next.maxRounds) {
-    if (satisfaction >= 0.70) {
+    if (satisfaction >= 0.85) {
       next.outcome = 'accepted';
       next.currentOfferSalary = next.askingSalary;
       next.currentOfferYears = next.askingYears;

@@ -6,6 +6,7 @@ import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { BoxScore } from '@/components/game/BoxScore';
+import { PlayerModal } from '@/components/game/PlayerModal';
 import type { GameResult, Team } from '@/types';
 
 type StandingsView = 'division' | 'conference' | 'league';
@@ -15,7 +16,7 @@ function winPct(t: Team) {
   return total > 0 ? t.record.wins / total : 0;
 }
 
-function StandingsTable({ teamList, userTeamId }: { teamList: Team[]; userTeamId: string | null }) {
+function StandingsTable({ teamList, userTeamId, onTeamClick }: { teamList: Team[]; userTeamId: string | null; onTeamClick: (teamId: string) => void }) {
   return (
     <table className="w-full text-sm">
       <thead>
@@ -38,7 +39,8 @@ function StandingsTable({ teamList, userTeamId }: { teamList: Team[]; userTeamId
           return (
             <tr
               key={t.id}
-              className={`border-t border-[var(--border)] ${t.id === userTeamId ? 'text-blue-400 font-semibold' : ''}`}
+              className={`border-t border-[var(--border)] cursor-pointer hover:bg-[var(--surface-2)] ${t.id === userTeamId ? 'text-blue-400 font-semibold' : ''}`}
+              onClick={() => onTeamClick(t.id)}
             >
               <td className="py-1.5 text-[var(--text-sec)] text-xs w-6">{i + 1}</td>
               <td className="py-1.5">
@@ -73,6 +75,8 @@ export default function StandingsPage() {
   const [view, setView] = useState<StandingsView>('division');
   const [tab, setTab] = useState<'standings' | 'schedule'>('standings');
   const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
+  const [viewTeamId, setViewTeamId] = useState<string | null>(null);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   const conferences = ['AFC', 'NFC'] as const;
   const divisions = ['North', 'South', 'East', 'West'] as const;
@@ -155,7 +159,7 @@ export default function StandingsPage() {
                           <CardHeader className="mb-2">
                             <CardTitle>{conf} {div}</CardTitle>
                           </CardHeader>
-                          <StandingsTable teamList={divTeams} userTeamId={userTeamId} />
+                          <StandingsTable teamList={divTeams} userTeamId={userTeamId} onTeamClick={(id) => setViewTeamId(id)} />
                         </Card>
                       );
                     })}
@@ -173,7 +177,7 @@ export default function StandingsPage() {
                       <CardHeader className="mb-2">
                         <CardTitle>{conf}</CardTitle>
                       </CardHeader>
-                      <StandingsTable teamList={confTeams} userTeamId={userTeamId} />
+                      <StandingsTable teamList={confTeams} userTeamId={userTeamId} onTeamClick={(id) => setViewTeamId(id)} />
                     </Card>
                   );
                 })}
@@ -185,7 +189,7 @@ export default function StandingsPage() {
                 <CardHeader className="mb-2">
                   <CardTitle>League Standings</CardTitle>
                 </CardHeader>
-                <StandingsTable teamList={sortedTeams(teams)} userTeamId={userTeamId} />
+                <StandingsTable teamList={sortedTeams(teams)} userTeamId={userTeamId} onTeamClick={(id) => setViewTeamId(id)} />
               </Card>
             )}
           </>
@@ -271,6 +275,69 @@ export default function StandingsPage() {
           onClose={() => setSelectedGame(null)}
         />
       )}
+
+      {/* Team Roster Modal */}
+      {viewTeamId && (() => {
+        const vt = teams.find(t => t.id === viewTeamId);
+        if (!vt) return null;
+        const posOrder = ['QB','RB','WR','TE','OL','DL','LB','CB','S','K','P'] as string[];
+        const teamRoster = players
+          .filter(p => p.teamId === viewTeamId && !p.retired)
+          .sort((a, b) => {
+            const pi = posOrder.indexOf(a.position) - posOrder.indexOf(b.position);
+            return pi !== 0 ? pi : b.ratings.overall - a.ratings.overall;
+          });
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setViewTeamId(null)}>
+            <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] max-w-3xl w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-black text-white" style={{ backgroundColor: vt.primaryColor }}>
+                    {vt.abbreviation}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black">{vt.city} {vt.name}</h3>
+                    <div className="text-xs text-[var(--text-sec)]">{vt.record.wins}-{vt.record.losses} · Cap: ${Math.round(vt.totalPayroll)}M / ${vt.salaryCap}M</div>
+                  </div>
+                </div>
+                <button onClick={() => setViewTeamId(null)} className="text-[var(--text-sec)] hover:text-white text-xl">✕</button>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[var(--text-sec)] text-xs border-b border-[var(--border)]">
+                    <th className="text-left px-4 py-2">Player</th>
+                    <th className="text-center px-2 py-2">POS</th>
+                    <th className="text-center px-2 py-2">AGE</th>
+                    <th className="text-center px-2 py-2">OVR</th>
+                    <th className="text-right px-4 py-2">Contract</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teamRoster.map(p => (
+                    <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)]">
+                      <td className="px-4 py-1.5">
+                        <button onClick={() => { setViewTeamId(null); setSelectedPlayerId(p.id); }} className="hover:text-blue-400 transition-colors font-medium">
+                          {p.firstName} {p.lastName}
+                        </button>
+                      </td>
+                      <td className="text-center px-2 py-1.5"><Badge variant="default" size="sm">{p.position}</Badge></td>
+                      <td className="text-center px-2 py-1.5">{p.age}</td>
+                      <td className="text-center px-2 py-1.5">
+                        <span className={`font-bold ${p.ratings.overall >= 80 ? 'text-green-400' : p.ratings.overall >= 65 ? 'text-blue-400' : p.ratings.overall >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                          {p.ratings.overall}
+                        </span>
+                      </td>
+                      <td className="text-right px-4 py-1.5 text-[var(--text-sec)]">${p.contract.salary}M × {p.contract.yearsLeft}yr</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
+      <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
   );
 }
