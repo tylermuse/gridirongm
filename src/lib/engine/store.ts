@@ -1734,65 +1734,79 @@ export const useGameStore = create<GameStore>()(
           }));
         }
 
-        // --- Step 2: AI teams sign free agents (3-5 teams per "day") ---
+        // --- Step 2: ALL AI teams try to sign free agents based on need ---
+        // Shuffle order for fairness, then each team with needs signs 1-2 players.
         const aiTeamIds = currentTeams.filter(t => t.id !== state.userTeamId).map(t => t.id);
         const shuffled = [...aiTeamIds].sort(() => Math.random() - 0.5);
-        const signingTeams = shuffled.slice(0, 3 + Math.floor(Math.random() * 3));
 
-        for (const aiTeamId of signingTeams) {
+        for (const aiTeamId of shuffled) {
           if (currentFreeAgents.length === 0) break;
 
           const teamData = currentTeams.find(t => t.id === aiTeamId);
           if (!teamData) continue;
-          const capSpace = teamData.salaryCap - teamData.totalPayroll;
+          let capSpace = teamData.salaryCap - teamData.totalPayroll;
 
           const rosterPlayers = currentPlayers.filter(p => p.teamId === aiTeamId && !p.retired);
           if (rosterPlayers.length >= 53) continue;
 
+          // Determine positions of need (below minimum OR below target depth)
           const needPositions: Position[] = [];
+          const wantPositions: Position[] = [];
           for (const pos of POSITIONS) {
             const count = rosterPlayers.filter(p => p.position === pos).length;
+            const starterOvr = rosterPlayers.filter(p => p.position === pos).sort((a, b) => b.ratings.overall - a.ratings.overall)[0]?.ratings.overall ?? 0;
             if (count < ROSTER_LIMITS[pos].min) needPositions.push(pos);
+            else if (count < ROSTER_LIMITS[pos].max && starterOvr < 70) wantPositions.push(pos);
           }
 
-          const availableFAs = currentFreeAgents
-            .map(id => currentPlayers.find(p => p.id === id))
-            .filter((p): p is Player => !!p && !p.retired)
-            .filter(p => {
-              const s = estimateSalary(p.ratings.overall, p.position);
-              return s <= capSpace || (capSpace >= LEAGUE_MINIMUM_SALARY && s <= LEAGUE_MINIMUM_SALARY * 2);
-            })
-            .sort((a, b) => {
-              const aNeeded = needPositions.includes(a.position) ? 100 : 0;
-              const bNeeded = needPositions.includes(b.position) ? 100 : 0;
-              return (bNeeded + b.ratings.overall) - (aNeeded + a.ratings.overall);
+          // Skip if team has no needs at all
+          if (needPositions.length === 0 && wantPositions.length === 0 && Math.random() > 0.3) continue;
+
+          // Each team signs 1-2 players per round
+          const signsCount = needPositions.length >= 3 ? 2 : 1;
+          for (let s = 0; s < signsCount; s++) {
+            if (currentFreeAgents.length === 0) break;
+
+            const availableFAs = currentFreeAgents
+              .map(id => currentPlayers.find(p => p.id === id))
+              .filter((p): p is Player => !!p && !p.retired)
+              .filter(p => {
+                const sal = estimateSalary(p.ratings.overall, p.position);
+                return sal <= capSpace || (capSpace >= LEAGUE_MINIMUM_SALARY && sal <= LEAGUE_MINIMUM_SALARY * 2);
+              })
+              .sort((a, b) => {
+                const aBonus = needPositions.includes(a.position) ? 200 : wantPositions.includes(a.position) ? 80 : 0;
+                const bBonus = needPositions.includes(b.position) ? 200 : wantPositions.includes(b.position) ? 80 : 0;
+                return (bBonus + b.ratings.overall) - (aBonus + a.ratings.overall);
+              });
+
+            const target = availableFAs[0];
+            if (!target) break;
+
+            const marketSalary = estimateSalary(target.ratings.overall, target.position);
+            const aiSalary = marketSalary <= capSpace ? marketSalary : LEAGUE_MINIMUM_SALARY;
+            const aiYears = target.age >= 32 ? 1 : target.age >= 28 ? 2 : 3;
+
+            currentPlayers = currentPlayers.map(p =>
+              p.id === target.id
+                ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears } }
+                : p,
+            );
+            currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
+            currentTeams = currentTeams.map(t => {
+              if (t.id !== aiTeamId) return t;
+              const chart = insertIntoDepthChart(t.depthChart, target.position, target.id, currentPlayers);
+              return { ...t, roster: [...t.roster, target.id], totalPayroll: t.totalPayroll + aiSalary, depthChart: chart };
             });
+            capSpace -= aiSalary;
 
-          const target = availableFAs[0];
-          if (!target) continue;
-
-          const marketSalary = estimateSalary(target.ratings.overall, target.position);
-          const aiSalary = marketSalary <= capSpace ? marketSalary : LEAGUE_MINIMUM_SALARY;
-          const aiYears = target.age >= 32 ? 1 : target.age >= 28 ? 2 : 3;
-
-          currentPlayers = currentPlayers.map(p =>
-            p.id === target.id
-              ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears } }
-              : p,
-          );
-          currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
-          currentTeams = currentTeams.map(t => {
-            if (t.id !== aiTeamId) return t;
-            const chart = insertIntoDepthChart(t.depthChart, target.position, target.id, currentPlayers);
-            return { ...t, roster: [...t.roster, target.id], totalPayroll: t.totalPayroll + aiSalary, depthChart: chart };
-          });
-
-          allNews.push(makeNews({
-            season: state.season, week: state.week, type: 'signing',
-            teamId: aiTeamId, playerIds: [target.id],
-            headline: `${teamData.city} ${teamData.name} signed ${target.firstName} ${target.lastName} (${target.position}, ${target.ratings.overall} OVR) to a $${aiSalary}M/yr, ${aiYears}-year deal.`,
-            isUserTeam: false,
-          }));
+            allNews.push(makeNews({
+              season: state.season, week: state.week, type: 'signing',
+              teamId: aiTeamId, playerIds: [target.id],
+              headline: `${teamData.city} ${teamData.name} signed ${target.firstName} ${target.lastName} (${target.position}, ${target.ratings.overall} OVR) to a $${aiSalary}M/yr, ${aiYears}-year deal.`,
+              isUserTeam: false,
+            }));
+          }
         }
 
         // --- Single set() call with both user signing + AI signings ---
