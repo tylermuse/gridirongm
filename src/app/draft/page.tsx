@@ -845,6 +845,75 @@ export default function DraftPage() {
               </div>
 
               <div className="p-5 space-y-5">
+                {/* Scout's Summary */}
+                {(() => {
+                  // Build a qualitative scouting report from prospect attributes
+                  const ovr = scout.scoutedOvr;
+                  const pot = sp.potential;
+                  const age = sp.age;
+                  const pos = sp.position;
+                  const topRating = strengths[0];
+                  const topWeakness = weaknesses[weaknesses.length - 1] ?? weaknesses[0];
+                  const potLabel = potentialLabel(pot, sp.experience);
+
+                  // Ceiling/floor assessment
+                  const ceilingLines: Record<string, string[]> = {
+                    'Elite': ['franchise cornerstone', 'perennial All-Pro candidate', 'generational talent at the position'],
+                    'High': ['long-term starter with Pro Bowl upside', 'potential top-10 player at his position', 'high-ceiling starter who could anchor the position'],
+                    'Average': ['solid starter who can hold down the position', 'dependable contributor with room to grow', 'starter-caliber player with a steady floor'],
+                    'Low': ['rotational piece or situational contributor', 'depth player who may develop into a spot starter', 'limited ceiling but can fill a role immediately'],
+                  };
+                  const ceilingPool = ceilingLines[potLabel] ?? ceilingLines['Average'];
+                  const ceiling = ceilingPool[Math.abs(sp.id.charCodeAt(0)) % ceilingPool.length];
+
+                  // Playing style based on position + top strength
+                  const styleMap: Record<string, Record<string, string>> = {
+                    QB: { throwing: 'pure pocket passer with excellent arm talent', awareness: 'smart, cerebral quarterback who reads defenses well', speed: 'dual-threat quarterback who can extend plays with his legs', agility: 'elusive scrambler with good improvisational skills' },
+                    RB: { carrying: 'between-the-tackles bruiser with reliable ball security', speed: 'explosive home-run hitter who can take it to the house', agility: 'shifty runner who makes defenders miss in space', strength: 'powerful downhill runner who breaks tackles' },
+                    WR: { catching: 'reliable pass-catcher with soft hands and great body control', speed: 'deep threat with elite straight-line speed', agility: 'crisp route-runner who creates separation underneath' },
+                    TE: { catching: 'receiving threat who can stretch the seam', blocking: 'strong in-line blocker who holds up at the point of attack', strength: 'physical mismatch who can both block and catch', speed: 'athletic move tight end who can split out wide' },
+                    OL: { blocking: 'technically sound blocker with good fundamentals', strength: 'powerful run blocker who moves people at the point of attack', awareness: 'smart lineman who picks up blitzes and stunts well' },
+                    DL: { passRush: 'disruptive pass rusher who can collapse the pocket', strength: 'stout run defender who commands double teams', speed: 'explosive first step that gives tackles fits', tackling: 'disciplined defender who holds his gap and finishes plays' },
+                    LB: { tackling: 'sure tackler who flies to the ball', coverage: 'versatile coverage linebacker who can match up with backs', speed: 'sideline-to-sideline athlete with elite range', awareness: 'instinctive defender who diagnoses plays quickly' },
+                    CB: { coverage: 'lockdown corner who can shadow top receivers', speed: 'blazing speed that recovers on deep routes', agility: 'fluid athlete who mirrors receivers in and out of breaks' },
+                    S: { coverage: 'ball-hawking safety with great range in center field', tackling: 'physical enforcer who supports the run game', speed: 'elite range safety who covers ground sideline to sideline', awareness: 'smart safety who reads quarterback eyes and jumps routes' },
+                    K: { kicking: 'strong-legged kicker with good accuracy from distance' },
+                    P: { kicking: 'booming punter who can flip field position' },
+                  };
+                  const posStyles = styleMap[pos] ?? {};
+                  const style = (topRating && posStyles[topRating.key]) ?? `solid prospect at the ${pos} position`;
+
+                  // Concern based on scouting label + weakness
+                  const concernMap: Record<string, string> = {
+                    'Injury history': 'Medical staff flagged durability concerns that could affect his availability.',
+                    'Character concerns': 'Some off-field question marks that teams will want to vet thoroughly.',
+                    'Raw but explosive': 'Still raw and needs time to develop, but the physical tools are tantalizing.',
+                    'High motor': 'Plays with relentless effort and energy — coaches love his motor.',
+                    'Pro-ready': 'One of the more polished prospects in this class — could contribute from day one.',
+                    'Combine standout': 'Put up elite testing numbers that had scouts buzzing.',
+                  };
+                  const labelNote = sp.scoutingLabel ? concernMap[sp.scoutingLabel] ?? '' : '';
+
+                  // Weakness note
+                  const weakNote = topWeakness
+                    ? `Scouts want to see improvement in ${topWeakness.label.toLowerCase()} before projecting him as a full-time starter.`
+                    : '';
+
+                  // Projected round
+                  const roundProj = ovr >= 75 ? 'first-round talent' : ovr >= 65 ? 'Day 1-2 pick' : ovr >= 55 ? 'Day 2-3 prospect' : 'late-round flier';
+
+                  return (
+                    <div className="bg-[var(--surface-2)] rounded-xl p-4 border-l-2 border-blue-500">
+                      <div className="text-[10px] uppercase tracking-wider text-blue-400 font-semibold mb-1.5">Scout&apos;s Report</div>
+                      <p className="text-sm leading-relaxed text-[var(--text)]">
+                        {sp.lastName} is a {roundProj} — a {style}. Our scouts see his ceiling as a {ceiling}.
+                        {labelNote && ` ${labelNote}`}
+                        {weakNote && ` ${weakNote}`}
+                      </p>
+                    </div>
+                  );
+                })()}
+
                 {/* OVR & Potential */}
                 <div className="flex gap-4">
                   <div className="flex-1 bg-[var(--surface-2)] rounded-xl p-4 text-center">
