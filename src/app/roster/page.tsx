@@ -24,7 +24,6 @@ export default function RosterPage() {
   const {
     players, teams, userTeamId,
     releasePlayer, placeOnIR, activateFromIR,
-    reorderDepthChart, resetDepthChart,
     phase,
   } = useGameStore();
 
@@ -32,10 +31,6 @@ export default function RosterPage() {
   const [sortBy, setSortBy] = useState<'overall' | 'age' | 'salary'>('overall');
   const [viewMode, setViewMode] = useState<'depth' | 'table' | 'injuries'>('depth');
   const [confirmRelease, setConfirmRelease] = useState<string | null>(null);
-  const [autoSort, setAutoSort] = useState(true);
-
-  const userTeam = teams.find(t => t.id === userTeamId);
-  const depthChart = userTeam?.depthChart;
 
   const roster = players
     .filter(p => p.teamId === userTeamId && !p.retired)
@@ -47,18 +42,8 @@ export default function RosterPage() {
 
   const filteredRoster = roster.filter(p => filterPos === 'ALL' || p.position === filterPos);
 
-  // Build depth chart groups - use stored depth chart if available, otherwise sort by OVR
+  // Build depth chart groups - always sorted by OVR (highest rated at top)
   function getDepthGroup(position: Position): Player[] {
-    if (autoSort) {
-      return roster.filter(p => p.position === position).sort((a, b) => b.ratings.overall - a.ratings.overall);
-    }
-    if (depthChart) {
-      const ids = depthChart[position] ?? [];
-      const mapped = ids.map(id => roster.find(p => p.id === id)).filter(Boolean) as Player[];
-      // Add any players not in chart (e.g., newly signed)
-      const extra = roster.filter(p => p.position === position && !ids.includes(p.id));
-      return [...mapped, ...extra];
-    }
     return roster.filter(p => p.position === position).sort((a, b) => b.ratings.overall - a.ratings.overall);
   }
 
@@ -83,14 +68,6 @@ export default function RosterPage() {
     { label: 'K', position: 'K' },
     { label: 'P', position: 'P' },
   ];
-
-  function movePlayer(position: Position, fromIndex: number, toIndex: number) {
-    const group = getDepthGroup(position);
-    const newIds = group.map(p => p.id);
-    const [moved] = newIds.splice(fromIndex, 1);
-    newIds.splice(toIndex, 0, moved);
-    reorderDepthChart(position, newIds);
-  }
 
   function renderDepthSection(title: string, rows: Array<{ label: string; position: Position }>) {
     return (
@@ -145,40 +122,10 @@ export default function RosterPage() {
                             <div className="text-[10px] text-red-400">{player.injury.type} ({player.injury.weeksLeft}w)</div>
                           )}
                           {player.onIR && <div className="text-[10px] text-amber-400">IR</div>}
-                          {/* Up/down arrows for PRD-13 */}
-                          {!autoSort && (
-                          <div className="flex gap-0.5 mt-1">
-                            <button
-                              onClick={() => movePlayer(row.position, idx, idx - 1)}
-                              disabled={idx === 0}
-                              className="flex-1 text-[10px] py-0.5 rounded bg-[var(--surface)] hover:bg-blue-600/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                              title="Move up"
-                            >
-                              ↑
-                            </button>
-                            <button
-                              onClick={() => movePlayer(row.position, idx, idx + 1)}
-                              disabled={idx >= group.length - 1}
-                              className="flex-1 text-[10px] py-0.5 rounded bg-[var(--surface)] hover:bg-blue-600/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                              title="Move down"
-                            >
-                              ↓
-                            </button>
-                          </div>
-                          )}
                         </div>
                       );
                     })}
                   </div>
-                  {!autoSort && (
-                    <button
-                      onClick={() => resetDepthChart(row.position)}
-                      className="text-[10px] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors px-1 shrink-0"
-                      title="Reset to OVR order"
-                    >
-                      Reset
-                    </button>
-                  )}
                 </div>
               </div>
             );
@@ -221,22 +168,9 @@ export default function RosterPage() {
 
         {viewMode === 'depth' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-[var(--text-sec)]">
-                {autoSort
-                  ? 'Auto-sorted by overall rating. Uncheck to manually reorder.'
-                  : 'Use ↑↓ arrows to reorder. Click Reset to restore OVR ranking. Depth chart order affects simulation.'}
-              </p>
-              <label className="flex items-center gap-2 cursor-pointer shrink-0">
-                <input
-                  type="checkbox"
-                  checked={autoSort}
-                  onChange={() => setAutoSort(!autoSort)}
-                  className="accent-blue-500"
-                />
-                <span className="text-xs font-medium">Auto-sort by rating</span>
-              </label>
-            </div>
+            <p className="text-xs text-[var(--text-sec)]">
+              Sorted by overall rating. Highest rated players are starters.
+            </p>
             {renderDepthSection('Offense', offenseRows)}
             {renderDepthSection('Defense', defenseRows)}
             {renderDepthSection('Special Teams', specialRows)}
