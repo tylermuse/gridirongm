@@ -345,7 +345,7 @@ export default function DraftPage() {
           </p>
           <div className="flex gap-3 justify-center">
             <a href="/" className="text-sm text-blue-400 hover:underline">Go to Dashboard</a>
-            <a href="/schedule" className="text-sm text-blue-400 hover:underline">View Schedule</a>
+            <a href="/standings" className="text-sm text-blue-400 hover:underline">View Schedule</a>
           </div>
         </div>
       </GameShell>

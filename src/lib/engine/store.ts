@@ -5,9 +5,9 @@ function uuid(): string {
 }
 import type {
   LeagueState, Team, Player, GameResult, PlayerStats,
-  NewsItem, TradeProposal, ResigningEntry, DraftPick,
+  NewsItem, TradeProposal, ResigningEntry, DraftPick, LeagueSettings,
 } from '@/types';
-import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, type Position } from '@/types';
+import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, type Position } from '@/types';
 import { NFL_TEAMS } from '@/lib/data/teams';
 import { loadFbgmLeagueFromUrl } from '@/lib/data/fbgmRoster';
 import { generateRoster, generateDraftClass } from './playerGen';
@@ -16,6 +16,16 @@ import { simulateGame } from './simulate';
 import { developPlayers } from './development';
 
 const SAVE_VERSION = 2;
+
+// Defaults for export (UI uses these for display when store isn't accessible)
+export const LEAGUE_MINIMUM_SALARY = DEFAULT_LEAGUE_SETTINGS.leagueMinSalary;
+export const LUXURY_TAX_RATE = DEFAULT_LEAGUE_SETTINGS.luxuryTaxRate;
+
+export function computeLuxuryTax(payroll: number, cap: number): number {
+  const overCap = payroll - cap;
+  if (overCap <= 0) return 0;
+  return Math.round(overCap * LUXURY_TAX_RATE * 10) / 10;
+}
 
 interface GameStore extends LeagueState {
   initialized: boolean;
@@ -58,6 +68,7 @@ interface GameStore extends LeagueState {
   // PRD-13: Depth chart
   reorderDepthChart: (position: Position, playerIds: string[]) => void;
   resetDepthChart: (position: Position) => void;
+  updateLeagueSettings: (settings: Partial<LeagueSettings>) => void;
   saveToSlot: (slot: 1 | 2) => void;
   loadFromSlot: (slot: 1 | 2) => void;
   getTeam: (id: string) => Team | undefined;
@@ -328,7 +339,7 @@ function computeScoutingData(
 // ---------------------------------------------------------------------------
 
 function estimateSalary(overall: number): number {
-  return Math.round(Math.max(0.5, ((overall - 40) / 60) * 15) * 10) / 10;
+  return Math.round(Math.max(LEAGUE_MINIMUM_SALARY, ((overall - 40) / 60) * 15) * 10) / 10;
 }
 
 function computeResigningEntry(player: Player, team: Team): ResigningEntry {
@@ -592,6 +603,9 @@ function computeAllLeagueTeams(state: LeagueState): {
 // AI trade proposal generation (PRD-04)
 // ---------------------------------------------------------------------------
 
+/** Positions that are NOT interesting for AI-initiated trade proposals (easily replaced via FA). */
+const TRADE_EXCLUDED_POSITIONS = new Set<Position>(['K', 'P']);
+
 function generateAITradeProposals(state: LeagueState): TradeProposal[] {
   if (state.week > 12) return []; // Trade deadline after week 12
   const proposals: TradeProposal[] = [];
@@ -599,44 +613,63 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
   if (!userTeam) return [];
 
   const aiTeams = state.teams.filter(t => t.id !== state.userTeamId);
+  const userPlayers = state.players
+    .filter(p => p.teamId === state.userTeamId && !TRADE_EXCLUDED_POSITIONS.has(p.position));
+  if (userPlayers.length === 0) return [];
 
-  // Each AI team has a 4% chance per week of proposing a trade
+  // Each AI team has a 5% chance per week of proposing a trade
   for (const aiTeam of aiTeams) {
-    if (Math.random() > 0.04) continue;
+    if (Math.random() > 0.05) continue;
     if (state.tradeProposals.filter(p => p.proposingTeamId === aiTeam.id && p.status === 'pending').length > 0) continue;
 
-    // Find a user player the AI wants (highest OVR user player that fits AI need)
-    const userPlayers = state.players.filter(p => p.teamId === state.userTeamId);
-    if (userPlayers.length === 0) continue;
+    const aiRoster = state.players.filter(p => p.teamId === aiTeam.id && !p.retired);
 
-    // AI wants a player that fills a positional need
-    const aiRoster = state.players.filter(p => p.teamId === aiTeam.id);
-    const aiNeedPos = POSITIONS.find(pos => {
-      const count = aiRoster.filter(p => p.position === pos).length;
-      return count < ROSTER_LIMITS[pos].min;
-    });
+    // Find all positions where AI is at or below minimum (excluding K/P)
+    const aiNeeds = POSITIONS.filter(pos =>
+      !TRADE_EXCLUDED_POSITIONS.has(pos) &&
+      aiRoster.filter(p => p.position === pos).length <= ROSTER_LIMITS[pos].min,
+    );
 
-    const targetPlayer = aiNeedPos
-      ? userPlayers.filter(p => p.position === aiNeedPos).sort((a, b) => b.ratings.overall - a.ratings.overall)[0]
-      : userPlayers.sort((a, b) => b.ratings.overall - a.ratings.overall)[Math.floor(Math.random() * 3)];
+    // Pick a random need position (if any), or null for general interest
+    const aiNeedPos = aiNeeds.length > 0 ? aiNeeds[Math.floor(Math.random() * aiNeeds.length)] : null;
+
+    let targetPlayer: Player | undefined;
+    if (aiNeedPos) {
+      // Target best user player at that position
+      const candidates = userPlayers
+        .filter(p => p.position === aiNeedPos)
+        .sort((a, b) => b.ratings.overall - a.ratings.overall);
+      targetPlayer = candidates[0];
+    }
+    if (!targetPlayer) {
+      // General interest: target a random high-value user player (top 8, random pick)
+      const sorted = [...userPlayers].sort((a, b) => b.ratings.overall - a.ratings.overall);
+      const topN = sorted.slice(0, Math.min(8, sorted.length));
+      targetPlayer = topN[Math.floor(Math.random() * topN.length)];
+    }
 
     if (!targetPlayer) continue;
 
     const targetValue = playerTradeValue(targetPlayer);
 
-    // AI offers a player of similar value from their roster
-    const aiPlayers = aiRoster.filter(p => !p.retired && !p.injury);
+    // AI offers a player of similar value from their roster (excluding K/P)
+    const aiPlayers = aiRoster.filter(p =>
+      !p.injury && !TRADE_EXCLUDED_POSITIONS.has(p.position),
+    );
     const aiOffer = aiPlayers
       .map(p => ({ player: p, diff: Math.abs(playerTradeValue(p) - targetValue * 0.9) }))
       .sort((a, b) => a.diff - b.diff)[0]?.player;
 
     if (!aiOffer) continue;
 
+    // Don't offer the same position back (not interesting)
+    if (aiOffer.position === targetPlayer.position && Math.random() > 0.3) continue;
+
     const offeredValue = playerTradeValue(aiOffer);
     const ratio = offeredValue / Math.max(1, targetValue);
     const valueAssessment: TradeProposal['valueAssessment'] =
-      ratio >= 0.9 ? 'fair' :
-      ratio >= 0.7 ? 'lopsided-they-win' : 'lopsided-they-win';
+      ratio >= 0.9 && ratio <= 1.1 ? 'fair' :
+      ratio > 1.1 ? 'lopsided-you-win' : 'lopsided-they-win';
 
     proposals.push({
       id: uuid(),
@@ -681,6 +714,7 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   scoutingLevel: 1,
   draftScoutingData: {},
   finalsMvpPlayerId: null,
+  leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
 };
 
 export const useGameStore = create<GameStore>()(
@@ -717,6 +751,7 @@ export const useGameStore = create<GameStore>()(
             scoutingLevel: 1,
             draftScoutingData: {},
             finalsMvpPlayerId: null,
+            leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
           });
           return;
         } catch (error) {
@@ -734,7 +769,7 @@ export const useGameStore = create<GameStore>()(
             id,
             ...t,
             record: emptyRecord(),
-            salaryCap: 225,
+            salaryCap: DEFAULT_LEAGUE_SETTINGS.salaryCap,
             totalPayroll: roster.reduce((sum, p) => sum + p.contract.salary, 0),
             roster: roster.map(p => p.id),
             draftPicks: [1, 2, 3, 4, 5, 6, 7].map(round => ({
@@ -774,6 +809,7 @@ export const useGameStore = create<GameStore>()(
           scoutingLevel: 1,
           draftScoutingData: {},
           finalsMvpPlayerId: null,
+          leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
         });
       },
 
@@ -1047,7 +1083,7 @@ export const useGameStore = create<GameStore>()(
         set({ phase: 'resigning', resigningPlayers });
       },
 
-      // PRD-03: User re-signs a player
+      // PRD-03: User re-signs a player (negotiation handled in UI, this just executes)
       resignPlayer: (playerId: string, salary: number, years: number) => {
         const state = get();
         const entry = state.resigningPlayers.find(e => e.playerId === playerId);
@@ -1056,19 +1092,10 @@ export const useGameStore = create<GameStore>()(
         const userTeam = state.teams.find(t => t.id === state.userTeamId);
         if (!userTeam) return false;
 
-        // Cap check
         const player = state.players.find(p => p.id === playerId);
         if (!player) return false;
 
         const capSpaceNeeded = salary - player.contract.salary;
-        if (capSpaceNeeded > 0 && userTeam.totalPayroll + capSpaceNeeded > userTeam.salaryCap) {
-          return false;
-        }
-
-        // Offer must meet asking price
-        if (salary < entry.askingSalary) {
-          return false;
-        }
 
         const newNewsItems = [...state.newsItems, makeNews({
           season: state.season,
@@ -1357,7 +1384,9 @@ export const useGameStore = create<GameStore>()(
       signFreeAgent: (playerId: string, salary: number, years: number) => {
         const state = get();
         const userTeam = state.teams.find(t => t.id === state.userTeamId);
-        if (userTeam && userTeam.totalPayroll + salary > userTeam.salaryCap) {
+        const isMinimumSalary = salary <= LEAGUE_MINIMUM_SALARY;
+        // Allow minimum salary signings even when over cap
+        if (!isMinimumSalary && userTeam && userTeam.totalPayroll + salary > userTeam.salaryCap) {
           return false;
         }
 
@@ -1469,7 +1498,10 @@ export const useGameStore = create<GameStore>()(
         counterpartTeamId,
       ) => {
         const state = get();
-        if (state.week > 12) return false; // Past trade deadline
+        // Trade deadline only applies during regular season; offseason trades always allowed
+        const offseasonPhases = ['resigning', 'draft', 'freeAgency', 'offseason', 'preseason'];
+        if (state.phase === 'regular' && state.week > 12) return false;
+        if (state.phase === 'playoffs') return false; // No trades during playoffs
 
         const userTeam = state.teams.find(t => t.id === state.userTeamId);
         const aiTeam = state.teams.find(t => t.id === counterpartTeamId);
@@ -1494,6 +1526,19 @@ export const useGameStore = create<GameStore>()(
 
         // AI accepts if within 10% value
         if (offeredValue < receivedValue * 0.90) return false;
+
+        // Block trades that increase user payroll when over the cap
+        const offeredSalaryTotal = offeredPlayerIds.reduce((sum, id) => {
+          const p = state.players.find(pl => pl.id === id);
+          return sum + (p ? p.contract.salary : 0);
+        }, 0);
+        const receivedSalaryTotal = receivedPlayerIds.reduce((sum, id) => {
+          const p = state.players.find(pl => pl.id === id);
+          return sum + (p ? p.contract.salary : 0);
+        }, 0);
+        if (userTeam.totalPayroll > userTeam.salaryCap && receivedSalaryTotal > offeredSalaryTotal) {
+          return false;
+        }
 
         // Execute the trade
         const offeredPlayerIdsSet = new Set(offeredPlayerIds);
@@ -1583,6 +1628,20 @@ export const useGameStore = create<GameStore>()(
         const proposal = state.tradeProposals.find(p => p.id === proposalId);
         if (!proposal || proposal.status !== 'pending') return false;
 
+        // Guard: verify requested players still on user team
+        const requestedPlayersValid = proposal.requestedPlayerIds.every(pid => {
+          const p = state.players.find(pl => pl.id === pid);
+          return p && p.teamId === state.userTeamId;
+        });
+        if (!requestedPlayersValid) {
+          set({
+            tradeProposals: state.tradeProposals.map(p =>
+              p.id === proposalId ? { ...p, status: 'rejected' } : p,
+            ),
+          });
+          return false;
+        }
+
         if (!accept) {
           set({
             tradeProposals: state.tradeProposals.map(p =>
@@ -1611,7 +1670,9 @@ export const useGameStore = create<GameStore>()(
 
       solicitTradingBlockProposals: (blockedPlayerIds: string[], blockedPickIds: string[], seekPositions: Position[]) => {
         const state = get();
-        if (state.phase !== 'regular' || state.week > 12) return;
+        // Block during playoffs and past in-season trade deadline
+        if (state.phase === 'playoffs') return;
+        if (state.phase === 'regular' && state.week > 12) return;
 
         const blockedPlayers = blockedPlayerIds
           .map(id => state.players.find(p => p.id === id))
@@ -1863,7 +1924,13 @@ export const useGameStore = create<GameStore>()(
           };
         });
 
-        const developedPlayers = developPlayers(agedPlayers, state.season);
+        const devSettings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
+        const developedPlayers = developPlayers(
+          agedPlayers,
+          state.season,
+          devSettings.progressionRate / 100,
+          devSettings.regressionRate / 100,
+        );
 
         const retirementNews: NewsItem[] = developedPlayers
           .filter(p => p.retired && !previouslyRetiredIds.has(p.id))
@@ -1927,14 +1994,22 @@ export const useGameStore = create<GameStore>()(
             age: p.age,
           }));
 
-        const newSchedule = generateSchedule(newTeams, newSeason);
+        // Grow salary cap for new season
+        const settings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
+        const capGrowthMult = 1 + (settings.capGrowthRate / 100);
+        const grownTeams = newTeams.map(t => ({
+          ...t,
+          salaryCap: Math.round(t.salaryCap * capGrowthMult * 10) / 10,
+        }));
+
+        const newSchedule = generateSchedule(grownTeams, newSeason);
 
         set({
           season: newSeason,
           week: 1,
           phase: 'regular',
           players: finalPlayers,
-          teams: newTeams,
+          teams: grownTeams,
           schedule: newSchedule,
           draftResults: [],
           freeAgents: [],
@@ -1947,6 +2022,18 @@ export const useGameStore = create<GameStore>()(
           draftScoutingData: {},
           finalsMvpPlayerId: null,
         });
+      },
+
+      updateLeagueSettings: (updates: Partial<LeagueSettings>) => {
+        const state = get();
+        const newSettings = { ...(state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS), ...updates };
+        // If salaryCap changed, update all teams
+        const oldSettings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
+        let updatedTeams = state.teams;
+        if (updates.salaryCap !== undefined && updates.salaryCap !== oldSettings.salaryCap) {
+          updatedTeams = state.teams.map(t => ({ ...t, salaryCap: updates.salaryCap! }));
+        }
+        set({ leagueSettings: newSettings, teams: updatedTeams });
       },
 
       saveToSlot: (slot: 1 | 2) => {

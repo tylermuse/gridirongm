@@ -221,6 +221,30 @@ export interface ResigningEntry {
   askingYears: number;
 }
 
+export interface LeagueSettings {
+  salaryCap: number;         // Starting cap (default 300)
+  capGrowthRate: number;     // % annual growth (default 5)
+  luxuryTaxRate: number;     // Penalty multiplier (default 1.5)
+  leagueMinSalary: number;   // Minimum salary (default 0.75)
+  tradeDeadlineWeek: number; // Week trades close (default 12)
+  injuryRate: number;        // 0-200, 100 = normal (default 100)
+  progressionRate: number;   // 0-200, 100 = normal (default 100)
+  regressionRate: number;    // 0-200, 100 = normal (default 100)
+  retirementAge: number;     // Min age for retirement consideration (default 32)
+}
+
+export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
+  salaryCap: 300,
+  capGrowthRate: 5,
+  luxuryTaxRate: 1.5,
+  leagueMinSalary: 0.75,
+  tradeDeadlineWeek: 12,
+  injuryRate: 100,
+  progressionRate: 100,
+  regressionRate: 100,
+  retirementAge: 32,
+};
+
 export interface LeagueState {
   season: number;
   week: number;
@@ -253,6 +277,8 @@ export interface LeagueState {
   draftScoutingData: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }>;
   /** Player ID of the Super Bowl MVP (set when SB is played, consumed when season summary is created) */
   finalsMvpPlayerId: string | null;
+  /** Configurable league settings */
+  leagueSettings: LeagueSettings;
 }
 
 export interface DraftSelection {

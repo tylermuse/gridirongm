@@ -70,8 +70,23 @@ export default function TradesPage() {
         .sort((a, b) => b.ratings.overall - a.ratings.overall)
     : [];
 
-  const isTradeOpen = phase === 'regular' && week <= 12;
-  const pendingProposals = tradeProposals.filter(p => p.status === 'pending');
+  // Trades allowed during regular season (before deadline) and all offseason phases
+  const offseasonPhases = ['resigning', 'draft', 'freeAgency', 'offseason', 'preseason'];
+  const isTradeOpen = offseasonPhases.includes(phase) || (phase === 'regular' && week <= 12);
+  const userTeamObj = teams.find(t => t.id === userTeamId);
+  const pendingProposals = tradeProposals.filter(p => {
+    if (p.status !== 'pending') return false;
+    // Hide stale proposals: requested players must still be on user's team
+    const playersValid = p.requestedPlayerIds.every(pid => {
+      const player = players.find(pl => pl.id === pid);
+      return player && player.teamId === userTeamId;
+    });
+    // Requested picks must still be owned
+    const picksValid = p.requestedPickIds.every(pkId =>
+      userTeamObj?.draftPicks.some(pk => pk.id === pkId),
+    );
+    return playersValid && picksValid;
+  });
 
   function togglePlayerSelect(
     playerId: string,

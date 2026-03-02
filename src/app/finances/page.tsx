@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useGameStore } from '@/lib/engine/store';
+import { useGameStore, computeLuxuryTax, LUXURY_TAX_RATE } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -100,8 +100,16 @@ export default function FinancesPage() {
           </div>
           <div className="text-xs text-[var(--text-sec)] mt-1 text-right">{(capPct * 100).toFixed(1)}% of cap used</div>
           {remaining < 0 && (
-            <div className="mt-2 text-sm text-red-400 font-semibold">
-              Over the salary cap by ${Math.abs(Math.round(remaining * 10) / 10)}M — release players to clear space.
+            <div className="mt-2 space-y-1">
+              <div className="text-sm text-red-400 font-semibold">
+                Over the salary cap by ${Math.abs(Math.round(remaining * 10) / 10)}M — release players to clear space.
+              </div>
+              <div className="text-sm text-red-400">
+                Luxury Tax: ${computeLuxuryTax(used, cap)}M
+                <span className="text-xs text-[var(--text-sec)] ml-2">
+                  ({LUXURY_TAX_RATE}x penalty on every $1M over the cap)
+                </span>
+              </div>
             </div>
           )}
         </Card>

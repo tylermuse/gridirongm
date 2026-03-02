@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
@@ -20,17 +20,52 @@ function ratingColor(val: number): string {
 
 const DEPTH_LABELS = ['Starter', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
 
+/** Returns the most relevant stat line for a player based on position */
+function getPositionStat(player: Player): string {
+  const s = player.stats;
+  if (s.gamesPlayed === 0) return '—';
+  switch (player.position) {
+    case 'QB':
+      return `${s.passYards} yd · ${s.passTDs} TD · ${s.interceptions} INT`;
+    case 'RB':
+      return `${s.rushYards} yd · ${s.rushTDs} TD`;
+    case 'WR':
+    case 'TE':
+      return `${s.receptions} rec · ${s.receivingYards} yd · ${s.receivingTDs} TD`;
+    case 'OL':
+      return `${s.gamesPlayed} GP`;
+    case 'DL':
+    case 'LB':
+      return `${s.tackles} tkl · ${s.sacks} sck`;
+    case 'CB':
+    case 'S':
+      return `${s.tackles} tkl · ${s.defensiveINTs} INT`;
+    case 'K':
+      return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG`;
+    case 'P':
+      return `${s.gamesPlayed} GP`;
+    default:
+      return '—';
+  }
+}
+
 export default function RosterPage() {
   const {
     players, teams, userTeamId,
     releasePlayer, placeOnIR, activateFromIR,
-    phase,
+    reorderDepthChart,
+    phase, seasonHistory,
   } = useGameStore();
 
   const [filterPos, setFilterPos] = useState<Position | 'ALL'>('ALL');
   const [sortBy, setSortBy] = useState<'overall' | 'age' | 'salary'>('overall');
   const [viewMode, setViewMode] = useState<'depth' | 'table' | 'injuries'>('depth');
   const [confirmRelease, setConfirmRelease] = useState<string | null>(null);
+
+  // Drag state
+  const [dragPosition, setDragPosition] = useState<Position | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const roster = players
     .filter(p => p.teamId === userTeamId && !p.retired)
@@ -42,9 +77,33 @@ export default function RosterPage() {
 
   const filteredRoster = roster.filter(p => filterPos === 'ALL' || p.position === filterPos);
 
-  // Build depth chart groups - always sorted by OVR (highest rated at top)
+  // Use team's depth chart order if available, fallback to OVR sort
+  const userTeam = teams.find(t => t.id === userTeamId);
   function getDepthGroup(position: Position): Player[] {
-    return roster.filter(p => p.position === position).sort((a, b) => b.ratings.overall - a.ratings.overall);
+    const depthOrder = userTeam?.depthChart[position];
+    const posPlayers = roster.filter(p => p.position === position);
+    if (depthOrder && depthOrder.length > 0) {
+      // Arrange by depth chart order, append any not in the chart
+      const ordered: Player[] = [];
+      for (const pid of depthOrder) {
+        const p = posPlayers.find(pl => pl.id === pid);
+        if (p) ordered.push(p);
+      }
+      // Add any players not in the depth chart (newly signed, etc.)
+      for (const p of posPlayers) {
+        if (!ordered.includes(p)) ordered.push(p);
+      }
+      return ordered;
+    }
+    return posPlayers.sort((a, b) => b.ratings.overall - a.ratings.overall);
+  }
+
+  // Pro Bowl: players who made All-League 1st or 2nd team last season
+  const lastSeason = seasonHistory.length > 0 ? seasonHistory[seasonHistory.length - 1] : null;
+  const proBowlPlayerIds = new Set<string>();
+  if (lastSeason) {
+    for (const entry of (lastSeason.allLeagueFirst ?? [])) proBowlPlayerIds.add(entry.playerId);
+    for (const entry of (lastSeason.allLeagueSecond ?? [])) proBowlPlayerIds.add(entry.playerId);
   }
 
   const injuredPlayers = roster.filter(p => p.injury && p.injury.weeksLeft > 0);
@@ -69,6 +128,31 @@ export default function RosterPage() {
     { label: 'P', position: 'P' },
   ];
 
+  // Drag-and-drop handlers
+  function handleDragStart(position: Position, index: number) {
+    setDragPosition(position);
+    setDragIndex(index);
+  }
+
+  function handleDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault();
+    setDragOverIndex(index);
+  }
+
+  function handleDragEnd() {
+    if (dragPosition !== null && dragIndex !== null && dragOverIndex !== null && dragIndex !== dragOverIndex) {
+      const group = getDepthGroup(dragPosition);
+      const ids = group.map(p => p.id);
+      // Move the dragged item
+      const [movedId] = ids.splice(dragIndex, 1);
+      ids.splice(dragOverIndex, 0, movedId);
+      reorderDepthChart(dragPosition, ids);
+    }
+    setDragPosition(null);
+    setDragIndex(null);
+    setDragOverIndex(null);
+  }
+
   function renderDepthSection(title: string, rows: Array<{ label: string; position: Position }>) {
     return (
       <Card>
@@ -88,35 +172,39 @@ export default function RosterPage() {
                           <div key={idx} className="text-xs text-[var(--text-sec)] py-1 px-2">—</div>
                         );
                       }
-                      const prevOvr = player.ratingHistory.length >= 1
-                        ? player.ratingHistory[player.ratingHistory.length - 1].overall
-                        : null;
-                      const ovrDelta = prevOvr !== null ? player.ratings.overall - prevOvr : 0;
+                      const isProBowl = proBowlPlayerIds.has(player.id);
+                      const isDragging = dragPosition === row.position && dragIndex === idx;
+                      const isDragOver = dragPosition === row.position && dragOverIndex === idx;
+
                       return (
-                        <div key={player.id} className="bg-[var(--surface-2)] rounded-lg p-2">
+                        <div
+                          key={player.id}
+                          draggable
+                          onDragStart={() => handleDragStart(row.position, idx)}
+                          onDragOver={(e) => handleDragOver(e, idx)}
+                          onDragEnd={handleDragEnd}
+                          className={`bg-[var(--surface-2)] rounded-lg p-2 cursor-grab active:cursor-grabbing transition-all ${
+                            isDragging ? 'opacity-40 scale-95' : ''
+                          } ${isDragOver ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-[var(--bg)]' : ''}`}
+                        >
                           <div className="flex items-center justify-between mb-0.5">
                             <span className="text-[10px] text-[var(--text-sec)]">
                               {DEPTH_LABELS[idx] ?? `${idx + 1}th`}
                             </span>
-                            <div className="flex items-center gap-1">
-                              {ovrDelta !== 0 && (
-                                <span className={`text-[10px] ${ovrDelta > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                  {ovrDelta > 0 ? `+${ovrDelta}` : ovrDelta}
-                                </span>
-                              )}
-                              <span className={`text-xs font-bold ${ratingColor(player.ratings.overall)}`}>
-                                {player.ratings.overall}
-                              </span>
-                            </div>
+                            <span className={`text-xs font-bold ${ratingColor(player.ratings.overall)}`}>
+                              {player.ratings.overall}
+                            </span>
                           </div>
                           <Link
                             href={`/player/${player.id}`}
                             className="text-xs font-semibold truncate block hover:text-blue-400 transition-colors"
+                            onClick={e => e.stopPropagation()}
                           >
+                            {isProBowl && <span className="text-amber-400 mr-0.5">★</span>}
                             {player.firstName[0]}. {player.lastName}
                           </Link>
-                          <div className="text-[10px] text-[var(--text-sec)] mt-0.5">
-                            ${player.contract.salary}M · {player.contract.yearsLeft}yr
+                          <div className="text-[10px] text-[var(--text-sec)] mt-0.5 truncate">
+                            {getPositionStat(player)}
                           </div>
                           {player.injury && (
                             <div className="text-[10px] text-red-400">{player.injury.type} ({player.injury.weeksLeft}w)</div>
@@ -169,7 +257,7 @@ export default function RosterPage() {
         {viewMode === 'depth' && (
           <div className="space-y-4">
             <p className="text-xs text-[var(--text-sec)]">
-              Sorted by overall rating. Highest rated players are starters.
+              Drag players to reorder the depth chart. ★ = All-League last season.
             </p>
             {renderDepthSection('Offense', offenseRows)}
             {renderDepthSection('Defense', defenseRows)}
@@ -208,9 +296,7 @@ export default function RosterPage() {
                     <th className="text-center pb-3 cursor-pointer hover:text-[var(--text)]" onClick={() => setSortBy('age')}>Age</th>
                     <th className="text-center pb-3 cursor-pointer hover:text-[var(--text)]" onClick={() => setSortBy('overall')}>OVR</th>
                     <th className="text-center pb-3">POT</th>
-                    <th className="text-center pb-3">SPD</th>
-                    <th className="text-center pb-3">STR</th>
-                    <th className="text-center pb-3">AWR</th>
+                    <th className="text-left pb-3">Stats</th>
                     <th className="text-right pb-3 cursor-pointer hover:text-[var(--text)]" onClick={() => setSortBy('salary')}>Salary</th>
                     <th className="text-right pb-3">Yrs</th>
                     <th className="text-right pb-3 pr-2">Action</th>
@@ -221,6 +307,7 @@ export default function RosterPage() {
                     <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
                       <td className="py-2.5 pl-2">
                         <Link href={`/player/${p.id}`} className="font-semibold hover:text-blue-400 transition-colors">
+                          {proBowlPlayerIds.has(p.id) && <span className="text-amber-400 mr-1">★</span>}
                           {p.firstName} {p.lastName}
                         </Link>
                         {p.injury && (
@@ -237,14 +324,8 @@ export default function RosterPage() {
                       <td className={`py-2.5 text-center text-xs ${potentialColor(p.potential, p.experience)}`}>
                         {potentialLabel(p.potential, p.experience)}
                       </td>
-                      <td className={`py-2.5 text-center ${ratingColor(p.ratings.speed)}`}>
-                        {p.ratings.speed}
-                      </td>
-                      <td className={`py-2.5 text-center ${ratingColor(p.ratings.strength)}`}>
-                        {p.ratings.strength}
-                      </td>
-                      <td className={`py-2.5 text-center ${ratingColor(p.ratings.awareness)}`}>
-                        {p.ratings.awareness}
+                      <td className="py-2.5 text-left text-xs text-[var(--text-sec)] font-mono">
+                        {getPositionStat(p)}
                       </td>
                       <td className="py-2.5 text-right font-mono">
                         ${p.contract.salary}M
@@ -306,6 +387,7 @@ export default function RosterPage() {
                       <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
                         <td className="py-2.5 pl-2">
                           <Link href={`/player/${p.id}`} className="font-semibold hover:text-blue-400 transition-colors">
+                            {proBowlPlayerIds.has(p.id) && <span className="text-amber-400 mr-1">★</span>}
                             {p.firstName} {p.lastName}
                           </Link>
                         </td>

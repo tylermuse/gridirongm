@@ -9,7 +9,6 @@ const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: '🏟️' },
   { href: '/roster', label: 'Roster', icon: '👥' },
   { href: '/standings', label: 'Standings', icon: '📊' },
-  { href: '/schedule', label: 'Schedule', icon: '📅' },
   { href: '/playoffs', label: 'Playoffs', icon: '🏆' },
   { href: '/re-sign', label: 'Re-signing', icon: '✍️' },
   { href: '/draft', label: 'Draft', icon: '🎯' },
@@ -19,6 +18,7 @@ const NAV_ITEMS = [
   { href: '/stats', label: 'Stats', icon: '📈' },
   { href: '/news', label: 'News', icon: '📰' },
   { href: '/history', label: 'History', icon: '🗃️' },
+  { href: '/settings', label: 'Settings', icon: '⚙️' },
 ];
 
 const PHASE_LABELS: Record<string, string> = {
