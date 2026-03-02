@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -121,6 +122,7 @@ function OnTheClockSection({
   simToUserDraftPick,
   simToEndDraft,
   advanceToFreeAgency,
+  onSimAll,
 }: {
   currentTeam: Team | undefined;
   currentRound: number;
@@ -139,6 +141,7 @@ function OnTheClockSection({
   simToUserDraftPick: () => void;
   simToEndDraft: () => void;
   advanceToFreeAgency: () => void;
+  onSimAll?: () => void;
 }) {
   const canSimulate = !draftComplete;
 
@@ -194,11 +197,11 @@ function OnTheClockSection({
               <Button onClick={simToUserDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
                 To My Pick
               </Button>
-              <Button onClick={simToEndDraft} size="sm" variant="secondary" disabled={!canSimulate}>
+              <Button onClick={() => { simToEndDraft(); advanceToFreeAgency(); onSimAll?.(); }} size="sm" variant="secondary" disabled={!canSimulate}>
                 Sim All
               </Button>
               {draftComplete && (
-                <Button onClick={advanceToFreeAgency} size="sm">
+                <Button onClick={() => { advanceToFreeAgency(); onSimAll?.(); }} size="sm">
                   Free Agency →
                 </Button>
               )}
@@ -308,6 +311,7 @@ function OnTheClockSection({
 // ---------------------------------------------------------------------------
 
 export default function DraftPage() {
+  const router = useRouter();
   const {
     phase,
     players,
@@ -384,10 +388,15 @@ export default function DraftPage() {
     .map((id) => players.find((player) => player.id === id))
     .filter((player): player is Player => Boolean(player))
     .sort((a, b) => {
+      // Sort by scouted OVR (what the user actually sees), not real OVR
+      const aScout = draftScoutingData[a.id];
+      const bScout = draftScoutingData[b.id];
+      const aOvr = aScout ? aScout.scoutedOvr : a.ratings.overall;
+      const bOvr = bScout ? bScout.scoutedOvr : b.ratings.overall;
       // K/P are least valuable — push them way down the draft board
-      const aOvr = (a.position === 'K' || a.position === 'P') ? a.ratings.overall * 0.5 : a.ratings.overall;
-      const bOvr = (b.position === 'K' || b.position === 'P') ? b.ratings.overall * 0.5 : b.ratings.overall;
-      return bOvr - aOvr;
+      const aAdj = (a.position === 'K' || a.position === 'P') ? aOvr * 0.5 : aOvr;
+      const bAdj = (b.position === 'K' || b.position === 'P') ? bOvr * 0.5 : bOvr;
+      return bAdj - aAdj;
     });
 
   const prospects = allProspects
@@ -465,6 +474,7 @@ export default function DraftPage() {
           simToUserDraftPick={simToUserDraftPick}
           simToEndDraft={simToEndDraft}
           advanceToFreeAgency={advanceToFreeAgency}
+          onSimAll={() => router.push('/free-agency')}
         />
 
         <div className="grid grid-cols-12 gap-4">

@@ -1548,15 +1548,11 @@ export const useGameStore = create<GameStore>()(
         let currentTeams = [...state.teams];
         const newNews: NewsItem[] = [];
 
-        // Each AI team has a chance to sign 0-2 free agents per "day"
-        const signingsPerDay = 2 + Math.floor(Math.random() * 3); // 2-4 total AI signings
-        let signingsMade = 0;
-
-        // Shuffle AI teams for fairness
+        // Every AI team gets a chance to sign one free agent per "day"
+        // Shuffle for fairness (different team gets first pick each time)
         const shuffledTeams = [...aiTeams].sort(() => Math.random() - 0.5);
 
         for (const aiTeam of shuffledTeams) {
-          if (signingsMade >= signingsPerDay) break;
           if (currentFreeAgents.length === 0) break;
 
           const teamData = currentTeams.find(t => t.id === aiTeam.id);
@@ -1616,11 +1612,9 @@ export const useGameStore = create<GameStore>()(
             headline: `${teamData.city} ${teamData.name} signed ${target.firstName} ${target.lastName} (${target.position}, ${target.ratings.overall} OVR) to a $${salary}M/yr, ${years}-year deal.`,
             isUserTeam: false,
           }));
-
-          signingsMade++;
         }
 
-        if (signingsMade > 0) {
+        if (newNews.length > 0) {
           set({
             players: currentPlayers,
             freeAgents: currentFreeAgents,
@@ -1635,8 +1629,14 @@ export const useGameStore = create<GameStore>()(
         const player = state.players.find(p => p.id === playerId);
         if (!player || player.teamId !== state.userTeamId) return;
 
-        const deadCap = calculateDeadCap(player.contract);
-        const capSavings = calculateCapSavings(player.contract);
+        // Ensure guaranteed is set (handles old saves where it might be missing)
+        const contract = { ...player.contract };
+        if (contract.guaranteed === undefined || contract.guaranteed === null) {
+          contract.guaranteed = generateGuaranteed(contract.salary, contract.yearsLeft);
+        }
+
+        const deadCap = calculateDeadCap(contract);
+        const capSavings = calculateCapSavings(contract);
 
         const deadCapNote = deadCap > 0
           ? ` Dead cap hit: $${deadCap}M. Cap savings: $${capSavings > 0 ? capSavings : 0}M.`
@@ -1990,7 +1990,20 @@ export const useGameStore = create<GameStore>()(
 
       // PRD-07: Set scouting level
       setScoutingLevel: (level: 0 | 1 | 2 | 3 | 4) => {
-        set({ scoutingLevel: level });
+        const state = get();
+        // Recompute scouting data at the new level
+        const prospects = state.freeAgents
+          .map(id => state.players.find(p => p.id === id))
+          .filter((p): p is Player => !!p);
+        const newScoutingData = computeScoutingData(prospects, level);
+        // Preserve deep-scouted entries (don't overwrite them)
+        const merged = { ...newScoutingData };
+        for (const [pid, existing] of Object.entries(state.draftScoutingData)) {
+          if (existing.deepScouted) {
+            merged[pid] = existing; // keep deep-scouted as-is
+          }
+        }
+        set({ scoutingLevel: level, draftScoutingData: merged });
       },
 
       // PRD-07: Deep scout a prospect

@@ -134,11 +134,14 @@ function simulatePlay(
 
   if (isPass && qb && receivers.length > 0) {
     // ── Sack check ──
-    const sackChance = clamp((dlPower - olPower) / 200 + 0.07, 0.04, 0.15);
+    // NFL average: ~6.5% of pass plays result in a sack (~2.3 sacks per team per game)
+    // Top pass rusher gets ~8-12 sacks per season (not 25+), so spread sacks across DL
+    const sackChance = clamp((dlPower - olPower) / 500 + 0.05, 0.03, 0.08);
     if (Math.random() < sackChance) {
-      const sackYards = -(3 + Math.floor(Math.random() * 8));
+      const sackYards = -(3 + Math.floor(Math.random() * 6));
+      // Spread sacks more evenly across DL — reduce starter dominance
       const sacker = dls.length > 0
-        ? weightedPick(dls, dls.map((p, i) => (i === 0 ? 5 : i === 1 ? 3 : 1) * (p.ratings.passRush / 70)))
+        ? weightedPick(dls, dls.map((p, i) => (i === 0 ? 3 : i === 1 ? 2.5 : 1.5) * (p.ratings.passRush / 70)))
         : allDefenders[0];
       return { type: 'sack', yards: sackYards, touchdown: false, turnover: false, passer: qb, sacker };
     }
@@ -193,7 +196,7 @@ function simulatePlay(
       if (td) yards = 100 - fieldPosition;
 
       const tackler = allDefenders.length > 0
-        ? weightedPick(allDefenders, allDefenders.map((d, i) => (i < 3 ? 3 : 1) * (d.ratings.tackling / 70)))
+        ? weightedPick(allDefenders, allDefenders.map((d, i) => (i < 3 ? 2 : 1) * (d.ratings.tackling / 70)))
         : null;
 
       return {

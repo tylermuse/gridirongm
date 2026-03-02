@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { calculateDeadCap, calculateCapSavings } from '@/types';
 import type { Player, Position } from '@/types';
-import { POSITIONS } from '@/types';
+import { POSITIONS, ROSTER_LIMITS } from '@/types';
 
 function ratingColor(val: number): string {
   if (val >= 85) return 'text-green-400';
@@ -27,7 +27,7 @@ function ratingBg(val: number): string {
 
 const DEPTH_LABELS = ['Starter', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
 
-type SortKey = 'name' | 'pos' | 'age' | 'ovr' | 'pot' | 'salary' | 'gp' | 'stat1' | 'stat2';
+type SortKey = 'name' | 'pos' | 'age' | 'ovr' | 'pot' | 'contract' | 'gp' | 'stat1' | 'stat2';
 
 /** Returns the label columns for a specific position group */
 function getStatColumns(pos: Position): [string, string] {
@@ -88,15 +88,15 @@ function getGenericStat(p: Player): string {
 
 export default function RosterPage() {
   const {
-    players, teams, userTeamId,
+    players, teams, userTeamId, season,
     releasePlayer, placeOnIR, activateFromIR,
     reorderDepthChart,
     phase, seasonHistory,
   } = useGameStore();
 
   const [filterPos, setFilterPos] = useState<Position | 'ALL'>('ALL');
-  const [sortKey, setSortKey] = useState<SortKey>('ovr');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [sortKey, setSortKey] = useState<SortKey>('pos');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [viewMode, setViewMode] = useState<'roster' | 'depth' | 'injuries'>('roster');
   const [confirmRelease, setConfirmRelease] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -139,12 +139,17 @@ export default function RosterPage() {
         case 'name': return dir * a.lastName.localeCompare(b.lastName);
         case 'pos': {
           const pi = POSITIONS.indexOf(a.position) - POSITIONS.indexOf(b.position);
-          return pi !== 0 ? pi : (b.ratings.overall - a.ratings.overall);
+          if (pi !== 0) return dir * pi;
+          // Within same position, sort by depth chart order then OVR
+          const aDepth = getDepthIndex(a);
+          const bDepth = getDepthIndex(b);
+          if (aDepth !== bDepth) return aDepth - bDepth;
+          return b.ratings.overall - a.ratings.overall;
         }
         case 'age': return dir * (a.age - b.age);
         case 'ovr': return dir * (a.ratings.overall - b.ratings.overall);
         case 'pot': return dir * (a.potential - b.potential);
-        case 'salary': return dir * (a.contract.salary - b.contract.salary);
+        case 'contract': return dir * (a.contract.salary - b.contract.salary);
         case 'gp': return dir * (a.stats.gamesPlayed - b.stats.gamesPlayed);
         default: return dir * (a.ratings.overall - b.ratings.overall);
       }
@@ -258,6 +263,30 @@ export default function RosterPage() {
         {/* ── ROSTER TABLE VIEW (BBGM-style) ── */}
         {viewMode === 'roster' && (
           <>
+            {/* Roster Composition */}
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 mb-4">
+              <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-3">Roster Composition</div>
+              <div className="grid grid-cols-11 gap-2">
+                {POSITIONS.map(pos => {
+                  const count = roster.filter(p => p.position === pos).length;
+                  const limits = ROSTER_LIMITS[pos];
+                  const isBelowMin = count < limits.min;
+                  const isAtMax = count >= limits.max;
+                  return (
+                    <div key={pos} className="text-center">
+                      <div className={`text-sm font-black ${
+                        isBelowMin ? 'text-red-400' : isAtMax ? 'text-amber-400' : 'text-green-400'
+                      }`}>
+                        {count}
+                      </div>
+                      <div className="text-[10px] text-[var(--text-sec)]">{pos}</div>
+                      <div className="text-[10px] text-[var(--text-sec)]">{limits.min}-{limits.max}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Position filter */}
             <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-4 flex-wrap w-fit">
               <button
@@ -286,8 +315,7 @@ export default function RosterPage() {
                     <SortHeader k="age" className="text-center w-10">Age</SortHeader>
                     <SortHeader k="ovr" className="text-center w-12">Ovr</SortHeader>
                     <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-center w-14">Pot</th>
-                    <SortHeader k="salary" className="text-right w-20">Salary</SortHeader>
-                    <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-center w-10">Yrs</th>
+                    <SortHeader k="contract" className="text-right w-32">Contract</SortHeader>
                     <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-center w-16">Role</th>
                     <SortHeader k="gp" className="text-center w-10">GP</SortHeader>
                     <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-left">
@@ -309,13 +337,16 @@ export default function RosterPage() {
                     const [stat1, stat2] = filterPos !== 'ALL' ? getStatValues(p) : [getGenericStat(p), ''];
                     const deadCap = calculateDeadCap(p.contract);
                     const capSav = calculateCapSavings(p.contract);
+                    // Position group separator when sorted by position
+                    const prevPlayer = idx > 0 ? sortedRoster[idx - 1] : null;
+                    const showPosSeparator = sortKey === 'pos' && filterPos === 'ALL' && prevPlayer && prevPlayer.position !== p.position;
 
                     return (
                       <tr
                         key={p.id}
-                        className={`border-t border-[var(--border)] transition-colors hover:bg-[var(--surface-2)] ${
+                        className={`transition-colors hover:bg-[var(--surface-2)] ${
                           isStarter ? '' : 'opacity-80'
-                        }`}
+                        } ${showPosSeparator ? 'border-t-2 border-[var(--accent)]/30' : 'border-t border-[var(--border)]'}`}
                       >
                         {/* Name */}
                         <td className="py-2 px-2 pl-3">
@@ -355,14 +386,12 @@ export default function RosterPage() {
                           {potentialLabel(p.potential, p.experience)}
                         </td>
 
-                        {/* Salary */}
+                        {/* Contract */}
                         <td className="py-2 px-2 text-right font-mono text-xs tabular-nums">
-                          ${p.contract.salary}M
-                        </td>
-
-                        {/* Years left */}
-                        <td className="py-2 px-2 text-center text-xs text-[var(--text-sec)] tabular-nums">
-                          {p.contract.yearsLeft}
+                          <span className="font-semibold">${p.contract.salary}M</span>
+                          <span className="text-[var(--text-sec)] ml-1">
+                            thru {season + p.contract.yearsLeft}
+                          </span>
                         </td>
 
                         {/* Depth role */}
@@ -417,7 +446,9 @@ export default function RosterPage() {
                             }}
                           >
                             {confirmRelease === p.id
-                              ? (deadCap > 0 ? `Cut ($${deadCap}M dead)` : 'Confirm?')
+                              ? (deadCap > 0
+                                ? `Cut (save $${Math.max(0, capSav)}M, $${deadCap}M dead)`
+                                : `Cut (save $${p.contract.salary}M)`)
                               : 'Cut'
                             }
                           </Button>
