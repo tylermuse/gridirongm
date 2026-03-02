@@ -10,7 +10,7 @@ import type {
 import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, type Position, type DeadCapEntry } from '@/types';
 import { NFL_TEAMS } from '@/lib/data/teams';
 import { loadFbgmLeagueFromUrl } from '@/lib/data/fbgmRoster';
-import { generateRoster, generateDraftClass } from './playerGen';
+import { generateRoster, generateDraftClass, generatePlayer } from './playerGen';
 import { generateSchedule } from './schedule';
 import { simulateGame } from './simulate';
 import { developPlayers } from './development';
@@ -377,10 +377,10 @@ function computeScoutingData(
  * Uses an exponential curve so elite players command disproportionately more.
  */
 const POSITION_SALARY_MULTIPLIER: Partial<Record<Position, number>> = {
-  QB: 1.6,
+  QB: 1.9,
   WR: 1.0,
-  CB: 1.0,
-  DL: 1.05,
+  CB: 1.05,
+  DL: 1.35,
   LB: 0.95,
   OL: 1.0,
   S: 0.9,
@@ -391,13 +391,16 @@ const POSITION_SALARY_MULTIPLIER: Partial<Record<Position, number>> = {
 };
 
 function estimateSalary(overall: number, position?: Position): number {
-  // Exponential curve: low-end players get minimum, elite players get $35-50M
-  // Formula: base = ((ovr - 40) / 60) ^ 1.6 * 38
-  // At OVR 50: ~$2M    At OVR 60: ~$5.7M   At OVR 65: ~$8M
-  // At OVR 70: ~$12.5M At OVR 75: ~$16M     At OVR 80: ~$20.6M
-  // At OVR 85: ~$25.5M At OVR 90: ~$31M     At OVR 95: ~$36.5M
+  // Exponential curve: low-end players get minimum, elite players get $40-55M
+  // Formula: base = ((ovr - 40) / 60) ^ 1.6 * 42
+  // Base (no multiplier):
+  //   OVR 50: ~$2.2M   OVR 60: ~$6.3M   OVR 65: ~$9.4M
+  //   OVR 70: ~$13.2M  OVR 75: ~$17.7M   OVR 80: ~$22.8M
+  //   OVR 85: ~$28.2M  OVR 90: ~$34.2M   OVR 95: ~$40.5M
+  // With QB mult (1.9): 75 OVR → $33.6M, 85 → $53.6M, 90 → $65M
+  // With DL mult (1.35): 80 OVR → $30.8M, 85 → $38.1M, 90 → $46.2M
   const normalized = Math.max(0, (overall - 40) / 60);
-  const baseSalary = Math.max(LEAGUE_MINIMUM_SALARY, Math.pow(normalized, 1.6) * 38);
+  const baseSalary = Math.max(LEAGUE_MINIMUM_SALARY, Math.pow(normalized, 1.6) * 42);
 
   // Position multiplier — QBs command the most, K/P the least
   const posMult = position ? (POSITION_SALARY_MULTIPLIER[position] ?? 1.0) : 1.0;
@@ -1672,11 +1675,35 @@ export const useGameStore = create<GameStore>()(
           return p && !p.teamId;
         });
 
-        set({
-          phase: 'freeAgency',
-          players: state.players.map(p =>
+        // Generate supplemental free agents to ensure a healthy market
+        // Target: at least 150 FAs available (real NFL FA class is 200-400+)
+        const baseFACount = expiredPlayers.length + undraftedIds.length;
+        const supplementalCount = Math.max(0, 150 - baseFACount);
+        const supplementalPlayers: Player[] = [];
+        if (supplementalCount > 0) {
+          for (let i = 0; i < supplementalCount; i++) {
+            const pos = POSITIONS[Math.floor(Math.random() * POSITIONS.length)];
+            // Generate depth players (45-68 OVR) — journeymen and camp bodies
+            const talentMean = 45 + Math.random() * 23;
+            const p = generatePlayer(pos, talentMean, {
+              age: 24 + Math.floor(Math.random() * 8),
+              experience: 1 + Math.floor(Math.random() * 6),
+              teamId: null,
+            });
+            supplementalPlayers.push(p);
+          }
+        }
+
+        const allPlayers = [
+          ...state.players.map(p =>
             p.contract.yearsLeft <= 0 ? { ...p, teamId: null } : p,
           ),
+          ...supplementalPlayers,
+        ];
+
+        set({
+          phase: 'freeAgency',
+          players: allPlayers,
           teams: state.teams.map(t => {
             const expiredFromTeam = expiredPlayers.filter(ep => t.roster.includes(ep.id));
             const salaryReduction = expiredFromTeam.reduce((sum, p) => sum + p.contract.salary, 0);
@@ -1695,7 +1722,7 @@ export const useGameStore = create<GameStore>()(
               depthChart: newDepthChart,
             };
           }),
-          freeAgents: [...expiredPlayers.map(p => p.id), ...undraftedIds],
+          freeAgents: [...expiredPlayers.map(p => p.id), ...undraftedIds, ...supplementalPlayers.map(p => p.id)],
           newsItems: [...state.newsItems, ...releaseNews],
         });
       },
@@ -1734,22 +1761,19 @@ export const useGameStore = create<GameStore>()(
           }));
         }
 
-        // --- Step 2: ALL AI teams try to sign free agents based on need ---
-        // Shuffle order for fairness, then each team with needs signs 1-2 players.
+        // --- Step 2: A handful of AI teams sign free agents each round ---
+        // Only 5-8 teams act per user signing to keep the FA pool healthy.
+        // Teams with critical needs are prioritized to act first.
         const aiTeamIds = currentTeams.filter(t => t.id !== state.userTeamId).map(t => t.id);
-        const shuffled = [...aiTeamIds].sort(() => Math.random() - 0.5);
 
-        for (const aiTeamId of shuffled) {
-          if (currentFreeAgents.length === 0) break;
-
+        // Score each AI team by how badly they need FAs
+        const teamNeedScores: { teamId: string; score: number; needPositions: Position[]; wantPositions: Position[] }[] = [];
+        for (const aiTeamId of aiTeamIds) {
           const teamData = currentTeams.find(t => t.id === aiTeamId);
           if (!teamData) continue;
-          let capSpace = teamData.salaryCap - teamData.totalPayroll;
-
           const rosterPlayers = currentPlayers.filter(p => p.teamId === aiTeamId && !p.retired);
           if (rosterPlayers.length >= 53) continue;
 
-          // Determine positions of need (below minimum OR below target depth)
           const needPositions: Position[] = [];
           const wantPositions: Position[] = [];
           for (const pos of POSITIONS) {
@@ -1759,54 +1783,60 @@ export const useGameStore = create<GameStore>()(
             else if (count < ROSTER_LIMITS[pos].max && starterOvr < 70) wantPositions.push(pos);
           }
 
-          // Skip if team has no needs at all
-          if (needPositions.length === 0 && wantPositions.length === 0 && Math.random() > 0.3) continue;
+          const score = needPositions.length * 10 + wantPositions.length * 3 + Math.random() * 5;
+          teamNeedScores.push({ teamId: aiTeamId, score, needPositions, wantPositions });
+        }
 
-          // Each team signs 1-2 players per round
-          const signsCount = needPositions.length >= 3 ? 2 : 1;
-          for (let s = 0; s < signsCount; s++) {
-            if (currentFreeAgents.length === 0) break;
+        // Sort by need (most desperate teams first), pick top 5-8 to act this round
+        teamNeedScores.sort((a, b) => b.score - a.score);
+        const teamsActingThisRound = teamNeedScores.slice(0, 5 + Math.floor(Math.random() * 4));
 
-            const availableFAs = currentFreeAgents
-              .map(id => currentPlayers.find(p => p.id === id))
-              .filter((p): p is Player => !!p && !p.retired)
-              .filter(p => {
-                const sal = estimateSalary(p.ratings.overall, p.position);
-                return sal <= capSpace || (capSpace >= LEAGUE_MINIMUM_SALARY && sal <= LEAGUE_MINIMUM_SALARY * 2);
-              })
-              .sort((a, b) => {
-                const aBonus = needPositions.includes(a.position) ? 200 : wantPositions.includes(a.position) ? 80 : 0;
-                const bBonus = needPositions.includes(b.position) ? 200 : wantPositions.includes(b.position) ? 80 : 0;
-                return (bBonus + b.ratings.overall) - (aBonus + a.ratings.overall);
-              });
+        for (const { teamId: aiTeamId, needPositions, wantPositions } of teamsActingThisRound) {
+          if (currentFreeAgents.length === 0) break;
 
-            const target = availableFAs[0];
-            if (!target) break;
+          const teamData = currentTeams.find(t => t.id === aiTeamId);
+          if (!teamData) continue;
+          let capSpace = teamData.salaryCap - teamData.totalPayroll;
 
-            const marketSalary = estimateSalary(target.ratings.overall, target.position);
-            const aiSalary = marketSalary <= capSpace ? marketSalary : LEAGUE_MINIMUM_SALARY;
-            const aiYears = target.age >= 32 ? 1 : target.age >= 28 ? 2 : 3;
-
-            currentPlayers = currentPlayers.map(p =>
-              p.id === target.id
-                ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears } }
-                : p,
-            );
-            currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
-            currentTeams = currentTeams.map(t => {
-              if (t.id !== aiTeamId) return t;
-              const chart = insertIntoDepthChart(t.depthChart, target.position, target.id, currentPlayers);
-              return { ...t, roster: [...t.roster, target.id], totalPayroll: t.totalPayroll + aiSalary, depthChart: chart };
+          // Each team signs exactly 1 player per round
+          const availableFAs = currentFreeAgents
+            .map(id => currentPlayers.find(p => p.id === id))
+            .filter((p): p is Player => !!p && !p.retired)
+            .filter(p => {
+              const sal = estimateSalary(p.ratings.overall, p.position);
+              return sal <= capSpace || (capSpace >= LEAGUE_MINIMUM_SALARY && sal <= LEAGUE_MINIMUM_SALARY * 2);
+            })
+            .sort((a, b) => {
+              const aBonus = needPositions.includes(a.position) ? 200 : wantPositions.includes(a.position) ? 80 : 0;
+              const bBonus = needPositions.includes(b.position) ? 200 : wantPositions.includes(b.position) ? 80 : 0;
+              return (bBonus + b.ratings.overall) - (aBonus + a.ratings.overall);
             });
-            capSpace -= aiSalary;
 
-            allNews.push(makeNews({
-              season: state.season, week: state.week, type: 'signing',
-              teamId: aiTeamId, playerIds: [target.id],
-              headline: `${teamData.city} ${teamData.name} signed ${target.firstName} ${target.lastName} (${target.position}, ${target.ratings.overall} OVR) to a $${aiSalary}M/yr, ${aiYears}-year deal.`,
-              isUserTeam: false,
-            }));
-          }
+          const target = availableFAs[0];
+          if (!target) continue;
+
+          const marketSalary = estimateSalary(target.ratings.overall, target.position);
+          const aiSalary = marketSalary <= capSpace ? marketSalary : LEAGUE_MINIMUM_SALARY;
+          const aiYears = target.age >= 32 ? 1 : target.age >= 28 ? 2 : 3;
+
+          currentPlayers = currentPlayers.map(p =>
+            p.id === target.id
+              ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears } }
+              : p,
+          );
+          currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
+          currentTeams = currentTeams.map(t => {
+            if (t.id !== aiTeamId) return t;
+            const chart = insertIntoDepthChart(t.depthChart, target.position, target.id, currentPlayers);
+            return { ...t, roster: [...t.roster, target.id], totalPayroll: t.totalPayroll + aiSalary, depthChart: chart };
+          });
+
+          allNews.push(makeNews({
+            season: state.season, week: state.week, type: 'signing',
+            teamId: aiTeamId, playerIds: [target.id],
+            headline: `${teamData.city} ${teamData.name} signed ${target.firstName} ${target.lastName} (${target.position}, ${target.ratings.overall} OVR) to a $${aiSalary}M/yr, ${aiYears}-year deal.`,
+            isUserTeam: false,
+          }));
         }
 
         // --- Single set() call with both user signing + AI signings ---

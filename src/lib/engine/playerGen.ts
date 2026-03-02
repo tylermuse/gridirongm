@@ -72,11 +72,11 @@ function randomAge(experience: number): number {
 function randomSalary(overall: number, position: Position): number {
   // Match estimateSalary curve from store.ts for consistency
   const POSITION_SALARY_MULT: Record<string, number> = {
-    QB: 1.6, WR: 1.0, CB: 1.0, DL: 1.05, LB: 0.95, OL: 1.0,
+    QB: 1.9, WR: 1.0, CB: 1.05, DL: 1.35, LB: 0.95, OL: 1.0,
     S: 0.9, TE: 0.85, RB: 0.8, K: 0.25, P: 0.25,
   };
   const normalized = Math.max(0, (overall - 40) / 60);
-  const baseSalary = Math.max(0.75, Math.pow(normalized, 1.6) * 38);
+  const baseSalary = Math.max(0.75, Math.pow(normalized, 1.6) * 42);
   const posMult = POSITION_SALARY_MULT[position] ?? 1.0;
   let salary = baseSalary * posMult;
   if (position === 'K' || position === 'P') salary = Math.min(salary, 5.0);
