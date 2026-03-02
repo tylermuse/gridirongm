@@ -9,8 +9,9 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
+import { POSITION_WEIGHTS } from '@/lib/engine/playerGen';
 import { POSITIONS, ROSTER_LIMITS } from '@/types';
-import type { Player, Position, Team } from '@/types';
+import type { Player, Position, Team, PlayerRatings } from '@/types';
 
 const SCOUTING_LEVEL_LABELS = ['Budget ($2M)', 'Standard ($4M)', 'Enhanced ($6M)', 'Elite ($8M)', 'Maximum ($10M)'];
 
@@ -365,6 +366,7 @@ export default function DraftPage() {
   const [selectedRound, setSelectedRound] = useState(1);
   const [positionFilter, setPositionFilter] = useState<Position | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [scoutPlayerId, setScoutPlayerId] = useState<string | null>(null);
 
   if (phase !== 'draft') {
     return (
@@ -584,8 +586,13 @@ export default function DraftPage() {
                       <td className="py-2 pr-2 text-right">
                         <div className="flex gap-1 justify-end">
                           {isUserPick && scout && !scout.deepScouted && deepScoutedCount < 5 && (
-                            <Button size="sm" variant="ghost" onClick={() => deepScoutPlayer(player.id)}>
+                            <Button size="sm" variant="ghost" onClick={() => { deepScoutPlayer(player.id); setScoutPlayerId(player.id); }}>
                               Scout
+                            </Button>
+                          )}
+                          {scout?.deepScouted && (
+                            <Button size="sm" variant="ghost" onClick={() => setScoutPlayerId(player.id)}>
+                              🔍
                             </Button>
                           )}
                           {isUserPick ? (
@@ -779,6 +786,158 @@ export default function DraftPage() {
           </Card>
         </div>
       </div>
+
+      {/* Scouting Report Modal */}
+      {scoutPlayerId && (() => {
+        const sp = players.find(p => p.id === scoutPlayerId);
+        const scout = draftScoutingData[scoutPlayerId];
+        if (!sp || !scout) return null;
+
+        const weights = POSITION_WEIGHTS[sp.position];
+        const keyRatings = Object.entries(weights)
+          .sort((a, b) => (b[1] as number) - (a[1] as number))
+          .map(([key, weight]) => ({
+            key: key as keyof PlayerRatings,
+            weight: weight as number,
+            label: key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()),
+          }));
+
+        // After deep scout, show tighter OVR range
+        const ovrLow = Math.max(20, scout.scoutedOvr - scout.error);
+        const ovrHigh = Math.min(99, scout.scoutedOvr + scout.error);
+
+        // Generate scouted rating ranges for key attributes (fuzzy based on error)
+        const ratingRanges = keyRatings.map(r => {
+          const real = sp.ratings[r.key] as number;
+          const noise = Math.round((Math.random() - 0.5) * scout.error * 1.5);
+          const scouted = Math.max(20, Math.min(99, real + noise));
+          return {
+            ...r,
+            low: Math.max(20, scouted - scout.error),
+            high: Math.min(99, scouted + scout.error),
+            scouted,
+          };
+        });
+
+        // Strengths & weaknesses
+        const sorted = [...ratingRanges].sort((a, b) => b.scouted - a.scouted);
+        const strengths = sorted.filter(r => r.weight >= 2).slice(0, 3);
+        const weaknesses = sorted.filter(r => r.weight >= 1).slice(-2);
+
+        // Comparison to team need
+        const userNeed = getTeamNeeds(userTeamId).find(n => n.position === sp.position);
+        const fitScore = userNeed ? Math.min(100, userNeed.needScore * 2) : 0;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setScoutPlayerId(null)}>
+            <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] max-w-lg w-full max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              {/* Header */}
+              <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
+                <div>
+                  <h3 className="text-xl font-black">{sp.firstName} {sp.lastName}</h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge>{sp.position}</Badge>
+                    <span className="text-sm text-[var(--text-sec)]">Age {sp.age}</span>
+                    {sp.scoutingLabel && <span className="text-xs text-[var(--text-sec)] italic">{sp.scoutingLabel}</span>}
+                  </div>
+                </div>
+                <button onClick={() => setScoutPlayerId(null)} className="text-[var(--text-sec)] hover:text-white text-xl">✕</button>
+              </div>
+
+              <div className="p-5 space-y-5">
+                {/* OVR & Potential */}
+                <div className="flex gap-4">
+                  <div className="flex-1 bg-[var(--surface-2)] rounded-xl p-4 text-center">
+                    <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider mb-1">Projected OVR</div>
+                    <div className={`text-3xl font-black ${ratingColor(scout.scoutedOvr)}`}>{ovrLow}–{ovrHigh}</div>
+                  </div>
+                  <div className="flex-1 bg-[var(--surface-2)] rounded-xl p-4 text-center">
+                    <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider mb-1">Potential</div>
+                    <div className={`text-3xl font-black ${potentialColor(sp.potential, sp.experience)}`}>
+                      {potentialLabel(sp.potential, sp.experience)}
+                    </div>
+                  </div>
+                  <div className="flex-1 bg-[var(--surface-2)] rounded-xl p-4 text-center">
+                    <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider mb-1">Team Fit</div>
+                    <div className={`text-3xl font-black ${fitScore >= 60 ? 'text-green-400' : fitScore >= 30 ? 'text-amber-400' : 'text-[var(--text-sec)]'}`}>
+                      {fitScore >= 60 ? '🔥' : fitScore >= 30 ? '👍' : '—'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Key Ratings */}
+                <div>
+                  <h4 className="text-xs text-[var(--text-sec)] uppercase tracking-wider mb-2 font-semibold">Scouted Ratings</h4>
+                  <div className="space-y-2">
+                    {ratingRanges.map(r => {
+                      const pct = ((r.scouted - 20) / 79) * 100;
+                      return (
+                        <div key={r.key} className="flex items-center gap-3">
+                          <span className="text-xs w-20 text-right text-[var(--text-sec)]">{r.label}</span>
+                          <div className="flex-1 h-5 bg-[var(--surface-2)] rounded-full relative overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${r.scouted >= 75 ? 'bg-green-500' : r.scouted >= 60 ? 'bg-blue-500' : r.scouted >= 45 ? 'bg-amber-500' : 'bg-red-500'}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow">
+                              {r.low}–{r.high}
+                            </span>
+                          </div>
+                          {r.weight >= 3 && <span className="text-[10px] text-amber-400">★★★</span>}
+                          {r.weight === 2 && <span className="text-[10px] text-amber-400">★★</span>}
+                          {r.weight === 1 && <span className="text-[10px] text-[var(--text-sec)]">★</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Strengths & Weaknesses */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="text-xs text-green-400 uppercase tracking-wider mb-1.5 font-semibold">Strengths</h4>
+                    {strengths.map(s => (
+                      <div key={s.key} className="text-sm flex justify-between py-0.5">
+                        <span>{s.label}</span>
+                        <span className="text-green-400 font-bold">{s.low}–{s.high}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <h4 className="text-xs text-red-400 uppercase tracking-wider mb-1.5 font-semibold">Weaknesses</h4>
+                    {weaknesses.map(w => (
+                      <div key={w.key} className="text-sm flex justify-between py-0.5">
+                        <span>{w.label}</span>
+                        <span className="text-red-400 font-bold">{w.low}–{w.high}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Team Need Context */}
+                {userNeed && (
+                  <div className="bg-[var(--surface-2)] rounded-lg p-3">
+                    <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider mb-1">Team Need: {sp.position}</div>
+                    <div className="text-sm">
+                      Current depth: <span className="font-bold">{userNeed.count}/{userNeed.limits.max}</span>
+                      {userNeed.starterOvr > 0 && <> · Best starter: <span className={`font-bold ${ratingColor(userNeed.starterOvr)}`}>{userNeed.starterOvr} OVR</span></>}
+                      {userNeed.needScore >= 40 && <span className="ml-2 text-red-400 text-xs font-semibold">HIGH NEED</span>}
+                      {userNeed.needScore >= 25 && userNeed.needScore < 40 && <span className="ml-2 text-amber-400 text-xs font-semibold">MODERATE NEED</span>}
+                    </div>
+                  </div>
+                )}
+
+                {/* Draft button */}
+                {isUserPick && (
+                  <Button className="w-full" onClick={() => { draftPlayer(scoutPlayerId); setScoutPlayerId(null); }}>
+                    Draft {sp.firstName} {sp.lastName}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </GameShell>
   );
 }
