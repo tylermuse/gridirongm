@@ -31,6 +31,7 @@ export function TopBar() {
     advanceToResigning,
     advanceToDraft,
     advanceToFreeAgency,
+    simToEndDraft,
     startNewSeason,
   } = useGameStore();
 
@@ -228,9 +229,12 @@ export function TopBar() {
                 <Button
                   onClick={() => {
                     // Finish remaining draft picks first, then advance to FA
-                    useGameStore.getState().simToEndDraft();
-                    useGameStore.getState().advanceToFreeAgency();
-                    router.push('/free-agency');
+                    simToEndDraft();
+                    // Use setTimeout to let state settle before advancing phase
+                    setTimeout(() => {
+                      useGameStore.getState().advanceToFreeAgency();
+                      router.push('/free-agency');
+                    }, 0);
                   }}
                   variant="secondary"
                   size="sm"
