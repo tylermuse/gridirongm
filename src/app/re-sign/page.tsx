@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { initNegotiation, processOffer, type NegotiationState } from '@/lib/engine/negotiation';
+import { POSITIONS, ROSTER_LIMITS } from '@/types';
 
 function ratingColor(val: number): string {
   if (val >= 80) return 'text-green-400';
@@ -40,6 +41,7 @@ type NegMode = 'extend' | 'restructure';
 
 export default function ReSignPage() {
   const { phase, players, teams, userTeamId, resigningPlayers, resignPlayer, passOnResigning } = useGameStore();
+  const roster = players.filter(p => p.teamId === userTeamId && !p.retired);
 
   const [results, setResults] = useState<Record<string, ReSignResult>>({});
   const [negotiation, setNegotiation] = useState<NegotiationState | null>(null);
@@ -313,7 +315,68 @@ export default function ReSignPage() {
             </div>
           </Card>
         ) : (
-          <div className="space-y-4">
+          <div className="flex gap-4">
+            {/* Roster Composition sidebar */}
+            <div className="shrink-0 w-48">
+              <Card className="sticky top-4">
+                <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-3">Roster Composition</div>
+                <div className="space-y-1.5">
+                  {POSITIONS.map(pos => {
+                    const count = roster.filter(p => p.position === pos).length;
+                    const limits = ROSTER_LIMITS[pos];
+                    const isBelowMin = count < limits.min;
+                    const isAtMax = count >= limits.max;
+                    // Count expiring players at this position
+                    const expiringAtPos = resigningPlayers.filter(e => {
+                      const pl = players.find(p => p.id === e.playerId);
+                      return pl?.position === pos;
+                    }).length;
+                    const wouldHave = count - expiringAtPos + Object.entries(results).filter(([id, r]) => {
+                      const pl = players.find(p => p.id === id);
+                      return pl?.position === pos && r === 'accepted';
+                    }).length;
+                    return (
+                      <div key={pos} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-[var(--text-sec)] w-6">{pos}</span>
+                          <div className="w-16 h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${isBelowMin ? 'bg-red-500' : isAtMax ? 'bg-amber-500' : 'bg-green-500'}`}
+                              style={{ width: `${Math.min(100, (count / limits.max) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className={`text-xs font-bold ${isBelowMin ? 'text-red-400' : isAtMax ? 'text-amber-400' : 'text-green-400'}`}>
+                            {count}
+                          </span>
+                          <span className="text-[10px] text-[var(--text-sec)]">/{limits.max}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 pt-3 border-t border-[var(--border)] text-xs text-[var(--text-sec)]">
+                  <div className="flex justify-between">
+                    <span>Total</span>
+                    <span className="font-bold text-[var(--text)]">{roster.length}</span>
+                  </div>
+                  <div className="flex justify-between mt-1">
+                    <span>Expiring</span>
+                    <span className="font-bold text-amber-400">{resigningPlayers.length}</span>
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-[var(--border)]">
+                  <div className="text-[10px] text-[var(--text-sec)] space-y-0.5">
+                    <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> Below minimum</div>
+                    <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Healthy</div>
+                    <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> At maximum</div>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
+          <div className="flex-1 space-y-4">
             {/* Active re-signing entries */}
             {activeEntries.map(entry => {
               const player = players.find(p => p.id === entry.playerId);
@@ -411,6 +474,7 @@ export default function ReSignPage() {
                 </div>
               );
             })}
+          </div>
           </div>
         )}
 
