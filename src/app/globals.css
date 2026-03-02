@@ -1,26 +1,32 @@
 @import "tailwindcss";
 
-:root {
-  --bg: #0a0e17;
-  --surface: #111827;
-  --surface-2: #1a2235;
-  --border: #1f2937;
-  --text: #f1f5f9;
-  --text-sec: #94a3b8;
-  --accent: #3b82f6;
-  --accent-glow: rgba(59, 130, 246, 0.15);
-  --green: #22c55e;
-  --red: #ef4444;
-  --amber: #f59e0b;
-}
+@layer base {
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface-2: #1a2235;
+    --border: #1f2937;
+    --text: #f1f5f9;
+    --text-sec: #94a3b8;
+    --accent: #3b82f6;
+    --accent-glow: rgba(59, 130, 246, 0.15);
+    --green: #22c55e;
+    --red: #ef4444;
+    --amber: #f59e0b;
+  }
 
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  html, body {
+    background-color: var(--bg) !important;
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* Hide scrollbar for game ticker */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

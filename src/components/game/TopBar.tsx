@@ -21,6 +21,7 @@ export function TopBar() {
     resigningPlayers,
     tradeProposals,
     suppressTradePopups,
+    leagueSettings,
     simWeek,
     simNextPlayoffGame,
     simAllPlayoffGames,
@@ -53,6 +54,15 @@ export function TopBar() {
       }
     }
   }, [simWeek]);
+
+  const handleSimToDeadline = useCallback(() => {
+    const deadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
+    const store = useGameStore.getState();
+    for (let w = store.week; w <= deadlineWeek; w++) {
+      if (useGameStore.getState().phase !== 'regular') break;
+      useGameStore.getState().simWeek();
+    }
+  }, [leagueSettings]);
 
   const handleSimSeason = useCallback(() => {
     const store = useGameStore.getState();
@@ -131,6 +141,15 @@ export function TopBar() {
                 <Button onClick={handleSimWeek} size="sm">
                   Sim Week {week}
                 </Button>
+                {week <= (leagueSettings?.tradeDeadlineWeek ?? 12) && (
+                  <Button
+                    onClick={handleSimToDeadline}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    Sim to Deadline
+                  </Button>
+                )}
                 <Button
                   onClick={handleSimSeason}
                   variant="secondary"

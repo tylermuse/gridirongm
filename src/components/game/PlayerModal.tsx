@@ -154,18 +154,25 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
 
             {/* Actions */}
             {isOnUserTeam && !player.retired && (
-              <div className="flex gap-2 mt-3">
-                <Button
-                  size="sm"
-                  variant={confirmRelease ? 'danger' : 'secondary'}
-                  onClick={handleRelease}
-                >
-                  {confirmRelease ? 'Confirm Release?' : 'Release Player'}
-                </Button>
-                {confirmRelease && (
-                  <Button size="sm" variant="ghost" onClick={() => setConfirmRelease(false)}>
-                    Cancel
+              <div className="mt-3">
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant={confirmRelease ? 'danger' : 'secondary'}
+                    onClick={handleRelease}
+                  >
+                    {confirmRelease ? 'Confirm Release?' : 'Release Player'}
                   </Button>
+                  {confirmRelease && (
+                    <Button size="sm" variant="ghost" onClick={() => setConfirmRelease(false)}>
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+                {player.contract.salary > 0 && (
+                  <div className="text-xs text-green-400 mt-1">
+                    Saves ${player.contract.salary}M/yr cap space
+                  </div>
                 )}
               </div>
             )}

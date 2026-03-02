@@ -15,7 +15,7 @@ import { generateSchedule } from './schedule';
 import { simulateGame } from './simulate';
 import { developPlayers } from './development';
 
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 
 // Defaults for export (UI uses these for display when store isn't accessible)
 export const LEAGUE_MINIMUM_SALARY = DEFAULT_LEAGUE_SETTINGS.leagueMinSalary;
@@ -2066,6 +2066,26 @@ export const useGameStore = create<GameStore>()(
     {
       name: 'gridiron-gm-autosave',
       version: SAVE_VERSION,
+      migrate: (persisted: unknown, version: number) => {
+        const state = persisted as Record<string, unknown>;
+        if (version < 3) {
+          // Migrate salary cap to $300M and add missing fields
+          const settings = (state.leagueSettings as Record<string, unknown>) ?? {};
+          if (!settings.salaryCap || (settings.salaryCap as number) < 300) {
+            settings.salaryCap = DEFAULT_LEAGUE_SETTINGS.salaryCap;
+          }
+          state.leagueSettings = { ...DEFAULT_LEAGUE_SETTINGS, ...settings };
+          state.suppressTradePopups = state.suppressTradePopups ?? false;
+          // Update team salary caps if they're still on the old default
+          const teams = (state.teams as Array<Record<string, unknown>>) ?? [];
+          for (const team of teams) {
+            if ((team.salaryCap as number) < 250) {
+              team.salaryCap = DEFAULT_LEAGUE_SETTINGS.salaryCap;
+            }
+          }
+        }
+        return state;
+      },
     },
   ),
 );
