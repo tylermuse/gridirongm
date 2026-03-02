@@ -90,7 +90,7 @@ export default function RosterPage() {
   const {
     players, teams, userTeamId, season,
     releasePlayer, placeOnIR, activateFromIR,
-    reorderDepthChart,
+    reorderDepthChart, restructureContract,
     phase, seasonHistory,
   } = useGameStore();
 
@@ -100,6 +100,11 @@ export default function RosterPage() {
   const [viewMode, setViewMode] = useState<'roster' | 'depth' | 'injuries'>('roster');
   const [confirmRelease, setConfirmRelease] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [restructurePlayer, setRestructurePlayer] = useState<string | null>(null);
+
+  // Whether we're in an offseason phase where restructuring makes sense
+  const isOffseason = phase !== 'regular';
+
 
   // Drag state for depth chart
   const [dragPosition, setDragPosition] = useState<Position | null>(null);
@@ -429,7 +434,38 @@ export default function RosterPage() {
                         </td>
 
                         {/* Actions */}
-                        <td className="py-2 px-2 text-right pr-3">
+                        <td className="py-2 px-2 text-right pr-3 space-x-1">
+                          {isOffseason && p.contract.yearsLeft >= 2 && (
+                            <Button
+                              size="sm"
+                              variant={restructurePlayer === p.id ? 'primary' : 'ghost'}
+                              onClick={() => {
+                                if (restructurePlayer === p.id) {
+                                  // Execute restructure
+                                  const addedYears = p.contract.yearsLeft <= 2 ? 2 : 1;
+                                  const newYears = p.contract.yearsLeft + addedYears;
+                                  const discountPct = 0.85 + (addedYears === 1 ? 0.05 : 0);
+                                  const newAnnual = Math.round(p.contract.salary * discountPct * 10) / 10;
+                                  restructureContract(p.id, newAnnual, newYears);
+                                  setRestructurePlayer(null);
+                                } else {
+                                  setRestructurePlayer(p.id);
+                                  setConfirmRelease(null);
+                                }
+                              }}
+                            >
+                              {restructurePlayer === p.id
+                                ? (() => {
+                                    const addedYears = p.contract.yearsLeft <= 2 ? 2 : 1;
+                                    const discountPct = 0.85 + (addedYears === 1 ? 0.05 : 0);
+                                    const newAnnual = Math.round(p.contract.salary * discountPct * 10) / 10;
+                                    const saved = Math.round((p.contract.salary - newAnnual) * 10) / 10;
+                                    return `→ $${newAnnual}M × ${p.contract.yearsLeft + addedYears}yr (save $${saved}M/yr)`;
+                                  })()
+                                : 'Restructure'
+                              }
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant={confirmRelease === p.id ? 'danger' : 'ghost'}
@@ -439,6 +475,7 @@ export default function RosterPage() {
                                 setConfirmRelease(null);
                               } else {
                                 setConfirmRelease(p.id);
+                                setRestructurePlayer(null);
                               }
                             }}
                           >

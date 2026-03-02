@@ -51,6 +51,7 @@ interface GameStore extends LeagueState {
   signFreeAgent: (playerId: string, salary: number, years: number) => boolean;
   aiSignFreeAgents: () => void;
   releasePlayer: (playerId: string) => void;
+  restructureContract: (playerId: string, newSalary: number, newYears: number) => boolean;
   placeOnIR: (playerId: string) => void;
   activateFromIR: (playerId: string) => void;
   startNewSeason: () => void;
@@ -800,9 +801,24 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
   const weekGames = state.schedule.filter(g => g.week === state.week && !g.played);
   if (weekGames.length === 0) return null;
 
+  // Auto-resort all teams' depth charts by OVR each week (fixes stale ordering from old saves)
+  const resortedTeams = state.teams.map(t => {
+    const newDepthChart = { ...t.depthChart };
+    for (const pos of POSITIONS) {
+      const arr = newDepthChart[pos] ?? [];
+      if (arr.length > 1) {
+        newDepthChart[pos] = [...arr].sort((a, b) => {
+          const pa = state.players.find(p => p.id === a);
+          const pb = state.players.find(p => p.id === b);
+          return (pb?.ratings.overall ?? 0) - (pa?.ratings.overall ?? 0);
+        });
+      }
+    }
+    return { ...t, depthChart: newDepthChart };
+  });
   const updatedGames = weekGames.map(game => {
-    const homeTeam = state.teams.find(t => t.id === game.homeTeamId);
-    const awayTeam = state.teams.find(t => t.id === game.awayTeamId);
+    const homeTeam = resortedTeams.find(t => t.id === game.homeTeamId);
+    const awayTeam = resortedTeams.find(t => t.id === game.awayTeamId);
     const homeRosterRaw = state.players.filter(p => p.teamId === game.homeTeamId);
     const awayRosterRaw = state.players.filter(p => p.teamId === game.awayTeamId);
     const homeRoster = homeTeam?.depthChart
@@ -819,7 +835,7 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     return updated ?? g;
   });
 
-  const newTeams = state.teams.map(team => {
+  const newTeams = resortedTeams.map(team => {
     const teamGames = updatedGames.filter(
       g => g.homeTeamId === team.id || g.awayTeamId === team.id,
     );
@@ -1915,6 +1931,36 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
+      restructureContract: (playerId: string, newSalary: number, newYears: number) => {
+        const state = get();
+        const player = state.players.find(p => p.id === playerId);
+        if (!player || player.teamId !== state.userTeamId) return false;
+
+        const oldSalary = player.contract.salary;
+        const capDelta = newSalary - oldSalary; // negative = savings
+
+        set({
+          players: state.players.map(p =>
+            p.id === playerId
+              ? { ...p, contract: { salary: newSalary, yearsLeft: newYears, guaranteed: generateGuaranteed(newSalary, newYears), totalYears: newYears } }
+              : p,
+          ),
+          teams: state.teams.map(t =>
+            t.id === state.userTeamId
+              ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + capDelta) }
+              : t,
+          ),
+          newsItems: [...state.newsItems, makeNews({
+            season: state.season, week: 0, type: 'signing',
+            teamId: state.userTeamId, playerIds: [playerId],
+            headline: `You restructured ${player.firstName} ${player.lastName}'s contract to $${newSalary}M/yr for ${newYears} years.`,
+            isUserTeam: true,
+          })],
+        });
+
+        return true;
+      },
+
       placeOnIR: (playerId: string) => {
         const state = get();
         const player = state.players.find(p => p.id === playerId);
@@ -2423,9 +2469,15 @@ export const useGameStore = create<GameStore>()(
           const retiredFromTeam = newlyRetiredOnTeam.filter(p => t.roster.includes(p.id));
           const salaryReduction = retiredFromTeam.reduce((sum, p) => sum + p.contract.salary, 0);
           const newRoster = t.roster.filter(pid => !newlyRetiredOnTeamIds.has(pid));
-          // Remove retired from depth chart
+          // Remove retired from depth chart, then re-sort all positions by OVR
           const newDepthChart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
-            acc[pos] = (t.depthChart[pos] ?? []).filter(pid => !newlyRetiredOnTeamIds.has(pid));
+            const active = (t.depthChart[pos] ?? []).filter(pid => !newlyRetiredOnTeamIds.has(pid));
+            // Re-sort by OVR descending so best players are starters
+            acc[pos] = active.sort((a, b) => {
+              const pa = developedPlayers.find(p => p.id === a);
+              const pb = developedPlayers.find(p => p.id === b);
+              return (pb?.ratings.overall ?? 0) - (pa?.ratings.overall ?? 0);
+            });
             return acc;
           }, {} as Record<Position, string[]>);
           // Expire dead cap entries (decrement years, remove expired)

@@ -283,7 +283,7 @@ function simulateDrive(
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
 
-  for (let playNum = 0; playNum < 12; playNum++) { // max 12 plays per drive (avg NFL drive ~6)
+  for (let playNum = 0; playNum < 8; playNum++) { // max 8 plays per drive (avg NFL drive ~5.5)
     const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition);
     plays.push(play);
 
@@ -378,8 +378,8 @@ export function simulateGame(
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
-  // NFL average: ~11-12 possessions per team per game
-  const possessions = 10 + Math.floor(Math.random() * 3);
+  // NFL average: ~10-11 possessions per team per game
+  const possessions = 9 + Math.floor(Math.random() * 3);
 
   const allHomePlays: PlayResult[] = [];
   const allAwayPlays: PlayResult[] = [];

@@ -157,7 +157,11 @@ export interface Team {
  */
 export function calculateDeadCap(contract: Contract): number {
   const guaranteed = contract.guaranteed ?? 0;
-  return Math.round(guaranteed * 10) / 10;
+  const totalYears = contract.totalYears ?? contract.yearsLeft;
+  // Prorate: remaining guaranteed based on years left vs total contract
+  // Early in contract = high dead cap, late in contract = low dead cap
+  const proratedGuaranteed = totalYears > 0 ? guaranteed * (contract.yearsLeft / totalYears) : 0;
+  return Math.round(proratedGuaranteed * 10) / 10;
 }
 
 /**
