@@ -106,6 +106,24 @@ function buildDefaultDepthChart(players: Player[]): Record<Position, string[]> {
   }, {} as Record<Position, string[]>);
 }
 
+/** Insert a player into a depth chart position, sorted by OVR */
+function insertIntoDepthChart(
+  chart: Record<Position, string[]>,
+  position: Position,
+  playerId: string,
+  allPlayers: Player[],
+): Record<Position, string[]> {
+  const newChart = { ...chart };
+  const existing = [...(newChart[position] ?? []), playerId];
+  // Sort by OVR descending
+  newChart[position] = existing.sort((a, b) => {
+    const pa = allPlayers.find(p => p.id === a);
+    const pb = allPlayers.find(p => p.id === b);
+    return (pb?.ratings.overall ?? 0) - (pa?.ratings.overall ?? 0);
+  });
+  return newChart;
+}
+
 /** Sort roster so depth-chart starter appears first — used before simulateGame */
 function sortRosterByDepthChart(
   roster: Player[],
@@ -1396,8 +1414,7 @@ export const useGameStore = create<GameStore>()(
         // PRD-13: Update depth chart for drafting team
         const updatedTeams = state.teams.map(t => {
           if (t.id !== currentPickTeamId) return t;
-          const chart = { ...t.depthChart };
-          chart[player.position] = [...(chart[player.position] ?? []), playerId];
+          const chart = insertIntoDepthChart(t.depthChart, player.position, playerId, state.players);
           return { ...t, roster: [...t.roster, playerId], totalPayroll: t.totalPayroll + finalSalary, depthChart: chart };
         });
 
@@ -1470,8 +1487,7 @@ export const useGameStore = create<GameStore>()(
           );
           teams = teams.map(t => {
             if (t.id !== pickTeam) return t;
-            const chart = { ...t.depthChart };
-            chart[player.position] = [...(chart[player.position] ?? []), pid];
+            const chart = insertIntoDepthChart(t.depthChart, player.position, pid, players);
             return { ...t, roster: [...t.roster, pid], totalPayroll: t.totalPayroll + rookieSalary, depthChart: chart };
           });
           freeAgentIds = freeAgentIds.filter(id => id !== pid);
@@ -1525,8 +1541,7 @@ export const useGameStore = create<GameStore>()(
           );
           teams = teams.map(t => {
             if (t.id !== pickTeam) return t;
-            const chart = { ...t.depthChart };
-            chart[player.position] = [...(chart[player.position] ?? []), pid];
+            const chart = insertIntoDepthChart(t.depthChart, player.position, pid, players);
             return { ...t, roster: [...t.roster, pid], totalPayroll: t.totalPayroll + rookieSalary, depthChart: chart };
           });
           freeAgentIds = freeAgentIds.filter(id => id !== pid);
@@ -1620,10 +1635,7 @@ export const useGameStore = create<GameStore>()(
         );
         let currentTeams = state.teams.map(t => {
           if (t.id !== state.userTeamId) return t;
-          const chart = { ...t.depthChart };
-          if (player) {
-            chart[player.position] = [...(chart[player.position] ?? []), playerId];
-          }
+          const chart = player ? insertIntoDepthChart(t.depthChart, player.position, playerId, currentPlayers) : t.depthChart;
           return { ...t, roster: [...t.roster, playerId], totalPayroll: t.totalPayroll + salary, depthChart: chart };
         });
         let currentFreeAgents = state.freeAgents.filter(id => id !== playerId);
@@ -1687,8 +1699,7 @@ export const useGameStore = create<GameStore>()(
           currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
           currentTeams = currentTeams.map(t => {
             if (t.id !== aiTeamId) return t;
-            const chart = { ...t.depthChart };
-            chart[target.position] = [...(chart[target.position] ?? []), target.id];
+            const chart = insertIntoDepthChart(t.depthChart, target.position, target.id, currentPlayers);
             return { ...t, roster: [...t.roster, target.id], totalPayroll: t.totalPayroll + aiSalary, depthChart: chart };
           });
 

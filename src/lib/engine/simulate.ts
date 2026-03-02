@@ -351,107 +351,14 @@ function simulateDrive(
   return { points: 0, plays };
 }
 
-// ── Stats accumulation from plays ───────────────────────────────────────────
+// ── Stats helper ────────────────────────────────────────────────────────────
 
-function accumulateStats(
-  allPlays: PlayResult[],
-  roster: Player[],
-): Record<string, Partial<PlayerStats>> {
-  const stats: Record<string, Partial<PlayerStats>> = {};
-
-  function ensure(id: string): Partial<PlayerStats> {
-    if (!stats[id]) stats[id] = { gamesPlayed: 1 };
-    return stats[id];
-  }
-
-  for (const play of allPlays) {
-    if (play.type === 'pass') {
-      if (play.passer) {
-        const s = ensure(play.passer.id);
-        s.passAttempts = (s.passAttempts ?? 0) + 1;
-        if (play.yards > 0 || play.touchdown) {
-          s.passCompletions = (s.passCompletions ?? 0) + 1;
-          s.passYards = (s.passYards ?? 0) + play.yards;
-          if (play.touchdown) s.passTDs = (s.passTDs ?? 0) + 1;
-        }
-      }
-      if (play.receiver && (play.yards > 0 || play.touchdown)) {
-        const s = ensure(play.receiver.id);
-        s.targets = (s.targets ?? 0) + 1;
-        s.receptions = (s.receptions ?? 0) + 1;
-        s.receivingYards = (s.receivingYards ?? 0) + play.yards;
-        if (play.touchdown) s.receivingTDs = (s.receivingTDs ?? 0) + 1;
-      } else if (play.receiver) {
-        // Incomplete - count target
-        const s = ensure(play.receiver.id);
-        s.targets = (s.targets ?? 0) + 1;
-      }
-      if (play.tackler) {
-        const s = ensure(play.tackler.id);
-        s.tackles = (s.tackles ?? 0) + 1;
-      }
-    }
-
-    if (play.type === 'rush') {
-      if (play.rusher) {
-        const s = ensure(play.rusher.id);
-        s.rushAttempts = (s.rushAttempts ?? 0) + 1;
-        s.rushYards = (s.rushYards ?? 0) + play.yards;
-        if (play.touchdown) s.rushTDs = (s.rushTDs ?? 0) + 1;
-        if (play.turnover) s.fumbles = (s.fumbles ?? 0) + 1;
-      }
-      if (play.tackler) {
-        const s = ensure(play.tackler.id);
-        s.tackles = (s.tackles ?? 0) + 1;
-        if (play.turnover) s.forcedFumbles = (s.forcedFumbles ?? 0) + 1;
-      }
-    }
-
-    if (play.type === 'sack') {
-      if (play.sacker) {
-        const s = ensure(play.sacker.id);
-        s.sacks = (s.sacks ?? 0) + 1;
-        s.tackles = (s.tackles ?? 0) + 1;
-      }
-    }
-
-    if (play.type === 'interception') {
-      if (play.passer) {
-        const s = ensure(play.passer.id);
-        s.passAttempts = (s.passAttempts ?? 0) + 1;
-        s.interceptions = (s.interceptions ?? 0) + 1;
-      }
-      if (play.interceptor) {
-        const s = ensure(play.interceptor.id);
-        s.defensiveINTs = (s.defensiveINTs ?? 0) + 1;
-      }
-    }
-
-    if (play.type === 'fieldGoal') {
-      if (play.kicker && play.fieldGoalMade !== undefined) {
-        const s = ensure(play.kicker.id);
-        const idx = allPlays.indexOf(play);
-        const prevPlay = idx > 0 ? allPlays[idx - 1] : null;
-        if (prevPlay?.touchdown) {
-          s.extraPointAttempts = (s.extraPointAttempts ?? 0) + 1;
-          if (play.fieldGoalMade) s.extraPointsMade = (s.extraPointsMade ?? 0) + 1;
-        } else {
-          s.fieldGoalAttempts = (s.fieldGoalAttempts ?? 0) + 1;
-          if (play.fieldGoalMade) s.fieldGoalsMade = (s.fieldGoalsMade ?? 0) + 1;
-        }
-      }
-    }
-  }
-
-  // Mark all active players with gamesPlayed
-  for (const p of roster) {
-    if (!p.injury || p.injury.weeksLeft === 0) {
-      if (!stats[p.id]) stats[p.id] = { gamesPlayed: 1 };
-      else stats[p.id].gamesPlayed = 1;
-    }
-  }
-
-  return stats;
+function ensure(
+  stats: Record<string, Partial<PlayerStats>>,
+  id: string,
+): Partial<PlayerStats> {
+  if (!stats[id]) stats[id] = { gamesPlayed: 1 };
+  return stats[id];
 }
 
 // ── Main simulation entry point ─────────────────────────────────────────────
@@ -495,36 +402,102 @@ export function simulateGame(
     else awayScore += 3;
   }
 
-  // Accumulate stats from plays
-  const homeOffStats = accumulateStats(allHomePlays, homeRoster);
-  const awayDefStats = accumulateStats(allHomePlays, awayRoster);
-  const awayOffStats = accumulateStats(allAwayPlays, awayRoster);
-  const homeDefStats = accumulateStats(allAwayPlays, homeRoster);
-
-  // Merge stats
+  // Accumulate stats — one pass per team over their relevant plays.
+  // Home offense plays: home players get offensive stats, away players get defensive stats.
+  // Away offense plays: away players get offensive stats, home players get defensive stats.
+  const homeIds = new Set(homeRoster.map(p => p.id));
+  const awayIds = new Set(awayRoster.map(p => p.id));
   const playerStats: Record<string, Partial<PlayerStats>> = {};
 
-  function mergeIn(source: Record<string, Partial<PlayerStats>>) {
-    for (const [id, s] of Object.entries(source)) {
-      if (!playerStats[id]) {
-        playerStats[id] = { ...s };
-      } else {
-        const existing = playerStats[id];
-        for (const key of Object.keys(s) as Array<keyof Partial<PlayerStats>>) {
-          if (key === 'gamesPlayed') {
-            existing[key] = 1;
+  function addPlayStats(plays: PlayResult[], rosterIds: Set<string>, rosterList: Player[]) {
+    // Process play-by-play, only counting stats for players on this roster
+    for (const play of plays) {
+      if (play.type === 'pass') {
+        if (play.passer && rosterIds.has(play.passer.id)) {
+          const s = ensure(playerStats, play.passer.id);
+          s.passAttempts = (s.passAttempts ?? 0) + 1;
+          if (play.yards > 0 || play.touchdown) {
+            s.passCompletions = (s.passCompletions ?? 0) + 1;
+            s.passYards = (s.passYards ?? 0) + play.yards;
+            if (play.touchdown) s.passTDs = (s.passTDs ?? 0) + 1;
+          }
+        }
+        if (play.receiver && rosterIds.has(play.receiver.id) && (play.yards > 0 || play.touchdown)) {
+          const s = ensure(playerStats, play.receiver.id);
+          s.targets = (s.targets ?? 0) + 1;
+          s.receptions = (s.receptions ?? 0) + 1;
+          s.receivingYards = (s.receivingYards ?? 0) + play.yards;
+          if (play.touchdown) s.receivingTDs = (s.receivingTDs ?? 0) + 1;
+        } else if (play.receiver && rosterIds.has(play.receiver.id)) {
+          const s = ensure(playerStats, play.receiver.id);
+          s.targets = (s.targets ?? 0) + 1;
+        }
+        if (play.tackler && rosterIds.has(play.tackler.id)) {
+          const s = ensure(playerStats, play.tackler.id);
+          s.tackles = (s.tackles ?? 0) + 1;
+        }
+      }
+      if (play.type === 'rush') {
+        if (play.rusher && rosterIds.has(play.rusher.id)) {
+          const s = ensure(playerStats, play.rusher.id);
+          s.rushAttempts = (s.rushAttempts ?? 0) + 1;
+          s.rushYards = (s.rushYards ?? 0) + play.yards;
+          if (play.touchdown) s.rushTDs = (s.rushTDs ?? 0) + 1;
+          if (play.turnover) s.fumbles = (s.fumbles ?? 0) + 1;
+        }
+        if (play.tackler && rosterIds.has(play.tackler.id)) {
+          const s = ensure(playerStats, play.tackler.id);
+          s.tackles = (s.tackles ?? 0) + 1;
+          if (play.turnover) s.forcedFumbles = (s.forcedFumbles ?? 0) + 1;
+        }
+      }
+      if (play.type === 'sack') {
+        if (play.sacker && rosterIds.has(play.sacker.id)) {
+          const s = ensure(playerStats, play.sacker.id);
+          s.sacks = (s.sacks ?? 0) + 1;
+          s.tackles = (s.tackles ?? 0) + 1;
+        }
+      }
+      if (play.type === 'interception') {
+        if (play.passer && rosterIds.has(play.passer.id)) {
+          const s = ensure(playerStats, play.passer.id);
+          s.passAttempts = (s.passAttempts ?? 0) + 1;
+          s.interceptions = (s.interceptions ?? 0) + 1;
+        }
+        if (play.interceptor && rosterIds.has(play.interceptor.id)) {
+          const s = ensure(playerStats, play.interceptor.id);
+          s.defensiveINTs = (s.defensiveINTs ?? 0) + 1;
+        }
+      }
+      if (play.type === 'fieldGoal') {
+        if (play.kicker && rosterIds.has(play.kicker.id) && play.fieldGoalMade !== undefined) {
+          const s = ensure(playerStats, play.kicker.id);
+          const idx = plays.indexOf(play);
+          const prevPlay = idx > 0 ? plays[idx - 1] : null;
+          if (prevPlay?.touchdown) {
+            s.extraPointAttempts = (s.extraPointAttempts ?? 0) + 1;
+            if (play.fieldGoalMade) s.extraPointsMade = (s.extraPointsMade ?? 0) + 1;
           } else {
-            (existing as Record<string, number>)[key] = ((existing as Record<string, number>)[key] ?? 0) + ((s as Record<string, number>)[key] ?? 0);
+            s.fieldGoalAttempts = (s.fieldGoalAttempts ?? 0) + 1;
+            if (play.fieldGoalMade) s.fieldGoalsMade = (s.fieldGoalsMade ?? 0) + 1;
           }
         }
       }
     }
+    // Mark gamesPlayed for all healthy roster players
+    for (const p of rosterList) {
+      if (!p.injury || p.injury.weeksLeft === 0) {
+        ensure(playerStats, p.id).gamesPlayed = 1;
+      }
+    }
   }
 
-  mergeIn(homeOffStats);
-  mergeIn(homeDefStats);
-  mergeIn(awayOffStats);
-  mergeIn(awayDefStats);
+  // Home team: offensive stats from home plays + defensive stats from away plays
+  addPlayStats(allHomePlays, homeIds, homeRoster);
+  addPlayStats(allAwayPlays, homeIds, homeRoster);
+  // Away team: offensive stats from away plays + defensive stats from home plays
+  addPlayStats(allAwayPlays, awayIds, awayRoster);
+  addPlayStats(allHomePlays, awayIds, awayRoster);
 
   return {
     ...game,
