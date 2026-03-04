@@ -1968,6 +1968,8 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         const player = state.players.find(p => p.id === playerId);
         if (!player || player.teamId !== state.userTeamId) return false;
+        // Prevent restructuring the same player more than once per season
+        if (player.lastRestructuredSeason === state.season) return false;
 
         const oldSalary = player.contract.salary;
         const capDelta = newSalary - oldSalary; // negative = savings
@@ -1975,7 +1977,7 @@ export const useGameStore = create<GameStore>()(
         set({
           players: state.players.map(p =>
             p.id === playerId
-              ? { ...p, contract: { salary: newSalary, yearsLeft: newYears, guaranteed: generateGuaranteed(newSalary, newYears), totalYears: newYears } }
+              ? { ...p, lastRestructuredSeason: state.season, contract: { salary: newSalary, yearsLeft: newYears, guaranteed: generateGuaranteed(newSalary, newYears), totalYears: newYears } }
               : p,
           ),
           teams: state.teams.map(t =>

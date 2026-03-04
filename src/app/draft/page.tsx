@@ -365,6 +365,7 @@ export default function DraftPage() {
   const deepScoutedCount = Object.values(draftScoutingData).filter(d => d.deepScouted).length;
 
   const [selectedRound, setSelectedRound] = useState(1);
+  const [draftResultsTeamFilter, setDraftResultsTeamFilter] = useState<string>('ALL');
   const [positionFilter, setPositionFilter] = useState<Position | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [scoutPlayerId, setScoutPlayerId] = useState<string | null>(null);
@@ -438,7 +439,7 @@ export default function DraftPage() {
       if (!query) return true;
       return `${player.firstName} ${player.lastName}`.toLowerCase().includes(query);
     })
-    .slice(0, 30);
+    .slice(0, 50);
 
   const currentTeam = teams.find((team) => team.id === currentPickTeamId);
   const nextPickTeam = teams.find((team) => team.id === draftOrder[1]);
@@ -452,8 +453,13 @@ export default function DraftPage() {
         const needs = getTeamNeeds(currentPickTeamId);
         const aNeed = needs.find((n) => n.position === a.position)?.needScore ?? 0;
         const bNeed = needs.find((n) => n.position === b.position)?.needScore ?? 0;
-        let aScore = a.ratings.overall + a.potential * 0.4 + aNeed * 0.2;
-        let bScore = b.ratings.overall + b.potential * 0.4 + bNeed * 0.2;
+        // Use scouted OVR (what the user sees) so bestFit matches the prospect list
+        const aScout = draftScoutingData[a.id];
+        const bScout = draftScoutingData[b.id];
+        const aOvr = aScout ? aScout.scoutedOvr : a.ratings.overall;
+        const bOvr = bScout ? bScout.scoutedOvr : b.ratings.overall;
+        let aScore = aOvr + a.potential * 0.4 + aNeed * 0.2;
+        let bScore = bOvr + b.potential * 0.4 + bNeed * 0.2;
         // K/P are least valuable — heavily penalize in draft rankings
         if (a.position === 'K' || a.position === 'P') aScore *= 0.5;
         if (b.position === 'K' || b.position === 'P') bScore *= 0.5;
@@ -616,23 +622,41 @@ export default function DraftPage() {
           <Card className="col-span-12 lg:col-span-6">
             <CardHeader>
               <CardTitle>Draft Results</CardTitle>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalRounds }, (_, index) => {
-                  const round = index + 1;
-                  return (
-                    <button
-                      key={round}
-                      onClick={() => setSelectedRound(round)}
-                      className={`px-2 py-1 text-xs rounded font-medium transition-colors ${
-                        selectedRound === round
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
-                      }`}
-                    >
-                      {round}
-                    </button>
-                  );
-                })}
+              <div className="flex items-center gap-2">
+                <select
+                  value={draftResultsTeamFilter}
+                  onChange={e => setDraftResultsTeamFilter(e.target.value)}
+                  className="h-7 px-2 text-xs rounded border border-[var(--border)] bg-[var(--surface-2)]"
+                >
+                  <option value="ALL">All Teams</option>
+                  {/* User's team first */}
+                  {teams.filter(t => t.id === userTeamId).map(t => (
+                    <option key={t.id} value={t.id}>{t.city} {t.name} (You)</option>
+                  ))}
+                  {teams.filter(t => t.id !== userTeamId).sort((a, b) => a.city.localeCompare(b.city)).map(t => (
+                    <option key={t.id} value={t.id}>{t.city} {t.name}</option>
+                  ))}
+                </select>
+                {draftResultsTeamFilter === 'ALL' && (
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalRounds }, (_, index) => {
+                      const round = index + 1;
+                      return (
+                        <button
+                          key={round}
+                          onClick={() => setSelectedRound(round)}
+                          className={`px-2 py-1 text-xs rounded font-medium transition-colors ${
+                            selectedRound === round
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+                          }`}
+                        >
+                          {round}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </CardHeader>
             <table className="w-full text-sm">
@@ -646,22 +670,42 @@ export default function DraftPage() {
                 </tr>
               </thead>
               <tbody>
-                {roundRows.map((row) => (
-                  <tr key={row.overallPick} className="border-t border-[var(--border)]">
-                    <td className="py-2 pl-2 text-[var(--text-sec)]">{row.pickInRound} ({row.overallPick})</td>
-                    <td className="py-2 font-semibold">{row.team?.abbreviation ?? '--'}</td>
-                    <td className="py-2">{row.player ? `${row.player.firstName} ${row.player.lastName}` : '--'}</td>
-                    <td className="py-2 text-center">{row.player ? <Badge>{row.player.position}</Badge> : '--'}</td>
-                    <td className="py-2 text-center">
-                      {row.player ? (() => {
-                        const g = pickGrade(row.overallPick, totalPicks, row.player.ratings.overall);
-                        return <span className={`font-bold text-xs ${gradeColor(g)}`}>{g}</span>;
-                      })() : (
-                        '--'
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {(() => {
+                  // When filtering by team, show all that team's picks across all rounds
+                  const rows = draftResultsTeamFilter !== 'ALL'
+                    ? draftResults
+                        .filter(r => r.teamId === draftResultsTeamFilter)
+                        .sort((a, b) => a.overallPick - b.overallPick)
+                        .map(r => ({
+                          overallPick: r.overallPick,
+                          pickInRound: r.pickInRound,
+                          team: teams.find(t => t.id === r.teamId),
+                          player: players.find(p => p.id === r.playerId) ?? null,
+                        }))
+                    : roundRows;
+
+                  return rows.map((row) => (
+                    <tr key={row.overallPick} className={`border-t border-[var(--border)] ${row.team?.id === userTeamId ? 'bg-blue-500/5' : ''}`}>
+                      <td className="py-2 pl-2 text-[var(--text-sec)]">
+                        {draftResultsTeamFilter !== 'ALL'
+                          ? `R${Math.ceil(row.overallPick / picksPerRound)}, #${row.overallPick}`
+                          : `${row.pickInRound} (${row.overallPick})`
+                        }
+                      </td>
+                      <td className="py-2 font-semibold">{row.team?.abbreviation ?? '--'}</td>
+                      <td className="py-2">{row.player ? `${row.player.firstName} ${row.player.lastName}` : '--'}</td>
+                      <td className="py-2 text-center">{row.player ? <Badge>{row.player.position}</Badge> : '--'}</td>
+                      <td className="py-2 text-center">
+                        {row.player ? (() => {
+                          const g = pickGrade(row.overallPick, totalPicks, row.player.ratings.overall);
+                          return <span className={`font-bold text-xs ${gradeColor(g)}`}>{g}</span>;
+                        })() : (
+                          '--'
+                        )}
+                      </td>
+                    </tr>
+                  ));
+                })()}
               </tbody>
             </table>
           </Card>

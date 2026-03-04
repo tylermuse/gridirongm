@@ -113,6 +113,8 @@ export interface Player {
    * Low sentiment → holdouts, locker room problems, unlikely to re-sign.
    */
   mood: number;
+  /** Season when the player last had their contract restructured (prevents repeat restructures) */
+  lastRestructuredSeason?: number;
 }
 
 export interface TeamRecord {

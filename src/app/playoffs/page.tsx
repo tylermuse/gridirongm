@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -271,6 +272,7 @@ export default function PlayoffsPage() {
     champions,
     advanceToResigning,
   } = useGameStore();
+  const router = useRouter();
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
@@ -333,7 +335,7 @@ export default function PlayoffsPage() {
 
           {sbDone && (
             <Button
-              onClick={advanceToResigning}
+              onClick={() => { advanceToResigning(); router.push('/re-sign'); }}
               size="sm"
               variant="primary"
             >

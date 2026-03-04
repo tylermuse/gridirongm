@@ -213,27 +213,39 @@ export default function TradesPage() {
                   userTeam?.draftPicks.find(pk => pk.id === id),
                 ).filter(Boolean) as DraftPick[];
 
-                // Compute team OVR impact for BOTH teams (1-100 scale)
+                // Compute starter-weighted OVR (top 22 starters, not full 53-man roster)
+                // This makes trades of key players show meaningful OVR changes
+                const starterOvr = (roster: Player[]) => {
+                  if (roster.length === 0) return 60;
+                  // Take top N at each position to approximate starters
+                  const starterCounts: Record<string, number> = {
+                    QB: 1, RB: 1, WR: 3, TE: 1, OL: 5, DL: 3, LB: 3, CB: 2, S: 2, K: 0, P: 0,
+                  };
+                  const starters: Player[] = [];
+                  for (const [pos, count] of Object.entries(starterCounts)) {
+                    const atPos = roster.filter(p => p.position === pos).sort((a, b) => b.ratings.overall - a.ratings.overall);
+                    starters.push(...atPos.slice(0, count));
+                  }
+                  if (starters.length === 0) return Math.round(roster.reduce((s, p) => s + p.ratings.overall, 0) / roster.length);
+                  return Math.round(starters.reduce((s, p) => s + p.ratings.overall, 0) / starters.length);
+                };
+
                 const userRoster = players.filter(p => p.teamId === userTeamId && !p.retired);
-                const currentUserOvr = userRoster.length > 0
-                  ? Math.round(userRoster.reduce((s, p) => s + p.ratings.overall, 0) / userRoster.length) : 60;
+                const currentUserOvr = starterOvr(userRoster);
                 const afterUserRoster = [
                   ...userRoster.filter(p => !reqPlayers.find(rp => rp.id === p.id)),
                   ...offPlayers,
                 ];
-                const afterUserOvr = afterUserRoster.length > 0
-                  ? Math.round(afterUserRoster.reduce((s, p) => s + p.ratings.overall, 0) / afterUserRoster.length) : 60;
+                const afterUserOvr = starterOvr(afterUserRoster);
 
                 // Other team's OVR change
                 const otherRoster = players.filter(p => p.teamId === proposal.proposingTeamId && !p.retired);
-                const currentOtherOvr = otherRoster.length > 0
-                  ? Math.round(otherRoster.reduce((s, p) => s + p.ratings.overall, 0) / otherRoster.length) : 60;
+                const currentOtherOvr = starterOvr(otherRoster);
                 const afterOtherRoster = [
                   ...otherRoster.filter(p => !offPlayers.find(op => op.id === p.id)),
                   ...reqPlayers,
                 ];
-                const afterOtherOvr = afterOtherRoster.length > 0
-                  ? Math.round(afterOtherRoster.reduce((s, p) => s + p.ratings.overall, 0) / afterOtherRoster.length) : 60;
+                const afterOtherOvr = starterOvr(afterOtherRoster);
 
                 const userOvrDelta = afterUserOvr - currentUserOvr;
 

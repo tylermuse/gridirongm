@@ -137,6 +137,10 @@ export default function ReSignPage() {
   }
 
   function closeNegotiation() {
+    // Walking away from negotiation = letting the player go
+    if (activePlayerId && !results[activePlayerId]) {
+      handlePass(activePlayerId);
+    }
     setNegotiation(null);
     setActivePlayerId(null);
   }

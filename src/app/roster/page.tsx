@@ -435,7 +435,7 @@ export default function RosterPage() {
 
                         {/* Actions */}
                         <td className="py-2 px-2 text-right pr-3 space-x-1">
-                          {isOffseason && p.contract.yearsLeft >= 2 && (
+                          {isOffseason && p.contract.yearsLeft >= 2 && p.lastRestructuredSeason !== season && (
                             <Button
                               size="sm"
                               variant={restructurePlayer === p.id ? 'primary' : 'ghost'}
