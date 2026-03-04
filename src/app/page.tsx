@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
+import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -317,17 +318,52 @@ function Dashboard() {
             <CardHeader><CardTitle>Team Stats</CardTitle></CardHeader>
             {(() => {
               const gp = Math.max(1, userTeam.record.wins + userTeam.record.losses);
-              const ppg = (userTeam.record.pointsFor / gp).toFixed(1);
-              const pag = (userTeam.record.pointsAgainst / gp).toFixed(1);
+              const ppg = userTeam.record.pointsFor / gp;
+              const pag = userTeam.record.pointsAgainst / gp;
               const totalPassYds = roster.reduce((s, p) => s + p.stats.passYards, 0);
               const totalRushYds = roster.reduce((s, p) => s + p.stats.rushYards, 0);
+              const passPerGame = totalPassYds / gp;
+              const rushPerGame = totalRushYds / gp;
+              const totalYds = totalPassYds + totalRushYds;
+
+              // Compute league rankings
+              const teamStatsList = teams.map(t => {
+                const tgp = Math.max(1, t.record.wins + t.record.losses);
+                const tRoster = players.filter(p => p.teamId === t.id);
+                const tPass = tRoster.reduce((s, p) => s + p.stats.passYards, 0);
+                const tRush = tRoster.reduce((s, p) => s + p.stats.rushYards, 0);
+                return {
+                  id: t.id,
+                  ppg: t.record.pointsFor / tgp,
+                  pag: t.record.pointsAgainst / tgp,
+                  passPerGame: tPass / tgp,
+                  rushPerGame: tRush / tgp,
+                  totalYds: tPass + tRush,
+                };
+              });
+              const rank = (arr: { id: string; val: number }[], desc = true) => {
+                const sorted = [...arr].sort((a, b) => desc ? b.val - a.val : a.val - b.val);
+                return sorted.findIndex(x => x.id === userTeamId) + 1;
+              };
+              const ppgRank = rank(teamStatsList.map(t => ({ id: t.id, val: t.ppg })));
+              const pagRank = rank(teamStatsList.map(t => ({ id: t.id, val: t.pag })), false); // lower is better
+              const passRank = rank(teamStatsList.map(t => ({ id: t.id, val: t.passPerGame })));
+              const rushRank = rank(teamStatsList.map(t => ({ id: t.id, val: t.rushPerGame })));
+              const ydsRank = rank(teamStatsList.map(t => ({ id: t.id, val: t.totalYds })));
+
+              const ordinal = (n: number) => {
+                const s = ['th', 'st', 'nd', 'rd'];
+                const v = n % 100;
+                return n + (s[(v - 20) % 10] || s[v] || s[0]);
+              };
+
               return (
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">PPG</span><span className="font-bold">{ppg}</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Opp PPG</span><span className="font-bold">{pag}</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Pass YDS/G</span><span className="font-bold">{(totalPassYds / gp).toFixed(0)}</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Rush YDS/G</span><span className="font-bold">{(totalRushYds / gp).toFixed(0)}</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Total YDS</span><span className="font-bold">{(totalPassYds + totalRushYds).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">PPG</span><span className="font-bold">{ppg.toFixed(1)} <span className="text-xs text-[var(--text-sec)] font-normal">({ordinal(ppgRank)})</span></span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Opp PPG</span><span className="font-bold">{pag.toFixed(1)} <span className="text-xs text-[var(--text-sec)] font-normal">({ordinal(pagRank)})</span></span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Pass YDS/G</span><span className="font-bold">{passPerGame.toFixed(0)} <span className="text-xs text-[var(--text-sec)] font-normal">({ordinal(passRank)})</span></span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Rush YDS/G</span><span className="font-bold">{rushPerGame.toFixed(0)} <span className="text-xs text-[var(--text-sec)] font-normal">({ordinal(rushRank)})</span></span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Total YDS</span><span className="font-bold">{totalYds.toLocaleString()} <span className="text-xs text-[var(--text-sec)] font-normal">({ordinal(ydsRank)})</span></span></div>
                 </div>
               );
             })()}
@@ -389,64 +425,7 @@ function Dashboard() {
       </div>
 
       {/* Team Roster Modal */}
-      {viewTeamId && (() => {
-        const vt = teams.find(t => t.id === viewTeamId);
-        if (!vt) return null;
-        const teamRoster = players
-          .filter(p => p.teamId === viewTeamId && !p.retired)
-          .sort((a, b) => {
-            const pi = (['QB','RB','WR','TE','OL','DL','LB','CB','S','K','P'] as string[]).indexOf(a.position) - (['QB','RB','WR','TE','OL','DL','LB','CB','S','K','P'] as string[]).indexOf(b.position);
-            return pi !== 0 ? pi : b.ratings.overall - a.ratings.overall;
-          });
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setViewTeamId(null)}>
-            <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] max-w-3xl w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-black text-white" style={{ backgroundColor: vt.primaryColor }}>
-                    {vt.abbreviation}
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-black">{vt.city} {vt.name}</h3>
-                    <div className="text-xs text-[var(--text-sec)]">{vt.record.wins}-{vt.record.losses} · Cap: ${Math.round(vt.totalPayroll)}M / ${vt.salaryCap}M</div>
-                  </div>
-                </div>
-                <button onClick={() => setViewTeamId(null)} className="text-[var(--text-sec)] hover:text-white text-xl">✕</button>
-              </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-[var(--text-sec)] text-xs border-b border-[var(--border)]">
-                    <th className="text-left px-4 py-2">Player</th>
-                    <th className="text-center px-2 py-2">POS</th>
-                    <th className="text-center px-2 py-2">AGE</th>
-                    <th className="text-center px-2 py-2">OVR</th>
-                    <th className="text-right px-4 py-2">Contract</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {teamRoster.map(p => (
-                    <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)]">
-                      <td className="px-4 py-1.5">
-                        <button onClick={() => { setViewTeamId(null); setSelectedPlayerId(p.id); }} className="hover:text-blue-400 transition-colors font-medium">
-                          {p.firstName} {p.lastName}
-                        </button>
-                      </td>
-                      <td className="text-center px-2 py-1.5"><Badge variant="default" size="sm">{p.position}</Badge></td>
-                      <td className="text-center px-2 py-1.5">{p.age}</td>
-                      <td className="text-center px-2 py-1.5">
-                        <span className={`font-bold ${p.ratings.overall >= 80 ? 'text-green-400' : p.ratings.overall >= 65 ? 'text-blue-400' : p.ratings.overall >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
-                          {p.ratings.overall}
-                        </span>
-                      </td>
-                      <td className="text-right px-4 py-1.5 text-[var(--text-sec)]">${p.contract.salary}M × {p.contract.yearsLeft}yr</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })()}
+      <TeamRosterModal teamId={viewTeamId} onClose={() => setViewTeamId(null)} onPlayerClick={(id) => setSelectedPlayerId(id)} />
 
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>

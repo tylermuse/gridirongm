@@ -168,11 +168,15 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
       const minNeed = Math.max(0, limits.min - count);
       const depthNeed = Math.max(0, Math.ceil((limits.min + limits.max) / 2) - count);
       const qualityNeed = Math.max(0, 72 - topOvrByPosition[prospect.position]);
-      const needScore = minNeed * 30 + depthNeed * 8 + qualityNeed;
-      let score = prospect.ratings.overall * 2 + prospect.potential + needScore;
+      // BPA-heavy: talent is king, need is a tiebreaker
+      // OVR * 5 = dominant factor (90 OVR = 450 pts, 65 OVR = 325 pts)
+      // Potential adds modest value, need only matters for roster minimums
+      const needScore = minNeed * 20 + depthNeed * 3 + qualityNeed * 0.5;
+      let score = prospect.ratings.overall * 5 + prospect.potential * 1.5 + needScore;
+      // Small random factor to prevent perfectly predictable drafts
+      score += (Math.random() - 0.5) * 8;
       // K/P are the least important positions — heavily de-value them in draft
       if (prospect.position === 'K' || prospect.position === 'P') {
-        // Only draft K/P if you truly need one (minNeed > 0) and even then with much lower priority
         score = minNeed > 0 ? score * 0.4 : score * 0.15;
       }
       return { playerId: prospect.id, score };

@@ -1,10 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { TeamRosterModal } from '@/components/game/TeamRosterModal';
+import { PlayerModal } from '@/components/game/PlayerModal';
 import type { PlayoffMatchup, Team } from '@/types';
 
 const ROUND_LABELS: Record<number, string> = {
@@ -25,6 +28,7 @@ function TeamRow({
   isWinner,
   isUser,
   isTBD,
+  onTeamClick,
 }: {
   team: Team | undefined;
   seed: number | null;
@@ -32,6 +36,7 @@ function TeamRow({
   isWinner: boolean;
   isUser: boolean;
   isTBD: boolean;
+  onTeamClick?: (teamId: string) => void;
 }) {
   const dim = score !== null && !isWinner;
   return (
@@ -49,15 +54,16 @@ function TeamRow({
         </div>
       ) : (
         <div className="flex-1 flex items-center gap-2 min-w-0">
-          <div
-            className="w-5 h-5 rounded flex items-center justify-center text-[8px] font-black text-white shrink-0"
+          <button
+            onClick={() => team && onTeamClick?.(team.id)}
+            className="w-5 h-5 rounded flex items-center justify-center text-[8px] font-black text-white shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
             style={{ backgroundColor: team?.primaryColor ?? '#555' }}
           >
             {team?.abbreviation ?? '?'}
-          </div>
-          <span className={`text-xs truncate ${isUser ? 'text-blue-400' : ''}`}>
+          </button>
+          <button onClick={() => team && onTeamClick?.(team.id)} className={`text-xs truncate hover:text-blue-400 transition-colors ${isUser ? 'text-blue-400' : ''}`}>
             {team ? `${team.city}` : 'Unknown'}
-          </span>
+          </button>
           {isUser && (
             <span className="text-[9px] font-bold text-blue-400 shrink-0">YOU</span>
           )}
@@ -75,10 +81,12 @@ function MatchupCard({
   matchup,
   teams,
   userTeamId,
+  onTeamClick,
 }: {
   matchup: PlayoffMatchup;
   teams: Team[];
   userTeamId: string;
+  onTeamClick?: (teamId: string) => void;
 }) {
   const homeTeam = matchup.homeTeamId
     ? teams.find(t => t.id === matchup.homeTeamId)
@@ -104,6 +112,7 @@ function MatchupCard({
         isWinner={matchup.winnerId === matchup.homeTeamId}
         isUser={matchup.homeTeamId === userTeamId}
         isTBD={!matchup.homeTeamId}
+        onTeamClick={onTeamClick}
       />
       <div className="border-t border-[var(--border)]" />
       <TeamRow
@@ -113,6 +122,7 @@ function MatchupCard({
         isWinner={matchup.winnerId === matchup.awayTeamId}
         isUser={matchup.awayTeamId === userTeamId}
         isTBD={!matchup.awayTeamId}
+        onTeamClick={onTeamClick}
       />
     </div>
   );
@@ -123,11 +133,13 @@ function ConferenceBracket({
   bracket,
   teams,
   userTeamId,
+  onTeamClick,
 }: {
   conference: 'AFC' | 'NFC';
   bracket: PlayoffMatchup[];
   teams: Team[];
   userTeamId: string;
+  onTeamClick?: (teamId: string) => void;
 }) {
   const confMatchups = bracket.filter(m => m.conference === conference);
   const color = conference === 'AFC' ? 'text-red-400' : 'text-blue-400';
@@ -148,15 +160,16 @@ function ConferenceBracket({
       {/* Bye indicator */}
       {byeTeamObj && (
         <div className="mb-3 flex items-center gap-2 text-xs text-[var(--text-sec)]">
-          <div
-            className="w-5 h-5 rounded flex items-center justify-center text-[8px] font-black text-white shrink-0"
+          <button
+            onClick={() => onTeamClick?.(byeTeamObj.id)}
+            className="w-5 h-5 rounded flex items-center justify-center text-[8px] font-black text-white shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
             style={{ backgroundColor: byeTeamObj.primaryColor }}
           >
             {byeTeamObj.abbreviation}
-          </div>
-          <span>
+          </button>
+          <button onClick={() => onTeamClick?.(byeTeamObj.id)} className="hover:text-blue-400 transition-colors">
             {byeTeamObj.city} {byeTeamObj.name}
-          </span>
+          </button>
           <Badge size="sm" variant="default">#1 Seed — Bye</Badge>
         </div>
       )}
@@ -174,6 +187,7 @@ function ConferenceBracket({
                 matchup={m}
                 teams={teams}
                 userTeamId={userTeamId}
+                onTeamClick={onTeamClick}
               />
             ))}
           </div>
@@ -191,6 +205,7 @@ function ConferenceBracket({
                 matchup={m}
                 teams={teams}
                 userTeamId={userTeamId}
+                onTeamClick={onTeamClick}
               />
             ))}
           </div>
@@ -206,6 +221,7 @@ function ConferenceBracket({
               matchup={confChamp}
               teams={teams}
               userTeamId={userTeamId}
+              onTeamClick={onTeamClick}
             />
           )}
         </div>
@@ -253,8 +269,10 @@ export default function PlayoffsPage() {
     playoffBracket,
     userTeamId,
     champions,
-    advanceToDraft,
+    advanceToResigning,
   } = useGameStore();
+  const [viewTeamId, setViewTeamId] = useState<string | null>(null);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   // Show bracket if it exists (persists through resigning/draft/FA until new season)
   // Only show "not started" message if there's no bracket at all
@@ -315,11 +333,11 @@ export default function PlayoffsPage() {
 
           {sbDone && (
             <Button
-              onClick={advanceToDraft}
+              onClick={advanceToResigning}
               size="sm"
               variant="primary"
             >
-              Advance to Draft →
+              Advance to Re-signing →
             </Button>
           )}
         </div>
@@ -407,6 +425,7 @@ export default function PlayoffsPage() {
               bracket={playoffBracket}
               teams={teams}
               userTeamId={userTeamId}
+              onTeamClick={(id) => setViewTeamId(id)}
             />
           </Card>
           <Card>
@@ -415,6 +434,7 @@ export default function PlayoffsPage() {
               bracket={playoffBracket}
               teams={teams}
               userTeamId={userTeamId}
+              onTeamClick={(id) => setViewTeamId(id)}
             />
           </Card>
         </div>
@@ -429,10 +449,13 @@ export default function PlayoffsPage() {
               matchup={superBowl}
               teams={teams}
               userTeamId={userTeamId}
+              onTeamClick={(id) => setViewTeamId(id)}
             />
           </div>
         </Card>
       </div>
+      <TeamRosterModal teamId={viewTeamId} onClose={() => setViewTeamId(null)} onPlayerClick={(id) => setSelectedPlayerId(id)} />
+      <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
   );
 }

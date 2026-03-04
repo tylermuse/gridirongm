@@ -178,12 +178,25 @@ export function calculateCapSavings(contract: Contract): number {
 
 /**
  * Generates a guaranteed amount for a new contract.
- * NFL-style: ~40-60% of total contract value is guaranteed.
+ * NFL-style: guaranteed money is roughly 1-2 years of salary, NOT a % of total value.
+ * This ensures releasing a player always saves cap space (dead cap < annual salary).
+ * Guaranteed $ is prorated across years, so dead cap = guaranteed * (yearsLeft/totalYears).
+ * For savings to be positive: salary > guaranteed * (yearsLeft/totalYears)
+ * → guaranteed must be < salary * totalYears (always true with these values).
  */
 export function generateGuaranteed(salary: number, years: number): number {
-  const totalValue = salary * years;
-  const guaranteedPct = years <= 1 ? 1.0 : years <= 2 ? 0.65 : years <= 3 ? 0.50 : 0.40;
-  return Math.round(totalValue * guaranteedPct * 10) / 10;
+  // 1-year deal: fully guaranteed (dead cap = salary, no savings anyway)
+  // 2-year deal: ~1.2x salary guaranteed → dead cap in year 1 = 1.2*sal*(2/2) = 1.2*sal...
+  //   but savings = sal - 0.6*sal = 0.4*sal per year remaining
+  // 3-year deal: ~1.5x salary → dead cap year 1 = 1.5*sal*(3/3) = 1.5*sal > salary!
+  // Fix: guaranteed scales so dead cap is always < salary when prorated
+  // Formula: guaranteed = salary * factor where factor < totalYears
+  // This means dead cap = salary * factor * (yearsLeft/totalYears)
+  // For year 1 (yearsLeft = totalYears): dead cap = salary * factor → need factor < 1
+  // So guaranteed = salary * guaranteedYears, where guaranteedYears < 1.0
+  if (years <= 1) return Math.round(salary * 10) / 10; // fully guaranteed
+  const guaranteedFraction = years <= 2 ? 0.75 : years <= 3 ? 0.60 : 0.50;
+  return Math.round(salary * guaranteedFraction * 10) / 10;
 }
 
 export interface DraftPick {
@@ -288,8 +301,8 @@ export interface LeagueSettings {
 }
 
 export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
-  salaryCap: 300,
-  capGrowthRate: 8,
+  salaryCap: 285,
+  capGrowthRate: 5,
   luxuryTaxRate: 1.5,
   leagueMinSalary: 0.75,
   tradeDeadlineWeek: 12,

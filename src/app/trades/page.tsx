@@ -7,6 +7,7 @@ import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import type { Player, DraftPick, Position } from '@/types';
 import { POSITIONS } from '@/types';
 
@@ -51,6 +52,7 @@ export default function TradesPage() {
   const [tradeResult, setTradeResult] = useState<'accepted' | 'rejected' | null>(null);
   const [activeTab, setActiveTab] = useState<'incoming' | 'propose' | 'block'>('incoming');
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [viewTeamId, setViewTeamId] = useState<string | null>(null);
 
   // Trading block state
   const [blockedPlayerIds, setBlockedPlayerIds] = useState<string[]>([]);
@@ -211,41 +213,59 @@ export default function TradesPage() {
                   userTeam?.draftPicks.find(pk => pk.id === id),
                 ).filter(Boolean) as DraftPick[];
 
-                // Compute team OVR impact: avg OVR of players you receive vs send
+                // Compute team OVR impact for BOTH teams (1-100 scale)
                 const userRoster = players.filter(p => p.teamId === userTeamId && !p.retired);
-                const currentAvgOvr = userRoster.length > 0
-                  ? userRoster.reduce((s, p) => s + p.ratings.overall, 0) / userRoster.length : 60;
-                // After trade: remove sent, add received
-                const afterRoster = [
+                const currentUserOvr = userRoster.length > 0
+                  ? Math.round(userRoster.reduce((s, p) => s + p.ratings.overall, 0) / userRoster.length) : 60;
+                const afterUserRoster = [
                   ...userRoster.filter(p => !reqPlayers.find(rp => rp.id === p.id)),
                   ...offPlayers,
                 ];
-                const afterAvgOvr = afterRoster.length > 0
-                  ? afterRoster.reduce((s, p) => s + p.ratings.overall, 0) / afterRoster.length : 60;
-                const ovrDelta = Math.round((afterAvgOvr - currentAvgOvr) * 10) / 10;
+                const afterUserOvr = afterUserRoster.length > 0
+                  ? Math.round(afterUserRoster.reduce((s, p) => s + p.ratings.overall, 0) / afterUserRoster.length) : 60;
+
+                // Other team's OVR change
+                const otherRoster = players.filter(p => p.teamId === proposal.proposingTeamId && !p.retired);
+                const currentOtherOvr = otherRoster.length > 0
+                  ? Math.round(otherRoster.reduce((s, p) => s + p.ratings.overall, 0) / otherRoster.length) : 60;
+                const afterOtherRoster = [
+                  ...otherRoster.filter(p => !offPlayers.find(op => op.id === p.id)),
+                  ...reqPlayers,
+                ];
+                const afterOtherOvr = afterOtherRoster.length > 0
+                  ? Math.round(afterOtherRoster.reduce((s, p) => s + p.ratings.overall, 0) / afterOtherRoster.length) : 60;
+
+                const userOvrDelta = afterUserOvr - currentUserOvr;
 
                 return (
                   <Card key={proposal.id}>
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <div
-                          className="w-6 h-6 rounded flex items-center justify-center text-xs font-black text-white"
+                        <button
+                          onClick={() => proposingTeam && setViewTeamId(proposingTeam.id)}
+                          className="w-6 h-6 rounded flex items-center justify-center text-xs font-black text-white cursor-pointer hover:opacity-80 transition-opacity shrink-0"
                           style={{ backgroundColor: proposingTeam?.primaryColor ?? '#374151' }}
                         >
                           {proposingTeam?.abbreviation?.[0]}
-                        </div>
-                        <span className="font-bold">{proposingTeam?.city} {proposingTeam?.name}</span>
+                        </button>
+                        <button onClick={() => proposingTeam && setViewTeamId(proposingTeam.id)} className="font-bold hover:text-blue-400 transition-colors">{proposingTeam?.city} {proposingTeam?.name}</button>
                         <span className="text-xs text-[var(--text-sec)]">Week {proposal.week}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                          ovrDelta > 0.5 ? 'bg-green-900/40 text-green-400' :
-                          ovrDelta < -0.5 ? 'bg-red-900/40 text-red-400' :
+                          userOvrDelta > 0 ? 'bg-green-900/40 text-green-400' :
+                          userOvrDelta < 0 ? 'bg-red-900/40 text-red-400' :
                           'bg-amber-900/30 text-amber-400'
                         }`}>
-                          Team OVR: {ovrDelta > 0 ? '+' : ''}{ovrDelta}
+                          Your OVR: {currentUserOvr} → {afterUserOvr}
                         </span>
-                        <ValueAssessmentBadge assessment={proposal.valueAssessment} />
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                          afterOtherOvr > currentOtherOvr ? 'bg-green-900/40 text-green-400' :
+                          afterOtherOvr < currentOtherOvr ? 'bg-red-900/40 text-red-400' :
+                          'bg-amber-900/30 text-amber-400'
+                        }`}>
+                          Their OVR: {currentOtherOvr} → {afterOtherOvr}
+                        </span>
                       </div>
                     </div>
 
@@ -636,6 +656,7 @@ export default function TradesPage() {
           </div>
         )}
       </div>
+      <TeamRosterModal teamId={viewTeamId} onClose={() => setViewTeamId(null)} onPlayerClick={(id) => setSelectedPlayerId(id)} />
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
   );

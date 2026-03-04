@@ -6,6 +6,7 @@ import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 
 type StatCategory = 'passYards' | 'rushYards' | 'receivingYards' | 'passTDs' | 'rushTDs' | 'sacks' | 'defensiveINTs' | 'tackles' | 'tacklesForLoss' | 'passDeflections' | 'receptions' | 'forcedFumbles';
 type Tab = 'leaders' | 'teams' | 'power';
@@ -36,6 +37,7 @@ export default function StatsPage() {
   const [tab, setTab] = useState<Tab>('leaders');
   const [statCat, setStatCat] = useState<StatCategory>('passYards');
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [viewTeamId, setViewTeamId] = useState<string | null>(null);
 
   const activePlayers = players.filter(p => !p.retired && p.teamId && p.stats.gamesPlayed >= 1);
 
@@ -137,12 +139,13 @@ export default function StatsPage() {
                       <td className="py-2.5 text-center"><Badge>{p.position}</Badge></td>
                       <td className="py-2.5 text-center">
                         {t && (
-                          <span
-                            className="text-xs font-bold px-1.5 py-0.5 rounded"
+                          <button
+                            onClick={() => setViewTeamId(t.id)}
+                            className="text-xs font-bold px-1.5 py-0.5 rounded cursor-pointer hover:opacity-80 transition-opacity"
                             style={{ backgroundColor: t.primaryColor + '33', color: t.primaryColor }}
                           >
                             {t.abbreviation}
-                          </span>
+                          </button>
                         )}
                       </td>
                       <td className="py-2.5 text-center text-[var(--text-sec)]">{p.stats.gamesPlayed}</td>
@@ -183,7 +186,7 @@ export default function StatsPage() {
                     >
                       <td className="py-2.5 text-center text-[var(--text-sec)] text-xs">{i + 1}</td>
                       <td className="py-2.5">
-                        <div className="flex items-center gap-2">
+                        <button onClick={() => setViewTeamId(ts.team.id)} className="flex items-center gap-2 hover:text-blue-400 transition-colors">
                           <div
                             className="w-5 h-5 rounded text-[9px] font-black text-white flex items-center justify-center"
                             style={{ backgroundColor: ts.team.primaryColor }}
@@ -191,7 +194,7 @@ export default function StatsPage() {
                             {ts.team.abbreviation.slice(0, 3)}
                           </div>
                           <span className={isUser ? 'text-blue-400' : ''}>{ts.team.city} {ts.team.name}</span>
-                        </div>
+                        </button>
                       </td>
                       <td className="py-2.5 text-center">{ts.team.record.wins}</td>
                       <td className="py-2.5 text-center">{ts.team.record.losses}</td>
@@ -241,7 +244,7 @@ export default function StatsPage() {
                         </span>
                       </td>
                       <td className="py-2.5">
-                        <div className="flex items-center gap-2">
+                        <button onClick={() => setViewTeamId(pr.team.id)} className="flex items-center gap-2 hover:text-blue-400 transition-colors">
                           <div
                             className="w-5 h-5 rounded text-[9px] font-black text-white flex items-center justify-center"
                             style={{ backgroundColor: pr.team.primaryColor }}
@@ -249,7 +252,7 @@ export default function StatsPage() {
                             {pr.team.abbreviation.slice(0, 3)}
                           </div>
                           <span className={isUser ? 'text-blue-400' : ''}>{pr.team.city} {pr.team.name}</span>
-                        </div>
+                        </button>
                       </td>
                       <td className="py-2.5 text-center text-[var(--text-sec)]">
                         {pr.team.record.wins}-{pr.team.record.losses}
@@ -266,6 +269,7 @@ export default function StatsPage() {
           </Card>
         )}
       </div>
+      <TeamRosterModal teamId={viewTeamId} onClose={() => setViewTeamId(null)} onPlayerClick={(id) => setSelectedPlayerId(id)} />
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
   );
