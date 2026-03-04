@@ -211,10 +211,18 @@ export default function TradesPage() {
                   userTeam?.draftPicks.find(pk => pk.id === id),
                 ).filter(Boolean) as DraftPick[];
 
-                const proposedOfferedValue = offPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
-                  + offPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
-                const proposedRequestedValue = reqPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
-                  + reqPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
+                // Compute team OVR impact: avg OVR of players you receive vs send
+                const userRoster = players.filter(p => p.teamId === userTeamId && !p.retired);
+                const currentAvgOvr = userRoster.length > 0
+                  ? userRoster.reduce((s, p) => s + p.ratings.overall, 0) / userRoster.length : 60;
+                // After trade: remove sent, add received
+                const afterRoster = [
+                  ...userRoster.filter(p => !reqPlayers.find(rp => rp.id === p.id)),
+                  ...offPlayers,
+                ];
+                const afterAvgOvr = afterRoster.length > 0
+                  ? afterRoster.reduce((s, p) => s + p.ratings.overall, 0) / afterRoster.length : 60;
+                const ovrDelta = Math.round((afterAvgOvr - currentAvgOvr) * 10) / 10;
 
                 return (
                   <Card key={proposal.id}>
@@ -229,24 +237,35 @@ export default function TradesPage() {
                         <span className="font-bold">{proposingTeam?.city} {proposingTeam?.name}</span>
                         <span className="text-xs text-[var(--text-sec)]">Week {proposal.week}</span>
                       </div>
-                      <ValueAssessmentBadge assessment={proposal.valueAssessment} />
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                          ovrDelta > 0.5 ? 'bg-green-900/40 text-green-400' :
+                          ovrDelta < -0.5 ? 'bg-red-900/40 text-red-400' :
+                          'bg-amber-900/30 text-amber-400'
+                        }`}>
+                          Team OVR: {ovrDelta > 0 ? '+' : ''}{ovrDelta}
+                        </span>
+                        <ValueAssessmentBadge assessment={proposal.valueAssessment} />
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 mb-4">
                       <div>
-                        <div className="text-xs font-bold text-green-400 mb-2">You Receive ({proposedOfferedValue} pts)</div>
+                        <div className="text-xs font-bold text-green-400 mb-2">You Receive</div>
                         {offPlayers.map(p => (
                           <div key={p.id} className="flex items-center gap-2 mb-1">
                             <Badge size="sm">{p.position}</Badge>
                             <button onClick={() => setSelectedPlayerId(p.id)} className="text-sm hover:text-blue-400">
                               {p.firstName} {p.lastName}
                             </button>
-                            <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                            <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall} OVR</span>
+                            <span className="text-[10px] text-[var(--text-sec)]">Age {p.age}</span>
                           </div>
                         ))}
                         {offPicks.map(pk => (
-                          <div key={pk.id} className="text-sm text-[var(--text-sec)]">
-                            Round {pk.round} Pick ({pickTradeValue(pk)} pts)
+                          <div key={pk.id} className="flex items-center gap-2 mb-1 text-sm">
+                            <Badge size="sm" variant="default">Pick</Badge>
+                            <span>Round {pk.round} ({pk.year})</span>
                           </div>
                         ))}
                         {offPlayers.length === 0 && offPicks.length === 0 && (
@@ -254,19 +273,21 @@ export default function TradesPage() {
                         )}
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-red-400 mb-2">You Send ({proposedRequestedValue} pts)</div>
+                        <div className="text-xs font-bold text-red-400 mb-2">You Send</div>
                         {reqPlayers.map(p => (
                           <div key={p.id} className="flex items-center gap-2 mb-1">
                             <Badge size="sm">{p.position}</Badge>
                             <button onClick={() => setSelectedPlayerId(p.id)} className="text-sm hover:text-blue-400">
                               {p.firstName} {p.lastName}
                             </button>
-                            <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                            <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall} OVR</span>
+                            <span className="text-[10px] text-[var(--text-sec)]">Age {p.age}</span>
                           </div>
                         ))}
                         {reqPicks.map(pk => (
-                          <div key={pk.id} className="text-sm text-[var(--text-sec)]">
-                            Round {pk.round} Pick ({pickTradeValue(pk)} pts)
+                          <div key={pk.id} className="flex items-center gap-2 mb-1 text-sm">
+                            <Badge size="sm" variant="default">Pick</Badge>
+                            <span>Round {pk.round} ({pk.year})</span>
                           </div>
                         ))}
                         {reqPlayers.length === 0 && reqPicks.length === 0 && (

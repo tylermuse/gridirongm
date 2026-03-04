@@ -31,14 +31,15 @@ function expectedOvrForPick(overallPick: number, totalPicks: number): number {
 function pickGrade(overallPick: number, totalPicks: number, playerOvr: number): string {
   const expected = expectedOvrForPick(overallPick, totalPicks);
   const delta = playerOvr - expected;
-  if (delta >= 10) return 'A+';
-  if (delta >= 6) return 'A';
+  // Wider bands: average picks get B, slight misses still B-, truly bad picks get C/D
+  if (delta >= 12) return 'A+';
+  if (delta >= 7) return 'A';
   if (delta >= 3) return 'B+';
-  if (delta >= 0) return 'B';
-  if (delta >= -3) return 'B-';
-  if (delta >= -6) return 'C+';
-  if (delta >= -9) return 'C';
-  if (delta >= -12) return 'C-';
+  if (delta >= -2) return 'B';
+  if (delta >= -6) return 'B-';
+  if (delta >= -10) return 'C+';
+  if (delta >= -14) return 'C';
+  if (delta >= -18) return 'C-';
   return 'D';
 }
 

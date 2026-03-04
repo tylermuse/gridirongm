@@ -738,7 +738,36 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
     // Don't offer the same position back (not interesting)
     if (aiOffer.position === targetPlayer.position && Math.random() > 0.3) continue;
 
-    const offeredValue = playerTradeValue(aiOffer);
+    let offeredValue = playerTradeValue(aiOffer);
+    const offeredPickIds: string[] = [];
+
+    // ~40% chance to include a draft pick to sweeten the deal
+    if (Math.random() < 0.40) {
+      const aiPicks = aiTeam.draftPicks.filter(pk => pk.year >= state.season);
+      if (aiPicks.length > 0) {
+        // Prefer lower-round picks (less valuable) to add as sweetener
+        const sortedPicks = [...aiPicks].sort((a, b) => b.round - a.round);
+        const pick = sortedPicks[0];
+        offeredPickIds.push(pick.id);
+        offeredValue += pickTradeValue(pick);
+      }
+    }
+
+    // ~20% chance: offer ONLY a draft pick (no player) for a mid-tier player
+    const pickOnlyTrade = Math.random() < 0.20 && targetValue < 200;
+    let offeredPlayerIds = [aiOffer.id];
+    if (pickOnlyTrade) {
+      // Offer a high-value pick instead of a player
+      const aiPicks = aiTeam.draftPicks.filter(pk => pk.year >= state.season && pk.round <= 3);
+      if (aiPicks.length > 0) {
+        const pick = aiPicks[Math.floor(Math.random() * aiPicks.length)];
+        offeredPlayerIds = [];
+        offeredPickIds.length = 0;
+        offeredPickIds.push(pick.id);
+        offeredValue = pickTradeValue(pick);
+      }
+    }
+
     const ratio = offeredValue / Math.max(1, targetValue);
     const valueAssessment: TradeProposal['valueAssessment'] =
       ratio >= 0.9 && ratio <= 1.1 ? 'fair' :
@@ -749,8 +778,8 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
       season: state.season,
       week: state.week,
       proposingTeamId: aiTeam.id,
-      offeredPlayerIds: [aiOffer.id],
-      offeredPickIds: [],
+      offeredPlayerIds,
+      offeredPickIds,
       requestedPlayerIds: [targetPlayer.id],
       requestedPickIds: [],
       status: 'pending',

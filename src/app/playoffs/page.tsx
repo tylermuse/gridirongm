@@ -253,8 +253,6 @@ export default function PlayoffsPage() {
     playoffBracket,
     userTeamId,
     champions,
-    simNextPlayoffGame,
-    simAllPlayoffGames,
     advanceToDraft,
   } = useGameStore();
 
@@ -315,35 +313,15 @@ export default function PlayoffsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            {!sbDone && phase === 'playoffs' && (
-              <>
-                <Button
-                  onClick={simNextPlayoffGame}
-                  size="sm"
-                  variant="secondary"
-                  disabled={!nextGame}
-                >
-                  Sim Next Game
-                </Button>
-                <Button
-                  onClick={simAllPlayoffGames}
-                  size="sm"
-                  variant="secondary"
-                  disabled={!nextGame}
-                >
-                  Sim All Games
-                </Button>
-              </>
-            )}
+          {sbDone && (
             <Button
               onClick={advanceToDraft}
               size="sm"
-              variant={sbDone ? 'primary' : 'secondary'}
+              variant="primary"
             >
-              {sbDone ? 'Advance to Draft →' : 'Skip to Draft'}
+              Advance to Draft →
             </Button>
-          </div>
+          )}
         </div>
 
         {/* ---- Champion Banner ---- */}

@@ -63,8 +63,10 @@ export interface PlayerStats {
   receivingTDs: number;
   // Defense
   tackles: number;
+  tacklesForLoss: number;
   sacks: number;
   defensiveINTs: number;
+  passDeflections: number;
   forcedFumbles: number;
   // Kicking
   fieldGoalAttempts: number;
@@ -369,7 +371,7 @@ export function emptyStats(): PlayerStats {
     passAttempts: 0, passCompletions: 0, passYards: 0, passTDs: 0, interceptions: 0,
     rushAttempts: 0, rushYards: 0, rushTDs: 0, fumbles: 0,
     targets: 0, receptions: 0, receivingYards: 0, receivingTDs: 0,
-    tackles: 0, sacks: 0, defensiveINTs: 0, forcedFumbles: 0,
+    tackles: 0, tacklesForLoss: 0, sacks: 0, defensiveINTs: 0, passDeflections: 0, forcedFumbles: 0,
     fieldGoalAttempts: 0, fieldGoalsMade: 0, extraPointAttempts: 0, extraPointsMade: 0,
   };
 }

@@ -32,15 +32,15 @@ type SortKey = 'name' | 'pos' | 'age' | 'ovr' | 'pot' | 'contract' | 'gp' | 'sta
 /** Returns the label columns for a specific position group */
 function getStatColumns(pos: Position): [string, string] {
   switch (pos) {
-    case 'QB': return ['Pass Yds', 'TD/INT'];
-    case 'RB': return ['Rush Yds', 'Rush TD'];
-    case 'WR': return ['Rec Yds', 'Rec TD'];
-    case 'TE': return ['Rec Yds', 'Rec TD'];
+    case 'QB': return ['CMP/ATT · Yds', 'TD / INT'];
+    case 'RB': return ['ATT · Yds', 'TD / FUM'];
+    case 'WR': return ['REC/TGT · Yds', 'TD'];
+    case 'TE': return ['REC/TGT · Yds', 'TD'];
     case 'OL': return ['GP', ''];
-    case 'DL': return ['Tackles', 'Sacks'];
-    case 'LB': return ['Tackles', 'Sacks'];
-    case 'CB': return ['Tackles', 'INT'];
-    case 'S': return ['Tackles', 'INT'];
+    case 'DL': return ['TKL / TFL', 'SCK'];
+    case 'LB': return ['TKL / TFL', 'SCK / FF'];
+    case 'CB': return ['TKL / PD', 'INT'];
+    case 'S': return ['TKL / PD', 'INT'];
     case 'K': return ['FG', 'XP'];
     case 'P': return ['GP', ''];
     default: return ['', ''];
@@ -51,15 +51,15 @@ function getStatColumns(pos: Position): [string, string] {
 function getStatValues(p: Player): [string, string] {
   const s = p.stats;
   switch (p.position) {
-    case 'QB': return [String(s.passYards), `${s.passTDs}/${s.interceptions}`];
-    case 'RB': return [String(s.rushYards), String(s.rushTDs)];
-    case 'WR': return [String(s.receivingYards), String(s.receivingTDs)];
-    case 'TE': return [String(s.receivingYards), String(s.receivingTDs)];
+    case 'QB': return [`${s.passCompletions}/${s.passAttempts} · ${s.passYards}`, `${s.passTDs} / ${s.interceptions}`];
+    case 'RB': return [`${s.rushAttempts} · ${s.rushYards}`, `${s.rushTDs} / ${s.fumbles}`];
+    case 'WR': return [`${s.receptions}/${s.targets} · ${s.receivingYards}`, String(s.receivingTDs)];
+    case 'TE': return [`${s.receptions}/${s.targets} · ${s.receivingYards}`, String(s.receivingTDs)];
     case 'OL': return [String(s.gamesPlayed), ''];
-    case 'DL': return [String(s.tackles), String(s.sacks)];
-    case 'LB': return [String(s.tackles), String(s.sacks)];
-    case 'CB': return [String(s.tackles), String(s.defensiveINTs)];
-    case 'S': return [String(s.tackles), String(s.defensiveINTs)];
+    case 'DL': return [`${s.tackles} / ${s.tacklesForLoss ?? 0}`, String(s.sacks)];
+    case 'LB': return [`${s.tackles} / ${s.tacklesForLoss ?? 0}`, `${s.sacks} / ${s.forcedFumbles}`];
+    case 'CB': return [`${s.tackles} / ${s.passDeflections ?? 0}`, String(s.defensiveINTs)];
+    case 'S': return [`${s.tackles} / ${s.passDeflections ?? 0}`, String(s.defensiveINTs)];
     case 'K': return [`${s.fieldGoalsMade}/${s.fieldGoalAttempts}`, `${s.extraPointsMade}/${s.extraPointAttempts}`];
     case 'P': return [String(s.gamesPlayed), ''];
     default: return ['', ''];
@@ -71,14 +71,14 @@ function getGenericStat(p: Player): string {
   const s = p.stats;
   if (s.gamesPlayed === 0) return '—';
   switch (p.position) {
-    case 'QB': return `${s.passYards} yd · ${s.passTDs} TD`;
-    case 'RB': return `${s.rushYards} yd · ${s.rushTDs} TD`;
+    case 'QB': return `${s.passCompletions}/${s.passAttempts} · ${s.passYards} yd · ${s.passTDs} TD`;
+    case 'RB': return `${s.rushAttempts} att · ${s.rushYards} yd · ${s.rushTDs} TD`;
     case 'WR':
-    case 'TE': return `${s.receivingYards} yd · ${s.receivingTDs} TD`;
+    case 'TE': return `${s.receptions} rec · ${s.receivingYards} yd · ${s.receivingTDs} TD`;
     case 'DL':
-    case 'LB': return `${s.tackles} tkl · ${s.sacks} sck`;
+    case 'LB': return `${s.tackles} tkl · ${s.tacklesForLoss ?? 0} TFL · ${s.sacks} sck`;
     case 'CB':
-    case 'S': return `${s.tackles} tkl · ${s.defensiveINTs} INT`;
+    case 'S': return `${s.tackles} tkl · ${s.passDeflections ?? 0} PD · ${s.defensiveINTs} INT`;
     case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG`;
     case 'OL':
     case 'P': return `${s.gamesPlayed} GP`;

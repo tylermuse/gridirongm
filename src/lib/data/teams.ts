@@ -21,7 +21,7 @@ export const NFL_TEAMS: TeamTemplate[] = [
   { city: 'Pittsburgh', name: 'Steelers', abbreviation: 'PIT', conference: 'AFC', division: 'North', primaryColor: '#FFB612', secondaryColor: '#101820' },
   // AFC South
   { city: 'Houston', name: 'Texans', abbreviation: 'HOU', conference: 'AFC', division: 'South', primaryColor: '#03202F', secondaryColor: '#A71930' },
-  { city: 'Indianapolis', name: 'Colts', abbreviation: 'IND', conference: 'AFC', division: 'South', primaryColor: '#002C5F', secondaryColor: '#A2AAAD' },
+  { city: 'Indianapolis', name: 'Colts', abbreviation: 'IND', conference: 'AFC', division: 'South', primaryColor: '#004DA2', secondaryColor: '#A2AAAD' },
   { city: 'Jacksonville', name: 'Jaguars', abbreviation: 'JAX', conference: 'AFC', division: 'South', primaryColor: '#006778', secondaryColor: '#D7A22A' },
   { city: 'Tennessee', name: 'Titans', abbreviation: 'TEN', conference: 'AFC', division: 'South', primaryColor: '#0C2340', secondaryColor: '#4B92DB' },
   // AFC West

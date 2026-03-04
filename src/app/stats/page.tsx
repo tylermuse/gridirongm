@@ -7,18 +7,22 @@ import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
-type StatCategory = 'passYards' | 'rushYards' | 'receivingYards' | 'passTDs' | 'rushTDs' | 'sacks' | 'defensiveINTs' | 'tackles';
+type StatCategory = 'passYards' | 'rushYards' | 'receivingYards' | 'passTDs' | 'rushTDs' | 'sacks' | 'defensiveINTs' | 'tackles' | 'tacklesForLoss' | 'passDeflections' | 'receptions' | 'forcedFumbles';
 type Tab = 'leaders' | 'teams' | 'power';
 
 const STAT_OPTIONS: { key: StatCategory; label: string }[] = [
   { key: 'passYards', label: 'Passing Yards' },
   { key: 'rushYards', label: 'Rushing Yards' },
   { key: 'receivingYards', label: 'Receiving Yards' },
+  { key: 'receptions', label: 'Receptions' },
   { key: 'passTDs', label: 'Passing TDs' },
   { key: 'rushTDs', label: 'Rushing TDs' },
+  { key: 'tackles', label: 'Tackles' },
+  { key: 'tacklesForLoss', label: 'Tackles for Loss' },
   { key: 'sacks', label: 'Sacks' },
   { key: 'defensiveINTs', label: 'Interceptions' },
-  { key: 'tackles', label: 'Tackles' },
+  { key: 'passDeflections', label: 'Pass Deflections' },
+  { key: 'forcedFumbles', label: 'Forced Fumbles' },
 ];
 
 function ratingColor(val: number) {
