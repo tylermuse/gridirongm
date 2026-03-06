@@ -1730,7 +1730,9 @@ export const useGameStore = create<GameStore>()(
           const overallPick = totalPicks - draftOrder.length + 1;
           const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
           const round = Math.ceil(overallPick / state.teams.length);
-          const rookieSalary = Math.max(0.5, Math.round((5 - (freeAgentIds.indexOf(pid) / 50)) * 10) / 10);
+          // Rookie salary scale based on draft position (NFL-style exponential decay)
+          // Pick 1: ~$10M, Pick 32: ~$2.8M, Pick 64: ~$1.3M, Pick 128+: ~$0.8M
+          const rookieSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * 10) / 10);
 
           players = players.map(p =>
             p.id === pid
@@ -1784,7 +1786,9 @@ export const useGameStore = create<GameStore>()(
           const overallPick = totalPicks - draftOrder.length + 1;
           const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
           const round = Math.ceil(overallPick / state.teams.length);
-          const rookieSalary = Math.max(0.5, Math.round((5 - (freeAgentIds.indexOf(pid) / 50)) * 10) / 10);
+          // Rookie salary scale based on draft position (NFL-style exponential decay)
+          // Pick 1: ~$10M, Pick 32: ~$2.8M, Pick 64: ~$1.3M, Pick 128+: ~$0.8M
+          const rookieSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * 10) / 10);
 
           players = players.map(p =>
             p.id === pid
