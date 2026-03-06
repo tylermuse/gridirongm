@@ -28,7 +28,7 @@ const RESULT_VARIANTS: Record<string, 'green' | 'blue' | 'red' | 'default'> = {
 
 function PlayerLink({ playerId, children, onSelect }: { playerId: string; children: React.ReactNode; onSelect: (id: string) => void }) {
   return (
-    <button onClick={() => onSelect(playerId)} className="text-blue-400 hover:text-blue-300 transition-colors">
+    <button onClick={() => onSelect(playerId)} className="text-blue-600 hover:text-blue-400 transition-colors">
       {children}
     </button>
   );
@@ -217,16 +217,29 @@ function SeasonDetail({
               <div className="text-xs text-[var(--text-sec)]">Super Bowl Champions</div>
             </div>
           </div>
-          {selected.finalsMvpId && (
-            <div className="mt-3 text-sm">
-              <span className="text-[var(--text-sec)]">Finals MVP: </span>
-              <span className="font-semibold">
-                {playerPosition(selected.finalsMvpId)}{' '}
-                <PlayerLink playerId={selected.finalsMvpId} onSelect={onSelectPlayer}>{playerName(selected.finalsMvpId)}</PlayerLink>
-                <span className="ml-1 text-xs text-[var(--text-sec)]">({teamAbbr(selected.championTeamId)})</span>
-              </span>
-            </div>
-          )}
+          {selected.finalsMvpId && (() => {
+            const gs = selected.finalsMvpGameStats;
+            const pos = playerPosition(selected.finalsMvpId);
+            let sbStatLine = '';
+            if (gs) {
+              if (pos === 'QB') sbStatLine = `${gs.passYards ?? 0} YDS · ${gs.passTDs ?? 0} TD · ${gs.interceptions ?? 0} INT`;
+              else if (pos === 'RB') sbStatLine = `${gs.rushYards ?? 0} YDS · ${gs.rushTDs ?? 0} TD · ${gs.receptions ?? 0} REC`;
+              else if (pos === 'WR' || pos === 'TE') sbStatLine = `${gs.receptions ?? 0} REC · ${gs.receivingYards ?? 0} YDS · ${gs.receivingTDs ?? 0} TD`;
+              else if (pos === 'DL' || pos === 'LB') sbStatLine = `${gs.tackles ?? 0} TKL · ${gs.sacks ?? 0} SCK · ${gs.defensiveINTs ?? 0} INT`;
+              else if (pos === 'CB' || pos === 'S') sbStatLine = `${gs.tackles ?? 0} TKL · ${gs.defensiveINTs ?? 0} INT`;
+            }
+            return (
+              <div className="mt-3 text-sm">
+                <span className="text-[var(--text-sec)]">Super Bowl MVP: </span>
+                <span className="font-semibold">
+                  {pos}{' '}
+                  <PlayerLink playerId={selected.finalsMvpId} onSelect={onSelectPlayer}>{playerName(selected.finalsMvpId)}</PlayerLink>
+                  <span className="ml-1 text-xs text-[var(--text-sec)]">({teamAbbr(selected.championTeamId)})</span>
+                </span>
+                {sbStatLine && <div className="text-xs text-[var(--text-sec)] mt-0.5">SB: {sbStatLine}</div>}
+              </div>
+            );
+          })()}
         </Card>
 
         {/* Best Record */}

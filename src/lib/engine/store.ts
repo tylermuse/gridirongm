@@ -2559,6 +2559,10 @@ export const useGameStore = create<GameStore>()(
           season: state.season,
           championTeamId: champion?.teamId ?? '',
           finalsMvpId: state.finalsMvpPlayerId ?? '',
+          finalsMvpGameStats: (() => {
+            const sbGame = state.schedule.find(g => g.id === 'super-bowl' && g.played);
+            return sbGame && state.finalsMvpPlayerId ? sbGame.playerStats[state.finalsMvpPlayerId] : undefined;
+          })(),
           awards,
           bestRecord: {
             afc: { teamId: bestAfc?.id ?? '', wins: bestAfc?.record.wins ?? 0, losses: bestAfc?.record.losses ?? 0 },
@@ -2845,7 +2849,8 @@ export const useGameStore = create<GameStore>()(
         const slimSchedule = state.schedule.map(game => {
           if (!game.played) return game;
           const isUserGame = game.homeTeamId === state.userTeamId || game.awayTeamId === state.userTeamId;
-          if (isUserGame) return game; // keep full stats for user games (box score)
+          const isSuperBowl = game.id === 'super-bowl';
+          if (isUserGame || isSuperBowl) return game; // keep full stats for user games (box score) and SB (MVP stats)
           // For non-user games, strip heavy data — scores are kept
           return { ...game, playerStats: {}, scoringPlays: undefined };
         });
@@ -2953,7 +2958,8 @@ export const useGameStore = create<GameStore>()(
           for (const game of schedule8) {
             if (!game.played) continue;
             const isUserGame = game.homeTeamId === userTeamId8 || game.awayTeamId === userTeamId8;
-            if (!isUserGame) {
+            const isSuperBowl = game.id === 'super-bowl';
+            if (!isUserGame && !isSuperBowl) {
               game.playerStats = {};
               game.scoringPlays = undefined;
             }

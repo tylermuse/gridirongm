@@ -107,6 +107,8 @@ export interface Player {
   onIR: boolean;
   /** Scouting label assigned at draft (cosmetic flavor) */
   scoutingLabel?: string;
+  /** Deterministic seed for scouting report generation (set at draft class creation) */
+  scoutingSeed?: number;
   /**
    * Player sentiment / mood (0-100).
    * Affected by: team winning, playing time (depth chart), contract satisfaction, team location.
@@ -156,16 +158,16 @@ export interface Team {
 
 /**
  * Calculates the dead cap hit when releasing a player.
- * NFL-style: all remaining guaranteed money accelerates onto the current year's cap.
- * Simplified: guaranteed = ~50% of total contract value for first contract, decreasing over time.
+ * Uses the formula directly to avoid stale stored guaranteed values.
+ * Dead cap is always < salary, so cutting always saves cap space.
  */
 export function calculateDeadCap(contract: Contract): number {
-  const guaranteed = contract.guaranteed ?? 0;
-  const totalYears = contract.totalYears ?? contract.yearsLeft;
-  // Prorate: remaining guaranteed based on years left vs total contract
-  // Early in contract = high dead cap, late in contract = low dead cap
-  const proratedGuaranteed = totalYears > 0 ? guaranteed * (contract.yearsLeft / totalYears) : 0;
-  return Math.round(proratedGuaranteed * 10) / 10;
+  // Compute guaranteed from formula — never trust stored value (may be from old buggy formula)
+  const formulaGuaranteed = generateGuaranteed(contract.salary, contract.yearsLeft);
+  // Use whichever is lower: stored value or formula (handles both old inflated values AND correctly reduced values)
+  const stored = contract.guaranteed ?? Infinity;
+  const guaranteed = Math.min(stored, formulaGuaranteed);
+  return Math.round(guaranteed * 10) / 10;
 }
 
 /**
@@ -187,18 +189,36 @@ export function calculateCapSavings(contract: Contract): number {
  * → guaranteed must be < salary * totalYears (always true with these values).
  */
 export function generateGuaranteed(salary: number, years: number): number {
-  // 1-year deal: fully guaranteed (dead cap = salary, no savings anyway)
-  // 2-year deal: ~1.2x salary guaranteed → dead cap in year 1 = 1.2*sal*(2/2) = 1.2*sal...
-  //   but savings = sal - 0.6*sal = 0.4*sal per year remaining
-  // 3-year deal: ~1.5x salary → dead cap year 1 = 1.5*sal*(3/3) = 1.5*sal > salary!
-  // Fix: guaranteed scales so dead cap is always < salary when prorated
-  // Formula: guaranteed = salary * factor where factor < totalYears
-  // This means dead cap = salary * factor * (yearsLeft/totalYears)
-  // For year 1 (yearsLeft = totalYears): dead cap = salary * factor → need factor < 1
-  // So guaranteed = salary * guaranteedYears, where guaranteedYears < 1.0
-  if (years <= 1) return Math.round(salary * 10) / 10; // fully guaranteed
-  const guaranteedFraction = years <= 2 ? 0.75 : years <= 3 ? 0.60 : 0.50;
-  return Math.round(salary * guaranteedFraction * 10) / 10;
+  // NFL-realistic guaranteed money:
+  // - Star players (high salary) get more guaranteed
+  // - Short deals get higher % guaranteed but lower total
+  // - Cutting a player should almost always save SOME cap space
+  //
+  // Real NFL examples:
+  //   1-year $1M deal: ~$0.2-0.5M guaranteed (signing bonus only)
+  //   1-year $10M deal: ~$5-7M guaranteed
+  //   3-year $15M/yr deal: ~$25-30M total guaranteed (~55-65%)
+  //   5-year $50M/yr deal: ~$100-125M total guaranteed (~40-50%)
+  //
+  // Dead cap = guaranteed * (yearsLeft / totalYears)
+  // Cap savings = salary - deadCap
+  // We want savings > 0 almost always, especially for depth players.
+
+  if (salary <= 1) {
+    // Minimum/low salary: small signing bonus only
+    return Math.round(salary * 0.25 * 10) / 10;
+  }
+
+  // Base guaranteed fraction decreases with contract length
+  // But total guaranteed $ increases with salary (stars get more guaranteed)
+  const baseFraction = years <= 1 ? 0.40 : years <= 2 ? 0.55 : years <= 3 ? 0.50 : years <= 4 ? 0.45 : 0.40;
+
+  // Higher-paid players get slightly more guaranteed (as % of salary)
+  // A $20M/yr player might get 60% guaranteed, a $2M/yr player gets 35%
+  const salaryBonus = Math.min(0.15, (salary / 100) * 0.5);
+
+  const fraction = Math.min(0.70, baseFraction + salaryBonus);
+  return Math.round(salary * fraction * 10) / 10;
 }
 
 export interface DraftPick {
@@ -211,6 +231,21 @@ export interface DraftPick {
   playerId?: string;
 }
 
+export interface ScoringPlay {
+  /** Which quarter (1-4, 5 for OT) */
+  quarter: number;
+  /** Time remaining in the quarter (e.g. "12:34") */
+  timeLeft?: string;
+  /** Team that scored */
+  teamId: string;
+  /** Points scored on this play */
+  points: number;
+  /** Description of the scoring play */
+  description: string;
+  /** Running score after this play: [away, home] */
+  score: [number, number];
+}
+
 export interface GameResult {
   id: string;
   week: number;
@@ -221,6 +256,8 @@ export interface GameResult {
   awayScore: number;
   played: boolean;
   playerStats: Record<string, Partial<PlayerStats>>;
+  /** Scoring play log for box score display */
+  scoringPlays?: ScoringPlay[];
 }
 
 export interface NewsItem {
@@ -253,6 +290,8 @@ export interface SeasonSummary {
   season: number;
   championTeamId: string;
   finalsMvpId: string;
+  /** Super Bowl game stats for the MVP */
+  finalsMvpGameStats?: Partial<PlayerStats>;
   awards: { award: string; playerId: string; teamId: string }[];
   bestRecord: {
     afc: { teamId: string; wins: number; losses: number };
@@ -303,8 +342,8 @@ export interface LeagueSettings {
 }
 
 export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
-  salaryCap: 285,
-  capGrowthRate: 5,
+  salaryCap: 300,
+  capGrowthRate: 7,
   luxuryTaxRate: 1.5,
   leagueMinSalary: 0.75,
   tradeDeadlineWeek: 12,
