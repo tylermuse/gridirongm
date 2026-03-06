@@ -1,5 +1,5 @@
 import type { Player, PlayerRatings, Position, Team } from '@/types';
-import { emptyRecord, emptyStats, POSITIONS } from '@/types';
+import { emptyRecord, emptyStats, POSITIONS, generateGuaranteed } from '@/types';
 import { NFL_TEAMS } from './teams';
 
 function uuid(): string {
@@ -146,9 +146,7 @@ function mapContract(
 ): { salary: number; yearsLeft: number; guaranteed: number; totalYears: number } {
   const salary = Math.max(0.5, Math.round(((contract?.amount ?? 500) / 1000) * 10) / 10);
   const yearsLeft = Math.max(1, (contract?.exp ?? season) - season + 1);
-  const totalValue = salary * yearsLeft;
-  const guaranteedPct = yearsLeft <= 1 ? 1.0 : yearsLeft <= 2 ? 0.65 : yearsLeft <= 3 ? 0.50 : 0.40;
-  return { salary, yearsLeft, guaranteed: Math.round(totalValue * guaranteedPct * 10) / 10, totalYears: yearsLeft };
+  return { salary, yearsLeft, guaranteed: generateGuaranteed(salary, yearsLeft), totalYears: yearsLeft };
 }
 
 export interface ImportedLeagueData {
@@ -184,7 +182,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       primaryColor,
       secondaryColor,
       record: emptyRecord(),
-      salaryCap: 225,
+      salaryCap: 300,
       totalPayroll: 0,
       roster: [],
       draftPicks: [],
@@ -225,7 +223,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       draftYear,
       draftPick: player.draft?.pick ?? null,
       retired: false,
-      injury: player.injury?.type
+      injury: player.injury?.type && player.injury.type !== 'Healthy'
         ? { type: player.injury.type, weeksLeft: Math.max(1, player.injury.gamesRemaining ?? 1) }
         : null,
       ratingHistory: [],
