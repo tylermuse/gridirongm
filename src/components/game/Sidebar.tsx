@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 
 const NAV_ITEMS = [
@@ -62,7 +62,7 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
             <div className="flex gap-1">
               <button
                 onClick={() => { saveToSlot(slot); onClose(); }}
-                className="flex-1 text-xs py-1 rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition-colors"
+                className="flex-1 text-xs py-1 rounded bg-blue-600/20 text-blue-600 hover:bg-blue-600/30 transition-colors"
               >
                 Save
               </button>
@@ -90,9 +90,11 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const {
     season, week, phase, teams, userTeamId, resetLeague,
     newsItems, resigningPlayers, tradeProposals, freeAgents, draftOrder,
+    leagueSettings,
   } = useGameStore();
   const userTeam = teams.find(t => t.id === userTeamId);
   const [showSavePanel, setShowSavePanel] = useState(false);
@@ -117,7 +119,7 @@ export function Sidebar() {
     <aside className="w-56 shrink-0 bg-[var(--surface)] border-r border-[var(--border)] flex flex-col h-screen sticky top-0">
       <div className="p-4 border-b border-[var(--border)]">
         <h1 className="text-xl font-extrabold tracking-tight">
-          <span className="text-blue-400">GRIDIRON</span>
+          <span className="text-blue-600">GRIDIRON</span>
           <span className="text-[var(--text-sec)]"> GM</span>
         </h1>
       </div>
@@ -145,12 +147,20 @@ export function Sidebar() {
 
       <div className="p-3 border-b border-[var(--border)] text-xs">
         <div className="text-[var(--text-sec)]">
-          Season {season} · Week {week} · <span className="text-blue-400">{PHASE_LABELS[phase] ?? phase}</span>
+          Season {season} · Week {week} · <span className="text-blue-600">{PHASE_LABELS[phase] ?? phase}</span>
         </div>
       </div>
 
       <nav className="flex-1 p-2 overflow-y-auto">
-        {NAV_ITEMS.map(item => {
+        {NAV_ITEMS.filter(item => {
+          // Hide Trades link only during playoffs and after regular-season trade deadline
+          if (item.href === '/trades') {
+            if (phase === 'playoffs') return false;
+            const deadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
+            if (phase === 'regular' && week > deadlineWeek + 1) return false;
+          }
+          return true;
+        }).map(item => {
           const active = pathname === item.href;
           const badge = getBadge(item.href);
           return (
@@ -161,7 +171,7 @@ export function Sidebar() {
                 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium mb-0.5
                 transition-colors
                 ${active
-                  ? 'bg-blue-600/15 text-blue-400'
+                  ? 'bg-blue-600/15 text-blue-600'
                   : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'}
               `}
             >
@@ -194,8 +204,8 @@ export function Sidebar() {
           </button>
           {confirmReset ? (
             <button
-              onClick={() => { resetLeague(); setConfirmReset(false); }}
-              className="flex-1 text-xs py-1.5 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors"
+              onClick={() => { resetLeague(); setConfirmReset(false); router.push('/'); }}
+              className="flex-1 text-xs py-1.5 rounded-lg bg-red-600/20 text-red-600 hover:bg-red-600/30 transition-colors"
             >
               Confirm?
             </button>
