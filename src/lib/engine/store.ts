@@ -15,7 +15,7 @@ import { generateSchedule } from './schedule';
 import { simulateGame } from './simulate';
 import { developPlayers } from './development';
 
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 8;
 
 // Defaults for export (UI uses these for display when store isn't accessible)
 export const LEAGUE_MINIMUM_SALARY = DEFAULT_LEAGUE_SETTINGS.leagueMinSalary;
@@ -64,7 +64,7 @@ interface GameStore extends LeagueState {
     counterpartTeamId: string,
   ) => boolean;
   respondToTradeProposal: (proposalId: string, accept: boolean) => boolean;
-  solicitTradingBlockProposals: (playerIds: string[], pickIds: string[], seekPositions: Position[]) => void;
+  solicitTradingBlockProposals: (playerIds: string[], pickIds: string[], seekPositions: Position[], seekDraftPicks?: boolean) => void;
   // PRD-07: Scouting
   setScoutingLevel: (level: 0 | 1 | 2 | 3 | 4) => void;
   deepScoutPlayer: (playerId: string) => void;
@@ -166,14 +166,12 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
       const limits = ROSTER_LIMITS[prospect.position];
       const count = countByPosition[prospect.position];
       const minNeed = Math.max(0, limits.min - count);
-      const depthNeed = Math.max(0, Math.ceil((limits.min + limits.max) / 2) - count);
-      const qualityNeed = Math.max(0, 72 - topOvrByPosition[prospect.position]);
-      // BPA-heavy: talent is king, need is a tiebreaker
-      // OVR * 5 = dominant factor (90 OVR = 450 pts, 65 OVR = 325 pts)
-      // Potential adds modest value, need only matters for roster minimums
-      const needScore = minNeed * 20 + depthNeed * 3 + qualityNeed * 0.5;
-      let score = prospect.ratings.overall * 5 + prospect.potential * 1.5 + needScore;
-      // Small random factor to prevent perfectly predictable drafts
+      // BPA-dominant: OVR is by far the biggest factor.
+      // A 10 OVR gap = 150pts — need bonuses max out at ~25pts and can never bridge that.
+      // This means a 73 OVR S beats a 66 OVR WR even with strong positional need.
+      const needScore = minNeed * 12;
+      let score = prospect.ratings.overall * 15 + prospect.potential * 0.5 + needScore;
+      // Very small random to break ties, not to reshape the board
       score += (Math.random() - 0.5) * 8;
       // K/P are the least important positions — heavily de-value them in draft
       if (prospect.position === 'K' || prospect.position === 'P') {
@@ -247,13 +245,13 @@ function generateWeekNews(
   const { season, week, userTeamId, players, teams } = state;
 
   // Top passer of the week
-  let topPasser: { playerId: string; yards: number; teamId: string } | null = null;
+  let topPasser: { playerId: string; yards: number; teamId: string; game: GameResult } | null = null;
   for (const game of updatedGames) {
     for (const [pid, stats] of Object.entries(game.playerStats)) {
       if ((stats.passYards ?? 0) > (topPasser?.yards ?? 250)) {
         const p = players.find(pl => pl.id === pid);
         if (p && p.teamId) {
-          topPasser = { playerId: pid, yards: stats.passYards ?? 0, teamId: p.teamId };
+          topPasser = { playerId: pid, yards: stats.passYards ?? 0, teamId: p.teamId, game };
         }
       }
     }
@@ -262,11 +260,18 @@ function generateWeekNews(
     const p = players.find(pl => pl.id === topPasser!.playerId);
     const t = teams.find(t => t.id === topPasser!.teamId);
     if (p && t) {
+      const g = topPasser.game;
+      const isHome = g.homeTeamId === t.id;
+      const teamScore = isHome ? g.homeScore : g.awayScore;
+      const oppScore = isHome ? g.awayScore : g.homeScore;
+      const oppTeam = teams.find(ot => ot.id === (isHome ? g.awayTeamId : g.homeTeamId));
+      const result = teamScore > oppScore ? 'win' : teamScore < oppScore ? 'loss' : 'tie';
+      const resultText = result === 'win' ? `${teamScore}-${oppScore} win` : result === 'loss' ? `${oppScore}-${teamScore} loss` : `${teamScore}-${oppScore} tie`;
       news.push(makeNews({
         season, week, type: 'performance',
         teamId: t.id,
         playerIds: [p.id],
-        headline: `${p.firstName} ${p.lastName} threw for ${topPasser.yards} yards in ${t.abbreviation}'s Week ${week} game.`,
+        headline: `${p.firstName} ${p.lastName} threw for ${topPasser.yards} yards in ${t.abbreviation}'s ${resultText} against ${oppTeam?.abbreviation ?? 'opponent'}.`,
         isUserTeam: t.id === userTeamId,
       }));
     }
@@ -395,21 +400,30 @@ const POSITION_SALARY_MULTIPLIER: Partial<Record<Position, number>> = {
   P: 0.25,
 };
 
-function estimateSalary(overall: number, position?: Position): number {
+function estimateSalary(overall: number, position?: Position, age?: number, potential?: number): number {
   // Exponential curve: low-end players get minimum, elite players get $40-55M
-  // Formula: base = ((ovr - 40) / 60) ^ 1.6 * 42
-  // Base (no multiplier):
-  //   OVR 50: ~$2.2M   OVR 60: ~$6.3M   OVR 65: ~$9.4M
-  //   OVR 70: ~$13.2M  OVR 75: ~$17.7M   OVR 80: ~$22.8M
-  //   OVR 85: ~$28.2M  OVR 90: ~$34.2M   OVR 95: ~$40.5M
-  // With QB mult (1.9): 75 OVR → $33.6M, 85 → $53.6M, 90 → $65M
-  // With DL mult (1.35): 80 OVR → $30.8M, 85 → $38.1M, 90 → $46.2M
   const normalized = Math.max(0, (overall - 40) / 60);
   const baseSalary = Math.max(LEAGUE_MINIMUM_SALARY, Math.pow(normalized, 1.6) * 42);
 
   // Position multiplier — QBs command the most, K/P the least
   const posMult = position ? (POSITION_SALARY_MULTIPLIER[position] ?? 1.0) : 1.0;
   let salary = baseSalary * posMult;
+
+  // Age factor: younger players with upside command a premium
+  // Older declining players get discounted
+  if (age !== undefined) {
+    if (age <= 25) salary *= 1.15;       // Young ascending — premium
+    else if (age <= 27) salary *= 1.05;  // Prime years — slight premium
+    else if (age >= 33) salary *= 0.65;  // Declining — steep discount
+    else if (age >= 31) salary *= 0.80;  // Late career — discount
+    else if (age >= 29) salary *= 0.90;  // Starting to age
+  }
+
+  // High-potential young players command more (teams pay for ceiling)
+  if (potential !== undefined && age !== undefined && age <= 27) {
+    const potentialBonus = Math.max(0, potential - overall) * 0.15;
+    salary += potentialBonus;
+  }
 
   // K/P hard cap at $5M
   if (position === 'K' || position === 'P') {
@@ -420,7 +434,7 @@ function estimateSalary(overall: number, position?: Position): number {
 }
 
 function computeResigningEntry(player: Player, team: Team): ResigningEntry {
-  const base = estimateSalary(player.ratings.overall, player.position);
+  const base = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
   const winPct = team.record.wins / Math.max(1, team.record.wins + team.record.losses);
   let mult = 1.0;
   if (winPct < 0.4) mult *= 1.15;
@@ -499,21 +513,20 @@ function buildBracket(seeds: { AFC: string[]; NFC: string[] }, _teams: Team[]): 
       homeScore: null, awayScore: null, winnerId: null,
     });
 
+    // Divisional round: no feedsFrom — re-seeded dynamically in propagateWinner
+    // after all 3 WC games in the conference are decided.
+    // #1 seed plays lowest remaining seed; other two winners play each other.
     matchups.push({
       id: `${c}-div-0`, round: 2, conference: conf,
       homeTeamId: s[0] ?? null, awayTeamId: null,
       homeSeed: 1, awaySeed: null,
       homeScore: null, awayScore: null, winnerId: null,
-      awayFeedsFrom: `${c}-wc-0`,
     });
     matchups.push({
       id: `${c}-div-1`, round: 2, conference: conf,
       homeTeamId: null, awayTeamId: null,
       homeSeed: null, awaySeed: null,
       homeScore: null, awayScore: null, winnerId: null,
-      homeFeedsFrom: `${c}-wc-1`,
-      awayFeedsFrom: `${c}-wc-2`,
-      seedDeterminesHome: true,
     });
 
     matchups.push({
@@ -552,7 +565,7 @@ function propagateWinner(
 
   const winnerSeed = teamSeedMap.get(winnerId) ?? null;
 
-  return matchups.map(m => {
+  let result = matchups.map(m => {
     let updated = { ...m };
 
     if (m.homeFeedsFrom === decidedId) {
@@ -578,6 +591,50 @@ function propagateWinner(
 
     return updated;
   });
+
+  // NFL re-seeding: after all 3 Wild Card games in a conference finish,
+  // assign divisional matchups so #1 plays the LOWEST remaining seed.
+  for (const conf of ['AFC', 'NFC'] as const) {
+    const c = conf.toLowerCase();
+    const wcGames = result.filter(m => m.conference === conf && m.round === 1);
+    const allWcDone = wcGames.every(m => m.winnerId !== null);
+    if (!allWcDone) continue;
+
+    const div0 = result.find(m => m.id === `${c}-div-0`);
+    const div1 = result.find(m => m.id === `${c}-div-1`);
+    if (!div0 || !div1) continue;
+    // Only re-seed if divisional away slots haven't been filled yet
+    if (div0.awayTeamId && div1.homeTeamId && div1.awayTeamId) continue;
+
+    // Collect the 3 wild card winners and sort by seed (ascending = lowest seed first)
+    const wcWinners = wcGames
+      .map(m => m.winnerId!)
+      .sort((a, b) => (teamSeedMap.get(a) ?? 99) - (teamSeedMap.get(b) ?? 99));
+
+    // Highest seed (worst) plays #1 in div-0
+    const lowestSeed = wcWinners[wcWinners.length - 1]; // highest seed number = worst team
+    const remaining = wcWinners.filter(id => id !== lowestSeed);
+    // Sort remaining so higher seed (better) is home
+    remaining.sort((a, b) => (teamSeedMap.get(a) ?? 99) - (teamSeedMap.get(b) ?? 99));
+
+    result = result.map(m => {
+      if (m.id === `${c}-div-0`) {
+        return { ...m, awayTeamId: lowestSeed, awaySeed: teamSeedMap.get(lowestSeed) ?? null };
+      }
+      if (m.id === `${c}-div-1`) {
+        return {
+          ...m,
+          homeTeamId: remaining[0],
+          homeSeed: teamSeedMap.get(remaining[0]) ?? null,
+          awayTeamId: remaining[1],
+          awaySeed: teamSeedMap.get(remaining[1]) ?? null,
+        };
+      }
+      return m;
+    });
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -734,10 +791,14 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
       !p.injury && !TRADE_EXCLUDED_POSITIONS.has(p.position),
     );
     const aiOffer = aiPlayers
-      .map(p => ({ player: p, diff: Math.abs(playerTradeValue(p) - targetValue * 0.9) }))
+      .map(p => ({ player: p, diff: Math.abs(playerTradeValue(p) - targetValue) }))
       .sort((a, b) => a.diff - b.diff)[0]?.player;
 
     if (!aiOffer) continue;
+
+    // Skip if OVR gap is too large (prevents 64-for-85 type proposals)
+    const ovrGap = Math.abs(aiOffer.ratings.overall - targetPlayer.ratings.overall);
+    if (ovrGap > 15) continue;
 
     // Don't offer the same position back (not interesting)
     if (aiOffer.position === targetPlayer.position && Math.random() > 0.3) continue;
@@ -774,8 +835,8 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
 
     const ratio = offeredValue / Math.max(1, targetValue);
     const valueAssessment: TradeProposal['valueAssessment'] =
-      ratio >= 0.9 && ratio <= 1.1 ? 'fair' :
-      ratio > 1.1 ? 'lopsided-you-win' : 'lopsided-they-win';
+      ratio > 1.05 ? 'lopsided-you-win' :
+      ratio >= 0.95 ? 'fair' : 'lopsided-they-win';
 
     proposals.push({
       id: uuid(),
@@ -944,7 +1005,7 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     const depthPos = team.depthChart[p.position]?.indexOf(p.id) ?? -1;
     if (depthPos === 0) moodDelta += 1;
     else if (depthPos > 2) moodDelta -= 1;
-    const marketSalary = estimateSalary(p.ratings.overall, p.position);
+    const marketSalary = estimateSalary(p.ratings.overall, p.position, p.age, p.potential);
     if (p.contract.salary < marketSalary * 0.7) moodDelta -= 1;
     if (team.record.streak >= 3) moodDelta += 1;
     if (team.record.streak <= -3) moodDelta -= 1;
@@ -981,6 +1042,21 @@ export const useGameStore = create<GameStore>()(
           const imported = await loadFbgmLeagueFromUrl();
           const userTeam = imported.teams.find((t) => t.abbreviation === userTeamId) ?? imported.teams[0];
           const schedule = generateSchedule(imported.teams, imported.season);
+
+          // Generate street free agents for in-season signings
+          const fbgmFAs: Player[] = [];
+          for (let i = 0; i < 80; i++) {
+            const pos = POSITIONS[Math.floor(Math.random() * POSITIONS.length)];
+            const talentMean = 40 + Math.random() * 20;
+            const p = generatePlayer(pos, talentMean, {
+              age: 23 + Math.floor(Math.random() * 8),
+              experience: Math.floor(Math.random() * 5),
+              teamId: null,
+            });
+            p.contract = { salary: LEAGUE_MINIMUM_SALARY, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
+            fbgmFAs.push(p);
+          }
+
           set({
             initialized: true,
             season: imported.season,
@@ -988,11 +1064,11 @@ export const useGameStore = create<GameStore>()(
             phase: 'regular',
             userTeamId: userTeam.id,
             teams: imported.teams,
-            players: imported.players,
+            players: [...imported.players, ...fbgmFAs],
             schedule,
             draftOrder: [],
             draftResults: [],
-            freeAgents: [],
+            freeAgents: fbgmFAs.map(p => p.id),
             playoffBracket: null,
             playoffSeeds: null,
             champions: [],
@@ -1041,6 +1117,21 @@ export const useGameStore = create<GameStore>()(
         const userTeam = teams.find(t => t.abbreviation === userTeamId) ?? teams[0];
         const schedule = generateSchedule(teams, 2026);
 
+        // Generate initial street free agents for in-season signings
+        const initialFAs: Player[] = [];
+        for (let i = 0; i < 80; i++) {
+          const pos = POSITIONS[Math.floor(Math.random() * POSITIONS.length)];
+          const talentMean = 40 + Math.random() * 20;
+          const p = generatePlayer(pos, talentMean, {
+            age: 23 + Math.floor(Math.random() * 8),
+            experience: Math.floor(Math.random() * 5),
+            teamId: null,
+          });
+          p.contract = { salary: LEAGUE_MINIMUM_SALARY, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
+          initialFAs.push(p);
+        }
+        allPlayers.push(...initialFAs);
+
         set({
           initialized: true,
           season: 2026,
@@ -1052,7 +1143,7 @@ export const useGameStore = create<GameStore>()(
           schedule,
           draftOrder: [],
           draftResults: [],
-          freeAgents: [],
+          freeAgents: initialFAs.map(p => p.id),
           playoffBracket: null,
           playoffSeeds: null,
           champions: [],
@@ -1222,7 +1313,15 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
-        set({ playoffBracket: updatedBracket, champions: newChampions, newsItems: newNewsItems, finalsMvpPlayerId });
+        // Store the full game result in the schedule so BoxScoreModal can access it
+        const playoffGameResult: GameResult = {
+          ...result,
+          id: matchupId,
+          played: true,
+        };
+        const updatedSchedule = [...state.schedule.filter(g => g.id !== matchupId), playoffGameResult];
+
+        set({ playoffBracket: updatedBracket, champions: newChampions, newsItems: newNewsItems, finalsMvpPlayerId, schedule: updatedSchedule });
       },
 
       simNextPlayoffGame: () => {
@@ -1242,6 +1341,7 @@ export const useGameStore = create<GameStore>()(
         let champions = state.champions ?? [];
         let newsItems = state.newsItems;
         let finalsMvpPlayerId = state.finalsMvpPlayerId;
+        const playoffResults: GameResult[] = [];
 
         for (let guard = 0; guard < 200; guard++) {
           const next = bracket
@@ -1263,6 +1363,8 @@ export const useGameStore = create<GameStore>()(
           };
           const result = simulateGame(tempGame, homeRoster, awayRoster);
           const winnerId = result.homeScore >= result.awayScore ? next.homeTeamId! : next.awayTeamId!;
+
+          playoffResults.push({ ...result, id: next.id, played: true });
 
           // Update bracket in local array
           bracket = bracket.map(m =>
@@ -1301,7 +1403,11 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
-        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId });
+        // Store playoff game results in schedule for BoxScoreModal access
+        const existingIds = new Set(playoffResults.map(r => r.id));
+        const updatedSchedule = [...state.schedule.filter(g => !existingIds.has(g.id)), ...playoffResults];
+
+        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId, schedule: updatedSchedule });
       },
 
       /** Sim all games in the current playoff round (e.g. all Wild Card games). */
@@ -1318,6 +1424,7 @@ export const useGameStore = create<GameStore>()(
         let champions = state.champions ?? [];
         let newsItems = state.newsItems;
         let finalsMvpPlayerId = state.finalsMvpPlayerId;
+        const playoffResults: GameResult[] = [];
 
         for (const game of roundGames) {
           const matchup = bracket.find(m => m.id === game.id);
@@ -1338,13 +1445,19 @@ export const useGameStore = create<GameStore>()(
           const result = simulateGame(tempGame, homeRoster, awayRoster);
           const winnerId = result.homeScore >= result.awayScore ? matchup.homeTeamId! : matchup.awayTeamId!;
 
+          playoffResults.push({ ...result, id: matchup.id, played: true });
+
           bracket = bracket.map(m =>
             m.id === matchup.id ? { ...m, homeScore: result.homeScore, awayScore: result.awayScore, winnerId } : m,
           );
           bracket = propagateWinner(bracket, matchup.id, winnerId, state.playoffSeeds);
         }
 
-        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId });
+        // Store playoff game results in schedule for BoxScoreModal access
+        const existingIds = new Set(playoffResults.map(r => r.id));
+        const updatedSchedule = [...state.schedule.filter(g => !existingIds.has(g.id)), ...playoffResults];
+
+        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId, schedule: updatedSchedule });
       },
 
       // PRD-03: Advance from playoffs to re-signing phase
@@ -1433,7 +1546,7 @@ export const useGameStore = create<GameStore>()(
               p => p.teamId === aiTeam.id && p.contract.yearsLeft === 1 && !p.retired,
             );
             for (const player of expiringFromAI) {
-              const marketSalary = estimateSalary(player.ratings.overall, player.position);
+              const marketSalary = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
               const capSpace = aiTeam.salaryCap - aiTeam.totalPayroll;
               // 70% chance if cap space available
               if (capSpace >= marketSalary && Math.random() < 0.70) {
@@ -1590,6 +1703,8 @@ export const useGameStore = create<GameStore>()(
       simToUserDraftPick: () => {
         const state = get();
         if (state.phase !== 'draft') return;
+        // If it's already the user's pick, do nothing — they need to pick first
+        if (state.draftOrder[0] === state.userTeamId) return;
 
         // Compute all picks in a single pass, then call set() ONCE
         let draftOrder = [...state.draftOrder];
@@ -1852,7 +1967,7 @@ export const useGameStore = create<GameStore>()(
             .map(id => currentPlayers.find(p => p.id === id))
             .filter((p): p is Player => !!p && !p.retired)
             .filter(p => {
-              const sal = estimateSalary(p.ratings.overall, p.position);
+              const sal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential);
               return sal <= capSpace || (capSpace >= LEAGUE_MINIMUM_SALARY && sal <= LEAGUE_MINIMUM_SALARY * 2);
             })
             .sort((a, b) => {
@@ -1864,7 +1979,7 @@ export const useGameStore = create<GameStore>()(
           const target = availableFAs[0];
           if (!target) continue;
 
-          const marketSalary = estimateSalary(target.ratings.overall, target.position);
+          const marketSalary = estimateSalary(target.ratings.overall, target.position, target.age, target.potential);
           const aiSalary = marketSalary <= capSpace ? marketSalary : LEAGUE_MINIMUM_SALARY;
           const aiYears = target.age >= 32 ? 1 : target.age >= 28 ? 2 : 3;
 
@@ -2199,7 +2314,7 @@ export const useGameStore = create<GameStore>()(
         return success;
       },
 
-      solicitTradingBlockProposals: (blockedPlayerIds: string[], blockedPickIds: string[], seekPositions: Position[]) => {
+      solicitTradingBlockProposals: (blockedPlayerIds: string[], blockedPickIds: string[], seekPositions: Position[], seekDraftPicks?: boolean) => {
         const state = get();
         // Block during playoffs and past in-season trade deadline
         if (state.phase === 'playoffs') return;
@@ -2223,7 +2338,10 @@ export const useGameStore = create<GameStore>()(
         const proposals: TradeProposal[] = [];
 
         const aiTeams = state.teams.filter(t => t.id !== state.userTeamId);
-        for (const aiTeam of aiTeams) {
+        // Shuffle AI teams so we get varied proposals each time
+        const shuffledTeams = [...aiTeams].sort(() => Math.random() - 0.5);
+
+        for (const aiTeam of shuffledTeams) {
           const aiRoster = state.players.filter(p => p.teamId === aiTeam.id && !p.retired && !p.injury);
 
           // Interest: does the AI need any of the blocked positions?
@@ -2232,41 +2350,70 @@ export const useGameStore = create<GameStore>()(
             return count <= ROSTER_LIMITS[pos].min;
           });
 
-          // 60% chance if they need the position, 15% random interest otherwise
-          if (!needsBlockedPos && Math.random() > 0.15) continue;
-          if (needsBlockedPos && Math.random() > 0.60) continue;
+          // 85% chance if they need the position, 40% random interest otherwise
+          if (!needsBlockedPos && Math.random() > 0.40) continue;
+          if (needsBlockedPos && Math.random() > 0.85) continue;
 
-          // Build offer: prefer players at positions the user seeks
-          const offerCandidates = aiRoster
-            .filter(p => !blockedPositions.has(p.position)) // don't offer same position back
-            .sort((a, b) => {
-              const aSeek = seekPosSet.has(a.position) ? 1 : 0;
-              const bSeek = seekPosSet.has(b.position) ? 1 : 0;
-              if (aSeek !== bSeek) return bSeek - aSeek;
-              return b.ratings.overall - a.ratings.overall;
-            });
+          // Build offer: when user specified seek positions, try to ONLY use those positions
+          const hasPosPreference = seekPosSet.size > 0;
 
-          // Find combination of players/picks matching ~85-110% of blocked value
+          // First pass: candidates at requested positions only
+          const seekCandidates = aiRoster
+            .filter(p => !blockedPositions.has(p.position) && seekPosSet.has(p.position))
+            .sort((a, b) => b.ratings.overall - a.ratings.overall);
+
+          // Fallback: all non-blocked-position players
+          const allCandidates = aiRoster
+            .filter(p => !blockedPositions.has(p.position))
+            .sort((a, b) => b.ratings.overall - a.ratings.overall);
+
+          // Find combination of players/picks matching ~75-120% of blocked value
           const offeredPlayerIds: string[] = [];
           const offeredPickIds: string[] = [];
           let offeredValue = 0;
-          const targetMin = totalBlockedValue * 0.85;
-          const targetMax = totalBlockedValue * 1.10;
+          const targetMin = totalBlockedValue * 0.75;
+          const targetMax = totalBlockedValue * 1.20;
 
-          for (const candidate of offerCandidates) {
-            if (offeredValue >= targetMin) break;
-            const v = playerTradeValue(candidate);
-            if (offeredValue + v <= targetMax * 1.2) {
-              offeredPlayerIds.push(candidate.id);
-              offeredValue += v;
+          const aiPicks = aiTeam.draftPicks
+            .filter(pk => pk.year >= state.season)
+            .sort((a, b) => pickTradeValue(b) - pickTradeValue(a));
+
+          // If user wants draft picks, lead with picks first
+          if (seekDraftPicks) {
+            for (const pk of aiPicks) {
+              if (offeredValue >= targetMin) break;
+              offeredPickIds.push(pk.id);
+              offeredValue += pickTradeValue(pk);
             }
           }
 
-          // Add picks to fill value gap if needed
+          // First try: fill with seek-position players only
+          if (hasPosPreference) {
+            for (const candidate of seekCandidates) {
+              if (offeredValue >= targetMin) break;
+              const v = playerTradeValue(candidate);
+              if (offeredValue + v <= targetMax * 1.3) {
+                offeredPlayerIds.push(candidate.id);
+                offeredValue += v;
+              }
+            }
+          }
+
+          // If seek positions couldn't fill value, supplement with other positions
           if (offeredValue < targetMin) {
-            const aiPicks = aiTeam.draftPicks
-              .filter(pk => pk.year >= state.season)
-              .sort((a, b) => pickTradeValue(b) - pickTradeValue(a));
+            for (const candidate of allCandidates) {
+              if (offeredValue >= targetMin) break;
+              if (offeredPlayerIds.includes(candidate.id)) continue;
+              const v = playerTradeValue(candidate);
+              if (offeredValue + v <= targetMax * 1.3) {
+                offeredPlayerIds.push(candidate.id);
+                offeredValue += v;
+              }
+            }
+          }
+
+          // Add picks to fill value gap if needed (and not already added)
+          if (offeredValue < targetMin && !seekDraftPicks) {
             for (const pk of aiPicks) {
               if (offeredValue >= targetMin) break;
               offeredPickIds.push(pk.id);
@@ -2279,8 +2426,8 @@ export const useGameStore = create<GameStore>()(
 
           const ratio = offeredValue / Math.max(1, totalBlockedValue);
           const valueAssessment: TradeProposal['valueAssessment'] =
-            ratio >= 0.9 && ratio <= 1.1 ? 'fair' :
-            ratio > 1.1 ? 'lopsided-you-win' : 'lopsided-they-win';
+            ratio > 1.05 ? 'lopsided-you-win' :
+            ratio >= 0.95 ? 'fair' : 'lopsided-they-win';
 
           proposals.push({
             id: uuid(),
@@ -2563,22 +2710,79 @@ export const useGameStore = create<GameStore>()(
         // Grow salary cap for new season
         const settings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
         const capGrowthMult = 1 + (settings.capGrowthRate / 100);
-        const grownTeams = newTeams.map(t => ({
+        let grownTeams = newTeams.map(t => ({
           ...t,
           salaryCap: Math.round(t.salaryCap * capGrowthMult * 10) / 10,
         }));
 
+        // Ensure no team starts short-handed: fill roster gaps with minimum-salary players
+        let allPlayersForNewSeason = [...finalPlayers];
+        for (let ti = 0; ti < grownTeams.length; ti++) {
+          const team = grownTeams[ti];
+          const teamRoster = allPlayersForNewSeason.filter(p => p.teamId === team.id && !p.retired);
+          for (const pos of POSITIONS) {
+            const posCount = teamRoster.filter(p => p.position === pos).length;
+            const needed = ROSTER_LIMITS[pos].min - posCount;
+            if (needed <= 0) continue;
+            for (let j = 0; j < needed; j++) {
+              const fill = generatePlayer(pos, 42 + Math.random() * 15, {
+                age: 23 + Math.floor(Math.random() * 5),
+                experience: 0,
+                teamId: team.id,
+              });
+              fill.contract = { salary: LEAGUE_MINIMUM_SALARY, yearsLeft: 1, guaranteed: 0, totalYears: 1 };
+              allPlayersForNewSeason.push(fill);
+              const newChart = { ...team.depthChart };
+              newChart[pos] = [...(newChart[pos] ?? []), fill.id];
+              grownTeams = grownTeams.map((t, idx) =>
+                idx === ti
+                  ? { ...t, roster: [...t.roster, fill.id], totalPayroll: t.totalPayroll + LEAGUE_MINIMUM_SALARY, depthChart: newChart }
+                  : t,
+              );
+            }
+          }
+        }
+
         const newSchedule = generateSchedule(grownTeams, newSeason);
+
+        // Preserve unsigned players as free agents for in-season signings
+        const unsignedPlayerIds = allPlayersForNewSeason
+          .filter(p => !p.teamId && !p.retired)
+          .map(p => p.id);
+
+        // Generate street free agents so there's always a pool for in-season signings
+        // Real NFL always has ~100+ unsigned players available on the street
+        const streetFATarget = 80;
+        const currentFACount = unsignedPlayerIds.length;
+        const streetFACount = Math.max(0, streetFATarget - currentFACount);
+        const streetFAs: import('@/types').Player[] = [];
+        if (streetFACount > 0) {
+          for (let i = 0; i < streetFACount; i++) {
+            const pos = POSITIONS[Math.floor(Math.random() * POSITIONS.length)];
+            // Street FAs are lower-end players (40-60 OVR) — practice squad / depth
+            const talentMean = 40 + Math.random() * 20;
+            const p = generatePlayer(pos, talentMean, {
+              age: 23 + Math.floor(Math.random() * 8),
+              experience: Math.floor(Math.random() * 5),
+              teamId: null,
+            });
+            p.contract = { salary: LEAGUE_MINIMUM_SALARY, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
+            streetFAs.push(p);
+          }
+          allPlayersForNewSeason.push(...streetFAs);
+        }
+
+        const seasonFreeAgents = [...unsignedPlayerIds, ...streetFAs.map(p => p.id)];
 
         set({
           season: newSeason,
           week: 1,
           phase: 'regular',
-          players: finalPlayers,
+          players: allPlayersForNewSeason,
           teams: grownTeams,
           schedule: newSchedule,
           draftResults: [],
-          freeAgents: [],
+          freeAgents: seasonFreeAgents,
           playoffBracket: null,
           playoffSeeds: null,
           newsItems: retirementNews,
@@ -2628,6 +2832,28 @@ export const useGameStore = create<GameStore>()(
     {
       name: 'gridiron-gm-autosave',
       version: SAVE_VERSION,
+      partialize: (state) => {
+        // Slim down schedule: only keep playerStats/scoringPlays for user-team games
+        // (other games' stats are already aggregated into player .stats objects)
+        const slimSchedule = state.schedule.map(game => {
+          if (!game.played) return game;
+          const isUserGame = game.homeTeamId === state.userTeamId || game.awayTeamId === state.userTeamId;
+          if (isUserGame) return game; // keep full stats for user games (box score)
+          // For non-user games, strip heavy data — scores are kept
+          return { ...game, playerStats: {}, scoringPlays: undefined };
+        });
+
+        // Limit news items to last 200 to prevent unbounded growth
+        const trimmedNews = state.newsItems.slice(-200);
+
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { initialized, ...rest } = state;
+        return {
+          ...rest,
+          schedule: slimSchedule,
+          newsItems: trimmedNews,
+        };
+      },
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
         if (version < 3) {
@@ -2640,7 +2866,7 @@ export const useGameStore = create<GameStore>()(
           state.suppressTradePopups = state.suppressTradePopups ?? false;
           const teams = (state.teams as Array<Record<string, unknown>>) ?? [];
           for (const team of teams) {
-            if ((team.salaryCap as number) < 250) {
+            if ((team.salaryCap as number) < 300) {
               team.salaryCap = DEFAULT_LEAGUE_SETTINGS.salaryCap;
             }
           }
@@ -2668,6 +2894,67 @@ export const useGameStore = create<GameStore>()(
           const teams = (state.teams as Array<Record<string, unknown>>) ?? [];
           for (const team of teams) {
             if (!team.deadCap) team.deadCap = [];
+          }
+        }
+        if (version < 5) {
+          // Ensure salary cap is $300M for all teams
+          const teams5 = (state.teams as Array<Record<string, unknown>>) ?? [];
+          for (const team of teams5) {
+            if ((team.salaryCap as number) < 300) {
+              team.salaryCap = DEFAULT_LEAGUE_SETTINGS.salaryCap;
+            }
+          }
+          const settings5 = (state.leagueSettings as Record<string, unknown>) ?? {};
+          if (!settings5.salaryCap || (settings5.salaryCap as number) < 300) {
+            settings5.salaryCap = DEFAULT_LEAGUE_SETTINGS.salaryCap;
+          }
+          state.leagueSettings = { ...DEFAULT_LEAGUE_SETTINGS, ...settings5 };
+        }
+        if (version < 6) {
+          // Recalculate guaranteed money with realistic formula
+          // Old formula had 1-year deals at 100% guaranteed (no cap savings from cuts)
+          const players6 = (state.players as Array<Record<string, unknown>>) ?? [];
+          for (const p of players6) {
+            const contract = p.contract as Record<string, unknown>;
+            if (contract) {
+              const salary = (contract.salary as number) ?? 0;
+              const years = (contract.yearsLeft as number) ?? 1;
+              contract.guaranteed = generateGuaranteed(salary, years);
+            }
+          }
+        }
+        if (version < 7) {
+          // Fix guaranteed money: old formula used salary*years*pct (total contract value)
+          // which produced absurdly high guaranteed amounts (e.g. $18M on a $6.5M/yr deal).
+          // New formula: guaranteed = salary * fraction (single year basis), always < salary.
+          // Also removed double-proration from calculateDeadCap — guaranteed IS the dead cap now.
+          const players7 = (state.players as Array<Record<string, unknown>>) ?? [];
+          for (const p of players7) {
+            const contract = p.contract as Record<string, unknown>;
+            if (contract) {
+              const salary = (contract.salary as number) ?? 0;
+              const years = (contract.yearsLeft as number) ?? 1;
+              contract.guaranteed = generateGuaranteed(salary, years);
+            }
+          }
+        }
+        if (version < 8) {
+          // Strip playerStats from non-user games to reduce localStorage size
+          // playerStats are the biggest contributor to save bloat
+          const userTeamId8 = state.userTeamId as string;
+          const schedule8 = (state.schedule as Array<Record<string, unknown>>) ?? [];
+          for (const game of schedule8) {
+            if (!game.played) continue;
+            const isUserGame = game.homeTeamId === userTeamId8 || game.awayTeamId === userTeamId8;
+            if (!isUserGame) {
+              game.playerStats = {};
+              game.scoringPlays = undefined;
+            }
+          }
+          // Trim news items to last 200
+          const news8 = (state.newsItems as Array<unknown>) ?? [];
+          if (news8.length > 200) {
+            state.newsItems = news8.slice(-200);
           }
         }
         return state;

@@ -27,13 +27,13 @@ const STAT_OPTIONS: { key: StatCategory; label: string }[] = [
 ];
 
 function ratingColor(val: number) {
-  if (val >= 80) return 'text-green-400';
-  if (val >= 65) return 'text-blue-400';
+  if (val >= 80) return 'text-green-600';
+  if (val >= 65) return 'text-blue-600';
   return 'text-[var(--text-sec)]';
 }
 
 export default function StatsPage() {
-  const { players, teams, userTeamId, week } = useGameStore();
+  const { players, teams, schedule, userTeamId, week } = useGameStore();
   const [tab, setTab] = useState<Tab>('leaders');
   const [statCat, setStatCat] = useState<StatCategory>('passYards');
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -47,14 +47,49 @@ export default function StatsPage() {
     .sort((a, b) => (b.stats[statCat] as number) - (a.stats[statCat] as number))
     .slice(0, 20);
 
+  // Compute opponent pass/rush yards allowed per game
+  // For each played game, sum each team's per-game player stats from the schedule
+  // (playerStats may be stripped for non-user games after reload, so fall back to player aggregate stats)
+  const teamOffYards = new Map<string, { passYards: number; rushYards: number }>();
+  for (const p of players) {
+    if (!p.teamId || p.retired) continue;
+    const entry = teamOffYards.get(p.teamId) ?? { passYards: 0, rushYards: 0 };
+    entry.passYards += p.stats.passYards ?? 0;
+    entry.rushYards += p.stats.rushYards ?? 0;
+    teamOffYards.set(p.teamId, entry);
+  }
+
+  // Build opponent yards map: for each team, sum the offensive yards of all opponents they faced
+  const oppYardsMap = new Map<string, { oppPassYards: number; oppRushYards: number; games: number }>();
+  for (const t of teams) {
+    const gp = Math.max(1, t.record.wins + t.record.losses + t.record.ties);
+    // Sum opponents' per-game average yards for each game this team played
+    const teamGames = schedule.filter(g => g.played && (g.homeTeamId === t.id || g.awayTeamId === t.id));
+    let oppPass = 0, oppRush = 0;
+    for (const g of teamGames) {
+      const oppId = g.homeTeamId === t.id ? g.awayTeamId : g.homeTeamId;
+      const oppOff = teamOffYards.get(oppId);
+      if (oppOff) {
+        const oppTeam = teams.find(tm => tm.id === oppId);
+        const oppGP = Math.max(1, (oppTeam?.record.wins ?? 0) + (oppTeam?.record.losses ?? 0) + (oppTeam?.record.ties ?? 0));
+        oppPass += oppOff.passYards / oppGP;
+        oppRush += oppOff.rushYards / oppGP;
+      }
+    }
+    oppYardsMap.set(t.id, { oppPassYards: oppPass, oppRushYards: oppRush, games: gp });
+  }
+
   // Team stats
   const teamStats = teams.map(t => {
-    const teamPlayers = players.filter(p => p.teamId === t.id);
+    const opp = oppYardsMap.get(t.id);
+    const gp = opp?.games ?? Math.max(1, t.record.wins + t.record.losses);
     return {
       team: t,
       pf: t.record.pointsFor,
       pa: t.record.pointsAgainst,
       diff: t.record.pointsFor - t.record.pointsAgainst,
+      oppPassYPG: opp ? opp.oppPassYards / gp : 0,
+      oppRushYPG: opp ? opp.oppRushYards / gp : 0,
     };
   }).sort((a, b) => b.pf - a.pf);
 
@@ -131,10 +166,10 @@ export default function StatsPage() {
                     >
                       <td className="py-2.5 text-center text-[var(--text-sec)] text-xs">{i + 1}</td>
                       <td className="py-2.5">
-                        <button onClick={() => setSelectedPlayerId(p.id)} className={`font-semibold hover:text-blue-400 transition-colors ${isUser ? 'text-blue-300' : ''}`}>
+                        <button onClick={() => setSelectedPlayerId(p.id)} className={`font-semibold hover:text-blue-600 transition-colors ${isUser ? 'text-blue-600' : ''}`}>
                           {p.firstName} {p.lastName}
                         </button>
-                        {isUser && <span className="ml-1 text-xs text-blue-400">(You)</span>}
+                        {isUser && <span className="ml-1 text-xs text-blue-600">(You)</span>}
                       </td>
                       <td className="py-2.5 text-center"><Badge>{p.position}</Badge></td>
                       <td className="py-2.5 text-center">
@@ -173,7 +208,9 @@ export default function StatsPage() {
                   <th className="text-center pb-3">L</th>
                   <th className="text-center pb-3">PF</th>
                   <th className="text-center pb-3">PA</th>
-                  <th className="text-right pb-3 pr-2">DIFF</th>
+                  <th className="text-center pb-3">DIFF</th>
+                  <th className="text-center pb-3">Opp Pass YDS/G</th>
+                  <th className="text-right pb-3 pr-2">Opp Rush YDS/G</th>
                 </tr>
               </thead>
               <tbody>
@@ -186,23 +223,25 @@ export default function StatsPage() {
                     >
                       <td className="py-2.5 text-center text-[var(--text-sec)] text-xs">{i + 1}</td>
                       <td className="py-2.5">
-                        <button onClick={() => setViewTeamId(ts.team.id)} className="flex items-center gap-2 hover:text-blue-400 transition-colors">
+                        <button onClick={() => setViewTeamId(ts.team.id)} className="flex items-center gap-2 hover:text-blue-600 transition-colors">
                           <div
                             className="w-5 h-5 rounded text-[9px] font-black text-white flex items-center justify-center"
                             style={{ backgroundColor: ts.team.primaryColor }}
                           >
                             {ts.team.abbreviation.slice(0, 3)}
                           </div>
-                          <span className={isUser ? 'text-blue-400' : ''}>{ts.team.city} {ts.team.name}</span>
+                          <span className={isUser ? 'text-blue-600' : ''}>{ts.team.city} {ts.team.name}</span>
                         </button>
                       </td>
                       <td className="py-2.5 text-center">{ts.team.record.wins}</td>
                       <td className="py-2.5 text-center">{ts.team.record.losses}</td>
                       <td className="py-2.5 text-center font-mono">{ts.pf}</td>
                       <td className="py-2.5 text-center font-mono">{ts.pa}</td>
-                      <td className={`py-2.5 text-right pr-2 font-mono ${ts.diff > 0 ? 'text-green-400' : ts.diff < 0 ? 'text-red-400' : ''}`}>
+                      <td className={`py-2.5 text-center font-mono ${ts.diff > 0 ? 'text-green-600' : ts.diff < 0 ? 'text-red-600' : ''}`}>
                         {ts.diff > 0 ? '+' : ''}{ts.diff}
                       </td>
+                      <td className="py-2.5 text-center font-mono">{ts.oppPassYPG.toFixed(1)}</td>
+                      <td className="py-2.5 text-right pr-2 font-mono">{ts.oppRushYPG.toFixed(1)}</td>
                     </tr>
                   );
                 })}
@@ -239,19 +278,19 @@ export default function StatsPage() {
                       className={`border-t border-[var(--border)] ${isUser ? 'bg-blue-500/5 font-semibold' : 'hover:bg-[var(--surface-2)]'} transition-colors`}
                     >
                       <td className="py-2.5 text-center">
-                        <span className={`text-sm font-bold ${i < 3 ? 'text-amber-400' : 'text-[var(--text-sec)]'}`}>
+                        <span className={`text-sm font-bold ${i < 3 ? 'text-amber-600' : 'text-[var(--text-sec)]'}`}>
                           {i + 1}
                         </span>
                       </td>
                       <td className="py-2.5">
-                        <button onClick={() => setViewTeamId(pr.team.id)} className="flex items-center gap-2 hover:text-blue-400 transition-colors">
+                        <button onClick={() => setViewTeamId(pr.team.id)} className="flex items-center gap-2 hover:text-blue-600 transition-colors">
                           <div
                             className="w-5 h-5 rounded text-[9px] font-black text-white flex items-center justify-center"
                             style={{ backgroundColor: pr.team.primaryColor }}
                           >
                             {pr.team.abbreviation.slice(0, 3)}
                           </div>
-                          <span className={isUser ? 'text-blue-400' : ''}>{pr.team.city} {pr.team.name}</span>
+                          <span className={isUser ? 'text-blue-600' : ''}>{pr.team.city} {pr.team.name}</span>
                         </button>
                       </td>
                       <td className="py-2.5 text-center text-[var(--text-sec)]">
