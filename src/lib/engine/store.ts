@@ -1637,8 +1637,9 @@ export const useGameStore = create<GameStore>()(
         const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
         const round = Math.ceil(overallPick / state.teams.length);
 
-        const rookieSalary = Math.round((5 - (state.freeAgents.indexOf(playerId) / 50)) * 10) / 10;
-        const finalSalary = Math.max(0.5, rookieSalary);
+        // Rookie salary scale based on draft position (NFL-style exponential decay)
+        // Pick 1: ~$10M, Pick 32: ~$2.8M, Pick 64: ~$1.3M, Pick 128+: ~$0.8M
+        const finalSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * 10) / 10);
 
         const pickingTeam = state.teams.find(t => t.id === currentPickTeamId);
         if (pickingTeam && currentPickTeamId === state.userTeamId) {
