@@ -191,6 +191,11 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
 
   const teamByTid = new Map(league.teams.map((team) => [team.tid, `team-${team.tid}`]));
 
+  // Manual rating overrides for players whose FBGM ratings are inaccurate
+  const RATING_OVERRIDES: Record<string, { overall?: number; potential?: number }> = {
+    'Conor McGovern': { overall: 58 },
+  };
+
   const players: Player[] = [];
   for (const player of league.players) {
     if (player.tid < 0 || !teamByTid.has(player.tid)) {
@@ -201,6 +206,15 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
     if (!rating) continue;
     const { ratings, potential, position } = mapRatings(rating);
     if (!position) continue;
+
+    // Apply manual overrides
+    const fullName = `${player.firstName} ${player.lastName}`;
+    const override = RATING_OVERRIDES[fullName];
+    if (override) {
+      if (override.overall !== undefined) ratings.overall = override.overall;
+      if (override.potential !== undefined) ratings.overall = Math.max(ratings.overall, override.potential);
+    }
+    const finalPotential = override?.potential ?? potential;
 
     const age = Math.max(20, season - (player.born?.year ?? season - 24));
     const draftYear = player.draft?.year ?? null;
@@ -215,7 +229,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       age,
       experience,
       ratings,
-      potential,
+      potential: finalPotential,
       stats: emptyStats(),
       careerStats: emptyStats(),
       contract,
