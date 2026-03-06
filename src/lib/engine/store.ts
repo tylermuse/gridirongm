@@ -62,6 +62,7 @@ interface GameStore extends LeagueState {
     receivedPlayerIds: string[],
     receivedPickIds: string[],
     counterpartTeamId: string,
+    skipValueCheck?: boolean,
   ) => boolean;
   respondToTradeProposal: (proposalId: string, accept: boolean) => boolean;
   solicitTradingBlockProposals: (playerIds: string[], pickIds: string[], seekPositions: Position[], seekDraftPicks?: boolean) => void;
@@ -2142,6 +2143,7 @@ export const useGameStore = create<GameStore>()(
         receivedPlayerIds,
         receivedPickIds,
         counterpartTeamId,
+        skipValueCheck,
       ) => {
         const state = get();
         // Trade deadline only applies during regular season; offseason trades always allowed
@@ -2170,8 +2172,8 @@ export const useGameStore = create<GameStore>()(
           return sum + (pick ? pickTradeValue(pick) : 0);
         }, 0);
 
-        // AI accepts if within 10% value
-        if (offeredValue < receivedValue * 0.90) return false;
+        // AI accepts if within 10% value (skip for AI-initiated proposals already approved)
+        if (!skipValueCheck && offeredValue < receivedValue * 0.90) return false;
 
         // Block trades that increase user payroll when over the cap
         const offeredSalaryTotal = offeredPlayerIds.reduce((sum, id) => {
@@ -2297,12 +2299,17 @@ export const useGameStore = create<GameStore>()(
           return true;
         }
 
+        // In the proposal, "offered" = what AI offers to user, "requested" = what AI wants from user.
+        // executeTrade expects (userOfferedPlayers, userOfferedPicks, userReceivedPlayers, userReceivedPicks, counterpart).
+        // So: user is offering the "requested" players and receiving the "offered" players.
+        // skipValueCheck=true because the AI already approved this trade when it proposed it.
         const success = get().executeTrade(
-          proposal.offeredPlayerIds,
-          proposal.offeredPickIds,
           proposal.requestedPlayerIds,
           proposal.requestedPickIds,
+          proposal.offeredPlayerIds,
+          proposal.offeredPickIds,
           proposal.proposingTeamId,
+          true, // skip AI value check — AI already proposed this
         );
 
         set({
