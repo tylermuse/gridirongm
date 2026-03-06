@@ -1518,11 +1518,23 @@ export const useGameStore = create<GameStore>()(
       // PRD-03: User passes on re-signing (player will enter FA)
       passOnResigning: (playerId: string) => {
         const state = get();
-        // Set yearsLeft = 0 so they get picked up by advanceToFreeAgency
+        const player = state.players.find(p => p.id === playerId);
+        const salary = player?.contract.salary ?? 0;
+
         set({
           players: state.players.map(p =>
-            p.id === playerId ? { ...p, contract: { ...p.contract, yearsLeft: 0 } } : p,
+            p.id === playerId ? { ...p, teamId: null, contract: { ...p.contract, yearsLeft: 0 } } : p,
           ),
+          teams: state.teams.map(t => {
+            if (t.id !== state.userTeamId) return t;
+            const newRoster = t.roster.filter(id => id !== playerId);
+            const newDepthChart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
+              acc[pos] = (t.depthChart[pos] ?? []).filter(id => id !== playerId);
+              return acc;
+            }, {} as Record<Position, string[]>);
+            return { ...t, roster: newRoster, depthChart: newDepthChart, totalPayroll: Math.max(0, t.totalPayroll - salary) };
+          }),
+          freeAgents: [...state.freeAgents, playerId],
           resigningPlayers: state.resigningPlayers.filter(e => e.playerId !== playerId),
         });
       },
@@ -1534,11 +1546,23 @@ export const useGameStore = create<GameStore>()(
         let updatedTeams = [...state.teams];
 
         if (state.phase === 'resigning') {
-          // Handle remaining unsigned user players
-          const unhandledUserExpiring = state.resigningPlayers.map(e => e.playerId);
+          // Handle remaining unsigned user players — remove from team
+          const unhandledUserExpiring = new Set(state.resigningPlayers.map(e => e.playerId));
+          const unhandledSalary = updatedPlayers
+            .filter(p => unhandledUserExpiring.has(p.id))
+            .reduce((sum, p) => sum + p.contract.salary, 0);
           updatedPlayers = updatedPlayers.map(p =>
-            unhandledUserExpiring.includes(p.id) ? { ...p, contract: { ...p.contract, yearsLeft: 0 } } : p,
+            unhandledUserExpiring.has(p.id) ? { ...p, teamId: null, contract: { ...p.contract, yearsLeft: 0 } } : p,
           );
+          updatedTeams = updatedTeams.map(t => {
+            if (t.id !== state.userTeamId) return t;
+            const newRoster = t.roster.filter(id => !unhandledUserExpiring.has(id));
+            const newDepthChart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
+              acc[pos] = (t.depthChart[pos] ?? []).filter(id => !unhandledUserExpiring.has(id));
+              return acc;
+            }, {} as Record<Position, string[]>);
+            return { ...t, roster: newRoster, depthChart: newDepthChart, totalPayroll: Math.max(0, t.totalPayroll - unhandledSalary) };
+          });
 
           // AI teams auto-resign their own expiring players
           const aiTeams = updatedTeams.filter(t => t.id !== state.userTeamId);
