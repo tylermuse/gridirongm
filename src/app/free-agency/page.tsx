@@ -13,10 +13,10 @@ import { initNegotiation, processOffer, type NegotiationState } from '@/lib/engi
 import { POSITIONS, ROSTER_LIMITS, type Position } from '@/types';
 
 function ratingColor(val: number): string {
-  if (val >= 80) return 'text-green-400';
-  if (val >= 65) return 'text-blue-400';
-  if (val >= 50) return 'text-amber-400';
-  return 'text-red-400';
+  if (val >= 80) return 'text-green-600';
+  if (val >= 65) return 'text-blue-600';
+  if (val >= 50) return 'text-amber-600';
+  return 'text-red-600';
 }
 
 function positionStats(p: { position: string; stats: { gamesPlayed: number; passYards: number; passTDs: number; interceptions: number; rushYards: number; rushTDs: number; receptions: number; receivingYards: number; receivingTDs: number; tackles: number; sacks: number; defensiveINTs: number; fieldGoalsMade: number; fieldGoalAttempts: number } }): string {
@@ -29,13 +29,13 @@ function positionStats(p: { position: string; stats: { gamesPlayed: number; pass
     case 'OL': return `${s.gamesPlayed} GP`;
     case 'DL': case 'LB': return `${s.tackles} TKL / ${s.sacks} SCK`;
     case 'CB': case 'S': return `${s.tackles} TKL / ${s.defensiveINTs} INT`;
-    case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG`;
+    case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG${s.fieldGoalAttempts > 0 ? ` (${Math.round(s.fieldGoalsMade / s.fieldGoalAttempts * 100)}%)` : ''}`;
     case 'P': return `${s.gamesPlayed} GP`;
     default: return `${s.gamesPlayed} GP`;
   }
 }
 
-function estimateSalary(overall: number, position?: string): number {
+function estimateSalary(overall: number, position?: string, age?: number, potential?: number): number {
   const POSITION_SALARY_MULT: Record<string, number> = {
     QB: 1.9, WR: 1.0, CB: 1.05, DL: 1.35, LB: 0.95, OL: 1.0,
     S: 0.9, TE: 0.85, RB: 0.8, K: 0.25, P: 0.25,
@@ -44,6 +44,18 @@ function estimateSalary(overall: number, position?: string): number {
   const baseSalary = Math.max(LEAGUE_MINIMUM_SALARY, Math.pow(normalized, 1.6) * 42);
   const posMult = position ? (POSITION_SALARY_MULT[position] ?? 1.0) : 1.0;
   let salary = baseSalary * posMult;
+  // Age factor: younger players with upside command a premium, older players get discounted
+  if (age !== undefined) {
+    if (age <= 25) salary *= 1.15;
+    else if (age <= 27) salary *= 1.05;
+    else if (age >= 33) salary *= 0.65;
+    else if (age >= 31) salary *= 0.80;
+    else if (age >= 29) salary *= 0.90;
+  }
+  // High-potential young players command more
+  if (potential !== undefined && age !== undefined && age <= 27) {
+    salary += Math.max(0, potential - overall) * 0.15;
+  }
   if (position === 'K' || position === 'P') salary = Math.min(salary, 5.0);
   return Math.round(salary * 10) / 10;
 }
@@ -58,21 +70,23 @@ export default function FreeAgencyPage() {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [walkedAwayIds, setWalkedAwayIds] = useState<Set<string>>(new Set());
 
-  if (phase !== 'freeAgency') {
+  // Allow free agent signings during regular season and freeAgency phase (NFL teams can sign FAs anytime)
+  const canSignFreeAgents = phase === 'freeAgency' || phase === 'regular';
+
+  if (!canSignFreeAgents) {
     return (
       <GameShell>
         <div className="max-w-4xl mx-auto text-center py-20">
           <div className="text-5xl mb-4">✍️</div>
           <h2 className="text-2xl font-black mb-3">Free Agency</h2>
           <p className="text-[var(--text-sec)] mb-6">
-            {phase === 'regular' ? 'Free agency opens in the offseason. Focus on the current season first.' :
-             phase === 'playoffs' ? 'Free agency opens after the Draft phase.' :
+            {phase === 'playoffs' ? 'Free agency opens after the Draft phase.' :
              phase === 'draft' ? 'Free agency opens after the Draft. Finish your picks first.' :
-             "Free agency hasn't started yet."}
+             "Free agency isn't available right now."}
           </p>
           <div className="flex gap-3 justify-center">
-            <a href="/" className="text-sm text-blue-400 hover:underline">Go to Dashboard</a>
-            <a href="/roster" className="text-sm text-blue-400 hover:underline">View Roster</a>
+            <a href="/" className="text-sm text-blue-600 hover:underline">Go to Dashboard</a>
+            <a href="/roster" className="text-sm text-blue-600 hover:underline">View Roster</a>
           </div>
         </div>
       </GameShell>
@@ -102,12 +116,12 @@ export default function FreeAgencyPage() {
     filteredAgents = filteredAgents.filter(p => p.position === filterPos);
   }
   if (affordableOnly) {
-    filteredAgents = filteredAgents.filter(p => estimateSalary(p.ratings.overall, p.position) <= Math.max(capSpace, LEAGUE_MINIMUM_SALARY));
+    filteredAgents = filteredAgents.filter(p => estimateSalary(p.ratings.overall, p.position, p.age, p.potential) <= Math.max(capSpace, LEAGUE_MINIMUM_SALARY));
   }
   const agents = filteredAgents.slice(0, 60);
 
   function startNegotiation(player: typeof agents[0]) {
-    const salary = estimateSalary(player.ratings.overall, player.position);
+    const salary = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
     const neg = initNegotiation(player, salary);
     setNegotiation(neg);
     setOfferSalary(salary);
@@ -140,13 +154,13 @@ export default function FreeAgencyPage() {
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div>
-            <h2 className="text-2xl font-black">Free Agency</h2>
+            <h2 className="text-2xl font-black">{phase === 'regular' ? 'Sign Free Agents' : 'Free Agency'}</h2>
             <div className="text-sm text-[var(--text-sec)]">
-              {allAgents.length} free agents available
+              {allAgents.length} free agents available{phase === 'regular' ? ' · In-season signings' : ''}
             </div>
           </div>
           <div className="text-right">
-            <div className={`text-2xl font-black ${capSpace > 10 ? 'text-green-400' : capSpace > 0 ? 'text-amber-400' : 'text-red-400'}`}>
+            <div className={`text-2xl font-black ${capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}`}>
               ${capSpace}M
             </div>
             <div className="text-xs text-[var(--text-sec)]">Cap Space</div>
@@ -155,9 +169,9 @@ export default function FreeAgencyPage() {
 
         {/* Over-cap warning */}
         {overCap && (
-          <div className="mb-4 p-3 bg-red-900/20 border border-red-800/50 rounded-lg">
-            <div className="text-sm font-bold text-red-400">Over the Salary Cap</div>
-            <div className="text-xs text-red-300/80 mt-1">
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className="text-sm font-bold text-red-600">Over the Salary Cap</div>
+            <div className="text-xs text-red-600/80 mt-1">
               ${Math.abs(capSpace).toFixed(1)}M over the cap · Luxury tax: ${luxuryTax}M ({LUXURY_TAX_RATE}x penalty) · Can only sign at league minimum (${LEAGUE_MINIMUM_SALARY}M/yr)
             </div>
           </div>
@@ -177,7 +191,7 @@ export default function FreeAgencyPage() {
                   const belowIdeal = count < ideal;
                   const barPct = Math.min(100, (count / limits.max) * 100);
                   const barColor = belowMin ? 'bg-red-500' : belowIdeal ? 'bg-amber-500' : 'bg-green-500';
-                  const textColor = belowMin ? 'text-red-400 font-bold' : belowIdeal ? 'text-amber-400' : 'text-[var(--text-sec)]';
+                  const textColor = belowMin ? 'text-red-600 font-bold' : belowIdeal ? 'text-amber-600' : 'text-[var(--text-sec)]';
 
                   return (
                     <button
@@ -196,7 +210,7 @@ export default function FreeAgencyPage() {
                       <span className={`text-xs tabular-nums w-10 text-right ${textColor}`}>
                         {count}/{limits.max}
                       </span>
-                      {belowMin && <span className="text-[10px] text-red-400">NEED</span>}
+                      {belowMin && <span className="text-[10px] text-red-600">NEED</span>}
                     </button>
                   );
                 })}
@@ -216,12 +230,12 @@ export default function FreeAgencyPage() {
                 </div>
                 <div className="border-t border-[var(--border)] pt-2 flex justify-between">
                   <span className="text-[var(--text-sec)]">Space</span>
-                  <span className={`font-mono font-bold ${capSpace > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <span className={`font-mono font-bold ${capSpace > 0 ? 'text-green-600' : 'text-red-600'}`}>
                     ${capSpace}M
                   </span>
                 </div>
                 {luxuryTax > 0 && (
-                  <div className="flex justify-between text-red-400">
+                  <div className="flex justify-between text-red-600">
                     <span>Luxury Tax</span>
                     <span className="font-mono">${luxuryTax}M</span>
                   </div>
@@ -286,15 +300,15 @@ export default function FreeAgencyPage() {
                         key={i}
                         className={`text-sm rounded-lg px-3 py-2 ${
                           msg.type === 'result' && negotiation.outcome === 'accepted'
-                            ? 'bg-green-900/30 border border-green-700/50 text-green-300'
+                            ? 'bg-green-50 border border-green-200 text-green-700'
                             : msg.type === 'result' && negotiation.outcome === 'rejected'
-                            ? 'bg-red-900/30 border border-red-700/50 text-red-300'
+                            ? 'bg-red-50 border border-red-200 text-red-700'
                             : msg.type === 'counter'
-                            ? 'bg-amber-900/20 border border-amber-700/30 text-amber-200'
+                            ? 'bg-amber-50 border border-amber-200 text-amber-700'
                             : msg.type === 'negative'
-                            ? 'bg-red-900/10 border border-red-800/20 text-red-300/90'
+                            ? 'bg-red-50 border border-red-200 text-red-600'
                             : msg.sender === 'system'
-                            ? 'bg-blue-900/10 border border-blue-800/20 text-blue-300/90'
+                            ? 'bg-blue-50 border border-blue-200 text-blue-600'
                             : 'bg-[var(--surface)] text-[var(--text)]'
                         }`}
                       >
@@ -308,9 +322,9 @@ export default function FreeAgencyPage() {
 
                   {/* Outcome banners */}
                   {negotiation.outcome === 'accepted' && (
-                    <div className="bg-green-900/30 border border-green-600 rounded-lg p-4 text-center mb-3">
-                      <div className="text-lg font-black text-green-400">SIGNED!</div>
-                      <div className="text-sm text-green-300">
+                    <div className="bg-green-50 border border-green-600 rounded-lg p-4 text-center mb-3">
+                      <div className="text-lg font-black text-green-600">SIGNED!</div>
+                      <div className="text-sm text-green-600">
                         {negotiation.playerName} signed for ${negotiation.currentOfferSalary}M/yr for {negotiation.currentOfferYears} year{negotiation.currentOfferYears > 1 ? 's' : ''}
                       </div>
                       <Button size="sm" variant="secondary" onClick={closeNegotiation} className="mt-3">Done</Button>
@@ -318,9 +332,9 @@ export default function FreeAgencyPage() {
                   )}
 
                   {negotiation.outcome === 'rejected' && (
-                    <div className="bg-red-900/30 border border-red-600 rounded-lg p-4 text-center mb-3">
-                      <div className="text-lg font-black text-red-400">REJECTED</div>
-                      <div className="text-sm text-red-300">
+                    <div className="bg-red-50 border border-red-600 rounded-lg p-4 text-center mb-3">
+                      <div className="text-lg font-black text-red-600">REJECTED</div>
+                      <div className="text-sm text-red-600">
                         {negotiation.playerName} rejected your offer and walked away.
                       </div>
                       <Button size="sm" variant="secondary" onClick={walkAway} className="mt-3">Dismiss</Button>
@@ -334,7 +348,7 @@ export default function FreeAgencyPage() {
                         <label className="text-xs text-[var(--text-sec)] block mb-1">
                           Salary: <span className="font-mono font-bold text-[var(--text)]">${offerSalary.toFixed(1)}M/yr</span>
                           {overCap && offerSalary > LEAGUE_MINIMUM_SALARY && (
-                            <span className="text-red-400 ml-2">(over cap — min only)</span>
+                            <span className="text-red-600 ml-2">(over cap — min only)</span>
                           )}
                         </label>
                         <input
@@ -348,7 +362,7 @@ export default function FreeAgencyPage() {
                         />
                         <div className="flex justify-between text-[10px] text-[var(--text-sec)]">
                           <span>${LEAGUE_MINIMUM_SALARY}M</span>
-                          <span className="text-amber-400">Asking: ${negotiation.askingSalary}M</span>
+                          <span className="text-amber-600">Asking: ${negotiation.askingSalary}M</span>
                           <span>${(negotiation.askingSalary * 1.3).toFixed(1)}M</span>
                         </div>
                       </div>
@@ -401,17 +415,17 @@ export default function FreeAgencyPage() {
                 </thead>
                 <tbody>
                   {agents.map(p => {
-                    const salary = estimateSalary(p.ratings.overall, p.position);
+                    const salary = estimateSalary(p.ratings.overall, p.position, p.age, p.potential);
                     const canAfford = !overCap || salary <= LEAGUE_MINIMUM_SALARY;
                     return (
                       <tr
                         key={p.id}
                         className={`border-t border-[var(--border)] transition-colors ${
-                          negotiation?.playerId === p.id ? 'bg-blue-900/20' : 'hover:bg-[var(--surface-2)]'
+                          negotiation?.playerId === p.id ? 'bg-blue-50' : 'hover:bg-[var(--surface-2)]'
                         }`}
                       >
                         <td className="py-2.5 pl-2">
-                          <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-400 transition-colors">
+                          <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-600 transition-colors">
                             {p.firstName} {p.lastName}
                           </button>
                         </td>

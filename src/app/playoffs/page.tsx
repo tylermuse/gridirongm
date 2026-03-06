@@ -257,7 +257,7 @@ function posStatLine(p: { position: string; stats: StatShape }, overrideStats?: 
     case 'OL': return `${s.gamesPlayed} GP`;
     case 'DL': case 'LB': return `${s.tackles} TKL · ${s.sacks.toFixed(1)} SCK · ${s.defensiveINTs} INT`;
     case 'CB': case 'S': return `${s.tackles} TKL · ${s.defensiveINTs} INT`;
-    case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG`;
+    case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG${s.fieldGoalAttempts > 0 ? ` (${Math.round(s.fieldGoalsMade / s.fieldGoalAttempts * 100)}%)` : ''}`;
     case 'P': return `${s.gamesPlayed} GP`;
     default: return `${s.gamesPlayed} GP`;
   }

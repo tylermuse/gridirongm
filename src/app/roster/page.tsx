@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
@@ -12,17 +13,17 @@ import type { Player, Position } from '@/types';
 import { POSITIONS, ROSTER_LIMITS } from '@/types';
 
 function ratingColor(val: number): string {
-  if (val >= 85) return 'text-green-400';
-  if (val >= 70) return 'text-blue-400';
-  if (val >= 55) return 'text-amber-400';
-  return 'text-red-400';
+  if (val >= 85) return 'text-green-600';
+  if (val >= 70) return 'text-blue-600';
+  if (val >= 55) return 'text-amber-600';
+  return 'text-red-600';
 }
 
 function ratingBg(val: number): string {
-  if (val >= 85) return 'bg-green-900/40';
-  if (val >= 70) return 'bg-blue-900/40';
-  if (val >= 55) return 'bg-amber-900/30';
-  return 'bg-red-900/30';
+  if (val >= 85) return 'bg-green-100';
+  if (val >= 70) return 'bg-blue-100';
+  if (val >= 55) return 'bg-amber-50';
+  return 'bg-red-50';
 }
 
 const DEPTH_LABELS = ['Starter', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
@@ -60,7 +61,7 @@ function getStatValues(p: Player): [string, string] {
     case 'LB': return [`${s.tackles} / ${s.tacklesForLoss ?? 0}`, `${s.sacks} / ${s.forcedFumbles}`];
     case 'CB': return [`${s.tackles} / ${s.passDeflections ?? 0}`, String(s.defensiveINTs)];
     case 'S': return [`${s.tackles} / ${s.passDeflections ?? 0}`, String(s.defensiveINTs)];
-    case 'K': return [`${s.fieldGoalsMade}/${s.fieldGoalAttempts}`, `${s.extraPointsMade}/${s.extraPointAttempts}`];
+    case 'K': return [`${s.fieldGoalsMade}/${s.fieldGoalAttempts}${s.fieldGoalAttempts > 0 ? ` (${Math.round(s.fieldGoalsMade / s.fieldGoalAttempts * 100)}%)` : ''}`, `${s.extraPointsMade}/${s.extraPointAttempts}`];
     case 'P': return [String(s.gamesPlayed), ''];
     default: return ['', ''];
   }
@@ -71,7 +72,7 @@ function getGenericStat(p: Player): string {
   const s = p.stats;
   if (s.gamesPlayed === 0) return '—';
   switch (p.position) {
-    case 'QB': return `${s.passCompletions}/${s.passAttempts} · ${s.passYards} yd · ${s.passTDs} TD`;
+    case 'QB': return `${s.passCompletions}/${s.passAttempts} · ${s.passYards} yd · ${s.passTDs} TD · ${s.interceptions} INT`;
     case 'RB': return `${s.rushAttempts} att · ${s.rushYards} yd · ${s.rushTDs} TD`;
     case 'WR':
     case 'TE': return `${s.receptions} rec · ${s.receivingYards} yd · ${s.receivingTDs} TD`;
@@ -79,7 +80,7 @@ function getGenericStat(p: Player): string {
     case 'LB': return `${s.tackles} tkl · ${s.tacklesForLoss ?? 0} TFL · ${s.sacks} sck`;
     case 'CB':
     case 'S': return `${s.tackles} tkl · ${s.passDeflections ?? 0} PD · ${s.defensiveINTs} INT`;
-    case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG`;
+    case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG${s.fieldGoalAttempts > 0 ? ` (${Math.round(s.fieldGoalsMade / s.fieldGoalAttempts * 100)}%)` : ''}`;
     case 'OL':
     case 'P': return `${s.gamesPlayed} GP`;
     default: return '—';
@@ -87,11 +88,13 @@ function getGenericStat(p: Player): string {
 }
 
 export default function RosterPage() {
+  const router = useRouter();
   const {
     players, teams, userTeamId, season,
     releasePlayer, placeOnIR, activateFromIR,
     reorderDepthChart, restructureContract,
-    phase, seasonHistory,
+    solicitTradingBlockProposals,
+    phase, week, seasonHistory, leagueSettings,
   } = useGameStore();
 
   const [filterPos, setFilterPos] = useState<Position | 'ALL'>('ALL');
@@ -104,6 +107,32 @@ export default function RosterPage() {
 
   // Whether we're in an offseason phase where restructuring makes sense
   const isOffseason = phase !== 'regular';
+
+  // Whether trades are currently allowed
+  const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
+  const isTradeOpen = phase !== 'playoffs' && !(phase === 'regular' && week > tradeDeadlineWeek + 1);
+
+  // Action menu state — uses fixed positioning to escape table overflow:hidden
+  const [actionMenu, setActionMenu] = useState<{ id: string; x: number; y: number; deadCap: number; capSav: number } | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close action menu on outside click or scroll
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(e.target as Node)) {
+        setActionMenu(null);
+      }
+    }
+    function handleScroll() { setActionMenu(null); }
+    if (actionMenu) {
+      document.addEventListener('mousedown', handleClick);
+      window.addEventListener('scroll', handleScroll, true);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [actionMenu]);
 
 
   // Drag state for depth chart
@@ -216,7 +245,7 @@ export default function RosterPage() {
 
   const SortHeader = ({ k, children, className = '' }: { k: SortKey; children: React.ReactNode; className?: string }) => (
     <th
-      className={`py-2 px-2 text-xs font-bold uppercase tracking-wider cursor-pointer select-none hover:text-[var(--text)] transition-colors ${sortKey === k ? 'text-blue-400' : 'text-[var(--text-sec)]'} ${className}`}
+      className={`py-2 px-2 text-xs font-bold uppercase tracking-wider cursor-pointer select-none hover:text-[var(--text)] transition-colors ${sortKey === k ? 'text-blue-600' : 'text-[var(--text-sec)]'} ${className}`}
       onClick={() => handleSort(k)}
     >
       {children}
@@ -233,14 +262,14 @@ export default function RosterPage() {
             <h2 className="text-2xl font-black">{userTeam?.city} {userTeam?.name} Roster</h2>
             <div className="flex items-center gap-4 text-sm text-[var(--text-sec)] mt-1">
               <span>{roster.length} players</span>
-              <span className={capSpace > 10 ? 'text-green-400' : capSpace > 0 ? 'text-amber-400' : 'text-red-400'}>
+              <span className={capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}>
                 ${capSpace}M cap space
               </span>
               {deadCapTotal > 0 && (
-                <span className="text-red-400">${Math.round(deadCapTotal * 10) / 10}M dead cap</span>
+                <span className="text-red-600">${Math.round(deadCapTotal * 10) / 10}M dead cap</span>
               )}
               {injuredPlayers.length > 0 && (
-                <span className="text-red-400">{injuredPlayers.length} injured</span>
+                <span className="text-red-600">{injuredPlayers.length} injured</span>
               )}
             </div>
           </div>
@@ -277,7 +306,7 @@ export default function RosterPage() {
                   return (
                     <div key={pos} className="text-center">
                       <div className={`text-sm font-black ${
-                        isBelowMin ? 'text-red-400' : isAtMax ? 'text-amber-400' : 'text-green-400'
+                        isBelowMin ? 'text-red-600' : isAtMax ? 'text-amber-600' : 'text-green-600'
                       }`}>
                         {count}
                       </div>
@@ -329,7 +358,7 @@ export default function RosterPage() {
                       </th>
                     )}
                     <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-center w-10">Mood</th>
-                    <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-right pr-3 w-20">Action</th>
+                    <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-right pr-3 w-28">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -353,16 +382,16 @@ export default function RosterPage() {
                         {/* Name */}
                         <td className="py-2 px-2 pl-3">
                           <div className="flex items-center gap-1.5">
-                            {proBowlPlayerIds.has(p.id) && <span className="text-amber-400 text-xs">★</span>}
+                            {proBowlPlayerIds.has(p.id) && <span className="text-amber-600 text-xs">★</span>}
                             <button
                               onClick={() => setSelectedPlayerId(p.id)}
-                              className="font-semibold hover:text-blue-400 transition-colors truncate"
+                              className="font-semibold hover:text-blue-600 transition-colors truncate"
                             >
                               {p.firstName} {p.lastName}
                             </button>
                           </div>
                           {p.injury && (
-                            <span className="text-[10px] text-red-400 block">
+                            <span className="text-[10px] text-red-600 block">
                               {p.injury.type} ({p.injury.weeksLeft}w)
                             </span>
                           )}
@@ -399,7 +428,7 @@ export default function RosterPage() {
                         {/* Depth role */}
                         <td className="py-2 px-2 text-center">
                           <span className={`text-[10px] font-bold uppercase ${
-                            isStarter ? 'text-green-400' : 'text-[var(--text-sec)]'
+                            isStarter ? 'text-green-600' : 'text-[var(--text-sec)]'
                           }`}>
                             {depthLabel}
                           </span>
@@ -425,67 +454,66 @@ export default function RosterPage() {
                         {/* Mood */}
                         <td className="py-2 px-2 text-center">
                           <span className={`text-xs ${
-                            (p.mood ?? 70) >= 75 ? 'text-green-400' :
-                            (p.mood ?? 70) >= 50 ? 'text-amber-400' :
-                            'text-red-400'
+                            (p.mood ?? 70) >= 75 ? 'text-green-600' :
+                            (p.mood ?? 70) >= 50 ? 'text-amber-600' :
+                            'text-red-600'
                           }`}>
                             {(p.mood ?? 70) >= 75 ? '😊' : (p.mood ?? 70) >= 50 ? '😐' : '😠'}
                           </span>
                         </td>
 
                         {/* Actions */}
-                        <td className="py-2 px-2 text-right pr-3 space-x-1">
-                          {isOffseason && p.contract.yearsLeft >= 2 && p.lastRestructuredSeason !== season && (
-                            <Button
-                              size="sm"
-                              variant={restructurePlayer === p.id ? 'primary' : 'ghost'}
-                              onClick={() => {
-                                if (restructurePlayer === p.id) {
-                                  // Execute restructure
+                        <td className="py-2 px-2 text-right pr-3 relative">
+                          {/* Confirm Cut state */}
+                          {confirmRelease === p.id ? (
+                            <div className="flex items-center gap-1 justify-end">
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                onClick={() => { releasePlayer(p.id); setConfirmRelease(null); }}
+                              >
+                                {deadCap > 0
+                                  ? `Cut (save $${Math.max(0, capSav)}M, $${deadCap}M dead)`
+                                  : `Cut (save $${p.contract.salary}M)`}
+                              </Button>
+                              <button onClick={() => setConfirmRelease(null)} className="text-xs text-[var(--text-sec)] hover:text-[var(--text)] px-1">✕</button>
+                            </div>
+                          ) : restructurePlayer === p.id ? (
+                            <div className="flex items-center gap-1 justify-end">
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                onClick={() => {
                                   const addedYears = p.contract.yearsLeft <= 2 ? 2 : 1;
                                   const newYears = p.contract.yearsLeft + addedYears;
                                   const discountPct = 0.85 + (addedYears === 1 ? 0.05 : 0);
                                   const newAnnual = Math.round(p.contract.salary * discountPct * 10) / 10;
                                   restructureContract(p.id, newAnnual, newYears);
                                   setRestructurePlayer(null);
-                                } else {
-                                  setRestructurePlayer(p.id);
-                                  setConfirmRelease(null);
-                                }
+                                }}
+                              >
+                                {(() => {
+                                  const addedYears = p.contract.yearsLeft <= 2 ? 2 : 1;
+                                  const discountPct = 0.85 + (addedYears === 1 ? 0.05 : 0);
+                                  const newAnnual = Math.round(p.contract.salary * discountPct * 10) / 10;
+                                  const saved = Math.round((p.contract.salary - newAnnual) * 10) / 10;
+                                  return `→ $${newAnnual}M × ${p.contract.yearsLeft + addedYears}yr (save $${saved}M/yr)`;
+                                })()}
+                              </Button>
+                              <button onClick={() => setRestructurePlayer(null)} className="text-xs text-[var(--text-sec)] hover:text-[var(--text)] px-1">✕</button>
+                            </div>
+                          ) : (
+                            /* Action dropdown trigger */
+                            <button
+                              className="px-3 py-1.5 text-xs rounded font-medium hover:bg-[var(--surface-2)] text-[var(--text-sec)] transition-colors"
+                              onClick={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setActionMenu(actionMenu?.id === p.id ? null : { id: p.id, x: rect.right, y: rect.top, deadCap, capSav });
                               }}
                             >
-                              {restructurePlayer === p.id
-                                ? (() => {
-                                    const addedYears = p.contract.yearsLeft <= 2 ? 2 : 1;
-                                    const discountPct = 0.85 + (addedYears === 1 ? 0.05 : 0);
-                                    const newAnnual = Math.round(p.contract.salary * discountPct * 10) / 10;
-                                    const saved = Math.round((p.contract.salary - newAnnual) * 10) / 10;
-                                    return `→ $${newAnnual}M × ${p.contract.yearsLeft + addedYears}yr (save $${saved}M/yr)`;
-                                  })()
-                                : 'Restructure'
-                              }
-                            </Button>
+                              Actions ▾
+                            </button>
                           )}
-                          <Button
-                            size="sm"
-                            variant={confirmRelease === p.id ? 'danger' : 'ghost'}
-                            onClick={() => {
-                              if (confirmRelease === p.id) {
-                                releasePlayer(p.id);
-                                setConfirmRelease(null);
-                              } else {
-                                setConfirmRelease(p.id);
-                                setRestructurePlayer(null);
-                              }
-                            }}
-                          >
-                            {confirmRelease === p.id
-                              ? (deadCap > 0
-                                ? `Cut (save $${Math.max(0, capSav)}M, $${deadCap}M dead)`
-                                : `Cut (save $${p.contract.salary}M)`)
-                              : 'Cut'
-                            }
-                          </Button>
                         </td>
                       </tr>
                     );
@@ -548,18 +576,18 @@ export default function RosterPage() {
                                   </div>
                                   <button
                                     onClick={(e) => { e.stopPropagation(); setSelectedPlayerId(player.id); }}
-                                    className="text-xs font-semibold truncate block hover:text-blue-400 transition-colors"
+                                    className="text-xs font-semibold truncate block hover:text-blue-600 transition-colors"
                                   >
-                                    {isProBowl && <span className="text-amber-400 mr-0.5">★</span>}
+                                    {isProBowl && <span className="text-amber-600 mr-0.5">★</span>}
                                     {player.firstName[0]}. {player.lastName}
                                   </button>
                                   <div className="text-[10px] text-[var(--text-sec)] mt-0.5 truncate">
                                     {getGenericStat(player)}
                                   </div>
                                   {player.injury && (
-                                    <div className="text-[10px] text-red-400">{player.injury.type} ({player.injury.weeksLeft}w)</div>
+                                    <div className="text-[10px] text-red-600">{player.injury.type} ({player.injury.weeksLeft}w)</div>
                                   )}
-                                  {player.onIR && <div className="text-[10px] text-amber-400">IR</div>}
+                                  {player.onIR && <div className="text-[10px] text-amber-600">IR</div>}
                                 </div>
                               );
                             })}
@@ -604,8 +632,8 @@ export default function RosterPage() {
                     {injuredPlayers.map(p => (
                       <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
                         <td className="py-2.5 pl-2">
-                          <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-400 transition-colors">
-                            {proBowlPlayerIds.has(p.id) && <span className="text-amber-400 mr-1">★</span>}
+                          <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-600 transition-colors">
+                            {proBowlPlayerIds.has(p.id) && <span className="text-amber-600 mr-1">★</span>}
                             {p.firstName} {p.lastName}
                           </button>
                         </td>
@@ -614,10 +642,10 @@ export default function RosterPage() {
                         <td className="py-2.5 text-center">{p.injury?.type}</td>
                         <td className="py-2.5 text-center">
                           <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                            p.onIR ? 'bg-amber-900/30 text-amber-400' :
-                            p.injury && p.injury.weeksLeft >= 4 ? 'bg-red-900/30 text-red-400' :
-                            p.injury && p.injury.weeksLeft >= 2 ? 'bg-amber-900/30 text-amber-400' :
-                            'bg-green-900/30 text-green-400'
+                            p.onIR ? 'bg-amber-50 text-amber-600' :
+                            p.injury && p.injury.weeksLeft >= 4 ? 'bg-red-50 text-red-600' :
+                            p.injury && p.injury.weeksLeft >= 2 ? 'bg-amber-50 text-amber-600' :
+                            'bg-green-50 text-green-600'
                           }`}>
                             {p.onIR ? 'IR' : `${p.injury?.weeksLeft}w`}
                           </span>
@@ -648,6 +676,67 @@ export default function RosterPage() {
         )}
       </div>
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
+
+      {/* Fixed-position action menu (rendered outside table to avoid overflow:hidden clipping) */}
+      {actionMenu && (() => {
+        const p = roster.find(pl => pl.id === actionMenu.id);
+        if (!p) return null;
+        return (
+          <div
+            ref={actionMenuRef}
+            className="fixed z-[9999] rounded-lg py-1.5 min-w-[220px]"
+            style={{
+              top: actionMenu.y - 8,
+              left: actionMenu.x - 220,
+              transform: 'translateY(-100%)',
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05)',
+            }}
+          >
+            <button
+              onClick={() => { setConfirmRelease(p.id); setActionMenu(null); }}
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-black/5 transition-colors text-red-600 font-medium"
+            >
+              Cut Player
+              <span className="block text-[11px] text-[var(--text-sec)] font-normal mt-0.5">
+                Save ${Math.max(0, actionMenu.capSav)}M{actionMenu.deadCap > 0 ? ` · $${actionMenu.deadCap}M dead cap` : ''}
+              </span>
+            </button>
+            {p.contract.yearsLeft >= 2 && p.lastRestructuredSeason !== season && (
+              <>
+                <div className="border-t border-[var(--border)] mx-3 my-0.5" />
+                <button
+                  onClick={() => { setRestructurePlayer(p.id); setActionMenu(null); }}
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-black/5 transition-colors text-amber-600 font-medium"
+                >
+                  Restructure
+                  <span className="block text-[11px] text-[var(--text-sec)] font-normal mt-0.5">
+                    Lower annual salary, add years
+                  </span>
+                </button>
+              </>
+            )}
+            {isTradeOpen && (
+              <>
+                <div className="border-t border-[var(--border)] mx-3 my-0.5" />
+                <button
+                  onClick={() => {
+                    setActionMenu(null);
+                    router.push(`/trades?block=${p.id}`);
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-black/5 transition-colors text-blue-600 font-medium"
+                >
+                  Add to Trade Block
+                  <span className="block text-[11px] text-[var(--text-sec)] font-normal mt-0.5">
+                    Solicit offers from other teams
+                  </span>
+                </button>
+              </>
+            )}
+          </div>
+        );
+      })()}
     </GameShell>
   );
 }

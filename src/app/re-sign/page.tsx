@@ -14,10 +14,10 @@ import { initNegotiation, processOffer, type NegotiationState } from '@/lib/engi
 import { POSITIONS, ROSTER_LIMITS } from '@/types';
 
 function ratingColor(val: number): string {
-  if (val >= 80) return 'text-green-400';
-  if (val >= 65) return 'text-blue-400';
-  if (val >= 50) return 'text-amber-400';
-  return 'text-red-400';
+  if (val >= 80) return 'text-green-600';
+  if (val >= 65) return 'text-blue-600';
+  if (val >= 50) return 'text-amber-600';
+  return 'text-red-600';
 }
 
 function positionStats(p: { position: string; stats: { gamesPlayed: number; passYards: number; passTDs: number; interceptions: number; rushYards: number; rushTDs: number; receptions: number; receivingYards: number; receivingTDs: number; tackles: number; sacks: number; defensiveINTs: number; fieldGoalsMade: number; fieldGoalAttempts: number } }): string {
@@ -30,7 +30,7 @@ function positionStats(p: { position: string; stats: { gamesPlayed: number; pass
     case 'OL': return `${s.gamesPlayed} GP`;
     case 'DL': case 'LB': return `${s.gamesPlayed} GP · ${s.tackles} TKL · ${s.sacks} SCK`;
     case 'CB': case 'S': return `${s.gamesPlayed} GP · ${s.tackles} TKL · ${s.defensiveINTs} INT`;
-    case 'K': return `${s.gamesPlayed} GP · ${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG`;
+    case 'K': return `${s.gamesPlayed} GP · ${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG${s.fieldGoalAttempts > 0 ? ` (${Math.round(s.fieldGoalsMade / s.fieldGoalAttempts * 100)}%)` : ''}`;
     case 'P': return `${s.gamesPlayed} GP`;
     default: return `${s.gamesPlayed} GP`;
   }
@@ -65,8 +65,8 @@ export default function ReSignPage() {
              "The re-signing window isn't open yet."}
           </p>
           <div className="flex gap-3 justify-center">
-            <Link href="/" className="text-sm text-blue-400 hover:underline">Go to Dashboard</Link>
-            <Link href="/roster" className="text-sm text-blue-400 hover:underline">View Roster</Link>
+            <Link href="/" className="text-sm text-blue-600 hover:underline">Go to Dashboard</Link>
+            <Link href="/roster" className="text-sm text-blue-600 hover:underline">View Roster</Link>
           </div>
         </div>
       </GameShell>
@@ -137,6 +137,11 @@ export default function ReSignPage() {
   }
 
   function closeNegotiation() {
+    setNegotiation(null);
+    setActivePlayerId(null);
+  }
+
+  function walkAway() {
     // Walking away from negotiation = letting the player go
     if (activePlayerId && !results[activePlayerId]) {
       handlePass(activePlayerId);
@@ -151,7 +156,9 @@ export default function ReSignPage() {
   }
 
   const completedIds = new Set(Object.keys(results));
-  const activeEntries = resigningPlayers.filter(e => !completedIds.has(e.playerId));
+  const activeEntries = resigningPlayers
+    .filter(e => !completedIds.has(e.playerId))
+    .sort((a, b) => b.askingSalary - a.askingSalary);
 
   return (
     <GameShell>
@@ -164,12 +171,12 @@ export default function ReSignPage() {
             </p>
           </div>
           <div className="text-right">
-            <div className={`text-2xl font-black ${capSpace > 10 ? 'text-green-400' : capSpace > 0 ? 'text-amber-400' : 'text-red-400'}`}>
+            <div className={`text-2xl font-black ${capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}`}>
               ${capSpace}M
             </div>
             <div className="text-xs text-[var(--text-sec)]">Cap Space</div>
             {luxuryTax > 0 && (
-              <div className="text-xs text-red-400 mt-0.5">Luxury Tax: ${luxuryTax}M</div>
+              <div className="text-xs text-red-600 mt-0.5">Luxury Tax: ${luxuryTax}M</div>
             )}
           </div>
         </div>
@@ -186,13 +193,13 @@ export default function ReSignPage() {
                   <div className="text-sm text-[var(--text-sec)]">
                     {negotiation.position} · {negotiation.playerOverall} OVR
                     {negMode === 'restructure' && (
-                      <span className="ml-2 text-amber-400">
+                      <span className="ml-2 text-amber-600">
                         (Restructuring lowers annual hit, extends commitment)
                       </span>
                     )}
                   </div>
                 </div>
-                <Button size="sm" variant="ghost" onClick={closeNegotiation}>✕</Button>
+                <Button size="sm" variant="ghost" onClick={walkAway}>✕</Button>
               </div>
 
               {/* Message feed */}
@@ -202,15 +209,15 @@ export default function ReSignPage() {
                     key={i}
                     className={`text-sm rounded-lg px-3 py-2 ${
                       msg.type === 'result' && negotiation.outcome === 'accepted'
-                        ? 'bg-green-900/30 border border-green-700/50 text-green-300'
+                        ? 'bg-green-50 border border-green-200 text-green-700'
                         : msg.type === 'result' && negotiation.outcome === 'rejected'
-                        ? 'bg-red-900/30 border border-red-700/50 text-red-300'
+                        ? 'bg-red-50 border border-red-200 text-red-700'
                         : msg.type === 'counter'
-                        ? 'bg-amber-900/20 border border-amber-700/30 text-amber-200'
+                        ? 'bg-amber-50 border border-amber-200 text-amber-700'
                         : msg.type === 'negative'
-                        ? 'bg-red-900/10 border border-red-800/20 text-red-300/90'
+                        ? 'bg-red-50 border border-red-200 text-red-600'
                         : msg.sender === 'system'
-                        ? 'bg-blue-900/10 border border-blue-800/20 text-blue-300/90'
+                        ? 'bg-blue-50 border border-blue-200 text-blue-600'
                         : 'bg-[var(--surface)] text-[var(--text)]'
                     }`}
                   >
@@ -224,11 +231,11 @@ export default function ReSignPage() {
 
               {/* Outcome banners */}
               {negotiation.outcome === 'accepted' && (
-                <div className="bg-green-900/30 border border-green-600 rounded-lg p-4 text-center mb-3">
-                  <div className="text-lg font-black text-green-400">
+                <div className="bg-green-50 border border-green-600 rounded-lg p-4 text-center mb-3">
+                  <div className="text-lg font-black text-green-600">
                     {negMode === 'extend' ? 'EXTENDED!' : 'RESTRUCTURED!'}
                   </div>
-                  <div className="text-sm text-green-300">
+                  <div className="text-sm text-green-600">
                     {negotiation.playerName} agreed to ${negotiation.currentOfferSalary}M/yr for {negotiation.currentOfferYears} year{negotiation.currentOfferYears > 1 ? 's' : ''}
                   </div>
                   <Button size="sm" variant="secondary" onClick={closeNegotiation} className="mt-3">Done</Button>
@@ -236,9 +243,9 @@ export default function ReSignPage() {
               )}
 
               {negotiation.outcome === 'rejected' && (
-                <div className="bg-red-900/30 border border-red-600 rounded-lg p-4 text-center mb-3">
-                  <div className="text-lg font-black text-red-400">REJECTED</div>
-                  <div className="text-sm text-red-300">
+                <div className="bg-red-50 border border-red-600 rounded-lg p-4 text-center mb-3">
+                  <div className="text-lg font-black text-red-600">REJECTED</div>
+                  <div className="text-sm text-red-600">
                     {negotiation.playerName} rejected your offer. They'll hit free agency.
                   </div>
                   <Button size="sm" variant="secondary" onClick={closeNegotiation} className="mt-3">Dismiss</Button>
@@ -263,7 +270,7 @@ export default function ReSignPage() {
                     />
                     <div className="flex justify-between text-[10px] text-[var(--text-sec)]">
                       <span>${LEAGUE_MINIMUM_SALARY}M</span>
-                      <span className="text-amber-400">Asking: ${negotiation.askingSalary}M</span>
+                      <span className="text-amber-600">Asking: ${negotiation.askingSalary}M</span>
                       <span>${(negotiation.askingSalary * 1.3).toFixed(1)}M</span>
                     </div>
                   </div>
@@ -294,15 +301,15 @@ export default function ReSignPage() {
                         if (!player) return '—';
                         const saving = player.contract.salary - offerSalary;
                         return saving > 0
-                          ? <span className="text-green-400">Saves ${saving.toFixed(1)}M/yr cap space</span>
-                          : <span className="text-red-400">Adds ${Math.abs(saving).toFixed(1)}M/yr cap hit</span>;
+                          ? <span className="text-green-600">Saves ${saving.toFixed(1)}M/yr cap space</span>
+                          : <span className="text-red-600">Adds ${Math.abs(saving).toFixed(1)}M/yr cap hit</span>;
                       })()}
                     </div>
                   )}
 
                   <div className="flex gap-2 pt-1">
                     <Button onClick={submitOffer}>Make Offer</Button>
-                    <Button variant="ghost" onClick={closeNegotiation}>Walk Away</Button>
+                    <Button variant="ghost" onClick={walkAway}>Walk Away</Button>
                   </div>
                 </div>
               )}
@@ -351,7 +358,7 @@ export default function ReSignPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
-                          <span className={`text-xs font-bold ${isBelowMin ? 'text-red-400' : isAtMax ? 'text-amber-400' : 'text-green-400'}`}>
+                          <span className={`text-xs font-bold ${isBelowMin ? 'text-red-600' : isAtMax ? 'text-amber-600' : 'text-green-600'}`}>
                             {count}
                           </span>
                           <span className="text-[10px] text-[var(--text-sec)]">/{limits.max}</span>
@@ -367,7 +374,7 @@ export default function ReSignPage() {
                   </div>
                   <div className="flex justify-between mt-1">
                     <span>Expiring</span>
-                    <span className="font-bold text-amber-400">{resigningPlayers.length}</span>
+                    <span className="font-bold text-amber-600">{resigningPlayers.length}</span>
                   </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-[var(--border)]">
@@ -393,7 +400,7 @@ export default function ReSignPage() {
                     {/* Player info */}
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <button onClick={() => setSelectedPlayerId(player.id)} className="font-bold text-lg hover:text-blue-400 transition-colors">
+                        <button onClick={() => setSelectedPlayerId(player.id)} className="font-bold text-lg hover:text-blue-600 transition-colors">
                           {player.firstName} {player.lastName}
                         </button>
                         <Badge>{player.position}</Badge>
@@ -402,7 +409,7 @@ export default function ReSignPage() {
                       <div className="flex gap-4 text-sm text-[var(--text-sec)]">
                         <span>Age {player.age}</span>
                         <span>{player.experience}yr exp</span>
-                        <span className="text-amber-400">Current: ${player.contract.salary}M/yr · {player.contract.yearsLeft}yr left</span>
+                        <span className="text-amber-600">Current: ${player.contract.salary}M/yr · {player.contract.yearsLeft}yr left</span>
                         <span className={potentialColor(player.potential, player.experience)}>
                           {potentialLabel(player.potential, player.experience)}
                         </span>
@@ -413,7 +420,7 @@ export default function ReSignPage() {
                       </div>
                       <div className="mt-2 p-2 bg-[var(--surface-2)] rounded-lg inline-flex items-center gap-2">
                         <span className="text-xs text-[var(--text-sec)]">Asking:</span>
-                        <span className="text-sm font-bold text-amber-400">
+                        <span className="text-sm font-bold text-amber-600">
                           ${entry.askingSalary}M/yr × {entry.askingYears}yr
                         </span>
                       </div>
@@ -428,14 +435,7 @@ export default function ReSignPage() {
                       >
                         Extend
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => startNegotiation(entry.playerId, 'restructure')}
-                        disabled={!!negotiation && negotiation.outcome === 'pending'}
-                      >
-                        Restructure
-                      </Button>
+{/* Restructure only available if player has >1 year left (re-signing players are in final year, so hide) */}
                       <Button
                         size="sm"
                         variant="ghost"
