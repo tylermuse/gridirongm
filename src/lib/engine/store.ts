@@ -826,12 +826,26 @@ function computeSeasonAwards(state: LeagueState): { award: string; playerId: str
   const withGames = (pos: string[]) =>
     activePlayers.filter(p => pos.includes(p.position) && p.stats.gamesPlayed >= 10);
 
-  const offensivePlayers = withGames(['QB', 'RB', 'WR', 'TE', 'OL']);
-  if (offensivePlayers.length > 0) {
-    const mvp = offensivePlayers.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+  // MVP — stats-based scoring, heavily favors QBs (matches playoffs page formula)
+  const mvpCandidates = withGames(['QB', 'RB', 'WR', 'TE']);
+  if (mvpCandidates.length > 0) {
+    const mvp = mvpCandidates.sort((a, b) => {
+      const aScore = a.position === 'QB'
+        ? a.stats.passYards * 0.04 + a.stats.passTDs * 6 - a.stats.interceptions * 4 + a.ratings.overall * 2
+        : a.position === 'RB'
+          ? a.stats.rushYards * 0.06 + a.stats.rushTDs * 6 + a.ratings.overall
+          : a.stats.receivingYards * 0.06 + a.stats.receivingTDs * 6 + a.ratings.overall;
+      const bScore = b.position === 'QB'
+        ? b.stats.passYards * 0.04 + b.stats.passTDs * 6 - b.stats.interceptions * 4 + b.ratings.overall * 2
+        : b.position === 'RB'
+          ? b.stats.rushYards * 0.06 + b.stats.rushTDs * 6 + b.ratings.overall
+          : b.stats.receivingYards * 0.06 + b.stats.receivingTDs * 6 + b.ratings.overall;
+      return bScore - aScore;
+    })[0];
     awards.push({ award: 'MVP', playerId: mvp.id, teamId: mvp.teamId! });
   }
 
+  // DPOY — stats-based (tackles, sacks, INTs)
   const defensivePlayers = withGames(['DL', 'LB', 'CB', 'S']);
   if (defensivePlayers.length > 0) {
     const dpoy = defensivePlayers.sort((a, b) =>
@@ -839,6 +853,17 @@ function computeSeasonAwards(state: LeagueState): { award: string; playerId: str
       (a.stats.tackles + a.stats.sacks * 5 + a.stats.defensiveINTs * 4)
     )[0];
     awards.push({ award: 'Defensive POY', playerId: dpoy.id, teamId: dpoy.teamId! });
+  }
+
+  // OPOY — total yards based
+  const opoyCandidates = withGames(['QB', 'RB', 'WR', 'TE']);
+  if (opoyCandidates.length > 0) {
+    const opoy = opoyCandidates.sort((a, b) => {
+      const aYds = a.stats.passYards + a.stats.rushYards + a.stats.receivingYards;
+      const bYds = b.stats.passYards + b.stats.rushYards + b.stats.receivingYards;
+      return bYds - aYds;
+    })[0];
+    awards.push({ award: 'Offensive POY', playerId: opoy.id, teamId: opoy.teamId! });
   }
 
   const rookies = activePlayers.filter(p => p.experience === 1 && p.stats.gamesPlayed >= 10);

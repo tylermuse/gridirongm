@@ -27,6 +27,42 @@ function TeamPicker() {
   const [importLoading, setImportLoading] = useState(false);
   const [importedTeams, setImportedTeams] = useState<ImportedLeagueData | null>(null);
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
+  const [savedGame, setSavedGame] = useState<{ teamAbbr: string; season: number; wins: number; losses: number; phase: string } | null>(null);
+  const [resumeLoading, setResumeLoading] = useState(false);
+
+  // Check for existing autosave on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('gridiron-gm-autosave');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const state = parsed.state ?? parsed;
+      if (state.userTeamId && state.teams?.length > 0) {
+        const team = state.teams.find((t: { id: string; abbreviation: string }) => t.id === state.userTeamId);
+        const userRecord = state.teams.find((t: { id: string; record: { wins: number; losses: number } }) => t.id === state.userTeamId)?.record;
+        const PHASE_LABELS: Record<string, string> = {
+          preseason: 'Preseason', regular: 'Regular Season', playoffs: 'Playoffs',
+          resigning: 'Re-signing', draft: 'Draft', freeAgency: 'Free Agency', offseason: 'Offseason',
+        };
+        setSavedGame({
+          teamAbbr: team?.abbreviation ?? '???',
+          season: state.season ?? 1,
+          wins: userRecord?.wins ?? 0,
+          losses: userRecord?.losses ?? 0,
+          phase: PHASE_LABELS[state.phase] ?? state.phase ?? 'Unknown',
+        });
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }, []);
+
+  function handleResume() {
+    setResumeLoading(true);
+    // The store auto-hydrates from localStorage via persist middleware.
+    // We just need to set initialized = true.
+    useGameStore.setState({ initialized: true });
+  }
 
   async function handlePick(abbr: string) {
     setLoading(true);
@@ -74,6 +110,34 @@ function TeamPicker() {
         </h1>
         <p className="text-[var(--text-sec)] text-sm sm:text-lg">Choose your franchise. Build your dynasty.</p>
       </div>
+
+      {/* Resume saved game */}
+      {savedGame && (
+        <div className="mb-6 max-w-md w-full">
+          <button
+            onClick={handleResume}
+            disabled={resumeLoading}
+            className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-blue-500 bg-blue-500/5
+                       hover:bg-blue-500/10 hover:shadow-lg hover:shadow-blue-500/10 transition-all group"
+          >
+            <div className="flex items-center gap-3 text-left">
+              <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-lg font-black shrink-0">
+                {savedGame.teamAbbr.slice(0, 2)}
+              </div>
+              <div>
+                <div className="text-sm font-bold text-blue-600">Continue League</div>
+                <div className="text-xs text-[var(--text-sec)]">
+                  {savedGame.teamAbbr} · Season {savedGame.season} · {savedGame.wins}-{savedGame.losses} · {savedGame.phase}
+                </div>
+              </div>
+            </div>
+            <div className="text-blue-600 text-xl group-hover:translate-x-1 transition-transform">→</div>
+          </button>
+          <div className="text-center mt-2">
+            <span className="text-xs text-[var(--text-sec)]">or start a new league below</span>
+          </div>
+        </div>
+      )}
 
       {/* Import League File Section */}
       <div className="mb-6 max-w-4xl w-full">
