@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { LEAGUE_TEAMS, type TeamTemplate } from '@/lib/data/teams';
 import { type ImportedLeagueData, loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { TeamLogo } from '@/components/ui/TeamLogo';
-import { generateTeamSpotlight, COMMENTATORS } from '@/lib/engine/debate';
+import { generateTeamSpotlight, COMMENTATORS, type SpotlightContext } from '@/lib/engine/debate';
 import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
@@ -218,7 +218,7 @@ function TeamPicker() {
 /* ─── Team Spotlight Section ─── */
 
 function TeamSpotlightSection({
-  team, roster, allTeams, allPlayers, season, week, onPlayerClick,
+  team, roster, allTeams, allPlayers, season, week, ctx, onPlayerClick,
 }: {
   team: import('@/types').Team;
   roster: import('@/types').Player[];
@@ -226,14 +226,16 @@ function TeamSpotlightSection({
   allPlayers: import('@/types').Player[];
   season: number;
   week: number;
+  ctx?: SpotlightContext;
   onPlayerClick: (id: string) => void;
 }) {
   const { tier } = useSubscription();
   const isPro = hasFeature(tier, 'analytics_dashboard');
 
   const topics = React.useMemo(
-    () => generateTeamSpotlight(team, roster, allTeams, allPlayers, season, week),
-    [team, roster, allTeams, allPlayers, season, week],
+    () => generateTeamSpotlight(team, roster, allTeams, allPlayers, season, week, ctx),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [team, roster, allTeams, allPlayers, season, week, ctx?.phase, ctx?.faDay, ctx?.draftResults?.length, ctx?.playoffBracket],
   );
 
   if (topics.length === 0) return null;
@@ -359,7 +361,7 @@ function TeamSpotlightSection({
 }
 
 function Dashboard() {
-  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, champions, newsItems, achievements } = useGameStore();
+  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const spotlightRef = useRef<HTMLDivElement>(null);
@@ -724,6 +726,7 @@ function Dashboard() {
           allPlayers={players}
           season={season}
           week={week}
+          ctx={{ phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay }}
           onPlayerClick={setSelectedPlayerId}
         />
       </div>
