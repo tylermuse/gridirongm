@@ -359,9 +359,9 @@ export default function ReSignPage() {
             </div>
           </Card>
         ) : (
-          <div className="flex gap-4">
+          <div className="flex flex-col md:flex-row gap-4">
             {/* Roster Composition sidebar */}
-            <div className="shrink-0 w-48">
+            <div className="shrink-0 w-full md:w-48">
               <Card className="sticky top-4">
                 <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-3">Roster Composition</div>
                 <div className="space-y-1.5">
@@ -429,17 +429,17 @@ export default function ReSignPage() {
 
               return (
                 <Card key={entry.playerId} className={isActive ? 'ring-1 ring-blue-500' : ''}>
-                  <div className="flex gap-4 items-start">
+                  <div className="flex flex-col sm:flex-row gap-4 items-start">
                     {/* Player info */}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <button onClick={() => setSelectedPlayerId(player.id)} className="font-bold text-lg hover:text-blue-600 transition-colors">
                           {player.firstName} {player.lastName}
                         </button>
                         <Badge>{player.position}</Badge>
                         <span className={`font-bold ${ratingColor(player.ratings.overall)}`}>{player.ratings.overall} OVR</span>
                       </div>
-                      <div className="flex gap-4 text-sm text-[var(--text-sec)]">
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-[var(--text-sec)]">
                         <span>Age {player.age}</span>
                         <span>{player.experience}yr exp</span>
                         <span className="text-amber-600">Current: ${player.contract.salary}M/yr · {player.contract.yearsLeft}yr left</span>
@@ -460,7 +460,7 @@ export default function ReSignPage() {
                     </div>
 
                     {/* Action buttons */}
-                    <div className="flex flex-col gap-2 shrink-0 mt-1">
+                    <div className="flex sm:flex-col gap-2 shrink-0 sm:mt-1">
                       <Button
                         size="sm"
                         onClick={() => startNegotiation(entry.playerId, 'extend')}

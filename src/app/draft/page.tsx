@@ -96,7 +96,7 @@ function ProspectCard({
 }) {
   if (!player) return null;
   return (
-    <div className="flex-1 min-w-[180px] rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+    <div className="flex-1 min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
       <div className="px-4 pt-3 pb-1">
         <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">
           {label}
@@ -230,32 +230,33 @@ function OnTheClockSection({
         className="rounded-t-xl border border-[var(--border)] px-5 py-4"
         style={{ borderLeft: `4px solid ${teamColor}` }}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3 sm:gap-4">
             {/* Team badge */}
             <div
-              className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-black text-white shrink-0"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-xs sm:text-sm font-black text-white shrink-0"
               style={{ backgroundColor: teamColor }}
             >
               {currentTeam?.abbreviation ?? '--'}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-black text-lg">On The Clock</span>
+                <span className="font-black text-base sm:text-lg">On The Clock</span>
                 {isUserPick && (
                   <Badge variant="green" size="sm">Your Pick</Badge>
                 )}
               </div>
-              <div className="text-sm text-[var(--text-sec)]">
+              <div className="text-xs sm:text-sm text-[var(--text-sec)]">
                 {currentTeam ? `${currentTeam.city} ${currentTeam.name}` : 'Draft Complete'}
               </div>
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-sm font-bold">
+          <div className="sm:text-right">
+            <div className="text-xs sm:text-sm font-bold mb-1 hidden sm:block">
               Round {currentRound}, Pick {currentPickInRound}
             </div>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold sm:hidden">Rd {currentRound}, Pick {currentPickInRound}</span>
               <Button onClick={simDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
                 Sim Pick
               </Button>
@@ -301,7 +302,7 @@ function OnTheClockSection({
           className="border-x border-[var(--border)] px-5 py-4 bg-[var(--surface-2)]"
           style={{ borderLeft: `4px solid ${teamColor}` }}
         >
-          <div className="flex gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {bestAvailable && (
               <ProspectCard
                 label="Best Available"
@@ -645,7 +646,7 @@ export default function DraftPage() {
               </div>
             </CardHeader>
             {/* Scouting level selector */}
-            <div className="mb-3 flex items-center gap-2">
+            <div className="mb-3 flex items-center gap-2 flex-wrap">
               <span className="text-xs text-[var(--text-sec)]">Scouting Level:</span>
               <select
                 value={scoutingLevel}
@@ -674,6 +675,7 @@ export default function DraftPage() {
                 </a>
               )}
             </div>
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
@@ -739,6 +741,7 @@ export default function DraftPage() {
                 })}
               </tbody>
             </table>
+            </div>
           </Card>
 
           {/* Draft Results */}
@@ -782,6 +785,7 @@ export default function DraftPage() {
                 )}
               </div>
             </CardHeader>
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
@@ -830,6 +834,7 @@ export default function DraftPage() {
                 })()}
               </tbody>
             </table>
+            </div>
           </Card>
         </div>
 
@@ -860,6 +865,7 @@ export default function DraftPage() {
               <CardHeader>
                 <CardTitle>Draft Recap — Team Grades</CardTitle>
               </CardHeader>
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
@@ -893,6 +899,7 @@ export default function DraftPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </Card>
           );
         })()}

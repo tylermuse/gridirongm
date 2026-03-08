@@ -23,7 +23,7 @@ export function Card({ children, className = '', onClick }: CardProps) {
 
 export function CardHeader({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`flex items-center justify-between mb-4 ${className}`}>
+    <div className={`flex items-center justify-between mb-4 flex-wrap gap-2 ${className}`}>
       {children}
     </div>
   );
