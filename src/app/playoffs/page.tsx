@@ -1,22 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { BoxScoreModal } from '@/components/game/BoxScoreModal';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { PlayoffMatchup, Team, GameResult } from '@/types';
 
 const ROUND_LABELS: Record<number, string> = {
   1: 'Wild Card',
   2: 'Divisional',
-  3: 'Championship',
-  4: 'Super Bowl',
+  3: 'Conference',
+  4: 'The Championship',
 };
 
 // ---------------------------------------------------------------------------
@@ -58,14 +57,18 @@ function TeamRow({
         <div className="flex-1 flex items-center gap-2 min-w-0">
           <button
             onClick={() => team && onTeamClick?.(team.id)}
-            className="w-5 h-5 rounded flex items-center justify-center text-[8px] font-black text-white shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-            style={{ backgroundColor: team?.primaryColor ?? '#555' }}
+            className="shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
           >
-            {team?.abbreviation ?? '?'}
+            {team ? <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="xs" /> : <div className="w-5 h-5 rounded bg-gray-400" />}
           </button>
           <button onClick={() => team && onTeamClick?.(team.id)} className={`text-xs truncate hover:text-blue-600 transition-colors ${isUser ? 'text-blue-600' : ''}`}>
             {team ? `${team.city}` : 'Unknown'}
           </button>
+          {team && (
+            <span className="text-[9px] text-[var(--text-sec)] shrink-0 font-mono">
+              ({team.record.wins}-{team.record.losses})
+            </span>
+          )}
           {isUser && (
             <span className="text-[9px] font-bold text-blue-600 shrink-0">YOU</span>
           )}
@@ -142,7 +145,7 @@ function ConferenceBracket({
   onTeamClick,
   onGameClick,
 }: {
-  conference: 'AFC' | 'NFC';
+  conference: 'AC' | 'NC';
   bracket: PlayoffMatchup[];
   teams: Team[];
   userTeamId: string;
@@ -150,7 +153,7 @@ function ConferenceBracket({
   onGameClick?: (matchupId: string) => void;
 }) {
   const confMatchups = bracket.filter(m => m.conference === conference);
-  const color = conference === 'AFC' ? 'text-red-600' : 'text-blue-600';
+  const color = conference === 'AC' ? 'text-red-600' : 'text-blue-600';
 
   // Determine seeds 1-4 (div winners with bye)
   const wcMatchups = confMatchups.filter(m => m.round === 1);
@@ -170,14 +173,14 @@ function ConferenceBracket({
         <div className="mb-3 flex items-center gap-2 text-xs text-[var(--text-sec)]">
           <button
             onClick={() => onTeamClick?.(byeTeamObj.id)}
-            className="w-5 h-5 rounded flex items-center justify-center text-[8px] font-black text-white shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-            style={{ backgroundColor: byeTeamObj.primaryColor }}
+            className="shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
           >
-            {byeTeamObj.abbreviation}
+            <TeamLogo abbreviation={byeTeamObj.abbreviation} primaryColor={byeTeamObj.primaryColor} secondaryColor={byeTeamObj.secondaryColor} size="xs" />
           </button>
           <button onClick={() => onTeamClick?.(byeTeamObj.id)} className="hover:text-blue-600 transition-colors">
             {byeTeamObj.city} {byeTeamObj.name}
           </button>
+          <span className="font-mono text-[10px]">({byeTeamObj.record.wins}-{byeTeamObj.record.losses})</span>
           <Badge size="sm" variant="default">#1 Seed — Bye</Badge>
         </div>
       )}
@@ -224,7 +227,7 @@ function ConferenceBracket({
         {/* Conference Championship */}
         <div className="flex flex-col justify-center">
           <div className="text-[10px] font-medium text-[var(--text-sec)] mb-1.5 text-center uppercase tracking-wide">
-            Championship
+            Conference
           </div>
           {confChamp && (
             <MatchupCard
@@ -247,8 +250,10 @@ function ConferenceBracket({
 
 type StatShape = { gamesPlayed: number; passYards: number; passTDs: number; interceptions: number; rushYards: number; rushTDs: number; receptions: number; receivingYards: number; receivingTDs: number; tackles: number; sacks: number; defensiveINTs: number; fieldGoalsMade: number; fieldGoalAttempts: number };
 
+const ZERO_STATS: StatShape = { gamesPlayed: 0, passYards: 0, passTDs: 0, interceptions: 0, rushYards: 0, rushTDs: 0, receptions: 0, receivingYards: 0, receivingTDs: 0, tackles: 0, sacks: 0, defensiveINTs: 0, fieldGoalsMade: 0, fieldGoalAttempts: 0 };
+
 function posStatLine(p: { position: string; stats: StatShape }, overrideStats?: Partial<StatShape>): string {
-  const s = overrideStats ? { ...p.stats, ...overrideStats } as StatShape : p.stats;
+  const s = overrideStats ? { ...ZERO_STATS, ...overrideStats } as StatShape : p.stats;
   if (!overrideStats && s.gamesPlayed === 0) return '';
   switch (p.position) {
     case 'QB': return `${s.passYards} YDS · ${s.passTDs} TD · ${s.interceptions} INT`;
@@ -305,12 +310,7 @@ export default function PlayoffsPage() {
     userTeamId,
     champions,
     finalsMvpPlayerId,
-    advanceToResigning,
-    simNextPlayoffGame,
-    simPlayoffRound,
-    simAllPlayoffGames,
   } = useGameStore();
-  const router = useRouter();
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
@@ -345,7 +345,7 @@ export default function PlayoffsPage() {
     );
   }
 
-  const superBowl = playoffBracket.find(m => m.id === 'super-bowl')!;
+  const superBowl = playoffBracket.find(m => m.id === 'championship')!;
   const sbDone = !!superBowl?.winnerId;
   const champion = sbDone ? teams.find(t => t.id === superBowl.winnerId) : null;
   const userIsChampion = champion?.id === userTeamId;
@@ -377,50 +377,6 @@ export default function PlayoffsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            {phase === 'playoffs' && !sbDone && (
-              <>
-                <Button
-                  onClick={simNextPlayoffGame}
-                  size="sm"
-                  disabled={!nextGame}
-                >
-                  Sim Next Game
-                </Button>
-                <Button
-                  onClick={simPlayoffRound}
-                  size="sm"
-                  variant="secondary"
-                  disabled={!nextGame}
-                >
-                  Sim Round
-                </Button>
-                <Button
-                  onClick={simAllPlayoffGames}
-                  size="sm"
-                  variant="secondary"
-                  disabled={!nextGame}
-                >
-                  Sim All
-                </Button>
-              </>
-            )}
-            {sbDone && (
-              <Button
-                onClick={() => {
-                  const store = useGameStore.getState();
-                  if (store.phase !== 'resigning') {
-                    store.advanceToResigning();
-                  }
-                  router.push('/re-sign');
-                }}
-                size="sm"
-                variant="primary"
-              >
-                Advance to Re-signing →
-              </Button>
-            )}
-          </div>
         </div>
 
         {/* ---- Champion Banner ---- */}
@@ -438,7 +394,7 @@ export default function PlayoffsPage() {
             </div>
             {superBowl.homeScore !== null && superBowl.awayScore !== null && (
               <div className="mt-2 text-sm opacity-70">
-                Super Bowl:{' '}
+                The Championship:{' '}
                 {teams.find(t => t.id === superBowl.homeTeamId)?.abbreviation}{' '}
                 {superBowl.homeScore} –{' '}
                 {teams.find(t => t.id === superBowl.awayTeamId)?.abbreviation}{' '}
@@ -447,7 +403,7 @@ export default function PlayoffsPage() {
             )}
             {userIsChampion && (
               <div className="mt-4 text-xl font-bold">
-                🎉 Congratulations — you won the Super Bowl!
+                🎉 Congratulations — you won The Championship!
               </div>
             )}
           </div>
@@ -461,13 +417,13 @@ export default function PlayoffsPage() {
 
           const awards: { award: string; icon: string; player: typeof activePlayers[0] | undefined; gameStats?: Partial<StatShape> }[] = [];
 
-          // Super Bowl MVP — show SB game stats, not season stats
+          // Championship MVP — show championship game stats, not season stats
           const sbMvp = finalsMvpPlayerId ? players.find(p => p.id === finalsMvpPlayerId) : null;
-          const sbGame = schedule.find(g => g.id === 'super-bowl' && g.played);
+          const sbGame = schedule.find(g => g.id === 'championship' && g.played);
           const sbMvpGameStats = sbMvp && sbGame ? sbGame.playerStats[sbMvp.id] : undefined;
-          if (sbMvp) awards.push({ award: 'Super Bowl MVP', icon: '🏆', player: sbMvp, gameStats: sbMvpGameStats as Partial<StatShape> | undefined });
+          if (sbMvp) awards.push({ award: 'Championship MVP', icon: '🏆', player: sbMvp, gameStats: sbMvpGameStats as Partial<StatShape> | undefined });
 
-          // MVP — heavily favor QBs (real NFL MVP is almost always a QB)
+          // MVP — heavily favor QBs (MVP is almost always a QB)
           const mvpCandidates = withGames(['QB', 'RB', 'WR', 'TE']);
           if (mvpCandidates.length > 0) {
             const mvp = mvpCandidates.sort((a, b) => {
@@ -521,32 +477,31 @@ export default function PlayoffsPage() {
             awards.push({ award: 'Defensive Rookie of the Year', icon: '🌟', player: droy });
           }
 
-          // Pro Bowl — expanded: multiple players per position, more positions
-          // Real NFL Pro Bowl: 2 QBs, 2 RBs, 4 WRs, 2 TEs, 3 OL, 2 DEs, 2 DTs, 3 LBs, 2 CBs, 2 S, K, P per conference
-          const proBowlers: { conf: string; player: typeof activePlayers[0]; pos: string }[] = [];
-          const proBowlSlots: { pos: string; positions: string[]; count: number; sortFn: (a: typeof activePlayers[0], b: typeof activePlayers[0]) => number }[] = [
-            { pos: 'QB', positions: ['QB'], count: 2, sortFn: (a, b) => b.stats.passYards - a.stats.passYards },
+          // All-Pro — expanded: multiple players per position, more positions
+          const allProPlayers: { conf: string; player: typeof activePlayers[0]; pos: string }[] = [];
+          const allProSlots: { pos: string; positions: string[]; count: number; sortFn: (a: typeof activePlayers[0], b: typeof activePlayers[0]) => number }[] = [
+            { pos: 'QB', positions: ['QB'], count: 3, sortFn: (a, b) => b.stats.passYards - a.stats.passYards },
             { pos: 'RB', positions: ['RB'], count: 2, sortFn: (a, b) => b.stats.rushYards - a.stats.rushYards },
             { pos: 'WR', positions: ['WR'], count: 4, sortFn: (a, b) => b.stats.receivingYards - a.stats.receivingYards },
             { pos: 'TE', positions: ['TE'], count: 2, sortFn: (a, b) => b.stats.receivingYards - a.stats.receivingYards },
-            { pos: 'OL', positions: ['OL'], count: 3, sortFn: (a, b) => b.ratings.overall - a.ratings.overall },
+            { pos: 'OL', positions: ['OL'], count: 5, sortFn: (a, b) => b.ratings.overall - a.ratings.overall },
             { pos: 'DL', positions: ['DL'], count: 4, sortFn: (a, b) => b.stats.sacks - a.stats.sacks },
-            { pos: 'LB', positions: ['LB'], count: 3, sortFn: (a, b) => b.stats.tackles - a.stats.tackles },
-            { pos: 'CB', positions: ['CB'], count: 2, sortFn: (a, b) => b.stats.defensiveINTs - a.stats.defensiveINTs },
+            { pos: 'LB', positions: ['LB'], count: 4, sortFn: (a, b) => b.stats.tackles - a.stats.tackles },
+            { pos: 'CB', positions: ['CB'], count: 4, sortFn: (a, b) => b.stats.defensiveINTs - a.stats.defensiveINTs },
             { pos: 'S', positions: ['S'], count: 2, sortFn: (a, b) => (b.stats.tackles + b.stats.defensiveINTs * 3) - (a.stats.tackles + a.stats.defensiveINTs * 3) },
             { pos: 'K', positions: ['K'], count: 1, sortFn: (a, b) => b.ratings.overall - a.ratings.overall },
             { pos: 'P', positions: ['P'], count: 1, sortFn: (a, b) => b.ratings.overall - a.ratings.overall },
           ];
 
-          for (const conf of ['AFC', 'NFC'] as const) {
+          for (const conf of ['AC', 'NC'] as const) {
             const confTeamIds = new Set(teams.filter(t => t.conference === conf).map(t => t.id));
             const confPlayers = activePlayers.filter(p => confTeamIds.has(p.teamId!));
-            for (const slot of proBowlSlots) {
+            for (const slot of allProSlots) {
               const eligible = confPlayers
                 .filter(p => slot.positions.includes(p.position))
                 .sort(slot.sortFn);
               for (let i = 0; i < slot.count && i < eligible.length; i++) {
-                proBowlers.push({ conf, player: eligible[i], pos: slot.pos });
+                allProPlayers.push({ conf, player: eligible[i], pos: slot.pos });
               }
             }
           }
@@ -584,12 +539,7 @@ export default function PlayoffsPage() {
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         {t && (
-                          <div
-                            className="w-5 h-5 rounded flex items-center justify-center text-[8px] font-black text-white"
-                            style={{ backgroundColor: t.primaryColor }}
-                          >
-                            {t.abbreviation}
-                          </div>
+                          <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="xs" />
                         )}
                         <span className="text-xs text-[var(--text-sec)]">{a.player.position}</span>
                       </div>
@@ -598,17 +548,17 @@ export default function PlayoffsPage() {
                 })}
               </div>
 
-              {/* Pro Bowl selections */}
+              {/* All-Pro selections */}
               <div className="mt-4 pt-3 border-t border-[var(--border)]">
-                <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Pro Bowl Selections</div>
+                <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">All-Pro Selections</div>
                 <div className="grid grid-cols-2 gap-4">
-                  {(['AFC', 'NFC'] as const).map(conf => (
+                  {(['AC', 'NC'] as const).map(conf => (
                     <div key={conf}>
-                      <div className={`text-xs font-bold mb-1.5 ${conf === 'AFC' ? 'text-red-600' : 'text-blue-600'}`}>
+                      <div className={`text-xs font-bold mb-1.5 ${conf === 'AC' ? 'text-red-600' : 'text-blue-600'}`}>
                         {conf}
                       </div>
                       <div className="space-y-1">
-                        {proBowlers.filter(pb => pb.conf === conf).map((pb, idx) => {
+                        {allProPlayers.filter(pb => pb.conf === conf).map((pb, idx) => {
                           const t = teams.find(t => t.id === pb.player.teamId);
                           const isUserPlayer = pb.player.teamId === userTeamId;
                           return (
@@ -635,6 +585,61 @@ export default function PlayoffsPage() {
               </div>
             </Card>
 
+            {/* All-Rookie Team */}
+            {(() => {
+              const allRookieSlots: { pos: string; positions: string[]; count: number; sortFn: (a: typeof activePlayers[0], b: typeof activePlayers[0]) => number }[] = [
+                { pos: 'QB', positions: ['QB'], count: 1, sortFn: (a, b) => (b.stats.passYards + b.stats.passTDs * 20) - (a.stats.passYards + a.stats.passTDs * 20) },
+                { pos: 'RB', positions: ['RB'], count: 1, sortFn: (a, b) => (b.stats.rushYards + b.stats.rushTDs * 10) - (a.stats.rushYards + a.stats.rushTDs * 10) },
+                { pos: 'WR', positions: ['WR'], count: 2, sortFn: (a, b) => b.stats.receivingYards - a.stats.receivingYards },
+                { pos: 'TE', positions: ['TE'], count: 1, sortFn: (a, b) => b.stats.receivingYards - a.stats.receivingYards },
+                { pos: 'OL', positions: ['OL'], count: 2, sortFn: (a, b) => b.ratings.overall - a.ratings.overall },
+                { pos: 'DL', positions: ['DL'], count: 2, sortFn: (a, b) => (b.stats.sacks * 3 + b.stats.tackles) - (a.stats.sacks * 3 + a.stats.tackles) },
+                { pos: 'LB', positions: ['LB'], count: 2, sortFn: (a, b) => b.stats.tackles - a.stats.tackles },
+                { pos: 'CB', positions: ['CB'], count: 2, sortFn: (a, b) => (b.stats.defensiveINTs * 5 + b.stats.tackles) - (a.stats.defensiveINTs * 5 + a.stats.tackles) },
+                { pos: 'S', positions: ['S'], count: 1, sortFn: (a, b) => (b.stats.tackles + b.stats.defensiveINTs * 3) - (a.stats.tackles + a.stats.defensiveINTs * 3) },
+                { pos: 'K', positions: ['K'], count: 1, sortFn: (a, b) => b.ratings.overall - a.ratings.overall },
+              ];
+              const allRookiePlayers: { player: typeof activePlayers[0]; pos: string }[] = [];
+              for (const slot of allRookieSlots) {
+                const eligible = rookies
+                  .filter(p => slot.positions.includes(p.position))
+                  .sort(slot.sortFn);
+                for (let i = 0; i < slot.count && i < eligible.length; i++) {
+                  allRookiePlayers.push({ player: eligible[i], pos: slot.pos });
+                }
+              }
+              if (allRookiePlayers.length === 0) return null;
+              return (
+                <Card>
+                  <CardHeader><CardTitle>All-Rookie Team</CardTitle></CardHeader>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    {allRookiePlayers.map((ar, idx) => {
+                      const t = teams.find(t => t.id === ar.player.teamId);
+                      const isUserPlayer = ar.player.teamId === userTeamId;
+                      return (
+                        <div key={`rookie-${ar.pos}-${idx}`} className={`flex items-center justify-between text-xs rounded px-1 py-1 ${isUserPlayer ? 'bg-blue-500/10 font-semibold' : ''}`}>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <Badge size="sm">{ar.pos}</Badge>
+                            <button
+                              onClick={() => setSelectedPlayerId(ar.player.id)}
+                              className={`hover:text-blue-600 transition-colors shrink-0 ${isUserPlayer ? 'text-blue-600' : ''}`}
+                            >
+                              {ar.player.firstName[0]}. {ar.player.lastName}
+                            </button>
+                            {isUserPlayer && <span className="text-[9px] text-blue-600 font-bold shrink-0">★</span>}
+                            <span className="text-[10px] text-[var(--text-sec)] truncate">{posStatLine(ar.player)}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-[var(--text-sec)]">{t?.abbreviation}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              );
+            })()}
+
             {/* Notable Retirements */}
             {notableRetirees.length > 0 && (
               <Card>
@@ -657,12 +662,7 @@ export default function PlayoffsPage() {
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           {t && (
-                            <div
-                              className="w-5 h-5 rounded flex items-center justify-center text-[8px] font-black text-white"
-                              style={{ backgroundColor: t.primaryColor }}
-                            >
-                              {t.abbreviation}
-                            </div>
+                            <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="xs" />
                           )}
                         </div>
                       </div>
@@ -679,12 +679,7 @@ export default function PlayoffsPage() {
         {userTeam && (
           <Card>
             <div className="flex items-center gap-3">
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black text-white shrink-0"
-                style={{ backgroundColor: userTeam.primaryColor }}
-              >
-                {userTeam.abbreviation}
-              </div>
+              <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="lg" />
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-sm">
                   {userTeam.city} {userTeam.name}
@@ -713,7 +708,7 @@ export default function PlayoffsPage() {
                   <Badge variant="red">Eliminated — Conference Championship</Badge>
                 )}
                 {status === 'eliminated-4' && (
-                  <Badge variant="red">Super Bowl Runner-Up</Badge>
+                  <Badge variant="red">Championship Runner-Up</Badge>
                 )}
               </div>
             </div>
@@ -724,7 +719,7 @@ export default function PlayoffsPage() {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <Card>
             <ConferenceBracket
-              conference="AFC"
+              conference="AC"
               bracket={playoffBracket}
               teams={teams}
               userTeamId={userTeamId}
@@ -734,7 +729,7 @@ export default function PlayoffsPage() {
           </Card>
           <Card>
             <ConferenceBracket
-              conference="NFC"
+              conference="NC"
               bracket={playoffBracket}
               teams={teams}
               userTeamId={userTeamId}
@@ -744,10 +739,10 @@ export default function PlayoffsPage() {
           </Card>
         </div>
 
-        {/* ---- Super Bowl ---- */}
+        {/* ---- The Championship ---- */}
         <Card>
           <CardHeader>
-            <CardTitle>🏆 Super Bowl</CardTitle>
+            <CardTitle>🏆 The Championship</CardTitle>
           </CardHeader>
           <div className="max-w-xs mx-auto">
             <MatchupCard

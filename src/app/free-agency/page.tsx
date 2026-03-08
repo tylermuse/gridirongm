@@ -1,16 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
-import { LEAGUE_MINIMUM_SALARY, LUXURY_TAX_RATE, computeLuxuryTax } from '@/lib/engine/store';
+import { LEAGUE_MINIMUM_SALARY, LUXURY_TAX_RATE, computeLuxuryTax, faPriceDecay, estimateSalary } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { initNegotiation, processOffer, type NegotiationState } from '@/lib/engine/negotiation';
-import { POSITIONS, ROSTER_LIMITS, type Position } from '@/types';
+import { generateFAEvaluation, type FAEvaluation } from '@/lib/engine/personnelReport';
+import { POSITIONS, ROSTER_LIMITS, type Position, type Player } from '@/types';
 
 function ratingColor(val: number): string {
   if (val >= 80) return 'text-green-600';
@@ -35,42 +36,108 @@ function positionStats(p: { position: string; stats: { gamesPlayed: number; pass
   }
 }
 
-function estimateSalary(overall: number, position?: string, age?: number, potential?: number): number {
-  const POSITION_SALARY_MULT: Record<string, number> = {
-    QB: 1.9, WR: 1.0, CB: 1.05, DL: 1.35, LB: 0.95, OL: 1.0,
-    S: 0.9, TE: 0.85, RB: 0.8, K: 0.25, P: 0.25,
-  };
-  const normalized = Math.max(0, (overall - 40) / 60);
-  const baseSalary = Math.max(LEAGUE_MINIMUM_SALARY, Math.pow(normalized, 1.6) * 42);
-  const posMult = position ? (POSITION_SALARY_MULT[position] ?? 1.0) : 1.0;
-  let salary = baseSalary * posMult;
-  // Age factor: younger players with upside command a premium, older players get discounted
-  if (age !== undefined) {
-    if (age <= 25) salary *= 1.15;
-    else if (age <= 27) salary *= 1.05;
-    else if (age >= 33) salary *= 0.65;
-    else if (age >= 31) salary *= 0.80;
-    else if (age >= 29) salary *= 0.90;
+
+function recColor(rec: FAEvaluation['recommendation']): string {
+  switch (rec) {
+    case 'Must Sign': return 'text-green-700 bg-green-50 border-green-200';
+    case 'Strong Target': return 'text-blue-700 bg-blue-50 border-blue-200';
+    case 'Worth Considering': return 'text-amber-700 bg-amber-50 border-amber-200';
+    case 'Depth Only': return 'text-gray-600 bg-gray-50 border-gray-200';
+    case 'Pass': return 'text-red-600 bg-red-50 border-red-200';
   }
-  // High-potential young players command more
-  if (potential !== undefined && age !== undefined && age <= 27) {
-    salary += Math.max(0, potential - overall) * 0.15;
-  }
-  if (position === 'K' || position === 'P') salary = Math.min(salary, 5.0);
-  return Math.round(salary * 10) / 10;
+}
+
+function FAEvaluationPanel({ player, roster, capSpace, marketSalary }: {
+  player: Player;
+  roster: Player[];
+  capSpace: number;
+  marketSalary: number;
+}) {
+  const evaluation = generateFAEvaluation(player, roster, capSpace, marketSalary);
+
+  return (
+    <div className="space-y-3">
+      {/* Header: recommendation badge + fit score */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg border ${recColor(evaluation.recommendation)}`}>
+            {evaluation.recommendation === 'Must Sign' && '🎯'}
+            {evaluation.recommendation === 'Strong Target' && '✅'}
+            {evaluation.recommendation === 'Worth Considering' && '🤔'}
+            {evaluation.recommendation === 'Depth Only' && '📋'}
+            {evaluation.recommendation === 'Pass' && '❌'}
+            {' '}{evaluation.recommendation}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wider text-[var(--text-sec)]">Fit Score</span>
+            <div className="w-20 h-2 rounded-full bg-[var(--surface)] overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${evaluation.fitScore >= 70 ? 'bg-green-500' : evaluation.fitScore >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                style={{ width: `${evaluation.fitScore}%` }}
+              />
+            </div>
+            <span className="text-xs font-bold">{evaluation.fitScore}</span>
+          </div>
+        </div>
+        <span className="text-[10px] uppercase tracking-wider text-[var(--text-sec)]">Front Office Evaluation</span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {/* Impact */}
+        <div className="col-span-2">
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-sec)] mb-1">Impact Assessment</div>
+          <p className="text-sm leading-relaxed">{evaluation.impactDescription}</p>
+        </div>
+
+        {/* Roster comparison */}
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-sec)] mb-1">Roster Comparison</div>
+          <p className="text-sm text-[var(--text)]">{evaluation.comparisons}</p>
+        </div>
+      </div>
+
+      {/* Contract verdict + concerns */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="col-span-2">
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-sec)] mb-1">Contract Analysis</div>
+          <p className="text-sm">{evaluation.contractVerdict}</p>
+        </div>
+        {evaluation.concerns.length > 0 && (
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-[var(--text-sec)] mb-1">Concerns</div>
+            <ul className="space-y-0.5">
+              {evaluation.concerns.map((c, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-xs text-amber-600">
+                  <span className="mt-1 w-1 h-1 rounded-full bg-amber-500 shrink-0" />
+                  {c}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* GM Quote */}
+      <div className="border-l-2 border-blue-400 pl-3">
+        <p className="text-sm italic text-[var(--text)]">{evaluation.foQuote}</p>
+        <span className="text-[10px] text-[var(--text-sec)]">— Front Office</span>
+      </div>
+    </div>
+  );
 }
 
 export default function FreeAgencyPage() {
-  const { phase, players, freeAgents, signFreeAgent, teams, userTeamId } = useGameStore();
+  const { phase, players, freeAgents, signFreeAgent, teams, userTeamId, faDay, faRefusals, advanceFADay } = useGameStore();
   const [affordableOnly, setAffordableOnly] = useState(false);
   const [filterPos, setFilterPos] = useState<Position | 'ALL'>('ALL');
   const [negotiation, setNegotiation] = useState<NegotiationState | null>(null);
   const [offerSalary, setOfferSalary] = useState(0);
   const [offerYears, setOfferYears] = useState(3);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null);
   const [walkedAwayIds, setWalkedAwayIds] = useState<Set<string>>(new Set());
 
-  // Allow free agent signings during regular season and freeAgency phase (NFL teams can sign FAs anytime)
+  // Allow free agent signings during regular season and freeAgency phase (teams can sign FAs anytime)
   const canSignFreeAgents = phase === 'freeAgency' || phase === 'regular';
 
   if (!canSignFreeAgents) {
@@ -111,20 +178,36 @@ export default function FreeAgencyPage() {
     .filter(Boolean)
     .sort((a, b) => b.ratings.overall - a.ratings.overall);
 
+  const decay = phase === 'freeAgency' ? faPriceDecay(faDay) : 1.0;
+
   let filteredAgents = allAgents.filter(p => !walkedAwayIds.has(p.id));
   if (filterPos !== 'ALL') {
     filteredAgents = filteredAgents.filter(p => p.position === filterPos);
   }
   if (affordableOnly) {
-    filteredAgents = filteredAgents.filter(p => estimateSalary(p.ratings.overall, p.position, p.age, p.potential) <= Math.max(capSpace, LEAGUE_MINIMUM_SALARY));
+    if (overCap) {
+      // Over cap: can only sign at league minimum. Only show players whose decayed market rate
+      // is close enough to minimum that they might accept (within 2x league min).
+      filteredAgents = filteredAgents.filter(p => {
+        const market = estimateSalary(p.ratings.overall, p.position, p.age, p.potential) * decay;
+        return market <= LEAGUE_MINIMUM_SALARY * 2;
+      });
+    } else {
+      // Under cap: filter to players whose market salary fits within cap space
+      const affordCap = Math.max(capSpace, LEAGUE_MINIMUM_SALARY);
+      filteredAgents = filteredAgents.filter(p => estimateSalary(p.ratings.overall, p.position, p.age, p.potential) * decay <= affordCap);
+    }
   }
   const agents = filteredAgents.slice(0, 60);
 
   function startNegotiation(player: typeof agents[0]) {
-    const salary = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
+    if (faRefusals.includes(player.id)) return;
+    const baseSal = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
+    const salary = Math.round(baseSal * decay * 10) / 10;
     const neg = initNegotiation(player, salary);
     setNegotiation(neg);
-    setOfferSalary(salary);
+    // When over cap, start offer at league minimum (that's all we can actually sign at)
+    setOfferSalary(overCap ? LEAGUE_MINIMUM_SALARY : salary);
     setOfferYears(neg.askingYears);
   }
 
@@ -134,7 +217,16 @@ export default function FreeAgencyPage() {
     setNegotiation(updated);
     // If accepted, sign the player
     if (updated.outcome === 'accepted') {
-      signFreeAgent(updated.playerId, updated.currentOfferSalary, updated.currentOfferYears);
+      const success = signFreeAgent(updated.playerId, updated.currentOfferSalary, updated.currentOfferYears);
+      if (!success) {
+        // Over cap and salary too high — override outcome to show rejection
+        setNegotiation({
+          ...updated,
+          outcome: 'rejected',
+          messages: [...updated.messages, { sender: 'system', text: `Signing blocked — salary $${updated.currentOfferSalary}M exceeds cap space. You can only sign at league minimum ($${LEAGUE_MINIMUM_SALARY}M/yr) while over the cap.`, type: 'negative' }],
+        });
+        return;
+      }
     }
   }
 
@@ -152,20 +244,66 @@ export default function FreeAgencyPage() {
   return (
     <GameShell>
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h2 className="text-2xl font-black">{phase === 'regular' ? 'Sign Free Agents' : 'Free Agency'}</h2>
             <div className="text-sm text-[var(--text-sec)]">
-              {allAgents.length} free agents available{phase === 'regular' ? ' · In-season signings' : ''}
+              {phase === 'freeAgency' && (
+                <span className="font-semibold text-blue-600 mr-2">Day {faDay} of 30</span>
+              )}
+              {allAgents.length} free agents available
+              {phase === 'regular' ? ' · In-season signings' : ''}
+              {phase === 'freeAgency' && decay < 1.0 && (
+                <span className="text-amber-600 ml-2">· Prices at {Math.round(decay * 100)}%</span>
+              )}
             </div>
           </div>
-          <div className="text-right">
-            <div className={`text-2xl font-black ${capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}`}>
-              ${capSpace}M
+          <div className="flex items-center gap-3">
+            {phase === 'freeAgency' && (
+              <div className="flex items-center gap-1.5">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={advanceFADay}
+                  disabled={faDay >= 30}
+                >
+                  Skip Day →
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => { for (let i = 0; i < 7; i++) advanceFADay(); }}
+                  disabled={faDay >= 30}
+                >
+                  Skip Week ⏩
+                </Button>
+              </div>
+            )}
+            <div className="text-right">
+              <div className={`text-2xl font-black ${capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}`}>
+                ${capSpace}M
+              </div>
+              <div className="text-xs text-[var(--text-sec)]">Cap Space</div>
             </div>
-            <div className="text-xs text-[var(--text-sec)]">Cap Space</div>
           </div>
         </div>
+
+        {/* FA Day progress bar */}
+        {phase === 'freeAgency' && (
+          <div className="mb-4">
+            <div className="h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
+              <div
+                className="h-full rounded-full bg-blue-500 transition-all"
+                style={{ width: `${(faDay / 30) * 100}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[10px] text-[var(--text-sec)] mt-1">
+              <span>Day 1</span>
+              <span>{faDay <= 5 ? 'Full Market' : faDay <= 15 ? 'Market Cooling' : faDay <= 25 ? 'Prices Dropping' : 'Bargain Hunting'}</span>
+              <span>Day 30</span>
+            </div>
+          </div>
+        )}
 
         {/* Over-cap warning */}
         {overCap && (
@@ -347,24 +485,65 @@ export default function FreeAgencyPage() {
                       <div>
                         <label className="text-xs text-[var(--text-sec)] block mb-1">
                           Salary: <span className="font-mono font-bold text-[var(--text)]">${offerSalary.toFixed(1)}M/yr</span>
-                          {overCap && offerSalary > LEAGUE_MINIMUM_SALARY && (
-                            <span className="text-red-600 ml-2">(over cap — min only)</span>
+                          {overCap && (
+                            <span className="text-red-600 ml-2">(over cap — league min only)</span>
                           )}
                         </label>
-                        <input
-                          type="range"
-                          min={LEAGUE_MINIMUM_SALARY}
-                          max={Math.max(negotiation.askingSalary * 1.3, 2)}
-                          step={0.1}
-                          value={offerSalary}
-                          onChange={e => setOfferSalary(Math.round(parseFloat(e.target.value) * 10) / 10)}
-                          className="w-full accent-blue-500"
-                        />
-                        <div className="flex justify-between text-[10px] text-[var(--text-sec)]">
-                          <span>${LEAGUE_MINIMUM_SALARY}M</span>
-                          <span className="text-amber-600">Asking: ${negotiation.askingSalary}M</span>
-                          <span>${(negotiation.askingSalary * 1.3).toFixed(1)}M</span>
-                        </div>
+                        {overCap ? (
+                          <div className="text-xs text-[var(--text-sec)] py-1">
+                            Locked at league minimum (${LEAGUE_MINIMUM_SALARY}M/yr) while over the salary cap.
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <div className="relative">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-[var(--text-sec)]">$</span>
+                                <input
+                                  type="number"
+                                  min={LEAGUE_MINIMUM_SALARY}
+                                  max={Math.max(negotiation.askingSalary * 2, 5)}
+                                  step={0.1}
+                                  value={offerSalary}
+                                  onChange={e => {
+                                    const val = parseFloat(e.target.value);
+                                    if (!isNaN(val)) setOfferSalary(Math.round(val * 10) / 10);
+                                  }}
+                                  className="w-28 pl-6 pr-2 py-1.5 text-sm font-mono font-bold bg-[var(--surface)] border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                />
+                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--text-sec)]">M/yr</span>
+                              </div>
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => setOfferSalary(Math.round(negotiation.askingSalary * 0.85 * 10) / 10)}
+                                  className="px-2 py-1 text-[10px] rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
+                                >
+                                  85%
+                                </button>
+                                <button
+                                  onClick={() => setOfferSalary(Math.round(negotiation.askingSalary * 0.95 * 10) / 10)}
+                                  className="px-2 py-1 text-[10px] rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
+                                >
+                                  95%
+                                </button>
+                                <button
+                                  onClick={() => setOfferSalary(negotiation.askingSalary)}
+                                  className="px-2 py-1 text-[10px] rounded bg-amber-100 text-amber-700 font-medium hover:bg-amber-200 transition-colors"
+                                >
+                                  Match
+                                </button>
+                                <button
+                                  onClick={() => setOfferSalary(Math.round(negotiation.askingSalary * 1.1 * 10) / 10)}
+                                  className="px-2 py-1 text-[10px] rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
+                                >
+                                  110%
+                                </button>
+                              </div>
+                            </div>
+                            <div className="text-[10px] text-[var(--text-sec)]">
+                              Asking: <span className="text-amber-600 font-medium">${negotiation.askingSalary}M/yr</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div>
@@ -415,19 +594,27 @@ export default function FreeAgencyPage() {
                 </thead>
                 <tbody>
                   {agents.map(p => {
-                    const salary = estimateSalary(p.ratings.overall, p.position, p.age, p.potential);
-                    const canAfford = !overCap || salary <= LEAGUE_MINIMUM_SALARY;
+                    const baseSal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential);
+                    const salary = Math.round(baseSal * decay * 10) / 10;
+                    const isRefused = faRefusals.includes(p.id);
+                    const isExpanded = expandedPlayerId === p.id;
                     return (
+                      <React.Fragment key={p.id}>
                       <tr
-                        key={p.id}
-                        className={`border-t border-[var(--border)] transition-colors ${
-                          negotiation?.playerId === p.id ? 'bg-blue-50' : 'hover:bg-[var(--surface-2)]'
+                        className={`border-t border-[var(--border)] transition-colors cursor-pointer ${
+                          negotiation?.playerId === p.id ? 'bg-blue-50' : isRefused ? 'opacity-60' : isExpanded ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'
                         }`}
+                        onClick={() => setExpandedPlayerId(isExpanded ? null : p.id)}
                       >
                         <td className="py-2.5 pl-2">
-                          <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-600 transition-colors">
-                            {p.firstName} {p.lastName}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <svg className={`w-3 h-3 text-[var(--text-sec)] transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                            </svg>
+                            <button onClick={(e) => { e.stopPropagation(); setSelectedPlayerId(p.id); }} className="font-semibold hover:text-blue-600 transition-colors">
+                              {p.firstName} {p.lastName}
+                            </button>
+                          </div>
                         </td>
                         <td className="py-2.5 text-center"><Badge>{p.position}</Badge></td>
                         <td className="py-2.5 text-center">{p.age}</td>
@@ -440,17 +627,36 @@ export default function FreeAgencyPage() {
                         <td className="py-2.5 text-left text-xs text-[var(--text-sec)]">
                           {positionStats(p)}
                         </td>
-                        <td className="py-2.5 text-right font-mono">${salary}M/yr</td>
-                        <td className="py-2.5 text-right pr-2">
-                          <Button
-                            size="sm"
-                            disabled={!!negotiation && negotiation.outcome === 'pending'}
-                            onClick={() => startNegotiation(p)}
-                          >
-                            Negotiate
-                          </Button>
+                        <td className="py-2.5 text-right font-mono">
+                          ${salary}M/yr
+                          {decay < 1.0 && (
+                            <span className="text-[10px] text-amber-600 ml-1">↓</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 text-right pr-2" onClick={e => e.stopPropagation()}>
+                          {isRefused ? (
+                            <span className="inline-block px-2 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded">
+                              Refuses
+                            </span>
+                          ) : (
+                            <Button
+                              size="sm"
+                              disabled={!!negotiation && negotiation.outcome === 'pending'}
+                              onClick={() => startNegotiation(p)}
+                            >
+                              Negotiate
+                            </Button>
+                          )}
                         </td>
                       </tr>
+                      {isExpanded && (
+                        <tr className="border-t border-[var(--border)]">
+                          <td colSpan={8} className="px-4 py-3 bg-[var(--surface-2)]/50">
+                            <FAEvaluationPanel player={p} roster={roster} capSpace={capSpace} marketSalary={salary} />
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
                     );
                   })}
                   {agents.length === 0 && (

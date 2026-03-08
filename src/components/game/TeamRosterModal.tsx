@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useGameStore } from '@/lib/engine/store';
+import { useGameStore, computeAllLeagueTeams } from '@/lib/engine/store';
 import { Modal } from '@/components/ui/Modal';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { POSITIONS } from '@/types';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { Player, Position } from '@/types';
 
 interface TeamRosterModalProps {
@@ -86,16 +87,19 @@ function getStatValues(p: Player): [string, string] {
 type SortKey = 'name' | 'pos' | 'age' | 'ovr' | 'pot' | 'contract' | 'gp';
 
 export function TeamRosterModal({ teamId, onClose, onPlayerClick }: TeamRosterModalProps) {
-  const { teams, players, season, seasonHistory } = useGameStore();
+  const { teams, players, season, seasonHistory, champions } = useGameStore();
   const [filterPos, setFilterPos] = useState<Position | 'ALL'>('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('pos');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const currentChamp = champions?.find(c => c.season === season);
 
   if (!teamId) return null;
 
   const team = teams.find(t => t.id === teamId);
   if (!team) return null;
 
+  const isChampTeam = currentChamp?.teamId === teamId;
   const teamRoster = players.filter(p => p.teamId === teamId && !p.retired);
 
   const avgOvr = teamRoster.length > 0
@@ -104,12 +108,15 @@ export function TeamRosterModal({ teamId, onClose, onPlayerClick }: TeamRosterMo
 
   const capSpace = Math.round((team.salaryCap - team.totalPayroll) * 10) / 10;
 
-  // Pro Bowl players
+  // All-Pro players (current season live + last completed season)
+  const allProPlayerIds = new Set<string>();
+  const currentAllLeague = computeAllLeagueTeams(useGameStore.getState() as never);
+  for (const entry of currentAllLeague.first) allProPlayerIds.add(entry.playerId);
+  for (const entry of currentAllLeague.second) allProPlayerIds.add(entry.playerId);
   const lastSeason = seasonHistory.length > 0 ? seasonHistory[seasonHistory.length - 1] : null;
-  const proBowlPlayerIds = new Set<string>();
   if (lastSeason) {
-    for (const entry of (lastSeason.allLeagueFirst ?? [])) proBowlPlayerIds.add(entry.playerId);
-    for (const entry of (lastSeason.allLeagueSecond ?? [])) proBowlPlayerIds.add(entry.playerId);
+    for (const entry of (lastSeason.allLeagueFirst ?? [])) allProPlayerIds.add(entry.playerId);
+    for (const entry of (lastSeason.allLeagueSecond ?? [])) allProPlayerIds.add(entry.playerId);
   }
 
   // Depth position for each player
@@ -168,12 +175,7 @@ export function TeamRosterModal({ teamId, onClose, onPlayerClick }: TeamRosterMo
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-[var(--border)] sticky top-0 bg-[var(--surface)] z-10 rounded-t-2xl">
         <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-black text-white"
-            style={{ backgroundColor: team.primaryColor }}
-          >
-            {team.abbreviation}
-          </div>
+          <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="lg" />
           <div>
             <h3 className="text-lg font-black">{team.city} {team.name}</h3>
             <div className="flex items-center gap-3 text-xs text-[var(--text-sec)]">
@@ -251,16 +253,20 @@ export function TeamRosterModal({ teamId, onClose, onPlayerClick }: TeamRosterMo
                     {/* Name */}
                     <td className="py-2 px-2 pl-3">
                       <div className="flex items-center gap-1.5">
-                        {proBowlPlayerIds.has(p.id) && <span className="text-amber-600 text-xs">★</span>}
+                        {allProPlayerIds.has(p.id) && <span className="text-amber-600 text-xs">★</span>}
                         {onPlayerClick ? (
                           <button
                             onClick={() => { onClose(); onPlayerClick(p.id); }}
                             className="font-semibold hover:text-blue-600 transition-colors truncate"
                           >
                             {p.firstName} {p.lastName}
+                            {isChampTeam && <span className="ml-0.5 text-xs" title="Championship Ring">💍</span>}
                           </button>
                         ) : (
-                          <span className="font-semibold truncate">{p.firstName} {p.lastName}</span>
+                          <span className="font-semibold truncate">
+                            {p.firstName} {p.lastName}
+                            {isChampTeam && <span className="ml-0.5 text-xs" title="Championship Ring">💍</span>}
+                          </span>
                         )}
                       </div>
                       {p.injury && (

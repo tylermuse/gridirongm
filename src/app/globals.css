@@ -1,25 +1,23 @@
 @import "tailwindcss";
 
-@layer base {
-  :root {
-    --bg: #0f1623;
-    --surface: #111827;
-    --surface-2: #1a2235;
-    --border: #1f2937;
-    --text: #f1f5f9;
-    --text-sec: #94a3b8;
-    --accent: #3b82f6;
-    --accent-glow: rgba(59, 130, 246, 0.15);
-    --green: #22c55e;
-    --red: #ef4444;
-    --amber: #f59e0b;
-  }
+:root {
+  --bg: #f0f4f8;
+  --surface: #ffffff;
+  --surface-2: #e8edf4;
+  --border: #d1d9e6;
+  --text: #1a2332;
+  --text-sec: #5a6a7e;
+  --accent: #2563eb;
+  --accent-glow: rgba(37, 99, 235, 0.12);
+  --green: #16a34a;
+  --red: #dc2626;
+  --amber: #d97706;
+}
 
-  html, body {
-    background-color: var(--bg) !important;
-    color: var(--text);
-    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-  }
+html, body {
+  background-color: var(--bg) !important;
+  color: var(--text) !important;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
 /* Custom scrollbar */

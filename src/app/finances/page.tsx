@@ -12,10 +12,10 @@ import type { Position } from '@/types';
 import { POSITIONS } from '@/types';
 
 function ratingColor(val: number) {
-  if (val >= 80) return 'text-green-400';
-  if (val >= 65) return 'text-blue-400';
-  if (val >= 50) return 'text-amber-400';
-  return 'text-red-400';
+  if (val >= 80) return 'text-green-600';
+  if (val >= 65) return 'text-blue-600';
+  if (val >= 50) return 'text-amber-600';
+  return 'text-red-600';
 }
 
 export default function FinancesPage() {
@@ -81,13 +81,13 @@ export default function FinancesPage() {
             </div>
             <div className="text-center">
               <div className="text-xs text-[var(--text-sec)] mb-1">Committed</div>
-              <div className={`text-3xl font-black ${capPct > 0.95 ? 'text-red-400' : capPct > 0.85 ? 'text-amber-400' : 'text-green-400'}`}>
+              <div className={`text-3xl font-black ${capPct > 0.95 ? 'text-red-600' : capPct > 0.85 ? 'text-amber-600' : 'text-green-600'}`}>
                 ${Math.round(used * 10) / 10}M
               </div>
             </div>
             <div className="text-center">
               <div className="text-xs text-[var(--text-sec)] mb-1">Available</div>
-              <div className={`text-3xl font-black ${remaining < 10 ? 'text-red-400' : remaining < 25 ? 'text-amber-400' : 'text-green-400'}`}>
+              <div className={`text-3xl font-black ${remaining < 10 ? 'text-red-600' : remaining < 25 ? 'text-amber-600' : 'text-green-600'}`}>
                 ${Math.round(remaining * 10) / 10}M
               </div>
             </div>
@@ -102,10 +102,10 @@ export default function FinancesPage() {
           <div className="text-xs text-[var(--text-sec)] mt-1 text-right">{(capPct * 100).toFixed(1)}% of cap used</div>
           {remaining < 0 && (
             <div className="mt-2 space-y-1">
-              <div className="text-sm text-red-400 font-semibold">
+              <div className="text-sm text-red-600 font-semibold">
                 Over the salary cap by ${Math.abs(Math.round(remaining * 10) / 10)}M — release players to clear space.
               </div>
-              <div className="text-sm text-red-400">
+              <div className="text-sm text-red-600">
                 Luxury Tax: ${computeLuxuryTax(used, cap)}M
                 <span className="text-xs text-[var(--text-sec)] ml-2">
                   ({LUXURY_TAX_RATE}x penalty on every $1M over the cap)
@@ -158,7 +158,7 @@ export default function FinancesPage() {
                   {expiring.map(p => (
                     <tr key={p.id} className="border-t border-[var(--border)]">
                       <td className="py-2">
-                        <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-400 transition-colors">
+                        <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-600 transition-colors">
                           {p.firstName} {p.lastName}
                         </button>
                         <div className="text-xs text-[var(--text-sec)]">{p.position} · Age {p.age}</div>
@@ -190,7 +190,7 @@ export default function FinancesPage() {
                 {topSalaries.map(p => (
                   <tr key={p.id} className="border-t border-[var(--border)]">
                     <td className="py-2">
-                      <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-400 transition-colors">
+                      <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-600 transition-colors">
                         {p.firstName} {p.lastName}
                       </button>
                       <div className="text-xs text-[var(--text-sec)]">{p.position} · {p.contract.yearsLeft}yr</div>

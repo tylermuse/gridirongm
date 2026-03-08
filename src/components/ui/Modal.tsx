@@ -44,7 +44,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 'lg' }: Mod
       onClick={onClose}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60" />
+      <div className="absolute inset-0 bg-black/40" />
 
       {/* Modal content */}
       <div

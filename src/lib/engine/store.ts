@@ -8,17 +8,19 @@ import type {
   NewsItem, TradeProposal, ResigningEntry, DraftPick, LeagueSettings,
 } from '@/types';
 import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, type Position, type DeadCapEntry } from '@/types';
-import { NFL_TEAMS } from '@/lib/data/teams';
-import { loadFbgmLeagueFromUrl } from '@/lib/data/fbgmRoster';
+import { LEAGUE_TEAMS } from '@/lib/data/teams';
+import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { generateRoster, generateDraftClass, generatePlayer } from './playerGen';
 import { generateSchedule } from './schedule';
 import { simulateGame } from './simulate';
 import { developPlayers } from './development';
+import { generateWeeklyRecap } from './recap';
+import { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
 
-const SAVE_VERSION = 8;
+const SAVE_VERSION = 11;
 
-// Defaults for export (UI uses these for display when store isn't accessible)
-export const LEAGUE_MINIMUM_SALARY = DEFAULT_LEAGUE_SETTINGS.leagueMinSalary;
+// Re-export for UI consumers
+export { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
 export const LUXURY_TAX_RATE = DEFAULT_LEAGUE_SETTINGS.luxuryTaxRate;
 
 export function computeLuxuryTax(payroll: number, cap: number): number {
@@ -29,7 +31,7 @@ export function computeLuxuryTax(payroll: number, cap: number): number {
 
 interface GameStore extends LeagueState {
   initialized: boolean;
-  newLeague: (teamId: string) => Promise<void>;
+  newLeague: (teamId: string, leagueFileUrl?: string) => Promise<void>;
   resetLeague: () => void;
   simWeek: () => void;
   simToWeek: (targetWeek: number) => void;
@@ -42,12 +44,14 @@ interface GameStore extends LeagueState {
   advanceToResigning: () => void;
   resignPlayer: (playerId: string, salary: number, years: number) => boolean;
   passOnResigning: (playerId: string) => void;
+  franchiseTagPlayer: (playerId: string) => boolean;
   advanceToDraft: () => void;
   draftPlayer: (playerId: string) => void;
   simDraftPick: () => void;
   simToUserDraftPick: () => void;
   simToEndDraft: () => void;
   advanceToFreeAgency: () => void;
+  advanceFADay: () => void;
   signFreeAgent: (playerId: string, salary: number, years: number) => boolean;
   aiSignFreeAgents: () => void;
   releasePlayer: (playerId: string) => void;
@@ -67,7 +71,7 @@ interface GameStore extends LeagueState {
   respondToTradeProposal: (proposalId: string, accept: boolean) => boolean;
   solicitTradingBlockProposals: (playerIds: string[], pickIds: string[], seekPositions: Position[], seekDraftPicks?: boolean) => void;
   // PRD-07: Scouting
-  setScoutingLevel: (level: 0 | 1 | 2 | 3 | 4) => void;
+  setScoutingLevel: (level: 0 | 1 | 2) => void;
   deepScoutPlayer: (playerId: string) => void;
   // PRD-13: Depth chart
   reorderDepthChart: (position: Position, playerIds: string[]) => void;
@@ -159,7 +163,8 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
 
   const prospects = state.freeAgents
     .map((id) => state.players.find((player) => player.id === id))
-    .filter((player): player is Player => Boolean(player));
+    .filter((player): player is Player => Boolean(player))
+    .filter((player) => player.experience === 0);
   if (prospects.length === 0) return undefined;
 
   const ranked = prospects
@@ -331,30 +336,50 @@ function generateWeekNews(
 // Trade value formula (PRD-04)
 // ---------------------------------------------------------------------------
 
-const PICK_VALUES = [150, 90, 55, 35, 20, 10, 5]; // Rounds 1-7
+// Realistic pick values: 1st rounders are extremely valuable.
+// A 1st round pick should only be traded for elite players (85+ OVR).
+// Two 1sts should cost a true superstar (90+ OVR, young).
+const PICK_VALUES = [1000, 450, 200, 100, 50, 20, 10]; // Rounds 1-7
 
 function playerTradeValue(player: Player): number {
   const ageMultiplier =
-    player.age <= 25 ? 1.2 :
+    player.age <= 25 ? 1.3 :
+    player.age <= 27 ? 1.1 :
     player.age <= 29 ? 1.0 :
-    player.age <= 33 ? 0.7 : 0.3;
-  return (player.ratings.overall * 2 + player.potential * 0.5) * ageMultiplier;
+    player.age <= 31 ? 0.7 :
+    player.age <= 33 ? 0.45 : 0.2;
+  // Exponential curve: stars (85+) are worth dramatically more than average (65) players.
+  // 56 OVR → ~30 value, 70 OVR → ~200, 80 OVR → ~500, 90 OVR → ~1200
+  const normalized = Math.max(0, (player.ratings.overall - 40) / 55);
+  const base = Math.pow(normalized, 2.5) * 1200;
+  const potBonus = Math.max(0, player.potential - player.ratings.overall) * 3;
+  return (base + potBonus) * ageMultiplier;
 }
 
 function pickTradeValue(pick: DraftPick): number {
-  return PICK_VALUES[(pick.round - 1)] ?? 5;
+  return PICK_VALUES[(pick.round - 1)] ?? 10;
 }
 
 // ---------------------------------------------------------------------------
 // Scouting helpers (PRD-07)
 // ---------------------------------------------------------------------------
 
-const SCOUTING_ERRORS = [12, 8, 5, 3, 1]; // Indexed by scoutingLevel
+const SCOUTING_ERRORS = [12, 5, 2]; // Indexed by scoutingLevel: 0=Entry(±12), 1=Pro(±5), 2=Elite(±2)
 
-function gaussianScout(): number {
-  const u1 = Math.random();
-  const u2 = Math.random();
-  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+/** Deterministic hash from player ID → stable noise factor in [-1, 1] */
+function playerNoiseDirection(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = (h * 31 + id.charCodeAt(i)) | 0;
+  }
+  // Map to [-1, 1] using a second pass for better distribution
+  const h2 = ((h * 2654435769) >>> 0) / 4294967296; // golden ratio hash → [0,1)
+  // Box-Muller-ish: approximate gaussian from uniform, clamped to [-2.5, 2.5]
+  const u1 = Math.max(0.001, h2);
+  const h3 = (((h * 1103515245 + 12345) >>> 0) & 0x7fffffff) / 2147483647;
+  const u2 = h3;
+  const gaussian = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  return Math.max(-2.5, Math.min(2.5, gaussian));
 }
 
 function computeScoutingData(
@@ -364,7 +389,10 @@ function computeScoutingData(
   const error = SCOUTING_ERRORS[scoutingLevel] ?? 12;
   const data: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }> = {};
   for (const p of prospects) {
-    const noise = Math.round(gaussianScout() * error);
+    // Deterministic noise based on player ID — direction stays consistent across levels,
+    // only magnitude changes. This prevents OVR from randomly jumping when switching levels.
+    const direction = playerNoiseDirection(p.id);
+    const noise = Math.round(direction * error);
     const scoutedOvr = Math.max(20, Math.min(99, p.ratings.overall + noise));
     data[p.id] = { scoutedOvr, error, deepScouted: false };
   }
@@ -375,63 +403,86 @@ function computeScoutingData(
 // Re-signing helpers (PRD-03)
 // ---------------------------------------------------------------------------
 
-/**
- * Estimates market salary for a player based on overall rating and position.
- * Calibrated to real NFL salary ranges:
- *   - Elite QB (95+):  ~$45-50M   (Mahomes/Burrow tier)
- *   - Elite WR (93+):  ~$27-30M   (CeeDee Lamb tier)
- *   - Elite DL (93+):  ~$25-28M
- *   - Good starter (80): ~$10-14M
- *   - Backup (65):     ~$2-4M
- *   - K/P:             capped at $5M max
- *
- * Uses an exponential curve so elite players command disproportionately more.
+// estimateSalary is now imported from ./salary.ts (re-exported above for external consumers)
+
+/** Compute franchise tag salary: blended positional average scaled by the player's quality.
+ *  For elite players (OVR 85+), this equals the top-5 positional average (like the real league).
+ *  For average or below players, the tag is capped at a reasonable multiple of their market value
+ *  so you don't see a 49 OVR player commanding $36M on a tag.
  */
-const POSITION_SALARY_MULTIPLIER: Partial<Record<Position, number>> = {
-  QB: 1.9,
-  WR: 1.0,
-  CB: 1.05,
-  DL: 1.35,
-  LB: 0.95,
-  OL: 1.0,
-  S: 0.9,
-  TE: 0.85,
-  RB: 0.8,
-  K: 0.25,
-  P: 0.25,
-};
+export function computeFranchiseTagSalary(position: Position, players: Player[], taggedPlayer?: Player): number {
+  const posPlayers = players
+    .filter(p => p.position === position && p.teamId && !p.retired)
+    .sort((a, b) => b.contract.salary - a.contract.salary);
+  const top5 = posPlayers.slice(0, 5);
+  if (top5.length === 0) return LEAGUE_MINIMUM_SALARY;
+  const positionalAvg = top5.reduce((sum, p) => sum + p.contract.salary, 0) / top5.length;
 
-function estimateSalary(overall: number, position?: Position, age?: number, potential?: number): number {
-  // Exponential curve: low-end players get minimum, elite players get $40-55M
-  const normalized = Math.max(0, (overall - 40) / 60);
-  const baseSalary = Math.max(LEAGUE_MINIMUM_SALARY, Math.pow(normalized, 1.6) * 42);
+  // If no specific player provided, return the raw positional average
+  if (!taggedPlayer) return Math.round(positionalAvg * 10) / 10;
 
-  // Position multiplier — QBs command the most, K/P the least
-  const posMult = position ? (POSITION_SALARY_MULTIPLIER[position] ?? 1.0) : 1.0;
-  let salary = baseSalary * posMult;
+  // Scale the tag based on the player's quality
+  const playerMarket = estimateSalary(taggedPlayer.ratings.overall, taggedPlayer.position, taggedPlayer.age, taggedPlayer.potential);
+  // Tag is 110% of market value or the top-5 positional average, whichever is higher
+  // but capped at 150% of market value to prevent absurd tags for weak players
+  const tag = Math.max(playerMarket * 1.1, Math.min(positionalAvg, playerMarket * 1.5));
+  return Math.round(tag * 10) / 10;
+}
 
-  // Age factor: younger players with upside command a premium
-  // Older declining players get discounted
-  if (age !== undefined) {
-    if (age <= 25) salary *= 1.15;       // Young ascending — premium
-    else if (age <= 27) salary *= 1.05;  // Prime years — slight premium
-    else if (age >= 33) salary *= 0.65;  // Declining — steep discount
-    else if (age >= 31) salary *= 0.80;  // Late career — discount
-    else if (age >= 29) salary *= 0.90;  // Starting to age
-  }
+/** Returns the price multiplier for the current FA day (1.0 on day 1, minimum 0.50 on day 30). */
+export function faPriceDecay(faDay: number): number {
+  if (faDay <= 5) return 1.0;
+  if (faDay <= 15) return 1.0 - (faDay - 5) * 0.02;   // -2%/day → day 15 = 0.80
+  if (faDay <= 25) return 0.80 - (faDay - 15) * 0.03;  // -3%/day → day 25 = 0.50
+  return 0.50;                                           // floor at 50%
+}
 
-  // High-potential young players command more (teams pay for ceiling)
-  if (potential !== undefined && age !== undefined && age <= 27) {
-    const potentialBonus = Math.max(0, potential - overall) * 0.15;
-    salary += potentialBonus;
-  }
+/** Determines which free agents refuse to negotiate with the user's team. */
+function computeFARefusals(
+  freeAgentIds: string[],
+  players: Player[],
+  userTeam: Team,
+  faDay: number,
+): string[] {
+  const totalGames = userTeam.record.wins + userTeam.record.losses;
+  const winPct = totalGames > 0 ? userTeam.record.wins / totalGames : 0.5;
+  const isBadTeam = winPct < 0.35;
 
-  // K/P hard cap at $5M
-  if (position === 'K' || position === 'P') {
-    salary = Math.min(salary, 5.0);
-  }
+  return freeAgentIds.filter(pid => {
+    const p = players.find(pl => pl.id === pid);
+    if (!p) return false;
 
-  return Math.round(salary * 10) / 10;
+    // Previously unhappy → always refuses initially
+    if (p.mood < 40) {
+      // But even unhappy players acquiesce over time
+      if (faDay >= 15) {
+        const hash = p.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+        const acquiesceChance = (faDay - 15) * 0.06;
+        const acquiesceRoll = ((hash * 13 + faDay * 17) % 100) / 100;
+        if (acquiesceRoll < acquiesceChance) return false;
+      }
+      return true;
+    }
+
+    // Bad team: some players refuse based on quality
+    if (isBadTeam) {
+      const eliteThreshold = p.ratings.overall >= 85 ? 0.60 : p.ratings.overall >= 75 ? 0.35 : 0.15;
+      // Deterministic hash for stable refusal within a day
+      const hash = p.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+      const roll = ((hash * 7 + faDay * 3) % 100) / 100;
+      if (roll < eliteThreshold) {
+        // Acquiesce: after day 15, growing chance they stop refusing
+        if (faDay >= 15) {
+          const acquiesceChance = (faDay - 15) * 0.06;
+          const acquiesceRoll = ((hash * 13 + faDay * 17) % 100) / 100;
+          if (acquiesceRoll < acquiesceChance) return false;
+        }
+        return true;
+      }
+    }
+
+    return false;
+  });
 }
 
 function computeResigningEntry(player: Player, team: Team): ResigningEntry {
@@ -463,11 +514,11 @@ function teamCompareFn(a: Team, b: Team): number {
   return winPct(b) - winPct(a) || pointDiff(b) - pointDiff(a);
 }
 
-function computePlayoffSeeds(teams: Team[]): { AFC: string[]; NFC: string[] } {
-  const result: { AFC: string[]; NFC: string[] } = { AFC: [], NFC: [] };
+function computePlayoffSeeds(teams: Team[]): { AC: string[]; NC: string[] } {
+  const result: { AC: string[]; NC: string[] } = { AC: [], NC: [] };
   const divisions = ['North', 'South', 'East', 'West'] as const;
 
-  for (const conf of ['AFC', 'NFC'] as const) {
+  for (const conf of ['AC', 'NC'] as const) {
     const confTeams = teams.filter(t => t.conference === conf);
 
     const divWinners = divisions
@@ -488,10 +539,10 @@ function computePlayoffSeeds(teams: Team[]): { AFC: string[]; NFC: string[] } {
   return result;
 }
 
-function buildBracket(seeds: { AFC: string[]; NFC: string[] }, _teams: Team[]): import('@/types').PlayoffMatchup[] {
+function buildBracket(seeds: { AC: string[]; NC: string[] }, _teams: Team[]): import('@/types').PlayoffMatchup[] {
   const matchups: import('@/types').PlayoffMatchup[] = [];
 
-  for (const conf of ['AFC', 'NFC'] as const) {
+  for (const conf of ['AC', 'NC'] as const) {
     const s = seeds[conf];
     const c = conf.toLowerCase();
 
@@ -542,12 +593,12 @@ function buildBracket(seeds: { AFC: string[]; NFC: string[] }, _teams: Team[]): 
   }
 
   matchups.push({
-    id: 'super-bowl', round: 4, conference: 'Super Bowl',
+    id: 'championship', round: 4, conference: 'Championship',
     homeTeamId: null, awayTeamId: null,
     homeSeed: null, awaySeed: null,
     homeScore: null, awayScore: null, winnerId: null,
-    homeFeedsFrom: 'afc-conf',
-    awayFeedsFrom: 'nfc-conf',
+    homeFeedsFrom: 'ac-conf',
+    awayFeedsFrom: 'nc-conf',
   });
 
   return matchups;
@@ -557,7 +608,7 @@ function propagateWinner(
   matchups: import('@/types').PlayoffMatchup[],
   decidedId: string,
   winnerId: string,
-  playoffSeeds: { AFC: string[]; NFC: string[] },
+  playoffSeeds: { AC: string[]; NC: string[] },
 ): import('@/types').PlayoffMatchup[] {
   const teamSeedMap = new Map<string, number>();
   for (const teamIds of Object.values(playoffSeeds)) {
@@ -593,9 +644,9 @@ function propagateWinner(
     return updated;
   });
 
-  // NFL re-seeding: after all 3 Wild Card games in a conference finish,
+  // Re-seeding: after all 3 Wild Card games in a conference finish,
   // assign divisional matchups so #1 plays the LOWEST remaining seed.
-  for (const conf of ['AFC', 'NFC'] as const) {
+  for (const conf of ['AC', 'NC'] as const) {
     const c = conf.toLowerCase();
     const wcGames = result.filter(m => m.conference === conf && m.round === 1);
     const allWcDone = wcGames.every(m => m.winnerId !== null);
@@ -683,22 +734,22 @@ function computeSeasonAwards(state: LeagueState): { award: string; playerId: str
 // All-League / All-Rookie team selection
 // ---------------------------------------------------------------------------
 
-/** Positional slot counts for All-League teams (mirrors NFL All-Pro format). */
+/** Positional slot counts for All-League teams (mirrors All-Pro roster format). */
 const ALL_LEAGUE_SLOTS: { position: Position; count: number }[] = [
   { position: 'QB', count: 1 },
-  { position: 'RB', count: 1 },
+  { position: 'RB', count: 2 },
   { position: 'WR', count: 3 },
   { position: 'TE', count: 1 },
-  { position: 'OL', count: 2 },
-  { position: 'DL', count: 2 },
+  { position: 'OL', count: 3 },
+  { position: 'DL', count: 3 },
   { position: 'LB', count: 3 },
   { position: 'CB', count: 2 },
-  { position: 'S', count: 1 },
+  { position: 'S', count: 2 },
   { position: 'K', count: 1 },
   { position: 'P', count: 1 },
 ];
 
-function computeAllLeagueTeams(state: LeagueState): {
+export function computeAllLeagueTeams(state: LeagueState): {
   first: { position: Position; playerId: string; teamId: string }[];
   second: { position: Position; playerId: string; teamId: string }[];
   allRookie: { position: Position; playerId: string; teamId: string }[];
@@ -812,25 +863,33 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
       const aiPicks = aiTeam.draftPicks.filter(pk => pk.year >= state.season);
       if (aiPicks.length > 0) {
         // Prefer lower-round picks (less valuable) to add as sweetener
+        // Don't add a pick that would make the offer more than 2x target value
         const sortedPicks = [...aiPicks].sort((a, b) => b.round - a.round);
-        const pick = sortedPicks[0];
-        offeredPickIds.push(pick.id);
-        offeredValue += pickTradeValue(pick);
+        const pick = sortedPicks.find(pk => offeredValue + pickTradeValue(pk) <= targetValue * 2.0);
+        if (pick) {
+          offeredPickIds.push(pick.id);
+          offeredValue += pickTradeValue(pick);
+        }
       }
     }
 
     // ~20% chance: offer ONLY a draft pick (no player) for a mid-tier player
-    const pickOnlyTrade = Math.random() < 0.20 && targetValue < 200;
+    // Pick must be proportional to player value — don't offer Rd 1 for a scrub
+    const pickOnlyTrade = Math.random() < 0.20 && targetValue >= 50 && targetValue < 400;
     let offeredPlayerIds = [aiOffer.id];
     if (pickOnlyTrade) {
-      // Offer a high-value pick instead of a player
-      const aiPicks = aiTeam.draftPicks.filter(pk => pk.year >= state.season && pk.round <= 3);
+      // Find the best-fit pick that doesn't massively overshoot
+      const aiPicks = aiTeam.draftPicks
+        .filter(pk => pk.year >= state.season)
+        .map(pk => ({ pick: pk, pv: pickTradeValue(pk) }))
+        .filter(({ pv }) => pv <= targetValue * 2.0) // Don't overshoot by more than 2x
+        .sort((a, b) => Math.abs(a.pv - targetValue) - Math.abs(b.pv - targetValue));
       if (aiPicks.length > 0) {
-        const pick = aiPicks[Math.floor(Math.random() * aiPicks.length)];
+        const { pick, pv } = aiPicks[0];
         offeredPlayerIds = [];
         offeredPickIds.length = 0;
         offeredPickIds.push(pick.id);
-        offeredValue = pickTradeValue(pick);
+        offeredValue = pv;
       }
     }
 
@@ -871,6 +930,8 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   draftOrder: [],
   draftResults: [],
   freeAgents: [],
+  faDay: 0,
+  faRefusals: [],
   playoffBracket: null,
   playoffSeeds: null,
   champions: [],
@@ -879,11 +940,12 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   saveVersion: SAVE_VERSION,
   resigningPlayers: [],
   tradeProposals: [],
-  scoutingLevel: 1,
+  scoutingLevel: 0,
   draftScoutingData: {},
   finalsMvpPlayerId: null,
   leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
   suppressTradePopups: false,
+  weeklyRecaps: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -896,8 +958,10 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
   const weekGames = state.schedule.filter(g => g.week === state.week && !g.played);
   if (weekGames.length === 0) return null;
 
-  // Auto-resort all teams' depth charts by OVR each week (fixes stale ordering from old saves)
+  // Auto-resort AI teams' depth charts by OVR each week.
+  // User team depth chart is NOT touched — the user controls it via drag-reorder.
   const resortedTeams = state.teams.map(t => {
+    if (t.id === state.userTeamId) return t; // preserve user's manual depth chart
     const newDepthChart = { ...t.depthChart };
     for (const pos of POSITIONS) {
       const arr = newDepthChart[pos] ?? [];
@@ -1038,9 +1102,10 @@ export const useGameStore = create<GameStore>()(
       initialized: false,
       ...EMPTY_LEAGUE_STATE,
 
-      newLeague: async (userTeamId: string) => {
+      newLeague: async (userTeamId: string, leagueFileUrl?: string) => {
         try {
-          const imported = await loadFbgmLeagueFromUrl();
+          if (!leagueFileUrl) throw new Error('No league file URL provided');
+          const imported = await loadLeagueFromUrl(leagueFileUrl);
           const userTeam = imported.teams.find((t) => t.abbreviation === userTeamId) ?? imported.teams[0];
           const schedule = generateSchedule(imported.teams, imported.season);
 
@@ -1070,6 +1135,8 @@ export const useGameStore = create<GameStore>()(
             draftOrder: [],
             draftResults: [],
             freeAgents: fbgmFAs.map(p => p.id),
+            faDay: 0,
+            faRefusals: [],
             playoffBracket: null,
             playoffSeeds: null,
             champions: [],
@@ -1078,19 +1145,20 @@ export const useGameStore = create<GameStore>()(
             saveVersion: SAVE_VERSION,
             resigningPlayers: [],
             tradeProposals: [],
-            scoutingLevel: 1,
+            scoutingLevel: 0,
             draftScoutingData: {},
             finalsMvpPlayerId: null,
             leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
             suppressTradePopups: false,
+            weeklyRecaps: [],
           });
           return;
         } catch (error) {
-          console.warn('Failed to import FBGM roster, falling back to generated league.', error);
+          console.warn('Failed to import league data, falling back to generated league.', error);
         }
 
         const allPlayers: Player[] = [];
-        const teams: Team[] = NFL_TEAMS.map(t => {
+        const teams: Team[] = LEAGUE_TEAMS.map(t => {
           const id = uuid();
           const tierMean = 55 + Math.random() * 20;
           const roster = generateRoster(id, tierMean);
@@ -1112,6 +1180,7 @@ export const useGameStore = create<GameStore>()(
             })),
             depthChart: buildDefaultDepthChart(roster),
             deadCap: [],
+            franchiseTagUsed: false,
           };
         });
 
@@ -1145,6 +1214,8 @@ export const useGameStore = create<GameStore>()(
           draftOrder: [],
           draftResults: [],
           freeAgents: initialFAs.map(p => p.id),
+          faDay: 0,
+          faRefusals: [],
           playoffBracket: null,
           playoffSeeds: null,
           champions: [],
@@ -1153,11 +1224,12 @@ export const useGameStore = create<GameStore>()(
           saveVersion: SAVE_VERSION,
           resigningPlayers: [],
           tradeProposals: [],
-          scoutingLevel: 1,
+          scoutingLevel: 0,
           draftScoutingData: {},
           finalsMvpPlayerId: null,
           leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
           suppressTradePopups: false,
+          weeklyRecaps: [],
         });
       },
 
@@ -1170,14 +1242,21 @@ export const useGameStore = create<GameStore>()(
         if (state.phase !== 'regular') return;
         const result = simulateOneWeek(state);
         if (!result) return;
+
+        // Generate weekly recap from this week's games
+        const simmedWeek = state.week;
+        const weekGames = (result.patch.schedule as GameResult[]).filter(g => g.week === simmedWeek && g.played);
+        const recap = generateWeeklyRecap(weekGames, result.patch.teams as Team[], result.patch.players as Player[], state.season, simmedWeek);
+        const weeklyRecaps = [...state.weeklyRecaps, recap];
+
         if (result.isSeasonOver) {
           // Compute playoff bracket in the same set() call
           const teams = result.patch.teams as Team[];
           const seeds = computePlayoffSeeds(teams);
           const bracket = buildBracket(seeds, teams);
-          set({ ...result.patch, playoffSeeds: seeds, playoffBracket: bracket });
+          set({ ...result.patch, playoffSeeds: seeds, playoffBracket: bracket, weeklyRecaps });
         } else {
-          set(result.patch);
+          set({ ...result.patch, weeklyRecaps });
         }
       },
 
@@ -1192,10 +1271,12 @@ export const useGameStore = create<GameStore>()(
         let week = current.week;
         let newsItems = [...current.newsItems];
         let tradeProposals = [...current.tradeProposals];
+        let weeklyRecaps = [...current.weeklyRecaps];
         let isSeasonOver = false;
 
         for (let guard = 0; guard < 200 && week < targetWeek; guard++) {
-          const fakeState = { ...current, schedule, teams, players, week, newsItems, tradeProposals, phase: 'regular' as const } as LeagueState;
+          const simmedWeek = week;
+          const fakeState = { ...current, schedule, teams, players, week, newsItems, tradeProposals, weeklyRecaps, phase: 'regular' as const } as LeagueState;
           const result = simulateOneWeek(fakeState);
           if (!result) break;
 
@@ -1205,6 +1286,11 @@ export const useGameStore = create<GameStore>()(
           week = result.patch.week as number;
           newsItems = result.patch.newsItems as typeof newsItems;
           tradeProposals = result.patch.tradeProposals as typeof tradeProposals;
+
+          // Generate recap for the week just simmed
+          const weekGames = schedule.filter(g => g.week === simmedWeek && g.played);
+          const recap = generateWeeklyRecap(weekGames, teams, players, current.season, simmedWeek);
+          weeklyRecaps = [...weeklyRecaps, recap];
 
           if (result.isSeasonOver) {
             isSeasonOver = true;
@@ -1216,9 +1302,9 @@ export const useGameStore = create<GameStore>()(
           // Compute playoff bracket here in the same set() call to avoid stale get()
           const seeds = computePlayoffSeeds(teams);
           const bracket = buildBracket(seeds, teams);
-          set({ schedule, teams, players, week, newsItems, tradeProposals, phase: 'playoffs', playoffSeeds: seeds, playoffBracket: bracket });
+          set({ schedule, teams, players, week, newsItems, tradeProposals, weeklyRecaps, phase: 'playoffs', playoffSeeds: seeds, playoffBracket: bracket });
         } else {
-          set({ schedule, teams, players, week, newsItems, tradeProposals, phase: 'regular' });
+          set({ schedule, teams, players, week, newsItems, tradeProposals, weeklyRecaps, phase: 'regular' });
         }
       },
 
@@ -1271,7 +1357,7 @@ export const useGameStore = create<GameStore>()(
 
         updatedBracket = propagateWinner(updatedBracket, matchupId, winnerId, state.playoffSeeds);
 
-        const superBowl = updatedBracket.find(m => m.id === 'super-bowl');
+        const superBowl = updatedBracket.find(m => m.id === 'championship');
         const existingChampions = state.champions ?? [];
         const newChampions =
           superBowl?.winnerId && !existingChampions.find(c => c.season === state.season)
@@ -1288,12 +1374,12 @@ export const useGameStore = create<GameStore>()(
               week: 99,
               type: 'milestone',
               teamId: champTeam.id,
-              headline: `${champTeam.city} ${champTeam.name} win Super Bowl ${state.season}!`,
+              headline: `${champTeam.city} ${champTeam.name} win The Championship ${state.season}!`,
               isUserTeam: champTeam.id === state.userTeamId,
             })];
           }
           // Determine Finals MVP: best performer from winning team in the SB game
-          if (matchupId === 'super-bowl') {
+          if (matchupId === 'championship') {
             const winnerRoster = state.players.filter(p => p.teamId === winnerId);
             const winnerIds = new Set(winnerRoster.map(p => p.id));
             let bestScore = -1;
@@ -1373,19 +1459,19 @@ export const useGameStore = create<GameStore>()(
           );
           bracket = propagateWinner(bracket, next.id, winnerId, state.playoffSeeds);
 
-          // Check Super Bowl
-          const superBowl = bracket.find(m => m.id === 'super-bowl');
+          // Check Championship
+          const superBowl = bracket.find(m => m.id === 'championship');
           if (superBowl?.winnerId && !champions.find(c => c.season === state.season)) {
             champions = [...champions, { season: state.season, teamId: superBowl.winnerId }];
             const champTeam = state.teams.find(t => t.id === superBowl.winnerId);
             if (champTeam) {
               newsItems = [...newsItems, makeNews({
                 season: state.season, week: 99, type: 'milestone', teamId: champTeam.id,
-                headline: `${champTeam.city} ${champTeam.name} win Super Bowl ${state.season}!`,
+                headline: `${champTeam.city} ${champTeam.name} win The Championship ${state.season}!`,
                 isUserTeam: champTeam.id === state.userTeamId,
               })];
             }
-            if (next.id === 'super-bowl') {
+            if (next.id === 'championship') {
               const winnerRoster = state.players.filter(p => p.teamId === winnerId);
               const winnerIds = new Set(winnerRoster.map(p => p.id));
               let bestScore = -1;
@@ -1452,6 +1538,36 @@ export const useGameStore = create<GameStore>()(
             m.id === matchup.id ? { ...m, homeScore: result.homeScore, awayScore: result.awayScore, winnerId } : m,
           );
           bracket = propagateWinner(bracket, matchup.id, winnerId, state.playoffSeeds);
+
+          // Check if this was the Championship game
+          const superBowl = bracket.find(m => m.id === 'championship');
+          if (superBowl?.winnerId && !champions.find(c => c.season === state.season)) {
+            champions = [...champions, { season: state.season, teamId: superBowl.winnerId }];
+            const champTeam = state.teams.find(t => t.id === superBowl.winnerId);
+            if (champTeam) {
+              newsItems = [...newsItems, makeNews({
+                season: state.season, week: 99, type: 'milestone', teamId: champTeam.id,
+                headline: `${champTeam.city} ${champTeam.name} win The Championship ${state.season}!`,
+                isUserTeam: champTeam.id === state.userTeamId,
+              })];
+            }
+            if (matchup.id === 'championship') {
+              const winnerRoster = state.players.filter(p => p.teamId === winnerId);
+              const winnerIds = new Set(winnerRoster.map(p => p.id));
+              let bestScore = -1;
+              let bestId = '';
+              for (const [pid, stats] of Object.entries(result.playerStats)) {
+                if (!winnerIds.has(pid)) continue;
+                const s = stats as Partial<PlayerStats>;
+                const score = (s.passYards ?? 0) * 0.04 + (s.passTDs ?? 0) * 6
+                  + (s.rushYards ?? 0) * 0.1 + (s.rushTDs ?? 0) * 6
+                  + (s.receivingYards ?? 0) * 0.1 + (s.receivingTDs ?? 0) * 6
+                  + (s.tackles ?? 0) * 1 + (s.sacks ?? 0) * 3 + (s.defensiveINTs ?? 0) * 5;
+                if (score > bestScore) { bestScore = score; bestId = pid; }
+              }
+              if (bestId) finalsMvpPlayerId = bestId;
+            }
+          }
         }
 
         // Store playoff game results in schedule for BoxScoreModal access
@@ -1539,6 +1655,49 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
+      franchiseTagPlayer: (playerId: string) => {
+        const state = get();
+        const player = state.players.find(p => p.id === playerId);
+        const userTeam = state.teams.find(t => t.id === state.userTeamId);
+        if (!player || !userTeam) return false;
+        if (userTeam.franchiseTagUsed) return false;
+        if (!state.resigningPlayers.some(e => e.playerId === playerId)) return false;
+
+        const tagSalary = computeFranchiseTagSalary(player.position, state.players, player);
+        const oldSalary = player.contract.salary;
+        const capSpaceNeeded = tagSalary - oldSalary;
+
+        // Allow tag even if slightly over cap (franchise tags are mandatory cap hits)
+        set({
+          players: state.players.map(p =>
+            p.id === playerId
+              ? { ...p, contract: { salary: tagSalary, yearsLeft: 1, guaranteed: tagSalary, totalYears: 1 } }
+              : p,
+          ),
+          teams: state.teams.map(t =>
+            t.id === state.userTeamId
+              ? { ...t, totalPayroll: t.totalPayroll + capSpaceNeeded, franchiseTagUsed: true }
+              : t,
+          ),
+          resigningPlayers: state.resigningPlayers.filter(e => e.playerId !== playerId),
+          newsItems: [
+            ...state.newsItems,
+            {
+              id: `news-tag-${playerId}-${state.season}`,
+              season: state.season,
+              week: state.week,
+              type: 'signing' as const,
+              headline: `${player.firstName} ${player.lastName} franchise tagged by ${userTeam.city} ${userTeam.name}`,
+              body: `${player.position} ${player.firstName} ${player.lastName} has been given the franchise tag, locking him in for 1 year at $${tagSalary}M.`,
+              teamId: userTeam.id,
+              playerIds: [playerId],
+              isUserTeam: true,
+            },
+          ],
+        });
+        return true;
+      },
+
       advanceToDraft: () => {
         const state = get();
         // PRD-03: AI teams re-sign their own expiring players when coming from resigning phase
@@ -1563,6 +1722,25 @@ export const useGameStore = create<GameStore>()(
             }, {} as Record<Position, string[]>);
             return { ...t, roster: newRoster, depthChart: newDepthChart, totalPayroll: Math.max(0, t.totalPayroll - unhandledSalary) };
           });
+
+          // AI teams use franchise tag on their best expiring player (OVR >= 70)
+          const aiTeamsForTag = updatedTeams.filter(t => t.id !== state.userTeamId && !t.franchiseTagUsed);
+          for (const aiTeam of aiTeamsForTag) {
+            const expiring = updatedPlayers
+              .filter(p => p.teamId === aiTeam.id && p.contract.yearsLeft === 1 && !p.retired)
+              .sort((a, b) => b.ratings.overall - a.ratings.overall);
+            const bestPlayer = expiring[0];
+            if (bestPlayer && bestPlayer.ratings.overall >= 70) {
+              const tagSalary = computeFranchiseTagSalary(bestPlayer.position, updatedPlayers, bestPlayer);
+              const oldSalary = bestPlayer.contract.salary;
+              updatedPlayers = updatedPlayers.map(p =>
+                p.id === bestPlayer.id ? { ...p, contract: { salary: tagSalary, yearsLeft: 1, guaranteed: tagSalary, totalYears: 1 } } : p,
+              );
+              updatedTeams = updatedTeams.map(t =>
+                t.id === aiTeam.id ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + (tagSalary - oldSalary)), franchiseTagUsed: true } : t,
+              );
+            }
+          }
 
           // AI teams auto-resign their own expiring players
           const aiTeams = updatedTeams.filter(t => t.id !== state.userTeamId);
@@ -1661,7 +1839,7 @@ export const useGameStore = create<GameStore>()(
         const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
         const round = Math.ceil(overallPick / state.teams.length);
 
-        // Rookie salary scale based on draft position (NFL-style exponential decay)
+        // Rookie salary scale based on draft position (league-style exponential decay)
         // Pick 1: ~$10M, Pick 32: ~$2.8M, Pick 64: ~$1.3M, Pick 128+: ~$0.8M
         const finalSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * 10) / 10);
 
@@ -1693,6 +1871,9 @@ export const useGameStore = create<GameStore>()(
           return { ...t, roster: [...t.roster, playerId], totalPayroll: t.totalPayroll + finalSalary, depthChart: chart };
         });
 
+        const newDraftOrder = state.draftOrder.slice(1);
+        const newFreeAgents = state.freeAgents.filter(id => id !== playerId);
+
         set({
           players: state.players.map(p =>
             p.id === playerId
@@ -1706,14 +1887,19 @@ export const useGameStore = create<GameStore>()(
               : p,
           ),
           teams: updatedTeams,
-          freeAgents: state.freeAgents.filter(id => id !== playerId),
-          draftOrder: state.draftOrder.slice(1),
+          freeAgents: newFreeAgents,
+          draftOrder: newDraftOrder,
           draftResults: [
             ...state.draftResults,
             { overallPick, round, pickInRound, teamId: currentPickTeamId, playerId },
           ],
           newsItems: newNewsItems,
         });
+
+        // Auto-advance to free agency when draft is complete
+        if (newDraftOrder.length === 0 || newFreeAgents.length === 0) {
+          get().advanceToFreeAgency();
+        }
       },
 
       simDraftPick: () => {
@@ -1755,7 +1941,7 @@ export const useGameStore = create<GameStore>()(
           const overallPick = totalPicks - draftOrder.length + 1;
           const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
           const round = Math.ceil(overallPick / state.teams.length);
-          // Rookie salary scale based on draft position (NFL-style exponential decay)
+          // Rookie salary scale based on draft position (league-style exponential decay)
           // Pick 1: ~$10M, Pick 32: ~$2.8M, Pick 64: ~$1.3M, Pick 128+: ~$0.8M
           const rookieSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * 10) / 10);
 
@@ -1811,7 +1997,7 @@ export const useGameStore = create<GameStore>()(
           const overallPick = totalPicks - draftOrder.length + 1;
           const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
           const round = Math.ceil(overallPick / state.teams.length);
-          // Rookie salary scale based on draft position (NFL-style exponential decay)
+          // Rookie salary scale based on draft position (league-style exponential decay)
           // Pick 1: ~$10M, Pick 32: ~$2.8M, Pick 64: ~$1.3M, Pick 128+: ~$0.8M
           const rookieSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * 10) / 10);
 
@@ -1840,6 +2026,9 @@ export const useGameStore = create<GameStore>()(
         }
 
         set({ players, teams, freeAgents: freeAgentIds, draftOrder, draftResults, newsItems });
+
+        // Auto-advance to free agency when draft is complete
+        get().advanceToFreeAgency();
       },
 
       advanceToFreeAgency: () => {
@@ -1870,7 +2059,7 @@ export const useGameStore = create<GameStore>()(
         });
 
         // Generate supplemental free agents to ensure a healthy market
-        // Target: at least 150 FAs available (real NFL FA class is 200-400+)
+        // Target: at least 150 FAs available (real pro FA class is 200-400+)
         const baseFACount = expiredPlayers.length + undraftedIds.length;
         const supplementalCount = Math.max(0, 150 - baseFACount);
         const supplementalPlayers: Player[] = [];
@@ -1917,7 +2106,128 @@ export const useGameStore = create<GameStore>()(
             };
           }),
           freeAgents: [...expiredPlayers.map(p => p.id), ...undraftedIds, ...supplementalPlayers.map(p => p.id)],
+          faDay: 1,
           newsItems: [...state.newsItems, ...releaseNews],
+        });
+
+        // Compute initial refusals
+        const newState = get();
+        const userTeamData = newState.teams.find(t => t.id === newState.userTeamId);
+        if (userTeamData) {
+          set({ faRefusals: computeFARefusals(newState.freeAgents, newState.players, userTeamData, 1) });
+        }
+      },
+
+      advanceFADay: () => {
+        const state = get();
+        if (state.phase !== 'freeAgency' || state.faDay >= 30) return;
+
+        const nextDay = state.faDay + 1;
+        const decay = faPriceDecay(nextDay);
+
+        // --- AI signings for this day ---
+        let currentPlayers = state.players;
+        let currentTeams = state.teams;
+        let currentFreeAgents = [...state.freeAgents];
+        const allNews: NewsItem[] = [];
+
+        // Signing pace: Early(1-5): 12-18, Mid-Early(6-10): 8-12, Mid(11-20): 5-8, Late(21-30): 2-4
+        const signingsThisDay =
+          nextDay <= 5 ? 12 + Math.floor(Math.random() * 7) :
+          nextDay <= 10 ? 8 + Math.floor(Math.random() * 5) :
+          nextDay <= 20 ? 5 + Math.floor(Math.random() * 4) :
+          2 + Math.floor(Math.random() * 3);
+
+        // Score AI teams by need — check roster needs AND upgrade opportunities
+        const teamNeedScores: { teamId: string; score: number; needPositions: Position[]; wantPositions: Position[] }[] = [];
+        for (const t of currentTeams) {
+          if (t.id === state.userTeamId) continue;
+          const rosterPlayers = currentPlayers.filter(p => p.teamId === t.id && !p.retired);
+          // Allow signing up to 56 (cuts happen later) — don't block teams at 53
+          if (rosterPlayers.length >= 56) continue;
+          const capSpace = t.salaryCap - t.totalPayroll;
+          if (capSpace < LEAGUE_MINIMUM_SALARY) continue; // Can't afford anyone
+          const needPositions: Position[] = [];
+          const wantPositions: Position[] = [];
+          for (const pos of POSITIONS) {
+            const posPlayers = rosterPlayers.filter(p => p.position === pos);
+            const count = posPlayers.length;
+            const starterOvr = posPlayers.sort((a, b) => b.ratings.overall - a.ratings.overall)[0]?.ratings.overall ?? 0;
+            if (count < ROSTER_LIMITS[pos].min) needPositions.push(pos);
+            else if (count < ROSTER_LIMITS[pos].max && starterOvr < 78) wantPositions.push(pos);
+            // Upgrade-seeking: positions with many starters (OL=5, WR=3, DL=4) check weakest starter
+            else if (count >= ROSTER_LIMITS[pos].min && ROSTER_LIMITS[pos].min >= 3) {
+              const weakestStarter = posPlayers.sort((a, b) => a.ratings.overall - b.ratings.overall)[0];
+              if (weakestStarter && weakestStarter.ratings.overall < 65) wantPositions.push(pos);
+            }
+          }
+          // Even teams without specific position needs still participate (BPA signings)
+          const score = needPositions.length * 10 + wantPositions.length * 3 + (capSpace > 20 ? 5 : 0) + Math.random() * 5;
+          // All teams with cap space participate — BPA, depth, upgrades
+          if (needPositions.length > 0 || wantPositions.length > 0 || rosterPlayers.length < 53 || Math.random() < 0.4) {
+            teamNeedScores.push({ teamId: t.id, score, needPositions, wantPositions });
+          }
+        }
+        teamNeedScores.sort((a, b) => b.score - a.score);
+        const teamsActing = teamNeedScores.slice(0, signingsThisDay);
+
+        for (const { teamId: aiTeamId, needPositions, wantPositions } of teamsActing) {
+          if (currentFreeAgents.length === 0) break;
+          const teamData = currentTeams.find(t => t.id === aiTeamId);
+          if (!teamData) continue;
+          const capSpace = teamData.salaryCap - teamData.totalPayroll;
+
+          const availableFAs = currentFreeAgents
+            .map(id => currentPlayers.find(p => p.id === id))
+            .filter((p): p is Player => !!p && !p.retired)
+            .filter(p => {
+              const sal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential) * decay;
+              return sal <= capSpace || (capSpace >= LEAGUE_MINIMUM_SALARY && sal <= LEAGUE_MINIMUM_SALARY * 2);
+            })
+            .sort((a, b) => {
+              const aBonus = needPositions.includes(a.position) ? 200 : wantPositions.includes(a.position) ? 80 : 0;
+              const bBonus = needPositions.includes(b.position) ? 200 : wantPositions.includes(b.position) ? 80 : 0;
+              return (bBonus + b.ratings.overall) - (aBonus + a.ratings.overall);
+            });
+
+          const target = availableFAs[0];
+          if (!target) continue;
+
+          const marketSalary = estimateSalary(target.ratings.overall, target.position, target.age, target.potential) * decay;
+          const aiSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, Math.min(marketSalary, capSpace)) * 10) / 10;
+          const aiYears = target.age >= 32 ? 1 : target.age >= 28 ? 2 : 3;
+
+          currentPlayers = currentPlayers.map(p =>
+            p.id === target.id
+              ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears } }
+              : p,
+          );
+          currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
+          currentTeams = currentTeams.map(t => {
+            if (t.id !== aiTeamId) return t;
+            const chart = insertIntoDepthChart(t.depthChart, target.position, target.id, currentPlayers);
+            return { ...t, roster: [...t.roster, target.id], totalPayroll: t.totalPayroll + aiSalary, depthChart: chart };
+          });
+
+          allNews.push(makeNews({
+            season: state.season, week: state.week, type: 'signing',
+            teamId: aiTeamId, playerIds: [target.id],
+            headline: `${teamData.city} ${teamData.name} signed ${target.firstName} ${target.lastName} (${target.position}, ${target.ratings.overall} OVR) to a $${aiSalary}M/yr, ${aiYears}-year deal.`,
+            isUserTeam: false,
+          }));
+        }
+
+        // Recompute refusals for the new day
+        const userTeamData = currentTeams.find(t => t.id === state.userTeamId);
+        const newRefusals = userTeamData ? computeFARefusals(currentFreeAgents, currentPlayers, userTeamData, nextDay) : [];
+
+        set({
+          faDay: nextDay,
+          players: currentPlayers,
+          teams: currentTeams,
+          freeAgents: currentFreeAgents,
+          faRefusals: newRefusals,
+          newsItems: [...state.newsItems, ...allNews],
         });
       },
 
@@ -1955,91 +2265,84 @@ export const useGameStore = create<GameStore>()(
           }));
         }
 
-        // --- Step 2: A handful of AI teams sign free agents each round ---
-        // Only 5-8 teams act per user signing to keep the FA pool healthy.
-        // Teams with critical needs are prioritized to act first.
-        const aiTeamIds = currentTeams.filter(t => t.id !== state.userTeamId).map(t => t.id);
-
-        // Score each AI team by how badly they need FAs
-        const teamNeedScores: { teamId: string; score: number; needPositions: Position[]; wantPositions: Position[] }[] = [];
-        for (const aiTeamId of aiTeamIds) {
-          const teamData = currentTeams.find(t => t.id === aiTeamId);
-          if (!teamData) continue;
-          const rosterPlayers = currentPlayers.filter(p => p.teamId === aiTeamId && !p.retired);
-          if (rosterPlayers.length >= 53) continue;
-
-          const needPositions: Position[] = [];
-          const wantPositions: Position[] = [];
-          for (const pos of POSITIONS) {
-            const count = rosterPlayers.filter(p => p.position === pos).length;
-            const starterOvr = rosterPlayers.filter(p => p.position === pos).sort((a, b) => b.ratings.overall - a.ratings.overall)[0]?.ratings.overall ?? 0;
-            if (count < ROSTER_LIMITS[pos].min) needPositions.push(pos);
-            else if (count < ROSTER_LIMITS[pos].max && starterOvr < 70) wantPositions.push(pos);
+        // --- Step 2: AI signings ---
+        // During freeAgency phase, AI signings happen via advanceFADay (called below).
+        // During regular season, do inline AI signings as before.
+        if (state.phase !== 'freeAgency') {
+          const aiTeamIds = currentTeams.filter(t => t.id !== state.userTeamId).map(t => t.id);
+          const teamNeedScores: { teamId: string; score: number; needPositions: Position[]; wantPositions: Position[] }[] = [];
+          for (const aiTeamId of aiTeamIds) {
+            const teamData = currentTeams.find(t => t.id === aiTeamId);
+            if (!teamData) continue;
+            const rosterPlayers = currentPlayers.filter(p => p.teamId === aiTeamId && !p.retired);
+            if (rosterPlayers.length >= 53) continue;
+            const needPositions: Position[] = [];
+            const wantPositions: Position[] = [];
+            for (const pos of POSITIONS) {
+              const count = rosterPlayers.filter(p => p.position === pos).length;
+              const starterOvr = rosterPlayers.filter(p => p.position === pos).sort((a, b) => b.ratings.overall - a.ratings.overall)[0]?.ratings.overall ?? 0;
+              if (count < ROSTER_LIMITS[pos].min) needPositions.push(pos);
+              else if (count < ROSTER_LIMITS[pos].max && starterOvr < 70) wantPositions.push(pos);
+            }
+            const score = needPositions.length * 10 + wantPositions.length * 3 + Math.random() * 5;
+            teamNeedScores.push({ teamId: aiTeamId, score, needPositions, wantPositions });
           }
-
-          const score = needPositions.length * 10 + wantPositions.length * 3 + Math.random() * 5;
-          teamNeedScores.push({ teamId: aiTeamId, score, needPositions, wantPositions });
-        }
-
-        // Sort by need (most desperate teams first), pick top 5-8 to act this round
-        teamNeedScores.sort((a, b) => b.score - a.score);
-        const teamsActingThisRound = teamNeedScores.slice(0, 5 + Math.floor(Math.random() * 4));
-
-        for (const { teamId: aiTeamId, needPositions, wantPositions } of teamsActingThisRound) {
-          if (currentFreeAgents.length === 0) break;
-
-          const teamData = currentTeams.find(t => t.id === aiTeamId);
-          if (!teamData) continue;
-          let capSpace = teamData.salaryCap - teamData.totalPayroll;
-
-          // Each team signs exactly 1 player per round
-          const availableFAs = currentFreeAgents
-            .map(id => currentPlayers.find(p => p.id === id))
-            .filter((p): p is Player => !!p && !p.retired)
-            .filter(p => {
-              const sal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential);
-              return sal <= capSpace || (capSpace >= LEAGUE_MINIMUM_SALARY && sal <= LEAGUE_MINIMUM_SALARY * 2);
-            })
-            .sort((a, b) => {
-              const aBonus = needPositions.includes(a.position) ? 200 : wantPositions.includes(a.position) ? 80 : 0;
-              const bBonus = needPositions.includes(b.position) ? 200 : wantPositions.includes(b.position) ? 80 : 0;
-              return (bBonus + b.ratings.overall) - (aBonus + a.ratings.overall);
+          teamNeedScores.sort((a, b) => b.score - a.score);
+          const teamsActingThisRound = teamNeedScores.slice(0, 5 + Math.floor(Math.random() * 4));
+          for (const { teamId: aiTeamId, needPositions, wantPositions } of teamsActingThisRound) {
+            if (currentFreeAgents.length === 0) break;
+            const teamData = currentTeams.find(t => t.id === aiTeamId);
+            if (!teamData) continue;
+            const capSpace = teamData.salaryCap - teamData.totalPayroll;
+            const availableFAs = currentFreeAgents
+              .map(id => currentPlayers.find(p => p.id === id))
+              .filter((p): p is Player => !!p && !p.retired)
+              .filter(p => {
+                const sal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential);
+                return sal <= capSpace || (capSpace >= LEAGUE_MINIMUM_SALARY && sal <= LEAGUE_MINIMUM_SALARY * 2);
+              })
+              .sort((a, b) => {
+                const aBonus = needPositions.includes(a.position) ? 200 : wantPositions.includes(a.position) ? 80 : 0;
+                const bBonus = needPositions.includes(b.position) ? 200 : wantPositions.includes(b.position) ? 80 : 0;
+                return (bBonus + b.ratings.overall) - (aBonus + a.ratings.overall);
+              });
+            const target = availableFAs[0];
+            if (!target) continue;
+            const marketSalary = estimateSalary(target.ratings.overall, target.position, target.age, target.potential);
+            const aiSalary = marketSalary <= capSpace ? marketSalary : LEAGUE_MINIMUM_SALARY;
+            const aiYears = target.age >= 32 ? 1 : target.age >= 28 ? 2 : 3;
+            currentPlayers = currentPlayers.map(p =>
+              p.id === target.id
+                ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears } }
+                : p,
+            );
+            currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
+            currentTeams = currentTeams.map(t => {
+              if (t.id !== aiTeamId) return t;
+              const chart = insertIntoDepthChart(t.depthChart, target.position, target.id, currentPlayers);
+              return { ...t, roster: [...t.roster, target.id], totalPayroll: t.totalPayroll + aiSalary, depthChart: chart };
             });
-
-          const target = availableFAs[0];
-          if (!target) continue;
-
-          const marketSalary = estimateSalary(target.ratings.overall, target.position, target.age, target.potential);
-          const aiSalary = marketSalary <= capSpace ? marketSalary : LEAGUE_MINIMUM_SALARY;
-          const aiYears = target.age >= 32 ? 1 : target.age >= 28 ? 2 : 3;
-
-          currentPlayers = currentPlayers.map(p =>
-            p.id === target.id
-              ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears } }
-              : p,
-          );
-          currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
-          currentTeams = currentTeams.map(t => {
-            if (t.id !== aiTeamId) return t;
-            const chart = insertIntoDepthChart(t.depthChart, target.position, target.id, currentPlayers);
-            return { ...t, roster: [...t.roster, target.id], totalPayroll: t.totalPayroll + aiSalary, depthChart: chart };
-          });
-
-          allNews.push(makeNews({
-            season: state.season, week: state.week, type: 'signing',
-            teamId: aiTeamId, playerIds: [target.id],
-            headline: `${teamData.city} ${teamData.name} signed ${target.firstName} ${target.lastName} (${target.position}, ${target.ratings.overall} OVR) to a $${aiSalary}M/yr, ${aiYears}-year deal.`,
-            isUserTeam: false,
-          }));
+            allNews.push(makeNews({
+              season: state.season, week: state.week, type: 'signing',
+              teamId: aiTeamId, playerIds: [target.id],
+              headline: `${teamData.city} ${teamData.name} signed ${target.firstName} ${target.lastName} (${target.position}, ${target.ratings.overall} OVR) to a $${aiSalary}M/yr, ${aiYears}-year deal.`,
+              isUserTeam: false,
+            }));
+          }
         }
 
-        // --- Single set() call with both user signing + AI signings ---
+        // --- Single set() call with user signing (+ AI signings if regular season) ---
         set({
           players: currentPlayers,
           teams: currentTeams,
           freeAgents: currentFreeAgents,
           newsItems: [...state.newsItems, ...allNews],
         });
+
+        // During freeAgency, advance one day (triggers AI signings via advanceFADay)
+        if (state.phase === 'freeAgency') {
+          get().advanceFADay();
+        }
 
         return true;
       },
@@ -2369,6 +2672,10 @@ export const useGameStore = create<GameStore>()(
         const totalBlockedValue = blockedPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
           + blockedPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
 
+        // If blocked assets are essentially worthless, no AI team should bother
+        // (e.g. 51 OVR aging player ≈ 20 value — not worth a trade)
+        if (totalBlockedValue < 30) return;
+
         const blockedPositions = new Set(blockedPlayers.map(p => p.position));
         const seekPosSet = new Set(seekPositions);
         const proposals: TradeProposal[] = [];
@@ -2409,6 +2716,8 @@ export const useGameStore = create<GameStore>()(
           let offeredValue = 0;
           const targetMin = totalBlockedValue * 0.75;
           const targetMax = totalBlockedValue * 1.20;
+          // Hard ceiling: never offer more than 2x the blocked value
+          const hardCeiling = totalBlockedValue * 2.0;
 
           const aiPicks = aiTeam.draftPicks
             .filter(pk => pk.year >= state.season)
@@ -2418,8 +2727,11 @@ export const useGameStore = create<GameStore>()(
           if (seekDraftPicks) {
             for (const pk of aiPicks) {
               if (offeredValue >= targetMin) break;
+              const pv = pickTradeValue(pk);
+              // Don't add a pick if it would massively overshoot the target
+              if (offeredValue + pv > hardCeiling) continue;
               offeredPickIds.push(pk.id);
-              offeredValue += pickTradeValue(pk);
+              offeredValue += pv;
             }
           }
 
@@ -2428,7 +2740,7 @@ export const useGameStore = create<GameStore>()(
             for (const candidate of seekCandidates) {
               if (offeredValue >= targetMin) break;
               const v = playerTradeValue(candidate);
-              if (offeredValue + v <= targetMax * 1.3) {
+              if (offeredValue + v <= targetMax * 1.3 && offeredValue + v <= hardCeiling) {
                 offeredPlayerIds.push(candidate.id);
                 offeredValue += v;
               }
@@ -2441,7 +2753,7 @@ export const useGameStore = create<GameStore>()(
               if (offeredValue >= targetMin) break;
               if (offeredPlayerIds.includes(candidate.id)) continue;
               const v = playerTradeValue(candidate);
-              if (offeredValue + v <= targetMax * 1.3) {
+              if (offeredValue + v <= targetMax * 1.3 && offeredValue + v <= hardCeiling) {
                 offeredPlayerIds.push(candidate.id);
                 offeredValue += v;
               }
@@ -2452,13 +2764,18 @@ export const useGameStore = create<GameStore>()(
           if (offeredValue < targetMin && !seekDraftPicks) {
             for (const pk of aiPicks) {
               if (offeredValue >= targetMin) break;
+              const pv = pickTradeValue(pk);
+              // Don't add a pick if it would massively overshoot the target
+              if (offeredValue + pv > hardCeiling) continue;
               offeredPickIds.push(pk.id);
-              offeredValue += pickTradeValue(pk);
+              offeredValue += pv;
             }
           }
 
           if (offeredValue < targetMin * 0.5) continue; // Can't match value at all
           if (offeredPlayerIds.length === 0 && offeredPickIds.length === 0) continue;
+          // Reject proposals that overshoot by more than 2x (shouldn't happen now but safety net)
+          if (offeredValue > hardCeiling) continue;
 
           const ratio = offeredValue / Math.max(1, totalBlockedValue);
           const valueAssessment: TradeProposal['valueAssessment'] =
@@ -2485,7 +2802,7 @@ export const useGameStore = create<GameStore>()(
       },
 
       // PRD-07: Set scouting level
-      setScoutingLevel: (level: 0 | 1 | 2 | 3 | 4) => {
+      setScoutingLevel: (level: 0 | 1 | 2) => {
         const state = get();
         // Recompute scouting data at the new level
         const prospects = state.freeAgents
@@ -2509,7 +2826,7 @@ export const useGameStore = create<GameStore>()(
         if (!scoutData) return;
 
         const deepScoutedCount = Object.values(state.draftScoutingData).filter(d => d.deepScouted).length;
-        if (deepScoutedCount >= 5) return; // Max 5 deep scouts
+        // Deep scout limit is enforced on the UI side based on subscription tier
 
         set({
           draftScoutingData: {
@@ -2561,7 +2878,7 @@ export const useGameStore = create<GameStore>()(
         if (state.playoffBracket && state.playoffSeeds) {
           const userInPlayoffs = Object.values(state.playoffSeeds).flat().includes(state.userTeamId);
           if (userInPlayoffs) {
-            const sbGame = state.playoffBracket.find(m => m.id === 'super-bowl');
+            const sbGame = state.playoffBracket.find(m => m.id === 'championship');
             const confGames = state.playoffBracket.filter(m => m.round === 3);
             const divGames = state.playoffBracket.filter(m => m.round === 2);
 
@@ -2576,10 +2893,10 @@ export const useGameStore = create<GameStore>()(
         const champion = state.champions.find(c => c.season === state.season);
 
         // Best record per conference (before records reset)
-        const afcTeams = state.teams.filter(t => t.conference === 'AFC');
-        const nfcTeams = state.teams.filter(t => t.conference === 'NFC');
-        const bestAfc = afcTeams.sort((a, b) => b.record.wins - a.record.wins || a.record.losses - b.record.losses)[0];
-        const bestNfc = nfcTeams.sort((a, b) => b.record.wins - a.record.wins || a.record.losses - b.record.losses)[0];
+        const acTeams = state.teams.filter(t => t.conference === 'AC');
+        const ncTeams = state.teams.filter(t => t.conference === 'NC');
+        const bestAc = acTeams.sort((a, b) => b.record.wins - a.record.wins || a.record.losses - b.record.losses)[0];
+        const bestNc = ncTeams.sort((a, b) => b.record.wins - a.record.wins || a.record.losses - b.record.losses)[0];
 
         // All-League teams
         const { first: allLeagueFirst, second: allLeagueSecond, allRookie: allRookieTeam } = computeAllLeagueTeams(state);
@@ -2589,13 +2906,13 @@ export const useGameStore = create<GameStore>()(
           championTeamId: champion?.teamId ?? '',
           finalsMvpId: state.finalsMvpPlayerId ?? '',
           finalsMvpGameStats: (() => {
-            const sbGame = state.schedule.find(g => g.id === 'super-bowl' && g.played);
+            const sbGame = state.schedule.find(g => g.id === 'championship' && g.played);
             return sbGame && state.finalsMvpPlayerId ? sbGame.playerStats[state.finalsMvpPlayerId] : undefined;
           })(),
           awards,
           bestRecord: {
-            afc: { teamId: bestAfc?.id ?? '', wins: bestAfc?.record.wins ?? 0, losses: bestAfc?.record.losses ?? 0 },
-            nfc: { teamId: bestNfc?.id ?? '', wins: bestNfc?.record.wins ?? 0, losses: bestNfc?.record.losses ?? 0 },
+            ac: { teamId: bestAc?.id ?? '', wins: bestAc?.record.wins ?? 0, losses: bestAc?.record.losses ?? 0 },
+            nc: { teamId: bestNc?.id ?? '', wins: bestNc?.record.wins ?? 0, losses: bestNc?.record.losses ?? 0 },
           },
           allLeagueFirst,
           allLeagueSecond,
@@ -2717,6 +3034,7 @@ export const useGameStore = create<GameStore>()(
             totalPayroll: Math.max(0, t.totalPayroll - salaryReduction - deadCapRelief),
             depthChart: newDepthChart,
             deadCap: updatedDeadCap,
+            franchiseTagUsed: false,
             // Refresh picks for new season
             draftPicks: [...t.draftPicks, ...[1, 2, 3, 4, 5, 6, 7].map(round => ({
               id: uuid(),
@@ -2791,7 +3109,7 @@ export const useGameStore = create<GameStore>()(
           .map(p => p.id);
 
         // Generate street free agents so there's always a pool for in-season signings
-        // Real NFL always has ~100+ unsigned players available on the street
+        // Real league always has ~100+ unsigned players available on the street
         const streetFATarget = 80;
         const currentFACount = unsignedPlayerIds.length;
         const streetFACount = Math.max(0, streetFATarget - currentFACount);
@@ -2823,6 +3141,8 @@ export const useGameStore = create<GameStore>()(
           schedule: newSchedule,
           draftResults: [],
           freeAgents: seasonFreeAgents,
+          faDay: 0,
+          faRefusals: [],
           playoffBracket: null,
           playoffSeeds: null,
           newsItems: retirementNews,
@@ -2831,6 +3151,7 @@ export const useGameStore = create<GameStore>()(
           tradeProposals: [],
           draftScoutingData: {},
           finalsMvpPlayerId: null,
+          weeklyRecaps: [],
         });
       },
 
@@ -2878,7 +3199,7 @@ export const useGameStore = create<GameStore>()(
         const slimSchedule = state.schedule.map(game => {
           if (!game.played) return game;
           const isUserGame = game.homeTeamId === state.userTeamId || game.awayTeamId === state.userTeamId;
-          const isSuperBowl = game.id === 'super-bowl';
+          const isSuperBowl = game.id === 'championship';
           if (isUserGame || isSuperBowl) return game; // keep full stats for user games (box score) and SB (MVP stats)
           // For non-user games, strip heavy data — scores are kept
           return { ...game, playerStats: {}, scoringPlays: undefined };
@@ -2887,12 +3208,18 @@ export const useGameStore = create<GameStore>()(
         // Limit news items to last 200 to prevent unbounded growth
         const trimmedNews = state.newsItems.slice(-200);
 
+        // Keep only current season recaps to prevent unbounded growth
+        const trimmedRecaps = (state.weeklyRecaps ?? []).filter(
+          (r: { season: number }) => r.season === state.season
+        );
+
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { initialized, ...rest } = state;
         return {
           ...rest,
           schedule: slimSchedule,
           newsItems: trimmedNews,
+          weeklyRecaps: trimmedRecaps,
         };
       },
       migrate: (persisted: unknown, version: number) => {
@@ -2905,6 +3232,7 @@ export const useGameStore = create<GameStore>()(
           }
           state.leagueSettings = { ...DEFAULT_LEAGUE_SETTINGS, ...settings };
           state.suppressTradePopups = state.suppressTradePopups ?? false;
+          state.weeklyRecaps = state.weeklyRecaps ?? [];
           const teams = (state.teams as Array<Record<string, unknown>>) ?? [];
           for (const team of teams) {
             if ((team.salaryCap as number) < 300) {
@@ -2987,7 +3315,7 @@ export const useGameStore = create<GameStore>()(
           for (const game of schedule8) {
             if (!game.played) continue;
             const isUserGame = game.homeTeamId === userTeamId8 || game.awayTeamId === userTeamId8;
-            const isSuperBowl = game.id === 'super-bowl';
+            const isSuperBowl = game.id === 'championship';
             if (!isUserGame && !isSuperBowl) {
               game.playerStats = {};
               game.scoringPlays = undefined;
@@ -2997,6 +3325,64 @@ export const useGameStore = create<GameStore>()(
           const news8 = (state.newsItems as Array<unknown>) ?? [];
           if (news8.length > 200) {
             state.newsItems = news8.slice(-200);
+          }
+        }
+        if (version < 9) {
+          // Add franchiseTagUsed to all teams
+          const teams9 = (state.teams as Array<Record<string, unknown>>) ?? [];
+          for (const team of teams9) {
+            if (team.franchiseTagUsed === undefined) team.franchiseTagUsed = false;
+          }
+        }
+        if (version < 10) {
+          // Add free agency day tracking
+          if (state.faDay === undefined) state.faDay = 0;
+          if (state.faRefusals === undefined) state.faRefusals = [];
+        }
+        if (version < 11) {
+          // Rename conferences: AFC→AC, NFC→NC; rename super-bowl→championship
+          const teams11 = (state.teams as Array<Record<string, unknown>>) ?? [];
+          for (const team of teams11) {
+            if (team.conference === 'AFC') team.conference = 'AC';
+            if (team.conference === 'NFC') team.conference = 'NC';
+          }
+          // Migrate playoff seeds
+          const seeds = state.playoffSeeds as Record<string, unknown> | null;
+          if (seeds) {
+            if (seeds.AFC) { seeds.AC = seeds.AFC; delete seeds.AFC; }
+            if (seeds.NFC) { seeds.NC = seeds.NFC; delete seeds.NFC; }
+          }
+          // Migrate playoff bracket matchup IDs and conference labels
+          const bracket = (state.playoffBracket as Array<Record<string, unknown>>) ?? [];
+          for (const m of bracket) {
+            if (typeof m.id === 'string') {
+              m.id = m.id.replace(/^afc-/, 'ac-').replace(/^nfc-/, 'nc-').replace('super-bowl', 'championship');
+            }
+            if (m.conference === 'AFC') m.conference = 'AC';
+            if (m.conference === 'NFC') m.conference = 'NC';
+            if (m.conference === 'Super Bowl') m.conference = 'Championship';
+            if (typeof m.homeFeedsFrom === 'string') {
+              m.homeFeedsFrom = m.homeFeedsFrom.replace(/^afc-/, 'ac-').replace(/^nfc-/, 'nc-');
+            }
+            if (typeof m.awayFeedsFrom === 'string') {
+              m.awayFeedsFrom = m.awayFeedsFrom.replace(/^afc-/, 'ac-').replace(/^nfc-/, 'nc-');
+            }
+          }
+          // Migrate season history bestRecord keys
+          const history = (state.seasonHistory as Array<Record<string, unknown>>) ?? [];
+          for (const summary of history) {
+            const br = summary.bestRecord as Record<string, unknown>;
+            if (br) {
+              if (br.afc) { br.ac = br.afc; delete br.afc; }
+              if (br.nfc) { br.nc = br.nfc; delete br.nfc; }
+            }
+          }
+          // Migrate schedule game IDs
+          const schedule11 = (state.schedule as Array<Record<string, unknown>>) ?? [];
+          for (const game of schedule11) {
+            if (typeof game.id === 'string') {
+              game.id = game.id.replace('super-bowl', 'championship');
+            }
           }
         }
         return state;

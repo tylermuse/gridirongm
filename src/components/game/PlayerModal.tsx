@@ -8,13 +8,15 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { calculateDeadCap, calculateCapSavings } from '@/types';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { Position, PlayerRatings } from '@/types';
 
 function ratingColor(val: number) {
-  if (val >= 85) return 'text-green-400';
-  if (val >= 70) return 'text-blue-400';
-  if (val >= 55) return 'text-amber-400';
-  return 'text-red-400';
+  if (val >= 85) return 'text-green-600';
+  if (val >= 70) return 'text-blue-600';
+  if (val >= 55) return 'text-amber-600';
+  return 'text-red-600';
 }
 
 function ratingBarColor(val: number) {
@@ -51,7 +53,7 @@ interface PlayerModalProps {
 }
 
 export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
-  const { players, teams, userTeamId, releasePlayer } = useGameStore();
+  const { players, teams, userTeamId, releasePlayer, champions, season } = useGameStore();
   const [confirmRelease, setConfirmRelease] = useState(false);
 
   // Reset confirm state when player changes
@@ -74,6 +76,8 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
   const team = player.teamId ? teams.find(t => t.id === player.teamId) : null;
   const isOnUserTeam = player.teamId === userTeamId;
   const relevantRatings = POSITION_RELEVANT_RATINGS[player.position] ?? [];
+  const currentChamp = champions?.find(c => c.season === season);
+  const isChampionPlayer = !!currentChamp && player.teamId === currentChamp.teamId;
   const stats = player.stats;
   const career = player.careerStats;
 
@@ -92,18 +96,19 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
       <div className="p-6 space-y-5">
         {/* Header */}
         <div className="flex items-start gap-5">
-          <div
-            className="w-16 h-16 rounded-xl flex flex-col items-center justify-center text-white shrink-0"
-            style={{ backgroundColor: team?.primaryColor ?? '#374151' }}
-          >
-            <div className="text-xl font-black">{player.position}</div>
-            {team && <div className="text-[10px] font-bold opacity-80">{team.abbreviation}</div>}
+          <div className="flex flex-col items-center gap-1.5 shrink-0">
+            <PlayerAvatar player={player} size="md" teamColor={team?.primaryColor ?? '#374151'} />
+            {team && <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="sm" />}
+            <div className="text-[10px] font-black text-[var(--text-sec)]">{player.position}</div>
           </div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-black">{player.firstName} {player.lastName}</h2>
+                <h2 className="text-2xl font-black">
+                  {player.firstName} {player.lastName}
+                  {isChampionPlayer && <span className="ml-1.5 text-lg" title="Championship Ring">💍</span>}
+                </h2>
                 <div className="flex flex-wrap items-center gap-2 mt-1.5">
                   <Badge>{player.position}</Badge>
                   <span className="text-sm text-[var(--text-sec)]">Age {player.age}</span>
@@ -144,9 +149,9 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
               </span>
               {player.mood !== undefined && (
                 <span className={`text-sm ${
-                  player.mood >= 75 ? 'text-green-400' :
-                  player.mood >= 50 ? 'text-amber-400' :
-                  'text-red-400'
+                  player.mood >= 75 ? 'text-green-600' :
+                  player.mood >= 50 ? 'text-amber-600' :
+                  'text-red-600'
                 }`}>
                   {player.mood >= 75 ? '😊' : player.mood >= 50 ? '😐' : '😠'} {
                     player.mood >= 90 ? 'Ecstatic' :
@@ -191,13 +196,13 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                   const savings = calculateCapSavings(player.contract);
                   return deadCap > 0 ? (
                     <div className="text-xs mt-1 space-y-0.5">
-                      <div className="text-red-400">Dead cap: ${deadCap}M</div>
-                      <div className={savings > 0 ? 'text-green-400' : 'text-red-400'}>
+                      <div className="text-red-600">Dead cap: ${deadCap}M</div>
+                      <div className={savings > 0 ? 'text-green-600' : 'text-red-600'}>
                         Cap savings: ${savings > 0 ? savings : 0}M
                       </div>
                     </div>
                   ) : (
-                    <div className="text-xs text-green-400 mt-1">
+                    <div className="text-xs text-green-600 mt-1">
                       Saves ${player.contract.salary}M/yr cap space
                     </div>
                   );
@@ -293,7 +298,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                   <div key={entry.season} className="flex-1 text-center">
                     <div className={`text-base font-black ${ratingColor(entry.overall)}`}>{entry.overall}</div>
                     {i > 0 && delta !== 0 && (
-                      <div className={`text-[10px] ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      <div className={`text-[10px] ${delta > 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {delta > 0 ? '+' : ''}{delta}
                       </div>
                     )}
@@ -305,7 +310,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                 <div className={`text-base font-black ${ratingColor(player.ratings.overall)} opacity-60`}>
                   {player.ratings.overall}
                 </div>
-                <div className="text-[10px] text-blue-400">Now</div>
+                <div className="text-[10px] text-blue-600">Now</div>
               </div>
             </div>
           </Card>

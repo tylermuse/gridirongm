@@ -90,7 +90,7 @@ export function BoxScore({ game, players, homeTeamName, awayTeamName, onClose }:
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
         className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-3xl w-full max-h-[85vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
@@ -143,8 +143,8 @@ export function BoxScore({ game, players, homeTeamName, awayTeamName, onClose }:
                       <td className="py-1.5 text-center">{stats.passCompletions ?? 0}</td>
                       <td className="py-1.5 text-center">{stats.passAttempts ?? 0}</td>
                       <td className="py-1.5 text-center font-mono">{stats.passYards ?? 0}</td>
-                      <td className="py-1.5 text-center text-green-400">{stats.passTDs ?? 0}</td>
-                      <td className="py-1.5 text-center text-red-400">{stats.interceptions ?? 0}</td>
+                      <td className="py-1.5 text-center text-green-600">{stats.passTDs ?? 0}</td>
+                      <td className="py-1.5 text-center text-red-600">{stats.interceptions ?? 0}</td>
                       <td className="py-1.5 text-right font-mono">{qbRating(stats)}</td>
                     </tr>
                   ))}
@@ -176,7 +176,7 @@ export function BoxScore({ game, players, homeTeamName, awayTeamName, onClose }:
                       <td className="py-1.5 text-center text-[var(--text-sec)]">
                         {stats.rushAttempts ? (((stats.rushYards ?? 0) / stats.rushAttempts).toFixed(1)) : '—'}
                       </td>
-                      <td className="py-1.5 text-right text-green-400">{stats.rushTDs ?? 0}</td>
+                      <td className="py-1.5 text-right text-green-600">{stats.rushTDs ?? 0}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -205,7 +205,7 @@ export function BoxScore({ game, players, homeTeamName, awayTeamName, onClose }:
                       <td className="py-1.5 text-center">{stats.targets ?? 0}</td>
                       <td className="py-1.5 text-center">{stats.receptions ?? 0}</td>
                       <td className="py-1.5 text-center font-mono">{stats.receivingYards ?? 0}</td>
-                      <td className="py-1.5 text-right text-green-400">{stats.receivingTDs ?? 0}</td>
+                      <td className="py-1.5 text-right text-green-600">{stats.receivingTDs ?? 0}</td>
                     </tr>
                   ))}
                 </tbody>

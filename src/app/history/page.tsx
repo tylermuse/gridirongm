@@ -6,6 +6,7 @@ import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { SeasonSummary, AllLeagueEntry } from '@/types';
 
 const PLAYOFF_LABELS: Record<string, string> = {
@@ -13,7 +14,7 @@ const PLAYOFF_LABELS: Record<string, string> = {
   wildcard: 'Wild Card',
   divisional: 'Divisional',
   conference: 'Conf. Championship',
-  runnerup: 'Super Bowl Runner-Up',
+  runnerup: 'Championship Runner-Up',
   champion: 'CHAMPION',
 };
 
@@ -137,12 +138,7 @@ export default function HistoryPage() {
                       </span>
                       {champTeam && (
                         <div className="flex items-center gap-1">
-                          <div
-                            className="w-4 h-4 rounded text-[8px] font-black text-white flex items-center justify-center"
-                            style={{ backgroundColor: champTeam.primaryColor }}
-                          >
-                            {champTeam.abbreviation.slice(0, 2)}
-                          </div>
+                          <TeamLogo abbreviation={champTeam.abbreviation} primaryColor={champTeam.primaryColor} secondaryColor={champTeam.secondaryColor} size="xs" />
                           <span className="text-xs text-[var(--text-sec)]">{champTeam.abbreviation} won</span>
                         </div>
                       )}
@@ -214,7 +210,7 @@ function SeasonDetail({
             </div>
             <div>
               <div className="font-bold">{teamName(selected.championTeamId)}</div>
-              <div className="text-xs text-[var(--text-sec)]">Super Bowl Champions</div>
+              <div className="text-xs text-[var(--text-sec)]">Champions</div>
             </div>
           </div>
           {selected.finalsMvpId && (() => {
@@ -230,7 +226,7 @@ function SeasonDetail({
             }
             return (
               <div className="mt-3 text-sm">
-                <span className="text-[var(--text-sec)]">Super Bowl MVP: </span>
+                <span className="text-[var(--text-sec)]">Championship MVP: </span>
                 <span className="font-semibold">
                   {pos}{' '}
                   <PlayerLink playerId={selected.finalsMvpId} onSelect={onSelectPlayer}>{playerName(selected.finalsMvpId)}</PlayerLink>
@@ -248,20 +244,20 @@ function SeasonDetail({
             <CardHeader><CardTitle>Best Record</CardTitle></CardHeader>
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-[var(--text-sec)]">AFC:</span>
+                <span className="text-[var(--text-sec)]">AC:</span>
                 <span className="font-semibold">
-                  {teamName(selected.bestRecord.afc.teamId)}{' '}
+                  {teamName(selected.bestRecord.ac.teamId)}{' '}
                   <span className="text-xs text-[var(--text-sec)]">
-                    ({selected.bestRecord.afc.wins}-{selected.bestRecord.afc.losses})
+                    ({selected.bestRecord.ac.wins}-{selected.bestRecord.ac.losses})
                   </span>
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[var(--text-sec)]">NFC:</span>
+                <span className="text-[var(--text-sec)]">NC:</span>
                 <span className="font-semibold">
-                  {teamName(selected.bestRecord.nfc.teamId)}{' '}
+                  {teamName(selected.bestRecord.nc.teamId)}{' '}
                   <span className="text-xs text-[var(--text-sec)]">
-                    ({selected.bestRecord.nfc.wins}-{selected.bestRecord.nfc.losses})
+                    ({selected.bestRecord.nc.wins}-{selected.bestRecord.nc.losses})
                   </span>
                 </span>
               </div>

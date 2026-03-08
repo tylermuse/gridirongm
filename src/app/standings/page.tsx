@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useGameStore } from '@/lib/engine/store';
+import { teamPower } from '@/lib/engine/simulate';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { BoxScore } from '@/components/game/BoxScore';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import type { GameResult, Team } from '@/types';
@@ -40,18 +42,13 @@ function StandingsTable({ teamList, userTeamId, onTeamClick }: { teamList: Team[
           return (
             <tr
               key={t.id}
-              className={`border-t border-[var(--border)] cursor-pointer hover:bg-[var(--surface-2)] ${t.id === userTeamId ? 'text-blue-400 font-semibold' : ''}`}
+              className={`border-t border-[var(--border)] cursor-pointer hover:bg-[var(--surface-2)] ${t.id === userTeamId ? 'text-blue-600 font-semibold' : ''}`}
               onClick={() => onTeamClick(t.id)}
             >
               <td className="py-1.5 text-[var(--text-sec)] text-xs w-6">{i + 1}</td>
               <td className="py-1.5">
                 <div className="flex items-center gap-2">
-                  <div
-                    className="w-6 h-6 rounded flex items-center justify-center text-[9px] font-black text-white shrink-0"
-                    style={{ backgroundColor: t.primaryColor }}
-                  >
-                    {t.abbreviation}
-                  </div>
+                  <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="sm" />
                   <span className="truncate">{t.city} {t.name}</span>
                 </div>
               </td>
@@ -60,7 +57,7 @@ function StandingsTable({ teamList, userTeamId, onTeamClick }: { teamList: Team[
               <td className="py-1.5 text-center font-mono text-xs">{pct}</td>
               <td className="py-1.5 text-right">{t.record.pointsFor}</td>
               <td className="py-1.5 text-right">{t.record.pointsAgainst}</td>
-              <td className={`py-1.5 text-right font-mono ${diff > 0 ? 'text-green-400' : diff < 0 ? 'text-red-400' : ''}`}>
+              <td className={`py-1.5 text-right font-mono ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : ''}`}>
                 {diff > 0 ? '+' : ''}{diff}
               </td>
             </tr>
@@ -79,7 +76,7 @@ export default function StandingsPage() {
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
-  const conferences = ['AFC', 'NFC'] as const;
+  const conferences = ['AC', 'NC'] as const;
   const divisions = ['North', 'South', 'East', 'West'] as const;
 
   const sortedTeams = (list: Team[]) =>
@@ -103,6 +100,25 @@ export default function StandingsPage() {
   function teamFullName(id: string) {
     const t = teams.find(t => t.id === id);
     return t ? `${t.city} ${t.name}` : '???';
+  }
+
+  /** Compute a betting-style spread for an upcoming game. Negative = user favored. */
+  function computeSpread(game: GameResult): { spread: number; favored: 'user' | 'opp' | 'even' } {
+    const isHome = game.homeTeamId === userTeamId;
+    const userRoster = players.filter(p => p.teamId === userTeamId && !p.retired);
+    const oppId = isHome ? game.awayTeamId : game.homeTeamId;
+    const oppRoster = players.filter(p => p.teamId === oppId && !p.retired);
+    const userPow = teamPower(userRoster);
+    const oppPow = teamPower(oppRoster);
+    const userTotal = userPow.offense + userPow.defense;
+    const oppTotal = oppPow.offense + oppPow.defense;
+    // Power diff scaled to points, plus 3-point home field advantage
+    const homeAdv = isHome ? 3 : -3;
+    const rawSpread = ((oppTotal - userTotal) * 0.35) + homeAdv;
+    const spread = Math.round(rawSpread * 2) / 2; // round to nearest 0.5
+    if (spread < -0.5) return { spread, favored: 'user' };
+    if (spread > 0.5) return { spread, favored: 'opp' };
+    return { spread: 0, favored: 'even' };
   }
 
   return (
@@ -152,7 +168,7 @@ export default function StandingsPage() {
               <div className="grid grid-cols-2 gap-6">
                 {conferences.map(conf => (
                   <div key={conf} className="space-y-4">
-                    <h3 className="text-lg font-bold text-blue-400">{conf}</h3>
+                    <h3 className="text-lg font-bold text-blue-600">{conf}</h3>
                     {divisions.map(div => {
                       const divTeams = sortedTeams(teams.filter(t => t.conference === conf && t.division === div));
                       return (
@@ -250,13 +266,30 @@ export default function StandingsPage() {
                           </Badge>
                           <button
                             onClick={() => setSelectedGame(game)}
-                            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                            className="text-xs text-blue-600 hover:text-blue-400 transition-colors"
                           >
                             Box Score
                           </button>
                         </div>
                       ) : (
-                        <span className="text-xs text-[var(--text-sec)]">Upcoming</span>
+                        (() => {
+                          const { spread, favored } = computeSpread(game);
+                          const spreadText = spread === 0 ? 'EVEN' :
+                            favored === 'user' ? `YOU ${spread > 0 ? '+' : ''}${spread}` :
+                            `${teamAbbr(isHome ? game.awayTeamId : game.homeTeamId)} ${spread < 0 ? '+' : '-'}${Math.abs(spread)}`;
+                          return (
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-mono font-medium ${
+                                favored === 'user' ? 'text-green-600' :
+                                favored === 'opp' ? 'text-red-600' :
+                                'text-[var(--text-sec)]'
+                              }`}>
+                                {spreadText}
+                              </span>
+                              <span className="text-[10px] text-[var(--text-sec)]">LINE</span>
+                            </div>
+                          );
+                        })()
                       )}
                     </div>
                   </Card>

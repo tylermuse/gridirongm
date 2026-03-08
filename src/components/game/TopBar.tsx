@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
@@ -19,6 +19,7 @@ export function TopBar() {
     playoffBracket,
     playoffSeeds,
     freeAgents,
+    faDay,
     draftOrder,
     resigningPlayers,
     tradeProposals,
@@ -36,8 +37,26 @@ export function TopBar() {
   } = useGameStore();
 
   const [newProposalIds, setNewProposalIds] = useState<string[]>([]);
+  const prevPhaseRef = useRef(phase);
 
-  const superBowlDone = !!playoffBracket?.find(m => m.id === 'super-bowl')?.winnerId;
+  const superBowlDone = !!playoffBracket?.find(m => m.id === 'championship')?.winnerId;
+  const prevSuperBowlDoneRef = useRef(superBowlDone);
+
+  // Auto-redirect to playoffs when phase transitions
+  useEffect(() => {
+    if (prevPhaseRef.current !== 'playoffs' && phase === 'playoffs') {
+      router.push('/playoffs');
+    }
+    prevPhaseRef.current = phase;
+  }, [phase, router]);
+
+  // Auto-redirect to playoffs page when Championship completes (to show awards)
+  useEffect(() => {
+    if (!prevSuperBowlDoneRef.current && superBowlDone) {
+      router.push('/playoffs');
+    }
+    prevSuperBowlDoneRef.current = superBowlDone;
+  }, [superBowlDone, router]);
   const nextPlayoffGame = playoffBracket
     ?.filter(m => !m.winnerId && m.homeTeamId && m.awayTeamId)
     .sort((a, b) => a.round - b.round)[0];
@@ -89,14 +108,15 @@ export function TopBar() {
     const wins = userTeam?.record.wins ?? 0;
     const losses = userTeam?.record.losses ?? 0;
     const gamesLeft = maxWeek - week + 1;
-    const tradeDeadlineNote = week <= 12 ? '' : ' · Trade window closed';
+    const dl = leagueSettings?.tradeDeadlineWeek ?? 12;
+    const tradeDeadlineNote = week <= dl + 1 ? '' : ' · Trade window closed';
     bannerText = `Week ${week} of ${maxWeek} · Record: ${wins}-${losses} · ${gamesLeft} game${gamesLeft !== 1 ? 's' : ''} remaining${tradeDeadlineNote}`;
   } else if (phase === 'playoffs') {
     if (playoffSeeds && userTeamId) {
-      const afcSeed = playoffSeeds.AFC.indexOf(userTeamId);
-      const nfcSeed = playoffSeeds.NFC.indexOf(userTeamId);
-      const seed = afcSeed >= 0 ? afcSeed + 1 : nfcSeed >= 0 ? nfcSeed + 1 : null;
-      const conf = afcSeed >= 0 ? 'AFC' : nfcSeed >= 0 ? 'NFC' : null;
+      const acSeed = playoffSeeds.AC.indexOf(userTeamId);
+      const ncSeed = playoffSeeds.NC.indexOf(userTeamId);
+      const seed = acSeed >= 0 ? acSeed + 1 : ncSeed >= 0 ? ncSeed + 1 : null;
+      const conf = acSeed >= 0 ? 'AC' : ncSeed >= 0 ? 'NC' : null;
       if (seed && conf) {
         bannerText = `${conf} Seed #${seed}`;
         if (nextPlayoffGame) {
@@ -123,7 +143,7 @@ export function TopBar() {
   } else if (phase === 'freeAgency') {
     const remaining = freeAgents.length;
     const capSpace = userTeam ? (userTeam.salaryCap - userTeam.totalPayroll) : 0;
-    bannerText = `${remaining} free agent${remaining !== 1 ? 's' : ''} available · $${Math.round(capSpace * 10) / 10}M cap space`;
+    bannerText = `Day ${faDay} of 30 · ${remaining} free agent${remaining !== 1 ? 's' : ''} available · $${Math.round(capSpace * 10) / 10}M cap space`;
   }
 
   return (
@@ -134,7 +154,7 @@ export function TopBar() {
             {phase === 'regular' && `Week ${week} · Regular Season`}
             {phase === 'playoffs' && 'Playoffs'}
             {phase === 'resigning' && 'Re-signing Window'}
-            {phase === 'draft' && `NFL Draft · Season ${season}`}
+            {phase === 'draft' && `Draft · Season ${season}`}
             {phase === 'freeAgency' && 'Free Agency'}
             {phase === 'offseason' && 'Offseason'}
           </div>
@@ -152,7 +172,7 @@ export function TopBar() {
                 <Button onClick={handleSimWeek} size="sm">
                   Sim Week {week}
                 </Button>
-                {week <= (leagueSettings?.tradeDeadlineWeek ?? 12) && (
+                {week <= (leagueSettings?.tradeDeadlineWeek ?? 12) + 1 && (
                   <Button
                     onClick={handleSimToDeadline}
                     variant="secondary"
@@ -199,22 +219,43 @@ export function TopBar() {
                     </Button>
                   </>
                 )}
-                <Button
-                  onClick={() => { advanceToResigning(); router.push('/re-sign'); }}
-                  size="sm"
-                  variant={superBowlDone ? 'primary' : 'secondary'}
-                >
-                  {superBowlDone ? 'Advance to Re-signing →' : 'Skip to Re-signing'}
-                </Button>
+                {superBowlDone && (
+                  <Button
+                    onClick={() => {
+                      const store = useGameStore.getState();
+                      if (store.phase !== 'resigning') {
+                        store.advanceToResigning();
+                      }
+                      router.push('/re-sign');
+                    }}
+                    size="sm"
+                  >
+                    Advance to Re-signing →
+                  </Button>
+                )}
               </>
             )}
             {phase === 'resigning' && (
               <>
                 <Link href="/re-sign">
-                  <Button size="sm" variant="secondary">Go to Re-signing</Button>
+                  <Button size="sm">
+                    Go to Re-signing
+                  </Button>
                 </Link>
                 <Button
-                  onClick={() => { advanceToDraft(); router.push('/draft'); }}
+                  onClick={() => {
+                    const remaining = resigningPlayers.length;
+                    const msg = remaining > 0
+                      ? `Skip to draft? ${remaining} player${remaining !== 1 ? 's' : ''} still unsigned — they will become free agents.`
+                      : 'Advance to the draft phase?';
+                    if (!confirm(msg)) return;
+                    const store = useGameStore.getState();
+                    if (store.phase !== 'draft') {
+                      store.advanceToDraft();
+                    }
+                    router.push('/draft');
+                  }}
+                  variant="secondary"
                   size="sm"
                 >
                   {resigningPlayers.length === 0 ? 'Advance to Draft →' : 'Skip to Draft'}
@@ -224,17 +265,17 @@ export function TopBar() {
             {phase === 'draft' && (
               <>
                 <Link href="/draft">
-                  <Button size="sm" variant="secondary">Go to Draft</Button>
+                  <Button size="sm">
+                    Go to Draft
+                  </Button>
                 </Link>
                 <Button
                   onClick={() => {
-                    // Finish remaining draft picks first, then advance to FA
-                    simToEndDraft();
-                    // Use setTimeout to let state settle before advancing phase
-                    setTimeout(() => {
-                      useGameStore.getState().advanceToFreeAgency();
+                    const remaining = draftOrder.length;
+                    if (confirm(`Skip the rest of the draft? ${remaining} pick${remaining !== 1 ? 's' : ''} remaining — AI will auto-draft for your team.`)) {
+                      useGameStore.getState().simToEndDraft();
                       router.push('/free-agency');
-                    }, 0);
+                    }
                   }}
                   variant="secondary"
                   size="sm"
@@ -245,11 +286,35 @@ export function TopBar() {
             )}
             {phase === 'freeAgency' && (
               <>
-                <Button onClick={() => { startNewSeason(); router.push('/'); }} size="sm">
-                  Start New Season →
-                </Button>
+                <Link href="/free-agency">
+                  <Button size="sm">
+                    Go to Free Agency
+                  </Button>
+                </Link>
+                {faDay >= 30 ? (
+                  <Button onClick={() => {
+                    if (!confirm('Start the new season? This will advance to the next year.')) return;
+                    startNewSeason(); router.push('/');
+                  }} variant="secondary" size="sm">
+                    Start New Season →
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      if (confirm(`End free agency early? (Day ${faDay}/30 — remaining FAs will be unsigned)`)) {
+                        startNewSeason();
+                        router.push('/');
+                      }
+                    }}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    End Free Agency Early
+                  </Button>
+                )}
               </>
             )}
+
           </div>
         </div>
 

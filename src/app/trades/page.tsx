@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
@@ -10,12 +11,27 @@ import { Button } from '@/components/ui/Button';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import type { Player, DraftPick, Position } from '@/types';
 import { POSITIONS } from '@/types';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 
 function ratingColor(val: number): string {
-  if (val >= 80) return 'text-green-400';
-  if (val >= 65) return 'text-blue-400';
-  if (val >= 50) return 'text-amber-400';
-  return 'text-red-400';
+  if (val >= 80) return 'text-green-600';
+  if (val >= 65) return 'text-blue-600';
+  if (val >= 50) return 'text-amber-600';
+  return 'text-red-600';
+}
+
+function statLine(p: Player): string {
+  const s = p.stats;
+  if (s.gamesPlayed === 0) return '';
+  switch (p.position) {
+    case 'QB': return `${s.passYards} YDS · ${s.passTDs} TD · ${s.interceptions} INT`;
+    case 'RB': return `${s.rushYards} YDS · ${s.rushTDs} TD`;
+    case 'WR': case 'TE': return `${s.receptions} REC · ${s.receivingYards} YDS · ${s.receivingTDs} TD`;
+    case 'DL': case 'LB': return `${s.tackles} TKL · ${s.sacks.toFixed(1)} SCK`;
+    case 'CB': case 'S': return `${s.tackles} TKL · ${s.defensiveINTs} INT`;
+    case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG`;
+    default: return `${s.gamesPlayed} GP`;
+  }
 }
 
 function playerTradeValue(player: Player): number {
@@ -37,11 +53,19 @@ function ValueAssessmentBadge({ assessment }: { assessment: string }) {
   return <Badge variant="red">They Win</Badge>;
 }
 
-export default function TradesPage() {
+export default function TradesPageWrapper() {
+  return (
+    <Suspense>
+      <TradesPage />
+    </Suspense>
+  );
+}
+
+function TradesPage() {
   const {
     phase, week, players, teams, userTeamId,
     tradeProposals, executeTrade, respondToTradeProposal,
-    solicitTradingBlockProposals,
+    solicitTradingBlockProposals, leagueSettings,
   } = useGameStore();
 
   const [selectedTeamId, setSelectedTeamId] = useState('');
@@ -58,7 +82,19 @@ export default function TradesPage() {
   const [blockedPlayerIds, setBlockedPlayerIds] = useState<string[]>([]);
   const [blockedPickIds, setBlockedPickIds] = useState<string[]>([]);
   const [seekPositions, setSeekPositions] = useState<Position[]>([]);
+  const [seekDraftPicks, setSeekDraftPicks] = useState(false);
   const [blockSolicited, setBlockSolicited] = useState(false);
+
+  // Handle ?block=PLAYER_ID from roster page
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const blockPlayerId = searchParams.get('block');
+    if (blockPlayerId) {
+      // Pre-select the player on the trading block tab
+      setBlockedPlayerIds(prev => prev.includes(blockPlayerId) ? prev : [...prev, blockPlayerId]);
+      setActiveTab('block');
+    }
+  }, [searchParams]);
 
   const userTeam = teams.find(t => t.id === userTeamId);
   const aiTeams = teams.filter(t => t.id !== userTeamId).sort((a, b) => a.abbreviation.localeCompare(b.abbreviation));
@@ -75,7 +111,9 @@ export default function TradesPage() {
 
   // Trades allowed during regular season (before deadline) and all offseason phases
   const offseasonPhases = ['resigning', 'draft', 'freeAgency', 'offseason', 'preseason'];
-  const isTradeOpen = offseasonPhases.includes(phase) || (phase === 'regular' && week <= 12);
+  const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
+  // Trades stay open through the deadline week + 1 (close after simming the week after deadline)
+  const isTradeOpen = offseasonPhases.includes(phase) || (phase === 'regular' && week <= tradeDeadlineWeek + 1);
   const userTeamObj = teams.find(t => t.id === userTeamId);
   const pendingProposals = tradeProposals.filter(p => {
     if (p.status !== 'pending') return false;
@@ -148,7 +186,7 @@ export default function TradesPage() {
   }
 
   function handleSolicitProposals() {
-    solicitTradingBlockProposals(blockedPlayerIds, blockedPickIds, seekPositions);
+    solicitTradingBlockProposals(blockedPlayerIds, blockedPickIds, seekPositions, seekDraftPicks);
     setBlockSolicited(true);
     setActiveTab('incoming');
   }
@@ -160,7 +198,7 @@ export default function TradesPage() {
           <h2 className="text-2xl font-black">Trade Center</h2>
           <div className="text-sm text-[var(--text-sec)]">
             {isTradeOpen
-              ? `Trade deadline: Week 12 (${12 - week} week${12 - week !== 1 ? 's' : ''} away)`
+              ? `Trade deadline: After Week ${tradeDeadlineWeek + 1} (${Math.max(0, tradeDeadlineWeek + 1 - week)} week${tradeDeadlineWeek + 1 - week !== 1 ? 's' : ''} left)`
               : 'Trade window closed'}
           </div>
         </div>
@@ -255,26 +293,25 @@ export default function TradesPage() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => proposingTeam && setViewTeamId(proposingTeam.id)}
-                          className="w-6 h-6 rounded flex items-center justify-center text-xs font-black text-white cursor-pointer hover:opacity-80 transition-opacity shrink-0"
-                          style={{ backgroundColor: proposingTeam?.primaryColor ?? '#374151' }}
+                          className="shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
                         >
-                          {proposingTeam?.abbreviation?.[0]}
+                          {proposingTeam && <TeamLogo abbreviation={proposingTeam.abbreviation} primaryColor={proposingTeam.primaryColor} secondaryColor={proposingTeam.secondaryColor} size="sm" />}
                         </button>
-                        <button onClick={() => proposingTeam && setViewTeamId(proposingTeam.id)} className="font-bold hover:text-blue-400 transition-colors">{proposingTeam?.city} {proposingTeam?.name}</button>
+                        <button onClick={() => proposingTeam && setViewTeamId(proposingTeam.id)} className="font-bold hover:text-blue-600 transition-colors">{proposingTeam?.city} {proposingTeam?.name}</button>
                         <span className="text-xs text-[var(--text-sec)]">Week {proposal.week}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                          userOvrDelta > 0 ? 'bg-green-900/40 text-green-400' :
-                          userOvrDelta < 0 ? 'bg-red-900/40 text-red-400' :
-                          'bg-amber-900/30 text-amber-400'
+                          userOvrDelta > 0 ? 'bg-green-100 text-green-600' :
+                          userOvrDelta < 0 ? 'bg-red-100 text-red-600' :
+                          'bg-amber-50 text-amber-600'
                         }`}>
                           Your OVR: {currentUserOvr} → {afterUserOvr}
                         </span>
                         <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                          afterOtherOvr > currentOtherOvr ? 'bg-green-900/40 text-green-400' :
-                          afterOtherOvr < currentOtherOvr ? 'bg-red-900/40 text-red-400' :
-                          'bg-amber-900/30 text-amber-400'
+                          afterOtherOvr > currentOtherOvr ? 'bg-green-100 text-green-600' :
+                          afterOtherOvr < currentOtherOvr ? 'bg-red-100 text-red-600' :
+                          'bg-amber-50 text-amber-600'
                         }`}>
                           Their OVR: {currentOtherOvr} → {afterOtherOvr}
                         </span>
@@ -283,17 +320,23 @@ export default function TradesPage() {
 
                     <div className="grid grid-cols-2 gap-4 mb-4">
                       <div>
-                        <div className="text-xs font-bold text-green-400 mb-2">You Receive</div>
-                        {offPlayers.map(p => (
-                          <div key={p.id} className="flex items-center gap-2 mb-1">
-                            <Badge size="sm">{p.position}</Badge>
-                            <button onClick={() => setSelectedPlayerId(p.id)} className="text-sm hover:text-blue-400">
-                              {p.firstName} {p.lastName}
-                            </button>
-                            <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall} OVR</span>
-                            <span className="text-[10px] text-[var(--text-sec)]">Age {p.age}</span>
-                          </div>
-                        ))}
+                        <div className="text-xs font-bold text-green-600 mb-2">You Receive</div>
+                        {offPlayers.map(p => {
+                          const stats = statLine(p);
+                          return (
+                            <div key={p.id} className="mb-1.5">
+                              <div className="flex items-center gap-2">
+                                <Badge size="sm">{p.position}</Badge>
+                                <button onClick={() => setSelectedPlayerId(p.id)} className="text-sm hover:text-blue-600">
+                                  {p.firstName} {p.lastName}
+                                </button>
+                                <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall} OVR</span>
+                                <span className="text-[10px] text-[var(--text-sec)]">Age {p.age}</span>
+                              </div>
+                              {stats && <div className="text-[10px] text-[var(--text-sec)] ml-7 mt-0.5">{stats}</div>}
+                            </div>
+                          );
+                        })}
                         {offPicks.map(pk => (
                           <div key={pk.id} className="flex items-center gap-2 mb-1 text-sm">
                             <Badge size="sm" variant="default">Pick</Badge>
@@ -305,17 +348,23 @@ export default function TradesPage() {
                         )}
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-red-400 mb-2">You Send</div>
-                        {reqPlayers.map(p => (
-                          <div key={p.id} className="flex items-center gap-2 mb-1">
-                            <Badge size="sm">{p.position}</Badge>
-                            <button onClick={() => setSelectedPlayerId(p.id)} className="text-sm hover:text-blue-400">
-                              {p.firstName} {p.lastName}
-                            </button>
-                            <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall} OVR</span>
-                            <span className="text-[10px] text-[var(--text-sec)]">Age {p.age}</span>
-                          </div>
-                        ))}
+                        <div className="text-xs font-bold text-red-600 mb-2">You Send</div>
+                        {reqPlayers.map(p => {
+                          const stats = statLine(p);
+                          return (
+                            <div key={p.id} className="mb-1.5">
+                              <div className="flex items-center gap-2">
+                                <Badge size="sm">{p.position}</Badge>
+                                <button onClick={() => setSelectedPlayerId(p.id)} className="text-sm hover:text-blue-600">
+                                  {p.firstName} {p.lastName}
+                                </button>
+                                <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall} OVR</span>
+                                <span className="text-[10px] text-[var(--text-sec)]">Age {p.age}</span>
+                              </div>
+                              {stats && <div className="text-[10px] text-[var(--text-sec)] ml-7 mt-0.5">{stats}</div>}
+                            </div>
+                          );
+                        })}
                         {reqPicks.map(pk => (
                           <div key={pk.id} className="flex items-center gap-2 mb-1 text-sm">
                             <Badge size="sm" variant="default">Pick</Badge>
@@ -331,7 +380,10 @@ export default function TradesPage() {
                     <div className="flex gap-2">
                       <Button
                         size="sm"
-                        onClick={() => respondToTradeProposal(proposal.id, true)}
+                        onClick={() => {
+                          const success = respondToTradeProposal(proposal.id, true);
+                          if (!success) alert('Trade failed — you may be over the salary cap or the players are no longer available.');
+                        }}
                         disabled={!isTradeOpen}
                       >
                         Accept Trade
@@ -416,7 +468,7 @@ export default function TradesPage() {
                             <span className="text-sm flex-1">{p.firstName} {p.lastName}</span>
                             <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
                             <span className="text-xs text-[var(--text-sec)] w-10 text-right">{p.age}y</span>
-                            <span className="text-xs text-[var(--text-sec)] w-14 text-right">${(p.contract.salary / 1_000_000).toFixed(1)}M</span>
+                            <span className="text-xs text-[var(--text-sec)] w-14 text-right">${p.contract.salary}M</span>
                           </label>
                         ))}
                       </div>
@@ -449,9 +501,10 @@ export default function TradesPage() {
                     <Card>
                       <CardHeader><CardTitle>Seeking in Return</CardTitle></CardHeader>
                       <p className="text-xs text-[var(--text-sec)] mb-3">
-                        Select positions you want. AI teams will prioritize offering these.
+                        Select what you want back. AI teams will prioritize offering these.
                       </p>
-                      <div className="grid grid-cols-3 gap-1">
+                      <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Positions</div>
+                      <div className="grid grid-cols-3 gap-1 mb-3">
                         {POSITIONS.map(pos => (
                           <label key={pos} className="flex items-center gap-1.5 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
                             <input
@@ -470,6 +523,17 @@ export default function TradesPage() {
                           </label>
                         ))}
                       </div>
+                      <div className="border-t border-[var(--border)] pt-2">
+                        <label className="flex items-center gap-1.5 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
+                          <input
+                            type="checkbox"
+                            checked={seekDraftPicks}
+                            onChange={() => setSeekDraftPicks(!seekDraftPicks)}
+                            className="accent-blue-500"
+                          />
+                          <span className="text-xs font-medium">Draft Picks</span>
+                        </label>
+                      </div>
                     </Card>
 
                     <Card>
@@ -487,7 +551,7 @@ export default function TradesPage() {
                           Ask for Proposals
                         </Button>
                         {blockSolicited && (
-                          <p className="text-xs text-green-400 mt-2">
+                          <p className="text-xs text-green-600 mt-2">
                             Proposals generated! Check Incoming Offers.
                           </p>
                         )}
@@ -636,19 +700,19 @@ export default function TradesPage() {
                       <div className="text-sm font-semibold">
                         Value: {offeredValue} → {receivedValue} pts
                         <span className={`ml-2 text-xs ${
-                          Math.abs(valueDiff) < offeredValue * 0.1 ? 'text-green-400' :
-                          valueDiff < 0 ? 'text-blue-400' : 'text-amber-400'
+                          Math.abs(valueDiff) < offeredValue * 0.1 ? 'text-green-600' :
+                          valueDiff < 0 ? 'text-blue-600' : 'text-amber-600'
                         }`}>
                           ({valueLabel})
                         </span>
                       </div>
                       {tradeResult === 'rejected' && (
-                        <p className="text-sm text-red-400 mt-1">
+                        <p className="text-sm text-red-600 mt-1">
                           Trade rejected — offer more value or adjust your asks.
                         </p>
                       )}
                       {tradeResult === 'accepted' && (
-                        <p className="text-sm text-green-400 mt-1">Trade accepted!</p>
+                        <p className="text-sm text-green-600 mt-1">Trade accepted!</p>
                       )}
                     </div>
                     <Button

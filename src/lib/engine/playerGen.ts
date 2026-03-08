@@ -4,6 +4,7 @@ function uuid(): string {
 import type { Player, PlayerRatings, Position } from '@/types';
 import { emptyStats } from '@/types';
 import { randomName } from '@/lib/data/names';
+import { estimateSalary } from './salary';
 
 /** Rating weights per position — higher weight = more important for that position. */
 export const POSITION_WEIGHTS: Record<Position, Partial<Record<keyof PlayerRatings, number>>> = {
@@ -69,20 +70,13 @@ function randomAge(experience: number): number {
   return 22 + experience;
 }
 
-function randomSalary(overall: number, position: Position): number {
-  // Match estimateSalary curve from store.ts for consistency
-  const POSITION_SALARY_MULT: Record<string, number> = {
-    QB: 1.9, WR: 1.0, CB: 1.05, DL: 1.35, LB: 0.95, OL: 1.0,
-    S: 0.9, TE: 0.85, RB: 0.8, K: 0.25, P: 0.25,
-  };
-  const normalized = Math.max(0, (overall - 40) / 60);
-  const baseSalary = Math.max(0.75, Math.pow(normalized, 1.6) * 42);
-  const posMult = POSITION_SALARY_MULT[position] ?? 1.0;
-  let salary = baseSalary * posMult;
-  if (position === 'K' || position === 'P') salary = Math.min(salary, 5.0);
-  // Add ±20% noise for variety
-  const noise = 0.8 + Math.random() * 0.4;
-  return Math.round(salary * noise * 10) / 10;
+function randomSalary(overall: number, position: Position, age: number, potential: number): number {
+  // Use the canonical estimateSalary curve from store.ts so initial rosters
+  // have realistic salaries consistent with free agency / re-signing values.
+  const base = estimateSalary(overall, position, age, potential);
+  // Add ±15% noise for variety
+  const noise = 0.85 + Math.random() * 0.30;
+  return Math.round(base * noise * 10) / 10;
 }
 
 export function generatePlayer(
@@ -109,7 +103,7 @@ export function generatePlayer(
     potentialBonus = Math.round(gaussian(-5, 3)); // Well below current OVR — clearly declining
   }
   const potential = clamp(ratings.overall + potentialBonus);
-  const salary = randomSalary(ratings.overall, position);
+  const salary = randomSalary(ratings.overall, position, age, potential);
 
   return {
     id: uuid(),
@@ -179,7 +173,7 @@ const SCOUTING_LABELS = [
 /** Generates a class of draft prospects.
  *  Top picks should be mid-level starter quality (~75-80 OVR),
  *  declining through mid-round role players (~55-65) to late-round
- *  projects (~35-45). This mirrors real NFL draft talent distribution.
+ *  projects (~35-45). This mirrors real pro draft talent distribution.
  */
 export function generateDraftClass(count: number): Player[] {
   const prospects: Player[] = [];
@@ -193,6 +187,7 @@ export function generateDraftClass(count: number): Player[] {
     const player = generatePlayer(position, talent, { age: 21 + Math.floor(Math.random() * 2), experience: 0 });
     player.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
     player.scoutingLabel = SCOUTING_LABELS[Math.floor(Math.random() * SCOUTING_LABELS.length)];
+    player.scoutingSeed = Math.floor(Math.random() * 10000);
     prospects.push(player);
   }
 

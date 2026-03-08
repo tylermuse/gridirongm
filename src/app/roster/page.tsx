@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useGameStore } from '@/lib/engine/store';
+import { useGameStore, computeAllLeagueTeams } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -90,7 +90,7 @@ function getGenericStat(p: Player): string {
 export default function RosterPage() {
   const router = useRouter();
   const {
-    players, teams, userTeamId, season,
+    players, teams, userTeamId, season, champions,
     releasePlayer, placeOnIR, activateFromIR,
     reorderDepthChart, restructureContract,
     solicitTradingBlockProposals,
@@ -107,6 +107,10 @@ export default function RosterPage() {
 
   // Whether we're in an offseason phase where restructuring makes sense
   const isOffseason = phase !== 'regular';
+
+  // Current season champion team (for ring indicators)
+  const currentChamp = champions?.find(c => c.season === season);
+  const champTeamId = currentChamp?.teamId ?? null;
 
   // Whether trades are currently allowed
   const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
@@ -186,12 +190,17 @@ export default function RosterPage() {
       }
     });
 
-  // Pro Bowl: players who made All-League 1st or 2nd team last season
+  // All-Pro: players who made All-League 1st or 2nd team this season (live) or last season
+  const allProPlayerIds = new Set<string>();
+  // Current season All-League (computed live from current ratings/stats)
+  const currentAllLeague = computeAllLeagueTeams(useGameStore.getState() as never);
+  for (const entry of currentAllLeague.first) allProPlayerIds.add(entry.playerId);
+  for (const entry of currentAllLeague.second) allProPlayerIds.add(entry.playerId);
+  // Also include last completed season
   const lastSeason = seasonHistory.length > 0 ? seasonHistory[seasonHistory.length - 1] : null;
-  const proBowlPlayerIds = new Set<string>();
   if (lastSeason) {
-    for (const entry of (lastSeason.allLeagueFirst ?? [])) proBowlPlayerIds.add(entry.playerId);
-    for (const entry of (lastSeason.allLeagueSecond ?? [])) proBowlPlayerIds.add(entry.playerId);
+    for (const entry of (lastSeason.allLeagueFirst ?? [])) allProPlayerIds.add(entry.playerId);
+    for (const entry of (lastSeason.allLeagueSecond ?? [])) allProPlayerIds.add(entry.playerId);
   }
 
   const injuredPlayers = roster.filter(p => p.injury && p.injury.weeksLeft > 0);
@@ -382,12 +391,13 @@ export default function RosterPage() {
                         {/* Name */}
                         <td className="py-2 px-2 pl-3">
                           <div className="flex items-center gap-1.5">
-                            {proBowlPlayerIds.has(p.id) && <span className="text-amber-600 text-xs">★</span>}
+                            {allProPlayerIds.has(p.id) && <span className="text-amber-600 text-xs">★</span>}
                             <button
                               onClick={() => setSelectedPlayerId(p.id)}
                               className="font-semibold hover:text-blue-600 transition-colors truncate"
                             >
                               {p.firstName} {p.lastName}
+                              {champTeamId === userTeamId && <span className="ml-0.5 text-xs" title="Championship Ring">💍</span>}
                             </button>
                           </div>
                           {p.injury && (
@@ -410,6 +420,17 @@ export default function RosterPage() {
                           <span className={`font-black text-sm ${ratingColor(p.ratings.overall)} ${ratingBg(p.ratings.overall)} px-1.5 py-0.5 rounded`}>
                             {p.ratings.overall}
                           </span>
+                          {(() => {
+                            const lastEntry = p.ratingHistory.length > 0 ? p.ratingHistory[p.ratingHistory.length - 1] : null;
+                            if (!lastEntry) return null;
+                            const diff = p.ratings.overall - lastEntry.overall;
+                            if (diff === 0) return null;
+                            return (
+                              <span className={`text-[10px] font-bold ml-0.5 ${diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {diff > 0 ? `+${diff}` : diff}
+                              </span>
+                            );
+                          })()}
                         </td>
 
                         {/* Potential */}
@@ -420,8 +441,9 @@ export default function RosterPage() {
                         {/* Contract */}
                         <td className="py-2 px-2 text-right font-mono text-xs tabular-nums">
                           <span className="font-semibold">${p.contract.salary}M</span>
-                          <span className="text-[var(--text-sec)] ml-1">
+                          <span className={`ml-1 ${p.contract.yearsLeft <= 1 ? 'font-bold text-amber-600' : 'text-[var(--text-sec)]'}`}>
                             thru {season + p.contract.yearsLeft}
+                            {p.contract.yearsLeft <= 1 && ' ⚠'}
                           </span>
                         </td>
 
@@ -534,7 +556,7 @@ export default function RosterPage() {
         {viewMode === 'depth' && (
           <div className="space-y-4">
             <p className="text-xs text-[var(--text-sec)]">
-              Drag players to reorder the depth chart. ★ = All-League last season.
+              Drag players to reorder the depth chart. ★ = All-League selection.
             </p>
             {positionGroups.map(group => (
               <Card key={group.label}>
@@ -552,7 +574,7 @@ export default function RosterPage() {
                               if (!player) {
                                 return <div key={idx} className="text-xs text-[var(--text-sec)] py-1 px-2">—</div>;
                               }
-                              const isProBowl = proBowlPlayerIds.has(player.id);
+                              const isAllPro = allProPlayerIds.has(player.id);
                               const isDragging = dragPosition === pos && dragIndex === idx;
                               const isDragOver = dragPosition === pos && dragOverIndex === idx;
                               return (
@@ -578,7 +600,7 @@ export default function RosterPage() {
                                     onClick={(e) => { e.stopPropagation(); setSelectedPlayerId(player.id); }}
                                     className="text-xs font-semibold truncate block hover:text-blue-600 transition-colors"
                                   >
-                                    {isProBowl && <span className="text-amber-600 mr-0.5">★</span>}
+                                    {isAllPro && <span className="text-amber-600 mr-0.5">★</span>}
                                     {player.firstName[0]}. {player.lastName}
                                   </button>
                                   <div className="text-[10px] text-[var(--text-sec)] mt-0.5 truncate">
@@ -633,7 +655,7 @@ export default function RosterPage() {
                       <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
                         <td className="py-2.5 pl-2">
                           <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-600 transition-colors">
-                            {proBowlPlayerIds.has(p.id) && <span className="text-amber-600 mr-1">★</span>}
+                            {allProPlayerIds.has(p.id) && <span className="text-amber-600 mr-1">★</span>}
                             {p.firstName} {p.lastName}
                           </button>
                         </td>

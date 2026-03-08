@@ -82,7 +82,7 @@ export default function NewsPage() {
             >
               {tab.label}
               {tab.key === 'myteam' && newsItems.filter(n => n.isUserTeam).length > 0 && (
-                <span className="ml-1.5 bg-blue-500/30 text-blue-300 rounded-full px-1.5 text-[10px]">
+                <span className="ml-1.5 bg-blue-100 text-blue-600 rounded-full px-1.5 text-[10px]">
                   {newsItems.filter(n => n.isUserTeam).length}
                 </span>
               )}
@@ -141,7 +141,7 @@ export default function NewsPage() {
                           const p = players.find(pl => pl.id === pid);
                           if (!p) return null;
                           return (
-                            <button key={pid} onClick={() => setSelectedPlayerId(pid)} className="text-xs text-blue-400 hover:underline">
+                            <button key={pid} onClick={() => setSelectedPlayerId(pid)} className="text-xs text-blue-600 hover:underline">
                               {p.firstName} {p.lastName}
                             </button>
                           );

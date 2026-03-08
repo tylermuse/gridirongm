@@ -1,10 +1,10 @@
-import type { Player, PlayerStats, GameResult } from '@/types';
+import type { Player, PlayerStats, GameResult, ScoringPlay } from '@/types';
 
 /**
  * Computes an aggregate offensive and defensive power rating for a roster.
- * Returns a value roughly in 50-100 range for typical NFL teams.
+ * Returns a value roughly in 50-100 range for typical pro teams.
  */
-function teamPower(roster: Player[]): { offense: number; defense: number } {
+export function teamPower(roster: Player[]): { offense: number; defense: number } {
   let offSum = 0, offCount = 0;
   let defSum = 0, defCount = 0;
 
@@ -136,18 +136,24 @@ function simulatePlay(
 
   if (isPass && qb && receivers.length > 0) {
     // ── Sack check ──
-    const sackChance = clamp((dlPower - olPower) / 500 + 0.05, 0.03, 0.08);
+    const sackChance = clamp((dlPower - olPower) / 500 + 0.04, 0.02, 0.06);
     if (Math.random() < sackChance) {
       const sackYards = -(3 + Math.floor(Math.random() * 6));
-      const sacker = dls.length > 0
-        ? weightedPick(dls, dls.map((p, i) => (i === 0 ? 3 : i === 1 ? 2.5 : 1.5) * (p.ratings.passRush / 70)))
+      // Sacks can come from DLs or LBs (edge rushers)
+      const sackerPool = [...dls, ...lbs.slice(0, 2)]; // top 2 LBs can rush
+      const sacker = sackerPool.length > 0
+        ? weightedPick(sackerPool, sackerPool.map(p => {
+            const isLB = p.position === 'LB';
+            const base = isLB ? 1 : 1.5; // DLs slightly more likely
+            return base * (p.ratings.passRush / 70);
+          }))
         : allDefenders[0];
       return { type: 'sack', yards: sackYards, touchdown: false, turnover: false, passer: qb, sacker };
     }
 
-    // ── Pick receiver (starters get much more usage) ──
+    // ── Pick receiver (starters get more usage but spread more) ──
     const recWeights = receivers.map((r, i) => {
-      const starterBonus = i === 0 ? 6 : i === 1 ? 4 : i === 2 ? 2.5 : 1;
+      const starterBonus = i === 0 ? 4 : i === 1 ? 3 : i === 2 ? 2 : 1;
       return starterBonus * (r.ratings.catching / 70);
     });
     const target = weightedPick(receivers, recWeights);
@@ -161,9 +167,10 @@ function simulatePlay(
       : 50;
 
     // ── Interception check ──
+    // Avg INT rate ~1.5% of attempts. Elite QBs ~0.5% (~3/season), bad QBs ~2.8% (~16/season).
     const intChance = clamp(
-      (coverageRating - qb.ratings.throwing) / 400 + 0.03,
-      0.015, 0.07,
+      (coverageRating - qb.ratings.throwing) / 800 + 0.015,
+      0.005, 0.028,
     );
     if (Math.random() < intChance) {
       const interceptor = coverageDefender ?? (cbs[0] || safeties[0] || allDefenders[0]);
@@ -178,16 +185,16 @@ function simulatePlay(
     const compRate = clamp(compBase - (coverageRating / 100) * 0.10, 0.35, 0.80);
 
     if (Math.random() < compRate) {
-      // Completed pass — yards tuned for NFL realism
-      // NFL average: ~11.8 yards per completion
-      const baseYards = 3 + Math.random() * 9; // 3-12 base
-      const bonusYards = (qb.ratings.throwing / 100) * 4 + (target.ratings.speed / 100) * 3;
+      // Completed pass — yards tuned for realism
+      // Average: ~11.8 yards per completion, top WR ~1,000-1,400 yds/season
+      const baseYards = 3 + Math.random() * 10; // 3-13 base (avg 8)
+      const bonusYards = (qb.ratings.throwing / 100) * 3 + (target.ratings.speed / 100) * 2;
       let yards = Math.round(baseYards + bonusYards * Math.random());
 
-      // Big play chance (~6% of completions go 20+)
-      const bigPlayChance = (target.ratings.speed / 100) * 0.06;
+      // Big play chance (~3% of completions go 20+) — rare explosive plays
+      const bigPlayChance = (target.ratings.speed / 100) * 0.03;
       if (Math.random() < bigPlayChance) {
-        yards += 15 + Math.floor(Math.random() * 30);
+        yards += 15 + Math.floor(Math.random() * 20);
       }
 
       const newPos = fieldPosition + yards;
@@ -213,7 +220,7 @@ function simulatePlay(
   } else if (rbs.length > 0) {
     // ── Rush play ──
     const rushWeights = rbs.map((r, i) => {
-      const starterBonus = i === 0 ? 6 : i === 1 ? 2.5 : 1;
+      const starterBonus = i === 0 ? 4 : i === 1 ? 2 : 1;
       return starterBonus * (r.ratings.carrying / 70);
     });
     const rusher = weightedPick(rbs, rushWeights);
@@ -224,20 +231,20 @@ function simulatePlay(
     const rushSkill = rusher.ratings.carrying * 0.5 + rusher.ratings.speed * 0.3 + rusher.ratings.agility * 0.2;
     const olBonus = (olPower - 60) / 100 * 2;
 
-    // NFL average: ~4.3 yards per carry
+    // Average: ~4.3 yards per carry, top RB ~1,000-1,400 yds/season
     let yards = Math.round(
-      (rushSkill - defRushPower) / 30 + 3.5 + (Math.random() * 5 - 2) + olBonus,
+      (rushSkill - defRushPower) / 50 + 2.5 + (Math.random() * 3 - 1.0) + olBonus,
     );
 
-    // Big rush chance (~4%)
-    if (Math.random() < (rusher.ratings.speed / 100) * 0.05) {
-      yards += 12 + Math.floor(Math.random() * 25);
+    // Big rush chance (~1.5%) — breakaway runs
+    if (Math.random() < (rusher.ratings.speed / 100) * 0.015) {
+      yards += 8 + Math.floor(Math.random() * 12);
     }
 
-    // Negative play chance (~10% of rushes go for loss)
-    const isNegative = Math.random() < 0.10;
+    // Negative play chance (~12% of rushes go for loss)
+    const isNegative = Math.random() < 0.12;
     if (isNegative) {
-      yards = -(1 + Math.floor(Math.random() * 3));
+      yards = -(1 + Math.floor(Math.random() * 4));
     }
 
     // Fumble check
@@ -288,7 +295,7 @@ function simulateDrive(
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
 
-  for (let playNum = 0; playNum < 10; playNum++) { // max 10 plays per drive
+  for (let playNum = 0; playNum < 12; playNum++) { // max 12 plays per drive (Drives avg ~6, long drives 10-12)
     const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition);
     plays.push(play);
 
@@ -314,7 +321,7 @@ function simulateDrive(
       yardsToGo -= play.yards; // sack yards are negative, so this adds
       down++;
     } else {
-      fieldPosition += Math.max(0, play.yards);
+      fieldPosition = Math.max(1, fieldPosition + play.yards);
       yardsToGo -= play.yards;
     }
 
@@ -389,7 +396,7 @@ function ensure(
  * Each team gets ~11-12 possessions. Stats are accumulated from individual plays,
  * so starters naturally dominate stats through weighted play selection.
  *
- * Tuned for realistic NFL scores: average ~20-24 points per team.
+ * Tuned for realistic pro scores: average ~20-24 points per team.
  * QB season averages: ~3,800-4,500 pass yards, ~25-35 TDs.
  */
 export function simulateGame(
@@ -399,28 +406,116 @@ export function simulateGame(
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
-  // NFL average: ~11-12 possessions per team per game
-  const possessions = 10 + Math.floor(Math.random() * 3);
+  // Average: ~11-12 possessions per team per game
+  const possessions = 10 + Math.floor(Math.random() * 2);
 
   const allHomePlays: PlayResult[] = [];
   const allAwayPlays: PlayResult[] = [];
+  const scoringPlays: ScoringPlay[] = [];
+
+  // Track scoring play index per quarter for timestamp generation
+  const quarterScoringIndex: Record<number, number> = {};
+
+  // Helper to build scoring play descriptions
+  function describeScoring(drive: DriveResult, offenseTeamId: string, quarter: number, runningAway: number, runningHome: number): { away: number; home: number } {
+    if (drive.points === 0) return { away: runningAway, home: runningHome };
+
+    const plays = drive.plays;
+    // Find the scoring play
+    const tdPlay = plays.find(p => p.touchdown);
+    const fgPlay = plays.find(p => p.type === 'fieldGoal' && p.fieldGoalMade && !plays.find(pp => pp.touchdown && plays.indexOf(pp) < plays.indexOf(p)));
+
+    const isHome = offenseTeamId === game.homeTeamId;
+    let desc = '';
+    let pts = drive.points;
+
+    if (tdPlay) {
+      if (tdPlay.type === 'pass' && tdPlay.passer && tdPlay.receiver) {
+        desc = `${tdPlay.passer.firstName[0]}. ${tdPlay.passer.lastName} ${tdPlay.yards} yd pass to ${tdPlay.receiver.firstName[0]}. ${tdPlay.receiver.lastName}`;
+      } else if (tdPlay.type === 'rush' && tdPlay.rusher) {
+        desc = `${tdPlay.rusher.firstName[0]}. ${tdPlay.rusher.lastName} ${tdPlay.yards} yd rush`;
+      } else {
+        desc = `${tdPlay.yards} yd touchdown`;
+      }
+      desc += ` (${pts === 7 ? 'XP good' : 'XP missed'})`;
+    } else if (fgPlay && fgPlay.kicker) {
+      desc = `${fgPlay.kicker.firstName[0]}. ${fgPlay.kicker.lastName} field goal`;
+      pts = 3;
+    } else {
+      desc = `${pts} points`;
+    }
+
+    if (isHome) {
+      runningHome += pts;
+    } else {
+      runningAway += pts;
+    }
+
+    // Generate timestamp: distribute scoring plays within the quarter
+    // Each quarter has 15:00 of game time. Scoring plays happen at roughly random times.
+    quarterScoringIndex[quarter] = (quarterScoringIndex[quarter] ?? 0) + 1;
+    const idx = quarterScoringIndex[quarter];
+    const minutesBase = quarter <= 4 ? 15 : 10; // OT is 10 min
+    const minutesLeft = Math.max(0, minutesBase - Math.floor(idx * (minutesBase / 5) + Math.random() * 3));
+    const secondsLeft = Math.floor(Math.random() * 60);
+    const timeLeft = `${minutesLeft}:${secondsLeft.toString().padStart(2, '0')}`;
+
+    scoringPlays.push({
+      quarter,
+      timeLeft,
+      teamId: offenseTeamId,
+      points: pts,
+      description: desc,
+      score: [runningAway, runningHome],
+    });
+
+    return { away: runningAway, home: runningHome };
+  }
+
+  let runAway = 0;
+  let runHome = 0;
 
   for (let i = 0; i < possessions; i++) {
+    // Quarter assignment: distribute possessions across 4 quarters
+    const quarter = Math.min(4, Math.floor(i / (possessions / 4)) + 1);
+
     // Home offense drives
     const homeDrive = simulateDrive(homeRoster, awayRoster);
     homeScore += homeDrive.points;
     allHomePlays.push(...homeDrive.plays);
+    const afterHome = describeScoring(homeDrive, game.homeTeamId, quarter, runAway, runHome);
+    runAway = afterHome.away;
+    runHome = afterHome.home;
 
     // Away offense drives
     const awayDrive = simulateDrive(awayRoster, homeRoster);
     awayScore += awayDrive.points;
     allAwayPlays.push(...awayDrive.plays);
+    const afterAway = describeScoring(awayDrive, game.awayTeamId, quarter, runAway, runHome);
+    runAway = afterAway.away;
+    runHome = afterAway.home;
   }
 
   // Break ties with OT field goal
   if (homeScore === awayScore) {
-    if (Math.random() < 0.55) homeScore += 3;
-    else awayScore += 3;
+    const homeWinsOT = Math.random() < 0.55;
+    if (homeWinsOT) {
+      homeScore += 3;
+      runHome += 3;
+    } else {
+      awayScore += 3;
+      runAway += 3;
+    }
+    const otMinutes = Math.floor(Math.random() * 8) + 1;
+    const otSeconds = Math.floor(Math.random() * 60);
+    scoringPlays.push({
+      quarter: 5,
+      timeLeft: `${otMinutes}:${otSeconds.toString().padStart(2, '0')}`,
+      teamId: homeWinsOT ? game.homeTeamId : game.awayTeamId,
+      points: 3,
+      description: 'OT field goal',
+      score: [runAway, runHome],
+    });
   }
 
   // Accumulate stats — one pass per team over their relevant plays.
@@ -533,5 +628,6 @@ export function simulateGame(
     awayScore,
     played: true,
     playerStats,
+    scoringPlays,
   };
 }

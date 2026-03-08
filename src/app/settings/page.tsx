@@ -6,6 +6,8 @@ import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { DEFAULT_LEAGUE_SETTINGS, type LeagueSettings } from '@/types';
+import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import Link from 'next/link';
 
 interface SettingRowProps {
   label: string;
@@ -40,6 +42,63 @@ function SettingRow({ label, description, value, onChange, min, max, step, unit,
         <span className="text-sm font-mono w-20 text-right">{display}</span>
       </div>
     </div>
+  );
+}
+
+function AccountCard() {
+  const { user, tier, signOut } = useSubscription();
+
+  const tierLabel = tier === 'elite' ? 'Elite' : tier === 'pro' ? 'Pro' : 'Free';
+  const tierColor = tier === 'elite' ? 'bg-amber-100 text-amber-700' : tier === 'pro' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700';
+
+  return (
+    <Card className="mb-4">
+      <CardHeader><CardTitle>Account</CardTitle></CardHeader>
+      {user ? (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">
+              {user.email?.[0]?.toUpperCase() ?? '?'}
+            </div>
+            <div>
+              <div className="text-sm font-medium">{user.email}</div>
+              <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full mt-0.5 ${tierColor}`}>
+                {tierLabel}
+              </span>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {tier === 'free' && (
+              <Link href="/pricing">
+                <Button size="sm">Upgrade</Button>
+              </Link>
+            )}
+            {tier !== 'free' && (
+              <Button size="sm" variant="secondary" onClick={async () => {
+                try {
+                  const res = await fetch('/api/stripe/portal', { method: 'POST' });
+                  const data = await res.json();
+                  if (data.url) window.location.href = data.url;
+                } catch { /* ignore */ }
+              }}>
+                Manage Subscription
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={signOut}>Sign Out</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-[var(--text-sec)]">
+            Sign in to unlock scouting upgrades and remove ads.
+          </div>
+          <div className="flex gap-2">
+            <Link href="/login"><Button size="sm">Sign In</Button></Link>
+            <Link href="/pricing"><Button size="sm" variant="secondary">View Plans</Button></Link>
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -88,6 +147,9 @@ export default function SettingsPage() {
             </Button>
           </div>
         </div>
+
+        {/* Account */}
+        <AccountCard />
 
         {/* Finance Settings */}
         <Card className="mb-4">
@@ -214,7 +276,7 @@ export default function SettingsPage() {
             </div>
             <div>
               <span className="text-[var(--text-sec)]">Cap Space:</span>{' '}
-              <span className={`font-mono font-bold ${(userTeam?.salaryCap ?? 0) - (userTeam?.totalPayroll ?? 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
+              <span className={`font-mono font-bold ${(userTeam?.salaryCap ?? 0) - (userTeam?.totalPayroll ?? 0) > 0 ? 'text-green-600' : 'text-red-600'}`}>
                 ${((userTeam?.salaryCap ?? 0) - (userTeam?.totalPayroll ?? 0)).toFixed(1)}M
               </span>
             </div>
@@ -226,7 +288,64 @@ export default function SettingsPage() {
             </div>
           </div>
         </Card>
+        {/* Import League File */}
+        <Card>
+          <CardHeader><CardTitle>Import League File</CardTitle></CardHeader>
+          <ImportLeagueCard />
+        </Card>
       </div>
     </GameShell>
+  );
+}
+
+function ImportLeagueCard() {
+  const { newLeague, userTeamId, teams } = useGameStore();
+  const [importUrl, setImportUrl] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const userTeam = teams.find(t => t.id === userTeamId);
+
+  async function handleImport() {
+    if (!importUrl.trim()) return;
+    setImporting(true);
+    setError(null);
+    setResult(null);
+    try {
+      await newLeague(userTeam?.abbreviation ?? 'BUF', importUrl.trim());
+      setResult('League imported successfully! Page will refresh.');
+    } catch {
+      setError('Failed to import league file. Check the URL and try again.');
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-[var(--text-sec)]">
+        Import a league file from a URL to replace your current league with custom teams, players, and draft prospects.
+        This will reset your current league progress.
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="url"
+          value={importUrl}
+          onChange={(e) => setImportUrl(e.target.value)}
+          placeholder="https://example.com/league-file.json"
+          className="flex-1 px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--surface-2)] outline-none focus:border-blue-500"
+          onKeyDown={(e) => e.key === 'Enter' && handleImport()}
+        />
+        <Button size="sm" onClick={handleImport} disabled={importing || !importUrl.trim()}>
+          {importing ? 'Importing...' : 'Import & Reset'}
+        </Button>
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      {result && <p className="text-xs text-green-600">{result}</p>}
+      <p className="text-[10px] text-[var(--text-sec)]">
+        ⚠️ This will replace your entire league. Save your current game first if you want to keep it.
+      </p>
+    </div>
   );
 }

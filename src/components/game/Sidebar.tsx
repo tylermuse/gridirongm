@@ -4,6 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
+import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: '🏟️' },
@@ -16,6 +18,7 @@ const NAV_ITEMS = [
   { href: '/trades', label: 'Trades', icon: '🔄' },
   { href: '/finances', label: 'Finances', icon: '💰' },
   { href: '/stats', label: 'Stats', icon: '📈' },
+  { href: '/recap', label: 'Recap', icon: '🎙️' },
   { href: '/news', label: 'News', icon: '📰' },
   { href: '/history', label: 'History', icon: '🗃️' },
   { href: '/settings', label: 'Settings', icon: '⚙️' },
@@ -88,6 +91,58 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
+function AccountSection() {
+  const { user, tier, signOut } = useSubscription();
+
+  if (!user) {
+    return (
+      <div className="p-3 border-t border-[var(--border)]">
+        <Link
+          href="/login"
+          className="flex items-center justify-center gap-1 w-full text-xs py-1.5 rounded-lg bg-blue-600/10 text-blue-600 hover:bg-blue-600/20 transition-colors font-medium"
+        >
+          Sign In
+        </Link>
+      </div>
+    );
+  }
+
+  const tierLabel = tier === 'elite' ? 'Elite' : tier === 'pro' ? 'Pro' : 'Free';
+  const tierColor = tier === 'elite' ? 'bg-amber-100 text-amber-700' : tier === 'pro' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700';
+
+  return (
+    <div className="p-3 border-t border-[var(--border)]">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+          {user.email?.[0]?.toUpperCase() ?? '?'}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-medium truncate">{user.email}</div>
+          <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded-full ${tierColor}`}>
+            {tierLabel}
+          </span>
+        </div>
+      </div>
+      <div className="flex gap-1">
+        {tier === 'free' && (
+          <Link
+            href="/pricing"
+            className="flex-1 text-[10px] text-center py-1 rounded bg-blue-600/10 text-blue-600 hover:bg-blue-600/20 transition-colors font-medium"
+          >
+            Upgrade
+          </Link>
+        )}
+        <button
+          onClick={signOut}
+          className="flex-1 text-[10px] text-center py-1 rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
+        >
+          Sign Out
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -127,12 +182,12 @@ export function Sidebar() {
       {userTeam && (
         <div className="p-4 border-b border-[var(--border)]">
           <div className="flex items-center gap-2 mb-1">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white"
-              style={{ backgroundColor: userTeam.primaryColor }}
-            >
-              {userTeam.abbreviation}
-            </div>
+            <TeamLogo
+              abbreviation={userTeam.abbreviation}
+              primaryColor={userTeam.primaryColor}
+              secondaryColor={userTeam.secondaryColor}
+              size="md"
+            />
             <div>
               <div className="text-sm font-bold">{userTeam.city}</div>
               <div className="text-xs text-[var(--text-sec)]">{userTeam.name}</div>
@@ -190,6 +245,9 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {/* Account section */}
+      <AccountSection />
 
       {/* Footer: save/reset controls */}
       <div className="p-3 border-t border-[var(--border)] relative">

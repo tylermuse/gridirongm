@@ -4,7 +4,7 @@ function uuid(): string {
 import type { Team, GameResult } from '@/types';
 
 /**
- * Generates an 18-week NFL-style regular season schedule:
+ * Generates an 18-week pro-style regular season schedule:
  * - 17 games per team
  * - 1 bye per team
  * - at most 1 game per team per week

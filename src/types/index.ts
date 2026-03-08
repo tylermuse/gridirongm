@@ -117,6 +117,8 @@ export interface Player {
   mood: number;
   /** Season when the player last had their contract restructured (prevents repeat restructures) */
   lastRestructuredSeason?: number;
+  /** Optional photo URL (populated from imported league files) */
+  photoUrl?: string;
 }
 
 export interface TeamRecord {
@@ -141,7 +143,7 @@ export interface Team {
   city: string;
   name: string;
   abbreviation: string;
-  conference: 'AFC' | 'NFC';
+  conference: 'AC' | 'NC';
   division: 'North' | 'South' | 'East' | 'West';
   primaryColor: string;
   secondaryColor: string;
@@ -154,6 +156,8 @@ export interface Team {
   depthChart: Record<Position, string[]>;
   /** Dead cap charges from released players */
   deadCap: DeadCapEntry[];
+  /** Whether the franchise tag has been used this season */
+  franchiseTagUsed: boolean;
 }
 
 /**
@@ -182,19 +186,19 @@ export function calculateCapSavings(contract: Contract): number {
 
 /**
  * Generates a guaranteed amount for a new contract.
- * NFL-style: guaranteed money is roughly 1-2 years of salary, NOT a % of total value.
+ * Pro-style: guaranteed money is roughly 1-2 years of salary, NOT a % of total value.
  * This ensures releasing a player always saves cap space (dead cap < annual salary).
  * Guaranteed $ is prorated across years, so dead cap = guaranteed * (yearsLeft/totalYears).
  * For savings to be positive: salary > guaranteed * (yearsLeft/totalYears)
  * → guaranteed must be < salary * totalYears (always true with these values).
  */
 export function generateGuaranteed(salary: number, years: number): number {
-  // NFL-realistic guaranteed money:
+  // Realistic guaranteed money:
   // - Star players (high salary) get more guaranteed
   // - Short deals get higher % guaranteed but lower total
   // - Cutting a player should almost always save SOME cap space
   //
-  // Real NFL examples:
+  // Examples:
   //   1-year $1M deal: ~$0.2-0.5M guaranteed (signing bonus only)
   //   1-year $10M deal: ~$5-7M guaranteed
   //   3-year $15M/yr deal: ~$25-30M total guaranteed (~55-65%)
@@ -290,12 +294,12 @@ export interface SeasonSummary {
   season: number;
   championTeamId: string;
   finalsMvpId: string;
-  /** Super Bowl game stats for the MVP */
+  /** Championship game stats for the MVP */
   finalsMvpGameStats?: Partial<PlayerStats>;
   awards: { award: string; playerId: string; teamId: string }[];
   bestRecord: {
-    afc: { teamId: string; wins: number; losses: number };
-    nfc: { teamId: string; wins: number; losses: number };
+    ac: { teamId: string; wins: number; losses: number };
+    nc: { teamId: string; wins: number; losses: number };
   };
   allLeagueFirst: AllLeagueEntry[];
   allLeagueSecond: AllLeagueEntry[];
@@ -364,9 +368,13 @@ export interface LeagueState {
   draftOrder: string[];
   draftResults: DraftSelection[];
   freeAgents: string[];
+  /** Current day within the 30-day free agency window (0 = not in FA) */
+  faDay: number;
+  /** Player IDs that refuse to negotiate with the user's team */
+  faRefusals: string[];
   playoffBracket: PlayoffMatchup[] | null;
   /** Per-conference seed order: index 0 = seed 1, index 6 = seed 7 (array of team IDs) */
-  playoffSeeds: { AFC: string[]; NFC: string[] } | null;
+  playoffSeeds: { AC: string[]; NC: string[] } | null;
   /** Championship history across all seasons */
   champions: { season: number; teamId: string }[];
   /** News feed items */
@@ -379,16 +387,34 @@ export interface LeagueState {
   resigningPlayers: ResigningEntry[];
   /** Incoming AI trade proposals */
   tradeProposals: TradeProposal[];
-  /** Scouting budget level (0=cheap, 4=maximum) */
-  scoutingLevel: 0 | 1 | 2 | 3 | 4;
+  /** Scouting level (0=Entry, 1=Pro, 2=Elite) */
+  scoutingLevel: 0 | 1 | 2;
   /** Scouting data keyed by prospect player ID */
   draftScoutingData: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }>;
-  /** Player ID of the Super Bowl MVP (set when SB is played, consumed when season summary is created) */
+  /** Player ID of the Championship MVP (set when championship is played, consumed when season summary is created) */
   finalsMvpPlayerId: string | null;
   /** Configurable league settings */
   leagueSettings: LeagueSettings;
   /** Suppress trade proposal popup notifications */
   suppressTradePopups: boolean;
+  /** Weekly recap show data generated after each sim week */
+  weeklyRecaps: WeeklyRecapData[];
+}
+
+export interface WeeklyRecapData {
+  season: number;
+  week: number;
+  segments: RecapSegmentData[];
+}
+
+export interface RecapSegmentData {
+  type: 'headline' | 'upset' | 'comeback' | 'blowout' | 'shootout' | 'defensive' | 'performance' | 'streak' | 'rivalry' | 'milestone' | 'summary';
+  title: string;
+  body: string;
+  teamIds: string[];
+  playerIds: string[];
+  priority: number;
+  icon: string;
 }
 
 export interface DraftSelection {
@@ -401,9 +427,9 @@ export interface DraftSelection {
 
 export interface PlayoffMatchup {
   id: string;
-  /** 1 = Wild Card, 2 = Divisional, 3 = Conference Championship, 4 = Super Bowl */
+  /** 1 = Wild Card, 2 = Divisional, 3 = Conference Championship, 4 = Championship */
   round: number;
-  conference: 'AFC' | 'NFC' | 'Super Bowl';
+  conference: 'AC' | 'NC' | 'Championship';
   homeTeamId: string | null;
   awayTeamId: string | null;
   homeSeed: number | null;

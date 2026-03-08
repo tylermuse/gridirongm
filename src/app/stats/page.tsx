@@ -7,6 +7,7 @@ import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 
 type StatCategory = 'passYards' | 'rushYards' | 'receivingYards' | 'passTDs' | 'rushTDs' | 'sacks' | 'defensiveINTs' | 'tackles' | 'tacklesForLoss' | 'passDeflections' | 'receptions' | 'forcedFumbles';
 type Tab = 'leaders' | 'teams' | 'power';
@@ -224,12 +225,7 @@ export default function StatsPage() {
                       <td className="py-2.5 text-center text-[var(--text-sec)] text-xs">{i + 1}</td>
                       <td className="py-2.5">
                         <button onClick={() => setViewTeamId(ts.team.id)} className="flex items-center gap-2 hover:text-blue-600 transition-colors">
-                          <div
-                            className="w-5 h-5 rounded text-[9px] font-black text-white flex items-center justify-center"
-                            style={{ backgroundColor: ts.team.primaryColor }}
-                          >
-                            {ts.team.abbreviation.slice(0, 3)}
-                          </div>
+                          <TeamLogo abbreviation={ts.team.abbreviation} primaryColor={ts.team.primaryColor} secondaryColor={ts.team.secondaryColor} size="xs" />
                           <span className={isUser ? 'text-blue-600' : ''}>{ts.team.city} {ts.team.name}</span>
                         </button>
                       </td>
@@ -284,12 +280,7 @@ export default function StatsPage() {
                       </td>
                       <td className="py-2.5">
                         <button onClick={() => setViewTeamId(pr.team.id)} className="flex items-center gap-2 hover:text-blue-600 transition-colors">
-                          <div
-                            className="w-5 h-5 rounded text-[9px] font-black text-white flex items-center justify-center"
-                            style={{ backgroundColor: pr.team.primaryColor }}
-                          >
-                            {pr.team.abbreviation.slice(0, 3)}
-                          </div>
+                          <TeamLogo abbreviation={pr.team.abbreviation} primaryColor={pr.team.primaryColor} secondaryColor={pr.team.secondaryColor} size="xs" />
                           <span className={isUser ? 'text-blue-600' : ''}>{pr.team.city} {pr.team.name}</span>
                         </button>
                       </td>

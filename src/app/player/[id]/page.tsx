@@ -8,13 +8,16 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
+import { generateCoachEvaluation, generateRosterEvaluation, type CoachEvaluation, type RosterEvaluation } from '@/lib/engine/personnelReport';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { Position, PlayerRatings } from '@/types';
 
 function ratingColor(val: number) {
-  if (val >= 85) return 'text-green-400';
-  if (val >= 70) return 'text-blue-400';
-  if (val >= 55) return 'text-amber-400';
-  return 'text-red-400';
+  if (val >= 85) return 'text-green-600';
+  if (val >= 70) return 'text-blue-600';
+  if (val >= 55) return 'text-amber-600';
+  return 'text-red-600';
 }
 
 function ratingBarColor(val: number) {
@@ -68,6 +71,12 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
   const isOnUserTeam = player.teamId === userTeamId;
   const relevantRatings = POSITION_RELEVANT_RATINGS[player.position] ?? [];
 
+  // Generate personnel evaluations for rostered players
+  const userTeam = teams.find(t => t.id === userTeamId);
+  const teammates = isOnUserTeam ? players.filter(p => p.teamId === userTeamId && !p.retired) : [];
+  const coachEval = isOnUserTeam ? generateCoachEvaluation(player) : null;
+  const rosterEval = isOnUserTeam && userTeam ? generateRosterEvaluation(player, teammates, userTeam.salaryCap) : null;
+
   const stats = player.stats;
   const career = player.careerStats;
 
@@ -93,13 +102,11 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
         {/* Header */}
         <Card>
           <div className="flex items-start gap-6">
-            {/* Jersey / position */}
-            <div
-              className="w-20 h-20 rounded-2xl flex flex-col items-center justify-center text-white shrink-0"
-              style={{ backgroundColor: team?.primaryColor ?? '#374151' }}
-            >
-              <div className="text-2xl font-black">{player.position}</div>
-              {team && <div className="text-xs font-bold opacity-80">{team.abbreviation}</div>}
+            {/* Avatar / Jersey */}
+            <div className="flex flex-col items-center gap-2 shrink-0">
+              <PlayerAvatar player={player} size="lg" teamColor={team?.primaryColor ?? '#374151'} />
+              {team && <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="lg" />}
+              <div className="text-xs font-black text-[var(--text-sec)]">{player.position}</div>
             </div>
 
             <div className="flex-1">
@@ -113,7 +120,7 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                       {player.experience === 0 ? 'Rookie' : `${player.experience}${player.experience === 1 ? 'st' : player.experience === 2 ? 'nd' : player.experience === 3 ? 'rd' : 'th'} Year`}
                     </span>
                     {team ? (
-                      <Link href={`/standings`} className="text-sm hover:text-blue-400 transition-colors">
+                      <Link href={`/standings`} className="text-sm hover:text-blue-600 transition-colors">
                         {team.city} {team.name}
                       </Link>
                     ) : (
@@ -303,6 +310,127 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
           </Card>
         </div>
 
+        {/* Coach's Evaluation — only for user's rostered players */}
+        {coachEval && (
+          <Card>
+            <CardHeader><CardTitle>Coach&apos;s Evaluation</CardTitle></CardHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-4 gap-3">
+                <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2 text-center">
+                  <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Locker Room</div>
+                  <div className={`text-xs font-bold mt-1 ${
+                    coachEval.lockerRoomPresence === 'Team Captain Material' ? 'text-green-600' :
+                    coachEval.lockerRoomPresence === 'Positive Influence' ? 'text-blue-600' :
+                    coachEval.lockerRoomPresence === 'Potential Distraction' ? 'text-red-600' :
+                    'text-[var(--text)]'
+                  }`}>
+                    {coachEval.lockerRoomPresence}
+                  </div>
+                </div>
+                <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2 text-center">
+                  <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Work Ethic</div>
+                  <div className={`text-xs font-bold mt-1 ${
+                    coachEval.workEthic === 'First In, Last Out' ? 'text-green-600' :
+                    coachEval.workEthic === 'Above Average' ? 'text-blue-600' :
+                    coachEval.workEthic === 'Concerning' || coachEval.workEthic === 'Inconsistent' ? 'text-red-600' :
+                    'text-[var(--text)]'
+                  }`}>
+                    {coachEval.workEthic}
+                  </div>
+                </div>
+                <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2 text-center">
+                  <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Coachability</div>
+                  <div className={`text-xs font-bold mt-1 ${
+                    coachEval.coachability === 'Extremely Coachable' ? 'text-green-600' :
+                    coachEval.coachability === 'Receptive' ? 'text-blue-600' :
+                    coachEval.coachability === 'Difficult' || coachEval.coachability === 'Stubborn' ? 'text-red-600' :
+                    'text-[var(--text)]'
+                  }`}>
+                    {coachEval.coachability}
+                  </div>
+                </div>
+                <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2 text-center">
+                  <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Game Prep</div>
+                  <div className="text-xs mt-1 text-[var(--text)]">{coachEval.gamePreparation.length > 50 ? coachEval.gamePreparation.slice(0, 50) + '…' : coachEval.gamePreparation}</div>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider mb-1">Practice Report</div>
+                <p className="text-sm text-[var(--text)]">{coachEval.practiceHabits}</p>
+              </div>
+
+              <div className="border-l-2 border-amber-400 pl-3">
+                <p className="text-sm italic text-[var(--text)]">{coachEval.coachQuote}</p>
+                <span className="text-[10px] text-[var(--text-sec)]">— Head Coach</span>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Front Office Evaluation — only for user's rostered players */}
+        {rosterEval && (
+          <Card>
+            <CardHeader><CardTitle>Front Office Assessment</CardTitle></CardHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-4 gap-3">
+                <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2 text-center">
+                  <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Roster Status</div>
+                  <div className={`text-xs font-bold mt-1 ${
+                    rosterEval.rosterStatus === 'Franchise Cornerstone' ? 'text-green-600' :
+                    rosterEval.rosterStatus === 'Core Starter' ? 'text-blue-600' :
+                    rosterEval.rosterStatus === 'On the Bubble' ? 'text-red-600' :
+                    'text-[var(--text)]'
+                  }`}>
+                    {rosterEval.rosterStatus}
+                  </div>
+                </div>
+                <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2 text-center">
+                  <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Contract Value</div>
+                  <div className={`text-xs font-bold mt-1 ${
+                    rosterEval.contractValue === 'Elite Value' || rosterEval.contractValue === 'Good Value' ? 'text-green-600' :
+                    rosterEval.contractValue === 'Overpaid' || rosterEval.contractValue === 'Significantly Overpaid' ? 'text-red-600' :
+                    'text-[var(--text)]'
+                  }`}>
+                    {rosterEval.contractValue}
+                  </div>
+                </div>
+                <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2 text-center">
+                  <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Trade Value</div>
+                  <div className={`text-xs font-bold mt-1 ${
+                    rosterEval.tradeValue === 'Untouchable' || rosterEval.tradeValue === 'High' ? 'text-green-600' :
+                    rosterEval.tradeValue === 'Minimal' ? 'text-red-600' :
+                    'text-[var(--text)]'
+                  }`}>
+                    {rosterEval.tradeValue}
+                  </div>
+                </div>
+                <div className={`rounded-lg px-3 py-2 text-center border ${
+                  rosterEval.recommendation === 'Extend Now' ? 'bg-green-50 border-green-200' :
+                  rosterEval.recommendation === 'Keep & Develop' ? 'bg-blue-50 border-blue-200' :
+                  rosterEval.recommendation === 'Consider Release' || rosterEval.recommendation === 'Explore Trade Value' ? 'bg-red-50 border-red-200' :
+                  'bg-[var(--surface-2)] border-transparent'
+                }`}>
+                  <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Recommendation</div>
+                  <div className={`text-xs font-bold mt-1 ${
+                    rosterEval.recommendation === 'Extend Now' ? 'text-green-600' :
+                    rosterEval.recommendation === 'Keep & Develop' ? 'text-blue-600' :
+                    rosterEval.recommendation === 'Consider Release' || rosterEval.recommendation === 'Explore Trade Value' ? 'text-red-600' :
+                    'text-[var(--text)]'
+                  }`}>
+                    {rosterEval.recommendation}
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-l-2 border-blue-400 pl-3">
+                <p className="text-sm italic text-[var(--text)]">{rosterEval.foQuote}</p>
+                <span className="text-[10px] text-[var(--text-sec)]">— General Manager</span>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Rating history */}
         {player.ratingHistory.length >= 1 && (
           <Card>
@@ -315,7 +443,7 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                   <div key={entry.season} className="flex-1 text-center">
                     <div className={`text-lg font-black ${ratingColor(entry.overall)}`}>{entry.overall}</div>
                     {i > 0 && delta !== 0 && (
-                      <div className={`text-xs ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      <div className={`text-xs ${delta > 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {delta > 0 ? '+' : ''}{delta}
                       </div>
                     )}
@@ -326,7 +454,7 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
               {/* Current season */}
               <div className="flex-1 text-center">
                 <div className={`text-lg font-black ${ratingColor(player.ratings.overall)} opacity-60`}>{player.ratings.overall}</div>
-                <div className="text-xs text-blue-400">Current</div>
+                <div className="text-xs text-blue-600">Current</div>
               </div>
             </div>
           </Card>

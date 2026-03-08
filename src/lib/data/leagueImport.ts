@@ -1,13 +1,10 @@
 import type { Player, PlayerRatings, Position, Team } from '@/types';
 import { emptyRecord, emptyStats, POSITIONS, generateGuaranteed } from '@/types';
-import { NFL_TEAMS } from './teams';
+import { LEAGUE_TEAMS } from './teams';
 
 function uuid(): string {
   return crypto.randomUUID();
 }
-
-export const FBGM_ROSTER_URL =
-  'https://dl.dropbox.com/scl/fi/dta1i9j8tfma6ajbf3m57/FBGM_NFL_Roster_2026_draft.json?rlkey=ox7zkt3e96sqcjfof0c1gzb9b&st=5ntxtive&dl=1';
 
 interface FbgmRating {
   pos?: string;
@@ -50,6 +47,7 @@ interface FbgmPlayer {
   tid: number;
   firstName: string;
   lastName: string;
+  imgURL?: string;
   born?: { year?: number };
   draft?: { year?: number; pick?: number; round?: number };
   contract?: { amount?: number; exp?: number };
@@ -160,13 +158,13 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
   const confById = new Map<number, Team['conference']>(
     (league.gameAttributes?.confs ?? []).map((conf) => [
       conf.cid,
-      conf.name === 'NFC' ? 'NFC' : 'AFC',
+      conf.name === 'NFC' ? 'NC' : 'AC',
     ]),
   );
   const divById = new Map<number, Team['division']>(
     (league.gameAttributes?.divs ?? []).map((div) => [div.did, mapDivision(div.name)]),
   );
-  const templateByAbbrev = new Map(NFL_TEAMS.map((team) => [team.abbreviation, team]));
+  const templateByAbbrev = new Map(LEAGUE_TEAMS.map((team) => [team.abbreviation, team]));
 
   const teams = league.teams.map((team) => {
     const template = templateByAbbrev.get(team.abbrev);
@@ -177,7 +175,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       city: team.region,
       name: team.name,
       abbreviation: team.abbrev,
-      conference: confById.get(team.cid) ?? template?.conference ?? 'AFC',
+      conference: confById.get(team.cid) ?? template?.conference ?? 'AC',
       division: divById.get(team.did) ?? template?.division ?? 'East',
       primaryColor,
       secondaryColor,
@@ -191,11 +189,6 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
 
   const teamByTid = new Map(league.teams.map((team) => [team.tid, `team-${team.tid}`]));
 
-  // Manual rating overrides for players whose FBGM ratings are inaccurate
-  const RATING_OVERRIDES: Record<string, { overall?: number; potential?: number }> = {
-    'Conor McGovern': { overall: 58 },
-  };
-
   const players: Player[] = [];
   for (const player of league.players) {
     if (player.tid < 0 || !teamByTid.has(player.tid)) {
@@ -206,15 +199,6 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
     if (!rating) continue;
     const { ratings, potential, position } = mapRatings(rating);
     if (!position) continue;
-
-    // Apply manual overrides
-    const fullName = `${player.firstName} ${player.lastName}`;
-    const override = RATING_OVERRIDES[fullName];
-    if (override) {
-      if (override.overall !== undefined) ratings.overall = override.overall;
-      if (override.potential !== undefined) ratings.overall = Math.max(ratings.overall, override.potential);
-    }
-    const finalPotential = override?.potential ?? potential;
 
     const age = Math.max(20, season - (player.born?.year ?? season - 24));
     const draftYear = player.draft?.year ?? null;
@@ -229,7 +213,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       age,
       experience,
       ratings,
-      potential: finalPotential,
+      potential,
       stats: emptyStats(),
       careerStats: emptyStats(),
       contract,
@@ -243,10 +227,11 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       ratingHistory: [],
       onIR: false,
       mood: 60 + Math.floor(Math.random() * 30),
+      photoUrl: player.imgURL || undefined,
     });
   }
 
-  // FBGM draft classes are typically stored as tid = -2 for upcoming draft years.
+  // Draft classes are typically stored as tid = -2 for upcoming draft years.
   // Pull all classes from current season forward so each draft year stays separate.
   const importedProspects: Player[] = [];
   for (const player of league.players) {
@@ -282,6 +267,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       ratingHistory: [],
       onIR: false,
       mood: 70,
+      photoUrl: player.imgURL || undefined,
     });
   }
 
@@ -320,24 +306,21 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       })),
       depthChart,
       deadCap: [],
+      franchiseTagUsed: false,
     };
   });
 
   return { season, teams: finalizedTeams, players };
 }
 
-let importedLeaguePromise: Promise<ImportedLeagueData> | null = null;
-
-export async function loadFbgmLeagueFromUrl(url: string = FBGM_ROSTER_URL): Promise<ImportedLeagueData> {
-  if (!importedLeaguePromise) {
-    importedLeaguePromise = fetch(url)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Failed to load FBGM roster: ${response.status}`);
-        }
-        return response.json() as Promise<FbgmLeagueFile>;
-      })
-      .then((raw) => convertFbgmLeague(raw));
-  }
-  return importedLeaguePromise;
+export async function loadLeagueFromUrl(url: string): Promise<ImportedLeagueData> {
+  const data = await fetch(url)
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`Failed to load league data: ${response.status}`);
+      }
+      return response.json() as Promise<FbgmLeagueFile>;
+    })
+    .then((raw) => convertFbgmLeague(raw));
+  return data;
 }
