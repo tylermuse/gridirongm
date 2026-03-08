@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
@@ -358,68 +358,30 @@ function TeamSpotlightSection({
   );
 }
 
-/* ─── Spotlight Corner Popup ─── */
-
-function SpotlightPopup({ teamName, onDismiss, onClick }: {
-  teamName: string;
-  onDismiss: () => void;
-  onClick: () => void;
-}) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => setVisible(true), 800);
-    return () => clearTimeout(t);
-  }, []);
-
-  return (
-    <div
-      className={`fixed bottom-6 right-6 z-50 transition-all duration-500 ${visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}
-    >
-      <div className="relative bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-xl shadow-black/10 overflow-hidden max-w-xs">
-        {/* Dismiss X */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
-          className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-full text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors text-xs"
-          aria-label="Dismiss"
-        >
-          ✕
-        </button>
-
-        <button onClick={onClick} className="w-full text-left p-3 hover:bg-[var(--surface-2)] transition-colors">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg shrink-0">
-              🎬
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-bold leading-tight">Team Spotlight</p>
-              <p className="text-xs text-[var(--text-sec)] leading-tight mt-0.5">
-                {COMMENTATORS.stats.avatar} {COMMENTATORS.stats.name} & {COMMENTATORS.hottake.avatar} {COMMENTATORS.hottake.name} break down the {teamName}
-              </p>
-            </div>
-          </div>
-          <div className="mt-2 flex items-center gap-1 text-[10px] text-blue-600 font-semibold">
-            <span>Watch Now</span>
-            <span>→</span>
-          </div>
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function Dashboard() {
   const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, champions, newsItems, achievements } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
-  const [spotlightDismissed, setSpotlightDismissed] = useState(false);
   const spotlightRef = useRef<HTMLDivElement>(null);
   const userTeam = teams.find(t => t.id === userTeamId)!;
   const roster = players.filter(p => p.teamId === userTeamId);
 
-  const scrollToSpotlight = useCallback(() => {
-    setSpotlightDismissed(true);
-    spotlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Listen for spotlight scroll requests (from SpotlightPopup in GameShell or ?spotlight=1 query)
+  useEffect(() => {
+    function scrollToSpotlight() {
+      spotlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    window.addEventListener('scroll-to-spotlight', scrollToSpotlight);
+
+    // Check for ?spotlight=1 query param (navigated from another page)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('spotlight') === '1') {
+      setTimeout(scrollToSpotlight, 300); // small delay to let page render
+      // Clean up the URL
+      window.history.replaceState({}, '', '/');
+    }
+
+    return () => window.removeEventListener('scroll-to-spotlight', scrollToSpotlight);
   }, []);
 
   // Conference standings sorted by win pct, then wins
@@ -765,15 +727,6 @@ function Dashboard() {
           onPlayerClick={setSelectedPlayerId}
         />
       </div>
-
-      {/* Spotlight Corner Popup */}
-      {!spotlightDismissed && gamesPlayed > 0 && (
-        <SpotlightPopup
-          teamName={userTeam.name}
-          onDismiss={() => setSpotlightDismissed(true)}
-          onClick={scrollToSpotlight}
-        />
-      )}
 
       {/* Team Roster Modal */}
       <TeamRosterModal teamId={viewTeamId} onClose={() => setViewTeamId(null)} onPlayerClick={(id) => setSelectedPlayerId(id)} />

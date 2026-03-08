@@ -5,6 +5,7 @@ import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { GameTicker } from './GameTicker';
 import { AdBanner } from '@/components/ui/AdBanner';
+import { SpotlightPopup } from './SpotlightPopup';
 
 export function GameShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -36,6 +37,8 @@ export function GameShell({ children }: { children: React.ReactNode }) {
         <AdBanner variant="banner" />
         <main className="flex-1 p-3 md:p-6 overflow-auto">{children}</main>
       </div>
+
+      <SpotlightPopup />
     </div>
   );
 }
