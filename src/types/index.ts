@@ -119,6 +119,8 @@ export interface Player {
   lastRestructuredSeason?: number;
   /** Optional photo URL (populated from imported league files) */
   photoUrl?: string;
+  /** College / university the player attended (flavor text for draft) */
+  college?: string;
 }
 
 export interface TeamRecord {

@@ -158,21 +158,29 @@ export default function RecapPage() {
                   {debateTranscript.topics.map((topic, topicIdx) => (
                     <div key={topicIdx}>
                       {/* Topic divider */}
-                      <div className="flex items-center gap-3 mb-4">
-                        <span className="text-lg">{topic.icon}</span>
-                        <h4 className="text-sm font-bold flex-1">{topic.headline}</h4>
-                        {/* Team badges */}
-                        <div className="flex gap-1">
-                          {topic.teamIds.slice(0, 3).map(tid => (
-                            <span
-                              key={tid}
-                              className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                              style={{ backgroundColor: teamColor(tid) + '33', color: teamColor(tid) }}
-                            >
-                              {teamAbbr(tid)}
-                            </span>
-                          ))}
+                      <div className="mb-4">
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">{topic.icon}</span>
+                          <h4 className="text-sm font-bold flex-1">{topic.headline}</h4>
+                          {/* Team badges */}
+                          <div className="flex gap-1">
+                            {topic.teamIds.slice(0, 3).map(tid => (
+                              <span
+                                key={tid}
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                                style={{ backgroundColor: teamColor(tid) + '33', color: teamColor(tid) }}
+                              >
+                                {teamAbbr(tid)}
+                              </span>
+                            ))}
+                          </div>
                         </div>
+                        {/* Context line — stat lines, scores, etc. */}
+                        {topic.context && (
+                          <p className="text-xs text-[var(--text-sec)] mt-1.5 ml-8 leading-relaxed italic">
+                            {topic.context}
+                          </p>
+                        )}
                       </div>
 
                       {/* Exchanges */}

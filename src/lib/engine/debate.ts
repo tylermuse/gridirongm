@@ -26,6 +26,8 @@ export interface DebateTopic {
   exchanges: DebateExchange[];
   teamIds: string[];
   playerIds: string[];
+  /** Context line from the recap segment (e.g. stat line, score) shown under the headline */
+  context?: string;
 }
 
 export interface DebateTranscript {
@@ -619,6 +621,7 @@ export function generateDebateTranscript(
       exchanges,
       teamIds: segment.teamIds,
       playerIds: segment.playerIds,
+      context: segment.body,
     });
   }
 

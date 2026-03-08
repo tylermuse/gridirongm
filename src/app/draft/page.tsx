@@ -16,57 +16,13 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { Player, Position, Team } from '@/types';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { SCOUTING_LEVELS, maxDeepScouts } from '@/lib/subscription';
+import { expectedOvrForPick, pickGrade, gradeValue, gradeColor, teamDraftGrade } from '@/lib/engine/draftGrades';
 
 function ratingColor(val: number): string {
   if (val >= 80) return 'text-green-600';
   if (val >= 65) return 'text-blue-600';
   if (val >= 50) return 'text-amber-600';
   return 'text-red-600';
-}
-
-function expectedOvrForPick(overallPick: number, totalPicks: number): number {
-  // Mirrors the talent curve in generateDraftClass: top picks ~78, late ~33
-  const progress = (overallPick - 1) / Math.max(1, totalPicks - 1);
-  return Math.round(78 - progress * 45);
-}
-
-function pickGrade(overallPick: number, totalPicks: number, playerOvr: number): string {
-  const expected = expectedOvrForPick(overallPick, totalPicks);
-  const delta = playerOvr - expected;
-  // Wider bands: average picks get B, slight misses still B-, truly bad picks get C/D
-  if (delta >= 12) return 'A+';
-  if (delta >= 7) return 'A';
-  if (delta >= 3) return 'B+';
-  if (delta >= -2) return 'B';
-  if (delta >= -6) return 'B-';
-  if (delta >= -10) return 'C+';
-  if (delta >= -14) return 'C';
-  if (delta >= -18) return 'C-';
-  return 'D';
-}
-
-function gradeValue(grade: string): number {
-  const map: Record<string, number> = { 'A+': 12, 'A': 11, 'B+': 10, 'B': 9, 'B-': 8, 'C+': 7, 'C': 6, 'C-': 5, 'D': 3 };
-  return map[grade] ?? 5;
-}
-
-function gradeColor(grade: string): string {
-  if (grade.startsWith('A')) return 'text-green-600';
-  if (grade === 'B+' || grade === 'B') return 'text-blue-600';
-  if (grade === 'B-' || grade === 'C+') return 'text-amber-600';
-  return 'text-red-600';
-}
-
-function teamDraftGrade(avgVal: number): string {
-  if (avgVal >= 10.5) return 'A+';
-  if (avgVal >= 9.5) return 'A';
-  if (avgVal >= 8.5) return 'B+';
-  if (avgVal >= 7.5) return 'B';
-  if (avgVal >= 6.5) return 'B-';
-  if (avgVal >= 5.5) return 'C+';
-  if (avgVal >= 4.5) return 'C';
-  if (avgVal >= 3.5) return 'C-';
-  return 'D';
 }
 
 // ---------------------------------------------------------------------------
@@ -263,7 +219,7 @@ function OnTheClockSection({
               <Button onClick={simToUserDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
                 To My Pick
               </Button>
-              <Button onClick={() => { simToEndDraft(); onSimAll?.(); }} size="sm" variant="secondary" disabled={!canSimulate}>
+              <Button onClick={() => { onSimAll?.(); simToEndDraft(); }} size="sm" variant="secondary" disabled={!canSimulate}>
                 Sim All
               </Button>
             </div>
@@ -387,9 +343,11 @@ function OnTheClockSection({
       {/* Draft complete state */}
       {draftComplete && (
         <div className="rounded-b-xl border border-[var(--border)] px-5 py-4 bg-[var(--surface)]">
-          <div className="text-center">
+          <div className="text-center flex flex-wrap items-center justify-center gap-3">
             <span className="font-bold text-green-600">Draft Complete!</span>
-            <span className="text-sm text-[var(--text-sec)] ml-2">Advance to Free Agency to continue.</span>
+            <Link href="/draft-recap" className="text-sm font-medium text-blue-600 hover:underline">
+              View Draft Recap →
+            </Link>
           </div>
         </div>
       )}
@@ -426,8 +384,9 @@ export default function DraftPage() {
   const deepScoutLimit = maxDeepScouts(tier);
 
   // Auto-redirect to free agency when draft completes and phase advances
+  // (unless Sim All was clicked — that redirects to draft-recap instead)
   useEffect(() => {
-    if (phase === 'freeAgency') {
+    if (phase === 'freeAgency' && !(window as any).__simAllToRecap) {
       router.push('/free-agency');
     }
   }, [phase, router]);
@@ -614,7 +573,15 @@ export default function DraftPage() {
           simDraftPick={simDraftPick}
           simToUserDraftPick={simToUserDraftPick}
           simToEndDraft={simToEndDraft}
-          onSimAll={() => {}}
+          onSimAll={() => {
+            (window as any).__simAllToRecap = true;
+            // Navigate after simToEndDraft completes (called right after in OnTheClockSection)
+            setTimeout(() => {
+              router.push('/draft-recap');
+              // Clear flag after navigation starts
+              setTimeout(() => { (window as any).__simAllToRecap = false; }, 500);
+            }, 0);
+          }}
           onDraft={(playerId) => draftPlayer(playerId)}
           onPlayerClick={(playerId) => setSelectedProspectId(playerId)}
         />

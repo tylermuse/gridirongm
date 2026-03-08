@@ -32,6 +32,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     advanceToResigning,
     advanceToDraft,
     advanceToFreeAgency,
+    simDraftPick,
+    simToUserDraftPick,
     simToEndDraft,
     startNewSeason,
   } = useGameStore();
@@ -190,15 +192,13 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                   Sim Week {week}
                 </Button>
                 {week <= (leagueSettings?.tradeDeadlineWeek ?? 12) + 1 && (
-                  <span className="hidden sm:inline">
-                    <Button
-                      onClick={handleSimToDeadline}
-                      variant="secondary"
-                      size="sm"
-                    >
-                      Sim to Deadline
-                    </Button>
-                  </span>
+                  <Button
+                    onClick={handleSimToDeadline}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    Sim to Deadline
+                  </Button>
                 )}
                 <Button
                   onClick={handleSimSeason}
@@ -283,24 +283,33 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             )}
             {phase === 'draft' && (
               <>
-                <Link href="/draft">
-                  <Button size="sm">
-                    Go to Draft
-                  </Button>
-                </Link>
-                <Button
-                  onClick={() => {
-                    const remaining = draftOrder.length;
-                    if (confirm(`Skip the rest of the draft? ${remaining} pick${remaining !== 1 ? 's' : ''} remaining — AI will auto-draft for your team.`)) {
-                      useGameStore.getState().simToEndDraft();
-                      router.push('/free-agency');
-                    }
-                  }}
-                  variant="secondary"
-                  size="sm"
-                >
-                  Skip to Free Agency
-                </Button>
+                {draftOrder.length > 0 ? (
+                  <>
+                    <Button onClick={simDraftPick} size="sm" variant="secondary">
+                      Sim Pick
+                    </Button>
+                    <Button onClick={simToUserDraftPick} size="sm" variant="secondary">
+                      To My Pick
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        (window as any).__simAllToRecap = true;
+                        simToEndDraft();
+                        router.push('/draft-recap');
+                        setTimeout(() => { (window as any).__simAllToRecap = false; }, 500);
+                      }}
+                      size="sm"
+                    >
+                      Sim All
+                    </Button>
+                  </>
+                ) : (
+                  <Link href="/draft-recap">
+                    <Button size="sm">
+                      Draft Recap
+                    </Button>
+                  </Link>
+                )}
               </>
             )}
             {phase === 'freeAgency' && (

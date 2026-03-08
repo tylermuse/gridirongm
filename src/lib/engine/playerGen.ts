@@ -165,6 +165,21 @@ export function generateRoster(teamId: string, tierMean: number): Player[] {
   return players;
 }
 
+const COLLEGES = [
+  'Alabama', 'Ohio State', 'Georgia', 'Clemson', 'LSU', 'Michigan',
+  'Oklahoma', 'Notre Dame', 'Penn State', 'Oregon', 'Texas', 'Florida',
+  'USC', 'Auburn', 'Texas A&M', 'Tennessee', 'Wisconsin', 'Iowa',
+  'Miami (FL)', 'Florida State', 'Stanford', 'UCLA', 'Nebraska',
+  'Michigan State', 'Virginia Tech', 'North Carolina', 'Ole Miss',
+  'Arkansas', 'South Carolina', 'Pittsburgh', 'Baylor', 'TCU',
+  'Utah', 'Washington', 'Arizona State', 'Kentucky', 'Mississippi State',
+  'Minnesota', 'West Virginia', 'Louisville', 'Colorado', 'Missouri',
+  'NC State', 'Maryland', 'Boston College', 'Duke', 'Northwestern',
+  'Purdue', 'Illinois', 'Vanderbilt', 'Wake Forest', 'Cincinnati',
+  'BYU', 'Memphis', 'Houston', 'SMU', 'Boise State', 'San Diego State',
+  'Fresno State', 'Tulane',
+];
+
 const SCOUTING_LABELS = [
   'High motor', 'Raw but explosive', 'Pro-ready',
   'Injury history', 'Combine standout', 'Character concerns',
@@ -186,6 +201,7 @@ export function generateDraftClass(count: number): Player[] {
     const talent = gaussian(78 - progress * 45, 7);
     const player = generatePlayer(position, talent, { age: 21 + Math.floor(Math.random() * 2), experience: 0 });
     player.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
+    player.college = COLLEGES[Math.floor(Math.random() * COLLEGES.length)];
     player.scoutingLabel = SCOUTING_LABELS[Math.floor(Math.random() * SCOUTING_LABELS.length)];
     player.scoutingSeed = Math.floor(Math.random() * 10000);
     prospects.push(player);

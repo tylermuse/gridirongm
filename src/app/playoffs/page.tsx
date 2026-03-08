@@ -65,7 +65,7 @@ function TeamRow({
             {team ? `${team.city}` : 'Unknown'}
           </button>
           {team && (
-            <span className="text-[9px] text-[var(--text-sec)] shrink-0 font-mono">
+            <span className="text-[9px] text-[var(--text-sec)] shrink-0 font-mono hidden sm:inline">
               ({team.record.wins}-{team.record.losses})
             </span>
           )}
@@ -180,7 +180,7 @@ function ConferenceBracket({
           <button onClick={() => onTeamClick?.(byeTeamObj.id)} className="hover:text-blue-600 transition-colors">
             {byeTeamObj.city} {byeTeamObj.name}
           </button>
-          <span className="font-mono text-[10px]">({byeTeamObj.record.wins}-{byeTeamObj.record.losses})</span>
+          <span className="font-mono text-[10px] hidden sm:inline">({byeTeamObj.record.wins}-{byeTeamObj.record.losses})</span>
           <Badge size="sm" variant="default">#1 Seed — Bye</Badge>
         </div>
       )}
@@ -517,31 +517,31 @@ export default function PlayoffsPage() {
             <>
             <Card>
               <CardHeader><CardTitle>Season {season} Awards</CardTitle></CardHeader>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                 {awards.map(a => {
                   if (!a.player) return null;
                   const t = teams.find(t => t.id === a.player!.teamId);
                   const isUserPlayer = a.player.teamId === userTeamId;
                   return (
                     <div key={a.award} className={`flex items-center gap-3 rounded-lg px-2 py-1.5 ${isUserPlayer ? 'bg-blue-500/10 ring-1 ring-blue-500/30' : ''}`}>
-                      <span className="text-xl">{a.icon}</span>
+                      <span className="text-xl shrink-0">{a.icon}</span>
                       <div className="flex-1 min-w-0">
                         <div className="text-xs text-[var(--text-sec)]">{a.award}</div>
-                        <button
-                          onClick={() => setSelectedPlayerId(a.player!.id)}
-                          className={`font-semibold text-sm hover:text-blue-600 transition-colors truncate block ${isUserPlayer ? 'text-blue-600' : ''}`}
-                        >
-                          {a.player.firstName} {a.player.lastName}
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => setSelectedPlayerId(a.player!.id)}
+                            className={`font-semibold text-sm hover:text-blue-600 transition-colors truncate ${isUserPlayer ? 'text-blue-600' : ''}`}
+                          >
+                            {a.player.firstName} {a.player.lastName}
+                          </button>
+                          {t && (
+                            <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="xs" />
+                          )}
+                          <span className="text-xs text-[var(--text-sec)] shrink-0">{a.player.position}</span>
+                        </div>
                         <div className="text-[10px] text-[var(--text-sec)] mt-0.5">
                           {a.gameStats ? `SB: ${posStatLine(a.player, a.gameStats)}` : posStatLine(a.player)}
                         </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {t && (
-                          <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="xs" />
-                        )}
-                        <span className="text-xs text-[var(--text-sec)]">{a.player.position}</span>
                       </div>
                     </div>
                   );
@@ -551,7 +551,7 @@ export default function PlayoffsPage() {
               {/* All-Pro selections */}
               <div className="mt-4 pt-3 border-t border-[var(--border)]">
                 <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">All-Pro Selections</div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {(['AC', 'NC'] as const).map(conf => (
                     <div key={conf}>
                       <div className={`text-xs font-bold mb-1.5 ${conf === 'AC' ? 'text-red-600' : 'text-blue-600'}`}>
