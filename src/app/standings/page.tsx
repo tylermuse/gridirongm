@@ -21,7 +21,8 @@ function winPct(t: Team) {
 
 function StandingsTable({ teamList, userTeamId, onTeamClick }: { teamList: Team[]; userTeamId: string | null; onTeamClick: (teamId: string) => void }) {
   return (
-    <table className="w-full text-sm">
+    <div className="overflow-x-auto">
+    <table className="w-full text-sm min-w-[500px]">
       <thead>
         <tr className="text-[var(--text-sec)] text-xs">
           <th className="text-left pb-1">#</th>
@@ -65,6 +66,7 @@ function StandingsTable({ teamList, userTeamId, onTeamClick }: { teamList: Team[
         })}
       </tbody>
     </table>
+    </div>
   );
 }
 

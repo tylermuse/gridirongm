@@ -158,6 +158,13 @@ export interface Team {
   deadCap: DeadCapEntry[];
   /** Whether the franchise tag has been used this season */
   franchiseTagUsed: boolean;
+  /** Revenue breakdown (computed at start of each season) */
+  revenue: {
+    tickets: number;
+    merchandise: number;
+    tvDeal: number;
+    total: number;
+  };
 }
 
 /**
@@ -268,12 +275,21 @@ export interface NewsItem {
   id: string;
   season: number;
   week: number;
-  type: 'injury' | 'trade' | 'signing' | 'release' | 'performance' | 'milestone' | 'system';
+  type: 'injury' | 'trade' | 'signing' | 'release' | 'performance' | 'milestone' | 'system' | 'quote' | 'rumor';
   teamId?: string;
   playerIds?: string[];
   headline: string;
   body?: string;
   isUserTeam: boolean;
+}
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  unlockedSeason?: number;
+  unlockedWeek?: number;
 }
 
 export interface AllLeagueEntry {
@@ -399,6 +415,8 @@ export interface LeagueState {
   suppressTradePopups: boolean;
   /** Weekly recap show data generated after each sim week */
   weeklyRecaps: WeeklyRecapData[];
+  /** Unlocked achievements */
+  achievements: Achievement[];
 }
 
 export interface WeeklyRecapData {

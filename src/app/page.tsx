@@ -13,6 +13,7 @@ import { LEAGUE_TEAMS, type TeamTemplate } from '@/lib/data/teams';
 import { type ImportedLeagueData, loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { generateTeamSpotlight, COMMENTATORS } from '@/lib/engine/debate';
+import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { hasFeature } from '@/lib/subscription';
@@ -66,12 +67,12 @@ function TeamPicker() {
     : LEAGUE_TEAMS;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8">
       <div className="text-center mb-8">
-        <h1 className="text-5xl font-black tracking-tight mb-3">
+        <h1 className="text-3xl sm:text-5xl font-black tracking-tight mb-3">
           <span className="text-blue-600">GRIDIRON</span> GM
         </h1>
-        <p className="text-[var(--text-sec)] text-lg">Choose your franchise. Build your dynasty.</p>
+        <p className="text-[var(--text-sec)] text-sm sm:text-lg">Choose your franchise. Build your dynasty.</p>
       </div>
 
       {/* Import League File Section */}
@@ -129,7 +130,7 @@ function TeamPicker() {
           Loading league data...
         </div>
       ) : (
-        <div className="grid grid-cols-4 gap-3 max-w-4xl">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-w-4xl">
           {displayTeams.map(team => (
             <button
               key={team.abbreviation}
@@ -344,7 +345,7 @@ function SpotlightPopup({ teamName, onDismiss, onClick }: {
 }
 
 function Dashboard() {
-  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, champions, newsItems } = useGameStore();
+  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, champions, newsItems, achievements } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const [spotlightDismissed, setSpotlightDismissed] = useState(false);
@@ -446,8 +447,31 @@ function Dashboard() {
           </div>
         </div>
 
+        {/* Achievements row */}
+        {ALL_ACHIEVEMENTS.length > 0 && (
+          <div className="flex items-center gap-1 flex-wrap">
+            {ALL_ACHIEVEMENTS.map(def => {
+              const unlocked = achievements.find(a => a.id === def.id);
+              return (
+                <div
+                  key={def.id}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition-all ${
+                    unlocked
+                      ? 'bg-amber-50 border-amber-300 text-amber-800'
+                      : 'bg-[var(--surface-2)] border-[var(--border)] text-[var(--text-sec)] opacity-40'
+                  }`}
+                  title={`${def.name}: ${def.description}${unlocked ? ` (Unlocked S${unlocked.unlockedSeason})` : ''}`}
+                >
+                  <span className="text-sm">{def.icon}</span>
+                  <span className="font-medium hidden sm:inline">{def.name}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* Row 1: Standings, Finances, Team Stats */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Conference standings with GB */}
           <Card>
             <CardHeader><CardTitle>{userTeam.conference} Standings</CardTitle></CardHeader>
@@ -556,7 +580,7 @@ function Dashboard() {
         </div>
 
         {/* Row 2: League Leaders, Team Leaders, News */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* League Leaders */}
           <Card>
             <CardHeader><CardTitle>League Leaders</CardTitle></CardHeader>

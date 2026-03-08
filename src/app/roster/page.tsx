@@ -346,8 +346,8 @@ export default function RosterPage() {
               ))}
             </div>
 
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-x-auto">
+              <table className="w-full text-sm min-w-[700px]">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
                     <SortHeader k="name" className="text-left pl-3 w-48">Name</SortHeader>
@@ -639,7 +639,8 @@ export default function RosterPage() {
                 <CardHeader>
                   <CardTitle>Injury Report ({injuredPlayers.length})</CardTitle>
                 </CardHeader>
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[500px]">
                   <thead>
                     <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                       <th className="text-left pb-3 pl-2">Player</th>
@@ -692,6 +693,7 @@ export default function RosterPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </Card>
             )}
           </div>

@@ -579,7 +579,8 @@ export default function FreeAgencyPage() {
 
             {/* Free agent table */}
             <Card>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[700px]">
                 <thead>
                   <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                     <th className="text-left pb-3 pl-2">Player</th>
@@ -668,6 +669,7 @@ export default function FreeAgencyPage() {
                   )}
                 </tbody>
               </table>
+              </div>
             </Card>
           </div>
         </div>

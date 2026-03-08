@@ -143,7 +143,7 @@ function AccountSection() {
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const {
@@ -222,6 +222,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               className={`
                 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium mb-0.5
                 transition-colors

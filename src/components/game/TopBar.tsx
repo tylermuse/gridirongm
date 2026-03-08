@@ -7,7 +7,7 @@ import { useGameStore } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
 import { TradeProposalPopup } from './TradeProposalPopup';
 
-export function TopBar() {
+export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const router = useRouter();
   const {
     phase,
@@ -149,37 +149,56 @@ export function TopBar() {
   return (
     <>
       <header className="border-b border-[var(--border)] bg-[var(--surface)] sticky top-0 z-10">
-        <div className="h-14 flex items-center justify-between px-6">
-          <div className="text-sm text-[var(--text-sec)]">
-            {phase === 'regular' && `Week ${week} · Regular Season`}
-            {phase === 'playoffs' && 'Playoffs'}
-            {phase === 'resigning' && 'Re-signing Window'}
-            {phase === 'draft' && `Draft · Season ${season}`}
-            {phase === 'freeAgency' && 'Free Agency'}
-            {phase === 'offseason' && 'Offseason'}
+        <div className="h-14 flex items-center justify-between px-3 md:px-6">
+          <div className="flex items-center gap-2 text-sm text-[var(--text-sec)]">
+            {onMenuToggle && (
+              <button
+                onClick={onMenuToggle}
+                className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[var(--surface-2)] transition-colors"
+                aria-label="Toggle menu"
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="3" y1="5" x2="17" y2="5" />
+                  <line x1="3" y1="10" x2="17" y2="10" />
+                  <line x1="3" y1="15" x2="17" y2="15" />
+                </svg>
+              </button>
+            )}
+            <span className="hidden sm:inline">
+              {phase === 'regular' && `Week ${week} · Regular Season`}
+              {phase === 'playoffs' && 'Playoffs'}
+              {phase === 'resigning' && 'Re-signing Window'}
+              {phase === 'draft' && `Draft · Season ${season}`}
+              {phase === 'freeAgency' && 'Free Agency'}
+              {phase === 'offseason' && 'Offseason'}
+            </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 md:gap-2 flex-wrap justify-end">
             {phase === 'regular' && (
               <>
                 {pendingTradeCount > 0 && (
-                  <Link href="/trades">
-                    <Button size="sm" variant="secondary">
-                      Trades ({pendingTradeCount})
-                    </Button>
-                  </Link>
+                  <span className="hidden sm:inline">
+                    <Link href="/trades">
+                      <Button size="sm" variant="secondary">
+                        Trades ({pendingTradeCount})
+                      </Button>
+                    </Link>
+                  </span>
                 )}
                 <Button onClick={handleSimWeek} size="sm">
                   Sim Week {week}
                 </Button>
                 {week <= (leagueSettings?.tradeDeadlineWeek ?? 12) + 1 && (
-                  <Button
-                    onClick={handleSimToDeadline}
-                    variant="secondary"
-                    size="sm"
-                  >
-                    Sim to Deadline
-                  </Button>
+                  <span className="hidden sm:inline">
+                    <Button
+                      onClick={handleSimToDeadline}
+                      variant="secondary"
+                      size="sm"
+                    >
+                      Sim to Deadline
+                    </Button>
+                  </span>
                 )}
                 <Button
                   onClick={handleSimSeason}
@@ -320,7 +339,7 @@ export function TopBar() {
 
         {/* Phase context banner */}
         {bannerText && (
-          <div className="px-6 py-1.5 bg-[var(--surface-2)] border-t border-[var(--border)] text-xs text-[var(--text-sec)]">
+          <div className="px-3 md:px-6 py-1.5 bg-[var(--surface-2)] border-t border-[var(--border)] text-xs text-[var(--text-sec)] truncate">
             {bannerText}
           </div>
         )}

@@ -49,12 +49,11 @@ export function maxDeepScouts(tier: Tier): number {
 }
 
 // Stripe price IDs — safe to import client-side (no Stripe SDK dependency)
-// Replace these with actual Stripe price IDs after creating products in Stripe Dashboard
 export const PRICE_IDS = {
-  pro_monthly: 'price_pro_monthly_placeholder',
-  pro_yearly: 'price_pro_yearly_placeholder',
-  elite_monthly: 'price_elite_monthly_placeholder',
-  elite_yearly: 'price_elite_yearly_placeholder',
+  pro_monthly: 'price_1T8WqYC87PsOiVCS72XaASn0',
+  pro_yearly: 'price_1T8WrAC87PsOiVCSahhW6Yy4',
+  elite_monthly: 'price_1T8WreC87PsOiVCSpnKIEdWT',
+  elite_yearly: 'price_1T8WsOC87PsOiVCSOaK2yN8G',
 } as const;
 
 export type PriceId = (typeof PRICE_IDS)[keyof typeof PRICE_IDS];
