@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
+import { Button } from '@/components/ui/Button';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -67,7 +68,8 @@ function GradeCircle({ grade, size = 'md' }: { grade: string; size?: 'sm' | 'md'
 /* ─── Main Page ─── */
 
 export default function DraftRecapPage() {
-  const { draftResults, players, teams, userTeamId, season } = useGameStore();
+  const router = useRouter();
+  const { draftResults, players, teams, userTeamId, season, phase, advanceToFreeAgency } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
 
@@ -358,6 +360,21 @@ export default function DraftRecapPage() {
             </table>
           </div>
         </Section>
+
+        {/* Advance to Free Agency CTA — shown when draft phase hasn't advanced yet */}
+        {phase === 'draft' && (
+          <div className="text-center pt-2 pb-4">
+            <Button
+              onClick={() => {
+                advanceToFreeAgency();
+                router.push('/free-agency');
+              }}
+              size="lg"
+            >
+              Advance to Free Agency →
+            </Button>
+          </div>
+        )}
       </div>
 
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />

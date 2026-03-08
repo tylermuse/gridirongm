@@ -58,7 +58,7 @@ interface GameStore extends LeagueState {
   draftPlayer: (playerId: string) => void;
   simDraftPick: () => void;
   simToUserDraftPick: () => void;
-  simToEndDraft: () => void;
+  simToEndDraft: (options?: { skipAdvance?: boolean }) => void;
   advanceToFreeAgency: () => void;
   advanceFADay: () => void;
   signFreeAgent: (playerId: string, salary: number, years: number) => boolean;
@@ -2143,7 +2143,7 @@ export const useGameStore = create<GameStore>()(
         set({ players, teams, freeAgents: freeAgentIds, draftOrder, draftResults, newsItems });
       },
 
-      simToEndDraft: () => {
+      simToEndDraft: (options?: { skipAdvance?: boolean }) => {
         const state = get();
         if (state.phase !== 'draft') return;
 
@@ -2198,8 +2198,10 @@ export const useGameStore = create<GameStore>()(
 
         set({ players, teams, freeAgents: freeAgentIds, draftOrder, draftResults, newsItems });
 
-        // Auto-advance to free agency when draft is complete
-        get().advanceToFreeAgency();
+        // Auto-advance to free agency when draft is complete (unless caller opts out)
+        if (!options?.skipAdvance) {
+          get().advanceToFreeAgency();
+        }
       },
 
       advanceToFreeAgency: () => {

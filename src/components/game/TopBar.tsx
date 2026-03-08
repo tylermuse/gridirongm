@@ -293,10 +293,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     </Button>
                     <Button
                       onClick={() => {
-                        (window as any).__simAllToRecap = true;
-                        simToEndDraft();
+                        simToEndDraft({ skipAdvance: true });
                         router.push('/draft-recap');
-                        setTimeout(() => { (window as any).__simAllToRecap = false; }, 500);
                       }}
                       size="sm"
                     >

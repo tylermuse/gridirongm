@@ -219,7 +219,7 @@ function OnTheClockSection({
               <Button onClick={simToUserDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
                 To My Pick
               </Button>
-              <Button onClick={() => { onSimAll?.(); simToEndDraft(); }} size="sm" variant="secondary" disabled={!canSimulate}>
+              <Button onClick={() => onSimAll?.()} size="sm" variant="secondary" disabled={!canSimulate}>
                 Sim All
               </Button>
             </div>
@@ -384,9 +384,8 @@ export default function DraftPage() {
   const deepScoutLimit = maxDeepScouts(tier);
 
   // Auto-redirect to free agency when draft completes and phase advances
-  // (unless Sim All was clicked — that redirects to draft-recap instead)
   useEffect(() => {
-    if (phase === 'freeAgency' && !(window as any).__simAllToRecap) {
+    if (phase === 'freeAgency') {
       router.push('/free-agency');
     }
   }, [phase, router]);
@@ -574,13 +573,8 @@ export default function DraftPage() {
           simToUserDraftPick={simToUserDraftPick}
           simToEndDraft={simToEndDraft}
           onSimAll={() => {
-            (window as any).__simAllToRecap = true;
-            // Navigate after simToEndDraft completes (called right after in OnTheClockSection)
-            setTimeout(() => {
-              router.push('/draft-recap');
-              // Clear flag after navigation starts
-              setTimeout(() => { (window as any).__simAllToRecap = false; }, 500);
-            }, 0);
+            simToEndDraft({ skipAdvance: true });
+            router.push('/draft-recap');
           }}
           onDraft={(playerId) => draftPlayer(playerId)}
           onPlayerClick={(playerId) => setSelectedProspectId(playerId)}
