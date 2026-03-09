@@ -11,7 +11,7 @@
  * Uses seeded randomization for deterministic output per week.
  */
 
-import type { RecapSegmentData, Team, Player, Position } from '@/types';
+import type { RecapSegmentData, Team, Player, Position, PlayoffMatchup, DraftSelection } from '@/types';
 
 /* ─── Types ─── */
 
@@ -26,6 +26,8 @@ export interface DebateTopic {
   exchanges: DebateExchange[];
   teamIds: string[];
   playerIds: string[];
+  /** Context line from the recap segment (e.g. stat line, score) shown under the headline */
+  context?: string;
 }
 
 export interface DebateTranscript {
@@ -619,6 +621,7 @@ export function generateDebateTranscript(
       exchanges,
       teamIds: segment.teamIds,
       playerIds: segment.playerIds,
+      context: segment.body,
     });
   }
 
@@ -744,6 +747,17 @@ function primaryStatForPosition(p: Player): (q: Player) => number {
   return q => q.stats.tackles;
 }
 
+export interface SpotlightContext {
+  phase?: string;
+  playoffBracket?: PlayoffMatchup[] | null;
+  playoffSeeds?: { AC: string[]; NC: string[] } | null;
+  champions?: { season: number; teamId: string }[];
+  finalsMvpPlayerId?: string | null;
+  draftResults?: DraftSelection[];
+  freeAgents?: string[];
+  faDay?: number;
+}
+
 export function generateTeamSpotlight(
   team: Team,
   roster: Player[],
@@ -751,6 +765,7 @@ export function generateTeamSpotlight(
   allPlayers: Player[],
   season: number,
   week: number,
+  ctx: SpotlightContext = {},
 ): DebateTopic[] {
   const rng = seededRandom(season * 10000 + week * 100 + (team.id.charCodeAt(0) ?? 0));
   const topics: DebateTopic[] = [];
@@ -1119,6 +1134,208 @@ export function generateTeamSpotlight(
     teamIds: [team.id],
     playerIds: [],
   });
+
+  // ─── Phase-specific topics ───
+  const phase = ctx.phase ?? 'regular';
+
+  // ─── PLAYOFFS: bracket status, matchup previews, championship ───
+  if ((phase === 'playoffs' || phase === 'resigning' || phase === 'draft' || phase === 'freeAgency') && ctx.playoffBracket) {
+    const bracket = ctx.playoffBracket;
+    const championship = bracket.find(m => m.id === 'championship');
+    const champWon = championship?.winnerId === team.id;
+    const champLost = championship?.winnerId && championship.winnerId !== team.id
+      && (championship.homeTeamId === team.id || championship.awayTeamId === team.id);
+
+    // Find user's seed
+    const seeds = ctx.playoffSeeds;
+    const userSeed = seeds ? (seeds.AC.indexOf(team.id) + 1 || seeds.NC.indexOf(team.id) + 1) : 0;
+    const madePlayoffs = userSeed > 0 && userSeed <= 7;
+
+    // User's playoff games (wins/losses)
+    const userGames = bracket.filter(m =>
+      m.winnerId && (m.homeTeamId === team.id || m.awayTeamId === team.id));
+    const userWins = userGames.filter(m => m.winnerId === team.id).length;
+    const userLosses = userGames.filter(m => m.winnerId && m.winnerId !== team.id).length;
+
+    if (champWon) {
+      // Championship celebration!
+      const mvp = ctx.finalsMvpPlayerId ? allPlayers.find(p => p.id === ctx.finalsMvpPlayerId) : null;
+      const opponent = championship!.homeTeamId === team.id
+        ? allTeams.find(t => t.id === championship!.awayTeamId)
+        : allTeams.find(t => t.id === championship!.homeTeamId);
+      const champCount = (ctx.champions ?? []).filter(c => c.teamId === team.id).length;
+
+      const champTemplates: (() => DebateExchange[])[] = [
+        () => [
+          { speakerId: 'hottake', text: `CHAMPIONS!!! THE ${team.name.toUpperCase()} ARE CHAMPIONS! ${champCount > 1 ? `That's ${champCount} titles now — we're witnessing a DYNASTY!` : `Their FIRST championship — this franchise has ARRIVED!`} I'M LOSING MY MIND!` },
+          { speakerId: 'stats', text: `What a run. ${userWins}-${userLosses} in the playoffs${opponent ? `, defeating ${opponent.city} ${opponent.name} in the championship` : ''}.${mvp ? ` ${mvp.firstName} ${mvp.lastName} was named Finals MVP — he was absolutely dominant.` : ''} The ${team.record.wins}-${team.record.losses} regular season record translated perfectly.` },
+          { speakerId: 'hottake', text: `${mvp ? `${mvp.lastName} is a LEGEND! Finals MVP and he EARNED every bit of it!` : 'Every single player on this roster contributed!'} CHAMPIONSHIP PARADE — book it!` },
+        ],
+        () => [
+          { speakerId: 'stats', text: `The ${team.city} ${team.name} are champions. ${userWins}-${userLosses} playoff record, capping a ${team.record.wins}-${team.record.losses} season.${mvp ? ` ${mvp.firstName} ${mvp.lastName} (${mvp.position}) took home Finals MVP honors.` : ''} This was built through smart roster construction and execution when it mattered most.` },
+          { speakerId: 'hottake', text: `Smart roster construction?! SMART?! This was DOMINANCE! ${champCount > 1 ? `${champCount} championships and counting — who's going to stop them?!` : "From underdogs to CHAMPIONS — what a story!"} THIS is what we live for!` },
+          { speakerId: 'stats', text: `Credit where it's due. The coaching, the player development, the in-game adjustments — all elite. This championship was earned.` },
+        ],
+      ];
+      // Insert championship topic at the top
+      topics.unshift({
+        headline: `🏆 CHAMPIONS! ${team.city} ${team.name} Win It All!`,
+        icon: '🏆',
+        exchanges: pick(champTemplates, rng)(),
+        teamIds: [team.id, ...(opponent ? [opponent.id] : [])],
+        playerIds: mvp ? [mvp.id] : [],
+      });
+    } else if (champLost) {
+      // Runner-up
+      const opponent = championship!.winnerId ? allTeams.find(t => t.id === championship!.winnerId) : null;
+      topics.unshift({
+        headline: 'Championship Heartbreak',
+        icon: '💔',
+        exchanges: [
+          { speakerId: 'hottake', text: `SO close! The ${team.name} made it to the championship and came up SHORT! ${opponent ? `${opponent.city} ${opponent.name} took it from them` : 'They couldn\'t close it out'}! That HURTS!` },
+          { speakerId: 'stats', text: `Making the championship is an achievement — only 2 of ${allTeams.length} teams get there. But ${userWins}-${userLosses} in the playoffs shows this team is built for the postseason. They'll be motivated next year.` },
+          { speakerId: 'hottake', text: `Motivation doesn't win trophies! They need to make MOVES this offseason to get over the hump!` },
+        ],
+        teamIds: [team.id],
+        playerIds: [],
+      });
+    } else if (madePlayoffs && userLosses > 0) {
+      // Eliminated in earlier round
+      const roundNames = ['', 'Wild Card', 'Divisional', 'Conference Championship', 'Championship'];
+      const eliminationGame = userGames.find(m => m.winnerId !== team.id);
+      const roundEliminated = eliminationGame ? roundNames[eliminationGame.round] ?? 'the playoffs' : 'the playoffs';
+      const eliminatedBy = eliminationGame?.winnerId ? allTeams.find(t => t.id === eliminationGame.winnerId) : null;
+
+      topics.unshift({
+        headline: `Playoff Exit: ${roundEliminated}`,
+        icon: '😤',
+        exchanges: [
+          { speakerId: 'hottake', text: `OUT in the ${roundEliminated}! ${eliminatedBy ? `${eliminatedBy.city} ${eliminatedBy.name} sent the ${team.name} home!` : `The ${team.name} couldn't get it done!`} A ${team.record.wins}-${team.record.losses} season ends in DISAPPOINTMENT!` },
+          { speakerId: 'stats', text: `As a ${ordinal(userSeed)} seed, ${userWins > 0 ? `they did win ${userWins} playoff game${userWins > 1 ? 's' : ''}` : 'the expectations were there'} — but the season ends earlier than hoped. The question now is what changes do they make this offseason?` },
+          { speakerId: 'hottake', text: `${userSeed <= 3 ? "With that seed they should've gone FURTHER! Something needs to change!" : "They made the playoffs, now they need to learn how to WIN in the playoffs!"}` },
+        ],
+        teamIds: [team.id, ...(eliminatedBy ? [eliminatedBy.id] : [])],
+        playerIds: [],
+      });
+    } else if (phase === 'playoffs' && madePlayoffs && userLosses === 0 && userWins > 0) {
+      // Currently alive in playoffs
+      const nextGame = bracket.find(m =>
+        !m.winnerId && (m.homeTeamId === team.id || m.awayTeamId === team.id));
+      const roundNames = ['', 'Wild Card', 'Divisional', 'Conference Championship', 'Championship'];
+      if (nextGame) {
+        const opponentId = nextGame.homeTeamId === team.id ? nextGame.awayTeamId : nextGame.homeTeamId;
+        const opponent = opponentId ? allTeams.find(t => t.id === opponentId) : null;
+        const roundName = roundNames[nextGame.round] ?? 'the next round';
+        topics.unshift({
+          headline: `${roundName} Preview`,
+          icon: '🏈',
+          exchanges: [
+            { speakerId: 'hottake', text: `${roundName} time! The ${team.name} are ${userWins}-0 in the playoffs and ${opponent ? `facing the ${opponent.city} ${opponent.name}` : 'the opponent is TBD'}! ${userWins >= 2 ? "They're on a ROLL!" : "One win under their belt — time to build on it!"}` },
+            { speakerId: 'stats', text: `${opponent ? `${opponent.city} went ${opponent.record.wins}-${opponent.record.losses} this season.` : 'Opponent still being determined.'} The ${team.name}'s playoff experience through ${userWins} game${userWins > 1 ? 's' : ''} should help. ${ordinal(ppgRank)} offense vs their opponent's defense will be the key matchup.` },
+            { speakerId: 'hottake', text: `They can go ALL THE WAY! I BELIEVE!` },
+          ],
+          teamIds: [team.id, ...(opponent ? [opponent.id] : [])],
+          playerIds: [],
+        });
+      }
+    } else if (!madePlayoffs && phase !== 'playoffs') {
+      // Missed playoffs — offseason
+      topics.unshift({
+        headline: 'Missed the Playoffs',
+        icon: '😞',
+        exchanges: [
+          { speakerId: 'stats', text: `The ${team.name} finished ${team.record.wins}-${team.record.losses} — not enough to make the postseason. ${ordinal(confRank)} in the ${team.conference}. The offense was ${ordinal(ppgRank)} in scoring and the defense ${ordinal(defRank)}. Changes are needed.` },
+          { speakerId: 'hottake', text: `${team.record.wins} wins?! This team needs a COMPLETE overhaul! The draft and free agency are going to be CRUCIAL!` },
+          { speakerId: 'stats', text: `The focus should be on addressing the ${ppgRank > totalTeams / 2 ? 'offense' : defRank > totalTeams / 2 ? 'defense' : 'roster depth'}. Targeted improvements can turn things around quickly.` },
+        ],
+        teamIds: [team.id],
+        playerIds: [],
+      });
+    }
+  }
+
+  // ─── DRAFT RECAP: commentary on draft picks ───
+  if ((phase === 'draft' || phase === 'freeAgency') && ctx.draftResults && ctx.draftResults.length > 0) {
+    const userPicks = ctx.draftResults.filter(d => d.teamId === team.id);
+    if (userPicks.length > 0) {
+      const draftedPlayers = userPicks
+        .map(pk => allPlayers.find(p => p.id === pk.playerId))
+        .filter(Boolean) as Player[];
+      const topPick = draftedPlayers.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+      const avgOvr = draftedPlayers.length > 0
+        ? Math.round(draftedPlayers.reduce((s, p) => s + p.ratings.overall, 0) / draftedPlayers.length)
+        : 0;
+      const positions = [...new Set(draftedPlayers.map(p => p.position))];
+      const firstPick = userPicks.sort((a, b) => a.overallPick - b.overallPick)[0];
+
+      const draftTemplates: (() => DebateExchange[])[] = [
+        () => [
+          { speakerId: 'stats', text: `Draft recap: ${userPicks.length} picks made. ${topPick ? `${topPick.firstName} ${topPick.lastName} (${topPick.position}, ${topPick.ratings.overall} OVR) was the crown jewel, selected ${ordinal(firstPick.overallPick)} overall.` : ''} Average OVR of the class: ${avgOvr}. Positions addressed: ${positions.join(', ')}.` },
+          { speakerId: 'hottake', text: `${topPick && topPick.ratings.overall >= 70 ? `${topPick.lastName} is a DAY ONE STARTER! That's a HOME RUN pick!` : topPick && topPick.potential >= 80 ? `${topPick.lastName}'s ceiling is THROUGH THE ROOF! Give him time and he's going to be SPECIAL!` : "Not the flashiest draft class, but role players win championships too!"}` },
+          { speakerId: 'stats', text: `${draftedPlayers.length >= 3 ? `${draftedPlayers.length} new rookies gives them depth at key positions.` : 'A smaller class, but sometimes quality over quantity.'} The development staff will be critical for this group.` },
+        ],
+        () => [
+          { speakerId: 'hottake', text: `Let's talk about this draft class! ${userPicks.length} picks and the headliner is ${topPick ? `${topPick.firstName} ${topPick.lastName} — a ${topPick.position} with ${topPick.ratings.overall} OVR${topPick.potential >= 80 ? ' and ELITE potential!' : '!'}` : 'a group of players ready to compete!'} ${avgOvr >= 60 ? "This class has JUICE!" : "These guys need development time!"}` },
+          { speakerId: 'stats', text: `The picks addressed ${positions.length} position group${positions.length > 1 ? 's' : ''}: ${positions.join(', ')}. ${positions.includes('QB') ? "Getting a quarterback is a franchise-altering move." : "No QB, so they're committed to the current starter."} Average class OVR of ${avgOvr} is ${avgOvr >= 65 ? 'above average' : avgOvr >= 55 ? 'about league average' : 'a development-heavy class'}.` },
+          { speakerId: 'hottake', text: `${topPick && firstPick.overallPick <= 10 ? "A top-10 pick is a STATEMENT!" : "Every pick is a chance to change the franchise!"} I can't WAIT to see these guys in action!` },
+        ],
+      ];
+      topics.push({
+        headline: `Draft Class Review: ${userPicks.length} Picks`,
+        icon: '🎯',
+        exchanges: pick(draftTemplates, rng)(),
+        teamIds: [team.id],
+        playerIds: draftedPlayers.slice(0, 3).map(p => p.id),
+      });
+    }
+  }
+
+  // ─── FREE AGENCY: cap situation and moves ───
+  if (phase === 'freeAgency' && ctx.faDay !== undefined) {
+    const faCount = (ctx.freeAgents ?? []).length;
+    const expiringCount = roster.filter(p => p.contract.yearsLeft <= 0).length;
+    // Find recently signed FAs (players on team drafted in different year or with contract starting now)
+    const newSignings = roster.filter(p =>
+      p.draftYear === season && (p.draftPick ?? 999) > 200 // Not drafted, so FA signing
+    );
+
+    const faTemplates: (() => DebateExchange[])[] = [
+      () => [
+        { speakerId: 'stats', text: `Free agency update: Day ${ctx.faDay} of 30. The ${team.name} have $${capSpace}M in cap space. ${faCount} free agents remain on the market. ${expiringCount > 0 ? `They lost ${expiringCount} player${expiringCount > 1 ? 's' : ''} to expiring contracts.` : 'All key players were retained.'}` },
+        { speakerId: 'hottake', text: `${capSpace > 30 ? `$${capSpace}M to spend and free agents are AVAILABLE! GO SHOPPING! Fill those holes!` : capSpace > 10 ? "They've got some space — be surgical, find the right fits!" : "Not much cap room — better hope the draft class can contribute!"}` },
+        { speakerId: 'stats', text: `The priority should be ${defRank > totalTeams / 2 ? 'defensive upgrades' : ppgRank > totalTeams / 2 ? 'offensive weapons' : 'depth pieces that can contribute immediately'}. Smart spending now sets up the next season.` },
+      ],
+    ];
+    topics.push({
+      headline: `Free Agency: Day ${ctx.faDay}`,
+      icon: '🖊️',
+      exchanges: pick(faTemplates, rng)(),
+      teamIds: [team.id],
+      playerIds: [],
+    });
+  }
+
+  // ─── RE-SIGNING: contract decisions ───
+  if (phase === 'resigning') {
+    const expiringStars = roster
+      .filter(p => p.contract.yearsLeft <= 0 && p.ratings.overall >= 70)
+      .sort((a, b) => b.ratings.overall - a.ratings.overall);
+
+    if (expiringStars.length > 0) {
+      const top = expiringStars[0];
+      topics.push({
+        headline: 'Re-signing Window',
+        icon: '✍️',
+        exchanges: [
+          { speakerId: 'hottake', text: `It's decision time! ${expiringStars.length} key player${expiringStars.length > 1 ? 's' : ''} ${expiringStars.length > 1 ? 'are' : 'is'} up for new deals. ${top.firstName} ${top.lastName} (${top.position}, ${top.ratings.overall} OVR) is the BIG one — you CANNOT let ${top.ratings.overall >= 80 ? 'a superstar' : 'a starter'} like that walk!` },
+          { speakerId: 'stats', text: `${top.lastName}'s market value will be significant. At ${top.age}, he's ${top.age <= 28 ? 'still in his prime — worth the investment' : top.age <= 31 ? 'entering the back end of his prime — be careful with the term' : 'aging — a short-term deal makes the most sense'}. With $${capSpace}M in cap space, they need to be strategic about who gets paid.` },
+          { speakerId: 'hottake', text: `${expiringStars.length > 2 ? "They can't keep EVERYONE! Tough choices ahead!" : `PAY THE MAN! ${top.lastName} has earned it!`}` },
+        ],
+        teamIds: [team.id],
+        playerIds: expiringStars.slice(0, 3).map(p => p.id),
+      });
+    }
+  }
 
   return topics;
 }

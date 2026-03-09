@@ -136,7 +136,7 @@ function simulatePlay(
 
   if (isPass && qb && receivers.length > 0) {
     // ── Sack check ──
-    const sackChance = clamp((dlPower - olPower) / 500 + 0.04, 0.02, 0.06);
+    const sackChance = clamp((dlPower - olPower) / 350 + 0.05, 0.02, 0.10);
     if (Math.random() < sackChance) {
       const sackYards = -(3 + Math.floor(Math.random() * 6));
       // Sacks can come from DLs or LBs (edge rushers)
@@ -169,8 +169,8 @@ function simulatePlay(
     // ── Interception check ──
     // Avg INT rate ~1.5% of attempts. Elite QBs ~0.5% (~3/season), bad QBs ~2.8% (~16/season).
     const intChance = clamp(
-      (coverageRating - qb.ratings.throwing) / 800 + 0.015,
-      0.005, 0.028,
+      (coverageRating - qb.ratings.throwing) / 600 + 0.015,
+      0.004, 0.035,
     );
     if (Math.random() < intChance) {
       const interceptor = coverageDefender ?? (cbs[0] || safeties[0] || allDefenders[0]);
@@ -181,14 +181,14 @@ function simulatePlay(
     }
 
     // ── Completion check ──
-    const compBase = 0.52 + (qb.ratings.throwing / 100) * 0.14 + (target.ratings.catching / 100) * 0.10;
-    const compRate = clamp(compBase - (coverageRating / 100) * 0.10, 0.35, 0.80);
+    const compBase = 0.50 + (qb.ratings.throwing / 100) * 0.20 + (target.ratings.catching / 100) * 0.14;
+    const compRate = clamp(compBase - (coverageRating / 100) * 0.14, 0.35, 0.80);
 
     if (Math.random() < compRate) {
       // Completed pass — yards tuned for realism
       // Average: ~11.8 yards per completion, top WR ~1,000-1,400 yds/season
       const baseYards = 3 + Math.random() * 10; // 3-13 base (avg 8)
-      const bonusYards = (qb.ratings.throwing / 100) * 3 + (target.ratings.speed / 100) * 2;
+      const bonusYards = (qb.ratings.throwing / 100) * 4 + (target.ratings.speed / 100) * 3;
       let yards = Math.round(baseYards + bonusYards * Math.random());
 
       // Big play chance (~3% of completions go 20+) — rare explosive plays
@@ -229,11 +229,12 @@ function simulatePlay(
       ? [...dls, ...lbs].reduce((s, p) => s + p.ratings.tackling + p.ratings.strength * 0.5, 0) / [...dls, ...lbs].length
       : 50;
     const rushSkill = rusher.ratings.carrying * 0.5 + rusher.ratings.speed * 0.3 + rusher.ratings.agility * 0.2;
-    const olBonus = (olPower - 60) / 100 * 2;
+    const olBonus = (olPower - 60) / 100 * 2.6; // 1.3x OL bonus multiplier (was 2)
 
     // Average: ~4.3 yards per carry, top RB ~1,000-1,400 yds/season
+    // Increased signal: divisor 35 (was 50), reduced noise range 2.5 (was 3.0)
     let yards = Math.round(
-      (rushSkill - defRushPower) / 50 + 2.5 + (Math.random() * 3 - 1.0) + olBonus,
+      (rushSkill - defRushPower) / 35 + 2.5 + (Math.random() * 2.5 - 0.75) + olBonus,
     );
 
     // Big rush chance (~1.5%) — breakaway runs
@@ -537,6 +538,12 @@ export function simulateGame(
             s.passYards = (s.passYards ?? 0) + play.yards;
             if (play.touchdown) s.passTDs = (s.passTDs ?? 0) + 1;
           }
+          // Track pass blocks for OL
+          for (const p of rosterList) {
+            if (p.position === 'OL' && (!p.injury || p.injury.weeksLeft === 0)) {
+              ensure(playerStats, p.id).passBlocks = (ensure(playerStats, p.id).passBlocks ?? 0) + 1;
+            }
+          }
         }
         if (play.receiver && rosterIds.has(play.receiver.id) && (play.yards > 0 || play.touchdown)) {
           const s = ensure(playerStats, play.receiver.id);
@@ -579,6 +586,16 @@ export function simulateGame(
           s.sacks = (s.sacks ?? 0) + 1;
           s.tackles = (s.tackles ?? 0) + 1;
           s.tacklesForLoss = (s.tacklesForLoss ?? 0) + 1;
+        }
+        // Charge sacksAllowed + passBlocks to OL on the passer's team
+        if (play.passer && rosterIds.has(play.passer.id)) {
+          for (const p of rosterList) {
+            if (p.position === 'OL' && (!p.injury || p.injury.weeksLeft === 0)) {
+              const s = ensure(playerStats, p.id);
+              s.sacksAllowed = (s.sacksAllowed ?? 0) + 1;
+              s.passBlocks = (s.passBlocks ?? 0) + 1;
+            }
+          }
         }
       }
       if (play.type === 'interception') {

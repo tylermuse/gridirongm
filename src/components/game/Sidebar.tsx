@@ -92,7 +92,7 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
 }
 
 function AccountSection() {
-  const { user, tier, signOut } = useSubscription();
+  const { user, tier, isAdmin, signOut } = useSubscription();
 
   if (!user) {
     return (
@@ -132,8 +132,16 @@ function AccountSection() {
             Upgrade
           </Link>
         )}
+        {isAdmin && (
+          <Link
+            href="/admin/analytics"
+            className="flex-1 text-[10px] text-center py-1 rounded bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors font-medium"
+          >
+            Analytics
+          </Link>
+        )}
         <button
-          onClick={signOut}
+          onClick={async () => { await signOut(); window.location.href = '/login'; }}
           className="flex-1 text-[10px] text-center py-1 rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
         >
           Sign Out
@@ -143,7 +151,7 @@ function AccountSection() {
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const {
@@ -222,6 +230,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               className={`
                 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium mb-0.5
                 transition-colors

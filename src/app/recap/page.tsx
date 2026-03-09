@@ -5,6 +5,7 @@ import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { generateDebateTranscript, COMMENTATORS } from '@/lib/engine/debate';
+import { generateWeeklyRecap } from '@/lib/engine/recap';
 import { DebateBubble } from '@/components/game/DebateBubble';
 import type { RecapSegmentData, Player, Team } from '@/types';
 
@@ -38,16 +39,57 @@ const SEGMENT_TYPE_COLORS: Record<RecapSegmentData['type'], string> = {
 
 type TabId = 'recap' | 'show';
 
+const PLAYOFF_ROUND_LABELS: Record<number, string> = {
+  101: 'Wild Card',
+  102: 'Divisional',
+  103: 'Conf. Championship',
+  104: 'Championship',
+};
+
+function weekLabel(week: number): string {
+  if (week >= 101) return PLAYOFF_ROUND_LABELS[week] ?? `Playoff Rd ${week - 100}`;
+  return `Week ${week}`;
+}
+
 /* ─── Main Page ─── */
 
 export default function RecapPage() {
-  const { weeklyRecaps, teams, players, season, week } = useGameStore();
+  const { weeklyRecaps, teams, players, season, week, playoffBracket, schedule } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('show');
 
+  // Generate playoff recaps on the fly if they're missing from weeklyRecaps
+  // (handles saves from before playoff recap generation was added)
+  const allRecaps = useMemo(() => {
+    const recaps = [...weeklyRecaps];
+    if (!playoffBracket) return recaps;
+
+    // Find played playoff matchups grouped by round
+    const playedMatchups = playoffBracket.filter(m => m.winnerId);
+    if (playedMatchups.length === 0) return recaps;
+
+    const rounds = [...new Set(playedMatchups.map(m => m.round))];
+    for (const round of rounds) {
+      const playoffWeek = 100 + round;
+      // Skip if we already have a recap for this playoff round
+      if (recaps.some(r => r.season === season && r.week === playoffWeek)) continue;
+
+      // Find matching game results in schedule
+      const roundMatchups = playedMatchups.filter(m => m.round === round);
+      const matchupIds = new Set(roundMatchups.map(m => m.id));
+      const gameResults = schedule.filter(g => matchupIds.has(g.id) && g.played);
+
+      if (gameResults.length > 0) {
+        const recap = generateWeeklyRecap(gameResults, teams, players, season, playoffWeek);
+        recaps.push(recap);
+      }
+    }
+    return recaps;
+  }, [weeklyRecaps, playoffBracket, schedule, teams, players, season]);
+
   // Get recaps for current season, sorted by week descending
-  const seasonRecaps = weeklyRecaps
+  const seasonRecaps = allRecaps
     .filter(r => r.season === season)
     .sort((a, b) => b.week - a.week);
 
@@ -103,7 +145,7 @@ export default function RecapPage() {
                       : 'bg-[var(--surface)] border border-[var(--border)] text-[var(--text-sec)] hover:text-[var(--text)]'
                   }`}
                 >
-                  Week {recap.week}
+                  {weekLabel(recap.week)}
                 </button>
               ))}
             </div>
@@ -133,7 +175,7 @@ export default function RecapPage() {
                   {/* Show header */}
                   <div className="text-center mb-4">
                     <div className="text-sm font-bold text-[var(--text-sec)] uppercase tracking-widest">
-                      Season {debateTranscript.season} — Week {debateTranscript.week}
+                      Season {debateTranscript.season} — {weekLabel(debateTranscript.week)}
                     </div>
                     <div className="flex items-center justify-center gap-4 mt-3">
                       <div className="flex items-center gap-2">
@@ -158,21 +200,29 @@ export default function RecapPage() {
                   {debateTranscript.topics.map((topic, topicIdx) => (
                     <div key={topicIdx}>
                       {/* Topic divider */}
-                      <div className="flex items-center gap-3 mb-4">
-                        <span className="text-lg">{topic.icon}</span>
-                        <h4 className="text-sm font-bold flex-1">{topic.headline}</h4>
-                        {/* Team badges */}
-                        <div className="flex gap-1">
-                          {topic.teamIds.slice(0, 3).map(tid => (
-                            <span
-                              key={tid}
-                              className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                              style={{ backgroundColor: teamColor(tid) + '33', color: teamColor(tid) }}
-                            >
-                              {teamAbbr(tid)}
-                            </span>
-                          ))}
+                      <div className="mb-4">
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">{topic.icon}</span>
+                          <h4 className="text-sm font-bold flex-1">{topic.headline}</h4>
+                          {/* Team badges */}
+                          <div className="flex gap-1">
+                            {topic.teamIds.slice(0, 3).map(tid => (
+                              <span
+                                key={tid}
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                                style={{ backgroundColor: teamColor(tid) + '33', color: teamColor(tid) }}
+                              >
+                                {teamAbbr(tid)}
+                              </span>
+                            ))}
+                          </div>
                         </div>
+                        {/* Context line — stat lines, scores, etc. */}
+                        {topic.context && (
+                          <p className="text-xs text-[var(--text-sec)] mt-1.5 ml-8 leading-relaxed italic">
+                            {topic.context}
+                          </p>
+                        )}
                       </div>
 
                       {/* Exchanges */}
@@ -207,7 +257,7 @@ export default function RecapPage() {
               activeRecap && activeRecap.segments.length > 0 ? (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-lg font-bold">Season {activeRecap.season} — Week {activeRecap.week} Recap</h3>
+                    <h3 className="text-lg font-bold">Season {activeRecap.season} — {weekLabel(activeRecap.week)} Recap</h3>
                     <span className="text-xs text-[var(--text-sec)] bg-[var(--surface-2)] px-2 py-0.5 rounded-full">
                       {activeRecap.segments.length} stories
                     </span>

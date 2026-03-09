@@ -15,13 +15,22 @@ import { generateSchedule } from './schedule';
 import { simulateGame } from './simulate';
 import { developPlayers } from './development';
 import { generateWeeklyRecap } from './recap';
+import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
 
-const SAVE_VERSION = 11;
+const SAVE_VERSION = 13;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
 export const LUXURY_TAX_RATE = DEFAULT_LEAGUE_SETTINGS.luxuryTaxRate;
+
+/** Market size multipliers by team abbreviation (1.0 = average) */
+const MARKET_SIZES: Record<string, number> = {
+  NYS: 1.4, NYG: 1.4, LAA: 1.35, CHI: 1.3, DAL: 1.3, HOU: 1.2, PHI: 1.2, WAS: 1.15,
+  MIA: 1.1, DEN: 1.1, NE: 1.1, SF: 1.15, SEA: 1.1, ATL: 1.1, MIN: 1.05,
+  BAL: 1.0, CIN: 1.0, PIT: 1.0, DET: 1.0, IND: 1.0, KC: 1.0, LV: 1.05, TB: 1.0, ARI: 1.0, CAR: 0.95, NO: 0.95,
+  CLE: 0.9, TEN: 0.9, JAX: 0.85, BUF: 0.85, GB: 0.85,
+};
 
 export function computeLuxuryTax(payroll: number, cap: number): number {
   const overCap = payroll - cap;
@@ -49,7 +58,7 @@ interface GameStore extends LeagueState {
   draftPlayer: (playerId: string) => void;
   simDraftPick: () => void;
   simToUserDraftPick: () => void;
-  simToEndDraft: () => void;
+  simToEndDraft: (options?: { skipAdvance?: boolean }) => void;
   advanceToFreeAgency: () => void;
   advanceFADay: () => void;
   signFreeAgent: (playerId: string, salary: number, years: number) => boolean;
@@ -76,6 +85,7 @@ interface GameStore extends LeagueState {
   // PRD-13: Depth chart
   reorderDepthChart: (position: Position, playerIds: string[]) => void;
   resetDepthChart: (position: Position) => void;
+  commitLiveGame: (result: GameResult) => void;
   updateLeagueSettings: (settings: Partial<LeagueSettings>) => void;
   setSuppressTradePopups: (val: boolean) => void;
   saveToSlot: (slot: 1 | 2) => void;
@@ -296,6 +306,122 @@ function generateWeekNews(
           headline: `${p.firstName} ${p.lastName} suffered a ${inj.type}. Expected to miss ${inj.weeksLeft} week${inj.weeksLeft > 1 ? 's' : ''}.`,
           isUserTeam: t.id === userTeamId,
         }));
+      }
+    }
+  }
+
+  // Post-game coach quotes for user team games
+  const coachWinQuotes = [
+    (team: string, opp: string, margin: number) => `"We came out focused and executed the game plan." — ${team} HC after ${margin > 14 ? 'dominant ' : ''}win over ${opp}.`,
+    (team: string, opp: string) => `"Defense really stepped up today. That's the standard." — ${team} HC after beating ${opp}.`,
+    (team: string, opp: string) => `"Great team win. Everyone contributed." — ${team} HC after victory over ${opp}.`,
+    (team: string, opp: string) => `"Good week of practice and it showed on the field." — ${team} HC after defeating ${opp}.`,
+    (team: string, opp: string, margin: number) => margin <= 7
+      ? `"That was a dogfight. Respect to ${opp} — they made us earn it." — ${team} HC.`
+      : `"When we play our brand of football, we're tough to beat." — ${team} HC.`,
+    (team: string) => `"We're not looking ahead. One week at a time." — ${team} HC.`,
+    (team: string, opp: string) => `"Our guys showed resilience today against ${opp}. Proud of this team." — ${team} HC.`,
+    (team: string, opp: string) => `"Preparation was there all week. Took care of business against ${opp}." — ${team} HC.`,
+  ];
+  const coachLossQuotes = [
+    (team: string, opp: string) => `"We need to look in the mirror. That's not good enough." — ${team} HC after loss to ${opp}.`,
+    (team: string, opp: string) => `"Can't turn the ball over like that and expect to win." — ${team} HC after loss to ${opp}.`,
+    (team: string) => `"We'll go back to the drawing board. Lot of football left." — ${team} HC.`,
+    (team: string, opp: string, margin: number) => margin >= 20
+      ? `"I have to do better putting our players in position to succeed. That's on me." — ${team} HC after blowout loss to ${opp}.`
+      : `"We were in it but couldn't finish." — ${team} HC.`,
+    (team: string, opp: string) => `"${opp} was the better team today. We need to respond." — ${team} HC.`,
+    (team: string) => `"Disappointing result. Got to get back to fundamentals." — ${team} HC.`,
+    (team: string) => `"Not the result we wanted. We'll learn from this." — ${team} HC.`,
+    (team: string, opp: string) => `"Credit to ${opp}. They came out with more energy." — ${team} HC.`,
+  ];
+
+  for (const game of updatedGames) {
+    if (!game.played) continue;
+    const isUserHome = game.homeTeamId === userTeamId;
+    const isUserAway = game.awayTeamId === userTeamId;
+    if (!isUserHome && !isUserAway) continue;
+    const ut = teams.find(t => t.id === userTeamId);
+    const oppId = isUserHome ? game.awayTeamId : game.homeTeamId;
+    const ot = teams.find(t => t.id === oppId);
+    if (!ut || !ot) continue;
+    const userScore = isUserHome ? game.homeScore : game.awayScore;
+    const oppScore = isUserHome ? game.awayScore : game.homeScore;
+    const margin = Math.abs(userScore - oppScore);
+    const won = userScore > oppScore;
+    const templates = won ? coachWinQuotes : coachLossQuotes;
+    const seed = season * 10000 + week * 100 + (won ? 1 : 0);
+    const quote = templates[seed % templates.length](ut.abbreviation, ot.abbreviation, margin);
+    news.push(makeNews({
+      season, week, type: 'quote',
+      teamId: userTeamId!,
+      headline: quote,
+      isUserTeam: true,
+    }));
+  }
+
+  // Trade rumors (losing teams with high-OVR veterans, weeks 4-14)
+  if (week >= 4 && week <= 14) {
+    const rumorTemplates = [
+      (team: string, player: string, pos: string) => `League sources: ${team} exploring trade options for ${pos} ${player}.`,
+      (team: string, player: string, pos: string) => `Multiple teams have inquired about ${team}'s ${pos} ${player}, per sources.`,
+      (team: string, player: string, pos: string) => `Don't be surprised if ${team} make ${pos} ${player} available before the deadline.`,
+      (team: string, player: string, pos: string) => `Sources: ${team} "open to moving" ${pos} ${player} for the right package.`,
+      (team: string, player: string, pos: string) => `Expect ${team} to shop ${pos} ${player} aggressively before the deadline.`,
+      (team: string, player: string, pos: string) => `${team} reportedly listening to offers for ${pos} ${player} as they look toward the future.`,
+    ];
+    const losingTeams = teams.filter(t => t.id !== userTeamId && t.record.losses > t.record.wins + 2);
+    let rumorCount = 0;
+    for (const lt of losingTeams) {
+      if (rumorCount >= 2) break;
+      const tradeable = players.filter(p =>
+        p.teamId === lt.id && p.ratings.overall >= 78 && p.age >= 27 && !p.retired
+      ).sort((a, b) => b.ratings.overall - a.ratings.overall);
+      if (tradeable.length === 0) continue;
+      const target = tradeable[0];
+      const rumorSeed = season * 10000 + week * 100 + lt.id.charCodeAt(0);
+      const template = rumorTemplates[rumorSeed % rumorTemplates.length];
+      news.push(makeNews({
+        season, week, type: 'rumor',
+        teamId: lt.id,
+        playerIds: [target.id],
+        headline: template(`${lt.city} ${lt.name}`, `${target.firstName} ${target.lastName}`, target.position),
+        isUserTeam: false,
+      }));
+      rumorCount++;
+    }
+  }
+
+  // Stat milestones
+  const milestoneChecks: { stat: keyof PlayerStats; threshold: number; label: string }[] = [
+    { stat: 'passYards', threshold: 3000, label: 'passing yards' },
+    { stat: 'passYards', threshold: 4000, label: 'passing yards' },
+    { stat: 'rushYards', threshold: 1000, label: 'rushing yards' },
+    { stat: 'receivingYards', threshold: 1000, label: 'receiving yards' },
+    { stat: 'sacks', threshold: 10, label: 'sacks' },
+    { stat: 'passTDs', threshold: 30, label: 'passing touchdowns' },
+    { stat: 'rushTDs', threshold: 10, label: 'rushing touchdowns' },
+    { stat: 'defensiveINTs', threshold: 7, label: 'interceptions' },
+  ];
+  for (const game of updatedGames) {
+    if (!game.played) continue;
+    for (const [pid, gameStats] of Object.entries(game.playerStats)) {
+      const p = players.find(pl => pl.id === pid);
+      if (!p || !p.teamId) continue;
+      for (const m of milestoneChecks) {
+        const prevStat = (p.stats[m.stat] as number) ?? 0;
+        const gameStat = ((gameStats as Record<string, number>)[m.stat]) ?? 0;
+        const newTotal = prevStat + gameStat;
+        if (prevStat < m.threshold && newTotal >= m.threshold) {
+          const t = teams.find(tm => tm.id === p.teamId);
+          news.push(makeNews({
+            season, week, type: 'milestone',
+            teamId: p.teamId!,
+            playerIds: [p.id],
+            headline: `${p.firstName} ${p.lastName} reaches ${newTotal.toLocaleString()} ${m.label} this season${t ? ` for the ${t.city} ${t.name}` : ''}.`,
+            isUserTeam: p.teamId === userTeamId,
+          }));
+        }
       }
     }
   }
@@ -700,12 +826,26 @@ function computeSeasonAwards(state: LeagueState): { award: string; playerId: str
   const withGames = (pos: string[]) =>
     activePlayers.filter(p => pos.includes(p.position) && p.stats.gamesPlayed >= 10);
 
-  const offensivePlayers = withGames(['QB', 'RB', 'WR', 'TE', 'OL']);
-  if (offensivePlayers.length > 0) {
-    const mvp = offensivePlayers.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+  // MVP — stats-based scoring, heavily favors QBs (matches playoffs page formula)
+  const mvpCandidates = withGames(['QB', 'RB', 'WR', 'TE']);
+  if (mvpCandidates.length > 0) {
+    const mvp = mvpCandidates.sort((a, b) => {
+      const aScore = a.position === 'QB'
+        ? a.stats.passYards * 0.04 + a.stats.passTDs * 6 - a.stats.interceptions * 4 + a.ratings.overall * 2
+        : a.position === 'RB'
+          ? a.stats.rushYards * 0.06 + a.stats.rushTDs * 6 + a.ratings.overall
+          : a.stats.receivingYards * 0.06 + a.stats.receivingTDs * 6 + a.ratings.overall;
+      const bScore = b.position === 'QB'
+        ? b.stats.passYards * 0.04 + b.stats.passTDs * 6 - b.stats.interceptions * 4 + b.ratings.overall * 2
+        : b.position === 'RB'
+          ? b.stats.rushYards * 0.06 + b.stats.rushTDs * 6 + b.ratings.overall
+          : b.stats.receivingYards * 0.06 + b.stats.receivingTDs * 6 + b.ratings.overall;
+      return bScore - aScore;
+    })[0];
     awards.push({ award: 'MVP', playerId: mvp.id, teamId: mvp.teamId! });
   }
 
+  // DPOY — stats-based (tackles, sacks, INTs)
   const defensivePlayers = withGames(['DL', 'LB', 'CB', 'S']);
   if (defensivePlayers.length > 0) {
     const dpoy = defensivePlayers.sort((a, b) =>
@@ -713,6 +853,17 @@ function computeSeasonAwards(state: LeagueState): { award: string; playerId: str
       (a.stats.tackles + a.stats.sacks * 5 + a.stats.defensiveINTs * 4)
     )[0];
     awards.push({ award: 'Defensive POY', playerId: dpoy.id, teamId: dpoy.teamId! });
+  }
+
+  // OPOY — total yards based
+  const opoyCandidates = withGames(['QB', 'RB', 'WR', 'TE']);
+  if (opoyCandidates.length > 0) {
+    const opoy = opoyCandidates.sort((a, b) => {
+      const aYds = a.stats.passYards + a.stats.rushYards + a.stats.receivingYards;
+      const bYds = b.stats.passYards + b.stats.rushYards + b.stats.receivingYards;
+      return bYds - aYds;
+    })[0];
+    awards.push({ award: 'Offensive POY', playerId: opoy.id, teamId: opoy.teamId! });
   }
 
   const rookies = activePlayers.filter(p => p.experience === 1 && p.stats.gamesPlayed >= 10);
@@ -946,6 +1097,7 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
   suppressTradePopups: false,
   weeklyRecaps: [],
+  achievements: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -1151,6 +1303,7 @@ export const useGameStore = create<GameStore>()(
             leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
             suppressTradePopups: false,
             weeklyRecaps: [],
+            achievements: [],
           });
           return;
         } catch (error) {
@@ -1181,6 +1334,7 @@ export const useGameStore = create<GameStore>()(
             depthChart: buildDefaultDepthChart(roster),
             deadCap: [],
             franchiseTagUsed: false,
+            revenue: { tickets: 0, merchandise: 0, tvDeal: 0, total: 0 },
           };
         });
 
@@ -1230,6 +1384,7 @@ export const useGameStore = create<GameStore>()(
           leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
           suppressTradePopups: false,
           weeklyRecaps: [],
+          achievements: [],
         });
       },
 
@@ -1257,6 +1412,12 @@ export const useGameStore = create<GameStore>()(
           set({ ...result.patch, playoffSeeds: seeds, playoffBracket: bracket, weeklyRecaps });
         } else {
           set({ ...result.patch, weeklyRecaps });
+        }
+        // Check achievements after state update
+        const newAchievements = checkAchievements(get());
+        if (newAchievements.length > 0) {
+          const current = get();
+          set({ achievements: [...current.achievements, ...newAchievements] });
         }
       },
 
@@ -1408,7 +1569,16 @@ export const useGameStore = create<GameStore>()(
         };
         const updatedSchedule = [...state.schedule.filter(g => g.id !== matchupId), playoffGameResult];
 
-        set({ playoffBracket: updatedBracket, champions: newChampions, newsItems: newNewsItems, finalsMvpPlayerId, schedule: updatedSchedule });
+        // Generate playoff recap for this game's round
+        const playoffWeek = 100 + matchup.round;
+        const singleGameRecap = generateWeeklyRecap([playoffGameResult], state.teams, state.players, state.season, playoffWeek);
+        const existingRecap = (state.weeklyRecaps ?? []).find(r => r.season === state.season && r.week === playoffWeek);
+        const mergedRecap = existingRecap
+          ? { ...existingRecap, segments: [...existingRecap.segments, ...singleGameRecap.segments].sort((a, b) => b.priority - a.priority).slice(0, 10) }
+          : singleGameRecap;
+        const updatedRecaps = [...(state.weeklyRecaps ?? []).filter(r => !(r.season === state.season && r.week === playoffWeek)), mergedRecap];
+
+        set({ playoffBracket: updatedBracket, champions: newChampions, newsItems: newNewsItems, finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps });
       },
 
       simNextPlayoffGame: () => {
@@ -1494,7 +1664,28 @@ export const useGameStore = create<GameStore>()(
         const existingIds = new Set(playoffResults.map(r => r.id));
         const updatedSchedule = [...state.schedule.filter(g => !existingIds.has(g.id)), ...playoffResults];
 
-        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId, schedule: updatedSchedule });
+        // Generate playoff recaps grouped by round
+        const resultsByRound = new Map<number, GameResult[]>();
+        for (const r of playoffResults) {
+          const m = bracket.find(b => b.id === r.id);
+          const round = m?.round ?? 1;
+          if (!resultsByRound.has(round)) resultsByRound.set(round, []);
+          resultsByRound.get(round)!.push(r);
+        }
+        let updatedRecaps = [...(state.weeklyRecaps ?? [])];
+        for (const [round, results] of resultsByRound) {
+          const playoffWeek = 100 + round;
+          const recap = generateWeeklyRecap(results, state.teams, state.players, state.season, playoffWeek);
+          updatedRecaps = [...updatedRecaps.filter(r => !(r.season === state.season && r.week === playoffWeek)), recap];
+        }
+
+        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps });
+        // Check achievements after playoffs
+        const newAchievementsP = checkAchievements(get());
+        if (newAchievementsP.length > 0) {
+          const cur = get();
+          set({ achievements: [...cur.achievements, ...newAchievementsP] });
+        }
       },
 
       /** Sim all games in the current playoff round (e.g. all Wild Card games). */
@@ -1574,7 +1765,12 @@ export const useGameStore = create<GameStore>()(
         const existingIds = new Set(playoffResults.map(r => r.id));
         const updatedSchedule = [...state.schedule.filter(g => !existingIds.has(g.id)), ...playoffResults];
 
-        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId, schedule: updatedSchedule });
+        // Generate playoff recap for the round (week = 100 + round to distinguish from regular season)
+        const playoffWeek = 100 + currentRound;
+        const playoffRecap = generateWeeklyRecap(playoffResults, state.teams, state.players, state.season, playoffWeek);
+        const updatedRecaps = [...(state.weeklyRecaps ?? []).filter(r => !(r.season === state.season && r.week === playoffWeek)), playoffRecap];
+
+        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps });
       },
 
       // PRD-03: Advance from playoffs to re-signing phase
@@ -1733,12 +1929,16 @@ export const useGameStore = create<GameStore>()(
             if (bestPlayer && bestPlayer.ratings.overall >= 70) {
               const tagSalary = computeFranchiseTagSalary(bestPlayer.position, updatedPlayers, bestPlayer);
               const oldSalary = bestPlayer.contract.salary;
-              updatedPlayers = updatedPlayers.map(p =>
-                p.id === bestPlayer.id ? { ...p, contract: { salary: tagSalary, yearsLeft: 1, guaranteed: tagSalary, totalYears: 1 } } : p,
-              );
-              updatedTeams = updatedTeams.map(t =>
-                t.id === aiTeam.id ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + (tagSalary - oldSalary)), franchiseTagUsed: true } : t,
-              );
+              const aiTeamData = updatedTeams.find(t => t.id === aiTeam.id);
+              const canAffordTag = aiTeamData ? (aiTeamData.totalPayroll + tagSalary - oldSalary) <= aiTeamData.salaryCap : false;
+              if (canAffordTag) {
+                updatedPlayers = updatedPlayers.map(p =>
+                  p.id === bestPlayer.id ? { ...p, contract: { salary: tagSalary, yearsLeft: 1, guaranteed: tagSalary, totalYears: 1 } } : p,
+                );
+                updatedTeams = updatedTeams.map(t =>
+                  t.id === aiTeam.id ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + (tagSalary - oldSalary)), franchiseTagUsed: true } : t,
+                );
+              }
             }
           }
 
@@ -1972,7 +2172,7 @@ export const useGameStore = create<GameStore>()(
         set({ players, teams, freeAgents: freeAgentIds, draftOrder, draftResults, newsItems });
       },
 
-      simToEndDraft: () => {
+      simToEndDraft: (options?: { skipAdvance?: boolean }) => {
         const state = get();
         if (state.phase !== 'draft') return;
 
@@ -2027,8 +2227,10 @@ export const useGameStore = create<GameStore>()(
 
         set({ players, teams, freeAgents: freeAgentIds, draftOrder, draftResults, newsItems });
 
-        // Auto-advance to free agency when draft is complete
-        get().advanceToFreeAgency();
+        // Auto-advance to free agency when draft is complete (unless caller opts out)
+        if (!options?.skipAdvance) {
+          get().advanceToFreeAgency();
+        }
       },
 
       advanceToFreeAgency: () => {
@@ -2507,7 +2709,7 @@ export const useGameStore = create<GameStore>()(
         // AI accepts if within 10% value (skip for AI-initiated proposals already approved)
         if (!skipValueCheck && offeredValue < receivedValue * 0.90) return false;
 
-        // Block trades that increase user payroll when over the cap
+        // Block trades that would push user over the salary cap
         const offeredSalaryTotal = offeredPlayerIds.reduce((sum, id) => {
           const p = state.players.find(pl => pl.id === id);
           return sum + (p ? p.contract.salary : 0);
@@ -2516,7 +2718,8 @@ export const useGameStore = create<GameStore>()(
           const p = state.players.find(pl => pl.id === id);
           return sum + (p ? p.contract.salary : 0);
         }, 0);
-        if (userTeam.totalPayroll > userTeam.salaryCap && receivedSalaryTotal > offeredSalaryTotal) {
+        const newPayroll = userTeam.totalPayroll - offeredSalaryTotal + receivedSalaryTotal;
+        if (newPayroll > userTeam.salaryCap) {
           return false;
         }
 
@@ -3027,6 +3230,16 @@ export const useGameStore = create<GameStore>()(
           const expiredDeadCap = (t.deadCap ?? []).filter(dc => dc.yearsLeft <= 1);
           const deadCapRelief = expiredDeadCap.reduce((sum, dc) => sum + dc.amount, 0);
 
+          // Compute revenue based on previous season performance
+          const teamPlayers = developedPlayers.filter(p => p.teamId === t.id && !p.retired);
+          const starCount = teamPlayers.filter(p => p.ratings.overall >= 80).length;
+          const marketSize = MARKET_SIZES[t.abbreviation] ?? 1.0;
+          const wins = t.record.wins;
+          const tickets = Math.round(80 * marketSize * (1 + wins / 20) * 10) / 10;
+          const merchandise = Math.round(25 * (1 + starCount * 0.15) * marketSize * 10) / 10;
+          const tvDeal = 120;
+          const totalRevenue = Math.round((tickets + merchandise + tvDeal) * 10) / 10;
+
           return {
             ...t,
             record: emptyRecord(),
@@ -3035,6 +3248,7 @@ export const useGameStore = create<GameStore>()(
             depthChart: newDepthChart,
             deadCap: updatedDeadCap,
             franchiseTagUsed: false,
+            revenue: { tickets, merchandise, tvDeal, total: totalRevenue },
             // Refresh picks for new season
             draftPicks: [...t.draftPicks, ...[1, 2, 3, 4, 5, 6, 7].map(round => ({
               id: uuid(),
@@ -3165,6 +3379,40 @@ export const useGameStore = create<GameStore>()(
           updatedTeams = state.teams.map(t => ({ ...t, salaryCap: updates.salaryCap! }));
         }
         set({ leagueSettings: newSettings, teams: updatedTeams });
+      },
+
+      commitLiveGame: (result: GameResult) => {
+        const state = get();
+        // Merge the played game into the schedule
+        const newSchedule = state.schedule.map(g => g.id === result.id ? result : g);
+        // Update team records
+        const newTeams = state.teams.map(team => {
+          if (team.id !== result.homeTeamId && team.id !== result.awayTeamId) return team;
+          const isHome = team.id === result.homeTeamId;
+          const teamScore = isHome ? result.homeScore : result.awayScore;
+          const oppScore = isHome ? result.awayScore : result.homeScore;
+          const won = teamScore > oppScore;
+          const lost = teamScore < oppScore;
+          return {
+            ...team,
+            record: {
+              ...team.record,
+              wins: team.record.wins + (won ? 1 : 0),
+              losses: team.record.losses + (lost ? 1 : 0),
+              ties: team.record.ties + (!won && !lost ? 1 : 0),
+              pointsFor: team.record.pointsFor + teamScore,
+              pointsAgainst: team.record.pointsAgainst + oppScore,
+              streak: won ? (team.record.streak > 0 ? team.record.streak + 1 : 1) : (team.record.streak < 0 ? team.record.streak - 1 : -1),
+            },
+          };
+        });
+        // Update player stats
+        const newPlayers = state.players.map(p => {
+          const playerStats = result.playerStats?.[p.id];
+          if (!playerStats) return p;
+          return { ...p, stats: addStats(p.stats, playerStats) };
+        });
+        set({ schedule: newSchedule, teams: newTeams, players: newPlayers });
       },
 
       setSuppressTradePopups: (val: boolean) => {
@@ -3382,6 +3630,19 @@ export const useGameStore = create<GameStore>()(
           for (const game of schedule11) {
             if (typeof game.id === 'string') {
               game.id = game.id.replace('super-bowl', 'championship');
+            }
+          }
+        }
+        if (version < 12) {
+          // Add achievements array
+          if (!state.achievements) state.achievements = [];
+        }
+        if (version < 13) {
+          // Add revenue to teams
+          const teams13 = (state.teams as Array<Record<string, unknown>>) ?? [];
+          for (const team of teams13) {
+            if (!team.revenue) {
+              team.revenue = { tickets: 0, merchandise: 0, tvDeal: 0, total: 0 };
             }
           }
         }

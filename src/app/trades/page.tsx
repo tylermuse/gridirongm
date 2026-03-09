@@ -78,6 +78,14 @@ function TradesPage() {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
 
+  // Counter-offer state
+  const [counteringProposalId, setCounteringProposalId] = useState<string | null>(null);
+  const [counterOfferedPlayerIds, setCounterOfferedPlayerIds] = useState<string[]>([]);
+  const [counterOfferedPickIds, setCounterOfferedPickIds] = useState<string[]>([]);
+  const [counterReceivedPlayerIds, setCounterReceivedPlayerIds] = useState<string[]>([]);
+  const [counterReceivedPickIds, setCounterReceivedPickIds] = useState<string[]>([]);
+  const [counterResult, setCounterResult] = useState<'accepted' | 'rejected' | null>(null);
+
   // Trading block state
   const [blockedPlayerIds, setBlockedPlayerIds] = useState<string[]>([]);
   const [blockedPickIds, setBlockedPickIds] = useState<string[]>([]);
@@ -85,15 +93,23 @@ function TradesPage() {
   const [seekDraftPicks, setSeekDraftPicks] = useState(false);
   const [blockSolicited, setBlockSolicited] = useState(false);
 
-  // Handle ?block=PLAYER_ID from roster page
+  // Handle ?block=PLAYER_ID from roster page or ?counter=PROPOSAL_ID from popup
   const searchParams = useSearchParams();
   useEffect(() => {
     const blockPlayerId = searchParams.get('block');
     if (blockPlayerId) {
-      // Pre-select the player on the trading block tab
       setBlockedPlayerIds(prev => prev.includes(blockPlayerId) ? prev : [...prev, blockPlayerId]);
       setActiveTab('block');
     }
+    const counterProposalId = searchParams.get('counter');
+    if (counterProposalId) {
+      const proposal = tradeProposals.find(p => p.id === counterProposalId && p.status === 'pending');
+      if (proposal) {
+        setActiveTab('incoming');
+        handleStartCounter(counterProposalId);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const userTeam = teams.find(t => t.id === userTeamId);
@@ -184,6 +200,72 @@ function TradesPage() {
       setReceivedPickIds([]);
     }
   }
+
+  function handleStartCounter(proposalId: string) {
+    const proposal = tradeProposals.find(p => p.id === proposalId);
+    if (!proposal) return;
+    setCounteringProposalId(proposalId);
+    // Pre-fill: what user sends (requested in proposal) and what user receives (offered in proposal)
+    setCounterOfferedPlayerIds([...proposal.requestedPlayerIds]);
+    setCounterOfferedPickIds([...proposal.requestedPickIds]);
+    setCounterReceivedPlayerIds([...proposal.offeredPlayerIds]);
+    setCounterReceivedPickIds([...proposal.offeredPickIds]);
+    setCounterResult(null);
+  }
+
+  function handleCancelCounter() {
+    setCounteringProposalId(null);
+    setCounterOfferedPlayerIds([]);
+    setCounterOfferedPickIds([]);
+    setCounterReceivedPlayerIds([]);
+    setCounterReceivedPickIds([]);
+    setCounterResult(null);
+  }
+
+  function handleSubmitCounter() {
+    const proposal = tradeProposals.find(p => p.id === counteringProposalId);
+    if (!proposal) return;
+    const success = executeTrade(
+      counterOfferedPlayerIds, counterOfferedPickIds,
+      counterReceivedPlayerIds, counterReceivedPickIds,
+      proposal.proposingTeamId,
+    );
+    setCounterResult(success ? 'accepted' : 'rejected');
+    if (success) {
+      // Reject the original proposal since we completed a counter
+      respondToTradeProposal(proposal.id, false);
+      handleCancelCounter();
+    }
+  }
+
+  const counterTeam = counteringProposalId
+    ? teams.find(t => t.id === tradeProposals.find(p => p.id === counteringProposalId)?.proposingTeamId)
+    : null;
+  const counterTeamRoster = counterTeam
+    ? players.filter(p => p.teamId === counterTeam.id && !p.retired).sort((a, b) => b.ratings.overall - a.ratings.overall)
+    : [];
+
+  const counterOfferedValue = counterOfferedPlayerIds.reduce((sum, id) => {
+    const p = players.find(pl => pl.id === id);
+    return sum + (p ? playerTradeValue(p) : 0);
+  }, 0) + counterOfferedPickIds.reduce((sum, id) => {
+    const pick = userTeam?.draftPicks.find(pk => pk.id === id);
+    return sum + (pick ? pickTradeValue(pick) : 0);
+  }, 0);
+
+  const counterReceivedValue = counterReceivedPlayerIds.reduce((sum, id) => {
+    const p = players.find(pl => pl.id === id);
+    return sum + (p ? playerTradeValue(p) : 0);
+  }, 0) + counterReceivedPickIds.reduce((sum, id) => {
+    const pick = counterTeam?.draftPicks.find(pk => pk.id === id);
+    return sum + (pick ? pickTradeValue(pick) : 0);
+  }, 0);
+
+  const counterValueDiff = counterOfferedValue - counterReceivedValue;
+  const counterValueLabel =
+    Math.abs(counterValueDiff) < counterOfferedValue * 0.1 ? 'Fair trade' :
+    counterValueDiff < 0 ? `You lose ~${Math.abs(counterValueDiff)} pts` :
+    `You gain ~${counterValueDiff} pts`;
 
   function handleSolicitProposals() {
     solicitTradingBlockProposals(blockedPlayerIds, blockedPickIds, seekPositions, seekDraftPicks);
@@ -390,12 +472,148 @@ function TradesPage() {
                       </Button>
                       <Button
                         size="sm"
+                        variant="secondary"
+                        onClick={() => handleStartCounter(proposal.id)}
+                        disabled={!isTradeOpen || counteringProposalId === proposal.id}
+                      >
+                        Counter
+                      </Button>
+                      <Button
+                        size="sm"
                         variant="ghost"
                         onClick={() => respondToTradeProposal(proposal.id, false)}
                       >
                         Reject
                       </Button>
                     </div>
+
+                    {/* Counter-offer UI */}
+                    {counteringProposalId === proposal.id && (
+                      <div className="mt-4 pt-4 border-t border-[var(--border)]">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-bold">Counter Offer to {proposingTeam?.city} {proposingTeam?.name}</h3>
+                          <Button size="sm" variant="ghost" onClick={handleCancelCounter}>Cancel</Button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          {/* Your offer */}
+                          <div className="bg-[var(--surface-2)] rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold text-red-600 uppercase">You Send</span>
+                              <span className="text-xs text-[var(--text-sec)]">{counterOfferedValue} pts</span>
+                            </div>
+                            <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Players</div>
+                            <div className="max-h-[250px] overflow-y-auto space-y-0 mb-2">
+                              {userRoster.map(p => (
+                                <label key={p.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface)] rounded px-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={counterOfferedPlayerIds.includes(p.id)}
+                                    onChange={() => togglePlayerSelect(p.id, counterOfferedPlayerIds, setCounterOfferedPlayerIds)}
+                                    className="accent-blue-500"
+                                  />
+                                  <Badge size="sm">{p.position}</Badge>
+                                  <span className="text-xs flex-1 truncate">{p.firstName} {p.lastName}</span>
+                                  <span className={`text-[10px] font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                                </label>
+                              ))}
+                            </div>
+                            {userTeam && userTeam.draftPicks.length > 0 && (
+                              <>
+                                <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Draft Picks</div>
+                                {userTeam.draftPicks
+                                  .filter(pk => pk.year >= (useGameStore.getState().season))
+                                  .sort((a, b) => a.year - b.year || a.round - b.round)
+                                  .map(pk => (
+                                  <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface)] rounded px-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={counterOfferedPickIds.includes(pk.id)}
+                                      onChange={() => togglePickSelect(pk.id, counterOfferedPickIds, setCounterOfferedPickIds)}
+                                      className="accent-blue-500"
+                                    />
+                                    <span className="text-xs flex-1">Rd {pk.round} ({pk.year})</span>
+                                    <span className="text-[10px] text-[var(--text-sec)]">~{pickTradeValue(pk)}</span>
+                                  </label>
+                                ))}
+                              </>
+                            )}
+                          </div>
+
+                          {/* You receive */}
+                          <div className="bg-[var(--surface-2)] rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold text-green-600 uppercase">You Receive</span>
+                              <span className="text-xs text-[var(--text-sec)]">{counterReceivedValue} pts</span>
+                            </div>
+                            <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Players</div>
+                            <div className="max-h-[250px] overflow-y-auto space-y-0 mb-2">
+                              {counterTeamRoster.map(p => (
+                                <label key={p.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface)] rounded px-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={counterReceivedPlayerIds.includes(p.id)}
+                                    onChange={() => togglePlayerSelect(p.id, counterReceivedPlayerIds, setCounterReceivedPlayerIds)}
+                                    className="accent-blue-500"
+                                  />
+                                  <Badge size="sm">{p.position}</Badge>
+                                  <span className="text-xs flex-1 truncate">{p.firstName} {p.lastName}</span>
+                                  <span className={`text-[10px] font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                                </label>
+                              ))}
+                            </div>
+                            {counterTeam && counterTeam.draftPicks.length > 0 && (
+                              <>
+                                <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Draft Picks</div>
+                                {counterTeam.draftPicks
+                                  .filter(pk => pk.year >= (useGameStore.getState().season))
+                                  .sort((a, b) => a.year - b.year || a.round - b.round)
+                                  .map(pk => (
+                                  <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface)] rounded px-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={counterReceivedPickIds.includes(pk.id)}
+                                      onChange={() => togglePickSelect(pk.id, counterReceivedPickIds, setCounterReceivedPickIds)}
+                                      className="accent-blue-500"
+                                    />
+                                    <span className="text-xs flex-1">Rd {pk.round} ({pk.year})</span>
+                                    <span className="text-[10px] text-[var(--text-sec)]">~{pickTradeValue(pk)}</span>
+                                  </label>
+                                ))}
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Counter summary */}
+                        <div className="flex items-center justify-between bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3">
+                          <div>
+                            <div className="text-sm font-semibold">
+                              Value: {counterOfferedValue} → {counterReceivedValue} pts
+                              <span className={`ml-2 text-xs ${
+                                Math.abs(counterValueDiff) < counterOfferedValue * 0.1 ? 'text-green-600' :
+                                counterValueDiff < 0 ? 'text-blue-600' : 'text-amber-600'
+                              }`}>
+                                ({counterValueLabel})
+                              </span>
+                            </div>
+                            {counterResult === 'rejected' && (
+                              <p className="text-sm text-red-600 mt-1">Counter rejected — offer more value or adjust your asks.</p>
+                            )}
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={handleSubmitCounter}
+                            disabled={
+                              (counterOfferedPlayerIds.length === 0 && counterOfferedPickIds.length === 0) &&
+                              (counterReceivedPlayerIds.length === 0 && counterReceivedPickIds.length === 0)
+                            }
+                          >
+                            Submit Counter
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </Card>
                 );
               })

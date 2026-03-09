@@ -115,6 +115,75 @@ export default function FinancesPage() {
           )}
         </Card>
 
+        {/* Revenue & Profit/Loss */}
+        {userTeam.revenue && userTeam.revenue.total > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader><CardTitle>Revenue Breakdown</CardTitle></CardHeader>
+              <div className="space-y-3">
+                {[
+                  { label: 'Ticket Sales', value: userTeam.revenue.tickets, icon: '🎟️', color: 'bg-blue-500' },
+                  { label: 'Merchandise', value: userTeam.revenue.merchandise, icon: '👕', color: 'bg-purple-500' },
+                  { label: 'TV Deal', value: userTeam.revenue.tvDeal, icon: '📺', color: 'bg-amber-500' },
+                ].map(item => {
+                  const pct = item.value / userTeam.revenue.total;
+                  return (
+                    <div key={item.label} className="flex items-center gap-3">
+                      <span className="text-lg w-7">{item.icon}</span>
+                      <div className="flex-1">
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="font-medium">{item.label}</span>
+                          <span className="font-mono">${item.value}M</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                          <div className={`h-full rounded-full ${item.color}`} style={{ width: `${(pct * 100).toFixed(1)}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="border-t border-[var(--border)] pt-2 flex justify-between font-bold">
+                  <span>Total Revenue</span>
+                  <span className="font-mono">${userTeam.revenue.total}M</span>
+                </div>
+              </div>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle>Profit / Loss</CardTitle></CardHeader>
+              <div className="space-y-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-[var(--text-sec)]">Total Revenue</span>
+                  <span className="font-mono text-green-600">+${userTeam.revenue.total}M</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-[var(--text-sec)]">Player Payroll</span>
+                  <span className="font-mono text-red-600">-${Math.round(used * 10) / 10}M</span>
+                </div>
+                {remaining < 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[var(--text-sec)]">Luxury Tax</span>
+                    <span className="font-mono text-red-600">-${computeLuxuryTax(used, cap)}M</span>
+                  </div>
+                )}
+                <div className="border-t border-[var(--border)] pt-2">
+                  {(() => {
+                    const luxTax = remaining < 0 ? computeLuxuryTax(used, cap) : 0;
+                    const profit = Math.round((userTeam.revenue.total - used - luxTax) * 10) / 10;
+                    return (
+                      <div className="flex justify-between font-bold text-lg">
+                        <span>{profit >= 0 ? 'Profit' : 'Loss'}</span>
+                        <span className={`font-mono ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {profit >= 0 ? '+' : ''}{profit}M
+                        </span>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
         {/* Salary by position */}
         <Card>
           <CardHeader><CardTitle>Salary by Position</CardTitle></CardHeader>
@@ -138,7 +207,7 @@ export default function FinancesPage() {
           </div>
         </Card>
 
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Expiring contracts */}
           <Card>
             <CardHeader><CardTitle>Expiring Contracts ({expiring.length})</CardTitle></CardHeader>

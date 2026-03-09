@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/Button';
 import { LEAGUE_TEAMS, type TeamTemplate } from '@/lib/data/teams';
 import { type ImportedLeagueData, loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { TeamLogo } from '@/components/ui/TeamLogo';
-import { generateTeamSpotlight, COMMENTATORS } from '@/lib/engine/debate';
+import { generateTeamSpotlight, COMMENTATORS, type SpotlightContext } from '@/lib/engine/debate';
+import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { hasFeature } from '@/lib/subscription';
@@ -26,6 +27,42 @@ function TeamPicker() {
   const [importLoading, setImportLoading] = useState(false);
   const [importedTeams, setImportedTeams] = useState<ImportedLeagueData | null>(null);
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
+  const [savedGame, setSavedGame] = useState<{ teamAbbr: string; season: number; wins: number; losses: number; phase: string } | null>(null);
+  const [resumeLoading, setResumeLoading] = useState(false);
+
+  // Check for existing autosave on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('gridiron-gm-autosave');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const state = parsed.state ?? parsed;
+      if (state.userTeamId && state.teams?.length > 0) {
+        const team = state.teams.find((t: { id: string; abbreviation: string }) => t.id === state.userTeamId);
+        const userRecord = state.teams.find((t: { id: string; record: { wins: number; losses: number } }) => t.id === state.userTeamId)?.record;
+        const PHASE_LABELS: Record<string, string> = {
+          preseason: 'Preseason', regular: 'Regular Season', playoffs: 'Playoffs',
+          resigning: 'Re-signing', draft: 'Draft', freeAgency: 'Free Agency', offseason: 'Offseason',
+        };
+        setSavedGame({
+          teamAbbr: team?.abbreviation ?? '???',
+          season: state.season ?? 1,
+          wins: userRecord?.wins ?? 0,
+          losses: userRecord?.losses ?? 0,
+          phase: PHASE_LABELS[state.phase] ?? state.phase ?? 'Unknown',
+        });
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }, []);
+
+  function handleResume() {
+    setResumeLoading(true);
+    // The store auto-hydrates from localStorage via persist middleware.
+    // We just need to set initialized = true.
+    useGameStore.setState({ initialized: true });
+  }
 
   async function handlePick(abbr: string) {
     setLoading(true);
@@ -66,13 +103,41 @@ function TeamPicker() {
     : LEAGUE_TEAMS;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8">
       <div className="text-center mb-8">
-        <h1 className="text-5xl font-black tracking-tight mb-3">
+        <h1 className="text-3xl sm:text-5xl font-black tracking-tight mb-3">
           <span className="text-blue-600">GRIDIRON</span> GM
         </h1>
-        <p className="text-[var(--text-sec)] text-lg">Choose your franchise. Build your dynasty.</p>
+        <p className="text-[var(--text-sec)] text-sm sm:text-lg">Choose your franchise. Build your dynasty.</p>
       </div>
+
+      {/* Resume saved game */}
+      {savedGame && (
+        <div className="mb-6 max-w-md w-full">
+          <button
+            onClick={handleResume}
+            disabled={resumeLoading}
+            className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-blue-500 bg-blue-500/5
+                       hover:bg-blue-500/10 hover:shadow-lg hover:shadow-blue-500/10 transition-all group"
+          >
+            <div className="flex items-center gap-3 text-left">
+              <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-lg font-black shrink-0">
+                {savedGame.teamAbbr.slice(0, 2)}
+              </div>
+              <div>
+                <div className="text-sm font-bold text-blue-600">Continue League</div>
+                <div className="text-xs text-[var(--text-sec)]">
+                  {savedGame.teamAbbr} · Season {savedGame.season} · {savedGame.wins}-{savedGame.losses} · {savedGame.phase}
+                </div>
+              </div>
+            </div>
+            <div className="text-blue-600 text-xl group-hover:translate-x-1 transition-transform">→</div>
+          </button>
+          <div className="text-center mt-2">
+            <span className="text-xs text-[var(--text-sec)]">or start a new league below</span>
+          </div>
+        </div>
+      )}
 
       {/* Import League File Section */}
       <div className="mb-6 max-w-4xl w-full">
@@ -129,8 +194,8 @@ function TeamPicker() {
           Loading league data...
         </div>
       ) : (
-        <div className="grid grid-cols-4 gap-3 max-w-4xl">
-          {displayTeams.map(team => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-w-4xl">
+          {[...displayTeams].sort((a, b) => a.city.localeCompare(b.city)).map(team => (
             <button
               key={team.abbreviation}
               onClick={() => handlePick(team.abbreviation)}
@@ -153,7 +218,7 @@ function TeamPicker() {
 /* ─── Team Spotlight Section ─── */
 
 function TeamSpotlightSection({
-  team, roster, allTeams, allPlayers, season, week, onPlayerClick,
+  team, roster, allTeams, allPlayers, season, week, ctx, onPlayerClick,
 }: {
   team: import('@/types').Team;
   roster: import('@/types').Player[];
@@ -161,14 +226,16 @@ function TeamSpotlightSection({
   allPlayers: import('@/types').Player[];
   season: number;
   week: number;
+  ctx?: SpotlightContext;
   onPlayerClick: (id: string) => void;
 }) {
   const { tier } = useSubscription();
   const isPro = hasFeature(tier, 'analytics_dashboard');
 
   const topics = React.useMemo(
-    () => generateTeamSpotlight(team, roster, allTeams, allPlayers, season, week),
-    [team, roster, allTeams, allPlayers, season, week],
+    () => generateTeamSpotlight(team, roster, allTeams, allPlayers, season, week, ctx),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [team, roster, allTeams, allPlayers, season, week, ctx?.phase, ctx?.faDay, ctx?.draftResults?.length, ctx?.playoffBracket],
   );
 
   if (topics.length === 0) return null;
@@ -293,68 +360,30 @@ function TeamSpotlightSection({
   );
 }
 
-/* ─── Spotlight Corner Popup ─── */
-
-function SpotlightPopup({ teamName, onDismiss, onClick }: {
-  teamName: string;
-  onDismiss: () => void;
-  onClick: () => void;
-}) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => setVisible(true), 800);
-    return () => clearTimeout(t);
-  }, []);
-
-  return (
-    <div
-      className={`fixed bottom-6 right-6 z-50 transition-all duration-500 ${visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}
-    >
-      <div className="relative bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-xl shadow-black/10 overflow-hidden max-w-xs">
-        {/* Dismiss X */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
-          className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-full text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors text-xs"
-          aria-label="Dismiss"
-        >
-          ✕
-        </button>
-
-        <button onClick={onClick} className="w-full text-left p-3 hover:bg-[var(--surface-2)] transition-colors">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg shrink-0">
-              🎬
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-bold leading-tight">Team Spotlight</p>
-              <p className="text-xs text-[var(--text-sec)] leading-tight mt-0.5">
-                {COMMENTATORS.stats.avatar} {COMMENTATORS.stats.name} & {COMMENTATORS.hottake.avatar} {COMMENTATORS.hottake.name} break down the {teamName}
-              </p>
-            </div>
-          </div>
-          <div className="mt-2 flex items-center gap-1 text-[10px] text-blue-600 font-semibold">
-            <span>Watch Now</span>
-            <span>→</span>
-          </div>
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function Dashboard() {
-  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, champions, newsItems } = useGameStore();
+  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
-  const [spotlightDismissed, setSpotlightDismissed] = useState(false);
   const spotlightRef = useRef<HTMLDivElement>(null);
   const userTeam = teams.find(t => t.id === userTeamId)!;
   const roster = players.filter(p => p.teamId === userTeamId);
 
-  const scrollToSpotlight = useCallback(() => {
-    setSpotlightDismissed(true);
-    spotlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Listen for spotlight scroll requests (from SpotlightPopup in GameShell or ?spotlight=1 query)
+  useEffect(() => {
+    function scrollToSpotlight() {
+      spotlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    window.addEventListener('scroll-to-spotlight', scrollToSpotlight);
+
+    // Check for ?spotlight=1 query param (navigated from another page)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('spotlight') === '1') {
+      setTimeout(scrollToSpotlight, 300); // small delay to let page render
+      // Clean up the URL
+      window.history.replaceState({}, '', '/');
+    }
+
+    return () => window.removeEventListener('scroll-to-spotlight', scrollToSpotlight);
   }, []);
 
   // Conference standings sorted by win pct, then wins
@@ -446,8 +475,31 @@ function Dashboard() {
           </div>
         </div>
 
+        {/* Achievements row */}
+        {ALL_ACHIEVEMENTS.length > 0 && (
+          <div className="flex items-center gap-1 flex-wrap">
+            {ALL_ACHIEVEMENTS.map(def => {
+              const unlocked = achievements.find(a => a.id === def.id);
+              return (
+                <div
+                  key={def.id}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition-all ${
+                    unlocked
+                      ? 'bg-amber-50 border-amber-300 text-amber-800'
+                      : 'bg-[var(--surface-2)] border-[var(--border)] text-[var(--text-sec)] opacity-40'
+                  }`}
+                  title={`${def.name}: ${def.description}${unlocked ? ` (Unlocked S${unlocked.unlockedSeason})` : ''}`}
+                >
+                  <span className="text-sm">{def.icon}</span>
+                  <span className="font-medium hidden sm:inline">{def.name}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* Row 1: Standings, Finances, Team Stats */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Conference standings with GB */}
           <Card>
             <CardHeader><CardTitle>{userTeam.conference} Standings</CardTitle></CardHeader>
@@ -556,7 +608,7 @@ function Dashboard() {
         </div>
 
         {/* Row 2: League Leaders, Team Leaders, News */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* League Leaders */}
           <Card>
             <CardHeader><CardTitle>League Leaders</CardTitle></CardHeader>
@@ -674,18 +726,10 @@ function Dashboard() {
           allPlayers={players}
           season={season}
           week={week}
+          ctx={{ phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay }}
           onPlayerClick={setSelectedPlayerId}
         />
       </div>
-
-      {/* Spotlight Corner Popup */}
-      {!spotlightDismissed && gamesPlayed > 0 && (
-        <SpotlightPopup
-          teamName={userTeam.name}
-          onDismiss={() => setSpotlightDismissed(true)}
-          onClick={scrollToSpotlight}
-        />
-      )}
 
       {/* Team Roster Modal */}
       <TeamRosterModal teamId={viewTeamId} onClose={() => setViewTeamId(null)} onPlayerClick={(id) => setSelectedPlayerId(id)} />

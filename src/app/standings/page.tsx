@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { teamPower } from '@/lib/engine/simulate';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { BoxScore } from '@/components/game/BoxScore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerModal } from '@/components/game/PlayerModal';
@@ -21,7 +23,8 @@ function winPct(t: Team) {
 
 function StandingsTable({ teamList, userTeamId, onTeamClick }: { teamList: Team[]; userTeamId: string | null; onTeamClick: (teamId: string) => void }) {
   return (
-    <table className="w-full text-sm">
+    <div className="overflow-x-auto">
+    <table className="w-full text-sm min-w-[500px]">
       <thead>
         <tr className="text-[var(--text-sec)] text-xs">
           <th className="text-left pb-1">#</th>
@@ -65,11 +68,13 @@ function StandingsTable({ teamList, userTeamId, onTeamClick }: { teamList: Team[
         })}
       </tbody>
     </table>
+    </div>
   );
 }
 
 export default function StandingsPage() {
-  const { teams, schedule, userTeamId, players } = useGameStore();
+  const router = useRouter();
+  const { teams, schedule, userTeamId, players, week, phase } = useGameStore();
   const [view, setView] = useState<StandingsView>('division');
   const [tab, setTab] = useState<'standings' | 'schedule'>('standings');
   const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
@@ -277,8 +282,20 @@ export default function StandingsPage() {
                           const spreadText = spread === 0 ? 'EVEN' :
                             favored === 'user' ? `YOU ${spread > 0 ? '+' : ''}${spread}` :
                             `${teamAbbr(isHome ? game.awayTeamId : game.homeTeamId)} ${spread < 0 ? '+' : '-'}${Math.abs(spread)}`;
+                          const isCurrentWeek = phase === 'regular' && game.week === week;
                           return (
                             <div className="flex items-center gap-2">
+                              {isCurrentWeek && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/game/${game.id}`);
+                                  }}
+                                  className="px-2 py-1 text-[10px] font-bold bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                >
+                                  Watch Live
+                                </button>
+                              )}
                               <span className={`text-xs font-mono font-medium ${
                                 favored === 'user' ? 'text-green-600' :
                                 favored === 'opp' ? 'text-red-600' :

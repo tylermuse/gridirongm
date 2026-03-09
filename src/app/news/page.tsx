@@ -15,6 +15,8 @@ const TYPE_ICONS: Record<NewsItem['type'], string> = {
   performance: '⭐',
   milestone: '🏆',
   system: 'ℹ️',
+  quote: '🎤',
+  rumor: '👀',
 };
 
 const TYPE_LABELS: Record<NewsItem['type'], string> = {
@@ -25,6 +27,8 @@ const TYPE_LABELS: Record<NewsItem['type'], string> = {
   performance: 'Performance',
   milestone: 'Milestone',
   system: 'System',
+  quote: 'Coach Quote',
+  rumor: 'Trade Rumor',
 };
 
 type FilterTab = 'all' | 'myteam' | 'transactions' | 'injuries';

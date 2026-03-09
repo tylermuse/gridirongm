@@ -7,7 +7,7 @@ import { useGameStore } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
 import { TradeProposalPopup } from './TradeProposalPopup';
 
-export function TopBar() {
+export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const router = useRouter();
   const {
     phase,
@@ -32,30 +32,44 @@ export function TopBar() {
     advanceToResigning,
     advanceToDraft,
     advanceToFreeAgency,
+    simDraftPick,
+    simToUserDraftPick,
     simToEndDraft,
     startNewSeason,
   } = useGameStore();
 
   const [newProposalIds, setNewProposalIds] = useState<string[]>([]);
-  const prevPhaseRef = useRef(phase);
-
+  const stablePhaseRef = useRef<string | null>(null);
   const superBowlDone = !!playoffBracket?.find(m => m.id === 'championship')?.winnerId;
-  const prevSuperBowlDoneRef = useRef(superBowlDone);
+  const stableSBRef = useRef<boolean | null>(null);
 
-  // Auto-redirect to playoffs when phase transitions
+  // Wait for store hydration to stabilize before tracking phase transitions.
+  // After 500ms, record the "stable" phase. Only redirect on changes AFTER that.
   useEffect(() => {
-    if (prevPhaseRef.current !== 'playoffs' && phase === 'playoffs') {
+    const t = setTimeout(() => {
+      stablePhaseRef.current = phase;
+      stableSBRef.current = superBowlDone;
+    }, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-redirect to playoffs when phase transitions (post-hydration only)
+  useEffect(() => {
+    if (stablePhaseRef.current === null) return; // still hydrating
+    if (stablePhaseRef.current !== 'playoffs' && phase === 'playoffs') {
       router.push('/playoffs');
     }
-    prevPhaseRef.current = phase;
+    stablePhaseRef.current = phase;
   }, [phase, router]);
 
-  // Auto-redirect to playoffs page when Championship completes (to show awards)
+  // Auto-redirect to playoffs page when Championship completes
   useEffect(() => {
-    if (!prevSuperBowlDoneRef.current && superBowlDone) {
+    if (stableSBRef.current === null) return; // still hydrating
+    if (!stableSBRef.current && superBowlDone) {
       router.push('/playoffs');
     }
-    prevSuperBowlDoneRef.current = superBowlDone;
+    stableSBRef.current = superBowlDone;
   }, [superBowlDone, router]);
   const nextPlayoffGame = playoffBracket
     ?.filter(m => !m.winnerId && m.homeTeamId && m.awayTeamId)
@@ -149,25 +163,42 @@ export function TopBar() {
   return (
     <>
       <header className="border-b border-[var(--border)] bg-[var(--surface)] sticky top-0 z-10">
-        <div className="h-14 flex items-center justify-between px-6">
-          <div className="text-sm text-[var(--text-sec)]">
-            {phase === 'regular' && `Week ${week} · Regular Season`}
-            {phase === 'playoffs' && 'Playoffs'}
-            {phase === 'resigning' && 'Re-signing Window'}
-            {phase === 'draft' && `Draft · Season ${season}`}
-            {phase === 'freeAgency' && 'Free Agency'}
-            {phase === 'offseason' && 'Offseason'}
+        <div className="h-14 flex items-center justify-between px-3 md:px-6">
+          <div className="flex items-center gap-2 text-sm text-[var(--text-sec)]">
+            {onMenuToggle && (
+              <button
+                onClick={onMenuToggle}
+                className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[var(--surface-2)] transition-colors"
+                aria-label="Toggle menu"
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="3" y1="5" x2="17" y2="5" />
+                  <line x1="3" y1="10" x2="17" y2="10" />
+                  <line x1="3" y1="15" x2="17" y2="15" />
+                </svg>
+              </button>
+            )}
+            <span className="hidden sm:inline">
+              {phase === 'regular' && `Week ${week} · Regular Season`}
+              {phase === 'playoffs' && 'Playoffs'}
+              {phase === 'resigning' && 'Re-signing Window'}
+              {phase === 'draft' && `Draft · Season ${season}`}
+              {phase === 'freeAgency' && 'Free Agency'}
+              {phase === 'offseason' && 'Offseason'}
+            </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 md:gap-2 flex-wrap justify-end">
             {phase === 'regular' && (
               <>
                 {pendingTradeCount > 0 && (
-                  <Link href="/trades">
-                    <Button size="sm" variant="secondary">
-                      Trades ({pendingTradeCount})
-                    </Button>
-                  </Link>
+                  <span className="hidden sm:inline">
+                    <Link href="/trades">
+                      <Button size="sm" variant="secondary">
+                        Trades ({pendingTradeCount})
+                      </Button>
+                    </Link>
+                  </span>
                 )}
                 <Button onClick={handleSimWeek} size="sm">
                   Sim Week {week}
@@ -264,24 +295,31 @@ export function TopBar() {
             )}
             {phase === 'draft' && (
               <>
-                <Link href="/draft">
-                  <Button size="sm">
-                    Go to Draft
-                  </Button>
-                </Link>
-                <Button
-                  onClick={() => {
-                    const remaining = draftOrder.length;
-                    if (confirm(`Skip the rest of the draft? ${remaining} pick${remaining !== 1 ? 's' : ''} remaining — AI will auto-draft for your team.`)) {
-                      useGameStore.getState().simToEndDraft();
-                      router.push('/free-agency');
-                    }
-                  }}
-                  variant="secondary"
-                  size="sm"
-                >
-                  Skip to Free Agency
-                </Button>
+                {draftOrder.length > 0 ? (
+                  <>
+                    <Button onClick={simDraftPick} size="sm" variant="secondary">
+                      Sim Pick
+                    </Button>
+                    <Button onClick={simToUserDraftPick} size="sm" variant="secondary">
+                      To My Pick
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        simToEndDraft({ skipAdvance: true });
+                        router.push('/draft-recap');
+                      }}
+                      size="sm"
+                    >
+                      Sim All
+                    </Button>
+                  </>
+                ) : (
+                  <Link href="/draft-recap">
+                    <Button size="sm">
+                      Draft Recap
+                    </Button>
+                  </Link>
+                )}
               </>
             )}
             {phase === 'freeAgency' && (
@@ -320,7 +358,7 @@ export function TopBar() {
 
         {/* Phase context banner */}
         {bannerText && (
-          <div className="px-6 py-1.5 bg-[var(--surface-2)] border-t border-[var(--border)] text-xs text-[var(--text-sec)]">
+          <div className="px-3 md:px-6 py-1.5 bg-[var(--surface-2)] border-t border-[var(--border)] text-xs text-[var(--text-sec)] truncate">
             {bannerText}
           </div>
         )}

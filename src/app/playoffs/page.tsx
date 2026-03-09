@@ -65,7 +65,7 @@ function TeamRow({
             {team ? `${team.city}` : 'Unknown'}
           </button>
           {team && (
-            <span className="text-[9px] text-[var(--text-sec)] shrink-0 font-mono">
+            <span className="text-[9px] text-[var(--text-sec)] shrink-0 font-mono hidden sm:inline">
               ({team.record.wins}-{team.record.losses})
             </span>
           )}
@@ -180,7 +180,7 @@ function ConferenceBracket({
           <button onClick={() => onTeamClick?.(byeTeamObj.id)} className="hover:text-blue-600 transition-colors">
             {byeTeamObj.city} {byeTeamObj.name}
           </button>
-          <span className="font-mono text-[10px]">({byeTeamObj.record.wins}-{byeTeamObj.record.losses})</span>
+          <span className="font-mono text-[10px] hidden sm:inline">({byeTeamObj.record.wins}-{byeTeamObj.record.losses})</span>
           <Badge size="sm" variant="default">#1 Seed — Bye</Badge>
         </div>
       )}
@@ -248,9 +248,9 @@ function ConferenceBracket({
 // Stat line helper
 // ---------------------------------------------------------------------------
 
-type StatShape = { gamesPlayed: number; passYards: number; passTDs: number; interceptions: number; rushYards: number; rushTDs: number; receptions: number; receivingYards: number; receivingTDs: number; tackles: number; sacks: number; defensiveINTs: number; fieldGoalsMade: number; fieldGoalAttempts: number };
+type StatShape = { gamesPlayed: number; passYards: number; passTDs: number; interceptions: number; rushYards: number; rushTDs: number; receptions: number; receivingYards: number; receivingTDs: number; tackles: number; sacks: number; defensiveINTs: number; fieldGoalsMade: number; fieldGoalAttempts: number; sacksAllowed: number; passBlocks: number };
 
-const ZERO_STATS: StatShape = { gamesPlayed: 0, passYards: 0, passTDs: 0, interceptions: 0, rushYards: 0, rushTDs: 0, receptions: 0, receivingYards: 0, receivingTDs: 0, tackles: 0, sacks: 0, defensiveINTs: 0, fieldGoalsMade: 0, fieldGoalAttempts: 0 };
+const ZERO_STATS: StatShape = { gamesPlayed: 0, passYards: 0, passTDs: 0, interceptions: 0, rushYards: 0, rushTDs: 0, receptions: 0, receivingYards: 0, receivingTDs: 0, tackles: 0, sacks: 0, defensiveINTs: 0, fieldGoalsMade: 0, fieldGoalAttempts: 0, sacksAllowed: 0, passBlocks: 0 };
 
 function posStatLine(p: { position: string; stats: StatShape }, overrideStats?: Partial<StatShape>): string {
   const s = overrideStats ? { ...ZERO_STATS, ...overrideStats } as StatShape : p.stats;
@@ -259,7 +259,7 @@ function posStatLine(p: { position: string; stats: StatShape }, overrideStats?: 
     case 'QB': return `${s.passYards} YDS · ${s.passTDs} TD · ${s.interceptions} INT`;
     case 'RB': return `${s.rushYards} YDS · ${s.rushTDs} TD · ${s.receptions} REC`;
     case 'WR': case 'TE': return `${s.receptions} REC · ${s.receivingYards} YDS · ${s.receivingTDs} TD`;
-    case 'OL': return `${s.gamesPlayed} GP`;
+    case 'OL': return `${s.gamesPlayed} GP · ${s.sacksAllowed ?? 0} SA · ${(s.passBlocks ?? 0) > 0 ? ((s.sacksAllowed ?? 0) / s.passBlocks * 100).toFixed(1) : '0.0'}%`;
     case 'DL': case 'LB': return `${s.tackles} TKL · ${s.sacks.toFixed(1)} SCK · ${s.defensiveINTs} INT`;
     case 'CB': case 'S': return `${s.tackles} TKL · ${s.defensiveINTs} INT`;
     case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG${s.fieldGoalAttempts > 0 ? ` (${Math.round(s.fieldGoalsMade / s.fieldGoalAttempts * 100)}%)` : ''}`;
@@ -517,31 +517,31 @@ export default function PlayoffsPage() {
             <>
             <Card>
               <CardHeader><CardTitle>Season {season} Awards</CardTitle></CardHeader>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                 {awards.map(a => {
                   if (!a.player) return null;
                   const t = teams.find(t => t.id === a.player!.teamId);
                   const isUserPlayer = a.player.teamId === userTeamId;
                   return (
                     <div key={a.award} className={`flex items-center gap-3 rounded-lg px-2 py-1.5 ${isUserPlayer ? 'bg-blue-500/10 ring-1 ring-blue-500/30' : ''}`}>
-                      <span className="text-xl">{a.icon}</span>
+                      <span className="text-xl shrink-0">{a.icon}</span>
                       <div className="flex-1 min-w-0">
                         <div className="text-xs text-[var(--text-sec)]">{a.award}</div>
-                        <button
-                          onClick={() => setSelectedPlayerId(a.player!.id)}
-                          className={`font-semibold text-sm hover:text-blue-600 transition-colors truncate block ${isUserPlayer ? 'text-blue-600' : ''}`}
-                        >
-                          {a.player.firstName} {a.player.lastName}
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => setSelectedPlayerId(a.player!.id)}
+                            className={`font-semibold text-sm hover:text-blue-600 transition-colors truncate ${isUserPlayer ? 'text-blue-600' : ''}`}
+                          >
+                            {a.player.firstName} {a.player.lastName}
+                          </button>
+                          {t && (
+                            <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="xs" />
+                          )}
+                          <span className="text-xs text-[var(--text-sec)] shrink-0">{a.player.position}</span>
+                        </div>
                         <div className="text-[10px] text-[var(--text-sec)] mt-0.5">
                           {a.gameStats ? `SB: ${posStatLine(a.player, a.gameStats)}` : posStatLine(a.player)}
                         </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {t && (
-                          <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="xs" />
-                        )}
-                        <span className="text-xs text-[var(--text-sec)]">{a.player.position}</span>
                       </div>
                     </div>
                   );
@@ -551,7 +551,7 @@ export default function PlayoffsPage() {
               {/* All-Pro selections */}
               <div className="mt-4 pt-3 border-t border-[var(--border)]">
                 <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">All-Pro Selections</div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {(['AC', 'NC'] as const).map(conf => (
                     <div key={conf}>
                       <div className={`text-xs font-bold mb-1.5 ${conf === 'AC' ? 'text-red-600' : 'text-blue-600'}`}>

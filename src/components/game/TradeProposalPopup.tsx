@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
@@ -34,6 +35,7 @@ interface TradeProposalPopupProps {
 }
 
 export function TradeProposalPopup({ proposalIds, onClose }: TradeProposalPopupProps) {
+  const router = useRouter();
   const {
     tradeProposals, players, teams, userTeamId,
     respondToTradeProposal, suppressTradePopups, setSuppressTradePopups,
@@ -62,10 +64,25 @@ export function TradeProposalPopup({ proposalIds, onClose }: TradeProposalPopupP
     if (!success) {
       alert('Trade failed — you may be over the salary cap or the players are no longer available.');
     }
+    // Auto-close if this was the last pending proposal
+    const remaining = proposalIds
+      .map(id => tradeProposals.find(p => p.id === id))
+      .filter(p => p && p.status === 'pending' && p.id !== proposalId);
+    if (remaining.length === 0) onClose();
   }
 
   function handleReject(proposalId: string) {
     respondToTradeProposal(proposalId, false);
+    // Auto-close if this was the last pending proposal
+    const remaining = proposalIds
+      .map(id => tradeProposals.find(p => p.id === id))
+      .filter(p => p && p.status === 'pending' && p.id !== proposalId);
+    if (remaining.length === 0) onClose();
+  }
+
+  function handleRejectAll() {
+    proposals.forEach(p => respondToTradeProposal(p.id, false));
+    onClose();
   }
 
   const assessmentBadge = (assessment: string) => {
@@ -164,6 +181,12 @@ export function TradeProposalPopup({ proposalIds, onClose }: TradeProposalPopupP
                 <Button size="sm" onClick={() => handleAccept(proposal.id)}>
                   Accept
                 </Button>
+                <Button size="sm" variant="secondary" onClick={() => {
+                  onClose();
+                  router.push(`/trades?counter=${proposal.id}`);
+                }}>
+                  Counter
+                </Button>
                 <Button size="sm" variant="danger" onClick={() => handleReject(proposal.id)}>
                   Reject
                 </Button>
@@ -183,9 +206,16 @@ export function TradeProposalPopup({ proposalIds, onClose }: TradeProposalPopupP
             />
             Don&apos;t show trade popups
           </label>
-          <Button size="sm" variant="ghost" onClick={onClose}>
-            Dismiss
-          </Button>
+          <div className="flex gap-2">
+            {proposals.length > 1 && (
+              <Button size="sm" variant="danger" onClick={handleRejectAll}>
+                Reject All
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={onClose}>
+              Dismiss
+            </Button>
+          </div>
         </div>
       </div>
     </Modal>

@@ -145,7 +145,7 @@ export default function StatsPage() {
                 </select>
               </div>
             </CardHeader>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                   <th className="text-center pb-3 w-8">#</th>
@@ -192,7 +192,7 @@ export default function StatsPage() {
                   );
                 })}
               </tbody>
-            </table>
+            </table></div>
           </Card>
         )}
 
@@ -200,7 +200,7 @@ export default function StatsPage() {
         {tab === 'teams' && (
           <Card>
             <CardHeader><CardTitle>Team Statistics</CardTitle></CardHeader>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                   <th className="text-center pb-3 w-8">#</th>
@@ -242,7 +242,7 @@ export default function StatsPage() {
                   );
                 })}
               </tbody>
-            </table>
+            </table></div>
           </Card>
         )}
 
@@ -255,7 +255,7 @@ export default function StatsPage() {
                 <span className="text-xs text-[var(--text-sec)]">Week {week} · Record 60% + Diff 25% + Form 15%</span>
               </div>
             </CardHeader>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                   <th className="text-center pb-3 w-8">#</th>
@@ -295,7 +295,7 @@ export default function StatsPage() {
                   );
                 })}
               </tbody>
-            </table>
+            </table></div>
           </Card>
         )}
       </div>

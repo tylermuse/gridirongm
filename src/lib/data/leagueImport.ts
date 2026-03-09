@@ -307,6 +307,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       depthChart,
       deadCap: [],
       franchiseTagUsed: false,
+      revenue: { tickets: 0, merchandise: 0, tvDeal: 0, total: 0 },
     };
   });
 

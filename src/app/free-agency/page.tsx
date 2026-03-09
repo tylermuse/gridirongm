@@ -20,14 +20,14 @@ function ratingColor(val: number): string {
   return 'text-red-600';
 }
 
-function positionStats(p: { position: string; stats: { gamesPlayed: number; passYards: number; passTDs: number; interceptions: number; rushYards: number; rushTDs: number; receptions: number; receivingYards: number; receivingTDs: number; tackles: number; sacks: number; defensiveINTs: number; fieldGoalsMade: number; fieldGoalAttempts: number } }): string {
+function positionStats(p: { position: string; stats: { gamesPlayed: number; passYards: number; passTDs: number; interceptions: number; rushYards: number; rushTDs: number; receptions: number; receivingYards: number; receivingTDs: number; tackles: number; sacks: number; defensiveINTs: number; fieldGoalsMade: number; fieldGoalAttempts: number; sacksAllowed: number; passBlocks: number } }): string {
   const s = p.stats;
   if (s.gamesPlayed === 0) return '—';
   switch (p.position) {
     case 'QB': return `${s.passYards} YDS / ${s.passTDs} TD / ${s.interceptions} INT`;
     case 'RB': return `${s.rushYards} YDS / ${s.rushTDs} TD`;
     case 'WR': case 'TE': return `${s.receptions} REC / ${s.receivingYards} YDS / ${s.receivingTDs} TD`;
-    case 'OL': return `${s.gamesPlayed} GP`;
+    case 'OL': return `${s.gamesPlayed} GP / ${s.sacksAllowed ?? 0} SA / ${(s.passBlocks ?? 0) > 0 ? ((s.sacksAllowed ?? 0) / s.passBlocks * 100).toFixed(1) : '0.0'}%`;
     case 'DL': case 'LB': return `${s.tackles} TKL / ${s.sacks} SCK`;
     case 'CB': case 'S': return `${s.tackles} TKL / ${s.defensiveINTs} INT`;
     case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG${s.fieldGoalAttempts > 0 ? ` (${Math.round(s.fieldGoalsMade / s.fieldGoalAttempts * 100)}%)` : ''}`;
@@ -315,7 +315,7 @@ export default function FreeAgencyPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-[240px_1fr] gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6">
           {/* ── Left sidebar: Roster Composition ─────── */}
           <div className="space-y-4">
             <Card>
@@ -579,7 +579,8 @@ export default function FreeAgencyPage() {
 
             {/* Free agent table */}
             <Card>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[700px]">
                 <thead>
                   <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                     <th className="text-left pb-3 pl-2">Player</th>
@@ -668,6 +669,7 @@ export default function FreeAgencyPage() {
                   )}
                 </tbody>
               </table>
+              </div>
             </Card>
           </div>
         </div>
