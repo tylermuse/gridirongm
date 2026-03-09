@@ -195,7 +195,7 @@ function TeamPicker() {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-w-4xl">
-          {displayTeams.map(team => (
+          {[...displayTeams].sort((a, b) => a.city.localeCompare(b.city)).map(team => (
             <button
               key={team.abbreviation}
               onClick={() => handlePick(team.abbreviation)}

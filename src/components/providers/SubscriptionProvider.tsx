@@ -3,11 +3,13 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { type Tier, type Feature, hasFeature as checkFeature, maxScoutingLevel } from '@/lib/subscription';
+import { trackEvent } from '@/lib/analytics';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 interface SubscriptionContextValue {
   user: User | null;
   tier: Tier;
+  isAdmin: boolean;
   loading: boolean;
   hasFeature: (feature: Feature) => boolean;
   maxScoutingLevel: number;
@@ -17,6 +19,7 @@ interface SubscriptionContextValue {
 const SubscriptionContext = createContext<SubscriptionContextValue>({
   user: null,
   tier: 'free',
+  isAdmin: false,
   loading: true,
   hasFeature: () => false,
   maxScoutingLevel: 0,
@@ -27,6 +30,7 @@ export const useSubscription = () => useContext(SubscriptionContext);
 
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   // DEV OVERRIDE: default to 'elite' in development for admin testing
   const devTier = process.env.NODE_ENV === 'development' ? 'elite' : 'free';
   const [tier, setTier] = useState<Tier>(devTier as Tier);
@@ -36,6 +40,23 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   const fetchSubscription = useCallback(async (userId: string) => {
     if (!supabase) return;
+
+    // Check admin status from profiles
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', userId)
+      .single();
+
+    const admin = profile?.is_admin === true;
+    setIsAdmin(admin);
+
+    // Admins get elite tier regardless of subscription
+    if (admin) {
+      setTier('elite');
+      return;
+    }
+
     const { data } = await supabase
       .from('subscriptions')
       .select('tier, status')
@@ -73,13 +94,20 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
     // Listen for auth changes
     const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
-      async (_event: AuthChangeEvent, session: Session | null) => {
+      async (authEvent: AuthChangeEvent, session: Session | null) => {
         const newUser = session?.user ?? null;
         setUser(newUser);
         if (newUser) {
+          // Track login/signup
+          if (authEvent === 'SIGNED_IN') {
+            const createdAt = new Date(newUser.created_at).getTime();
+            const isNewUser = Date.now() - createdAt < 60_000; // created < 1 min ago
+            trackEvent(isNewUser ? 'signup' : 'login');
+          }
           await fetchSubscription(newUser.id);
         } else {
           setTier('free');
+          setIsAdmin(false);
         }
       },
     );
@@ -93,14 +121,16 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (supabase) await supabase.auth.signOut();
     setUser(null);
     setTier('free');
+    setIsAdmin(false);
   }, [supabase]);
 
   const value: SubscriptionContextValue = {
     user,
     tier,
+    isAdmin,
     loading,
-    hasFeature: (feature: Feature) => checkFeature(tier, feature),
-    maxScoutingLevel: maxScoutingLevel(tier),
+    hasFeature: (feature: Feature) => isAdmin || checkFeature(tier, feature),
+    maxScoutingLevel: isAdmin ? 2 : maxScoutingLevel(tier),
     signOut,
   };
 

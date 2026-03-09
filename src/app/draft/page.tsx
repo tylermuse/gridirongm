@@ -15,7 +15,7 @@ import { POSITIONS, ROSTER_LIMITS } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { Player, Position, Team } from '@/types';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import { SCOUTING_LEVELS, maxDeepScouts } from '@/lib/subscription';
+import { SCOUTING_LEVELS } from '@/lib/subscription';
 import { expectedOvrForPick, pickGrade, gradeValue, gradeColor, teamDraftGrade } from '@/lib/engine/draftGrades';
 
 function ratingColor(val: number): string {
@@ -376,12 +376,9 @@ export default function DraftPage() {
     simToUserDraftPick,
     simToEndDraft,
     setScoutingLevel,
-    deepScoutPlayer,
   } = useGameStore();
 
-  const { maxScoutingLevel: maxLevel, tier } = useSubscription();
-  const deepScoutedCount = Object.values(draftScoutingData).filter(d => d.deepScouted).length;
-  const deepScoutLimit = maxDeepScouts(tier);
+  const { maxScoutingLevel: maxLevel } = useSubscription();
 
   // Auto-redirect to free agency when draft completes and phase advances
   useEffect(() => {
@@ -627,10 +624,7 @@ export default function DraftPage() {
                   );
                 })}
               </select>
-              <span className="text-xs text-[var(--text-sec)]">
-                Deep scouts: {deepScoutedCount}/{deepScoutLimit === 999 ? '∞' : deepScoutLimit}
-              </span>
-              {maxLevel < 4 && (
+              {maxLevel < 2 && (
                 <a href="/pricing" className="text-[10px] text-blue-600 hover:underline ml-1">
                   Upgrade →
                 </a>
@@ -656,7 +650,7 @@ export default function DraftPage() {
                     : String(player.ratings.overall);
                   const ovrForColor = scout ? scout.scoutedOvr : player.ratings.overall;
                   return (
-                    <tr key={player.id} className={`border-t border-[var(--border)] hover:bg-[var(--surface-2)] cursor-pointer ${scout?.deepScouted ? 'bg-blue-500/5' : ''}`} onClick={() => setSelectedProspectId(player.id)}>
+                    <tr key={player.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)] cursor-pointer" onClick={() => setSelectedProspectId(player.id)}>
                       <td className="py-2 pl-2 text-[var(--text-sec)]">{index + 1}</td>
                       <td className="py-2">
                         <div className="font-semibold">{player.firstName} {player.lastName}</div>
@@ -667,25 +661,10 @@ export default function DraftPage() {
                       <td className="py-2 text-center"><Badge>{player.position}</Badge></td>
                       <td className={`py-2 text-center font-bold ${ratingColor(ovrForColor)}`}>
                         {displayOvr}
-                        {scout?.deepScouted && <span className="ml-1 text-[10px] text-blue-600">🔍</span>}
                       </td>
                       <td className={`py-2 text-center text-xs ${potentialColor(player.potential, player.experience)}`}>{potentialLabel(player.potential, player.experience)}</td>
                       <td className="py-2 pr-2 text-right">
                         <div className="flex gap-1 justify-end">
-                          {isUserPick && scout && !scout.deepScouted && deepScoutedCount < deepScoutLimit && (
-                            <span onClick={(e) => e.stopPropagation()}>
-                              <Button size="sm" variant="ghost" onClick={() => { deepScoutPlayer(player.id); setSelectedProspectId(player.id); }}>
-                                Scout
-                              </Button>
-                            </span>
-                          )}
-                          {scout?.deepScouted && (
-                            <span onClick={(e) => e.stopPropagation()}>
-                              <Button size="sm" variant="ghost" onClick={() => setSelectedProspectId(player.id)}>
-                                🔍
-                              </Button>
-                            </span>
-                          )}
                           {isUserPick ? (
                             <span onClick={(e) => e.stopPropagation()}>
                               <Button size="sm" onClick={() => draftPlayer(player.id)}>
@@ -920,20 +899,15 @@ export default function DraftPage() {
         const prospect = players.find(p => p.id === selectedProspectId);
         const scout = draftScoutingData[selectedProspectId];
         if (!prospect || !scout) return null;
-        const canDeepScout = isUserPick && !scout.deepScouted && deepScoutedCount < deepScoutLimit;
         return (
           <ScoutingReportModal
             player={prospect}
             scoutingLevel={scoutingLevel}
-            deepScouted={scout.deepScouted}
             scoutedOvr={scout.scoutedOvr}
             error={scout.error}
             onClose={() => setSelectedProspectId(null)}
-            onDeepScout={canDeepScout ? () => deepScoutPlayer(selectedProspectId) : undefined}
             onDraft={isUserPick ? () => { draftPlayer(selectedProspectId); setSelectedProspectId(null); } : undefined}
             onScoutingLevelChange={setScoutingLevel}
-            deepScoutCount={deepScoutedCount}
-            deepScoutLimit={deepScoutLimit}
             isUserPick={isUserPick}
             teamNeeds={getTeamNeeds(userTeamId)}
             userTeamAbbr={teams.find(t => t.id === userTeamId)?.abbreviation}

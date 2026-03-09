@@ -1569,7 +1569,16 @@ export const useGameStore = create<GameStore>()(
         };
         const updatedSchedule = [...state.schedule.filter(g => g.id !== matchupId), playoffGameResult];
 
-        set({ playoffBracket: updatedBracket, champions: newChampions, newsItems: newNewsItems, finalsMvpPlayerId, schedule: updatedSchedule });
+        // Generate playoff recap for this game's round
+        const playoffWeek = 100 + matchup.round;
+        const singleGameRecap = generateWeeklyRecap([playoffGameResult], state.teams, state.players, state.season, playoffWeek);
+        const existingRecap = (state.weeklyRecaps ?? []).find(r => r.season === state.season && r.week === playoffWeek);
+        const mergedRecap = existingRecap
+          ? { ...existingRecap, segments: [...existingRecap.segments, ...singleGameRecap.segments].sort((a, b) => b.priority - a.priority).slice(0, 10) }
+          : singleGameRecap;
+        const updatedRecaps = [...(state.weeklyRecaps ?? []).filter(r => !(r.season === state.season && r.week === playoffWeek)), mergedRecap];
+
+        set({ playoffBracket: updatedBracket, champions: newChampions, newsItems: newNewsItems, finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps });
       },
 
       simNextPlayoffGame: () => {
@@ -1655,7 +1664,22 @@ export const useGameStore = create<GameStore>()(
         const existingIds = new Set(playoffResults.map(r => r.id));
         const updatedSchedule = [...state.schedule.filter(g => !existingIds.has(g.id)), ...playoffResults];
 
-        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId, schedule: updatedSchedule });
+        // Generate playoff recaps grouped by round
+        const resultsByRound = new Map<number, GameResult[]>();
+        for (const r of playoffResults) {
+          const m = bracket.find(b => b.id === r.id);
+          const round = m?.round ?? 1;
+          if (!resultsByRound.has(round)) resultsByRound.set(round, []);
+          resultsByRound.get(round)!.push(r);
+        }
+        let updatedRecaps = [...(state.weeklyRecaps ?? [])];
+        for (const [round, results] of resultsByRound) {
+          const playoffWeek = 100 + round;
+          const recap = generateWeeklyRecap(results, state.teams, state.players, state.season, playoffWeek);
+          updatedRecaps = [...updatedRecaps.filter(r => !(r.season === state.season && r.week === playoffWeek)), recap];
+        }
+
+        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps });
         // Check achievements after playoffs
         const newAchievementsP = checkAchievements(get());
         if (newAchievementsP.length > 0) {
@@ -1741,7 +1765,12 @@ export const useGameStore = create<GameStore>()(
         const existingIds = new Set(playoffResults.map(r => r.id));
         const updatedSchedule = [...state.schedule.filter(g => !existingIds.has(g.id)), ...playoffResults];
 
-        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId, schedule: updatedSchedule });
+        // Generate playoff recap for the round (week = 100 + round to distinguish from regular season)
+        const playoffWeek = 100 + currentRound;
+        const playoffRecap = generateWeeklyRecap(playoffResults, state.teams, state.players, state.season, playoffWeek);
+        const updatedRecaps = [...(state.weeklyRecaps ?? []).filter(r => !(r.season === state.season && r.week === playoffWeek)), playoffRecap];
+
+        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps });
       },
 
       // PRD-03: Advance from playoffs to re-signing phase

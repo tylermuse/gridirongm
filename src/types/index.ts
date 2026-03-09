@@ -68,6 +68,9 @@ export interface PlayerStats {
   defensiveINTs: number;
   passDeflections: number;
   forcedFumbles: number;
+  // Offensive line
+  sacksAllowed: number;
+  passBlocks: number;
   // Kicking
   fieldGoalAttempts: number;
   fieldGoalsMade: number;
@@ -472,6 +475,7 @@ export function emptyStats(): PlayerStats {
     rushAttempts: 0, rushYards: 0, rushTDs: 0, fumbles: 0,
     targets: 0, receptions: 0, receivingYards: 0, receivingTDs: 0,
     tackles: 0, tacklesForLoss: 0, sacks: 0, defensiveINTs: 0, passDeflections: 0, forcedFumbles: 0,
+    sacksAllowed: 0, passBlocks: 0,
     fieldGoalAttempts: 0, fieldGoalsMade: 0, extraPointAttempts: 0, extraPointsMade: 0,
   };
 }

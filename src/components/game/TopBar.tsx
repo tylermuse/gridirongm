@@ -39,25 +39,37 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   } = useGameStore();
 
   const [newProposalIds, setNewProposalIds] = useState<string[]>([]);
-  const prevPhaseRef = useRef(phase);
-
+  const stablePhaseRef = useRef<string | null>(null);
   const superBowlDone = !!playoffBracket?.find(m => m.id === 'championship')?.winnerId;
-  const prevSuperBowlDoneRef = useRef(superBowlDone);
+  const stableSBRef = useRef<boolean | null>(null);
 
-  // Auto-redirect to playoffs when phase transitions
+  // Wait for store hydration to stabilize before tracking phase transitions.
+  // After 500ms, record the "stable" phase. Only redirect on changes AFTER that.
   useEffect(() => {
-    if (prevPhaseRef.current !== 'playoffs' && phase === 'playoffs') {
+    const t = setTimeout(() => {
+      stablePhaseRef.current = phase;
+      stableSBRef.current = superBowlDone;
+    }, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-redirect to playoffs when phase transitions (post-hydration only)
+  useEffect(() => {
+    if (stablePhaseRef.current === null) return; // still hydrating
+    if (stablePhaseRef.current !== 'playoffs' && phase === 'playoffs') {
       router.push('/playoffs');
     }
-    prevPhaseRef.current = phase;
+    stablePhaseRef.current = phase;
   }, [phase, router]);
 
-  // Auto-redirect to playoffs page when Championship completes (to show awards)
+  // Auto-redirect to playoffs page when Championship completes
   useEffect(() => {
-    if (!prevSuperBowlDoneRef.current && superBowlDone) {
+    if (stableSBRef.current === null) return; // still hydrating
+    if (!stableSBRef.current && superBowlDone) {
       router.push('/playoffs');
     }
-    prevSuperBowlDoneRef.current = superBowlDone;
+    stableSBRef.current = superBowlDone;
   }, [superBowlDone, router]);
   const nextPlayoffGame = playoffBracket
     ?.filter(m => !m.winnerId && m.homeTeamId && m.awayTeamId)

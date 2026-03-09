@@ -198,7 +198,7 @@ export default function DraftRecapPage() {
 
         {/* ─── 3. Post-Draft Pressers ─── */}
         {pressQuotes.length > 0 && (
-          <Section title="Post-Draft Pressers" icon="🎤" badge={`${pressQuotes.length} quotes`}>
+          <Section title="Post-Draft Pressers" icon="🎤" defaultOpen badge={`${pressQuotes.length} quotes`}>
             <div className="space-y-3">
               {pressQuotes.map((q, i) => {
                 const player = playerMap.get(q.playerId);
@@ -231,7 +231,7 @@ export default function DraftRecapPage() {
 
         {/* ─── 4. Post-Draft Highlights ─── */}
         {(highlights.biggestSteal || highlights.biggestReach) && (
-          <Section title="Post-Draft Highlights" icon="⭐">
+          <Section title="Post-Draft Highlights" icon="⭐" defaultOpen>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {highlights.biggestSteal && (() => {
                 const p = playerMap.get(highlights.biggestSteal!.playerId);
@@ -284,7 +284,7 @@ export default function DraftRecapPage() {
         )}
 
         {/* ─── 5. All Team Rankings ─── */}
-        <Section title="All Team Rankings" icon="🏅" badge={`${teams.length} teams`}>
+        <Section title="All Team Rankings" icon="🏅" defaultOpen badge={`${teams.length} teams`}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
