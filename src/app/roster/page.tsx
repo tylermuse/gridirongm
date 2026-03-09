@@ -354,7 +354,7 @@ export default function RosterPage() {
                     <SortHeader k="pos" className="text-center w-12">Pos</SortHeader>
                     <SortHeader k="age" className="text-center w-10">Age</SortHeader>
                     <SortHeader k="ovr" className="text-center w-12">Ovr</SortHeader>
-                    <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-center w-14">Pot</th>
+                    <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-center w-14 cursor-help" title="Potential — a player's ceiling. Young players show as Elite/High/Average/Low until 3+ seasons played. A declining player's POT may be lower than their OVR.">Pot <span className="inline-block w-3 h-3 text-[10px] rounded-full bg-[var(--surface-2)]">?</span></th>
                     <SortHeader k="contract" className="text-right w-32">Contract</SortHeader>
                     <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-center w-16">Role</th>
                     <SortHeader k="gp" className="text-center w-10">GP</SortHeader>

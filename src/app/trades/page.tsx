@@ -34,12 +34,23 @@ function statLine(p: Player): string {
   }
 }
 
+const POSITION_VALUE_MULT: Record<string, number> = {
+  QB: 1.5, RB: 0.9, WR: 1.1, TE: 0.85, OL: 0.95,
+  DL: 1.05, LB: 1.0, CB: 1.1, S: 0.95, K: 0.4, P: 0.35,
+};
+
 function playerTradeValue(player: Player): number {
   const ageMultiplier =
-    player.age <= 25 ? 1.2 :
+    player.age <= 25 ? 1.3 :
+    player.age <= 27 ? 1.1 :
     player.age <= 29 ? 1.0 :
-    player.age <= 33 ? 0.7 : 0.3;
-  return Math.round((player.ratings.overall * 2 + player.potential * 0.5) * ageMultiplier);
+    player.age <= 31 ? 0.7 :
+    player.age <= 33 ? 0.45 : 0.2;
+  const posMultiplier = POSITION_VALUE_MULT[player.position] ?? 1.0;
+  const normalized = Math.max(0, (player.ratings.overall - 40) / 55);
+  const base = Math.pow(normalized, 2.5) * 1200;
+  const potBonus = Math.max(0, player.potential - player.ratings.overall) * 3;
+  return (base + potBonus) * ageMultiplier * posMultiplier;
 }
 
 const PICK_VALUES = [150, 90, 55, 35, 20, 10, 5];

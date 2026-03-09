@@ -638,7 +638,7 @@ export default function DraftPage() {
                   <th className="text-left pb-2">Player</th>
                   <th className="text-center pb-2">Pos</th>
                   <th className="text-center pb-2">OVR Range</th>
-                  <th className="text-center pb-2">Pot</th>
+                  <th className="text-center pb-2 group relative cursor-help" title="Potential — a player's ceiling. Draft prospects show as Elite/High/Average/Low until scouted over 3+ seasons.">Pot <span className="inline-block w-3 h-3 text-[10px] rounded-full bg-[var(--surface-2)] text-[var(--text-sec)]">?</span></th>
                   <th className="text-right pb-2 pr-2">Draft</th>
                 </tr>
               </thead>

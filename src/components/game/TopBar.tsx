@@ -314,11 +314,16 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     </Button>
                   </>
                 ) : (
-                  <Link href="/draft-recap">
-                    <Button size="sm">
-                      Draft Recap
+                  <>
+                    <Link href="/draft-recap">
+                      <Button size="sm" variant="secondary">
+                        Draft Recap
+                      </Button>
+                    </Link>
+                    <Button size="sm" onClick={() => { advanceToFreeAgency(); router.push('/free-agency'); }}>
+                      Advance to Free Agency →
                     </Button>
-                  </Link>
+                  </>
                 )}
               </>
             )}
