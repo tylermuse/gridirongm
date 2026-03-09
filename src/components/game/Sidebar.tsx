@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: '/playoffs', label: 'Playoffs', icon: '🏆' },
   { href: '/re-sign', label: 'Re-signing', icon: '✍️' },
   { href: '/draft', label: 'Draft', icon: '🎯' },
+  { href: '/draft-recap', label: 'Draft Recap', icon: '📋' },
   { href: '/free-agency', label: 'Free Agency', icon: '🖊️' },
   { href: '/trades', label: 'Trades', icon: '🔄' },
   { href: '/finances', label: 'Finances', icon: '💰' },
@@ -156,7 +157,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const router = useRouter();
   const {
     season, week, phase, teams, userTeamId, resetLeague,
-    newsItems, resigningPlayers, tradeProposals, freeAgents, draftOrder,
+    newsItems, resigningPlayers, tradeProposals, freeAgents, draftOrder, draftResults,
     leagueSettings,
   } = useGameStore();
   const userTeam = teams.find(t => t.id === userTeamId);
@@ -222,6 +223,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             const deadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
             if (phase === 'regular' && week > deadlineWeek + 1) return false;
           }
+          // Hide Draft Recap when no draft results exist
+          if (item.href === '/draft-recap' && draftResults.length === 0) return false;
           return true;
         }).map(item => {
           const active = pathname === item.href;
