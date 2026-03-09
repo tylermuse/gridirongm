@@ -18,11 +18,20 @@ interface AnalyticsData {
 
 type Period = '7d' | '30d' | '90d';
 
+interface FeedbackItem {
+  id: string;
+  message: string;
+  page: string | null;
+  created_at: string;
+  user_id: string | null;
+}
+
 export default function AdminAnalyticsPage() {
   const { user, isAdmin, loading: authLoading } = useSubscription();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<Period>('30d');
+  const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
 
   const fetchData = useCallback(async (p: Period) => {
     setLoading(true);
@@ -38,13 +47,24 @@ export default function AdminAnalyticsPage() {
     }
   }, []);
 
+  const fetchFeedback = useCallback(async () => {
+    try {
+      const res = await fetch('/api/feedback?limit=50');
+      if (res.ok) {
+        const json = await res.json();
+        setFeedback(json.feedback ?? []);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     if (!authLoading && isAdmin) {
       fetchData(period);
+      fetchFeedback();
     } else if (!authLoading) {
       setLoading(false);
     }
-  }, [authLoading, isAdmin, period, fetchData]);
+  }, [authLoading, isAdmin, period, fetchData, fetchFeedback]);
 
   // Auth loading
   if (authLoading) {
@@ -184,6 +204,30 @@ export default function AdminAnalyticsPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </div>
+
+            {/* User Feedback */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-bold text-gray-900">User Feedback</h2>
+                <span className="text-xs text-gray-400">{feedback.length} messages</span>
+              </div>
+              {feedback.length === 0 ? (
+                <div className="text-sm text-gray-400 py-4 text-center">No feedback yet</div>
+              ) : (
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {feedback.map(fb => (
+                    <div key={fb.id} className="border border-gray-100 rounded-lg p-3">
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{fb.message}</p>
+                      <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+                        <span>{timeAgo(fb.created_at)}</span>
+                        {fb.page && <span className="font-mono">{fb.page}</span>}
+                        <span className="font-mono">{fb.user_id ? fb.user_id.slice(0, 8) : 'anon'}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
