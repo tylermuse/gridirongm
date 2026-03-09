@@ -498,6 +498,57 @@ function Dashboard() {
           </div>
         )}
 
+        {/* Next Game: Watch Live + Injury Report */}
+        {(() => {
+          const nextGame = phase === 'regular'
+            ? schedule.find(g => g.week === week && !g.played && (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId))
+            : null;
+          const injuredPlayers = roster.filter(p => p.injury && !p.retired).sort((a, b) => (b.injury?.weeksLeft ?? 0) - (a.injury?.weeksLeft ?? 0));
+          const oppTeam = nextGame ? teams.find(t => t.id === (nextGame.homeTeamId === userTeamId ? nextGame.awayTeamId : nextGame.homeTeamId)) : null;
+          return (nextGame || injuredPlayers.length > 0) ? (
+            <div className={`grid grid-cols-1 ${nextGame && injuredPlayers.length > 0 ? 'md:grid-cols-2' : ''} gap-4`}>
+              {nextGame && oppTeam && (
+                <Card>
+                  <div className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <TeamLogo abbreviation={oppTeam.abbreviation} primaryColor={oppTeam.primaryColor} secondaryColor={oppTeam.secondaryColor} size="md" />
+                      <div>
+                        <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider">Week {week} · {nextGame.homeTeamId === userTeamId ? 'Home' : 'Away'}</div>
+                        <div className="font-bold">{nextGame.homeTeamId === userTeamId ? 'vs' : '@'} {oppTeam.city} {oppTeam.name}</div>
+                        <div className="text-xs text-[var(--text-sec)]">{oppTeam.record.wins}-{oppTeam.record.losses}</div>
+                      </div>
+                    </div>
+                    <Link href={`/game/${nextGame.id}`}>
+                      <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white font-bold">
+                        Watch Live
+                      </Button>
+                    </Link>
+                  </div>
+                </Card>
+              )}
+              {injuredPlayers.length > 0 && (
+                <Card>
+                  <CardHeader><CardTitle>Injury Report ({injuredPlayers.length})</CardTitle></CardHeader>
+                  <div className="space-y-1 max-h-36 overflow-y-auto">
+                    {injuredPlayers.map(p => (
+                      <div key={p.id} className="flex items-center justify-between text-sm px-1 py-0.5">
+                        <button onClick={() => setSelectedPlayerId(p.id)} className="flex items-center gap-2 hover:text-blue-600">
+                          <Badge variant="red" size="sm">{p.position}</Badge>
+                          <span className="font-medium">{p.firstName} {p.lastName}</span>
+                        </button>
+                        <div className="text-xs text-[var(--text-sec)]">
+                          <span className="text-red-600">{p.injury?.type}</span>
+                          <span className="ml-2">{p.injury?.weeksLeft}w{p.onIR ? ' · IR' : ''}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+            </div>
+          ) : null;
+        })()}
+
         {/* Row 1: Standings, Finances, Team Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Conference standings with GB */}

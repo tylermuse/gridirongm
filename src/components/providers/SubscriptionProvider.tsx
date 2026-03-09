@@ -31,9 +31,8 @@ export const useSubscription = () => useContext(SubscriptionContext);
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  // DEV OVERRIDE: default to 'elite' in development for admin testing
-  const devTier = process.env.NODE_ENV === 'development' ? 'elite' : 'free';
-  const [tier, setTier] = useState<Tier>(devTier as Tier);
+  // 🎉 LIMITED-TIME PROMO: All users get elite tier (was: dev-only override)
+  const [tier, setTier] = useState<Tier>('elite');
   const [loading, setLoading] = useState(true);
 
   const supabase = useMemo(() => createClient(), []);
@@ -51,6 +50,12 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     const admin = profile?.is_admin === true;
     setIsAdmin(admin);
 
+    // 🎉 LIMITED-TIME PROMO: All users get elite tier for free
+    // To revert: remove this block and uncomment the subscription check below
+    setTier('elite');
+    return;
+
+    /* --- ORIGINAL SUBSCRIPTION CHECK (uncomment when promo ends) ---
     // Admins get elite tier regardless of subscription
     if (admin) {
       setTier('elite');
@@ -71,6 +76,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     } else {
       setTier('free');
     }
+    --- END ORIGINAL --- */
   }, [supabase]);
 
   useEffect(() => {

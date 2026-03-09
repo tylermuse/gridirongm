@@ -11,6 +11,7 @@ import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTI
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { generateRoster, generateDraftClass, generatePlayer } from './playerGen';
+import { resetUsedNames } from '../data/names';
 import { generateSchedule } from './schedule';
 import { simulateGame } from './simulate';
 import { developPlayers } from './development';
@@ -61,6 +62,7 @@ interface GameStore extends LeagueState {
   simToEndDraft: (options?: { skipAdvance?: boolean }) => void;
   advanceToFreeAgency: () => void;
   advanceFADay: () => void;
+  advanceFAWeek: () => void;
   signFreeAgent: (playerId: string, salary: number, years: number) => boolean;
   aiSignFreeAgents: () => void;
   releasePlayer: (playerId: string) => void;
@@ -467,6 +469,11 @@ function generateWeekNews(
 // Two 1sts should cost a true superstar (90+ OVR, young).
 const PICK_VALUES = [1000, 450, 200, 100, 50, 20, 10]; // Rounds 1-7
 
+const POSITION_VALUE_MULT: Record<string, number> = {
+  QB: 1.5, RB: 0.9, WR: 1.1, TE: 0.85, OL: 0.95,
+  DL: 1.05, LB: 1.0, CB: 1.1, S: 0.95, K: 0.4, P: 0.35,
+};
+
 function playerTradeValue(player: Player): number {
   const ageMultiplier =
     player.age <= 25 ? 1.3 :
@@ -474,12 +481,13 @@ function playerTradeValue(player: Player): number {
     player.age <= 29 ? 1.0 :
     player.age <= 31 ? 0.7 :
     player.age <= 33 ? 0.45 : 0.2;
+  const posMultiplier = POSITION_VALUE_MULT[player.position] ?? 1.0;
   // Exponential curve: stars (85+) are worth dramatically more than average (65) players.
   // 56 OVR → ~30 value, 70 OVR → ~200, 80 OVR → ~500, 90 OVR → ~1200
   const normalized = Math.max(0, (player.ratings.overall - 40) / 55);
   const base = Math.pow(normalized, 2.5) * 1200;
   const potBonus = Math.max(0, player.potential - player.ratings.overall) * 3;
-  return (base + potBonus) * ageMultiplier;
+  return (base + potBonus) * ageMultiplier * posMultiplier;
 }
 
 function pickTradeValue(pick: DraftPick): number {
@@ -1256,6 +1264,7 @@ export const useGameStore = create<GameStore>()(
 
       newLeague: async (userTeamId: string, leagueFileUrl?: string) => {
         try {
+          resetUsedNames();
           if (!leagueFileUrl) throw new Error('No league file URL provided');
           const imported = await loadLeagueFromUrl(leagueFileUrl);
           const userTeam = imported.teams.find((t) => t.abbreviation === userTeamId) ?? imported.teams[0];
@@ -2431,6 +2440,114 @@ export const useGameStore = create<GameStore>()(
           faRefusals: newRefusals,
           newsItems: [...state.newsItems, ...allNews],
         });
+      },
+
+      advanceFAWeek: () => {
+        // Advance up to 7 days in a single state update to avoid stale-state issues
+        for (let i = 0; i < 7; i++) {
+          const state = get();
+          if (state.phase !== 'freeAgency' || state.faDay >= 30) break;
+
+          const nextDay = state.faDay + 1;
+          const decay = faPriceDecay(nextDay);
+
+          let currentPlayers = state.players;
+          let currentTeams = state.teams;
+          let currentFreeAgents = [...state.freeAgents];
+          const allNews: NewsItem[] = [];
+
+          const signingsThisDay =
+            nextDay <= 5 ? 12 + Math.floor(Math.random() * 7) :
+            nextDay <= 10 ? 8 + Math.floor(Math.random() * 5) :
+            nextDay <= 20 ? 5 + Math.floor(Math.random() * 4) :
+            2 + Math.floor(Math.random() * 3);
+
+          const teamNeedScores: { teamId: string; score: number; needPositions: Position[]; wantPositions: Position[] }[] = [];
+          for (const t of currentTeams) {
+            if (t.id === state.userTeamId) continue;
+            const rosterPlayers = currentPlayers.filter(p => p.teamId === t.id && !p.retired);
+            if (rosterPlayers.length >= 56) continue;
+            const capSpace = t.salaryCap - t.totalPayroll;
+            if (capSpace < LEAGUE_MINIMUM_SALARY) continue;
+            const needPositions: Position[] = [];
+            const wantPositions: Position[] = [];
+            for (const pos of POSITIONS) {
+              const posPlayers = rosterPlayers.filter(p => p.position === pos);
+              const count = posPlayers.length;
+              const starterOvr = posPlayers.sort((a, b) => b.ratings.overall - a.ratings.overall)[0]?.ratings.overall ?? 0;
+              if (count < ROSTER_LIMITS[pos].min) needPositions.push(pos);
+              else if (count < ROSTER_LIMITS[pos].max && starterOvr < 78) wantPositions.push(pos);
+              else if (count >= ROSTER_LIMITS[pos].min && ROSTER_LIMITS[pos].min >= 3) {
+                const weakestStarter = posPlayers.sort((a, b) => a.ratings.overall - b.ratings.overall)[0];
+                if (weakestStarter && weakestStarter.ratings.overall < 65) wantPositions.push(pos);
+              }
+            }
+            const score = needPositions.length * 10 + wantPositions.length * 3 + (capSpace > 20 ? 5 : 0) + Math.random() * 5;
+            if (needPositions.length > 0 || wantPositions.length > 0 || rosterPlayers.length < 53 || Math.random() < 0.4) {
+              teamNeedScores.push({ teamId: t.id, score, needPositions, wantPositions });
+            }
+          }
+          teamNeedScores.sort((a, b) => b.score - a.score);
+          const teamsActing = teamNeedScores.slice(0, signingsThisDay);
+
+          for (const { teamId: aiTeamId, needPositions, wantPositions } of teamsActing) {
+            if (currentFreeAgents.length === 0) break;
+            const teamData = currentTeams.find(t => t.id === aiTeamId);
+            if (!teamData) continue;
+            const capSpace = teamData.salaryCap - teamData.totalPayroll;
+
+            const availableFAs = currentFreeAgents
+              .map(id => currentPlayers.find(p => p.id === id))
+              .filter((p): p is Player => !!p && !p.retired)
+              .filter(p => {
+                const sal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential) * decay;
+                return sal <= capSpace || (capSpace >= LEAGUE_MINIMUM_SALARY && sal <= LEAGUE_MINIMUM_SALARY * 2);
+              })
+              .sort((a, b) => {
+                const aBonus = needPositions.includes(a.position) ? 200 : wantPositions.includes(a.position) ? 80 : 0;
+                const bBonus = needPositions.includes(b.position) ? 200 : wantPositions.includes(b.position) ? 80 : 0;
+                return (bBonus + b.ratings.overall) - (aBonus + a.ratings.overall);
+              });
+
+            const target = availableFAs[0];
+            if (!target) continue;
+
+            const marketSalary = estimateSalary(target.ratings.overall, target.position, target.age, target.potential) * decay;
+            const aiSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, Math.min(marketSalary, capSpace)) * 10) / 10;
+            const aiYears = target.age >= 32 ? 1 : target.age >= 28 ? 2 : 3;
+
+            currentPlayers = currentPlayers.map(p =>
+              p.id === target.id
+                ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears } }
+                : p,
+            );
+            currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
+            currentTeams = currentTeams.map(t => {
+              if (t.id !== aiTeamId) return t;
+              const chart = insertIntoDepthChart(t.depthChart, target.position, target.id, currentPlayers);
+              return { ...t, roster: [...t.roster, target.id], totalPayroll: t.totalPayroll + aiSalary, depthChart: chart };
+            });
+
+            allNews.push(makeNews({
+              season: state.season, week: state.week, type: 'signing',
+              teamId: aiTeamId, playerIds: [target.id],
+              headline: `${teamData.city} ${teamData.name} signed ${target.firstName} ${target.lastName} (${target.position}, ${target.ratings.overall} OVR) to a $${aiSalary}M/yr, ${aiYears}-year deal.`,
+              isUserTeam: false,
+            }));
+          }
+
+          const userTeamData = currentTeams.find(t => t.id === state.userTeamId);
+          const newRefusals = userTeamData ? computeFARefusals(currentFreeAgents, currentPlayers, userTeamData, nextDay) : [];
+
+          set({
+            faDay: nextDay,
+            players: currentPlayers,
+            teams: currentTeams,
+            freeAgents: currentFreeAgents,
+            faRefusals: newRefusals,
+            newsItems: [...state.newsItems, ...allNews],
+          });
+        }
       },
 
       signFreeAgent: (playerId: string, salary: number, years: number) => {

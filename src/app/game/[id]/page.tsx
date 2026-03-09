@@ -7,6 +7,7 @@ import { GameShell } from '@/components/game/GameShell';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { simulatePlayByPlay, liveGameToGameResult } from '@/lib/engine/playByPlay';
+import { Confetti } from '@/components/ui/Confetti';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 
 // ---------------------------------------------------------------------------
@@ -1113,7 +1114,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         {/* ================================================================
             FINAL RESULT + COMMIT
         ================================================================ */}
-        {isFinished && (
+        {isFinished && (() => {
+          const userIsHome = game.homeTeamId === userTeamId;
+          const userScore = userIsHome ? liveResult.homeScore : liveResult.awayScore;
+          const oppScore = userIsHome ? liveResult.awayScore : liveResult.homeScore;
+          const won = isUserGame && userScore > oppScore;
+          return (
+          <>
+          {won && <Confetti duration={5000} />}
           <div className="bg-[var(--surface)] border-2 border-green-300 rounded-xl p-6 text-center space-y-4">
             <div className="text-sm font-bold uppercase tracking-wider text-green-600">Game Over</div>
             <div className="flex items-center justify-center gap-6">
@@ -1127,17 +1135,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 <div className="text-3xl font-black" style={{ color: homeColor }}>{liveResult.homeScore}</div>
               </div>
             </div>
-            {isUserGame && (() => {
-              const userIsHome = game.homeTeamId === userTeamId;
-              const userScore = userIsHome ? liveResult.homeScore : liveResult.awayScore;
-              const oppScore = userIsHome ? liveResult.awayScore : liveResult.homeScore;
-              const won = userScore > oppScore;
-              return (
-                <Badge variant={won ? 'green' : 'red'} size="md">
-                  {won ? 'Victory!' : 'Defeat'}
-                </Badge>
-              );
-            })()}
+            {isUserGame && (
+              <Badge variant={won ? 'green' : 'red'} size="md">
+                {won ? 'Victory!' : 'Defeat'}
+              </Badge>
+            )}
             <div>
               <Button
                 variant="primary"
@@ -1152,7 +1154,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               </p>
             </div>
           </div>
-        )}
+          </>
+          );
+        })()}
       </div>
     </GameShell>
   );
