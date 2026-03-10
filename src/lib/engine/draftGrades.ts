@@ -1,26 +1,57 @@
 /**
  * Draft grade utilities — shared between draft page and draft recap.
+ *
+ * Grades evaluate picks relative to realistic expectations for each round,
+ * factoring in both current OVR and development potential.
  */
 
-/** Expected OVR for a given pick position (mirrors talent curve in generateDraftClass). */
-export function expectedOvrForPick(overallPick: number, totalPicks: number): number {
-  const progress = (overallPick - 1) / Math.max(1, totalPicks - 1);
-  return Math.round(78 - progress * 45);
+/** Expected OVR range for each round (1-indexed). Accounts for the fact that
+ *  rookies are raw — even 1st-rounders typically start in the 55-70 OVR range. */
+const ROUND_EXPECTATIONS: Record<number, { expected: number; sigma: number }> = {
+  1: { expected: 62, sigma: 6 },
+  2: { expected: 56, sigma: 5 },
+  3: { expected: 52, sigma: 5 },
+  4: { expected: 48, sigma: 5 },
+  5: { expected: 45, sigma: 4 },
+  6: { expected: 42, sigma: 4 },
+  7: { expected: 40, sigma: 4 },
+};
+
+function getRoundFromPick(overallPick: number, totalPicks: number): number {
+  const teamsCount = Math.round(totalPicks / 7);
+  return Math.min(7, Math.max(1, Math.ceil(overallPick / teamsCount)));
 }
 
-/** Letter grade for a single draft pick based on OVR vs expected. */
-export function pickGrade(overallPick: number, totalPicks: number, playerOvr: number): string {
-  const expected = expectedOvrForPick(overallPick, totalPicks);
-  const delta = playerOvr - expected;
-  if (delta >= 12) return 'A+';
-  if (delta >= 7) return 'A';
-  if (delta >= 3) return 'B+';
-  if (delta >= -2) return 'B';
-  if (delta >= -6) return 'B-';
-  if (delta >= -10) return 'C+';
-  if (delta >= -14) return 'C';
-  if (delta >= -18) return 'C-';
+/** Letter grade for a single draft pick. Combines OVR vs round expectation
+ *  with a potential bonus — high-potential picks in later rounds grade better. */
+export function pickGrade(overallPick: number, totalPicks: number, playerOvr: number, playerPotential?: number): string {
+  const round = getRoundFromPick(overallPick, totalPicks);
+  const { expected, sigma } = ROUND_EXPECTATIONS[round] ?? { expected: 40, sigma: 4 };
+
+  // How many standard deviations above/below expected?
+  const ovrDelta = (playerOvr - expected) / sigma;
+
+  // Potential bonus: high-potential picks get a small grade boost (max ~1 sigma)
+  const pot = playerPotential ?? 50;
+  const potBonus = Math.max(0, (pot - 55) / 30); // 0 at pot=55, ~1.0 at pot=85
+
+  const score = ovrDelta + potBonus;
+
+  if (score >= 2.0) return 'A+';
+  if (score >= 1.3) return 'A';
+  if (score >= 0.7) return 'B+';
+  if (score >= 0.0) return 'B';
+  if (score >= -0.7) return 'B-';
+  if (score >= -1.3) return 'C+';
+  if (score >= -2.0) return 'C';
+  if (score >= -2.7) return 'C-';
   return 'D';
+}
+
+/** Backward-compatible overload without potential. */
+export function expectedOvrForPick(overallPick: number, totalPicks: number): number {
+  const round = getRoundFromPick(overallPick, totalPicks);
+  return ROUND_EXPECTATIONS[round]?.expected ?? 40;
 }
 
 /** Numeric value for a letter grade (for averaging). */
