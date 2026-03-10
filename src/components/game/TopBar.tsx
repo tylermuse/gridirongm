@@ -108,9 +108,18 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
 
   const handleSimSeason = useCallback(() => {
     const store = useGameStore.getState();
+    const beforeIds = new Set(store.tradeProposals.map(p => p.id));
     const max = Math.max(...store.schedule.map(g => g.week));
     // simToWeek computes all weeks in a single set() call — no stale state
     useGameStore.getState().simToWeek(max + 1);
+    // Auto-reject any trade proposals generated during the bulk sim
+    const afterState = useGameStore.getState();
+    const newProposals = afterState.tradeProposals.filter(p => !beforeIds.has(p.id) && p.status === 'pending');
+    if (newProposals.length > 0) {
+      for (const p of newProposals) {
+        afterState.respondToTradeProposal(p.id, false);
+      }
+    }
     if (useGameStore.getState().phase === 'playoffs') {
       router.push('/playoffs');
     }
@@ -246,7 +255,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       variant="secondary"
                       disabled={!nextPlayoffGame}
                     >
-                      Sim All
+                      Sim All Rounds
                     </Button>
                   </>
                 )}
@@ -296,7 +305,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       Sim Pick
                     </Button>
                     <Button onClick={simToUserDraftPick} size="sm" variant="secondary">
-                      To My Pick
+                      Sim to My Pick
                     </Button>
                     <Button
                       onClick={() => {
@@ -305,7 +314,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       }}
                       size="sm"
                     >
-                      Sim All
+                      Auto-Draft All
                     </Button>
                   </>
                 ) : (

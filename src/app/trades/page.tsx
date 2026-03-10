@@ -193,8 +193,8 @@ function TradesPage() {
   const valueDiff = offeredValue - receivedValue;
   const valueLabel =
     Math.abs(valueDiff) < offeredValue * 0.1 ? 'Fair trade' :
-    valueDiff < 0 ? `You lose ~${Math.abs(valueDiff)} pts` :
-    `You gain ~${valueDiff} pts`;
+    valueDiff < 0 ? `You lose ~${Math.round(Math.abs(valueDiff))} pts` :
+    `You gain ~${Math.round(valueDiff)} pts`;
 
   function handleSendTrade() {
     if (!selectedTeamId) return;
@@ -275,8 +275,8 @@ function TradesPage() {
   const counterValueDiff = counterOfferedValue - counterReceivedValue;
   const counterValueLabel =
     Math.abs(counterValueDiff) < counterOfferedValue * 0.1 ? 'Fair trade' :
-    counterValueDiff < 0 ? `You lose ~${Math.abs(counterValueDiff)} pts` :
-    `You gain ~${counterValueDiff} pts`;
+    counterValueDiff < 0 ? `You lose ~${Math.round(Math.abs(counterValueDiff))} pts` :
+    `You gain ~${Math.round(counterValueDiff)} pts`;
 
   function handleSolicitProposals() {
     solicitTradingBlockProposals(blockedPlayerIds, blockedPickIds, seekPositions, seekDraftPicks);
@@ -511,7 +511,7 @@ function TradesPage() {
                           <div className="bg-[var(--surface-2)] rounded-lg p-3">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-xs font-bold text-red-600 uppercase">You Send</span>
-                              <span className="text-xs text-[var(--text-sec)]">{counterOfferedValue} pts</span>
+                              <span className="text-xs text-[var(--text-sec)]">{Math.round(counterOfferedValue)} pts</span>
                             </div>
                             <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Players</div>
                             <div className="max-h-[250px] overflow-y-auto space-y-0 mb-2">
@@ -544,7 +544,7 @@ function TradesPage() {
                                       className="accent-blue-500"
                                     />
                                     <span className="text-xs flex-1">Rd {pk.round} ({pk.year})</span>
-                                    <span className="text-[10px] text-[var(--text-sec)]">~{pickTradeValue(pk)}</span>
+                                    <span className="text-[10px] text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
                                   </label>
                                 ))}
                               </>
@@ -555,7 +555,7 @@ function TradesPage() {
                           <div className="bg-[var(--surface-2)] rounded-lg p-3">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-xs font-bold text-green-600 uppercase">You Receive</span>
-                              <span className="text-xs text-[var(--text-sec)]">{counterReceivedValue} pts</span>
+                              <span className="text-xs text-[var(--text-sec)]">{Math.round(counterReceivedValue)} pts</span>
                             </div>
                             <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Players</div>
                             <div className="max-h-[250px] overflow-y-auto space-y-0 mb-2">
@@ -588,7 +588,7 @@ function TradesPage() {
                                       className="accent-blue-500"
                                     />
                                     <span className="text-xs flex-1">Rd {pk.round} ({pk.year})</span>
-                                    <span className="text-[10px] text-[var(--text-sec)]">~{pickTradeValue(pk)}</span>
+                                    <span className="text-[10px] text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
                                   </label>
                                 ))}
                               </>
@@ -600,7 +600,7 @@ function TradesPage() {
                         <div className="flex items-center justify-between bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3">
                           <div>
                             <div className="text-sm font-semibold">
-                              Value: {counterOfferedValue} → {counterReceivedValue} pts
+                              Value: {Math.round(counterOfferedValue)} → {Math.round(counterReceivedValue)} pts
                               <span className={`ml-2 text-xs ${
                                 Math.abs(counterValueDiff) < counterOfferedValue * 0.1 ? 'text-green-600' :
                                 counterValueDiff < 0 ? 'text-blue-600' : 'text-amber-600'
@@ -718,7 +718,7 @@ function TradesPage() {
                               className="accent-blue-500"
                             />
                             <span className="text-sm flex-1">{pk.year} Round {pk.round}</span>
-                            <span className="text-xs text-[var(--text-sec)]">~{pickTradeValue(pk)} pts</span>
+                            <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))} pts</span>
                           </label>
                         ))}
                       </div>
@@ -835,7 +835,7 @@ function TradesPage() {
                   <Card>
                     <CardHeader>
                       <CardTitle>Your Offer</CardTitle>
-                      <span className="text-xs text-[var(--text-sec)]">{offeredValue} trade pts</span>
+                      <span className="text-xs text-[var(--text-sec)]">{Math.round(offeredValue)} trade pts</span>
                     </CardHeader>
                     <div className="mb-3">
                       <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Players</div>
@@ -850,7 +850,7 @@ function TradesPage() {
                           <Badge size="sm">{p.position}</Badge>
                           <span className="text-sm flex-1">{p.firstName} {p.lastName}</span>
                           <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
-                          <span className="text-xs text-[var(--text-sec)]">~{playerTradeValue(p)}</span>
+                          <span className="text-xs text-[var(--text-sec)]">~{Math.round(playerTradeValue(p))}</span>
                         </label>
                       ))}
                     </div>
@@ -866,7 +866,7 @@ function TradesPage() {
                               className="accent-blue-500"
                             />
                             <span className="text-sm flex-1">Round {pk.round} ({pk.year})</span>
-                            <span className="text-xs text-[var(--text-sec)]">~{pickTradeValue(pk)}</span>
+                            <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
                           </label>
                         ))}
                       </div>
@@ -877,7 +877,7 @@ function TradesPage() {
                   <Card>
                     <CardHeader>
                       <CardTitle>You Receive</CardTitle>
-                      <span className="text-xs text-[var(--text-sec)]">{receivedValue} trade pts</span>
+                      <span className="text-xs text-[var(--text-sec)]">{Math.round(receivedValue)} trade pts</span>
                     </CardHeader>
                     {!selectedAITeam ? (
                       <p className="text-sm text-[var(--text-sec)]">Select a trade partner first.</p>
@@ -896,7 +896,7 @@ function TradesPage() {
                               <Badge size="sm">{p.position}</Badge>
                               <span className="text-sm flex-1">{p.firstName} {p.lastName}</span>
                               <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
-                              <span className="text-xs text-[var(--text-sec)]">~{playerTradeValue(p)}</span>
+                              <span className="text-xs text-[var(--text-sec)]">~{Math.round(playerTradeValue(p))}</span>
                             </label>
                           ))}
                         </div>
@@ -912,7 +912,7 @@ function TradesPage() {
                                   className="accent-blue-500"
                                 />
                                 <span className="text-sm flex-1">Round {pk.round} ({pk.year})</span>
-                                <span className="text-xs text-[var(--text-sec)]">~{pickTradeValue(pk)}</span>
+                                <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
                               </label>
                             ))}
                           </div>
@@ -927,7 +927,7 @@ function TradesPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-sm font-semibold">
-                        Value: {offeredValue} → {receivedValue} pts
+                        Value: {Math.round(offeredValue)} → {Math.round(receivedValue)} pts
                         <span className={`ml-2 text-xs ${
                           Math.abs(valueDiff) < offeredValue * 0.1 ? 'text-green-600' :
                           valueDiff < 0 ? 'text-blue-600' : 'text-amber-600'

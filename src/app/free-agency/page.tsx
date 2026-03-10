@@ -232,8 +232,8 @@ export default function FreeAgencyPage() {
     const salary = Math.round(baseSal * decay * 10) / 10;
     const neg = initNegotiation(player, salary);
     setNegotiation(neg);
-    // When over cap, start offer at league minimum (that's all we can actually sign at)
-    setOfferSalary(overCap ? LEAGUE_MINIMUM_SALARY : salary);
+    // Default offer to asking price (or league minimum if over cap)
+    setOfferSalary(overCap ? LEAGUE_MINIMUM_SALARY : neg.askingSalary);
     setOfferYears(neg.askingYears);
   }
 
@@ -662,7 +662,14 @@ export default function FreeAgencyPage() {
                         </td>
                         <td className="py-2.5 text-right pr-2" onClick={e => e.stopPropagation()}>
                           {isRefused ? (
-                            <span className="inline-block px-2 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded">
+                            <span
+                              className="inline-block px-2 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded cursor-help"
+                              title={
+                                (p.mood ?? 70) < 40
+                                  ? 'Unhappy with the organization'
+                                  : 'Only considering contenders'
+                              }
+                            >
                               Refuses
                             </span>
                           ) : (

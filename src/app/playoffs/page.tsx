@@ -480,14 +480,14 @@ export default function PlayoffsPage() {
           // All-Pro — expanded: multiple players per position, more positions
           const allProPlayers: { conf: string; player: typeof activePlayers[0]; pos: string }[] = [];
           const allProSlots: { pos: string; positions: string[]; count: number; sortFn: (a: typeof activePlayers[0], b: typeof activePlayers[0]) => number }[] = [
-            { pos: 'QB', positions: ['QB'], count: 3, sortFn: (a, b) => b.stats.passYards - a.stats.passYards },
+            { pos: 'QB', positions: ['QB'], count: 2, sortFn: (a, b) => b.stats.passYards - a.stats.passYards },
             { pos: 'RB', positions: ['RB'], count: 2, sortFn: (a, b) => b.stats.rushYards - a.stats.rushYards },
-            { pos: 'WR', positions: ['WR'], count: 4, sortFn: (a, b) => b.stats.receivingYards - a.stats.receivingYards },
+            { pos: 'WR', positions: ['WR'], count: 2, sortFn: (a, b) => b.stats.receivingYards - a.stats.receivingYards },
             { pos: 'TE', positions: ['TE'], count: 2, sortFn: (a, b) => b.stats.receivingYards - a.stats.receivingYards },
-            { pos: 'OL', positions: ['OL'], count: 5, sortFn: (a, b) => b.ratings.overall - a.ratings.overall },
-            { pos: 'DL', positions: ['DL'], count: 4, sortFn: (a, b) => b.stats.sacks - a.stats.sacks },
-            { pos: 'LB', positions: ['LB'], count: 4, sortFn: (a, b) => b.stats.tackles - a.stats.tackles },
-            { pos: 'CB', positions: ['CB'], count: 4, sortFn: (a, b) => b.stats.defensiveINTs - a.stats.defensiveINTs },
+            { pos: 'OL', positions: ['OL'], count: 4, sortFn: (a, b) => b.ratings.overall - a.ratings.overall },
+            { pos: 'DL', positions: ['DL'], count: 2, sortFn: (a, b) => b.stats.sacks - a.stats.sacks },
+            { pos: 'LB', positions: ['LB'], count: 2, sortFn: (a, b) => b.stats.tackles - a.stats.tackles },
+            { pos: 'CB', positions: ['CB'], count: 2, sortFn: (a, b) => b.stats.defensiveINTs - a.stats.defensiveINTs },
             { pos: 'S', positions: ['S'], count: 2, sortFn: (a, b) => (b.stats.tackles + b.stats.defensiveINTs * 3) - (a.stats.tackles + a.stats.defensiveINTs * 3) },
             { pos: 'K', positions: ['K'], count: 1, sortFn: (a, b) => b.ratings.overall - a.ratings.overall },
             { pos: 'P', positions: ['P'], count: 1, sortFn: (a, b) => b.ratings.overall - a.ratings.overall },

@@ -169,6 +169,21 @@ export default function ReSignPage() {
             <p className="text-sm text-[var(--text-sec)] mt-1">
               Extend or restructure your expiring contracts before they hit free agency.
             </p>
+            {activeEntries.length > 1 && (
+              <Button
+                size="sm"
+                variant="danger"
+                className="mt-2"
+                onClick={() => {
+                  for (const entry of activeEntries) {
+                    passOnResigning(entry.playerId);
+                    setResults(prev => ({ ...prev, [entry.playerId]: 'passed' }));
+                  }
+                }}
+              >
+                Let All Walk ({activeEntries.length})
+              </Button>
+            )}
           </div>
           <div className="text-right">
             <div className={`text-2xl font-black ${capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}`}>

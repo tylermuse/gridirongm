@@ -217,10 +217,10 @@ function OnTheClockSection({
                 Sim Pick
               </Button>
               <Button onClick={simToUserDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
-                To My Pick
+                Sim to My Pick
               </Button>
               <Button onClick={() => onSimAll?.()} size="sm" variant="secondary" disabled={!canSimulate}>
-                Sim All
+                Auto-Draft All
               </Button>
             </div>
           </div>
@@ -423,7 +423,7 @@ export default function DraftPage() {
     return p && p.experience === 0;
   }).length;
   const draftComplete = draftOrder.length === 0 || prospectCount === 0;
-  const currentOverallPick = totalPicks - draftOrder.length + 1;
+  const currentOverallPick = draftComplete ? totalPicks : totalPicks - draftOrder.length + 1;
   const currentRound = Math.min(totalRounds, Math.max(1, Math.ceil(currentOverallPick / picksPerRound)));
   const currentPickInRound = ((currentOverallPick - 1) % picksPerRound) + 1;
 
@@ -478,24 +478,30 @@ export default function DraftPage() {
   const nextPickNeeds = draftOrder[1] ? getTeamNeeds(draftOrder[1]).slice(0, 3) : [];
   const myNeeds = getTeamNeeds(userTeamId).slice(0, 5);
   const bestAvailable = allProspects[0];
-  const bestFit = !currentPickTeamId
-    ? null
-    : [...allProspects].sort((a, b) => {
-        const needs = getTeamNeeds(currentPickTeamId);
-        const aNeed = needs.find((n) => n.position === a.position)?.needScore ?? 0;
-        const bNeed = needs.find((n) => n.position === b.position)?.needScore ?? 0;
-        // Use scouted OVR (what the user sees) so bestFit matches the prospect list
-        const aScout = draftScoutingData[a.id];
-        const bScout = draftScoutingData[b.id];
-        const aOvr = aScout ? aScout.scoutedOvr : a.ratings.overall;
-        const bOvr = bScout ? bScout.scoutedOvr : b.ratings.overall;
-        let aScore = aOvr + a.potential * 0.4 + aNeed * 0.2;
-        let bScore = bOvr + b.potential * 0.4 + bNeed * 0.2;
-        // K/P are least valuable — heavily penalize in draft rankings
-        if (a.position === 'K' || a.position === 'P') aScore *= 0.5;
-        if (b.position === 'K' || b.position === 'P') bScore *= 0.5;
-        return bScore - aScore;
-      })[0];
+  const bestFit = (() => {
+    if (!currentPickTeamId) return null;
+    const needs = getTeamNeeds(currentPickTeamId);
+    // Get top need positions (needScore > 0, excluding K/P)
+    const needPositions = new Set(
+      needs.filter(n => n.needScore > 0 && n.position !== 'K' && n.position !== 'P').map(n => n.position),
+    );
+    // Filter prospects to only need positions
+    const needProspects = allProspects.filter(p => needPositions.has(p.position));
+    // If no need-matching prospects, fall back to all (excluding K/P)
+    const pool = needProspects.length > 0 ? needProspects : allProspects.filter(p => p.position !== 'K' && p.position !== 'P');
+    return [...pool].sort((a, b) => {
+      const aNeed = needs.find((n) => n.position === a.position)?.needScore ?? 0;
+      const bNeed = needs.find((n) => n.position === b.position)?.needScore ?? 0;
+      const aScout = draftScoutingData[a.id];
+      const bScout = draftScoutingData[b.id];
+      const aOvr = aScout ? aScout.scoutedOvr : a.ratings.overall;
+      const bOvr = bScout ? bScout.scoutedOvr : b.ratings.overall;
+      // Weight need more heavily than BPA for "Best Fit"
+      const aScore = aOvr + a.potential * 0.4 + aNeed * 0.5;
+      const bScore = bOvr + b.potential * 0.4 + bNeed * 0.5;
+      return bScore - aScore;
+    })[0] ?? null;
+  })();
 
   // "Your Scouts Say" — uses only scouted data (noisy OVR + noisy potential estimate)
   // At low scouting levels this will diverge from bestFit; at high levels they converge
