@@ -784,7 +784,7 @@ export default function DraftPage() {
             if (teamPicks.length === 0) return { team: t, grade: 'N/A', avgVal: 0, picks: 0, bestPick: null as null | { player: Player | undefined; grade: string; overallPick: number } };
             const grades = teamPicks.map(p => {
               const pl = players.find(pp => pp.id === p.playerId);
-              const g = pl ? pickGrade(p.overallPick, totalPicks, pl.ratings.overall) : 'C';
+              const g = pl ? pickGrade(p.overallPick, totalPicks, pl.ratings.overall, pl.potential) : 'C';
               return { grade: g, val: gradeValue(g), player: pl, overallPick: p.overallPick };
             });
             const avgVal = grades.reduce((s, g) => s + g.val, 0) / grades.length;
@@ -882,7 +882,7 @@ export default function DraftPage() {
                     </div>
                   </div>
                   {player ? (() => {
-                    const g = pickGrade(pick.overallPick, totalPicks, player.ratings.overall);
+                    const g = pickGrade(pick.overallPick, totalPicks, player.ratings.overall, player.potential);
                     return <span className={`font-bold text-xs ${gradeColor(g)}`}>{g}</span>;
                   })() : <span className="text-[var(--text-sec)]">--</span>}
                 </div>
