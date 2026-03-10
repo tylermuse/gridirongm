@@ -28,24 +28,19 @@ const ELITE_FEATURES: Feature[] = [
   'league_export',
 ];
 
-export function hasFeature(tier: Tier, feature: Feature): boolean {
-  if (tier === 'elite') return ELITE_FEATURES.includes(feature);
-  if (tier === 'pro') return PRO_FEATURES.includes(feature);
-  return false;
+// All features are free for everyone
+export function hasFeature(_tier: Tier, _feature: Feature): boolean {
+  return true;
 }
 
-/** Maximum scouting level allowed for this tier (0-indexed, 0=Entry, 1=Pro, 2=Elite) */
-export function maxScoutingLevel(tier: Tier): number {
-  if (tier === 'elite') return 2;
-  if (tier === 'pro') return 1;
-  return 0;
+/** Maximum scouting level — all levels unlocked */
+export function maxScoutingLevel(_tier: Tier): number {
+  return 2;
 }
 
-/** Maximum deep scouts per draft: Entry=1, Pro=5, Elite=unlimited */
-export function maxDeepScouts(tier: Tier): number {
-  if (tier === 'elite') return 999;
-  if (tier === 'pro') return 5;
-  return 1;
+/** Maximum deep scouts — unlimited for everyone */
+export function maxDeepScouts(_tier: Tier): number {
+  return 999;
 }
 
 // Stripe price IDs — safe to import client-side (no Stripe SDK dependency)
@@ -64,7 +59,7 @@ export function tierFromPriceId(priceId: string): 'pro' | 'elite' {
 }
 
 export const SCOUTING_LEVELS = [
-  { name: 'Entry', tier: 'free' as Tier, tooltip: 'Wide OVR ranges (±12). Free for all players.' },
-  { name: 'Pro', tier: 'pro' as Tier, tooltip: 'Tighter ranges (±5), position breakdowns, trait hints. Requires Pro subscription.' },
-  { name: 'Elite', tier: 'elite' as Tier, tooltip: 'Near-exact ratings (±2), full trait report, complete profile. Requires Elite subscription.' },
+  { name: 'Entry', tier: 'free' as Tier, tooltip: 'Wide OVR ranges (±12).' },
+  { name: 'Pro', tier: 'free' as Tier, tooltip: 'Tighter ranges (±5), position breakdowns, trait hints.' },
+  { name: 'Elite', tier: 'free' as Tier, tooltip: 'Near-exact ratings (±2), full trait report, complete profile.' },
 ];
