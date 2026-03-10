@@ -275,11 +275,6 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                 </Link>
                 <Button
                   onClick={() => {
-                    const remaining = resigningPlayers.length;
-                    const msg = remaining > 0
-                      ? `Skip to draft? ${remaining} player${remaining !== 1 ? 's' : ''} still unsigned — they will become free agents.`
-                      : 'Advance to the draft phase?';
-                    if (!confirm(msg)) return;
                     const store = useGameStore.getState();
                     if (store.phase !== 'draft') {
                       store.advanceToDraft();
@@ -336,7 +331,6 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                 </Link>
                 {faDay >= 30 ? (
                   <Button onClick={() => {
-                    if (!confirm('Start the new season? This will advance to the next year.')) return;
                     startNewSeason(); router.push('/');
                   }} variant="secondary" size="sm">
                     Start New Season →
@@ -344,10 +338,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                 ) : (
                   <Button
                     onClick={() => {
-                      if (confirm(`End free agency early? (Day ${faDay}/30 — remaining FAs will be unsigned)`)) {
-                        startNewSeason();
-                        router.push('/');
-                      }
+                      startNewSeason();
+                      router.push('/');
                     }}
                     variant="secondary"
                     size="sm"
