@@ -39,11 +39,12 @@ export default function AdminAnalyticsPage() {
     setError(null);
     try {
       const res = await fetch(`/api/admin/analytics?period=${p}`);
+      const json = await res.json().catch(() => ({}));
       if (res.ok) {
-        setData(await res.json());
+        if (json._warning) console.warn('Analytics warning:', json._warning);
+        setData(json);
       } else {
-        const json = await res.json().catch(() => ({}));
-        setError(json.error ?? `Failed to load analytics (${res.status})`);
+        setError(json.detail ? `${json.error}: ${json.detail}` : json.error ?? `Failed to load analytics (${res.status})`);
       }
     } catch {
       setError('Failed to connect to analytics API');
@@ -124,7 +125,6 @@ export default function AdminAnalyticsPage() {
         ) : error ? (
           <div className="text-center py-20">
             <div className="text-red-500 font-medium mb-2">⚠️ {error}</div>
-            <p className="text-gray-400 text-sm">Check that SUPABASE_SERVICE_ROLE_KEY is set in your environment.</p>
             <button onClick={() => fetchData(period)} className="mt-4 text-sm text-blue-600 hover:underline">Retry</button>
           </div>
         ) : !data ? (
