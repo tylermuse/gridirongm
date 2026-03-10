@@ -30,18 +30,23 @@ export default function AdminAnalyticsPage() {
   const { user, isAdmin, loading: authLoading } = useSubscription();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('30d');
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
 
   const fetchData = useCallback(async (p: Period) => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/admin/analytics?period=${p}`);
       if (res.ok) {
         setData(await res.json());
+      } else {
+        const json = await res.json().catch(() => ({}));
+        setError(json.error ?? `Failed to load analytics (${res.status})`);
       }
     } catch {
-      // Failed to fetch
+      setError('Failed to connect to analytics API');
     } finally {
       setLoading(false);
     }
@@ -116,6 +121,12 @@ export default function AdminAnalyticsPage() {
       <main className="max-w-6xl mx-auto px-6 py-8">
         {loading ? (
           <div className="text-center py-20 text-gray-400">Loading analytics...</div>
+        ) : error ? (
+          <div className="text-center py-20">
+            <div className="text-red-500 font-medium mb-2">⚠️ {error}</div>
+            <p className="text-gray-400 text-sm">Check that SUPABASE_SERVICE_ROLE_KEY is set in your environment.</p>
+            <button onClick={() => fetchData(period)} className="mt-4 text-sm text-blue-600 hover:underline">Retry</button>
+          </div>
         ) : !data ? (
           <div className="text-center py-20 text-gray-400">No data available yet. Events will appear once users start visiting.</div>
         ) : (
