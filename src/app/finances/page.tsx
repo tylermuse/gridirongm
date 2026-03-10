@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import type { Position } from '@/types';
-import { POSITIONS } from '@/types';
+import { POSITIONS, getCapHit, getUnamortizedBonus } from '@/types';
 
 function ratingColor(val: number) {
   if (val >= 80) return 'text-green-600';
@@ -114,6 +114,91 @@ export default function FinancesPage() {
             </div>
           )}
         </Card>
+
+        {/* Dead Money */}
+        {(() => {
+          const deadCapEntries = userTeam.deadCap ?? [];
+          const totalDeadCap = deadCapEntries.reduce((sum, dc) => sum + dc.amount, 0);
+
+          // Calculate future dead money risk from restructured contracts
+          const restructuredPlayers = roster.filter(p => p.contract.contractYears?.some(y => y.proratedBonus > 0));
+          const futureRisk: { year: number; amount: number; count: number }[] = [];
+          for (let yi = 1; yi <= 3; yi++) {
+            let yearTotal = 0;
+            let count = 0;
+            for (const p of restructuredPlayers) {
+              if (p.contract.contractYears && p.contract.contractYears.length > yi) {
+                yearTotal += p.contract.contractYears[yi].proratedBonus;
+                if (p.contract.contractYears[yi].proratedBonus > 0) count++;
+              }
+            }
+            if (yearTotal > 0) {
+              futureRisk.push({ year: yi, amount: Math.round(yearTotal * 10) / 10, count });
+            }
+          }
+
+          if (totalDeadCap === 0 && restructuredPlayers.length === 0) return null;
+
+          return (
+            <Card>
+              <CardHeader><CardTitle>Dead Money & Restructured Contracts</CardTitle></CardHeader>
+              {totalDeadCap > 0 && (
+                <div className="mb-4">
+                  <div className="text-sm font-medium text-red-600 mb-2">
+                    Active Dead Cap: ${Math.round(totalDeadCap * 10) / 10}M
+                  </div>
+                  <div className="space-y-1">
+                    {deadCapEntries.map((dc, i) => (
+                      <div key={i} className="flex justify-between text-sm px-2 py-1 rounded bg-red-50">
+                        <span>{dc.playerName} <span className="text-xs text-[var(--text-sec)]">({dc.source ?? 'release'})</span></span>
+                        <span className="font-medium text-red-600">${dc.amount}M</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {restructuredPlayers.length > 0 && (
+                <div className="mb-4">
+                  <div className="text-sm font-medium mb-2">Restructured Contracts ({restructuredPlayers.length})</div>
+                  <div className="space-y-1">
+                    {restructuredPlayers.map(p => {
+                      const unamortized = getUnamortizedBonus(p.contract);
+                      return (
+                        <div key={p.id} className="flex justify-between text-sm px-2 py-1 rounded bg-amber-50">
+                          <span>
+                            {p.firstName} {p.lastName}
+                            <span className="text-xs text-[var(--text-sec)] ml-1">
+                              ${getCapHit(p.contract).toFixed(1)}M cap hit
+                            </span>
+                          </span>
+                          <span className="font-medium text-amber-700" title="Dead money if cut/traded">
+                            ${unamortized.toFixed(1)}M risk
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {futureRisk.length > 0 && (
+                <div>
+                  <div className="text-sm font-medium mb-2">Future Dead Money Risk</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {futureRisk.map(fr => (
+                      <div key={fr.year} className="bg-[var(--surface-2)] rounded-lg p-2 text-center">
+                        <div className="text-xs text-[var(--text-sec)]">Year +{fr.year}</div>
+                        <div className="font-bold text-amber-600">${fr.amount}M</div>
+                        <div className="text-[10px] text-[var(--text-sec)]">{fr.count} contract{fr.count !== 1 ? 's' : ''}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+          );
+        })()}
 
         {/* Revenue & Profit/Loss */}
         {userTeam.revenue && userTeam.revenue.total > 0 && (

@@ -7,7 +7,7 @@ import type {
   LeagueState, Team, Player, GameResult, PlayerStats,
   NewsItem, TradeProposal, ResigningEntry, DraftPick, LeagueSettings,
 } from '@/types';
-import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, type Position, type DeadCapEntry } from '@/types';
+import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { generateRoster, generateDraftClass, generatePlayer } from './playerGen';
@@ -19,7 +19,7 @@ import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
 
-const SAVE_VERSION = 13;
+const SAVE_VERSION = 14;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
@@ -66,7 +66,7 @@ interface GameStore extends LeagueState {
   signFreeAgent: (playerId: string, salary: number, years: number) => boolean;
   aiSignFreeAgents: () => void;
   releasePlayer: (playerId: string) => void;
-  restructureContract: (playerId: string, newSalary: number, newYears: number) => boolean;
+  restructureContract: (playerId: string, conversionAmount: number, voidYearsToAdd: number) => boolean;
   placeOnIR: (playerId: string) => void;
   activateFromIR: (playerId: string) => void;
   startNewSeason: () => void;
@@ -2683,12 +2683,18 @@ export const useGameStore = create<GameStore>()(
           contract.guaranteed = generateGuaranteed(contract.salary, contract.yearsLeft);
         }
 
-        const deadCap = calculateDeadCap(contract);
-        const capSavings = calculateCapSavings(contract);
+        // Use V2 functions that handle restructured contracts (accelerated prorated bonus)
+        const deadCap = calculateDeadCapV2(contract);
+        const capHit = getCapHit(contract);
+        const capSavings = capHit - deadCap;
 
+        const unamortizedBonus = getUnamortizedBonus(contract);
+        const bonusNote = unamortizedBonus > 0
+          ? ` (includes $${Math.round(unamortizedBonus * 10) / 10}M accelerated bonus)`
+          : '';
         const deadCapNote = deadCap > 0
-          ? ` Dead cap hit: $${deadCap}M. Cap savings: $${capSavings > 0 ? capSavings : 0}M.`
-          : ` Saves $${player.contract.salary}M/yr cap space.`;
+          ? ` Dead cap hit: $${Math.round(deadCap * 10) / 10}M${bonusNote}. Cap savings: $${capSavings > 0 ? Math.round(capSavings * 10) / 10 : 0}M.`
+          : ` Saves $${capHit}M/yr cap space.`;
 
         const releaseNews = makeNews({
           season: state.season,
@@ -2709,7 +2715,13 @@ export const useGameStore = create<GameStore>()(
           const actualSavings = Math.max(0, capSavings);
           const existingDeadCap = t.deadCap ?? [];
           const newDeadCap: DeadCapEntry[] = deadCap > 0
-            ? [...existingDeadCap, { playerName: `${player.firstName} ${player.lastName}`, amount: deadCap, yearsLeft: 1 }]
+            ? [...existingDeadCap, {
+                playerName: `${player.firstName} ${player.lastName}`,
+                amount: Math.round(deadCap * 10) / 10,
+                yearsLeft: 1,
+                source: 'release' as const,
+                season: state.season,
+              }]
             : existingDeadCap;
 
           return {
@@ -2723,7 +2735,9 @@ export const useGameStore = create<GameStore>()(
 
         set({
           players: state.players.map(p =>
-            p.id === playerId ? { ...p, teamId: null, onIR: false } : p,
+            p.id === playerId
+              ? { ...p, teamId: null, onIR: false, contract: { salary: contract.salary, yearsLeft: contract.yearsLeft, guaranteed: contract.guaranteed, totalYears: contract.totalYears } }
+              : p,
           ),
           teams: updatedTeams,
           freeAgents: [...state.freeAgents, playerId],
@@ -2731,20 +2745,79 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
-      restructureContract: (playerId: string, newSalary: number, newYears: number) => {
+      restructureContract: (playerId: string, conversionAmount: number, voidYearsToAdd: number) => {
         const state = get();
         const player = state.players.find(p => p.id === playerId);
         if (!player || player.teamId !== state.userTeamId) return false;
         // Prevent restructuring the same player more than once per season
         if (player.lastRestructuredSeason === state.season) return false;
 
-        const oldSalary = player.contract.salary;
-        const capDelta = newSalary - oldSalary; // negative = savings
+        const contract = { ...player.contract };
+        const leagueMin = state.leagueSettings?.leagueMinSalary ?? LEAGUE_MINIMUM_SALARY;
+
+        // Must have 2+ real years remaining (excluding existing void years)
+        const realYears = contract.contractYears
+          ? contract.contractYears.filter(y => !y.isVoidYear).length
+          : contract.yearsLeft;
+        if (realYears < 2) return false;
+
+        // Cannot exceed 3 total void years on a contract
+        const existingVoidYears = contract.voidYears ?? 0;
+        if (existingVoidYears + voidYearsToAdd > 3) return false;
+
+        // Materialize contractYears from flat model if needed
+        let years: ContractYear[] = contract.contractYears
+          ? contract.contractYears.map(y => ({ ...y }))
+          : materializeContractYears(contract);
+
+        // Validate conversion amount
+        const currentBase = years[0].baseSalary;
+        const maxConversion = Math.max(0, currentBase - leagueMin);
+        if (conversionAmount < 1 || conversionAmount > maxConversion) return false;
+
+        // Add void years to the end
+        for (let i = 0; i < voidYearsToAdd; i++) {
+          years.push({ baseSalary: 0, proratedBonus: 0, isVoidYear: true });
+        }
+
+        // Calculate prorated amount per year (spread across ALL remaining years including void)
+        const totalYearsForProration = years.length;
+        const proratedPerYear = Math.round((conversionAmount / totalYearsForProration) * 100) / 100;
+
+        // Reduce current year base salary and add prorated bonus to all years
+        years[0] = { ...years[0], baseSalary: years[0].baseSalary - conversionAmount };
+        for (let i = 0; i < years.length; i++) {
+          years[i] = { ...years[i], proratedBonus: years[i].proratedBonus + proratedPerYear };
+        }
+
+        const oldCapHit = getCapHit(player.contract);
+        const newCapHit = Math.round((years[0].baseSalary + years[0].proratedBonus) * 100) / 100;
+        const capDelta = newCapHit - oldCapHit; // negative = savings
+
+        const newContract = {
+          ...contract,
+          salary: newCapHit, // Keep salary in sync for backward compat
+          yearsLeft: years.length,
+          contractYears: years,
+          voidYears: existingVoidYears + voidYearsToAdd,
+          restructureHistory: [
+            ...(contract.restructureHistory ?? []),
+            {
+              season: state.season,
+              amountConverted: conversionAmount,
+              voidYearsAdded: voidYearsToAdd,
+              proratedPerYear,
+            } as ContractRestructure,
+          ],
+        };
+
+        const capSaved = Math.round(Math.abs(capDelta) * 10) / 10;
+        const voidNote = voidYearsToAdd > 0 ? ` Added ${voidYearsToAdd} void year${voidYearsToAdd > 1 ? 's' : ''}.` : '';
 
         set({
           players: state.players.map(p =>
             p.id === playerId
-              ? { ...p, lastRestructuredSeason: state.season, contract: { salary: newSalary, yearsLeft: newYears, guaranteed: generateGuaranteed(newSalary, newYears), totalYears: newYears } }
+              ? { ...p, lastRestructuredSeason: state.season, contract: newContract }
               : p,
           ),
           teams: state.teams.map(t =>
@@ -2753,9 +2826,9 @@ export const useGameStore = create<GameStore>()(
               : t,
           ),
           newsItems: [...state.newsItems, makeNews({
-            season: state.season, week: 0, type: 'signing',
+            season: state.season, week: state.week, type: 'signing',
             teamId: state.userTeamId, playerIds: [playerId],
-            headline: `You restructured ${player.firstName} ${player.lastName}'s contract to $${newSalary}M/yr for ${newYears} years.`,
+            headline: `You restructured ${player.firstName} ${player.lastName}'s contract, converting $${conversionAmount}M to signing bonus. Saves $${capSaved}M this year.${voidNote}`,
             isUserTeam: true,
           })],
         });
@@ -2846,9 +2919,77 @@ export const useGameStore = create<GameStore>()(
         const offeredPickIdsSet = new Set(offeredPickIds);
         const receivedPickIdsSet = new Set(receivedPickIds);
 
+        // Calculate dead money from restructured players being traded away
+        // When trading a restructured player, the sending team eats the unamortized bonus as dead cap
+        const userDeadCapEntries: DeadCapEntry[] = [];
+        const aiDeadCapEntries: DeadCapEntry[] = [];
+
+        // Dead cap for players user is sending out
+        for (const id of offeredPlayerIds) {
+          const p = state.players.find(pl => pl.id === id);
+          if (p && p.contract.contractYears) {
+            const bonus = getUnamortizedBonus(p.contract);
+            if (bonus > 0) {
+              userDeadCapEntries.push({
+                playerName: `${p.firstName} ${p.lastName}`,
+                amount: Math.round(bonus * 10) / 10,
+                yearsLeft: 1,
+                source: 'trade',
+                season: state.season,
+              });
+            }
+          }
+        }
+
+        // Dead cap for players AI is sending out
+        for (const id of receivedPlayerIds) {
+          const p = state.players.find(pl => pl.id === id);
+          if (p && p.contract.contractYears) {
+            const bonus = getUnamortizedBonus(p.contract);
+            if (bonus > 0) {
+              aiDeadCapEntries.push({
+                playerName: `${p.firstName} ${p.lastName}`,
+                amount: Math.round(bonus * 10) / 10,
+                yearsLeft: 1,
+                source: 'trade',
+                season: state.season,
+              });
+            }
+          }
+        }
+
+        // Strip prorated bonus from traded players (receiving team gets base salary only)
         const updatedPlayers = state.players.map(p => {
-          if (offeredPlayerIdsSet.has(p.id)) return { ...p, teamId: counterpartTeamId };
-          if (receivedPlayerIdsSet.has(p.id)) return { ...p, teamId: state.userTeamId };
+          if (offeredPlayerIdsSet.has(p.id)) {
+            const cleanContract = p.contract.contractYears
+              ? {
+                  ...p.contract,
+                  salary: p.contract.contractYears[0].baseSalary,
+                  contractYears: p.contract.contractYears.filter(y => !y.isVoidYear).map(y => ({
+                    ...y, proratedBonus: 0,
+                  })),
+                  yearsLeft: p.contract.contractYears.filter(y => !y.isVoidYear).length,
+                  voidYears: 0,
+                  restructureHistory: undefined,
+                }
+              : p.contract;
+            return { ...p, teamId: counterpartTeamId, contract: cleanContract };
+          }
+          if (receivedPlayerIdsSet.has(p.id)) {
+            const cleanContract = p.contract.contractYears
+              ? {
+                  ...p.contract,
+                  salary: p.contract.contractYears[0].baseSalary,
+                  contractYears: p.contract.contractYears.filter(y => !y.isVoidYear).map(y => ({
+                    ...y, proratedBonus: 0,
+                  })),
+                  yearsLeft: p.contract.contractYears.filter(y => !y.isVoidYear).length,
+                  voidYears: 0,
+                  restructureHistory: undefined,
+                }
+              : p.contract;
+            return { ...p, teamId: state.userTeamId, contract: cleanContract };
+          }
           return p;
         });
 
@@ -2860,6 +3001,10 @@ export const useGameStore = create<GameStore>()(
           const p = state.players.find(pl => pl.id === id);
           return sum + (p?.contract.salary ?? 0);
         }, 0);
+
+        // Calculate dead money impact on payroll
+        const userDeadCapTotal = userDeadCapEntries.reduce((s, e) => s + e.amount, 0);
+        const aiDeadCapTotal = aiDeadCapEntries.reduce((s, e) => s + e.amount, 0);
 
         const updatedTeams = state.teams.map(t => {
           if (t.id === state.userTeamId) {
@@ -2879,8 +3024,9 @@ export const useGameStore = create<GameStore>()(
               ...t,
               roster: newRoster,
               draftPicks: newPicks,
-              totalPayroll: t.totalPayroll - offeredSalary + receivedSalary,
+              totalPayroll: t.totalPayroll - offeredSalary + receivedSalary + userDeadCapTotal,
               depthChart: buildDefaultDepthChart(allPlayers),
+              deadCap: [...(t.deadCap ?? []), ...userDeadCapEntries],
             };
           }
           if (t.id === counterpartTeamId) {
@@ -2898,7 +3044,8 @@ export const useGameStore = create<GameStore>()(
               ...t,
               roster: newRoster,
               draftPicks: newPicks,
-              totalPayroll: t.totalPayroll - receivedSalary + offeredSalary,
+              totalPayroll: t.totalPayroll - receivedSalary + offeredSalary + aiDeadCapTotal,
+              deadCap: [...(t.deadCap ?? []), ...aiDeadCapEntries],
             };
           }
           return t;
@@ -3279,6 +3426,37 @@ export const useGameStore = create<GameStore>()(
             p.draftYear !== null &&
             p.draftYear >= newSeason;
 
+          // Advance contractYears: pop index 0, shift everything forward
+          let advancedContract = p.contract;
+          if (!isUnsignedFutureProspect) {
+            const newYearsLeft = p.contract.yearsLeft - 1;
+            if (p.contract.contractYears && p.contract.contractYears.length > 1) {
+              const advancedYears = p.contract.contractYears.slice(1);
+              const newYr0 = advancedYears[0];
+              advancedContract = {
+                ...p.contract,
+                yearsLeft: newYearsLeft,
+                salary: Math.round((newYr0.baseSalary + newYr0.proratedBonus) * 100) / 100,
+                contractYears: advancedYears,
+                guaranteed: p.contract.yearsLeft > 1 && p.contract.guaranteed
+                  ? Math.round(((p.contract.guaranteed / p.contract.yearsLeft) * (p.contract.yearsLeft - 1)) * 10) / 10
+                  : 0,
+              };
+            } else {
+              advancedContract = {
+                ...p.contract,
+                yearsLeft: newYearsLeft,
+                // Clear contractYears if only 1 year was left
+                contractYears: undefined,
+                voidYears: undefined,
+                restructureHistory: undefined,
+                guaranteed: p.contract.yearsLeft > 1 && p.contract.guaranteed
+                  ? Math.round(((p.contract.guaranteed / p.contract.yearsLeft) * (p.contract.yearsLeft - 1)) * 10) / 10
+                  : 0,
+              };
+            }
+          }
+
           return {
             ...p,
             age: p.age + 1,
@@ -3286,16 +3464,7 @@ export const useGameStore = create<GameStore>()(
             stats: emptyStats(),
             injury: null,
             onIR: false,
-            contract: isUnsignedFutureProspect
-              ? p.contract
-              : {
-                  ...p.contract,
-                  yearsLeft: p.contract.yearsLeft - 1,
-                  // Reduce guaranteed money proportionally each year
-                  guaranteed: p.contract.yearsLeft > 1 && p.contract.guaranteed
-                    ? Math.round(((p.contract.guaranteed / p.contract.yearsLeft) * (p.contract.yearsLeft - 1)) * 10) / 10
-                    : 0,
-                },
+            contract: advancedContract,
           };
         });
 
@@ -3324,23 +3493,80 @@ export const useGameStore = create<GameStore>()(
         );
         const newlyRetiredOnTeamIds = new Set(newlyRetiredOnTeam.map(p => p.id));
 
+        // Process void years: players whose new year-0 is a void year have their contracts voided
+        const voidYearPlayers: { player: typeof developedPlayers[0]; deadCapAmount: number }[] = [];
+        for (const p of developedPlayers) {
+          if (
+            p.teamId &&
+            !p.retired &&
+            p.contract.contractYears &&
+            p.contract.contractYears.length > 0 &&
+            p.contract.contractYears[0].isVoidYear
+          ) {
+            // All remaining prorated bonus accelerates into dead money
+            const remainingBonus = getUnamortizedBonus(p.contract);
+            voidYearPlayers.push({ player: p, deadCapAmount: Math.round(remainingBonus * 10) / 10 });
+          }
+        }
+        const voidPlayerIds = new Set(voidYearPlayers.map(v => v.player.id));
+
+        // Generate void year news
+        const voidNews: NewsItem[] = voidYearPlayers
+          .filter(v => v.deadCapAmount > 0)
+          .map(v => makeNews({
+            season: newSeason,
+            week: 0,
+            type: 'signing',
+            teamId: v.player.teamId!,
+            playerIds: [v.player.id],
+            headline: `${v.player.firstName} ${v.player.lastName}'s contract voided — $${v.deadCapAmount}M dead money.`,
+            isUserTeam: v.player.teamId === state.userTeamId,
+          }));
+
+        // Update void players: remove from team, clear contract
+        const afterVoidPlayers = developedPlayers.map(p => {
+          if (voidPlayerIds.has(p.id)) {
+            return {
+              ...p,
+              teamId: null,
+              contract: { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 },
+            };
+          }
+          return p;
+        });
+
         const newTeams = state.teams.map(t => {
           const retiredFromTeam = newlyRetiredOnTeam.filter(p => t.roster.includes(p.id));
           const salaryReduction = retiredFromTeam.reduce((sum, p) => sum + p.contract.salary, 0);
-          const newRoster = t.roster.filter(pid => !newlyRetiredOnTeamIds.has(pid));
-          // Remove retired from depth chart, then re-sort all positions by OVR
+          // Also remove voided players from roster
+          const voidedFromTeam = voidYearPlayers.filter(v => t.roster.includes(v.player.id));
+          const voidSalaryReduction = voidedFromTeam.reduce((sum, v) => sum + getCapHit(v.player.contract), 0);
+          const voidDeadCapNew: DeadCapEntry[] = voidedFromTeam
+            .filter(v => v.deadCapAmount > 0)
+            .map(v => ({
+              playerName: `${v.player.firstName} ${v.player.lastName}`,
+              amount: v.deadCapAmount,
+              yearsLeft: 1,
+              source: 'void' as const,
+              season: newSeason,
+            }));
+          const voidDeadCapTotal = voidDeadCapNew.reduce((sum, dc) => sum + dc.amount, 0);
+
+          const removedIds = new Set([...newlyRetiredOnTeamIds, ...voidPlayerIds]);
+          const newRoster = t.roster.filter(pid => !removedIds.has(pid));
+          // Remove retired + voided from depth chart, then re-sort all positions by OVR
           const newDepthChart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
-            const active = (t.depthChart[pos] ?? []).filter(pid => !newlyRetiredOnTeamIds.has(pid));
+            const active = (t.depthChart[pos] ?? []).filter(pid => !removedIds.has(pid));
             // Re-sort by OVR descending so best players are starters
             acc[pos] = active.sort((a, b) => {
-              const pa = developedPlayers.find(p => p.id === a);
-              const pb = developedPlayers.find(p => p.id === b);
+              const pa = afterVoidPlayers.find(p => p.id === a);
+              const pb = afterVoidPlayers.find(p => p.id === b);
               return (pb?.ratings.overall ?? 0) - (pa?.ratings.overall ?? 0);
             });
             return acc;
           }, {} as Record<Position, string[]>);
           // Expire dead cap entries (decrement years, remove expired)
-          const updatedDeadCap = (t.deadCap ?? [])
+          const updatedDeadCap = [...(t.deadCap ?? []), ...voidDeadCapNew]
             .map(dc => ({ ...dc, yearsLeft: dc.yearsLeft - 1 }))
             .filter(dc => dc.yearsLeft > 0);
           // Remove expired dead cap from payroll
@@ -3361,7 +3587,7 @@ export const useGameStore = create<GameStore>()(
             ...t,
             record: emptyRecord(),
             roster: newRoster,
-            totalPayroll: Math.max(0, t.totalPayroll - salaryReduction - deadCapRelief),
+            totalPayroll: Math.max(0, t.totalPayroll - salaryReduction - voidSalaryReduction + voidDeadCapTotal - deadCapRelief),
             depthChart: newDepthChart,
             deadCap: updatedDeadCap,
             franchiseTagUsed: false,
@@ -3377,7 +3603,7 @@ export const useGameStore = create<GameStore>()(
           };
         });
 
-        const finalPlayers = developedPlayers.map(p =>
+        const finalPlayers = afterVoidPlayers.map(p =>
           p.retired && !previouslyRetiredIds.has(p.id) ? { ...p, teamId: null } : p,
         );
 
@@ -3432,6 +3658,91 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
+        // AI Contract Restructuring — win-now AI teams restructure to create cap space
+        const aiRestructureNews: NewsItem[] = [];
+        for (let ti = 0; ti < grownTeams.length; ti++) {
+          const team = grownTeams[ti];
+          if (team.id === state.userTeamId) continue; // Skip user team
+
+          const capSpace = team.salaryCap - team.totalPayroll;
+          const isContender = team.record.wins >= 9; // Won 9+ games last season
+          if (!isContender || capSpace > 20) continue; // Only cap-strapped contenders
+
+          const teamPlayers = allPlayersForNewSeason
+            .filter(p => p.teamId === team.id && !p.retired && p.contract.yearsLeft >= 3 && p.contract.salary >= 8);
+
+          let restructureCount = 0;
+          for (const player of teamPlayers) {
+            if (restructureCount >= 3) break; // Max 3 restructures per team
+            if (Math.random() > 0.30) continue; // 30% chance per eligible player
+
+            const contractYears = player.contract.contractYears
+              ? player.contract.contractYears.map(y => ({ ...y }))
+              : materializeContractYears(player.contract);
+
+            const currentBase = contractYears[0].baseSalary;
+            const leagueMin = settings.leagueMinSalary ?? LEAGUE_MINIMUM_SALARY;
+            const maxConversion = Math.max(0, currentBase - leagueMin);
+            if (maxConversion < 2) continue;
+
+            // AI converts 40-60% of base salary
+            const conversionPct = 0.40 + Math.random() * 0.20;
+            const conversionAmount = Math.round(Math.min(maxConversion, currentBase * conversionPct) * 10) / 10;
+
+            // AI adds 0-2 void years
+            const existingVoid = player.contract.voidYears ?? 0;
+            const voidToAdd = Math.min(2, 3 - existingVoid, Math.floor(Math.random() * 3));
+
+            // Apply restructure
+            for (let v = 0; v < voidToAdd; v++) {
+              contractYears.push({ baseSalary: 0, proratedBonus: 0, isVoidYear: true });
+            }
+            const totalYrs = contractYears.length;
+            const proratedPerYear = Math.round((conversionAmount / totalYrs) * 100) / 100;
+            contractYears[0] = { ...contractYears[0], baseSalary: contractYears[0].baseSalary - conversionAmount };
+            for (let y = 0; y < contractYears.length; y++) {
+              contractYears[y] = { ...contractYears[y], proratedBonus: contractYears[y].proratedBonus + proratedPerYear };
+            }
+
+            const newCapHit = Math.round((contractYears[0].baseSalary + contractYears[0].proratedBonus) * 100) / 100;
+            const capDelta = newCapHit - player.contract.salary;
+
+            // Update player
+            const pi = allPlayersForNewSeason.findIndex(p => p.id === player.id);
+            if (pi >= 0) {
+              allPlayersForNewSeason[pi] = {
+                ...allPlayersForNewSeason[pi],
+                lastRestructuredSeason: newSeason,
+                contract: {
+                  ...player.contract,
+                  salary: newCapHit,
+                  yearsLeft: contractYears.length,
+                  contractYears,
+                  voidYears: existingVoid + voidToAdd,
+                  restructureHistory: [
+                    ...(player.contract.restructureHistory ?? []),
+                    { season: newSeason, amountConverted: conversionAmount, voidYearsAdded: voidToAdd, proratedPerYear },
+                  ],
+                },
+              };
+            }
+
+            // Update team payroll
+            grownTeams = grownTeams.map((t, idx) =>
+              idx === ti ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + capDelta) } : t,
+            );
+
+            aiRestructureNews.push(makeNews({
+              season: newSeason, week: 0, type: 'signing',
+              teamId: team.id, playerIds: [player.id],
+              headline: `${team.city} restructured ${player.firstName} ${player.lastName}'s contract, converting $${conversionAmount}M to signing bonus.`,
+              isUserTeam: false,
+            }));
+
+            restructureCount++;
+          }
+        }
+
         const newSchedule = generateSchedule(grownTeams, newSeason);
 
         // Preserve unsigned players as free agents for in-season signings
@@ -3476,7 +3787,7 @@ export const useGameStore = create<GameStore>()(
           faRefusals: [],
           playoffBracket: null,
           playoffSeeds: null,
-          newsItems: retirementNews,
+          newsItems: [...retirementNews, ...voidNews, ...aiRestructureNews],
           seasonHistory: [...state.seasonHistory, newSummary],
           resigningPlayers: [],
           tradeProposals: [],
@@ -3760,6 +4071,17 @@ export const useGameStore = create<GameStore>()(
           for (const team of teams13) {
             if (!team.revenue) {
               team.revenue = { tickets: 0, merchandise: 0, tvDeal: 0, total: 0 };
+            }
+          }
+        }
+        if (version < 14) {
+          // Add source + season to existing dead cap entries
+          const teams14 = (state.teams as Array<Record<string, unknown>>) ?? [];
+          for (const team of teams14) {
+            const deadCap = (team.deadCap as Array<Record<string, unknown>>) ?? [];
+            for (const dc of deadCap) {
+              if (!dc.source) dc.source = 'release';
+              if (dc.season === undefined) dc.season = (state.season as number) ?? 1;
             }
           }
         }
