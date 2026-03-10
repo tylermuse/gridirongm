@@ -46,10 +46,7 @@ function SettingRow({ label, description, value, onChange, min, max, step, unit,
 }
 
 function AccountCard() {
-  const { user, tier, signOut } = useSubscription();
-
-  const tierLabel = tier === 'elite' ? 'Elite' : tier === 'pro' ? 'Pro' : 'Free';
-  const tierColor = tier === 'elite' ? 'bg-amber-100 text-amber-700' : tier === 'pro' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700';
+  const { user, signOut } = useSubscription();
 
   return (
     <Card className="mb-4">
@@ -62,40 +59,16 @@ function AccountCard() {
             </div>
             <div>
               <div className="text-sm font-medium">{user.email}</div>
-              <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full mt-0.5 ${tierColor}`}>
-                {tierLabel}
-              </span>
             </div>
           </div>
-          <div className="flex gap-2">
-            {tier === 'free' && (
-              <Link href="/pricing">
-                <Button size="sm">Upgrade</Button>
-              </Link>
-            )}
-            {tier !== 'free' && (
-              <Button size="sm" variant="secondary" onClick={async () => {
-                try {
-                  const res = await fetch('/api/stripe/portal', { method: 'POST' });
-                  const data = await res.json();
-                  if (data.url) window.location.href = data.url;
-                } catch { /* ignore */ }
-              }}>
-                Manage Subscription
-              </Button>
-            )}
-            <Button size="sm" variant="ghost" onClick={signOut}>Sign Out</Button>
-          </div>
+          <Button size="sm" variant="ghost" onClick={signOut}>Sign Out</Button>
         </div>
       ) : (
         <div className="flex items-center justify-between">
           <div className="text-sm text-[var(--text-sec)]">
-            Sign in to unlock scouting upgrades and remove ads.
+            Sign in to save your progress across devices.
           </div>
-          <div className="flex gap-2">
-            <Link href="/login"><Button size="sm">Sign In</Button></Link>
-            <Link href="/pricing"><Button size="sm" variant="secondary">View Plans</Button></Link>
-          </div>
+          <Link href="/login"><Button size="sm">Sign In</Button></Link>
         </div>
       )}
     </Card>

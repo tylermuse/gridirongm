@@ -290,7 +290,7 @@ function OnTheClockSection({
                 </div>
                 <div className="px-4 pb-3 text-center py-4">
                   <div className="text-3xl mb-1">?</div>
-                  <div className="text-xs text-[var(--text-sec)]">Upgrade scouting for better intel</div>
+                  <div className="text-xs text-[var(--text-sec)]">Set scouting to Pro or Elite for better intel</div>
                 </div>
               </div>
             ) : scoutsPick ? (
@@ -621,20 +621,12 @@ export default function DraftPage() {
                 className="h-7 px-2 text-xs rounded border border-[var(--border)] bg-[var(--surface-2)]"
                 title={SCOUTING_LEVELS[scoutingLevel]?.tooltip}
               >
-                {SCOUTING_LEVELS.map((level, i) => {
-                  const locked = i > maxLevel;
-                  return (
-                    <option key={i} value={i} disabled={locked}>
-                      {locked ? '🔒 ' : ''}{level.name}{locked ? ` (${level.tier === 'pro' ? 'Pro' : 'Elite'})` : ''}
-                    </option>
-                  );
-                })}
+                {SCOUTING_LEVELS.map((level, i) => (
+                  <option key={i} value={i}>
+                    {level.name}
+                  </option>
+                ))}
               </select>
-              {maxLevel < 2 && (
-                <a href="/pricing" className="text-[10px] text-blue-600 hover:underline ml-1">
-                  Upgrade →
-                </a>
-              )}
             </div>
             <div className="overflow-x-auto">
             <table className="w-full text-sm">

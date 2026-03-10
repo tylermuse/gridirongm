@@ -15,8 +15,6 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { generateTeamSpotlight, COMMENTATORS, type SpotlightContext } from '@/lib/engine/debate';
 import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
-import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import { hasFeature } from '@/lib/subscription';
 
 function TeamPicker() {
   const { newLeague } = useGameStore();
@@ -229,8 +227,7 @@ function TeamSpotlightSection({
   ctx?: SpotlightContext;
   onPlayerClick: (id: string) => void;
 }) {
-  const { tier } = useSubscription();
-  const isPro = hasFeature(tier, 'analytics_dashboard');
+  // All features are free — no tier gating
 
   const topics = React.useMemo(
     () => generateTeamSpotlight(team, roster, allTeams, allPlayers, season, week, ctx),
@@ -241,8 +238,6 @@ function TeamSpotlightSection({
   if (topics.length === 0) return null;
 
   // Free tier: show first topic with only 2 exchanges as teaser
-  const teaserTopic = topics[0];
-  const teaserExchanges = teaserTopic.exchanges.slice(0, 2);
 
   return (
     <div className="mt-6">
@@ -257,103 +252,33 @@ function TeamSpotlightSection({
                 with {COMMENTATORS.stats.name} {COMMENTATORS.stats.avatar} & {COMMENTATORS.hottake.name} {COMMENTATORS.hottake.avatar}
               </p>
             </div>
-            {!isPro && (
-              <Badge size="sm" variant="default">Preview</Badge>
-            )}
           </div>
         </CardHeader>
         <div className="px-4 pb-4">
-          {isPro ? (
-            /* Full content for Pro+ subscribers */
-            <div className="space-y-5">
-              {topics.map((topic, topicIdx) => (
-                <div key={topicIdx}>
-                  {/* Topic headline */}
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-base">{topic.icon}</span>
-                    <h4 className="text-sm font-bold">{topic.headline}</h4>
-                  </div>
-                  {/* Exchanges */}
-                  <div className="space-y-2.5">
-                    {topic.exchanges.map((exchange, exIdx) => (
-                      <DebateBubble
-                        key={exIdx}
-                        exchange={exchange}
-                        onPlayerClick={onPlayerClick}
-                        playerIds={topic.playerIds}
-                        players={allPlayers}
-                      />
-                    ))}
-                  </div>
-                  {topicIdx < topics.length - 1 && (
-                    <div className="border-b border-[var(--border)] mt-4" />
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            /* Teaser for free tier */
-            <div className="relative">
-              {/* Show first topic with 2 exchanges */}
-              <div>
+          <div className="space-y-5">
+            {topics.map((topic, topicIdx) => (
+              <div key={topicIdx}>
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="text-base">{teaserTopic.icon}</span>
-                  <h4 className="text-sm font-bold">{teaserTopic.headline}</h4>
+                  <span className="text-base">{topic.icon}</span>
+                  <h4 className="text-sm font-bold">{topic.headline}</h4>
                 </div>
                 <div className="space-y-2.5">
-                  {teaserExchanges.map((exchange, exIdx) => (
+                  {topic.exchanges.map((exchange, exIdx) => (
                     <DebateBubble
                       key={exIdx}
                       exchange={exchange}
                       onPlayerClick={onPlayerClick}
-                      playerIds={teaserTopic.playerIds}
+                      playerIds={topic.playerIds}
                       players={allPlayers}
                     />
                   ))}
                 </div>
+                {topicIdx < topics.length - 1 && (
+                  <div className="border-b border-[var(--border)] mt-4" />
+                )}
               </div>
-
-              {/* Blurred remaining content */}
-              <div className="relative mt-4">
-                {/* Faux blurred topics */}
-                <div className="filter blur-[6px] pointer-events-none select-none" aria-hidden>
-                  {topics.slice(1, 4).map((topic, idx) => (
-                    <div key={idx} className="mb-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span>{topic.icon}</span>
-                        <span className="text-sm font-bold">{topic.headline}</span>
-                      </div>
-                      <div className="space-y-2">
-                        {topic.exchanges.slice(0, 2).map((ex, i) => (
-                          <div key={i} className={`rounded-xl px-3 py-2 text-sm ${ex.speakerId === 'hottake' ? 'bg-red-50' : 'bg-blue-50'}`}>
-                            {ex.text.slice(0, 80)}...
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Gradient overlay + CTA */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-transparent via-white/80 to-white rounded-lg">
-                  <div className="text-center mt-8">
-                    <p className="text-sm font-bold mb-1">
-                      {topics.length - 1} more topics to explore
-                    </p>
-                    <p className="text-xs text-[var(--text-sec)] mb-3">
-                      Get the full breakdown from Marcus & Tony
-                    </p>
-                    <Link
-                      href="/pricing"
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      Upgrade to Pro
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
       </Card>
     </div>

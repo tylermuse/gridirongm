@@ -168,45 +168,27 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
-function LockedSection({ label, requiredLevel, currentLevel, maxLevel, onUpgrade }: {
+function LockedSection({ label, requiredLevel, onUpgrade }: {
   label: string;
   requiredLevel: 1 | 2;
-  currentLevel: 0 | 1 | 2;
-  maxLevel: number;
+  currentLevel?: 0 | 1 | 2;
+  maxLevel?: number;
   onUpgrade: (level: 0 | 1 | 2) => void;
 }) {
-  // Can the user actually upgrade to this level?
-  const canUnlock = maxLevel >= requiredLevel;
   const levelName = requiredLevel === 1 ? 'Pro' : 'Elite';
 
   return (
     <div className="border-t border-[var(--border)] pt-4 mt-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs text-[var(--text-sec)] opacity-60">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
+        <div className="flex items-center gap-2 text-xs text-[var(--text-sec)]">
           <span>{label}</span>
         </div>
-        {canUnlock ? (
-          <button
-            onClick={() => onUpgrade(requiredLevel as 0 | 1 | 2)}
-            className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-            </svg>
-            Upgrade to {levelName}
-          </button>
-        ) : (
-          <a
-            href="/pricing"
-            className="flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-700 hover:underline"
-          >
-            Get {levelName} →
-          </a>
-        )}
+        <button
+          onClick={() => onUpgrade(requiredLevel as 0 | 1 | 2)}
+          className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors"
+        >
+          Switch to {levelName} Scouting
+        </button>
       </div>
     </div>
   );
@@ -495,25 +477,16 @@ export function ScoutingReportModal({
             <div className="border-t border-[var(--border)] pt-4 mt-4">
               <div className="text-center py-6">
                 <div className="text-3xl mb-2">🔒</div>
-                <p className="text-sm font-bold text-[var(--text)]">Scouting Insights Locked</p>
+                <p className="text-sm font-bold text-[var(--text)]">Entry Scouting Level</p>
                 <p className="text-xs text-[var(--text-sec)] mt-1 max-w-xs mx-auto">
-                  Upgrade to Pro to unlock physical traits, combine measurables, strengths, and scouted ratings.
+                  Switch to Pro or Elite scouting to unlock physical traits, combine measurables, strengths, and scouted ratings.
                 </p>
-                {maxLevel >= 1 ? (
-                  <button
-                    onClick={() => onScoutingLevelChange(1)}
-                    className="mt-3 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Upgrade to Pro Scouting
-                  </button>
-                ) : (
-                  <a
-                    href="/pricing"
-                    className="mt-3 inline-block px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Get Pro →
-                  </a>
-                )}
+                <button
+                  onClick={() => onScoutingLevelChange(1)}
+                  className="mt-3 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Switch to Pro Scouting
+                </button>
               </div>
             </div>
           )}
@@ -683,19 +656,13 @@ export function ScoutingReportModal({
                     className="h-8 px-2 text-xs rounded border border-[var(--border)] bg-[var(--surface)] font-medium"
                   >
                     {SCOUTING_LEVELS.map((level, i) => {
-                      const locked = i > maxLevel;
                       return (
-                        <option key={i} value={i} disabled={locked}>
-                          {locked ? '🔒 ' : ''}{level.name}{locked ? ` (${level.tier === 'pro' ? 'Pro' : 'Elite'})` : ''}
+                        <option key={i} value={i}>
+                          {level.name}
                         </option>
                       );
                     })}
                   </select>
-                  {maxLevel < 2 && (
-                    <a href="/pricing" className="text-[10px] text-blue-600 hover:underline whitespace-nowrap">
-                      Upgrade →
-                    </a>
-                  )}
                 </div>
               </div>
             </div>
