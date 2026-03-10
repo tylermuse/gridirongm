@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import type { Player, DraftPick, Position } from '@/types';
-import { POSITIONS } from '@/types';
+import { POSITIONS, getUnamortizedBonus } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 
 function ratingColor(val: number): string {
@@ -935,6 +935,19 @@ function TradesPage() {
                           ({valueLabel})
                         </span>
                       </div>
+                      {/* Dead money warning for restructured players being traded */}
+                      {(() => {
+                        const tradeDeadCap = offeredPlayerIds.reduce((sum, id) => {
+                          const p = players.find(pl => pl.id === id);
+                          return sum + (p ? getUnamortizedBonus(p.contract) : 0);
+                        }, 0);
+                        if (tradeDeadCap <= 0) return null;
+                        return (
+                          <p className="text-xs text-red-600 mt-1">
+                            Trading creates ${Math.round(tradeDeadCap * 10) / 10}M dead money from restructured contracts
+                          </p>
+                        );
+                      })()}
                       {tradeResult === 'rejected' && (
                         <p className="text-sm text-red-600 mt-1">
                           Trade rejected — offer more value or adjust your asks.

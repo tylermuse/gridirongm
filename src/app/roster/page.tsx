@@ -8,9 +8,10 @@ import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
-import { calculateDeadCap, calculateCapSavings } from '@/types';
-import type { Player, Position } from '@/types';
+import { calculateDeadCap, calculateCapSavings, getCapHit, getUnamortizedBonus, materializeContractYears } from '@/types';
+import type { Player, Position, ContractYear } from '@/types';
 import { POSITIONS, ROSTER_LIMITS } from '@/types';
+import { LEAGUE_MINIMUM_SALARY } from '@/lib/engine/store';
 
 function ratingColor(val: number): string {
   if (val >= 85) return 'text-green-600';
@@ -104,6 +105,8 @@ export default function RosterPage() {
   const [confirmRelease, setConfirmRelease] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [restructurePlayer, setRestructurePlayer] = useState<string | null>(null);
+  const [restructureAmount, setRestructureAmount] = useState(1);
+  const [restructureVoidYears, setRestructureVoidYears] = useState(0);
 
   // Whether we're in an offseason phase where restructuring makes sense
   const isOffseason = phase !== 'regular';
@@ -399,6 +402,9 @@ export default function RosterPage() {
                               {p.firstName} {p.lastName}
                               {champTeamId === userTeamId && <span className="ml-0.5 text-xs" title="Championship Ring">💍</span>}
                             </button>
+                            {p.contract.contractYears?.some(y => y.proratedBonus > 0) && (
+                              <span className="ml-1 text-[9px] font-bold bg-amber-100 text-amber-700 px-1 rounded" title="Contract restructured">R</span>
+                            )}
                           </div>
                           {p.injury && (
                             <span className="text-[10px] text-red-600 block">
@@ -499,30 +505,6 @@ export default function RosterPage() {
                                   : `Cut (save $${p.contract.salary}M)`}
                               </Button>
                               <button onClick={() => setConfirmRelease(null)} className="text-xs text-[var(--text-sec)] hover:text-[var(--text)] px-1">✕</button>
-                            </div>
-                          ) : restructurePlayer === p.id ? (
-                            <div className="flex items-center gap-1 justify-end">
-                              <Button
-                                size="sm"
-                                variant="primary"
-                                onClick={() => {
-                                  const addedYears = p.contract.yearsLeft <= 2 ? 2 : 1;
-                                  const newYears = p.contract.yearsLeft + addedYears;
-                                  const discountPct = 0.85 + (addedYears === 1 ? 0.05 : 0);
-                                  const newAnnual = Math.round(p.contract.salary * discountPct * 10) / 10;
-                                  restructureContract(p.id, newAnnual, newYears);
-                                  setRestructurePlayer(null);
-                                }}
-                              >
-                                {(() => {
-                                  const addedYears = p.contract.yearsLeft <= 2 ? 2 : 1;
-                                  const discountPct = 0.85 + (addedYears === 1 ? 0.05 : 0);
-                                  const newAnnual = Math.round(p.contract.salary * discountPct * 10) / 10;
-                                  const saved = Math.round((p.contract.salary - newAnnual) * 10) / 10;
-                                  return `→ $${newAnnual}M × ${p.contract.yearsLeft + addedYears}yr (save $${saved}M/yr)`;
-                                })()}
-                              </Button>
-                              <button onClick={() => setRestructurePlayer(null)} className="text-xs text-[var(--text-sec)] hover:text-[var(--text)] px-1">✕</button>
                             </div>
                           ) : (
                             /* Action dropdown trigger */
@@ -731,12 +713,18 @@ export default function RosterPage() {
               <>
                 <div className="border-t border-[var(--border)] mx-3 my-0.5" />
                 <button
-                  onClick={() => { setRestructurePlayer(p.id); setActionMenu(null); }}
+                  onClick={() => {
+                    const baseSalary = p.contract.contractYears ? p.contract.contractYears[0].baseSalary : p.contract.salary;
+                    setRestructureAmount(Math.min(Math.floor(baseSalary / 2), Math.max(1, Math.floor(baseSalary - LEAGUE_MINIMUM_SALARY))));
+                    setRestructureVoidYears(0);
+                    setRestructurePlayer(p.id);
+                    setActionMenu(null);
+                  }}
                   className="w-full text-left px-4 py-2.5 text-sm hover:bg-black/5 transition-colors text-amber-600 font-medium"
                 >
-                  Restructure
+                  Restructure Contract
                   <span className="block text-[11px] text-[var(--text-sec)] font-normal mt-0.5">
-                    Lower annual salary, add years
+                    Convert salary to signing bonus
                   </span>
                 </button>
               </>
@@ -758,6 +746,182 @@ export default function RosterPage() {
                 </button>
               </>
             )}
+          </div>
+        );
+      })()}
+      {/* Restructure Contract Modal */}
+      {restructurePlayer && (() => {
+        const p = roster.find(pl => pl.id === restructurePlayer);
+        if (!p) return null;
+
+        const currentYears: ContractYear[] = p.contract.contractYears
+          ? p.contract.contractYears.map(y => ({ ...y }))
+          : materializeContractYears(p.contract);
+
+        const currentBase = currentYears[0].baseSalary;
+        const leagueMin = leagueSettings?.leagueMinSalary ?? LEAGUE_MINIMUM_SALARY;
+        const maxConversion = Math.max(0, Math.floor((currentBase - leagueMin) * 10) / 10);
+        const existingVoidYears = p.contract.voidYears ?? 0;
+        const maxVoidYearsAllowed = 3 - existingVoidYears;
+
+        // Preview calculation
+        const previewYears = currentYears.map(y => ({ ...y }));
+        // Add void years
+        for (let i = 0; i < restructureVoidYears; i++) {
+          previewYears.push({ baseSalary: 0, proratedBonus: 0, isVoidYear: true });
+        }
+        const totalYearsForProration = previewYears.length;
+        const clampedAmount = Math.min(restructureAmount, maxConversion);
+        const proratedPerYear = totalYearsForProration > 0 ? Math.round((clampedAmount / totalYearsForProration) * 100) / 100 : 0;
+
+        // Apply preview
+        const afterYears = previewYears.map((y, i) => {
+          const newBase = i === 0 ? y.baseSalary - clampedAmount : y.baseSalary;
+          return {
+            ...y,
+            baseSalary: newBase,
+            proratedBonus: y.proratedBonus + proratedPerYear,
+          };
+        });
+
+        const beforeCapHit = Math.round((currentYears[0].baseSalary + currentYears[0].proratedBonus) * 100) / 100;
+        const afterCapHit = Math.round((afterYears[0].baseSalary + afterYears[0].proratedBonus) * 100) / 100;
+        const capSaved = Math.round((beforeCapHit - afterCapHit) * 100) / 100;
+        const totalUnamortized = afterYears.reduce((sum, y) => sum + y.proratedBonus, 0);
+
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setRestructurePlayer(null)}>
+            <div className="bg-[var(--surface)] rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="p-5 border-b border-[var(--border)]">
+                <h2 className="text-lg font-bold">Restructure Contract</h2>
+                <p className="text-sm text-[var(--text-sec)] mt-0.5">{p.firstName} {p.lastName} · {p.position} · {p.ratings.overall} OVR</p>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {/* Current info */}
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="bg-[var(--surface-2)] rounded-lg p-3">
+                    <div className="text-[var(--text-sec)] text-xs">Current Year Base</div>
+                    <div className="font-bold text-lg">${currentBase.toFixed(1)}M</div>
+                  </div>
+                  <div className="bg-[var(--surface-2)] rounded-lg p-3">
+                    <div className="text-[var(--text-sec)] text-xs">Years Remaining</div>
+                    <div className="font-bold text-lg">{p.contract.yearsLeft}</div>
+                  </div>
+                </div>
+
+                {/* Conversion amount */}
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Amount to Convert to Signing Bonus</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={1}
+                      max={Math.max(1, maxConversion)}
+                      step={0.5}
+                      value={clampedAmount}
+                      onChange={e => setRestructureAmount(Number(e.target.value))}
+                      className="flex-1"
+                    />
+                    <span className="text-sm font-bold w-16 text-right">${clampedAmount.toFixed(1)}M</span>
+                  </div>
+                  <div className="text-xs text-[var(--text-sec)] mt-0.5">Max: ${maxConversion.toFixed(1)}M (base - league minimum)</div>
+                </div>
+
+                {/* Void years */}
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Add Void Years</label>
+                  <select
+                    value={restructureVoidYears}
+                    onChange={e => setRestructureVoidYears(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm"
+                  >
+                    <option value={0}>0 — No void years</option>
+                    {maxVoidYearsAllowed >= 1 && <option value={1}>1 void year</option>}
+                    {maxVoidYearsAllowed >= 2 && <option value={2}>2 void years</option>}
+                    {maxVoidYearsAllowed >= 3 && <option value={3}>3 void years</option>}
+                  </select>
+                  <div className="text-xs text-[var(--text-sec)] mt-0.5">Spreads bonus across more years but creates future dead money</div>
+                </div>
+
+                {/* Preview table */}
+                <div>
+                  <div className="text-sm font-medium mb-1.5">Preview</div>
+                  <div className="border border-[var(--border)] rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-[var(--surface-2)] text-[var(--text-sec)] text-xs">
+                          <th className="text-left px-3 py-1.5">Year</th>
+                          <th className="text-right px-3 py-1.5">Before</th>
+                          <th className="text-right px-3 py-1.5">After</th>
+                          <th className="text-right px-3 py-1.5">Change</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {afterYears.map((yr, i) => {
+                          const beforeHit = i < currentYears.length
+                            ? Math.round((currentYears[i].baseSalary + currentYears[i].proratedBonus) * 10) / 10
+                            : 0;
+                          const afterHitVal = Math.round((yr.baseSalary + yr.proratedBonus) * 10) / 10;
+                          const delta = Math.round((afterHitVal - beforeHit) * 10) / 10;
+                          const isCurrentYear = i === 0;
+                          return (
+                            <tr
+                              key={i}
+                              className={`border-t border-[var(--border)] ${
+                                yr.isVoidYear ? 'bg-gray-50 text-gray-400' :
+                                isCurrentYear ? 'bg-green-50' : delta > 0 ? 'bg-amber-50/50' : ''
+                              }`}
+                            >
+                              <td className="px-3 py-1.5 font-medium">
+                                {yr.isVoidYear ? `Void ${i + 1}` : `Year ${i + 1}`}
+                              </td>
+                              <td className="px-3 py-1.5 text-right">{beforeHit > 0 ? `$${beforeHit}M` : '—'}</td>
+                              <td className="px-3 py-1.5 text-right font-medium">${afterHitVal.toFixed(1)}M</td>
+                              <td className={`px-3 py-1.5 text-right font-medium ${
+                                delta < 0 ? 'text-green-600' : delta > 0 ? 'text-red-500' : ''
+                              }`}>
+                                {delta !== 0 ? `${delta > 0 ? '+' : ''}$${delta.toFixed(1)}M` : '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Summary */}
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm">
+                  <div className="font-medium text-green-800">Saves ${capSaved.toFixed(1)}M this year</div>
+                </div>
+
+                {totalUnamortized > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+                    <div className="font-medium text-amber-800">
+                      Dead money if cut after restructure: ${Math.round(totalUnamortized * 10) / 10}M
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="p-5 border-t border-[var(--border)] flex justify-end gap-2">
+                <Button size="sm" variant="secondary" onClick={() => setRestructurePlayer(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={clampedAmount < 1 || maxConversion < 1}
+                  onClick={() => {
+                    restructureContract(p.id, clampedAmount, restructureVoidYears);
+                    setRestructurePlayer(null);
+                  }}
+                >
+                  Confirm Restructure
+                </Button>
+              </div>
+            </div>
           </div>
         );
       })()}

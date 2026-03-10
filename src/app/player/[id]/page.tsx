@@ -12,6 +12,7 @@ import { generateCoachEvaluation, generateRosterEvaluation, type CoachEvaluation
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { Position, PlayerRatings } from '@/types';
+import { getCapHit, getUnamortizedBonus } from '@/types';
 
 function ratingColor(val: number) {
   if (val >= 85) return 'text-green-600';
@@ -153,6 +154,39 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                   Potential: {potentialLabel(player.potential, player.experience)}
                 </span>
               </div>
+
+              {/* Contract Year-by-Year Breakdown (restructured contracts) */}
+              {player.contract.contractYears && player.contract.contractYears.some(y => y.proratedBonus > 0) && (
+                <div className="mt-3 border border-[var(--border)] rounded-lg overflow-hidden">
+                  <div className="bg-[var(--surface-2)] px-3 py-1.5 text-xs font-bold text-[var(--text-sec)] uppercase flex justify-between items-center">
+                    <span>Contract Breakdown</span>
+                    <span className="text-amber-600 normal-case font-medium">Restructured</span>
+                  </div>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-[var(--border)] text-[var(--text-sec)]">
+                        <th className="text-left px-3 py-1">Year</th>
+                        <th className="text-right px-3 py-1">Base</th>
+                        <th className="text-right px-3 py-1">Bonus</th>
+                        <th className="text-right px-3 py-1">Cap Hit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {player.contract.contractYears.map((yr, i) => (
+                        <tr key={i} className={`border-b border-[var(--border)] last:border-0 ${yr.isVoidYear ? 'text-gray-400 bg-gray-50' : i === 0 ? 'bg-green-50' : ''}`}>
+                          <td className="px-3 py-1 font-medium">{yr.isVoidYear ? `Void ${i + 1}` : `Year ${i + 1}`}</td>
+                          <td className="px-3 py-1 text-right">${yr.baseSalary.toFixed(1)}M</td>
+                          <td className="px-3 py-1 text-right text-amber-600">{yr.proratedBonus > 0 ? `$${yr.proratedBonus.toFixed(1)}M` : '—'}</td>
+                          <td className="px-3 py-1 text-right font-medium">${(yr.baseSalary + yr.proratedBonus).toFixed(1)}M</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="px-3 py-1.5 bg-amber-50 text-xs text-amber-700">
+                    Dead money if cut/traded: ${getUnamortizedBonus(player.contract).toFixed(1)}M
+                  </div>
+                </div>
+              )}
 
               {/* Injury status */}
               {player.injury && (
