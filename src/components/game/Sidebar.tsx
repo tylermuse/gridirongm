@@ -118,6 +118,14 @@ function AccountSection() {
           <div className="text-xs font-medium truncate">{user.email}</div>
         </div>
       </div>
+      {isAdmin && (
+        <Link
+          href="/admin/analytics"
+          className="block text-[10px] text-center py-1 mb-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors font-medium"
+        >
+          📊 Analytics
+        </Link>
+      )}
       <div className="flex gap-1">
         {isAdmin && (
           <Link

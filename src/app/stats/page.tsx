@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { TeamQuickNav } from '@/components/game/TeamQuickNav';
 
 type StatCategory = 'passYards' | 'rushYards' | 'receivingYards' | 'passTDs' | 'rushTDs' | 'sacks' | 'defensiveINTs' | 'tackles' | 'tacklesForLoss' | 'passDeflections' | 'receptions' | 'forcedFumbles';
 type Tab = 'leaders' | 'teams' | 'power';
@@ -111,6 +112,7 @@ export default function StatsPage() {
   return (
     <GameShell>
       <div className="max-w-5xl mx-auto">
+        <TeamQuickNav currentPage="stats" />
         <h2 className="text-2xl font-black mb-6">Stats & Standings</h2>
 
         {/* Tab bar */}
@@ -145,7 +147,7 @@ export default function StatsPage() {
                 </select>
               </div>
             </CardHeader>
-            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
+            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px] sticky-col">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                   <th className="text-center pb-3 w-8">#</th>
@@ -200,7 +202,7 @@ export default function StatsPage() {
         {tab === 'teams' && (
           <Card>
             <CardHeader><CardTitle>Team Statistics</CardTitle></CardHeader>
-            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
+            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px] sticky-col">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                   <th className="text-center pb-3 w-8">#</th>
@@ -255,7 +257,7 @@ export default function StatsPage() {
                 <span className="text-xs text-[var(--text-sec)]">Week {week} · Record 60% + Diff 25% + Form 15%</span>
               </div>
             </CardHeader>
-            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
+            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px] sticky-col">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                   <th className="text-center pb-3 w-8">#</th>

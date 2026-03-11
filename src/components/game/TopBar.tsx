@@ -256,7 +256,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       variant="secondary"
                       disabled={!nextPlayoffGame}
                     >
-                      Sim All Rounds
+                      Sim Remaining
                     </Button>
                   </>
                 )}
@@ -270,6 +270,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       router.push('/re-sign');
                     }}
                     size="sm"
+                    className="relative z-20"
                   >
                     Advance to Re-signing →
                   </Button>

@@ -136,6 +136,7 @@ export default function FreeAgencyPage() {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null);
   const [walkedAwayIds, setWalkedAwayIds] = useState<Set<string>>(new Set());
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [sortKey, setSortKey] = useState<'name' | 'pos' | 'age' | 'ovr' | 'pot' | 'salary'>('ovr');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -343,7 +344,34 @@ export default function FreeAgencyPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6">
           {/* ── Left sidebar: Roster Composition ─────── */}
-          <div className="space-y-4">
+          {/* Mobile collapsed summary */}
+          <div className="md:hidden">
+            <button
+              onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm"
+            >
+              <span>
+                <span className="font-semibold">Roster: {roster.length}/53</span>
+                <span className="text-[var(--text-sec)] mx-2">·</span>
+                <span className={`${capSpace > 0 ? 'text-green-600' : 'text-red-600'} font-mono font-bold`}>${capSpace}M cap</span>
+                {(() => {
+                  const needs = POSITIONS.filter(pos => positionCounts[pos] < ROSTER_LIMITS[pos].min);
+                  return needs.length > 0 ? (
+                    <>
+                      <span className="text-[var(--text-sec)] mx-2">·</span>
+                      <span className="text-red-600">Needs: {needs.join(', ')}</span>
+                    </>
+                  ) : null;
+                })()}
+              </span>
+              <svg className={`w-4 h-4 text-[var(--text-sec)] transition-transform ${showMobileSidebar ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Desktop sidebar + mobile expanded */}
+          <div className={`space-y-4 ${showMobileSidebar ? '' : 'hidden md:block'}`}>
             <Card>
               <CardHeader><CardTitle>Roster ({roster.length})</CardTitle></CardHeader>
               <div className="space-y-1.5">
@@ -606,7 +634,7 @@ export default function FreeAgencyPage() {
             {/* Free agent table */}
             <Card>
               <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[700px]">
+              <table className="w-full text-sm min-w-[700px] sticky-col sticky-action">
                 <thead>
                   <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                     <th className="text-left pb-3 pl-2 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => toggleSort('name')}>Player{sortArrow('name')}</th>

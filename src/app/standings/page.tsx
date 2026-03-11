@@ -13,6 +13,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import type { GameResult, Team } from '@/types';
+import { TeamQuickNav } from '@/components/game/TeamQuickNav';
 
 type StandingsView = 'division' | 'conference' | 'league';
 
@@ -21,10 +22,41 @@ function winPct(t: Team) {
   return total > 0 ? t.record.wins / total : 0;
 }
 
-function StandingsTable({ teamList, userTeamId, onTeamClick }: { teamList: Team[]; userTeamId: string | null; onTeamClick: (teamId: string) => void }) {
+function clinchIndicator(team: Team, allTeams: Team[], schedule: GameResult[], maxWeek: number, currentWeek: number): string {
+  const conf = team.conference;
+  const div = team.division;
+
+  // Remaining games for a team
+  const remaining = (t: Team) => schedule.filter(g => !g.played && (g.homeTeamId === t.id || g.awayTeamId === t.id)).length;
+
+  const teamMaxWins = team.record.wins + remaining(team);
+
+  // Division teams
+  const divTeams = allTeams.filter(t => t.conference === conf && t.division === div);
+  const confTeams = allTeams.filter(t => t.conference === conf);
+
+  // y = clinched division: team's wins > all other div teams' max possible wins
+  const clinchedDiv = divTeams.every(t => t.id === team.id || team.record.wins > t.record.wins + remaining(t));
+  if (clinchedDiv) return 'y';
+
+  // x = clinched playoff: team's wins exceed max possible wins of enough conf teams
+  // 7 playoff spots per conference; if at most 6 conf teams could surpass this team, clinched
+  const confTeamsThatCouldPass = confTeams.filter(t => t.id !== team.id && (t.record.wins + remaining(t)) >= team.record.wins).length;
+  if (confTeamsThatCouldPass < 7) return 'x';
+
+  // e = eliminated: team's max wins < current 7th-best conf record
+  const confSorted = [...confTeams].sort((a, b) => b.record.wins - a.record.wins);
+  const seventhBestWins = confSorted[6]?.record.wins ?? 0;
+  if (teamMaxWins < seventhBestWins) return 'e';
+
+  return '';
+}
+
+function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams, schedule, maxWeek, currentWeek }: { teamList: Team[]; userTeamId: string | null; onTeamClick: (teamId: string) => void; expanded?: boolean; allTeams?: Team[]; schedule?: GameResult[]; maxWeek?: number; currentWeek?: number }) {
+  const leaderWins = teamList[0]?.record.wins ?? 0;
   return (
     <div className="overflow-x-auto">
-    <table className="w-full text-sm min-w-[500px]">
+    <table className="w-full text-sm min-w-[500px] sticky-col">
       <thead>
         <tr className="text-[var(--text-sec)] text-xs">
           <th className="text-left pb-1">#</th>
@@ -32,9 +64,19 @@ function StandingsTable({ teamList, userTeamId, onTeamClick }: { teamList: Team[
           <th className="text-center pb-1">W</th>
           <th className="text-center pb-1">L</th>
           <th className="text-center pb-1">PCT</th>
-          <th className="text-right pb-1">PF</th>
-          <th className="text-right pb-1">PA</th>
+          <th className="text-center pb-1">GB</th>
+          <th className="text-right pb-1 hidden sm:table-cell">PF</th>
+          <th className="text-right pb-1 hidden sm:table-cell">PA</th>
           <th className="text-right pb-1">DIFF</th>
+          <th className="text-center pb-1">STRK</th>
+          {expanded && (
+            <>
+              <th className="text-center pb-1 hidden lg:table-cell">HOME</th>
+              <th className="text-center pb-1 hidden lg:table-cell">AWAY</th>
+              <th className="text-center pb-1 hidden lg:table-cell">DIV</th>
+              <th className="text-center pb-1 hidden lg:table-cell">CONF</th>
+            </>
+          )}
         </tr>
       </thead>
       <tbody>
@@ -42,6 +84,10 @@ function StandingsTable({ teamList, userTeamId, onTeamClick }: { teamList: Team[
           const total = t.record.wins + t.record.losses;
           const pct = total > 0 ? (t.record.wins / total).toFixed(3) : '.000';
           const diff = t.record.pointsFor - t.record.pointsAgainst;
+          const gb = leaderWins - t.record.wins;
+          const streak = t.record.streak;
+          const streakStr = streak === 0 ? '-' : streak > 0 ? `W${streak}` : `L${Math.abs(streak)}`;
+          const clinch = allTeams && schedule ? clinchIndicator(t, allTeams, schedule, maxWeek ?? 18, currentWeek ?? 1) : '';
           return (
             <tr
               key={t.id}
@@ -52,17 +98,36 @@ function StandingsTable({ teamList, userTeamId, onTeamClick }: { teamList: Team[
               <td className="py-1.5">
                 <div className="flex items-center gap-2">
                   <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="sm" />
-                  <span className="truncate">{t.city} {t.name}</span>
+                  <span className="truncate">
+                    {t.city} {t.name}
+                    {clinch && (
+                      <span className={`ml-1 text-[10px] font-bold ${clinch === 'e' ? 'text-red-500' : 'text-green-600'}`}>
+                        {clinch}
+                      </span>
+                    )}
+                  </span>
                 </div>
               </td>
               <td className="py-1.5 text-center">{t.record.wins}</td>
               <td className="py-1.5 text-center">{t.record.losses}</td>
               <td className="py-1.5 text-center font-mono text-xs">{pct}</td>
-              <td className="py-1.5 text-right">{t.record.pointsFor}</td>
-              <td className="py-1.5 text-right">{t.record.pointsAgainst}</td>
+              <td className="py-1.5 text-center text-xs text-[var(--text-sec)]">{gb === 0 ? '-' : gb}</td>
+              <td className="py-1.5 text-right hidden sm:table-cell">{t.record.pointsFor}</td>
+              <td className="py-1.5 text-right hidden sm:table-cell">{t.record.pointsAgainst}</td>
               <td className={`py-1.5 text-right font-mono ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : ''}`}>
                 {diff > 0 ? '+' : ''}{diff}
               </td>
+              <td className={`py-1.5 text-center text-xs font-medium ${streak > 0 ? 'text-green-600' : streak < 0 ? 'text-red-600' : ''}`}>
+                {streakStr}
+              </td>
+              {expanded && (
+                <>
+                  <td className="py-1.5 text-center text-xs hidden lg:table-cell">{t.record.homeWins ?? 0}-{t.record.homeLosses ?? 0}</td>
+                  <td className="py-1.5 text-center text-xs hidden lg:table-cell">{t.record.awayWins ?? 0}-{t.record.awayLosses ?? 0}</td>
+                  <td className="py-1.5 text-center text-xs hidden lg:table-cell">{t.record.divisionWins}-{t.record.divisionLosses}</td>
+                  <td className="py-1.5 text-center text-xs hidden lg:table-cell">{t.record.conferenceWins ?? 0}-{t.record.conferenceLosses ?? 0}</td>
+                </>
+              )}
             </tr>
           );
         })}
@@ -81,6 +146,7 @@ export default function StandingsPage() {
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
+  const maxWeek = schedule.length > 0 ? Math.max(...schedule.map(g => g.week)) : 18;
   const conferences = ['AC', 'NC'] as const;
   const divisions = ['North', 'South', 'East', 'West'] as const;
 
@@ -131,7 +197,10 @@ export default function StandingsPage() {
       <div className="max-w-6xl mx-auto">
         {/* Header with tab toggle */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-black">Standings & Schedule</h2>
+          <div>
+            <TeamQuickNav currentPage="standings" />
+            <h2 className="text-2xl font-black">Standings & Schedule</h2>
+          </div>
           <div className="flex bg-[var(--surface-2)] rounded-lg p-0.5">
             <button
               onClick={() => setTab('standings')}
@@ -170,7 +239,7 @@ export default function StandingsPage() {
             </div>
 
             {view === 'division' && (
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {conferences.map(conf => (
                   <div key={conf} className="space-y-4">
                     <h3 className="text-lg font-bold text-blue-600">{conf}</h3>
@@ -181,7 +250,7 @@ export default function StandingsPage() {
                           <CardHeader className="mb-2">
                             <CardTitle>{conf} {div}</CardTitle>
                           </CardHeader>
-                          <StandingsTable teamList={divTeams} userTeamId={userTeamId} onTeamClick={(id) => setViewTeamId(id)} />
+                          <StandingsTable teamList={divTeams} userTeamId={userTeamId} onTeamClick={(id) => setViewTeamId(id)} allTeams={teams} schedule={schedule} maxWeek={maxWeek} currentWeek={week} />
                         </Card>
                       );
                     })}
@@ -191,7 +260,7 @@ export default function StandingsPage() {
             )}
 
             {view === 'conference' && (
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {conferences.map(conf => {
                   const confTeams = sortedTeams(teams.filter(t => t.conference === conf));
                   return (
@@ -199,7 +268,7 @@ export default function StandingsPage() {
                       <CardHeader className="mb-2">
                         <CardTitle>{conf}</CardTitle>
                       </CardHeader>
-                      <StandingsTable teamList={confTeams} userTeamId={userTeamId} onTeamClick={(id) => setViewTeamId(id)} />
+                      <StandingsTable teamList={confTeams} userTeamId={userTeamId} onTeamClick={(id) => setViewTeamId(id)} allTeams={teams} schedule={schedule} maxWeek={maxWeek} currentWeek={week} expanded />
                     </Card>
                   );
                 })}
@@ -211,7 +280,7 @@ export default function StandingsPage() {
                 <CardHeader className="mb-2">
                   <CardTitle>League Standings</CardTitle>
                 </CardHeader>
-                <StandingsTable teamList={sortedTeams(teams)} userTeamId={userTeamId} onTeamClick={(id) => setViewTeamId(id)} />
+                <StandingsTable teamList={sortedTeams(teams)} userTeamId={userTeamId} onTeamClick={(id) => setViewTeamId(id)} allTeams={teams} schedule={schedule} maxWeek={maxWeek} currentWeek={week} expanded />
               </Card>
             )}
           </>

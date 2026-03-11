@@ -627,9 +627,14 @@ export default function DraftPage() {
                   </option>
                 ))}
               </select>
+              {maxLevel < 2 && (
+                <a href="/pricing" className="text-[10px] text-blue-600 hover:underline ml-1">
+                  Upgrade →
+                </a>
+              )}
             </div>
             <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm sticky-col">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                   <th className="text-left pb-2 pl-2">#</th>
@@ -724,7 +729,7 @@ export default function DraftPage() {
               </div>
             </CardHeader>
             <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm sticky-col">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                   <th className="text-left pb-2 pl-2">Pick</th>
@@ -804,7 +809,7 @@ export default function DraftPage() {
                 <CardTitle>Draft Recap — Team Grades</CardTitle>
               </CardHeader>
               <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm sticky-col">
                 <thead>
                   <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                     <th className="text-left pb-2 pl-3">#</th>

@@ -154,6 +154,25 @@ export default function DraftRecapPage() {
                 </div>
               </div>
             </div>
+            {/* Share to social */}
+            <div className="flex gap-2 mt-3">
+              <a
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Just drafted my class for the ${userTeam?.city} ${userTeam?.name}! Grade: ${userReport.grade} (Ranked #${userRank} of ${teams.length}) 🏈 Play Gridiron GM free:`)}&url=${encodeURIComponent('https://gmgridiron.com?ref=twitter')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 text-xs font-medium text-[var(--text-sec)] hover:text-[var(--text)] bg-[var(--surface-2)] hover:bg-[var(--border)] rounded-lg transition-colors"
+              >
+                Share on X
+              </a>
+              <a
+                href={`https://reddit.com/submit?title=${encodeURIComponent(`My ${userTeam?.city} ${userTeam?.name} draft class got a ${userReport.grade} grade (#${userRank} of ${teams.length}) — Gridiron GM`)}&url=${encodeURIComponent('https://gmgridiron.com?ref=reddit')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 text-xs font-medium text-[var(--text-sec)] hover:text-[var(--text)] bg-[var(--surface-2)] hover:bg-[var(--border)] rounded-lg transition-colors"
+              >
+                Share on Reddit
+              </a>
+            </div>
           </Card>
         )}
 

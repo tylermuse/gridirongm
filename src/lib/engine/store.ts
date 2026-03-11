@@ -80,6 +80,7 @@ interface GameStore extends LeagueState {
     skipValueCheck?: boolean,
   ) => boolean;
   respondToTradeProposal: (proposalId: string, accept: boolean) => boolean;
+  rejectAllTradeProposals: () => void;
   solicitTradingBlockProposals: (playerIds: string[], pickIds: string[], seekPositions: Position[], seekDraftPicks?: boolean) => void;
   // PRD-07: Scouting
   setScoutingLevel: (level: 0 | 1 | 2) => void;
@@ -1166,17 +1167,31 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       const oppScore = isHome ? game.awayScore : game.homeScore;
       record.pointsFor += teamScore;
       record.pointsAgainst += oppScore;
-      if (teamScore > oppScore) {
+      const won = teamScore > oppScore;
+      if (won) {
         record.wins += 1;
         record.streak = record.streak >= 0 ? record.streak + 1 : 1;
       } else {
         record.losses += 1;
         record.streak = record.streak <= 0 ? record.streak - 1 : -1;
       }
+      // Home/away tracking
+      if (isHome) {
+        if (won) record.homeWins = (record.homeWins ?? 0) + 1;
+        else record.homeLosses = (record.homeLosses ?? 0) + 1;
+      } else {
+        if (won) record.awayWins = (record.awayWins ?? 0) + 1;
+        else record.awayLosses = (record.awayLosses ?? 0) + 1;
+      }
       const opponent = state.teams.find(t => t.id === (isHome ? game.awayTeamId : game.homeTeamId));
       if (opponent && opponent.conference === team.conference && opponent.division === team.division) {
-        if (teamScore > oppScore) record.divisionWins += 1;
+        if (won) record.divisionWins += 1;
         else record.divisionLosses += 1;
+      }
+      // Conference tracking
+      if (opponent && opponent.conference === team.conference) {
+        if (won) record.conferenceWins = (record.conferenceWins ?? 0) + 1;
+        else record.conferenceLosses = (record.conferenceLosses ?? 0) + 1;
       }
     }
     return { ...team, record };
@@ -3169,6 +3184,17 @@ export const useGameStore = create<GameStore>()(
         });
 
         return success;
+      },
+
+      rejectAllTradeProposals: () => {
+        const state = get();
+        const pending = state.tradeProposals.filter(p => p.status === 'pending');
+        if (pending.length === 0) return;
+        set({
+          tradeProposals: state.tradeProposals.map(p =>
+            p.status === 'pending' ? { ...p, status: 'rejected' } : p,
+          ),
+        });
       },
 
       solicitTradingBlockProposals: (blockedPlayerIds: string[], blockedPickIds: string[], seekPositions: Position[], seekDraftPicks?: boolean) => {

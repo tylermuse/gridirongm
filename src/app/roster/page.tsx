@@ -11,6 +11,7 @@ import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { calculateDeadCap, calculateCapSavings, getCapHit, getUnamortizedBonus, materializeContractYears } from '@/types';
 import type { Player, Position, ContractYear } from '@/types';
 import { POSITIONS, ROSTER_LIMITS } from '@/types';
+import { TeamQuickNav } from '@/components/game/TeamQuickNav';
 import { LEAGUE_MINIMUM_SALARY } from '@/lib/engine/store';
 
 function ratingColor(val: number): string {
@@ -274,6 +275,7 @@ export default function RosterPage() {
         {/* Header bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
+            <TeamQuickNav currentPage="roster" />
             <h2 className="text-2xl font-black">{userTeam?.city} {userTeam?.name} Roster</h2>
             <div className="flex items-center gap-4 text-sm text-[var(--text-sec)] mt-1">
               <span>{roster.length} players</span>
@@ -353,7 +355,7 @@ export default function RosterPage() {
             </div>
 
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-x-auto">
-              <table className="w-full text-sm min-w-[700px]">
+              <table className="w-full text-sm min-w-[700px] sticky-col">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
                     <SortHeader k="name" className="text-left pl-3 w-48">Name</SortHeader>
@@ -625,7 +627,7 @@ export default function RosterPage() {
                   <CardTitle>Injury Report ({injuredPlayers.length})</CardTitle>
                 </CardHeader>
                 <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[500px]">
+                <table className="w-full text-sm min-w-[500px] sticky-col">
                   <thead>
                     <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                       <th className="text-left pb-3 pl-2">Player</th>

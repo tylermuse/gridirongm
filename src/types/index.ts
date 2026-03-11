@@ -158,6 +158,12 @@ export interface TeamRecord {
   streak: number;
   divisionWins: number;
   divisionLosses: number;
+  homeWins: number;
+  homeLosses: number;
+  awayWins: number;
+  awayLosses: number;
+  conferenceWins: number;
+  conferenceLosses: number;
 }
 
 export interface DeadCapEntry {
@@ -573,5 +579,8 @@ export function emptyRecord(): TeamRecord {
     wins: 0, losses: 0, ties: 0,
     pointsFor: 0, pointsAgainst: 0,
     streak: 0, divisionWins: 0, divisionLosses: 0,
+    homeWins: 0, homeLosses: 0,
+    awayWins: 0, awayLosses: 0,
+    conferenceWins: 0, conferenceLosses: 0,
   };
 }

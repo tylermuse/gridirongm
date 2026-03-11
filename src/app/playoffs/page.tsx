@@ -427,6 +427,25 @@ export default function PlayoffsPage() {
                 🎉 Congratulations — you won The Championship!
               </div>
             )}
+            {/* Share to social */}
+            <div className="flex gap-2 justify-center mt-4">
+              <a
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`🏆 The ${champion.city} ${champion.name} are Season ${season} Champions! ${superBowl.homeScore !== null ? `Won ${superBowl.homeScore}-${superBowl.awayScore}` : ''} Built this dynasty in Gridiron GM:`)}&url=${encodeURIComponent('https://gmgridiron.com?ref=twitter')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 text-xs font-bold bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+              >
+                Share on X
+              </a>
+              <a
+                href={`https://reddit.com/submit?title=${encodeURIComponent(`The ${champion.city} ${champion.name} are Season ${season} Champions! — Gridiron GM`)}&url=${encodeURIComponent('https://gmgridiron.com?ref=reddit')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 text-xs font-bold bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+              >
+                Share on Reddit
+              </a>
+            </div>
           </div>
         )}
 
