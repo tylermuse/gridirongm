@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import type { Position } from '@/types';
 import { POSITIONS } from '@/types';
+import { TeamQuickNav } from '@/components/game/TeamQuickNav';
 
 function ratingColor(val: number) {
   if (val >= 80) return 'text-green-600';
@@ -69,6 +70,7 @@ export default function FinancesPage() {
   return (
     <GameShell>
       <div className="max-w-5xl mx-auto space-y-6">
+        <TeamQuickNav currentPage="finances" />
         <h2 className="text-2xl font-black mb-6">Finances & Cap Management</h2>
 
         {/* Cap summary */}

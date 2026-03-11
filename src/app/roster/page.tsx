@@ -11,6 +11,7 @@ import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { calculateDeadCap, calculateCapSavings } from '@/types';
 import type { Player, Position } from '@/types';
 import { POSITIONS, ROSTER_LIMITS } from '@/types';
+import { TeamQuickNav } from '@/components/game/TeamQuickNav';
 
 function ratingColor(val: number): string {
   if (val >= 85) return 'text-green-600';
@@ -37,7 +38,7 @@ function getStatColumns(pos: Position): [string, string] {
     case 'RB': return ['ATT · Yds', 'TD / FUM'];
     case 'WR': return ['REC/TGT · Yds', 'TD'];
     case 'TE': return ['REC/TGT · Yds', 'TD'];
-    case 'OL': return ['GP', ''];
+    case 'OL': return ['SA / Blks', 'SA%'];
     case 'DL': return ['TKL / TFL', 'SCK'];
     case 'LB': return ['TKL / TFL', 'SCK / FF'];
     case 'CB': return ['TKL / PD', 'INT'];
@@ -56,7 +57,7 @@ function getStatValues(p: Player): [string, string] {
     case 'RB': return [`${s.rushAttempts} · ${s.rushYards}`, `${s.rushTDs} / ${s.fumbles}`];
     case 'WR': return [`${s.receptions}/${s.targets} · ${s.receivingYards}`, String(s.receivingTDs)];
     case 'TE': return [`${s.receptions}/${s.targets} · ${s.receivingYards}`, String(s.receivingTDs)];
-    case 'OL': return [String(s.gamesPlayed), ''];
+    case 'OL': return [`${s.sacksAllowed ?? 0} / ${s.passBlocks ?? 0}`, `${(s.passBlocks ?? 0) > 0 ? ((s.sacksAllowed ?? 0) / s.passBlocks * 100).toFixed(1) : '0.0'}%`];
     case 'DL': return [`${s.tackles} / ${s.tacklesForLoss ?? 0}`, String(s.sacks)];
     case 'LB': return [`${s.tackles} / ${s.tacklesForLoss ?? 0}`, `${s.sacks} / ${s.forcedFumbles}`];
     case 'CB': return [`${s.tackles} / ${s.passDeflections ?? 0}`, String(s.defensiveINTs)];
@@ -81,7 +82,7 @@ function getGenericStat(p: Player): string {
     case 'CB':
     case 'S': return `${s.tackles} tkl · ${s.passDeflections ?? 0} PD · ${s.defensiveINTs} INT`;
     case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG${s.fieldGoalAttempts > 0 ? ` (${Math.round(s.fieldGoalsMade / s.fieldGoalAttempts * 100)}%)` : ''}`;
-    case 'OL':
+    case 'OL': return `${s.gamesPlayed} GP · ${s.sacksAllowed ?? 0} SA · ${(s.passBlocks ?? 0) > 0 ? ((s.sacksAllowed ?? 0) / s.passBlocks * 100).toFixed(1) : '0.0'}%`;
     case 'P': return `${s.gamesPlayed} GP`;
     default: return '—';
   }
@@ -268,6 +269,7 @@ export default function RosterPage() {
         {/* Header bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
+            <TeamQuickNav currentPage="roster" />
             <h2 className="text-2xl font-black">{userTeam?.city} {userTeam?.name} Roster</h2>
             <div className="flex items-center gap-4 text-sm text-[var(--text-sec)] mt-1">
               <span>{roster.length} players</span>
@@ -347,7 +349,7 @@ export default function RosterPage() {
             </div>
 
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-x-auto">
-              <table className="w-full text-sm min-w-[700px]">
+              <table className="w-full text-sm min-w-[700px] sticky-col">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
                     <SortHeader k="name" className="text-left pl-3 w-48">Name</SortHeader>
@@ -640,7 +642,7 @@ export default function RosterPage() {
                   <CardTitle>Injury Report ({injuredPlayers.length})</CardTitle>
                 </CardHeader>
                 <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[500px]">
+                <table className="w-full text-sm min-w-[500px] sticky-col">
                   <thead>
                     <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                       <th className="text-left pb-3 pl-2">Player</th>

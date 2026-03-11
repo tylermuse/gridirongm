@@ -20,14 +20,14 @@ function ratingColor(val: number): string {
   return 'text-red-600';
 }
 
-function positionStats(p: { position: string; stats: { gamesPlayed: number; passYards: number; passTDs: number; interceptions: number; rushYards: number; rushTDs: number; receptions: number; receivingYards: number; receivingTDs: number; tackles: number; sacks: number; defensiveINTs: number; fieldGoalsMade: number; fieldGoalAttempts: number } }): string {
+function positionStats(p: { position: string; stats: { gamesPlayed: number; passYards: number; passTDs: number; interceptions: number; rushYards: number; rushTDs: number; receptions: number; receivingYards: number; receivingTDs: number; tackles: number; sacks: number; defensiveINTs: number; fieldGoalsMade: number; fieldGoalAttempts: number; sacksAllowed: number; passBlocks: number } }): string {
   const s = p.stats;
   if (s.gamesPlayed === 0) return '—';
   switch (p.position) {
     case 'QB': return `${s.passYards} YDS / ${s.passTDs} TD / ${s.interceptions} INT`;
     case 'RB': return `${s.rushYards} YDS / ${s.rushTDs} TD`;
     case 'WR': case 'TE': return `${s.receptions} REC / ${s.receivingYards} YDS / ${s.receivingTDs} TD`;
-    case 'OL': return `${s.gamesPlayed} GP`;
+    case 'OL': return `${s.gamesPlayed} GP / ${s.sacksAllowed ?? 0} SA / ${(s.passBlocks ?? 0) > 0 ? ((s.sacksAllowed ?? 0) / s.passBlocks * 100).toFixed(1) : '0.0'}%`;
     case 'DL': case 'LB': return `${s.tackles} TKL / ${s.sacks} SCK`;
     case 'CB': case 'S': return `${s.tackles} TKL / ${s.defensiveINTs} INT`;
     case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG${s.fieldGoalAttempts > 0 ? ` (${Math.round(s.fieldGoalsMade / s.fieldGoalAttempts * 100)}%)` : ''}`;
@@ -136,6 +136,7 @@ export default function FreeAgencyPage() {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null);
   const [walkedAwayIds, setWalkedAwayIds] = useState<Set<string>>(new Set());
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
 
   // Allow free agent signings during regular season and freeAgency phase (teams can sign FAs anytime)
   const canSignFreeAgents = phase === 'freeAgency' || phase === 'regular';
@@ -315,9 +316,36 @@ export default function FreeAgencyPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-[240px_1fr] gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6">
           {/* ── Left sidebar: Roster Composition ─────── */}
-          <div className="space-y-4">
+          {/* Mobile collapsed summary */}
+          <div className="md:hidden">
+            <button
+              onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm"
+            >
+              <span>
+                <span className="font-semibold">Roster: {roster.length}/53</span>
+                <span className="text-[var(--text-sec)] mx-2">·</span>
+                <span className={`${capSpace > 0 ? 'text-green-600' : 'text-red-600'} font-mono font-bold`}>${capSpace}M cap</span>
+                {(() => {
+                  const needs = POSITIONS.filter(pos => positionCounts[pos] < ROSTER_LIMITS[pos].min);
+                  return needs.length > 0 ? (
+                    <>
+                      <span className="text-[var(--text-sec)] mx-2">·</span>
+                      <span className="text-red-600">Needs: {needs.join(', ')}</span>
+                    </>
+                  ) : null;
+                })()}
+              </span>
+              <svg className={`w-4 h-4 text-[var(--text-sec)] transition-transform ${showMobileSidebar ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Desktop sidebar + mobile expanded */}
+          <div className={`space-y-4 ${showMobileSidebar ? '' : 'hidden md:block'}`}>
             <Card>
               <CardHeader><CardTitle>Roster ({roster.length})</CardTitle></CardHeader>
               <div className="space-y-1.5">
@@ -580,7 +608,7 @@ export default function FreeAgencyPage() {
             {/* Free agent table */}
             <Card>
               <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[700px]">
+              <table className="w-full text-sm min-w-[700px] sticky-col sticky-action">
                 <thead>
                   <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                     <th className="text-left pb-3 pl-2">Player</th>

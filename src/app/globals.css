@@ -28,3 +28,49 @@ html, body {
 /* Hide scrollbar for game ticker */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Sticky first column for mobile data tables */
+.sticky-col th:first-child,
+.sticky-col td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background-color: var(--surface);
+}
+.sticky-col tr:hover td:first-child {
+  background-color: var(--surface-2);
+}
+.sticky-col th:first-child::after,
+.sticky-col td:first-child::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(to right, rgba(0,0,0,0.08), transparent);
+  pointer-events: none;
+}
+
+/* Sticky last column (action buttons) for mobile */
+.sticky-action th:last-child,
+.sticky-action td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background-color: var(--surface);
+}
+.sticky-action tr:hover td:last-child {
+  background-color: var(--surface-2);
+}
+.sticky-action th:last-child::before,
+.sticky-action td:last-child::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4px;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(to left, rgba(0,0,0,0.08), transparent);
+  pointer-events: none;
+}

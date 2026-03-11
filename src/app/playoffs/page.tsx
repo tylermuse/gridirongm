@@ -248,9 +248,9 @@ function ConferenceBracket({
 // Stat line helper
 // ---------------------------------------------------------------------------
 
-type StatShape = { gamesPlayed: number; passYards: number; passTDs: number; interceptions: number; rushYards: number; rushTDs: number; receptions: number; receivingYards: number; receivingTDs: number; tackles: number; sacks: number; defensiveINTs: number; fieldGoalsMade: number; fieldGoalAttempts: number };
+type StatShape = { gamesPlayed: number; passYards: number; passTDs: number; interceptions: number; rushYards: number; rushTDs: number; receptions: number; receivingYards: number; receivingTDs: number; tackles: number; sacks: number; defensiveINTs: number; fieldGoalsMade: number; fieldGoalAttempts: number; sacksAllowed: number; passBlocks: number };
 
-const ZERO_STATS: StatShape = { gamesPlayed: 0, passYards: 0, passTDs: 0, interceptions: 0, rushYards: 0, rushTDs: 0, receptions: 0, receivingYards: 0, receivingTDs: 0, tackles: 0, sacks: 0, defensiveINTs: 0, fieldGoalsMade: 0, fieldGoalAttempts: 0 };
+const ZERO_STATS: StatShape = { gamesPlayed: 0, passYards: 0, passTDs: 0, interceptions: 0, rushYards: 0, rushTDs: 0, receptions: 0, receivingYards: 0, receivingTDs: 0, tackles: 0, sacks: 0, defensiveINTs: 0, fieldGoalsMade: 0, fieldGoalAttempts: 0, sacksAllowed: 0, passBlocks: 0 };
 
 function posStatLine(p: { position: string; stats: StatShape }, overrideStats?: Partial<StatShape>): string {
   const s = overrideStats ? { ...ZERO_STATS, ...overrideStats } as StatShape : p.stats;
@@ -259,7 +259,7 @@ function posStatLine(p: { position: string; stats: StatShape }, overrideStats?: 
     case 'QB': return `${s.passYards} YDS · ${s.passTDs} TD · ${s.interceptions} INT`;
     case 'RB': return `${s.rushYards} YDS · ${s.rushTDs} TD · ${s.receptions} REC`;
     case 'WR': case 'TE': return `${s.receptions} REC · ${s.receivingYards} YDS · ${s.receivingTDs} TD`;
-    case 'OL': return `${s.gamesPlayed} GP`;
+    case 'OL': return `${s.gamesPlayed} GP · ${s.sacksAllowed ?? 0} SA · ${(s.passBlocks ?? 0) > 0 ? ((s.sacksAllowed ?? 0) / s.passBlocks * 100).toFixed(1) : '0.0'}%`;
     case 'DL': case 'LB': return `${s.tackles} TKL · ${s.sacks.toFixed(1)} SCK · ${s.defensiveINTs} INT`;
     case 'CB': case 'S': return `${s.tackles} TKL · ${s.defensiveINTs} INT`;
     case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG${s.fieldGoalAttempts > 0 ? ` (${Math.round(s.fieldGoalsMade / s.fieldGoalAttempts * 100)}%)` : ''}`;
@@ -406,6 +406,25 @@ export default function PlayoffsPage() {
                 🎉 Congratulations — you won The Championship!
               </div>
             )}
+            {/* Share to social */}
+            <div className="flex gap-2 justify-center mt-4">
+              <a
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`🏆 The ${champion.city} ${champion.name} are Season ${season} Champions! ${superBowl.homeScore !== null ? `Won ${superBowl.homeScore}-${superBowl.awayScore}` : ''} Built this dynasty in Gridiron GM:`)}&url=${encodeURIComponent('https://gmgridiron.com?ref=twitter')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 text-xs font-bold bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+              >
+                Share on X
+              </a>
+              <a
+                href={`https://reddit.com/submit?title=${encodeURIComponent(`The ${champion.city} ${champion.name} are Season ${season} Champions! — Gridiron GM`)}&url=${encodeURIComponent('https://gmgridiron.com?ref=reddit')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 text-xs font-bold bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+              >
+                Share on Reddit
+              </a>
+            </div>
           </div>
         )}
 

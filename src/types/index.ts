@@ -68,6 +68,9 @@ export interface PlayerStats {
   defensiveINTs: number;
   passDeflections: number;
   forcedFumbles: number;
+  // Offensive line
+  sacksAllowed: number;
+  passBlocks: number;
   // Kicking
   fieldGoalAttempts: number;
   fieldGoalsMade: number;
@@ -132,6 +135,12 @@ export interface TeamRecord {
   streak: number;
   divisionWins: number;
   divisionLosses: number;
+  homeWins: number;
+  homeLosses: number;
+  awayWins: number;
+  awayLosses: number;
+  conferenceWins: number;
+  conferenceLosses: number;
 }
 
 export interface DeadCapEntry {
@@ -472,6 +481,7 @@ export function emptyStats(): PlayerStats {
     rushAttempts: 0, rushYards: 0, rushTDs: 0, fumbles: 0,
     targets: 0, receptions: 0, receivingYards: 0, receivingTDs: 0,
     tackles: 0, tacklesForLoss: 0, sacks: 0, defensiveINTs: 0, passDeflections: 0, forcedFumbles: 0,
+    sacksAllowed: 0, passBlocks: 0,
     fieldGoalAttempts: 0, fieldGoalsMade: 0, extraPointAttempts: 0, extraPointsMade: 0,
   };
 }
@@ -481,5 +491,8 @@ export function emptyRecord(): TeamRecord {
     wins: 0, losses: 0, ties: 0,
     pointsFor: 0, pointsAgainst: 0,
     streak: 0, divisionWins: 0, divisionLosses: 0,
+    homeWins: 0, homeLosses: 0,
+    awayWins: 0, awayLosses: 0,
+    conferenceWins: 0, conferenceLosses: 0,
   };
 }
