@@ -106,6 +106,8 @@ export interface Contract {
   voidYears?: number;
   /** History of all restructures on this contract */
   restructureHistory?: ContractRestructure[];
+  /** Set true when signed during offseason — prevents first startNewSeason decrement */
+  offseasonSigned?: boolean;
 }
 
 export interface Player {
