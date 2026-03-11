@@ -281,7 +281,6 @@ function TradesPage() {
   function handleSolicitProposals() {
     solicitTradingBlockProposals(blockedPlayerIds, blockedPickIds, seekPositions, seekDraftPicks);
     setBlockSolicited(true);
-    setActiveTab('incoming');
   }
 
   return (
@@ -529,11 +528,11 @@ function TradesPage() {
                                 </label>
                               ))}
                             </div>
-                            {userTeam && userTeam.draftPicks.length > 0 && (
+                            {userTeam && userTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
                               <>
                                 <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Draft Picks</div>
                                 {userTeam.draftPicks
-                                  .filter(pk => pk.year >= (useGameStore.getState().season))
+                                  .filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId)
                                   .sort((a, b) => a.year - b.year || a.round - b.round)
                                   .map(pk => (
                                   <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface)] rounded px-1">
@@ -543,7 +542,7 @@ function TradesPage() {
                                       onChange={() => togglePickSelect(pk.id, counterOfferedPickIds, setCounterOfferedPickIds)}
                                       className="accent-blue-500"
                                     />
-                                    <span className="text-xs flex-1">Rd {pk.round} ({pk.year})</span>
+                                    <span className="text-xs flex-1">{pk.year} Rd {pk.round}</span>
                                     <span className="text-[10px] text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
                                   </label>
                                 ))}
@@ -573,11 +572,11 @@ function TradesPage() {
                                 </label>
                               ))}
                             </div>
-                            {counterTeam && counterTeam.draftPicks.length > 0 && (
+                            {counterTeam && counterTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
                               <>
                                 <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Draft Picks</div>
                                 {counterTeam.draftPicks
-                                  .filter(pk => pk.year >= (useGameStore.getState().season))
+                                  .filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId)
                                   .sort((a, b) => a.year - b.year || a.round - b.round)
                                   .map(pk => (
                                   <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface)] rounded px-1">
@@ -703,11 +702,11 @@ function TradesPage() {
                       </div>
                     </div>
 
-                    {userTeam && userTeam.draftPicks.length > 0 && (
+                    {userTeam && userTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
                       <div>
                         <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Draft Picks</div>
                         {userTeam.draftPicks
-                          .filter(pk => pk.year >= (useGameStore.getState().season))
+                          .filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId)
                           .sort((a, b) => a.year - b.year || a.round - b.round)
                           .map(pk => (
                           <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
@@ -777,18 +776,71 @@ function TradesPage() {
                           disabled={blockedPlayerIds.length === 0 && blockedPickIds.length === 0}
                           className="w-full"
                         >
-                          Ask for Proposals
+                          {blockSolicited ? 'Refresh Proposals' : 'Ask for Proposals'}
                         </Button>
-                        {blockSolicited && (
-                          <p className="text-xs text-green-600 mt-2">
-                            Proposals generated! Check Incoming Offers.
-                          </p>
-                        )}
                       </div>
                     </Card>
                   </div>
                 </div>
-              </div>
+
+              {/* ── Inline proposals from trading block ── */}
+              {blockSolicited && (() => {
+                const blockProposals = tradeProposals.filter(p => p.status === 'pending');
+                return blockProposals.length > 0 ? (
+                  <div className="mt-6 space-y-3">
+                    <h3 className="text-lg font-bold">Proposals ({blockProposals.length})</h3>
+                    {blockProposals.map(proposal => {
+                      const proposingTeam = teams.find(t => t.id === proposal.proposingTeamId);
+                      const offPlayers = proposal.offeredPlayerIds.map(id => players.find(p => p.id === id)).filter(Boolean) as Player[];
+                      const offPicks = proposal.offeredPickIds.map(id =>
+                        proposingTeam?.draftPicks.find(pk => pk.id === id),
+                      ).filter(Boolean) as DraftPick[];
+                      return (
+                        <Card key={proposal.id}>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Badge size="sm">{proposingTeam?.abbreviation}</Badge>
+                                <span className="font-bold text-sm">{proposingTeam?.city} {proposingTeam?.name}</span>
+                                {proposal.valueAssessment && <ValueAssessmentBadge assessment={proposal.valueAssessment} />}
+                              </div>
+                              <div className="text-xs text-[var(--text-sec)] uppercase font-bold mb-1">They Offer</div>
+                              <div className="space-y-0.5 mb-2">
+                                {offPlayers.map(p => (
+                                  <div key={p.id} className="flex items-center gap-2 text-sm">
+                                    <Badge size="sm">{p.position}</Badge>
+                                    <button onClick={() => setSelectedPlayerId(p.id)} className="hover:underline cursor-pointer">{p.firstName} {p.lastName}</button>
+                                    <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                                    <span className="text-xs text-[var(--text-sec)]">{p.age}y · ${p.contract.salary}M</span>
+                                  </div>
+                                ))}
+                                {offPicks.map(pk => (
+                                  <div key={pk.id} className="flex items-center gap-2 text-sm">
+                                    <Badge size="sm" variant="default">Pick</Badge>
+                                    <span>{pk.year} Round {pk.round}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={() => {
+                                const success = respondToTradeProposal(proposal.id, true);
+                                if (!success) alert('Trade failed — you may be over the salary cap.');
+                              }}>Accept</Button>
+                              <Button size="sm" variant="ghost" onClick={() => respondToTradeProposal(proposal.id, false)}>Reject</Button>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="mt-6 text-center text-sm text-[var(--text-sec)]">
+                    No teams were interested. Try adjusting your assets or preferences.
+                  </div>
+                );
+              })()}
+            </div>
             )}
           </div>
         )}
@@ -854,10 +906,13 @@ function TradesPage() {
                         </label>
                       ))}
                     </div>
-                    {userTeam && userTeam.draftPicks.length > 0 && (
+                    {userTeam && userTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
                       <div>
                         <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Draft Picks</div>
-                        {userTeam.draftPicks.map(pk => (
+                        {userTeam.draftPicks
+                          .filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId)
+                          .sort((a, b) => a.year - b.year || a.round - b.round)
+                          .map(pk => (
                           <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
                             <input
                               type="checkbox"
@@ -865,7 +920,7 @@ function TradesPage() {
                               onChange={() => togglePickSelect(pk.id, offeredPickIds, setOfferedPickIds)}
                               className="accent-blue-500"
                             />
-                            <span className="text-sm flex-1">Round {pk.round} ({pk.year})</span>
+                            <span className="text-sm flex-1">{pk.year} Round {pk.round}</span>
                             <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
                           </label>
                         ))}
@@ -900,10 +955,13 @@ function TradesPage() {
                             </label>
                           ))}
                         </div>
-                        {selectedAITeam.draftPicks.length > 0 && (
+                        {selectedAITeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
                           <div>
                             <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Draft Picks</div>
-                            {selectedAITeam.draftPicks.map(pk => (
+                            {selectedAITeam.draftPicks
+                              .filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId)
+                              .sort((a, b) => a.year - b.year || a.round - b.round)
+                              .map(pk => (
                               <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
                                 <input
                                   type="checkbox"
@@ -911,7 +969,7 @@ function TradesPage() {
                                   onChange={() => togglePickSelect(pk.id, receivedPickIds, setReceivedPickIds)}
                                   className="accent-blue-500"
                                 />
-                                <span className="text-sm flex-1">Round {pk.round} ({pk.year})</span>
+                                <span className="text-sm flex-1">{pk.year} Round {pk.round}</span>
                                 <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
                               </label>
                             ))}

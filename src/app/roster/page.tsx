@@ -193,15 +193,18 @@ export default function RosterPage() {
       }
     });
 
-  // All-Pro: players who made All-League 1st or 2nd team this season (live) or last season
+  // All-Pro: players who made All-League 1st or 2nd team
+  // Shows during/after regular season from live stats, persists through offseason
+  // from last completed season data, disappears once Week 1 of new season starts
   const allProPlayerIds = new Set<string>();
   // Current season All-League (computed live from current ratings/stats)
   const currentAllLeague = computeAllLeagueTeams(useGameStore.getState() as never);
   for (const entry of currentAllLeague.first) allProPlayerIds.add(entry.playerId);
   for (const entry of currentAllLeague.second) allProPlayerIds.add(entry.playerId);
-  // Also include last completed season
+  // Include last completed season during offseason and preseason (until regular season Week 1)
+  const showLastSeasonStars = phase !== 'regular' || week <= 1;
   const lastSeason = seasonHistory.length > 0 ? seasonHistory[seasonHistory.length - 1] : null;
-  if (lastSeason) {
+  if (lastSeason && showLastSeasonStars) {
     for (const entry of (lastSeason.allLeagueFirst ?? [])) allProPlayerIds.add(entry.playerId);
     for (const entry of (lastSeason.allLeagueSecond ?? [])) allProPlayerIds.add(entry.playerId);
   }

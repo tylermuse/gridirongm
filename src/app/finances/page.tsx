@@ -76,7 +76,7 @@ export default function FinancesPage() {
           <CardHeader><CardTitle>Salary Cap</CardTitle></CardHeader>
           <div className="grid grid-cols-3 gap-6 mb-4">
             <div className="text-center">
-              <div className="text-xs text-[var(--text-sec)] mb-1">Cap Space</div>
+              <div className="text-xs text-[var(--text-sec)] mb-1">Salary Cap</div>
               <div className="text-3xl font-black">${cap}M</div>
             </div>
             <div className="text-center">

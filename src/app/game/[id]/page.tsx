@@ -586,10 +586,21 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const router = useRouter();
 
   const {
-    schedule, teams, players, phase, userTeamId, commitLiveGame,
+    schedule, teams, players, phase, userTeamId, commitLiveGame, playoffBracket, season,
   } = useGameStore();
 
-  const game = schedule.find(g => g.id === id) ?? null;
+  // Try schedule first, then check playoff bracket for unplayed matchups
+  let game = schedule.find(g => g.id === id) ?? null;
+  const playoffMatchup = playoffBracket?.find(m => m.id === id && !m.winnerId && m.homeTeamId && m.awayTeamId) ?? null;
+  if (!game && playoffMatchup) {
+    // Create a temporary GameResult from the matchup data for the live game engine
+    game = {
+      id: playoffMatchup.id, week: 99, season,
+      homeTeamId: playoffMatchup.homeTeamId!, awayTeamId: playoffMatchup.awayTeamId!,
+      homeScore: 0, awayScore: 0, played: false, playerStats: {},
+    };
+  }
+  const isPlayoffGame = !!playoffMatchup || !!playoffBracket?.find(m => m.id === id);
   const homeTeam = game ? teams.find(t => t.id === game.homeTeamId) ?? null : null;
   const awayTeam = game ? teams.find(t => t.id === game.awayTeamId) ?? null : null;
   const homePlayers = game ? players.filter(p => p.teamId === game.homeTeamId) : [];
@@ -672,17 +683,17 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const handleCommit = useCallback(() => {
     if (!liveResult || !game || committed) return;
     const gameResult = liveGameToGameResult(liveResult, game);
-    commitLiveGame(gameResult);
+    commitLiveGame(gameResult, isPlayoffGame ? id : undefined);
     setCommitted(true);
-    router.push('/');
-  }, [liveResult, game, committed, commitLiveGame, router]);
+    router.push(isPlayoffGame ? '/playoffs' : '/');
+  }, [liveResult, game, committed, commitLiveGame, router, isPlayoffGame, id]);
 
   // Guard conditions
-  if (phase !== 'regular') {
+  if (phase !== 'regular' && phase !== 'playoffs') {
     return (
       <GameShell>
         <div className="max-w-2xl mx-auto mt-16 text-center">
-          <p className="text-[var(--text-sec)] text-lg">Live games are only available during the regular season.</p>
+          <p className="text-[var(--text-sec)] text-lg">Live games are only available during the regular season and playoffs.</p>
         </div>
       </GameShell>
     );

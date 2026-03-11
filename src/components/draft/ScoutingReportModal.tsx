@@ -375,12 +375,14 @@ export function ScoutingReportModal({
     : needLevel === 'low' ? 'Low Priority'
     : 'Unknown';
 
-  // Draft value estimate
-  const draftValueText = scoutedOvr >= 78 ? '1st Round Value'
-    : scoutedOvr >= 72 ? '1st-2nd Round Value'
-    : scoutedOvr >= 65 ? '2nd-3rd Round Value'
-    : scoutedOvr >= 58 ? 'Mid-Round Value'
-    : scoutedOvr >= 50 ? 'Late-Round Value'
+  // Draft value estimate — blends current OVR with potential (ceiling matters for draft picks)
+  const potentialBoost = Math.max(0, player.potential - scoutedOvr) * 0.4;
+  const draftScore = scoutedOvr + potentialBoost;
+  const draftValueText = draftScore >= 78 ? '1st Round Value'
+    : draftScore >= 72 ? '1st-2nd Round Value'
+    : draftScore >= 65 ? '2nd-3rd Round Value'
+    : draftScore >= 58 ? 'Mid-Round Value'
+    : draftScore >= 50 ? 'Late-Round Value'
     : 'UDFA/Camp Body';
 
   // Close on Escape

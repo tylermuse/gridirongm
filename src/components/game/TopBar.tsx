@@ -2,13 +2,14 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
 import { TradeProposalPopup } from './TradeProposalPopup';
 
 export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const router = useRouter();
+  const pathname = usePathname();
   const {
     phase,
     week,
@@ -277,11 +278,13 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             )}
             {phase === 'resigning' && (
               <>
-                <Link href="/re-sign">
-                  <Button size="sm">
-                    Go to Re-signing
-                  </Button>
-                </Link>
+                {pathname !== '/re-sign' && (
+                  <Link href="/re-sign">
+                    <Button size="sm">
+                      Go to Re-signing
+                    </Button>
+                  </Link>
+                )}
                 <Button
                   onClick={() => {
                     const store = useGameStore.getState();
@@ -333,11 +336,13 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             )}
             {phase === 'freeAgency' && (
               <>
-                <Link href="/free-agency">
-                  <Button size="sm">
-                    Go to Free Agency
-                  </Button>
-                </Link>
+                {pathname !== '/free-agency' && (
+                  <Link href="/free-agency">
+                    <Button size="sm">
+                      Go to Free Agency
+                    </Button>
+                  </Link>
+                )}
                 {faDay >= 30 ? (
                   <Button onClick={() => {
                     startNewSeason(); router.push('/');

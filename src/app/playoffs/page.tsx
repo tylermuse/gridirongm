@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -88,12 +89,14 @@ function MatchupCard({
   userTeamId,
   onTeamClick,
   onGameClick,
+  onWatchLive,
 }: {
   matchup: PlayoffMatchup;
   teams: Team[];
   userTeamId: string;
   onTeamClick?: (teamId: string) => void;
   onGameClick?: (matchupId: string) => void;
+  onWatchLive?: (matchupId: string) => void;
 }) {
   const homeTeam = matchup.homeTeamId
     ? teams.find(t => t.id === matchup.homeTeamId)
@@ -104,6 +107,7 @@ function MatchupCard({
   const userInGame =
     matchup.homeTeamId === userTeamId || matchup.awayTeamId === userTeamId;
   const isCompleted = !!matchup.winnerId;
+  const isReady = !!matchup.homeTeamId && !!matchup.awayTeamId && !isCompleted;
 
   return (
     <div
@@ -133,6 +137,14 @@ function MatchupCard({
         isTBD={!matchup.awayTeamId}
         onTeamClick={onTeamClick}
       />
+      {isReady && userInGame && onWatchLive && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onWatchLive(matchup.id); }}
+          className="w-full mt-0.5 mb-1 text-[10px] font-bold uppercase tracking-wide text-green-700 bg-green-100 hover:bg-green-200 rounded px-2 py-0.5 transition-colors cursor-pointer"
+        >
+          Watch Live
+        </button>
+      )}
     </div>
   );
 }
@@ -144,6 +156,7 @@ function ConferenceBracket({
   userTeamId,
   onTeamClick,
   onGameClick,
+  onWatchLive,
 }: {
   conference: 'AC' | 'NC';
   bracket: PlayoffMatchup[];
@@ -151,6 +164,7 @@ function ConferenceBracket({
   userTeamId: string;
   onTeamClick?: (teamId: string) => void;
   onGameClick?: (matchupId: string) => void;
+  onWatchLive?: (matchupId: string) => void;
 }) {
   const confMatchups = bracket.filter(m => m.conference === conference);
   const color = conference === 'AC' ? 'text-red-600' : 'text-blue-600';
@@ -200,6 +214,7 @@ function ConferenceBracket({
                 userTeamId={userTeamId}
                 onTeamClick={onTeamClick}
                 onGameClick={onGameClick}
+                onWatchLive={onWatchLive}
               />
             ))}
           </div>
@@ -219,6 +234,7 @@ function ConferenceBracket({
                 userTeamId={userTeamId}
                 onTeamClick={onTeamClick}
                 onGameClick={onGameClick}
+                onWatchLive={onWatchLive}
               />
             ))}
           </div>
@@ -300,6 +316,7 @@ function getUserPlayoffStatus(
 // ---------------------------------------------------------------------------
 
 export default function PlayoffsPage() {
+  const router = useRouter();
   const {
     phase,
     season,
@@ -318,6 +335,10 @@ export default function PlayoffsPage() {
   const handleGameClick = (matchupId: string) => {
     const game = schedule.find(g => g.id === matchupId);
     if (game) setSelectedGame(game);
+  };
+
+  const handleWatchLive = (matchupId: string) => {
+    router.push(`/game/${matchupId}`);
   };
 
   // Show bracket if it exists (persists through resigning/draft/FA until new season)
@@ -725,6 +746,7 @@ export default function PlayoffsPage() {
               userTeamId={userTeamId}
               onTeamClick={(id) => setViewTeamId(id)}
               onGameClick={handleGameClick}
+              onWatchLive={phase === 'playoffs' ? handleWatchLive : undefined}
             />
           </Card>
           <Card>
@@ -735,6 +757,7 @@ export default function PlayoffsPage() {
               userTeamId={userTeamId}
               onTeamClick={(id) => setViewTeamId(id)}
               onGameClick={handleGameClick}
+              onWatchLive={phase === 'playoffs' ? handleWatchLive : undefined}
             />
           </Card>
         </div>
@@ -751,6 +774,7 @@ export default function PlayoffsPage() {
               userTeamId={userTeamId}
               onTeamClick={(id) => setViewTeamId(id)}
               onGameClick={handleGameClick}
+              onWatchLive={phase === 'playoffs' ? handleWatchLive : undefined}
             />
           </div>
         </Card>

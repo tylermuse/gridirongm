@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useGameStore, computeFranchiseTagSalary } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { LEAGUE_MINIMUM_SALARY, computeLuxuryTax, LUXURY_TAX_RATE } from '@/lib/engine/store';
@@ -40,7 +41,8 @@ type ReSignResult = 'accepted' | 'rejected' | 'passed';
 type NegMode = 'extend' | 'restructure';
 
 export default function ReSignPage() {
-  const { phase, players, teams, userTeamId, resigningPlayers, resignPlayer, passOnResigning, franchiseTagPlayer } = useGameStore();
+  const router = useRouter();
+  const { phase, players, teams, userTeamId, resigningPlayers, resignPlayer, passOnResigning, franchiseTagPlayer, advanceToDraft } = useGameStore();
   const roster = players.filter(p => p.teamId === userTeamId && !p.retired);
 
   const [results, setResults] = useState<Record<string, ReSignResult>>({});
@@ -136,10 +138,17 @@ export default function ReSignPage() {
     }
   }
 
-  function closeNegotiation() {
+  const closeNegotiation = useCallback(() => {
     setNegotiation(null);
     setActivePlayerId(null);
-  }
+  }, []);
+
+  // Auto-close negotiation result after 3 seconds
+  useEffect(() => {
+    if (!negotiation || negotiation.outcome === 'pending') return;
+    const timer = setTimeout(closeNegotiation, 1000);
+    return () => clearTimeout(timer);
+  }, [negotiation, closeNegotiation]);
 
   function walkAway() {
     // Walking away from negotiation = letting the player go
@@ -371,6 +380,15 @@ export default function ReSignPage() {
               <div className="text-4xl mb-3">✅</div>
               <p className="font-semibold">No expiring contracts this offseason.</p>
               <p className="text-sm mt-1">All your players have at least 2 years remaining.</p>
+              <Button
+                className="mt-4"
+                onClick={() => {
+                  advanceToDraft();
+                  router.push('/draft');
+                }}
+              >
+                Advance to Draft →
+              </Button>
             </div>
           </Card>
         ) : (
@@ -541,6 +559,22 @@ export default function ReSignPage() {
               );
             })}
           </div>
+          </div>
+        )}
+
+        {/* Advance to Draft — shown when all entries are done */}
+        {activeEntries.length === 0 && Object.keys(results).length > 0 && (
+          <div className="text-center py-8">
+            <div className="text-4xl mb-2">✅</div>
+            <p className="text-[var(--text-sec)] mb-4">All re-signing decisions complete.</p>
+            <Button
+              onClick={() => {
+                advanceToDraft();
+                router.push('/draft');
+              }}
+            >
+              Advance to Draft →
+            </Button>
           </div>
         )}
 

@@ -28,17 +28,27 @@ function getPrimaryKeys(position: Position): (keyof Omit<PlayerRatings, 'overall
   return RATING_KEYS.filter(k => (weights[k] ?? 0) >= 2);
 }
 
-/** Recomputes the overall rating from individual ratings using position weights. */
-function recalculateOverall(ratings: PlayerRatings, position: Position): number {
+/**
+ * Computes OVR change based on how primary/weighted ratings changed.
+ * Uses delta-based approach to avoid drift from recalculating OVR
+ * (imported players' individual ratings may not reproduce their original OVR).
+ */
+function computeOvrDelta(
+  oldRatings: PlayerRatings,
+  newRatings: Record<string, number>,
+  position: Position,
+): number {
   const weights = POSITION_WEIGHTS[position];
-  const weightedSum = RATING_KEYS.reduce((sum, key) => {
+  let totalDelta = 0;
+  let totalWeight = 0;
+  for (const key of RATING_KEYS) {
     const w = weights[key] ?? 0;
-    return sum + ratings[key] * (w || 0.2);
-  }, 0);
-  const totalWeight = RATING_KEYS.reduce((sum, key) => {
-    return sum + ((weights[key] ?? 0) || 0.2);
-  }, 0);
-  return clamp(Math.round(weightedSum / totalWeight));
+    if (w > 0) {
+      totalDelta += ((newRatings[key] ?? oldRatings[key]) - oldRatings[key]) * w;
+      totalWeight += w;
+    }
+  }
+  return totalWeight > 0 ? totalDelta / totalWeight : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,16 +112,16 @@ export function developPlayers(
         }
         // Awareness always improves with experience for young players
         ratings.awareness = clamp(ratings.awareness + gaussian(2, 1) * progressionMult);
-        ratings.overall = Math.min(p.potential, recalculateOverall(ratings, p.position));
+        ratings.overall = clamp(Math.min(p.potential, p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position))));
       } else {
-        // Already at potential — small fluctuations
+        // Already at potential — mostly stable, slight upward bias
         for (const key of primaryKeys) {
           const k = key as string;
           (ratings as Record<string, number>)[k] = clamp(
-            (ratings as Record<string, number>)[k] + gaussian(0.5, 1),
+            (ratings as Record<string, number>)[k] + gaussian(0.3, 0.5),
           );
         }
-        ratings.overall = recalculateOverall(ratings, p.position);
+        ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
       }
     } else if (p.age <= 26) {
       // ── Moderate Progression ────────────────────────────────────────
@@ -125,33 +135,33 @@ export function developPlayers(
           );
         }
         ratings.awareness = clamp(ratings.awareness + gaussian(1.5, 1) * progressionMult);
-        ratings.overall = Math.min(p.potential, recalculateOverall(ratings, p.position));
+        ratings.overall = clamp(Math.min(p.potential, p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position))));
       } else {
-        // At or above potential — awareness can still grow
-        ratings.awareness = clamp(ratings.awareness + gaussian(1, 0.8));
+        // At or above potential — awareness can still grow, stable otherwise
+        ratings.awareness = clamp(ratings.awareness + gaussian(0.8, 0.5));
         for (const key of primaryKeys) {
           const k = key as string;
           (ratings as Record<string, number>)[k] = clamp(
-            (ratings as Record<string, number>)[k] + gaussian(0.3, 1),
+            (ratings as Record<string, number>)[k] + gaussian(0.2, 0.5),
           );
         }
-        ratings.overall = recalculateOverall(ratings, p.position);
+        ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
       }
     } else if (p.age <= 30) {
       // ── Prime Years ─────────────────────────────────────────────────
       // Stable with slight improvements possible (awareness peaks here)
-      ratings.awareness = clamp(ratings.awareness + gaussian(1, 0.8));
+      ratings.awareness = clamp(ratings.awareness + gaussian(0.8, 0.5));
       for (const key of primaryKeys) {
         const k = key as string;
         (ratings as Record<string, number>)[k] = clamp(
-          (ratings as Record<string, number>)[k] + gaussian(0.2, 1.2),
+          (ratings as Record<string, number>)[k] + gaussian(0.1, 0.6),
         );
       }
       // Slight speed decline starts at 29-30
       if (p.age >= 29) {
-        ratings.speed = clamp(ratings.speed - gaussian(0.5, 0.5) * regressionMult);
+        ratings.speed = clamp(ratings.speed - gaussian(0.3, 0.3) * regressionMult);
       }
-      ratings.overall = recalculateOverall(ratings, p.position);
+      ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
     } else if (p.age <= 33) {
       // ── Early Decline ───────────────────────────────────────────────
       // Gradual physical decline, awareness can still grow slightly
@@ -173,7 +183,7 @@ export function developPlayers(
       // Speed decline
       const speedDecline = clamp(gaussian(0.5 + yearsOver30 * 0.2, 0.5), 0, 2) * regressionMult;
       ratings.speed = clamp(ratings.speed - speedDecline);
-      ratings.overall = recalculateOverall(ratings, p.position);
+      ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
     } else {
       // ── Late Career Decline (34+) ───────────────────────────────────
       // More noticeable decline but still not catastrophic per year
@@ -191,7 +201,7 @@ export function developPlayers(
       // Stamina declines
       const staminaDecline = clamp(gaussian(1 + yearsOver33 * 0.3, 0.5), 0, 3) * regressionMult;
       ratings.stamina = clamp(ratings.stamina - staminaDecline);
-      ratings.overall = recalculateOverall(ratings, p.position);
+      ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
     }
 
     // Adjust potential based on age — past-prime players should lose upside
