@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
@@ -34,6 +35,7 @@ interface TradeProposalPopupProps {
 }
 
 export function TradeProposalPopup({ proposalIds, onClose }: TradeProposalPopupProps) {
+  const router = useRouter();
   const {
     tradeProposals, players, teams, userTeamId,
     respondToTradeProposal, suppressTradePopups, setSuppressTradePopups,
@@ -178,6 +180,12 @@ export function TradeProposalPopup({ proposalIds, onClose }: TradeProposalPopupP
               <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--border)]">
                 <Button size="sm" onClick={() => handleAccept(proposal.id)}>
                   Accept
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => {
+                  onClose();
+                  router.push(`/trades?counter=${proposal.id}`);
+                }}>
+                  Counter
                 </Button>
                 <Button size="sm" variant="danger" onClick={() => handleReject(proposal.id)}>
                   Reject

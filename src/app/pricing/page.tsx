@@ -97,9 +97,46 @@ export default function PricingPage() {
     }
   };
 
+  const [showPromo, setShowPromo] = useState(false);
+
   return (
     <div className="min-h-screen py-16 px-4" style={{ backgroundColor: '#f0f4f8' }}>
       <div className="max-w-5xl mx-auto">
+        {/* 🎉 Promo Banner */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl p-8 mb-8 text-center">
+          <div className="text-3xl mb-2">🎉</div>
+          <h2 className="text-2xl font-black mb-2">All Features Are Free!</h2>
+          <p className="text-blue-100 max-w-lg mx-auto">
+            For a limited time, every Gridiron GM player gets full access to all Elite features — no account required. Enjoy elite scouting, ad-free gameplay, and everything else. Just play!
+          </p>
+          <button
+            onClick={() => router.push('/')}
+            className="mt-4 px-6 py-2 bg-white text-blue-600 font-bold rounded-lg hover:bg-blue-50 transition-colors"
+          >
+            ← Back to Game
+          </button>
+        </div>
+
+        {/* Promo modal */}
+        {showPromo && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowPromo(false)}>
+            <div className="bg-white rounded-2xl p-8 max-w-md mx-4 text-center shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="text-5xl mb-3">🎉</div>
+              <h3 className="text-2xl font-black mb-2">Congrats!</h3>
+              <p className="text-[var(--text-sec)] mb-4">
+                You&apos;re getting a free upgrade for a limited time. Enjoy!
+              </p>
+              <p className="text-sm text-green-600 font-bold mb-6">All Elite features are now unlocked.</p>
+              <button
+                onClick={() => { setShowPromo(false); router.push('/'); }}
+                className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Start Playing →
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-black mb-2">
@@ -194,15 +231,14 @@ export default function PricingPage() {
                   </button>
                 ) : priceId ? (
                   <button
-                    onClick={() => handleSubscribe(priceId)}
-                    disabled={!!loading}
+                    onClick={() => setShowPromo(true)}
                     className={`w-full py-3 rounded-xl text-sm font-bold transition-colors ${
                       t.popular
                         ? 'bg-blue-600 text-white hover:bg-blue-700'
                         : 'bg-gray-900 text-white hover:bg-gray-800'
-                    } disabled:opacity-50`}
+                    }`}
                   >
-                    {loading === priceId ? 'Loading...' : `Upgrade to ${t.name}`}
+                    Upgrade to {t.name}
                   </button>
                 ) : (
                   <button

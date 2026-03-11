@@ -43,7 +43,7 @@ function getGenericStat(p: Player): string {
     case 'CB':
     case 'S': return `${s.tackles} tkl · ${s.passDeflections ?? 0} PD · ${s.defensiveINTs} INT`;
     case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG${s.fieldGoalAttempts > 0 ? ` (${Math.round(s.fieldGoalsMade / s.fieldGoalAttempts * 100)}%)` : ''}`;
-    case 'OL':
+    case 'OL': return `${s.gamesPlayed} GP · ${s.sacksAllowed ?? 0} SA · ${(s.passBlocks ?? 0) > 0 ? ((s.sacksAllowed ?? 0) / s.passBlocks * 100).toFixed(1) : '0.0'}%`;
     case 'P': return `${s.gamesPlayed} GP`;
     default: return '—';
   }
@@ -55,7 +55,7 @@ function getStatColumns(pos: Position): [string, string] {
     case 'RB': return ['ATT · Yds', 'TD / FUM'];
     case 'WR': return ['REC/TGT · Yds', 'TD'];
     case 'TE': return ['REC/TGT · Yds', 'TD'];
-    case 'OL': return ['GP', ''];
+    case 'OL': return ['SA / Blks', 'SA%'];
     case 'DL': return ['TKL / TFL', 'SCK'];
     case 'LB': return ['TKL / TFL', 'SCK / FF'];
     case 'CB': return ['TKL / PD', 'INT'];
@@ -73,7 +73,7 @@ function getStatValues(p: Player): [string, string] {
     case 'RB': return [`${s.rushAttempts} · ${s.rushYards}`, `${s.rushTDs} / ${s.fumbles}`];
     case 'WR': return [`${s.receptions}/${s.targets} · ${s.receivingYards}`, String(s.receivingTDs)];
     case 'TE': return [`${s.receptions}/${s.targets} · ${s.receivingYards}`, String(s.receivingTDs)];
-    case 'OL': return [String(s.gamesPlayed), ''];
+    case 'OL': return [`${s.sacksAllowed ?? 0} / ${s.passBlocks ?? 0}`, `${(s.passBlocks ?? 0) > 0 ? ((s.sacksAllowed ?? 0) / s.passBlocks * 100).toFixed(1) : '0.0'}%`];
     case 'DL': return [`${s.tackles} / ${s.tacklesForLoss ?? 0}`, String(s.sacks)];
     case 'LB': return [`${s.tackles} / ${s.tacklesForLoss ?? 0}`, `${s.sacks} / ${s.forcedFumbles}`];
     case 'CB': return [`${s.tackles} / ${s.passDeflections ?? 0}`, String(s.defensiveINTs)];

@@ -19,11 +19,11 @@ const SIZE_CLASSES: Record<string, string> = {
 };
 
 const PADDING: Record<string, number> = {
-  xs: 2,
-  sm: 3,
-  md: 4,
-  lg: 5,
-  xl: 8,
+  xs: 1,
+  sm: 2,
+  md: 3,
+  lg: 4,
+  xl: 6,
 };
 
 const FONT_SIZES: Record<string, string> = {
@@ -42,25 +42,29 @@ type IconFn = (c: string, bg: string) => React.ReactElement;
 
 const ICONS: Record<string, IconFn> = {
   // ── AC East ──
-  BUF: (c) => ( // Blizzard — Detailed snowflake with branches
+  BUF: (c, bg) => ( // Blizzard — Charging bison head with snow swirl
     <svg viewBox="0 0 32 32" fill="none">
-      <g stroke={c} strokeWidth="1.8" strokeLinecap="round">
-        <line x1="16" y1="2" x2="16" y2="30"/>
-        <line x1="4" y1="16" x2="28" y2="16"/>
-        <line x1="7.5" y1="7.5" x2="24.5" y2="24.5"/>
-        <line x1="24.5" y1="7.5" x2="7.5" y2="24.5"/>
-        {/* Branch tips */}
-        <line x1="16" y1="5" x2="13.5" y2="3"/>
-        <line x1="16" y1="5" x2="18.5" y2="3"/>
-        <line x1="16" y1="27" x2="13.5" y2="29"/>
-        <line x1="16" y1="27" x2="18.5" y2="29"/>
-        <line x1="5" y1="16" x2="3" y2="13.5"/>
-        <line x1="5" y1="16" x2="3" y2="18.5"/>
-        <line x1="27" y1="16" x2="29" y2="13.5"/>
-        <line x1="27" y1="16" x2="29" y2="18.5"/>
-      </g>
-      <circle cx="16" cy="16" r="3" fill={c}/>
-      <circle cx="16" cy="16" r="1.5" fill={c} opacity="0.4"/>
+      {/* Bison head silhouette - front view */}
+      <path d="M16 6c-5 0-9 3-9 7v3c0 2 1 4 3 5l2 2v3h2v-2h4v2h2v-3l2-2c2-1 3-3 3-5v-3c0-4-4-7-9-7z" fill={c}/>
+      {/* Horns curving out */}
+      <path d="M7 13c-2-1-4-3-4-5l2 0c1 1 2 3 3 4" stroke={c} strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+      <path d="M25 13c2-1 4-3 4-5l-2 0c-1 1-2 3-3 4" stroke={c} strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+      {/* Shaggy fur on forehead */}
+      <path d="M11 10c1-2 3-3 5-3s4 1 5 3" stroke={bg} strokeWidth="0.8" opacity="0.25" fill="none"/>
+      <path d="M12 12c1-1 2-2 4-2s3 1 4 2" stroke={bg} strokeWidth="0.6" opacity="0.2" fill="none"/>
+      {/* Eyes */}
+      <circle cx="12.5" cy="14" r="1.3" fill={bg} opacity="0.45"/>
+      <circle cx="19.5" cy="14" r="1.3" fill={bg} opacity="0.45"/>
+      <circle cx="12.8" cy="13.8" r="0.5" fill={bg} opacity="0.7"/>
+      <circle cx="19.8" cy="13.8" r="0.5" fill={bg} opacity="0.7"/>
+      {/* Nostrils */}
+      <ellipse cx="14" cy="19" rx="1" ry="0.7" fill={bg} opacity="0.3"/>
+      <ellipse cx="18" cy="19" rx="1" ry="0.7" fill={bg} opacity="0.3"/>
+      {/* Snow swirl accent */}
+      <circle cx="5" cy="5" r="1" fill={c} opacity="0.4"/>
+      <circle cx="27" cy="4" r="0.7" fill={c} opacity="0.3"/>
+      <circle cx="3" cy="10" r="0.5" fill={c} opacity="0.25"/>
+      <circle cx="29" cy="9" r="0.6" fill={c} opacity="0.2"/>
     </svg>
   ),
   MIA: (c) => ( // Riptide — Curling wave with spray
@@ -509,42 +513,90 @@ const ICONS: Record<string, IconFn> = {
   ),
 
   // ── NC West ──
-  ARI: (c, bg) => ( // Scorpions — Detailed scorpion
+  ARI: (c, bg) => ( // Scorpions — Aggressive front-facing scorpion, menacing pose
     <svg viewBox="0 0 32 32" fill="none">
-      {/* Body */}
-      <ellipse cx="16" cy="20" rx="6" ry="4" fill={c}/>
-      {/* Pincers */}
-      <path d="M10 20c-3-1-6 0-7 2l2 1c1 0 2-1 3-1" fill={c}/>
-      <path d="M22 20c3-1 6 0 7 2l-2 1c-1 0-2-1-3-1" fill={c}/>
-      <path d="M3 22l-1 2 2-1" fill={c} opacity="0.7"/>
-      <path d="M29 22l1 2-2-1" fill={c} opacity="0.7"/>
-      {/* Tail - curved up and over */}
-      <path d="M16 16V10c0-2 1-4 3-5l1-1" stroke={c} strokeWidth="3" fill="none" strokeLinecap="round"/>
-      {/* Stinger */}
-      <circle cx="20.5" cy="3.5" r="1.5" fill={c}/>
-      <path d="M21 5l1 1" stroke={c} strokeWidth="1.5" strokeLinecap="round"/>
-      {/* Eyes */}
-      <circle cx="14" cy="19" r="0.8" fill={bg} opacity="0.35"/>
-      <circle cx="18" cy="19" r="0.8" fill={bg} opacity="0.35"/>
-      {/* Legs */}
-      <path d="M11 22l-2 3M13 23l-1 3M19 23l1 3M21 22l2 3" stroke={c} strokeWidth="1" strokeLinecap="round" opacity="0.5"/>
+      {/* Segmented body — abdomen */}
+      <ellipse cx="16" cy="22" rx="5.5" ry="3.5" fill={c}/>
+      <ellipse cx="16" cy="22" rx="5.5" ry="3.5" fill={bg} opacity="0.08"/>
+      {/* Body segments */}
+      <path d="M10.5 21h11M10.8 22.5h10.4M11.5 23.8h9" stroke={bg} strokeWidth="0.5" opacity="0.15"/>
+      {/* Cephalothorax (head plate) */}
+      <ellipse cx="16" cy="18.5" rx="4" ry="2.2" fill={c}/>
+      <ellipse cx="16" cy="18.5" rx="3" ry="1.5" fill={bg} opacity="0.06"/>
+      {/* Arms / pedipalps — left claw */}
+      <path d="M12 18.5c-2-1-4-2.5-5.5-2s-2 2-1 3l2-0.5" stroke={c} strokeWidth="2" fill="none" strokeLinecap="round"/>
+      {/* Left pincer — open claw */}
+      <path d="M5.5 19.5l-2.5-1.5" stroke={c} strokeWidth="1.8" strokeLinecap="round"/>
+      <path d="M5.5 19.5l-2 1.5" stroke={c} strokeWidth="1.8" strokeLinecap="round"/>
+      <circle cx="3.5" cy="18.2" r="0.6" fill={c}/>
+      <circle cx="3.8" cy="20.8" r="0.6" fill={c}/>
+      {/* Arms / pedipalps — right claw */}
+      <path d="M20 18.5c2-1 4-2.5 5.5-2s2 2 1 3l-2-0.5" stroke={c} strokeWidth="2" fill="none" strokeLinecap="round"/>
+      {/* Right pincer — open claw */}
+      <path d="M26.5 19.5l2.5-1.5" stroke={c} strokeWidth="1.8" strokeLinecap="round"/>
+      <path d="M26.5 19.5l2 1.5" stroke={c} strokeWidth="1.8" strokeLinecap="round"/>
+      <circle cx="28.5" cy="18.2" r="0.6" fill={c}/>
+      <circle cx="28.2" cy="20.8" r="0.6" fill={c}/>
+      {/* Tail — thick segmented curve arching overhead */}
+      <path d="M16 18.5c0-2 0.5-4 1.5-5.5s2.5-3 3-4.5c0.3-1 0-2-0.5-2.5" stroke={c} strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+      {/* Tail segments */}
+      <path d="M16.3 16l0.8-0.3M17 14l0.8-0.5M18 12l0.7-0.6M19 10l0.6-0.7" stroke={bg} strokeWidth="0.5" opacity="0.2"/>
+      {/* Stinger — venomous tip */}
+      <path d="M20 6l1.5-2" stroke={c} strokeWidth="2" strokeLinecap="round"/>
+      <path d="M21.2 4.3l0.8 1.7" stroke={c} strokeWidth="1.5" strokeLinecap="round"/>
+      <circle cx="21.5" cy="4" r="1" fill={bg} opacity="0.3"/>
+      {/* Venom drop */}
+      <ellipse cx="22" cy="5.8" rx="0.5" ry="0.7" fill={c} opacity="0.5"/>
+      {/* Eyes — menacing cluster */}
+      <circle cx="14.5" cy="17.8" r="1" fill={bg} opacity="0.4"/>
+      <circle cx="17.5" cy="17.8" r="1" fill={bg} opacity="0.4"/>
+      <circle cx="14.5" cy="17.8" r="0.45" fill={bg} opacity="0.7"/>
+      <circle cx="17.5" cy="17.8" r="0.45" fill={bg} opacity="0.7"/>
+      {/* Smaller middle eyes */}
+      <circle cx="15.5" cy="17.3" r="0.4" fill={bg} opacity="0.25"/>
+      <circle cx="16.5" cy="17.3" r="0.4" fill={bg} opacity="0.25"/>
+      {/* Legs — 4 pairs, angular and segmented */}
+      <path d="M11 22l-3 2.5-1.5 1.5" stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+      <path d="M12 23.5l-2 2.5-1 2" stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+      <path d="M20 23.5l2 2.5 1 2" stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+      <path d="M21 22l3 2.5 1.5 1.5" stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+      {/* Leg joints */}
+      <circle cx="8" cy="24.5" r="0.5" fill={c} opacity="0.4"/>
+      <circle cx="10" cy="26" r="0.5" fill={c} opacity="0.4"/>
+      <circle cx="22" cy="26" r="0.5" fill={c} opacity="0.4"/>
+      <circle cx="24" cy="24.5" r="0.5" fill={c} opacity="0.4"/>
+      {/* Texture — carapace ridges */}
+      <path d="M14 20.5c1.3 0.5 2.7 0.5 4 0" stroke={bg} strokeWidth="0.4" opacity="0.12"/>
+      <path d="M13.5 21.5c1.7 0.5 3.3 0.5 5 0" stroke={bg} strokeWidth="0.4" opacity="0.1"/>
     </svg>
   ),
-  LAC: (c, bg) => ( // Condors — Condor with spread wings
+  LAC: (c, bg) => ( // Condors — Dramatic condor swooping down, wings spread wide
     <svg viewBox="0 0 32 32" fill="none">
-      {/* Wings spread */}
-      <path d="M16 10c-5 0-10 3-14 8 4 0 8-1 11-4v8c0 2 1 4 3 4s3-2 3-4v-8c3 3 7 4 11 4-4-5-9-8-14-8z" fill={c}/>
-      {/* Wing feather details */}
-      <path d="M4 17l3-2M7 16l3-2M10 14l2-1" stroke={bg} strokeWidth="0.5" opacity="0.2"/>
-      <path d="M28 17l-3-2M25 16l-3-2M22 14l-2-1" stroke={bg} strokeWidth="0.5" opacity="0.2"/>
+      {/* Left wing — sweeping back with feather detail */}
+      <path d="M16 14L2 8c0 2 1 4 3 5l6 3-1 2-7 1c2 2 5 2 8 1l5-3" fill={c}/>
+      {/* Right wing */}
+      <path d="M16 14l14-6c0 2-1 4-3 5l-6 3 1 2 7 1c-2 2-5 2-8 1l-5-3" fill={c}/>
+      {/* Primary feathers — left */}
+      <path d="M2 8l1 2M4 9l1 2M6 10l1 2" stroke={bg} strokeWidth="0.7" opacity="0.25" strokeLinecap="round"/>
+      {/* Primary feathers — right */}
+      <path d="M30 8l-1 2M28 9l-1 2M26 10l-1 2" stroke={bg} strokeWidth="0.7" opacity="0.25" strokeLinecap="round"/>
+      {/* Body */}
+      <path d="M13 14c0 3 0 8 1 12h4c1-4 1-9 1-12" fill={c} opacity="0.9"/>
+      {/* Tail feathers */}
+      <path d="M13 26l-2 4M16 26v4M19 26l2 4" stroke={c} strokeWidth="1.2" strokeLinecap="round" opacity="0.6"/>
       {/* Head */}
-      <circle cx="16" cy="7" r="3" fill={c}/>
-      {/* Beak */}
-      <path d="M16 9l-1 2h2z" fill={bg} opacity="0.3"/>
-      {/* Eye */}
-      <circle cx="15" cy="6.5" r="0.7" fill={bg} opacity="0.5"/>
+      <ellipse cx="16" cy="10" rx="3" ry="3.5" fill={c}/>
       {/* White neck ruff */}
-      <path d="M13 9c1 1 2 1.5 3 1.5s2-.5 3-1.5" stroke={bg} strokeWidth="1" opacity="0.3" fill="none"/>
+      <path d="M13 12.5c1 1 2 1.5 3 1.5s2-.5 3-1.5" stroke={bg} strokeWidth="1.5" opacity="0.35" fill="none"/>
+      <path d="M13.5 13.5c1 .8 1.5 1 2.5 1s1.5-.2 2.5-1" stroke={bg} strokeWidth="0.8" opacity="0.2" fill="none"/>
+      {/* Beak — hooked */}
+      <path d="M16 7.5l-1.5 2c0 .5.5 1 1.5 1s1.5-.5 1.5-1L16 7.5z" fill={bg} opacity="0.35"/>
+      <path d="M15.5 9.5l-1 1.5" stroke={bg} strokeWidth="0.6" opacity="0.4" strokeLinecap="round"/>
+      {/* Eyes — intense */}
+      <circle cx="14.3" cy="9.5" r="0.9" fill={bg} opacity="0.55"/>
+      <circle cx="17.7" cy="9.5" r="0.9" fill={bg} opacity="0.55"/>
+      <circle cx="14.5" cy="9.3" r="0.4" fill={bg} opacity="0.8"/>
+      <circle cx="17.9" cy="9.3" r="0.4" fill={bg} opacity="0.8"/>
     </svg>
   ),
   SF: (c, bg) => ( // Fog — Golden Gate bridge in fog
@@ -568,22 +620,32 @@ const ICONS: Record<string, IconFn> = {
       <line x1="26" y1="13" x2="26" y2="20" stroke={c} strokeWidth="0.5" opacity="0.3"/>
     </svg>
   ),
-  SEA: (c, bg) => ( // Sasquatch — Bigfoot mid-stride silhouette
+  SEA: (c, bg) => ( // Sasquatch — Fierce bigfoot face/bust, front-facing
     <svg viewBox="0 0 32 32" fill="none">
-      {/* Head */}
-      <ellipse cx="14" cy="5" rx="3.5" ry="4" fill={c}/>
-      {/* Body */}
-      <path d="M11 9c-1 2-2 5-2 8l-1 5 4 1 1-4h4l2 5 4-1-2-6c-1-3-2-6-3-8H11z" fill={c}/>
-      {/* Arms */}
-      <path d="M11 12l-4 5-2 1" stroke={c} strokeWidth="2.5" strokeLinecap="round"/>
-      <path d="M19 12l3 4 2 0" stroke={c} strokeWidth="2.5" strokeLinecap="round"/>
-      {/* Feet - big! */}
-      <ellipse cx="11" cy="28" rx="3" ry="1.5" fill={c}/>
-      <ellipse cx="22" cy="27" rx="3" ry="1.5" fill={c}/>
-      {/* Eye */}
-      <circle cx="15" cy="4.5" r="0.8" fill={bg} opacity="0.4"/>
-      {/* Fur texture */}
-      <path d="M10 14l-1 0.5M12 16l-1 0.5M18 14l1 0.5M17 16l1 0.5" stroke={bg} strokeWidth="0.4" opacity="0.15"/>
+      {/* Broad shoulders/body base */}
+      <path d="M4 28c0-5 3-8 6-10l2-1c1 0 2 .5 4 .5s3-.5 4-.5l2 1c3 2 6 5 6 10" fill={c} opacity="0.7"/>
+      {/* Head — large, slightly domed */}
+      <path d="M8 15c0-6 3.5-11 8-11s8 5 8 11c0 3-2 6-4 7l-1 1h-6l-1-1c-2-1-4-4-4-7z" fill={c}/>
+      {/* Heavy brow ridge */}
+      <path d="M9 12c1-1.5 3-2.5 7-2.5s6 1 7 2.5" stroke={c} strokeWidth="3" strokeLinecap="round"/>
+      <path d="M9.5 12.5c1-1 3-2 6.5-2s5.5 1 6.5 2" stroke={bg} strokeWidth="0.5" opacity="0.15" fill="none"/>
+      {/* Deep-set eyes under brow */}
+      <ellipse cx="13" cy="14" rx="1.8" ry="1.4" fill={bg} opacity="0.4"/>
+      <ellipse cx="19" cy="14" rx="1.8" ry="1.4" fill={bg} opacity="0.4"/>
+      <circle cx="13.3" cy="13.8" r="0.7" fill={bg} opacity="0.7"/>
+      <circle cx="19.3" cy="13.8" r="0.7" fill={bg} opacity="0.7"/>
+      {/* Broad flat nose */}
+      <path d="M14.5 16l-1 2.5c0 .5.5 1 2.5 1s2.5-.5 2.5-1L17.5 16" fill={bg} opacity="0.25"/>
+      {/* Nostrils */}
+      <circle cx="15" cy="18.5" r="0.6" fill={bg} opacity="0.3"/>
+      <circle cx="17" cy="18.5" r="0.6" fill={bg} opacity="0.3"/>
+      {/* Mouth / grimace */}
+      <path d="M13 21c1 1 2 1.5 3 1.5s2-.5 3-1.5" stroke={bg} strokeWidth="0.8" opacity="0.25" fill="none"/>
+      {/* Fur texture around face */}
+      <path d="M8 15l-1 .5M8 18l-1.5 .5M9 20l-1 1" stroke={c} strokeWidth="1.2" strokeLinecap="round" opacity="0.5"/>
+      <path d="M24 15l1 .5M24 18l1.5 .5M23 20l1 1" stroke={c} strokeWidth="1.2" strokeLinecap="round" opacity="0.5"/>
+      {/* Top of head fur tufts */}
+      <path d="M12 5l-1-2M16 4v-2M20 5l1-2" stroke={c} strokeWidth="1" strokeLinecap="round" opacity="0.4"/>
     </svg>
   ),
 };
@@ -596,10 +658,36 @@ export function TeamLogo({ abbreviation, primaryColor, secondaryColor, size = 'm
     const pad = PADDING[size] ?? PADDING.md;
     return (
       <div
-        className={`${sizeClass} rounded-lg shrink-0 overflow-hidden box-border ${className}`}
-        style={{ backgroundColor: primaryColor, padding: pad }}
+        className={`${sizeClass} shrink-0 overflow-hidden box-border relative ${className}`}
+        style={{
+          backgroundColor: primaryColor,
+          padding: pad,
+          boxShadow: `0 3px 8px ${primaryColor}55, 0 1px 3px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(0,0,0,0.15)`,
+          border: `1px solid rgba(255,255,255,0.12)`,
+          borderRadius: '22%',
+        }}
       >
-        <div style={{ width: '100%', height: '100%' }}>
+        {/* Gradient overlay for depth */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: `linear-gradient(160deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.05) 40%, transparent 60%, rgba(0,0,0,0.2) 100%)`,
+            borderRadius: 'inherit',
+          }}
+        />
+        {/* Gloss highlight */}
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            top: 0,
+            left: '5%',
+            right: '5%',
+            height: '45%',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.08) 60%, transparent 100%)',
+            borderRadius: '22% 22% 50% 50%',
+          }}
+        />
+        <div style={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }}>
           {iconFn(secondaryColor, primaryColor)}
         </div>
       </div>
@@ -610,10 +698,32 @@ export function TeamLogo({ abbreviation, primaryColor, secondaryColor, size = 'm
   const fontSize = FONT_SIZES[size] ?? FONT_SIZES.md;
   return (
     <div
-      className={`${sizeClass} rounded-lg flex items-center justify-center font-black text-white shrink-0 ${fontSize} ${className}`}
-      style={{ backgroundColor: primaryColor }}
+      className={`${sizeClass} flex items-center justify-center font-black text-white shrink-0 relative overflow-hidden ${fontSize} ${className}`}
+      style={{
+        backgroundColor: primaryColor,
+        boxShadow: `0 3px 8px ${primaryColor}55, 0 1px 3px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(0,0,0,0.15)`,
+        border: `1px solid rgba(255,255,255,0.12)`,
+        borderRadius: '22%',
+      }}
     >
-      {abbreviation}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: `linear-gradient(160deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.05) 40%, transparent 60%, rgba(0,0,0,0.2) 100%)`,
+        }}
+      />
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          top: 0,
+          left: '5%',
+          right: '5%',
+          height: '45%',
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.08) 60%, transparent 100%)',
+          borderRadius: '22% 22% 50% 50%',
+        }}
+      />
+      <span className="relative z-10">{abbreviation}</span>
     </div>
   );
 }

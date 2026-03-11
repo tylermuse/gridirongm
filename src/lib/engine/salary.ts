@@ -9,13 +9,13 @@ export const LEAGUE_MINIMUM_SALARY = DEFAULT_LEAGUE_SETTINGS.leagueMinSalary;
 
 const POSITION_SALARY_MULTIPLIER: Partial<Record<Position, number>> = {
   QB: 1.45,
-  WR: 0.90,
-  CB: 0.85,
-  DL: 0.90,
-  LB: 0.80,
-  OL: 0.85,
-  S: 0.75,
-  TE: 0.70,
+  DL: 1.05,
+  WR: 0.95,
+  CB: 0.95,
+  OL: 0.95,
+  LB: 0.90,
+  S: 0.85,
+  TE: 0.75,
   RB: 0.65,
   K: 0.25,
   P: 0.25,
@@ -24,12 +24,14 @@ const POSITION_SALARY_MULTIPLIER: Partial<Record<Position, number>> = {
 export function estimateSalary(overall: number, position?: Position, age?: number, potential?: number): number {
   // Piecewise salary curve tuned to pro reality:
   //   40 OVR → league min (~$0.75M)  — practice squad / camp body
-  //   50 OVR → ~$2-3M               — depth / backup
-  //   60 OVR → ~$8-12M              — solid starter
-  //   70 OVR → ~$16-22M             — above-average starter
-  //   80 OVR → ~$28-35M             — All-Pro caliber
-  //   90 OVR → ~$45-55M             — elite / All-Pro
-  //   99 OVR → ~$55-60M             — generational
+  //   50 OVR → ~$2M                  — depth / backup
+  //   55 OVR → ~$8M                  — low-end starter
+  //   60 OVR → ~$13M                 — solid starter
+  //   65 OVR → ~$18M                 — good starter
+  //   70 OVR → ~$23M                 — above-average starter
+  //   80 OVR → ~$32M                 — All-Pro caliber
+  //   90 OVR → ~$44M                 — elite / All-Pro
+  //   99 OVR → ~$55M                 — generational
   const ovr = Math.max(40, Math.min(99, overall));
   let baseSalary: number;
 
@@ -72,17 +74,17 @@ export function estimateSalary(overall: number, position?: Position, age?: numbe
     const t = (ovr - 40) / 10;
     baseSalary = LEAGUE_MINIMUM_SALARY + t * (2.0 - LEAGUE_MINIMUM_SALARY);
   } else if (ovr <= 65) {
-    // $2M to $12M — the starter range
+    // $2M to $18M — the starter range (linear, not quadratic)
     const t = (ovr - 50) / 15;
-    baseSalary = 2.0 + t * t * 10.0; // Gentle curve upward
+    baseSalary = 2.0 + t * 16.0;
   } else if (ovr <= 80) {
-    // $12M to $28M — above average to All-Pro
+    // $18M to $32M — above average to All-Pro
     const t = (ovr - 65) / 15;
-    baseSalary = 12.0 + t * 16.0;
+    baseSalary = 18.0 + t * 14.0;
   } else {
-    // $28M to $50M — elite tier
+    // $32M to $55M — elite tier
     const t = (ovr - 80) / 19;
-    baseSalary = 28.0 + t * 22.0;
+    baseSalary = 32.0 + t * 23.0;
   }
 
   // Position multiplier — QBs command the most, K/P the least

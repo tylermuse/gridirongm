@@ -128,24 +128,25 @@ function simulatePlay(
     : 50;
 
   // Decide pass vs rush (weighted by situation)
-  const passChance = down >= 3 && yardsToGo > 5 ? 0.72 :
-                     down >= 3 ? 0.60 :
-                     down === 1 ? 0.48 : 0.55;
+  const passChance = down >= 3 && yardsToGo > 5 ? 0.65 :
+                     down >= 3 ? 0.55 :
+                     down === 1 ? 0.45 : 0.50;
 
   const isPass = Math.random() < passChance;
 
   if (isPass && qb && receivers.length > 0) {
     // ── Sack check ──
-    const sackChance = clamp((dlPower - olPower) / 500 + 0.04, 0.02, 0.06);
+    const sackChance = clamp((dlPower - olPower) / 350 + 0.05, 0.02, 0.10);
     if (Math.random() < sackChance) {
       const sackYards = -(3 + Math.floor(Math.random() * 6));
-      // Sacks can come from DLs or LBs (edge rushers)
-      const sackerPool = [...dls, ...lbs.slice(0, 2)]; // top 2 LBs can rush
+      // Sacks come from DLs or LBs — starters (top 4 DL, top 2 LB) get heavy snap share
+      const sackerPool = [...dls.slice(0, 4), ...lbs.slice(0, 2)];
       const sacker = sackerPool.length > 0
-        ? weightedPick(sackerPool, sackerPool.map(p => {
+        ? weightedPick(sackerPool, sackerPool.map((p, i) => {
             const isLB = p.position === 'LB';
             const base = isLB ? 1 : 1.5; // DLs slightly more likely
-            return base * (p.ratings.passRush / 70);
+            const starterBonus = i < 4 ? 3 : 1; // Top 4 DL get 3x snap weight
+            return base * starterBonus * (p.ratings.passRush / 70);
           }))
         : allDefenders[0];
       return { type: 'sack', yards: sackYards, touchdown: false, turnover: false, passer: qb, sacker };
@@ -169,8 +170,8 @@ function simulatePlay(
     // ── Interception check ──
     // Avg INT rate ~1.5% of attempts. Elite QBs ~0.5% (~3/season), bad QBs ~2.8% (~16/season).
     const intChance = clamp(
-      (coverageRating - qb.ratings.throwing) / 800 + 0.015,
-      0.005, 0.028,
+      (coverageRating - qb.ratings.throwing) / 600 + 0.015,
+      0.004, 0.035,
     );
     if (Math.random() < intChance) {
       const interceptor = coverageDefender ?? (cbs[0] || safeties[0] || allDefenders[0]);
@@ -181,8 +182,8 @@ function simulatePlay(
     }
 
     // ── Completion check ──
-    const compBase = 0.52 + (qb.ratings.throwing / 100) * 0.14 + (target.ratings.catching / 100) * 0.10;
-    const compRate = clamp(compBase - (coverageRating / 100) * 0.10, 0.35, 0.80);
+    const compBase = 0.48 + (qb.ratings.throwing / 100) * 0.18 + (target.ratings.catching / 100) * 0.12;
+    const compRate = clamp(compBase - (coverageRating / 100) * 0.14, 0.35, 0.64);
 
     if (Math.random() < compRate) {
       // Completed pass — yards tuned for realism
@@ -192,7 +193,7 @@ function simulatePlay(
       let yards = Math.round(baseYards + bonusYards * Math.random());
 
       // Big play chance (~3% of completions go 20+) — rare explosive plays
-      const bigPlayChance = (target.ratings.speed / 100) * 0.03;
+      const bigPlayChance = (target.ratings.speed / 100) * 0.02;
       if (Math.random() < bigPlayChance) {
         yards += 15 + Math.floor(Math.random() * 20);
       }
@@ -229,11 +230,12 @@ function simulatePlay(
       ? [...dls, ...lbs].reduce((s, p) => s + p.ratings.tackling + p.ratings.strength * 0.5, 0) / [...dls, ...lbs].length
       : 50;
     const rushSkill = rusher.ratings.carrying * 0.5 + rusher.ratings.speed * 0.3 + rusher.ratings.agility * 0.2;
-    const olBonus = (olPower - 60) / 100 * 2;
+    const olBonus = (olPower - 60) / 100 * 2.6; // 1.3x OL bonus multiplier (was 2)
 
     // Average: ~4.3 yards per carry, top RB ~1,000-1,400 yds/season
+    // Increased signal: divisor 35 (was 50), reduced noise range 2.5 (was 3.0)
     let yards = Math.round(
-      (rushSkill - defRushPower) / 50 + 2.5 + (Math.random() * 3 - 1.0) + olBonus,
+      (rushSkill - defRushPower) / 35 + 2.5 + (Math.random() * 2.5 - 0.75) + olBonus,
     );
 
     // Big rush chance (~1.5%) — breakaway runs
@@ -295,7 +297,7 @@ function simulateDrive(
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
 
-  for (let playNum = 0; playNum < 12; playNum++) { // max 12 plays per drive (Drives avg ~6, long drives 10-12)
+  for (let playNum = 0; playNum < 10; playNum++) { // max 10 plays per drive (NFL avg ~6, long drives 8-10)
     const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition);
     plays.push(play);
 
@@ -397,7 +399,7 @@ function ensure(
  * so starters naturally dominate stats through weighted play selection.
  *
  * Tuned for realistic pro scores: average ~20-24 points per team.
- * QB season averages: ~3,800-4,500 pass yards, ~25-35 TDs.
+ * QB season averages: ~3,200-4,200 pass yards, ~25-35 TDs.
  */
 export function simulateGame(
   game: GameResult,
@@ -537,6 +539,12 @@ export function simulateGame(
             s.passYards = (s.passYards ?? 0) + play.yards;
             if (play.touchdown) s.passTDs = (s.passTDs ?? 0) + 1;
           }
+          // Track pass blocks for OL
+          for (const p of rosterList) {
+            if (p.position === 'OL' && (!p.injury || p.injury.weeksLeft === 0)) {
+              ensure(playerStats, p.id).passBlocks = (ensure(playerStats, p.id).passBlocks ?? 0) + 1;
+            }
+          }
         }
         if (play.receiver && rosterIds.has(play.receiver.id) && (play.yards > 0 || play.touchdown)) {
           const s = ensure(playerStats, play.receiver.id);
@@ -579,6 +587,22 @@ export function simulateGame(
           s.sacks = (s.sacks ?? 0) + 1;
           s.tackles = (s.tackles ?? 0) + 1;
           s.tacklesForLoss = (s.tacklesForLoss ?? 0) + 1;
+        }
+        // Charge sacksAllowed to one of the 5 starting OL (weighted by inverse blocking)
+        // and passBlocks to the starting 5 OL on the passer's team
+        if (play.passer && rosterIds.has(play.passer.id)) {
+          const olPlayers = rosterList
+            .filter(p => p.position === 'OL' && (!p.injury || p.injury.weeksLeft === 0))
+            .slice(0, 5); // Only the 5 starters
+          if (olPlayers.length > 0) {
+            // Assign sack to one starting OL (worse blockers more likely to be blamed)
+            const sackWeights = olPlayers.map(p => Math.max(1, 100 - p.ratings.blocking));
+            const blamed = weightedPick(olPlayers, sackWeights);
+            ensure(playerStats, blamed.id).sacksAllowed = (ensure(playerStats, blamed.id).sacksAllowed ?? 0) + 1;
+          }
+          for (const p of olPlayers) {
+            ensure(playerStats, p.id).passBlocks = (ensure(playerStats, p.id).passBlocks ?? 0) + 1;
+          }
         }
       }
       if (play.type === 'interception') {

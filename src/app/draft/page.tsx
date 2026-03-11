@@ -217,7 +217,7 @@ function OnTheClockSection({
                 Sim Pick
               </Button>
               <Button onClick={simToUserDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
-                To My Pick
+                Sim to My Pick
               </Button>
               <Button onClick={() => onSimAll?.()} size="sm" variant="secondary" disabled={!canSimulate}>
                 Auto-Draft All
@@ -290,7 +290,7 @@ function OnTheClockSection({
                 </div>
                 <div className="px-4 pb-3 text-center py-4">
                   <div className="text-3xl mb-1">?</div>
-                  <div className="text-xs text-[var(--text-sec)]">Upgrade scouting for better intel</div>
+                  <div className="text-xs text-[var(--text-sec)]">Set scouting to Pro or Elite for better intel</div>
                 </div>
               </div>
             ) : scoutsPick ? (
@@ -423,7 +423,7 @@ export default function DraftPage() {
     return p && p.experience === 0;
   }).length;
   const draftComplete = draftOrder.length === 0 || prospectCount === 0;
-  const currentOverallPick = totalPicks - draftOrder.length + 1;
+  const currentOverallPick = draftComplete ? totalPicks : totalPicks - draftOrder.length + 1;
   const currentRound = Math.min(totalRounds, Math.max(1, Math.ceil(currentOverallPick / picksPerRound)));
   const currentPickInRound = ((currentOverallPick - 1) % picksPerRound) + 1;
 
@@ -478,24 +478,30 @@ export default function DraftPage() {
   const nextPickNeeds = draftOrder[1] ? getTeamNeeds(draftOrder[1]).slice(0, 3) : [];
   const myNeeds = getTeamNeeds(userTeamId).slice(0, 5);
   const bestAvailable = allProspects[0];
-  const bestFit = !currentPickTeamId
-    ? null
-    : [...allProspects].sort((a, b) => {
-        const needs = getTeamNeeds(currentPickTeamId);
-        const aNeed = needs.find((n) => n.position === a.position)?.needScore ?? 0;
-        const bNeed = needs.find((n) => n.position === b.position)?.needScore ?? 0;
-        // Use scouted OVR (what the user sees) so bestFit matches the prospect list
-        const aScout = draftScoutingData[a.id];
-        const bScout = draftScoutingData[b.id];
-        const aOvr = aScout ? aScout.scoutedOvr : a.ratings.overall;
-        const bOvr = bScout ? bScout.scoutedOvr : b.ratings.overall;
-        let aScore = aOvr + a.potential * 0.4 + aNeed * 0.2;
-        let bScore = bOvr + b.potential * 0.4 + bNeed * 0.2;
-        // K/P are least valuable — heavily penalize in draft rankings
-        if (a.position === 'K' || a.position === 'P') aScore *= 0.5;
-        if (b.position === 'K' || b.position === 'P') bScore *= 0.5;
-        return bScore - aScore;
-      })[0];
+  const bestFit = (() => {
+    if (!currentPickTeamId) return null;
+    const needs = getTeamNeeds(currentPickTeamId);
+    // Get top need positions (needScore > 0, excluding K/P)
+    const needPositions = new Set(
+      needs.filter(n => n.needScore > 0 && n.position !== 'K' && n.position !== 'P').map(n => n.position),
+    );
+    // Filter prospects to only need positions
+    const needProspects = allProspects.filter(p => needPositions.has(p.position));
+    // If no need-matching prospects, fall back to all (excluding K/P)
+    const pool = needProspects.length > 0 ? needProspects : allProspects.filter(p => p.position !== 'K' && p.position !== 'P');
+    return [...pool].sort((a, b) => {
+      const aNeed = needs.find((n) => n.position === a.position)?.needScore ?? 0;
+      const bNeed = needs.find((n) => n.position === b.position)?.needScore ?? 0;
+      const aScout = draftScoutingData[a.id];
+      const bScout = draftScoutingData[b.id];
+      const aOvr = aScout ? aScout.scoutedOvr : a.ratings.overall;
+      const bOvr = bScout ? bScout.scoutedOvr : b.ratings.overall;
+      // Weight need more heavily than BPA for "Best Fit"
+      const aScore = aOvr + a.potential * 0.4 + aNeed * 0.5;
+      const bScore = bOvr + b.potential * 0.4 + bNeed * 0.5;
+      return bScore - aScore;
+    })[0] ?? null;
+  })();
 
   // "Your Scouts Say" — uses only scouted data (noisy OVR + noisy potential estimate)
   // At low scouting levels this will diverge from bestFit; at high levels they converge
@@ -615,14 +621,11 @@ export default function DraftPage() {
                 className="h-7 px-2 text-xs rounded border border-[var(--border)] bg-[var(--surface-2)]"
                 title={SCOUTING_LEVELS[scoutingLevel]?.tooltip}
               >
-                {SCOUTING_LEVELS.map((level, i) => {
-                  const locked = i > maxLevel;
-                  return (
-                    <option key={i} value={i} disabled={locked}>
-                      {locked ? '🔒 ' : ''}{level.name}{locked ? ` (${level.tier === 'pro' ? 'Pro' : 'Elite'})` : ''}
-                    </option>
-                  );
-                })}
+                {SCOUTING_LEVELS.map((level, i) => (
+                  <option key={i} value={i}>
+                    {level.name}
+                  </option>
+                ))}
               </select>
               {maxLevel < 2 && (
                 <a href="/pricing" className="text-[10px] text-blue-600 hover:underline ml-1">
@@ -638,7 +641,7 @@ export default function DraftPage() {
                   <th className="text-left pb-2">Player</th>
                   <th className="text-center pb-2">Pos</th>
                   <th className="text-center pb-2">OVR Range</th>
-                  <th className="text-center pb-2">Pot</th>
+                  <th className="text-center pb-2 group relative cursor-help" title="Potential — a player's ceiling. Draft prospects show as Elite/High/Average/Low until scouted over 3+ seasons.">Pot <span className="inline-block w-3 h-3 text-[10px] rounded-full bg-[var(--surface-2)] text-[var(--text-sec)]">?</span></th>
                   <th className="text-right pb-2 pr-2">Draft</th>
                 </tr>
               </thead>
@@ -786,7 +789,7 @@ export default function DraftPage() {
             if (teamPicks.length === 0) return { team: t, grade: 'N/A', avgVal: 0, picks: 0, bestPick: null as null | { player: Player | undefined; grade: string; overallPick: number } };
             const grades = teamPicks.map(p => {
               const pl = players.find(pp => pp.id === p.playerId);
-              const g = pl ? pickGrade(p.overallPick, totalPicks, pl.ratings.overall) : 'C';
+              const g = pl ? pickGrade(p.overallPick, totalPicks, pl.ratings.overall, pl.potential) : 'C';
               return { grade: g, val: gradeValue(g), player: pl, overallPick: p.overallPick };
             });
             const avgVal = grades.reduce((s, g) => s + g.val, 0) / grades.length;
@@ -884,7 +887,7 @@ export default function DraftPage() {
                     </div>
                   </div>
                   {player ? (() => {
-                    const g = pickGrade(pick.overallPick, totalPicks, player.ratings.overall);
+                    const g = pickGrade(pick.overallPick, totalPicks, player.ratings.overall, player.potential);
                     return <span className={`font-bold text-xs ${gradeColor(g)}`}>{g}</span>;
                   })() : <span className="text-[var(--text-sec)]">--</span>}
                 </div>

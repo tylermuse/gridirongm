@@ -183,6 +183,7 @@ const COLLEGES = [
 const SCOUTING_LABELS = [
   'High motor', 'Raw but explosive', 'Pro-ready',
   'Injury history', 'Combine standout', 'Character concerns',
+  'Sleeper',
 ];
 
 /** Generates a class of draft prospects.
@@ -207,5 +208,33 @@ export function generateDraftClass(count: number): Player[] {
     prospects.push(player);
   }
 
-  return prospects.sort((a, b) => b.ratings.overall - a.ratings.overall);
+  // Sort by OVR so pick order aligns with talent
+  prospects.sort((a, b) => b.ratings.overall - a.ratings.overall);
+
+  // ── Sleeper pass: upgrade 2-3 late-round prospects into hidden gems ──
+  // These have modest OVR (fall to rounds 4-7) but elite potential (develop
+  // into stars over 2-3 seasons). At low scouting levels the high potential
+  // is hidden; elite scouting reveals the upside.
+  const halfIdx = Math.floor(prospects.length / 2);
+  const bottomHalf = prospects.slice(halfIdx);
+  const sleeperCount = 2 + (Math.random() < 0.5 ? 1 : 0); // 2 or 3
+  const shuffled = [...bottomHalf].sort(() => Math.random() - 0.5);
+  const sleepers = shuffled.slice(0, sleeperCount);
+
+  for (const prospect of sleepers) {
+    // Re-roll ratings to land in the 45-55 OVR sweet spot (falls to late rounds)
+    const targetOvr = 45 + Math.floor(Math.random() * 11); // 45-55
+    const newRatings = generateRatings(prospect.position, targetOvr + 5);
+    // Manually adjust overall to be in range
+    newRatings.overall = clamp(targetOvr, 35, 60);
+    prospect.ratings = newRatings;
+    // High potential — develops into a star over 2-3 seasons
+    prospect.potential = clamp(75 + Math.floor(Math.random() * 11), 75, 85); // 75-85
+    prospect.scoutingLabel = 'Sleeper';
+  }
+
+  // Re-sort after sleeper adjustments
+  prospects.sort((a, b) => b.ratings.overall - a.ratings.overall);
+
+  return prospects;
 }

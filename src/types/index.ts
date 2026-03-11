@@ -78,6 +78,21 @@ export interface PlayerStats {
   extraPointsMade: number;
 }
 
+/** Per-year contract breakdown used for restructured contracts */
+export interface ContractYear {
+  baseSalary: number;      // Base salary for this year ($M)
+  proratedBonus: number;   // Accumulated prorated signing bonus ($M), 0 by default
+  isVoidYear: boolean;     // true = dummy year added for spreading proration
+}
+
+/** Log entry for a single contract restructure */
+export interface ContractRestructure {
+  season: number;          // When the restructure happened
+  amountConverted: number; // How much base salary was converted to bonus
+  voidYearsAdded: number;  // How many void years were added (0-3)
+  proratedPerYear: number; // The per-year prorated charge created
+}
+
 export interface Contract {
   salary: number;
   yearsLeft: number;
@@ -85,6 +100,14 @@ export interface Contract {
   guaranteed: number;
   /** Original total years of the contract (for dead-cap proration) */
   totalYears?: number;
+  /** Per-year breakdown — populated on first restructure, undefined for simple contracts */
+  contractYears?: ContractYear[];
+  /** Total void years added to this contract (max 3 lifetime) */
+  voidYears?: number;
+  /** History of all restructures on this contract */
+  restructureHistory?: ContractRestructure[];
+  /** Set true when signed during offseason — prevents first startNewSeason decrement */
+  offseasonSigned?: boolean;
 }
 
 export interface Player {
@@ -147,6 +170,10 @@ export interface DeadCapEntry {
   playerName: string;
   amount: number;
   yearsLeft: number;
+  /** Source of the dead cap charge */
+  source?: 'release' | 'trade' | 'void';
+  /** Season the dead cap was created */
+  season?: number;
 }
 
 export interface Team {
@@ -241,6 +268,67 @@ export function generateGuaranteed(salary: number, years: number): number {
 
   const fraction = Math.min(0.70, baseFraction + salaryBonus);
   return Math.round(salary * fraction * 10) / 10;
+}
+
+// ── Contract Restructuring Helpers ──────────────────────────────────
+
+/**
+ * Get the current-year cap hit for a contract.
+ * If contractYears exists, use index 0 (baseSalary + proratedBonus).
+ * Otherwise fall back to the flat salary field.
+ */
+export function getCapHit(contract: Contract): number {
+  if (contract.contractYears && contract.contractYears.length > 0) {
+    const yr = contract.contractYears[0];
+    return Math.round((yr.baseSalary + yr.proratedBonus) * 100) / 100;
+  }
+  return contract.salary;
+}
+
+/**
+ * Get the total unamortized prorated bonus remaining across ALL years.
+ * This is the dead money that accelerates on cut/trade.
+ */
+export function getUnamortizedBonus(contract: Contract): number {
+  if (!contract.contractYears) return 0;
+  return Math.round(
+    contract.contractYears.reduce((sum, yr) => sum + yr.proratedBonus, 0) * 100
+  ) / 100;
+}
+
+/**
+ * Calculate dead cap for a contract, handling both restructured and legacy contracts.
+ * Restructured: all unamortized prorated bonus accelerates.
+ * Legacy: falls back to the original calculateDeadCap formula.
+ */
+export function calculateDeadCapV2(contract: Contract): number {
+  if (contract.contractYears) {
+    return getUnamortizedBonus(contract);
+  }
+  return calculateDeadCap(contract);
+}
+
+/**
+ * Calculate cap savings from releasing a player.
+ * Savings = current year cap hit - dead money charge.
+ */
+export function calculateCapSavingsV2(contract: Contract): number {
+  const capHit = getCapHit(contract);
+  const deadCap = calculateDeadCapV2(contract);
+  return Math.round((capHit - deadCap) * 100) / 100;
+}
+
+/**
+ * Create a ContractYear[] from a flat contract model.
+ * Called on first restructure to materialize the per-year breakdown.
+ * All years get the same baseSalary = contract.salary, proratedBonus = 0.
+ */
+export function materializeContractYears(contract: Contract): ContractYear[] {
+  const years: ContractYear[] = [];
+  for (let i = 0; i < contract.yearsLeft; i++) {
+    years.push({ baseSalary: contract.salary, proratedBonus: 0, isVoidYear: false });
+  }
+  return years;
 }
 
 export interface DraftPick {

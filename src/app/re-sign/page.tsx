@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useGameStore, computeFranchiseTagSalary } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { LEAGUE_MINIMUM_SALARY, computeLuxuryTax, LUXURY_TAX_RATE } from '@/lib/engine/store';
@@ -20,14 +21,14 @@ function ratingColor(val: number): string {
   return 'text-red-600';
 }
 
-function positionStats(p: { position: string; stats: { gamesPlayed: number; passYards: number; passTDs: number; interceptions: number; rushYards: number; rushTDs: number; receptions: number; receivingYards: number; receivingTDs: number; tackles: number; sacks: number; defensiveINTs: number; fieldGoalsMade: number; fieldGoalAttempts: number } }): string {
+function positionStats(p: { position: string; stats: { gamesPlayed: number; passYards: number; passTDs: number; interceptions: number; rushYards: number; rushTDs: number; receptions: number; receivingYards: number; receivingTDs: number; tackles: number; sacks: number; defensiveINTs: number; fieldGoalsMade: number; fieldGoalAttempts: number; sacksAllowed: number; passBlocks: number } }): string {
   const s = p.stats;
   if (s.gamesPlayed === 0) return 'No games played';
   switch (p.position) {
     case 'QB': return `${s.gamesPlayed} GP · ${s.passYards} YDS · ${s.passTDs} TD · ${s.interceptions} INT`;
     case 'RB': return `${s.gamesPlayed} GP · ${s.rushYards} YDS · ${s.rushTDs} TD · ${s.receptions} REC`;
     case 'WR': case 'TE': return `${s.gamesPlayed} GP · ${s.receptions} REC · ${s.receivingYards} YDS · ${s.receivingTDs} TD`;
-    case 'OL': return `${s.gamesPlayed} GP`;
+    case 'OL': return `${s.gamesPlayed} GP · ${s.sacksAllowed ?? 0} SA · ${(s.passBlocks ?? 0) > 0 ? ((s.sacksAllowed ?? 0) / s.passBlocks * 100).toFixed(1) : '0.0'}%`;
     case 'DL': case 'LB': return `${s.gamesPlayed} GP · ${s.tackles} TKL · ${s.sacks} SCK`;
     case 'CB': case 'S': return `${s.gamesPlayed} GP · ${s.tackles} TKL · ${s.defensiveINTs} INT`;
     case 'K': return `${s.gamesPlayed} GP · ${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG${s.fieldGoalAttempts > 0 ? ` (${Math.round(s.fieldGoalsMade / s.fieldGoalAttempts * 100)}%)` : ''}`;
@@ -40,7 +41,8 @@ type ReSignResult = 'accepted' | 'rejected' | 'passed';
 type NegMode = 'extend' | 'restructure';
 
 export default function ReSignPage() {
-  const { phase, players, teams, userTeamId, resigningPlayers, resignPlayer, passOnResigning, franchiseTagPlayer } = useGameStore();
+  const router = useRouter();
+  const { phase, players, teams, userTeamId, resigningPlayers, resignPlayer, passOnResigning, franchiseTagPlayer, advanceToDraft } = useGameStore();
   const roster = players.filter(p => p.teamId === userTeamId && !p.retired);
 
   const [results, setResults] = useState<Record<string, ReSignResult>>({});
@@ -136,10 +138,17 @@ export default function ReSignPage() {
     }
   }
 
-  function closeNegotiation() {
+  const closeNegotiation = useCallback(() => {
     setNegotiation(null);
     setActivePlayerId(null);
-  }
+  }, []);
+
+  // Auto-close negotiation result after 3 seconds
+  useEffect(() => {
+    if (!negotiation || negotiation.outcome === 'pending') return;
+    const timer = setTimeout(closeNegotiation, 1000);
+    return () => clearTimeout(timer);
+  }, [negotiation, closeNegotiation]);
 
   function walkAway() {
     // Walking away from negotiation = letting the player go
@@ -169,6 +178,21 @@ export default function ReSignPage() {
             <p className="text-sm text-[var(--text-sec)] mt-1">
               Extend or restructure your expiring contracts before they hit free agency.
             </p>
+            {activeEntries.length > 1 && (
+              <Button
+                size="sm"
+                variant="danger"
+                className="mt-2"
+                onClick={() => {
+                  for (const entry of activeEntries) {
+                    passOnResigning(entry.playerId);
+                    setResults(prev => ({ ...prev, [entry.playerId]: 'passed' }));
+                  }
+                }}
+              >
+                Let All Walk ({activeEntries.length})
+              </Button>
+            )}
           </div>
           <div className="text-right">
             <div className={`text-2xl font-black ${capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}`}>
@@ -356,6 +380,15 @@ export default function ReSignPage() {
               <div className="text-4xl mb-3">✅</div>
               <p className="font-semibold">No expiring contracts this offseason.</p>
               <p className="text-sm mt-1">All your players have at least 2 years remaining.</p>
+              <Button
+                className="mt-4"
+                onClick={() => {
+                  advanceToDraft();
+                  router.push('/draft');
+                }}
+              >
+                Advance to Draft →
+              </Button>
             </div>
           </Card>
         ) : (
@@ -526,6 +559,22 @@ export default function ReSignPage() {
               );
             })}
           </div>
+          </div>
+        )}
+
+        {/* Advance to Draft — shown when all entries are done */}
+        {activeEntries.length === 0 && Object.keys(results).length > 0 && (
+          <div className="text-center py-8">
+            <div className="text-4xl mb-2">✅</div>
+            <p className="text-[var(--text-sec)] mb-4">All re-signing decisions complete.</p>
+            <Button
+              onClick={() => {
+                advanceToDraft();
+                router.push('/draft');
+              }}
+            >
+              Advance to Draft →
+            </Button>
           </div>
         )}
 

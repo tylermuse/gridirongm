@@ -3,7 +3,7 @@
  */
 import type { DraftSelection, Player, Team } from '@/types';
 import { ROSTER_LIMITS } from '@/types';
-import { pickGrade, gradeValue, teamDraftGrade } from './draftGrades';
+import { pickGrade, gradeValue, teamDraftGrade, expectedOvrForPick } from './draftGrades';
 
 /* ─── Types ─── */
 
@@ -57,8 +57,7 @@ function pick<T>(arr: T[], rand: () => number): T {
 /* ─── Grade Computation ─── */
 
 function expectedOvr(overallPick: number, totalPicks: number): number {
-  const progress = (overallPick - 1) / Math.max(1, totalPicks - 1);
-  return Math.round(78 - progress * 45);
+  return expectedOvrForPick(overallPick, totalPicks);
 }
 
 export function computeAllTeamGrades(
@@ -87,7 +86,7 @@ export function computeAllTeamGrades(
   for (const sel of draftResults) {
     const player = playerMap.get(sel.playerId);
     if (!player) continue;
-    const grade = pickGrade(sel.overallPick, totalPicks, player.ratings.overall);
+    const grade = pickGrade(sel.overallPick, totalPicks, player.ratings.overall, player.potential);
     const delta = player.ratings.overall - expectedOvr(sel.overallPick, totalPicks);
     const entry: PickRecapEntry = {
       overallPick: sel.overallPick,

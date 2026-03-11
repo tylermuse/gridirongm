@@ -93,8 +93,7 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
 }
 
 function AccountSection() {
-  const { user, tier, signOut } = useSubscription();
-  const isAdmin = (user as any)?.app_metadata?.role === 'admin';
+  const { user, tier, isAdmin, signOut } = useSubscription();
 
   if (!user) {
     return (
@@ -109,9 +108,6 @@ function AccountSection() {
     );
   }
 
-  const tierLabel = tier === 'elite' ? 'Elite' : tier === 'pro' ? 'Pro' : 'Free';
-  const tierColor = tier === 'elite' ? 'bg-amber-100 text-amber-700' : tier === 'pro' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700';
-
   return (
     <div className="p-3 border-t border-[var(--border)]">
       <div className="flex items-center gap-2 mb-2">
@@ -120,9 +116,6 @@ function AccountSection() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-xs font-medium truncate">{user.email}</div>
-          <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded-full ${tierColor}`}>
-            {tierLabel}
-          </span>
         </div>
       </div>
       {isAdmin && (
@@ -134,16 +127,16 @@ function AccountSection() {
         </Link>
       )}
       <div className="flex gap-1">
-        {tier === 'free' && (
+        {isAdmin && (
           <Link
-            href="/pricing"
-            className="flex-1 text-[10px] text-center py-1 rounded bg-blue-600/10 text-blue-600 hover:bg-blue-600/20 transition-colors font-medium"
+            href="/admin/analytics"
+            className="flex-1 text-[10px] text-center py-1 rounded bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors font-medium"
           >
-            Upgrade
+            Analytics
           </Link>
         )}
         <button
-          onClick={signOut}
+          onClick={async () => { await signOut(); window.location.href = '/login'; }}
           className="flex-1 text-[10px] text-center py-1 rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
         >
           Sign Out

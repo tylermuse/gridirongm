@@ -127,7 +127,7 @@ function FAEvaluationPanel({ player, roster, capSpace, marketSalary }: {
 }
 
 export default function FreeAgencyPage() {
-  const { phase, players, freeAgents, signFreeAgent, teams, userTeamId, faDay, faRefusals, advanceFADay } = useGameStore();
+  const { phase, players, freeAgents, signFreeAgent, teams, userTeamId, faDay, faRefusals, advanceFADay, advanceFAWeek } = useGameStore();
   const [affordableOnly, setAffordableOnly] = useState(false);
   const [filterPos, setFilterPos] = useState<Position | 'ALL'>('ALL');
   const [negotiation, setNegotiation] = useState<NegotiationState | null>(null);
@@ -137,6 +137,8 @@ export default function FreeAgencyPage() {
   const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null);
   const [walkedAwayIds, setWalkedAwayIds] = useState<Set<string>>(new Set());
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [sortKey, setSortKey] = useState<'name' | 'pos' | 'age' | 'ovr' | 'pot' | 'salary'>('ovr');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   // Allow free agent signings during regular season and freeAgency phase (teams can sign FAs anytime)
   const canSignFreeAgents = phase === 'freeAgency' || phase === 'regular';
@@ -174,12 +176,36 @@ export default function FreeAgencyPage() {
   }
 
   // Free agents list
+  const decay = phase === 'freeAgency' ? faPriceDecay(faDay) : 1.0;
+
+  function toggleSort(key: typeof sortKey) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir(key === 'name' || key === 'pos' ? 'asc' : 'desc'); }
+  }
+  function sortArrow(key: typeof sortKey) {
+    if (sortKey !== key) return '';
+    return sortDir === 'asc' ? ' ↑' : ' ↓';
+  }
+
   const allAgents = freeAgents
     .map(id => players.find(p => p.id === id)!)
     .filter(Boolean)
-    .sort((a, b) => b.ratings.overall - a.ratings.overall);
-
-  const decay = phase === 'freeAgency' ? faPriceDecay(faDay) : 1.0;
+    .sort((a, b) => {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      switch (sortKey) {
+        case 'name': return dir * (`${a.lastName} ${a.firstName}`).localeCompare(`${b.lastName} ${b.firstName}`);
+        case 'pos': return dir * a.position.localeCompare(b.position);
+        case 'age': return dir * (a.age - b.age);
+        case 'ovr': return dir * (a.ratings.overall - b.ratings.overall);
+        case 'pot': return dir * (a.potential - b.potential);
+        case 'salary': {
+          const aSal = estimateSalary(a.ratings.overall, a.position, a.age, a.potential) * decay;
+          const bSal = estimateSalary(b.ratings.overall, b.position, b.age, b.potential) * decay;
+          return dir * (aSal - bSal);
+        }
+        default: return 0;
+      }
+    });
 
   let filteredAgents = allAgents.filter(p => !walkedAwayIds.has(p.id));
   if (filterPos !== 'ALL') {
@@ -207,8 +233,8 @@ export default function FreeAgencyPage() {
     const salary = Math.round(baseSal * decay * 10) / 10;
     const neg = initNegotiation(player, salary);
     setNegotiation(neg);
-    // When over cap, start offer at league minimum (that's all we can actually sign at)
-    setOfferSalary(overCap ? LEAGUE_MINIMUM_SALARY : salary);
+    // Default offer to asking price (or league minimum if over cap)
+    setOfferSalary(overCap ? LEAGUE_MINIMUM_SALARY : neg.askingSalary);
     setOfferYears(neg.askingYears);
   }
 
@@ -273,7 +299,7 @@ export default function FreeAgencyPage() {
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => { for (let i = 0; i < 7; i++) advanceFADay(); }}
+                  onClick={advanceFAWeek}
                   disabled={faDay >= 30}
                 >
                   Skip Week ⏩
@@ -611,13 +637,13 @@ export default function FreeAgencyPage() {
               <table className="w-full text-sm min-w-[700px] sticky-col sticky-action">
                 <thead>
                   <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
-                    <th className="text-left pb-3 pl-2">Player</th>
-                    <th className="text-center pb-3">Pos</th>
-                    <th className="text-center pb-3">Age</th>
-                    <th className="text-center pb-3">OVR</th>
-                    <th className="text-center pb-3">POT</th>
+                    <th className="text-left pb-3 pl-2 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => toggleSort('name')}>Player{sortArrow('name')}</th>
+                    <th className="text-center pb-3 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => toggleSort('pos')}>Pos{sortArrow('pos')}</th>
+                    <th className="text-center pb-3 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => toggleSort('age')}>Age{sortArrow('age')}</th>
+                    <th className="text-center pb-3 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => toggleSort('ovr')}>OVR{sortArrow('ovr')}</th>
+                    <th className="text-center pb-3 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => toggleSort('pot')} title="Potential — a player's ceiling. Young players show as Elite/High/Average/Low until 3+ seasons played. A declining player's POT may be lower than their OVR.">POT <span className="inline-block w-3 h-3 text-[10px] rounded-full bg-[var(--surface-2)] text-[var(--text-sec)]">?</span>{sortArrow('pot')}</th>
                     <th className="text-left pb-3">Last Season</th>
-                    <th className="text-right pb-3">Market</th>
+                    <th className="text-right pb-3 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => toggleSort('salary')}>Market{sortArrow('salary')}</th>
                     <th className="text-right pb-3 pr-2">Action</th>
                   </tr>
                 </thead>
@@ -664,7 +690,14 @@ export default function FreeAgencyPage() {
                         </td>
                         <td className="py-2.5 text-right pr-2" onClick={e => e.stopPropagation()}>
                           {isRefused ? (
-                            <span className="inline-block px-2 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded">
+                            <span
+                              className="inline-block px-2 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded cursor-help"
+                              title={
+                                (p.mood ?? 70) < 40
+                                  ? 'Unhappy with the organization'
+                                  : 'Only considering contenders'
+                              }
+                            >
                               Refuses
                             </span>
                           ) : (

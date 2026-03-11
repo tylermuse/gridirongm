@@ -7,10 +7,11 @@ import type {
   LeagueState, Team, Player, GameResult, PlayerStats,
   NewsItem, TradeProposal, ResigningEntry, DraftPick, LeagueSettings,
 } from '@/types';
-import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, type Position, type DeadCapEntry } from '@/types';
+import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { generateRoster, generateDraftClass, generatePlayer } from './playerGen';
+import { resetUsedNames } from '../data/names';
 import { generateSchedule } from './schedule';
 import { simulateGame } from './simulate';
 import { developPlayers } from './development';
@@ -18,7 +19,7 @@ import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
 
-const SAVE_VERSION = 13;
+const SAVE_VERSION = 14;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
@@ -61,10 +62,11 @@ interface GameStore extends LeagueState {
   simToEndDraft: (options?: { skipAdvance?: boolean }) => void;
   advanceToFreeAgency: () => void;
   advanceFADay: () => void;
+  advanceFAWeek: () => void;
   signFreeAgent: (playerId: string, salary: number, years: number) => boolean;
   aiSignFreeAgents: () => void;
   releasePlayer: (playerId: string) => void;
-  restructureContract: (playerId: string, newSalary: number, newYears: number) => boolean;
+  restructureContract: (playerId: string, conversionAmount: number, voidYearsToAdd: number) => boolean;
   placeOnIR: (playerId: string) => void;
   activateFromIR: (playerId: string) => void;
   startNewSeason: () => void;
@@ -86,7 +88,7 @@ interface GameStore extends LeagueState {
   // PRD-13: Depth chart
   reorderDepthChart: (position: Position, playerIds: string[]) => void;
   resetDepthChart: (position: Position) => void;
-  commitLiveGame: (result: GameResult) => void;
+  commitLiveGame: (result: GameResult, matchupId?: string) => void;
   updateLeagueSettings: (settings: Partial<LeagueSettings>) => void;
   setSuppressTradePopups: (val: boolean) => void;
   saveToSlot: (slot: 1 | 2) => void;
@@ -468,6 +470,11 @@ function generateWeekNews(
 // Two 1sts should cost a true superstar (90+ OVR, young).
 const PICK_VALUES = [1000, 450, 200, 100, 50, 20, 10]; // Rounds 1-7
 
+const POSITION_VALUE_MULT: Record<string, number> = {
+  QB: 1.5, RB: 0.9, WR: 1.1, TE: 0.85, OL: 0.95,
+  DL: 1.05, LB: 1.0, CB: 1.1, S: 0.95, K: 0.4, P: 0.35,
+};
+
 function playerTradeValue(player: Player): number {
   const ageMultiplier =
     player.age <= 25 ? 1.3 :
@@ -475,12 +482,13 @@ function playerTradeValue(player: Player): number {
     player.age <= 29 ? 1.0 :
     player.age <= 31 ? 0.7 :
     player.age <= 33 ? 0.45 : 0.2;
+  const posMultiplier = POSITION_VALUE_MULT[player.position] ?? 1.0;
   // Exponential curve: stars (85+) are worth dramatically more than average (65) players.
   // 56 OVR → ~30 value, 70 OVR → ~200, 80 OVR → ~500, 90 OVR → ~1200
   const normalized = Math.max(0, (player.ratings.overall - 40) / 55);
   const base = Math.pow(normalized, 2.5) * 1200;
   const potBonus = Math.max(0, player.potential - player.ratings.overall) * 3;
-  return (base + potBonus) * ageMultiplier;
+  return (base + potBonus) * ageMultiplier * posMultiplier;
 }
 
 function pickTradeValue(pick: DraftPick): number {
@@ -616,11 +624,12 @@ function computeResigningEntry(player: Player, team: Team): ResigningEntry {
   const base = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
   const winPct = team.record.wins / Math.max(1, team.record.wins + team.record.losses);
   let mult = 1.0;
-  if (winPct < 0.4) mult *= 1.15;
-  if (winPct > 0.65) mult *= 0.90;
-  if (player.age >= 32) mult *= 0.85;
-  if (player.experience > 4) mult *= 0.92;
-  const askingSalary = Math.round(base * mult * 10) / 10;
+  // Winning teams get a small hometown discount; losing teams pay a premium
+  if (winPct < 0.4) mult *= 1.10;
+  else if (winPct > 0.65) mult *= 0.95;
+  // Older players accept slight discounts but not massive ones
+  if (player.age >= 32) mult *= 0.90;
+  const askingSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, base * mult) * 10) / 10;
   const askingYears = player.age >= 32 ? 1 : player.age >= 28 ? 2 : 3;
   return { playerId: player.id, askingSalary, askingYears };
 }
@@ -1271,6 +1280,7 @@ export const useGameStore = create<GameStore>()(
 
       newLeague: async (userTeamId: string, leagueFileUrl?: string) => {
         try {
+          resetUsedNames();
           if (!leagueFileUrl) throw new Error('No league file URL provided');
           const imported = await loadLeagueFromUrl(leagueFileUrl);
           const userTeam = imported.teams.find((t) => t.abbreviation === userTeamId) ?? imported.teams[0];
@@ -1339,13 +1349,15 @@ export const useGameStore = create<GameStore>()(
             salaryCap: DEFAULT_LEAGUE_SETTINGS.salaryCap,
             totalPayroll: roster.reduce((sum, p) => sum + p.contract.salary, 0),
             roster: roster.map(p => p.id),
-            draftPicks: [1, 2, 3, 4, 5, 6, 7].map(round => ({
-              id: uuid(),
-              year: 2026,
-              round,
-              originalTeamId: id,
-              ownerTeamId: id,
-            })),
+            draftPicks: [2026, 2027, 2028].flatMap(year =>
+              [1, 2, 3, 4, 5, 6, 7].map(round => ({
+                id: uuid(),
+                year,
+                round,
+                originalTeamId: id,
+                ownerTeamId: id,
+              })),
+            ),
             depthChart: buildDefaultDepthChart(roster),
             deadCap: [],
             franchiseTagUsed: false,
@@ -1711,7 +1723,13 @@ export const useGameStore = create<GameStore>()(
           .filter(m => !m.winnerId && m.homeTeamId && m.awayTeamId);
         if (unplayed.length === 0) return;
         const currentRound = Math.min(...unplayed.map(m => m.round));
-        const roundGames = unplayed.filter(m => m.round === currentRound);
+        const allRoundGames = unplayed.filter(m => m.round === currentRound);
+
+        // Skip the user's matchup so they can watch it live — unless it's the only game left
+        const userMatchup = allRoundGames.find(m => m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId);
+        const roundGames = allRoundGames.length > 1 && userMatchup
+          ? allRoundGames.filter(m => m !== userMatchup)
+          : allRoundGames;
 
         let bracket = [...state.playoffBracket.map(m => ({ ...m }))];
         let champions = state.champions ?? [];
@@ -1829,7 +1847,7 @@ export const useGameStore = create<GameStore>()(
 
         set({
           players: state.players.map(p =>
-            p.id === playerId ? { ...p, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years } } : p,
+            p.id === playerId ? { ...p, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, offseasonSigned: true } } : p,
           ),
           teams: state.teams.map(t =>
             t.id === state.userTeamId
@@ -1882,7 +1900,7 @@ export const useGameStore = create<GameStore>()(
         set({
           players: state.players.map(p =>
             p.id === playerId
-              ? { ...p, contract: { salary: tagSalary, yearsLeft: 1, guaranteed: tagSalary, totalYears: 1 } }
+              ? { ...p, contract: { salary: tagSalary, yearsLeft: 1, guaranteed: tagSalary, totalYears: 1, offseasonSigned: true } }
               : p,
           ),
           teams: state.teams.map(t =>
@@ -1948,7 +1966,7 @@ export const useGameStore = create<GameStore>()(
               const canAffordTag = aiTeamData ? (aiTeamData.totalPayroll + tagSalary - oldSalary) <= aiTeamData.salaryCap : false;
               if (canAffordTag) {
                 updatedPlayers = updatedPlayers.map(p =>
-                  p.id === bestPlayer.id ? { ...p, contract: { salary: tagSalary, yearsLeft: 1, guaranteed: tagSalary, totalYears: 1 } } : p,
+                  p.id === bestPlayer.id ? { ...p, contract: { salary: tagSalary, yearsLeft: 1, guaranteed: tagSalary, totalYears: 1, offseasonSigned: true } } : p,
                 );
                 updatedTeams = updatedTeams.map(t =>
                   t.id === aiTeam.id ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + (tagSalary - oldSalary)), franchiseTagUsed: true } : t,
@@ -1971,7 +1989,7 @@ export const useGameStore = create<GameStore>()(
                 const newYears = 1 + Math.floor(Math.random() * 3);
                 const salaryDiff = marketSalary - player.contract.salary;
                 updatedPlayers = updatedPlayers.map(p =>
-                  p.id === player.id ? { ...p, contract: { salary: marketSalary, yearsLeft: newYears, guaranteed: generateGuaranteed(marketSalary, newYears), totalYears: newYears } } : p,
+                  p.id === player.id ? { ...p, contract: { salary: marketSalary, yearsLeft: newYears, guaranteed: generateGuaranteed(marketSalary, newYears), totalYears: newYears, offseasonSigned: true } } : p,
                 );
                 updatedTeams = updatedTeams.map(t =>
                   t.id === aiTeam.id ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + salaryDiff) } : t,
@@ -2020,8 +2038,20 @@ export const useGameStore = create<GameStore>()(
           const bWinPct = b.record.wins / Math.max(1, b.record.wins + b.record.losses);
           return aWinPct - bWinPct;
         });
-        const rounds = 7;
-        const draftOrder = Array.from({ length: rounds }, () => sortedTeams.map((team) => team.id)).flat();
+
+        // Build draft order from draftPicks (respects trades — ownerTeamId may differ from originalTeamId)
+        // Collect all picks for this draft year from all teams
+        const allDraftYearPicks = updatedTeams.flatMap(t =>
+          t.draftPicks.filter(pk => pk.year === targetDraftYear && !pk.playerId),
+        );
+        // Sort by round, then within each round by original team's win pct (worst first)
+        const teamWinPctMap = new Map(sortedTeams.map((t, i) => [t.id, i])); // lower index = worse record
+        allDraftYearPicks.sort((a, b) => {
+          if (a.round !== b.round) return a.round - b.round;
+          return (teamWinPctMap.get(a.originalTeamId) ?? 16) - (teamWinPctMap.get(b.originalTeamId) ?? 16);
+        });
+        // Draft order = the OWNER of each pick drafts
+        const draftOrder = allDraftYearPicks.map(pk => pk.ownerTeamId);
 
         // PRD-07: Compute scouting data for draft prospects
         const scoutingData = computeScoutingData(draftClass, state.scoutingLevel);
@@ -2079,11 +2109,21 @@ export const useGameStore = create<GameStore>()(
           })];
         }
 
-        // PRD-13: Update depth chart for drafting team
+        // PRD-13: Update depth chart for drafting team + mark the DraftPick as used
+        // Find which DraftPick this corresponds to (the owner's pick for this round/year)
+        const targetDraftYear = state.season;
+        const pickIndex = state.draftResults.length; // how many picks have been made so far
         const updatedTeams = state.teams.map(t => {
-          if (t.id !== currentPickTeamId) return t;
+          // Mark the used pick on whichever team owns it
+          const updatedPicks = t.draftPicks.map(pk => {
+            if (pk.year === targetDraftYear && pk.ownerTeamId === currentPickTeamId && pk.round === round && !pk.playerId) {
+              return { ...pk, playerId, pick: overallPick };
+            }
+            return pk;
+          });
+          if (t.id !== currentPickTeamId) return { ...t, draftPicks: updatedPicks };
           const chart = insertIntoDepthChart(t.depthChart, player.position, playerId, state.players);
-          return { ...t, roster: [...t.roster, playerId], totalPayroll: t.totalPayroll + finalSalary, depthChart: chart };
+          return { ...t, roster: [...t.roster, playerId], totalPayroll: t.totalPayroll + finalSalary, depthChart: chart, draftPicks: updatedPicks };
         });
 
         const newDraftOrder = state.draftOrder.slice(1);
@@ -2097,7 +2137,7 @@ export const useGameStore = create<GameStore>()(
                   teamId: currentPickTeamId,
                   draftYear: state.season,
                   draftPick: overallPick,
-                  contract: { salary: finalSalary, yearsLeft: 4, guaranteed: generateGuaranteed(finalSalary, 4), totalYears: 4 },
+                  contract: { salary: finalSalary, yearsLeft: 4, guaranteed: generateGuaranteed(finalSalary, 4), totalYears: 4, offseasonSigned: true },
                 }
               : p,
           ),
@@ -2162,13 +2202,19 @@ export const useGameStore = create<GameStore>()(
 
           players = players.map(p =>
             p.id === pid
-              ? { ...p, teamId: pickTeam, draftYear: state.season, draftPick: overallPick, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4 } }
+              ? { ...p, teamId: pickTeam, draftYear: state.season, draftPick: overallPick, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4, offseasonSigned: true } }
               : p,
           );
           teams = teams.map(t => {
-            if (t.id !== pickTeam) return t;
+            const updPicks = t.draftPicks.map(pk => {
+              if (pk.year === state.season && pk.ownerTeamId === pickTeam && pk.round === round && !pk.playerId) {
+                return { ...pk, playerId: pid, pick: overallPick };
+              }
+              return pk;
+            });
+            if (t.id !== pickTeam) return { ...t, draftPicks: updPicks };
             const chart = insertIntoDepthChart(t.depthChart, player.position, pid, players);
-            return { ...t, roster: [...t.roster, pid], totalPayroll: t.totalPayroll + rookieSalary, depthChart: chart };
+            return { ...t, roster: [...t.roster, pid], totalPayroll: t.totalPayroll + rookieSalary, depthChart: chart, draftPicks: updPicks };
           });
           freeAgentIds = freeAgentIds.filter(id => id !== pid);
           draftOrder = draftOrder.slice(1);
@@ -2218,13 +2264,19 @@ export const useGameStore = create<GameStore>()(
 
           players = players.map(p =>
             p.id === pid
-              ? { ...p, teamId: pickTeam, draftYear: state.season, draftPick: overallPick, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4 } }
+              ? { ...p, teamId: pickTeam, draftYear: state.season, draftPick: overallPick, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4, offseasonSigned: true } }
               : p,
           );
           teams = teams.map(t => {
-            if (t.id !== pickTeam) return t;
+            const updPicks = t.draftPicks.map(pk => {
+              if (pk.year === state.season && pk.ownerTeamId === pickTeam && pk.round === round && !pk.playerId) {
+                return { ...pk, playerId: pid, pick: overallPick };
+              }
+              return pk;
+            });
+            if (t.id !== pickTeam) return { ...t, draftPicks: updPicks };
             const chart = insertIntoDepthChart(t.depthChart, player.position, pid, players);
-            return { ...t, roster: [...t.roster, pid], totalPayroll: t.totalPayroll + rookieSalary, depthChart: chart };
+            return { ...t, roster: [...t.roster, pid], totalPayroll: t.totalPayroll + rookieSalary, depthChart: chart, draftPicks: updPicks };
           });
           freeAgentIds = freeAgentIds.filter(id => id !== pid);
           draftOrder = draftOrder.slice(1);
@@ -2416,7 +2468,7 @@ export const useGameStore = create<GameStore>()(
 
           currentPlayers = currentPlayers.map(p =>
             p.id === target.id
-              ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears } }
+              ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears, offseasonSigned: true } }
               : p,
           );
           currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
@@ -2448,6 +2500,120 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
+      advanceFAWeek: () => {
+        // Advance up to 7 days in a SINGLE state update (one set() call) to avoid
+        // persist middleware overhead (lz-string compression + localStorage write per call)
+        const initialState = get();
+        if (initialState.phase !== 'freeAgency' || initialState.faDay >= 30) return;
+
+        let currentDay = initialState.faDay;
+        let currentPlayers = initialState.players;
+        let currentTeams = initialState.teams;
+        let currentFreeAgents = [...initialState.freeAgents];
+        const allNews: NewsItem[] = [];
+
+        for (let i = 0; i < 7; i++) {
+          if (currentDay >= 30) break;
+
+          const nextDay = currentDay + 1;
+          const decay = faPriceDecay(nextDay);
+
+          const signingsThisDay =
+            nextDay <= 5 ? 12 + Math.floor(Math.random() * 7) :
+            nextDay <= 10 ? 8 + Math.floor(Math.random() * 5) :
+            nextDay <= 20 ? 5 + Math.floor(Math.random() * 4) :
+            2 + Math.floor(Math.random() * 3);
+
+          const teamNeedScores: { teamId: string; score: number; needPositions: Position[]; wantPositions: Position[] }[] = [];
+          for (const t of currentTeams) {
+            if (t.id === initialState.userTeamId) continue;
+            const rosterPlayers = currentPlayers.filter(p => p.teamId === t.id && !p.retired);
+            if (rosterPlayers.length >= 56) continue;
+            const capSpace = t.salaryCap - t.totalPayroll;
+            if (capSpace < LEAGUE_MINIMUM_SALARY) continue;
+            const needPositions: Position[] = [];
+            const wantPositions: Position[] = [];
+            for (const pos of POSITIONS) {
+              const posPlayers = rosterPlayers.filter(p => p.position === pos);
+              const count = posPlayers.length;
+              const starterOvr = posPlayers.sort((a, b) => b.ratings.overall - a.ratings.overall)[0]?.ratings.overall ?? 0;
+              if (count < ROSTER_LIMITS[pos].min) needPositions.push(pos);
+              else if (count < ROSTER_LIMITS[pos].max && starterOvr < 78) wantPositions.push(pos);
+              else if (count >= ROSTER_LIMITS[pos].min && ROSTER_LIMITS[pos].min >= 3) {
+                const weakestStarter = posPlayers.sort((a, b) => a.ratings.overall - b.ratings.overall)[0];
+                if (weakestStarter && weakestStarter.ratings.overall < 65) wantPositions.push(pos);
+              }
+            }
+            const score = needPositions.length * 10 + wantPositions.length * 3 + (capSpace > 20 ? 5 : 0) + Math.random() * 5;
+            if (needPositions.length > 0 || wantPositions.length > 0 || rosterPlayers.length < 53 || Math.random() < 0.4) {
+              teamNeedScores.push({ teamId: t.id, score, needPositions, wantPositions });
+            }
+          }
+          teamNeedScores.sort((a, b) => b.score - a.score);
+          const teamsActing = teamNeedScores.slice(0, signingsThisDay);
+
+          for (const { teamId: aiTeamId, needPositions, wantPositions } of teamsActing) {
+            if (currentFreeAgents.length === 0) break;
+            const teamData = currentTeams.find(t => t.id === aiTeamId);
+            if (!teamData) continue;
+            const capSpace = teamData.salaryCap - teamData.totalPayroll;
+
+            const availableFAs = currentFreeAgents
+              .map(id => currentPlayers.find(p => p.id === id))
+              .filter((p): p is Player => !!p && !p.retired)
+              .filter(p => {
+                const sal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential) * decay;
+                return sal <= capSpace || (capSpace >= LEAGUE_MINIMUM_SALARY && sal <= LEAGUE_MINIMUM_SALARY * 2);
+              })
+              .sort((a, b) => {
+                const aBonus = needPositions.includes(a.position) ? 200 : wantPositions.includes(a.position) ? 80 : 0;
+                const bBonus = needPositions.includes(b.position) ? 200 : wantPositions.includes(b.position) ? 80 : 0;
+                return (bBonus + b.ratings.overall) - (aBonus + a.ratings.overall);
+              });
+
+            const target = availableFAs[0];
+            if (!target) continue;
+
+            const marketSalary = estimateSalary(target.ratings.overall, target.position, target.age, target.potential) * decay;
+            const aiSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, Math.min(marketSalary, capSpace)) * 10) / 10;
+            const aiYears = target.age >= 32 ? 1 : target.age >= 28 ? 2 : 3;
+
+            currentPlayers = currentPlayers.map(p =>
+              p.id === target.id
+                ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears, offseasonSigned: true } }
+                : p,
+            );
+            currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
+            currentTeams = currentTeams.map(t => {
+              if (t.id !== aiTeamId) return t;
+              const chart = insertIntoDepthChart(t.depthChart, target.position, target.id, currentPlayers);
+              return { ...t, roster: [...t.roster, target.id], totalPayroll: t.totalPayroll + aiSalary, depthChart: chart };
+            });
+
+            allNews.push(makeNews({
+              season: initialState.season, week: initialState.week, type: 'signing',
+              teamId: aiTeamId, playerIds: [target.id],
+              headline: `${teamData.city} ${teamData.name} signed ${target.firstName} ${target.lastName} (${target.position}, ${target.ratings.overall} OVR) to a $${aiSalary}M/yr, ${aiYears}-year deal.`,
+              isUserTeam: false,
+            }));
+          }
+
+          currentDay = nextDay;
+        }
+
+        const userTeamData = currentTeams.find(t => t.id === initialState.userTeamId);
+        const newRefusals = userTeamData ? computeFARefusals(currentFreeAgents, currentPlayers, userTeamData, currentDay) : [];
+
+        set({
+          faDay: currentDay,
+          players: currentPlayers,
+          teams: currentTeams,
+          freeAgents: currentFreeAgents,
+          faRefusals: newRefusals,
+          newsItems: [...initialState.newsItems, ...allNews],
+        });
+      },
+
       signFreeAgent: (playerId: string, salary: number, years: number) => {
         const state = get();
         const userTeam = state.teams.find(t => t.id === state.userTeamId);
@@ -2460,9 +2626,10 @@ export const useGameStore = create<GameStore>()(
         const player = state.players.find(p => p.id === playerId);
 
         // --- Step 1: Apply user signing to local variables ---
+        const isOffseason = state.phase === 'freeAgency' || state.phase === 'resigning' || state.phase === 'draft';
         let currentPlayers = state.players.map(p =>
           p.id === playerId
-            ? { ...p, teamId: state.userTeamId, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years } }
+            ? { ...p, teamId: state.userTeamId, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, ...(isOffseason ? { offseasonSigned: true } : {}) } }
             : p,
         );
         let currentTeams = state.teams.map(t => {
@@ -2528,6 +2695,7 @@ export const useGameStore = create<GameStore>()(
             const marketSalary = estimateSalary(target.ratings.overall, target.position, target.age, target.potential);
             const aiSalary = marketSalary <= capSpace ? marketSalary : LEAGUE_MINIMUM_SALARY;
             const aiYears = target.age >= 32 ? 1 : target.age >= 28 ? 2 : 3;
+            // Regular season AI signing — no offseasonSigned flag (season is already in progress)
             currentPlayers = currentPlayers.map(p =>
               p.id === target.id
                 ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears } }
@@ -2581,12 +2749,18 @@ export const useGameStore = create<GameStore>()(
           contract.guaranteed = generateGuaranteed(contract.salary, contract.yearsLeft);
         }
 
-        const deadCap = calculateDeadCap(contract);
-        const capSavings = calculateCapSavings(contract);
+        // Use V2 functions that handle restructured contracts (accelerated prorated bonus)
+        const deadCap = calculateDeadCapV2(contract);
+        const capHit = getCapHit(contract);
+        const capSavings = capHit - deadCap;
 
+        const unamortizedBonus = getUnamortizedBonus(contract);
+        const bonusNote = unamortizedBonus > 0
+          ? ` (includes $${Math.round(unamortizedBonus * 10) / 10}M accelerated bonus)`
+          : '';
         const deadCapNote = deadCap > 0
-          ? ` Dead cap hit: $${deadCap}M. Cap savings: $${capSavings > 0 ? capSavings : 0}M.`
-          : ` Saves $${player.contract.salary}M/yr cap space.`;
+          ? ` Dead cap hit: $${Math.round(deadCap * 10) / 10}M${bonusNote}. Cap savings: $${capSavings > 0 ? Math.round(capSavings * 10) / 10 : 0}M.`
+          : ` Saves $${capHit}M/yr cap space.`;
 
         const releaseNews = makeNews({
           season: state.season,
@@ -2607,7 +2781,13 @@ export const useGameStore = create<GameStore>()(
           const actualSavings = Math.max(0, capSavings);
           const existingDeadCap = t.deadCap ?? [];
           const newDeadCap: DeadCapEntry[] = deadCap > 0
-            ? [...existingDeadCap, { playerName: `${player.firstName} ${player.lastName}`, amount: deadCap, yearsLeft: 1 }]
+            ? [...existingDeadCap, {
+                playerName: `${player.firstName} ${player.lastName}`,
+                amount: Math.round(deadCap * 10) / 10,
+                yearsLeft: 1,
+                source: 'release' as const,
+                season: state.season,
+              }]
             : existingDeadCap;
 
           return {
@@ -2621,7 +2801,9 @@ export const useGameStore = create<GameStore>()(
 
         set({
           players: state.players.map(p =>
-            p.id === playerId ? { ...p, teamId: null, onIR: false } : p,
+            p.id === playerId
+              ? { ...p, teamId: null, onIR: false, contract: { salary: contract.salary, yearsLeft: contract.yearsLeft, guaranteed: contract.guaranteed, totalYears: contract.totalYears } }
+              : p,
           ),
           teams: updatedTeams,
           freeAgents: [...state.freeAgents, playerId],
@@ -2629,20 +2811,79 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
-      restructureContract: (playerId: string, newSalary: number, newYears: number) => {
+      restructureContract: (playerId: string, conversionAmount: number, voidYearsToAdd: number) => {
         const state = get();
         const player = state.players.find(p => p.id === playerId);
         if (!player || player.teamId !== state.userTeamId) return false;
         // Prevent restructuring the same player more than once per season
         if (player.lastRestructuredSeason === state.season) return false;
 
-        const oldSalary = player.contract.salary;
-        const capDelta = newSalary - oldSalary; // negative = savings
+        const contract = { ...player.contract };
+        const leagueMin = state.leagueSettings?.leagueMinSalary ?? LEAGUE_MINIMUM_SALARY;
+
+        // Must have 2+ real years remaining (excluding existing void years)
+        const realYears = contract.contractYears
+          ? contract.contractYears.filter(y => !y.isVoidYear).length
+          : contract.yearsLeft;
+        if (realYears < 2) return false;
+
+        // Cannot exceed 3 total void years on a contract
+        const existingVoidYears = contract.voidYears ?? 0;
+        if (existingVoidYears + voidYearsToAdd > 3) return false;
+
+        // Materialize contractYears from flat model if needed
+        let years: ContractYear[] = contract.contractYears
+          ? contract.contractYears.map(y => ({ ...y }))
+          : materializeContractYears(contract);
+
+        // Validate conversion amount
+        const currentBase = years[0].baseSalary;
+        const maxConversion = Math.max(0, currentBase - leagueMin);
+        if (conversionAmount < 1 || conversionAmount > maxConversion) return false;
+
+        // Add void years to the end
+        for (let i = 0; i < voidYearsToAdd; i++) {
+          years.push({ baseSalary: 0, proratedBonus: 0, isVoidYear: true });
+        }
+
+        // Calculate prorated amount per year (spread across ALL remaining years including void)
+        const totalYearsForProration = years.length;
+        const proratedPerYear = Math.round((conversionAmount / totalYearsForProration) * 100) / 100;
+
+        // Reduce current year base salary and add prorated bonus to all years
+        years[0] = { ...years[0], baseSalary: years[0].baseSalary - conversionAmount };
+        for (let i = 0; i < years.length; i++) {
+          years[i] = { ...years[i], proratedBonus: years[i].proratedBonus + proratedPerYear };
+        }
+
+        const oldCapHit = getCapHit(player.contract);
+        const newCapHit = Math.round((years[0].baseSalary + years[0].proratedBonus) * 100) / 100;
+        const capDelta = newCapHit - oldCapHit; // negative = savings
+
+        const newContract = {
+          ...contract,
+          salary: newCapHit, // Keep salary in sync for backward compat
+          yearsLeft: years.length,
+          contractYears: years,
+          voidYears: existingVoidYears + voidYearsToAdd,
+          restructureHistory: [
+            ...(contract.restructureHistory ?? []),
+            {
+              season: state.season,
+              amountConverted: conversionAmount,
+              voidYearsAdded: voidYearsToAdd,
+              proratedPerYear,
+            } as ContractRestructure,
+          ],
+        };
+
+        const capSaved = Math.round(Math.abs(capDelta) * 10) / 10;
+        const voidNote = voidYearsToAdd > 0 ? ` Added ${voidYearsToAdd} void year${voidYearsToAdd > 1 ? 's' : ''}.` : '';
 
         set({
           players: state.players.map(p =>
             p.id === playerId
-              ? { ...p, lastRestructuredSeason: state.season, contract: { salary: newSalary, yearsLeft: newYears, guaranteed: generateGuaranteed(newSalary, newYears), totalYears: newYears } }
+              ? { ...p, lastRestructuredSeason: state.season, contract: newContract }
               : p,
           ),
           teams: state.teams.map(t =>
@@ -2651,9 +2892,9 @@ export const useGameStore = create<GameStore>()(
               : t,
           ),
           newsItems: [...state.newsItems, makeNews({
-            season: state.season, week: 0, type: 'signing',
+            season: state.season, week: state.week, type: 'signing',
             teamId: state.userTeamId, playerIds: [playerId],
-            headline: `You restructured ${player.firstName} ${player.lastName}'s contract to $${newSalary}M/yr for ${newYears} years.`,
+            headline: `You restructured ${player.firstName} ${player.lastName}'s contract, converting $${conversionAmount}M to signing bonus. Saves $${capSaved}M this year.${voidNote}`,
             isUserTeam: true,
           })],
         });
@@ -2744,9 +2985,77 @@ export const useGameStore = create<GameStore>()(
         const offeredPickIdsSet = new Set(offeredPickIds);
         const receivedPickIdsSet = new Set(receivedPickIds);
 
+        // Calculate dead money from restructured players being traded away
+        // When trading a restructured player, the sending team eats the unamortized bonus as dead cap
+        const userDeadCapEntries: DeadCapEntry[] = [];
+        const aiDeadCapEntries: DeadCapEntry[] = [];
+
+        // Dead cap for players user is sending out
+        for (const id of offeredPlayerIds) {
+          const p = state.players.find(pl => pl.id === id);
+          if (p && p.contract.contractYears) {
+            const bonus = getUnamortizedBonus(p.contract);
+            if (bonus > 0) {
+              userDeadCapEntries.push({
+                playerName: `${p.firstName} ${p.lastName}`,
+                amount: Math.round(bonus * 10) / 10,
+                yearsLeft: 1,
+                source: 'trade',
+                season: state.season,
+              });
+            }
+          }
+        }
+
+        // Dead cap for players AI is sending out
+        for (const id of receivedPlayerIds) {
+          const p = state.players.find(pl => pl.id === id);
+          if (p && p.contract.contractYears) {
+            const bonus = getUnamortizedBonus(p.contract);
+            if (bonus > 0) {
+              aiDeadCapEntries.push({
+                playerName: `${p.firstName} ${p.lastName}`,
+                amount: Math.round(bonus * 10) / 10,
+                yearsLeft: 1,
+                source: 'trade',
+                season: state.season,
+              });
+            }
+          }
+        }
+
+        // Strip prorated bonus from traded players (receiving team gets base salary only)
         const updatedPlayers = state.players.map(p => {
-          if (offeredPlayerIdsSet.has(p.id)) return { ...p, teamId: counterpartTeamId };
-          if (receivedPlayerIdsSet.has(p.id)) return { ...p, teamId: state.userTeamId };
+          if (offeredPlayerIdsSet.has(p.id)) {
+            const cleanContract = p.contract.contractYears
+              ? {
+                  ...p.contract,
+                  salary: p.contract.contractYears[0].baseSalary,
+                  contractYears: p.contract.contractYears.filter(y => !y.isVoidYear).map(y => ({
+                    ...y, proratedBonus: 0,
+                  })),
+                  yearsLeft: p.contract.contractYears.filter(y => !y.isVoidYear).length,
+                  voidYears: 0,
+                  restructureHistory: undefined,
+                }
+              : p.contract;
+            return { ...p, teamId: counterpartTeamId, contract: cleanContract };
+          }
+          if (receivedPlayerIdsSet.has(p.id)) {
+            const cleanContract = p.contract.contractYears
+              ? {
+                  ...p.contract,
+                  salary: p.contract.contractYears[0].baseSalary,
+                  contractYears: p.contract.contractYears.filter(y => !y.isVoidYear).map(y => ({
+                    ...y, proratedBonus: 0,
+                  })),
+                  yearsLeft: p.contract.contractYears.filter(y => !y.isVoidYear).length,
+                  voidYears: 0,
+                  restructureHistory: undefined,
+                }
+              : p.contract;
+            return { ...p, teamId: state.userTeamId, contract: cleanContract };
+          }
           return p;
         });
 
@@ -2758,6 +3067,10 @@ export const useGameStore = create<GameStore>()(
           const p = state.players.find(pl => pl.id === id);
           return sum + (p?.contract.salary ?? 0);
         }, 0);
+
+        // Calculate dead money impact on payroll
+        const userDeadCapTotal = userDeadCapEntries.reduce((s, e) => s + e.amount, 0);
+        const aiDeadCapTotal = aiDeadCapEntries.reduce((s, e) => s + e.amount, 0);
 
         const updatedTeams = state.teams.map(t => {
           if (t.id === state.userTeamId) {
@@ -2777,8 +3090,9 @@ export const useGameStore = create<GameStore>()(
               ...t,
               roster: newRoster,
               draftPicks: newPicks,
-              totalPayroll: t.totalPayroll - offeredSalary + receivedSalary,
+              totalPayroll: t.totalPayroll - offeredSalary + receivedSalary + userDeadCapTotal,
               depthChart: buildDefaultDepthChart(allPlayers),
+              deadCap: [...(t.deadCap ?? []), ...userDeadCapEntries],
             };
           }
           if (t.id === counterpartTeamId) {
@@ -2796,7 +3110,8 @@ export const useGameStore = create<GameStore>()(
               ...t,
               roster: newRoster,
               draftPicks: newPicks,
-              totalPayroll: t.totalPayroll - receivedSalary + offeredSalary,
+              totalPayroll: t.totalPayroll - receivedSalary + offeredSalary + aiDeadCapTotal,
+              deadCap: [...(t.deadCap ?? []), ...aiDeadCapEntries],
             };
           }
           return t;
@@ -2901,109 +3216,96 @@ export const useGameStore = create<GameStore>()(
         const totalBlockedValue = blockedPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
           + blockedPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
 
-        // If blocked assets are essentially worthless, no AI team should bother
-        // (e.g. 51 OVR aging player ≈ 20 value — not worth a trade)
-        if (totalBlockedValue < 30) return;
+        if (totalBlockedValue < 10) return;
 
         const blockedPositions = new Set(blockedPlayers.map(p => p.position));
         const seekPosSet = new Set(seekPositions);
+        const hasPosPreference = seekPosSet.size > 0;
         const proposals: TradeProposal[] = [];
 
         const aiTeams = state.teams.filter(t => t.id !== state.userTeamId);
-        // Shuffle AI teams so we get varied proposals each time
         const shuffledTeams = [...aiTeams].sort(() => Math.random() - 0.5);
 
         for (const aiTeam of shuffledTeams) {
+          if (proposals.length >= 8) break; // cap at 8 proposals
+
           const aiRoster = state.players.filter(p => p.teamId === aiTeam.id && !p.retired && !p.injury);
 
-          // Interest: does the AI need any of the blocked positions?
-          const needsBlockedPos = [...blockedPositions].some(pos => {
-            const count = aiRoster.filter(p => p.position === pos).length;
-            return count <= ROSTER_LIMITS[pos].min;
-          });
+          // Interest check: 70% of teams consider it (higher than before for more variety)
+          if (Math.random() > 0.70) continue;
 
-          // 85% chance if they need the position, 40% random interest otherwise
-          if (!needsBlockedPos && Math.random() > 0.40) continue;
-          if (needsBlockedPos && Math.random() > 0.85) continue;
-
-          // Build offer: when user specified seek positions, try to ONLY use those positions
-          const hasPosPreference = seekPosSet.size > 0;
-
-          // First pass: candidates at requested positions only
-          const seekCandidates = aiRoster
-            .filter(p => !blockedPositions.has(p.position) && seekPosSet.has(p.position))
-            .sort((a, b) => b.ratings.overall - a.ratings.overall);
-
-          // Fallback: all non-blocked-position players
-          const allCandidates = aiRoster
-            .filter(p => !blockedPositions.has(p.position))
-            .sort((a, b) => b.ratings.overall - a.ratings.overall);
-
-          // Find combination of players/picks matching ~75-120% of blocked value
           const offeredPlayerIds: string[] = [];
           const offeredPickIds: string[] = [];
           let offeredValue = 0;
           const targetMin = totalBlockedValue * 0.75;
-          const targetMax = totalBlockedValue * 1.20;
-          // Hard ceiling: never offer more than 2x the blocked value
           const hardCeiling = totalBlockedValue * 2.0;
 
           const aiPicks = aiTeam.draftPicks
-            .filter(pk => pk.year >= state.season)
+            .filter(pk => pk.year >= state.season && !pk.playerId)
             .sort((a, b) => pickTradeValue(b) - pickTradeValue(a));
 
-          // If user wants draft picks, lead with picks first
+          // ── Build offer based on what user WANTS ──
+
+          // Step 1: If user wants draft picks, lead with picks
           if (seekDraftPicks) {
             for (const pk of aiPicks) {
               if (offeredValue >= targetMin) break;
               const pv = pickTradeValue(pk);
-              // Don't add a pick if it would massively overshoot the target
               if (offeredValue + pv > hardCeiling) continue;
               offeredPickIds.push(pk.id);
               offeredValue += pv;
             }
           }
 
-          // First try: fill with seek-position players only
+          // Step 2: If user specified positions, offer ONLY those positions
           if (hasPosPreference) {
+            const seekCandidates = aiRoster
+              .filter(p => seekPosSet.has(p.position))
+              .sort((a, b) => b.ratings.overall - a.ratings.overall);
+
             for (const candidate of seekCandidates) {
               if (offeredValue >= targetMin) break;
               const v = playerTradeValue(candidate);
-              if (offeredValue + v <= targetMax * 1.3 && offeredValue + v <= hardCeiling) {
-                offeredPlayerIds.push(candidate.id);
-                offeredValue += v;
-              }
+              if (offeredValue + v > hardCeiling) continue;
+              offeredPlayerIds.push(candidate.id);
+              offeredValue += v;
             }
+
+            // If user specified positions, don't fall back to random positions —
+            // skip this team if they can't provide what user wants
+            if (offeredPlayerIds.length === 0 && !seekDraftPicks) continue;
           }
 
-          // If seek positions couldn't fill value, supplement with other positions
-          if (offeredValue < targetMin) {
+          // Step 3: If no preferences specified (or picks-only preference already filled),
+          // use general candidates to fill remaining value
+          if (!hasPosPreference && !seekDraftPicks) {
+            const allCandidates = aiRoster
+              .filter(p => !blockedPositions.has(p.position))
+              .sort((a, b) => b.ratings.overall - a.ratings.overall);
+
             for (const candidate of allCandidates) {
               if (offeredValue >= targetMin) break;
               if (offeredPlayerIds.includes(candidate.id)) continue;
               const v = playerTradeValue(candidate);
-              if (offeredValue + v <= targetMax * 1.3 && offeredValue + v <= hardCeiling) {
-                offeredPlayerIds.push(candidate.id);
-                offeredValue += v;
-              }
+              if (offeredValue + v > hardCeiling) continue;
+              offeredPlayerIds.push(candidate.id);
+              offeredValue += v;
             }
           }
 
-          // Add picks to fill value gap if needed (and not already added)
+          // Step 4: Supplement with picks if value still short (and user didn't exclude them)
           if (offeredValue < targetMin && !seekDraftPicks) {
             for (const pk of aiPicks) {
               if (offeredValue >= targetMin) break;
               const pv = pickTradeValue(pk);
-              // Don't add a pick if it would massively overshoot the target
               if (offeredValue + pv > hardCeiling) continue;
               offeredPickIds.push(pk.id);
               offeredValue += pv;
             }
           }
 
-          if (offeredValue < targetMin * 0.5) continue; // Can't match value at all
+          if (offeredValue < targetMin * 0.5) continue;
           if (offeredPlayerIds.length === 0 && offeredPickIds.length === 0) continue;
-          // Reject proposals that overshoot by more than 2x (shouldn't happen now but safety net)
           if (offeredValue > hardCeiling) continue;
 
           const ratio = offeredValue / Math.max(1, totalBlockedValue);
@@ -3188,6 +3490,43 @@ export const useGameStore = create<GameStore>()(
             p.draftYear !== null &&
             p.draftYear >= newSeason;
 
+          // Advance contractYears: pop index 0, shift everything forward
+          // Skip decrement for contracts signed this offseason (offseasonSigned flag)
+          let advancedContract = p.contract;
+          if (!isUnsignedFutureProspect) {
+            if (p.contract.offseasonSigned) {
+              // Just clear the flag — don't decrement. This contract hasn't had a season played yet.
+              advancedContract = { ...p.contract, offseasonSigned: undefined };
+            } else {
+              const newYearsLeft = p.contract.yearsLeft - 1;
+              if (p.contract.contractYears && p.contract.contractYears.length > 1) {
+                const advancedYears = p.contract.contractYears.slice(1);
+                const newYr0 = advancedYears[0];
+                advancedContract = {
+                  ...p.contract,
+                  yearsLeft: newYearsLeft,
+                  salary: Math.round((newYr0.baseSalary + newYr0.proratedBonus) * 100) / 100,
+                  contractYears: advancedYears,
+                  guaranteed: p.contract.yearsLeft > 1 && p.contract.guaranteed
+                    ? Math.round(((p.contract.guaranteed / p.contract.yearsLeft) * (p.contract.yearsLeft - 1)) * 10) / 10
+                    : 0,
+                };
+              } else {
+                advancedContract = {
+                  ...p.contract,
+                  yearsLeft: newYearsLeft,
+                  // Clear contractYears if only 1 year was left
+                  contractYears: undefined,
+                  voidYears: undefined,
+                  restructureHistory: undefined,
+                  guaranteed: p.contract.yearsLeft > 1 && p.contract.guaranteed
+                    ? Math.round(((p.contract.guaranteed / p.contract.yearsLeft) * (p.contract.yearsLeft - 1)) * 10) / 10
+                    : 0,
+                };
+              }
+            }
+          }
+
           return {
             ...p,
             age: p.age + 1,
@@ -3195,16 +3534,7 @@ export const useGameStore = create<GameStore>()(
             stats: emptyStats(),
             injury: null,
             onIR: false,
-            contract: isUnsignedFutureProspect
-              ? p.contract
-              : {
-                  ...p.contract,
-                  yearsLeft: p.contract.yearsLeft - 1,
-                  // Reduce guaranteed money proportionally each year
-                  guaranteed: p.contract.yearsLeft > 1 && p.contract.guaranteed
-                    ? Math.round(((p.contract.guaranteed / p.contract.yearsLeft) * (p.contract.yearsLeft - 1)) * 10) / 10
-                    : 0,
-                },
+            contract: advancedContract,
           };
         });
 
@@ -3233,23 +3563,90 @@ export const useGameStore = create<GameStore>()(
         );
         const newlyRetiredOnTeamIds = new Set(newlyRetiredOnTeam.map(p => p.id));
 
+        // Process void years: players whose new year-0 is a void year have their contracts voided
+        const voidYearPlayers: { player: typeof developedPlayers[0]; deadCapAmount: number }[] = [];
+        for (const p of developedPlayers) {
+          if (
+            p.teamId &&
+            !p.retired &&
+            p.contract.contractYears &&
+            p.contract.contractYears.length > 0 &&
+            p.contract.contractYears[0].isVoidYear
+          ) {
+            // All remaining prorated bonus accelerates into dead money
+            const remainingBonus = getUnamortizedBonus(p.contract);
+            voidYearPlayers.push({ player: p, deadCapAmount: Math.round(remainingBonus * 10) / 10 });
+          }
+        }
+        const voidPlayerIds = new Set(voidYearPlayers.map(v => v.player.id));
+
+        // Generate void year news
+        const voidNews: NewsItem[] = voidYearPlayers
+          .filter(v => v.deadCapAmount > 0)
+          .map(v => makeNews({
+            season: newSeason,
+            week: 0,
+            type: 'signing',
+            teamId: v.player.teamId!,
+            playerIds: [v.player.id],
+            headline: `${v.player.firstName} ${v.player.lastName}'s contract voided — $${v.deadCapAmount}M dead money.`,
+            isUserTeam: v.player.teamId === state.userTeamId,
+          }));
+
+        // Update void players: remove from team, clear contract
+        const afterVoidPlayers = developedPlayers.map(p => {
+          if (voidPlayerIds.has(p.id)) {
+            return {
+              ...p,
+              teamId: null,
+              contract: { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 },
+            };
+          }
+          return p;
+        });
+
+        // Identify players whose contracts expired (yearsLeft hit 0 after decrement)
+        // These should be properly released from their teams
+        const expiredContractPlayers = afterVoidPlayers.filter(
+          p => p.teamId && !p.retired && !voidPlayerIds.has(p.id) && p.contract.yearsLeft <= 0,
+        );
+        const expiredContractIds = new Set(expiredContractPlayers.map(p => p.id));
+
         const newTeams = state.teams.map(t => {
           const retiredFromTeam = newlyRetiredOnTeam.filter(p => t.roster.includes(p.id));
           const salaryReduction = retiredFromTeam.reduce((sum, p) => sum + p.contract.salary, 0);
-          const newRoster = t.roster.filter(pid => !newlyRetiredOnTeamIds.has(pid));
-          // Remove retired from depth chart, then re-sort all positions by OVR
+          // Also remove voided players from roster
+          const voidedFromTeam = voidYearPlayers.filter(v => t.roster.includes(v.player.id));
+          const voidSalaryReduction = voidedFromTeam.reduce((sum, v) => sum + getCapHit(v.player.contract), 0);
+          // Remove expired contract players from roster
+          const expiredFromTeam = expiredContractPlayers.filter(p => t.roster.includes(p.id));
+          const expiredSalaryReduction = expiredFromTeam.reduce((sum, p) => sum + p.contract.salary, 0);
+          const voidDeadCapNew: DeadCapEntry[] = voidedFromTeam
+            .filter(v => v.deadCapAmount > 0)
+            .map(v => ({
+              playerName: `${v.player.firstName} ${v.player.lastName}`,
+              amount: v.deadCapAmount,
+              yearsLeft: 1,
+              source: 'void' as const,
+              season: newSeason,
+            }));
+          const voidDeadCapTotal = voidDeadCapNew.reduce((sum, dc) => sum + dc.amount, 0);
+
+          const removedIds = new Set([...newlyRetiredOnTeamIds, ...voidPlayerIds, ...expiredContractIds]);
+          const newRoster = t.roster.filter(pid => !removedIds.has(pid));
+          // Remove retired + voided from depth chart, then re-sort all positions by OVR
           const newDepthChart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
-            const active = (t.depthChart[pos] ?? []).filter(pid => !newlyRetiredOnTeamIds.has(pid));
+            const active = (t.depthChart[pos] ?? []).filter(pid => !removedIds.has(pid));
             // Re-sort by OVR descending so best players are starters
             acc[pos] = active.sort((a, b) => {
-              const pa = developedPlayers.find(p => p.id === a);
-              const pb = developedPlayers.find(p => p.id === b);
+              const pa = afterVoidPlayers.find(p => p.id === a);
+              const pb = afterVoidPlayers.find(p => p.id === b);
               return (pb?.ratings.overall ?? 0) - (pa?.ratings.overall ?? 0);
             });
             return acc;
           }, {} as Record<Position, string[]>);
           // Expire dead cap entries (decrement years, remove expired)
-          const updatedDeadCap = (t.deadCap ?? [])
+          const updatedDeadCap = [...(t.deadCap ?? []), ...voidDeadCapNew]
             .map(dc => ({ ...dc, yearsLeft: dc.yearsLeft - 1 }))
             .filter(dc => dc.yearsLeft > 0);
           // Remove expired dead cap from payroll
@@ -3270,25 +3667,33 @@ export const useGameStore = create<GameStore>()(
             ...t,
             record: emptyRecord(),
             roster: newRoster,
-            totalPayroll: Math.max(0, t.totalPayroll - salaryReduction - deadCapRelief),
+            totalPayroll: Math.max(0, t.totalPayroll - salaryReduction - voidSalaryReduction - expiredSalaryReduction + voidDeadCapTotal - deadCapRelief),
             depthChart: newDepthChart,
             deadCap: updatedDeadCap,
             franchiseTagUsed: false,
             revenue: { tickets, merchandise, tvDeal, total: totalRevenue },
-            // Refresh picks for new season
-            draftPicks: [...t.draftPicks, ...[1, 2, 3, 4, 5, 6, 7].map(round => ({
-              id: uuid(),
-              year: newSeason,
-              round,
-              originalTeamId: t.id,
-              ownerTeamId: t.id,
-            }))],
+            // Add picks for new season + next year (ensure 2 future years always exist)
+            draftPicks: [
+              ...t.draftPicks,
+              ...[newSeason, newSeason + 1].flatMap(yr =>
+                t.draftPicks.some(pk => pk.year === yr && pk.originalTeamId === t.id) ? [] :
+                [1, 2, 3, 4, 5, 6, 7].map(round => ({
+                  id: uuid(),
+                  year: yr,
+                  round,
+                  originalTeamId: t.id,
+                  ownerTeamId: t.id,
+                })),
+              ),
+            ],
           };
         });
 
-        const finalPlayers = developedPlayers.map(p =>
-          p.retired && !previouslyRetiredIds.has(p.id) ? { ...p, teamId: null } : p,
-        );
+        const finalPlayers = afterVoidPlayers.map(p => {
+          if (p.retired && !previouslyRetiredIds.has(p.id)) return { ...p, teamId: null };
+          if (expiredContractIds.has(p.id)) return { ...p, teamId: null };
+          return p;
+        });
 
         // Populate retired players in the season summary (notable retirees only)
         const newlyRetiredAll = developedPlayers.filter(
@@ -3341,6 +3746,91 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
+        // AI Contract Restructuring — win-now AI teams restructure to create cap space
+        const aiRestructureNews: NewsItem[] = [];
+        for (let ti = 0; ti < grownTeams.length; ti++) {
+          const team = grownTeams[ti];
+          if (team.id === state.userTeamId) continue; // Skip user team
+
+          const capSpace = team.salaryCap - team.totalPayroll;
+          const isContender = team.record.wins >= 9; // Won 9+ games last season
+          if (!isContender || capSpace > 20) continue; // Only cap-strapped contenders
+
+          const teamPlayers = allPlayersForNewSeason
+            .filter(p => p.teamId === team.id && !p.retired && p.contract.yearsLeft >= 3 && p.contract.salary >= 8);
+
+          let restructureCount = 0;
+          for (const player of teamPlayers) {
+            if (restructureCount >= 3) break; // Max 3 restructures per team
+            if (Math.random() > 0.30) continue; // 30% chance per eligible player
+
+            const contractYears = player.contract.contractYears
+              ? player.contract.contractYears.map(y => ({ ...y }))
+              : materializeContractYears(player.contract);
+
+            const currentBase = contractYears[0].baseSalary;
+            const leagueMin = settings.leagueMinSalary ?? LEAGUE_MINIMUM_SALARY;
+            const maxConversion = Math.max(0, currentBase - leagueMin);
+            if (maxConversion < 2) continue;
+
+            // AI converts 40-60% of base salary
+            const conversionPct = 0.40 + Math.random() * 0.20;
+            const conversionAmount = Math.round(Math.min(maxConversion, currentBase * conversionPct) * 10) / 10;
+
+            // AI adds 0-2 void years
+            const existingVoid = player.contract.voidYears ?? 0;
+            const voidToAdd = Math.min(2, 3 - existingVoid, Math.floor(Math.random() * 3));
+
+            // Apply restructure
+            for (let v = 0; v < voidToAdd; v++) {
+              contractYears.push({ baseSalary: 0, proratedBonus: 0, isVoidYear: true });
+            }
+            const totalYrs = contractYears.length;
+            const proratedPerYear = Math.round((conversionAmount / totalYrs) * 100) / 100;
+            contractYears[0] = { ...contractYears[0], baseSalary: contractYears[0].baseSalary - conversionAmount };
+            for (let y = 0; y < contractYears.length; y++) {
+              contractYears[y] = { ...contractYears[y], proratedBonus: contractYears[y].proratedBonus + proratedPerYear };
+            }
+
+            const newCapHit = Math.round((contractYears[0].baseSalary + contractYears[0].proratedBonus) * 100) / 100;
+            const capDelta = newCapHit - player.contract.salary;
+
+            // Update player
+            const pi = allPlayersForNewSeason.findIndex(p => p.id === player.id);
+            if (pi >= 0) {
+              allPlayersForNewSeason[pi] = {
+                ...allPlayersForNewSeason[pi],
+                lastRestructuredSeason: newSeason,
+                contract: {
+                  ...player.contract,
+                  salary: newCapHit,
+                  yearsLeft: contractYears.length,
+                  contractYears,
+                  voidYears: existingVoid + voidToAdd,
+                  restructureHistory: [
+                    ...(player.contract.restructureHistory ?? []),
+                    { season: newSeason, amountConverted: conversionAmount, voidYearsAdded: voidToAdd, proratedPerYear },
+                  ],
+                },
+              };
+            }
+
+            // Update team payroll
+            grownTeams = grownTeams.map((t, idx) =>
+              idx === ti ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + capDelta) } : t,
+            );
+
+            aiRestructureNews.push(makeNews({
+              season: newSeason, week: 0, type: 'signing',
+              teamId: team.id, playerIds: [player.id],
+              headline: `${team.city} restructured ${player.firstName} ${player.lastName}'s contract, converting $${conversionAmount}M to signing bonus.`,
+              isUserTeam: false,
+            }));
+
+            restructureCount++;
+          }
+        }
+
         const newSchedule = generateSchedule(grownTeams, newSeason);
 
         // Preserve unsigned players as free agents for in-season signings
@@ -3385,7 +3875,7 @@ export const useGameStore = create<GameStore>()(
           faRefusals: [],
           playoffBracket: null,
           playoffSeeds: null,
-          newsItems: retirementNews,
+          newsItems: [...retirementNews, ...voidNews, ...aiRestructureNews],
           seasonHistory: [...state.seasonHistory, newSummary],
           resigningPlayers: [],
           tradeProposals: [],
@@ -3407,38 +3897,104 @@ export const useGameStore = create<GameStore>()(
         set({ leagueSettings: newSettings, teams: updatedTeams });
       },
 
-      commitLiveGame: (result: GameResult) => {
+      commitLiveGame: (result: GameResult, matchupId?: string) => {
         const state = get();
-        // Merge the played game into the schedule
-        const newSchedule = state.schedule.map(g => g.id === result.id ? result : g);
-        // Update team records
-        const newTeams = state.teams.map(team => {
-          if (team.id !== result.homeTeamId && team.id !== result.awayTeamId) return team;
-          const isHome = team.id === result.homeTeamId;
-          const teamScore = isHome ? result.homeScore : result.awayScore;
-          const oppScore = isHome ? result.awayScore : result.homeScore;
-          const won = teamScore > oppScore;
-          const lost = teamScore < oppScore;
-          return {
-            ...team,
-            record: {
-              ...team.record,
-              wins: team.record.wins + (won ? 1 : 0),
-              losses: team.record.losses + (lost ? 1 : 0),
-              ties: team.record.ties + (!won && !lost ? 1 : 0),
-              pointsFor: team.record.pointsFor + teamScore,
-              pointsAgainst: team.record.pointsAgainst + oppScore,
-              streak: won ? (team.record.streak > 0 ? team.record.streak + 1 : 1) : (team.record.streak < 0 ? team.record.streak - 1 : -1),
-            },
-          };
-        });
-        // Update player stats
-        const newPlayers = state.players.map(p => {
-          const playerStats = result.playerStats?.[p.id];
-          if (!playerStats) return p;
-          return { ...p, stats: addStats(p.stats, playerStats) };
-        });
-        set({ schedule: newSchedule, teams: newTeams, players: newPlayers });
+
+        // Check if this is a playoff game
+        const isPlayoff = !!matchupId && !!state.playoffBracket?.find(m => m.id === matchupId);
+
+        if (isPlayoff && state.playoffBracket && state.playoffSeeds) {
+          // --- Playoff game commit ---
+          const winnerId = result.homeScore >= result.awayScore ? result.homeTeamId : result.awayTeamId;
+          let bracket = state.playoffBracket.map(m =>
+            m.id === matchupId ? { ...m, homeScore: result.homeScore, awayScore: result.awayScore, winnerId } : { ...m },
+          );
+          bracket = propagateWinner(bracket, matchupId, winnerId, state.playoffSeeds);
+
+          let champions = state.champions ?? [];
+          let newsItems = state.newsItems;
+          let finalsMvpPlayerId = state.finalsMvpPlayerId;
+
+          // Check if this was the Championship game
+          const superBowl = bracket.find(m => m.id === 'championship');
+          if (superBowl?.winnerId && !champions.find(c => c.season === state.season)) {
+            champions = [...champions, { season: state.season, teamId: superBowl.winnerId }];
+            const champTeam = state.teams.find(t => t.id === superBowl.winnerId);
+            if (champTeam) {
+              newsItems = [...newsItems, makeNews({
+                season: state.season, week: 99, type: 'milestone', teamId: champTeam.id,
+                headline: `${champTeam.city} ${champTeam.name} win The Championship ${state.season}!`,
+                isUserTeam: champTeam.id === state.userTeamId,
+              })];
+            }
+            if (matchupId === 'championship') {
+              const winnerRoster = state.players.filter(p => p.teamId === winnerId);
+              const winnerIds = new Set(winnerRoster.map(p => p.id));
+              let bestScore = -1;
+              let bestId = '';
+              for (const [pid, stats] of Object.entries(result.playerStats ?? {})) {
+                if (!winnerIds.has(pid)) continue;
+                const s = stats as Partial<PlayerStats>;
+                const score = (s.passYards ?? 0) * 0.04 + (s.passTDs ?? 0) * 6
+                  + (s.rushYards ?? 0) * 0.1 + (s.rushTDs ?? 0) * 6
+                  + (s.receivingYards ?? 0) * 0.1 + (s.receivingTDs ?? 0) * 6
+                  + (s.tackles ?? 0) * 1 + (s.sacks ?? 0) * 3 + (s.defensiveINTs ?? 0) * 5;
+                if (score > bestScore) { bestScore = score; bestId = pid; }
+              }
+              if (bestId) finalsMvpPlayerId = bestId;
+            }
+          }
+
+          // Add result to schedule for box score access
+          const playoffResult = { ...result, id: matchupId, played: true };
+          const updatedSchedule = [...state.schedule.filter(g => g.id !== matchupId), playoffResult];
+
+          // Generate playoff recap
+          const matchup = state.playoffBracket.find(m => m.id === matchupId);
+          const playoffWeek = 100 + (matchup?.round ?? 1);
+          const playoffRecap = generateWeeklyRecap([playoffResult], state.teams, state.players, state.season, playoffWeek);
+          const updatedRecaps = [...(state.weeklyRecaps ?? []).filter(r => !(r.season === state.season && r.week === playoffWeek)), playoffRecap];
+
+          // Update player stats
+          const newPlayers = state.players.map(p => {
+            const playerStats = result.playerStats?.[p.id];
+            if (!playerStats) return p;
+            return { ...p, stats: addStats(p.stats, playerStats) };
+          });
+
+          set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps, players: newPlayers });
+        } else {
+          // --- Regular season game commit ---
+          const newSchedule = state.schedule.map(g => g.id === result.id ? result : g);
+          // Update team records
+          const newTeams = state.teams.map(team => {
+            if (team.id !== result.homeTeamId && team.id !== result.awayTeamId) return team;
+            const isHome = team.id === result.homeTeamId;
+            const teamScore = isHome ? result.homeScore : result.awayScore;
+            const oppScore = isHome ? result.awayScore : result.homeScore;
+            const won = teamScore > oppScore;
+            const lost = teamScore < oppScore;
+            return {
+              ...team,
+              record: {
+                ...team.record,
+                wins: team.record.wins + (won ? 1 : 0),
+                losses: team.record.losses + (lost ? 1 : 0),
+                ties: team.record.ties + (!won && !lost ? 1 : 0),
+                pointsFor: team.record.pointsFor + teamScore,
+                pointsAgainst: team.record.pointsAgainst + oppScore,
+                streak: won ? (team.record.streak > 0 ? team.record.streak + 1 : 1) : (team.record.streak < 0 ? team.record.streak - 1 : -1),
+              },
+            };
+          });
+          // Update player stats
+          const newPlayers = state.players.map(p => {
+            const playerStats = result.playerStats?.[p.id];
+            if (!playerStats) return p;
+            return { ...p, stats: addStats(p.stats, playerStats) };
+          });
+          set({ schedule: newSchedule, teams: newTeams, players: newPlayers });
+        }
       },
 
       setSuppressTradePopups: (val: boolean) => {
@@ -3669,6 +4225,17 @@ export const useGameStore = create<GameStore>()(
           for (const team of teams13) {
             if (!team.revenue) {
               team.revenue = { tickets: 0, merchandise: 0, tvDeal: 0, total: 0 };
+            }
+          }
+        }
+        if (version < 14) {
+          // Add source + season to existing dead cap entries
+          const teams14 = (state.teams as Array<Record<string, unknown>>) ?? [];
+          for (const team of teams14) {
+            const deadCap = (team.deadCap as Array<Record<string, unknown>>) ?? [];
+            for (const dc of deadCap) {
+              if (!dc.source) dc.source = 'release';
+              if (dc.season === undefined) dc.season = (state.season as number) ?? 1;
             }
           }
         }

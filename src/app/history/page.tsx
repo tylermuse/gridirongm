@@ -274,10 +274,10 @@ function SeasonDetail({
                 <div key={i} className="border-t border-[var(--border)] pt-2 first:border-t-0 first:pt-0">
                   <div className="text-xs text-[var(--text-sec)] mb-0.5">{a.award}</div>
                   <div className="text-sm font-semibold">
-                    {playerPosition(a.playerId)}{' '}
                     <PlayerLink playerId={a.playerId} onSelect={onSelectPlayer}>{playerName(a.playerId)}</PlayerLink>
-                    <span className="ml-1 text-xs text-[var(--text-sec)]">({teamAbbr(a.teamId)})</span>
+                    <span className="ml-1"><Badge size="sm">{playerPosition(a.playerId)}</Badge></span>
                   </div>
+                  <div className="text-xs text-[var(--text-sec)] mt-0.5">{teamName(a.teamId)}</div>
                 </div>
               ))}
             </div>

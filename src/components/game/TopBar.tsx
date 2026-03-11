@@ -2,13 +2,14 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
 import { TradeProposalPopup } from './TradeProposalPopup';
 
 export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const router = useRouter();
+  const pathname = usePathname();
   const {
     phase,
     week,
@@ -108,9 +109,18 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
 
   const handleSimSeason = useCallback(() => {
     const store = useGameStore.getState();
+    const beforeIds = new Set(store.tradeProposals.map(p => p.id));
     const max = Math.max(...store.schedule.map(g => g.week));
     // simToWeek computes all weeks in a single set() call — no stale state
     useGameStore.getState().simToWeek(max + 1);
+    // Auto-reject any trade proposals generated during the bulk sim
+    const afterState = useGameStore.getState();
+    const newProposals = afterState.tradeProposals.filter(p => !beforeIds.has(p.id) && p.status === 'pending');
+    if (newProposals.length > 0) {
+      for (const p of newProposals) {
+        afterState.respondToTradeProposal(p.id, false);
+      }
+    }
     if (useGameStore.getState().phase === 'playoffs') {
       router.push('/playoffs');
     }
@@ -269,18 +279,15 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             )}
             {phase === 'resigning' && (
               <>
-                <Link href="/re-sign">
-                  <Button size="sm">
-                    Go to Re-signing
-                  </Button>
-                </Link>
+                {pathname !== '/re-sign' && (
+                  <Link href="/re-sign">
+                    <Button size="sm">
+                      Go to Re-signing
+                    </Button>
+                  </Link>
+                )}
                 <Button
                   onClick={() => {
-                    const remaining = resigningPlayers.length;
-                    const msg = remaining > 0
-                      ? `Skip to draft? ${remaining} player${remaining !== 1 ? 's' : ''} still unsigned — they will become free agents.`
-                      : 'Advance to the draft phase?';
-                    if (!confirm(msg)) return;
                     const store = useGameStore.getState();
                     if (store.phase !== 'draft') {
                       store.advanceToDraft();
@@ -302,7 +309,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       Sim Pick
                     </Button>
                     <Button onClick={simToUserDraftPick} size="sm" variant="secondary">
-                      To My Pick
+                      Sim to My Pick
                     </Button>
                     <Button
                       onClick={() => {
@@ -315,24 +322,30 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     </Button>
                   </>
                 ) : (
-                  <Link href="/draft-recap">
-                    <Button size="sm">
-                      Draft Recap
+                  <>
+                    <Link href="/draft-recap">
+                      <Button size="sm" variant="secondary">
+                        Draft Recap
+                      </Button>
+                    </Link>
+                    <Button size="sm" onClick={() => { advanceToFreeAgency(); router.push('/free-agency'); }}>
+                      Advance to Free Agency →
                     </Button>
-                  </Link>
+                  </>
                 )}
               </>
             )}
             {phase === 'freeAgency' && (
               <>
-                <Link href="/free-agency">
-                  <Button size="sm">
-                    Go to Free Agency
-                  </Button>
-                </Link>
+                {pathname !== '/free-agency' && (
+                  <Link href="/free-agency">
+                    <Button size="sm">
+                      Go to Free Agency
+                    </Button>
+                  </Link>
+                )}
                 {faDay >= 30 ? (
                   <Button onClick={() => {
-                    if (!confirm('Start the new season? This will advance to the next year.')) return;
                     startNewSeason(); router.push('/');
                   }} variant="secondary" size="sm">
                     Start New Season →
@@ -340,10 +353,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                 ) : (
                   <Button
                     onClick={() => {
-                      if (confirm(`End free agency early? (Day ${faDay}/30 — remaining FAs will be unsigned)`)) {
-                        startNewSeason();
-                        router.push('/');
-                      }
+                      startNewSeason();
+                      router.push('/');
                     }}
                     variant="secondary"
                     size="sm"

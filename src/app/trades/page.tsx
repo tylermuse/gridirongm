@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import type { Player, DraftPick, Position } from '@/types';
-import { POSITIONS } from '@/types';
+import { POSITIONS, getUnamortizedBonus } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
 
@@ -35,12 +35,23 @@ function statLine(p: Player): string {
   }
 }
 
+const POSITION_VALUE_MULT: Record<string, number> = {
+  QB: 1.5, RB: 0.9, WR: 1.1, TE: 0.85, OL: 0.95,
+  DL: 1.05, LB: 1.0, CB: 1.1, S: 0.95, K: 0.4, P: 0.35,
+};
+
 function playerTradeValue(player: Player): number {
   const ageMultiplier =
-    player.age <= 25 ? 1.2 :
+    player.age <= 25 ? 1.3 :
+    player.age <= 27 ? 1.1 :
     player.age <= 29 ? 1.0 :
-    player.age <= 33 ? 0.7 : 0.3;
-  return Math.round((player.ratings.overall * 2 + player.potential * 0.5) * ageMultiplier);
+    player.age <= 31 ? 0.7 :
+    player.age <= 33 ? 0.45 : 0.2;
+  const posMultiplier = POSITION_VALUE_MULT[player.position] ?? 1.0;
+  const normalized = Math.max(0, (player.ratings.overall - 40) / 55);
+  const base = Math.pow(normalized, 2.5) * 1200;
+  const potBonus = Math.max(0, player.potential - player.ratings.overall) * 3;
+  return (base + potBonus) * ageMultiplier * posMultiplier;
 }
 
 const PICK_VALUES = [150, 90, 55, 35, 20, 10, 5];
@@ -359,6 +370,14 @@ function TradesPage() {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
 
+  // Counter-offer state
+  const [counteringProposalId, setCounteringProposalId] = useState<string | null>(null);
+  const [counterOfferedPlayerIds, setCounterOfferedPlayerIds] = useState<string[]>([]);
+  const [counterOfferedPickIds, setCounterOfferedPickIds] = useState<string[]>([]);
+  const [counterReceivedPlayerIds, setCounterReceivedPlayerIds] = useState<string[]>([]);
+  const [counterReceivedPickIds, setCounterReceivedPickIds] = useState<string[]>([]);
+  const [counterResult, setCounterResult] = useState<'accepted' | 'rejected' | null>(null);
+
   // Trading block state
   const [blockedPlayerIds, setBlockedPlayerIds] = useState<string[]>([]);
   const [blockedPickIds, setBlockedPickIds] = useState<string[]>([]);
@@ -366,15 +385,23 @@ function TradesPage() {
   const [seekDraftPicks, setSeekDraftPicks] = useState(false);
   const [blockSolicited, setBlockSolicited] = useState(false);
 
-  // Handle ?block=PLAYER_ID from roster page
+  // Handle ?block=PLAYER_ID from roster page or ?counter=PROPOSAL_ID from popup
   const searchParams = useSearchParams();
   useEffect(() => {
     const blockPlayerId = searchParams.get('block');
     if (blockPlayerId) {
-      // Pre-select the player on the trading block tab
       setBlockedPlayerIds(prev => prev.includes(blockPlayerId) ? prev : [...prev, blockPlayerId]);
       setActiveTab('block');
     }
+    const counterProposalId = searchParams.get('counter');
+    if (counterProposalId) {
+      const proposal = tradeProposals.find(p => p.id === counterProposalId && p.status === 'pending');
+      if (proposal) {
+        setActiveTab('incoming');
+        handleStartCounter(counterProposalId);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const userTeam = teams.find(t => t.id === userTeamId);
@@ -447,8 +474,8 @@ function TradesPage() {
   const valueDiff = offeredValue - receivedValue;
   const valueLabel =
     Math.abs(valueDiff) < offeredValue * 0.1 ? 'Fair trade' :
-    valueDiff < 0 ? `You lose ~${Math.abs(valueDiff)} pts` :
-    `You gain ~${valueDiff} pts`;
+    valueDiff < 0 ? `You lose ~${Math.round(Math.abs(valueDiff))} pts` :
+    `You gain ~${Math.round(valueDiff)} pts`;
 
   function handleSendTrade() {
     if (!selectedTeamId) return;
@@ -466,10 +493,75 @@ function TradesPage() {
     }
   }
 
+  function handleStartCounter(proposalId: string) {
+    const proposal = tradeProposals.find(p => p.id === proposalId);
+    if (!proposal) return;
+    setCounteringProposalId(proposalId);
+    // Pre-fill: what user sends (requested in proposal) and what user receives (offered in proposal)
+    setCounterOfferedPlayerIds([...proposal.requestedPlayerIds]);
+    setCounterOfferedPickIds([...proposal.requestedPickIds]);
+    setCounterReceivedPlayerIds([...proposal.offeredPlayerIds]);
+    setCounterReceivedPickIds([...proposal.offeredPickIds]);
+    setCounterResult(null);
+  }
+
+  function handleCancelCounter() {
+    setCounteringProposalId(null);
+    setCounterOfferedPlayerIds([]);
+    setCounterOfferedPickIds([]);
+    setCounterReceivedPlayerIds([]);
+    setCounterReceivedPickIds([]);
+    setCounterResult(null);
+  }
+
+  function handleSubmitCounter() {
+    const proposal = tradeProposals.find(p => p.id === counteringProposalId);
+    if (!proposal) return;
+    const success = executeTrade(
+      counterOfferedPlayerIds, counterOfferedPickIds,
+      counterReceivedPlayerIds, counterReceivedPickIds,
+      proposal.proposingTeamId,
+    );
+    setCounterResult(success ? 'accepted' : 'rejected');
+    if (success) {
+      // Reject the original proposal since we completed a counter
+      respondToTradeProposal(proposal.id, false);
+      handleCancelCounter();
+    }
+  }
+
+  const counterTeam = counteringProposalId
+    ? teams.find(t => t.id === tradeProposals.find(p => p.id === counteringProposalId)?.proposingTeamId)
+    : null;
+  const counterTeamRoster = counterTeam
+    ? players.filter(p => p.teamId === counterTeam.id && !p.retired).sort((a, b) => b.ratings.overall - a.ratings.overall)
+    : [];
+
+  const counterOfferedValue = counterOfferedPlayerIds.reduce((sum, id) => {
+    const p = players.find(pl => pl.id === id);
+    return sum + (p ? playerTradeValue(p) : 0);
+  }, 0) + counterOfferedPickIds.reduce((sum, id) => {
+    const pick = userTeam?.draftPicks.find(pk => pk.id === id);
+    return sum + (pick ? pickTradeValue(pick) : 0);
+  }, 0);
+
+  const counterReceivedValue = counterReceivedPlayerIds.reduce((sum, id) => {
+    const p = players.find(pl => pl.id === id);
+    return sum + (p ? playerTradeValue(p) : 0);
+  }, 0) + counterReceivedPickIds.reduce((sum, id) => {
+    const pick = counterTeam?.draftPicks.find(pk => pk.id === id);
+    return sum + (pick ? pickTradeValue(pick) : 0);
+  }, 0);
+
+  const counterValueDiff = counterOfferedValue - counterReceivedValue;
+  const counterValueLabel =
+    Math.abs(counterValueDiff) < counterOfferedValue * 0.1 ? 'Fair trade' :
+    counterValueDiff < 0 ? `You lose ~${Math.round(Math.abs(counterValueDiff))} pts` :
+    `You gain ~${Math.round(counterValueDiff)} pts`;
+
   function handleSolicitProposals() {
     solicitTradingBlockProposals(blockedPlayerIds, blockedPickIds, seekPositions, seekDraftPicks);
     setBlockSolicited(true);
-    setActiveTab('incoming');
   }
 
   return (
@@ -688,12 +780,148 @@ function TradesPage() {
                       </Button>
                       <Button
                         size="sm"
+                        variant="secondary"
+                        onClick={() => handleStartCounter(proposal.id)}
+                        disabled={!isTradeOpen || counteringProposalId === proposal.id}
+                      >
+                        Counter
+                      </Button>
+                      <Button
+                        size="sm"
                         variant="ghost"
                         onClick={() => respondToTradeProposal(proposal.id, false)}
                       >
                         Reject
                       </Button>
                     </div>
+
+                    {/* Counter-offer UI */}
+                    {counteringProposalId === proposal.id && (
+                      <div className="mt-4 pt-4 border-t border-[var(--border)]">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-bold">Counter Offer to {proposingTeam?.city} {proposingTeam?.name}</h3>
+                          <Button size="sm" variant="ghost" onClick={handleCancelCounter}>Cancel</Button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          {/* Your offer */}
+                          <div className="bg-[var(--surface-2)] rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold text-red-600 uppercase">You Send</span>
+                              <span className="text-xs text-[var(--text-sec)]">{Math.round(counterOfferedValue)} pts</span>
+                            </div>
+                            <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Players</div>
+                            <div className="max-h-[250px] overflow-y-auto space-y-0 mb-2">
+                              {userRoster.map(p => (
+                                <label key={p.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface)] rounded px-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={counterOfferedPlayerIds.includes(p.id)}
+                                    onChange={() => togglePlayerSelect(p.id, counterOfferedPlayerIds, setCounterOfferedPlayerIds)}
+                                    className="accent-blue-500"
+                                  />
+                                  <Badge size="sm">{p.position}</Badge>
+                                  <span className="text-xs flex-1 truncate">{p.firstName} {p.lastName}</span>
+                                  <span className={`text-[10px] font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                                </label>
+                              ))}
+                            </div>
+                            {userTeam && userTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
+                              <>
+                                <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Draft Picks</div>
+                                {userTeam.draftPicks
+                                  .filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId)
+                                  .sort((a, b) => a.year - b.year || a.round - b.round)
+                                  .map(pk => (
+                                  <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface)] rounded px-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={counterOfferedPickIds.includes(pk.id)}
+                                      onChange={() => togglePickSelect(pk.id, counterOfferedPickIds, setCounterOfferedPickIds)}
+                                      className="accent-blue-500"
+                                    />
+                                    <span className="text-xs flex-1">{pk.year} Rd {pk.round}</span>
+                                    <span className="text-[10px] text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
+                                  </label>
+                                ))}
+                              </>
+                            )}
+                          </div>
+
+                          {/* You receive */}
+                          <div className="bg-[var(--surface-2)] rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold text-green-600 uppercase">You Receive</span>
+                              <span className="text-xs text-[var(--text-sec)]">{Math.round(counterReceivedValue)} pts</span>
+                            </div>
+                            <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Players</div>
+                            <div className="max-h-[250px] overflow-y-auto space-y-0 mb-2">
+                              {counterTeamRoster.map(p => (
+                                <label key={p.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface)] rounded px-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={counterReceivedPlayerIds.includes(p.id)}
+                                    onChange={() => togglePlayerSelect(p.id, counterReceivedPlayerIds, setCounterReceivedPlayerIds)}
+                                    className="accent-blue-500"
+                                  />
+                                  <Badge size="sm">{p.position}</Badge>
+                                  <span className="text-xs flex-1 truncate">{p.firstName} {p.lastName}</span>
+                                  <span className={`text-[10px] font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                                </label>
+                              ))}
+                            </div>
+                            {counterTeam && counterTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
+                              <>
+                                <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Draft Picks</div>
+                                {counterTeam.draftPicks
+                                  .filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId)
+                                  .sort((a, b) => a.year - b.year || a.round - b.round)
+                                  .map(pk => (
+                                  <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface)] rounded px-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={counterReceivedPickIds.includes(pk.id)}
+                                      onChange={() => togglePickSelect(pk.id, counterReceivedPickIds, setCounterReceivedPickIds)}
+                                      className="accent-blue-500"
+                                    />
+                                    <span className="text-xs flex-1">Rd {pk.round} ({pk.year})</span>
+                                    <span className="text-[10px] text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
+                                  </label>
+                                ))}
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Counter summary */}
+                        <div className="flex items-center justify-between bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3">
+                          <div>
+                            <div className="text-sm font-semibold">
+                              Value: {Math.round(counterOfferedValue)} → {Math.round(counterReceivedValue)} pts
+                              <span className={`ml-2 text-xs ${
+                                Math.abs(counterValueDiff) < counterOfferedValue * 0.1 ? 'text-green-600' :
+                                counterValueDiff < 0 ? 'text-blue-600' : 'text-amber-600'
+                              }`}>
+                                ({counterValueLabel})
+                              </span>
+                            </div>
+                            {counterResult === 'rejected' && (
+                              <p className="text-sm text-red-600 mt-1">Counter rejected — offer more value or adjust your asks.</p>
+                            )}
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={handleSubmitCounter}
+                            disabled={
+                              (counterOfferedPlayerIds.length === 0 && counterOfferedPickIds.length === 0) &&
+                              (counterReceivedPlayerIds.length === 0 && counterReceivedPickIds.length === 0)
+                            }
+                          >
+                            Submit Counter
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </Card>
                 );
               })
@@ -772,11 +1000,11 @@ function TradesPage() {
                       </div>
                     </div>
 
-                    {userTeam && userTeam.draftPicks.length > 0 && (
+                    {userTeam && userTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
                       <div>
                         <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Draft Picks</div>
                         {userTeam.draftPicks
-                          .filter(pk => pk.year >= (useGameStore.getState().season))
+                          .filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId)
                           .sort((a, b) => a.year - b.year || a.round - b.round)
                           .map(pk => (
                           <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
@@ -787,7 +1015,7 @@ function TradesPage() {
                               className="accent-blue-500"
                             />
                             <span className="text-sm flex-1">{pk.year} Round {pk.round}</span>
-                            <span className="text-xs text-[var(--text-sec)]">~{pickTradeValue(pk)} pts</span>
+                            <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))} pts</span>
                           </label>
                         ))}
                       </div>
@@ -846,18 +1074,71 @@ function TradesPage() {
                           disabled={blockedPlayerIds.length === 0 && blockedPickIds.length === 0}
                           className="w-full"
                         >
-                          Ask for Proposals
+                          {blockSolicited ? 'Refresh Proposals' : 'Ask for Proposals'}
                         </Button>
-                        {blockSolicited && (
-                          <p className="text-xs text-green-600 mt-2">
-                            Proposals generated! Check Incoming Offers.
-                          </p>
-                        )}
                       </div>
                     </Card>
                   </div>
                 </div>
-              </div>
+
+              {/* ── Inline proposals from trading block ── */}
+              {blockSolicited && (() => {
+                const blockProposals = tradeProposals.filter(p => p.status === 'pending');
+                return blockProposals.length > 0 ? (
+                  <div className="mt-6 space-y-3">
+                    <h3 className="text-lg font-bold">Proposals ({blockProposals.length})</h3>
+                    {blockProposals.map(proposal => {
+                      const proposingTeam = teams.find(t => t.id === proposal.proposingTeamId);
+                      const offPlayers = proposal.offeredPlayerIds.map(id => players.find(p => p.id === id)).filter(Boolean) as Player[];
+                      const offPicks = proposal.offeredPickIds.map(id =>
+                        proposingTeam?.draftPicks.find(pk => pk.id === id),
+                      ).filter(Boolean) as DraftPick[];
+                      return (
+                        <Card key={proposal.id}>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Badge size="sm">{proposingTeam?.abbreviation}</Badge>
+                                <span className="font-bold text-sm">{proposingTeam?.city} {proposingTeam?.name}</span>
+                                {proposal.valueAssessment && <ValueAssessmentBadge assessment={proposal.valueAssessment} />}
+                              </div>
+                              <div className="text-xs text-[var(--text-sec)] uppercase font-bold mb-1">They Offer</div>
+                              <div className="space-y-0.5 mb-2">
+                                {offPlayers.map(p => (
+                                  <div key={p.id} className="flex items-center gap-2 text-sm">
+                                    <Badge size="sm">{p.position}</Badge>
+                                    <button onClick={() => setSelectedPlayerId(p.id)} className="hover:underline cursor-pointer">{p.firstName} {p.lastName}</button>
+                                    <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                                    <span className="text-xs text-[var(--text-sec)]">{p.age}y · ${p.contract.salary}M</span>
+                                  </div>
+                                ))}
+                                {offPicks.map(pk => (
+                                  <div key={pk.id} className="flex items-center gap-2 text-sm">
+                                    <Badge size="sm" variant="default">Pick</Badge>
+                                    <span>{pk.year} Round {pk.round}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={() => {
+                                const success = respondToTradeProposal(proposal.id, true);
+                                if (!success) alert('Trade failed — you may be over the salary cap.');
+                              }}>Accept</Button>
+                              <Button size="sm" variant="ghost" onClick={() => respondToTradeProposal(proposal.id, false)}>Reject</Button>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="mt-6 text-center text-sm text-[var(--text-sec)]">
+                    No teams were interested. Try adjusting your assets or preferences.
+                  </div>
+                );
+              })()}
+            </div>
             )}
           </div>
         )}
@@ -919,7 +1200,7 @@ function TradesPage() {
                   <Card>
                     <CardHeader>
                       <CardTitle>Your Offer</CardTitle>
-                      <span className="text-xs text-[var(--text-sec)]">{offeredValue} trade pts</span>
+                      <span className="text-xs text-[var(--text-sec)]">{Math.round(offeredValue)} trade pts</span>
                     </CardHeader>
                     <div className="mb-3">
                       <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Players</div>
@@ -934,14 +1215,17 @@ function TradesPage() {
                           <Badge size="sm">{p.position}</Badge>
                           <span className="text-sm flex-1">{p.firstName} {p.lastName}</span>
                           <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
-                          <span className="text-xs text-[var(--text-sec)]">~{playerTradeValue(p)}</span>
+                          <span className="text-xs text-[var(--text-sec)]">~{Math.round(playerTradeValue(p))}</span>
                         </label>
                       ))}
                     </div>
-                    {userTeam && userTeam.draftPicks.length > 0 && (
+                    {userTeam && userTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
                       <div>
                         <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Draft Picks</div>
-                        {userTeam.draftPicks.map(pk => (
+                        {userTeam.draftPicks
+                          .filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId)
+                          .sort((a, b) => a.year - b.year || a.round - b.round)
+                          .map(pk => (
                           <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
                             <input
                               type="checkbox"
@@ -949,8 +1233,8 @@ function TradesPage() {
                               onChange={() => togglePickSelect(pk.id, offeredPickIds, setOfferedPickIds)}
                               className="accent-blue-500"
                             />
-                            <span className="text-sm flex-1">Round {pk.round} ({pk.year})</span>
-                            <span className="text-xs text-[var(--text-sec)]">~{pickTradeValue(pk)}</span>
+                            <span className="text-sm flex-1">{pk.year} Round {pk.round}</span>
+                            <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
                           </label>
                         ))}
                       </div>
@@ -961,7 +1245,7 @@ function TradesPage() {
                   <Card>
                     <CardHeader>
                       <CardTitle>You Receive</CardTitle>
-                      <span className="text-xs text-[var(--text-sec)]">{receivedValue} trade pts</span>
+                      <span className="text-xs text-[var(--text-sec)]">{Math.round(receivedValue)} trade pts</span>
                     </CardHeader>
                     {!selectedAITeam ? (
                       <p className="text-sm text-[var(--text-sec)]">Select a trade partner first.</p>
@@ -980,14 +1264,17 @@ function TradesPage() {
                               <Badge size="sm">{p.position}</Badge>
                               <span className="text-sm flex-1">{p.firstName} {p.lastName}</span>
                               <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
-                              <span className="text-xs text-[var(--text-sec)]">~{playerTradeValue(p)}</span>
+                              <span className="text-xs text-[var(--text-sec)]">~{Math.round(playerTradeValue(p))}</span>
                             </label>
                           ))}
                         </div>
-                        {selectedAITeam.draftPicks.length > 0 && (
+                        {selectedAITeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
                           <div>
                             <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Draft Picks</div>
-                            {selectedAITeam.draftPicks.map(pk => (
+                            {selectedAITeam.draftPicks
+                              .filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId)
+                              .sort((a, b) => a.year - b.year || a.round - b.round)
+                              .map(pk => (
                               <label key={pk.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
                                 <input
                                   type="checkbox"
@@ -995,8 +1282,8 @@ function TradesPage() {
                                   onChange={() => togglePickSelect(pk.id, receivedPickIds, setReceivedPickIds)}
                                   className="accent-blue-500"
                                 />
-                                <span className="text-sm flex-1">Round {pk.round} ({pk.year})</span>
-                                <span className="text-xs text-[var(--text-sec)]">~{pickTradeValue(pk)}</span>
+                                <span className="text-sm flex-1">{pk.year} Round {pk.round}</span>
+                                <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
                               </label>
                             ))}
                           </div>
@@ -1011,7 +1298,7 @@ function TradesPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-sm font-semibold">
-                        Value: {offeredValue} → {receivedValue} pts
+                        Value: {Math.round(offeredValue)} → {Math.round(receivedValue)} pts
                         <span className={`ml-2 text-xs ${
                           Math.abs(valueDiff) < offeredValue * 0.1 ? 'text-green-600' :
                           valueDiff < 0 ? 'text-blue-600' : 'text-amber-600'
@@ -1019,6 +1306,19 @@ function TradesPage() {
                           ({valueLabel})
                         </span>
                       </div>
+                      {/* Dead money warning for restructured players being traded */}
+                      {(() => {
+                        const tradeDeadCap = offeredPlayerIds.reduce((sum, id) => {
+                          const p = players.find(pl => pl.id === id);
+                          return sum + (p ? getUnamortizedBonus(p.contract) : 0);
+                        }, 0);
+                        if (tradeDeadCap <= 0) return null;
+                        return (
+                          <p className="text-xs text-red-600 mt-1">
+                            Trading creates ${Math.round(tradeDeadCap * 10) / 10}M dead money from restructured contracts
+                          </p>
+                        );
+                      })()}
                       {tradeResult === 'rejected' && (
                         <p className="text-sm text-red-600 mt-1">
                           Trade rejected — offer more value or adjust your asks.

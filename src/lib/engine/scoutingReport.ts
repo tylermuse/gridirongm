@@ -980,19 +980,18 @@ export function generateScoutingReport(
   const seed = player.scoutingSeed ?? seedFromId(player.id);
 
   // 3-tier model:
-  //   Entry (0): Physical traits only (vague labels, no numbers)
-  //   Pro   (1): Overview, strengths (max 3), Player comparison, scouted ratings (grades only), trait numbers
-  //   Elite (2): Everything — full strengths (5) + weaknesses, exact ratings, projection, scout's take,
-  //              combine measurables, draft grade, development curve, character report
+  //   Entry (0): Nothing — just OVR range + basic info
+  //   Pro   (1): Physical traits, combine measurables, strengths, scouted ratings, comparison, overview
+  //   Elite (2): Draft grade, weaknesses, development projection, character, projection, scout's take
   return {
-    physicalTraits: generatePhysicalTraits(player, effectiveLevel >= 1),
+    physicalTraits: effectiveLevel >= 1 ? generatePhysicalTraits(player, true) : null,
     overview: effectiveLevel >= 1 ? generateOverview(player, seed) : null,
     strengths: effectiveLevel >= 1 ? generateStrengths(player).slice(0, effectiveLevel >= 2 ? 5 : 3) : null,
     weaknesses: effectiveLevel >= 2 ? generateWeaknesses(player) : null,
     nflComparison: effectiveLevel >= 1 ? getNflComparison(player, seed) : null,
     projection: effectiveLevel >= 2 ? generateProjectionText(player) : null,
     scoutsTake: effectiveLevel >= 2 ? generateScoutsTakeText(player, seed) : null,
-    combineMeasurables: effectiveLevel >= 2 ? generateCombineMeasurables(player) : null,
+    combineMeasurables: effectiveLevel >= 1 ? generateCombineMeasurables(player) : null,
     draftGrade: effectiveLevel >= 2 ? generateDraftGrade(player) : null,
     developmentCurve: effectiveLevel >= 2 ? generateDevelopmentCurve(player) : null,
     characterReport: effectiveLevel >= 2 ? generateCharacterReport(player) : null,

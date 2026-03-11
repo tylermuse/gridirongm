@@ -83,15 +83,11 @@ const POSITION_KEY_RATINGS: Record<Position, { key: keyof PlayerRatings; label: 
 interface ScoutingReportModalProps {
   player: Player;
   scoutingLevel: 0 | 1 | 2;
-  deepScouted: boolean;
   scoutedOvr: number;
   error: number;
   onClose: () => void;
-  onDeepScout?: () => void;
   onDraft?: () => void;
   onScoutingLevelChange: (level: 0 | 1 | 2) => void;
-  deepScoutCount: number;
-  deepScoutLimit: number;
   isUserPick: boolean;
   teamNeeds?: { position: Position; needScore: number; count: number; starterOvr: number }[];
   userTeamAbbr?: string;
@@ -172,45 +168,27 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
-function LockedSection({ label, requiredLevel, currentLevel, maxLevel, onUpgrade }: {
+function LockedSection({ label, requiredLevel, onUpgrade }: {
   label: string;
   requiredLevel: 1 | 2;
-  currentLevel: 0 | 1 | 2;
-  maxLevel: number;
+  currentLevel?: 0 | 1 | 2;
+  maxLevel?: number;
   onUpgrade: (level: 0 | 1 | 2) => void;
 }) {
-  // Can the user actually upgrade to this level?
-  const canUnlock = maxLevel >= requiredLevel;
   const levelName = requiredLevel === 1 ? 'Pro' : 'Elite';
 
   return (
     <div className="border-t border-[var(--border)] pt-4 mt-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs text-[var(--text-sec)] opacity-60">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
+        <div className="flex items-center gap-2 text-xs text-[var(--text-sec)]">
           <span>{label}</span>
         </div>
-        {canUnlock ? (
-          <button
-            onClick={() => onUpgrade(requiredLevel as 0 | 1 | 2)}
-            className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-            </svg>
-            Upgrade to {levelName}
-          </button>
-        ) : (
-          <a
-            href="/pricing"
-            className="flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-700 hover:underline"
-          >
-            Get {levelName} →
-          </a>
-        )}
+        <button
+          onClick={() => onUpgrade(requiredLevel as 0 | 1 | 2)}
+          className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors"
+        >
+          Switch to {levelName} Scouting
+        </button>
       </div>
     </div>
   );
@@ -247,7 +225,7 @@ function DraftGradeCard({ grade }: { grade: DraftGrade }) {
   const confColor = grade.confidence === 'High' ? 'text-green-600' : grade.confidence === 'Medium' ? 'text-amber-600' : 'text-red-600';
 
   return (
-    <div className="grid grid-cols-5 gap-2">
+    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
       <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2 text-center">
         <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Grade</div>
         <div className={`text-2xl font-black ${gradeColor}`}>{grade.overall}</div>
@@ -371,24 +349,20 @@ function CharacterReportCard({ report }: { report: CharacterReport }) {
 export function ScoutingReportModal({
   player,
   scoutingLevel,
-  deepScouted,
   scoutedOvr,
   error,
   onClose,
-  onDeepScout,
   onDraft,
   onScoutingLevelChange,
-  deepScoutCount,
-  deepScoutLimit,
   isUserPick,
   teamNeeds,
   userTeamAbbr,
 }: ScoutingReportModalProps) {
   const { maxScoutingLevel: maxLevel } = useSubscription();
-  const report = generateScoutingReport(player, scoutingLevel, deepScouted);
+  const report = generateScoutingReport(player, scoutingLevel, false);
   const ovrLow = Math.max(20, scoutedOvr - error);
   const ovrHigh = Math.min(99, scoutedOvr + error);
-  const effectiveLevel = deepScouted ? Math.min(2, scoutingLevel + 1) : scoutingLevel;
+  const effectiveLevel = scoutingLevel;
 
   // Team need assessment
   const posNeed = teamNeeds?.find(n => n.position === player.position);
@@ -401,12 +375,14 @@ export function ScoutingReportModal({
     : needLevel === 'low' ? 'Low Priority'
     : 'Unknown';
 
-  // Draft value estimate
-  const draftValueText = scoutedOvr >= 78 ? '1st Round Value'
-    : scoutedOvr >= 72 ? '1st-2nd Round Value'
-    : scoutedOvr >= 65 ? '2nd-3rd Round Value'
-    : scoutedOvr >= 58 ? 'Mid-Round Value'
-    : scoutedOvr >= 50 ? 'Late-Round Value'
+  // Draft value estimate — blends current OVR with potential (ceiling matters for draft picks)
+  const potentialBoost = Math.max(0, player.potential - scoutedOvr) * 0.4;
+  const draftScore = scoutedOvr + potentialBoost;
+  const draftValueText = draftScore >= 78 ? '1st Round Value'
+    : draftScore >= 72 ? '1st-2nd Round Value'
+    : draftScore >= 65 ? '2nd-3rd Round Value'
+    : draftScore >= 58 ? 'Mid-Round Value'
+    : draftScore >= 50 ? 'Late-Round Value'
     : 'UDFA/Camp Body';
 
   // Close on Escape
@@ -442,7 +418,6 @@ export function ScoutingReportModal({
               <span className={`text-sm font-medium ${potentialColor(player.potential, player.experience)}`}>
                 {potentialLabel(player.potential, player.experience)} Potential
               </span>
-              {deepScouted && <Badge variant="blue">Deep Scouted</Badge>}
             </div>
           </div>
           <button
@@ -499,39 +474,49 @@ export function ScoutingReportModal({
             </div>
           )}
 
-          {/* ═══════════════════════════════════════════════════════════
-              ELITE ONLY: Draft Grade
-              ═══════════════════════════════════════════════════════════ */}
-          {report.draftGrade ? (
-            <>
-              <SectionHeader title="Draft Grade" />
-              <DraftGradeCard grade={report.draftGrade} />
-            </>
-          ) : effectiveLevel < 2 ? (
-            <LockedSection label="Draft Grade" requiredLevel={2} currentLevel={scoutingLevel} maxLevel={maxLevel} onUpgrade={onScoutingLevelChange} />
-          ) : null}
+          {/* Entry tier: no insights, just upgrade prompts */}
+          {effectiveLevel === 0 && (
+            <div className="border-t border-[var(--border)] pt-4 mt-4">
+              <div className="text-center py-6">
+                <div className="text-3xl mb-2">🔒</div>
+                <p className="text-sm font-bold text-[var(--text)]">Entry Scouting Level</p>
+                <p className="text-xs text-[var(--text-sec)] mt-1 max-w-xs mx-auto">
+                  Switch to Pro or Elite scouting to unlock physical traits, combine measurables, strengths, and scouted ratings.
+                </p>
+                <button
+                  onClick={() => onScoutingLevelChange(1)}
+                  className="mt-3 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Switch to Pro Scouting
+                </button>
+              </div>
+            </div>
+          )}
 
-          {/* Player Comparison — Pro+ */}
-          {report.nflComparison ? (
+          {/* ═══════════════════════════════════════════════════════════
+              PRO TIER: Physical Traits, Combine, Strengths, Ratings, Comparison, Overview
+              ═══════════════════════════════════════════════════════════ */}
+
+          {/* Physical Traits — Pro+ */}
+          {effectiveLevel >= 1 && report.physicalTraits && (
             <>
-              <SectionHeader title="Player Comparison" />
-              <div className="bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-4 py-3">
-                <div className="text-sm font-bold">{report.nflComparison}</div>
+              <SectionHeader title="Physical Traits" />
+              <div className="space-y-2">
+                <TraitBar name="Speed" trait={report.physicalTraits.speed} />
+                <TraitBar name="Strength" trait={report.physicalTraits.strength} />
+                <TraitBar name="Agility" trait={report.physicalTraits.agility} />
+                <TraitBar name="Stamina" trait={report.physicalTraits.stamina} />
               </div>
             </>
-          ) : scoutingLevel < 1 && !deepScouted ? (
-            <LockedSection label="Player Comparison" requiredLevel={1} currentLevel={scoutingLevel} maxLevel={maxLevel} onUpgrade={onScoutingLevelChange} />
-          ) : null}
+          )}
 
-          {/* Overview — Pro+ */}
-          {report.overview ? (
+          {/* Combine Measurables — Pro+ */}
+          {effectiveLevel >= 1 && report.combineMeasurables ? (
             <>
-              <SectionHeader title="Scout&apos;s Overview" />
-              <p className="text-sm leading-relaxed text-[var(--text)]">{report.overview}</p>
+              <SectionHeader title="Combine Measurables" />
+              <CombineMeasurablesCard data={report.combineMeasurables} />
             </>
-          ) : scoutingLevel < 1 && !deepScouted ? (
-            <LockedSection label="Overview" requiredLevel={1} currentLevel={scoutingLevel} maxLevel={maxLevel} onUpgrade={onScoutingLevelChange} />
-          ) : null}
+          ) : effectiveLevel >= 1 && !report.combineMeasurables ? null : null}
 
           {/* Scouted Ratings — Pro+ shows bars, Elite shows numbers */}
           {effectiveLevel >= 1 && (
@@ -550,33 +535,8 @@ export function ScoutingReportModal({
             </>
           )}
 
-          {/* Physical Traits */}
-          {report.physicalTraits && (
-            <>
-              <SectionHeader title="Physical Traits" />
-              <div className="space-y-2">
-                <TraitBar name="Speed" trait={report.physicalTraits.speed} />
-                <TraitBar name="Strength" trait={report.physicalTraits.strength} />
-                <TraitBar name="Agility" trait={report.physicalTraits.agility} />
-                <TraitBar name="Stamina" trait={report.physicalTraits.stamina} />
-              </div>
-            </>
-          )}
-
-          {/* ═══════════════════════════════════════════════════════════
-              ELITE ONLY: Combine Measurables
-              ═══════════════════════════════════════════════════════════ */}
-          {report.combineMeasurables ? (
-            <>
-              <SectionHeader title="Combine Measurables" />
-              <CombineMeasurablesCard data={report.combineMeasurables} />
-            </>
-          ) : effectiveLevel < 2 ? (
-            <LockedSection label="Combine Measurables" requiredLevel={2} currentLevel={scoutingLevel} maxLevel={maxLevel} onUpgrade={onScoutingLevelChange} />
-          ) : null}
-
-          {/* Strengths — Pro+ (capped at 3 for Pro, full 5 for Elite) */}
-          {report.strengths ? (
+          {/* Strengths — Pro+ */}
+          {effectiveLevel >= 1 && report.strengths ? (
             <>
               <SectionHeader title={effectiveLevel >= 2 ? 'Strengths' : `Strengths (Top ${report.strengths.length})`} />
               <ul className="space-y-1.5">
@@ -587,22 +547,48 @@ export function ScoutingReportModal({
                   </li>
                 ))}
               </ul>
-              {effectiveLevel < 2 && (
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-[var(--text-sec)] opacity-60">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  <span>Upgrade to Elite for full strengths analysis + weaknesses</span>
-                </div>
-              )}
             </>
-          ) : scoutingLevel < 1 && !deepScouted ? (
-            <LockedSection label="Strengths" requiredLevel={1} currentLevel={scoutingLevel} maxLevel={maxLevel} onUpgrade={onScoutingLevelChange} />
+          ) : null}
+
+          {/* Player Comparison — Pro+ */}
+          {effectiveLevel >= 1 && report.nflComparison ? (
+            <>
+              <SectionHeader title="Player Comparison" />
+              <div className="bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-4 py-3">
+                <div className="text-sm font-bold">{report.nflComparison}</div>
+              </div>
+            </>
+          ) : null}
+
+          {/* Overview — Pro+ */}
+          {effectiveLevel >= 1 && report.overview ? (
+            <>
+              <SectionHeader title="Scout&apos;s Overview" />
+              <p className="text-sm leading-relaxed text-[var(--text)]">{report.overview}</p>
+            </>
+          ) : null}
+
+          {/* ═══════════════════════════════════════════════════════════
+              ELITE TIER: Draft Grade, Weaknesses, Dev Curve, Character, Projection, Scout's Take
+              ═══════════════════════════════════════════════════════════ */}
+
+          {/* Locked Elite section shown to Pro users */}
+          {effectiveLevel === 1 && (
+            <>
+              <LockedSection label="Draft Grade, Development Projection, Character Report" requiredLevel={2} currentLevel={scoutingLevel} maxLevel={maxLevel} onUpgrade={onScoutingLevelChange} />
+            </>
+          )}
+
+          {/* Draft Grade — Elite only */}
+          {effectiveLevel >= 2 && report.draftGrade ? (
+            <>
+              <SectionHeader title="Draft Grade" />
+              <DraftGradeCard grade={report.draftGrade} />
+            </>
           ) : null}
 
           {/* Weaknesses — Elite only */}
-          {report.weaknesses ? (
+          {effectiveLevel >= 2 && report.weaknesses ? (
             <>
               <SectionHeader title="Weaknesses" />
               <ul className="space-y-1.5">
@@ -614,46 +600,34 @@ export function ScoutingReportModal({
                 ))}
               </ul>
             </>
-          ) : effectiveLevel >= 1 && effectiveLevel < 2 ? (
-            <LockedSection label="Weaknesses" requiredLevel={2} currentLevel={scoutingLevel} maxLevel={maxLevel} onUpgrade={onScoutingLevelChange} />
           ) : null}
 
-          {/* ═══════════════════════════════════════════════════════════
-              ELITE ONLY: Development Curve
-              ═══════════════════════════════════════════════════════════ */}
-          {report.developmentCurve ? (
+          {/* Development Projection — Elite only */}
+          {effectiveLevel >= 2 && report.developmentCurve ? (
             <>
               <SectionHeader title="Development Projection" />
               <DevCurveCard curve={report.developmentCurve} currentOvr={scoutedOvr} />
             </>
-          ) : effectiveLevel < 2 ? (
-            <LockedSection label="Development Projection" requiredLevel={2} currentLevel={scoutingLevel} maxLevel={maxLevel} onUpgrade={onScoutingLevelChange} />
           ) : null}
 
-          {/* ═══════════════════════════════════════════════════════════
-              ELITE ONLY: Character & Intangibles
-              ═══════════════════════════════════════════════════════════ */}
-          {report.characterReport ? (
+          {/* Character & Intangibles — Elite only */}
+          {effectiveLevel >= 2 && report.characterReport ? (
             <>
               <SectionHeader title="Character & Intangibles" />
               <CharacterReportCard report={report.characterReport} />
             </>
-          ) : effectiveLevel < 2 ? (
-            <LockedSection label="Character & Intangibles" requiredLevel={2} currentLevel={scoutingLevel} maxLevel={maxLevel} onUpgrade={onScoutingLevelChange} />
           ) : null}
 
           {/* Projection — Elite only */}
-          {report.projection ? (
+          {effectiveLevel >= 2 && report.projection ? (
             <>
               <SectionHeader title="Projection" />
               <p className="text-sm leading-relaxed text-[var(--text)]">{report.projection}</p>
             </>
-          ) : effectiveLevel < 2 ? (
-            <LockedSection label="Projection" requiredLevel={2} currentLevel={scoutingLevel} maxLevel={maxLevel} onUpgrade={onScoutingLevelChange} />
           ) : null}
 
           {/* Scout's Take — Elite only */}
-          {report.scoutsTake ? (
+          {effectiveLevel >= 2 && report.scoutsTake ? (
             <>
               <SectionHeader title="Scout&apos;s Take" />
               <div className="border-l-2 border-blue-500 pl-4">
@@ -662,8 +636,6 @@ export function ScoutingReportModal({
                 </p>
               </div>
             </>
-          ) : effectiveLevel < 2 ? (
-            <LockedSection label="Scout's Take" requiredLevel={2} currentLevel={scoutingLevel} maxLevel={maxLevel} onUpgrade={onScoutingLevelChange} />
           ) : null}
 
           {/* Scouting Level Selector */}
@@ -686,30 +658,15 @@ export function ScoutingReportModal({
                     className="h-8 px-2 text-xs rounded border border-[var(--border)] bg-[var(--surface)] font-medium"
                   >
                     {SCOUTING_LEVELS.map((level, i) => {
-                      const locked = i > maxLevel;
                       return (
-                        <option key={i} value={i} disabled={locked}>
-                          {locked ? '🔒 ' : ''}{level.name}{locked ? ` (${level.tier === 'pro' ? 'Pro' : 'Elite'})` : ''}
+                        <option key={i} value={i}>
+                          {level.name}
                         </option>
                       );
                     })}
                   </select>
-                  {maxLevel < 2 && (
-                    <a href="/pricing" className="text-[10px] text-blue-600 hover:underline whitespace-nowrap">
-                      Upgrade →
-                    </a>
-                  )}
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Deep Scout Button */}
-          {onDeepScout && (
-            <div className="border-t border-[var(--border)] pt-4 mt-4">
-              <Button onClick={onDeepScout} size="sm" variant="secondary" className="w-full">
-                Deep Scout — Reveals next tier ({deepScoutCount}/{deepScoutLimit === 999 ? '∞' : deepScoutLimit} used)
-              </Button>
             </div>
           )}
 

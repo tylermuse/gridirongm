@@ -1,45 +1,118 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { COMMENTATORS } from '@/lib/engine/debate';
 
 /**
- * Floating corner popup that nudges the user to check the Team Spotlight on the dashboard.
+ * Floating corner popup that nudges the user to check the Team Spotlight.
  * Rendered inside GameShell so it appears on every page.
- * Dismissible per session (resets on page reload).
+ *
+ * Triggers at specific moments only (not every render):
+ *  - After regular season game sim (week changes)
+ *  - After playoff game IF user team is involved
+ *  - After re-signing ends (phase → draft)
+ *  - After draft completes (phase → freeAgency)
+ *  - After free agency ends (phase → preseason)
+ *
+ * Uses sessionStorage to avoid showing twice for the same state.
  */
+
+const STORAGE_KEY = 'gg-spotlight-last';
+
+function computeSpotlightKey(
+  season: number,
+  week: number,
+  phase: string,
+  playoffGamesPlayed: number,
+): string {
+  return `s${season}-w${week}-${phase}-pg${playoffGamesPlayed}`;
+}
+
+/** Phases that should trigger the popup when entered */
+const TRIGGER_PHASES = new Set(['draft', 'freeAgency', 'preseason']);
+
 export function SpotlightPopup() {
   const router = useRouter();
   const pathname = usePathname();
-  const { teams, userTeamId, schedule } = useGameStore();
+  const { teams, userTeamId, season, week, phase, playoffBracket } = useGameStore();
 
   const [dismissed, setDismissed] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [shouldShow, setShouldShow] = useState(false);
+  const prevKeyRef = useRef<string | null>(null);
+  const mountedRef = useRef(false);
 
   const userTeam = teams.find(t => t.id === userTeamId);
   const gamesPlayed = userTeam ? userTeam.record.wins + userTeam.record.losses : 0;
 
-  // Slide-in animation after a short delay
+  // Count playoff games the user's team has played
+  const playoffGamesPlayed = playoffBracket && userTeamId
+    ? playoffBracket.filter(m => m.winnerId && (m.homeTeamId === userTeamId || m.awayTeamId === userTeamId)).length
+    : 0;
+
+  const currentKey = computeSpotlightKey(season, week, phase, playoffGamesPlayed);
+
   useEffect(() => {
-    if (dismissed || gamesPlayed === 0) return;
+    // Skip if no team selected
+    if (!userTeamId) return;
+
+    const lastShownKey = sessionStorage.getItem(STORAGE_KEY) ?? '';
+
+    // First mount — store key but don't trigger popup
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      prevKeyRef.current = currentKey;
+      if (!lastShownKey) sessionStorage.setItem(STORAGE_KEY, currentKey);
+      return;
+    }
+
+    // Nothing changed
+    if (currentKey === prevKeyRef.current) return;
+    prevKeyRef.current = currentKey;
+
+    // Already shown for this state
+    if (lastShownKey === currentKey) return;
+
+    // Determine if this is a trigger moment
+    const isRegularSeasonSim = phase === 'regular' && gamesPlayed > 0;
+    const isPlayoffUpdate = phase === 'playoffs' && playoffGamesPlayed > 0;
+    const isPhaseTransition = TRIGGER_PHASES.has(phase);
+
+    if (isRegularSeasonSim || isPlayoffUpdate || isPhaseTransition) {
+      sessionStorage.setItem(STORAGE_KEY, currentKey);
+      setShouldShow(true);
+      setDismissed(false);
+    }
+  }, [currentKey, userTeamId, gamesPlayed, phase, playoffGamesPlayed]);
+
+  // Slide-in animation
+  useEffect(() => {
+    if (!shouldShow || dismissed) {
+      setVisible(false);
+      return;
+    }
     const t = setTimeout(() => setVisible(true), 800);
     return () => clearTimeout(t);
-  }, [dismissed, gamesPlayed]);
+  }, [shouldShow, dismissed]);
 
-  // Don't render if no games played, dismissed, or no team
-  if (dismissed || gamesPlayed === 0 || !userTeam) return null;
+  if (!shouldShow || dismissed || !userTeam) return null;
 
   function handleClick() {
     setDismissed(true);
+    setShouldShow(false);
     if (pathname === '/') {
-      // Already on dashboard — dispatch a custom event so the dashboard can scroll to spotlight
       window.dispatchEvent(new CustomEvent('scroll-to-spotlight'));
     } else {
-      // Navigate to dashboard with a hash so it knows to scroll
       router.push('/?spotlight=1');
     }
+  }
+
+  function handleDismiss(e: React.MouseEvent) {
+    e.stopPropagation();
+    setDismissed(true);
+    setShouldShow(false);
   }
 
   return (
@@ -49,7 +122,7 @@ export function SpotlightPopup() {
       <div className="relative bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-xl shadow-black/10 overflow-hidden max-w-xs">
         {/* Dismiss X */}
         <button
-          onClick={(e) => { e.stopPropagation(); setDismissed(true); }}
+          onClick={handleDismiss}
           className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-full text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors text-xs"
           aria-label="Dismiss"
         >
