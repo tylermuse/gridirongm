@@ -37,8 +37,11 @@ const PHASE_LABELS: Record<string, string> = {
 
 function SaveSlotPanel({ onClose }: { onClose: () => void }) {
   const { saveToSlot, loadFromSlot } = useGameStore();
+  const [refreshKey, setRefreshKey] = useState(0);
 
   function getSlotMeta(slot: 1 | 2) {
+    // refreshKey used to force re-read after save
+    void refreshKey;
     try {
       const raw = localStorage.getItem(`gridiron-gm-save-${slot}`);
       if (!raw) return null;
@@ -65,7 +68,7 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
             <div className="text-xs text-[var(--text-sec)] mb-1">Slot {slot}: {meta ? `${meta.teamAbbr} S${meta.season} (${meta.wins}-${meta.losses})` : 'Empty'}</div>
             <div className="flex gap-1">
               <button
-                onClick={() => { saveToSlot(slot); onClose(); }}
+                onClick={() => { saveToSlot(slot); setRefreshKey(k => k + 1); }}
                 className="flex-1 text-xs py-1 rounded bg-blue-600/20 text-blue-600 hover:bg-blue-600/30 transition-colors"
               >
                 Save

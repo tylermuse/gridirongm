@@ -491,8 +491,12 @@ function playerTradeValue(player: Player): number {
   return (base + potBonus) * ageMultiplier * posMultiplier;
 }
 
-function pickTradeValue(pick: DraftPick): number {
-  return PICK_VALUES[(pick.round - 1)] ?? 10;
+function pickTradeValue(pick: DraftPick, currentSeason?: number): number {
+  const base = PICK_VALUES[(pick.round - 1)] ?? 10;
+  if (currentSeason == null) return base;
+  // Future picks are worth less: 90% per year out
+  const yearsOut = Math.max(0, pick.year - currentSeason);
+  return Math.round(base * Math.pow(0.9, yearsOut));
 }
 
 // ---------------------------------------------------------------------------
@@ -1026,10 +1030,10 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
         // Prefer lower-round picks (less valuable) to add as sweetener
         // Don't add a pick that would make the offer more than 2x target value
         const sortedPicks = [...aiPicks].sort((a, b) => b.round - a.round);
-        const pick = sortedPicks.find(pk => offeredValue + pickTradeValue(pk) <= targetValue * 2.0);
+        const pick = sortedPicks.find(pk => offeredValue + pickTradeValue(pk, state.season) <= targetValue * 2.0);
         if (pick) {
           offeredPickIds.push(pick.id);
-          offeredValue += pickTradeValue(pick);
+          offeredValue += pickTradeValue(pick, state.season);
         }
       }
     }
@@ -1042,7 +1046,7 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
       // Find the best-fit pick that doesn't massively overshoot
       const aiPicks = aiTeam.draftPicks
         .filter(pk => pk.year >= state.season)
-        .map(pk => ({ pick: pk, pv: pickTradeValue(pk) }))
+        .map(pk => ({ pick: pk, pv: pickTradeValue(pk, state.season) }))
         .filter(({ pv }) => pv <= targetValue * 2.0) // Don't overshoot by more than 2x
         .sort((a, b) => Math.abs(a.pv - targetValue) - Math.abs(b.pv - targetValue));
       if (aiPicks.length > 0) {
@@ -2951,7 +2955,7 @@ export const useGameStore = create<GameStore>()(
           return sum + (p ? playerTradeValue(p) : 0);
         }, 0) + offeredPickIds.reduce((sum, id) => {
           const pick = userTeam.draftPicks.find(pk => pk.id === id);
-          return sum + (pick ? pickTradeValue(pick) : 0);
+          return sum + (pick ? pickTradeValue(pick, state.season) : 0);
         }, 0);
 
         const receivedValue = receivedPlayerIds.reduce((sum, id) => {
@@ -2959,7 +2963,7 @@ export const useGameStore = create<GameStore>()(
           return sum + (p ? playerTradeValue(p) : 0);
         }, 0) + receivedPickIds.reduce((sum, id) => {
           const pick = aiTeam.draftPicks.find(pk => pk.id === id);
-          return sum + (pick ? pickTradeValue(pick) : 0);
+          return sum + (pick ? pickTradeValue(pick, state.season) : 0);
         }, 0);
 
         // AI accepts if within 10% value (skip for AI-initiated proposals already approved)
@@ -3214,7 +3218,7 @@ export const useGameStore = create<GameStore>()(
         if (blockedPlayers.length === 0 && blockedPicks.length === 0) return;
 
         const totalBlockedValue = blockedPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
-          + blockedPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
+          + blockedPicks.reduce((s, pk) => s + pickTradeValue(pk, state.season), 0);
 
         if (totalBlockedValue < 10) return;
 
@@ -3242,7 +3246,7 @@ export const useGameStore = create<GameStore>()(
 
           const aiPicks = aiTeam.draftPicks
             .filter(pk => pk.year >= state.season && !pk.playerId)
-            .sort((a, b) => pickTradeValue(b) - pickTradeValue(a));
+            .sort((a, b) => pickTradeValue(b, state.season) - pickTradeValue(a, state.season));
 
           // ── Build offer based on what user WANTS ──
 
@@ -3250,7 +3254,7 @@ export const useGameStore = create<GameStore>()(
           if (seekDraftPicks) {
             for (const pk of aiPicks) {
               if (offeredValue >= targetMin) break;
-              const pv = pickTradeValue(pk);
+              const pv = pickTradeValue(pk, state.season);
               if (offeredValue + pv > hardCeiling) continue;
               offeredPickIds.push(pk.id);
               offeredValue += pv;
@@ -3297,7 +3301,7 @@ export const useGameStore = create<GameStore>()(
           if (offeredValue < targetMin && !seekDraftPicks) {
             for (const pk of aiPicks) {
               if (offeredValue >= targetMin) break;
-              const pv = pickTradeValue(pk);
+              const pv = pickTradeValue(pk, state.season);
               if (offeredValue + pv > hardCeiling) continue;
               offeredPickIds.push(pk.id);
               offeredValue += pv;
@@ -4002,10 +4006,15 @@ export const useGameStore = create<GameStore>()(
       },
 
       saveToSlot: (slot: 1 | 2) => {
-        const stored = localStorage.getItem('gridiron-gm-autosave');
-        if (stored) {
-          localStorage.setItem(`gridiron-gm-save-${slot}`, stored);
-        }
+        // Force a persist flush before reading localStorage to avoid stale data
+        const api = (useGameStore as unknown as { persist: { getOptions: () => { name?: string; storage?: { getItem: (name: string) => unknown; setItem: (name: string, value: unknown) => void } }; rehydrate: () => void } }).persist;
+        // Build snapshot directly from current in-memory state so we don't depend
+        // on the async persist flush having completed yet.
+        const currentState = get();
+        const partializer = (api.getOptions() as { partialize?: (s: typeof currentState) => unknown }).partialize;
+        const stateToSave = partializer ? partializer(currentState) : currentState;
+        const payload = JSON.stringify({ state: stateToSave, version: SAVE_VERSION });
+        localStorage.setItem(`gridiron-gm-save-${slot}`, payload);
       },
 
       loadFromSlot: (slot: 1 | 2) => {
