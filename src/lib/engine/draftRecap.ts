@@ -143,7 +143,8 @@ export function findHighlights(allReports: TeamDraftReport[]): DraftHighlights {
 
   for (const report of allReports) {
     for (const pk of report.picks) {
-      if (!biggestSteal || pk.valueDelta > biggestSteal.valueDelta) biggestSteal = pk;
+      // Top-7 picks can't be "steals" — high OVR is expected there
+      if (pk.overallPick > 7 && (!biggestSteal || pk.valueDelta > biggestSteal.valueDelta)) biggestSteal = pk;
       if (!biggestReach || pk.valueDelta < biggestReach.valueDelta) biggestReach = pk;
     }
   }

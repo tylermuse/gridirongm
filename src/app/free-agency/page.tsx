@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { LEAGUE_MINIMUM_SALARY, LUXURY_TAX_RATE, computeLuxuryTax, faPriceDecay, estimateSalary } from '@/lib/engine/store';
@@ -139,6 +139,14 @@ export default function FreeAgencyPage() {
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [sortKey, setSortKey] = useState<'name' | 'pos' | 'age' | 'ovr' | 'pot' | 'salary'>('ovr');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const msgFeedRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll message feed to bottom when new messages arrive
+  useEffect(() => {
+    if (msgFeedRef.current && negotiation?.messages.length) {
+      msgFeedRef.current.scrollTop = msgFeedRef.current.scrollHeight;
+    }
+  }, [negotiation?.messages.length]);
 
   // Allow free agent signings during regular season and freeAgency phase (teams can sign FAs anytime)
   const canSignFreeAgents = phase === 'freeAgency' || phase === 'regular';
@@ -479,14 +487,14 @@ export default function FreeAgencyPage() {
                         Negotiating with {negotiation.playerName}
                       </h3>
                       <div className="text-sm text-[var(--text-sec)]">
-                        {negotiation.position} · {negotiation.playerOverall} OVR
+                        {negotiation.position} · {negotiation.playerOverall} OVR · Age {negotiation.playerAge}
                       </div>
                     </div>
                     <Button size="sm" variant="ghost" onClick={closeNegotiation}>✕</Button>
                   </div>
 
                   {/* Message feed */}
-                  <div className="bg-[var(--surface-2)] rounded-lg p-3 mb-4 max-h-48 overflow-y-auto space-y-2">
+                  <div ref={msgFeedRef} className="bg-[var(--surface-2)] rounded-lg p-3 mb-4 max-h-48 overflow-y-auto space-y-2">
                     {negotiation.messages.map((msg, i) => (
                       <div
                         key={i}

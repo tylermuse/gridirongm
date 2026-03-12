@@ -13,6 +13,7 @@ import { ScoutingReportModal } from '@/components/draft/ScoutingReportModal';
 // playerGen import removed — POSITION_WEIGHTS no longer needed
 import { POSITIONS, ROSTER_LIMITS } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import type { Player, Position, Team } from '@/types';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { SCOUTING_LEVELS } from '@/lib/subscription';
@@ -63,13 +64,7 @@ function ProspectCard({
       </div>
       <div className="px-4 pb-3">
         <div className="flex items-center gap-3 mb-3">
-          {/* Player avatar placeholder */}
-          <div
-            className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-black text-white shrink-0"
-            style={{ backgroundColor: teamColor }}
-          >
-            {player.firstName[0]}{player.lastName[0]}
-          </div>
+          <PlayerAvatar player={player} size="lg" teamColor={teamColor} />
           <div className="min-w-0">
             <button
               className="font-bold text-base truncate hover:text-blue-600 transition-colors text-left"
@@ -266,6 +261,13 @@ function OnTheClockSection({
                 posRank={getPositionRank(bestAvailable)}
                 ovrRank={getOverallRank(bestAvailable)}
                 teamColor="#6b7280"
+                ovrDisplay={(() => {
+                  const scout = draftScoutingData[bestAvailable.id];
+                  if (!scout) return undefined;
+                  const lo = Math.max(20, scout.scoutedOvr - scout.error);
+                  const hi = Math.min(99, scout.scoutedOvr + scout.error);
+                  return `${lo}–${hi}`;
+                })()}
                 onDraft={isUserPick ? onDraft : undefined}
                 onPlayerClick={onPlayerClick}
               />
@@ -277,16 +279,22 @@ function OnTheClockSection({
                 posRank={getPositionRank(bestFit)}
                 ovrRank={getOverallRank(bestFit)}
                 teamColor={teamColor}
+                ovrDisplay={(() => {
+                  const scout = draftScoutingData[bestFit.id];
+                  if (!scout) return undefined;
+                  const lo = Math.max(20, scout.scoutedOvr - scout.error);
+                  const hi = Math.min(99, scout.scoutedOvr + scout.error);
+                  return `${lo}–${hi}`;
+                })()}
                 onDraft={isUserPick ? onDraft : undefined}
                 onPlayerClick={onPlayerClick}
               />
             )}
-            {/* Your Scouts Say — scouting-influenced recommendation */}
-            {scoutingLevel === 0 ? (
+            {/* Your Scouts Say — only shown when it's the user's pick */}
+            {isUserPick && (scoutingLevel === 0 ? (
               <div className="flex-1 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] overflow-hidden opacity-60">
                 <div className="px-4 pt-3 pb-1">
                   <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">Your Scouts Say</div>
-                  <div className="text-[10px] text-[var(--text-sec)]/70 mt-0.5">Entry Scouting</div>
                 </div>
                 <div className="px-4 pb-3 text-center py-4">
                   <div className="text-3xl mb-1">?</div>
@@ -295,7 +303,7 @@ function OnTheClockSection({
               </div>
             ) : scoutsPick ? (
               <ProspectCard
-                label={scoutsPick.id === bestFit?.id ? "Your Scouts Say (Same)" : "Your Scouts Say"}
+                label={`Your Scouts Say (${SCOUTING_LEVELS[scoutingLevel]?.name ?? 'Pro'})`}
                 player={scoutsPick}
                 posRank={getPositionRank(scoutsPick)}
                 ovrRank={getOverallRank(scoutsPick)}
@@ -307,11 +315,10 @@ function OnTheClockSection({
                   const hi = Math.min(99, scout.scoutedOvr + scout.error);
                   return `${lo}–${hi}`;
                 })()}
-                subtitle={SCOUTING_LEVELS[scoutingLevel]?.name + ' Scouting'}
-                onDraft={isUserPick ? onDraft : undefined}
+                onDraft={onDraft}
                 onPlayerClick={onPlayerClick}
               />
-            ) : null}
+            ) : null)}
           </div>
         </div>
       )}
@@ -376,6 +383,7 @@ export default function DraftPage() {
     simToUserDraftPick,
     simToEndDraft,
     setScoutingLevel,
+    season,
   } = useGameStore();
 
   const { maxScoutingLevel: maxLevel } = useSubscription();
@@ -531,6 +539,28 @@ export default function DraftPage() {
     ...draftResults.sort((a, b) => a.overallPick - b.overallPick).map((result) => result.teamId),
     ...draftOrder,
   ];
+
+  // Map overall pick number → DraftPick object for undrafted slots
+  // draftOrder[i] = ownerTeamId for that slot; match each slot to its DraftPick
+  const allCurrentYearPicks = teams.flatMap(t =>
+    t.draftPicks.filter(pk => pk.year === season && !pk.playerId),
+  );
+  const pickBySlot = new Map<number, typeof allCurrentYearPicks[0]>();
+  const usedPickIds = new Set<string>();
+  for (let i = 0; i < draftOrder.length; i++) {
+    const overallPickNum = currentOverallPick + i;
+    const round = Math.ceil(overallPickNum / picksPerRound);
+    const ownerId = draftOrder[i];
+    // Find the pick owned by this team for this round (not yet assigned to a slot)
+    const pick = allCurrentYearPicks.find(
+      pk => pk.ownerTeamId === ownerId && pk.round === round && !usedPickIds.has(pk.id),
+    );
+    if (pick) {
+      pickBySlot.set(overallPickNum, pick);
+      usedPickIds.add(pick.id);
+    }
+  }
+
   const roundStart = (selectedRound - 1) * picksPerRound;
   const roundRows = Array.from({ length: picksPerRound }, (_, index) => {
     const overallPick = roundStart + index + 1;
@@ -763,13 +793,33 @@ export default function DraftPage() {
                         }
                       </td>
                       <td className="py-2 font-semibold">{row.team?.abbreviation ?? '--'}</td>
-                      <td className="py-2">{row.player ? `${row.player.firstName} ${row.player.lastName}` : '--'}</td>
-                      <td className="py-2 text-center">{row.player ? <Badge>{row.player.position}</Badge> : '--'}</td>
+                      <td className="py-2">
+                        {row.player
+                          ? `${row.player.firstName} ${row.player.lastName}`
+                          : (() => {
+                              const pick = pickBySlot.get(row.overallPick);
+                              if (!pick || draftComplete) return '--';
+                              const isMyPick = row.team?.id === userTeamId;
+                              const href = isMyPick
+                                ? `/trades?pick=${pick.id}&own=1&from=draft`
+                                : `/trades?team=${row.team?.id}&pick=${pick.id}&from=draft`;
+                              return (
+                                <Link
+                                  href={href}
+                                  className="text-xs text-blue-600 hover:underline"
+                                >
+                                  {isMyPick ? 'Trade Pick Away' : 'Trade for Pick'}
+                                </Link>
+                              );
+                            })()
+                        }
+                      </td>
+                      <td className="py-2 text-center">{row.player ? <Badge>{row.player.position}</Badge> : ''}</td>
                       <td className="py-2 text-center">
                         {row.player ? (
                           <span className={`font-bold text-xs ${ratingColor(row.player.ratings.overall)}`}>{row.player.ratings.overall}</span>
                         ) : (
-                          '--'
+                          ''
                         )}
                       </td>
                     </tr>

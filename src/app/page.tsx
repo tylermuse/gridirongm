@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
@@ -17,6 +18,7 @@ import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
 
 function TeamPicker() {
+  const router = useRouter();
   const { newLeague } = useGameStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +69,8 @@ function TeamPicker() {
     setError(null);
     try {
       await newLeague(abbr, activeUrl ?? undefined);
+      // New leagues start in re-signing phase — redirect there
+      router.push('/re-sign');
     } catch {
       setError('Failed to start league. Please try again.');
     } finally {

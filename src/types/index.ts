@@ -446,6 +446,8 @@ export interface ResigningEntry {
   playerId: string;
   askingSalary: number;
   askingYears: number;
+  /** Player refuses to negotiate — mood too low */
+  refusesToResign?: boolean;
 }
 
 export interface LeagueSettings {

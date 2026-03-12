@@ -86,7 +86,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Get initial session (with 5s timeout to prevent infinite loading)
+    // Get initial session (with timeout to prevent infinite loading)
     const authTimeout = setTimeout(() => setLoading(false), 5000);
     supabase.auth.getUser().then(({ data: { user: currentUser } }: { data: { user: User | null } }) => {
       clearTimeout(authTimeout);

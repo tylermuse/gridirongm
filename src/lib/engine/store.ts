@@ -531,7 +531,9 @@ function computeScoutingData(
     // Deterministic noise based on player ID — direction stays consistent across levels,
     // only magnitude changes. This prevents OVR from randomly jumping when switching levels.
     const direction = playerNoiseDirection(p.id);
-    const noise = Math.round(direction * error);
+    // Normalize direction to [-1, 1] so noise stays within ±error
+    const normalizedDir = direction / 2.5;
+    const noise = Math.round(normalizedDir * error);
     const scoutedOvr = Math.max(20, Math.min(99, p.ratings.overall + noise));
     data[p.id] = { scoutedOvr, error, deepScouted: false };
   }
@@ -560,11 +562,30 @@ export function computeFranchiseTagSalary(position: Position, players: Player[],
   // If no specific player provided, return the raw positional average
   if (!taggedPlayer) return Math.round(positionalAvg * 10) / 10;
 
-  // Scale the tag based on the player's quality
+  // Franchise tag = guaranteed 1-year deal at a modest premium over market value.
+  // It should be competitive with (slightly above) the player's asking price,
+  // making it a viable "guaranteed retention" tool vs. the negotiation risk of extending.
+  // Elite players: tag approaches the top-5 positional average (real NFL formula).
+  // Others: tag = market value + small premium (5-15%).
   const playerMarket = estimateSalary(taggedPlayer.ratings.overall, taggedPlayer.position, taggedPlayer.age, taggedPlayer.potential);
-  // Tag is 110% of market value or the top-5 positional average, whichever is higher
-  // but capped at 150% of market value to prevent absurd tags for weak players
-  const tag = Math.max(playerMarket * 1.1, Math.min(positionalAvg, playerMarket * 1.5));
+  const ovr = taggedPlayer.ratings.overall;
+
+  let tag: number;
+  if (ovr >= 85) {
+    // True elite: top-5 positional average (but floor at market + 10%)
+    tag = Math.max(positionalAvg, playerMarket * 1.10);
+  } else if (ovr >= 75) {
+    // Very good: blend between market and positional average
+    const blend = (ovr - 75) / 10; // 0 at 75, 1 at 85
+    tag = playerMarket * (1.08 + blend * 0.07) // 108% to 115%
+  } else {
+    // Starters and below: small premium (5-8%) over market
+    tag = playerMarket * (ovr >= 65 ? 1.08 : 1.05);
+  }
+
+  // Floor: at least market value
+  tag = Math.max(tag, playerMarket);
+
   return Math.round(tag * 10) / 10;
 }
 
@@ -625,12 +646,21 @@ function computeFARefusals(
 }
 
 function computeResigningEntry(player: Player, team: Team): ResigningEntry {
+  // Very unhappy players (mood < 20) refuse to re-sign entirely
+  if (player.mood < 20) {
+    const base = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
+    return { playerId: player.id, askingSalary: Math.round(base * 10) / 10, askingYears: 1, refusesToResign: true };
+  }
+
   const base = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
   const winPct = team.record.wins / Math.max(1, team.record.wins + team.record.losses);
   let mult = 1.0;
   // Winning teams get a small hometown discount; losing teams pay a premium
   if (winPct < 0.4) mult *= 1.10;
   else if (winPct > 0.65) mult *= 0.95;
+  // Unhappy players (mood 20-40) demand a premium to stay
+  if (player.mood < 30) mult *= 1.15;
+  else if (player.mood < 40) mult *= 1.08;
   // Older players accept slight discounts but not massive ones
   if (player.age >= 32) mult *= 0.90;
   const askingSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, base * mult) * 10) / 10;
@@ -1287,6 +1317,45 @@ export const useGameStore = create<GameStore>()(
           resetUsedNames();
           if (!leagueFileUrl) throw new Error('No league file URL provided');
           const imported = await loadLeagueFromUrl(leagueFileUrl);
+          // Real 2026 NFL draft order — original team by record (worst to best)
+          const REAL_2026_ORIGINAL_ORDER = [
+            'LV','NYJ','ARI','TEN','NYG','CLE','WAS','NO','KC','CIN',
+            'MIA','DAL','ATL','BAL','TB','IND','DET','MIN','CAR','GB',
+            'PIT','LAC','PHI','JAX','CHI','BUF','SF','HOU','LAR','DEN','NE','SEA',
+          ];
+          // Traded first-round picks: originalTeam → newOwner
+          const REAL_2026_R1_TRADES: Record<string, string> = {
+            'ATL': 'LAR',  // Pick 13: LAR via ATL
+            'BAL': 'LV',   // Pick 14: LV via BAL
+            'IND': 'NYJ',  // Pick 16: NYJ via IND
+            'GB':  'DAL',  // Pick 20: DAL via GB
+            'JAX': 'CLE',  // Pick 24: CLE via JAX
+            'LAR': 'KC',   // Pick 29: KC via LAR
+          };
+          // Assign records based on draft position — use pointsFor to break ties
+          for (const team of imported.teams) {
+            const draftIdx = REAL_2026_ORIGINAL_ORDER.indexOf(team.abbreviation);
+            if (draftIdx >= 0) {
+              const wins = Math.round(2 + (draftIdx / 31) * 12);
+              team.record = { ...emptyRecord(), wins, losses: 17 - wins, pointsFor: draftIdx };
+            } else {
+              team.record = { ...emptyRecord(), wins: 8, losses: 9 };
+            }
+            // Transfer traded R1 picks
+            const newOwnerAbbrev = REAL_2026_R1_TRADES[team.abbreviation];
+            if (newOwnerAbbrev) {
+              const newOwner = imported.teams.find(t => t.abbreviation === newOwnerAbbrev);
+              if (newOwner) {
+                const r1Pick = team.draftPicks.find(pk => pk.year === imported.season && pk.round === 1);
+                if (r1Pick) {
+                  // Move pick from original team to new owner
+                  team.draftPicks = team.draftPicks.filter(pk => pk.id !== r1Pick.id);
+                  newOwner.draftPicks.push({ ...r1Pick, ownerTeamId: newOwner.id });
+                }
+              }
+            }
+          }
+
           const userTeam = imported.teams.find((t) => t.abbreviation === userTeamId) ?? imported.teams[0];
           const schedule = generateSchedule(imported.teams, imported.season);
 
@@ -1304,14 +1373,21 @@ export const useGameStore = create<GameStore>()(
             fbgmFAs.push(p);
           }
 
+          // Start in re-signing phase (offseason) since real NFL is in the offseason
+          const allImportedPlayers = [...imported.players, ...fbgmFAs];
+          const expiringPlayers = allImportedPlayers.filter(
+            p => p.teamId === userTeam.id && p.contract.yearsLeft === 1 && !p.retired,
+          );
+          const resigningEntries = expiringPlayers.map(p => computeResigningEntry(p, userTeam));
+
           set({
             initialized: true,
             season: imported.season,
             week: 1,
-            phase: 'regular',
+            phase: 'resigning',
             userTeamId: userTeam.id,
             teams: imported.teams,
-            players: [...imported.players, ...fbgmFAs],
+            players: allImportedPlayers,
             schedule,
             draftOrder: [],
             draftResults: [],
@@ -1324,7 +1400,7 @@ export const useGameStore = create<GameStore>()(
             newsItems: [],
             seasonHistory: [],
             saveVersion: SAVE_VERSION,
-            resigningPlayers: [],
+            resigningPlayers: resigningEntries,
             tradeProposals: [],
             scoutingLevel: 0,
             draftScoutingData: {},
@@ -1369,6 +1445,36 @@ export const useGameStore = create<GameStore>()(
           };
         });
 
+        // Real 2026 NFL draft order — original team by record (worst to best)
+        const GEN_ORIGINAL_ORDER = [
+          'LV','NYJ','ARI','TEN','NYG','CLE','WAS','NO','KC','CIN',
+          'MIA','DAL','ATL','BAL','TB','IND','DET','MIN','CAR','GB',
+          'PIT','LAC','PHI','JAX','CHI','BUF','SF','HOU','LAR','DEN','NE','SEA',
+        ];
+        const GEN_R1_TRADES: Record<string, string> = {
+          'ATL': 'LAR', 'BAL': 'LV', 'IND': 'NYJ', 'GB': 'DAL', 'JAX': 'CLE', 'LAR': 'KC',
+        };
+        for (const t of teams) {
+          const draftIdx = GEN_ORIGINAL_ORDER.indexOf(t.abbreviation);
+          if (draftIdx >= 0) {
+            const wins = Math.round(2 + (draftIdx / 31) * 12);
+            t.record = { ...emptyRecord(), wins, losses: 17 - wins, pointsFor: draftIdx };
+          } else {
+            t.record = { ...emptyRecord(), wins: 8, losses: 9 };
+          }
+          const newOwnerAbbrev = GEN_R1_TRADES[t.abbreviation];
+          if (newOwnerAbbrev) {
+            const newOwner = teams.find(tt => tt.abbreviation === newOwnerAbbrev);
+            if (newOwner) {
+              const r1Pick = t.draftPicks.find(pk => pk.year === 2026 && pk.round === 1);
+              if (r1Pick) {
+                t.draftPicks = t.draftPicks.filter(pk => pk.id !== r1Pick.id);
+                newOwner.draftPicks.push({ ...r1Pick, ownerTeamId: newOwner.id });
+              }
+            }
+          }
+        }
+
         const userTeam = teams.find(t => t.abbreviation === userTeamId) ?? teams[0];
         const schedule = generateSchedule(teams, 2026);
 
@@ -1387,11 +1493,17 @@ export const useGameStore = create<GameStore>()(
         }
         allPlayers.push(...initialFAs);
 
+        // Start in re-signing phase (offseason)
+        const genExpiring = allPlayers.filter(
+          p => p.teamId === userTeam.id && p.contract.yearsLeft === 1 && !p.retired,
+        );
+        const genResigningEntries = genExpiring.map(p => computeResigningEntry(p, userTeam));
+
         set({
           initialized: true,
           season: 2026,
           week: 1,
-          phase: 'regular',
+          phase: 'resigning',
           userTeamId: userTeam.id,
           teams,
           players: allPlayers,
@@ -1407,7 +1519,7 @@ export const useGameStore = create<GameStore>()(
           newsItems: [],
           seasonHistory: [],
           saveVersion: SAVE_VERSION,
-          resigningPlayers: [],
+          resigningPlayers: genResigningEntries,
           tradeProposals: [],
           scoutingLevel: 0,
           draftScoutingData: {},
@@ -2040,7 +2152,9 @@ export const useGameStore = create<GameStore>()(
         const sortedTeams = [...updatedTeams].sort((a, b) => {
           const aWinPct = a.record.wins / Math.max(1, a.record.wins + a.record.losses);
           const bWinPct = b.record.wins / Math.max(1, b.record.wins + b.record.losses);
-          return aWinPct - bWinPct;
+          if (aWinPct !== bWinPct) return aWinPct - bWinPct;
+          // Tiebreak by points scored (fewer points = worse team = earlier pick)
+          return a.record.pointsFor - b.record.pointsFor;
         });
 
         // Build draft order from draftPicks (respects trades — ownerTeamId may differ from originalTeamId)
@@ -3131,9 +3245,46 @@ export const useGameStore = create<GameStore>()(
           isUserTeam: true,
         });
 
+        // During draft phase, update draftOrder to reflect pick ownership changes
+        let updatedDraftOrder = state.draftOrder;
+        if (state.phase === 'draft' && (offeredPickIds.length > 0 || receivedPickIds.length > 0)) {
+          // Build a map from pickId → new ownerTeamId for all traded picks
+          const pickOwnerChanges = new Map<string, string>();
+          for (const ut of updatedTeams) {
+            for (const pk of ut.draftPicks) {
+              if (offeredPickIdsSet.has(pk.id) || receivedPickIdsSet.has(pk.id)) {
+                pickOwnerChanges.set(pk.id, pk.ownerTeamId);
+              }
+            }
+          }
+          // For each slot in draftOrder, check if the pick at that slot was traded
+          const totalPicks = state.teams.length * 7;
+          const currentOverall = totalPicks - state.draftOrder.length + 1;
+          // Collect all unused picks from OLD teams to identify which pick is at each slot
+          const oldUnusedPicks = state.teams.flatMap(t =>
+            t.draftPicks.filter(pk => pk.year === state.season && !pk.playerId),
+          );
+          // Match each draftOrder slot to its pick: draftOrder[i] = ownerTeamId at slot i
+          // We need to find the pick for each slot, then check if its owner changed
+          const usedIds = new Set<string>();
+          updatedDraftOrder = state.draftOrder.map((oldOwner, i) => {
+            const overallNum = currentOverall + i;
+            const round = Math.ceil(overallNum / state.teams.length);
+            const pick = oldUnusedPicks.find(
+              pk => pk.ownerTeamId === oldOwner && pk.round === round && !usedIds.has(pk.id),
+            );
+            if (pick) {
+              usedIds.add(pick.id);
+              return pickOwnerChanges.get(pick.id) ?? oldOwner;
+            }
+            return oldOwner;
+          });
+        }
+
         set({
           players: updatedPlayers,
           teams: updatedTeams,
+          draftOrder: updatedDraftOrder,
           newsItems: [...state.newsItems, tradeNews],
         });
 

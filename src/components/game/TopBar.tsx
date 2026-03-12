@@ -199,7 +199,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
           </div>
 
           <div className="flex items-center gap-1 md:gap-2 flex-wrap justify-end">
-            {phase === 'regular' && (
+            {phase === 'regular' && !pathname.startsWith('/game/') && (
               <>
                 {pendingTradeCount > 0 && (
                   <span className="hidden sm:inline">
@@ -233,7 +233,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             )}
             {phase === 'playoffs' && (
               <>
-                {!superBowlDone && (
+                {!superBowlDone && !pathname.startsWith('/game/') && (
                   <>
                     <Button
                       onClick={simNextPlayoffGame}
@@ -346,7 +346,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                 )}
                 {faDay >= 30 ? (
                   <Button onClick={() => {
-                    startNewSeason(); router.push('/');
+                    startNewSeason(); router.push('/roster');
                   }} variant="secondary" size="sm">
                     Start New Season →
                   </Button>
@@ -354,7 +354,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                   <Button
                     onClick={() => {
                       startNewSeason();
-                      router.push('/');
+                      router.push('/roster');
                     }}
                     variant="secondary"
                     size="sm"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useGameStore, computeFranchiseTagSalary } from '@/lib/engine/store';
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { initNegotiation, processOffer, type NegotiationState } from '@/lib/engine/negotiation';
 import { POSITIONS, ROSTER_LIMITS } from '@/types';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 
 function ratingColor(val: number): string {
   if (val >= 80) return 'text-green-600';
@@ -52,6 +53,26 @@ export default function ReSignPage() {
   const [offerYears, setOfferYears] = useState(3);
   const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const msgFeedRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll message feed to bottom when new messages arrive
+  useEffect(() => {
+    if (msgFeedRef.current && negotiation?.messages.length) {
+      msgFeedRef.current.scrollTop = msgFeedRef.current.scrollHeight;
+    }
+  }, [negotiation?.messages.length]);
+
+  const closeNegotiation = useCallback(() => {
+    setNegotiation(null);
+    setActivePlayerId(null);
+  }, []);
+
+  // Auto-close negotiation result after 3 seconds
+  useEffect(() => {
+    if (!negotiation || negotiation.outcome === 'pending') return;
+    const timer = setTimeout(closeNegotiation, 1000);
+    return () => clearTimeout(timer);
+  }, [negotiation, closeNegotiation]);
 
   if (phase !== 'resigning') {
     return (
@@ -138,18 +159,6 @@ export default function ReSignPage() {
     }
   }
 
-  const closeNegotiation = useCallback(() => {
-    setNegotiation(null);
-    setActivePlayerId(null);
-  }, []);
-
-  // Auto-close negotiation result after 3 seconds
-  useEffect(() => {
-    if (!negotiation || negotiation.outcome === 'pending') return;
-    const timer = setTimeout(closeNegotiation, 1000);
-    return () => clearTimeout(timer);
-  }, [negotiation, closeNegotiation]);
-
   function walkAway() {
     // Walking away from negotiation = letting the player go
     if (activePlayerId && !results[activePlayerId]) {
@@ -167,11 +176,15 @@ export default function ReSignPage() {
   const completedIds = new Set(Object.keys(results));
   const activeEntries = resigningPlayers
     .filter(e => !completedIds.has(e.playerId))
-    .sort((a, b) => b.askingSalary - a.askingSalary);
+    .sort((a, b) => {
+      const pA = players.find(p => p.id === a.playerId);
+      const pB = players.find(p => p.id === b.playerId);
+      return (pB?.ratings.overall ?? 0) - (pA?.ratings.overall ?? 0);
+    });
 
   return (
     <GameShell>
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <div className="flex items-start justify-between mb-6">
           <div>
             <h2 className="text-2xl font-black">Re-signing Window</h2>
@@ -215,7 +228,7 @@ export default function ReSignPage() {
                     {negMode === 'extend' ? 'Extension' : 'Restructure'} — {negotiation.playerName}
                   </h3>
                   <div className="text-sm text-[var(--text-sec)]">
-                    {negotiation.position} · {negotiation.playerOverall} OVR
+                    {negotiation.position} · {negotiation.playerOverall} OVR · Age {negotiation.playerAge}
                     {negMode === 'restructure' && (
                       <span className="ml-2 text-amber-600">
                         (Restructuring lowers annual hit, extends commitment)
@@ -227,7 +240,7 @@ export default function ReSignPage() {
               </div>
 
               {/* Message feed */}
-              <div className="bg-[var(--surface-2)] rounded-lg p-3 mb-4 max-h-48 overflow-y-auto space-y-2">
+              <div ref={msgFeedRef} className="bg-[var(--surface-2)] rounded-lg p-3 mb-4 max-h-48 overflow-y-auto space-y-2">
                 {negotiation.messages.map((msg, i) => (
                   <div
                     key={i}
@@ -392,9 +405,9 @@ export default function ReSignPage() {
             </div>
           </Card>
         ) : (
-          <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex gap-4 items-start">
             {/* Roster Composition sidebar */}
-            <div className="shrink-0 w-full md:w-48">
+            <div className="shrink-0 w-48 hidden lg:block">
               <Card className="sticky top-4">
                 <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-3">Roster Composition</div>
                 <div className="space-y-1.5">
@@ -466,6 +479,7 @@ export default function ReSignPage() {
                     {/* Player info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <PlayerAvatar player={player} size="md" teamColor={userTeam?.primaryColor ?? '#374151'} />
                         <button onClick={() => setSelectedPlayerId(player.id)} className="font-bold text-lg hover:text-blue-600 transition-colors">
                           {player.firstName} {player.lastName}
                         </button>
@@ -477,53 +491,93 @@ export default function ReSignPage() {
                         <span>{player.experience}yr exp</span>
                         <span className="text-amber-600">Current: ${player.contract.salary}M/yr · {player.contract.yearsLeft}yr left</span>
                         <span className={potentialColor(player.potential, player.experience)}>
-                          {potentialLabel(player.potential, player.experience)}
+                          POT: {potentialLabel(player.potential, player.experience)}
                         </span>
                       </div>
                       <div className="mt-1.5 text-xs text-[var(--text-sec)]">
                         <span className="text-[10px] uppercase tracking-wider text-[var(--text-sec)]/60 mr-2">Last Season</span>
                         {positionStats(player)}
                       </div>
-                      <div className="mt-2 p-2 bg-[var(--surface-2)] rounded-lg inline-flex items-center gap-2">
-                        <span className="text-xs text-[var(--text-sec)]">Asking:</span>
-                        <span className="text-sm font-bold text-amber-600">
-                          ${entry.askingSalary}M/yr × {entry.askingYears}yr
-                        </span>
-                      </div>
+                      {entry.refusesToResign ? (
+                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg inline-flex items-center gap-2">
+                          <span className="text-xs text-red-600">
+                            Won&apos;t negotiate — wants out. Franchise tag is your only option.
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="mt-2 p-2 bg-[var(--surface-2)] rounded-lg inline-flex items-center gap-2">
+                          <span className="text-xs text-[var(--text-sec)]">Asking:</span>
+                          <span className="text-sm font-bold text-amber-600">
+                            ${entry.askingSalary}M/yr × {entry.askingYears}yr
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Action buttons */}
                     <div className="flex sm:flex-col gap-2 shrink-0 sm:mt-1">
-                      <Button
-                        size="sm"
-                        onClick={() => startNegotiation(entry.playerId, 'extend')}
-                        disabled={!!negotiation && negotiation.outcome === 'pending'}
-                      >
-                        Extend
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          const success = franchiseTagPlayer(entry.playerId);
-                          if (success) {
-                            setResults(prev => ({ ...prev, [entry.playerId]: 'accepted' }));
-                            setNegotiation(null);
-                            setActivePlayerId(null);
-                          }
-                        }}
-                        disabled={(!!negotiation && negotiation.outcome === 'pending') || userTeam?.franchiseTagUsed === true}
-                      >
-                        {userTeam?.franchiseTagUsed ? 'Tag Used' : `Tag ($${computeFranchiseTagSalary(player.position, players, player)}M)`}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handlePass(entry.playerId)}
-                        disabled={!!negotiation && negotiation.outcome === 'pending'}
-                      >
-                        Let Walk
-                      </Button>
+                      {entry.refusesToResign ? (
+                        <>
+                          <div className="text-xs text-red-600 font-semibold text-center px-2 py-1 bg-red-50 border border-red-200 rounded-lg">
+                            Refuses to re-sign
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              const success = franchiseTagPlayer(entry.playerId);
+                              if (success) {
+                                setResults(prev => ({ ...prev, [entry.playerId]: 'accepted' }));
+                                setNegotiation(null);
+                                setActivePlayerId(null);
+                              }
+                            }}
+                            disabled={userTeam?.franchiseTagUsed === true}
+                          >
+                            {userTeam?.franchiseTagUsed ? 'Tag Used' : `Tag ($${computeFranchiseTagSalary(player.position, players, player)}M)`}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handlePass(entry.playerId)}
+                          >
+                            Let Walk
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={() => startNegotiation(entry.playerId, 'extend')}
+                            disabled={!!negotiation && negotiation.outcome === 'pending'}
+                          >
+                            Extend
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              const success = franchiseTagPlayer(entry.playerId);
+                              if (success) {
+                                setResults(prev => ({ ...prev, [entry.playerId]: 'accepted' }));
+                                setNegotiation(null);
+                                setActivePlayerId(null);
+                              }
+                            }}
+                            disabled={(!!negotiation && negotiation.outcome === 'pending') || userTeam?.franchiseTagUsed === true}
+                          >
+                            {userTeam?.franchiseTagUsed ? 'Tag Used' : `Tag ($${computeFranchiseTagSalary(player.position, players, player)}M)`}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handlePass(entry.playerId)}
+                            disabled={!!negotiation && negotiation.outcome === 'pending'}
+                          >
+                            Let Walk
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </Card>

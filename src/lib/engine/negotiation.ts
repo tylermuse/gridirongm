@@ -14,6 +14,7 @@ export interface NegotiationState {
   playerName: string;
   position: string;
   playerOverall: number;
+  playerAge: number;
   playerMood: number; // 0-100
   askingSalary: number;
   askingYears: number;
@@ -66,6 +67,7 @@ export function initNegotiation(
     playerName: `${player.firstName} ${player.lastName}`,
     position: player.position,
     playerOverall: player.ratings.overall,
+    playerAge: player.age,
     playerMood: mood,
     askingSalary: adjustedSalary,
     askingYears,
@@ -254,6 +256,25 @@ export function processOffer(
     } else {
       const counterSalary = r1((offeredSalary + state.askingSalary) / 2);
       const counterYears = Math.max(1, Math.round((offeredYears + state.askingYears) / 2));
+      // If counter is at or below the offer, or within $0.3M and same years, just accept
+      if (counterSalary <= offeredSalary + 0.1 || (Math.abs(counterSalary - offeredSalary) < 0.3 && counterYears === offeredYears)) {
+        next.outcome = 'accepted';
+        next.messages.push({
+          sender: 'player',
+          text: isUnhappy
+            ? pick([
+              `Fine, I'll take it. Let's move on.`,
+              `Alright, I'll stay. But I expect things to improve around here.`,
+            ])
+            : pick([
+              `You know what, that works. Let's do it!`,
+              `Deal. I'm ready to contribute.`,
+              `Alright, I can work with that. You've got a deal!`,
+            ]),
+          type: 'result',
+        });
+        return next;
+      }
       next.askingSalary = counterSalary;
       next.askingYears = counterYears;
       // Build a context-aware counter message
