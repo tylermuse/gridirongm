@@ -136,7 +136,7 @@ function simulatePlay(
 
   if (isPass && qb && receivers.length > 0) {
     // ── Sack check ──
-    const sackChance = clamp((dlPower - olPower) / 350 + 0.05, 0.02, 0.10);
+    const sackChance = clamp((dlPower - olPower) / 300 + 0.06, 0.03, 0.12);
     if (Math.random() < sackChance) {
       const sackYards = -(3 + Math.floor(Math.random() * 6));
       // Sacks come from DLs or LBs — starters (top 4 DL, top 2 LB) get heavy snap share
@@ -168,10 +168,10 @@ function simulatePlay(
       : 50;
 
     // ── Interception check ──
-    // Avg INT rate ~2% of attempts. Elite QBs ~1% (~5/season), bad QBs ~3% (~18/season).
+    // Avg INT rate ~2.5% of attempts. Elite QBs ~1.5% (~8/season), bad QBs ~3.5% (~18/season).
     const intChance = clamp(
-      (coverageRating - qb.ratings.throwing) / 800 + 0.018,
-      0.005, 0.030,
+      (coverageRating - qb.ratings.throwing) / 600 + 0.025,
+      0.012, 0.040,
     );
     if (Math.random() < intChance) {
       const interceptor = coverageDefender ?? (cbs[0] || safeties[0] || allDefenders[0]);
@@ -184,7 +184,9 @@ function simulatePlay(
     // ── Completion check ──
     // NFL avg comp% ~65%, elite QBs ~70%, bad QBs ~57%
     const compBase = 0.50 + (qb.ratings.throwing / 100) * 0.16 + (target.ratings.catching / 100) * 0.10;
-    const compRate = clamp(compBase - (coverageRating / 100) * 0.13, 0.40, 0.68);
+    // Red zone boost: shorter field compresses coverage, boosting completion rates
+    const redZoneBonus = fieldPosition >= 80 ? 0.06 : 0;
+    const compRate = clamp(compBase - (coverageRating / 100) * 0.13 + redZoneBonus, 0.40, 0.72);
 
     if (Math.random() < compRate) {
       // Completed pass — yards tuned for realism
@@ -235,8 +237,10 @@ function simulatePlay(
 
     // Average: ~4.3 yards per carry, top RB ~1,000-1,400 yds/season
     // Increased signal: divisor 35 (was 50), reduced noise range 2.5 (was 3.0)
+    // Red zone boost: goal-line runs benefit from compressed field
+    const rushRedZoneBonus = fieldPosition >= 80 ? 1.0 : 0;
     let yards = Math.round(
-      (rushSkill - defRushPower) / 35 + 2.5 + (Math.random() * 2.5 - 0.75) + olBonus,
+      (rushSkill - defRushPower) / 35 + 2.5 + (Math.random() * 2.5 - 0.75) + olBonus + rushRedZoneBonus,
     );
 
     // Big rush chance (~2-3%) — breakaway runs
@@ -244,8 +248,8 @@ function simulatePlay(
       yards += 10 + Math.floor(Math.random() * 15);
     }
 
-    // Negative play chance (~12% of rushes go for loss)
-    const isNegative = Math.random() < 0.12;
+    // Negative play chance (~15% of rushes go for loss)
+    const isNegative = Math.random() < 0.15;
     if (isNegative) {
       yards = -(1 + Math.floor(Math.random() * 4));
     }
@@ -293,12 +297,14 @@ function simulateDrive(
   defense: Player[],
 ): DriveResult {
   const plays: PlayResult[] = [];
-  let fieldPosition = 25 + Math.floor(Math.random() * 15); // start at own 25-40 (accounts for kickoff returns)
+  let fieldPosition = 30 + Math.floor(Math.random() * 15); // start at own 30-45 (kickoff returns + touchbacks)
   let down = 1;
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
 
-  for (let playNum = 0; playNum < 11; playNum++) { // max 11 plays per drive (NFL avg ~6, long drives 9-11)
+  // Max 10 plays per drive (NFL avg ~6, long drives 9-11). Drives also end on
+  // 4th-down stops, turnovers, or scores before hitting the cap.
+  for (let playNum = 0; playNum < 10; playNum++) {
     const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition);
     plays.push(play);
 
@@ -331,7 +337,7 @@ function simulateDrive(
     // First down
     if (yardsToGo <= 0) {
       down = 1;
-      yardsToGo = 10;
+      yardsToGo = Math.min(10, 100 - fieldPosition); // goal-to-go if inside 10
     } else {
       down++;
     }
@@ -362,7 +368,7 @@ function simulateDrive(
     }
   }
 
-  // Ran out of plays — try field goal if in range, otherwise punt
+  // Ran out of plays (20-play safety valve) — try field goal if in range
   if (kicker) {
     const fgDistance = 100 - fieldPosition + 17;
     if (fgDistance <= 55) {
@@ -409,8 +415,8 @@ export function simulateGame(
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
-  // Average: ~10-12 possessions per team per game (NFL avg ~11)
-  const possessions = 10 + Math.floor(Math.random() * 3);
+  // ~9 possessions per team per game (NFL has ~11 but many are 3-and-outs/short punts)
+  const possessions = 9;
 
   const allHomePlays: PlayResult[] = [];
   const allAwayPlays: PlayResult[] = [];
