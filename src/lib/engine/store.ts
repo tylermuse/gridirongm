@@ -3818,11 +3818,19 @@ export const useGameStore = create<GameStore>()(
           const tvDeal = 120;
           const totalRevenue = Math.round((tickets + merchandise + tvDeal) * 10) / 10;
 
+          // Recalculate payroll from scratch based on actual roster contracts + dead cap
+          const rosterPayroll = newRoster.reduce((sum, pid) => {
+            const p = afterVoidPlayers.find(pl => pl.id === pid);
+            if (!p) return sum;
+            return sum + getCapHit(p.contract);
+          }, 0);
+          const deadCapTotal = updatedDeadCap.reduce((sum, dc) => sum + dc.amount, 0);
+
           return {
             ...t,
             record: emptyRecord(),
             roster: newRoster,
-            totalPayroll: Math.max(0, t.totalPayroll - salaryReduction - voidSalaryReduction - expiredSalaryReduction + voidDeadCapTotal - deadCapRelief),
+            totalPayroll: Math.round((rosterPayroll + deadCapTotal) * 10) / 10,
             depthChart: newDepthChart,
             deadCap: updatedDeadCap,
             franchiseTagUsed: false,
