@@ -128,10 +128,10 @@ function simulatePlay(
     ? dls.reduce((s, p) => s + p.ratings.passRush * 1.2 + p.ratings.strength, 0) / dls.length
     : 50;
 
-  // Decide pass vs rush (weighted by situation)
-  const passChance = down >= 3 && yardsToGo > 5 ? 0.65 :
+  // Decide pass vs rush (weighted by situation) — NFL avg ~58% pass
+  const passChance = down >= 3 && yardsToGo > 5 ? 0.70 :
                      down >= 3 ? 0.55 :
-                     down === 1 ? 0.45 : 0.50;
+                     down === 1 ? 0.42 : 0.48;
 
   const isPass = Math.random() < passChance;
 
@@ -176,10 +176,10 @@ function simulatePlay(
       : 50;
 
     // ── Interception check ──
-    // Avg INT rate ~1.5% of attempts. Elite QBs ~0.5% (~3/season), bad QBs ~2.8% (~16/season).
+    // Avg INT rate ~2% of attempts. Elite QBs ~1% (~5/season), bad QBs ~3% (~18/season).
     const intChance = clamp(
-      (coverageRating - qb.ratings.throwing) / 600 + 0.015,
-      0.004, 0.035,
+      (coverageRating - qb.ratings.throwing) / 800 + 0.018,
+      0.005, 0.030,
     );
     if (Math.random() < intChance) {
       const interceptor = coverageDefender ?? (cbs[0] || safeties[0] || allDefenders[0]);
@@ -190,18 +190,19 @@ function simulatePlay(
     }
 
     // ── Completion check ──
-    const compBase = 0.48 + (qb.ratings.throwing / 100) * 0.18 + (target.ratings.catching / 100) * 0.12;
-    const compRate = clamp(compBase - (coverageRating / 100) * 0.14, 0.35, 0.64);
+    // NFL avg comp% ~65%, elite QBs ~70%, bad QBs ~57%
+    const compBase = 0.50 + (qb.ratings.throwing / 100) * 0.16 + (target.ratings.catching / 100) * 0.10;
+    const compRate = clamp(compBase - (coverageRating / 100) * 0.13, 0.40, 0.68);
 
     if (Math.random() < compRate) {
       // Completed pass — yards tuned for realism
-      // Average: ~10.5 yards per completion, top WR ~900-1,300 yds/season
-      const baseYards = 2 + Math.random() * 9; // 2-11 base (avg 6.5)
-      const bonusYards = (qb.ratings.throwing / 100) * 2.5 + (target.ratings.speed / 100) * 1.5;
+      // Average: ~11.8 yards per completion, top WR ~1,000-1,400 yds/season
+      const baseYards = 3 + Math.random() * 11; // 3-14 base (avg 8.5)
+      const bonusYards = (qb.ratings.throwing / 100) * 3 + (target.ratings.speed / 100) * 2;
       let yards = Math.round(baseYards + bonusYards * Math.random());
 
-      // Big play chance (~1.5% of completions go 20+) — rare explosive plays
-      const bigPlayChance = (target.ratings.speed / 100) * 0.015;
+      // Big play chance (~4-6% of completions go 20+) — explosive plays
+      const bigPlayChance = 0.02 + (target.ratings.speed / 100) * 0.03;
       if (Math.random() < bigPlayChance) {
         yards += 12 + Math.floor(Math.random() * 18);
       }
@@ -248,9 +249,9 @@ function simulatePlay(
       (rushSkill - defRushPower) / 35 + 2.5 + (Math.random() * 2.5 - 0.75) + olBonus,
     );
 
-    // Big rush chance (~1.5%) — breakaway runs
-    if (Math.random() < (rusher.ratings.speed / 100) * 0.015) {
-      yards += 8 + Math.floor(Math.random() * 12);
+    // Big rush chance (~2-3%) — breakaway runs
+    if (Math.random() < 0.01 + (rusher.ratings.speed / 100) * 0.02) {
+      yards += 10 + Math.floor(Math.random() * 15);
     }
 
     // Negative play chance (~12% of rushes go for loss)
@@ -304,12 +305,12 @@ function simulateDrive(
   defense: Player[],
 ): DriveResult {
   const plays: PlayResult[] = [];
-  let fieldPosition = 20 + Math.floor(Math.random() * 15); // start at own 20-35
+  let fieldPosition = 25 + Math.floor(Math.random() * 15); // start at own 25-40 (accounts for kickoff returns)
   let down = 1;
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
 
-  for (let playNum = 0; playNum < 10; playNum++) { // max 10 plays per drive (NFL avg ~6, long drives 8-10)
+  for (let playNum = 0; playNum < 11; playNum++) { // max 11 plays per drive (NFL avg ~6, long drives 9-11)
     const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition);
     plays.push(play);
 
@@ -420,8 +421,8 @@ export function simulateGame(
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
-  // Average: ~11-12 possessions per team per game
-  const possessions = 10 + Math.floor(Math.random() * 2);
+  // Average: ~10-12 possessions per team per game (NFL avg ~11)
+  const possessions = 10 + Math.floor(Math.random() * 3);
 
   const allHomePlays: PlayResult[] = [];
   const allAwayPlays: PlayResult[] = [];
