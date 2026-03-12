@@ -475,37 +475,34 @@ export default function ReSignPage() {
 
               return (
                 <Card key={entry.playerId} className={isActive ? 'ring-1 ring-blue-500' : ''}>
-                  <div className="flex flex-col sm:flex-row gap-4 items-start">
+                  <div className="flex gap-4 items-center">
                     {/* Player info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <PlayerAvatar player={player} size="md" teamColor={userTeam?.primaryColor ?? '#374151'} />
                         <button onClick={() => setSelectedPlayerId(player.id)} className="font-bold text-lg hover:text-blue-600 transition-colors">
                           {player.firstName} {player.lastName}
                         </button>
                         <Badge>{player.position}</Badge>
                         <span className={`font-bold ${ratingColor(player.ratings.overall)}`}>{player.ratings.overall} OVR</span>
-                      </div>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-[var(--text-sec)]">
-                        <span>Age {player.age}</span>
-                        <span>{player.experience}yr exp</span>
-                        <span className="text-amber-600">Current: ${player.contract.salary}M/yr · {player.contract.yearsLeft}yr left</span>
-                        <span className={potentialColor(player.potential, player.experience)}>
+                        <span className="text-sm text-[var(--text-sec)]">Age {player.age}</span>
+                        <span className={`text-sm ${potentialColor(player.potential, player.experience)}`}>
                           POT: {potentialLabel(player.potential, player.experience)}
                         </span>
                       </div>
-                      <div className="mt-1.5 text-xs text-[var(--text-sec)]">
-                        <span className="text-[10px] uppercase tracking-wider text-[var(--text-sec)]/60 mr-2">Last Season</span>
-                        {positionStats(player)}
+                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-sm text-[var(--text-sec)]">
+                        <span>{player.experience}yr exp</span>
+                        <span className="text-amber-600">Current: ${player.contract.salary}M/yr · {player.contract.yearsLeft}yr left</span>
+                        <span className="text-xs">{positionStats(player)}</span>
                       </div>
                       {entry.refusesToResign ? (
-                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg inline-flex items-center gap-2">
+                        <div className="mt-1.5 px-2 py-1 bg-red-50 border border-red-200 rounded inline-flex items-center gap-2">
                           <span className="text-xs text-red-600">
-                            Won&apos;t negotiate — wants out. Franchise tag is your only option.
+                            Won&apos;t negotiate — tag only
                           </span>
                         </div>
                       ) : (
-                        <div className="mt-2 p-2 bg-[var(--surface-2)] rounded-lg inline-flex items-center gap-2">
+                        <div className="mt-1.5 px-2 py-1 bg-[var(--surface-2)] rounded inline-flex items-center gap-2">
                           <span className="text-xs text-[var(--text-sec)]">Asking:</span>
                           <span className="text-sm font-bold text-amber-600">
                             ${entry.askingSalary}M/yr × {entry.askingYears}yr
@@ -515,7 +512,7 @@ export default function ReSignPage() {
                     </div>
 
                     {/* Action buttons */}
-                    <div className="flex sm:flex-col gap-2 shrink-0 sm:mt-1">
+                    <div className="flex flex-col gap-1.5 shrink-0">
                       {entry.refusesToResign ? (
                         <>
                           <div className="text-xs text-red-600 font-semibold text-center px-2 py-1 bg-red-50 border border-red-200 rounded-lg">
