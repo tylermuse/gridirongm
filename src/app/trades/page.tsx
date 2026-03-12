@@ -926,7 +926,15 @@ function TradesPage() {
                             <div className="flex gap-2">
                               <Button size="sm" onClick={() => {
                                 const success = respondToTradeProposal(proposal.id, true);
-                                if (!success) alert('Trade failed — you may be over the salary cap.');
+                                if (success) {
+                                  // Reject all other pending proposals and redirect
+                                  const otherPending = tradeProposals.filter(p => p.id !== proposal.id && p.status === 'pending');
+                                  for (const op of otherPending) respondToTradeProposal(op.id, false);
+                                  setBlockSolicited(false);
+                                  router.push('/');
+                                } else {
+                                  alert('Trade failed — you may be over the salary cap.');
+                                }
                               }}>Accept</Button>
                               <Button size="sm" variant="ghost" onClick={() => respondToTradeProposal(proposal.id, false)}>Reject</Button>
                             </div>
