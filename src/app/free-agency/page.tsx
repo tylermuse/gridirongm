@@ -621,8 +621,8 @@ export default function FreeAgencyPage() {
                     <th className="text-center pb-3 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => toggleSort('pos')}>Pos{sortArrow('pos')}</th>
                     <th className="text-center pb-3 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => toggleSort('age')}>Age{sortArrow('age')}</th>
                     <th className="text-center pb-3 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => toggleSort('ovr')}>OVR{sortArrow('ovr')}</th>
-                    <th className="text-center pb-3 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => toggleSort('pot')} title="Potential — a player's ceiling. Young players show as Elite/High/Average/Low until 3+ seasons played. A declining player's POT may be lower than their OVR.">POT <span className="inline-block w-3 h-3 text-[10px] rounded-full bg-[var(--surface-2)] text-[var(--text-sec)]">?</span>{sortArrow('pot')}</th>
-                    <th className="text-left pb-3">Last Season</th>
+                    <th className="text-center pb-3 cursor-pointer select-none hover:text-[var(--text)] hidden sm:table-cell" onClick={() => toggleSort('pot')} title="Potential — a player's ceiling. Young players show as Elite/High/Average/Low until 3+ seasons played. A declining player's POT may be lower than their OVR.">POT <span className="inline-block w-3 h-3 text-[10px] rounded-full bg-[var(--surface-2)] text-[var(--text-sec)]">?</span>{sortArrow('pot')}</th>
+                    <th className="text-left pb-3 hidden md:table-cell">Last Season</th>
                     <th className="text-right pb-3 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => toggleSort('salary')}>Market{sortArrow('salary')}</th>
                     <th className="text-right pb-3 pr-2">Action</th>
                   </tr>
@@ -641,12 +641,12 @@ export default function FreeAgencyPage() {
                         }`}
                         onClick={() => setExpandedPlayerId(isExpanded ? null : p.id)}
                       >
-                        <td className="py-2.5 pl-2">
+                        <td className="py-2.5 pl-2 max-w-[140px] sm:max-w-none">
                           <div className="flex items-center gap-2">
-                            <svg className={`w-3 h-3 text-[var(--text-sec)] transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <svg className={`w-3 h-3 shrink-0 text-[var(--text-sec)] transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                             </svg>
-                            <button onClick={(e) => { e.stopPropagation(); setSelectedPlayerId(p.id); }} className="font-semibold hover:text-blue-600 transition-colors">
+                            <button onClick={(e) => { e.stopPropagation(); setSelectedPlayerId(p.id); }} className="font-semibold hover:text-blue-600 transition-colors truncate">
                               {p.firstName} {p.lastName}
                             </button>
                           </div>
@@ -656,10 +656,10 @@ export default function FreeAgencyPage() {
                         <td className={`py-2.5 text-center font-bold ${ratingColor(p.ratings.overall)}`}>
                           {p.ratings.overall}
                         </td>
-                        <td className={`py-2.5 text-center text-xs ${potentialColor(p.potential, p.experience)}`}>
+                        <td className={`py-2.5 text-center text-xs hidden sm:table-cell ${potentialColor(p.potential, p.experience)}`}>
                           {potentialLabel(p.potential, p.experience)}
                         </td>
-                        <td className="py-2.5 text-left text-xs text-[var(--text-sec)]">
+                        <td className="py-2.5 text-left text-xs text-[var(--text-sec)] hidden md:table-cell">
                           {positionStats(p)}
                         </td>
                         <td className="py-2.5 text-right font-mono">
