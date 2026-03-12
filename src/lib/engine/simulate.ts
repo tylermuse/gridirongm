@@ -116,8 +116,7 @@ function simulatePlay(
   const allDefenders = [...dls, ...lbs, ...cbs, ...safeties];
 
   const qb = qbs[0]; // starter QB
-  // Limit to active WRs (top 4) and TEs (top 2) — backups don't run routes
-  const receivers = [...wrs.slice(0, 4), ...tes.slice(0, 2)];
+  const receivers = [...wrs, ...tes];
 
   // OL blocking power
   const olPower = ols.length > 0
@@ -153,24 +152,17 @@ function simulatePlay(
       return { type: 'sack', yards: sackYards, touchdown: false, turnover: false, passer: qb, sacker };
     }
 
-    // ── Pick receiver (starters dominate targets, backups rarely targeted) ──
-    // WR1 ~30%, WR2 ~23%, WR3/TE1 ~15%, WR4+/TE2+ ~5-8% each
+    // ── Pick receiver (starters get more usage but spread more) ──
     const recWeights = receivers.map((r, i) => {
-      const starterBonus = i === 0 ? 5 : i === 1 ? 3.5 : i === 2 ? 2 : i === 3 ? 1.2 : 0.5;
+      const starterBonus = i === 0 ? 4 : i === 1 ? 3 : i === 2 ? 2 : 1;
       return starterBonus * (r.ratings.catching / 70);
     });
     const target = weightedPick(receivers, recWeights);
 
     // ── Coverage matchup ──
-    // CBs cover first receivers 1:1, safeties cover overflow receivers
-    const targetIdx = receivers.indexOf(target);
-    const coverageDefender = targetIdx < cbs.length
-      ? cbs[targetIdx]
-      : safeties.length > 0
-        ? safeties[Math.min(targetIdx - cbs.length, safeties.length - 1)]
-        : cbs.length > 0
-          ? cbs[cbs.length - 1]
-          : allDefenders.length > 0 ? allDefenders[0] : null;
+    const coverageDefender = cbs.length > 0
+      ? cbs[Math.min(receivers.indexOf(target), cbs.length - 1)]
+      : allDefenders.length > 0 ? allDefenders[0] : null;
     const coverageRating = coverageDefender
       ? coverageDefender.ratings.coverage
       : 50;
@@ -204,17 +196,15 @@ function simulatePlay(
       // Big play chance (~4-6% of completions go 20+) — explosive plays
       const bigPlayChance = 0.02 + (target.ratings.speed / 100) * 0.03;
       if (Math.random() < bigPlayChance) {
-        yards += 12 + Math.floor(Math.random() * 18);
+        yards += 15 + Math.floor(Math.random() * 20);
       }
 
       const newPos = fieldPosition + yards;
       const td = newPos >= 100;
       if (td) yards = 100 - fieldPosition;
 
-      // Limit tackling pool to ~11 starters: 4 DL + 3 LB + 2 CB + 2 S
-      const tacklePool = [...dls.slice(0, 4), ...lbs.slice(0, 3), ...cbs.slice(0, 2), ...safeties.slice(0, 2)];
-      const tackler = tacklePool.length > 0
-        ? weightedPick(tacklePool, tacklePool.map((d, i) => (i < 4 ? 2.5 : 1.5) * (d.ratings.tackling / 70)))
+      const tackler = allDefenders.length > 0
+        ? weightedPick(allDefenders, allDefenders.map((d, i) => (i < 3 ? 2 : 1) * (d.ratings.tackling / 70)))
         : null;
 
       return {
@@ -262,11 +252,9 @@ function simulatePlay(
 
     // Fumble check
     const fumbleChance = clamp(0.015 - (rusher.ratings.carrying / 100) * 0.008, 0.003, 0.02);
-    // Limit tackling pool to starters: 4 DL + 3 LB + 2 CB + 2 S
-    const rushTacklePool = [...dls.slice(0, 4), ...lbs.slice(0, 3), ...cbs.slice(0, 2), ...safeties.slice(0, 2)];
     if (Math.random() < fumbleChance) {
-      const tackler = rushTacklePool.length > 0
-        ? weightedPick(rushTacklePool, rushTacklePool.map((d, i) => (i < 4 ? 3 : 1) * (d.ratings.tackling / 70)))
+      const tackler = allDefenders.length > 0
+        ? weightedPick(allDefenders, allDefenders.map((d, i) => (i < 4 ? 3 : 1) * (d.ratings.tackling / 70)))
         : null;
       return {
         type: 'rush', yards: Math.max(0, yards), touchdown: false, turnover: true,
@@ -278,8 +266,8 @@ function simulatePlay(
     const td = newPos >= 100;
     if (td) yards = 100 - fieldPosition;
 
-    const tackler = rushTacklePool.length > 0
-      ? weightedPick(rushTacklePool, rushTacklePool.map((d, i) => (i < 4 ? 3 : 1) * (d.ratings.tackling / 70)))
+    const tackler = allDefenders.length > 0
+      ? weightedPick(allDefenders, allDefenders.map((d, i) => (i < 4 ? 3 : 1) * (d.ratings.tackling / 70)))
       : null;
 
     return {
