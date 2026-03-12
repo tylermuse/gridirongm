@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
@@ -73,9 +74,11 @@ export default function TradesPageWrapper() {
 }
 
 function TradesPage() {
+  const router = useRouter();
+  const fromDraftRef = useRef(false);
   const {
-    phase, week, players, teams, userTeamId,
-    tradeProposals, executeTrade, respondToTradeProposal,
+    phase, week, season, players, teams, userTeamId,
+    draftOrder, tradeProposals, executeTrade, respondToTradeProposal,
     solicitTradingBlockProposals, leagueSettings,
   } = useGameStore();
 
@@ -120,12 +123,78 @@ function TradesPage() {
         handleStartCounter(counterProposalId);
       }
     }
+    // Handle ?team=TEAM_ID&pick=PICK_ID from draft page (pre-populate trade for a specific pick)
+    const teamParam = searchParams.get('team');
+    const pickParam = searchParams.get('pick');
+    const ownPick = searchParams.get('own') === '1'; // trading away our own pick
+    if (pickParam) {
+      if (ownPick) {
+        // Trading away our own pick — pre-add to offered picks, no team pre-selected
+        setOfferedPickIds(prev => prev.includes(pickParam) ? prev : [...prev, pickParam]);
+      } else if (teamParam) {
+        // Trading for another team's pick — pre-select team and add to received picks
+        setSelectedTeamId(teamParam);
+        setReceivedPickIds(prev => prev.includes(pickParam) ? prev : [...prev, pickParam]);
+      }
+      setActiveTab('propose');
+    }
+    if (searchParams.get('from') === 'draft') {
+      fromDraftRef.current = true;
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const userTeam = teams.find(t => t.id === userTeamId);
   const aiTeams = teams.filter(t => t.id !== userTeamId).sort((a, b) => a.abbreviation.localeCompare(b.abbreviation));
   const selectedAITeam = teams.find(t => t.id === selectedTeamId);
+
+  // Compute pick number label (e.g., "#21") for current-year picks during/after draft ordering
+  const pickNumberMap = useMemo(() => {
+    const map = new Map<string, number>(); // pickId → overall pick number
+    if (phase !== 'draft' || !draftOrder || draftOrder.length === 0) return map;
+    const numTeams = teams.length;
+    const totalPicks = numTeams * 7;
+    // draftOrder contains remaining picks; already-drafted picks are gone
+    // Reconstruct full order from all teams' draftPicks for current season
+    const allPicks = teams.flatMap(t =>
+      t.draftPicks.filter(pk => pk.year === season && !pk.playerId),
+    );
+    // Sort same way as store: by round, then by original team record (worst first)
+    const teamRecords = new Map(teams.map(t => [t.id, t.record]));
+    const winPct = (r: { wins: number; losses: number }) => r.wins + r.losses > 0 ? r.wins / (r.wins + r.losses) : 0;
+    allPicks.sort((a, b) => {
+      if (a.round !== b.round) return a.round - b.round;
+      const aWp = winPct(teamRecords.get(a.originalTeamId) ?? { wins: 0, losses: 0 });
+      const bWp = winPct(teamRecords.get(b.originalTeamId) ?? { wins: 0, losses: 0 });
+      return aWp - bWp;
+    });
+    // Already-drafted picks offset
+    const draftedCount = totalPicks - draftOrder.length;
+    allPicks.forEach((pk, i) => {
+      map.set(pk.id, draftedCount + i + 1);
+    });
+    return map;
+  }, [phase, draftOrder, teams, season]);
+
+  function pickLabel(pk: { id: string; year: number; round: number; originalTeamId: string; ownerTeamId: string }) {
+    const num = pickNumberMap.get(pk.id);
+    const origTeam = pk.originalTeamId !== pk.ownerTeamId ? teams.find(t => t.id === pk.originalTeamId) : null;
+    const via = origTeam ? ` (via ${origTeam.abbreviation})` : '';
+    if (num) return `${pk.year} Round ${pk.round}, Pick #${num}${via}`;
+    return `${pk.year} Round ${pk.round}${via}`;
+  }
+
+  // Compute team average OVR (top 22 starters, like a real depth chart)
+  function teamAvgOvr(teamId: string, addPlayerIds: string[] = [], removePlayerIds: string[] = []): number {
+    const removeSet = new Set(removePlayerIds);
+    const roster = players
+      .filter(p => p.teamId === teamId && !p.retired && !removeSet.has(p.id))
+      .concat(addPlayerIds.map(id => players.find(p => p.id === id)).filter(Boolean) as Player[])
+      .sort((a, b) => b.ratings.overall - a.ratings.overall)
+      .slice(0, 22);
+    if (roster.length === 0) return 0;
+    return Math.round(roster.reduce((s, p) => s + p.ratings.overall, 0) / roster.length * 10) / 10;
+  }
 
   const userRoster = players
     .filter(p => p.teamId === userTeamId && !p.retired)
@@ -209,6 +278,10 @@ function TradesPage() {
       setOfferedPickIds([]);
       setReceivedPlayerIds([]);
       setReceivedPickIds([]);
+      // Auto-redirect back to draft page if trade was initiated from there
+      if (fromDraftRef.current) {
+        setTimeout(() => router.push('/draft'), 1500);
+      }
     }
   }
 
@@ -432,7 +505,7 @@ function TradesPage() {
                         {offPicks.map(pk => (
                           <div key={pk.id} className="flex items-center gap-2 mb-1 text-sm">
                             <Badge size="sm" variant="default">Pick</Badge>
-                            <span>Round {pk.round} ({pk.year})</span>
+                            <span>{pickLabel(pk)}</span>
                           </div>
                         ))}
                         {offPlayers.length === 0 && offPicks.length === 0 && (
@@ -460,7 +533,7 @@ function TradesPage() {
                         {reqPicks.map(pk => (
                           <div key={pk.id} className="flex items-center gap-2 mb-1 text-sm">
                             <Badge size="sm" variant="default">Pick</Badge>
-                            <span>Round {pk.round} ({pk.year})</span>
+                            <span>{pickLabel(pk)}</span>
                           </div>
                         ))}
                         {reqPlayers.length === 0 && reqPicks.length === 0 && (
@@ -542,7 +615,7 @@ function TradesPage() {
                                       onChange={() => togglePickSelect(pk.id, counterOfferedPickIds, setCounterOfferedPickIds)}
                                       className="accent-blue-500"
                                     />
-                                    <span className="text-xs flex-1">{pk.year} Rd {pk.round}</span>
+                                    <span className="text-xs flex-1">{pickLabel(pk)}</span>
                                     <span className="text-[10px] text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
                                   </label>
                                 ))}
@@ -586,7 +659,7 @@ function TradesPage() {
                                       onChange={() => togglePickSelect(pk.id, counterReceivedPickIds, setCounterReceivedPickIds)}
                                       className="accent-blue-500"
                                     />
-                                    <span className="text-xs flex-1">Rd {pk.round} ({pk.year})</span>
+                                    <span className="text-xs flex-1">{pickLabel(pk)}</span>
                                     <span className="text-[10px] text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
                                   </label>
                                 ))}
@@ -716,7 +789,7 @@ function TradesPage() {
                               onChange={() => togglePickSelect(pk.id, blockedPickIds, setBlockedPickIds)}
                               className="accent-blue-500"
                             />
-                            <span className="text-sm flex-1">{pk.year} Round {pk.round}</span>
+                            <span className="text-sm flex-1">{pickLabel(pk)}</span>
                             <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))} pts</span>
                           </label>
                         ))}
@@ -795,6 +868,13 @@ function TradesPage() {
                       const offPicks = proposal.offeredPickIds.map(id =>
                         proposingTeam?.draftPicks.find(pk => pk.id === id),
                       ).filter(Boolean) as DraftPick[];
+                      // OVR impact
+                      const userOvrBefore = teamAvgOvr(userTeamId);
+                      const userOvrAfter = teamAvgOvr(userTeamId, proposal.offeredPlayerIds, proposal.requestedPlayerIds);
+                      const userDelta = Math.round((userOvrAfter - userOvrBefore) * 10) / 10;
+                      const theirOvrBefore = proposingTeam ? teamAvgOvr(proposingTeam.id) : 0;
+                      const theirOvrAfter = proposingTeam ? teamAvgOvr(proposingTeam.id, proposal.requestedPlayerIds, proposal.offeredPlayerIds) : 0;
+                      const theirDelta = Math.round((theirOvrAfter - theirOvrBefore) * 10) / 10;
                       return (
                         <Card key={proposal.id}>
                           <div className="flex items-start justify-between gap-4">
@@ -817,9 +897,30 @@ function TradesPage() {
                                 {offPicks.map(pk => (
                                   <div key={pk.id} className="flex items-center gap-2 text-sm">
                                     <Badge size="sm" variant="default">Pick</Badge>
-                                    <span>{pk.year} Round {pk.round}</span>
+                                    <span>{pickLabel(pk)}</span>
                                   </div>
                                 ))}
+                              </div>
+                              {/* OVR Impact */}
+                              <div className="flex gap-4 mt-2 pt-2 border-t border-[var(--border)]">
+                                <div className="text-xs">
+                                  <span className="text-[var(--text-sec)]">Your OVR: </span>
+                                  <span className="font-bold">{userOvrBefore}</span>
+                                  <span className="text-[var(--text-sec)]"> → </span>
+                                  <span className="font-bold">{userOvrAfter}</span>
+                                  <span className={`ml-1 font-bold ${userDelta > 0 ? 'text-green-600' : userDelta < 0 ? 'text-red-600' : 'text-[var(--text-sec)]'}`}>
+                                    ({userDelta > 0 ? '+' : ''}{userDelta})
+                                  </span>
+                                </div>
+                                <div className="text-xs">
+                                  <span className="text-[var(--text-sec)]">Their OVR: </span>
+                                  <span className="font-bold">{theirOvrBefore}</span>
+                                  <span className="text-[var(--text-sec)]"> → </span>
+                                  <span className="font-bold">{theirOvrAfter}</span>
+                                  <span className={`ml-1 font-bold ${theirDelta > 0 ? 'text-green-600' : theirDelta < 0 ? 'text-red-600' : 'text-[var(--text-sec)]'}`}>
+                                    ({theirDelta > 0 ? '+' : ''}{theirDelta})
+                                  </span>
+                                </div>
                               </div>
                             </div>
                             <div className="flex gap-2">
@@ -920,7 +1021,7 @@ function TradesPage() {
                               onChange={() => togglePickSelect(pk.id, offeredPickIds, setOfferedPickIds)}
                               className="accent-blue-500"
                             />
-                            <span className="text-sm flex-1">{pk.year} Round {pk.round}</span>
+                            <span className="text-sm flex-1">{pickLabel(pk)}</span>
                             <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
                           </label>
                         ))}
@@ -969,7 +1070,7 @@ function TradesPage() {
                                   onChange={() => togglePickSelect(pk.id, receivedPickIds, setReceivedPickIds)}
                                   className="accent-blue-500"
                                 />
-                                <span className="text-sm flex-1">{pk.year} Round {pk.round}</span>
+                                <span className="text-sm flex-1">{pickLabel(pk)}</span>
                                 <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
                               </label>
                             ))}

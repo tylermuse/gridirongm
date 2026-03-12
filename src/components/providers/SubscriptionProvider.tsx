@@ -86,8 +86,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Get initial session
+    // Get initial session (with timeout to prevent infinite loading)
+    const authTimeout = setTimeout(() => setLoading(false), 5000);
     supabase.auth.getUser().then(({ data: { user: currentUser } }: { data: { user: User | null } }) => {
+      clearTimeout(authTimeout);
       setUser(currentUser);
       if (currentUser) {
         fetchSubscription(currentUser.id).finally(() => setLoading(false));
@@ -95,6 +97,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     }).catch(() => {
+      clearTimeout(authTimeout);
       setLoading(false);
     });
 

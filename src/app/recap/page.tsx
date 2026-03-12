@@ -8,6 +8,7 @@ import { generateDebateTranscript, COMMENTATORS } from '@/lib/engine/debate';
 import { generateWeeklyRecap } from '@/lib/engine/recap';
 import { DebateBubble } from '@/components/game/DebateBubble';
 import type { RecapSegmentData, Player, Team } from '@/types';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 
 const SEGMENT_TYPE_LABELS: Record<RecapSegmentData['type'], string> = {
   headline: 'Headlines',
@@ -305,12 +306,7 @@ export default function RecapPage() {
                                   onClick={() => setSelectedPlayerId(pid)}
                                   className="text-xs text-blue-600 hover:underline flex items-center gap-1"
                                 >
-                                  <span
-                                    className="w-4 h-4 rounded-full text-white flex items-center justify-center text-[8px] font-bold"
-                                    style={{ backgroundColor: teamColor(p.teamId ?? '') }}
-                                  >
-                                    {p.firstName[0]}
-                                  </span>
+                                  <PlayerAvatar player={p} size="xs" teamColor={teamColor(p.teamId ?? '')} />
                                   {p.firstName} {p.lastName}
                                 </button>
                               );

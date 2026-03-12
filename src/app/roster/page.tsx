@@ -372,7 +372,8 @@ export default function RosterPage() {
                         {getStatColumns(filterPos)[1]}
                       </th>
                     )}
-                    <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-center w-10">Mood</th>
+                    <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-left w-28">Acquired</th>
+                    <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-center w-16">Mood</th>
                     <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-right pr-3 w-28">Action</th>
                   </tr>
                 </thead>
@@ -482,15 +483,26 @@ export default function RosterPage() {
                           </td>
                         )}
 
+                        {/* Acquired */}
+                        <td className="py-2 px-2 text-xs text-[var(--text-sec)]">
+                          {p.draftYear && p.draftPick
+                            ? <span>Draft <span className="font-medium text-[var(--text)]">#{p.draftPick}</span> ({p.draftYear})</span>
+                            : <span>Free Agent{p.draftYear ? ` (${p.draftYear})` : ''}</span>
+                          }
+                        </td>
+
                         {/* Mood */}
                         <td className="py-2 px-2 text-center">
-                          <span className={`text-xs ${
-                            (p.mood ?? 70) >= 75 ? 'text-green-600' :
-                            (p.mood ?? 70) >= 50 ? 'text-amber-600' :
-                            'text-red-600'
-                          }`}>
-                            {(p.mood ?? 70) >= 75 ? '😊' : (p.mood ?? 70) >= 50 ? '😐' : '😠'}
-                          </span>
+                          {(() => {
+                            const mood = p.mood ?? 70;
+                            const label = mood >= 85 ? 'Thrilled' : mood >= 75 ? 'Happy' : mood >= 60 ? 'Content' : mood >= 45 ? 'Unhappy' : 'Angry';
+                            const color = mood >= 75 ? 'text-green-600 bg-green-50' : mood >= 50 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50';
+                            return (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color}`}>
+                                {label}
+                              </span>
+                            );
+                          })()}
                         </td>
 
                         {/* Actions */}
