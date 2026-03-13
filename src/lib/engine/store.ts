@@ -18,8 +18,9 @@ import { developPlayers } from './development';
 import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
+import { generateCoachingStaff, coachingBonus } from './coaching';
 
-const SAVE_VERSION = 14;
+const SAVE_VERSION = 15;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
@@ -85,6 +86,8 @@ interface GameStore extends LeagueState {
   // PRD-07: Scouting
   setScoutingLevel: (level: 0 | 1 | 2) => void;
   deepScoutPlayer: (playerId: string) => void;
+  /** Scout a prospect to a higher tier (costs scout points) */
+  scoutProspect: (playerId: string, tier: 1 | 2 | 3) => boolean;
   // PRD-13: Depth chart
   reorderDepthChart: (position: Position, playerIds: string[]) => void;
   resetDepthChart: (position: Position) => void;
@@ -1146,6 +1149,8 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   resigningPlayers: [],
   tradeProposals: [],
   scoutingLevel: 0,
+  scoutPoints: 30,
+  scoutPointsMax: 30,
   draftScoutingData: {},
   finalsMvpPlayerId: null,
   leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
@@ -1193,10 +1198,14 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       ? sortRosterByDepthChart(awayRosterRaw, awayTeam.depthChart)
       : awayRosterRaw;
 
-    // Generate betting line before game
-    const bettingLine = generateBettingLine(homeRosterRaw, awayRosterRaw);
+    // Coaching bonus applied to team power
+    const homeCoachBonus = homeTeam ? coachingBonus(homeTeam) : 0;
+    const awayCoachBonus = awayTeam ? coachingBonus(awayTeam) : 0;
 
-    const result = simulateGame(game, homeRoster, awayRoster);
+    // Generate betting line before game
+    const bettingLine = generateBettingLine(homeRosterRaw, awayRosterRaw, homeCoachBonus, awayCoachBonus);
+
+    const result = simulateGame(game, homeRoster, awayRoster, homeCoachBonus, awayCoachBonus);
 
     // Compute ATS coverage
     const scoreDiff = result.homeScore - result.awayScore;
@@ -1350,6 +1359,13 @@ export const useGameStore = create<GameStore>()(
             'JAX': 'CLE',  // Pick 24: CLE via JAX
             'LAR': 'KC',   // Pick 29: KC via LAR
           };
+          // Add coaching staff to imported teams
+          for (const team of imported.teams) {
+            if (!team.coaches || team.coaches.length === 0) {
+              team.coaches = generateCoachingStaff();
+            }
+          }
+
           // Assign records based on draft position — use pointsFor to break ties
           for (const team of imported.teams) {
             const draftIdx = REAL_2026_ORIGINAL_ORDER.indexOf(team.abbreviation);
@@ -1460,6 +1476,7 @@ export const useGameStore = create<GameStore>()(
             deadCap: [],
             franchiseTagUsed: false,
             revenue: { tickets: 0, merchandise: 0, tvDeal: 0, total: 0 },
+            coaches: generateCoachingStaff(),
           };
         });
 
@@ -1667,7 +1684,9 @@ export const useGameStore = create<GameStore>()(
           playerStats: {},
         };
 
-        const result = simulateGame(tempGame, homeRoster, awayRoster);
+        const hcb = homeTeam ? coachingBonus(homeTeam) : 0;
+        const acb = awayTeam ? coachingBonus(awayTeam) : 0;
+        const result = simulateGame(tempGame, homeRoster, awayRoster, hcb, acb);
         const winnerId =
           result.homeScore >= result.awayScore ? matchup.homeTeamId : matchup.awayTeamId;
 
@@ -1779,7 +1798,9 @@ export const useGameStore = create<GameStore>()(
             homeTeamId: next.homeTeamId!, awayTeamId: next.awayTeamId!,
             homeScore: 0, awayScore: 0, played: false, playerStats: {},
           };
-          const result = simulateGame(tempGame, homeRoster, awayRoster);
+          const hcb2 = homeTeam ? coachingBonus(homeTeam) : 0;
+          const acb2 = awayTeam ? coachingBonus(awayTeam) : 0;
+          const result = simulateGame(tempGame, homeRoster, awayRoster, hcb2, acb2);
           const winnerId = result.homeScore >= result.awayScore ? next.homeTeamId! : next.awayTeamId!;
 
           playoffResults.push({ ...result, id: next.id, played: true });
@@ -1887,7 +1908,9 @@ export const useGameStore = create<GameStore>()(
             homeTeamId: matchup.homeTeamId!, awayTeamId: matchup.awayTeamId!,
             homeScore: 0, awayScore: 0, played: false, playerStats: {},
           };
-          const result = simulateGame(tempGame, homeRoster, awayRoster);
+          const hcb3 = homeTeam ? coachingBonus(homeTeam) : 0;
+          const acb3 = awayTeam ? coachingBonus(awayTeam) : 0;
+          const result = simulateGame(tempGame, homeRoster, awayRoster, hcb3, acb3);
           const winnerId = result.homeScore >= result.awayScore ? matchup.homeTeamId! : matchup.awayTeamId!;
 
           playoffResults.push({ ...result, id: matchup.id, played: true });
@@ -2198,6 +2221,13 @@ export const useGameStore = create<GameStore>()(
         // PRD-07: Compute scouting data for draft prospects
         const scoutingData = computeScoutingData(draftClass, state.scoutingLevel);
 
+        // Calculate scout points based on coaching staff
+        const userTeamObj = state.teams.find(t => t.id === state.userTeamId);
+        const hc = userTeamObj?.coaches?.find(c => c.role === 'HC');
+        const baseScoutPoints = 30;
+        const bonusScoutPoints = hc ? Math.floor((hc.ovr - 50) / 5) : 0;
+        const totalScoutPoints = baseScoutPoints + Math.max(0, bonusScoutPoints);
+
         const finalPlayers = importedDraftClass.length > 0
           ? updatedPlayers
           : [...updatedPlayers, ...draftClass];
@@ -2217,6 +2247,8 @@ export const useGameStore = create<GameStore>()(
           draftResults: [],
           resigningPlayers: [],
           draftScoutingData: scoutingData,
+          scoutPoints: totalScoutPoints,
+          scoutPointsMax: totalScoutPoints,
         });
       },
 
@@ -3554,6 +3586,43 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
+      // Scout a prospect to a specific tier (costs scout points)
+      scoutProspect: (playerId: string, tier: 1 | 2 | 3) => {
+        const state = get();
+        const existing = state.draftScoutingData[playerId];
+        const currentTier = existing?.scoutTier ?? 0;
+        if (tier <= currentTier) return false; // already scouted to this tier or higher
+
+        // Cost: tier 1 = 1pt, tier 2 = 2pts, tier 3 = 3pts (only pay incremental)
+        const cost = tier - currentTier; // incremental cost
+        if (state.scoutPoints < cost) return false; // not enough points
+
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return false;
+
+        // Compute scouted OVR based on tier
+        const direction = playerNoiseDirection(playerId);
+        const normalizedDir = direction / 2.5;
+        const tierErrors = [12, 5, 2, 0]; // tier 0=±12, 1=±5, 2=±2, 3=exact
+        const error = tierErrors[tier];
+        const noise = Math.round(normalizedDir * error);
+        const scoutedOvr = Math.max(20, Math.min(99, player.ratings.overall + noise));
+
+        set({
+          scoutPoints: state.scoutPoints - cost,
+          draftScoutingData: {
+            ...state.draftScoutingData,
+            [playerId]: {
+              scoutedOvr,
+              error,
+              deepScouted: tier >= 3,
+              scoutTier: tier,
+            },
+          },
+        });
+        return true;
+      },
+
       // PRD-13: Reorder depth chart position
       reorderDepthChart: (position: Position, playerIds: string[]) => {
         const state = get();
@@ -4431,6 +4500,18 @@ export const useGameStore = create<GameStore>()(
               if (dc.season === undefined) dc.season = (state.season as number) ?? 1;
             }
           }
+        }
+        if (version < 15) {
+          // Add coaching staff to teams
+          const teams15 = (state.teams as Array<Record<string, unknown>>) ?? [];
+          for (const team of teams15) {
+            if (!team.coaches || (team.coaches as unknown[]).length === 0) {
+              team.coaches = generateCoachingStaff();
+            }
+          }
+          // Add scout points
+          if (state.scoutPoints === undefined) state.scoutPoints = 30;
+          if (state.scoutPointsMax === undefined) state.scoutPointsMax = 30;
         }
         return state;
       },

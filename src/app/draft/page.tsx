@@ -381,11 +381,14 @@ export default function DraftPage() {
     teams,
     draftScoutingData,
     scoutingLevel,
+    scoutPoints,
+    scoutPointsMax,
     draftPlayer,
     simDraftPick,
     simToUserDraftPick,
     simToEndDraft,
     setScoutingLevel,
+    scoutProspect,
     season,
   } = useGameStore();
 
@@ -682,29 +685,24 @@ export default function DraftPage() {
                 </select>
               </div>
             </CardHeader>
-            {/* Scouting level selector */}
-            <div className="mb-3 flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-[var(--text-sec)]">Scouting Level:</span>
-              <select
-                value={scoutingLevel}
-                onChange={e => {
-                  const val = Number(e.target.value) as 0|1|2;
-                  if (val <= maxLevel) setScoutingLevel(val);
-                }}
-                className="h-7 px-2 text-xs rounded border border-[var(--border)] bg-[var(--surface-2)]"
-                title={SCOUTING_LEVELS[scoutingLevel]?.tooltip}
-              >
-                {SCOUTING_LEVELS.map((level, i) => (
-                  <option key={i} value={i}>
-                    {level.name}
-                  </option>
-                ))}
-              </select>
-              {maxLevel < 2 && (
-                <a href="/pricing" className="text-[10px] text-blue-600 hover:underline ml-1">
-                  Upgrade →
-                </a>
-              )}
+            {/* Scout Points display */}
+            <div className="mb-3 flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm">🔍</span>
+                <span className="text-xs font-bold text-[var(--text)]">Scout Points:</span>
+                <span className={`text-xs font-bold tabular-nums ${scoutPoints <= 5 ? 'text-red-600' : scoutPoints <= 15 ? 'text-amber-600' : 'text-green-600'}`}>
+                  {scoutPoints}/{scoutPointsMax}
+                </span>
+              </div>
+              <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden max-w-[120px]">
+                <div
+                  className={`h-full rounded-full transition-all ${scoutPoints <= 5 ? 'bg-red-500' : scoutPoints <= 15 ? 'bg-amber-500' : 'bg-green-500'}`}
+                  style={{ width: `${scoutPointsMax > 0 ? (scoutPoints / scoutPointsMax) * 100 : 0}%` }}
+                />
+              </div>
+              <div className="text-[10px] text-[var(--text-sec)]">
+                Click a prospect to scout
+              </div>
             </div>
             <div className="overflow-x-auto">
             <table className="w-full text-sm sticky-col">
@@ -715,6 +713,7 @@ export default function DraftPage() {
                   <th className="text-center pb-2">Pos</th>
                   <th className="text-center pb-2">OVR Range</th>
                   <th className="text-center pb-2 group relative cursor-help" title="Potential — a player's ceiling. Draft prospects show as Elite/High/Average/Low until scouted over 3+ seasons.">Pot <span className="inline-block w-3 h-3 text-[10px] rounded-full bg-[var(--surface-2)] text-[var(--text-sec)]">?</span></th>
+                  <th className="text-center pb-2">Scout</th>
                   <th className="text-right pb-2 pr-2">Draft</th>
                 </tr>
               </thead>
@@ -739,6 +738,25 @@ export default function DraftPage() {
                         {displayOvr}
                       </td>
                       <td className={`py-2 text-center text-xs ${potentialColor(player.potential, player.experience)}`}>{potentialLabel(player.potential, player.experience)}</td>
+                      <td className="py-2 text-center" onClick={e => e.stopPropagation()}>
+                        {(() => {
+                          const tier = scout?.scoutTier ?? 0;
+                          const nextTier = (tier + 1) as 1 | 2 | 3;
+                          if (tier >= 3) return <span className="text-[10px] text-green-600 font-bold">Full</span>;
+                          const cost = 1; // each tier costs 1 more than previous (incremental = nextTier - tier = 1)
+                          const tierLabels = ['', 'Basic', 'Full', 'Deep'];
+                          return (
+                            <button
+                              onClick={() => scoutProspect(player.id, nextTier)}
+                              disabled={scoutPoints < (nextTier - tier)}
+                              className="text-[10px] px-1.5 py-0.5 rounded border border-blue-400 text-blue-600 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                              title={`${tierLabels[nextTier]} scout (${nextTier - tier} pts)`}
+                            >
+                              🔍 {nextTier - tier}pt
+                            </button>
+                          );
+                        })()}
+                      </td>
                       <td className="py-2 pr-2 text-right">
                         <div className="flex gap-1 justify-end">
                           {isUserPick ? (

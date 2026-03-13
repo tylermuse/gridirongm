@@ -195,6 +195,25 @@ export interface DeadCapEntry {
   season?: number;
 }
 
+export type OffensiveScheme = 'spread' | 'west_coast' | 'power_run' | 'air_raid' | 'rpo';
+export type DefensiveScheme = 'cover_3' | 'man_press' | 'tampa_2' | 'blitz_34' | 'zone_blitz';
+export type CoachRole = 'HC' | 'OC' | 'DC';
+
+export interface Coach {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role: CoachRole;
+  ovr: number;
+  age: number;
+  offensiveScheme?: OffensiveScheme;
+  defensiveScheme?: DefensiveScheme;
+  trait: string;
+  yearsWithTeam: number;
+  careerWins: number;
+  careerLosses: number;
+}
+
 export interface Team {
   id: string;
   city: string;
@@ -215,6 +234,8 @@ export interface Team {
   deadCap: DeadCapEntry[];
   /** Whether the franchise tag has been used this season */
   franchiseTagUsed: boolean;
+  /** Coaching staff (HC, OC, DC) */
+  coaches?: Coach[];
   /** Revenue breakdown (computed at start of each season) */
   revenue: {
     tickets: number;
@@ -538,8 +559,12 @@ export interface LeagueState {
   tradeProposals: TradeProposal[];
   /** Scouting level (0=Entry, 1=Pro, 2=Elite) */
   scoutingLevel: 0 | 1 | 2;
+  /** Scout points remaining for this draft cycle */
+  scoutPoints: number;
+  /** Max scout points for this draft cycle */
+  scoutPointsMax: number;
   /** Scouting data keyed by prospect player ID */
-  draftScoutingData: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }>;
+  draftScoutingData: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean; scoutTier?: 0 | 1 | 2 | 3 }>;
   /** Player ID of the Championship MVP (set when championship is played, consumed when season summary is created) */
   finalsMvpPlayerId: string | null;
   /** Configurable league settings */

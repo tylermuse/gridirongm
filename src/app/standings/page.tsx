@@ -424,6 +424,10 @@ export default function StandingsPage() {
           players={players}
           homeTeamName={teamFullName(selectedGame.homeTeamId)}
           awayTeamName={teamFullName(selectedGame.awayTeamId)}
+          homeTeamId={selectedGame.homeTeamId}
+          awayTeamId={selectedGame.awayTeamId}
+          homeColor={teams.find(t => t.id === selectedGame.homeTeamId)?.primaryColor}
+          awayColor={teams.find(t => t.id === selectedGame.awayTeamId)?.primaryColor}
           onClose={() => setSelectedGame(null)}
         />
       )}

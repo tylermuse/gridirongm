@@ -4,7 +4,7 @@ import type { Player, PlayerStats, GameResult, ScoringPlay, BettingLine } from '
  * Computes an aggregate offensive and defensive power rating for a roster.
  * Returns a value roughly in 50-100 range for typical pro teams.
  */
-export function teamPower(roster: Player[]): { offense: number; defense: number } {
+export function teamPower(roster: Player[], coachBonus = 0): { offense: number; defense: number } {
   let offSum = 0, offCount = 0;
   let defSum = 0, defCount = 0;
 
@@ -52,8 +52,8 @@ export function teamPower(roster: Player[]): { offense: number; defense: number 
   }
 
   return {
-    offense: offCount > 0 ? offSum / offCount : 50,
-    defense: defCount > 0 ? defSum / defCount : 50,
+    offense: (offCount > 0 ? offSum / offCount : 50) + coachBonus,
+    defense: (defCount > 0 ? defSum / defCount : 50) + coachBonus,
   };
 }
 
@@ -64,9 +64,11 @@ export function teamPower(roster: Player[]): { offense: number; defense: number 
 export function generateBettingLine(
   homeRoster: Player[],
   awayRoster: Player[],
+  homeCoachBonus = 0,
+  awayCoachBonus = 0,
 ): BettingLine {
-  const homePow = teamPower(homeRoster);
-  const awayPow = teamPower(awayRoster);
+  const homePow = teamPower(homeRoster, homeCoachBonus);
+  const awayPow = teamPower(awayRoster, awayCoachBonus);
   const homeTotal = homePow.offense + homePow.defense;
   const awayTotal = awayPow.offense + awayPow.defense;
 
@@ -333,9 +335,12 @@ interface DriveResult {
 function simulateDrive(
   offense: Player[],
   defense: Player[],
+  offCoachBonus = 0,
 ): DriveResult {
   const plays: PlayResult[] = [];
-  let fieldPosition = 30 + Math.floor(Math.random() * 15); // start at own 30-45 (kickoff returns + touchbacks)
+  // Better coaching = slightly better field position (preparation, discipline)
+  const fpBonus = Math.floor(offCoachBonus * 1.5);
+  let fieldPosition = 30 + Math.floor(Math.random() * 15) + fpBonus; // start at own 30-45 (kickoff returns + touchbacks)
   let down = 1;
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
@@ -450,6 +455,8 @@ export function simulateGame(
   game: GameResult,
   homeRoster: Player[],
   awayRoster: Player[],
+  homeCoachBonus = 0,
+  awayCoachBonus = 0,
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
@@ -527,7 +534,7 @@ export function simulateGame(
     const quarter = Math.min(4, Math.floor(i / (possessions / 4)) + 1);
 
     // Home offense drives
-    const homeDrive = simulateDrive(homeRoster, awayRoster);
+    const homeDrive = simulateDrive(homeRoster, awayRoster, homeCoachBonus);
     homeScore += homeDrive.points;
     allHomePlays.push(...homeDrive.plays);
     const afterHome = describeScoring(homeDrive, game.homeTeamId, quarter, runAway, runHome);
@@ -535,7 +542,7 @@ export function simulateGame(
     runHome = afterHome.home;
 
     // Away offense drives
-    const awayDrive = simulateDrive(awayRoster, homeRoster);
+    const awayDrive = simulateDrive(awayRoster, homeRoster, awayCoachBonus);
     awayScore += awayDrive.points;
     allAwayPlays.push(...awayDrive.plays);
     const afterAway = describeScoring(awayDrive, game.awayTeamId, quarter, runAway, runHome);

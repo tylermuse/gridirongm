@@ -17,6 +17,7 @@ import { generateTeamSpotlight, COMMENTATORS, type SpotlightContext } from '@/li
 import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
 import { teamPower, generateBettingLine } from '@/lib/engine/simulate';
+import { OFFENSIVE_SCHEME_LABELS, DEFENSIVE_SCHEME_LABELS } from '@/lib/engine/coaching';
 
 function TeamPicker() {
   const router = useRouter();
@@ -402,6 +403,21 @@ function Dashboard() {
                 </span>
               )}
             </div>
+            {/* Coaching schemes */}
+            {userTeam.coaches && userTeam.coaches.length > 0 && (() => {
+              const hc = userTeam.coaches.find(c => c.role === 'HC');
+              const oc = userTeam.coaches.find(c => c.role === 'OC');
+              const dc = userTeam.coaches.find(c => c.role === 'DC');
+              const offScheme = oc?.offensiveScheme ?? hc?.offensiveScheme;
+              const defScheme = dc?.defensiveScheme ?? hc?.defensiveScheme;
+              return (
+                <div className="flex items-center gap-3 mt-0.5">
+                  {hc && <span className="text-xs text-[var(--text-sec)]">HC: <span className="font-medium text-[var(--text)]">{hc.firstName[0]}. {hc.lastName}</span></span>}
+                  {offScheme && <span className="text-xs text-green-600">{OFFENSIVE_SCHEME_LABELS[offScheme]}</span>}
+                  {defScheme && <span className="text-xs text-red-600">{DEFENSIVE_SCHEME_LABELS[defScheme]}</span>}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
@@ -729,6 +745,50 @@ function Dashboard() {
             )}
           </Card>
         </div>
+
+        {/* Last Week Scores */}
+        {phase === 'regular' && week > 1 && (() => {
+          const lastWeek = week - 1;
+          const lastWeekGames = schedule.filter(g => g.week === lastWeek && g.played);
+          if (lastWeekGames.length === 0) return null;
+          const userDiv = userTeam.division;
+          const userConf = userTeam.conference;
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle>Week {lastWeek} Scores</CardTitle>
+              </CardHeader>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {lastWeekGames.map(g => {
+                  const ht = teams.find(t => t.id === g.homeTeamId);
+                  const at = teams.find(t => t.id === g.awayTeamId);
+                  if (!ht || !at) return null;
+                  const isUserGame = g.homeTeamId === userTeamId || g.awayTeamId === userTeamId;
+                  const isDivGame = (ht.conference === userConf && ht.division === userDiv && ht.id !== userTeamId)
+                    || (at.conference === userConf && at.division === userDiv && at.id !== userTeamId);
+                  const upset = g.bettingLine && ((g.bettingLine.spread < -3 && g.awayScore > g.homeScore) || (g.bettingLine.spread > 3 && g.homeScore > g.awayScore));
+                  return (
+                    <div key={g.id} className={`rounded-lg border px-2.5 py-1.5 text-xs ${
+                      isUserGame ? 'border-blue-400 bg-blue-50/60 font-bold' :
+                      isDivGame ? 'border-amber-300 bg-amber-50/40' :
+                      'border-[var(--border)] bg-[var(--surface)]'
+                    }`}>
+                      <div className="flex justify-between">
+                        <span>{at.abbreviation}</span>
+                        <span className={`font-mono ${g.awayScore > g.homeScore ? 'font-bold' : ''}`}>{g.awayScore}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>{ht.abbreviation}</span>
+                        <span className={`font-mono ${g.homeScore > g.awayScore ? 'font-bold' : ''}`}>{g.homeScore}</span>
+                      </div>
+                      {upset && <div className="text-[10px] text-amber-600 text-center mt-0.5">UPSET</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          );
+        })()}
       </div>
 
       {/* Team Spotlight */}

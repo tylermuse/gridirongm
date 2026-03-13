@@ -10,6 +10,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: '🏟️' },
   { href: '/roster', label: 'Roster', icon: '👥' },
+  { href: '/staff', label: 'Staff', icon: '🧑‍💼' },
   { href: '/standings', label: 'Standings', icon: '📊' },
   { href: '/playoffs', label: 'Playoffs', icon: '🏆' },
   { href: '/re-sign', label: 'Re-signing', icon: '✍️' },

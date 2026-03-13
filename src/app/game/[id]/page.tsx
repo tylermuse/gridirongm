@@ -578,6 +578,98 @@ function playTextColor(type: PlayEvent['type']): string {
 type TabId = 'gamecast' | 'play-by-play' | 'drives';
 
 // ---------------------------------------------------------------------------
+// Win Probability Chart
+// ---------------------------------------------------------------------------
+
+function WinProbabilityChart({
+  events,
+  homeColor,
+  awayColor,
+  homeAbbr,
+  awayAbbr,
+}: {
+  events: PlayEvent[];
+  homeColor: string;
+  awayColor: string;
+  homeAbbr: string;
+  awayAbbr: string;
+}) {
+  if (events.length < 2) return null;
+
+  const W = 600;
+  const H = 120;
+  const PAD_X = 0;
+  const PAD_Y = 8;
+  const chartW = W - PAD_X * 2;
+  const chartH = H - PAD_Y * 2;
+
+  // Calculate win probability at each event point
+  // Simple model: based on score differential, quarter, and time remaining
+  const probPoints: number[] = events.map(ev => {
+    const diff = ev.homeScore - ev.awayScore; // positive = home leading
+    const quarterWeight = ev.quarter >= 4 ? 3 : ev.quarter >= 3 ? 2 : 1;
+    // Sigmoid-like conversion: diff → probability
+    const k = 0.12 * quarterWeight;
+    return 1 / (1 + Math.exp(-k * diff));
+  });
+
+  // Build SVG path
+  const xStep = chartW / Math.max(1, probPoints.length - 1);
+  const points = probPoints.map((p, i) => ({
+    x: PAD_X + i * xStep,
+    y: PAD_Y + (1 - p) * chartH,
+  }));
+
+  const pathD = points.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(' ');
+  const midY = PAD_Y + chartH / 2;
+
+  // Fill area above/below 50% line
+  const homeAreaD = `${pathD} L ${points[points.length - 1].x.toFixed(1)} ${midY} L ${PAD_X} ${midY} Z`;
+
+  const lastProb = probPoints[probPoints.length - 1];
+  const homePct = Math.round(lastProb * 100);
+  const awayPct = 100 - homePct;
+
+  return (
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-4 py-3">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-sec)]">Win Probability</span>
+        <div className="flex items-center gap-3 text-xs font-bold">
+          <span style={{ color: awayColor }}>{awayAbbr} {awayPct}%</span>
+          <span style={{ color: homeColor }}>{homeAbbr} {homePct}%</span>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 100 }} preserveAspectRatio="none">
+        {/* 50% line */}
+        <line x1={PAD_X} y1={midY} x2={W - PAD_X} y2={midY} stroke="var(--border)" strokeWidth="1" strokeDasharray="4 3" />
+        {/* Home fill */}
+        <path d={homeAreaD} fill={homeColor} opacity={0.12} />
+        {/* Probability line */}
+        <path d={pathD} fill="none" stroke={homeColor} strokeWidth="2" strokeLinejoin="round" />
+        {/* Quarter markers */}
+        {[0.25, 0.5, 0.75].map((frac, i) => {
+          const x = PAD_X + frac * chartW;
+          return (
+            <g key={i}>
+              <line x1={x} y1={PAD_Y} x2={x} y2={PAD_Y + chartH} stroke="var(--border)" strokeWidth="0.5" opacity={0.5} />
+              <text x={x} y={H - 1} textAnchor="middle" fill="var(--text-sec)" fontSize="8" opacity={0.6}>
+                Q{i + 2}
+              </text>
+            </g>
+          );
+        })}
+        {/* End dot */}
+        <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r="3" fill={homeColor} />
+      </svg>
+      <div className="flex justify-between text-[10px] text-[var(--text-sec)] mt-0.5">
+        <span>{awayAbbr}</span>
+        <span>{homeAbbr}</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
 
@@ -755,7 +847,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
   return (
     <GameShell>
-      <div className="max-w-4xl mx-auto space-y-3">
+      <div className="max-w-6xl mx-auto flex gap-4">
+      {/* Main game content */}
+      <div className="flex-1 min-w-0 space-y-3">
 
         {/* ================================================================
             SCOREBOARD
@@ -902,6 +996,17 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             </span>
           </div>
         </div>
+
+        {/* ================================================================
+            WIN PROBABILITY
+        ================================================================ */}
+        <WinProbabilityChart
+          events={revealedEvents}
+          homeColor={homeColor}
+          awayColor={awayColor}
+          homeAbbr={homeAbbr}
+          awayAbbr={awayAbbr}
+        />
 
         {/* ================================================================
             TABS
@@ -1168,6 +1273,55 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           </>
           );
         })()}
+      </div>
+
+      {/* Around the League sidebar */}
+      <div className="w-72 hidden lg:block shrink-0 space-y-2">
+        <div className="sticky top-20">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Around the League</h3>
+          <div className="space-y-1.5 max-h-[calc(100vh-6rem)] overflow-y-auto">
+            {schedule
+              .filter(g => g.week === game.week && g.id !== game.id)
+              .map(g => {
+                const ht = teams.find(t => t.id === g.homeTeamId);
+                const at = teams.find(t => t.id === g.awayTeamId);
+                if (!ht || !at) return null;
+                const isDiv = ht.conference === teams.find(t => t.id === userTeamId)?.conference
+                  && ht.division === teams.find(t => t.id === userTeamId)?.division
+                  || at.conference === teams.find(t => t.id === userTeamId)?.conference
+                  && at.division === teams.find(t => t.id === userTeamId)?.division;
+                return (
+                  <div key={g.id} className={`rounded-lg border px-3 py-2 text-xs ${
+                    isDiv ? 'border-blue-300 bg-blue-50/50' : 'border-[var(--border)] bg-[var(--surface)]'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: at.primaryColor }} />
+                        <span className="font-medium">{at.abbreviation}</span>
+                      </div>
+                      <span className="font-mono font-bold">{g.played ? g.awayScore : ''}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: ht.primaryColor }} />
+                        <span className="font-medium">{ht.abbreviation}</span>
+                      </div>
+                      <span className="font-mono font-bold">{g.played ? g.homeScore : ''}</span>
+                    </div>
+                    {g.played && (
+                      <div className="text-[10px] text-[var(--text-sec)] mt-0.5 text-center">FINAL</div>
+                    )}
+                    {!g.played && (
+                      <div className="text-[10px] text-[var(--text-sec)] mt-0.5 text-center">
+                        {g.bettingLine ? `${g.bettingLine.spread > 0 ? at.abbreviation : ht.abbreviation} ${Math.abs(g.bettingLine.spread).toFixed(1)}` : '—'}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      </div>
       </div>
     </GameShell>
   );

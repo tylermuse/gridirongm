@@ -7,6 +7,10 @@ interface BoxScoreProps {
   players: Player[];
   homeTeamName: string;
   awayTeamName: string;
+  homeTeamId?: string;
+  awayTeamId?: string;
+  homeColor?: string;
+  awayColor?: string;
   onClose: () => void;
 }
 
@@ -33,7 +37,7 @@ function qbRating(stats: Partial<PlayerStats>): number {
   return Math.round(Math.min(158.3, Math.max(0, (pct + ypa + tdRate - intRate) * 25)));
 }
 
-export function BoxScore({ game, players, homeTeamName, awayTeamName, onClose }: BoxScoreProps) {
+export function BoxScore({ game, players, homeTeamName, awayTeamName, homeTeamId, awayTeamId, homeColor = '#3b82f6', awayColor = '#ef4444', onClose }: BoxScoreProps) {
   const allStats = game.playerStats;
 
   function getPlayer(pid: string): Player | undefined {
@@ -120,6 +124,100 @@ export function BoxScore({ game, players, homeTeamName, awayTeamName, onClose }:
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Scoring Plays */}
+          {game.scoringPlays && game.scoringPlays.length > 0 && (
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Key Plays</h3>
+              <div className="space-y-1">
+                {game.scoringPlays.map((sp, i) => {
+                  const isHome = sp.teamId === (homeTeamId ?? game.homeTeamId);
+                  return (
+                    <div key={i} className="flex items-start gap-2 text-sm py-1 border-b border-[var(--border)] last:border-0">
+                      <span className="text-[10px] font-mono text-[var(--text-sec)] w-12 shrink-0 mt-0.5">
+                        Q{sp.quarter} {sp.timeLeft ?? ''}
+                      </span>
+                      <div
+                        className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
+                        style={{ backgroundColor: isHome ? homeColor : awayColor }}
+                      />
+                      <span className="flex-1 text-xs">{sp.description}</span>
+                      <span className="text-[10px] font-mono font-bold text-[var(--text-sec)] shrink-0">
+                        {sp.score[0]}-{sp.score[1]}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Team Stats Comparison */}
+          {(() => {
+            const homeStats = Object.entries(allStats)
+              .filter(([pid]) => {
+                const p = getPlayer(pid);
+                return p && p.teamId === (homeTeamId ?? game.homeTeamId);
+              })
+              .map(([, s]) => s);
+            const awayStats = Object.entries(allStats)
+              .filter(([pid]) => {
+                const p = getPlayer(pid);
+                return p && p.teamId === (awayTeamId ?? game.awayTeamId);
+              })
+              .map(([, s]) => s);
+
+            const sum = (stats: typeof homeStats, key: keyof PlayerStats) =>
+              stats.reduce((acc, s) => acc + ((s[key] as number) ?? 0), 0);
+
+            const hPassYds = sum(homeStats, 'passYards');
+            const aPassYds = sum(awayStats, 'passYards');
+            const hRushYds = sum(homeStats, 'rushYards');
+            const aRushYds = sum(awayStats, 'rushYards');
+            const hTotalYds = hPassYds + hRushYds;
+            const aTotalYds = aPassYds + aRushYds;
+            const hTurnovers = sum(homeStats, 'interceptions') + sum(homeStats, 'fumbles');
+            const aTurnovers = sum(awayStats, 'interceptions') + sum(awayStats, 'fumbles');
+            const hSacks = sum(homeStats, 'sacks');
+            const aSacks = sum(awayStats, 'sacks');
+
+            if (hTotalYds === 0 && aTotalYds === 0) return null;
+
+            const rows = [
+              { label: 'Total Yards', home: hTotalYds, away: aTotalYds },
+              { label: 'Passing Yards', home: hPassYds, away: aPassYds },
+              { label: 'Rushing Yards', home: hRushYds, away: aRushYds },
+              { label: 'Turnovers', home: hTurnovers, away: aTurnovers, lowerIsBetter: true },
+              { label: 'Sacks', home: hSacks, away: aSacks },
+            ];
+
+            return (
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Team Stats</h3>
+                <div className="space-y-2">
+                  {rows.map(row => {
+                    const total = row.home + row.away || 1;
+                    const homePct = (row.home / total) * 100;
+                    const homeWins = row.lowerIsBetter ? row.home < row.away : row.home > row.away;
+                    const awayWins = row.lowerIsBetter ? row.away < row.home : row.away > row.home;
+                    return (
+                      <div key={row.label}>
+                        <div className="flex items-center justify-between text-xs mb-0.5">
+                          <span className={`font-mono ${homeWins ? 'font-bold' : 'text-[var(--text-sec)]'}`}>{row.home}</span>
+                          <span className="text-[var(--text-sec)]">{row.label}</span>
+                          <span className={`font-mono ${awayWins ? 'font-bold' : 'text-[var(--text-sec)]'}`}>{row.away}</span>
+                        </div>
+                        <div className="flex h-1.5 rounded-full overflow-hidden bg-[var(--surface-2)]">
+                          <div className="rounded-l-full" style={{ width: `${homePct}%`, backgroundColor: homeColor }} />
+                          <div className="rounded-r-full" style={{ width: `${100 - homePct}%`, backgroundColor: awayColor }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Passing */}
           {passers.length > 0 && (
             <div>
