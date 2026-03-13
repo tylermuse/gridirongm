@@ -48,13 +48,16 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       .single();
 
     if (profileError) {
-      console.warn('Failed to fetch profile for admin check:', profileError.message);
+      console.warn('[Admin] Profile fetch error:', profileError.message, profileError.code);
     }
 
-    // Fallback: grant admin to known admin emails if profile query fails
+    // Fallback: grant admin to known admin emails if profile query fails or is_admin is falsy
     const { data: { user: authUser } } = await supabase.auth.getUser();
     const ADMIN_EMAILS = ['tylermuse@gmail.com'];
-    const admin = profile?.is_admin === true || ADMIN_EMAILS.includes(authUser?.email ?? '');
+    const profileAdmin = profile?.is_admin === true || profile?.is_admin === 'true';
+    const emailAdmin = ADMIN_EMAILS.includes(authUser?.email?.toLowerCase() ?? '');
+    const admin = profileAdmin || emailAdmin;
+    console.log('[Admin] userId:', userId, 'profile:', profile, 'authEmail:', authUser?.email, 'profileAdmin:', profileAdmin, 'emailAdmin:', emailAdmin, 'result:', admin);
     setIsAdmin(admin);
 
     // 🎉 LIMITED-TIME PROMO: All users get elite tier for free
