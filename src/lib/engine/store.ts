@@ -195,6 +195,24 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
       let score = prospect.ratings.overall * 15 + prospect.potential * 0.5 + needScore;
       // Very small random to break ties, not to reshape the board
       score += (Math.random() - 0.5) * 8;
+
+      // QB premium: QBs are the most valuable position in football.
+      // Good QBs go very early — a 70+ OVR QB should go top 5-10.
+      // Also value QB potential much more than other positions.
+      if (prospect.position === 'QB') {
+        const qbOvr = prospect.ratings.overall;
+        const currentQbOvr = topOvrByPosition['QB'] ?? 0;
+        // Big premium for high-OVR QBs (elite QBs get +100-150 bonus)
+        if (qbOvr >= 75) score += 150;
+        else if (qbOvr >= 68) score += 100;
+        else if (qbOvr >= 60) score += 50;
+        // Extra bonus if team's current QB is weak
+        if (currentQbOvr < 65) score += 60;
+        else if (currentQbOvr < 75) score += 25;
+        // QBs with high potential are especially prized
+        score += prospect.potential * 1.5; // additional POT weight on top of base 0.5
+      }
+
       // K/P are the least important positions — heavily de-value them in draft
       if (prospect.position === 'K' || prospect.position === 'P') {
         score = minNeed > 0 ? score * 0.4 : score * 0.15;
