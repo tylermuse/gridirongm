@@ -52,7 +52,10 @@ function playerTradeValue(player: Player): number {
   const normalized = Math.max(0, (player.ratings.overall - 40) / 55);
   const base = Math.pow(normalized, 2.5) * 1200;
   const potBonus = Math.max(0, player.potential - player.ratings.overall) * 3;
-  return (base + potBonus) * ageMultiplier * posMultiplier;
+  const rawValue = (base + potBonus) * ageMultiplier * posMultiplier;
+  // Subtract contract burden so overpaid players have lower trade value
+  const contractCost = player.contract.salary * player.contract.yearsLeft * 1.5;
+  return Math.round(rawValue - contractCost);
 }
 
 const PICK_VALUES = [150, 90, 55, 35, 20, 10, 5];
@@ -194,15 +197,23 @@ function TradeFinderContent({
     );
   }
 
-  // Find user's weakest positions (best player < 70 OVR at that position)
+  // Find user's top 4 weakest positions (below roster minimum or best player below league avg OVR)
   const userRoster = players.filter(p => p.teamId === userTeamId && !p.retired);
-  const weakPositions = new Set<string>();
+  const ROSTER_MIN: Record<string, number> = { QB: 2, RB: 2, WR: 3, TE: 2, OL: 5, DL: 4, LB: 3, CB: 3, S: 2, K: 1, P: 1 };
+  const posNeeds: { pos: string; urgency: number }[] = [];
   for (const pos of POSITIONS) {
     const atPos = userRoster.filter(p => p.position === pos).sort((a, b) => b.ratings.overall - a.ratings.overall);
-    if (atPos.length === 0 || atPos[0].ratings.overall < 70) {
-      weakPositions.add(pos);
-    }
+    const bestOvr = atPos[0]?.ratings.overall ?? 0;
+    const count = atPos.length;
+    const minCount = ROSTER_MIN[pos] ?? 2;
+    // Urgency: higher = more needed. Empty position = 100, below minimum roster = 80, best player < 70 OVR = 70 - bestOvr
+    let urgency = 0;
+    if (count === 0) urgency = 100;
+    else if (count < minCount) urgency = 80 + (minCount - count) * 5;
+    else if (bestOvr < 70) urgency = 70 - bestOvr;
+    if (urgency > 0) posNeeds.push({ pos, urgency });
   }
+  const weakPositions = posNeeds.sort((a, b) => b.urgency - a.urgency).slice(0, 4).map(n => n.pos);
 
   const tradeableMap = findTradeablePlayers(players, teams, userTeamId);
 
@@ -239,9 +250,9 @@ function TradeFinderContent({
           <p className="text-sm text-[var(--text-sec)]">
             Browse available players across the league. Shows non-elite players and depth surplus — these are the most likely to be traded.
           </p>
-          {weakPositions.size > 0 && (
+          {weakPositions.length > 0 && (
             <p className="text-xs text-amber-600 mt-1">
-              Your needs: {[...weakPositions].join(', ')} (best player &lt; 70 OVR)
+              Top needs: {weakPositions.join(', ')}
             </p>
           )}
         </div>
@@ -295,7 +306,7 @@ function TradeFinderContent({
 
               <div className="space-y-1">
                 {displayPlayers.map(tp => {
-                  const isNeed = weakPositions.has(tp.player.position);
+                  const isNeed = weakPositions.includes(tp.player.position);
                   return (
                     <div key={tp.player.id} className={`flex items-center gap-2 py-1.5 px-2 rounded ${isNeed ? 'bg-amber-50' : ''}`}>
                       <Badge size="sm" variant={isNeed ? 'amber' : 'default'}>{tp.player.position}</Badge>
@@ -494,6 +505,9 @@ function TradesPage() {
   const userTeamObj = teams.find(t => t.id === userTeamId);
   const pendingProposals = tradeProposals.filter(p => {
     if (p.status !== 'pending') return false;
+    // Expire proposals older than 3 weeks
+    if (p.season === season && week - p.week > 3) return false;
+    if (p.season < season) return false;
     // Hide stale proposals: requested players must still be on user's team
     const playersValid = p.requestedPlayerIds.every(pid => {
       const player = players.find(pl => pl.id === pid);
@@ -540,11 +554,11 @@ function TradesPage() {
     return sum + (pick ? pickTradeValue(pick) : 0);
   }, 0);
 
-  const valueDiff = offeredValue - receivedValue;
+  const valueDiff = receivedValue - offeredValue;
   const valueLabel =
-    Math.abs(valueDiff) < offeredValue * 0.1 ? 'Fair trade' :
-    valueDiff < 0 ? `You lose ~${Math.round(Math.abs(valueDiff))} pts` :
-    `You gain ~${Math.round(valueDiff)} pts`;
+    Math.abs(valueDiff) < Math.max(offeredValue, receivedValue, 1) * 0.1 ? 'Fair trade' :
+    valueDiff > 0 ? `You gain ~${Math.round(valueDiff).toLocaleString()} pts` :
+    `You lose ~${Math.round(Math.abs(valueDiff)).toLocaleString()} pts`;
 
   function handleSendTrade() {
     if (!selectedTeamId) return;
@@ -626,11 +640,11 @@ function TradesPage() {
     return sum + (pick ? pickTradeValue(pick) : 0);
   }, 0);
 
-  const counterValueDiff = counterOfferedValue - counterReceivedValue;
+  const counterValueDiff = counterReceivedValue - counterOfferedValue;
   const counterValueLabel =
-    Math.abs(counterValueDiff) < counterOfferedValue * 0.1 ? 'Fair trade' :
-    counterValueDiff < 0 ? `You lose ~${Math.round(Math.abs(counterValueDiff))} pts` :
-    `You gain ~${Math.round(counterValueDiff)} pts`;
+    Math.abs(counterValueDiff) < Math.max(counterOfferedValue, counterReceivedValue, 1) * 0.1 ? 'Fair trade' :
+    counterValueDiff > 0 ? `You gain ~${Math.round(counterValueDiff).toLocaleString()} pts` :
+    `You lose ~${Math.round(Math.abs(counterValueDiff)).toLocaleString()} pts`;
 
   function handleSolicitProposals() {
     solicitTradingBlockProposals(blockedPlayerIds, blockedPickIds, seekPositions, seekDraftPicks);
@@ -970,10 +984,10 @@ function TradesPage() {
                         <div className="flex items-center justify-between bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3">
                           <div>
                             <div className="text-sm font-semibold">
-                              Value: {Math.round(counterOfferedValue)} → {Math.round(counterReceivedValue)} pts
+                              Value: {Math.round(counterOfferedValue).toLocaleString()} → {Math.round(counterReceivedValue).toLocaleString()} pts
                               <span className={`ml-2 text-xs ${
-                                Math.abs(counterValueDiff) < counterOfferedValue * 0.1 ? 'text-green-600' :
-                                counterValueDiff < 0 ? 'text-blue-600' : 'text-amber-600'
+                                Math.abs(counterValueDiff) < Math.max(counterOfferedValue, counterReceivedValue, 1) * 0.1 ? 'text-green-600' :
+                                counterValueDiff > 0 ? 'text-blue-600' : 'text-amber-600'
                               }`}>
                                 ({counterValueLabel})
                               </span>
@@ -1324,7 +1338,7 @@ function TradesPage() {
                           <Badge size="sm">{p.position}</Badge>
                           <span className="text-sm flex-1">{p.firstName} {p.lastName}</span>
                           <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
-                          <span className="text-xs text-[var(--text-sec)]">~{Math.round(playerTradeValue(p))}</span>
+                          <span className="text-xs text-[var(--text-sec)]">~{Math.round(playerTradeValue(p)).toLocaleString()}</span>
                         </label>
                       ))}
                     </div>
@@ -1373,7 +1387,7 @@ function TradesPage() {
                               <Badge size="sm">{p.position}</Badge>
                               <span className="text-sm flex-1">{p.firstName} {p.lastName}</span>
                               <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
-                              <span className="text-xs text-[var(--text-sec)]">~{Math.round(playerTradeValue(p))}</span>
+                              <span className="text-xs text-[var(--text-sec)]">~{Math.round(playerTradeValue(p)).toLocaleString()}</span>
                             </label>
                           ))}
                         </div>
@@ -1407,10 +1421,10 @@ function TradesPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-sm font-semibold">
-                        Value: {Math.round(offeredValue)} → {Math.round(receivedValue)} pts
+                        Value: {Math.round(offeredValue).toLocaleString()} → {Math.round(receivedValue).toLocaleString()} pts
                         <span className={`ml-2 text-xs ${
-                          Math.abs(valueDiff) < offeredValue * 0.1 ? 'text-green-600' :
-                          valueDiff < 0 ? 'text-blue-600' : 'text-amber-600'
+                          Math.abs(valueDiff) < Math.max(offeredValue, receivedValue, 1) * 0.1 ? 'text-green-600' :
+                          valueDiff > 0 ? 'text-blue-600' : 'text-amber-600'
                         }`}>
                           ({valueLabel})
                         </span>

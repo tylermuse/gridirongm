@@ -147,6 +147,18 @@ export interface Player {
   photoUrl?: string;
   /** College / university the player attended (flavor text for draft) */
   college?: string;
+  /** Height string e.g. "6'3\"" */
+  height?: string;
+  /** Weight in lbs */
+  weight?: number;
+  /** Round the player was drafted in */
+  draftRound?: number;
+  /** Team ID that originally drafted this player */
+  draftTeamId?: string;
+  /** Stats from the previous completed season (for free agency display) */
+  previousSeasonStats?: PlayerStats;
+  /** Season-by-season stat history */
+  seasonLog?: { season: number; teamId: string; stats: PlayerStats }[];
 }
 
 export interface TeamRecord {

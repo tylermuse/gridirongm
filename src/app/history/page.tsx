@@ -39,13 +39,13 @@ function AllLeagueList({
   title,
   entries,
   playerName,
-  teamAbbr,
+  teamName,
   onSelectPlayer,
 }: {
   title: string;
   entries: AllLeagueEntry[];
   playerName: (id: string) => string;
-  teamAbbr: (id: string) => string;
+  teamName: (id: string) => string;
   onSelectPlayer: (id: string) => void;
 }) {
   if (entries.length === 0) return null;
@@ -57,7 +57,7 @@ function AllLeagueList({
           <div key={i} className="flex items-center gap-2 text-sm border-t border-[var(--border)] pt-1.5 first:border-t-0 first:pt-0">
             <span className="text-[var(--text-sec)] w-7 shrink-0 font-mono text-xs">{e.position}</span>
             <PlayerLink playerId={e.playerId} onSelect={onSelectPlayer}>{playerName(e.playerId)}</PlayerLink>
-            <span className="text-xs text-[var(--text-sec)]">({teamAbbr(e.teamId)})</span>
+            <span className="text-xs text-[var(--text-sec)]">({teamName(e.teamId)})</span>
           </div>
         ))}
       </div>
@@ -230,7 +230,7 @@ function SeasonDetail({
                 <span className="font-semibold">
                   {pos}{' '}
                   <PlayerLink playerId={selected.finalsMvpId} onSelect={onSelectPlayer}>{playerName(selected.finalsMvpId)}</PlayerLink>
-                  <span className="ml-1 text-xs text-[var(--text-sec)]">({teamAbbr(selected.championTeamId)})</span>
+                  <span className="ml-1 text-xs text-[var(--text-sec)]">({teamName(selected.championTeamId)})</span>
                 </span>
                 {sbStatLine && <div className="text-xs text-[var(--text-sec)] mt-0.5">SB: {sbStatLine}</div>}
               </div>
@@ -307,21 +307,21 @@ function SeasonDetail({
           title="All-League 1st Team"
           entries={selected.allLeagueFirst ?? []}
           playerName={playerName}
-          teamAbbr={teamAbbr}
+          teamName={teamName}
           onSelectPlayer={onSelectPlayer}
         />
         <AllLeagueList
           title="All-League 2nd Team"
           entries={selected.allLeagueSecond ?? []}
           playerName={playerName}
-          teamAbbr={teamAbbr}
+          teamName={teamName}
           onSelectPlayer={onSelectPlayer}
         />
         <AllLeagueList
           title="All-Rookie Team"
           entries={selected.allRookieTeam ?? []}
           playerName={playerName}
-          teamAbbr={teamAbbr}
+          teamName={teamName}
           onSelectPlayer={onSelectPlayer}
         />
 

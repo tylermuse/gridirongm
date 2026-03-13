@@ -80,6 +80,7 @@ interface GameStore extends LeagueState {
     skipValueCheck?: boolean,
   ) => boolean;
   respondToTradeProposal: (proposalId: string, accept: boolean) => boolean;
+  rejectAllTradeProposals: () => void;
   solicitTradingBlockProposals: (playerIds: string[], pickIds: string[], seekPositions: Position[], seekDraftPicks?: boolean) => void;
   // PRD-07: Scouting
   setScoutingLevel: (level: 0 | 1 | 2) => void;
@@ -184,19 +185,22 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
       const limits = ROSTER_LIMITS[prospect.position];
       const count = countByPosition[prospect.position];
       const minNeed = Math.max(0, limits.min - count);
+      const atOrAboveMax = count >= limits.max;
+      // Skip positions at or above roster maximum entirely
+      if (atOrAboveMax) return { playerId: prospect.id, score: -9999 };
       // BPA-dominant: OVR is by far the biggest factor.
-      // A 10 OVR gap = 150pts — need bonuses max out at ~25pts and can never bridge that.
-      // This means a 73 OVR S beats a 66 OVR WR even with strong positional need.
       const needScore = minNeed * 12;
       let score = prospect.ratings.overall * 15 + prospect.potential * 0.5 + needScore;
       // Very small random to break ties, not to reshape the board
       score += (Math.random() - 0.5) * 8;
-      // K/P are the least important positions — heavily de-value them in draft
+      // K/P: never draft if team already has one, otherwise heavily de-value
       if (prospect.position === 'K' || prospect.position === 'P') {
+        if (count >= 1) return { playerId: prospect.id, score: -9999 };
         score = minNeed > 0 ? score * 0.4 : score * 0.15;
       }
       return { playerId: prospect.id, score };
     })
+    .filter(r => r.score > -9999)
     .sort((a, b) => b.score - a.score);
 
   return ranked[0]?.playerId;
@@ -483,11 +487,13 @@ function playerTradeValue(player: Player): number {
     player.age <= 33 ? 0.45 : 0.2;
   const posMultiplier = POSITION_VALUE_MULT[player.position] ?? 1.0;
   // Exponential curve: stars (85+) are worth dramatically more than average (65) players.
-  // 56 OVR → ~30 value, 70 OVR → ~200, 80 OVR → ~500, 90 OVR → ~1200
   const normalized = Math.max(0, (player.ratings.overall - 40) / 55);
   const base = Math.pow(normalized, 2.5) * 1200;
   const potBonus = Math.max(0, player.potential - player.ratings.overall) * 3;
-  return (base + potBonus) * ageMultiplier * posMultiplier;
+  const rawValue = (base + potBonus) * ageMultiplier * posMultiplier;
+  // Subtract contract burden so overpaid players have lower trade value
+  const contractCost = player.contract.salary * player.contract.yearsLeft * 1.5;
+  return Math.round(rawValue - contractCost);
 }
 
 function pickTradeValue(pick: DraftPick): number {
@@ -2262,6 +2268,8 @@ export const useGameStore = create<GameStore>()(
                   teamId: currentPickTeamId,
                   draftYear: state.season,
                   draftPick: overallPick,
+                  draftRound: round,
+                  draftTeamId: currentPickTeamId,
                   contract: { salary: finalSalary, yearsLeft: 4, guaranteed: generateGuaranteed(finalSalary, 4), totalYears: 4, offseasonSigned: true },
                 }
               : p,
@@ -2327,7 +2335,7 @@ export const useGameStore = create<GameStore>()(
 
           players = players.map(p =>
             p.id === pid
-              ? { ...p, teamId: pickTeam, draftYear: state.season, draftPick: overallPick, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4, offseasonSigned: true } }
+              ? { ...p, teamId: pickTeam, draftYear: state.season, draftPick: overallPick, draftRound: round, draftTeamId: pickTeam, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4, offseasonSigned: true } }
               : p,
           );
           teams = teams.map(t => {
@@ -2389,7 +2397,7 @@ export const useGameStore = create<GameStore>()(
 
           players = players.map(p =>
             p.id === pid
-              ? { ...p, teamId: pickTeam, draftYear: state.season, draftPick: overallPick, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4, offseasonSigned: true } }
+              ? { ...p, teamId: pickTeam, draftYear: state.season, draftPick: overallPick, draftRound: round, draftTeamId: pickTeam, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4, offseasonSigned: true } }
               : p,
           );
           teams = teams.map(t => {
@@ -3345,6 +3353,15 @@ export const useGameStore = create<GameStore>()(
         return success;
       },
 
+      rejectAllTradeProposals: () => {
+        const state = get();
+        set({
+          tradeProposals: state.tradeProposals.map(p =>
+            p.status === 'pending' ? { ...p, status: 'rejected' as const } : p,
+          ),
+        });
+      },
+
       solicitTradingBlockProposals: (blockedPlayerIds: string[], blockedPickIds: string[], seekPositions: Position[], seekDraftPicks?: boolean) => {
         const state = get();
         // Block during playoffs and past in-season trade deadline
@@ -3675,10 +3692,19 @@ export const useGameStore = create<GameStore>()(
             }
           }
 
+          // Save season stats before resetting
+          const hasPlayedThisSeason = p.stats.gamesPlayed > 0;
+          const prevLog = p.seasonLog ?? [];
+          const newSeasonLog = hasPlayedThisSeason
+            ? [...prevLog, { season: state.season, teamId: p.teamId ?? '', stats: { ...p.stats } }]
+            : prevLog;
+
           return {
             ...p,
             age: p.age + 1,
             experience: isUnsignedFutureProspect ? 0 : p.experience + 1,
+            previousSeasonStats: hasPlayedThisSeason ? { ...p.stats } : p.previousSeasonStats,
+            seasonLog: newSeasonLog,
             stats: emptyStats(),
             injury: null,
             onIR: false,

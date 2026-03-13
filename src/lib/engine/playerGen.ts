@@ -25,6 +25,53 @@ function clamp(val: number, min = 20, max = 99): number {
   return Math.round(Math.max(min, Math.min(max, val)));
 }
 
+// Height/weight ranges by position (inches, lbs)
+const POSITION_BODY: Record<Position, { heightMin: number; heightMax: number; weightMin: number; weightMax: number }> = {
+  QB:  { heightMin: 72, heightMax: 77, weightMin: 210, weightMax: 240 },
+  RB:  { heightMin: 68, heightMax: 73, weightMin: 195, weightMax: 230 },
+  WR:  { heightMin: 69, heightMax: 76, weightMin: 175, weightMax: 215 },
+  TE:  { heightMin: 74, heightMax: 78, weightMin: 235, weightMax: 265 },
+  OL:  { heightMin: 74, heightMax: 78, weightMin: 295, weightMax: 340 },
+  DL:  { heightMin: 73, heightMax: 78, weightMin: 270, weightMax: 320 },
+  LB:  { heightMin: 72, heightMax: 76, weightMin: 225, weightMax: 260 },
+  CB:  { heightMin: 69, heightMax: 74, weightMin: 180, weightMax: 205 },
+  S:   { heightMin: 70, heightMax: 75, weightMin: 195, weightMax: 220 },
+  K:   { heightMin: 69, heightMax: 74, weightMin: 180, weightMax: 210 },
+  P:   { heightMin: 71, heightMax: 76, weightMin: 200, weightMax: 230 },
+};
+
+function generateHeight(position: Position): string {
+  const { heightMin, heightMax } = POSITION_BODY[position];
+  const inches = heightMin + Math.floor(Math.random() * (heightMax - heightMin + 1));
+  const feet = Math.floor(inches / 12);
+  const rem = inches % 12;
+  return `${feet}'${rem}"`;
+}
+
+function generateWeight(position: Position): number {
+  const { weightMin, weightMax } = POSITION_BODY[position];
+  return weightMin + Math.floor(Math.random() * (weightMax - weightMin + 1));
+}
+
+const COLLEGES = [
+  'Alabama', 'Ohio State', 'Georgia', 'Clemson', 'LSU', 'Michigan', 'Oklahoma',
+  'Notre Dame', 'Texas', 'Penn State', 'Oregon', 'Florida', 'USC', 'Auburn',
+  'Wisconsin', 'Iowa', 'Miami (FL)', 'Tennessee', 'Texas A&M', 'Florida State',
+  'Stanford', 'Michigan State', 'Virginia Tech', 'North Carolina', 'Ole Miss',
+  'Arkansas', 'Kentucky', 'Pittsburgh', 'Utah', 'Baylor', 'Minnesota',
+  'West Virginia', 'Mississippi State', 'South Carolina', 'TCU', 'NC State',
+  'Missouri', 'UCLA', 'Nebraska', 'Colorado', 'BYU', 'Washington', 'Arizona State',
+  'Louisville', 'Boston College', 'Duke', 'Cal', 'Illinois', 'Purdue', 'Syracuse',
+  'Cincinnati', 'Houston', 'Memphis', 'UCF', 'Boise State', 'San Diego State',
+  'Fresno State', 'SMU', 'Tulane', 'App State', 'James Madison', 'Liberty',
+  'Coastal Carolina', 'Georgia Tech', 'Vanderbilt', 'Wake Forest', 'Kansas State',
+  'Iowa State', 'Oklahoma State', 'Oregon State', 'Washington State', 'Arizona',
+];
+
+function randomCollege(): string {
+  return COLLEGES[Math.floor(Math.random() * COLLEGES.length)];
+}
+
 function gaussian(mean: number, stdDev: number): number {
   const u1 = Math.random();
   const u2 = Math.random();
@@ -135,6 +182,10 @@ export function generatePlayer(
     injury: null,
     onIR: false,
     mood: 60 + Math.floor(Math.random() * 30), // 60-90 initial mood
+    height: generateHeight(position),
+    weight: generateWeight(position),
+    college: randomCollege(),
+    seasonLog: [],
   };
 }
 
@@ -164,21 +215,6 @@ export function generateRoster(teamId: string, tierMean: number): Player[] {
   }
   return players;
 }
-
-const COLLEGES = [
-  'Alabama', 'Ohio State', 'Georgia', 'Clemson', 'LSU', 'Michigan',
-  'Oklahoma', 'Notre Dame', 'Penn State', 'Oregon', 'Texas', 'Florida',
-  'USC', 'Auburn', 'Texas A&M', 'Tennessee', 'Wisconsin', 'Iowa',
-  'Miami (FL)', 'Florida State', 'Stanford', 'UCLA', 'Nebraska',
-  'Michigan State', 'Virginia Tech', 'North Carolina', 'Ole Miss',
-  'Arkansas', 'South Carolina', 'Pittsburgh', 'Baylor', 'TCU',
-  'Utah', 'Washington', 'Arizona State', 'Kentucky', 'Mississippi State',
-  'Minnesota', 'West Virginia', 'Louisville', 'Colorado', 'Missouri',
-  'NC State', 'Maryland', 'Boston College', 'Duke', 'Northwestern',
-  'Purdue', 'Illinois', 'Vanderbilt', 'Wake Forest', 'Cincinnati',
-  'BYU', 'Memphis', 'Houston', 'SMU', 'Boise State', 'San Diego State',
-  'Fresno State', 'Tulane',
-];
 
 const SCOUTING_LABELS = [
   'High motor', 'Raw but explosive', 'Pro-ready',

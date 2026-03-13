@@ -540,8 +540,12 @@ function Dashboard() {
           {/* Team Stats */}
           <Card>
             <CardHeader><CardTitle>Team Stats</CardTitle></CardHeader>
-            {(() => {
-              const gp = Math.max(1, userTeam.record.wins + userTeam.record.losses);
+            {gamesPlayed === 0 ? (
+              <div className="text-sm text-[var(--text-sec)] text-center py-4">
+                Season hasn&apos;t started — sim some games!
+              </div>
+            ) : (() => {
+              const gp = Math.max(1, gamesPlayed);
               const ppg = userTeam.record.pointsFor / gp;
               const pag = userTeam.record.pointsAgainst / gp;
               const totalPassYds = roster.reduce((s, p) => s + p.stats.passYards, 0);
@@ -592,6 +596,11 @@ function Dashboard() {
           {/* League Leaders */}
           <Card>
             <CardHeader><CardTitle>League Leaders</CardTitle></CardHeader>
+            {gamesPlayed === 0 ? (
+              <div className="text-sm text-[var(--text-sec)] text-center py-4">
+                Season hasn&apos;t started — sim some games!
+              </div>
+            ) : (
             <div className="space-y-3">
               {(() => {
                 const allActive = players.filter(p => p.teamId && !p.retired);
@@ -622,11 +631,17 @@ function Dashboard() {
                 });
               })()}
             </div>
+            )}
           </Card>
 
           {/* Team Leaders */}
           <Card>
             <CardHeader><CardTitle>Team Leaders</CardTitle></CardHeader>
+            {gamesPlayed === 0 ? (
+              <div className="text-sm text-[var(--text-sec)] text-center py-4">
+                Season hasn&apos;t started — sim some games!
+              </div>
+            ) : (
             <div className="space-y-3">
               {(() => {
                 const qb = roster.filter(p => p.position === 'QB').sort((a, b) => b.stats.passYards - a.stats.passYards)[0];
@@ -655,6 +670,7 @@ function Dashboard() {
                 ));
               })()}
             </div>
+            )}
           </Card>
 
           {/* News */}

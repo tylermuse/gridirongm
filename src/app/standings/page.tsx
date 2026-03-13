@@ -37,11 +37,15 @@ function clinchIndicator(team: Team, allTeams: Team[], schedule: GameResult[], m
 
   // y = clinched division: team's wins > all other div teams' max possible wins
   const clinchedDiv = divTeams.every(t => t.id === team.id || team.record.wins > t.record.wins + remaining(t));
+
+  // z = clinched #1 seed: clinched division AND wins > all other conf teams' max possible wins
+  const confTeamsThatCouldPass = confTeams.filter(t => t.id !== team.id && (t.record.wins + remaining(t)) >= team.record.wins).length;
+  if (clinchedDiv && confTeamsThatCouldPass === 0) return 'z';
+
   if (clinchedDiv) return 'y';
 
   // x = clinched playoff: team's wins exceed max possible wins of enough conf teams
   // 7 playoff spots per conference; if at most 6 conf teams could surpass this team, clinched
-  const confTeamsThatCouldPass = confTeams.filter(t => t.id !== team.id && (t.record.wins + remaining(t)) >= team.record.wins).length;
   if (confTeamsThatCouldPass < 7) return 'x';
 
   // e = eliminated: team's max wins < current 7th-best conf record
@@ -282,6 +286,16 @@ export default function StandingsPage() {
                 </CardHeader>
                 <StandingsTable teamList={sortedTeams(teams)} userTeamId={userTeamId} onTeamClick={(id) => setViewTeamId(id)} allTeams={teams} schedule={schedule} maxWeek={maxWeek} currentWeek={week} expanded />
               </Card>
+            )}
+
+            {/* Clinch legend */}
+            {phase === 'regular' && week > 1 && (
+              <div className="flex gap-4 mt-3 text-[10px] text-[var(--text-sec)]">
+                <span><span className="font-bold text-green-600">z</span> = #1 seed</span>
+                <span><span className="font-bold text-green-600">y</span> = clinched division</span>
+                <span><span className="font-bold text-green-600">x</span> = clinched playoff</span>
+                <span><span className="font-bold text-red-500">e</span> = eliminated</span>
+              </div>
             )}
           </>
         )}

@@ -119,6 +119,7 @@ function OnTheClockSection({
   currentOverallPick,
   bestAvailable,
   bestFit,
+  bestFitIsNeedMatch,
   scoutsPick,
   scoutingLevel,
   draftScoutingData,
@@ -142,6 +143,7 @@ function OnTheClockSection({
   currentOverallPick: number;
   bestAvailable: Player | undefined;
   bestFit: Player | null | undefined;
+  bestFitIsNeedMatch: boolean;
   scoutsPick: Player | null | undefined;
   scoutingLevel: number;
   draftScoutingData: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }>;
@@ -274,7 +276,8 @@ function OnTheClockSection({
             )}
             {bestFit && (
               <ProspectCard
-                label={bestFit.id === bestAvailable?.id ? "Best Fit (Same)" : "Best Fit"}
+                label="Best Fit"
+                subtitle={!bestFitIsNeedMatch ? 'No position need match' : undefined}
                 player={bestFit}
                 posRank={getPositionRank(bestFit)}
                 ovrRank={getOverallRank(bestFit)}
@@ -431,9 +434,9 @@ export default function DraftPage() {
     return p && p.experience === 0;
   }).length;
   const draftComplete = draftOrder.length === 0 || prospectCount === 0;
-  const currentOverallPick = draftComplete ? totalPicks : totalPicks - draftOrder.length + 1;
+  const currentOverallPick = draftComplete ? totalPicks : Math.min(totalPicks, totalPicks - draftOrder.length + 1);
   const currentRound = Math.min(totalRounds, Math.max(1, Math.ceil(currentOverallPick / picksPerRound)));
-  const currentPickInRound = ((currentOverallPick - 1) % picksPerRound) + 1;
+  const currentPickInRound = Math.min(picksPerRound, ((currentOverallPick - 1) % picksPerRound) + 1);
 
   function getTeamNeeds(teamId: string) {
     const roster = players.filter((player) => player.teamId === teamId);
@@ -486,30 +489,36 @@ export default function DraftPage() {
   const nextPickNeeds = draftOrder[1] ? getTeamNeeds(draftOrder[1]).slice(0, 3) : [];
   const myNeeds = getTeamNeeds(userTeamId).slice(0, 5);
   const bestAvailable = allProspects[0];
-  const bestFit = (() => {
-    if (!currentPickTeamId) return null;
+  const bestFitResult = (() => {
+    if (!currentPickTeamId) return { player: null as Player | null, isNeedMatch: true };
     const needs = getTeamNeeds(currentPickTeamId);
     // Get top need positions (needScore > 0, excluding K/P)
     const needPositions = new Set(
       needs.filter(n => n.needScore > 0 && n.position !== 'K' && n.position !== 'P').map(n => n.position),
     );
-    // Filter prospects to only need positions
+    // Filter prospects to ONLY need positions
     const needProspects = allProspects.filter(p => needPositions.has(p.position));
-    // If no need-matching prospects, fall back to all (excluding K/P)
-    const pool = needProspects.length > 0 ? needProspects : allProspects.filter(p => p.position !== 'K' && p.position !== 'P');
-    return [...pool].sort((a, b) => {
-      const aNeed = needs.find((n) => n.position === a.position)?.needScore ?? 0;
-      const bNeed = needs.find((n) => n.position === b.position)?.needScore ?? 0;
-      const aScout = draftScoutingData[a.id];
-      const bScout = draftScoutingData[b.id];
-      const aOvr = aScout ? aScout.scoutedOvr : a.ratings.overall;
-      const bOvr = bScout ? bScout.scoutedOvr : b.ratings.overall;
-      // Weight need more heavily than BPA for "Best Fit"
-      const aScore = aOvr + a.potential * 0.4 + aNeed * 0.5;
-      const bScore = bOvr + b.potential * 0.4 + bNeed * 0.5;
-      return bScore - aScore;
-    })[0] ?? null;
+    if (needProspects.length > 0) {
+      const sorted = [...needProspects].sort((a, b) => {
+        const aNeed = needs.find((n) => n.position === a.position)?.needScore ?? 0;
+        const bNeed = needs.find((n) => n.position === b.position)?.needScore ?? 0;
+        const aScout = draftScoutingData[a.id];
+        const bScout = draftScoutingData[b.id];
+        const aOvr = aScout ? aScout.scoutedOvr : a.ratings.overall;
+        const bOvr = bScout ? bScout.scoutedOvr : b.ratings.overall;
+        const aScore = aOvr + a.potential * 0.4 + aNeed * 0.5;
+        const bScore = bOvr + b.potential * 0.4 + bNeed * 0.5;
+        return bScore - aScore;
+      });
+      // Pick the top need-match that isn't the same as BPA (if possible)
+      const pick = sorted.find(p => p.id !== allProspects[0]?.id) ?? sorted[0];
+      return { player: pick ?? null, isNeedMatch: true };
+    }
+    // No need-matching prospects: fall back to BPA excluding the actual BPA
+    const fallback = allProspects.filter(p => p.position !== 'K' && p.position !== 'P' && p.id !== allProspects[0]?.id);
+    return { player: fallback[0] ?? null, isNeedMatch: false };
   })();
+  const bestFit = bestFitResult.player;
 
   // "Your Scouts Say" — uses only scouted data (noisy OVR + noisy potential estimate)
   // At low scouting levels this will diverge from bestFit; at high levels they converge
@@ -592,6 +601,7 @@ export default function DraftPage() {
           currentOverallPick={currentOverallPick}
           bestAvailable={bestAvailable}
           bestFit={bestFit}
+          bestFitIsNeedMatch={bestFitResult.isNeedMatch}
           scoutsPick={scoutsPick}
           scoutingLevel={scoutingLevel}
           draftScoutingData={draftScoutingData}

@@ -349,9 +349,27 @@ export default function FreeAgencyPage() {
           </div>
         )}
 
+        {/* Mobile compact summary — only visible below md */}
+        <div className="md:hidden mb-4 flex flex-wrap items-center gap-3 text-sm">
+          <span className="font-semibold">Roster: {roster.length}/53</span>
+          <span className="text-[var(--text-sec)]">|</span>
+          <span className={`font-mono font-bold ${capSpace > 0 ? 'text-green-600' : 'text-red-600'}`}>
+            Cap: ${capSpace}M
+          </span>
+          {(() => {
+            const needPositions = POSITIONS.filter(pos => positionCounts[pos] < ROSTER_LIMITS[pos].min);
+            return needPositions.length > 0 ? (
+              <>
+                <span className="text-[var(--text-sec)]">|</span>
+                <span className="text-red-600 text-xs">Needs: {needPositions.join(', ')}</span>
+              </>
+            ) : null;
+          })()}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6">
-          {/* ── Left sidebar: Roster Composition ─────── */}
-          <div className="space-y-4">
+          {/* ── Left sidebar: Roster Composition — hidden on mobile ─────── */}
+          <div className="hidden md:block space-y-4">
             <Card>
               <CardHeader><CardTitle>Roster ({roster.length})</CardTitle></CardHeader>
               <div className="space-y-1.5">
@@ -614,7 +632,7 @@ export default function FreeAgencyPage() {
             {/* Free agent table */}
             <Card>
               <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm sticky-col sticky-action">
                 <thead>
                   <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                     <th className="text-left pb-3 pl-2 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => toggleSort('name')}>Player{sortArrow('name')}</th>
@@ -661,7 +679,7 @@ export default function FreeAgencyPage() {
                           {potentialLabel(p.potential, p.experience)}
                         </td>
                         <td className="py-2.5 text-left text-xs text-[var(--text-sec)] hidden md:table-cell">
-                          {positionStats(p)}
+                          {positionStats({ position: p.position, stats: p.previousSeasonStats ?? p.stats })}
                         </td>
                         <td className="py-2.5 text-right font-mono">
                           ${salary}M/yr

@@ -305,7 +305,7 @@ export default function DraftRecapPage() {
         {/* ─── 5. All Team Rankings ─── */}
         <Section title="All Team Rankings" icon="🏅" defaultOpen badge={`${teams.length} teams`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm sticky-col">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                   <th className="text-left pb-2 pl-2">#</th>

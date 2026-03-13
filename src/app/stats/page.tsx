@@ -84,12 +84,18 @@ export default function StatsPage() {
   // Team stats
   const teamStats = teams.map(t => {
     const opp = oppYardsMap.get(t.id);
+    const off = teamOffYards.get(t.id);
     const gp = opp?.games ?? Math.max(1, t.record.wins + t.record.losses);
+    const passYPG = off ? off.passYards / gp : 0;
+    const rushYPG = off ? off.rushYards / gp : 0;
     return {
       team: t,
       pf: t.record.pointsFor,
       pa: t.record.pointsAgainst,
       diff: t.record.pointsFor - t.record.pointsAgainst,
+      passYPG,
+      rushYPG,
+      totalYPG: passYPG + rushYPG,
       oppPassYPG: opp ? opp.oppPassYards / gp : 0,
       oppRushYPG: opp ? opp.oppRushYards / gp : 0,
     };
@@ -113,7 +119,7 @@ export default function StatsPage() {
     <GameShell>
       <div className="max-w-5xl mx-auto">
         <TeamQuickNav currentPage="stats" />
-        <h2 className="text-2xl font-black mb-6">Stats & Standings</h2>
+        <h2 className="text-2xl font-black mb-6">League Stats</h2>
 
         {/* Tab bar */}
         <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-6 w-fit">
@@ -202,7 +208,7 @@ export default function StatsPage() {
         {tab === 'teams' && (
           <Card>
             <CardHeader><CardTitle>Team Statistics</CardTitle></CardHeader>
-            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px] sticky-col">
+            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[800px] sticky-col">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                   <th className="text-center pb-3 w-8">#</th>
@@ -212,6 +218,9 @@ export default function StatsPage() {
                   <th className="text-center pb-3">PF</th>
                   <th className="text-center pb-3">PA</th>
                   <th className="text-center pb-3">DIFF</th>
+                  <th className="text-center pb-3">Pass YDS/G</th>
+                  <th className="text-center pb-3">Rush YDS/G</th>
+                  <th className="text-center pb-3">Total YDS/G</th>
                   <th className="text-center pb-3">Opp Pass YDS/G</th>
                   <th className="text-right pb-3 pr-2">Opp Rush YDS/G</th>
                 </tr>
@@ -238,6 +247,9 @@ export default function StatsPage() {
                       <td className={`py-2.5 text-center font-mono ${ts.diff > 0 ? 'text-green-600' : ts.diff < 0 ? 'text-red-600' : ''}`}>
                         {ts.diff > 0 ? '+' : ''}{ts.diff}
                       </td>
+                      <td className="py-2.5 text-center font-mono">{ts.passYPG.toFixed(1)}</td>
+                      <td className="py-2.5 text-center font-mono">{ts.rushYPG.toFixed(1)}</td>
+                      <td className="py-2.5 text-center font-mono">{ts.totalYPG.toFixed(1)}</td>
                       <td className="py-2.5 text-center font-mono">{ts.oppPassYPG.toFixed(1)}</td>
                       <td className="py-2.5 text-right pr-2 font-mono">{ts.oppRushYPG.toFixed(1)}</td>
                     </tr>

@@ -301,7 +301,8 @@ export default function FinancesPage() {
             {expiring.length === 0 ? (
               <p className="text-sm text-[var(--text-sec)]">No expiring contracts.</p>
             ) : (
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm sticky-col">
                 <thead>
                   <tr className="text-[var(--text-sec)] text-xs uppercase">
                     <th className="text-left pb-2">Player</th>
@@ -326,13 +327,15 @@ export default function FinancesPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </Card>
 
           {/* Top salaries with release */}
           <Card>
             <CardHeader><CardTitle>Top Salaries</CardTitle></CardHeader>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm sticky-col">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase">
                   <th className="text-left pb-2">Player</th>
@@ -369,6 +372,7 @@ export default function FinancesPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </Card>
         </div>
       </div>

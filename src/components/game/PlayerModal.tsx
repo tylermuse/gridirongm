@@ -109,16 +109,24 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                   {player.firstName} {player.lastName}
                   {isChampionPlayer && <span className="ml-1.5 text-lg" title="Championship Ring">💍</span>}
                 </h2>
-                <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                <div className="flex flex-wrap items-center gap-2 mt-1">
                   <Badge>{player.position}</Badge>
+                  {player.height && player.weight && (
+                    <span className="text-sm text-[var(--text-sec)]">{player.height} · {player.weight} lbs</span>
+                  )}
                   <span className="text-sm text-[var(--text-sec)]">Age {player.age}</span>
                   <span className="text-sm text-[var(--text-sec)]">
                     {player.experience === 0 ? 'Rookie' : `Yr ${player.experience}`}
                   </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-0.5">
                   {team ? (
                     <span className="text-sm text-[var(--text-sec)]">{team.city} {team.name}</span>
                   ) : (
                     <span className="text-sm text-[var(--text-sec)]">Free Agent</span>
+                  )}
+                  {player.college && (
+                    <span className="text-sm text-[var(--text-sec)]">· {player.college}</span>
                   )}
                   {player.retired && <Badge variant="red">Retired</Badge>}
                 </div>
@@ -319,11 +327,62 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
         {/* Draft Info */}
         <div className="text-xs text-[var(--text-sec)]">
           {player.draftYear && player.draftPick ? (
-            <span>Drafted {player.draftYear}, Pick #{player.draftPick}</span>
+            <span>
+              Draft: {player.draftYear}
+              {player.draftRound ? ` Rd ${player.draftRound}` : ''}
+              , Pick #{player.draftPick}
+              {(() => {
+                const draftTeam = player.draftTeamId ? teams.find(t => t.id === player.draftTeamId) : null;
+                return draftTeam ? ` by ${draftTeam.city} ${draftTeam.name}` : '';
+              })()}
+            </span>
           ) : (
             <span>Undrafted</span>
           )}
         </div>
+
+        {/* Season Log */}
+        {player.seasonLog && player.seasonLog.length > 0 && (
+          <Card>
+            <CardHeader><CardTitle>Career Stats</CardTitle></CardHeader>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-[var(--text-sec)] uppercase tracking-wider">
+                    <th className="text-left pb-2">Year</th>
+                    <th className="text-left pb-2">Team</th>
+                    <th className="text-center pb-2">G</th>
+                    {['QB'].includes(player.position) && <><th className="text-center pb-2">YDS</th><th className="text-center pb-2">TD</th><th className="text-center pb-2">INT</th></>}
+                    {['RB'].includes(player.position) && <><th className="text-center pb-2">Rush</th><th className="text-center pb-2">YDS</th><th className="text-center pb-2">TD</th></>}
+                    {['WR', 'TE'].includes(player.position) && <><th className="text-center pb-2">REC</th><th className="text-center pb-2">YDS</th><th className="text-center pb-2">TD</th></>}
+                    {['DL', 'LB'].includes(player.position) && <><th className="text-center pb-2">TKL</th><th className="text-center pb-2">SCK</th><th className="text-center pb-2">INT</th></>}
+                    {['CB', 'S'].includes(player.position) && <><th className="text-center pb-2">TKL</th><th className="text-center pb-2">INT</th><th className="text-center pb-2">PD</th></>}
+                    {['K'].includes(player.position) && <><th className="text-center pb-2">FGM</th><th className="text-center pb-2">FGA</th><th className="text-center pb-2">FG%</th></>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...player.seasonLog].reverse().map((entry, i) => {
+                    const t = teams.find(tm => tm.id === entry.teamId);
+                    const s = entry.stats;
+                    return (
+                      <tr key={i} className="border-t border-[var(--border)]">
+                        <td className="py-1.5">S{entry.season}</td>
+                        <td className="py-1.5">{t?.abbreviation ?? '???'}</td>
+                        <td className="py-1.5 text-center">{s.gamesPlayed}</td>
+                        {['QB'].includes(player.position) && <><td className="py-1.5 text-center font-mono">{s.passYards.toLocaleString()}</td><td className="py-1.5 text-center">{s.passTDs}</td><td className="py-1.5 text-center">{s.interceptions}</td></>}
+                        {['RB'].includes(player.position) && <><td className="py-1.5 text-center">{s.rushAttempts}</td><td className="py-1.5 text-center font-mono">{s.rushYards.toLocaleString()}</td><td className="py-1.5 text-center">{s.rushTDs}</td></>}
+                        {['WR', 'TE'].includes(player.position) && <><td className="py-1.5 text-center">{s.receptions}</td><td className="py-1.5 text-center font-mono">{s.receivingYards.toLocaleString()}</td><td className="py-1.5 text-center">{s.receivingTDs}</td></>}
+                        {['DL', 'LB'].includes(player.position) && <><td className="py-1.5 text-center">{s.tackles}</td><td className="py-1.5 text-center">{s.sacks}</td><td className="py-1.5 text-center">{s.defensiveINTs}</td></>}
+                        {['CB', 'S'].includes(player.position) && <><td className="py-1.5 text-center">{s.tackles}</td><td className="py-1.5 text-center">{s.defensiveINTs}</td><td className="py-1.5 text-center">{s.passDeflections}</td></>}
+                        {['K'].includes(player.position) && <><td className="py-1.5 text-center">{s.fieldGoalsMade}</td><td className="py-1.5 text-center">{s.fieldGoalAttempts}</td><td className="py-1.5 text-center">{s.fieldGoalAttempts > 0 ? Math.round(s.fieldGoalsMade / s.fieldGoalAttempts * 100) : 0}%</td></>}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
       </div>
     </Modal>
   );

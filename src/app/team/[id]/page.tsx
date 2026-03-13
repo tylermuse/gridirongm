@@ -107,7 +107,8 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
               <CardHeader className="mb-3">
                 <CardTitle>{group.label}</CardTitle>
               </CardHeader>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm sticky-col">
                 <thead>
                   <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                     <th className="text-left pb-2 pl-2">Player</th>
@@ -163,6 +164,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
                     ))}
                 </tbody>
               </table>
+              </div>
             </Card>
           );
         })}
