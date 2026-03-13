@@ -41,13 +41,20 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (!supabase) return;
 
     // Check admin status from profiles
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('is_admin')
       .eq('id', userId)
       .single();
 
-    const admin = profile?.is_admin === true;
+    if (profileError) {
+      console.warn('Failed to fetch profile for admin check:', profileError.message);
+    }
+
+    // Fallback: grant admin to known admin emails if profile query fails
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    const ADMIN_EMAILS = ['tylermuse@gmail.com'];
+    const admin = profile?.is_admin === true || ADMIN_EMAILS.includes(authUser?.email ?? '');
     setIsAdmin(admin);
 
     // 🎉 LIMITED-TIME PROMO: All users get elite tier for free
