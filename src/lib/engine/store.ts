@@ -80,6 +80,7 @@ interface GameStore extends LeagueState {
     skipValueCheck?: boolean,
   ) => boolean;
   respondToTradeProposal: (proposalId: string, accept: boolean) => boolean;
+  rejectAllTradeProposals: () => void;
   solicitTradingBlockProposals: (playerIds: string[], pickIds: string[], seekPositions: Position[], seekDraftPicks?: boolean) => void;
   // PRD-07: Scouting
   setScoutingLevel: (level: 0 | 1 | 2) => void;
@@ -3350,6 +3351,15 @@ export const useGameStore = create<GameStore>()(
         });
 
         return success;
+      },
+
+      rejectAllTradeProposals: () => {
+        const state = get();
+        set({
+          tradeProposals: state.tradeProposals.map(p =>
+            p.status === 'pending' ? { ...p, status: 'rejected' as const } : p,
+          ),
+        });
       },
 
       solicitTradingBlockProposals: (blockedPlayerIds: string[], blockedPickIds: string[], seekPositions: Position[], seekDraftPicks?: boolean) => {
