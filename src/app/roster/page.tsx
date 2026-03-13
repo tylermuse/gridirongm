@@ -7,7 +7,7 @@ import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { potentialLabel, potentialColor } from '@/lib/engine/development';
+import { potentialLabel, potentialColor, devTraitIcon, devTraitColor, devTraitDescription, isDevTraitVisible } from '@/lib/engine/development';
 import { calculateDeadCap, calculateCapSavings, getCapHit, getUnamortizedBonus, materializeContractYears } from '@/types';
 import type { Player, Position, ContractYear } from '@/types';
 import { POSITIONS, ROSTER_LIMITS } from '@/types';
@@ -363,6 +363,7 @@ export default function RosterPage() {
                     <SortHeader k="age" className="text-center w-10">Age</SortHeader>
                     <SortHeader k="ovr" className="text-center w-12">Ovr</SortHeader>
                     <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-center w-14 cursor-help" title="Potential — a player's ceiling. Young players show as Elite/High/Average/Low until 3+ seasons played. A declining player's POT may be lower than their OVR.">Pot <span className="inline-block w-3 h-3 text-[10px] rounded-full bg-[var(--surface-2)]">?</span></th>
+                    <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-center w-14 cursor-help" title="Development Trait — affects how a player grows and ages. Revealed after 1 full season on your roster.">Dev</th>
                     <SortHeader k="contract" className="text-right w-32">Contract</SortHeader>
                     <th className="py-2 px-2 text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] text-center w-16">Role</th>
                     <SortHeader k="gp" className="text-center w-10">GP</SortHeader>
@@ -448,6 +449,11 @@ export default function RosterPage() {
                         {/* Potential */}
                         <td className={`py-2 px-2 text-center text-xs font-medium ${potentialColor(p.potential, p.experience)}`}>
                           {potentialLabel(p.potential, p.experience)}
+                        </td>
+
+                        {/* Dev Trait */}
+                        <td className={`py-2 px-2 text-center text-xs font-medium ${isDevTraitVisible(p, userTeamId) ? devTraitColor(p.devTrait) : 'text-[var(--text-sec)]'}`} title={isDevTraitVisible(p, userTeamId) ? devTraitDescription(p.devTrait) : 'Play 1 full season to reveal'}>
+                          {isDevTraitVisible(p, userTeamId) ? devTraitIcon(p.devTrait) : '?'}
                         </td>
 
                         {/* Contract */}

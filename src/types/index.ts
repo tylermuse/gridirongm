@@ -159,6 +159,10 @@ export interface Player {
   previousSeasonStats?: PlayerStats;
   /** Season-by-season stat history */
   seasonLog?: { season: number; teamId: string; stats: PlayerStats }[];
+  /** Development trait affecting aging/growth curve */
+  devTrait?: 'star' | 'normal' | 'late_bloomer' | 'bust';
+  /** Season when devTrait was revealed to the user (after 1 full season on roster) */
+  devTraitRevealedSeason?: number;
 }
 
 export interface TeamRecord {
@@ -176,6 +180,9 @@ export interface TeamRecord {
   awayLosses: number;
   conferenceWins: number;
   conferenceLosses: number;
+  atsWins?: number;
+  atsLosses?: number;
+  atsPushes?: number;
 }
 
 export interface DeadCapEntry {
@@ -368,6 +375,13 @@ export interface ScoringPlay {
   score: [number, number];
 }
 
+export interface BettingLine {
+  spread: number;        // negative = home favored
+  overUnder: number;
+  homeML: number;        // e.g. -175
+  awayML: number;        // e.g. +155
+}
+
 export interface GameResult {
   id: string;
   week: number;
@@ -380,6 +394,12 @@ export interface GameResult {
   playerStats: Record<string, Partial<PlayerStats>>;
   /** Scoring play log for box score display */
   scoringPlays?: ScoringPlay[];
+  /** Betting lines generated before game */
+  bettingLine?: BettingLine;
+  /** ATS result after game played */
+  spreadCover?: 'home' | 'away' | 'push';
+  /** Whether total went over the O/U */
+  overHit?: boolean;
 }
 
 export interface NewsItem {

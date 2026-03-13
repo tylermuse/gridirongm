@@ -204,6 +204,33 @@ export function developPlayers(
       ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
     }
 
+    // Dev trait OVR modifier — applies on top of age-based development
+    const trait = p.devTrait ?? 'normal';
+    let traitBonus = 0;
+    switch (trait) {
+      case 'star':
+        if (p.age <= 30) traitBonus = gaussian(2, 1);       // +1 to +3 extra
+        else if (p.age <= 33) traitBonus = gaussian(0, 0.5); // stable longer
+        else traitBonus = gaussian(-1, 1);                    // still declines but slower
+        break;
+      case 'late_bloomer':
+        if (p.age <= 25) traitBonus = gaussian(-1, 0.5);    // slow start
+        else if (p.age <= 29) traitBonus = gaussian(3, 1);  // big leap
+        else if (p.age <= 32) traitBonus = gaussian(0, 0.5);
+        else traitBonus = gaussian(-1.5, 1);
+        break;
+      case 'bust':
+        if (p.age <= 25) traitBonus = gaussian(0, 0.3);     // minimal improvement
+        else traitBonus = gaussian(-1.5, 0.5);               // declines early
+        break;
+      default: // normal — no extra modifier
+        break;
+    }
+    if (traitBonus !== 0) {
+      const bonus = Math.round(traitBonus * (traitBonus > 0 ? progressionMult : regressionMult));
+      ratings.overall = clamp(ratings.overall + bonus);
+    }
+
     // Adjust potential based on age — past-prime players should lose upside
     let newPotential = p.potential;
     if (p.age >= 30) {
@@ -214,7 +241,13 @@ export function developPlayers(
       newPotential = clamp(newPotential);
     }
 
-    return { ...p, ratings, potential: newPotential, ratingHistory };
+    // Reveal dev trait to user after 1 full season on their roster
+    let devTraitRevealedSeason = p.devTraitRevealedSeason;
+    if (!devTraitRevealedSeason && p.teamId && p.experience >= 1) {
+      devTraitRevealedSeason = completedSeason;
+    }
+
+    return { ...p, ratings, potential: newPotential, ratingHistory, devTraitRevealedSeason };
   });
 }
 
@@ -246,4 +279,47 @@ export function potentialColor(potential: number, experience: number): string {
   if (potential >= 65) return 'text-blue-400';
   if (potential >= 50) return 'text-amber-400';
   return 'text-red-400';
+}
+
+// ---------------------------------------------------------------------------
+// Dev trait helpers
+// ---------------------------------------------------------------------------
+
+const DEV_TRAIT_INFO: Record<string, { label: string; icon: string; color: string; description: string }> = {
+  star: { label: 'Star', icon: '\u2B50', color: 'text-amber-500', description: 'Elite growth potential. Improves fast and peaks later.' },
+  normal: { label: 'Normal', icon: '\u2014', color: 'text-[var(--text-sec)]', description: 'Standard development curve.' },
+  late_bloomer: { label: 'Late Bloomer', icon: '\uD83C\uDF31', color: 'text-green-600', description: 'Slow start, but explodes after age 25.' },
+  bust: { label: 'Bust', icon: '\uD83D\uDC80', color: 'text-red-500', description: 'Limited ceiling. Declines early.' },
+};
+
+export function devTraitLabel(trait: string | undefined): string {
+  return DEV_TRAIT_INFO[trait ?? 'normal']?.label ?? 'Normal';
+}
+
+export function devTraitIcon(trait: string | undefined): string {
+  return DEV_TRAIT_INFO[trait ?? 'normal']?.icon ?? '\u2014';
+}
+
+export function devTraitColor(trait: string | undefined): string {
+  return DEV_TRAIT_INFO[trait ?? 'normal']?.color ?? 'text-[var(--text-sec)]';
+}
+
+export function devTraitDescription(trait: string | undefined): string {
+  return DEV_TRAIT_INFO[trait ?? 'normal']?.description ?? '';
+}
+
+/**
+ * Whether a player's dev trait is visible to the user.
+ * Visible if: on user's team with devTraitRevealedSeason set,
+ * or is a free agent (played in league), or is on another team (visible in modal).
+ * Hidden for: draft prospects (experience === 0 and not yet drafted).
+ */
+export function isDevTraitVisible(player: Player, userTeamId: string | null): boolean {
+  // Draft prospects: hidden
+  if (player.experience === 0 && !player.teamId) return false;
+  // Your team: visible after revelation
+  if (player.teamId === userTeamId) return !!player.devTraitRevealedSeason;
+  // Free agents and other team players: always visible (they've played)
+  if (player.experience >= 1) return true;
+  return false;
 }

@@ -13,7 +13,7 @@ import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { generateRoster, generateDraftClass, generatePlayer } from './playerGen';
 import { resetUsedNames } from '../data/names';
 import { generateSchedule } from './schedule';
-import { simulateGame } from './simulate';
+import { simulateGame, generateBettingLine } from './simulate';
 import { developPlayers } from './development';
 import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
@@ -1192,7 +1192,21 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     const awayRoster = awayTeam?.depthChart
       ? sortRosterByDepthChart(awayRosterRaw, awayTeam.depthChart)
       : awayRosterRaw;
-    return simulateGame(game, homeRoster, awayRoster);
+
+    // Generate betting line before game
+    const bettingLine = generateBettingLine(homeRosterRaw, awayRosterRaw);
+
+    const result = simulateGame(game, homeRoster, awayRoster);
+
+    // Compute ATS coverage
+    const scoreDiff = result.homeScore - result.awayScore;
+    const adjustedDiff = scoreDiff + bettingLine.spread; // spread is negative when home favored
+    const spreadCover: 'home' | 'away' | 'push' =
+      adjustedDiff > 0 ? 'home' : adjustedDiff < 0 ? 'away' : 'push';
+    const totalPoints = result.homeScore + result.awayScore;
+    const overHit = totalPoints > bettingLine.overUnder;
+
+    return { ...result, bettingLine, spreadCover, overHit };
   });
 
   const newSchedule = state.schedule.map(g => {
@@ -1222,6 +1236,14 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       if (opponent && opponent.conference === team.conference && opponent.division === team.division) {
         if (teamScore > oppScore) record.divisionWins += 1;
         else record.divisionLosses += 1;
+      }
+      // ATS tracking
+      if (game.spreadCover) {
+        const teamCovered = (isHome && game.spreadCover === 'home') || (!isHome && game.spreadCover === 'away');
+        const teamLostCover = (isHome && game.spreadCover === 'away') || (!isHome && game.spreadCover === 'home');
+        if (teamCovered) record.atsWins = (record.atsWins ?? 0) + 1;
+        else if (teamLostCover) record.atsLosses = (record.atsLosses ?? 0) + 1;
+        else record.atsPushes = (record.atsPushes ?? 0) + 1;
       }
     }
     return { ...team, record };

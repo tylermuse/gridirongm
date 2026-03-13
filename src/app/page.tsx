@@ -16,6 +16,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { generateTeamSpotlight, COMMENTATORS, type SpotlightContext } from '@/lib/engine/debate';
 import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
+import { teamPower, generateBettingLine } from '@/lib/engine/simulate';
 
 function TeamPicker() {
   const router = useRouter();
@@ -436,15 +437,31 @@ function Dashboard() {
           const oppTeam = nextGame ? teams.find(t => t.id === (nextGame.homeTeamId === userTeamId ? nextGame.awayTeamId : nextGame.homeTeamId)) : null;
           return (nextGame || injuredPlayers.length > 0) ? (
             <div className={`grid grid-cols-1 ${nextGame && injuredPlayers.length > 0 ? 'md:grid-cols-2' : ''} gap-4`}>
-              {nextGame && oppTeam && (
+              {nextGame && oppTeam && (() => {
+                const isHome = nextGame.homeTeamId === userTeamId;
+                const oppId = isHome ? nextGame.awayTeamId : nextGame.homeTeamId;
+                const oppRoster = players.filter(p => p.teamId === oppId && !p.retired);
+                const line = generateBettingLine(
+                  isHome ? roster : oppRoster,
+                  isHome ? oppRoster : roster,
+                );
+                const userSpread = isHome ? line.spread : -line.spread;
+                const spreadText = userSpread === 0 ? 'PK' : `${userSpread > 0 ? '+' : ''}${userSpread}`;
+                return (
                 <Card>
                   <div className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <TeamLogo abbreviation={oppTeam.abbreviation} primaryColor={oppTeam.primaryColor} secondaryColor={oppTeam.secondaryColor} size="md" />
                       <div>
-                        <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider">Week {week} · {nextGame.homeTeamId === userTeamId ? 'Home' : 'Away'}</div>
-                        <div className="font-bold">{nextGame.homeTeamId === userTeamId ? 'vs' : '@'} {oppTeam.city} {oppTeam.name}</div>
+                        <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider">Week {week} · {isHome ? 'Home' : 'Away'}</div>
+                        <div className="font-bold">{isHome ? 'vs' : '@'} {oppTeam.city} {oppTeam.name}</div>
                         <div className="text-xs text-[var(--text-sec)]">{oppTeam.record.wins}-{oppTeam.record.losses}</div>
+                        <div className="flex gap-3 mt-1">
+                          <span className={`text-xs font-mono font-medium ${userSpread <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            SPREAD: {spreadText}
+                          </span>
+                          <span className="text-xs font-mono text-[var(--text-sec)]">O/U: {line.overUnder}</span>
+                        </div>
                       </div>
                     </div>
                     <Link href={`/game/${nextGame.id}`}>
@@ -454,7 +471,8 @@ function Dashboard() {
                     </Link>
                   </div>
                 </Card>
-              )}
+                );
+              })()}
               {injuredPlayers.length > 0 && (
                 <Card>
                   <CardHeader><CardTitle>Injury Report ({injuredPlayers.length})</CardTitle></CardHeader>

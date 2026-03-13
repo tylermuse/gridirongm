@@ -593,6 +593,39 @@ export default function DraftPage() {
       <div className="max-w-7xl mx-auto space-y-4">
         <h2 className="text-2xl font-black">Draft</h2>
 
+        {/* Draft Class Quality Preview */}
+        {allProspects.length > 0 && (() => {
+          const avgOvr = allProspects.reduce((s, p) => s + p.ratings.overall, 0) / allProspects.length;
+          const topTier = allProspects.filter(p => p.ratings.overall >= 70).length;
+          const grade = avgOvr >= 55 && topTier >= 15 ? 'Elite' : avgOvr >= 50 && topTier >= 10 ? 'Strong' : avgOvr >= 45 ? 'Average' : 'Weak';
+          const gradeColor: Record<string, string> = { Elite: 'text-amber-600', Strong: 'text-green-600', Average: 'text-[var(--text-sec)]', Weak: 'text-red-600' };
+          const posGrades = (['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S'] as const).map(pos => {
+            const posP = allProspects.filter(p => p.position === pos);
+            if (posP.length === 0) return { pos, grade: 'Weak' };
+            const pAvg = posP.reduce((s, p) => s + p.ratings.overall, 0) / posP.length;
+            const pTop = posP.filter(p => p.ratings.overall >= 65).length;
+            const g = pAvg >= 55 && pTop >= 3 ? 'Elite' : pAvg >= 50 && pTop >= 2 ? 'Strong' : pAvg >= 45 ? 'Average' : 'Weak';
+            return { pos, grade: g };
+          });
+          return (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-sm font-bold">{season} Draft Class:</span>
+                <span className={`text-sm font-black ${gradeColor[grade]}`}>{grade.toUpperCase()}</span>
+                <span className="text-xs text-[var(--text-sec)]">({allProspects.length} prospects)</span>
+              </div>
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                {posGrades.map(({ pos, grade: g }) => (
+                  <span key={pos} className="text-xs">
+                    <span className="text-[var(--text-sec)]">{pos}:</span>{' '}
+                    <span className={`font-semibold ${gradeColor[g]}`}>{g}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* On The Clock */}
         <OnTheClockSection
           currentTeam={currentTeam}

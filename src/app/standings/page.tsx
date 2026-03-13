@@ -79,6 +79,7 @@ function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams,
               <th className="text-center pb-1 hidden lg:table-cell">AWAY</th>
               <th className="text-center pb-1 hidden lg:table-cell">DIV</th>
               <th className="text-center pb-1 hidden lg:table-cell">CONF</th>
+              <th className="text-center pb-1 hidden lg:table-cell">ATS</th>
             </>
           )}
         </tr>
@@ -130,6 +131,7 @@ function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams,
                   <td className="py-1.5 text-center text-xs hidden lg:table-cell">{t.record.awayWins ?? 0}-{t.record.awayLosses ?? 0}</td>
                   <td className="py-1.5 text-center text-xs hidden lg:table-cell">{t.record.divisionWins}-{t.record.divisionLosses}</td>
                   <td className="py-1.5 text-center text-xs hidden lg:table-cell">{t.record.conferenceWins ?? 0}-{t.record.conferenceLosses ?? 0}</td>
+                  <td className="py-1.5 text-center text-xs hidden lg:table-cell font-mono">{t.record.atsWins ?? 0}-{t.record.atsLosses ?? 0}{(t.record.atsPushes ?? 0) > 0 ? `-${t.record.atsPushes}` : ''}</td>
                 </>
               )}
             </tr>
@@ -343,7 +345,7 @@ export default function StandingsPage() {
                       </span>
                     </div>
 
-                    <div className="w-40 text-right">
+                    <div className="w-56 text-right">
                       {game.played ? (
                         <div className="flex items-center justify-end gap-3">
                           <span className="font-mono font-bold">
@@ -352,6 +354,14 @@ export default function StandingsPage() {
                           <Badge variant={won ? 'green' : 'red'} size="sm">
                             {won ? 'W' : 'L'}
                           </Badge>
+                          {game.bettingLine && (
+                            <span className={`text-[10px] font-mono ${
+                              (isHome && game.spreadCover === 'home') || (!isHome && game.spreadCover === 'away')
+                                ? 'text-green-600' : game.spreadCover === 'push' ? 'text-[var(--text-sec)]' : 'text-red-500'
+                            }`}>
+                              ATS {(isHome && game.spreadCover === 'home') || (!isHome && game.spreadCover === 'away') ? 'W' : game.spreadCover === 'push' ? 'P' : 'L'}
+                            </span>
+                          )}
                           <button
                             onClick={() => setSelectedGame(game)}
                             className="text-xs text-blue-600 hover:text-blue-400 transition-colors"
@@ -362,10 +372,18 @@ export default function StandingsPage() {
                       ) : (
                         (() => {
                           const { spread, favored } = computeSpread(game);
-                          const spreadText = spread === 0 ? 'EVEN' :
+                          const spreadText = spread === 0 ? 'PK' :
                             favored === 'user' ? `YOU ${spread > 0 ? '+' : ''}${spread}` :
                             `${teamAbbr(isHome ? game.awayTeamId : game.homeTeamId)} ${spread < 0 ? '+' : '-'}${Math.abs(spread)}`;
                           const isCurrentWeek = phase === 'regular' && game.week === week;
+                          // O/U from computeSpread — estimate from team power
+                          const userRoster = players.filter(p => p.teamId === userTeamId && !p.retired);
+                          const oppId = isHome ? game.awayTeamId : game.homeTeamId;
+                          const oppRoster = players.filter(p => p.teamId === oppId && !p.retired);
+                          const uPow = teamPower(userRoster);
+                          const oPow = teamPower(oppRoster);
+                          const combinedOff = (uPow.offense + oPow.offense) / 2;
+                          const ou = Math.round((38 + (combinedOff - 50) * 0.4) * 2) / 2;
                           return (
                             <div className="flex items-center gap-2">
                               {isCurrentWeek && (
@@ -386,7 +404,7 @@ export default function StandingsPage() {
                               }`}>
                                 {spreadText}
                               </span>
-                              <span className="text-[10px] text-[var(--text-sec)]">LINE</span>
+                              <span className="text-[10px] text-[var(--text-sec)] font-mono">O/U {ou}</span>
                             </div>
                           );
                         })()
