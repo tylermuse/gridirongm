@@ -368,6 +368,13 @@ export interface ScoringPlay {
   score: [number, number];
 }
 
+export interface BettingLine {
+  spread: number;        // negative = home favored
+  overUnder: number;
+  homeML: number;        // e.g. -175
+  awayML: number;        // e.g. +155
+}
+
 export interface GameResult {
   id: string;
   week: number;
@@ -380,6 +387,11 @@ export interface GameResult {
   playerStats: Record<string, Partial<PlayerStats>>;
   /** Scoring play log for box score display */
   scoringPlays?: ScoringPlay[];
+  bettingLine?: BettingLine;
+  /** ATS result after game played */
+  spreadCover?: 'home' | 'away' | 'push';
+  /** Whether total went over the O/U */
+  overHit?: boolean;
 }
 
 export interface NewsItem {
