@@ -684,8 +684,9 @@ export default function DraftPage() {
                   <th className="text-left pb-2 pl-2">#</th>
                   <th className="text-left pb-2">Player</th>
                   <th className="text-center pb-2">Pos</th>
-                  <th className="text-center pb-2">OVR Range</th>
-                  <th className="text-center pb-2 group relative cursor-help" title="Potential — a player's ceiling. Draft prospects show as Elite/High/Average/Low until scouted over 3+ seasons.">Pot <span className="inline-block w-3 h-3 text-[10px] rounded-full bg-[var(--surface-2)] text-[var(--text-sec)]">?</span></th>
+                  <th className="text-center pb-2 hidden sm:table-cell">OVR Range</th>
+                  <th className="text-center pb-2 sm:hidden">OVR</th>
+                  <th className="text-center pb-2 hidden sm:table-cell" title="Potential — a player's ceiling. Draft prospects show as Elite/High/Average/Low until scouted over 3+ seasons.">Pot <span className="inline-block w-3 h-3 text-[10px] rounded-full bg-[var(--surface-2)] text-[var(--text-sec)]">?</span></th>
                   <th className="text-right pb-2 pr-2">Draft</th>
                 </tr>
               </thead>
@@ -695,33 +696,42 @@ export default function DraftPage() {
                   const displayOvr = scout
                     ? `${Math.max(20, scout.scoutedOvr - scout.error)}–${Math.min(99, scout.scoutedOvr + scout.error)}`
                     : String(player.ratings.overall);
+                  const displayOvrShort = scout
+                    ? `${scout.scoutedOvr}`
+                    : String(player.ratings.overall);
                   const ovrForColor = scout ? scout.scoutedOvr : player.ratings.overall;
                   return (
-                    <tr key={player.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)] cursor-pointer" onClick={() => setSelectedProspectId(player.id)}>
-                      <td className="py-2 pl-2 text-[var(--text-sec)]">{index + 1}</td>
-                      <td className="py-2">
+                    <tr
+                      key={player.id}
+                      className="border-t border-[var(--border)] hover:bg-[var(--surface-2)] cursor-pointer active:bg-[var(--surface-2)]"
+                      onClick={() => setSelectedProspectId(player.id)}
+                    >
+                      <td className="py-3 pl-2 text-[var(--text-sec)]">{index + 1}</td>
+                      <td className="py-3">
                         <div className="font-semibold">{player.firstName} {player.lastName}</div>
                         {player.scoutingLabel && (
                           <div className="text-[10px] text-[var(--text-sec)]">{player.scoutingLabel}</div>
                         )}
                       </td>
-                      <td className="py-2 text-center"><Badge>{player.position}</Badge></td>
-                      <td className={`py-2 text-center font-bold ${ratingColor(ovrForColor)}`}>
+                      <td className="py-3 text-center"><Badge>{player.position}</Badge></td>
+                      <td className={`py-3 text-center font-bold hidden sm:table-cell ${ratingColor(ovrForColor)}`}>
                         {displayOvr}
                       </td>
-                      <td className={`py-2 text-center text-xs ${potentialColor(player.potential, player.experience)}`}>{potentialLabel(player.potential, player.experience)}</td>
-                      <td className="py-2 pr-2 text-right">
-                        <div className="flex gap-1 justify-end">
-                          {isUserPick ? (
-                            <span onClick={(e) => e.stopPropagation()}>
-                              <Button size="sm" onClick={() => draftPlayer(player.id)}>
-                                Draft
-                              </Button>
-                            </span>
-                          ) : (
-                            <span className="text-xs text-[var(--text-sec)]">Waiting...</span>
-                          )}
-                        </div>
+                      <td className={`py-3 text-center font-bold sm:hidden ${ratingColor(ovrForColor)}`}>
+                        {displayOvrShort}
+                      </td>
+                      <td className={`py-3 text-center text-xs hidden sm:table-cell ${potentialColor(player.potential, player.experience)}`}>{potentialLabel(player.potential, player.experience)}</td>
+                      <td className="py-3 pr-2 text-right">
+                        {isUserPick ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); draftPlayer(player.id); }}
+                            className="min-h-[44px] min-w-[44px] px-3 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg active:bg-blue-700 touch-manipulation"
+                          >
+                            Draft
+                          </button>
+                        ) : (
+                          <span className="text-xs text-[var(--text-sec)]">—</span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -964,14 +974,17 @@ export default function DraftPage() {
       {/* Scouting Report Modal */}
       {selectedProspectId && (() => {
         const prospect = players.find(p => p.id === selectedProspectId);
+        if (!prospect) return null;
         const scout = draftScoutingData[selectedProspectId];
-        if (!prospect || !scout) return null;
+        // Fall back to real OVR if no scouting data (shouldn't happen, but safe)
+        const scoutedOvr = scout?.scoutedOvr ?? prospect.ratings.overall;
+        const scoutError = scout?.error ?? 10;
         return (
           <ScoutingReportModal
             player={prospect}
             scoutingLevel={scoutingLevel}
-            scoutedOvr={scout.scoutedOvr}
-            error={scout.error}
+            scoutedOvr={scoutedOvr}
+            error={scoutError}
             onClose={() => setSelectedProspectId(null)}
             onDraft={isUserPick ? () => { draftPlayer(selectedProspectId); setSelectedProspectId(null); } : undefined}
             onScoutingLevelChange={setScoutingLevel}
