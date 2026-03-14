@@ -347,9 +347,9 @@ export function ScoutingReportModal({
       className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center pt-[5vh] px-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-2xl">
+      <div className="w-full max-w-2xl max-h-[85vh] flex flex-col bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-2xl">
         {/* Header */}
-        <div className="sticky top-0 bg-[var(--surface)] border-b border-[var(--border)] px-6 py-4 flex items-start justify-between rounded-t-2xl z-10">
+        <div className="bg-[var(--surface)] border-b border-[var(--border)] px-6 py-4 flex items-start justify-between rounded-t-2xl shrink-0">
           <div>
             <h2 className="text-xl font-black">
               {player.firstName} {player.lastName}
@@ -377,7 +377,7 @@ export function ScoutingReportModal({
           </button>
         </div>
 
-        <div className="px-6 py-4 space-y-0">
+        <div className="px-6 py-4 space-y-0 overflow-y-auto flex-1 min-h-0">
           {/* Top summary row */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2.5">
@@ -577,15 +577,19 @@ export function ScoutingReportModal({
             </>
           )}
 
-          {/* Draft Button */}
-          {isUserPick && onDraft && (
-            <div className="border-t border-[var(--border)] pt-4 mt-4">
-              <Button onClick={onDraft} size="sm" className="w-full">
-                Draft {player.firstName} {player.lastName}
-              </Button>
-            </div>
-          )}
         </div>
+
+        {/* Draft Button — sticky footer on mobile */}
+        {isUserPick && onDraft && (
+          <div className="sticky bottom-0 border-t border-[var(--border)] px-6 py-3 bg-[var(--surface)] rounded-b-2xl">
+            <button
+              onClick={onDraft}
+              className="w-full min-h-[44px] px-4 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-lg active:bg-blue-700 touch-manipulation"
+            >
+              Draft {player.firstName} {player.lastName}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
