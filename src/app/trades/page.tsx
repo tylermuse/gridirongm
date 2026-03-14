@@ -639,6 +639,7 @@ function TradesPage() {
   const [activeTab, setActiveTab] = useState<'incoming' | 'propose' | 'block' | 'finder'>('incoming');
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
+  const [showAllRumors, setShowAllRumors] = useState(false);
 
   // Counter-offer state
   const [counteringProposalId, setCounteringProposalId] = useState<string | null>(null);
@@ -954,42 +955,69 @@ function TradesPage() {
                 })()}
               </div>
             </CardHeader>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {[...(tradeRumors ?? [])].reverse().slice(0, 6).map(rumor => {
-                const rumorTeam = teams.find(t => t.id === rumor.teamId);
-                const targetTeam = rumor.targetTeamId ? teams.find(t => t.id === rumor.targetTeamId) : null;
-                const rumorPlayers = rumor.playerIds.map(id => players.find(p => p.id === id)).filter(Boolean);
-                return (
-                  <div key={rumor.id} className={`rounded-lg border px-3 py-2.5 ${
-                    rumor.resolved
-                      ? rumor.outcome === 'accurate' ? 'border-green-300 bg-green-50/50' : 'border-gray-200 bg-gray-50/50 opacity-60'
-                      : rumor.type === 'deadline_buzz' ? 'border-orange-300 bg-orange-50/40' : 'border-[var(--border)] bg-[var(--surface)]'
-                  }`}>
-                    <div className="flex items-center gap-2 mb-1">
-                      {rumorTeam && <TeamLogo abbreviation={rumorTeam.abbreviation} primaryColor={rumorTeam.primaryColor} secondaryColor={rumorTeam.secondaryColor} size="sm" />}
-                      {targetTeam && <><span className="text-[10px] text-[var(--text-sec)]">&</span><TeamLogo abbreviation={targetTeam.abbreviation} primaryColor={targetTeam.primaryColor} secondaryColor={targetTeam.secondaryColor} size="sm" /></>}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs text-[var(--text-sec)]">Week {rumor.week}</div>
-                      </div>
-                      {rumor.type === 'deadline_buzz' && !rumor.resolved && <span className="text-[10px] font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">HOT</span>}
-                      {rumor.resolved && rumor.outcome === 'accurate' && <span className="text-[10px] font-bold text-green-600 bg-green-100 px-1.5 py-0.5 rounded">CONFIRMED</span>}
-                      {rumor.resolved && rumor.outcome === 'false_alarm' && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">COLD</span>}
-                    </div>
-                    <div className="text-sm font-semibold leading-tight">{rumor.headline}</div>
-                    <div className="text-xs text-[var(--text-sec)] mt-1 leading-snug">{rumor.detail}</div>
-                    {rumorPlayers.length > 0 && (
-                      <div className="flex gap-1 mt-1.5">
-                        {rumorPlayers.map(p => p && (
-                          <button key={p.id} onClick={() => setSelectedPlayerId(p.id)} className="text-[10px] text-blue-600 hover:underline">
-                            {p.firstName[0]}. {p.lastName} ({p.position}, {p.age}yo, {p.ratings.overall} OVR, ${(p.contract.salary).toFixed(1)}M/{p.contract.yearsLeft}yr)
-                          </button>
-                        ))}
-                      </div>
-                    )}
+            {(() => {
+              const allRumors = [...(tradeRumors ?? [])].reverse().slice(0, 6);
+              return (
+                <div className="relative">
+                  <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 ${!showAllRumors ? 'max-h-[180px] sm:max-h-none overflow-hidden' : ''}`}>
+                    {allRumors.map(rumor => {
+                      const rumorTeam = teams.find(t => t.id === rumor.teamId);
+                      const targetTeam = rumor.targetTeamId ? teams.find(t => t.id === rumor.targetTeamId) : null;
+                      const rumorPlayers = rumor.playerIds.map(id => players.find(p => p.id === id)).filter(Boolean);
+                      return (
+                        <div key={rumor.id} className={`rounded-lg border px-3 py-2.5 ${
+                          rumor.resolved
+                            ? rumor.outcome === 'accurate' ? 'border-green-300 bg-green-50/50' : 'border-gray-200 bg-gray-50/50 opacity-60'
+                            : rumor.type === 'deadline_buzz' ? 'border-orange-300 bg-orange-50/40' : 'border-[var(--border)] bg-[var(--surface)]'
+                        }`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            {rumorTeam && <TeamLogo abbreviation={rumorTeam.abbreviation} primaryColor={rumorTeam.primaryColor} secondaryColor={rumorTeam.secondaryColor} size="sm" />}
+                            {targetTeam && <><span className="text-[10px] text-[var(--text-sec)]">&</span><TeamLogo abbreviation={targetTeam.abbreviation} primaryColor={targetTeam.primaryColor} secondaryColor={targetTeam.secondaryColor} size="sm" /></>}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs text-[var(--text-sec)]">Week {rumor.week}</div>
+                            </div>
+                            {rumor.type === 'deadline_buzz' && !rumor.resolved && <span className="text-[10px] font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">HOT</span>}
+                            {rumor.resolved && rumor.outcome === 'accurate' && <span className="text-[10px] font-bold text-green-600 bg-green-100 px-1.5 py-0.5 rounded">CONFIRMED</span>}
+                            {rumor.resolved && rumor.outcome === 'false_alarm' && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">COLD</span>}
+                          </div>
+                          <div className="text-sm font-semibold leading-tight">{rumor.headline}</div>
+                          <div className="text-xs text-[var(--text-sec)] mt-1 leading-snug">{rumor.detail}</div>
+                          {rumorPlayers.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {rumorPlayers.map(p => p && (
+                                <button key={p.id} onClick={() => setSelectedPlayerId(p.id)} className="text-[10px] text-blue-600 hover:underline">
+                                  {p.firstName[0]}. {p.lastName} ({p.position}, {p.age}yo, {p.ratings.overall} OVR, ${(p.contract.salary).toFixed(1)}M/{p.contract.yearsLeft}yr)
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
+                  {/* Mobile fade + show more */}
+                  {!showAllRumors && allRumors.length > 1 && (
+                    <div className="sm:hidden">
+                      <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-[var(--surface)] to-transparent pointer-events-none rounded-b-lg" />
+                      <button
+                        onClick={() => setShowAllRumors(true)}
+                        className="relative w-full py-2 text-sm font-semibold text-blue-600 hover:text-blue-700 active:text-blue-800 touch-manipulation"
+                      >
+                        Show all {allRumors.length} trade rumors
+                      </button>
+                    </div>
+                  )}
+                  {showAllRumors && (
+                    <button
+                      onClick={() => setShowAllRumors(false)}
+                      className="sm:hidden w-full py-2 text-sm text-[var(--text-sec)] hover:text-[var(--text)] touch-manipulation"
+                    >
+                      Show less
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
           </Card>
         )}
 
