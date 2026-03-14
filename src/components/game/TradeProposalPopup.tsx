@@ -129,6 +129,7 @@ export function TradeProposalPopup({ proposalIds, onClose }: TradeProposalPopupP
                           <span className="text-sm font-semibold">{p.firstName} {p.lastName}</span>
                           <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
                           <span className="text-[10px] text-[var(--text-sec)]">Age {p.age}</span>
+                          <span className="text-[10px] text-[var(--text-sec)]">${p.contract.salary.toFixed(1)}M · {p.contract.yearsLeft}yr</span>
                         </div>
                         {stats && <div className="text-[10px] text-[var(--text-sec)] ml-7 mt-0.5">{stats}</div>}
                       </div>
@@ -159,6 +160,7 @@ export function TradeProposalPopup({ proposalIds, onClose }: TradeProposalPopupP
                           <span className="text-sm font-semibold">{p.firstName} {p.lastName}</span>
                           <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
                           <span className="text-[10px] text-[var(--text-sec)]">Age {p.age}</span>
+                          <span className="text-[10px] text-[var(--text-sec)]">${p.contract.salary.toFixed(1)}M · {p.contract.yearsLeft}yr</span>
                         </div>
                         {stats && <div className="text-[10px] text-[var(--text-sec)] ml-7 mt-0.5">{stats}</div>}
                       </div>

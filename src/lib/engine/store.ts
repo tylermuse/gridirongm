@@ -1217,8 +1217,8 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       : awayRosterRaw;
 
     // Coaching bonus applied to team power
-    const homeCoachBonus = homeTeam ? coachingBonus(homeTeam) : 0;
-    const awayCoachBonus = awayTeam ? coachingBonus(awayTeam) : 0;
+    const homeCoachBonus = homeTeam ? coachingBonus(homeTeam, homeRosterRaw) : 0;
+    const awayCoachBonus = awayTeam ? coachingBonus(awayTeam, awayRosterRaw) : 0;
 
     // Generate betting line before game
     const bettingLine = generateBettingLine(homeRosterRaw, awayRosterRaw, homeCoachBonus, awayCoachBonus);
@@ -1702,8 +1702,8 @@ export const useGameStore = create<GameStore>()(
           playerStats: {},
         };
 
-        const hcb = homeTeam ? coachingBonus(homeTeam) : 0;
-        const acb = awayTeam ? coachingBonus(awayTeam) : 0;
+        const hcb = homeTeam ? coachingBonus(homeTeam, homeRoster) : 0;
+        const acb = awayTeam ? coachingBonus(awayTeam, awayRoster) : 0;
         const result = simulateGame(tempGame, homeRoster, awayRoster, hcb, acb);
         const winnerId =
           result.homeScore >= result.awayScore ? matchup.homeTeamId : matchup.awayTeamId;
@@ -1816,8 +1816,8 @@ export const useGameStore = create<GameStore>()(
             homeTeamId: next.homeTeamId!, awayTeamId: next.awayTeamId!,
             homeScore: 0, awayScore: 0, played: false, playerStats: {},
           };
-          const hcb2 = homeTeam ? coachingBonus(homeTeam) : 0;
-          const acb2 = awayTeam ? coachingBonus(awayTeam) : 0;
+          const hcb2 = homeTeam ? coachingBonus(homeTeam, homeRoster) : 0;
+          const acb2 = awayTeam ? coachingBonus(awayTeam, awayRoster) : 0;
           const result = simulateGame(tempGame, homeRoster, awayRoster, hcb2, acb2);
           const winnerId = result.homeScore >= result.awayScore ? next.homeTeamId! : next.awayTeamId!;
 
@@ -1926,8 +1926,8 @@ export const useGameStore = create<GameStore>()(
             homeTeamId: matchup.homeTeamId!, awayTeamId: matchup.awayTeamId!,
             homeScore: 0, awayScore: 0, played: false, playerStats: {},
           };
-          const hcb3 = homeTeam ? coachingBonus(homeTeam) : 0;
-          const acb3 = awayTeam ? coachingBonus(awayTeam) : 0;
+          const hcb3 = homeTeam ? coachingBonus(homeTeam, homeRoster) : 0;
+          const acb3 = awayTeam ? coachingBonus(awayTeam, awayRoster) : 0;
           const result = simulateGame(tempGame, homeRoster, awayRoster, hcb3, acb3);
           const winnerId = result.homeScore >= result.awayScore ? matchup.homeTeamId! : matchup.awayTeamId!;
 

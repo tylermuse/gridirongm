@@ -583,12 +583,14 @@ type TabId = 'gamecast' | 'play-by-play' | 'drives';
 
 function WinProbabilityChart({
   events,
+  totalEvents,
   homeColor,
   awayColor,
   homeAbbr,
   awayAbbr,
 }: {
   events: PlayEvent[];
+  totalEvents: number;
   homeColor: string;
   awayColor: string;
   homeAbbr: string;
@@ -613,8 +615,9 @@ function WinProbabilityChart({
     return 1 / (1 + Math.exp(-k * diff));
   });
 
-  // Build SVG path
-  const xStep = chartW / Math.max(1, probPoints.length - 1);
+  // X-axis scaled to full game length so line "grows" from left to right
+  const fullLen = Math.max(totalEvents, events.length, 1);
+  const xStep = chartW / Math.max(1, fullLen - 1);
   const points = probPoints.map((p, i) => ({
     x: PAD_X + i * xStep,
     y: PAD_Y + (1 - p) * chartH,
@@ -623,8 +626,9 @@ function WinProbabilityChart({
   const pathD = points.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(' ');
   const midY = PAD_Y + chartH / 2;
 
-  // Fill area above/below 50% line
-  const homeAreaD = `${pathD} L ${points[points.length - 1].x.toFixed(1)} ${midY} L ${PAD_X} ${midY} Z`;
+  // Fill area above/below 50% line — only up to current play position
+  const lastPt = points[points.length - 1];
+  const homeAreaD = `${pathD} L ${lastPt.x.toFixed(1)} ${midY} L ${PAD_X} ${midY} Z`;
 
   const lastProb = probPoints[probPoints.length - 1];
   const homePct = Math.round(lastProb * 100);
@@ -642,11 +646,11 @@ function WinProbabilityChart({
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 100 }} preserveAspectRatio="none">
         {/* 50% line */}
         <line x1={PAD_X} y1={midY} x2={W - PAD_X} y2={midY} stroke="var(--border)" strokeWidth="1" strokeDasharray="4 3" />
-        {/* Home fill */}
+        {/* Home fill — only up to current play */}
         <path d={homeAreaD} fill={homeColor} opacity={0.12} />
-        {/* Probability line */}
+        {/* Probability line — only up to current play */}
         <path d={pathD} fill="none" stroke={homeColor} strokeWidth="2" strokeLinejoin="round" />
-        {/* Quarter markers */}
+        {/* Quarter markers at fixed positions */}
         {[0.25, 0.5, 0.75].map((frac, i) => {
           const x = PAD_X + frac * chartW;
           return (
@@ -658,8 +662,8 @@ function WinProbabilityChart({
             </g>
           );
         })}
-        {/* End dot */}
-        <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r="3" fill={homeColor} />
+        {/* Current position dot */}
+        <circle cx={lastPt.x} cy={lastPt.y} r="3" fill={homeColor} />
       </svg>
       <div className="flex justify-between text-[10px] text-[var(--text-sec)] mt-0.5">
         <span>{awayAbbr}</span>
@@ -1002,6 +1006,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         ================================================================ */}
         <WinProbabilityChart
           events={revealedEvents}
+          totalEvents={totalEvents}
           homeColor={homeColor}
           awayColor={awayColor}
           homeAbbr={homeAbbr}

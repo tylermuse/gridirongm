@@ -1,51 +1,54 @@
-import type { Player, PlayerStats, GameResult, ScoringPlay, BettingLine } from '@/types';
+import type { Player, PlayerStats, GameResult, ScoringPlay, BettingLine, Team } from '@/types';
+import { schemeFitOvrBonus } from './coaching';
 
 /**
  * Computes an aggregate offensive and defensive power rating for a roster.
  * Returns a value roughly in 50-100 range for typical pro teams.
+ * When a team is provided, scheme fit bonuses are applied (+2 great, -1 poor).
  */
-export function teamPower(roster: Player[], coachBonus = 0): { offense: number; defense: number } {
+export function teamPower(roster: Player[], coachBonus = 0, team?: Team): { offense: number; defense: number } {
   let offSum = 0, offCount = 0;
   let defSum = 0, defCount = 0;
 
   for (const p of roster) {
     if (p.injury && p.injury.weeksLeft > 0) continue;
     const r = p.ratings;
+    const fitBonus = team ? schemeFitOvrBonus(p, team) : 0;
     switch (p.position) {
       case 'QB':
-        offSum += r.throwing * 2 + r.awareness + r.speed * 0.5;
+        offSum += (r.throwing + fitBonus) * 2 + (r.awareness + fitBonus) + r.speed * 0.5;
         offCount += 3.5;
         break;
       case 'RB':
-        offSum += r.carrying * 1.5 + r.speed + r.agility * 0.5;
+        offSum += (r.carrying + fitBonus) * 1.5 + r.speed + r.agility * 0.5;
         offCount += 3;
         break;
       case 'WR':
-        offSum += r.catching * 1.5 + r.speed;
+        offSum += (r.catching + fitBonus) * 1.5 + r.speed;
         offCount += 2.5;
         break;
       case 'TE':
-        offSum += r.catching + r.blocking + r.strength * 0.5;
+        offSum += (r.catching + fitBonus) + r.blocking + r.strength * 0.5;
         offCount += 2.5;
         break;
       case 'OL':
-        offSum += r.blocking * 1.5 + r.strength;
+        offSum += (r.blocking + fitBonus) * 1.5 + r.strength;
         offCount += 2.5;
         break;
       case 'DL':
-        defSum += r.passRush * 1.5 + r.strength + r.tackling * 0.5;
+        defSum += (r.passRush + fitBonus) * 1.5 + r.strength + r.tackling * 0.5;
         defCount += 3;
         break;
       case 'LB':
-        defSum += r.tackling * 1.5 + r.coverage * 0.5 + r.speed * 0.5;
+        defSum += (r.tackling + fitBonus) * 1.5 + r.coverage * 0.5 + r.speed * 0.5;
         defCount += 2.5;
         break;
       case 'CB':
-        defSum += r.coverage * 2 + r.speed * 0.5;
+        defSum += (r.coverage + fitBonus) * 2 + r.speed * 0.5;
         defCount += 2.5;
         break;
       case 'S':
-        defSum += r.coverage + r.tackling + r.speed * 0.5;
+        defSum += (r.coverage + fitBonus) + r.tackling + r.speed * 0.5;
         defCount += 2.5;
         break;
     }
@@ -66,9 +69,11 @@ export function generateBettingLine(
   awayRoster: Player[],
   homeCoachBonus = 0,
   awayCoachBonus = 0,
+  homeTeam?: Team,
+  awayTeam?: Team,
 ): BettingLine {
-  const homePow = teamPower(homeRoster, homeCoachBonus);
-  const awayPow = teamPower(awayRoster, awayCoachBonus);
+  const homePow = teamPower(homeRoster, homeCoachBonus, homeTeam);
+  const awayPow = teamPower(awayRoster, awayCoachBonus, awayTeam);
   const homeTotal = homePow.offense + homePow.defense;
   const awayTotal = awayPow.offense + awayPow.defense;
 
@@ -168,9 +173,9 @@ function simulatePlay(
     : 50;
 
   // Decide pass vs rush (weighted by situation) — NFL avg ~58% pass
-  const passChance = down >= 3 && yardsToGo > 5 ? 0.70 :
-                     down >= 3 ? 0.55 :
-                     down === 1 ? 0.42 : 0.48;
+  const passChance = down >= 3 && yardsToGo > 5 ? 0.75 :
+                     down >= 3 ? 0.60 :
+                     down === 1 ? 0.48 : 0.54;
 
   const isPass = Math.random() < passChance;
 
@@ -208,10 +213,10 @@ function simulatePlay(
       : 50;
 
     // ── Interception check ──
-    // Avg INT rate ~2.5% of attempts. Elite QBs ~1.5% (~8/season), bad QBs ~3.5% (~18/season).
+    // Avg INT rate ~2.0% of attempts. Elite QBs ~1.2% (~7/season), bad QBs ~3.0% (~16/season).
     const intChance = clamp(
-      (coverageRating - qb.ratings.throwing) / 600 + 0.025,
-      0.012, 0.040,
+      (coverageRating - qb.ratings.throwing) / 700 + 0.018,
+      0.008, 0.030,
     );
     if (Math.random() < intChance) {
       const interceptor = coverageDefender ?? (cbs[0] || safeties[0] || allDefenders[0]);
@@ -223,22 +228,22 @@ function simulatePlay(
 
     // ── Completion check ──
     // NFL avg comp% ~65%, elite QBs ~70%, bad QBs ~57%
-    const compBase = 0.50 + (qb.ratings.throwing / 100) * 0.16 + (target.ratings.catching / 100) * 0.10;
+    const compBase = 0.48 + (qb.ratings.throwing / 100) * 0.16 + (target.ratings.catching / 100) * 0.10;
     // Red zone boost: shorter field compresses coverage, boosting completion rates
     const redZoneBonus = fieldPosition >= 80 ? 0.06 : 0;
-    const compRate = clamp(compBase - (coverageRating / 100) * 0.13 + redZoneBonus, 0.40, 0.72);
+    const compRate = clamp(compBase - (coverageRating / 100) * 0.12 + redZoneBonus, 0.42, 0.74);
 
     if (Math.random() < compRate) {
       // Completed pass — yards tuned for realism
-      // Average: ~11.8 yards per completion, top WR ~1,000-1,400 yds/season
+      // Average: ~11.8 yards per completion, top QB ~4,500 yds/season, top WR ~1,500 yds/season
       const baseYards = 3 + Math.random() * 11; // 3-14 base (avg 8.5)
-      const bonusYards = (qb.ratings.throwing / 100) * 3 + (target.ratings.speed / 100) * 2;
+      const bonusYards = (qb.ratings.throwing / 100) * 2.5 + (target.ratings.speed / 100) * 2;
       let yards = Math.round(baseYards + bonusYards * Math.random());
 
       // Big play chance (~4-6% of completions go 20+) — explosive plays
       const bigPlayChance = 0.02 + (target.ratings.speed / 100) * 0.03;
       if (Math.random() < bigPlayChance) {
-        yards += 15 + Math.floor(Math.random() * 20);
+        yards += 12 + Math.floor(Math.random() * 18);
       }
 
       const newPos = fieldPosition + yards;

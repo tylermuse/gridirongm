@@ -320,6 +320,7 @@ function TradeFinderContent({
                         {tp.player.ratings.overall} OVR
                       </span>
                       <span className="text-[10px] text-[var(--text-sec)] w-8 text-right">{tp.player.age}y</span>
+                      <span className="text-[10px] text-[var(--text-sec)] w-20 text-right">${tp.player.contract.salary.toFixed(1)}M · {tp.player.contract.yearsLeft}yr</span>
                       <span className="text-[10px] text-[var(--text-sec)] w-20 text-right">{tp.estimatedCost}</span>
                       <Button
                         size="sm"
@@ -809,6 +810,7 @@ function TradesPage() {
                                 </button>
                                 <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall} OVR</span>
                                 <span className="text-[10px] text-[var(--text-sec)]">Age {p.age}</span>
+                                <span className="text-[10px] text-[var(--text-sec)]">${p.contract.salary.toFixed(1)}M · {p.contract.yearsLeft}yr</span>
                               </div>
                               {stats && <div className="text-[10px] text-[var(--text-sec)] ml-7 mt-0.5">{stats}</div>}
                             </div>
@@ -837,6 +839,7 @@ function TradesPage() {
                                 </button>
                                 <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall} OVR</span>
                                 <span className="text-[10px] text-[var(--text-sec)]">Age {p.age}</span>
+                                <span className="text-[10px] text-[var(--text-sec)]">${p.contract.salary.toFixed(1)}M · {p.contract.yearsLeft}yr</span>
                               </div>
                               {stats && <div className="text-[10px] text-[var(--text-sec)] ml-7 mt-0.5">{stats}</div>}
                             </div>
@@ -1338,6 +1341,7 @@ function TradesPage() {
                           <Badge size="sm">{p.position}</Badge>
                           <span className="text-sm flex-1">{p.firstName} {p.lastName}</span>
                           <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                          <span className="text-[10px] text-[var(--text-sec)] w-20 text-right">${p.contract.salary.toFixed(1)}M · {p.contract.yearsLeft}yr</span>
                           <span className="text-xs text-[var(--text-sec)]">~{Math.round(playerTradeValue(p)).toLocaleString()}</span>
                         </label>
                       ))}
@@ -1387,6 +1391,7 @@ function TradesPage() {
                               <Badge size="sm">{p.position}</Badge>
                               <span className="text-sm flex-1">{p.firstName} {p.lastName}</span>
                               <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                              <span className="text-[10px] text-[var(--text-sec)] w-20 text-right">${p.contract.salary.toFixed(1)}M · {p.contract.yearsLeft}yr</span>
                               <span className="text-xs text-[var(--text-sec)]">~{Math.round(playerTradeValue(p)).toLocaleString()}</span>
                             </label>
                           ))}
