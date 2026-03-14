@@ -278,6 +278,7 @@ export default function FreeAgencyPage() {
         });
         return;
       }
+      // User clicks "Done" to dismiss
     }
   }
 

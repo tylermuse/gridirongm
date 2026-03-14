@@ -43,14 +43,12 @@ type NegMode = 'extend' | 'restructure';
 
 export default function ReSignPage() {
   const router = useRouter();
-  const { phase, players, teams, userTeamId, resigningPlayers, holdoutDemands, resignPlayer, passOnResigning, franchiseTagPlayer, resolveHoldout, advanceToDraft } = useGameStore();
+  const { phase, players, teams, userTeamId, resigningPlayers, resignPlayer, passOnResigning, passOnResigningBatch, franchiseTagPlayer, advanceToDraft } = useGameStore();
   const roster = players.filter(p => p.teamId === userTeamId && !p.retired);
 
   const [results, setResults] = useState<Record<string, ReSignResult>>({});
-  const [holdoutResults, setHoldoutResults] = useState<Record<string, 'extended' | 'denied'>>({});
   const [negotiation, setNegotiation] = useState<NegotiationState | null>(null);
   const [negMode, setNegMode] = useState<NegMode>('extend');
-  const [holdoutNegPlayerId, setHoldoutNegPlayerId] = useState<string | null>(null);
   const [offerSalary, setOfferSalary] = useState(0);
   const [offerYears, setOfferYears] = useState(3);
   const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
@@ -112,7 +110,7 @@ export default function ReSignPage() {
 
     if (mode === 'extend') {
       // Extension: player wants askingSalary for askingYears
-      const neg = initNegotiation(player, entry.askingSalary);
+      const neg = initNegotiation(player, entry.askingSalary, 'resigning');
       // Override asking years from the entry
       neg.askingYears = entry.askingYears;
       neg.messages = [{
@@ -136,7 +134,7 @@ export default function ReSignPage() {
       const newAnnual = Math.round(currentSalary * discountPct * 10) / 10;
       const capSaved = Math.round((currentSalary - newAnnual) * 10) / 10;
 
-      const neg = initNegotiation(player, newAnnual);
+      const neg = initNegotiation(player, newAnnual, 'resigning');
       neg.askingYears = newYears;
       neg.messages = [{
         sender: 'player',
@@ -154,24 +152,10 @@ export default function ReSignPage() {
     const updated = processOffer(negotiation, offerSalary, offerYears);
     setNegotiation(updated);
     if (updated.outcome === 'accepted') {
-      if (holdoutNegPlayerId) {
-        // Holdout extension: sign the new deal
-        resignPlayer(activePlayerId, updated.currentOfferSalary, updated.currentOfferYears);
-        setHoldoutResults(prev => ({ ...prev, [activePlayerId]: 'extended' }));
-        setHoldoutNegPlayerId(null);
-      } else {
-        resignPlayer(activePlayerId, updated.currentOfferSalary, updated.currentOfferYears);
-        setResults(prev => ({ ...prev, [activePlayerId]: 'accepted' }));
-      }
+      resignPlayer(activePlayerId, updated.currentOfferSalary, updated.currentOfferYears);
+      setResults(prev => ({ ...prev, [activePlayerId]: 'accepted' }));
     } else if (updated.outcome === 'rejected') {
-      if (holdoutNegPlayerId) {
-        // Holdout negotiation failed — they hold out
-        resolveHoldout(activePlayerId, 'deny');
-        setHoldoutResults(prev => ({ ...prev, [activePlayerId]: 'denied' }));
-        setHoldoutNegPlayerId(null);
-      } else {
-        setResults(prev => ({ ...prev, [activePlayerId]: 'rejected' }));
-      }
+      setResults(prev => ({ ...prev, [activePlayerId]: 'rejected' }));
     }
   }
 
@@ -182,34 +166,6 @@ export default function ReSignPage() {
     }
     setNegotiation(null);
     setActivePlayerId(null);
-  }
-
-  function startHoldoutNeg(playerId: string) {
-    const demand = (holdoutDemands ?? []).find(h => h.playerId === playerId);
-    const player = players.find(p => p.id === playerId);
-    if (!demand || !player) return;
-
-    resolveHoldout(playerId, 'extend');
-    setHoldoutNegPlayerId(playerId);
-    setActivePlayerId(playerId);
-    setNegMode('extend');
-
-    const neg = initNegotiation(player, demand.demandedSalary);
-    neg.askingYears = demand.demandedYears;
-    neg.messages = [{
-      sender: 'player',
-      text: `I've outperformed my deal. I want $${demand.demandedSalary}M/yr for ${demand.demandedYears} years. Otherwise, I'm holding out.`,
-      type: 'neutral',
-    }];
-    setNegotiation(neg);
-    setOfferSalary(demand.demandedSalary);
-    setOfferYears(demand.demandedYears);
-    setHoldoutResults(prev => ({ ...prev, [playerId]: 'extended' }));
-  }
-
-  function denyHoldout(playerId: string) {
-    resolveHoldout(playerId, 'deny');
-    setHoldoutResults(prev => ({ ...prev, [playerId]: 'denied' }));
   }
 
   function handlePass(playerId: string) {
@@ -241,13 +197,16 @@ export default function ReSignPage() {
                 variant="danger"
                 className="mt-2"
                 onClick={() => {
+                  if (!confirm(`Let all ${activeEntries.length} players walk? They'll become free agents.`)) return;
                   const ids = activeEntries.map(e => e.playerId);
-                  const newResults: Record<string, ReSignResult> = {};
-                  for (const id of ids) {
-                    passOnResigning(id);
-                    newResults[id] = 'passed';
-                  }
-                  setResults(prev => ({ ...prev, ...newResults }));
+                  passOnResigningBatch(ids);
+                  setNegotiation(null);
+                  setActivePlayerId(null);
+                  setResults(prev => {
+                    const next = { ...prev };
+                    for (const id of ids) next[id] = 'passed';
+                    return next;
+                  });
                 }}
               >
                 Let All Walk ({activeEntries.length})
@@ -434,7 +393,7 @@ export default function ReSignPage() {
           </Card>
         )}
 
-        {activeEntries.length === 0 && Object.keys(results).length === 0 && (holdoutDemands ?? []).length === 0 ? (
+        {activeEntries.length === 0 && Object.keys(results).length === 0 ? (
           <Card>
             <div className="text-center py-12 text-[var(--text-sec)]">
               <div className="text-4xl mb-3">✅</div>
@@ -514,103 +473,6 @@ export default function ReSignPage() {
             </div>
 
           <div className="flex-1 space-y-4">
-            {/* Contract Holdout Demands */}
-            {(() => {
-              const demands = (holdoutDemands ?? []);
-              const unresolvedDemands = demands.filter(h => !h.resolved && !holdoutResults[h.playerId]);
-              const resolvedDemands = demands.filter(h => h.resolved || holdoutResults[h.playerId]);
-              if (demands.length === 0) return null;
-              return (
-                <>
-                  {unresolvedDemands.length > 0 && (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-lg">&#x26A0;&#xFE0F;</span>
-                        <h3 className="font-black text-lg text-red-600">Contract Demands</h3>
-                        <span className="text-xs text-[var(--text-sec)]">({unresolvedDemands.length} unresolved)</span>
-                      </div>
-                      {unresolvedDemands.map(demand => {
-                        const player = players.find(p => p.id === demand.playerId);
-                        if (!player) return null;
-                        const marketValue = demand.demandedSalary;
-                        const underpaidPct = Math.round((marketValue / Math.max(0.5, player.contract.salary) - 1) * 100);
-                        return (
-                          <Card key={demand.playerId} className="border-red-200 bg-red-50/30">
-                            <div className="flex gap-4 items-start">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <PlayerAvatar player={player} size="md" teamColor={userTeam?.primaryColor ?? '#374151'} />
-                                  <span className="font-bold text-lg">{player.firstName} {player.lastName}</span>
-                                  <Badge>{player.position}</Badge>
-                                  <span className={`font-bold ${ratingColor(player.ratings.overall)}`}>{player.ratings.overall} OVR</span>
-                                  <Badge variant="red" size="sm">Underpaid +{underpaidPct}%</Badge>
-                                </div>
-                                <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-sm text-[var(--text-sec)]">
-                                  <span>Current: ${player.contract.salary}M/yr x {player.contract.yearsLeft}yr</span>
-                                  <span className="text-red-600">Wants: ${demand.demandedSalary}M/yr x {demand.demandedYears}yr</span>
-                                  <span>Mood: {player.mood}</span>
-                                </div>
-                                <div className="mt-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm italic text-amber-800">
-                                  &ldquo;I&apos;ve outperformed my deal. I need a new contract or I&apos;m holding out.&rdquo;
-                                </div>
-                              </div>
-                              <div className="flex flex-col gap-1.5 shrink-0">
-                                <Button
-                                  size="sm"
-                                  onClick={() => startHoldoutNeg(demand.playerId)}
-                                  disabled={!!negotiation && negotiation.outcome === 'pending'}
-                                >
-                                  Extend
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="danger"
-                                  onClick={() => {
-                                    if (confirm(`Deny ${player.firstName} ${player.lastName}'s contract demand? He will hold out with reduced performance.`)) {
-                                      denyHoldout(demand.playerId);
-                                    }
-                                  }}
-                                  disabled={!!negotiation && negotiation.outcome === 'pending'}
-                                >
-                                  Deny
-                                </Button>
-                              </div>
-                            </div>
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {/* Resolved holdout demands */}
-                  {resolvedDemands.map(demand => {
-                    const player = players.find(p => p.id === demand.playerId);
-                    if (!player) return null;
-                    const result = holdoutResults[demand.playerId];
-                    return (
-                      <div
-                        key={demand.playerId}
-                        className={`flex items-center gap-3 p-3 rounded-xl border ${
-                          result === 'extended' ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'
-                        }`}
-                      >
-                        <span className="text-lg">{result === 'extended' ? '✅' : '⛔'}</span>
-                        <span className="font-semibold">{player.firstName} {player.lastName}</span>
-                        <Badge>{player.position}</Badge>
-                        <span className="text-sm text-[var(--text-sec)]">
-                          {result === 'extended'
-                            ? `New deal — $${player.contract.salary}M/yr x ${player.contract.yearsLeft}yr`
-                            : 'Holdout — reduced performance until season ends'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                  {unresolvedDemands.length === 0 && resolvedDemands.length > 0 && (
-                    <div className="border-b border-[var(--border)] mb-2" />
-                  )}
-                </>
-              );
-            })()}
-
             {/* Active re-signing entries */}
             {activeEntries.map(entry => {
               const player = players.find(p => p.id === entry.playerId);
@@ -758,29 +620,20 @@ export default function ReSignPage() {
         )}
 
         {/* Advance to Draft — shown when all entries are done */}
-        {activeEntries.length === 0 && (Object.keys(results).length > 0 || (holdoutDemands ?? []).length > 0) && (() => {
-          const unresolvedHoldouts = (holdoutDemands ?? []).filter(h => !h.resolved && !holdoutResults[h.playerId]);
-          const allDone = unresolvedHoldouts.length === 0;
-          return (
-            <div className="text-center py-8">
-              <div className="text-4xl mb-2">{allDone ? '✅' : '⏳'}</div>
-              <p className="text-[var(--text-sec)] mb-4">
-                {allDone
-                  ? 'All re-signing decisions complete.'
-                  : `Resolve ${unresolvedHoldouts.length} holdout demand${unresolvedHoldouts.length > 1 ? 's' : ''} before advancing.`}
-              </p>
-              <Button
-                onClick={() => {
-                  advanceToDraft();
-                  router.push('/draft');
-                }}
-                disabled={!allDone}
-              >
-                Advance to Draft →
-              </Button>
-            </div>
-          );
-        })()}
+        {activeEntries.length === 0 && Object.keys(results).length > 0 && (
+          <div className="text-center py-8">
+            <div className="text-4xl mb-2">✅</div>
+            <p className="text-[var(--text-sec)] mb-4">All re-signing decisions complete.</p>
+            <Button
+              onClick={() => {
+                advanceToDraft();
+                router.push('/draft');
+              }}
+            >
+              Advance to Draft →
+            </Button>
+          </div>
+        )}
 
         {/* Tips card */}
         {activeEntries.length > 0 && !negotiation && (

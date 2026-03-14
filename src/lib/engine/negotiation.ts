@@ -50,6 +50,7 @@ function fmtYears(y: number): string {
 export function initNegotiation(
   player: { id: string; firstName: string; lastName: string; position: string; age: number; ratings: { overall: number }; mood?: number },
   estimatedSalary: number,
+  context: 'resigning' | 'freeAgency' = 'freeAgency',
 ): NegotiationState {
   const askingYears = player.age >= 32 ? 1 : player.age >= 28 ? 2 : 3;
   const mood = player.mood ?? 70;
@@ -61,6 +62,29 @@ export function initNegotiation(
   // Low mood = less patience, fewer rounds of negotiation
   const basePat = mood < 30 ? 40 : mood < 50 ? 60 : mood < 70 ? 80 : 100;
   const baseRounds = mood < 30 ? 2 : mood < 50 ? 2 + (Math.random() > 0.5 ? 1 : 0) : 3 + (Math.random() > 0.5 ? 1 : 0);
+
+  const isResigning = context === 'resigning';
+
+  let openingText: string;
+  if (mood < 30) {
+    openingText = isResigning
+      ? pick([
+        `I'll hear you out, but honestly I'm not sure I want to stay here. ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}, minimum.`,
+        `After the way things have gone, I'm not feeling great about re-signing. If you want me, it's ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}.`,
+      ])
+      : pick([
+        `I'll hear you out, but I've got other options. ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}, minimum.`,
+        `I'm not going to come cheap. If you want me, it's ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}.`,
+      ]);
+  } else if (mood < 50) {
+    openingText = isResigning
+      ? `I'm looking for around ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}. Let's see what you've got.`
+      : `I'm looking for around ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}. Show me what you've got.`;
+  } else {
+    openingText = isResigning
+      ? `I'd love to stay. I'm looking for around ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}. What can you offer?`
+      : `I'm looking for around ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}. What can you offer?`;
+  }
 
   return {
     playerId: player.id,
@@ -79,14 +103,7 @@ export function initNegotiation(
     messages: [
       {
         sender: 'player',
-        text: mood < 30
-          ? pick([
-            `I'll hear you out, but honestly I'm not sure I want to be here. ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}, minimum.`,
-            `After the way things have gone, I'm not feeling great about staying. If you want me, it's ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}.`,
-          ])
-          : mood < 50
-          ? `I'm looking for around ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}. Let's see what you've got.`
-          : `I'm looking for around ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}. What can you offer?`,
+        text: openingText,
         type: mood < 50 ? 'negative' : 'neutral',
       },
     ],
@@ -186,16 +203,17 @@ export function processOffer(
 
   if (satisfaction >= 0.95) {
     /* ── Very good offer — at or above asking ── */
-    // Unhappy players are harder to convince even at asking price
-    const acceptChance = isAngry ? 0.50 : isUnhappy ? 0.70 : 0.85;
-    if (roll < acceptChance) {
+    // At or above asking: accept almost always. Unhappy players are slightly harder.
+    const acceptChance = isAngry ? 0.70 : isUnhappy ? 0.85 : 1.0;
+    if (roll < acceptChance || offeredSalary >= state.askingSalary) {
+      // If offering at or above asking salary, always accept
       next.outcome = 'accepted';
       next.messages.push({
         sender: 'player',
         text: isUnhappy
           ? pick([
-            `...Alright. The money's right. I'll stay, but things need to change around here.`,
-            `Fine. It's a good deal. But I want to see this team compete.`,
+            `...Alright. The money's right. I'll sign, but I expect this team to compete.`,
+            `Fine. It's a fair deal. Let's get it done.`,
           ])
           : pick([
             `That's a great offer. I'm in! Let's make it official.`,
@@ -205,9 +223,10 @@ export function processOffer(
         type: 'result',
       });
     } else {
-      const counterSalary = r1(offeredSalary * (isUnhappy ? 1.05 : 1.02));
-      // If the counter rounds to the same as the offer, just accept (avoids "bump to $X" when already at $X)
+      // Unhappy player wants a bump even at asking price
+      const counterSalary = r1(offeredSalary * 1.08);
       if (counterSalary <= offeredSalary) {
+        // Rounding made counter same as offer — just accept
         next.outcome = 'accepted';
         next.messages.push({
           sender: 'player',
@@ -222,12 +241,10 @@ export function processOffer(
         next.askingSalary = counterSalary;
         next.messages.push({
           sender: 'player',
-          text: isUnhappy
-            ? pick([
-              `We're getting close, but I need a little more to feel valued here. ${fmtSalary(counterSalary)}.`,
-              `Almost there. Make it ${fmtSalary(counterSalary)} and I'll consider it.`,
-            ])
-            : `We're really close. Can you bump it to ${fmtSalary(counterSalary)}? That would seal the deal.`,
+          text: pick([
+            `We're getting close, but I need a little more to feel valued here. ${fmtSalary(counterSalary)}.`,
+            `Almost there. Make it ${fmtSalary(counterSalary)} and I'll consider it.`,
+          ]),
           type: 'counter',
         });
       }
@@ -244,7 +261,7 @@ export function processOffer(
         text: isUnhappy
           ? pick([
             `It's not what I wanted, but I'll take it. Don't make me regret this.`,
-            `Alright, I'll stay. But I expect things to improve around here.`,
+            `Alright, I'll sign. But I expect this team to step up.`,
           ])
           : pick([
             `Alright, I can work with that. You've got a deal!`,
@@ -264,7 +281,7 @@ export function processOffer(
           text: isUnhappy
             ? pick([
               `Fine, I'll take it. Let's move on.`,
-              `Alright, I'll stay. But I expect things to improve around here.`,
+              `Alright, I'll sign. But I expect this team to step up.`,
             ])
             : pick([
               `You know what, that works. Let's do it!`,

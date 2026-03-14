@@ -527,10 +527,14 @@ export default function PlayoffsPage() {
             }
           }
 
-          // Retired players (age 35+ or low OVR older players flagged as retiring)
-          const retiredThisSeason = players.filter(p => p.retired && p.experience >= 5);
+          // Retired players who still have a team (retired this season, not prior seasons)
+          // Players who retired in previous seasons have teamId: null and no current stats
+          const retiredThisSeason = players.filter(p =>
+            p.retired && (p.teamId !== null || p.stats.gamesPlayed > 0),
+          );
           // Show notable retirees (top OVR or long careers)
           const notableRetirees = retiredThisSeason
+            .filter(p => p.ratings.overall >= 75 || p.experience >= 10)
             .sort((a, b) => b.ratings.overall - a.ratings.overall)
             .slice(0, 10);
 

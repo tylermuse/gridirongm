@@ -305,12 +305,16 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
               <>
                 {draftOrder.length > 0 ? (
                   <>
-                    <Button onClick={simDraftPick} size="sm" variant="secondary">
-                      Sim Pick
-                    </Button>
-                    <Button onClick={simToUserDraftPick} size="sm" variant="secondary">
-                      Sim to My Pick
-                    </Button>
+                    {draftOrder[0] !== userTeamId && (
+                      <Button onClick={simDraftPick} size="sm" variant="secondary">
+                        Sim Pick
+                      </Button>
+                    )}
+                    {draftOrder[0] !== userTeamId && (
+                      <Button onClick={simToUserDraftPick} size="sm" variant="secondary">
+                        Sim to My Pick
+                      </Button>
+                    )}
                     <Button
                       onClick={() => {
                         simToEndDraft({ skipAdvance: true });

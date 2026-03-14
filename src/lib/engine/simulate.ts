@@ -1,106 +1,60 @@
-import type { Player, PlayerStats, GameResult, ScoringPlay, BettingLine, Team } from '@/types';
-import { schemeFitOvrBonus } from './coaching';
+import type { Player, PlayerStats, GameResult, ScoringPlay } from '@/types';
 
 /**
  * Computes an aggregate offensive and defensive power rating for a roster.
  * Returns a value roughly in 50-100 range for typical pro teams.
- * When a team is provided, scheme fit bonuses are applied (+2 great, -1 poor).
  */
-export function teamPower(roster: Player[], coachBonus = 0, team?: Team): { offense: number; defense: number } {
+export function teamPower(roster: Player[]): { offense: number; defense: number } {
   let offSum = 0, offCount = 0;
   let defSum = 0, defCount = 0;
 
   for (const p of roster) {
     if (p.injury && p.injury.weeksLeft > 0) continue;
     const r = p.ratings;
-    const fitBonus = team ? schemeFitOvrBonus(p, team) : 0;
-    const holdoutPenalty = p.holdout ? -4 : 0;
     switch (p.position) {
       case 'QB':
-        offSum += (r.throwing + fitBonus + holdoutPenalty) * 2 + (r.awareness + fitBonus + holdoutPenalty) + r.speed * 0.5;
+        offSum += r.throwing * 2 + r.awareness + r.speed * 0.5;
         offCount += 3.5;
         break;
       case 'RB':
-        offSum += (r.carrying + fitBonus + holdoutPenalty) * 1.5 + r.speed + r.agility * 0.5;
+        offSum += r.carrying * 1.5 + r.speed + r.agility * 0.5;
         offCount += 3;
         break;
       case 'WR':
-        offSum += (r.catching + fitBonus + holdoutPenalty) * 1.5 + r.speed;
+        offSum += r.catching * 1.5 + r.speed;
         offCount += 2.5;
         break;
       case 'TE':
-        offSum += (r.catching + fitBonus + holdoutPenalty) + r.blocking + r.strength * 0.5;
+        offSum += r.catching + r.blocking + r.strength * 0.5;
         offCount += 2.5;
         break;
       case 'OL':
-        offSum += (r.blocking + fitBonus + holdoutPenalty) * 1.5 + r.strength;
+        offSum += r.blocking * 1.5 + r.strength;
         offCount += 2.5;
         break;
       case 'DL':
-        defSum += (r.passRush + fitBonus + holdoutPenalty) * 1.5 + r.strength + r.tackling * 0.5;
+        defSum += r.passRush * 1.5 + r.strength + r.tackling * 0.5;
         defCount += 3;
         break;
       case 'LB':
-        defSum += (r.tackling + fitBonus + holdoutPenalty) * 1.5 + r.coverage * 0.5 + r.speed * 0.5;
+        defSum += r.tackling * 1.5 + r.coverage * 0.5 + r.speed * 0.5;
         defCount += 2.5;
         break;
       case 'CB':
-        defSum += (r.coverage + fitBonus + holdoutPenalty) * 2 + r.speed * 0.5;
+        defSum += r.coverage * 2 + r.speed * 0.5;
         defCount += 2.5;
         break;
       case 'S':
-        defSum += (r.coverage + fitBonus + holdoutPenalty) + r.tackling + r.speed * 0.5;
+        defSum += r.coverage + r.tackling + r.speed * 0.5;
         defCount += 2.5;
         break;
     }
   }
 
   return {
-    offense: (offCount > 0 ? offSum / offCount : 50) + coachBonus,
-    defense: (defCount > 0 ? defSum / defCount : 50) + coachBonus,
+    offense: offCount > 0 ? offSum / offCount : 50,
+    defense: defCount > 0 ? defSum / defCount : 50,
   };
-}
-
-/**
- * Generate Vegas-style betting lines for a game based on team power ratings.
- * spread < 0 means home team is favored.
- */
-export function generateBettingLine(
-  homeRoster: Player[],
-  awayRoster: Player[],
-  homeCoachBonus = 0,
-  awayCoachBonus = 0,
-  homeTeam?: Team,
-  awayTeam?: Team,
-): BettingLine {
-  const homePow = teamPower(homeRoster, homeCoachBonus, homeTeam);
-  const awayPow = teamPower(awayRoster, awayCoachBonus, awayTeam);
-  const homeTotal = homePow.offense + homePow.defense;
-  const awayTotal = awayPow.offense + awayPow.defense;
-
-  // Spread: power diff scaled to points + 3pt home field advantage
-  const rawSpread = (awayTotal - homeTotal) * 0.35 - 3;
-  const spread = Math.round(rawSpread * 2) / 2; // nearest 0.5
-
-  // O/U: based on combined offensive strength
-  const combinedOff = (homePow.offense + awayPow.offense) / 2;
-  const rawOU = 38 + (combinedOff - 50) * 0.4;
-  const overUnder = Math.round(rawOU * 2) / 2;
-
-  // Moneyline from spread
-  const absSpread = Math.abs(spread);
-  let homeML: number, awayML: number;
-  if (absSpread <= 1) {
-    homeML = spread <= 0 ? -115 : -105;
-    awayML = spread <= 0 ? -105 : -115;
-  } else {
-    const favML = Math.round(-100 - absSpread * 20);
-    const dogML = Math.round(100 + absSpread * 18);
-    homeML = spread <= 0 ? favML : dogML;
-    awayML = spread <= 0 ? dogML : favML;
-  }
-
-  return { spread, overUnder, homeML, awayML };
 }
 
 function clamp(val: number, min: number, max: number): number {
@@ -173,10 +127,10 @@ function simulatePlay(
     ? dls.reduce((s, p) => s + p.ratings.passRush * 1.2 + p.ratings.strength, 0) / dls.length
     : 50;
 
-  // Decide pass vs rush (weighted by situation) — NFL avg ~58% pass
-  const passChance = down >= 3 && yardsToGo > 5 ? 0.75 :
-                     down >= 3 ? 0.60 :
-                     down === 1 ? 0.48 : 0.54;
+  // Decide pass vs rush (weighted by situation) — NFL avg ~60% pass
+  const passChance = down >= 3 && yardsToGo > 5 ? 0.80 :
+                     down >= 3 ? 0.65 :
+                     down === 1 ? 0.55 : 0.60;
 
   const isPass = Math.random() < passChance;
 
@@ -214,10 +168,10 @@ function simulatePlay(
       : 50;
 
     // ── Interception check ──
-    // Avg INT rate ~2.0% of attempts. Elite QBs ~1.2% (~7/season), bad QBs ~3.0% (~16/season).
+    // Avg INT rate ~2.5% of attempts. Elite QBs ~1.5% (~8/season), bad QBs ~3.5% (~18/season).
     const intChance = clamp(
-      (coverageRating - qb.ratings.throwing) / 700 + 0.018,
-      0.008, 0.030,
+      (coverageRating - qb.ratings.throwing) / 600 + 0.025,
+      0.012, 0.040,
     );
     if (Math.random() < intChance) {
       const interceptor = coverageDefender ?? (cbs[0] || safeties[0] || allDefenders[0]);
@@ -229,22 +183,22 @@ function simulatePlay(
 
     // ── Completion check ──
     // NFL avg comp% ~65%, elite QBs ~70%, bad QBs ~57%
-    const compBase = 0.48 + (qb.ratings.throwing / 100) * 0.16 + (target.ratings.catching / 100) * 0.10;
+    const compBase = 0.52 + (qb.ratings.throwing / 100) * 0.18 + (target.ratings.catching / 100) * 0.10;
     // Red zone boost: shorter field compresses coverage, boosting completion rates
     const redZoneBonus = fieldPosition >= 80 ? 0.06 : 0;
-    const compRate = clamp(compBase - (coverageRating / 100) * 0.12 + redZoneBonus, 0.42, 0.74);
+    const compRate = clamp(compBase - (coverageRating / 100) * 0.12 + redZoneBonus, 0.42, 0.76);
 
     if (Math.random() < compRate) {
       // Completed pass — yards tuned for realism
-      // Average: ~11.8 yards per completion, top QB ~4,500 yds/season, top WR ~1,500 yds/season
-      const baseYards = 3 + Math.random() * 11; // 3-14 base (avg 8.5)
-      const bonusYards = (qb.ratings.throwing / 100) * 2.5 + (target.ratings.speed / 100) * 2;
+      // Average: ~12.5 yards per completion, top WR ~1,000-1,400 yds/season
+      const baseYards = 5 + Math.random() * 11; // 5-16 base (avg 10.5)
+      const bonusYards = (qb.ratings.throwing / 100) * 3.5 + (target.ratings.speed / 100) * 2.5;
       let yards = Math.round(baseYards + bonusYards * Math.random());
 
-      // Big play chance (~4-6% of completions go 20+) — explosive plays
-      const bigPlayChance = 0.02 + (target.ratings.speed / 100) * 0.03;
+      // Big play chance (~5-8% of completions go 20+) — explosive plays
+      const bigPlayChance = 0.03 + (target.ratings.speed / 100) * 0.04;
       if (Math.random() < bigPlayChance) {
-        yards += 12 + Math.floor(Math.random() * 18);
+        yards += 15 + Math.floor(Math.random() * 25);
       }
 
       const newPos = fieldPosition + yards;
@@ -341,12 +295,9 @@ interface DriveResult {
 function simulateDrive(
   offense: Player[],
   defense: Player[],
-  offCoachBonus = 0,
 ): DriveResult {
   const plays: PlayResult[] = [];
-  // Better coaching = slightly better field position (preparation, discipline)
-  const fpBonus = Math.floor(offCoachBonus * 1.5);
-  let fieldPosition = 30 + Math.floor(Math.random() * 15) + fpBonus; // start at own 30-45 (kickoff returns + touchbacks)
+  let fieldPosition = 30 + Math.floor(Math.random() * 15); // start at own 30-45 (kickoff returns + touchbacks)
   let down = 1;
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
@@ -451,7 +402,7 @@ function ensure(
 
 /**
  * Simulates a full game between two teams using play-by-play simulation.
- * Each team gets ~11-12 possessions. Stats are accumulated from individual plays,
+ * Each team gets ~11 possessions. Stats are accumulated from individual plays,
  * so starters naturally dominate stats through weighted play selection.
  *
  * Tuned for realistic pro scores: average ~20-24 points per team.
@@ -461,14 +412,11 @@ export function simulateGame(
   game: GameResult,
   homeRoster: Player[],
   awayRoster: Player[],
-  homeCoachBonus = 0,
-  awayCoachBonus = 0,
-  rivalryIntensity = 0,
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
-  // ~9 possessions per team per game (NFL has ~11 but many are 3-and-outs/short punts)
-  const possessions = 9;
+  // ~11 possessions per team per game (matches NFL average)
+  const possessions = 11;
 
   const allHomePlays: PlayResult[] = [];
   const allAwayPlays: PlayResult[] = [];
@@ -541,7 +489,7 @@ export function simulateGame(
     const quarter = Math.min(4, Math.floor(i / (possessions / 4)) + 1);
 
     // Home offense drives
-    const homeDrive = simulateDrive(homeRoster, awayRoster, homeCoachBonus);
+    const homeDrive = simulateDrive(homeRoster, awayRoster);
     homeScore += homeDrive.points;
     allHomePlays.push(...homeDrive.plays);
     const afterHome = describeScoring(homeDrive, game.homeTeamId, quarter, runAway, runHome);
@@ -549,7 +497,7 @@ export function simulateGame(
     runHome = afterHome.home;
 
     // Away offense drives
-    const awayDrive = simulateDrive(awayRoster, homeRoster, awayCoachBonus);
+    const awayDrive = simulateDrive(awayRoster, homeRoster);
     awayScore += awayDrive.points;
     allAwayPlays.push(...awayDrive.plays);
     const afterAway = describeScoring(awayDrive, game.awayTeamId, quarter, runAway, runHome);
@@ -557,50 +505,40 @@ export function simulateGame(
     runHome = afterAway.home;
   }
 
-  // Rivalry variance: intensity ≥50 gives underdog +2 bonus (applied as score variance)
-  // Intensity ≥75 adds random variance to final scores
-  if (rivalryIntensity >= 50) {
-    // Determine underdog (team with fewer wins in their roster's average OVR)
-    const homePow = teamPower(homeRoster, homeCoachBonus);
-    const awayPow = teamPower(awayRoster, awayCoachBonus);
-    const homeTotal = homePow.offense + homePow.defense;
-    const awayTotal = awayPow.offense + awayPow.defense;
-    // Give underdog a slight boost (equivalent to +2 power → ~2-3 pts)
-    if (homeTotal < awayTotal) {
-      homeScore += Math.floor(Math.random() * 4); // 0-3 pt boost
-    } else if (awayTotal < homeTotal) {
-      awayScore += Math.floor(Math.random() * 4);
-    }
-  }
-  if (rivalryIntensity >= 75) {
-    // High-intensity rivalry: add small random swing
-    homeScore += Math.floor(Math.random() * 4) - 1; // -1 to +2
-    awayScore += Math.floor(Math.random() * 4) - 1;
-    // Ensure non-negative
-    homeScore = Math.max(0, homeScore);
-    awayScore = Math.max(0, awayScore);
-  }
-
-  // Break ties with OT field goal
+  // Break ties with OT — rare chance of a tie (~1.5% of all games, ~15% of games that go to OT)
   if (homeScore === awayScore) {
-    const homeWinsOT = Math.random() < 0.55;
-    if (homeWinsOT) {
-      homeScore += 3;
-      runHome += 3;
+    const tieRoll = Math.random();
+    if (tieRoll < 0.15 && game.week <= 18) {
+      // Regular season tie — OT expires with no score
+      scoringPlays.push({
+        quarter: 5,
+        timeLeft: '0:00',
+        teamId: game.homeTeamId,
+        points: 0,
+        description: 'OT ends in a tie',
+        score: [runAway, runHome],
+      });
     } else {
-      awayScore += 3;
-      runAway += 3;
+      // OT winner
+      const homeWinsOT = Math.random() < 0.55;
+      if (homeWinsOT) {
+        homeScore += 3;
+        runHome += 3;
+      } else {
+        awayScore += 3;
+        runAway += 3;
+      }
+      const otMinutes = Math.floor(Math.random() * 8) + 1;
+      const otSeconds = Math.floor(Math.random() * 60);
+      scoringPlays.push({
+        quarter: 5,
+        timeLeft: `${otMinutes}:${otSeconds.toString().padStart(2, '0')}`,
+        teamId: homeWinsOT ? game.homeTeamId : game.awayTeamId,
+        points: 3,
+        description: 'OT field goal',
+        score: [runAway, runHome],
+      });
     }
-    const otMinutes = Math.floor(Math.random() * 8) + 1;
-    const otSeconds = Math.floor(Math.random() * 60);
-    scoringPlays.push({
-      quarter: 5,
-      timeLeft: `${otMinutes}:${otSeconds.toString().padStart(2, '0')}`,
-      teamId: homeWinsOT ? game.homeTeamId : game.awayTeamId,
-      points: 3,
-      description: 'OT field goal',
-      score: [runAway, runHome],
-    });
   }
 
   // Accumulate stats — one pass per team over their relevant plays.
