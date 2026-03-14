@@ -686,6 +686,10 @@ function TradesPage() {
         setReceivedPickIds(prev => prev.includes(pickParam) ? prev : [...prev, pickParam]);
       }
       setActiveTab('propose');
+    } else if (teamParam && !blockPlayerId) {
+      // Pre-select team for trade (e.g. from PlayerModal "Trade for" button)
+      setSelectedTeamId(teamParam);
+      setActiveTab('propose');
     }
     if (searchParams.get('from') === 'draft') {
       fromDraftRef.current = true;
@@ -926,7 +930,7 @@ function TradesPage() {
   return (
     <GameShell>
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
           <div>
             <TeamQuickNav currentPage="trades" />
             <h2 className="text-2xl font-black">Trade Center</h2>
@@ -1022,7 +1026,7 @@ function TradesPage() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-6 w-fit">
+        <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-6 w-fit overflow-x-auto max-w-full">
           {(['incoming', 'block', 'propose', 'finder'] as const).map(tab => (
             <button
               key={tab}
@@ -1150,7 +1154,7 @@ function TradesPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                       <div>
                         <div className="text-xs font-bold text-green-600 mb-2">You Receive</div>
                         {offPlayers.map(p => {
@@ -1247,7 +1251,7 @@ function TradesPage() {
                           <Button size="sm" variant="ghost" onClick={handleCancelCounter}>Cancel</Button>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                           {/* Your offer */}
                           <div className="bg-[var(--surface-2)] rounded-lg p-3">
                             <div className="flex items-center justify-between mb-2">
@@ -1412,7 +1416,7 @@ function TradesPage() {
                   Select players and picks to put on the trading block, choose what you want in return, then ask for proposals.
                 </p>
 
-                <div className="grid grid-cols-[1fr_280px] gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_280px] gap-4">
                   {/* Left: Players + Picks to put on block */}
                   <Card>
                     <CardHeader>
@@ -1427,18 +1431,18 @@ function TradesPage() {
                       <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Players</div>
                       <div className="max-h-[400px] overflow-y-auto space-y-0">
                         {userRoster.map(p => (
-                          <label key={p.id} className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
+                          <label key={p.id} className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1 flex-wrap sm:flex-nowrap">
                             <input
                               type="checkbox"
                               checked={blockedPlayerIds.includes(p.id)}
                               onChange={() => togglePlayerSelect(p.id, blockedPlayerIds, setBlockedPlayerIds)}
-                              className="accent-blue-500"
+                              className="accent-blue-500 shrink-0"
                             />
                             <Badge size="sm">{p.position}</Badge>
-                            <span className="text-sm flex-1">{p.firstName} {p.lastName}</span>
+                            <span className="text-sm flex-1 min-w-0 truncate">{p.firstName} {p.lastName}</span>
                             <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
-                            <span className="text-xs text-[var(--text-sec)] w-10 text-right">{p.age}y</span>
-                            <span className="text-xs text-[var(--text-sec)] w-14 text-right">${p.contract.salary}M</span>
+                            <span className="text-xs text-[var(--text-sec)] shrink-0">{p.age}y</span>
+                            <span className="text-xs text-[var(--text-sec)] shrink-0">${p.contract.salary}M</span>
                           </label>
                         ))}
                       </div>
@@ -1675,7 +1679,7 @@ function TradesPage() {
                 </Card>
 
                 {/* Trade panels */}
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   {/* Your offer */}
                   <Card>
                     <CardHeader>
@@ -1685,21 +1689,21 @@ function TradesPage() {
                     <div className="mb-3">
                       <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Players</div>
                       {userRoster.map(p => (
-                        <label key={p.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
+                        <label key={p.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1 flex-wrap sm:flex-nowrap">
                           <input
                             type="checkbox"
                             checked={offeredPlayerIds.includes(p.id)}
                             onChange={() => togglePlayerSelect(p.id, offeredPlayerIds, setOfferedPlayerIds)}
-                            className="accent-blue-500"
+                            className="accent-blue-500 shrink-0"
                           />
                           <Badge size="sm">{p.position}</Badge>
-                          <span className="text-sm flex-1">{p.firstName} {p.lastName}</span>
+                          <span className="text-sm flex-1 min-w-0 truncate">{p.firstName} {p.lastName}</span>
                           <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
                           {userTeam && calculateSchemeFit(p, userTeam) === 'poor' && (
                             <span className="text-[9px] text-red-500 font-bold px-1 py-0.5 bg-red-50 rounded">Poor Fit</span>
                           )}
-                          <span className="text-[10px] text-[var(--text-sec)] w-20 text-right">${p.contract.salary.toFixed(1)}M · {p.contract.yearsLeft}yr</span>
-                          <span className="text-xs text-[var(--text-sec)]">~{Math.round(playerTradeValue(p)).toLocaleString()}</span>
+                          <span className="text-[10px] text-[var(--text-sec)] shrink-0">${p.contract.salary.toFixed(1)}M/{p.contract.yearsLeft}yr</span>
+                          <span className="text-xs text-[var(--text-sec)] shrink-0">~{Math.round(playerTradeValue(p)).toLocaleString()}</span>
                         </label>
                       ))}
                     </div>
@@ -1738,18 +1742,18 @@ function TradesPage() {
                         <div className="mb-3">
                           <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Players</div>
                           {aiRoster.map(p => (
-                            <label key={p.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1">
+                            <label key={p.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1 flex-wrap sm:flex-nowrap">
                               <input
                                 type="checkbox"
                                 checked={receivedPlayerIds.includes(p.id)}
                                 onChange={() => togglePlayerSelect(p.id, receivedPlayerIds, setReceivedPlayerIds)}
-                                className="accent-blue-500"
+                                className="accent-blue-500 shrink-0"
                               />
                               <Badge size="sm">{p.position}</Badge>
-                              <span className="text-sm flex-1">{p.firstName} {p.lastName}</span>
+                              <span className="text-sm flex-1 min-w-0 truncate">{p.firstName} {p.lastName}</span>
                               <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
-                              <span className="text-[10px] text-[var(--text-sec)] w-20 text-right">${p.contract.salary.toFixed(1)}M · {p.contract.yearsLeft}yr</span>
-                              <span className="text-xs text-[var(--text-sec)]">~{Math.round(playerTradeValue(p)).toLocaleString()}</span>
+                              <span className="text-[10px] text-[var(--text-sec)] shrink-0">${p.contract.salary.toFixed(1)}M/{p.contract.yearsLeft}yr</span>
+                              <span className="text-xs text-[var(--text-sec)] shrink-0">~{Math.round(playerTradeValue(p)).toLocaleString()}</span>
                             </label>
                           ))}
                         </div>
@@ -1780,7 +1784,7 @@ function TradesPage() {
 
                 {/* Trade summary */}
                 <Card>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-semibold">
                         Value: {Math.round(offeredValue).toLocaleString()} → {Math.round(receivedValue).toLocaleString()} pts

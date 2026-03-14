@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { Modal } from '@/components/ui/Modal';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -53,8 +54,13 @@ interface PlayerModalProps {
 }
 
 export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
-  const { players, teams, userTeamId, releasePlayer, champions, season } = useGameStore();
+  const { players, teams, userTeamId, releasePlayer, champions, season, phase, week, leagueSettings } = useGameStore();
+  const router = useRouter();
   const [confirmRelease, setConfirmRelease] = useState(false);
+
+  const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
+  const offseasonPhases = ['resigning', 'draft', 'freeAgency', 'offseason', 'preseason'];
+  const isTradeOpen = offseasonPhases.includes(phase) || (phase === 'regular' && week <= tradeDeadlineWeek + 1);
 
   // Reset confirm state when player changes
   useEffect(() => {
@@ -220,6 +226,22 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                     </div>
                   );
                 })()}
+              </div>
+            )}
+
+            {/* Trade for player */}
+            {!isOnUserTeam && !player.retired && player.teamId && isTradeOpen && (
+              <div className="mt-3">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    onClose();
+                    router.push(`/trades?team=${player.teamId}`);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  Trade for {player.firstName} {player.lastName}
+                </Button>
               </div>
             )}
           </div>
