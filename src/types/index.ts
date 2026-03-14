@@ -450,6 +450,41 @@ export interface Achievement {
   unlockedWeek?: number;
 }
 
+export interface TradeRumor {
+  id: string;
+  season: number;
+  week: number;
+  type: 'star_available' | 'shopping_pick' | 'position_need' | 'blockbuster' | 'deadline_buzz';
+  teamId: string;
+  targetTeamId?: string;
+  playerIds: string[];
+  pickIds?: string[];
+  headline: string;
+  detail: string;
+  resolved: boolean;
+  outcome?: 'accurate' | 'false_alarm';
+  resolvedWeek?: number;
+  /** Hidden flag set at generation — determines if this rumor is "destined" to come true */
+  _accurate?: boolean;
+}
+
+export interface Rivalry {
+  id: string;
+  team1Id: string;
+  team2Id: string;
+  intensity: number;
+  formed: number;
+  events: RivalryEvent[];
+  type: 'divisional' | 'playoff' | 'trade' | 'emerging';
+}
+
+export interface RivalryEvent {
+  season: number;
+  week: number;
+  description: string;
+  type: 'blowout' | 'comeback' | 'upset' | 'playoff_elimination' | 'trade_steal' | 'sweep';
+}
+
 export interface AllLeagueEntry {
   position: Position;
   playerId: string;
@@ -586,6 +621,10 @@ export interface LeagueState {
   weeklyRecaps: WeeklyRecapData[];
   /** Unlocked achievements */
   achievements: Achievement[];
+  /** Active trade rumors for the current season */
+  tradeRumors: TradeRumor[];
+  /** Dynamic rivalries between teams */
+  rivalries: Rivalry[];
 }
 
 export interface WeeklyRecapData {

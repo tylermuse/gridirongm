@@ -145,7 +145,7 @@ function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams,
 
 export default function StandingsPage() {
   const router = useRouter();
-  const { teams, schedule, userTeamId, players, week, phase } = useGameStore();
+  const { teams, schedule, userTeamId, players, week, phase, rivalries } = useGameStore();
   const [view, setView] = useState<StandingsView>('division');
   const [tab, setTab] = useState<'standings' | 'schedule'>('standings');
   const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
@@ -342,6 +342,14 @@ export default function StandingsPage() {
                       </div>
                       <span className="font-semibold text-sm">
                         {isHome ? 'vs' : '@'} {teamFullName(opponentId)}
+                        {(() => {
+                          const r = (rivalries ?? []).find(rv =>
+                            (rv.team1Id === userTeamId && rv.team2Id === opponentId) ||
+                            (rv.team1Id === opponentId && rv.team2Id === userTeamId)
+                          );
+                          if (!r || r.intensity < 40) return null;
+                          return <span className="ml-1.5" title={`Rivalry (${r.intensity})`} style={{ opacity: Math.min(1, r.intensity / 80) }}>🔥</span>;
+                        })()}
                       </span>
                     </div>
 

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
-import { TradeProposalPopup } from './TradeProposalPopup';
+// TradeProposalPopup disabled — user prefers checking trades inline
 
 export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const router = useRouter();
@@ -376,13 +376,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
         )}
       </header>
 
-      {/* Trade proposal popup */}
-      {newProposalIds.length > 0 && (
-        <TradeProposalPopup
-          proposalIds={newProposalIds}
-          onClose={() => setNewProposalIds([])}
-        />
-      )}
+      {/* Trade proposal popup — disabled, user prefers inline notifications */}
     </>
   );
 }

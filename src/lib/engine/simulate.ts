@@ -463,6 +463,7 @@ export function simulateGame(
   awayRoster: Player[],
   homeCoachBonus = 0,
   awayCoachBonus = 0,
+  rivalryIntensity = 0,
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
@@ -554,6 +555,30 @@ export function simulateGame(
     const afterAway = describeScoring(awayDrive, game.awayTeamId, quarter, runAway, runHome);
     runAway = afterAway.away;
     runHome = afterAway.home;
+  }
+
+  // Rivalry variance: intensity ≥50 gives underdog +2 bonus (applied as score variance)
+  // Intensity ≥75 adds random variance to final scores
+  if (rivalryIntensity >= 50) {
+    // Determine underdog (team with fewer wins in their roster's average OVR)
+    const homePow = teamPower(homeRoster, homeCoachBonus);
+    const awayPow = teamPower(awayRoster, awayCoachBonus);
+    const homeTotal = homePow.offense + homePow.defense;
+    const awayTotal = awayPow.offense + awayPow.defense;
+    // Give underdog a slight boost (equivalent to +2 power → ~2-3 pts)
+    if (homeTotal < awayTotal) {
+      homeScore += Math.floor(Math.random() * 4); // 0-3 pt boost
+    } else if (awayTotal < homeTotal) {
+      awayScore += Math.floor(Math.random() * 4);
+    }
+  }
+  if (rivalryIntensity >= 75) {
+    // High-intensity rivalry: add small random swing
+    homeScore += Math.floor(Math.random() * 4) - 1; // -1 to +2
+    awayScore += Math.floor(Math.random() * 4) - 1;
+    // Ensure non-negative
+    homeScore = Math.max(0, homeScore);
+    awayScore = Math.max(0, awayScore);
   }
 
   // Break ties with OT field goal

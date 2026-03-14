@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { simulatePlayByPlay, liveGameToGameResult } from '@/lib/engine/playByPlay';
 import { Confetti } from '@/components/ui/Confetti';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
+import type { Player } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Speed settings
@@ -575,7 +576,7 @@ function playTextColor(type: PlayEvent['type']): string {
 // Tabs
 // ---------------------------------------------------------------------------
 
-type TabId = 'gamecast' | 'play-by-play' | 'drives';
+type TabId = 'gamecast' | 'play-by-play' | 'drives' | 'stats';
 
 // ---------------------------------------------------------------------------
 // Win Probability Chart
@@ -847,6 +848,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     { id: 'gamecast', label: 'Gamecast' },
     { id: 'play-by-play', label: 'Play-by-Play' },
     { id: 'drives', label: 'Drives' },
+    { id: 'stats', label: 'Stats' },
   ];
 
   return (
@@ -1230,6 +1232,130 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               />
             </div>
           )}
+
+          {/* STATS TAB */}
+          {activeTab === 'stats' && (() => {
+            const stats = liveResult.playerStats;
+
+            // Build stat leaders for each category
+            const buildLeaders = (teamPlayers: Player[], teamAbbr: string, teamColor: string) => {
+              const getS = (id: string) => stats[id] ?? {};
+
+              // Find key players
+              const qb = teamPlayers.find(p => p.position === 'QB' && (getS(p.id).passAttempts ?? 0) > 0);
+              const rushers = teamPlayers
+                .filter(p => (getS(p.id).rushAttempts ?? 0) > 0)
+                .sort((a, b) => (getS(b.id).rushYards ?? 0) - (getS(a.id).rushYards ?? 0));
+              const receivers = teamPlayers
+                .filter(p => (getS(p.id).receptions ?? 0) > 0)
+                .sort((a, b) => (getS(b.id).receivingYards ?? 0) - (getS(a.id).receivingYards ?? 0));
+              const defenders = teamPlayers
+                .filter(p => (getS(p.id).tackles ?? 0) > 0)
+                .sort((a, b) => (getS(b.id).tackles ?? 0) - (getS(a.id).tackles ?? 0));
+              const kicker = teamPlayers.find(p => p.position === 'K' && (getS(p.id).fieldGoalAttempts ?? 0) > 0);
+
+              return (
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-3 pb-2 border-b border-[var(--border)]">
+                    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: teamColor }} />
+                    <span className="font-bold text-sm">{teamAbbr}</span>
+                  </div>
+
+                  {/* Passing */}
+                  {qb && (() => {
+                    const s = getS(qb.id);
+                    return (
+                      <div className="mb-3">
+                        <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase mb-1">Passing</div>
+                        <div className="text-sm font-medium">{qb.firstName[0]}. {qb.lastName}</div>
+                        <div className="text-xs text-[var(--text-sec)]">
+                          {s.passCompletions}/{s.passAttempts}, {s.passYards} YDS, {s.passTDs} TD, {s.interceptions} INT
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Rushing */}
+                  {rushers.length > 0 && (
+                    <div className="mb-3">
+                      <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase mb-1">Rushing</div>
+                      {rushers.slice(0, 2).map(p => {
+                        const s = getS(p.id);
+                        return (
+                          <div key={p.id} className="mb-1">
+                            <div className="text-sm font-medium">{p.firstName[0]}. {p.lastName}</div>
+                            <div className="text-xs text-[var(--text-sec)]">
+                              {s.rushAttempts} CAR, {s.rushYards} YDS, {s.rushTDs} TD
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Receiving */}
+                  {receivers.length > 0 && (
+                    <div className="mb-3">
+                      <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase mb-1">Receiving</div>
+                      {receivers.slice(0, 3).map(p => {
+                        const s = getS(p.id);
+                        return (
+                          <div key={p.id} className="mb-1">
+                            <div className="text-sm font-medium">{p.firstName[0]}. {p.lastName}</div>
+                            <div className="text-xs text-[var(--text-sec)]">
+                              {s.receptions} REC, {s.receivingYards} YDS, {s.receivingTDs} TD
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Defense */}
+                  {defenders.length > 0 && (
+                    <div className="mb-3">
+                      <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase mb-1">Defense</div>
+                      {defenders.slice(0, 3).map(p => {
+                        const s = getS(p.id);
+                        return (
+                          <div key={p.id} className="mb-1">
+                            <div className="text-sm font-medium">{p.firstName[0]}. {p.lastName}</div>
+                            <div className="text-xs text-[var(--text-sec)]">
+                              {s.tackles} TKL{(s.sacks ?? 0) > 0 ? `, ${s.sacks} SCK` : ''}{(s.defensiveINTs ?? 0) > 0 ? `, ${s.defensiveINTs} INT` : ''}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Kicking */}
+                  {kicker && (() => {
+                    const s = getS(kicker.id);
+                    return (
+                      <div className="mb-3">
+                        <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase mb-1">Kicking</div>
+                        <div className="text-sm font-medium">{kicker.firstName[0]}. {kicker.lastName}</div>
+                        <div className="text-xs text-[var(--text-sec)]">
+                          {s.fieldGoalsMade}/{s.fieldGoalAttempts} FG, {s.extraPointsMade}/{s.extraPointAttempts} XP
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            };
+
+            return (
+              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-4">
+                <div className="flex gap-6">
+                  {buildLeaders(awayPlayers, awayAbbr, awayColor)}
+                  <div className="w-px bg-[var(--border)]" />
+                  {buildLeaders(homePlayers, homeAbbr, homeColor)}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* ================================================================

@@ -292,7 +292,7 @@ function TeamSpotlightSection({
 }
 
 function Dashboard() {
-  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements } = useGameStore();
+  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements, rivalries } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const spotlightRef = useRef<HTMLDivElement>(null);
@@ -470,7 +470,16 @@ function Dashboard() {
                       <TeamLogo abbreviation={oppTeam.abbreviation} primaryColor={oppTeam.primaryColor} secondaryColor={oppTeam.secondaryColor} size="md" />
                       <div>
                         <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider">Week {week} · {isHome ? 'Home' : 'Away'}</div>
-                        <div className="font-bold">{isHome ? 'vs' : '@'} {oppTeam.city} {oppTeam.name}</div>
+                        <div className="font-bold">
+                          {isHome ? 'vs' : '@'} {oppTeam.city} {oppTeam.name}
+                          {(() => {
+                            const r = (rivalries ?? []).find(rv =>
+                              rv.intensity >= 40 &&
+                              ((rv.team1Id === userTeamId && rv.team2Id === oppId) || (rv.team1Id === oppId && rv.team2Id === userTeamId))
+                            );
+                            return r ? <span className="ml-1.5" title={`Rivalry (${r.intensity})`}>🔥</span> : null;
+                          })()}
+                        </div>
                         <div className="text-xs text-[var(--text-sec)]">{oppTeam.record.wins}-{oppTeam.record.losses}</div>
                         <div className="flex gap-3 mt-1">
                           <span className={`text-xs font-mono font-medium ${userSpread <= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -767,6 +776,10 @@ function Dashboard() {
                   const isDivGame = (ht.conference === userConf && ht.division === userDiv && ht.id !== userTeamId)
                     || (at.conference === userConf && at.division === userDiv && at.id !== userTeamId);
                   const upset = g.bettingLine && ((g.bettingLine.spread < -3 && g.awayScore > g.homeScore) || (g.bettingLine.spread > 3 && g.homeScore > g.awayScore));
+                  const isRivalry = (rivalries ?? []).some(r =>
+                    r.intensity >= 40 &&
+                    ((r.team1Id === g.homeTeamId && r.team2Id === g.awayTeamId) || (r.team1Id === g.awayTeamId && r.team2Id === g.homeTeamId))
+                  );
                   return (
                     <div key={g.id} className={`rounded-lg border px-2.5 py-1.5 text-xs ${
                       isUserGame ? 'border-blue-400 bg-blue-50/60 font-bold' :
@@ -782,6 +795,7 @@ function Dashboard() {
                         <span className={`font-mono ${g.homeScore > g.awayScore ? 'font-bold' : ''}`}>{g.homeScore}</span>
                       </div>
                       {upset && <div className="text-[10px] text-amber-600 text-center mt-0.5">UPSET</div>}
+                      {isRivalry && <div className="text-[10px] text-center mt-0.5">🔥 Rivalry</div>}
                     </div>
                   );
                 })}
@@ -800,7 +814,7 @@ function Dashboard() {
           allPlayers={players}
           season={season}
           week={week}
-          ctx={{ phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay }}
+          ctx={{ phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, schedule }}
           onPlayerClick={setSelectedPlayerId}
         />
       </div>

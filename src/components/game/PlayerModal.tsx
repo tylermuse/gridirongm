@@ -225,6 +225,15 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
           </div>
         </div>
 
+        {/* Combine Stats */}
+        {player.combineStats && (
+          <div className="flex gap-4 text-xs text-[var(--text-sec)] px-1">
+            <span>40yd: <span className="font-bold text-[var(--text)]">{player.combineStats.fortyYard.toFixed(2)}</span></span>
+            <span>Bench: <span className="font-bold text-[var(--text)]">{player.combineStats.benchPress}</span></span>
+            <span>Vert: <span className="font-bold text-[var(--text)]">{player.combineStats.verticalJump.toFixed(1)}&quot;</span></span>
+          </div>
+        )}
+
         {/* Ratings + Stats side by side */}
         <div className="grid grid-cols-2 gap-4">
           {/* Ratings */}

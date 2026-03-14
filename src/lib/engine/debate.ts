@@ -747,6 +747,75 @@ function primaryStatForPosition(p: Player): (q: Player) => number {
   return q => q.stats.tackles;
 }
 
+/** Fallback topics when myStats is unavailable or during draft/FA phases */
+function generateOffseasonTopics(
+  team: Team, roster: Player[], allTeams: Team[], allPlayers: Player[],
+  season: number, week: number, ctx: SpotlightContext,
+  rng: () => number, capSpace: number, capPct: number,
+): DebateTopic[] {
+  const topics: DebateTopic[] = [];
+  const phase = ctx.phase ?? 'preseason';
+  const activeRoster = roster.filter(p => !p.retired);
+
+  if ((phase === 'draft' || phase === 'freeAgency') && ctx.draftResults && ctx.draftResults.length > 0) {
+    const teamPicks = ctx.draftResults.filter(dr => dr.teamId === team.id);
+    if (teamPicks.length > 0) {
+      const draftedPlayers = teamPicks
+        .map(dr => allPlayers.find(p => p.id === dr.playerId))
+        .filter((p): p is Player => !!p);
+      const bestPick = draftedPlayers.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+      const positionsCovered = [...new Set(draftedPlayers.map(p => p.position))];
+      topics.push({
+        headline: 'Draft Recap',
+        icon: '🎓',
+        exchanges: [
+          { speakerId: 'stats', text: `The ${team.city} ${team.name} made ${teamPicks.length} selection${teamPicks.length > 1 ? 's' : ''} in this year's draft, addressing ${positionsCovered.join(', ')}. ${bestPick ? `Their top pick was ${bestPick.firstName} ${bestPick.lastName} (${bestPick.position}, ${bestPick.ratings.overall} OVR) — ${bestPick.ratings.overall >= 70 ? 'an immediate impact player' : bestPick.ratings.overall >= 60 ? 'a solid contributor' : 'a developmental prospect'}.` : ''}` },
+          { speakerId: 'hottake', text: `${bestPick && bestPick.ratings.overall >= 70 ? `STEAL! ${bestPick.lastName} is going to be a STAR! This front office NAILED IT!` : bestPick && bestPick.ratings.overall >= 60 ? `Decent haul. ${bestPick.lastName} can contribute right away, but where's the home run pick?!` : `I'm not impressed. This draft class needs time to develop — and time is a LUXURY in this league!`}` },
+          { speakerId: 'stats', text: `With $${capSpace}M in cap space and ${activeRoster.length} players on the roster, they still have work to do in free agency to finalize this roster.` },
+        ],
+        teamIds: [team.id],
+        playerIds: draftedPlayers.slice(0, 3).map(p => p.id),
+      });
+    }
+  }
+
+  if (phase === 'freeAgency') {
+    const topFAs = allPlayers
+      .filter(p => !p.teamId && !p.retired && p.ratings.overall >= 65)
+      .sort((a, b) => b.ratings.overall - a.ratings.overall)
+      .slice(0, 3);
+    if (topFAs.length > 0) {
+      topics.push({
+        headline: 'Free Agency Watch',
+        icon: '🏷️',
+        exchanges: [
+          { speakerId: 'hottake', text: `The free agent market is OPEN and there are some BIG names available! ${topFAs[0].firstName} ${topFAs[0].lastName} (${topFAs[0].position}, ${topFAs[0].ratings.overall} OVR) should be the TOP priority!` },
+          { speakerId: 'stats', text: `With $${capSpace}M in cap space${capPct > 85 ? " — that's tight" : ''}, the ${team.name} need to be selective. ${topFAs[0].lastName} would fill a need, but they can't overspend.` },
+        ],
+        teamIds: [team.id],
+        playerIds: topFAs.map(p => p.id),
+      });
+    }
+  }
+
+  // Roster strength fallback
+  const topPlayers = activeRoster.sort((a, b) => b.ratings.overall - a.ratings.overall).slice(0, 3);
+  if (topPlayers.length > 0 && topics.length === 0) {
+    topics.push({
+      headline: 'Roster Outlook',
+      icon: '📋',
+      exchanges: [
+        { speakerId: 'stats', text: `The ${team.name} roster is led by ${topPlayers[0].firstName} ${topPlayers[0].lastName} (${topPlayers[0].position}, ${topPlayers[0].ratings.overall} OVR). The core looks ${topPlayers[0].ratings.overall >= 80 ? 'championship-caliber' : topPlayers[0].ratings.overall >= 70 ? 'competitive' : 'like it needs upgrades'}.` },
+        { speakerId: 'hottake', text: `${topPlayers[0].ratings.overall >= 80 ? 'They have a SUPERSTAR! Build around them and WIN NOW!' : 'They need more talent around the top of this roster. Time to make some MOVES!'}` },
+      ],
+      teamIds: [team.id],
+      playerIds: topPlayers.map(p => p.id),
+    });
+  }
+
+  return topics;
+}
+
 export interface SpotlightContext {
   phase?: string;
   playoffBracket?: PlayoffMatchup[] | null;
@@ -756,6 +825,7 @@ export interface SpotlightContext {
   draftResults?: DraftSelection[];
   freeAgents?: string[];
   faDay?: number;
+  schedule?: { week: number; homeTeamId: string; awayTeamId: string; played: boolean }[];
 }
 
 export function generateTeamSpotlight(
@@ -781,7 +851,11 @@ export function generateTeamSpotlight(
     const tRoster = allActive.filter(p => p.teamId === t.id);
     return computeTeamStats(t, tRoster);
   });
-  const myStats = allTeamStats.find(s => s.id === team.id)!;
+  const myStats = allTeamStats.find(s => s.id === team.id);
+  if (!myStats) {
+    // During phase transitions (draft/FA), stats may be stale — return draft/FA topics only
+    return generateOffseasonTopics(team, roster, allTeams, allPlayers, season, week, ctx, rng, capSpace, capPct);
+  }
   const ppgRank = leagueRankOf(allTeamStats, team.id, 'ppg');
   const defRank = leagueRankOf(allTeamStats, team.id, 'oppPpg', true); // lower is better
   const passOffRank = leagueRankOf(allTeamStats, team.id, 'passYpg');
@@ -791,6 +865,20 @@ export function generateTeamSpotlight(
   const totalTeams = allTeams.length;
 
   const pointDiff = team.record.pointsFor - team.record.pointsAgainst;
+
+  // ─── Injury context (used across multiple topics) ───
+  const injuredPlayers = activeRoster.filter(p => p.injury && p.ratings.overall >= 65)
+    .sort((a, b) => b.ratings.overall - a.ratings.overall);
+  const topInjured = injuredPlayers[0] ?? null;
+
+  // ─── Next opponent (from schedule context) ───
+  const nextGame = ctx.schedule?.find(g => !g.played && g.week >= week &&
+    (g.homeTeamId === team.id || g.awayTeamId === team.id));
+  const nextOpponentId = nextGame
+    ? (nextGame.homeTeamId === team.id ? nextGame.awayTeamId : nextGame.homeTeamId)
+    : null;
+  const nextOpponent = nextOpponentId ? allTeams.find(t => t.id === nextOpponentId) : null;
+  const nextOpponentRoster = nextOpponent ? allPlayers.filter(p => p.teamId === nextOpponent.id && !p.retired) : [];
 
   // League rank by wins
   const sortedByWins = [...allTeams].sort((a, b) => {
@@ -848,12 +936,25 @@ export function generateTeamSpotlight(
         { speakerId: 'hottake' as const, text: `Average doesn't win championships! Make a move! DO something!` },
       ],
     ];
+    const recordExchanges = pick(recordTemplates, rng)();
+    // Weave injury context into the record discussion when significant injuries exist
+    if (topInjured && topInjured.ratings.overall >= 75) {
+      const topInjStatLine = getPlayerStatLine(topInjured);
+      const isDefPlayer = ['DL', 'LB', 'CB', 'S'].includes(topInjured.position);
+      if (winPct >= 0.6) {
+        recordExchanges.push({ speakerId: 'hottake' as const, text: `BUT — and this is a BIG but — they're doing this WITHOUT ${topInjured.firstName} ${topInjured.lastName}! ${topInjured.ratings.overall} OVR, ${topInjStatLine}! Imagine when he comes back in ${topInjured.injury?.weeksLeft ?? '?'} weeks!` });
+      } else if (winPct <= 0.35) {
+        recordExchanges.push({ speakerId: 'hottake' as const, text: `And let's be honest, losing ${topInjured.firstName} ${topInjured.lastName} (${topInjured.position}, ${topInjStatLine}) hasn't helped! He's the ${isDefPlayer ? 'anchor of the defense' : 'engine of the offense'} and they've been ${topInjured.injury?.weeksLeft ?? '?'} weeks without him!` });
+      } else {
+        recordExchanges.push({ speakerId: 'stats' as const, text: `Worth noting: ${topInjured.firstName} ${topInjured.lastName} (${topInjured.position}, ${topInjured.ratings.overall} OVR, ${topInjStatLine}) has been out. That's ${isDefPlayer ? 'a defensive impact' : 'an offensive loss'} that doesn't show up cleanly in the W-L column, but getting him back could be the boost they need.` });
+      }
+    }
     topics.push({
       headline: `${team.city} ${team.name}: ${team.record.wins}-${team.record.losses}`,
       icon: winPct >= 0.6 ? '🏆' : winPct <= 0.35 ? '😰' : '🤔',
-      exchanges: pick(recordTemplates, rng)(),
+      exchanges: recordExchanges,
       teamIds: [team.id],
-      playerIds: [],
+      playerIds: topInjured ? [topInjured.id] : [],
     });
   }
 
@@ -1015,47 +1116,110 @@ export function generateTeamSpotlight(
     const gamesBack = confLeader && confLeader.id !== team.id
       ? ((confLeader.record.wins - team.record.wins) + (team.record.losses - confLeader.record.losses)) / 2
       : 0;
-    const playoffTemplates: (() => DebateExchange[])[] = confRank <= 7 ? [
-      () => [
-        { speakerId: 'stats' as const, text: `Playoff picture: ${ordinal(confRank)} in the ${team.conference}${gamesBack > 0 ? `, ${gamesBack} games back of ${confLeader?.city ?? 'the leader'}` : ' — leading the conference'}. They're ${ordinal(ppgRank)} in scoring and ${ordinal(defRank)} in defense — ${ppgRank <= 10 && defRank <= 10 ? 'both sides can carry them in the postseason' : ppgRank <= 10 ? 'the offense can carry them but the defense is a concern' : defRank <= 10 ? 'the defense can win playoff games but they need more offensive firepower' : 'they need to elevate on both sides of the ball'}.` },
-        { speakerId: 'hottake' as const, text: `${confRank <= 4 ? "They're IN! Book it! This team has PLAYOFF TEAM written all over them!" : "They're on the BUBBLE and every game is WIN OR GO HOME!"}` },
-        { speakerId: 'stats' as const, text: `${confRank <= 4 ? `Division record of ${team.record.divisionWins}-${team.record.divisionLosses} is key for tiebreakers.` : `They need to close the gap. ${gamesBack > 0 ? gamesBack + ' games back is doable but no margin for error.' : 'The race is tight.'}`}` },
-      ],
+    const playoffExchanges: DebateExchange[] = confRank <= 7 ? [
+      { speakerId: 'stats' as const, text: `Playoff picture: ${ordinal(confRank)} in the ${team.conference}${gamesBack > 0 ? `, ${gamesBack} games back of ${confLeader?.city ?? 'the leader'}` : ' — leading the conference'}. They're ${ordinal(ppgRank)} in scoring and ${ordinal(defRank)} in defense — ${ppgRank <= 10 && defRank <= 10 ? 'both sides can carry them in the postseason' : ppgRank <= 10 ? 'the offense can carry them but the defense is a concern' : defRank <= 10 ? 'the defense can win playoff games but they need more offensive firepower' : 'they need to elevate on both sides of the ball'}.` },
+      { speakerId: 'hottake' as const, text: `${confRank <= 4 ? "They're IN! Book it! This team has PLAYOFF TEAM written all over them!" : "They're on the BUBBLE and every game is WIN OR GO HOME!"}` },
+      { speakerId: 'stats' as const, text: `${confRank <= 4 ? `Division record of ${team.record.divisionWins}-${team.record.divisionLosses} is key for tiebreakers.` : `They need to close the gap. ${gamesBack > 0 ? gamesBack + ' games back is doable but no margin for error.' : 'The race is tight.'}`}` },
     ] : [
-      () => [
-        { speakerId: 'stats' as const, text: `At ${ordinal(confRank)} in the ${team.conference}${gamesBack > 0 ? `, ${gamesBack} games back` : ''}, the playoff math is getting difficult. The ${ordinal(ppgRank)}-ranked offense and ${ordinal(defRank)}-ranked defense just haven't been enough.` },
-        { speakerId: 'hottake' as const, text: `It's not IMPOSSIBLE! But when you're ${ordinal(ppgRank)} in scoring... yeah, it's tough to make a late-season push.` },
-        { speakerId: 'stats' as const, text: `The smart move is evaluating young talent and positioning for next season rather than forcing a run.` },
-      ],
+      { speakerId: 'stats' as const, text: `At ${ordinal(confRank)} in the ${team.conference}${gamesBack > 0 ? `, ${gamesBack} games back` : ''}, the playoff math is getting difficult. The ${ordinal(ppgRank)}-ranked offense and ${ordinal(defRank)}-ranked defense just haven't been enough.` },
+      { speakerId: 'hottake' as const, text: `It's not IMPOSSIBLE! But when you're ${ordinal(ppgRank)} in scoring... yeah, it's tough to make a late-season push.` },
+      { speakerId: 'stats' as const, text: `The smart move is evaluating young talent and positioning for next season rather than forcing a run.` },
     ];
+    // Weave injury context into playoff outlook
+    if (topInjured && topInjured.ratings.overall >= 75) {
+      const isDefPlayer = ['DL', 'LB', 'CB', 'S'].includes(topInjured.position);
+      const weeksOut = topInjured.injury?.weeksLeft ?? 0;
+      if (confRank <= 7) {
+        playoffExchanges.push({ speakerId: 'hottake' as const, text: `The X-FACTOR is ${topInjured.firstName} ${topInjured.lastName}'s health! ${weeksOut} more week${weeksOut !== 1 ? 's' : ''} without ${isDefPlayer ? 'your best defender' : 'your best offensive weapon'} is SCARY for a playoff push! ${getPlayerStatLine(topInjured)} on the year — that's production you NEED in January!` });
+      } else {
+        playoffExchanges.push({ speakerId: 'stats' as const, text: `The ${topInjured.lastName} injury (${weeksOut} weeks remaining) only compounds the problem. You lose ${getPlayerStatLine(topInjured)} worth of production when you can least afford it.` });
+      }
+    }
+    if (injuredPlayers.length >= 3) {
+      playoffExchanges.push({ speakerId: 'hottake' as const, text: `And with ${injuredPlayers.length} key players on the injury list, this team is literally LIMPING into the stretch run! You can't make a playoff push with your roster in a hospital bed!` });
+    }
     topics.push({
       headline: 'Playoff Picture',
       icon: '🏈',
-      exchanges: pick(playoffTemplates, rng)(),
+      exchanges: playoffExchanges,
       teamIds: [team.id],
-      playerIds: [],
+      playerIds: topInjured ? [topInjured.id] : [],
     });
   }
 
   // ─── 7. Injury Report ───
-  const injured = activeRoster.filter(p => p.injury && p.ratings.overall >= 65);
-  if (injured.length > 0) {
-    const topInjured = [...injured].sort((a, b) => b.ratings.overall - a.ratings.overall);
-    const worst = topInjured[0];
+  if (injuredPlayers.length > 0) {
+    const worst = injuredPlayers[0];
     const worstStatLine = getPlayerStatLine(worst);
+    const weeksOut = worst.injury?.weeksLeft ?? 0;
+    const injuryType = worst.injury?.type ?? 'injury';
+
+    // Find the backup at the injured player's position
+    const backups = activeRoster
+      .filter(p => p.position === worst.position && !p.injury && p.id !== worst.id)
+      .sort((a, b) => b.ratings.overall - a.ratings.overall);
+    const backup = backups[0];
+    const ovrDrop = backup ? worst.ratings.overall - backup.ratings.overall : 0;
+
+    // Check if injured player is a key position vs the next opponent
+    const isDefensivePlayer = ['DL', 'LB', 'CB', 'S'].includes(worst.position);
+    const oppQB = nextOpponentRoster.filter(p => p.position === 'QB').sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+    const oppRusher = nextOpponentRoster.sort((a, b) => b.stats.rushYards - a.stats.rushYards)[0];
+    const oppReceiver = nextOpponentRoster.filter(p => ['WR', 'TE'].includes(p.position)).sort((a, b) => b.stats.receivingYards - a.stats.receivingYards)[0];
+
+    // Second most injured player for multi-injury discussions
+    const secondInjured = injuredPlayers.length > 1 ? injuredPlayers[1] : null;
+
     const injuryTemplates: (() => DebateExchange[])[] = [
+      // Template 1: General injury impact with depth chart concern
       () => [
-        { speakerId: 'stats' as const, text: `Injury front: ${injured.length} key player${injured.length > 1 ? 's' : ''} down. ${worst.firstName} ${worst.lastName} (${worst.position}, ${worstStatLine}) out with a ${worst.injury?.type ?? 'injury'} — ${worst.injury?.weeksLeft ?? '?'} weeks remaining.${injured.length > 1 ? ` Plus ${injured.length - 1} other${injured.length > 2 ? 's' : ''}.` : ''}` },
-        { speakerId: 'hottake' as const, text: `Losing ${worst.lastName} is a HUGE blow! He was producing ${worstStatLine}! You can't just replace that kind of production!` },
-        { speakerId: 'stats' as const, text: `The depth chart becomes critical. Next man up, but the drop-off at ${worst.position} could move them in the standings.` },
+        { speakerId: 'stats' as const, text: `Injury front: ${injuredPlayers.length} key player${injuredPlayers.length > 1 ? 's' : ''} down. ${worst.firstName} ${worst.lastName} (${worst.position}, ${worst.ratings.overall} OVR) out with a ${injuryType} — ${weeksOut} week${weeksOut !== 1 ? 's' : ''} remaining. He's been producing ${worstStatLine} this season.${secondInjured ? ` ${secondInjured.firstName} ${secondInjured.lastName} (${secondInjured.position}) is also out with a ${secondInjured.injury?.type ?? 'injury'}.` : ''}` },
+        { speakerId: 'hottake' as const, text: `I don't know if they can win without ${worst.lastName}! ${worstStatLine} on the year — he is the heart of ${isDefensivePlayer ? 'their defense' : 'that offense'}! ${backup ? `${backup.firstName} ${backup.lastName} is a ${ovrDrop}-point OVR drop-off at ${worst.position}. That's a MASSIVE downgrade!` : `They have NOBODY to replace him!`}` },
+        { speakerId: 'stats' as const, text: `${backup ? `${backup.lastName} steps in at ${backup.ratings.overall} OVR — that's a ${ovrDrop > 15 ? 'significant' : ovrDrop > 8 ? 'noticeable' : 'manageable'} drop-off.` : 'The depth simply isn\'t there.'} ${weeksOut <= 2 ? `The silver lining: ${worst.lastName} could be back in ${weeksOut} week${weeksOut !== 1 ? 's' : ''}.` : `${weeksOut} weeks is a long time to survive without your ${worst.ratings.overall >= 85 ? 'best player' : 'key contributor'}.`}` },
       ],
+      // Template 2: Next opponent matchup concern
+      () => {
+        const exchanges: DebateExchange[] = [];
+        if (nextOpponent && isDefensivePlayer) {
+          exchanges.push({ speakerId: 'hottake' as const, text: `The timing could NOT be worse! ${worst.firstName} ${worst.lastName} is out with a ${injuryType} and they're going up against ${nextOpponent.city} ${nextOpponent.name} next!${oppQB ? ` ${oppQB.firstName} ${oppQB.lastName} is going to FEAST without ${worst.lastName} out there!` : ''} ${worstStatLine} on the year — they will STRUGGLE to ${worst.position === 'DL' || worst.position === 'LB' ? `put pressure on ${nextOpponent.abbreviation}` : `cover ${nextOpponent.abbreviation}'s receivers`} without him!` });
+          exchanges.push({ speakerId: 'stats' as const, text: `It's a legitimate matchup concern. ${worst.lastName}'s ${worstStatLine} can't be replicated. ${backup ? `${backup.firstName} ${backup.lastName} (${backup.ratings.overall} OVR) will need to step up, but ${ovrDrop > 10 ? 'the gap is significant' : 'he\'s shown flashes'}.` : 'The depth chart is thin at that position.'} ${weeksOut <= 2 ? `Hoping for a quick return — ${weeksOut} week${weeksOut !== 1 ? 's' : ''} left.` : `At ${weeksOut} weeks out, they need a plan beyond just surviving.`}` });
+          exchanges.push({ speakerId: 'hottake' as const, text: `${weeksOut <= 2 ? `They just need to hold on for ${weeksOut} more week${weeksOut !== 1 ? 's' : ''}! Get him back and this team is DIFFERENT!` : `${weeksOut} WEEKS! That's basically ${Math.ceil(weeksOut / 4)} months! The season could be OVER by then!`}` });
+        } else if (nextOpponent && !isDefensivePlayer) {
+          exchanges.push({ speakerId: 'hottake' as const, text: `Without ${worst.firstName} ${worst.lastName} (${worstStatLine}), how do they move the ball against ${nextOpponent.city}?! He's out ${weeksOut} more week${weeksOut !== 1 ? 's' : ''} with a ${injuryType}! That offense is NOT the same without him!` });
+          exchanges.push({ speakerId: 'stats' as const, text: `${worst.position === 'QB' ? 'Losing your quarterback changes everything.' : worst.position === 'OL' ? 'The pass protection takes a hit without him.' : `${worst.lastName} accounted for ${worstStatLine}.`} ${backup ? `${backup.lastName} (${backup.ratings.overall} OVR) gets the nod but the ${ovrDrop > 10 ? 'talent gap is real' : 'transition should be manageable'}.` : 'No clear replacement on the roster.'} The game plan against ${nextOpponent.abbreviation} will have to adapt.` });
+          exchanges.push({ speakerId: 'hottake' as const, text: `Adapt?! They need a MIRACLE! ${worst.lastName} IS that offense!${secondInjured ? ` And ${secondInjured.lastName} is ALSO out! This team is falling apart!` : ''}` });
+        } else {
+          // No next opponent context — generic
+          exchanges.push({ speakerId: 'stats' as const, text: `${worst.firstName} ${worst.lastName} (${worst.position}, ${worst.ratings.overall} OVR): out ${weeksOut} week${weeksOut !== 1 ? 's' : ''} with a ${injuryType}. Season stats: ${worstStatLine}. ${injuredPlayers.length > 1 ? `${injuredPlayers.length} key players total on the injury list.` : ''}` });
+          exchanges.push({ speakerId: 'hottake' as const, text: `${worst.lastName} was having a ${worst.ratings.overall >= 85 ? 'MONSTER' : worst.ratings.overall >= 75 ? 'fantastic' : 'solid'} season! ${worstStatLine}! You CAN'T lose a guy like that and expect to keep winning!` });
+          exchanges.push({ speakerId: 'stats' as const, text: `${backup ? `The backup, ${backup.firstName} ${backup.lastName}, is ${backup.ratings.overall} OVR — ${ovrDrop > 15 ? 'a steep cliff' : ovrDrop > 8 ? 'a downgrade but workable' : 'actually not a bad fill-in'}.` : 'Depth is a real problem at this position.'} ${weeksOut <= 3 ? 'At least the timeline for return is short.' : 'This is a long-term absence that could derail the season.'}` });
+        }
+        return exchanges;
+      },
+      // Template 3: Multiple injuries focus
+      () => {
+        if (injuredPlayers.length >= 2 && secondInjured) {
+          const secondStatLine = getPlayerStatLine(secondInjured);
+          return [
+            { speakerId: 'hottake' as const, text: `The injury bug is DESTROYING this team! ${worst.firstName} ${worst.lastName} out ${weeksOut} weeks (${injuryType}) — ${worstStatLine}. ${secondInjured.firstName} ${secondInjured.lastName} ALSO down with a ${secondInjured.injury?.type ?? 'injury'}! That's ${injuredPlayers.length} key players on the shelf!` },
+            { speakerId: 'stats' as const, text: `It's a significant hit. ${worst.lastName} (${worst.ratings.overall} OVR, ${worst.position}) and ${secondInjured.lastName} (${secondInjured.ratings.overall} OVR, ${secondInjured.position}) combine for ${worstStatLine} and ${secondStatLine}. That's production you can't just manufacture from the bench.${nextOpponent ? ` Facing ${nextOpponent.city} without both of them is concerning.` : ''}` },
+            { speakerId: 'hottake' as const, text: `${injuredPlayers.length >= 3 ? `${injuredPlayers.length} guys down?! At what point do you just call the season?!` : `Two of your best players OUT! This is where you find out what the rest of the roster is made of!`}${nextOpponent ? ` ${nextOpponent.abbreviation} has to be LICKING THEIR CHOPS right now!` : ''}` },
+          ];
+        }
+        // Fallback for single injury
+        return [
+          { speakerId: 'stats' as const, text: `Key injury: ${worst.firstName} ${worst.lastName} (${worst.position}, ${worst.ratings.overall} OVR) — ${injuryType}, ${weeksOut} week${weeksOut !== 1 ? 's' : ''} out. Season line: ${worstStatLine}.` },
+          { speakerId: 'hottake' as const, text: `${worst.lastName} was putting up ${worstStatLine}! He's the ${worst.ratings.overall >= 85 ? 'MVP of this team' : 'backbone of the roster'}! Without him${nextOpponent ? ` against ${nextOpponent.abbreviation}` : ''}, I'm worried!` },
+          { speakerId: 'stats' as const, text: `${backup ? `${backup.lastName} at ${backup.ratings.overall} OVR is the next man up — ${ovrDrop > 12 ? 'a significant step down' : 'capable of holding the fort'}.` : 'No ready replacement.'} Watch this closely.` },
+        ];
+      },
     ];
     topics.push({
-      headline: 'Injury Report',
+      headline: `Injury Report${injuredPlayers.length >= 3 ? ` (${injuredPlayers.length} Key Players Out)` : topInjured ? `: ${topInjured.firstName} ${topInjured.lastName}` : ''}`,
       icon: '🏥',
       exchanges: pick(injuryTemplates, rng)(),
       teamIds: [team.id],
-      playerIds: topInjured.slice(0, 3).map(p => p.id),
+      playerIds: injuredPlayers.slice(0, 3).map(p => p.id),
     });
   }
 
@@ -1106,24 +1270,34 @@ export function generateTeamSpotlight(
     count: activeRoster.filter(p => positions.includes(p.position)).length,
   })).filter(g => g.count > 0).sort((a, b) => b.avg - a.avg);
 
+  // Build injury context for the burning question
+  const injuryNote = topInjured
+    ? ` And don't forget — ${topInjured.firstName} ${topInjured.lastName} (${topInjured.position}, ${getPlayerStatLine(topInjured)}) is still out ${topInjured.injury?.weeksLeft ?? '?'} more week${(topInjured.injury?.weeksLeft ?? 0) !== 1 ? 's' : ''}.`
+    : '';
+  const injuryImpact = injuredPlayers.length >= 2
+    ? ` With ${injuredPlayers.length} key players injured, the margin for error is razor-thin.`
+    : topInjured
+    ? ` Getting ${topInjured.lastName} back healthy would change the calculus.`
+    : '';
+
   const burningQs: (() => DebateExchange[])[] = winPct >= 0.6 ? [
     () => [
-      { speakerId: 'hottake' as const, text: `Here's the BIG question: can the ${team.name} keep this up? ${ordinal(ppgRank)} in scoring, ${ordinal(defRank)} in defense — are they for REAL or a mirage?` },
-      { speakerId: 'stats' as const, text: `Point differential of ${pointDiff > 0 ? '+' : ''}${pointDiff}, balanced attack at ${myStats.passYpg} pass and ${myStats.rushYpg} rush yards per game — the metrics say they're genuine. Barring major injuries, no reason for collapse.` },
-      { speakerId: 'hottake' as const, text: `I BELIEVE! Championship or BUST!` },
+      { speakerId: 'hottake' as const, text: `Here's the BIG question: can the ${team.name} keep this up? ${ordinal(ppgRank)} in scoring, ${ordinal(defRank)} in defense — are they for REAL or a mirage?${injuryNote}` },
+      { speakerId: 'stats' as const, text: `Point differential of ${pointDiff > 0 ? '+' : ''}${pointDiff}, balanced attack at ${myStats.passYpg} pass and ${myStats.rushYpg} rush yards per game — the metrics say they're genuine.${topInjured ? ` ${topInjured.lastName}'s return in ${topInjured.injury?.weeksLeft ?? '?'} weeks could make them even more dangerous.` : ' Barring major injuries, no reason for collapse.'}` },
+      { speakerId: 'hottake' as const, text: `I BELIEVE! Championship or BUST!${topInjured ? ` And when ${topInjured.lastName} comes back?! WATCH OUT!` : ''}` },
     ],
   ] : winPct <= 0.35 ? [
     () => [
-      { speakerId: 'hottake' as const, text: `Is it time to blow it up and REBUILD? ${ordinal(ppgRank)} in offense, ${ordinal(defRank)} in defense — this isn't working!` },
-      { speakerId: 'stats' as const, text: `The stats don't lie — ${myStats.ppg} PPG and ${myStats.oppPpg} allowed. But if the young talent is developing, a retool makes more sense than a full teardown.` },
+      { speakerId: 'hottake' as const, text: `Is it time to blow it up and REBUILD? ${ordinal(ppgRank)} in offense, ${ordinal(defRank)} in defense — this isn't working!${injuryNote}` },
+      { speakerId: 'stats' as const, text: `The stats don't lie — ${myStats.ppg} PPG and ${myStats.oppPpg} allowed.${injuryImpact} But if the young talent is developing, a retool makes more sense than a full teardown.` },
       { speakerId: 'hottake' as const, text: `Trade anyone over 28 and stockpile picks! That's my plan!` },
-      { speakerId: 'stats' as const, text: `That's... actually not the worst strategy. But keep a few vets for development.` },
+      { speakerId: 'stats' as const, text: `That's... actually not the worst strategy.${topInjured ? ` And getting ${topInjured.lastName} healthy gives you a foundation to build around.` : ' But keep a few vets for development.'}` },
     ],
   ] : [
     () => [
-      { speakerId: 'hottake' as const, text: `So what's the move? The ${team.name} are RIGHT THERE — ${ordinal(ppgRank)} offense, ${ordinal(defRank)} defense. One piece away or one bad break from disaster?` },
-      { speakerId: 'stats' as const, text: `The data says they're on the cusp. A difference-maker at ${groupStats[groupStats.length - 1]?.name ?? 'their weakest position'} could tip the scales. ${rushOffRank > 16 ? 'Improving the run game would open everything up.' : passOffRank > 16 ? 'A better passing attack changes the equation.' : 'Consistency is the key.'}` },
-      { speakerId: 'hottake' as const, text: `Make a TRADE! Be AGGRESSIVE! You don't win championships by playing it safe!` },
+      { speakerId: 'hottake' as const, text: `So what's the move? The ${team.name} are RIGHT THERE — ${ordinal(ppgRank)} offense, ${ordinal(defRank)} defense. One piece away or one bad break from disaster?${injuryNote}` },
+      { speakerId: 'stats' as const, text: `The data says they're on the cusp.${injuryImpact} A difference-maker at ${groupStats[groupStats.length - 1]?.name ?? 'their weakest position'} could tip the scales. ${rushOffRank > 16 ? 'Improving the run game would open everything up.' : passOffRank > 16 ? 'A better passing attack changes the equation.' : 'Consistency is the key.'}` },
+      { speakerId: 'hottake' as const, text: `Make a TRADE! Be AGGRESSIVE! You don't win championships by playing it safe!${topInjured ? ` Or at least get ${topInjured.lastName} back and pray!` : ''}` },
       { speakerId: 'stats' as const, text: `But you don't win them by mortgaging your future either. Balance.` },
     ],
   ];
@@ -1132,7 +1306,7 @@ export function generateTeamSpotlight(
     icon: '🔥',
     exchanges: pick(burningQs, rng)(),
     teamIds: [team.id],
-    playerIds: [],
+    playerIds: topInjured ? [topInjured.id] : [],
   });
 
   // ─── Phase-specific topics ───
@@ -1334,6 +1508,16 @@ export function generateTeamSpotlight(
         teamIds: [team.id],
         playerIds: expiringStars.slice(0, 3).map(p => p.id),
       });
+    }
+  }
+
+  // Draft/FA phase topics (appended after stat-based topics)
+  if (phase === 'draft' || phase === 'freeAgency') {
+    const offseasonTopics = generateOffseasonTopics(team, roster, allTeams, allPlayers, season, week, ctx, rng, capSpace, capPct);
+    for (const t of offseasonTopics) {
+      if (!topics.some(existing => existing.headline === t.headline)) {
+        topics.push(t);
+      }
     }
   }
 

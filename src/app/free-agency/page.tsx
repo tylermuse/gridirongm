@@ -13,6 +13,23 @@ import { initNegotiation, processOffer, type NegotiationState } from '@/lib/engi
 import { generateFAEvaluation, type FAEvaluation } from '@/lib/engine/personnelReport';
 import { POSITIONS, ROSTER_LIMITS, type Position, type Player } from '@/types';
 
+/**
+ * Determines if a free agent will accept a veteran minimum deal.
+ * - Day 1-24: Only low-OVR players (≤55) accept minimums
+ * - Day 25-27: Players ≤65 OVR start accepting
+ * - Day 28-29: Players ≤75 OVR accept
+ * - Day 30: ALL remaining players accept (end of FA, take what you can get)
+ */
+function willAcceptMinimum(player: Player, faDay: number): boolean {
+  if (faDay >= 30) return true;
+  if (faDay >= 28 && player.ratings.overall <= 75) return true;
+  if (faDay >= 25 && player.ratings.overall <= 65) return true;
+  if (player.ratings.overall <= 55) return true;
+  // Players with age 33+ are more willing to accept minimums earlier
+  if (player.age >= 33 && faDay >= 20) return true;
+  return false;
+}
+
 function ratingColor(val: number): string {
   if (val >= 80) return 'text-green-600';
   if (val >= 65) return 'text-blue-600';
@@ -345,6 +362,9 @@ export default function FreeAgencyPage() {
             <div className="text-sm font-bold text-red-600">Over the Salary Cap</div>
             <div className="text-xs text-red-600/80 mt-1">
               ${Math.abs(capSpace).toFixed(1)}M over the cap · Luxury tax: ${luxuryTax}M ({LUXURY_TAX_RATE}x penalty) · Can only sign at league minimum (${LEAGUE_MINIMUM_SALARY}M/yr)
+            </div>
+            <div className="text-xs text-red-600/60 mt-1">
+              Use the &quot;Vet Min&quot; button to sign available players to a 1-year, ${LEAGUE_MINIMUM_SALARY}M minimum deal.
             </div>
           </div>
         )}
@@ -700,13 +720,29 @@ export default function FreeAgencyPage() {
                               Refuses
                             </span>
                           ) : (
-                            <Button
-                              size="sm"
-                              disabled={!!negotiation && negotiation.outcome === 'pending'}
-                              onClick={() => startNegotiation(p)}
-                            >
-                              Negotiate
-                            </Button>
+                            <div className="flex items-center gap-1 justify-end">
+                              <Button
+                                size="sm"
+                                disabled={!!negotiation && negotiation.outcome === 'pending'}
+                                onClick={() => startNegotiation(p)}
+                              >
+                                Negotiate
+                              </Button>
+                              {phase === 'freeAgency' && willAcceptMinimum(p, faDay) && (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => {
+                                    const success = signFreeAgent(p.id, LEAGUE_MINIMUM_SALARY, 1);
+                                    if (!success) {
+                                      alert('Failed to sign player.');
+                                    }
+                                  }}
+                                >
+                                  Vet Min
+                                </Button>
+                              )}
+                            </div>
                           )}
                         </td>
                       </tr>

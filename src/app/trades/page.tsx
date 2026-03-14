@@ -45,17 +45,17 @@ const POSITION_VALUE_MULT: Record<string, number> = {
 function playerTradeValue(player: Player): number {
   const ageMultiplier =
     player.age <= 25 ? 1.3 :
-    player.age <= 27 ? 1.1 :
+    player.age <= 27 ? 1.15 :
     player.age <= 29 ? 1.0 :
-    player.age <= 31 ? 0.7 :
-    player.age <= 33 ? 0.45 : 0.2;
+    player.age <= 31 ? 0.85 :
+    player.age <= 33 ? 0.65 : 0.45;
   const posMultiplier = POSITION_VALUE_MULT[player.position] ?? 1.0;
   const normalized = Math.max(0, (player.ratings.overall - 40) / 55);
   const base = Math.pow(normalized, 2.5) * 1200;
   const potBonus = Math.max(0, player.potential - player.ratings.overall) * 3;
   const rawValue = (base + potBonus) * ageMultiplier * posMultiplier;
-  // Subtract contract burden so overpaid players have lower trade value
-  const contractCost = player.contract.salary * player.contract.yearsLeft * 1.5;
+  // Light contract burden: only penalize expensive + long deals
+  const contractCost = Math.max(0, player.contract.salary - 8) * player.contract.yearsLeft * 0.8;
   return Math.round(rawValue - contractCost);
 }
 
@@ -98,14 +98,15 @@ interface TradeablePlayer {
   teamId: string;
   tradeValue: number;
   estimatedCost: string; // human-readable
+  whyAvailable: string[]; // tags for why this player might be available
 }
 
 function findTradeablePlayers(
   players: Player[],
   teams: { id: string; abbreviation: string }[],
   userTeamId: string | null,
-): Map<string, TradeablePlayer[]> {
-  const result = new Map<string, TradeablePlayer[]>();
+): TradeablePlayer[] {
+  const all: TradeablePlayer[] = [];
 
   for (const team of teams) {
     if (team.id === userTeamId) continue;
@@ -127,7 +128,9 @@ function findTradeablePlayers(
       byPos.set(p.position, list);
     }
 
-    const tradeable: TradeablePlayer[] = [];
+    // Team strategy for "why available" tags
+    const fullTeam = teams.find(t => t.id === team.id) as any;
+    const strategy = fullTeam?.record ? getTeamStrategy(fullTeam, roster) : 'Developing';
 
     for (const p of roster) {
       // Skip top 3
@@ -154,41 +157,185 @@ function findTradeablePlayers(
       else if (tv >= 35) estimatedCost = '3rd-4th round pick';
       else estimatedCost = 'Late round pick';
 
-      tradeable.push({ player: p, teamId: team.id, tradeValue: tv, estimatedCost });
-    }
+      // "Why available?" tags
+      const whyAvailable: string[] = [];
+      if (isDepthSurplus) whyAvailable.push('Depth surplus');
+      if (strategy === 'Rebuilding') whyAvailable.push('Rebuilding');
+      if (p.contract.yearsLeft <= 1) whyAvailable.push('Expiring');
+      if (p.contract.salary > 15 && fullTeam?.totalPayroll > fullTeam?.salaryCap * 0.9) whyAvailable.push('Cap dump');
 
-    if (tradeable.length > 0) {
-      // Sort by trade value descending
-      tradeable.sort((a, b) => b.tradeValue - a.tradeValue);
-      result.set(team.id, tradeable);
+      all.push({ player: p, teamId: team.id, tradeValue: tv, estimatedCost, whyAvailable });
     }
   }
 
-  return result;
+  // Sort by trade value descending
+  all.sort((a, b) => b.tradeValue - a.tradeValue);
+  return all;
 }
+
+// ---------------------------------------------------------------------------
+// Trade Recommendations — AI-suggested trades based on user needs
+// ---------------------------------------------------------------------------
+
+interface TradeRecommendation {
+  target: Player;
+  targetTeamId: string;
+  why: string;
+  estimatedCostLabel: string;
+  suggestedSendPlayerIds: string[];
+  suggestedSendPickIds: string[];
+  score: number;
+}
+
+function generateRecommendedTrades(
+  allTradeable: TradeablePlayer[],
+  userRoster: Player[],
+  userTeam: any, // full team object
+  weakPositions: string[],
+  players: Player[],
+): TradeRecommendation[] {
+  if (!userTeam || weakPositions.length === 0) return [];
+
+  const recommendations: TradeRecommendation[] = [];
+  const usedPositions = new Map<string, number>(); // track per-position count
+
+  for (const tp of allTradeable) {
+    const pos = tp.player.position;
+    const isNeed = weakPositions.includes(pos);
+    if (!isNeed) continue;
+
+    // Max 2 per position for diversity
+    const posCount = usedPositions.get(pos) ?? 0;
+    if (posCount >= 2) continue;
+
+    // Score: OVR base + scheme fit + age bonus - salary penalty
+    const schemeFit = calculateSchemeFit(tp.player, userTeam);
+    const schemeFitBonus = schemeFit === 'great' ? 20 : schemeFit === 'poor' ? -10 : 0;
+    const ageBonus = tp.player.age <= 26 ? 15 : tp.player.age >= 31 ? -10 : 0;
+    const salaryPenalty = Math.max(0, tp.player.contract.salary - 10) * 1.5;
+    const score = tp.player.ratings.overall * 1.5 + schemeFitBonus + ageBonus - salaryPenalty;
+
+    // Build "WHY" reason
+    const needRank = weakPositions.indexOf(pos) + 1;
+    const reasons: string[] = [];
+    reasons.push(`Your #${needRank} need is ${pos}`);
+    if (schemeFit === 'great') reasons.push('fits your scheme');
+    if (tp.player.age <= 26) reasons.push('young and developing');
+    else if (tp.player.contract.yearsLeft <= 1) reasons.push('expiring deal');
+
+    const targetTeamRoster = players.filter(p => p.teamId === tp.teamId && !p.retired);
+    const targetFullTeam = { record: (userTeam as any), ...tp } as any;
+    // Check if selling team is rebuilding
+    const sellerTeam = useGameStore.getState().teams.find(t => t.id === tp.teamId);
+    if (sellerTeam) {
+      const sellerStrategy = getTeamStrategy(sellerTeam, targetTeamRoster);
+      if (sellerStrategy === 'Rebuilding') reasons.push('seller is rebuilding');
+    }
+
+    // Suggest trade package from user's assets
+    const suggestedSendPlayerIds: string[] = [];
+    const suggestedSendPickIds: string[] = [];
+    const tv = tp.tradeValue;
+
+    // Map estimated cost to user's actual picks
+    const availablePicks = userTeam.draftPicks
+      .filter((pk: any) => pk.year >= useGameStore.getState().season && !pk.playerId)
+      .sort((a: any, b: any) => a.round - b.round);
+
+    if (tv >= 120 && availablePicks.length > 0) {
+      // 1st + player: find a low-OVR bench player at a surplus position
+      const firstRound = availablePicks.find((pk: any) => pk.round === 1);
+      if (firstRound) suggestedSendPickIds.push(firstRound.id);
+      // Find a low-value bench player to sweeten
+      const surplusPlayer = userRoster
+        .filter(p => !weakPositions.includes(p.position) && p.ratings.overall < 70)
+        .sort((a, b) => a.ratings.overall - b.ratings.overall)[0];
+      if (surplusPlayer) suggestedSendPlayerIds.push(surplusPlayer.id);
+    } else if (tv >= 90) {
+      const firstRound = availablePicks.find((pk: any) => pk.round === 1);
+      if (firstRound) suggestedSendPickIds.push(firstRound.id);
+    } else if (tv >= 55) {
+      const secondRound = availablePicks.find((pk: any) => pk.round === 2);
+      if (secondRound) suggestedSendPickIds.push(secondRound.id);
+      else if (availablePicks.length > 0) suggestedSendPickIds.push(availablePicks[0].id);
+    } else if (tv >= 35) {
+      const midRound = availablePicks.find((pk: any) => pk.round >= 3 && pk.round <= 4);
+      if (midRound) suggestedSendPickIds.push(midRound.id);
+      else if (availablePicks.length > 0) suggestedSendPickIds.push(availablePicks[availablePicks.length - 1].id);
+    } else {
+      const lateRound = availablePicks.find((pk: any) => pk.round >= 5);
+      if (lateRound) suggestedSendPickIds.push(lateRound.id);
+      else if (availablePicks.length > 0) suggestedSendPickIds.push(availablePicks[availablePicks.length - 1].id);
+    }
+
+    recommendations.push({
+      target: tp.player,
+      targetTeamId: tp.teamId,
+      why: reasons.join(' · '),
+      estimatedCostLabel: tp.estimatedCost,
+      suggestedSendPlayerIds,
+      suggestedSendPickIds,
+      score,
+    });
+
+    usedPositions.set(pos, posCount + 1);
+  }
+
+  // Sort by score, take top 5
+  return recommendations.sort((a, b) => b.score - a.score).slice(0, 5);
+}
+
+type SortOption = 'value' | 'ovr' | 'fit' | 'cheapest' | 'youngest';
 
 function TradeFinderContent({
   players,
   teams,
   userTeamId,
   isTradeOpen,
+  phase,
+  week,
+  season,
+  tradeDeadlineWeek,
   onPlayerClick,
   onTeamClick,
   onProposeTrade,
 }: {
   players: Player[];
-  teams: { id: string; name: string; city: string; abbreviation: string; primaryColor: string; secondaryColor: string }[];
+  teams: { id: string; name: string; city: string; abbreviation: string; primaryColor: string; secondaryColor: string; record: { wins: number; losses: number }; totalPayroll: number; salaryCap: number; draftPicks: DraftPick[] }[];
   userTeamId: string | null;
   isTradeOpen: boolean;
+  phase: string;
+  week: number;
+  season: number;
+  tradeDeadlineWeek: number;
   onPlayerClick: (id: string) => void;
   onTeamClick: (id: string) => void;
-  onProposeTrade: (teamId: string, playerIds: string[]) => void;
+  onProposeTrade: (teamId: string, playerIds: string[], sendPlayerIds?: string[], sendPickIds?: string[]) => void;
 }) {
-  const [posFilter, setPosFilter] = useState<Position | ''>('');
-  const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
-
   // Get full user team for scheme fit calculation
   const fullUserTeam = useGameStore.getState().teams.find(t => t.id === userTeamId);
+
+  // Find user's top 4 weakest positions
+  const userRoster = players.filter(p => p.teamId === userTeamId && !p.retired);
+  const ROSTER_MIN: Record<string, number> = { QB: 2, RB: 2, WR: 3, TE: 2, OL: 5, DL: 4, LB: 3, CB: 3, S: 2, K: 1, P: 1 };
+  const posNeeds: { pos: string; urgency: number }[] = [];
+  for (const pos of POSITIONS) {
+    const atPos = userRoster.filter(p => p.position === pos).sort((a, b) => b.ratings.overall - a.ratings.overall);
+    const bestOvr = atPos[0]?.ratings.overall ?? 0;
+    const count = atPos.length;
+    const minCount = ROSTER_MIN[pos] ?? 2;
+    let urgency = 0;
+    if (count === 0) urgency = 100;
+    else if (count < minCount) urgency = 80 + (minCount - count) * 5;
+    else if (bestOvr < 70) urgency = 70 - bestOvr;
+    if (urgency > 0) posNeeds.push({ pos, urgency });
+  }
+  const weakPositions = posNeeds.sort((a, b) => b.urgency - a.urgency).slice(0, 4).map(n => n.pos);
+
+  const defaultPos = weakPositions[0] as Position | undefined;
+  const [posFilter, setPosFilter] = useState<Position | ''>(defaultPos ?? '');
+  const [sortBy, setSortBy] = useState<SortOption>('value');
+  const [browseLimit, setBrowseLimit] = useState(25);
 
   if (!isTradeOpen) {
     return (
@@ -201,182 +348,263 @@ function TradeFinderContent({
     );
   }
 
-  // Find user's top 4 weakest positions (below roster minimum or best player below league avg OVR)
-  const userRoster = players.filter(p => p.teamId === userTeamId && !p.retired);
-  const ROSTER_MIN: Record<string, number> = { QB: 2, RB: 2, WR: 3, TE: 2, OL: 5, DL: 4, LB: 3, CB: 3, S: 2, K: 1, P: 1 };
-  const posNeeds: { pos: string; urgency: number }[] = [];
-  for (const pos of POSITIONS) {
-    const atPos = userRoster.filter(p => p.position === pos).sort((a, b) => b.ratings.overall - a.ratings.overall);
-    const bestOvr = atPos[0]?.ratings.overall ?? 0;
-    const count = atPos.length;
-    const minCount = ROSTER_MIN[pos] ?? 2;
-    // Urgency: higher = more needed. Empty position = 100, below minimum roster = 80, best player < 70 OVR = 70 - bestOvr
-    let urgency = 0;
-    if (count === 0) urgency = 100;
-    else if (count < minCount) urgency = 80 + (minCount - count) * 5;
-    else if (bestOvr < 70) urgency = 70 - bestOvr;
-    if (urgency > 0) posNeeds.push({ pos, urgency });
-  }
-  const weakPositions = posNeeds.sort((a, b) => b.urgency - a.urgency).slice(0, 4).map(n => n.pos);
+  const userTeam = teams.find(t => t.id === userTeamId);
+  const allTradeable = findTradeablePlayers(players, teams, userTeamId);
 
-  const tradeableMap = findTradeablePlayers(players, teams, userTeamId);
+  // Generate recommended trades
+  const recommendations = fullUserTeam
+    ? generateRecommendedTrades(allTradeable, userRoster, fullUserTeam, weakPositions, players)
+    : [];
 
-  // Flatten & filter by position if selected
-  let allTradeable: TradeablePlayer[] = [];
-  for (const list of tradeableMap.values()) {
-    allTradeable.push(...list);
-  }
-  if (posFilter) {
-    allTradeable = allTradeable.filter(t => t.player.position === posFilter);
-  }
+  // Filter & sort for browse
+  let browsePlayers = posFilter
+    ? allTradeable.filter(t => t.player.position === posFilter)
+    : [...allTradeable];
 
-  // Group by team
-  const grouped = new Map<string, TradeablePlayer[]>();
-  for (const tp of allTradeable) {
-    const list = grouped.get(tp.teamId) ?? [];
-    list.push(tp);
-    grouped.set(tp.teamId, list);
-  }
-
-  const toggleTeam = (teamId: string) => {
-    setExpandedTeams(prev => {
-      const next = new Set(prev);
-      if (next.has(teamId)) next.delete(teamId);
-      else next.add(teamId);
-      return next;
+  // Sort
+  if (sortBy === 'ovr') browsePlayers.sort((a, b) => b.player.ratings.overall - a.player.ratings.overall);
+  else if (sortBy === 'fit' && fullUserTeam) {
+    const fitOrder = { great: 0, neutral: 1, poor: 2 } as const;
+    browsePlayers.sort((a, b) => {
+      const fa = fitOrder[calculateSchemeFit(a.player, fullUserTeam)];
+      const fb = fitOrder[calculateSchemeFit(b.player, fullUserTeam)];
+      return fa - fb || b.tradeValue - a.tradeValue;
     });
-  };
+  } else if (sortBy === 'cheapest') browsePlayers.sort((a, b) => a.player.contract.salary - b.player.contract.salary);
+  else if (sortBy === 'youngest') browsePlayers.sort((a, b) => a.player.age - b.player.age);
+  // 'value' is already the default sort from findTradeablePlayers
+
+  const displayPlayers = browsePlayers.slice(0, browseLimit);
+
+  // Cap space
+  const capSpace = userTeam ? userTeam.salaryCap - userTeam.totalPayroll : 0;
+  const userPicks = userTeam?.draftPicks.filter(pk => pk.year === season && !pk.playerId) ?? [];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-[var(--text-sec)]">
-            Browse available players across the league. Shows non-elite players and depth surplus — these are the most likely to be traded.
-          </p>
-          {weakPositions.length > 0 && (
-            <p className="text-xs text-amber-600 mt-1">
-              Top needs: {weakPositions.join(', ')}
-            </p>
-          )}
-        </div>
-        <select
-          value={posFilter}
-          onChange={e => setPosFilter(e.target.value as Position | '')}
-          className="px-2 py-1 text-xs bg-[var(--surface-2)] border border-[var(--border)] rounded-lg"
-        >
-          <option value="">All Positions</option>
-          {POSITIONS.map(pos => (
-            <option key={pos} value={pos}>{pos}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="text-xs text-[var(--text-sec)]">
-        {allTradeable.length} available players from {grouped.size} teams
-      </div>
-
-      {[...grouped.entries()]
-        .sort(([, a], [, b]) => b.length - a.length)
-        .map(([teamId, tradeablePlayers]) => {
-          const team = teams.find(t => t.id === teamId);
-          if (!team) return null;
-          const isExpanded = expandedTeams.has(teamId);
-          // Sort: great fits first, then neutral, then poor
-          const sortedPlayers = fullUserTeam
-            ? [...tradeablePlayers].sort((a, b) => {
-                const fitOrder = { great: 0, neutral: 1, poor: 2 } as const;
-                const fa = fitOrder[calculateSchemeFit(a.player, fullUserTeam)];
-                const fb = fitOrder[calculateSchemeFit(b.player, fullUserTeam)];
-                return fa - fb || b.tradeValue - a.tradeValue;
-              })
-            : tradeablePlayers;
-          const displayPlayers = isExpanded ? sortedPlayers : sortedPlayers.slice(0, 3);
-
-          return (
-            <Card key={teamId}>
-              <div className="flex items-center gap-2 mb-3">
-                <button
-                  onClick={() => onTeamClick(teamId)}
-                  className="shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-                >
-                  <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="sm" />
-                </button>
-                <button onClick={() => onTeamClick(teamId)} className="font-bold text-sm hover:text-blue-600 transition-colors">
-                  {team.city} {team.name}
-                </button>
-                {(() => {
-                  const fullTeam = teams.find(t => t.id === teamId) as any;
-                  if (!fullTeam?.record) return null;
-                  const teamRoster = players.filter(p => p.teamId === teamId && !p.retired);
-                  const strategy = getTeamStrategy(fullTeam, teamRoster);
-                  return <StrategyBadge label={strategy} />;
-                })()}
+    <div className="space-y-6">
+      {/* ── YOUR SITUATION ── */}
+      <Card>
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              {userTeam && (
+                <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="sm" />
+              )}
+              <div>
+                <h3 className="font-bold text-sm">{userTeam?.city} {userTeam?.name}</h3>
                 <span className="text-xs text-[var(--text-sec)]">
-                  {tradeablePlayers.length} available
+                  {userTeam?.record.wins}-{userTeam?.record.losses}
+                  {phase === 'regular' && ` · Week ${week}`}
                 </span>
               </div>
+            </div>
+            {weakPositions.length > 0 && (
+              <div className="flex items-center gap-1.5 mt-2">
+                <span className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Needs:</span>
+                {weakPositions.map(pos => (
+                  <Badge key={pos} size="sm" variant="amber">{pos}</Badge>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="text-right text-xs space-y-1">
+            <div>
+              <span className="text-[var(--text-sec)]">Cap Space: </span>
+              <span className={`font-bold ${capSpace < 5 ? 'text-red-600' : capSpace < 15 ? 'text-amber-600' : 'text-green-600'}`}>
+                ${Math.round(capSpace)}M
+              </span>
+            </div>
+            <div>
+              <span className="text-[var(--text-sec)]">Draft Picks: </span>
+              <span className="font-medium">{userPicks.length > 0 ? userPicks.map(pk => `R${pk.round}`).join(', ') : 'None'}</span>
+            </div>
+            {phase === 'regular' && (
+              <div>
+                <span className="text-[var(--text-sec)]">Deadline: </span>
+                <span className="font-medium">{Math.max(0, tradeDeadlineWeek + 1 - week)} week{tradeDeadlineWeek + 1 - week !== 1 ? 's' : ''}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
 
-              <div className="space-y-1">
-                {displayPlayers.map(tp => {
-                  const isNeed = weakPositions.includes(tp.player.position);
-                  return (
-                    <div key={tp.player.id} className={`flex items-center gap-2 py-1.5 px-2 rounded ${isNeed ? 'bg-amber-50' : ''}`}>
-                      <Badge size="sm" variant={isNeed ? 'amber' : 'default'}>{tp.player.position}</Badge>
-                      <button
-                        onClick={() => onPlayerClick(tp.player.id)}
-                        className="text-sm hover:text-blue-600 transition-colors flex-1 text-left"
-                      >
-                        {tp.player.firstName} {tp.player.lastName}
-                      </button>
-                      <span className={`text-xs font-bold ${ratingColor(tp.player.ratings.overall)}`}>
-                        {tp.player.ratings.overall} OVR
-                      </span>
-                      {(() => {
-                        if (!fullUserTeam) return null;
-                        const fit = calculateSchemeFit(tp.player, fullUserTeam);
-                        if (fit === 'neutral') return null;
-                        return (
-                          <span className={`text-[10px] ${schemeFitColor(fit)}`} title={fit === 'great' ? 'Great Fit for your scheme (+2 OVR)' : 'Poor Fit for your scheme (-1 OVR)'}>
+      {/* ── RECOMMENDED TRADES ── */}
+      {recommendations.length > 0 && (
+        <div>
+          <h3 className="text-sm font-bold uppercase text-[var(--text-sec)] mb-3">Recommended Trades</h3>
+          <div className="space-y-3">
+            {recommendations.map(rec => {
+              const team = teams.find(t => t.id === rec.targetTeamId);
+              if (!team) return null;
+              const fit = fullUserTeam ? calculateSchemeFit(rec.target, fullUserTeam) : 'neutral';
+              return (
+                <Card key={rec.target.id}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge size="sm" variant="amber">{rec.target.position}</Badge>
+                        <button
+                          onClick={() => onPlayerClick(rec.target.id)}
+                          className="font-bold text-sm hover:text-blue-600 transition-colors"
+                        >
+                          {rec.target.firstName} {rec.target.lastName}
+                        </button>
+                        <span className={`text-xs font-bold ${ratingColor(rec.target.ratings.overall)}`}>
+                          {rec.target.ratings.overall} OVR
+                        </span>
+                        {fit !== 'neutral' && (
+                          <span className={`text-[10px] ${schemeFitColor(fit)}`}>
                             {schemeFitDot(fit)}
                           </span>
-                        );
-                      })()}
-                      <span className="text-[10px] text-[var(--text-sec)] w-8 text-right">{tp.player.age}y</span>
-                      <span className="text-[10px] text-[var(--text-sec)] w-20 text-right">${tp.player.contract.salary.toFixed(1)}M · {tp.player.contract.yearsLeft}yr</span>
-                      <span className="text-[10px] text-[var(--text-sec)] w-20 text-right">{tp.estimatedCost}</span>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onProposeTrade(teamId, [tp.player.id])}
-                        className="text-[10px] px-2 py-0.5"
-                      >
-                        Propose →
-                      </Button>
+                        )}
+                        <span className="text-[10px] text-[var(--text-sec)]">{rec.target.age}y</span>
+                        <span className="text-[10px] text-[var(--text-sec)]">${rec.target.contract.salary.toFixed(1)}M · {rec.target.contract.yearsLeft}yr</span>
+                      </div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <button
+                          onClick={() => onTeamClick(rec.targetTeamId)}
+                          className="text-[10px] text-[var(--text-sec)] hover:text-blue-600 transition-colors"
+                        >
+                          {team.abbreviation}
+                        </button>
+                        <span className="text-[10px] text-[var(--text-sec)]">·</span>
+                        <span className="text-[10px] text-[var(--text-sec)]">Est. cost: {rec.estimatedCostLabel}</span>
+                      </div>
+                      <p className="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded inline-block">
+                        {rec.why}
+                      </p>
                     </div>
-                  );
-                })}
-              </div>
-
-              {tradeablePlayers.length > 3 && (
-                <button
-                  onClick={() => toggleTeam(teamId)}
-                  className="text-xs text-blue-600 mt-2 hover:underline"
-                >
-                  {isExpanded ? 'Show less' : `Show all ${tradeablePlayers.length} players`}
-                </button>
-              )}
-            </Card>
-          );
-        })}
-
-      {grouped.size === 0 && (
-        <Card>
-          <div className="text-center py-8 text-[var(--text-sec)]">
-            No tradeable players found{posFilter ? ` at ${posFilter}` : ''}.
+                    <Button
+                      size="sm"
+                      onClick={() => onProposeTrade(
+                        rec.targetTeamId,
+                        [rec.target.id],
+                        rec.suggestedSendPlayerIds,
+                        rec.suggestedSendPickIds,
+                      )}
+                    >
+                      Propose Trade
+                    </Button>
+                  </div>
+                </Card>
+              );
+            })}
           </div>
-        </Card>
+        </div>
       )}
+
+      {/* ── BROWSE ALL ── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold uppercase text-[var(--text-sec)]">Browse Players</h3>
+          <div className="flex items-center gap-2">
+            <select
+              value={posFilter}
+              onChange={e => { setPosFilter(e.target.value as Position | ''); setBrowseLimit(25); }}
+              className="px-2 py-1 text-xs bg-[var(--surface-2)] border border-[var(--border)] rounded-lg"
+            >
+              <option value="">All Positions</option>
+              {POSITIONS.map(pos => (
+                <option key={pos} value={pos}>{pos}{weakPositions.includes(pos) ? ' (need)' : ''}</option>
+              ))}
+            </select>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as SortOption)}
+              className="px-2 py-1 text-xs bg-[var(--surface-2)] border border-[var(--border)] rounded-lg"
+            >
+              <option value="value">Best Value</option>
+              <option value="ovr">Best OVR</option>
+              <option value="fit">Best Scheme Fit</option>
+              <option value="cheapest">Cheapest</option>
+              <option value="youngest">Youngest</option>
+            </select>
+          </div>
+        </div>
+
+        <Card>
+          {/* Header row */}
+          <div className="flex items-center gap-2 py-1 px-2 text-[10px] font-bold text-[var(--text-sec)] uppercase border-b border-[var(--border)] mb-1">
+            <span className="w-8">Pos</span>
+            <span className="flex-1">Player</span>
+            <span className="w-10 text-right">OVR</span>
+            <span className="w-6 text-center">Fit</span>
+            <span className="w-8 text-right">Age</span>
+            <span className="w-24 text-right">Contract</span>
+            <span className="w-16 text-right">Cost</span>
+            <span className="w-24 text-right">Team</span>
+            <span className="w-24"></span>
+          </div>
+
+          <div className="space-y-0">
+            {displayPlayers.map(tp => {
+              const isNeed = weakPositions.includes(tp.player.position);
+              const team = teams.find(t => t.id === tp.teamId);
+              const fit = fullUserTeam ? calculateSchemeFit(tp.player, fullUserTeam) : 'neutral';
+              return (
+                <div key={tp.player.id} className={`flex items-center gap-2 py-1.5 px-2 rounded hover:bg-[var(--surface-2)] ${isNeed ? 'bg-amber-50/50' : ''}`}>
+                  <Badge size="sm" variant={isNeed ? 'amber' : 'default'}>{tp.player.position}</Badge>
+                  <button
+                    onClick={() => onPlayerClick(tp.player.id)}
+                    className="text-sm hover:text-blue-600 transition-colors flex-1 text-left truncate"
+                  >
+                    {tp.player.firstName} {tp.player.lastName}
+                  </button>
+                  <span className={`text-xs font-bold w-10 text-right ${ratingColor(tp.player.ratings.overall)}`}>
+                    {tp.player.ratings.overall}
+                  </span>
+                  <span className="w-6 text-center text-[10px]">
+                    {fit !== 'neutral' && (
+                      <span className={schemeFitColor(fit)} title={fit === 'great' ? 'Great scheme fit' : 'Poor scheme fit'}>
+                        {schemeFitDot(fit)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-[10px] text-[var(--text-sec)] w-8 text-right">{tp.player.age}y</span>
+                  <span className="text-[10px] text-[var(--text-sec)] w-24 text-right">${tp.player.contract.salary.toFixed(1)}M · {tp.player.contract.yearsLeft}yr</span>
+                  <span className="text-[10px] text-[var(--text-sec)] w-16 text-right">{tp.estimatedCost}</span>
+                  <button
+                    onClick={() => onTeamClick(tp.teamId)}
+                    className="text-[10px] text-[var(--text-sec)] hover:text-blue-600 w-24 text-right truncate"
+                  >
+                    {team?.abbreviation}
+                    {tp.whyAvailable.length > 0 && (
+                      <span className="ml-1 text-[9px] text-amber-600">
+                        {tp.whyAvailable[0]}
+                      </span>
+                    )}
+                  </button>
+                  <div className="w-24 flex justify-end">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onProposeTrade(tp.teamId, [tp.player.id])}
+                      className="text-[10px] px-2 py-0.5"
+                    >
+                      Propose
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {browsePlayers.length > browseLimit && (
+            <button
+              onClick={() => setBrowseLimit(prev => prev + 25)}
+              className="w-full text-center text-xs text-blue-600 hover:underline mt-3 py-2"
+            >
+              Show more ({browsePlayers.length - browseLimit} remaining)
+            </button>
+          )}
+
+          {browsePlayers.length === 0 && (
+            <div className="text-center py-8 text-[var(--text-sec)]">
+              No tradeable players found{posFilter ? ` at ${posFilter}` : ''}.
+            </div>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }
@@ -394,8 +622,8 @@ function TradesPage() {
   const fromDraftRef = useRef(false);
   const {
     phase, week, season, players, teams, userTeamId,
-    draftOrder, tradeProposals, executeTrade, respondToTradeProposal, rejectAllTradeProposals,
-    solicitTradingBlockProposals, leagueSettings,
+    draftOrder, tradeProposals, executeTrade, generateCounterOffer, respondToTradeProposal, rejectAllTradeProposals,
+    solicitTradingBlockProposals, leagueSettings, tradeRumors,
   } = useGameStore();
 
   const [selectedTeamId, setSelectedTeamId] = useState('');
@@ -404,6 +632,7 @@ function TradesPage() {
   const [receivedPlayerIds, setReceivedPlayerIds] = useState<string[]>([]);
   const [receivedPickIds, setReceivedPickIds] = useState<string[]>([]);
   const [tradeResult, setTradeResult] = useState<'accepted' | 'rejected' | null>(null);
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'incoming' | 'propose' | 'block' | 'finder'>('incoming');
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
@@ -586,13 +815,14 @@ function TradesPage() {
 
   function handleSendTrade() {
     if (!selectedTeamId) return;
-    const success = executeTrade(
+    const result = executeTrade(
       offeredPlayerIds, offeredPickIds,
       receivedPlayerIds, receivedPickIds,
       selectedTeamId,
     );
-    setTradeResult(success ? 'accepted' : 'rejected');
-    if (success) {
+    setTradeResult(result.success ? 'accepted' : 'rejected');
+    setRejectionReason(result.reason ?? null);
+    if (result.success) {
       setOfferedPlayerIds([]);
       setOfferedPickIds([]);
       setReceivedPlayerIds([]);
@@ -601,6 +831,20 @@ function TradesPage() {
       if (fromDraftRef.current) {
         setTimeout(() => router.push('/draft'), 1500);
       }
+    }
+  }
+
+  function handleWhatMakesThisWork() {
+    if (!selectedTeamId) return;
+    if (receivedPlayerIds.length === 0 && receivedPickIds.length === 0) return;
+    const counter = generateCounterOffer(receivedPlayerIds, receivedPickIds, selectedTeamId);
+    if (counter) {
+      setOfferedPlayerIds(counter.sendPlayerIds);
+      setOfferedPickIds(counter.sendPickIds);
+      setTradeResult(null);
+      setRejectionReason(null);
+    } else {
+      setRejectionReason('"We don\'t see a package that works. You may not have enough assets to acquire these players."');
     }
   }
 
@@ -628,13 +872,13 @@ function TradesPage() {
   function handleSubmitCounter() {
     const proposal = tradeProposals.find(p => p.id === counteringProposalId);
     if (!proposal) return;
-    const success = executeTrade(
+    const result = executeTrade(
       counterOfferedPlayerIds, counterOfferedPickIds,
       counterReceivedPlayerIds, counterReceivedPickIds,
       proposal.proposingTeamId,
     );
-    setCounterResult(success ? 'accepted' : 'rejected');
-    if (success) {
+    setCounterResult(result.success ? 'accepted' : 'rejected');
+    if (result.success) {
       // Reject the original proposal since we completed a counter
       respondToTradeProposal(proposal.id, false);
       handleCancelCounter();
@@ -689,6 +933,62 @@ function TradesPage() {
               : phase === 'regular' ? 'Trade deadline has passed. Trading reopens during the draft.' : 'Trade window closed'}
           </div>
         </div>
+
+        {/* Trade Rumors */}
+        {(tradeRumors ?? []).length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Trade Rumors</CardTitle>
+                {(() => {
+                  const resolved = (tradeRumors ?? []).filter(r => r.resolved);
+                  const accurate = resolved.filter(r => r.outcome === 'accurate').length;
+                  return resolved.length > 0 ? (
+                    <span className="text-xs text-[var(--text-sec)]">
+                      Season Accuracy: {accurate}/{resolved.length} ({Math.round(accurate / resolved.length * 100)}%)
+                    </span>
+                  ) : null;
+                })()}
+              </div>
+            </CardHeader>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[...(tradeRumors ?? [])].reverse().slice(0, 6).map(rumor => {
+                const rumorTeam = teams.find(t => t.id === rumor.teamId);
+                const targetTeam = rumor.targetTeamId ? teams.find(t => t.id === rumor.targetTeamId) : null;
+                const rumorPlayers = rumor.playerIds.map(id => players.find(p => p.id === id)).filter(Boolean);
+                return (
+                  <div key={rumor.id} className={`rounded-lg border px-3 py-2.5 ${
+                    rumor.resolved
+                      ? rumor.outcome === 'accurate' ? 'border-green-300 bg-green-50/50' : 'border-gray-200 bg-gray-50/50 opacity-60'
+                      : rumor.type === 'deadline_buzz' ? 'border-orange-300 bg-orange-50/40' : 'border-[var(--border)] bg-[var(--surface)]'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      {rumorTeam && <TeamLogo abbreviation={rumorTeam.abbreviation} primaryColor={rumorTeam.primaryColor} secondaryColor={rumorTeam.secondaryColor} size="sm" />}
+                      {targetTeam && <><span className="text-[10px] text-[var(--text-sec)]">&</span><TeamLogo abbreviation={targetTeam.abbreviation} primaryColor={targetTeam.primaryColor} secondaryColor={targetTeam.secondaryColor} size="sm" /></>}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-[var(--text-sec)]">Week {rumor.week}</div>
+                      </div>
+                      {rumor.type === 'deadline_buzz' && !rumor.resolved && <span className="text-[10px] font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">HOT</span>}
+                      {rumor.resolved && rumor.outcome === 'accurate' && <span className="text-[10px] font-bold text-green-600 bg-green-100 px-1.5 py-0.5 rounded">CONFIRMED</span>}
+                      {rumor.resolved && rumor.outcome === 'false_alarm' && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">COLD</span>}
+                    </div>
+                    <div className="text-sm font-semibold leading-tight">{rumor.headline}</div>
+                    <div className="text-xs text-[var(--text-sec)] mt-1 leading-snug">{rumor.detail}</div>
+                    {rumorPlayers.length > 0 && (
+                      <div className="flex gap-1 mt-1.5">
+                        {rumorPlayers.map(p => p && (
+                          <button key={p.id} onClick={() => setSelectedPlayerId(p.id)} className="text-[10px] text-blue-600 hover:underline">
+                            {p.firstName[0]}. {p.lastName} ({p.ratings.overall})
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-6 w-fit">
@@ -1474,24 +1774,37 @@ function TradesPage() {
                         );
                       })()}
                       {tradeResult === 'rejected' && (
-                        <p className="text-sm text-red-600 mt-1">
-                          Trade rejected — offer more value or adjust your asks.
-                        </p>
+                        <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-3">
+                          <p className="text-sm text-red-700 italic">
+                            {rejectionReason ?? 'Trade rejected.'}
+                          </p>
+                        </div>
                       )}
                       {tradeResult === 'accepted' && (
                         <p className="text-sm text-green-600 mt-1">Trade accepted!</p>
                       )}
                     </div>
-                    <Button
-                      onClick={handleSendTrade}
-                      disabled={
-                        !selectedTeamId ||
-                        (offeredPlayerIds.length === 0 && offeredPickIds.length === 0 &&
-                         receivedPlayerIds.length === 0 && receivedPickIds.length === 0)
-                      }
-                    >
-                      Send Offer
-                    </Button>
+                    <div className="flex gap-2 items-center">
+                      {selectedTeamId && (receivedPlayerIds.length > 0 || receivedPickIds.length > 0) && tradeResult !== 'accepted' && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleWhatMakesThisWork}
+                        >
+                          What makes this work?
+                        </Button>
+                      )}
+                      <Button
+                        onClick={handleSendTrade}
+                        disabled={
+                          !selectedTeamId ||
+                          (offeredPlayerIds.length === 0 && offeredPickIds.length === 0 &&
+                           receivedPlayerIds.length === 0 && receivedPickIds.length === 0)
+                        }
+                      >
+                        Send Offer
+                      </Button>
+                    </div>
                   </div>
                 </Card>
               </>
@@ -1505,11 +1818,17 @@ function TradesPage() {
             teams={teams}
             userTeamId={userTeamId}
             isTradeOpen={isTradeOpen}
+            phase={phase}
+            week={week}
+            season={season}
+            tradeDeadlineWeek={tradeDeadlineWeek}
             onPlayerClick={setSelectedPlayerId}
             onTeamClick={setViewTeamId}
-            onProposeTrade={(teamId: string, playerIds: string[]) => {
+            onProposeTrade={(teamId: string, playerIds: string[], sendPlayerIds?: string[], sendPickIds?: string[]) => {
               setSelectedTeamId(teamId);
               setReceivedPlayerIds(playerIds);
+              if (sendPlayerIds?.length) setOfferedPlayerIds(sendPlayerIds);
+              if (sendPickIds?.length) setOfferedPickIds(sendPickIds);
               setActiveTab('propose');
             }}
           />

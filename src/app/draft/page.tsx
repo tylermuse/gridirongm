@@ -98,13 +98,6 @@ function ProspectCard({
             <div className="text-[10px] text-[var(--text-sec)] uppercase">Proj</div>
           </div>
         </div>
-        {player.combineStats && (
-          <div className="flex gap-3 mt-2 text-[10px] text-[var(--text-sec)]">
-            <span>40yd: <span className="font-bold text-[var(--text)]">{player.combineStats.fortyYard.toFixed(2)}</span></span>
-            <span>Bench: <span className="font-bold text-[var(--text)]">{player.combineStats.benchPress}</span></span>
-            <span>Vert: <span className="font-bold text-[var(--text)]">{player.combineStats.verticalJump.toFixed(1)}&quot;</span></span>
-          </div>
-        )}
         {onDraft && (
           <button
             onClick={() => onDraft(player.id)}
@@ -541,39 +534,6 @@ export default function DraftPage() {
       <div className="max-w-7xl mx-auto space-y-4">
         <h2 className="text-2xl font-black">Draft</h2>
 
-        {/* Draft Class Quality Preview */}
-        {allProspects.length > 0 && (() => {
-          const avgOvr = allProspects.reduce((s, p) => s + p.ratings.overall, 0) / allProspects.length;
-          const topTier = allProspects.filter(p => p.ratings.overall >= 70).length;
-          const grade = avgOvr >= 55 && topTier >= 15 ? 'Elite' : avgOvr >= 50 && topTier >= 10 ? 'Strong' : avgOvr >= 45 ? 'Average' : 'Weak';
-          const gradeColor: Record<string, string> = { Elite: 'text-amber-600', Strong: 'text-green-600', Average: 'text-[var(--text-sec)]', Weak: 'text-red-600' };
-          const posGrades = (['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S'] as const).map(pos => {
-            const posP = allProspects.filter(p => p.position === pos);
-            if (posP.length === 0) return { pos, grade: 'Weak' };
-            const pAvg = posP.reduce((s, p) => s + p.ratings.overall, 0) / posP.length;
-            const pTop = posP.filter(p => p.ratings.overall >= 65).length;
-            const g = pAvg >= 55 && pTop >= 3 ? 'Elite' : pAvg >= 50 && pTop >= 2 ? 'Strong' : pAvg >= 45 ? 'Average' : 'Weak';
-            return { pos, grade: g };
-          });
-          return (
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-sm font-bold">{season} Draft Class:</span>
-                <span className={`text-sm font-black ${gradeColor[grade]}`}>{grade.toUpperCase()}</span>
-                <span className="text-xs text-[var(--text-sec)]">({allProspects.length} prospects)</span>
-              </div>
-              <div className="flex flex-wrap gap-x-3 gap-y-1">
-                {posGrades.map(({ pos, grade: g }) => (
-                  <span key={pos} className="text-xs">
-                    <span className="text-[var(--text-sec)]">{pos}:</span>{' '}
-                    <span className={`font-semibold ${gradeColor[g]}`}>{g}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
-
         {/* On The Clock */}
         <OnTheClockSection
           currentTeam={currentTeam}
@@ -662,9 +622,6 @@ export default function DraftPage() {
                   <th className="text-center pb-2">OVR</th>
                   <th className="text-center pb-2">Pot</th>
                   <th className="text-center pb-2">Dev</th>
-                  <th className="text-center pb-2 hidden md:table-cell">40yd</th>
-                  <th className="text-center pb-2 hidden md:table-cell">Bench</th>
-                  <th className="text-center pb-2 hidden md:table-cell">Vert</th>
                   <th className="text-right pb-2 pr-2"></th>
                 </tr>
               </thead>
@@ -700,15 +657,6 @@ export default function DraftPage() {
                         ) : (
                           <span className="text-[var(--text-sec)]">?</span>
                         )}
-                      </td>
-                      <td className="py-2 text-center text-xs hidden md:table-cell font-mono">
-                        {player.combineStats ? player.combineStats.fortyYard.toFixed(2) : '—'}
-                      </td>
-                      <td className="py-2 text-center text-xs hidden md:table-cell font-mono">
-                        {player.combineStats ? player.combineStats.benchPress : '—'}
-                      </td>
-                      <td className="py-2 text-center text-xs hidden md:table-cell font-mono">
-                        {player.combineStats ? `${player.combineStats.verticalJump.toFixed(1)}"` : '—'}
                       </td>
                       <td className="py-2 pr-2 text-right" onClick={e => e.stopPropagation()}>
                         <div className="flex gap-1 justify-end">
