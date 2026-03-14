@@ -151,6 +151,8 @@ export interface Player {
   height?: string;
   /** Weight in lbs */
   weight?: number;
+  /** NFL Combine measurables (permanent, generated at player creation) */
+  combineStats?: { fortyYard: number; benchPress: number; verticalJump: number };
   /** Round the player was drafted in */
   draftRound?: number;
   /** Team ID that originally drafted this player */
@@ -159,10 +161,14 @@ export interface Player {
   previousSeasonStats?: PlayerStats;
   /** Season-by-season stat history */
   seasonLog?: { season: number; teamId: string; stats: PlayerStats }[];
+  /** Whether the player is holding out (performance penalty until resolved) */
+  holdout?: boolean;
   /** Development trait affecting aging/growth curve */
   devTrait?: 'star' | 'normal' | 'late_bloomer' | 'bust';
   /** Season when devTrait was revealed to the user (after 1 full season on roster) */
   devTraitRevealedSeason?: number;
+  /** Pre-draft projected rank (noisy estimate of talent, generated at draft class creation) */
+  projectedRank?: number;
 }
 
 export interface TeamRecord {
@@ -495,6 +501,13 @@ export interface TradeProposal {
   valueAssessment: 'fair' | 'lopsided-you-win' | 'lopsided-they-win';
 }
 
+export interface HoldoutEntry {
+  playerId: string;
+  demandedSalary: number;
+  demandedYears: number;
+  resolved: boolean;
+}
+
 export interface ResigningEntry {
   playerId: string;
   askingSalary: number;
@@ -555,6 +568,8 @@ export interface LeagueState {
   saveVersion: number;
   /** Players up for re-signing (user team, yearsLeft === 1) */
   resigningPlayers: ResigningEntry[];
+  /** Contract holdout demands from underpaid/unhappy players */
+  holdoutDemands: HoldoutEntry[];
   /** Incoming AI trade proposals */
   tradeProposals: TradeProposal[];
   /** Scouts remaining for this draft cycle (max 15) */

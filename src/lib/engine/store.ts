@@ -6,11 +6,12 @@ function uuid(): string {
 import type {
   LeagueState, Team, Player, GameResult, PlayerStats,
   NewsItem, TradeProposal, ResigningEntry, DraftPick, LeagueSettings,
+  HoldoutEntry,
 } from '@/types';
 import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
-import { generateRoster, generateDraftClass, generatePlayer } from './playerGen';
+import { generateRoster, generateDraftClass, generatePlayer, generateCombineStats } from './playerGen';
 import { resetUsedNames } from '../data/names';
 import { generateSchedule } from './schedule';
 import { simulateGame, generateBettingLine } from './simulate';
@@ -20,7 +21,7 @@ import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
 import { generateCoachingStaff, coachingBonus } from './coaching';
 
-const SAVE_VERSION = 15;
+const SAVE_VERSION = 16;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
@@ -56,6 +57,7 @@ interface GameStore extends LeagueState {
   resignPlayer: (playerId: string, salary: number, years: number) => boolean;
   passOnResigning: (playerId: string) => void;
   franchiseTagPlayer: (playerId: string) => boolean;
+  resolveHoldout: (playerId: string, resolution: 'extend' | 'deny') => void;
   advanceToDraft: () => void;
   draftPlayer: (playerId: string) => void;
   simDraftPick: () => void;
@@ -79,7 +81,12 @@ interface GameStore extends LeagueState {
     receivedPickIds: string[],
     counterpartTeamId: string,
     skipValueCheck?: boolean,
-  ) => boolean;
+  ) => { success: boolean; reason?: string };
+  generateCounterOffer: (
+    receivedPlayerIds: string[],
+    receivedPickIds: string[],
+    counterpartTeamId: string,
+  ) => { sendPlayerIds: string[]; sendPickIds: string[] } | null;
   respondToTradeProposal: (proposalId: string, accept: boolean) => boolean;
   rejectAllTradeProposals: () => void;
   solicitTradingBlockProposals: (playerIds: string[], pickIds: string[], seekPositions: Position[], seekDraftPicks?: boolean) => void;
@@ -496,13 +503,12 @@ const POSITION_VALUE_MULT: Record<string, number> = {
 function playerTradeValue(player: Player): number {
   const ageMultiplier =
     player.age <= 25 ? 1.3 :
-    player.age <= 27 ? 1.1 :
+    player.age <= 27 ? 1.15 :
     player.age <= 29 ? 1.0 :
-    player.age <= 31 ? 0.7 :
-    player.age <= 33 ? 0.45 : 0.2;
+    player.age <= 31 ? 0.85 :
+    player.age <= 33 ? 0.65 : 0.45;
   const posMultiplier = POSITION_VALUE_MULT[player.position] ?? 1.0;
   // Exponential curve: stars (85+) are worth dramatically more than average (65) players.
-  // 56 OVR → ~30 value, 70 OVR → ~200, 80 OVR → ~500, 90 OVR → ~1200
   const normalized = Math.max(0, (player.ratings.overall - 40) / 55);
   const base = Math.pow(normalized, 2.5) * 1200;
   const potBonus = Math.max(0, player.potential - player.ratings.overall) * 3;
@@ -653,6 +659,58 @@ function computeResigningEntry(player: Player, team: Team): ResigningEntry {
   const askingSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, base * mult) * 10) / 10;
   const askingYears = player.age >= 32 ? 1 : player.age >= 28 ? 2 : 3;
   return { playerId: player.id, askingSalary, askingYears };
+}
+
+/**
+ * Compute holdout demands for under-contract players who are underpaid/unhappy.
+ * Only applies to the user's team. Capped at 3 holdouts.
+ */
+function computeHoldoutDemands(players: Player[], userTeamId: string, season: number): HoldoutEntry[] {
+  const candidates = players.filter(p =>
+    p.teamId === userTeamId &&
+    !p.retired &&
+    !p.onIR &&
+    p.contract.yearsLeft >= 2 && // must have 2+ years remaining
+    !(p.lastRestructuredSeason !== undefined && season - p.lastRestructuredSeason < 2), // not recently restructured
+  );
+
+  const eligible: { player: Player; underpaidRatio: number }[] = [];
+
+  for (const p of candidates) {
+    const marketValue = estimateSalary(p.ratings.overall, p.position, p.age, p.potential);
+    const underpaidRatio = marketValue / Math.max(0.5, p.contract.salary);
+
+    // Must be significantly underpaid (market > 1.35x current salary)
+    if (underpaidRatio < 1.35) continue;
+
+    // Gate: low mood OR elite player
+    if (p.mood >= 50 && p.ratings.overall < 85) continue;
+
+    eligible.push({ player: p, underpaidRatio });
+  }
+
+  // Sort by underpaid ratio (most underpaid first), star priority
+  eligible.sort((a, b) => {
+    const starA = a.player.devTrait === 'star' ? 1 : 0;
+    const starB = b.player.devTrait === 'star' ? 1 : 0;
+    return (b.underpaidRatio + starB * 0.5) - (a.underpaidRatio + starA * 0.5);
+  });
+
+  // Cap at 3
+  const selected = eligible.slice(0, 3);
+
+  return selected.map(({ player }) => {
+    const marketValue = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
+    // They want somewhere between market and 110% of market
+    const demandedSalary = Math.round(marketValue * (1.0 + Math.random() * 0.1) * 10) / 10;
+    const demandedYears = player.age >= 30 ? 2 : player.age >= 27 ? 3 : 4;
+    return {
+      playerId: player.id,
+      demandedSalary,
+      demandedYears,
+      resolved: false,
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1121,6 +1179,7 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   seasonHistory: [],
   saveVersion: SAVE_VERSION,
   resigningPlayers: [],
+  holdoutDemands: [],
   tradeProposals: [],
   scoutsRemaining: 15,
   draftScoutingData: {},
@@ -1407,6 +1466,7 @@ export const useGameStore = create<GameStore>()(
             seasonHistory: [],
             saveVersion: SAVE_VERSION,
             resigningPlayers: resigningEntries,
+            holdoutDemands: [],
             tradeProposals: [],
             scoutsRemaining: 15,
             draftScoutingData: {},
@@ -1527,6 +1587,7 @@ export const useGameStore = create<GameStore>()(
           seasonHistory: [],
           saveVersion: SAVE_VERSION,
           resigningPlayers: genResigningEntries,
+          holdoutDemands: [],
           tradeProposals: [],
           scoutsRemaining: 15,
           draftScoutingData: {},
@@ -1947,13 +2008,36 @@ export const useGameStore = create<GameStore>()(
 
         const resigningPlayers = expiringPlayers.map(p => computeResigningEntry(p, userTeam));
 
+        // Compute holdout demands for under-contract stars
+        const holdoutDemands = computeHoldoutDemands(state.players, state.userTeamId, state.season);
+        const holdoutNews: NewsItem[] = holdoutDemands.map(h => {
+          const hp = state.players.find(p => p.id === h.playerId);
+          if (!hp) return null;
+          return makeNews({
+            season: state.season,
+            week: 0,
+            type: 'system',
+            teamId: state.userTeamId,
+            playerIds: [h.playerId],
+            headline: `${hp.firstName} ${hp.lastName} demands a new contract`,
+            body: `The ${hp.position} is unhappy with his current deal ($${hp.contract.salary}M/yr) and wants $${h.demandedSalary}M/yr for ${h.demandedYears} years. He will hold out if denied.`,
+            isUserTeam: true,
+          });
+        }).filter((n): n is NewsItem => n !== null);
+
         // Recalculate all team payrolls from scratch to prevent drift after regular season
         const recalcTeams = state.teams.map(t => ({
           ...t,
           totalPayroll: recalculateTeamPayroll(t, state.players),
         }));
 
-        set({ phase: 'resigning', resigningPlayers, teams: recalcTeams });
+        set({
+          phase: 'resigning',
+          resigningPlayers,
+          holdoutDemands,
+          teams: recalcTeams,
+          newsItems: [...state.newsItems, ...holdoutNews],
+        });
       },
 
       // PRD-03: User re-signs a player (negotiation handled in UI, this just executes)
@@ -2017,6 +2101,50 @@ export const useGameStore = create<GameStore>()(
           freeAgents: [...state.freeAgents, playerId],
           resigningPlayers: state.resigningPlayers.filter(e => e.playerId !== playerId),
         });
+      },
+
+      // Resolve a contract holdout demand
+      resolveHoldout: (playerId: string, resolution: 'extend' | 'deny') => {
+        const state = get();
+        const demand = state.holdoutDemands.find(h => h.playerId === playerId);
+        if (!demand || demand.resolved) return;
+
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return;
+
+        const updatedDemands = state.holdoutDemands.map(h =>
+          h.playerId === playerId ? { ...h, resolved: true } : h,
+        );
+
+        if (resolution === 'deny') {
+          // Player holds out — performance penalty until season ends
+          const denyNews = makeNews({
+            season: state.season,
+            week: 0,
+            type: 'system',
+            teamId: state.userTeamId,
+            playerIds: [playerId],
+            headline: `${player.firstName} ${player.lastName} begins holdout`,
+            body: `After being denied a new contract, the ${player.position} will hold out. Expect reduced performance until the situation is resolved.`,
+            isUserTeam: true,
+          });
+
+          set({
+            holdoutDemands: updatedDemands,
+            players: state.players.map(p =>
+              p.id === playerId ? { ...p, holdout: true, mood: Math.max(0, p.mood - 10) } : p,
+            ),
+            newsItems: [...state.newsItems, denyNews],
+          });
+        } else {
+          // Extend — mark resolved, clear holdout flag. UI will open negotiation.
+          set({
+            holdoutDemands: updatedDemands,
+            players: state.players.map(p =>
+              p.id === playerId ? { ...p, holdout: false } : p,
+            ),
+          });
+        }
       },
 
       franchiseTagPlayer: (playerId: string) => {
@@ -2110,27 +2238,120 @@ export const useGameStore = create<GameStore>()(
             }
           }
 
-          // AI teams auto-resign their own expiring players
+          // AI teams auto-resign their own expiring players using positional priority
           const aiTeams = updatedTeams.filter(t => t.id !== state.userTeamId);
+
+          // Track how many high-OVR QBs (70+) each AI team lets walk, to cap league-wide
+          let highOvrQBsLetGo = 0;
+          const MAX_HIGH_OVR_QBS_IN_FA = 2; // Max elite QBs that should hit free agency
+
+          // Sort AI teams to process re-signings: prioritize teams with winning records
+          // (contenders are more aggressive about retaining talent)
           for (const aiTeam of aiTeams) {
             const expiringFromAI = updatedPlayers.filter(
               p => p.teamId === aiTeam.id && p.contract.yearsLeft === 1 && !p.retired,
             );
-            for (const player of expiringFromAI) {
+            if (expiringFromAI.length === 0) continue;
+
+            // Sort by re-signing priority: QBs first, then by OVR
+            const prioritized = [...expiringFromAI].sort((a, b) => {
+              // Starting QBs always come first
+              if (a.position === 'QB' && b.position !== 'QB') return -1;
+              if (b.position === 'QB' && a.position !== 'QB') return 1;
+              // Then by OVR descending
+              return b.ratings.overall - a.ratings.overall;
+            });
+
+            for (const player of prioritized) {
               const marketSalary = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
-              const capSpace = aiTeam.salaryCap - aiTeam.totalPayroll;
-              // 70% chance if cap space available
-              if (capSpace >= marketSalary && Math.random() < 0.70) {
-                const newYears = 1 + Math.floor(Math.random() * 3);
-                const salaryDiff = marketSalary - player.contract.salary;
+              const teamData = updatedTeams.find(t => t.id === aiTeam.id)!;
+              const capSpace = teamData.salaryCap - teamData.totalPayroll;
+
+              // Determine re-signing probability based on position, OVR, and age
+              let resignChance: number;
+
+              if (player.position === 'QB' && player.ratings.overall >= 70 && player.age < 33) {
+                // Starting-caliber QB under 33: ALWAYS re-sign (unless can't afford)
+                resignChance = 0.98;
+              } else if (player.position === 'QB' && player.ratings.overall >= 70 && player.age < 36) {
+                // Older starting QB: very high chance
+                resignChance = 0.90;
+              } else if (player.ratings.overall >= 80) {
+                // Elite players at any position: very high retention
+                resignChance = 0.92;
+              } else if (player.ratings.overall >= 75) {
+                // Above-average starters: high retention
+                resignChance = 0.85;
+              } else if (player.ratings.overall >= 70) {
+                // Solid starters: good retention
+                resignChance = 0.75;
+              } else if (player.ratings.overall >= 60) {
+                // Role players: moderate retention
+                resignChance = 0.55;
+              } else {
+                // Below-average: low retention
+                resignChance = 0.30;
+              }
+
+              // Age penalty for non-QB positions
+              if (player.position !== 'QB') {
+                if (player.age >= 34) resignChance *= 0.4;
+                else if (player.age >= 32) resignChance *= 0.7;
+              }
+
+              // If can't afford at market rate, try at a discount or league minimum
+              let actualSalary = marketSalary;
+              if (capSpace < marketSalary) {
+                // Try a 15% discount
+                actualSalary = Math.round(marketSalary * 0.85 * 10) / 10;
+                if (capSpace < actualSalary) {
+                  // Try league minimum as last resort for important players
+                  if (player.ratings.overall >= 75 || (player.position === 'QB' && player.ratings.overall >= 70)) {
+                    actualSalary = LEAGUE_MINIMUM_SALARY;
+                  } else {
+                    // Can't afford, let walk
+                    if (player.position === 'QB' && player.ratings.overall >= 70) {
+                      highOvrQBsLetGo++;
+                    }
+                    updatedPlayers = updatedPlayers.map(p =>
+                      p.id === player.id ? { ...p, contract: { ...p.contract, yearsLeft: 0 } } : p,
+                    );
+                    continue;
+                  }
+                }
+              }
+
+              // For high-OVR QBs, enforce the league-wide cap on FA QBs
+              if (player.position === 'QB' && player.ratings.overall >= 70) {
+                if (Math.random() >= resignChance) {
+                  // Team chose not to re-sign, but check league-wide QB cap
+                  if (highOvrQBsLetGo >= MAX_HIGH_OVR_QBS_IN_FA) {
+                    // Force re-sign to prevent QB flood
+                    resignChance = 1.0;
+                  } else {
+                    highOvrQBsLetGo++;
+                    updatedPlayers = updatedPlayers.map(p =>
+                      p.id === player.id ? { ...p, contract: { ...p.contract, yearsLeft: 0 } } : p,
+                    );
+                    continue;
+                  }
+                }
+              }
+
+              if (capSpace >= actualSalary && Math.random() < resignChance) {
+                const newYears = player.age >= 32 ? 1 : player.age >= 28 ? 2 : 3;
+                const salaryDiff = actualSalary - player.contract.salary;
                 updatedPlayers = updatedPlayers.map(p =>
-                  p.id === player.id ? { ...p, contract: { salary: marketSalary, yearsLeft: newYears, guaranteed: generateGuaranteed(marketSalary, newYears), totalYears: newYears, offseasonSigned: true } } : p,
+                  p.id === player.id ? { ...p, contract: { salary: actualSalary, yearsLeft: newYears, guaranteed: generateGuaranteed(actualSalary, newYears), totalYears: newYears, offseasonSigned: true } } : p,
                 );
                 updatedTeams = updatedTeams.map(t =>
                   t.id === aiTeam.id ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + salaryDiff) } : t,
                 );
               } else {
                 // Let contract expire
+                if (player.position === 'QB' && player.ratings.overall >= 70) {
+                  highOvrQBsLetGo++;
+                }
                 updatedPlayers = updatedPlayers.map(p =>
                   p.id === player.id ? { ...p, contract: { ...p.contract, yearsLeft: 0 } } : p,
                 );
@@ -2208,6 +2429,7 @@ export const useGameStore = create<GameStore>()(
           draftOrder,
           draftResults: [],
           resigningPlayers: [],
+          holdoutDemands: [],
           draftScoutingData: {},
           scoutsRemaining: 15,
         });
@@ -3083,12 +3305,12 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         // Trade deadline only applies during regular season; offseason trades always allowed
         const offseasonPhases = ['resigning', 'draft', 'freeAgency', 'offseason', 'preseason'];
-        if (state.phase === 'regular' && state.week > 12) return false;
-        if (state.phase === 'playoffs') return false; // No trades during playoffs
+        if (state.phase === 'regular' && state.week > 12) return { success: false, reason: 'The trade deadline has passed.' };
+        if (state.phase === 'playoffs') return { success: false, reason: 'No trades during playoffs.' };
 
         const userTeam = state.teams.find(t => t.id === state.userTeamId);
         const aiTeam = state.teams.find(t => t.id === counterpartTeamId);
-        if (!userTeam || !aiTeam) return false;
+        if (!userTeam || !aiTeam) return { success: false, reason: 'Invalid teams.' };
 
         // Evaluate trade values
         const offeredValue = offeredPlayerIds.reduce((sum, id) => {
@@ -3108,7 +3330,22 @@ export const useGameStore = create<GameStore>()(
         }, 0);
 
         // AI accepts if within 10% value (skip for AI-initiated proposals already approved)
-        if (!skipValueCheck && offeredValue < receivedValue * 0.90) return false;
+        if (!skipValueCheck && offeredValue < receivedValue * 0.90) {
+          const deficit = Math.round(receivedValue * 0.90 - offeredValue);
+          const receivedNames = receivedPlayerIds.map(id => state.players.find(p => p.id === id)).filter(Boolean);
+          // Check if they're asking for a franchise player (top 3 on team)
+          const aiRoster = state.players.filter(p => p.teamId === counterpartTeamId && !p.retired).sort((a, b) => b.ratings.overall - a.ratings.overall);
+          const top3Ids = new Set(aiRoster.slice(0, 3).map(p => p.id));
+          const askingForStar = receivedPlayerIds.some(id => top3Ids.has(id));
+          let reason = `"We need more value to make this work. You're about ${deficit} trade points short.`;
+          if (askingForStar) {
+            const starName = receivedNames.find(p => p && top3Ids.has(p.id));
+            reason += ` ${starName?.lastName} is a franchise cornerstone — we'd need a premium offer to move him."`;
+          } else {
+            reason += ` Add a draft pick or another player to sweeten the deal."`;
+          }
+          return { success: false, reason };
+        }
 
         // Block trades that would push user over the salary cap
         const offeredSalaryTotal = offeredPlayerIds.reduce((sum, id) => {
@@ -3121,7 +3358,8 @@ export const useGameStore = create<GameStore>()(
         }, 0);
         const newPayroll = userTeam.totalPayroll - offeredSalaryTotal + receivedSalaryTotal;
         if (newPayroll > userTeam.salaryCap) {
-          return false;
+          const over = Math.round((newPayroll - userTeam.salaryCap) * 10) / 10;
+          return { success: false, reason: `Trade would put you $${over}M over the salary cap. Free up cap space first.` };
         }
 
         // Execute the trade
@@ -3315,7 +3553,78 @@ export const useGameStore = create<GameStore>()(
           newsItems: [...state.newsItems, tradeNews],
         });
 
-        return true;
+        return { success: true };
+      },
+
+      generateCounterOffer: (receivedPlayerIds, receivedPickIds, counterpartTeamId) => {
+        const state = get();
+        const userTeam = state.teams.find(t => t.id === state.userTeamId);
+        const aiTeam = state.teams.find(t => t.id === counterpartTeamId);
+        if (!userTeam || !aiTeam) return null;
+
+        // Calculate what the AI wants (value of players/picks the user is asking for)
+        const targetValue = receivedPlayerIds.reduce((sum, id) => {
+          const p = state.players.find(pl => pl.id === id);
+          return sum + (p ? playerTradeValue(p) : 0);
+        }, 0) + receivedPickIds.reduce((sum, id) => {
+          const pick = aiTeam.draftPicks.find(pk => pk.id === id);
+          return sum + (pick ? pickTradeValue(pick) : 0);
+        }, 0);
+
+        // AI wants at least 90% of the value
+        const neededValue = targetValue * 0.90;
+
+        // Collect user's available assets sorted by value
+        const userRoster = state.players
+          .filter(p => p.teamId === state.userTeamId && !p.retired && !receivedPlayerIds.includes(p.id))
+          .map(p => ({ id: p.id, value: playerTradeValue(p), salary: p.contract.salary, ovr: p.ratings.overall }))
+          .sort((a, b) => a.value - b.value); // ascending — prefer sending lower value players
+
+        const userPicks = userTeam.draftPicks
+          .filter(pk => pk.year >= state.season && !pk.playerId)
+          .map(pk => ({ id: pk.id, value: pickTradeValue(pk), round: pk.round }))
+          .sort((a, b) => b.round - a.round); // prefer sending later picks first
+
+        const sendPlayerIds: string[] = [];
+        const sendPickIds: string[] = [];
+        let accumulated = 0;
+
+        // First try to fill with draft picks (less painful)
+        for (const pk of userPicks) {
+          if (accumulated >= neededValue) break;
+          sendPickIds.push(pk.id);
+          accumulated += pk.value;
+        }
+
+        // If still short, add players (lowest value first)
+        if (accumulated < neededValue) {
+          for (const p of userRoster) {
+            if (accumulated >= neededValue) break;
+            if (p.ovr < 55) continue; // don't offer terrible players
+            sendPlayerIds.push(p.id);
+            accumulated += p.value;
+          }
+        }
+
+        if (accumulated < neededValue) return null; // can't match
+
+        // Trim excess: remove the last added asset if we're way over
+        while (sendPickIds.length > 1) {
+          const lastPick = userPicks.find(pk => pk.id === sendPickIds[sendPickIds.length - 1]);
+          if (lastPick && accumulated - lastPick.value >= neededValue) {
+            sendPickIds.pop();
+            accumulated -= lastPick.value;
+          } else break;
+        }
+        while (sendPlayerIds.length > 1) {
+          const lastPlayer = userRoster.find(p => p.id === sendPlayerIds[sendPlayerIds.length - 1]);
+          if (lastPlayer && accumulated - lastPlayer.value >= neededValue) {
+            sendPlayerIds.pop();
+            accumulated -= lastPlayer.value;
+          } else break;
+        }
+
+        return { sendPlayerIds, sendPickIds };
       },
 
       respondToTradeProposal: (proposalId: string, accept: boolean) => {
@@ -3350,7 +3659,7 @@ export const useGameStore = create<GameStore>()(
         // executeTrade expects (userOfferedPlayers, userOfferedPicks, userReceivedPlayers, userReceivedPicks, counterpart).
         // So: user is offering the "requested" players and receiving the "offered" players.
         // skipValueCheck=true because the AI already approved this trade when it proposed it.
-        const success = get().executeTrade(
+        const result = get().executeTrade(
           proposal.requestedPlayerIds,
           proposal.requestedPickIds,
           proposal.offeredPlayerIds,
@@ -3361,11 +3670,11 @@ export const useGameStore = create<GameStore>()(
 
         set({
           tradeProposals: state.tradeProposals.map(p =>
-            p.id === proposalId ? { ...p, status: accept && success ? 'accepted' : 'rejected' } : p,
+            p.id === proposalId ? { ...p, status: accept && result.success ? 'accepted' : 'rejected' } : p,
           ),
         });
 
-        return success;
+        return result.success;
       },
 
       rejectAllTradeProposals: () => {
@@ -3695,6 +4004,7 @@ export const useGameStore = create<GameStore>()(
             stats: emptyStats(),
             injury: null,
             onIR: false,
+            holdout: false,
             contract: advancedContract,
           };
         });
@@ -4045,6 +4355,7 @@ export const useGameStore = create<GameStore>()(
           newsItems: [...retirementNews, ...voidNews, ...aiRestructureNews],
           seasonHistory: [...state.seasonHistory, newSummary],
           resigningPlayers: [],
+          holdoutDemands: [],
           tradeProposals: [],
           draftScoutingData: {},
           finalsMvpPlayerId: null,
@@ -4421,6 +4732,21 @@ export const useGameStore = create<GameStore>()(
             delete (state as Record<string, unknown>).scoutingLevel;
           }
           if (state.scoutsRemaining === undefined) state.scoutsRemaining = 15;
+        }
+        if (version < 16) {
+          // Add combine stats to all players
+          const players16 = (state.players as Array<Record<string, unknown>>) ?? [];
+          for (const p of players16) {
+            if (!p.combineStats) {
+              const ratings = p.ratings as { speed: number; strength: number; agility: number } | undefined;
+              const position = p.position as Position | undefined;
+              if (ratings && position) {
+                p.combineStats = generateCombineStats(position, ratings, Math.floor(Math.random() * 10000));
+              }
+            }
+          }
+          // Add holdoutDemands to state
+          if (!state.holdoutDemands) state.holdoutDemands = [];
         }
         return state;
       },

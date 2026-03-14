@@ -14,41 +14,42 @@ export function teamPower(roster: Player[], coachBonus = 0, team?: Team): { offe
     if (p.injury && p.injury.weeksLeft > 0) continue;
     const r = p.ratings;
     const fitBonus = team ? schemeFitOvrBonus(p, team) : 0;
+    const holdoutPenalty = p.holdout ? -4 : 0;
     switch (p.position) {
       case 'QB':
-        offSum += (r.throwing + fitBonus) * 2 + (r.awareness + fitBonus) + r.speed * 0.5;
+        offSum += (r.throwing + fitBonus + holdoutPenalty) * 2 + (r.awareness + fitBonus + holdoutPenalty) + r.speed * 0.5;
         offCount += 3.5;
         break;
       case 'RB':
-        offSum += (r.carrying + fitBonus) * 1.5 + r.speed + r.agility * 0.5;
+        offSum += (r.carrying + fitBonus + holdoutPenalty) * 1.5 + r.speed + r.agility * 0.5;
         offCount += 3;
         break;
       case 'WR':
-        offSum += (r.catching + fitBonus) * 1.5 + r.speed;
+        offSum += (r.catching + fitBonus + holdoutPenalty) * 1.5 + r.speed;
         offCount += 2.5;
         break;
       case 'TE':
-        offSum += (r.catching + fitBonus) + r.blocking + r.strength * 0.5;
+        offSum += (r.catching + fitBonus + holdoutPenalty) + r.blocking + r.strength * 0.5;
         offCount += 2.5;
         break;
       case 'OL':
-        offSum += (r.blocking + fitBonus) * 1.5 + r.strength;
+        offSum += (r.blocking + fitBonus + holdoutPenalty) * 1.5 + r.strength;
         offCount += 2.5;
         break;
       case 'DL':
-        defSum += (r.passRush + fitBonus) * 1.5 + r.strength + r.tackling * 0.5;
+        defSum += (r.passRush + fitBonus + holdoutPenalty) * 1.5 + r.strength + r.tackling * 0.5;
         defCount += 3;
         break;
       case 'LB':
-        defSum += (r.tackling + fitBonus) * 1.5 + r.coverage * 0.5 + r.speed * 0.5;
+        defSum += (r.tackling + fitBonus + holdoutPenalty) * 1.5 + r.coverage * 0.5 + r.speed * 0.5;
         defCount += 2.5;
         break;
       case 'CB':
-        defSum += (r.coverage + fitBonus) * 2 + r.speed * 0.5;
+        defSum += (r.coverage + fitBonus + holdoutPenalty) * 2 + r.speed * 0.5;
         defCount += 2.5;
         break;
       case 'S':
-        defSum += (r.coverage + fitBonus) + r.tackling + r.speed * 0.5;
+        defSum += (r.coverage + fitBonus + holdoutPenalty) + r.tackling + r.speed * 0.5;
         defCount += 2.5;
         break;
     }

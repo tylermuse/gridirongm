@@ -78,6 +78,51 @@ function gaussian(mean: number, stdDev: number): number {
   return mean + stdDev * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
 }
 
+// Position multipliers for bench press (big guys press more)
+const BENCH_POS_MULT: Record<Position, number> = {
+  OL: 1.4, DL: 1.35, TE: 1.15, LB: 1.1, RB: 1.0, S: 0.9,
+  QB: 0.8, WR: 0.7, CB: 0.7, K: 0.6, P: 0.65,
+};
+
+/**
+ * Generate NFL Combine-style measurables from a player's ratings.
+ * These are permanent (set once at player creation, never change).
+ */
+export function generateCombineStats(
+  position: Position,
+  ratings: { speed: number; strength: number; agility: number },
+  seed = 0,
+): { fortyYard: number; benchPress: number; verticalJump: number } {
+  // Deterministic-ish noise from seed
+  const noise1 = ((seed * 9301 + 49297) % 233280) / 233280 - 0.5; // -0.5 to 0.5
+  const noise2 = ((seed * 7919 + 12347) % 233280) / 233280 - 0.5;
+  const noise3 = ((seed * 6271 + 54321) % 233280) / 233280 - 0.5;
+
+  // 40-yard dash: speed 99→4.28, speed 60→4.72, speed 30→5.10
+  // Linear interpolation with agility factor and noise
+  const speedFactor = (ratings.speed - 30) / 69; // 0 to 1
+  const rawForty = 5.10 - speedFactor * 0.82; // 5.10 to 4.28
+  const agilityAdj = (ratings.agility - 60) * 0.001; // small agility bonus
+  const fortyYard = Math.round((rawForty - agilityAdj + noise1 * 0.06) * 100) / 100;
+
+  // Bench press (225 lb reps): strength-based, position-adjusted
+  const strengthFactor = (ratings.strength - 20) / 79; // 0 to 1
+  const rawBench = 8 + strengthFactor * 22; // 8 to 30 reps
+  const posMult = BENCH_POS_MULT[position] ?? 1.0;
+  const benchPress = Math.max(1, Math.round(rawBench * posMult + noise2 * 4));
+
+  // Vertical jump (inches): speed + agility blend
+  const jumpFactor = ((ratings.speed * 0.6 + ratings.agility * 0.4) - 30) / 69;
+  const rawVert = 28 + jumpFactor * 14; // 28 to 42 inches
+  const verticalJump = Math.round((rawVert + noise3 * 3) * 10) / 10;
+
+  return {
+    fortyYard: Math.max(4.2, Math.min(5.4, fortyYard)),
+    benchPress,
+    verticalJump: Math.max(24, Math.min(46, verticalJump)),
+  };
+}
+
 /** Generates position-appropriate ratings for a player of a given talent tier. */
 function generateRatings(position: Position, talentMean: number): PlayerRatings {
   const weights = POSITION_WEIGHTS[position];
@@ -187,6 +232,7 @@ export function generatePlayer(
     college: randomCollege(),
     seasonLog: [],
     devTrait: assignDevTrait(),
+    combineStats: generateCombineStats(position, ratings, Math.floor(Math.random() * 10000)),
   };
 }
 
@@ -280,8 +326,43 @@ export function generateDraftClass(count: number): Player[] {
     prospect.scoutingLabel = 'Sleeper';
   }
 
-  // Re-sort after sleeper adjustments
+  // Re-sort after sleeper adjustments (internal ordering for generation only)
   prospects.sort((a, b) => b.ratings.overall - a.ratings.overall);
+
+  // ── Assign projected ranks (noisy public perception of talent) ──
+  // These simulate pre-draft media rankings: correlated with true OVR
+  // but with significant error, especially for mid/late-round prospects.
+  const totalProspects = prospects.length;
+  for (const prospect of prospects) {
+    const trueOvr = prospect.ratings.overall;
+    // Base rank from OVR (higher OVR = lower rank number = better)
+    const baseRank = Math.round((1 - (trueOvr - 30) / 65) * totalProspects);
+    // More noise for lower-ranked prospects (less media coverage)
+    const noiseFactor = 0.25 + (baseRank / totalProspects) * 0.45;
+    const noise = Math.round((Math.random() - 0.5) * totalProspects * noiseFactor);
+    // K/P penalty: push them down in projections
+    const posPenalty = (prospect.position === 'K' || prospect.position === 'P') ? Math.round(totalProspects * 0.4) : 0;
+    prospect.projectedRank = Math.max(1, Math.min(totalProspects, baseRank + noise + posPenalty));
+  }
+
+  // Deduplicate projected ranks (no two players share the same rank)
+  prospects.sort((a, b) => (a.projectedRank ?? 999) - (b.projectedRank ?? 999));
+  const usedRanks = new Set<number>();
+  for (const prospect of prospects) {
+    let rank = prospect.projectedRank ?? totalProspects;
+    while (usedRanks.has(rank) && rank <= totalProspects) rank++;
+    if (rank > totalProspects) {
+      // Find first available rank from the bottom
+      for (let r = totalProspects; r >= 1; r--) {
+        if (!usedRanks.has(r)) { rank = r; break; }
+      }
+    }
+    prospect.projectedRank = rank;
+    usedRanks.add(rank);
+  }
+
+  // Sort by projected rank for the final output (this is the "public" ordering)
+  prospects.sort((a, b) => (a.projectedRank ?? 999) - (b.projectedRank ?? 999));
 
   return prospects;
 }

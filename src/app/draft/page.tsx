@@ -32,7 +32,7 @@ function ProspectCard({
   label,
   player,
   posRank,
-  ovrRank,
+  projectedRank,
   teamColor,
   ovrDisplay,
   subtitle,
@@ -42,7 +42,7 @@ function ProspectCard({
   label: string;
   player: Player | null | undefined;
   posRank: number;
-  ovrRank: number;
+  projectedRank: number;
   teamColor: string;
   ovrDisplay?: string;
   subtitle?: string;
@@ -50,6 +50,7 @@ function ProspectCard({
   onPlayerClick?: (playerId: string) => void;
 }) {
   if (!player) return null;
+  const isScouted = ovrDisplay === undefined; // if no ovrDisplay override, it's scouted
   return (
     <div className="flex-1 min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
       <div className="px-4 pt-3 pb-1">
@@ -71,7 +72,7 @@ function ProspectCard({
               {player.firstName} {player.lastName}
             </button>
             <div className="text-xs text-[var(--text-sec)]">
-              Age {player.age} · Exp {player.experience}yr
+              {player.position} · Age {player.age} · Exp {player.experience}yr
             </div>
           </div>
         </div>
@@ -83,20 +84,27 @@ function ProspectCard({
             {player.position}
           </div>
           <div className="text-center">
+            <div className={`text-lg font-black ${isScouted ? ratingColor(player.ratings.overall) : 'text-[var(--text-sec)]'}`}>
+              {ovrDisplay ?? player.ratings.overall}
+            </div>
+            <div className="text-[10px] text-[var(--text-sec)] uppercase">{ovrDisplay ? 'OVR' : 'OVR'}</div>
+          </div>
+          <div className="text-center">
             <div className="text-lg font-black">{posRank}</div>
             <div className="text-[10px] text-[var(--text-sec)] uppercase">Pos Rk</div>
           </div>
           <div className="text-center">
-            <div className="text-lg font-black">{ovrRank}</div>
-            <div className="text-[10px] text-[var(--text-sec)] uppercase">Ovr Rk</div>
-          </div>
-          <div className="text-center">
-            <div className={`text-lg font-black ${ovrDisplay ? 'text-indigo-600' : ratingColor(player.ratings.overall)}`}>
-              {ovrDisplay ?? player.ratings.overall}
-            </div>
-            <div className="text-[10px] text-[var(--text-sec)] uppercase">{ovrDisplay ? 'Range' : 'OVR'}</div>
+            <div className="text-sm font-bold text-[var(--text-sec)]">#{projectedRank}</div>
+            <div className="text-[10px] text-[var(--text-sec)] uppercase">Proj</div>
           </div>
         </div>
+        {player.combineStats && (
+          <div className="flex gap-3 mt-2 text-[10px] text-[var(--text-sec)]">
+            <span>40yd: <span className="font-bold text-[var(--text)]">{player.combineStats.fortyYard.toFixed(2)}</span></span>
+            <span>Bench: <span className="font-bold text-[var(--text)]">{player.combineStats.benchPress}</span></span>
+            <span>Vert: <span className="font-bold text-[var(--text)]">{player.combineStats.verticalJump.toFixed(1)}&quot;</span></span>
+          </div>
+        )}
         {onDraft && (
           <button
             onClick={() => onDraft(player.id)}
@@ -161,9 +169,6 @@ function OnTheClockSection({
   function getPositionRank(player: Player): number {
     const samePosProspects = allProspects.filter(p => p.position === player.position);
     return samePosProspects.findIndex(p => p.id === player.id) + 1;
-  }
-  function getOverallRank(player: Player): number {
-    return allProspects.findIndex(p => p.id === player.id) + 1;
   }
 
   const teamColor = currentTeam?.primaryColor ?? '#374151';
@@ -255,7 +260,7 @@ function OnTheClockSection({
                 label={scoutedIds[bestAvailable.id] ? 'Best Available (Scouted)' : 'Best Available'}
                 player={bestAvailable}
                 posRank={getPositionRank(bestAvailable)}
-                ovrRank={getOverallRank(bestAvailable)}
+                projectedRank={bestAvailable.projectedRank ?? 1}
                 teamColor="#6b7280"
                 ovrDisplay={scoutedIds[bestAvailable.id] ? undefined : '?'}
                 onDraft={isUserPick ? onDraft : undefined}
@@ -268,13 +273,41 @@ function OnTheClockSection({
                 subtitle={!bestFitIsNeedMatch ? 'No position need match' : undefined}
                 player={bestFit}
                 posRank={getPositionRank(bestFit)}
-                ovrRank={getOverallRank(bestFit)}
+                projectedRank={bestFit.projectedRank ?? 1}
                 teamColor={teamColor}
                 ovrDisplay={scoutedIds[bestFit.id] ? undefined : '?'}
                 onDraft={isUserPick ? onDraft : undefined}
                 onPlayerClick={onPlayerClick}
               />
             )}
+            {/* Scout's Top Pick — highest TRUE OVR among scouted prospects */}
+            {(() => {
+              const scoutedProspects = allProspects.filter(p => scoutedIds[p.id]);
+              if (scoutedProspects.length === 0) {
+                return (
+                  <div className="flex-1 min-w-0 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-4 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-1">Scout&apos;s Top Pick</div>
+                      <p className="text-xs text-[var(--text-sec)]">Scout some prospects to unlock recommendations!</p>
+                    </div>
+                  </div>
+                );
+              }
+              const bestScouted = [...scoutedProspects].sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+              if (!bestScouted) return null;
+              return (
+                <ProspectCard
+                  label="Scout's Top Pick"
+                  subtitle={`Projected #${bestScouted.projectedRank ?? '?'} — actually ${bestScouted.ratings.overall} OVR`}
+                  player={bestScouted}
+                  posRank={getPositionRank(bestScouted)}
+                  projectedRank={bestScouted.projectedRank ?? 1}
+                  teamColor="#7c3aed"
+                  onDraft={isUserPick ? onDraft : undefined}
+                  onPlayerClick={onPlayerClick}
+                />
+              );
+            })()}
           </div>
         </div>
       )}
@@ -415,16 +448,9 @@ export default function DraftPage() {
     .filter((player): player is Player => Boolean(player))
     .filter((player) => player.experience === 0)
     .sort((a, b) => {
-      // Scouted players sort by real OVR; unscouted sort by projected round (position in raw list)
-      const aScouted = !!draftScoutingData[a.id];
-      const bScouted = !!draftScoutingData[b.id];
-      // Scouted players always appear above unscouted when using scouted-only sort
-      const aOvr = aScouted ? a.ratings.overall : a.ratings.overall;
-      const bOvr = bScouted ? b.ratings.overall : b.ratings.overall;
-      // K/P are least valuable — push them way down the draft board
-      const aAdj = (a.position === 'K' || a.position === 'P') ? aOvr * 0.5 : aOvr;
-      const bAdj = (b.position === 'K' || b.position === 'P') ? bOvr * 0.5 : bOvr;
-      return bAdj - aAdj;
+      // Sort by projected rank (noisy pre-draft media ranking)
+      // This is the key scouting mechanic: list order does NOT reveal true OVR
+      return (a.projectedRank ?? 999) - (b.projectedRank ?? 999);
     });
 
   const prospects = allProspects
@@ -630,21 +656,24 @@ export default function DraftPage() {
             <table className="w-full text-sm sticky-col">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
-                  <th className="text-left pb-2 pl-2">#</th>
+                  <th className="text-left pb-2 pl-2">Proj</th>
                   <th className="text-left pb-2">Player</th>
                   <th className="text-center pb-2">Pos</th>
                   <th className="text-center pb-2">OVR</th>
                   <th className="text-center pb-2">Pot</th>
                   <th className="text-center pb-2">Dev</th>
+                  <th className="text-center pb-2 hidden md:table-cell">40yd</th>
+                  <th className="text-center pb-2 hidden md:table-cell">Bench</th>
+                  <th className="text-center pb-2 hidden md:table-cell">Vert</th>
                   <th className="text-right pb-2 pr-2"></th>
                 </tr>
               </thead>
               <tbody>
-                {prospects.map((player, index) => {
+                {prospects.map((player) => {
                   const isScouted = !!draftScoutingData[player.id];
                   return (
                     <tr key={player.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)] cursor-pointer" onClick={() => setSelectedProspectId(player.id)}>
-                      <td className="py-2 pl-2 text-[var(--text-sec)]">{index + 1}</td>
+                      <td className="py-2 pl-2 text-[var(--text-sec)] text-xs">#{player.projectedRank ?? '?'}</td>
                       <td className="py-2">
                         <div className="font-semibold">{player.firstName} {player.lastName}</div>
                         {player.scoutingLabel && (
@@ -671,6 +700,15 @@ export default function DraftPage() {
                         ) : (
                           <span className="text-[var(--text-sec)]">?</span>
                         )}
+                      </td>
+                      <td className="py-2 text-center text-xs hidden md:table-cell font-mono">
+                        {player.combineStats ? player.combineStats.fortyYard.toFixed(2) : '—'}
+                      </td>
+                      <td className="py-2 text-center text-xs hidden md:table-cell font-mono">
+                        {player.combineStats ? player.combineStats.benchPress : '—'}
+                      </td>
+                      <td className="py-2 text-center text-xs hidden md:table-cell font-mono">
+                        {player.combineStats ? `${player.combineStats.verticalJump.toFixed(1)}"` : '—'}
                       </td>
                       <td className="py-2 pr-2 text-right" onClick={e => e.stopPropagation()}>
                         <div className="flex gap-1 justify-end">

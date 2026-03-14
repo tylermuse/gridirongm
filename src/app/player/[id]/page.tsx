@@ -494,6 +494,38 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
           </Card>
         )}
 
+        {/* Measurables */}
+        {(player.combineStats || player.height || player.weight) && (
+          <Card>
+            <CardHeader><CardTitle>Measurables</CardTitle></CardHeader>
+            <div className="grid grid-cols-3 gap-4">
+              {player.combineStats && (
+                <>
+                  <div className="text-center bg-[var(--surface-2)] rounded-lg py-3">
+                    <div className="text-2xl font-black">{player.combineStats.fortyYard.toFixed(2)}</div>
+                    <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider mt-1">40-Yard Dash</div>
+                  </div>
+                  <div className="text-center bg-[var(--surface-2)] rounded-lg py-3">
+                    <div className="text-2xl font-black">{player.combineStats.benchPress}</div>
+                    <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider mt-1">Bench Press</div>
+                  </div>
+                  <div className="text-center bg-[var(--surface-2)] rounded-lg py-3">
+                    <div className="text-2xl font-black">{player.combineStats.verticalJump.toFixed(1)}&quot;</div>
+                    <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider mt-1">Vertical Jump</div>
+                  </div>
+                </>
+              )}
+            </div>
+            {(player.height || player.weight || player.college) && (
+              <div className="flex gap-4 mt-3 text-sm text-[var(--text-sec)]">
+                {player.height && <span>{player.height}</span>}
+                {player.weight && <span>{player.weight} lbs</span>}
+                {player.college && <span>{player.college}</span>}
+              </div>
+            )}
+          </Card>
+        )}
+
         {/* Draft info */}
         <Card>
           <CardHeader><CardTitle>Draft Info</CardTitle></CardHeader>
