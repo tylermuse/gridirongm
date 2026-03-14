@@ -242,9 +242,11 @@ export function generateDraftClass(count: number): Player[] {
 
   for (let i = 0; i < count; i++) {
     const position = positions[Math.floor(Math.random() * positions.length)];
-    // Talent curve: top picks ~78, mid-round ~55, late-round ~35
+    // Talent curve: top picks ~82, mid-round ~63, late-round ~44
     const progress = i / count;
-    const talent = gaussian(78 - progress * 45, 7);
+    let talent = gaussian(82 - progress * 38, 7);
+    // Ensure top 6 picks are truly elite (blue-chip prospects every class)
+    if (i < 6) talent = Math.max(talent, 72 + Math.random() * 8);
     const player = generatePlayer(position, talent, { age: 21 + Math.floor(Math.random() * 2), experience: 0 });
     player.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
     player.college = COLLEGES[Math.floor(Math.random() * COLLEGES.length)];

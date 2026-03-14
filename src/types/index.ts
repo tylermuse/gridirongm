@@ -557,14 +557,10 @@ export interface LeagueState {
   resigningPlayers: ResigningEntry[];
   /** Incoming AI trade proposals */
   tradeProposals: TradeProposal[];
-  /** Scouting level (0=Entry, 1=Pro, 2=Elite) */
-  scoutingLevel: 0 | 1 | 2;
-  /** Scout points remaining for this draft cycle */
-  scoutPoints: number;
-  /** Max scout points for this draft cycle */
-  scoutPointsMax: number;
-  /** Scouting data keyed by prospect player ID */
-  draftScoutingData: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean; scoutTier?: 0 | 1 | 2 | 3 }>;
+  /** Scouts remaining for this draft cycle (max 15) */
+  scoutsRemaining: number;
+  /** Set of scouted prospect player IDs (true = fully scouted) */
+  draftScoutingData: Record<string, boolean>;
   /** Player ID of the Championship MVP (set when championship is played, consumed when season summary is created) */
   finalsMvpPlayerId: string | null;
   /** Configurable league settings */

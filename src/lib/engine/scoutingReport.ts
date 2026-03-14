@@ -970,31 +970,22 @@ export interface ScoutingReport {
 
 export function generateScoutingReport(
   player: Player,
-  scoutingLevel: 0 | 1 | 2,
-  deepScouted: boolean,
 ): ScoutingReport {
-  const effectiveLevel = deepScouted
-    ? (Math.min(2, scoutingLevel + 1) as 0 | 1 | 2)
-    : scoutingLevel;
-
   const seed = player.scoutingSeed ?? seedFromId(player.id);
 
-  // 3-tier model:
-  //   Entry (0): Nothing — just OVR range + basic info
-  //   Pro   (1): Physical traits, combine measurables, strengths, scouted ratings, comparison, overview
-  //   Elite (2): Draft grade, weaknesses, development projection, character, projection, scout's take
+  // Binary scouting: once scouted, everything is revealed
   return {
-    physicalTraits: effectiveLevel >= 1 ? generatePhysicalTraits(player, true) : null,
-    overview: effectiveLevel >= 1 ? generateOverview(player, seed) : null,
-    strengths: effectiveLevel >= 1 ? generateStrengths(player).slice(0, effectiveLevel >= 2 ? 5 : 3) : null,
-    weaknesses: effectiveLevel >= 2 ? generateWeaknesses(player) : null,
-    nflComparison: effectiveLevel >= 1 ? getNflComparison(player, seed) : null,
-    projection: effectiveLevel >= 2 ? generateProjectionText(player) : null,
-    scoutsTake: effectiveLevel >= 2 ? generateScoutsTakeText(player, seed) : null,
-    combineMeasurables: effectiveLevel >= 1 ? generateCombineMeasurables(player) : null,
-    draftGrade: effectiveLevel >= 2 ? generateDraftGrade(player) : null,
-    developmentCurve: effectiveLevel >= 2 ? generateDevelopmentCurve(player) : null,
-    characterReport: effectiveLevel >= 2 ? generateCharacterReport(player) : null,
+    physicalTraits: generatePhysicalTraits(player, true),
+    overview: generateOverview(player, seed),
+    strengths: generateStrengths(player).slice(0, 5),
+    weaknesses: generateWeaknesses(player),
+    nflComparison: getNflComparison(player, seed),
+    projection: generateProjectionText(player),
+    scoutsTake: generateScoutsTakeText(player, seed),
+    combineMeasurables: generateCombineMeasurables(player),
+    draftGrade: generateDraftGrade(player),
+    developmentCurve: generateDevelopmentCurve(player),
+    characterReport: generateCharacterReport(player),
   };
 }
 

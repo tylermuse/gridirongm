@@ -122,6 +122,65 @@ function CoachCard({ coach, roster, userTeam }: { coach: Coach; roster: Player[]
   );
 }
 
+const STARTER_COUNTS: Record<string, number> = {
+  QB: 1, RB: 1, WR: 3, TE: 1, OL: 5, DL: 3, LB: 3, CB: 2, S: 2, K: 1, P: 1,
+};
+
+function isStarter(player: Player, roster: Player[]): boolean {
+  const atPos = roster
+    .filter(p => p.position === player.position)
+    .sort((a, b) => b.ratings.overall - a.ratings.overall);
+  const count = STARTER_COUNTS[player.position] ?? 1;
+  return atPos.indexOf(player) < count;
+}
+
+function generateRecommendations(
+  playerFits: { player: Player; fit: SchemeFit }[],
+): string[] {
+  const tips: string[] = [];
+
+  // Count poor fits by position
+  const poorByPos: Record<string, number> = {};
+  const greatByPos: Record<string, number> = {};
+  let replaceableCount = 0;
+
+  for (const { player, fit } of playerFits) {
+    if (fit === 'poor') {
+      poorByPos[player.position] = (poorByPos[player.position] ?? 0) + 1;
+      if (player.ratings.overall < 60) replaceableCount++;
+    }
+    if (fit === 'great') {
+      greatByPos[player.position] = (greatByPos[player.position] ?? 0) + 1;
+    }
+  }
+
+  // Positions with many poor fits
+  for (const [pos, count] of Object.entries(poorByPos)) {
+    if (count >= 3) {
+      tips.push(`Your ${pos} corps has ${count} poor fits. Target scheme-fit ${pos}s in the draft or free agency.`);
+    }
+  }
+
+  // Positions with great fit strength
+  for (const [pos, count] of Object.entries(greatByPos)) {
+    if (count >= 2) {
+      tips.push(`Your ${pos} group has ${count} great fits — scheme is working well here. Protect those guys.`);
+    }
+  }
+
+  // Replaceable poor fits
+  if (replaceableCount >= 2) {
+    tips.push(`Replacing your ${replaceableCount} lowest-OVR poor fits with average neutral fits would boost your effective team OVR by ~${replaceableCount} points.`);
+  }
+
+  // All good
+  if (Object.keys(poorByPos).length === 0) {
+    tips.push('Your roster fits the scheme well. No major changes needed.');
+  }
+
+  return tips.slice(0, 3);
+}
+
 export default function StaffPage() {
   const { teams, userTeamId, players } = useGameStore();
   const userTeam = teams.find(t => t.id === userTeamId);
@@ -145,6 +204,9 @@ export default function StaffPage() {
 
   const greatFits = playerFits.filter(f => f.fit === 'great');
   const poorFits = playerFits.filter(f => f.fit === 'poor');
+  const poorReplace = poorFits.filter(f => f.player.ratings.overall < 65);
+  const poorKeep = poorFits.filter(f => f.player.ratings.overall >= 65);
+  const recommendations = generateRecommendations(playerFits);
 
   return (
     <GameShell>
@@ -166,44 +228,109 @@ export default function StaffPage() {
             </div>
 
             {/* Scheme Fit Details */}
-            {(greatFits.length > 0 || poorFits.length > 0) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Scheme Fit Breakdown</CardTitle>
+                <p className="text-xs text-[var(--text-sec)] mt-1">
+                  Great Fit players get <span className="text-green-600 font-bold">+2 OVR</span> in games.
+                  Poor Fit players get <span className="text-red-500 font-bold">-1 OVR</span>.
+                  Building a roster that fits your coach&apos;s scheme makes your team play above its ratings.
+                </p>
+              </CardHeader>
+
+              <div className="space-y-6">
+                {/* Great Fits */}
+                {greatFits.length > 0 && (
+                  <div>
+                    <div className="text-xs text-green-600 font-bold uppercase tracking-wider mb-2">
+                      Great Fits ({greatFits.length})
+                    </div>
+                    <div className="space-y-1">
+                      {greatFits.map(({ player }) => (
+                        <div key={player.id} className="flex items-center gap-2 text-sm">
+                          <span className="text-green-600">{schemeFitDot('great')}</span>
+                          <Badge variant="default" size="sm">{player.position}</Badge>
+                          <span className="font-medium">{player.firstName} {player.lastName}</span>
+                          <span className="text-green-600 text-[10px] font-medium">+2 OVR</span>
+                          <span className="text-[var(--text-sec)] text-xs ml-auto">OVR {player.ratings.overall}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Poor Fits — Consider Replacing (OVR < 65) */}
+                {poorReplace.length > 0 && (
+                  <div>
+                    <div className="text-xs text-red-500 font-bold uppercase tracking-wider mb-2">
+                      Poor Fits — Consider Replacing ({poorReplace.length})
+                    </div>
+                    <div className="space-y-1.5">
+                      {poorReplace.map(({ player }) => {
+                        const starter = isStarter(player, roster);
+                        return (
+                          <div key={player.id}>
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-red-500">{schemeFitDot('poor')}</span>
+                              <Badge variant="default" size="sm">{player.position}</Badge>
+                              <span className="font-medium">{player.firstName} {player.lastName}</span>
+                              <span className="text-red-500 text-[10px] font-medium">-1 OVR</span>
+                              <span className="text-[var(--text-sec)] text-xs ml-auto">OVR {player.ratings.overall}</span>
+                            </div>
+                            <div className={`text-[10px] ml-7 mt-0.5 ${starter ? 'text-amber-600' : 'text-[var(--text-sec)]'}`}>
+                              {starter
+                                ? `\u26A0\uFE0F Upgrade priority \u2014 starting at ${player.position} despite poor fit`
+                                : 'Low priority \u2014 bench player'}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Poor Fits — Keep Anyway (OVR >= 65) */}
+                {poorKeep.length > 0 && (
+                  <div>
+                    <div className="text-xs text-amber-600 font-bold uppercase tracking-wider mb-2">
+                      Poor Fits — Keep Anyway ({poorKeep.length})
+                    </div>
+                    <div className="space-y-1.5">
+                      {poorKeep.map(({ player }) => (
+                        <div key={player.id}>
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-amber-500">{schemeFitDot('poor')}</span>
+                            <Badge variant="default" size="sm">{player.position}</Badge>
+                            <span className="font-medium">{player.firstName} {player.lastName}</span>
+                            <span className="text-red-500 text-[10px] font-medium">-1 OVR</span>
+                            <span className="text-[var(--text-sec)] text-xs ml-auto">OVR {player.ratings.overall}</span>
+                          </div>
+                          <div className="text-[10px] ml-7 mt-0.5 text-[var(--text-sec)]">
+                            Too talented to move. Scheme penalty is minor compared to production.
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {greatFits.length === 0 && poorFits.length === 0 && (
+                  <p className="text-sm text-[var(--text-sec)]">All players have a neutral scheme fit.</p>
+                )}
+              </div>
+            </Card>
+
+            {/* Recommended Moves */}
+            {recommendations.length > 0 && (
               <Card>
-                <CardHeader><CardTitle>Scheme Fit Breakdown</CardTitle></CardHeader>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {greatFits.length > 0 && (
-                    <div>
-                      <div className="text-xs text-green-600 font-bold uppercase tracking-wider mb-2">
-                        Great Fits ({greatFits.length})
-                      </div>
-                      <div className="space-y-1">
-                        {greatFits.map(({ player }) => (
-                          <div key={player.id} className="flex items-center gap-2 text-sm">
-                            <span className="text-green-600">{schemeFitDot('great')}</span>
-                            <Badge variant="default" size="sm">{player.position}</Badge>
-                            <span className="font-medium">{player.firstName} {player.lastName}</span>
-                            <span className="text-[var(--text-sec)] text-xs ml-auto">OVR {player.ratings.overall}</span>
-                          </div>
-                        ))}
-                      </div>
+                <CardHeader><CardTitle>Recommended Moves</CardTitle></CardHeader>
+                <div className="space-y-2">
+                  {recommendations.map((tip, i) => (
+                    <div key={i} className="flex gap-2 text-sm">
+                      <span className="text-blue-500 shrink-0">&#x2022;</span>
+                      <span>{tip}</span>
                     </div>
-                  )}
-                  {poorFits.length > 0 && (
-                    <div>
-                      <div className="text-xs text-red-500 font-bold uppercase tracking-wider mb-2">
-                        Poor Fits ({poorFits.length})
-                      </div>
-                      <div className="space-y-1">
-                        {poorFits.map(({ player }) => (
-                          <div key={player.id} className="flex items-center gap-2 text-sm">
-                            <span className="text-red-500">{schemeFitDot('poor')}</span>
-                            <Badge variant="default" size="sm">{player.position}</Badge>
-                            <span className="font-medium">{player.firstName} {player.lastName}</span>
-                            <span className="text-[var(--text-sec)] text-xs ml-auto">OVR {player.ratings.overall}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  ))}
                 </div>
               </Card>
             )}

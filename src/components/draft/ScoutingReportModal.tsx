@@ -7,8 +7,6 @@ import { Button } from '@/components/ui/Button';
 import { generateScoutingReport } from '@/lib/engine/scoutingReport';
 import type { PhysicalTraitEntry, DraftGrade, DevelopmentCurve, CombineMeasurables, CharacterReport } from '@/lib/engine/scoutingReport';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
-import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import { SCOUTING_LEVELS } from '@/lib/subscription';
 
 // Position-specific key ratings to show in the scouted ratings section
 const POSITION_KEY_RATINGS: Record<Position, { key: keyof PlayerRatings; label: string }[]> = {
@@ -82,13 +80,12 @@ const POSITION_KEY_RATINGS: Record<Position, { key: keyof PlayerRatings; label: 
 
 interface ScoutingReportModalProps {
   player: Player;
-  scoutingLevel: 0 | 1 | 2;
-  scoutedOvr: number;
-  error: number;
+  isScouted: boolean;
   onClose: () => void;
   onDraft?: () => void;
-  onScoutingLevelChange: (level: 0 | 1 | 2) => void;
+  onScout?: () => void;
   isUserPick: boolean;
+  scoutsRemaining: number;
   teamNeeds?: { position: Position; needScore: number; count: number; starterOvr: number }[];
   userTeamAbbr?: string;
 }
@@ -168,33 +165,7 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
-function LockedSection({ label, requiredLevel, onUpgrade }: {
-  label: string;
-  requiredLevel: 1 | 2;
-  currentLevel?: 0 | 1 | 2;
-  maxLevel?: number;
-  onUpgrade: (level: 0 | 1 | 2) => void;
-}) {
-  const levelName = requiredLevel === 1 ? 'Pro' : 'Elite';
-
-  return (
-    <div className="border-t border-[var(--border)] pt-4 mt-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs text-[var(--text-sec)]">
-          <span>{label}</span>
-        </div>
-        <button
-          onClick={() => onUpgrade(requiredLevel as 0 | 1 | 2)}
-          className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors"
-        >
-          Switch to {levelName} Scouting
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ScoutedRatingBar({ label, value, showNumber }: { label: string; value: number; showNumber: boolean }) {
+function ScoutedRatingBar({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-center gap-2">
       <div className="w-28 text-xs text-[var(--text-sec)] truncate">{label}</div>
@@ -204,23 +175,15 @@ function ScoutedRatingBar({ label, value, showNumber }: { label: string; value: 
           style={{ width: `${value}%` }}
         />
       </div>
-      {showNumber ? (
-        <div className={`text-xs font-bold w-10 text-right ${ratingColor(value)}`}>
-          {value} <span className="text-[var(--text-sec)] font-normal">{ratingGrade(value)}</span>
-        </div>
-      ) : (
-        <div className={`text-xs font-bold w-10 text-right ${ratingColor(value)}`}>
-          {ratingGrade(value)}
-        </div>
-      )}
+      <div className={`text-xs font-bold w-10 text-right ${ratingColor(value)}`}>
+        {value} <span className="text-[var(--text-sec)] font-normal">{ratingGrade(value)}</span>
+      </div>
     </div>
   );
 }
 
-/* ─── Elite-exclusive section components ─────────────────── */
-
 function DraftGradeCard({ grade }: { grade: DraftGrade }) {
-  const gradeColor = grade.overall.startsWith('A') ? 'text-green-600' : grade.overall.startsWith('B') ? 'text-blue-600' : 'text-amber-600';
+  const gradeClr = grade.overall.startsWith('A') ? 'text-green-600' : grade.overall.startsWith('B') ? 'text-blue-600' : 'text-amber-600';
   const riskColor = grade.riskLevel === 'Low' ? 'text-green-600' : grade.riskLevel === 'Medium' ? 'text-amber-600' : 'text-red-600';
   const confColor = grade.confidence === 'High' ? 'text-green-600' : grade.confidence === 'Medium' ? 'text-amber-600' : 'text-red-600';
 
@@ -228,7 +191,7 @@ function DraftGradeCard({ grade }: { grade: DraftGrade }) {
     <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
       <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2 text-center">
         <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Grade</div>
-        <div className={`text-2xl font-black ${gradeColor}`}>{grade.overall}</div>
+        <div className={`text-2xl font-black ${gradeClr}`}>{grade.overall}</div>
       </div>
       <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2 text-center">
         <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Floor</div>
@@ -275,11 +238,6 @@ function CombineMeasurablesCard({ data }: { data: CombineMeasurables }) {
 }
 
 function DevCurveCard({ curve, currentOvr }: { curve: DevelopmentCurve; currentOvr: number }) {
-  const trajectoryColor = curve.trajectory === 'Rapid Riser' ? 'text-green-600'
-    : curve.trajectory === 'Steady Climber' ? 'text-blue-600'
-    : curve.trajectory === 'Near Ceiling' ? 'text-amber-600'
-    : 'text-red-600';
-
   const maxOvr = Math.max(currentOvr, curve.year1, curve.year2, curve.year3, 80);
 
   return (
@@ -348,42 +306,26 @@ function CharacterReportCard({ report }: { report: CharacterReport }) {
 
 export function ScoutingReportModal({
   player,
-  scoutingLevel,
-  scoutedOvr,
-  error,
+  isScouted,
   onClose,
   onDraft,
-  onScoutingLevelChange,
+  onScout,
   isUserPick,
+  scoutsRemaining,
   teamNeeds,
   userTeamAbbr,
 }: ScoutingReportModalProps) {
-  const { maxScoutingLevel: maxLevel } = useSubscription();
-  const report = generateScoutingReport(player, scoutingLevel, false);
-  const ovrLow = Math.max(20, scoutedOvr - error);
-  const ovrHigh = Math.min(99, scoutedOvr + error);
-  const effectiveLevel = scoutingLevel;
+  const report = isScouted ? generateScoutingReport(player) : null;
 
   // Team need assessment
   const posNeed = teamNeeds?.find(n => n.position === player.position);
   const needLevel = posNeed
     ? posNeed.needScore >= 40 ? 'critical' : posNeed.needScore >= 25 ? 'moderate' : 'low'
     : 'unknown';
-  const needEmoji = needLevel === 'critical' ? '🔴' : needLevel === 'moderate' ? '🟡' : needLevel === 'low' ? '🟢' : '⚪';
   const needText = needLevel === 'critical' ? 'Critical Need'
     : needLevel === 'moderate' ? 'Moderate Need'
     : needLevel === 'low' ? 'Low Priority'
     : 'Unknown';
-
-  // Draft value estimate — blends current OVR with potential (ceiling matters for draft picks)
-  const potentialBoost = Math.max(0, player.potential - scoutedOvr) * 0.4;
-  const draftScore = scoutedOvr + potentialBoost;
-  const draftValueText = draftScore >= 78 ? '1st Round Value'
-    : draftScore >= 72 ? '1st-2nd Round Value'
-    : draftScore >= 65 ? '2nd-3rd Round Value'
-    : draftScore >= 58 ? 'Mid-Round Value'
-    : draftScore >= 50 ? 'Late-Round Value'
-    : 'UDFA/Camp Body';
 
   // Close on Escape
   useEffect(() => {
@@ -415,9 +357,13 @@ export function ScoutingReportModal({
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <Badge>{player.position}</Badge>
               <span className="text-sm text-[var(--text-sec)]">Age {player.age}</span>
-              <span className={`text-sm font-medium ${potentialColor(player.potential, player.experience)}`}>
-                {potentialLabel(player.potential, player.experience)} Potential
-              </span>
+              {isScouted ? (
+                <span className={`text-sm font-medium ${potentialColor(player.potential, player.experience)}`}>
+                  {potentialLabel(player.potential, player.experience)} Potential
+                </span>
+              ) : (
+                <span className="text-sm font-medium text-[var(--text-sec)]">? Potential</span>
+              )}
             </div>
           </div>
           <button
@@ -432,28 +378,41 @@ export function ScoutingReportModal({
         </div>
 
         <div className="px-6 py-4 space-y-0">
-          {/* Top summary row: OVR Range + Draft Value + Team Fit */}
+          {/* Top summary row */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2.5">
-              <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Projected OVR</div>
-              <div className="text-2xl font-black">
-                {ovrLow}–{ovrHigh}
-              </div>
+              <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">OVR</div>
+              {isScouted ? (
+                <div className={`text-2xl font-black ${ratingColor(player.ratings.overall)}`}>
+                  {player.ratings.overall}
+                </div>
+              ) : (
+                <div className="text-2xl font-black text-[var(--text-sec)]">?</div>
+              )}
             </div>
             <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2.5">
-              <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Draft Value</div>
-              <div className="text-sm font-bold mt-1">{draftValueText}</div>
+              <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Dev Trait</div>
+              {isScouted ? (
+                <div className="text-sm font-bold mt-1">
+                  {player.devTrait === 'star' ? 'Star' : player.devTrait === 'late_bloomer' ? 'Late Bloomer' : player.devTrait === 'bust' ? 'Bust' : 'Normal'}
+                </div>
+              ) : (
+                <div className="text-sm font-bold mt-1 text-[var(--text-sec)]">?</div>
+              )}
             </div>
             <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2.5">
               <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">
                 Team Fit {userTeamAbbr ? `(${userTeamAbbr})` : ''}
               </div>
               <div className="text-sm font-bold mt-1">
-                {needEmoji} {needText}
+                {needLevel === 'critical' ? <span className="text-red-600">Critical Need</span>
+                  : needLevel === 'moderate' ? <span className="text-amber-600">Moderate Need</span>
+                  : needLevel === 'low' ? <span className="text-green-600">Low Priority</span>
+                  : <span className="text-[var(--text-sec)]">Unknown</span>}
               </div>
               {posNeed && (
                 <div className="text-[10px] text-[var(--text-sec)]">
-                  {posNeed.count} on roster · Starter: {posNeed.starterOvr || '—'} OVR
+                  {posNeed.count} on roster
                 </div>
               )}
             </div>
@@ -474,53 +433,53 @@ export function ScoutingReportModal({
             </div>
           )}
 
-          {/* Entry tier: no insights, just upgrade prompts */}
-          {effectiveLevel === 0 && (
+          {/* ─── UNSCOUTED: Show scout prompt ─── */}
+          {!isScouted && (
             <div className="border-t border-[var(--border)] pt-4 mt-4">
               <div className="text-center py-6">
-                <div className="text-3xl mb-2">🔒</div>
-                <p className="text-sm font-bold text-[var(--text)]">Entry Scouting Level</p>
+                <div className="text-4xl mb-3">?</div>
+                <p className="text-sm font-bold text-[var(--text)]">Unscouted Prospect</p>
                 <p className="text-xs text-[var(--text-sec)] mt-1 max-w-xs mx-auto">
-                  Switch to Pro or Elite scouting to unlock physical traits, combine measurables, strengths, and scouted ratings.
+                  Scout this player to reveal their OVR, potential, ratings, and full scouting report.
                 </p>
-                <button
-                  onClick={() => onScoutingLevelChange(1)}
-                  className="mt-3 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Switch to Pro Scouting
-                </button>
+                {onScout && (
+                  <button
+                    onClick={onScout}
+                    disabled={scoutsRemaining <= 0}
+                    className="mt-4 px-5 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Scout Player ({scoutsRemaining} remaining)
+                  </button>
+                )}
               </div>
             </div>
           )}
 
-          {/* ═══════════════════════════════════════════════════════════
-              PRO TIER: Physical Traits, Combine, Strengths, Ratings, Comparison, Overview
-              ═══════════════════════════════════════════════════════════ */}
-
-          {/* Physical Traits — Pro+ */}
-          {effectiveLevel >= 1 && report.physicalTraits && (
+          {/* ─── SCOUTED: Full report ─── */}
+          {isScouted && report && (
             <>
-              <SectionHeader title="Physical Traits" />
-              <div className="space-y-2">
-                <TraitBar name="Speed" trait={report.physicalTraits.speed} />
-                <TraitBar name="Strength" trait={report.physicalTraits.strength} />
-                <TraitBar name="Agility" trait={report.physicalTraits.agility} />
-                <TraitBar name="Stamina" trait={report.physicalTraits.stamina} />
-              </div>
-            </>
-          )}
+              {/* Physical Traits */}
+              {report.physicalTraits && (
+                <>
+                  <SectionHeader title="Physical Traits" />
+                  <div className="space-y-2">
+                    <TraitBar name="Speed" trait={report.physicalTraits.speed} />
+                    <TraitBar name="Strength" trait={report.physicalTraits.strength} />
+                    <TraitBar name="Agility" trait={report.physicalTraits.agility} />
+                    <TraitBar name="Stamina" trait={report.physicalTraits.stamina} />
+                  </div>
+                </>
+              )}
 
-          {/* Combine Measurables — Pro+ */}
-          {effectiveLevel >= 1 && report.combineMeasurables ? (
-            <>
-              <SectionHeader title="Combine Measurables" />
-              <CombineMeasurablesCard data={report.combineMeasurables} />
-            </>
-          ) : effectiveLevel >= 1 && !report.combineMeasurables ? null : null}
+              {/* Combine Measurables */}
+              {report.combineMeasurables && (
+                <>
+                  <SectionHeader title="Combine Measurables" />
+                  <CombineMeasurablesCard data={report.combineMeasurables} />
+                </>
+              )}
 
-          {/* Scouted Ratings — Pro+ shows bars, Elite shows numbers */}
-          {effectiveLevel >= 1 && (
-            <>
+              {/* Scouted Ratings */}
               <SectionHeader title="Scouted Ratings" />
               <div className="space-y-2">
                 {keyRatings.map(r => (
@@ -528,146 +487,94 @@ export function ScoutingReportModal({
                     key={r.key}
                     label={r.label}
                     value={player.ratings[r.key]}
-                    showNumber={effectiveLevel >= 2}
                   />
                 ))}
               </div>
-            </>
-          )}
 
-          {/* Strengths — Pro+ */}
-          {effectiveLevel >= 1 && report.strengths ? (
-            <>
-              <SectionHeader title={effectiveLevel >= 2 ? 'Strengths' : `Strengths (Top ${report.strengths.length})`} />
-              <ul className="space-y-1.5">
-                {report.strengths.map((s, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
-                    <span>{s}</span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
+              {/* Strengths */}
+              {report.strengths && (
+                <>
+                  <SectionHeader title="Strengths" />
+                  <ul className="space-y-1.5">
+                    {report.strengths.map((s, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
 
-          {/* Player Comparison — Pro+ */}
-          {effectiveLevel >= 1 && report.nflComparison ? (
-            <>
-              <SectionHeader title="Player Comparison" />
-              <div className="bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-4 py-3">
-                <div className="text-sm font-bold">{report.nflComparison}</div>
-              </div>
-            </>
-          ) : null}
+              {/* Weaknesses */}
+              {report.weaknesses && (
+                <>
+                  <SectionHeader title="Weaknesses" />
+                  <ul className="space-y-1.5">
+                    {report.weaknesses.map((w, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                        <span>{w}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
 
-          {/* Overview — Pro+ */}
-          {effectiveLevel >= 1 && report.overview ? (
-            <>
-              <SectionHeader title="Scout&apos;s Overview" />
-              <p className="text-sm leading-relaxed text-[var(--text)]">{report.overview}</p>
-            </>
-          ) : null}
-
-          {/* ═══════════════════════════════════════════════════════════
-              ELITE TIER: Draft Grade, Weaknesses, Dev Curve, Character, Projection, Scout's Take
-              ═══════════════════════════════════════════════════════════ */}
-
-          {/* Locked Elite section shown to Pro users */}
-          {effectiveLevel === 1 && (
-            <>
-              <LockedSection label="Draft Grade, Development Projection, Character Report" requiredLevel={2} currentLevel={scoutingLevel} maxLevel={maxLevel} onUpgrade={onScoutingLevelChange} />
-            </>
-          )}
-
-          {/* Draft Grade — Elite only */}
-          {effectiveLevel >= 2 && report.draftGrade ? (
-            <>
-              <SectionHeader title="Draft Grade" />
-              <DraftGradeCard grade={report.draftGrade} />
-            </>
-          ) : null}
-
-          {/* Weaknesses — Elite only */}
-          {effectiveLevel >= 2 && report.weaknesses ? (
-            <>
-              <SectionHeader title="Weaknesses" />
-              <ul className="space-y-1.5">
-                {report.weaknesses.map((w, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                    <span>{w}</span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-
-          {/* Development Projection — Elite only */}
-          {effectiveLevel >= 2 && report.developmentCurve ? (
-            <>
-              <SectionHeader title="Development Projection" />
-              <DevCurveCard curve={report.developmentCurve} currentOvr={scoutedOvr} />
-            </>
-          ) : null}
-
-          {/* Character & Intangibles — Elite only */}
-          {effectiveLevel >= 2 && report.characterReport ? (
-            <>
-              <SectionHeader title="Character & Intangibles" />
-              <CharacterReportCard report={report.characterReport} />
-            </>
-          ) : null}
-
-          {/* Projection — Elite only */}
-          {effectiveLevel >= 2 && report.projection ? (
-            <>
-              <SectionHeader title="Projection" />
-              <p className="text-sm leading-relaxed text-[var(--text)]">{report.projection}</p>
-            </>
-          ) : null}
-
-          {/* Scout's Take — Elite only */}
-          {effectiveLevel >= 2 && report.scoutsTake ? (
-            <>
-              <SectionHeader title="Scout&apos;s Take" />
-              <div className="border-l-2 border-blue-500 pl-4">
-                <p className="text-sm leading-relaxed italic text-[var(--text)]">
-                  &ldquo;{report.scoutsTake}&rdquo;
-                </p>
-              </div>
-            </>
-          ) : null}
-
-          {/* Scouting Level Selector */}
-          {scoutingLevel < 2 && (
-            <div className="border-t border-[var(--border)] pt-4 mt-4">
-              <div className="flex items-center justify-between bg-[var(--surface-2)] rounded-lg px-4 py-3">
-                <div>
-                  <div className="text-xs font-bold text-[var(--text-sec)]">Scouting Level</div>
-                  <div className="text-xs text-[var(--text-sec)] mt-0.5">
-                    Upgrade to unlock more insights
+              {/* Player Comparison */}
+              {report.nflComparison && (
+                <>
+                  <SectionHeader title="Player Comparison" />
+                  <div className="bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-4 py-3">
+                    <div className="text-sm font-bold">{report.nflComparison}</div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={scoutingLevel}
-                    onChange={e => {
-                      const val = Number(e.target.value) as 0|1|2;
-                      if (val <= maxLevel) onScoutingLevelChange(val);
-                    }}
-                    className="h-8 px-2 text-xs rounded border border-[var(--border)] bg-[var(--surface)] font-medium"
-                  >
-                    {SCOUTING_LEVELS.map((level, i) => {
-                      return (
-                        <option key={i} value={i}>
-                          {level.name}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-              </div>
-            </div>
+                </>
+              )}
+
+              {/* Draft Grade */}
+              {report.draftGrade && (
+                <>
+                  <SectionHeader title="Draft Grade" />
+                  <DraftGradeCard grade={report.draftGrade} />
+                </>
+              )}
+
+              {/* Development Projection */}
+              {report.developmentCurve && (
+                <>
+                  <SectionHeader title="Development Projection" />
+                  <DevCurveCard curve={report.developmentCurve} currentOvr={player.ratings.overall} />
+                </>
+              )}
+
+              {/* Character & Intangibles */}
+              {report.characterReport && (
+                <>
+                  <SectionHeader title="Character & Intangibles" />
+                  <CharacterReportCard report={report.characterReport} />
+                </>
+              )}
+
+              {/* Overview */}
+              {report.overview && (
+                <>
+                  <SectionHeader title="Scout&apos;s Overview" />
+                  <p className="text-sm leading-relaxed text-[var(--text)]">{report.overview}</p>
+                </>
+              )}
+
+              {/* Scout's Take */}
+              {report.scoutsTake && (
+                <>
+                  <SectionHeader title="Scout&apos;s Take" />
+                  <div className="border-l-2 border-blue-500 pl-4">
+                    <p className="text-sm leading-relaxed italic text-[var(--text)]">
+                      &ldquo;{report.scoutsTake}&rdquo;
+                    </p>
+                  </div>
+                </>
+              )}
+            </>
           )}
 
           {/* Draft Button */}

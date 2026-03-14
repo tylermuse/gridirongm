@@ -14,6 +14,7 @@ import type { Player, DraftPick, Position } from '@/types';
 import { POSITIONS, getUnamortizedBonus } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
+import { calculateSchemeFit, schemeFitDot, schemeFitColor } from '@/lib/engine/coaching';
 
 function ratingColor(val: number): string {
   if (val >= 80) return 'text-green-600';
@@ -186,6 +187,9 @@ function TradeFinderContent({
   const [posFilter, setPosFilter] = useState<Position | ''>('');
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
 
+  // Get full user team for scheme fit calculation
+  const fullUserTeam = useGameStore.getState().teams.find(t => t.id === userTeamId);
+
   if (!isTradeOpen) {
     return (
       <Card>
@@ -278,7 +282,16 @@ function TradeFinderContent({
           const team = teams.find(t => t.id === teamId);
           if (!team) return null;
           const isExpanded = expandedTeams.has(teamId);
-          const displayPlayers = isExpanded ? tradeablePlayers : tradeablePlayers.slice(0, 3);
+          // Sort: great fits first, then neutral, then poor
+          const sortedPlayers = fullUserTeam
+            ? [...tradeablePlayers].sort((a, b) => {
+                const fitOrder = { great: 0, neutral: 1, poor: 2 } as const;
+                const fa = fitOrder[calculateSchemeFit(a.player, fullUserTeam)];
+                const fb = fitOrder[calculateSchemeFit(b.player, fullUserTeam)];
+                return fa - fb || b.tradeValue - a.tradeValue;
+              })
+            : tradeablePlayers;
+          const displayPlayers = isExpanded ? sortedPlayers : sortedPlayers.slice(0, 3);
 
           return (
             <Card key={teamId}>
@@ -319,6 +332,16 @@ function TradeFinderContent({
                       <span className={`text-xs font-bold ${ratingColor(tp.player.ratings.overall)}`}>
                         {tp.player.ratings.overall} OVR
                       </span>
+                      {(() => {
+                        if (!fullUserTeam) return null;
+                        const fit = calculateSchemeFit(tp.player, fullUserTeam);
+                        if (fit === 'neutral') return null;
+                        return (
+                          <span className={`text-[10px] ${schemeFitColor(fit)}`} title={fit === 'great' ? 'Great Fit for your scheme (+2 OVR)' : 'Poor Fit for your scheme (-1 OVR)'}>
+                            {schemeFitDot(fit)}
+                          </span>
+                        );
+                      })()}
                       <span className="text-[10px] text-[var(--text-sec)] w-8 text-right">{tp.player.age}y</span>
                       <span className="text-[10px] text-[var(--text-sec)] w-20 text-right">${tp.player.contract.salary.toFixed(1)}M · {tp.player.contract.yearsLeft}yr</span>
                       <span className="text-[10px] text-[var(--text-sec)] w-20 text-right">{tp.estimatedCost}</span>
@@ -1341,6 +1364,9 @@ function TradesPage() {
                           <Badge size="sm">{p.position}</Badge>
                           <span className="text-sm flex-1">{p.firstName} {p.lastName}</span>
                           <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                          {userTeam && calculateSchemeFit(p, userTeam) === 'poor' && (
+                            <span className="text-[9px] text-red-500 font-bold px-1 py-0.5 bg-red-50 rounded">Poor Fit</span>
+                          )}
                           <span className="text-[10px] text-[var(--text-sec)] w-20 text-right">${p.contract.salary.toFixed(1)}M · {p.contract.yearsLeft}yr</span>
                           <span className="text-xs text-[var(--text-sec)]">~{Math.round(playerTradeValue(p)).toLocaleString()}</span>
                         </label>

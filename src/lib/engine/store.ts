@@ -83,11 +83,8 @@ interface GameStore extends LeagueState {
   respondToTradeProposal: (proposalId: string, accept: boolean) => boolean;
   rejectAllTradeProposals: () => void;
   solicitTradingBlockProposals: (playerIds: string[], pickIds: string[], seekPositions: Position[], seekDraftPicks?: boolean) => void;
-  // PRD-07: Scouting
-  setScoutingLevel: (level: 0 | 1 | 2) => void;
-  deepScoutPlayer: (playerId: string) => void;
-  /** Scout a prospect to a higher tier (costs scout points) */
-  scoutProspect: (playerId: string, tier: 1 | 2 | 3) => boolean;
+  // PRD-07: Scouting (simplified binary system)
+  scoutPlayer: (playerId: string) => boolean;
   // PRD-13: Depth chart
   reorderDepthChart: (position: Position, playerIds: string[]) => void;
   resetDepthChart: (position: Position) => void;
@@ -514,47 +511,6 @@ function playerTradeValue(player: Player): number {
 
 function pickTradeValue(pick: DraftPick): number {
   return PICK_VALUES[(pick.round - 1)] ?? 10;
-}
-
-// ---------------------------------------------------------------------------
-// Scouting helpers (PRD-07)
-// ---------------------------------------------------------------------------
-
-const SCOUTING_ERRORS = [12, 5, 2]; // Indexed by scoutingLevel: 0=Entry(±12), 1=Pro(±5), 2=Elite(±2)
-
-/** Deterministic hash from player ID → stable noise factor in [-1, 1] */
-function playerNoiseDirection(id: string): number {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) {
-    h = (h * 31 + id.charCodeAt(i)) | 0;
-  }
-  // Map to [-1, 1] using a second pass for better distribution
-  const h2 = ((h * 2654435769) >>> 0) / 4294967296; // golden ratio hash → [0,1)
-  // Box-Muller-ish: approximate gaussian from uniform, clamped to [-2.5, 2.5]
-  const u1 = Math.max(0.001, h2);
-  const h3 = (((h * 1103515245 + 12345) >>> 0) & 0x7fffffff) / 2147483647;
-  const u2 = h3;
-  const gaussian = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-  return Math.max(-2.5, Math.min(2.5, gaussian));
-}
-
-function computeScoutingData(
-  prospects: Player[],
-  scoutingLevel: number,
-): Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }> {
-  const error = SCOUTING_ERRORS[scoutingLevel] ?? 12;
-  const data: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }> = {};
-  for (const p of prospects) {
-    // Deterministic noise based on player ID — direction stays consistent across levels,
-    // only magnitude changes. This prevents OVR from randomly jumping when switching levels.
-    const direction = playerNoiseDirection(p.id);
-    // Normalize direction to [-1, 1] so noise stays within ±error
-    const normalizedDir = direction / 2.5;
-    const noise = Math.round(normalizedDir * error);
-    const scoutedOvr = Math.max(20, Math.min(99, p.ratings.overall + noise));
-    data[p.id] = { scoutedOvr, error, deepScouted: false };
-  }
-  return data;
 }
 
 // ---------------------------------------------------------------------------
@@ -1166,9 +1122,7 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   saveVersion: SAVE_VERSION,
   resigningPlayers: [],
   tradeProposals: [],
-  scoutingLevel: 0,
-  scoutPoints: 30,
-  scoutPointsMax: 30,
+  scoutsRemaining: 15,
   draftScoutingData: {},
   finalsMvpPlayerId: null,
   leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
@@ -1454,7 +1408,7 @@ export const useGameStore = create<GameStore>()(
             saveVersion: SAVE_VERSION,
             resigningPlayers: resigningEntries,
             tradeProposals: [],
-            scoutingLevel: 0,
+            scoutsRemaining: 15,
             draftScoutingData: {},
             finalsMvpPlayerId: null,
             leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
@@ -1574,7 +1528,7 @@ export const useGameStore = create<GameStore>()(
           saveVersion: SAVE_VERSION,
           resigningPlayers: genResigningEntries,
           tradeProposals: [],
-          scoutingLevel: 0,
+          scoutsRemaining: 15,
           draftScoutingData: {},
           finalsMvpPlayerId: null,
           leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
@@ -2236,16 +2190,6 @@ export const useGameStore = create<GameStore>()(
         // Draft order = the OWNER of each pick drafts
         const draftOrder = allDraftYearPicks.map(pk => pk.ownerTeamId);
 
-        // PRD-07: Compute scouting data for draft prospects
-        const scoutingData = computeScoutingData(draftClass, state.scoutingLevel);
-
-        // Calculate scout points based on coaching staff
-        const userTeamObj = state.teams.find(t => t.id === state.userTeamId);
-        const hc = userTeamObj?.coaches?.find(c => c.role === 'HC');
-        const baseScoutPoints = 30;
-        const bonusScoutPoints = hc ? Math.floor((hc.ovr - 50) / 5) : 0;
-        const totalScoutPoints = baseScoutPoints + Math.max(0, bonusScoutPoints);
-
         const finalPlayers = importedDraftClass.length > 0
           ? updatedPlayers
           : [...updatedPlayers, ...draftClass];
@@ -2264,9 +2208,8 @@ export const useGameStore = create<GameStore>()(
           draftOrder,
           draftResults: [],
           resigningPlayers: [],
-          draftScoutingData: scoutingData,
-          scoutPoints: totalScoutPoints,
-          scoutPointsMax: totalScoutPoints,
+          draftScoutingData: {},
+          scoutsRemaining: 15,
         });
       },
 
@@ -3569,73 +3512,17 @@ export const useGameStore = create<GameStore>()(
         set({ tradeProposals: [...existingNonPending, ...proposals] });
       },
 
-      // PRD-07: Set scouting level
-      setScoutingLevel: (level: 0 | 1 | 2) => {
+      // PRD-07: Scout a prospect (binary: unscouted → fully scouted, costs 1 scout)
+      scoutPlayer: (playerId: string) => {
         const state = get();
-        // Recompute scouting data at the new level
-        const prospects = state.freeAgents
-          .map(id => state.players.find(p => p.id === id))
-          .filter((p): p is Player => !!p);
-        const newScoutingData = computeScoutingData(prospects, level);
-        // Preserve deep-scouted entries (don't overwrite them)
-        const merged = { ...newScoutingData };
-        for (const [pid, existing] of Object.entries(state.draftScoutingData)) {
-          if (existing.deepScouted) {
-            merged[pid] = existing; // keep deep-scouted as-is
-          }
-        }
-        set({ scoutingLevel: level, draftScoutingData: merged });
-      },
-
-      // PRD-07: Deep scout a prospect
-      deepScoutPlayer: (playerId: string) => {
-        const state = get();
-        const scoutData = state.draftScoutingData[playerId];
-        if (!scoutData) return;
-
-        const deepScoutedCount = Object.values(state.draftScoutingData).filter(d => d.deepScouted).length;
-        // Deep scout limit is enforced on the UI side based on subscription tier
+        if (state.draftScoutingData[playerId]) return false; // already scouted
+        if (state.scoutsRemaining <= 0) return false;
 
         set({
+          scoutsRemaining: state.scoutsRemaining - 1,
           draftScoutingData: {
             ...state.draftScoutingData,
-            [playerId]: { ...scoutData, deepScouted: true, error: Math.ceil(scoutData.error / 2) },
-          },
-        });
-      },
-
-      // Scout a prospect to a specific tier (costs scout points)
-      scoutProspect: (playerId: string, tier: 1 | 2 | 3) => {
-        const state = get();
-        const existing = state.draftScoutingData[playerId];
-        const currentTier = existing?.scoutTier ?? 0;
-        if (tier <= currentTier) return false; // already scouted to this tier or higher
-
-        // Cost: tier 1 = 1pt, tier 2 = 2pts, tier 3 = 3pts (only pay incremental)
-        const cost = tier - currentTier; // incremental cost
-        if (state.scoutPoints < cost) return false; // not enough points
-
-        const player = state.players.find(p => p.id === playerId);
-        if (!player) return false;
-
-        // Compute scouted OVR based on tier
-        const direction = playerNoiseDirection(playerId);
-        const normalizedDir = direction / 2.5;
-        const tierErrors = [12, 5, 2, 0]; // tier 0=±12, 1=±5, 2=±2, 3=exact
-        const error = tierErrors[tier];
-        const noise = Math.round(normalizedDir * error);
-        const scoutedOvr = Math.max(20, Math.min(99, player.ratings.overall + noise));
-
-        set({
-          scoutPoints: state.scoutPoints - cost,
-          draftScoutingData: {
-            ...state.draftScoutingData,
-            [playerId]: {
-              scoutedOvr,
-              error,
-              deepScouted: tier >= 3,
-              scoutTier: tier,
-            },
+            [playerId]: true,
           },
         });
         return true;
@@ -4527,9 +4414,13 @@ export const useGameStore = create<GameStore>()(
               team.coaches = generateCoachingStaff();
             }
           }
-          // Add scout points
-          if (state.scoutPoints === undefined) state.scoutPoints = 30;
-          if (state.scoutPointsMax === undefined) state.scoutPointsMax = 30;
+          // Migrate old scouting system to binary scouts
+          if ((state as Record<string, unknown>).scoutPoints !== undefined) {
+            delete (state as Record<string, unknown>).scoutPoints;
+            delete (state as Record<string, unknown>).scoutPointsMax;
+            delete (state as Record<string, unknown>).scoutingLevel;
+          }
+          if (state.scoutsRemaining === undefined) state.scoutsRemaining = 15;
         }
         return state;
       },

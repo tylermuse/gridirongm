@@ -8,7 +8,7 @@ import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor, devTraitIcon, devTraitColor, devTraitDescription, isDevTraitVisible } from '@/lib/engine/development';
-import { calculateSchemeFit, schemeFitDot, schemeFitColor } from '@/lib/engine/coaching';
+import { calculateSchemeFit, schemeFitDot, schemeFitColor, OFFENSIVE_SCHEME_LABELS, DEFENSIVE_SCHEME_LABELS } from '@/lib/engine/coaching';
 import { calculateDeadCap, calculateCapSavings, getCapHit, getUnamortizedBonus, materializeContractYears } from '@/types';
 import type { Player, Position, ContractYear } from '@/types';
 import { POSITIONS, ROSTER_LIMITS } from '@/types';
@@ -461,8 +461,21 @@ export default function RosterPage() {
                         {/* Scheme Fit */}
                         {(() => {
                           const fit = userTeam ? calculateSchemeFit(p, userTeam) : 'neutral';
+                          const isOff = ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position);
+                          const coaches = userTeam?.coaches ?? [];
+                          const oc = coaches.find(c => c.role === 'OC');
+                          const dc = coaches.find(c => c.role === 'DC');
+                          const hc = coaches.find(c => c.role === 'HC');
+                          const schemeName = isOff
+                            ? OFFENSIVE_SCHEME_LABELS[(oc?.offensiveScheme ?? hc?.offensiveScheme) as keyof typeof OFFENSIVE_SCHEME_LABELS] ?? ''
+                            : DEFENSIVE_SCHEME_LABELS[(dc?.defensiveScheme ?? hc?.defensiveScheme) as keyof typeof DEFENSIVE_SCHEME_LABELS] ?? '';
+                          const tooltip = fit === 'great'
+                            ? `Great Fit: +2 OVR in games (${schemeName})`
+                            : fit === 'poor'
+                            ? `Poor Fit: -1 OVR in games (${schemeName})`
+                            : 'Neutral: No scheme bonus or penalty';
                           return (
-                            <td className={`py-2 px-2 text-center text-xs ${schemeFitColor(fit)}`} title={`Scheme fit: ${fit}`}>
+                            <td className={`py-2 px-2 text-center text-xs ${schemeFitColor(fit)}`} title={tooltip}>
                               {schemeFitDot(fit)}
                             </td>
                           );
