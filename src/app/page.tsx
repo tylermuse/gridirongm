@@ -16,8 +16,6 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { generateTeamSpotlight, COMMENTATORS, type SpotlightContext } from '@/lib/engine/debate';
 import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
-import { teamPower, generateBettingLine } from '@/lib/engine/simulate';
-import { OFFENSIVE_SCHEME_LABELS, DEFENSIVE_SCHEME_LABELS } from '@/lib/engine/coaching';
 
 function TeamPicker() {
   const router = useRouter();
@@ -292,7 +290,7 @@ function TeamSpotlightSection({
 }
 
 function Dashboard() {
-  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements, rivalries } = useGameStore();
+  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const spotlightRef = useRef<HTMLDivElement>(null);
@@ -403,21 +401,6 @@ function Dashboard() {
                 </span>
               )}
             </div>
-            {/* Coaching schemes */}
-            {userTeam.coaches && userTeam.coaches.length > 0 && (() => {
-              const hc = userTeam.coaches.find(c => c.role === 'HC');
-              const oc = userTeam.coaches.find(c => c.role === 'OC');
-              const dc = userTeam.coaches.find(c => c.role === 'DC');
-              const offScheme = oc?.offensiveScheme ?? hc?.offensiveScheme;
-              const defScheme = dc?.defensiveScheme ?? hc?.defensiveScheme;
-              return (
-                <div className="flex items-center gap-3 mt-0.5">
-                  {hc && <span className="text-xs text-[var(--text-sec)]">HC: <span className="font-medium text-[var(--text)]">{hc.firstName[0]}. {hc.lastName}</span></span>}
-                  {offScheme && <span className="text-xs text-green-600">{OFFENSIVE_SCHEME_LABELS[offScheme]}</span>}
-                  {defScheme && <span className="text-xs text-red-600">{DEFENSIVE_SCHEME_LABELS[defScheme]}</span>}
-                </div>
-              );
-            })()}
           </div>
         </div>
 
@@ -453,40 +436,15 @@ function Dashboard() {
           const oppTeam = nextGame ? teams.find(t => t.id === (nextGame.homeTeamId === userTeamId ? nextGame.awayTeamId : nextGame.homeTeamId)) : null;
           return (nextGame || injuredPlayers.length > 0) ? (
             <div className={`grid grid-cols-1 ${nextGame && injuredPlayers.length > 0 ? 'md:grid-cols-2' : ''} gap-4`}>
-              {nextGame && oppTeam && (() => {
-                const isHome = nextGame.homeTeamId === userTeamId;
-                const oppId = isHome ? nextGame.awayTeamId : nextGame.homeTeamId;
-                const oppRoster = players.filter(p => p.teamId === oppId && !p.retired);
-                const line = generateBettingLine(
-                  isHome ? roster : oppRoster,
-                  isHome ? oppRoster : roster,
-                );
-                const userSpread = isHome ? line.spread : -line.spread;
-                const spreadText = userSpread === 0 ? 'PK' : `${userSpread > 0 ? '+' : ''}${userSpread}`;
-                return (
+              {nextGame && oppTeam && (
                 <Card>
                   <div className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <TeamLogo abbreviation={oppTeam.abbreviation} primaryColor={oppTeam.primaryColor} secondaryColor={oppTeam.secondaryColor} size="md" />
                       <div>
-                        <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider">Week {week} · {isHome ? 'Home' : 'Away'}</div>
-                        <div className="font-bold">
-                          {isHome ? 'vs' : '@'} {oppTeam.city} {oppTeam.name}
-                          {(() => {
-                            const r = (rivalries ?? []).find(rv =>
-                              rv.intensity >= 40 &&
-                              ((rv.team1Id === userTeamId && rv.team2Id === oppId) || (rv.team1Id === oppId && rv.team2Id === userTeamId))
-                            );
-                            return r ? <span className="ml-1.5" title={`Rivalry (${r.intensity})`}>🔥</span> : null;
-                          })()}
-                        </div>
+                        <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider">Week {week} · {nextGame.homeTeamId === userTeamId ? 'Home' : 'Away'}</div>
+                        <div className="font-bold">{nextGame.homeTeamId === userTeamId ? 'vs' : '@'} {oppTeam.city} {oppTeam.name}</div>
                         <div className="text-xs text-[var(--text-sec)]">{oppTeam.record.wins}-{oppTeam.record.losses}</div>
-                        <div className="flex gap-3 mt-1">
-                          <span className={`text-xs font-mono font-medium ${userSpread <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            SPREAD: {spreadText}
-                          </span>
-                          <span className="text-xs font-mono text-[var(--text-sec)]">O/U: {line.overUnder}</span>
-                        </div>
                       </div>
                     </div>
                     <Link href={`/game/${nextGame.id}`}>
@@ -496,8 +454,7 @@ function Dashboard() {
                     </Link>
                   </div>
                 </Card>
-                );
-              })()}
+              )}
               {injuredPlayers.length > 0 && (
                 <Card>
                   <CardHeader><CardTitle>Injury Report ({injuredPlayers.length})</CardTitle></CardHeader>
@@ -754,55 +711,6 @@ function Dashboard() {
             )}
           </Card>
         </div>
-
-        {/* Last Week Scores */}
-        {phase === 'regular' && week > 1 && (() => {
-          const lastWeek = week - 1;
-          const lastWeekGames = schedule.filter(g => g.week === lastWeek && g.played);
-          if (lastWeekGames.length === 0) return null;
-          const userDiv = userTeam.division;
-          const userConf = userTeam.conference;
-          return (
-            <Card>
-              <CardHeader>
-                <CardTitle>Week {lastWeek} Scores</CardTitle>
-              </CardHeader>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {lastWeekGames.map(g => {
-                  const ht = teams.find(t => t.id === g.homeTeamId);
-                  const at = teams.find(t => t.id === g.awayTeamId);
-                  if (!ht || !at) return null;
-                  const isUserGame = g.homeTeamId === userTeamId || g.awayTeamId === userTeamId;
-                  const isDivGame = (ht.conference === userConf && ht.division === userDiv && ht.id !== userTeamId)
-                    || (at.conference === userConf && at.division === userDiv && at.id !== userTeamId);
-                  const upset = g.bettingLine && ((g.bettingLine.spread < -3 && g.awayScore > g.homeScore) || (g.bettingLine.spread > 3 && g.homeScore > g.awayScore));
-                  const isRivalry = (rivalries ?? []).some(r =>
-                    r.intensity >= 40 &&
-                    ((r.team1Id === g.homeTeamId && r.team2Id === g.awayTeamId) || (r.team1Id === g.awayTeamId && r.team2Id === g.homeTeamId))
-                  );
-                  return (
-                    <div key={g.id} className={`rounded-lg border px-2.5 py-1.5 text-xs ${
-                      isUserGame ? 'border-blue-400 bg-blue-50/60 font-bold' :
-                      isDivGame ? 'border-amber-300 bg-amber-50/40' :
-                      'border-[var(--border)] bg-[var(--surface)]'
-                    }`}>
-                      <div className="flex justify-between">
-                        <span>{at.abbreviation}</span>
-                        <span className={`font-mono ${g.awayScore > g.homeScore ? 'font-bold' : ''}`}>{g.awayScore}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>{ht.abbreviation}</span>
-                        <span className={`font-mono ${g.homeScore > g.awayScore ? 'font-bold' : ''}`}>{g.homeScore}</span>
-                      </div>
-                      {upset && <div className="text-[10px] text-amber-600 text-center mt-0.5">UPSET</div>}
-                      {isRivalry && <div className="text-[10px] text-center mt-0.5">🔥 Rivalry</div>}
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          );
-        })()}
       </div>
 
       {/* Team Spotlight */}
@@ -814,7 +722,7 @@ function Dashboard() {
           allPlayers={players}
           season={season}
           week={week}
-          ctx={{ phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, schedule }}
+          ctx={{ phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay }}
           onPlayerClick={setSelectedPlayerId}
         />
       </div>
