@@ -18,8 +18,8 @@ import { TeamQuickNav } from '@/components/game/TeamQuickNav';
 type StandingsView = 'division' | 'conference' | 'league';
 
 function winPct(t: Team) {
-  const total = t.record.wins + t.record.losses;
-  return total > 0 ? t.record.wins / total : 0;
+  const total = t.record.wins + t.record.losses + t.record.ties;
+  return total > 0 ? (t.record.wins + t.record.ties * 0.5) / total : 0;
 }
 
 function clinchIndicator(team: Team, allTeams: Team[], schedule: GameResult[], maxWeek: number, currentWeek: number): string {
@@ -57,7 +57,7 @@ function clinchIndicator(team: Team, allTeams: Team[], schedule: GameResult[], m
 }
 
 function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams, schedule, maxWeek, currentWeek }: { teamList: Team[]; userTeamId: string | null; onTeamClick: (teamId: string) => void; expanded?: boolean; allTeams?: Team[]; schedule?: GameResult[]; maxWeek?: number; currentWeek?: number }) {
-  const leaderWins = teamList[0]?.record.wins ?? 0;
+  // GB is calculated per-row using win percentage difference
   return (
     <div className="overflow-x-auto">
     <table className="w-full text-sm min-w-[500px] sticky-col">
@@ -67,6 +67,7 @@ function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams,
           <th className="text-left pb-1">Team</th>
           <th className="text-center pb-1">W</th>
           <th className="text-center pb-1">L</th>
+          <th className="text-center pb-1">T</th>
           <th className="text-center pb-1">PCT</th>
           <th className="text-center pb-1">GB</th>
           <th className="text-right pb-1 hidden sm:table-cell">PF</th>
@@ -85,10 +86,12 @@ function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams,
       </thead>
       <tbody>
         {teamList.map((t, i) => {
-          const total = t.record.wins + t.record.losses;
-          const pct = total > 0 ? (t.record.wins / total).toFixed(3) : '.000';
+          const total = t.record.wins + t.record.losses + t.record.ties;
+          const wp = total > 0 ? (t.record.wins + t.record.ties * 0.5) / total : 0;
+          const pct = wp.toFixed(3).replace(/^0/, '');
           const diff = t.record.pointsFor - t.record.pointsAgainst;
-          const gb = leaderWins - t.record.wins;
+          const leader = teamList[0].record;
+          const gb = ((leader.wins - t.record.wins) + (t.record.losses - leader.losses)) / 2;
           const streak = t.record.streak;
           const streakStr = streak === 0 ? '-' : streak > 0 ? `W${streak}` : `L${Math.abs(streak)}`;
           const clinch = allTeams && schedule ? clinchIndicator(t, allTeams, schedule, maxWeek ?? 18, currentWeek ?? 1) : '';
@@ -114,8 +117,9 @@ function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams,
               </td>
               <td className="py-1.5 text-center">{t.record.wins}</td>
               <td className="py-1.5 text-center">{t.record.losses}</td>
+              <td className="py-1.5 text-center">{t.record.ties}</td>
               <td className="py-1.5 text-center font-mono text-xs">{pct}</td>
-              <td className="py-1.5 text-center text-xs text-[var(--text-sec)]">{gb === 0 ? '-' : gb}</td>
+              <td className="py-1.5 text-center text-xs text-[var(--text-sec)]">{gb === 0 ? '-' : gb % 1 === 0.5 ? gb.toFixed(1) : gb}</td>
               <td className="py-1.5 text-right hidden sm:table-cell">{t.record.pointsFor}</td>
               <td className="py-1.5 text-right hidden sm:table-cell">{t.record.pointsAgainst}</td>
               <td className={`py-1.5 text-right font-mono ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : ''}`}>

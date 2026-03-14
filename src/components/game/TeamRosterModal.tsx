@@ -299,8 +299,8 @@ export function TeamRosterModal({ teamId, onClose, onPlayerClick }: TeamRosterMo
                     {/* Contract */}
                     <td className="py-2 px-2 text-right font-mono text-xs tabular-nums">
                       <span className="font-semibold">${p.contract.salary}M</span>
-                      <span className="text-[var(--text-sec)] ml-1">
-                        thru {season + p.contract.yearsLeft}
+                      <span className={`ml-1 ${p.contract.yearsLeft <= 1 ? 'font-bold text-amber-600' : 'text-[var(--text-sec)]'}`}>
+                        {p.contract.yearsLeft <= 1 ? 'expiring ⚠' : `${p.contract.yearsLeft}yr left`}
                       </span>
                     </td>
 

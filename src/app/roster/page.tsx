@@ -454,8 +454,7 @@ export default function RosterPage() {
                         <td className="py-2 px-2 text-right font-mono text-xs tabular-nums">
                           <span className="font-semibold">${p.contract.salary}M</span>
                           <span className={`ml-1 ${p.contract.yearsLeft <= 1 ? 'font-bold text-amber-600' : 'text-[var(--text-sec)]'}`}>
-                            thru {season + p.contract.yearsLeft}
-                            {p.contract.yearsLeft <= 1 && ' ⚠'}
+                            {p.contract.yearsLeft <= 1 ? 'expiring ⚠' : `${p.contract.yearsLeft}yr left`}
                           </span>
                         </td>
 

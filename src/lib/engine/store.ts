@@ -54,6 +54,7 @@ interface GameStore extends LeagueState {
   advanceToResigning: () => void;
   resignPlayer: (playerId: string, salary: number, years: number) => boolean;
   passOnResigning: (playerId: string) => void;
+  passOnResigningBatch: (playerIds: string[]) => void;
   franchiseTagPlayer: (playerId: string) => boolean;
   advanceToDraft: () => void;
   draftPlayer: (playerId: string) => void;
@@ -499,7 +500,23 @@ function pickTradeValue(pick: DraftPick): number {
 // Scouting helpers (PRD-07)
 // ---------------------------------------------------------------------------
 
-const SCOUTING_ERRORS = [12, 5, 2]; // Indexed by scoutingLevel: 0=Entry(±12), 1=Pro(±5), 2=Elite(±2)
+/**
+ * Scouting noise system — rank-aware variance.
+ *
+ * Top prospects are well-known commodities (low noise).
+ * Later picks have more uncertainty, making scouting valuable.
+ *
+ * Base OVR error by tier (Entry scouting, level 0):
+ *   Top 10:    ±4-7    (everyone knows the top talent)
+ *   Picks 11-32: ±8-12
+ *   Day 2 (33-100): ±12-18
+ *   Late/UDFA (100+): ±18-25
+ *
+ * Pro scouting (level 1) cuts error by ~55%.
+ * Elite scouting (level 2) cuts error by ~80%.
+ *
+ * Bust/boom flags (~5% of top-20, ~4% of picks 40-80) add extra noise.
+ */
 
 /** Deterministic hash from player ID → stable noise factor in [-1, 1] */
 function playerNoiseDirection(id: string): number {
@@ -507,9 +524,7 @@ function playerNoiseDirection(id: string): number {
   for (let i = 0; i < id.length; i++) {
     h = (h * 31 + id.charCodeAt(i)) | 0;
   }
-  // Map to [-1, 1] using a second pass for better distribution
-  const h2 = ((h * 2654435769) >>> 0) / 4294967296; // golden ratio hash → [0,1)
-  // Box-Muller-ish: approximate gaussian from uniform, clamped to [-2.5, 2.5]
+  const h2 = ((h * 2654435769) >>> 0) / 4294967296;
   const u1 = Math.max(0.001, h2);
   const h3 = (((h * 1103515245 + 12345) >>> 0) & 0x7fffffff) / 2147483647;
   const u2 = h3;
@@ -517,19 +532,65 @@ function playerNoiseDirection(id: string): number {
   return Math.max(-2.5, Math.min(2.5, gaussian));
 }
 
+/** Deterministic bust/boom flag based on player ID */
+function playerBustBoomRoll(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = ((h << 5) - h + id.charCodeAt(i)) | 0;
+  }
+  return ((h * 48271) >>> 0) / 4294967296; // [0, 1)
+}
+
+/** Base error for a prospect at a given true rank (Entry scouting level) */
+function baseErrorForRank(rank: number): number {
+  if (rank <= 10) return 4 + Math.min(3, rank * 0.3);          // 4-7
+  if (rank <= 32) return 8 + Math.min(4, (rank - 10) * 0.18);  // 8-12
+  if (rank <= 100) return 12 + Math.min(6, (rank - 32) * 0.09); // 12-18
+  return 18 + Math.min(7, (rank - 100) * 0.05);                 // 18-25
+}
+
+/** Scouting level multipliers — how much error is retained */
+const SCOUTING_LEVEL_MULT = [1.0, 0.45, 0.20]; // Entry, Pro, Elite
+
 function computeScoutingData(
   prospects: Player[],
   scoutingLevel: number,
 ): Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }> {
-  const error = SCOUTING_ERRORS[scoutingLevel] ?? 12;
+  // Sort by true OVR (desc) to determine true rank tiers — K/P deprioritized
+  const sorted = [...prospects].sort((a, b) => {
+    const aAdj = (a.position === 'K' || a.position === 'P') ? a.ratings.overall * 0.5 : a.ratings.overall;
+    const bAdj = (b.position === 'K' || b.position === 'P') ? b.ratings.overall * 0.5 : b.ratings.overall;
+    return bAdj - aAdj;
+  });
+  const trueRankMap = new Map<string, number>();
+  sorted.forEach((p, i) => trueRankMap.set(p.id, i + 1));
+
+  const levelMult = SCOUTING_LEVEL_MULT[scoutingLevel] ?? 1.0;
   const data: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }> = {};
+
   for (const p of prospects) {
-    // Deterministic noise based on player ID — direction stays consistent across levels,
-    // only magnitude changes. This prevents OVR from randomly jumping when switching levels.
+    const trueRank = trueRankMap.get(p.id) ?? 100;
+    const rawError = baseErrorForRank(trueRank);
+    const error = Math.max(1, Math.round(rawError * levelMult));
+
+    // Deterministic noise direction — stable across scouting levels
     const direction = playerNoiseDirection(p.id);
-    // Normalize direction to [-1, 1] so noise stays within ±error
-    const normalizedDir = direction / 2.5;
-    const noise = Math.round(normalizedDir * error);
+    const normalizedDir = direction / 2.5; // [-1, 1]
+
+    // Bust/boom: rare chance of extra noise
+    const bbRoll = playerBustBoomRoll(p.id);
+    let extraNoise = 0;
+    if (trueRank <= 20 && bbRoll < 0.06) {
+      // ~6% bust flag on top-20: scouted OVR drops 8-15 points
+      extraNoise = -(8 + Math.round(bbRoll * 100)); // deterministic drop
+    } else if (trueRank >= 40 && trueRank <= 80 && bbRoll > 0.96) {
+      // ~4% boom flag on picks 40-80: scouted OVR rises 8-12 points
+      extraNoise = 8 + Math.round((1 - bbRoll) * 100);
+    }
+    // Scouting reduces bust/boom noise too
+    const scaledExtra = Math.round(extraNoise * levelMult);
+
+    const noise = Math.round(normalizedDir * error) + scaledExtra;
     const scoutedOvr = Math.max(20, Math.min(99, p.ratings.overall + noise));
     data[p.id] = { scoutedOvr, error, deepScouted: false };
   }
@@ -614,8 +675,8 @@ function computeFARefusals(
   userTeam: Team,
   faDay: number,
 ): string[] {
-  const totalGames = userTeam.record.wins + userTeam.record.losses;
-  const winPct = totalGames > 0 ? userTeam.record.wins / totalGames : 0.5;
+  const totalGames = userTeam.record.wins + userTeam.record.losses + userTeam.record.ties;
+  const winPct = totalGames > 0 ? (userTeam.record.wins + userTeam.record.ties * 0.5) / totalGames : 0.5;
   const isBadTeam = winPct < 0.35;
 
   return freeAgentIds.filter(pid => {
@@ -663,7 +724,8 @@ function computeResigningEntry(player: Player, team: Team): ResigningEntry {
   }
 
   const base = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
-  const winPct = team.record.wins / Math.max(1, team.record.wins + team.record.losses);
+  const tg = team.record.wins + team.record.losses + team.record.ties;
+  const winPct = tg > 0 ? (team.record.wins + team.record.ties * 0.5) / tg : 0.5;
   let mult = 1.0;
   // Winning teams get a small hometown discount; losing teams pay a premium
   if (winPct < 0.4) mult *= 1.10;
@@ -674,7 +736,14 @@ function computeResigningEntry(player: Player, team: Team): ResigningEntry {
   // Older players accept slight discounts but not massive ones
   if (player.age >= 32) mult *= 0.90;
   const askingSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, base * mult) * 10) / 10;
-  const askingYears = player.age >= 32 ? 1 : player.age >= 28 ? 2 : 3;
+  // Players want long-term security — asking for multi-year deals
+  // makes the 1-year franchise tag a meaningful strategic trade-off
+  const askingYears = player.age >= 34 ? 2
+    : player.age >= 32 ? 3
+    : player.age >= 30 ? 3 + (player.ratings.overall >= 70 ? 1 : 0) // 3-4yr
+    : player.age >= 28 ? 4 + (player.ratings.overall >= 75 ? 1 : 0) // 4-5yr
+    : player.ratings.overall >= 70 ? 4 + (player.age <= 26 ? 1 : 0) // good young: 4-5yr
+    : 3 + (player.age <= 25 ? 1 : 0); // average young: 3-4yr
   return { playerId: player.id, askingSalary, askingYears };
 }
 
@@ -683,7 +752,8 @@ function computeResigningEntry(player: Player, team: Team): ResigningEntry {
 // ---------------------------------------------------------------------------
 
 function winPct(t: Team): number {
-  return t.record.wins / Math.max(1, t.record.wins + t.record.losses);
+  const totalGames = t.record.wins + t.record.losses + t.record.ties;
+  return totalGames > 0 ? (t.record.wins + t.record.ties * 0.5) / totalGames : 0;
 }
 
 function pointDiff(t: Team): number {
@@ -923,12 +993,12 @@ function computeSeasonAwards(state: LeagueState): { award: string; playerId: str
   const rookies = activePlayers.filter(p => p.experience === 1 && p.stats.gamesPlayed >= 10);
   const offensiveRookies = rookies.filter(p => ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position));
   if (offensiveRookies.length > 0) {
-    const oroy = offensiveRookies.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+    const oroy = offensiveRookies.sort((a, b) => allLeagueScore(b) - allLeagueScore(a))[0];
     awards.push({ award: 'Offensive ROY', playerId: oroy.id, teamId: oroy.teamId! });
   }
   const defensiveRookies = rookies.filter(p => ['DL', 'LB', 'CB', 'S'].includes(p.position));
   if (defensiveRookies.length > 0) {
-    const droy = defensiveRookies.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+    const droy = defensiveRookies.sort((a, b) => allLeagueScore(b) - allLeagueScore(a))[0];
     awards.push({ award: 'Defensive ROY', playerId: droy.id, teamId: droy.teamId! });
   }
 
@@ -954,6 +1024,45 @@ const ALL_LEAGUE_SLOTS: { position: Position; count: number }[] = [
   { position: 'P', count: 1 },
 ];
 
+/** Performance score: 80% season stats (totals, not per-game), 20% OVR.
+ *  A player who plays 17 games with big numbers should beat a higher-OVR
+ *  player who missed time or underperformed. Total stats reward availability. */
+function allLeagueScore(p: Player): number {
+  const s = p.stats;
+  let statPts = 0;
+  switch (p.position) {
+    case 'QB':
+      statPts = s.passTDs * 6 + s.passYards / 20 - s.interceptions * 8 + s.rushTDs * 6 + s.rushYards / 25;
+      break;
+    case 'RB':
+      statPts = s.rushYards / 8 + s.rushTDs * 8 + s.receptions * 1.0 + s.receivingYards / 15 + s.receivingTDs * 6;
+      break;
+    case 'WR':
+    case 'TE':
+      statPts = s.receptions * 1.5 + s.receivingYards / 8 + s.receivingTDs * 8;
+      break;
+    case 'DL':
+    case 'LB':
+      statPts = s.tackles * 1.5 + s.sacks * 6 + s.defensiveINTs * 10 + s.forcedFumbles * 5;
+      break;
+    case 'CB':
+    case 'S':
+      statPts = s.tackles * 1.2 + s.defensiveINTs * 10 + s.passDeflections * 4 + s.forcedFumbles * 5;
+      break;
+    case 'K':
+      statPts = s.fieldGoalsMade * 4 + (s.fieldGoalsMade / Math.max(1, s.fieldGoalAttempts)) * 25;
+      break;
+    case 'P':
+      statPts = p.ratings.overall * 0.6 + s.gamesPlayed * 2;
+      break;
+    default: // OL
+      statPts = p.ratings.overall * 0.4 + s.gamesPlayed * 2;
+      break;
+  }
+  // 80% stats, 20% OVR
+  return p.ratings.overall * 0.2 + statPts * 0.8;
+}
+
 export function computeAllLeagueTeams(state: LeagueState): {
   first: { position: Position; playerId: string; teamId: string }[];
   second: { position: Position; playerId: string; teamId: string }[];
@@ -969,7 +1078,7 @@ export function computeAllLeagueTeams(state: LeagueState): {
   for (const { position, count } of ALL_LEAGUE_SLOTS) {
     const posPlayers = activePlayers
       .filter(p => p.position === position)
-      .sort((a, b) => b.ratings.overall - a.ratings.overall);
+      .sort((a, b) => allLeagueScore(b) - allLeagueScore(a));
 
     for (let i = 0; i < count && i < posPlayers.length; i++) {
       first.push({ position, playerId: posPlayers[i].id, teamId: posPlayers[i].teamId! });
@@ -981,7 +1090,7 @@ export function computeAllLeagueTeams(state: LeagueState): {
     // All-Rookie: 1 per position
     const posRookies = rookies
       .filter(p => p.position === position)
-      .sort((a, b) => b.ratings.overall - a.ratings.overall);
+      .sort((a, b) => allLeagueScore(b) - allLeagueScore(a));
     if (posRookies.length > 0) {
       allRookie.push({ position, playerId: posRookies[0].id, teamId: posRookies[0].teamId! });
     }
@@ -1214,14 +1323,17 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       if (teamScore > oppScore) {
         record.wins += 1;
         record.streak = record.streak >= 0 ? record.streak + 1 : 1;
-      } else {
+      } else if (teamScore < oppScore) {
         record.losses += 1;
         record.streak = record.streak <= 0 ? record.streak - 1 : -1;
+      } else {
+        record.ties += 1;
+        record.streak = 0;
       }
       const opponent = state.teams.find(t => t.id === (isHome ? game.awayTeamId : game.homeTeamId));
       if (opponent && opponent.conference === team.conference && opponent.division === team.division) {
         if (teamScore > oppScore) record.divisionWins += 1;
-        else record.divisionLosses += 1;
+        else if (teamScore < oppScore) record.divisionLosses += 1;
       }
     }
     return { ...team, record };
@@ -1270,7 +1382,8 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     const team = newTeams.find(t => t.id === p.teamId);
     if (!team) return p;
     let moodDelta = 0;
-    const wp = team.record.wins / Math.max(1, team.record.wins + team.record.losses);
+    const wpGames = team.record.wins + team.record.losses + team.record.ties;
+    const wp = wpGames > 0 ? (team.record.wins + team.record.ties * 0.5) / wpGames : 0.5;
     if (wp >= 0.6) moodDelta += 1;
     else if (wp <= 0.35) moodDelta -= 2;
     const depthPos = team.depthChart[p.position]?.indexOf(p.id) ?? -1;
@@ -1442,13 +1555,14 @@ export const useGameStore = create<GameStore>()(
         });
 
         // Real 2026 NFL draft order — original team by record (worst to best)
+        // Uses Gridiron GM abbreviations: NYS (not NYJ), LAA (not LAR for Rams equiv)
         const GEN_ORIGINAL_ORDER = [
-          'LV','NYJ','ARI','TEN','NYG','CLE','WAS','NO','KC','CIN',
+          'LV','NYS','ARI','TEN','NYG','CLE','WAS','NO','KC','CIN',
           'MIA','DAL','ATL','BAL','TB','IND','DET','MIN','CAR','GB',
-          'PIT','LAC','PHI','JAX','CHI','BUF','SF','HOU','LAR','DEN','NE','SEA',
+          'PIT','LAC','PHI','JAX','CHI','BUF','SF','HOU','LAA','DEN','NE','SEA',
         ];
         const GEN_R1_TRADES: Record<string, string> = {
-          'ATL': 'LAR', 'BAL': 'LV', 'IND': 'NYJ', 'GB': 'DAL', 'JAX': 'CLE', 'LAR': 'KC',
+          'ATL': 'LAA', 'BAL': 'LV', 'IND': 'NYS', 'GB': 'DAL', 'JAX': 'CLE', 'LAA': 'KC',
         };
         for (const t of teams) {
           const draftIdx = GEN_ORIGINAL_ORDER.indexOf(t.abbreviation);
@@ -1924,19 +2038,67 @@ export const useGameStore = create<GameStore>()(
         const userTeam = state.teams.find(t => t.id === state.userTeamId);
         if (!userTeam) return;
 
-        const expiringPlayers = state.players.filter(
+        // Process retirements BEFORE re-signing so retired players' cap is freed up
+        const retiredIds = new Set<string>();
+        const retirementNews: NewsItem[] = [];
+        const playersAfterRetirement = state.players.map(p => {
+          if (p.retired || !p.teamId || p.age < 35) return p;
+          const retirementChance = Math.min(0.90, 0.10 + (p.age - 35) * 0.10);
+          if (Math.random() < retirementChance) {
+            retiredIds.add(p.id);
+            if (p.ratings.overall >= 70) {
+              retirementNews.push(makeNews({
+                season: state.season,
+                week: 0,
+                type: 'milestone',
+                playerIds: [p.id],
+                headline: `${p.firstName} ${p.lastName} announces retirement after ${p.experience} season${p.experience !== 1 ? 's' : ''}.`,
+                isUserTeam: p.teamId === state.userTeamId,
+              }));
+            }
+            return { ...p, retired: true };
+          }
+          return p;
+        });
+
+        // Remove retired players from team rosters
+        const teamsAfterRetirement = retiredIds.size > 0
+          ? state.teams.map(t => {
+              const retiredFromTeam = playersAfterRetirement.filter(p => retiredIds.has(p.id) && t.roster.includes(p.id));
+              if (retiredFromTeam.length === 0) return t;
+              const salaryDrop = retiredFromTeam.reduce((sum, p) => sum + p.contract.salary, 0);
+              return {
+                ...t,
+                roster: t.roster.filter(id => !retiredIds.has(id)),
+                depthChart: POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
+                  acc[pos] = (t.depthChart[pos] ?? []).filter(id => !retiredIds.has(id));
+                  return acc;
+                }, {} as Record<Position, string[]>),
+                totalPayroll: Math.max(0, t.totalPayroll - salaryDrop),
+              };
+            })
+          : state.teams;
+
+        const expiringPlayers = playersAfterRetirement.filter(
           p => p.teamId === state.userTeamId && p.contract.yearsLeft === 1 && !p.retired,
         );
 
-        const resigningPlayers = expiringPlayers.map(p => computeResigningEntry(p, userTeam));
+        const currentUserTeam = teamsAfterRetirement.find(t => t.id === state.userTeamId) ?? userTeam;
+        const resigningPlayers = expiringPlayers.map(p => computeResigningEntry(p, currentUserTeam));
 
         // Recalculate all team payrolls from scratch to prevent drift after regular season
-        const recalcTeams = state.teams.map(t => ({
+        const recalcTeams = teamsAfterRetirement.map(t => ({
           ...t,
-          totalPayroll: recalculateTeamPayroll(t, state.players),
+          totalPayroll: recalculateTeamPayroll(t, playersAfterRetirement),
         }));
 
-        set({ phase: 'resigning', resigningPlayers, teams: recalcTeams });
+        set({
+          phase: 'resigning',
+          resigningPlayers,
+          teams: recalcTeams,
+          players: playersAfterRetirement,
+          newsItems: [...state.newsItems, ...retirementNews],
+        });
       },
 
       // PRD-03: User re-signs a player (negotiation handled in UI, this just executes)
@@ -1999,6 +2161,34 @@ export const useGameStore = create<GameStore>()(
           }),
           freeAgents: [...state.freeAgents, playerId],
           resigningPlayers: state.resigningPlayers.filter(e => e.playerId !== playerId),
+        });
+      },
+
+      passOnResigningBatch: (playerIds: string[]) => {
+        const state = get();
+        const idSet = new Set(playerIds);
+        const salaryMap = new Map<string, number>();
+        for (const id of playerIds) {
+          const p = state.players.find(pl => pl.id === id);
+          salaryMap.set(id, p?.contract.salary ?? 0);
+        }
+        set({
+          players: state.players.map(p =>
+            idSet.has(p.id) ? { ...p, teamId: null, contract: { ...p.contract, yearsLeft: 0 } } : p,
+          ),
+          teams: state.teams.map(t => {
+            if (t.id !== state.userTeamId) return t;
+            const newRoster = t.roster.filter(id => !idSet.has(id));
+            const newDepthChart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
+              acc[pos] = (t.depthChart[pos] ?? []).filter(id => !idSet.has(id));
+              return acc;
+            }, {} as Record<Position, string[]>);
+            let payrollDrop = 0;
+            for (const id of playerIds) payrollDrop += salaryMap.get(id) ?? 0;
+            return { ...t, roster: newRoster, depthChart: newDepthChart, totalPayroll: Math.max(0, t.totalPayroll - payrollDrop) };
+          }),
+          freeAgents: [...state.freeAgents, ...playerIds],
+          resigningPlayers: state.resigningPlayers.filter(e => !idSet.has(e.playerId)),
         });
       },
 
@@ -2152,8 +2342,10 @@ export const useGameStore = create<GameStore>()(
             }));
 
         const sortedTeams = [...updatedTeams].sort((a, b) => {
-          const aWinPct = a.record.wins / Math.max(1, a.record.wins + a.record.losses);
-          const bWinPct = b.record.wins / Math.max(1, b.record.wins + b.record.losses);
+          const aGames = a.record.wins + a.record.losses + a.record.ties;
+          const bGames = b.record.wins + b.record.losses + b.record.ties;
+          const aWinPct = aGames > 0 ? (a.record.wins + a.record.ties * 0.5) / aGames : 0;
+          const bWinPct = bGames > 0 ? (b.record.wins + b.record.ties * 0.5) / bGames : 0;
           if (aWinPct !== bWinPct) return aWinPct - bWinPct;
           // Tiebreak by points scored (fewer points = worse team = earlier pick)
           return a.record.pointsFor - b.record.pointsFor;
@@ -2200,13 +2392,12 @@ export const useGameStore = create<GameStore>()(
 
       draftPlayer: (playerId: string) => {
         const state = get();
-        if (state.phase !== 'draft') { console.warn('[draftPlayer] phase is', state.phase); return; }
+        if (state.phase !== 'draft') return;
         const player = state.players.find(p => p.id === playerId);
-        if (!player) { console.warn('[draftPlayer] player not found:', playerId); return; }
+        if (!player) return;
 
         const currentPickTeamId = state.draftOrder[0];
-        if (!currentPickTeamId) { console.warn('[draftPlayer] no pick team, draftOrder:', state.draftOrder.length); return; }
-        console.log('[draftPlayer] picking', player.firstName, player.lastName, 'for team', currentPickTeamId);
+        if (!currentPickTeamId) return;
         const totalPicks = state.teams.length * 7;
         const overallPick = totalPicks - state.draftOrder.length + 1;
         const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
@@ -2287,17 +2478,12 @@ export const useGameStore = create<GameStore>()(
 
       simDraftPick: () => {
         const state = get();
-        if (state.phase !== 'draft') { console.warn('[simDraftPick] phase is', state.phase); return; }
+        if (state.phase !== 'draft') return;
         const currentPickTeamId = state.draftOrder[0];
-        if (!currentPickTeamId) { console.warn('[simDraftPick] no currentPickTeamId, draftOrder length:', state.draftOrder.length); return; }
-        try {
-          const playerId = autoDraftPlayerId(state, currentPickTeamId);
-          if (!playerId) { console.warn('[simDraftPick] autoDraftPlayerId returned undefined for team', currentPickTeamId, 'freeAgents:', state.freeAgents.length); return; }
-          console.log('[simDraftPick] drafting', playerId, 'for team', currentPickTeamId);
-          get().draftPlayer(playerId);
-        } catch (e) {
-          console.error('[simDraftPick] error:', e);
-        }
+        if (!currentPickTeamId) return;
+        const playerId = autoDraftPlayerId(state, currentPickTeamId);
+        if (!playerId) return;
+        get().draftPlayer(playerId);
       },
 
       simToUserDraftPick: () => {
@@ -3639,7 +3825,8 @@ export const useGameStore = create<GameStore>()(
         };
 
         const agedPlayers = state.players.map(p => {
-          if (p.retired) return p;
+          // Clear teamId on previously retired players so they don't re-appear in lists
+          if (p.retired) return p.teamId ? { ...p, teamId: null, stats: emptyStats() } : p;
 
           if (p.teamId === null) {
             const isFutureProspect =

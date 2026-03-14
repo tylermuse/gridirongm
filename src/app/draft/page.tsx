@@ -210,12 +210,16 @@ function OnTheClockSection({
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold sm:hidden">Rd {currentRound}, Pick {currentPickInRound}</span>
-              <Button onClick={simDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
-                Sim Pick
-              </Button>
-              <Button onClick={simToUserDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
-                Sim to My Pick
-              </Button>
+              {!isUserPick && (
+                <Button onClick={simDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
+                  Sim Pick
+                </Button>
+              )}
+              {!isUserPick && (
+                <Button onClick={simToUserDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
+                  Sim to My Pick
+                </Button>
+              )}
               <Button onClick={() => onSimAll?.()} size="sm" variant="secondary" disabled={!canSimulate}>
                 Auto-Draft All
               </Button>

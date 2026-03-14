@@ -41,11 +41,14 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (!supabase) return;
 
     // Check admin status from profiles
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('is_admin')
       .eq('id', userId)
       .single();
+
+    if (profileError) console.error('[SubscriptionProvider] profile fetch error:', profileError);
+    console.log('[SubscriptionProvider] userId:', userId, 'profile:', profile, 'is_admin:', profile?.is_admin);
 
     const admin = profile?.is_admin === true;
     setIsAdmin(admin);

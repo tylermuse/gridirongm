@@ -127,10 +127,10 @@ function simulatePlay(
     ? dls.reduce((s, p) => s + p.ratings.passRush * 1.2 + p.ratings.strength, 0) / dls.length
     : 50;
 
-  // Decide pass vs rush (weighted by situation) — NFL avg ~58% pass
-  const passChance = down >= 3 && yardsToGo > 5 ? 0.70 :
-                     down >= 3 ? 0.55 :
-                     down === 1 ? 0.42 : 0.48;
+  // Decide pass vs rush (weighted by situation) — NFL avg ~60% pass
+  const passChance = down >= 3 && yardsToGo > 5 ? 0.80 :
+                     down >= 3 ? 0.65 :
+                     down === 1 ? 0.55 : 0.60;
 
   const isPass = Math.random() < passChance;
 
@@ -183,22 +183,22 @@ function simulatePlay(
 
     // ── Completion check ──
     // NFL avg comp% ~65%, elite QBs ~70%, bad QBs ~57%
-    const compBase = 0.50 + (qb.ratings.throwing / 100) * 0.16 + (target.ratings.catching / 100) * 0.10;
+    const compBase = 0.52 + (qb.ratings.throwing / 100) * 0.18 + (target.ratings.catching / 100) * 0.10;
     // Red zone boost: shorter field compresses coverage, boosting completion rates
     const redZoneBonus = fieldPosition >= 80 ? 0.06 : 0;
-    const compRate = clamp(compBase - (coverageRating / 100) * 0.13 + redZoneBonus, 0.40, 0.72);
+    const compRate = clamp(compBase - (coverageRating / 100) * 0.12 + redZoneBonus, 0.42, 0.76);
 
     if (Math.random() < compRate) {
       // Completed pass — yards tuned for realism
-      // Average: ~11.8 yards per completion, top WR ~1,000-1,400 yds/season
-      const baseYards = 3 + Math.random() * 11; // 3-14 base (avg 8.5)
-      const bonusYards = (qb.ratings.throwing / 100) * 3 + (target.ratings.speed / 100) * 2;
+      // Average: ~12.5 yards per completion, top WR ~1,000-1,400 yds/season
+      const baseYards = 5 + Math.random() * 11; // 5-16 base (avg 10.5)
+      const bonusYards = (qb.ratings.throwing / 100) * 3.5 + (target.ratings.speed / 100) * 2.5;
       let yards = Math.round(baseYards + bonusYards * Math.random());
 
-      // Big play chance (~4-6% of completions go 20+) — explosive plays
-      const bigPlayChance = 0.02 + (target.ratings.speed / 100) * 0.03;
+      // Big play chance (~5-8% of completions go 20+) — explosive plays
+      const bigPlayChance = 0.03 + (target.ratings.speed / 100) * 0.04;
       if (Math.random() < bigPlayChance) {
-        yards += 15 + Math.floor(Math.random() * 20);
+        yards += 15 + Math.floor(Math.random() * 25);
       }
 
       const newPos = fieldPosition + yards;
@@ -402,7 +402,7 @@ function ensure(
 
 /**
  * Simulates a full game between two teams using play-by-play simulation.
- * Each team gets ~11-12 possessions. Stats are accumulated from individual plays,
+ * Each team gets ~11 possessions. Stats are accumulated from individual plays,
  * so starters naturally dominate stats through weighted play selection.
  *
  * Tuned for realistic pro scores: average ~20-24 points per team.
@@ -415,8 +415,8 @@ export function simulateGame(
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
-  // ~9 possessions per team per game (NFL has ~11 but many are 3-and-outs/short punts)
-  const possessions = 9;
+  // ~11 possessions per team per game (matches NFL average)
+  const possessions = 11;
 
   const allHomePlays: PlayResult[] = [];
   const allAwayPlays: PlayResult[] = [];
@@ -505,26 +505,40 @@ export function simulateGame(
     runHome = afterAway.home;
   }
 
-  // Break ties with OT field goal
+  // Break ties with OT — rare chance of a tie (~1.5% of all games, ~15% of games that go to OT)
   if (homeScore === awayScore) {
-    const homeWinsOT = Math.random() < 0.55;
-    if (homeWinsOT) {
-      homeScore += 3;
-      runHome += 3;
+    const tieRoll = Math.random();
+    if (tieRoll < 0.15 && game.week <= 18) {
+      // Regular season tie — OT expires with no score
+      scoringPlays.push({
+        quarter: 5,
+        timeLeft: '0:00',
+        teamId: game.homeTeamId,
+        points: 0,
+        description: 'OT ends in a tie',
+        score: [runAway, runHome],
+      });
     } else {
-      awayScore += 3;
-      runAway += 3;
+      // OT winner
+      const homeWinsOT = Math.random() < 0.55;
+      if (homeWinsOT) {
+        homeScore += 3;
+        runHome += 3;
+      } else {
+        awayScore += 3;
+        runAway += 3;
+      }
+      const otMinutes = Math.floor(Math.random() * 8) + 1;
+      const otSeconds = Math.floor(Math.random() * 60);
+      scoringPlays.push({
+        quarter: 5,
+        timeLeft: `${otMinutes}:${otSeconds.toString().padStart(2, '0')}`,
+        teamId: homeWinsOT ? game.homeTeamId : game.awayTeamId,
+        points: 3,
+        description: 'OT field goal',
+        score: [runAway, runHome],
+      });
     }
-    const otMinutes = Math.floor(Math.random() * 8) + 1;
-    const otSeconds = Math.floor(Math.random() * 60);
-    scoringPlays.push({
-      quarter: 5,
-      timeLeft: `${otMinutes}:${otSeconds.toString().padStart(2, '0')}`,
-      teamId: homeWinsOT ? game.homeTeamId : game.awayTeamId,
-      points: 3,
-      description: 'OT field goal',
-      score: [runAway, runHome],
-    });
   }
 
   // Accumulate stats — one pass per team over their relevant plays.

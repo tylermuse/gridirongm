@@ -43,7 +43,7 @@ type NegMode = 'extend' | 'restructure';
 
 export default function ReSignPage() {
   const router = useRouter();
-  const { phase, players, teams, userTeamId, resigningPlayers, resignPlayer, passOnResigning, franchiseTagPlayer, advanceToDraft } = useGameStore();
+  const { phase, players, teams, userTeamId, resigningPlayers, resignPlayer, passOnResigning, passOnResigningBatch, franchiseTagPlayer, advanceToDraft } = useGameStore();
   const roster = players.filter(p => p.teamId === userTeamId && !p.retired);
 
   const [results, setResults] = useState<Record<string, ReSignResult>>({});
@@ -110,7 +110,7 @@ export default function ReSignPage() {
 
     if (mode === 'extend') {
       // Extension: player wants askingSalary for askingYears
-      const neg = initNegotiation(player, entry.askingSalary);
+      const neg = initNegotiation(player, entry.askingSalary, 'resigning');
       // Override asking years from the entry
       neg.askingYears = entry.askingYears;
       neg.messages = [{
@@ -134,7 +134,7 @@ export default function ReSignPage() {
       const newAnnual = Math.round(currentSalary * discountPct * 10) / 10;
       const capSaved = Math.round((currentSalary - newAnnual) * 10) / 10;
 
-      const neg = initNegotiation(player, newAnnual);
+      const neg = initNegotiation(player, newAnnual, 'resigning');
       neg.askingYears = newYears;
       neg.messages = [{
         sender: 'player',
@@ -197,10 +197,16 @@ export default function ReSignPage() {
                 variant="danger"
                 className="mt-2"
                 onClick={() => {
-                  for (const entry of activeEntries) {
-                    passOnResigning(entry.playerId);
-                    setResults(prev => ({ ...prev, [entry.playerId]: 'passed' }));
-                  }
+                  if (!confirm(`Let all ${activeEntries.length} players walk? They'll become free agents.`)) return;
+                  const ids = activeEntries.map(e => e.playerId);
+                  passOnResigningBatch(ids);
+                  setNegotiation(null);
+                  setActivePlayerId(null);
+                  setResults(prev => {
+                    const next = { ...prev };
+                    for (const id of ids) next[id] = 'passed';
+                    return next;
+                  });
                 }}
               >
                 Let All Walk ({activeEntries.length})
