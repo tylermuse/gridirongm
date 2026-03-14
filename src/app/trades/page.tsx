@@ -981,7 +981,7 @@ function TradesPage() {
                       <div className="flex gap-1 mt-1.5">
                         {rumorPlayers.map(p => p && (
                           <button key={p.id} onClick={() => setSelectedPlayerId(p.id)} className="text-[10px] text-blue-600 hover:underline">
-                            {p.firstName[0]}. {p.lastName} ({p.ratings.overall})
+                            {p.firstName[0]}. {p.lastName} ({p.position}, {p.age}yo, {p.ratings.overall} OVR, ${(p.contract.salary).toFixed(1)}M/{p.contract.yearsLeft}yr)
                           </button>
                         ))}
                       </div>
