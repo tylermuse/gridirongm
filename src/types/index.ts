@@ -151,8 +151,6 @@ export interface Player {
   height?: string;
   /** Weight in lbs */
   weight?: number;
-  /** NFL Combine measurables (permanent, generated at player creation) */
-  combineStats?: { fortyYard: number; benchPress: number; verticalJump: number };
   /** Round the player was drafted in */
   draftRound?: number;
   /** Team ID that originally drafted this player */
@@ -161,14 +159,6 @@ export interface Player {
   previousSeasonStats?: PlayerStats;
   /** Season-by-season stat history */
   seasonLog?: { season: number; teamId: string; stats: PlayerStats }[];
-  /** Whether the player is holding out (performance penalty until resolved) */
-  holdout?: boolean;
-  /** Development trait affecting aging/growth curve */
-  devTrait?: 'star' | 'normal' | 'late_bloomer' | 'bust';
-  /** Season when devTrait was revealed to the user (after 1 full season on roster) */
-  devTraitRevealedSeason?: number;
-  /** Pre-draft projected rank (noisy estimate of talent, generated at draft class creation) */
-  projectedRank?: number;
 }
 
 export interface TeamRecord {
@@ -186,9 +176,6 @@ export interface TeamRecord {
   awayLosses: number;
   conferenceWins: number;
   conferenceLosses: number;
-  atsWins?: number;
-  atsLosses?: number;
-  atsPushes?: number;
 }
 
 export interface DeadCapEntry {
@@ -199,25 +186,6 @@ export interface DeadCapEntry {
   source?: 'release' | 'trade' | 'void';
   /** Season the dead cap was created */
   season?: number;
-}
-
-export type OffensiveScheme = 'spread' | 'west_coast' | 'power_run' | 'air_raid' | 'rpo';
-export type DefensiveScheme = 'cover_3' | 'man_press' | 'tampa_2' | 'blitz_34' | 'zone_blitz';
-export type CoachRole = 'HC' | 'OC' | 'DC';
-
-export interface Coach {
-  id: string;
-  firstName: string;
-  lastName: string;
-  role: CoachRole;
-  ovr: number;
-  age: number;
-  offensiveScheme?: OffensiveScheme;
-  defensiveScheme?: DefensiveScheme;
-  trait: string;
-  yearsWithTeam: number;
-  careerWins: number;
-  careerLosses: number;
 }
 
 export interface Team {
@@ -240,8 +208,6 @@ export interface Team {
   deadCap: DeadCapEntry[];
   /** Whether the franchise tag has been used this season */
   franchiseTagUsed: boolean;
-  /** Coaching staff (HC, OC, DC) */
-  coaches?: Coach[];
   /** Revenue breakdown (computed at start of each season) */
   revenue: {
     tickets: number;
@@ -421,7 +387,6 @@ export interface GameResult {
   playerStats: Record<string, Partial<PlayerStats>>;
   /** Scoring play log for box score display */
   scoringPlays?: ScoringPlay[];
-  /** Betting lines generated before game */
   bettingLine?: BettingLine;
   /** ATS result after game played */
   spreadCover?: 'home' | 'away' | 'push';
@@ -448,41 +413,6 @@ export interface Achievement {
   icon: string;
   unlockedSeason?: number;
   unlockedWeek?: number;
-}
-
-export interface TradeRumor {
-  id: string;
-  season: number;
-  week: number;
-  type: 'star_available' | 'shopping_pick' | 'position_need' | 'blockbuster' | 'deadline_buzz';
-  teamId: string;
-  targetTeamId?: string;
-  playerIds: string[];
-  pickIds?: string[];
-  headline: string;
-  detail: string;
-  resolved: boolean;
-  outcome?: 'accurate' | 'false_alarm';
-  resolvedWeek?: number;
-  /** Hidden flag set at generation — determines if this rumor is "destined" to come true */
-  _accurate?: boolean;
-}
-
-export interface Rivalry {
-  id: string;
-  team1Id: string;
-  team2Id: string;
-  intensity: number;
-  formed: number;
-  events: RivalryEvent[];
-  type: 'divisional' | 'playoff' | 'trade' | 'emerging';
-}
-
-export interface RivalryEvent {
-  season: number;
-  week: number;
-  description: string;
-  type: 'blowout' | 'comeback' | 'upset' | 'playoff_elimination' | 'trade_steal' | 'sweep';
 }
 
 export interface AllLeagueEntry {
@@ -534,13 +464,6 @@ export interface TradeProposal {
   /** 'pending' | 'accepted' | 'rejected' */
   status: 'pending' | 'accepted' | 'rejected';
   valueAssessment: 'fair' | 'lopsided-you-win' | 'lopsided-they-win';
-}
-
-export interface HoldoutEntry {
-  playerId: string;
-  demandedSalary: number;
-  demandedYears: number;
-  resolved: boolean;
 }
 
 export interface ResigningEntry {
@@ -603,14 +526,12 @@ export interface LeagueState {
   saveVersion: number;
   /** Players up for re-signing (user team, yearsLeft === 1) */
   resigningPlayers: ResigningEntry[];
-  /** Contract holdout demands from underpaid/unhappy players */
-  holdoutDemands: HoldoutEntry[];
   /** Incoming AI trade proposals */
   tradeProposals: TradeProposal[];
-  /** Scouts remaining for this draft cycle (max 15) */
-  scoutsRemaining: number;
-  /** Set of scouted prospect player IDs (true = fully scouted) */
-  draftScoutingData: Record<string, boolean>;
+  /** Scouting level (0=Entry, 1=Pro, 2=Elite) */
+  scoutingLevel: 0 | 1 | 2;
+  /** Scouting data keyed by prospect player ID */
+  draftScoutingData: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }>;
   /** Player ID of the Championship MVP (set when championship is played, consumed when season summary is created) */
   finalsMvpPlayerId: string | null;
   /** Configurable league settings */
@@ -621,10 +542,6 @@ export interface LeagueState {
   weeklyRecaps: WeeklyRecapData[];
   /** Unlocked achievements */
   achievements: Achievement[];
-  /** Active trade rumors for the current season */
-  tradeRumors: TradeRumor[];
-  /** Dynamic rivalries between teams */
-  rivalries: Rivalry[];
 }
 
 export interface WeeklyRecapData {

@@ -1,4 +1,4 @@
-import type { Player, PlayerStats, GameResult, ScoringPlay } from '@/types';
+import type { Player, PlayerStats, GameResult, ScoringPlay, BettingLine } from '@/types';
 
 /**
  * Computes an aggregate offensive and defensive power rating for a roster.
@@ -55,6 +55,44 @@ export function teamPower(roster: Player[]): { offense: number; defense: number 
     offense: offCount > 0 ? offSum / offCount : 50,
     defense: defCount > 0 ? defSum / defCount : 50,
   };
+}
+
+/**
+ * Generates a betting line (spread, O/U, moneylines) for a matchup.
+ * spread < 0 means home team is favored.
+ */
+export function generateBettingLine(
+  homeRoster: Player[],
+  awayRoster: Player[],
+): BettingLine {
+  const homePow = teamPower(homeRoster);
+  const awayPow = teamPower(awayRoster);
+  const homeTotal = homePow.offense + homePow.defense;
+  const awayTotal = awayPow.offense + awayPow.defense;
+
+  // Spread: power diff scaled to points + 3pt home field advantage
+  const rawSpread = (awayTotal - homeTotal) * 0.35 - 3;
+  const spread = Math.round(rawSpread * 2) / 2; // nearest 0.5
+
+  // O/U: based on combined offensive strength
+  const combinedOff = (homePow.offense + awayPow.offense) / 2;
+  const rawOU = 38 + (combinedOff - 50) * 0.4;
+  const overUnder = Math.round(rawOU * 2) / 2;
+
+  // Moneyline from spread
+  const absSpread = Math.abs(spread);
+  let homeML: number, awayML: number;
+  if (absSpread <= 1) {
+    homeML = spread <= 0 ? -115 : -105;
+    awayML = spread <= 0 ? -105 : -115;
+  } else {
+    const favML = Math.round(-100 - absSpread * 20);
+    const dogML = Math.round(100 + absSpread * 18);
+    homeML = spread <= 0 ? favML : dogML;
+    awayML = spread <= 0 ? dogML : favML;
+  }
+
+  return { spread, overUnder, homeML, awayML };
 }
 
 function clamp(val: number, min: number, max: number): number {
