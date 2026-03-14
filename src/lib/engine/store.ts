@@ -21,7 +21,7 @@ import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
 import { generateCoachingStaff, coachingBonus } from './coaching';
 
-const SAVE_VERSION = 17;
+const SAVE_VERSION = 18;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
@@ -1796,6 +1796,13 @@ export const useGameStore = create<GameStore>()(
             }
           }
 
+          // Generate coaching staff for all teams if not already present
+          for (const team of imported.teams) {
+            if (!team.coaches || team.coaches.length === 0) {
+              team.coaches = generateCoachingStaff();
+            }
+          }
+
           const userTeam = imported.teams.find((t) => t.abbreviation === userTeamId) ?? imported.teams[0];
           const schedule = generateSchedule(imported.teams, imported.season);
 
@@ -1885,6 +1892,7 @@ export const useGameStore = create<GameStore>()(
             deadCap: [],
             franchiseTagUsed: false,
             revenue: { tickets: 0, merchandise: 0, tvDeal: 0, total: 0 },
+            coaches: generateCoachingStaff(),
           };
         });
 
@@ -5089,6 +5097,14 @@ export const useGameStore = create<GameStore>()(
           if (!state.holdoutDemands) state.holdoutDemands = [];
           if (!state.tradeRumors) state.tradeRumors = [];
           if (!state.rivalries) state.rivalries = [];
+        }
+        if (version < 18) {
+          // Generate coaching staff for teams that don't have one
+          for (const team of (state as any).teams ?? []) {
+            if (!team.coaches || team.coaches.length === 0) {
+              team.coaches = generateCoachingStaff();
+            }
+          }
         }
         return state;
       },
