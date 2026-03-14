@@ -38,8 +38,8 @@ function statLine(p: Player): string {
 }
 
 const POSITION_VALUE_MULT: Record<string, number> = {
-  QB: 1.5, RB: 0.9, WR: 1.1, TE: 0.85, OL: 0.95,
-  DL: 1.05, LB: 1.0, CB: 1.1, S: 0.95, K: 0.4, P: 0.35,
+  QB: 1.3, RB: 0.9, WR: 1.05, TE: 0.85, OL: 1.05,
+  DL: 1.1, LB: 1.0, CB: 1.1, S: 0.95, K: 0.15, P: 0.10,
 };
 
 function playerTradeValue(player: Player): number {
@@ -135,6 +135,9 @@ function findTradeablePlayers(
     for (const p of roster) {
       // Skip top 3
       if (top3Ids.has(p.id)) continue;
+
+      // Skip K/P — almost never worth trading for
+      if (p.position === 'K' || p.position === 'P') continue;
 
       // Skip very low value players
       const tv = playerTradeValue(p);

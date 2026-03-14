@@ -950,22 +950,21 @@ function computeSeasonAwards(state: LeagueState): { award: string; playerId: str
   const withGames = (pos: string[]) =>
     activePlayers.filter(p => pos.includes(p.position) && p.stats.gamesPlayed >= 10);
 
-  // MVP — stats-based scoring, heavily favors QBs (matches playoffs page formula)
+  // MVP — stats-based scoring, heavily favors QBs
+  // TEs get position-adjusted scoring (75 catches / 900 yds / 7 TDs is elite for TE)
   const mvpCandidates = withGames(['QB', 'RB', 'WR', 'TE']);
+  const mvpScore = (p: typeof mvpCandidates[0]) => {
+    if (p.position === 'QB')
+      return p.stats.passYards * 0.04 + p.stats.passTDs * 6 - p.stats.interceptions * 4 + p.ratings.overall * 2;
+    if (p.position === 'RB')
+      return p.stats.rushYards * 0.06 + p.stats.rushTDs * 6 + p.ratings.overall;
+    if (p.position === 'TE')
+      return p.stats.receivingYards * 0.09 + p.stats.receivingTDs * 8 + p.ratings.overall * 1.2;
+    // WR
+    return p.stats.receivingYards * 0.06 + p.stats.receivingTDs * 6 + p.ratings.overall;
+  };
   if (mvpCandidates.length > 0) {
-    const mvp = mvpCandidates.sort((a, b) => {
-      const aScore = a.position === 'QB'
-        ? a.stats.passYards * 0.04 + a.stats.passTDs * 6 - a.stats.interceptions * 4 + a.ratings.overall * 2
-        : a.position === 'RB'
-          ? a.stats.rushYards * 0.06 + a.stats.rushTDs * 6 + a.ratings.overall
-          : a.stats.receivingYards * 0.06 + a.stats.receivingTDs * 6 + a.ratings.overall;
-      const bScore = b.position === 'QB'
-        ? b.stats.passYards * 0.04 + b.stats.passTDs * 6 - b.stats.interceptions * 4 + b.ratings.overall * 2
-        : b.position === 'RB'
-          ? b.stats.rushYards * 0.06 + b.stats.rushTDs * 6 + b.ratings.overall
-          : b.stats.receivingYards * 0.06 + b.stats.receivingTDs * 6 + b.ratings.overall;
-      return bScore - aScore;
-    })[0];
+    const mvp = mvpCandidates.sort((a, b) => mvpScore(b) - mvpScore(a))[0];
     awards.push({ award: 'MVP', playerId: mvp.id, teamId: mvp.teamId! });
   }
 

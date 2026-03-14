@@ -177,25 +177,29 @@ function simulatePlay(
     const sackChance = clamp((dlPower - olPower) / 300 + 0.06, 0.03, 0.12);
     if (Math.random() < sackChance) {
       const sackYards = -(3 + Math.floor(Math.random() * 6));
-      // Sacks come from DLs or LBs — starters (top 4 DL, top 2 LB) get heavy snap share
-      const sackerPool = [...dls.slice(0, 4), ...lbs.slice(0, 2)];
+      // Sack distribution: EDGE/DE ~55%, DT ~15%, LB ~25%, DB ~5%
+      const sackerPool = [...dls.slice(0, 4), ...lbs.slice(0, 3), ...cbs.slice(0, 1), ...safeties.slice(0, 1)];
       const sacker = sackerPool.length > 0
-        ? weightedPick(sackerPool, sackerPool.map((p, i) => {
-            const isLB = p.position === 'LB';
-            const base = isLB ? 1 : 1.5; // DLs slightly more likely
-            const starterBonus = i < 4 ? 3 : 1; // Top 4 DL get 3x snap weight
-            return base * starterBonus * (p.ratings.passRush / 70);
+        ? weightedPick(sackerPool, sackerPool.map(p => {
+            const posWeight = p.position === 'DL' ? 4.0 : p.position === 'LB' ? 2.0 : 0.4;
+            return posWeight * (p.ratings.passRush / 70);
           }))
         : allDefenders[0];
       return { type: 'sack', yards: sackYards, touchdown: false, turnover: false, passer: qb, sacker };
     }
 
-    // ── Pick receiver (starters get more usage but spread more) ──
-    const recWeights = receivers.map((r, i) => {
-      const starterBonus = i === 0 ? 4 : i === 1 ? 3 : i === 2 ? 2 : 1;
-      return starterBonus * (r.ratings.catching / 70);
-    });
-    const target = weightedPick(receivers, recWeights);
+    // ── Pick receiver with position-based target shares ──
+    // NFL-realistic: WR1 ~28%, WR2 ~21%, WR3 ~12%, TE1 ~18%, TE2 ~6%, RB1 ~12%, RB2 ~3%
+    const eligibleReceivers: { player: Player; baseShare: number }[] = [];
+    if (wrs[0]) eligibleReceivers.push({ player: wrs[0], baseShare: 0.28 });
+    if (wrs[1]) eligibleReceivers.push({ player: wrs[1], baseShare: 0.21 });
+    if (wrs[2]) eligibleReceivers.push({ player: wrs[2], baseShare: 0.12 });
+    if (tes[0]) eligibleReceivers.push({ player: tes[0], baseShare: 0.18 });
+    if (tes[1]) eligibleReceivers.push({ player: tes[1], baseShare: 0.06 });
+    if (rbs[0]) eligibleReceivers.push({ player: rbs[0], baseShare: 0.12 });
+    if (rbs[1]) eligibleReceivers.push({ player: rbs[1], baseShare: 0.03 });
+    const recWeights = eligibleReceivers.map(r => r.baseShare * (r.player.ratings.catching / 70));
+    const target = weightedPick(eligibleReceivers.map(r => r.player), recWeights);
 
     // ── Coverage matchup ──
     const coverageDefender = cbs.length > 0
@@ -244,7 +248,11 @@ function simulatePlay(
       if (td) yards = 100 - fieldPosition;
 
       const tackler = allDefenders.length > 0
-        ? weightedPick(allDefenders, allDefenders.map((d, i) => (i < 3 ? 2 : 1) * (d.ratings.tackling / 70)))
+        ? weightedPick(allDefenders, allDefenders.map(d => {
+            // Position-based tackle distribution: LB ~57%, DB ~28%, DL ~15%
+            const posWeight = d.position === 'LB' ? 3.5 : (d.position === 'CB' || d.position === 'S') ? 1.8 : 0.8;
+            return posWeight * (d.ratings.tackling / 70);
+          }))
         : null;
 
       return {
@@ -296,7 +304,10 @@ function simulatePlay(
     const fumbleChance = clamp(0.015 - (rusher.ratings.carrying / 100) * 0.008, 0.003, 0.02);
     if (Math.random() < fumbleChance) {
       const tackler = allDefenders.length > 0
-        ? weightedPick(allDefenders, allDefenders.map((d, i) => (i < 4 ? 3 : 1) * (d.ratings.tackling / 70)))
+        ? weightedPick(allDefenders, allDefenders.map(d => {
+            const posWeight = d.position === 'LB' ? 3.5 : d.position === 'DL' ? 1.2 : 1.0;
+            return posWeight * (d.ratings.tackling / 70);
+          }))
         : null;
       return {
         type: 'rush', yards: Math.max(0, yards), touchdown: false, turnover: true,
@@ -309,7 +320,11 @@ function simulatePlay(
     if (td) yards = 100 - fieldPosition;
 
     const tackler = allDefenders.length > 0
-      ? weightedPick(allDefenders, allDefenders.map((d, i) => (i < 4 ? 3 : 1) * (d.ratings.tackling / 70)))
+      ? weightedPick(allDefenders, allDefenders.map(d => {
+          // Rush tackles: LB ~55%, DL ~25%, DB ~20%
+          const posWeight = d.position === 'LB' ? 3.5 : d.position === 'DL' ? 1.6 : 1.0;
+          return posWeight * (d.ratings.tackling / 70);
+        }))
       : null;
 
     return {

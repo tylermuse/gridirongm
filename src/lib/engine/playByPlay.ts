@@ -729,11 +729,11 @@ export function simulatePlayByPlay(
         const yardsGained = clamp(rawYards, -2, 45);
         const isLong = yardsGained >= 20;
 
-        // Pick receiver: WR1 60%, WR2 25%, TE 15%
+        // Pick receiver: WR1 40%, WR2 30%, TE 30% (TE gets realistic share)
         const recRoll = Math.random();
         let receiver: Player | null;
-        if (recRoll < 0.60) receiver = ok.wr1;
-        else if (recRoll < 0.85) receiver = ok.wr2;
+        if (recRoll < 0.40) receiver = ok.wr1;
+        else if (recRoll < 0.70) receiver = ok.wr2;
         else receiver = ok.te;
 
         ob.passAttempts += 1;
@@ -763,10 +763,10 @@ export function simulatePlayByPlay(
         // INCOMPLETE
         ob.passAttempts += 1;
 
-        const recRoll = Math.random();
+        const recRoll2 = Math.random();
         let receiver: Player | null;
-        if (recRoll < 0.60) receiver = ok.wr1;
-        else if (recRoll < 0.85) receiver = ok.wr2;
+        if (recRoll2 < 0.40) receiver = ok.wr1;
+        else if (recRoll2 < 0.70) receiver = ok.wr2;
         else receiver = ok.te;
 
         ob.receivingTargets += 1;
@@ -889,56 +889,73 @@ export function simulatePlayByPlay(
       };
     }
 
-    // WR1 — split receiving stats roughly
+    // Receivers — NFL-realistic target shares: WR1 ~40%, WR2 ~30%, TE ~30%
     const totalRecYards = bucket.receivingYards;
     const totalRec = bucket.receptions;
     const totalTgts = bucket.receivingTargets;
-    const totalRecTDs = bucket.receivingTDs; // note: tracked on QB bucket for now; split manually
     const passTDs = bucket.passTDs;
 
     if (keyPlayers.wr1) {
       playerStats[keyPlayers.wr1.id] = {
         gamesPlayed: 1,
-        targets: Math.round(totalTgts * 0.50),
-        receptions: Math.round(totalRec * 0.50),
-        receivingYards: Math.round(totalRecYards * 0.50),
-        receivingTDs: passTDs > 0 ? Math.round(passTDs * 0.5) : 0,
+        targets: Math.round(totalTgts * 0.40),
+        receptions: Math.round(totalRec * 0.40),
+        receivingYards: Math.round(totalRecYards * 0.40),
+        receivingTDs: passTDs > 0 ? Math.round(passTDs * 0.40) : 0,
       };
     }
     if (keyPlayers.wr2) {
       playerStats[keyPlayers.wr2.id] = {
         gamesPlayed: 1,
-        targets: Math.round(totalTgts * 0.28),
-        receptions: Math.round(totalRec * 0.28),
-        receivingYards: Math.round(totalRecYards * 0.28),
-        receivingTDs: passTDs > 1 ? Math.round(passTDs * 0.3) : 0,
+        targets: Math.round(totalTgts * 0.30),
+        receptions: Math.round(totalRec * 0.30),
+        receivingYards: Math.round(totalRecYards * 0.30),
+        receivingTDs: passTDs > 1 ? Math.round(passTDs * 0.30) : 0,
       };
     }
     if (keyPlayers.te) {
       playerStats[keyPlayers.te.id] = {
         gamesPlayed: 1,
-        targets: Math.round(totalTgts * 0.22),
-        receptions: Math.round(totalRec * 0.22),
-        receivingYards: Math.round(totalRecYards * 0.22),
-        receivingTDs: passTDs > 1 ? Math.round(passTDs * 0.2) : 0,
+        targets: Math.round(totalTgts * 0.30),
+        receptions: Math.round(totalRec * 0.30),
+        receivingYards: Math.round(totalRecYards * 0.30),
+        receivingTDs: passTDs > 1 ? Math.round(passTDs * 0.30) : 0,
       };
     }
 
-    // Defenders
+    // Defenders — position-based tackle/sack/INT distribution
     const defenders = teamPlayers.filter(p =>
       ['DL', 'LB', 'CB', 'S'].includes(p.position) && (!p.injury || p.injury.weeksLeft === 0),
     );
     const totalTackles = Math.max(bucket.tackles, 30 + Math.floor(Math.random() * 20));
+    // Position weights: LB ~57%, DB ~28%, DL ~15%
+    const defWeights = defenders.map(d => {
+      const posW = d.position === 'LB' ? 3.5 : (d.position === 'CB' || d.position === 'S') ? 1.8 : 0.8;
+      return posW * (d.ratings.tackling / 70);
+    });
+    const totalWeight = defWeights.reduce((s, w) => s + w, 0) || 1;
+    let remainingSacks = bucket.sacks;
+    let remainingINTs = bucket.defensiveINTs;
     for (let i = 0; i < defenders.length; i++) {
-      const share = 1 / Math.max(1, defenders.length);
-      const tackles = Math.round(totalTackles * share * (0.8 + Math.random() * 0.4));
+      const share = defWeights[i] / totalWeight;
+      const tackles = Math.round(totalTackles * share * (0.85 + Math.random() * 0.3));
+      // Sacks: DL ~70%, LB ~25%, DB ~5%
+      let sacks = 0;
+      if (remainingSacks > 0) {
+        const sackChance = defenders[i].position === 'DL' ? 0.35 : defenders[i].position === 'LB' ? 0.15 : 0.03;
+        if (Math.random() < sackChance) { sacks = 1; remainingSacks--; }
+      }
+      // INTs: CB ~65%, S ~25%, LB ~10%
+      let ints = 0;
+      if (remainingINTs > 0) {
+        const intChance = defenders[i].position === 'CB' ? 0.20 : defenders[i].position === 'S' ? 0.10 : 0.03;
+        if (Math.random() < intChance) { ints = 1; remainingINTs--; }
+      }
       playerStats[defenders[i].id] = {
         gamesPlayed: 1,
         tackles,
-        sacks: defenders[i].position === 'DL' && Math.random() < 0.3 ? (bucket.sacks > 0 ? 1 : 0) : 0,
-        defensiveINTs: defenders[i].position === 'CB' && Math.random() < 0.15
-          ? (bucket.defensiveINTs > 0 ? 1 : 0)
-          : 0,
+        sacks,
+        defensiveINTs: ints,
       };
     }
 
