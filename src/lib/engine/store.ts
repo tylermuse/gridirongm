@@ -6,20 +6,22 @@ function uuid(): string {
 import type {
   LeagueState, Team, Player, GameResult, PlayerStats,
   NewsItem, TradeProposal, ResigningEntry, DraftPick, LeagueSettings,
+  HoldoutEntry, TradeRumor, Rivalry, RivalryEvent,
 } from '@/types';
 import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
-import { generateRoster, generateDraftClass, generatePlayer } from './playerGen';
+import { generateRoster, generateDraftClass, generatePlayer, generateCombineStats } from './playerGen';
 import { resetUsedNames } from '../data/names';
 import { generateSchedule } from './schedule';
-import { simulateGame } from './simulate';
+import { simulateGame, generateBettingLine } from './simulate';
 import { developPlayers } from './development';
 import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
+import { generateCoachingStaff, coachingBonus } from './coaching';
 
-const SAVE_VERSION = 14;
+const SAVE_VERSION = 17;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
@@ -56,6 +58,7 @@ interface GameStore extends LeagueState {
   passOnResigning: (playerId: string) => void;
   passOnResigningBatch: (playerIds: string[]) => void;
   franchiseTagPlayer: (playerId: string) => boolean;
+  resolveHoldout: (playerId: string, resolution: 'extend' | 'deny') => void;
   advanceToDraft: () => void;
   draftPlayer: (playerId: string) => void;
   simDraftPick: () => void;
@@ -79,7 +82,12 @@ interface GameStore extends LeagueState {
     receivedPickIds: string[],
     counterpartTeamId: string,
     skipValueCheck?: boolean,
-  ) => boolean;
+  ) => { success: boolean; reason?: string };
+  generateCounterOffer: (
+    receivedPlayerIds: string[],
+    receivedPickIds: string[],
+    counterpartTeamId: string,
+  ) => { sendPlayerIds: string[]; sendPickIds: string[] } | null;
   respondToTradeProposal: (proposalId: string, accept: boolean) => boolean;
   rejectAllTradeProposals: () => void;
   solicitTradingBlockProposals: (playerIds: string[], pickIds: string[], seekPositions: Position[], seekDraftPicks?: boolean) => void;
@@ -747,6 +755,58 @@ function computeResigningEntry(player: Player, team: Team): ResigningEntry {
   return { playerId: player.id, askingSalary, askingYears };
 }
 
+/**
+ * Compute holdout demands for under-contract players who are underpaid/unhappy.
+ * Only applies to the user's team. Capped at 3 holdouts.
+ */
+function computeHoldoutDemands(players: Player[], userTeamId: string, season: number): HoldoutEntry[] {
+  const candidates = players.filter(p =>
+    p.teamId === userTeamId &&
+    !p.retired &&
+    !p.onIR &&
+    p.contract.yearsLeft >= 2 && // must have 2+ years remaining
+    !(p.lastRestructuredSeason !== undefined && season - p.lastRestructuredSeason < 2), // not recently restructured
+  );
+
+  const eligible: { player: Player; underpaidRatio: number }[] = [];
+
+  for (const p of candidates) {
+    const marketValue = estimateSalary(p.ratings.overall, p.position, p.age, p.potential);
+    const underpaidRatio = marketValue / Math.max(0.5, p.contract.salary);
+
+    // Must be significantly underpaid (market > 1.35x current salary)
+    if (underpaidRatio < 1.35) continue;
+
+    // Gate: low mood OR elite player
+    if (p.mood >= 50 && p.ratings.overall < 85) continue;
+
+    eligible.push({ player: p, underpaidRatio });
+  }
+
+  // Sort by underpaid ratio (most underpaid first), star priority
+  eligible.sort((a, b) => {
+    const starA = a.player.devTrait === 'star' ? 1 : 0;
+    const starB = b.player.devTrait === 'star' ? 1 : 0;
+    return (b.underpaidRatio + starB * 0.5) - (a.underpaidRatio + starA * 0.5);
+  });
+
+  // Cap at 3
+  const selected = eligible.slice(0, 3);
+
+  return selected.map(({ player }) => {
+    const marketValue = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
+    // They want somewhere between market and 110% of market
+    const demandedSalary = Math.round(marketValue * (1.0 + Math.random() * 0.1) * 10) / 10;
+    const demandedYears = player.age >= 30 ? 2 : player.age >= 27 ? 3 : 4;
+    return {
+      playerId: player.id,
+      demandedSalary,
+      demandedYears,
+      resolved: false,
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Playoff helpers
 // ---------------------------------------------------------------------------
@@ -1116,9 +1176,11 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
     .filter(p => p.teamId === state.userTeamId && !TRADE_EXCLUDED_POSITIONS.has(p.position));
   if (userPlayers.length === 0) return [];
 
-  // Each AI team has a 5% chance per week of proposing a trade
+  // Each AI team has a 5% chance per week of proposing a trade (15% if active rumor)
   for (const aiTeam of aiTeams) {
-    if (Math.random() > 0.05) continue;
+    const hasActiveRumor = (state.tradeRumors ?? []).some(r => r.teamId === aiTeam.id && !r.resolved && r._accurate);
+    const tradeChance = hasActiveRumor ? 0.15 : 0.05;
+    if (Math.random() > tradeChance) continue;
     if (state.tradeProposals.filter(p => p.proposingTeamId === aiTeam.id && p.status === 'pending').length > 0) continue;
 
     const aiRoster = state.players.filter(p => p.teamId === aiTeam.id && !p.retired);
@@ -1252,6 +1314,7 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   seasonHistory: [],
   saveVersion: SAVE_VERSION,
   resigningPlayers: [],
+  holdoutDemands: [],
   tradeProposals: [],
   scoutingLevel: 0,
   draftScoutingData: {},
@@ -1260,7 +1323,227 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   suppressTradePopups: false,
   weeklyRecaps: [],
   achievements: [],
+  tradeRumors: [],
+  rivalries: [],
 };
+
+// ---------------------------------------------------------------------------
+// Trade Rumors
+// ---------------------------------------------------------------------------
+
+function generateTradeRumors(state: LeagueState): TradeRumor[] {
+  if (state.phase !== 'regular' || state.week < 4 || state.week > 12) return [];
+  const rumors: TradeRumor[] = [];
+  const maxNew = 3;
+
+  for (const team of state.teams) {
+    if (rumors.length >= maxNew) break;
+    if (Math.random() > 0.15) continue; // 15% chance per team
+
+    const teamRoster = state.players.filter(p => p.teamId === team.id && !p.retired);
+    const winPctVal = team.record.wins / Math.max(1, team.record.wins + team.record.losses);
+    const isAccurate = Math.random() < 0.6; // 60% accuracy
+
+    // Deadline buzz: any team
+    if (state.week >= 10 && Math.random() < 0.4) {
+      const target = teamRoster.filter(p => p.ratings.overall >= 70)
+        .sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+      if (target) {
+        rumors.push({
+          id: uuid(), season: state.season, week: state.week,
+          type: 'deadline_buzz', teamId: team.id, playerIds: [target.id],
+          headline: `Trade deadline heating up around ${target.firstName} ${target.lastName}`,
+          detail: `Multiple teams reportedly making calls about the ${team.city} ${team.name} ${target.position}. ${target.contract.yearsLeft <= 1 ? 'With an expiring contract, the price may be right.' : 'A deal would be costly given his contract.'}`,
+          resolved: false, _accurate: isAccurate,
+        });
+        continue;
+      }
+    }
+
+    // Star available: losing team with good player on expiring deal
+    if (winPctVal <= 0.4) {
+      const expStars = teamRoster.filter(p => p.ratings.overall >= 80 && p.contract.yearsLeft <= 1)
+        .sort((a, b) => b.ratings.overall - a.ratings.overall);
+      if (expStars.length > 0) {
+        const p = expStars[0];
+        rumors.push({
+          id: uuid(), season: state.season, week: state.week,
+          type: 'star_available', teamId: team.id, playerIds: [p.id],
+          headline: `Sources: ${team.city} listening to offers for ${p.firstName} ${p.lastName}`,
+          detail: `The ${team.name} (${team.record.wins}-${team.record.losses}) are reportedly open to moving their ${p.ratings.overall} OVR ${p.position} with an expiring contract.`,
+          resolved: false, _accurate: isAccurate,
+        });
+        continue;
+      }
+
+      // Shopping pick
+      if (team.record.wins <= 3) {
+        rumors.push({
+          id: uuid(), season: state.season, week: state.week,
+          type: 'shopping_pick', teamId: team.id, playerIds: [],
+          headline: `${team.city} reportedly shopping their 1st round pick`,
+          detail: `With a ${team.record.wins}-${team.record.losses} record, the ${team.name} may look to acquire win-now talent by leveraging their high draft position.`,
+          resolved: false, _accurate: isAccurate,
+        });
+        continue;
+      }
+    }
+
+    // Position need: team weak at a position
+    const posStarters = POSITIONS.filter(pos => pos !== 'K' && pos !== 'P').map(pos => {
+      const posPlayers = teamRoster.filter(p => p.position === pos).sort((a, b) => b.ratings.overall - a.ratings.overall);
+      return { pos, bestOvr: posPlayers[0]?.ratings.overall ?? 0 };
+    }).sort((a, b) => a.bestOvr - b.bestOvr);
+    const weakest = posStarters[0];
+    if (weakest && weakest.bestOvr < 65) {
+      rumors.push({
+        id: uuid(), season: state.season, week: state.week,
+        type: 'position_need', teamId: team.id, playerIds: [],
+        headline: `${team.city} actively seeking ${weakest.pos} help`,
+        detail: `The ${team.name} starter at ${weakest.pos} grades out at just ${weakest.bestOvr} OVR — one of the worst at the position league-wide. Expect calls to be made.`,
+        resolved: false, _accurate: isAccurate,
+      });
+      continue;
+    }
+
+    // Blockbuster: two teams with complementary needs
+    if (Math.random() < 0.3) {
+      const otherTeam = state.teams.find(t => t.id !== team.id && Math.random() < 0.1);
+      if (otherTeam) {
+        rumors.push({
+          id: uuid(), season: state.season, week: state.week,
+          type: 'blockbuster', teamId: team.id, targetTeamId: otherTeam.id, playerIds: [],
+          headline: `Early talks between ${team.city} and ${otherTeam.city}`,
+          detail: `Sources indicate the ${team.name} and ${otherTeam.name} have had preliminary trade discussions. No deal is imminent, but both sides are engaged.`,
+          resolved: false, _accurate: isAccurate,
+        });
+      }
+    }
+  }
+
+  return rumors;
+}
+
+function resolveTradeRumors(state: LeagueState): { rumors: TradeRumor[]; news: NewsItem[] } {
+  const news: NewsItem[] = [];
+  const updatedRumors = state.tradeRumors.map(r => {
+    if (r.resolved) return r;
+
+    // Past trade deadline — all unresolved become false alarms
+    if (state.week > 12) {
+      const resolved = { ...r, resolved: true, outcome: 'false_alarm' as const, resolvedWeek: state.week };
+      if (r.playerIds.length > 0) {
+        const p = state.players.find(pl => pl.id === r.playerIds[0]);
+        if (p) {
+          news.push(makeNews({
+            season: state.season, week: state.week, type: 'rumor',
+            headline: `Despite rumors, ${p.firstName} ${p.lastName} stays put in ${state.teams.find(t => t.id === r.teamId)?.city ?? 'town'}`,
+            isUserTeam: r.teamId === state.userTeamId,
+            teamId: r.teamId, playerIds: [p.id],
+          }));
+        }
+      }
+      return resolved;
+    }
+    return r;
+  });
+
+  return { rumors: updatedRumors, news };
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic Rivalries
+// ---------------------------------------------------------------------------
+
+function updateRivalries(state: LeagueState, weekGames: GameResult[]): { rivalries: Rivalry[]; news: NewsItem[] } {
+  const rivalries = [...(state.rivalries ?? [])];
+  const news: NewsItem[] = [];
+
+  for (const game of weekGames) {
+    if (!game.played) continue;
+    const homeTeam = state.teams.find(t => t.id === game.homeTeamId);
+    const awayTeam = state.teams.find(t => t.id === game.awayTeamId);
+    if (!homeTeam || !awayTeam) continue;
+
+    const margin = Math.abs(game.homeScore - game.awayScore);
+    const winnerId = game.homeScore > game.awayScore ? game.homeTeamId : game.awayTeamId;
+    const loserId = winnerId === game.homeTeamId ? game.awayTeamId : game.homeTeamId;
+    const winnerTeam = state.teams.find(t => t.id === winnerId)!;
+    const loserTeam = state.teams.find(t => t.id === loserId)!;
+
+    // Find existing rivalry
+    let rivalry = rivalries.find(r =>
+      (r.team1Id === game.homeTeamId && r.team2Id === game.awayTeamId) ||
+      (r.team1Id === game.awayTeamId && r.team2Id === game.homeTeamId)
+    );
+
+    // Determine intensity delta
+    let delta = 0;
+    const events: RivalryEvent[] = [];
+    const isDivision = homeTeam.conference === awayTeam.conference && homeTeam.division === awayTeam.division;
+
+    if (isDivision) delta += 3;
+    if (margin <= 7) {
+      delta += 8;
+      if (margin <= 3) {
+        events.push({ season: state.season, week: state.week, description: `${winnerTeam.abbreviation} edges ${loserTeam.abbreviation} ${game.homeScore > game.awayScore ? game.homeScore : game.awayScore}-${game.homeScore > game.awayScore ? game.awayScore : game.homeScore}`, type: 'upset' });
+      }
+    }
+    if (margin >= 21) {
+      // Check if underdog won (simple heuristic: worse record won)
+      const winnerWinPct = winnerTeam.record.wins / Math.max(1, winnerTeam.record.wins + winnerTeam.record.losses);
+      const loserWinPct = loserTeam.record.wins / Math.max(1, loserTeam.record.wins + loserTeam.record.losses);
+      if (winnerWinPct < loserWinPct - 0.15) {
+        delta += 12;
+        events.push({ season: state.season, week: state.week, description: `Underdog ${winnerTeam.abbreviation} blows out ${loserTeam.abbreviation} ${Math.max(game.homeScore, game.awayScore)}-${Math.min(game.homeScore, game.awayScore)}`, type: 'blowout' });
+      } else {
+        events.push({ season: state.season, week: state.week, description: `${winnerTeam.abbreviation} dominates ${loserTeam.abbreviation} ${Math.max(game.homeScore, game.awayScore)}-${Math.min(game.homeScore, game.awayScore)}`, type: 'blowout' });
+        delta += 5;
+      }
+    }
+
+    if (delta < 3 && !isDivision) continue; // Not interesting enough to form/update rivalry
+
+    if (rivalry) {
+      rivalry.intensity = Math.min(100, rivalry.intensity + delta);
+      rivalry.events.push(...events);
+      // Keep events trimmed
+      if (rivalry.events.length > 10) rivalry.events = rivalry.events.slice(-10);
+    } else if (delta >= 8 || isDivision) {
+      // Cap at ~20 active rivalries
+      if (rivalries.length >= 20) continue;
+      rivalry = {
+        id: uuid(),
+        team1Id: game.homeTeamId,
+        team2Id: game.awayTeamId,
+        intensity: Math.min(100, delta + 10),
+        formed: state.season,
+        events,
+        type: isDivision ? 'divisional' : 'emerging',
+      };
+      rivalries.push(rivalry);
+    }
+
+    // Generate news for intense rivalry games
+    if (rivalry && rivalry.intensity >= 50 && margin <= 7) {
+      news.push(makeNews({
+        season: state.season, week: state.week, type: 'rumor',
+        headline: `Rivalry heats up: ${winnerTeam.city} edges ${loserTeam.city} ${Math.max(game.homeScore, game.awayScore)}-${Math.min(game.homeScore, game.awayScore)}`,
+        body: `The rivalry between the ${homeTeam.name} and ${awayTeam.name} continues to intensify after another hard-fought battle.`,
+        teamId: winnerId,
+        isUserTeam: winnerId === state.userTeamId || loserId === state.userTeamId,
+      }));
+    }
+  }
+
+  return { rivalries, news };
+}
+
+function decayRivalries(rivalries: Rivalry[]): Rivalry[] {
+  return rivalries
+    .map(r => ({ ...r, intensity: r.intensity - 15 }))
+    .filter(r => r.intensity >= 10);
+}
 
 // ---------------------------------------------------------------------------
 // Pure function: simulate one week of games (no store dependency)
@@ -1300,7 +1583,32 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     const awayRoster = awayTeam?.depthChart
       ? sortRosterByDepthChart(awayRosterRaw, awayTeam.depthChart)
       : awayRosterRaw;
-    return simulateGame(game, homeRoster, awayRoster);
+
+    // Coaching bonus applied to team power
+    const homeCoachBonus = homeTeam ? coachingBonus(homeTeam, homeRosterRaw) : 0;
+    const awayCoachBonus = awayTeam ? coachingBonus(awayTeam, awayRosterRaw) : 0;
+
+    // Generate betting line before game
+    const bettingLine = generateBettingLine(homeRosterRaw, awayRosterRaw, homeCoachBonus, awayCoachBonus);
+
+    // Check for rivalry intensity between these teams
+    const rivalry = (state.rivalries ?? []).find(r =>
+      (r.team1Id === game.homeTeamId && r.team2Id === game.awayTeamId) ||
+      (r.team1Id === game.awayTeamId && r.team2Id === game.homeTeamId)
+    );
+    const rivalryIntensity = rivalry?.intensity ?? 0;
+
+    const result = simulateGame(game, homeRoster, awayRoster, homeCoachBonus, awayCoachBonus, rivalryIntensity);
+
+    // Compute ATS coverage
+    const scoreDiff = result.homeScore - result.awayScore;
+    const adjustedDiff = scoreDiff + bettingLine.spread; // spread is negative when home favored
+    const spreadCover: 'home' | 'away' | 'push' =
+      adjustedDiff > 0 ? 'home' : adjustedDiff < 0 ? 'away' : 'push';
+    const totalPoints = result.homeScore + result.awayScore;
+    const overHit = totalPoints > bettingLine.overUnder;
+
+    return { ...result, bettingLine, spreadCover, overHit };
   });
 
   const newSchedule = state.schedule.map(g => {
@@ -1333,6 +1641,14 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       if (opponent && opponent.conference === team.conference && opponent.division === team.division) {
         if (teamScore > oppScore) record.divisionWins += 1;
         else if (teamScore < oppScore) record.divisionLosses += 1;
+      }
+      // ATS tracking
+      if (game.spreadCover) {
+        const teamCovered = (isHome && game.spreadCover === 'home') || (!isHome && game.spreadCover === 'away');
+        const teamLostCover = (isHome && game.spreadCover === 'away') || (!isHome && game.spreadCover === 'home');
+        if (teamCovered) record.atsWins = (record.atsWins ?? 0) + 1;
+        else if (teamLostCover) record.atsLosses = (record.atsLosses ?? 0) + 1;
+        else record.atsPushes = (record.atsPushes ?? 0) + 1;
       }
     }
     return { ...team, record };
@@ -1396,6 +1712,20 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     return { ...p, mood: newMood };
   });
 
+  // Trade rumors
+  const newRumors = generateTradeRumors(state);
+  const rumorNews: NewsItem[] = newRumors.map(r => makeNews({
+    season: state.season, week: state.week, type: 'rumor',
+    headline: r.headline, body: r.detail,
+    teamId: r.teamId, isUserTeam: r.teamId === state.userTeamId,
+  }));
+  const { rumors: resolvedRumors, news: rumorResolutionNews } = resolveTradeRumors({
+    ...state, tradeRumors: [...(state.tradeRumors ?? []), ...newRumors],
+  });
+
+  // Dynamic rivalries
+  const { rivalries: updatedRivalries, news: rivalryNews } = updateRivalries(state, updatedGames);
+
   const maxWeek = Math.max(...state.schedule.map(g => g.week));
   const nextWeek = state.week + 1;
   const isSeasonOver = nextWeek > maxWeek;
@@ -1407,8 +1737,10 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       players: moodUpdatedPlayers,
       week: isSeasonOver ? state.week : nextWeek,
       phase: isSeasonOver ? 'playoffs' : 'regular',
-      newsItems: [...state.newsItems, ...weekNews],
+      newsItems: [...state.newsItems, ...weekNews, ...rumorNews, ...rumorResolutionNews, ...rivalryNews],
       tradeProposals: [...state.tradeProposals, ...newTradeProposals],
+      tradeRumors: resolvedRumors,
+      rivalries: updatedRivalries,
     },
     isSeasonOver,
   };
@@ -1509,6 +1841,7 @@ export const useGameStore = create<GameStore>()(
             seasonHistory: [],
             saveVersion: SAVE_VERSION,
             resigningPlayers: resigningEntries,
+            holdoutDemands: [],
             tradeProposals: [],
             scoutingLevel: 0,
             draftScoutingData: {},
@@ -1517,6 +1850,8 @@ export const useGameStore = create<GameStore>()(
             suppressTradePopups: false,
             weeklyRecaps: [],
             achievements: [],
+            tradeRumors: [],
+            rivalries: [],
           });
           return;
         } catch (error) {
@@ -1629,6 +1964,7 @@ export const useGameStore = create<GameStore>()(
           seasonHistory: [],
           saveVersion: SAVE_VERSION,
           resigningPlayers: genResigningEntries,
+          holdoutDemands: [],
           tradeProposals: [],
           scoutingLevel: 0,
           draftScoutingData: {},
@@ -1637,6 +1973,8 @@ export const useGameStore = create<GameStore>()(
           suppressTradePopups: false,
           weeklyRecaps: [],
           achievements: [],
+          tradeRumors: [],
+          rivalries: [],
         });
       },
 
@@ -1684,12 +2022,14 @@ export const useGameStore = create<GameStore>()(
         let week = current.week;
         let newsItems = [...current.newsItems];
         let tradeProposals = [...current.tradeProposals];
+        let tradeRumors = [...(current.tradeRumors ?? [])];
+        let rivalries = [...(current.rivalries ?? [])];
         let weeklyRecaps = [...current.weeklyRecaps];
         let isSeasonOver = false;
 
         for (let guard = 0; guard < 200 && week < targetWeek; guard++) {
           const simmedWeek = week;
-          const fakeState = { ...current, schedule, teams, players, week, newsItems, tradeProposals, weeklyRecaps, phase: 'regular' as const } as LeagueState;
+          const fakeState = { ...current, schedule, teams, players, week, newsItems, tradeProposals, tradeRumors, rivalries, weeklyRecaps, phase: 'regular' as const } as LeagueState;
           const result = simulateOneWeek(fakeState);
           if (!result) break;
 
@@ -1699,6 +2039,8 @@ export const useGameStore = create<GameStore>()(
           week = result.patch.week as number;
           newsItems = result.patch.newsItems as typeof newsItems;
           tradeProposals = result.patch.tradeProposals as typeof tradeProposals;
+          tradeRumors = (result.patch.tradeRumors as typeof tradeRumors) ?? tradeRumors;
+          rivalries = (result.patch.rivalries as typeof rivalries) ?? rivalries;
 
           // Generate recap for the week just simmed
           const weekGames = schedule.filter(g => g.week === simmedWeek && g.played);
@@ -1715,9 +2057,9 @@ export const useGameStore = create<GameStore>()(
           // Compute playoff bracket here in the same set() call to avoid stale get()
           const seeds = computePlayoffSeeds(teams);
           const bracket = buildBracket(seeds, teams);
-          set({ schedule, teams, players, week, newsItems, tradeProposals, weeklyRecaps, phase: 'playoffs', playoffSeeds: seeds, playoffBracket: bracket });
+          set({ schedule, teams, players, week, newsItems, tradeProposals, tradeRumors, rivalries, weeklyRecaps, phase: 'playoffs', playoffSeeds: seeds, playoffBracket: bracket });
         } else {
-          set({ schedule, teams, players, week, newsItems, tradeProposals, weeklyRecaps, phase: 'regular' });
+          set({ schedule, teams, players, week, newsItems, tradeProposals, tradeRumors, rivalries, weeklyRecaps, phase: 'regular' });
         }
       },
 
@@ -2085,6 +2427,23 @@ export const useGameStore = create<GameStore>()(
         const currentUserTeam = teamsAfterRetirement.find(t => t.id === state.userTeamId) ?? userTeam;
         const resigningPlayers = expiringPlayers.map(p => computeResigningEntry(p, currentUserTeam));
 
+        // Compute holdout demands for under-contract stars
+        const holdoutDemands = computeHoldoutDemands(playersAfterRetirement, state.userTeamId, state.season);
+        const holdoutNews: NewsItem[] = holdoutDemands.map(h => {
+          const hp = playersAfterRetirement.find(p => p.id === h.playerId);
+          if (!hp) return null;
+          return makeNews({
+            season: state.season,
+            week: 0,
+            type: 'system',
+            teamId: state.userTeamId,
+            playerIds: [h.playerId],
+            headline: `${hp.firstName} ${hp.lastName} demands a new contract`,
+            body: `The ${hp.position} is unhappy with his current deal ($${hp.contract.salary}M/yr) and wants $${h.demandedSalary}M/yr for ${h.demandedYears} years. He will hold out if denied.`,
+            isUserTeam: true,
+          });
+        }).filter((n): n is NewsItem => n !== null);
+
         // Recalculate all team payrolls from scratch to prevent drift after regular season
         const recalcTeams = teamsAfterRetirement.map(t => ({
           ...t,
@@ -2094,9 +2453,10 @@ export const useGameStore = create<GameStore>()(
         set({
           phase: 'resigning',
           resigningPlayers,
+          holdoutDemands,
           teams: recalcTeams,
           players: playersAfterRetirement,
-          newsItems: [...state.newsItems, ...retirementNews],
+          newsItems: [...state.newsItems, ...retirementNews, ...holdoutNews],
         });
       },
 
@@ -2232,6 +2592,50 @@ export const useGameStore = create<GameStore>()(
           ],
         });
         return true;
+      },
+
+      // Resolve a contract holdout demand
+      resolveHoldout: (playerId: string, resolution: 'extend' | 'deny') => {
+        const state = get();
+        const demand = state.holdoutDemands.find(h => h.playerId === playerId);
+        if (!demand || demand.resolved) return;
+
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return;
+
+        const updatedDemands = state.holdoutDemands.map(h =>
+          h.playerId === playerId ? { ...h, resolved: true } : h,
+        );
+
+        if (resolution === 'deny') {
+          // Player holds out — performance penalty until season ends
+          const denyNews = makeNews({
+            season: state.season,
+            week: 0,
+            type: 'system',
+            teamId: state.userTeamId,
+            playerIds: [playerId],
+            headline: `${player.firstName} ${player.lastName} begins holdout`,
+            body: `After being denied a new contract, the ${player.position} will hold out. Expect reduced performance until the situation is resolved.`,
+            isUserTeam: true,
+          });
+
+          set({
+            holdoutDemands: updatedDemands,
+            players: state.players.map(p =>
+              p.id === playerId ? { ...p, holdout: true, mood: Math.max(0, p.mood - 10) } : p,
+            ),
+            newsItems: [...state.newsItems, denyNews],
+          });
+        } else {
+          // Extend — mark resolved, clear holdout flag. UI will open negotiation.
+          set({
+            holdoutDemands: updatedDemands,
+            players: state.players.map(p =>
+              p.id === playerId ? { ...p, holdout: false } : p,
+            ),
+          });
+        }
       },
 
       advanceToDraft: () => {
@@ -2385,6 +2789,7 @@ export const useGameStore = create<GameStore>()(
           draftOrder,
           draftResults: [],
           resigningPlayers: [],
+          holdoutDemands: [],
           draftScoutingData: scoutingData,
         });
       },
@@ -3253,12 +3658,12 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         // Trade deadline only applies during regular season; offseason trades always allowed
         const offseasonPhases = ['resigning', 'draft', 'freeAgency', 'offseason', 'preseason'];
-        if (state.phase === 'regular' && state.week > 12) return false;
-        if (state.phase === 'playoffs') return false; // No trades during playoffs
+        if (state.phase === 'regular' && state.week > 12) return { success: false, reason: 'Trade deadline has passed' };
+        if (state.phase === 'playoffs') return { success: false, reason: 'No trades during playoffs' };
 
         const userTeam = state.teams.find(t => t.id === state.userTeamId);
         const aiTeam = state.teams.find(t => t.id === counterpartTeamId);
-        if (!userTeam || !aiTeam) return false;
+        if (!userTeam || !aiTeam) return { success: false, reason: 'Team not found' };
 
         // Evaluate trade values
         const offeredValue = offeredPlayerIds.reduce((sum, id) => {
@@ -3278,7 +3683,7 @@ export const useGameStore = create<GameStore>()(
         }, 0);
 
         // AI accepts if within 10% value (skip for AI-initiated proposals already approved)
-        if (!skipValueCheck && offeredValue < receivedValue * 0.90) return false;
+        if (!skipValueCheck && offeredValue < receivedValue * 0.90) return { success: false, reason: 'Trade value too low — AI rejected' };
 
         // Block trades that would push user over the salary cap
         const offeredSalaryTotal = offeredPlayerIds.reduce((sum, id) => {
@@ -3291,7 +3696,7 @@ export const useGameStore = create<GameStore>()(
         }, 0);
         const newPayroll = userTeam.totalPayroll - offeredSalaryTotal + receivedSalaryTotal;
         if (newPayroll > userTeam.salaryCap) {
-          return false;
+          return { success: false, reason: 'Trade would exceed salary cap' };
         }
 
         // Execute the trade
@@ -3485,7 +3890,78 @@ export const useGameStore = create<GameStore>()(
           newsItems: [...state.newsItems, tradeNews],
         });
 
-        return true;
+        return { success: true };
+      },
+
+      generateCounterOffer: (receivedPlayerIds, receivedPickIds, counterpartTeamId) => {
+        const state = get();
+        const userTeam = state.teams.find(t => t.id === state.userTeamId);
+        const aiTeam = state.teams.find(t => t.id === counterpartTeamId);
+        if (!userTeam || !aiTeam) return null;
+
+        // Calculate what the AI wants (value of players/picks the user is asking for)
+        const targetValue = receivedPlayerIds.reduce((sum, id) => {
+          const p = state.players.find(pl => pl.id === id);
+          return sum + (p ? playerTradeValue(p) : 0);
+        }, 0) + receivedPickIds.reduce((sum, id) => {
+          const pick = aiTeam.draftPicks.find(pk => pk.id === id);
+          return sum + (pick ? pickTradeValue(pick) : 0);
+        }, 0);
+
+        // AI wants at least 90% of the value
+        const neededValue = targetValue * 0.90;
+
+        // Collect user's available assets sorted by value
+        const userRoster = state.players
+          .filter(p => p.teamId === state.userTeamId && !p.retired && !receivedPlayerIds.includes(p.id))
+          .map(p => ({ id: p.id, value: playerTradeValue(p), salary: p.contract.salary, ovr: p.ratings.overall }))
+          .sort((a, b) => a.value - b.value); // ascending — prefer sending lower value players
+
+        const userPicks = userTeam.draftPicks
+          .filter(pk => pk.year >= state.season && !pk.playerId)
+          .map(pk => ({ id: pk.id, value: pickTradeValue(pk), round: pk.round }))
+          .sort((a, b) => b.round - a.round); // prefer sending later picks first
+
+        const sendPlayerIds: string[] = [];
+        const sendPickIds: string[] = [];
+        let accumulated = 0;
+
+        // First try to fill with draft picks (less painful)
+        for (const pk of userPicks) {
+          if (accumulated >= neededValue) break;
+          sendPickIds.push(pk.id);
+          accumulated += pk.value;
+        }
+
+        // If still short, add players (lowest value first)
+        if (accumulated < neededValue) {
+          for (const p of userRoster) {
+            if (accumulated >= neededValue) break;
+            if (p.ovr < 55) continue; // don't offer terrible players
+            sendPlayerIds.push(p.id);
+            accumulated += p.value;
+          }
+        }
+
+        if (accumulated < neededValue) return null; // can't match
+
+        // Trim excess: remove the last added asset if we're way over
+        while (sendPickIds.length > 1) {
+          const lastPick = userPicks.find(pk => pk.id === sendPickIds[sendPickIds.length - 1]);
+          if (lastPick && accumulated - lastPick.value >= neededValue) {
+            sendPickIds.pop();
+            accumulated -= lastPick.value;
+          } else break;
+        }
+        while (sendPlayerIds.length > 1) {
+          const lastPlayer = userRoster.find(p => p.id === sendPlayerIds[sendPlayerIds.length - 1]);
+          if (lastPlayer && accumulated - lastPlayer.value >= neededValue) {
+            sendPlayerIds.pop();
+            accumulated -= lastPlayer.value;
+          } else break;
+        }
+
+        return { sendPlayerIds, sendPickIds };
       },
 
       respondToTradeProposal: (proposalId: string, accept: boolean) => {
@@ -3520,7 +3996,7 @@ export const useGameStore = create<GameStore>()(
         // executeTrade expects (userOfferedPlayers, userOfferedPicks, userReceivedPlayers, userReceivedPicks, counterpart).
         // So: user is offering the "requested" players and receiving the "offered" players.
         // skipValueCheck=true because the AI already approved this trade when it proposed it.
-        const success = get().executeTrade(
+        const tradeResult = get().executeTrade(
           proposal.requestedPlayerIds,
           proposal.requestedPickIds,
           proposal.offeredPlayerIds,
@@ -3531,11 +4007,11 @@ export const useGameStore = create<GameStore>()(
 
         set({
           tradeProposals: state.tradeProposals.map(p =>
-            p.id === proposalId ? { ...p, status: accept && success ? 'accepted' : 'rejected' } : p,
+            p.id === proposalId ? { ...p, status: accept && tradeResult.success ? 'accepted' : 'rejected' } : p,
           ),
         });
 
-        return success;
+        return tradeResult.success;
       },
 
       rejectAllTradeProposals: () => {
@@ -4235,10 +4711,13 @@ export const useGameStore = create<GameStore>()(
           newsItems: [...retirementNews, ...voidNews, ...aiRestructureNews],
           seasonHistory: [...state.seasonHistory, newSummary],
           resigningPlayers: [],
+          holdoutDemands: [],
           tradeProposals: [],
           draftScoutingData: {},
           finalsMvpPlayerId: null,
           weeklyRecaps: [],
+          tradeRumors: [],
+          rivalries: decayRivalries(state.rivalries ?? []),
         });
       },
 
@@ -4595,6 +5074,21 @@ export const useGameStore = create<GameStore>()(
               if (dc.season === undefined) dc.season = (state.season as number) ?? 1;
             }
           }
+        }
+        if (version < 15) {
+          // Add holdoutDemands to state
+          if (!state.holdoutDemands) state.holdoutDemands = [];
+        }
+        if (version < 16) {
+          // Add tradeRumors and rivalries to state
+          if (!state.tradeRumors) state.tradeRumors = [];
+          if (!state.rivalries) state.rivalries = [];
+        }
+        if (version < 17) {
+          // Ensure all three arrays exist after migration
+          if (!state.holdoutDemands) state.holdoutDemands = [];
+          if (!state.tradeRumors) state.tradeRumors = [];
+          if (!state.rivalries) state.rivalries = [];
         }
         return state;
       },

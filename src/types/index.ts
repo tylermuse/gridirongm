@@ -131,6 +131,14 @@ export interface Player {
   injury: { type: string; weeksLeft: number } | null;
   /** Currently on Injured Reserve */
   onIR: boolean;
+  /** Development trait — affects how the player grows over time */
+  devTrait?: 'star' | 'normal' | 'late_bloomer' | 'bust';
+  /** Season when the dev trait was revealed to the user (after 1 full season on roster) */
+  devTraitRevealedSeason?: number;
+  /** Projected draft rank (noisy media perception, set at draft class creation) */
+  projectedRank?: number;
+  /** Whether the player is holding out for a new contract */
+  holdout?: boolean;
   /** Scouting label assigned at draft (cosmetic flavor) */
   scoutingLabel?: string;
   /** Deterministic seed for scouting report generation (set at draft class creation) */
@@ -145,6 +153,8 @@ export interface Player {
   lastRestructuredSeason?: number;
   /** Optional photo URL (populated from imported league files) */
   photoUrl?: string;
+  /** Combine measurables (40-yard dash, bench press, vertical jump) */
+  combineStats?: { fortyYard: number; benchPress: number; verticalJump: number };
   /** College / university the player attended (flavor text for draft) */
   college?: string;
   /** Height string e.g. "6'3\"" */
@@ -176,6 +186,12 @@ export interface TeamRecord {
   awayLosses: number;
   conferenceWins: number;
   conferenceLosses: number;
+  /** Against the spread wins (betting) */
+  atsWins?: number;
+  /** Against the spread losses (betting) */
+  atsLosses?: number;
+  /** Against the spread pushes (betting) */
+  atsPushes?: number;
 }
 
 export interface DeadCapEntry {
@@ -186,6 +202,29 @@ export interface DeadCapEntry {
   source?: 'release' | 'trade' | 'void';
   /** Season the dead cap was created */
   season?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Coaching types
+// ---------------------------------------------------------------------------
+
+export type CoachRole = 'HC' | 'OC' | 'DC';
+export type OffensiveScheme = 'spread' | 'west_coast' | 'power_run' | 'air_raid' | 'rpo';
+export type DefensiveScheme = 'cover_3' | 'man_press' | 'tampa_2' | 'blitz_34' | 'zone_blitz';
+
+export interface Coach {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role: CoachRole;
+  ovr: number;
+  age: number;
+  offensiveScheme?: OffensiveScheme;
+  defensiveScheme?: DefensiveScheme;
+  trait: string;
+  yearsWithTeam: number;
+  careerWins: number;
+  careerLosses: number;
 }
 
 export interface Team {
@@ -208,6 +247,8 @@ export interface Team {
   deadCap: DeadCapEntry[];
   /** Whether the franchise tag has been used this season */
   franchiseTagUsed: boolean;
+  /** Coaching staff (HC, OC, DC) */
+  coaches?: Coach[];
   /** Revenue breakdown (computed at start of each season) */
   revenue: {
     tickets: number;
@@ -542,6 +583,54 @@ export interface LeagueState {
   weeklyRecaps: WeeklyRecapData[];
   /** Unlocked achievements */
   achievements: Achievement[];
+  /** Dynamic rivalries between teams */
+  rivalries: Rivalry[];
+  /** Trade rumors generated during the season */
+  tradeRumors: TradeRumor[];
+  /** Underpaid stars demanding new deals during re-signing */
+  holdoutDemands: HoldoutEntry[];
+}
+
+export interface Rivalry {
+  id: string;
+  team1Id: string;
+  team2Id: string;
+  intensity: number;
+  formed: number;
+  events: RivalryEvent[];
+  type: 'divisional' | 'playoff' | 'trade' | 'emerging';
+}
+
+export interface RivalryEvent {
+  season: number;
+  week: number;
+  description: string;
+  type: 'blowout' | 'comeback' | 'upset' | 'playoff_elimination' | 'trade_steal' | 'sweep';
+}
+
+export interface TradeRumor {
+  id: string;
+  season: number;
+  week: number;
+  type: 'star_available' | 'shopping_pick' | 'position_need' | 'blockbuster' | 'deadline_buzz';
+  teamId: string;
+  targetTeamId?: string;
+  playerIds: string[];
+  pickIds?: string[];
+  headline: string;
+  detail: string;
+  resolved: boolean;
+  outcome?: 'accurate' | 'false_alarm';
+  resolvedWeek?: number;
+  /** Hidden flag set at generation — determines if this rumor is "destined" to come true */
+  _accurate?: boolean;
+}
+
+export interface HoldoutEntry {
+  playerId: string;
+  demandedSalary: number;
+  demandedYears: number;
+  resolved: boolean;
 }
 
 export interface WeeklyRecapData {

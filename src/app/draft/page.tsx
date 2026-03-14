@@ -386,6 +386,7 @@ export default function DraftPage() {
     draftScoutingData,
     scoutingLevel,
     draftPlayer,
+    deepScoutPlayer,
     simDraftPick,
     simToUserDraftPick,
     simToEndDraft,
@@ -976,19 +977,18 @@ export default function DraftPage() {
         const prospect = players.find(p => p.id === selectedProspectId);
         if (!prospect) return null;
         const scout = draftScoutingData[selectedProspectId];
-        // Fall back to real OVR if no scouting data (shouldn't happen, but safe)
-        const scoutedOvr = scout?.scoutedOvr ?? prospect.ratings.overall;
-        const scoutError = scout?.error ?? 10;
+        const isScouted = scout?.deepScouted === true;
+        const scoutedCount = Object.values(draftScoutingData).filter(d => d.deepScouted).length;
+        const TOTAL_SCOUTS = 15;
         return (
           <ScoutingReportModal
             player={prospect}
-            scoutingLevel={scoutingLevel}
-            scoutedOvr={scoutedOvr}
-            error={scoutError}
+            isScouted={isScouted}
             onClose={() => setSelectedProspectId(null)}
             onDraft={isUserPick ? () => { draftPlayer(selectedProspectId); setSelectedProspectId(null); } : undefined}
-            onScoutingLevelChange={setScoutingLevel}
+            onScout={() => deepScoutPlayer(selectedProspectId)}
             isUserPick={isUserPick}
+            scoutsRemaining={TOTAL_SCOUTS - scoutedCount}
             teamNeeds={getTeamNeeds(userTeamId)}
             userTeamAbbr={teams.find(t => t.id === userTeamId)?.abbreviation}
           />

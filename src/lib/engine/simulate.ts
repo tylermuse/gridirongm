@@ -64,11 +64,13 @@ export function teamPower(roster: Player[]): { offense: number; defense: number 
 export function generateBettingLine(
   homeRoster: Player[],
   awayRoster: Player[],
+  homeCoachBonus: number = 0,
+  awayCoachBonus: number = 0,
 ): BettingLine {
   const homePow = teamPower(homeRoster);
   const awayPow = teamPower(awayRoster);
-  const homeTotal = homePow.offense + homePow.defense;
-  const awayTotal = awayPow.offense + awayPow.defense;
+  const homeTotal = homePow.offense + homePow.defense + homeCoachBonus;
+  const awayTotal = awayPow.offense + awayPow.defense + awayCoachBonus;
 
   // Spread: power diff scaled to points + 3pt home field advantage
   const rawSpread = (awayTotal - homeTotal) * 0.35 - 3;
@@ -465,6 +467,9 @@ export function simulateGame(
   game: GameResult,
   homeRoster: Player[],
   awayRoster: Player[],
+  homeCoachBonus: number = 0,
+  awayCoachBonus: number = 0,
+  rivalryIntensity: number = 0,
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
