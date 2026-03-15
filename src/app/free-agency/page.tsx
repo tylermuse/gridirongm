@@ -278,7 +278,8 @@ export default function FreeAgencyPage() {
         });
         return;
       }
-      // User clicks "Done" to dismiss
+      // Auto-dismiss after a brief moment so the user sees the confirmation
+      setTimeout(() => setNegotiation(null), 1500);
     }
   }
 
