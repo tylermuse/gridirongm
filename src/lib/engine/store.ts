@@ -571,8 +571,9 @@ function baseErrorForRank(rank: number): number {
   return 10 + Math.min(5, (rank - 100) * 0.03);                  // ±10-15
 }
 
-/** Scouting level multipliers — how much error is retained */
-const SCOUTING_LEVEL_MULT = [1.0, 0.45, 0.20]; // Entry, Pro, Elite
+/** Scouting level multipliers — how much error is retained.
+ *  Level 0 is the default (no tier system) — use moderate error. */
+const SCOUTING_LEVEL_MULT = [0.40, 0.40, 0.20]; // All levels use tighter ranges now
 
 function computeScoutingData(
   prospects: Player[],
@@ -2764,12 +2765,26 @@ export const useGameStore = create<GameStore>()(
           (prospect) => prospect.draftYear === targetDraftYear,
         );
 
-        const draftClass = importedDraftClass.length > 0
+        const rawDraftClass = importedDraftClass.length > 0
           ? importedDraftClass
           : generateDraftClass(224).map((player) => ({
               ...player,
               draftYear: targetDraftYear,
             }));
+
+        // Ensure all prospects have projectedRank (imported prospects won't have it)
+        const needsRanking = rawDraftClass.some(p => p.projectedRank == null);
+        if (needsRanking) {
+          const sorted = [...rawDraftClass].sort((a, b) => {
+            const aOvr = (a.position === 'K' || a.position === 'P') ? a.ratings.overall - 40 : a.ratings.overall;
+            const bOvr = (b.position === 'K' || b.position === 'P') ? b.ratings.overall - 40 : b.ratings.overall;
+            return bOvr - aOvr;
+          });
+          for (let i = 0; i < sorted.length; i++) {
+            sorted[i].projectedRank = i + 1;
+          }
+        }
+        const draftClass = rawDraftClass;
 
         const sortedTeams = [...updatedTeams].sort((a, b) => {
           const aGames = a.record.wins + a.record.losses + a.record.ties;
