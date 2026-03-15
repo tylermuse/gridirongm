@@ -655,11 +655,16 @@ export default function DraftPage() {
   const hasRanks = rawProspects.some(p => p.projectedRank != null);
 
   // Assign ranks on the fly if missing (handles old saves / imported leagues)
+  // Use scoutedOvr (what the user sees) so ranking matches the displayed OVR ranges
   if (!hasRanks && rawProspects.length > 0) {
     const sorted = [...rawProspects].sort((a, b) => {
-      const aOvr = (a.position === 'K' || a.position === 'P') ? a.ratings.overall - 40 : a.ratings.overall;
-      const bOvr = (b.position === 'K' || b.position === 'P') ? b.ratings.overall - 40 : b.ratings.overall;
-      return bOvr - aOvr;
+      const aScout = draftScoutingData[a.id];
+      const bScout = draftScoutingData[b.id];
+      const aOvr = aScout ? aScout.scoutedOvr : a.ratings.overall;
+      const bOvr = bScout ? bScout.scoutedOvr : b.ratings.overall;
+      const aAdj = (a.position === 'K' || a.position === 'P') ? aOvr - 40 : aOvr;
+      const bAdj = (b.position === 'K' || b.position === 'P') ? bOvr - 40 : bOvr;
+      return bAdj - aAdj;
     });
     for (let i = 0; i < sorted.length; i++) {
       sorted[i].projectedRank = i + 1;

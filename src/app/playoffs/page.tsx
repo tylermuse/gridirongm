@@ -252,6 +252,7 @@ function ConferenceBracket({
               userTeamId={userTeamId}
               onTeamClick={onTeamClick}
               onGameClick={onGameClick}
+              onWatchLive={onWatchLive}
             />
           )}
         </div>
