@@ -105,7 +105,7 @@ function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams,
               <td className="py-1.5 text-[var(--text-sec)] text-xs w-6">{i + 1}</td>
               <td className="py-1.5">
                 <div className="flex items-center gap-2">
-                  <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="sm" />
+                  <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} logoUrl={t.logoUrl} size="sm" />
                   <span className="truncate">
                     {t.city} {t.name}
                     {clinch && (

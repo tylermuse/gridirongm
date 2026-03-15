@@ -40,6 +40,7 @@ interface FbgmTeam {
   name: string;
   abbrev: string;
   colors?: string[];
+  imgURL?: string;
 }
 
 interface FbgmPlayer {
@@ -179,6 +180,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       division: divById.get(team.did) ?? template?.division ?? 'East',
       primaryColor,
       secondaryColor,
+      logoUrl: team.imgURL || undefined,
       record: emptyRecord(),
       salaryCap: 300,
       totalPayroll: 0,

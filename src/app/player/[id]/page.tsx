@@ -106,7 +106,7 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
             {/* Avatar / Jersey */}
             <div className="flex flex-col items-center gap-2 shrink-0">
               <PlayerAvatar player={player} size="lg" teamColor={team?.primaryColor ?? '#374151'} />
-              {team && <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="lg" />}
+              {team && <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="lg" />}
               <div className="text-xs font-black text-[var(--text-sec)]">{player.position}</div>
             </div>
 

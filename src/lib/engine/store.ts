@@ -4098,10 +4098,27 @@ export const useGameStore = create<GameStore>()(
             }
           }
 
+          // AI protection: never offer franchise-caliber players unless the incoming
+          // value is truly elite (e.g. multiple 1sts or a superstar in return).
+          // A single 1st round pick (1000 value) shouldn't land a 90+ OVR star.
+          const aiCanOffer = (p: Player) => {
+            const pv = playerTradeValue(p);
+            // Top-3 on roster by OVR are protected — won't trade unless incoming value
+            // is at least 80% of their individual trade value
+            const sorted = [...aiRoster].sort((a, b) => b.ratings.overall - a.ratings.overall);
+            const isTop3 = sorted.slice(0, 3).some(s => s.id === p.id);
+            if (isTop3 && totalBlockedValue < pv * 0.8) return false;
+            // Never offer 85+ OVR players for less than their full value
+            if (p.ratings.overall >= 85 && totalBlockedValue < pv * 0.7) return false;
+            // Don't offer players worth more than 1.5x what we're getting
+            if (pv > totalBlockedValue * 1.5) return false;
+            return true;
+          };
+
           // Step 2: If user specified positions, offer ONLY those positions
           if (hasPosPreference) {
             const seekCandidates = aiRoster
-              .filter(p => seekPosSet.has(p.position))
+              .filter(p => seekPosSet.has(p.position) && aiCanOffer(p))
               .sort((a, b) => b.ratings.overall - a.ratings.overall);
 
             for (const candidate of seekCandidates) {
@@ -4121,7 +4138,7 @@ export const useGameStore = create<GameStore>()(
           // use general candidates to fill remaining value
           if (!hasPosPreference && !seekDraftPicks) {
             const allCandidates = aiRoster
-              .filter(p => !blockedPositions.has(p.position))
+              .filter(p => !blockedPositions.has(p.position) && aiCanOffer(p))
               .sort((a, b) => b.ratings.overall - a.ratings.overall);
 
             for (const candidate of allCandidates) {

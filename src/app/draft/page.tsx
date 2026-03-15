@@ -325,7 +325,7 @@ function OnTheClockSection({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="text-xs font-bold text-[var(--text-sec)] uppercase">Next Pick</div>
-              <TeamLogo abbreviation={nextPickTeam.abbreviation} primaryColor={nextPickTeam.primaryColor ?? '#374151'} secondaryColor={nextPickTeam.secondaryColor ?? '#fff'} size="sm" />
+              <TeamLogo abbreviation={nextPickTeam.abbreviation} primaryColor={nextPickTeam.primaryColor ?? '#374151'} secondaryColor={nextPickTeam.secondaryColor ?? '#fff'} logoUrl={nextPickTeam.logoUrl} size="sm" />
               <div>
                 <span className="text-sm font-semibold">{nextPickTeam.city} {nextPickTeam.name}</span>
                 <div className="text-xs text-[var(--text-sec)]">
@@ -648,15 +648,10 @@ export default function DraftPage() {
     .filter((player): player is Player => Boolean(player))
     .filter((player) => player.experience === 0)
     .sort((a, b) => {
-      // Sort by scouted OVR (what the user actually sees), not real OVR
-      const aScout = draftScoutingData[a.id];
-      const bScout = draftScoutingData[b.id];
-      const aOvr = aScout ? aScout.scoutedOvr : a.ratings.overall;
-      const bOvr = bScout ? bScout.scoutedOvr : b.ratings.overall;
-      // K/P are least valuable — push them way down the draft board
-      const aAdj = (a.position === 'K' || a.position === 'P') ? aOvr * 0.5 : aOvr;
-      const bAdj = (b.position === 'K' || b.position === 'P') ? bOvr * 0.5 : bOvr;
-      return bAdj - aAdj;
+      // Sort by projected rank (stable — doesn't change when scouted)
+      const aRank = a.projectedRank ?? 999;
+      const bRank = b.projectedRank ?? 999;
+      return aRank - bRank;
     });
 
   const TOTAL_SCOUTS = 15;
@@ -900,9 +895,16 @@ export default function DraftPage() {
                         <div className="flex items-center gap-2">
                           <div className="min-w-0">
                             <div className="font-semibold truncate">{player.firstName} {player.lastName}</div>
-                            <div className="text-[10px] text-[var(--text-sec)]">
+                            <div className="text-[10px] text-[var(--text-sec)] flex items-center gap-1 flex-wrap">
                               {player.scoutingLabel ?? 'Unranked'}
-                              {isScouted && <span className="ml-1 text-blue-600 font-medium">Scouted</span>}
+                              {isScouted && (() => {
+                                const eval_ = generateDraftScoutEval(player, userRoster, { lo, hi });
+                                return (
+                                  <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded border ${fitBadgeColor(eval_.fitBadge)}`}>
+                                    {fitBadgeEmoji(eval_.fitBadge)} {eval_.fitBadge}
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </div>
                         </div>
@@ -1112,7 +1114,7 @@ export default function DraftPage() {
                       <td className="py-1.5 pl-3 text-[var(--text-sec)] text-xs">{idx + 1}</td>
                       <td className="py-1.5">
                         <div className="flex items-center gap-2">
-                          <TeamLogo abbreviation={tg.team.abbreviation} primaryColor={tg.team.primaryColor} secondaryColor={tg.team.secondaryColor} size="sm" />
+                          <TeamLogo abbreviation={tg.team.abbreviation} primaryColor={tg.team.primaryColor} secondaryColor={tg.team.secondaryColor} logoUrl={tg.team.logoUrl} size="sm" />
                           <span className={`font-medium ${tg.team.id === userTeamId ? 'text-blue-600' : ''}`}>{tg.team.city} {tg.team.name}</span>
                         </div>
                       </td>
@@ -1166,7 +1168,7 @@ export default function DraftPage() {
                 <div key={pick.overallPick} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {team && (
-                      <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="xs" />
+                      <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="xs" />
                     )}
                     <div>
                       <div className="font-semibold">#{pick.overallPick} {team?.abbreviation ?? '--'} - {player?.lastName ?? '--'}</div>

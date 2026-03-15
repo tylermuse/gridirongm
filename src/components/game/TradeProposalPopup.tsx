@@ -104,7 +104,7 @@ export function TradeProposalPopup({ proposalIds, onClose }: TradeProposalPopupP
               {/* Team header */}
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  {aiTeam ? <TeamLogo abbreviation={aiTeam.abbreviation} primaryColor={aiTeam.primaryColor} secondaryColor={aiTeam.secondaryColor} size="md" /> : <div className="w-8 h-8 rounded-lg bg-gray-400" />}
+                  {aiTeam ? <TeamLogo abbreviation={aiTeam.abbreviation} primaryColor={aiTeam.primaryColor} secondaryColor={aiTeam.secondaryColor} logoUrl={aiTeam.logoUrl} size="md" /> : <div className="w-8 h-8 rounded-lg bg-gray-400" />}
                   <div>
                     <div className="text-sm font-bold">{aiTeam?.city} {aiTeam?.name}</div>
                     <div className="text-xs text-[var(--text-sec)]">wants to trade</div>

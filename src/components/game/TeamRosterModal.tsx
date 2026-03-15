@@ -175,7 +175,7 @@ export function TeamRosterModal({ teamId, onClose, onPlayerClick }: TeamRosterMo
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-[var(--border)] sticky top-0 bg-[var(--surface)] z-10 rounded-t-2xl">
         <div className="flex items-center gap-3">
-          <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="lg" />
+          <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="lg" />
           <div>
             <h3 className="text-lg font-black">{team.city} {team.name}</h3>
             <div className="flex items-center gap-3 text-xs text-[var(--text-sec)]">

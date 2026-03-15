@@ -195,7 +195,7 @@ export function BoxScoreModal({ game, onClose, onPlayerClick }: BoxScoreModalPro
               <div className="text-xs text-[var(--text-sec)]">{awayTeam.city}</div>
               <div className="font-bold">{awayTeam.name}</div>
             </div>
-            <TeamLogo abbreviation={awayTeam.abbreviation} primaryColor={awayTeam.primaryColor} secondaryColor={awayTeam.secondaryColor} size="lg" />
+            <TeamLogo abbreviation={awayTeam.abbreviation} primaryColor={awayTeam.primaryColor} secondaryColor={awayTeam.secondaryColor} logoUrl={awayTeam.logoUrl} size="lg" />
           </div>
 
           {/* Score */}
@@ -211,7 +211,7 @@ export function BoxScoreModal({ game, onClose, onPlayerClick }: BoxScoreModalPro
 
           {/* Home team */}
           <div className={`flex items-center gap-3 ${homeWon ? '' : 'opacity-60'}`}>
-            <TeamLogo abbreviation={homeTeam.abbreviation} primaryColor={homeTeam.primaryColor} secondaryColor={homeTeam.secondaryColor} size="lg" />
+            <TeamLogo abbreviation={homeTeam.abbreviation} primaryColor={homeTeam.primaryColor} secondaryColor={homeTeam.secondaryColor} logoUrl={homeTeam.logoUrl} size="lg" />
             <div>
               <div className="text-xs text-[var(--text-sec)]">{homeTeam.city}</div>
               <div className="font-bold">{homeTeam.name}</div>

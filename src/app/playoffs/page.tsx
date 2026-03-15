@@ -60,7 +60,7 @@ function TeamRow({
             onClick={() => team && onTeamClick?.(team.id)}
             className="shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
           >
-            {team ? <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="xs" /> : <div className="w-5 h-5 rounded bg-gray-400" />}
+            {team ? <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="xs" /> : <div className="w-5 h-5 rounded bg-gray-400" />}
           </button>
           <button onClick={() => team && onTeamClick?.(team.id)} className={`text-xs truncate hover:text-blue-600 transition-colors ${isUser ? 'text-blue-600' : ''}`}>
             {team ? `${team.city}` : 'Unknown'}
@@ -189,7 +189,7 @@ function ConferenceBracket({
             onClick={() => onTeamClick?.(byeTeamObj.id)}
             className="shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
           >
-            <TeamLogo abbreviation={byeTeamObj.abbreviation} primaryColor={byeTeamObj.primaryColor} secondaryColor={byeTeamObj.secondaryColor} size="xs" />
+            <TeamLogo abbreviation={byeTeamObj.abbreviation} primaryColor={byeTeamObj.primaryColor} secondaryColor={byeTeamObj.secondaryColor} logoUrl={byeTeamObj.logoUrl} size="xs" />
           </button>
           <button onClick={() => onTeamClick?.(byeTeamObj.id)} className="hover:text-blue-600 transition-colors">
             {byeTeamObj.city} {byeTeamObj.name}
@@ -700,7 +700,7 @@ export default function PlayoffsPage() {
         {userTeam && (
           <Card>
             <div className="flex items-center gap-3">
-              <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="lg" />
+              <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} logoUrl={userTeam.logoUrl} size="lg" />
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-sm">
                   {userTeam.city} {userTeam.name}

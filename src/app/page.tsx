@@ -381,7 +381,7 @@ function Dashboard() {
           <div
             className="shrink-0"
           >
-            <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="xl" />
+            <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} logoUrl={userTeam.logoUrl} size="xl" />
           </div>
           <div>
             <h2 className="text-2xl font-black">{userTeam.city} {userTeam.name}</h2>
@@ -440,7 +440,7 @@ function Dashboard() {
                 <Card>
                   <div className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <TeamLogo abbreviation={oppTeam.abbreviation} primaryColor={oppTeam.primaryColor} secondaryColor={oppTeam.secondaryColor} size="md" />
+                      <TeamLogo abbreviation={oppTeam.abbreviation} primaryColor={oppTeam.primaryColor} secondaryColor={oppTeam.secondaryColor} logoUrl={oppTeam.logoUrl} size="md" />
                       <div>
                         <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider">Week {week} · {nextGame.homeTeamId === userTeamId ? 'Home' : 'Away'}</div>
                         <div className="font-bold">{nextGame.homeTeamId === userTeamId ? 'vs' : '@'} {oppTeam.city} {oppTeam.name}</div>

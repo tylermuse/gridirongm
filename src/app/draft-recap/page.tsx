@@ -137,7 +137,7 @@ export default function DraftRecapPage() {
                     <TeamLogo
                       abbreviation={userTeam.abbreviation}
                       primaryColor={userTeam.primaryColor}
-                      secondaryColor={userTeam.secondaryColor}
+                      secondaryColor={userTeam.secondaryColor} logoUrl={userTeam.logoUrl}
                       size="sm"
                     />
                   )}
@@ -331,7 +331,7 @@ export default function DraftRecapPage() {
                       <td className="py-2 pl-2 text-[var(--text-sec)] text-xs align-top">{idx + 1}</td>
                       <td className="py-2 align-top">
                         <div className="flex items-center gap-2">
-                          <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="sm" />
+                          <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} logoUrl={t.logoUrl} size="sm" />
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
                               <span className={`font-medium text-sm truncate ${isUser ? 'text-blue-600' : ''}`}>

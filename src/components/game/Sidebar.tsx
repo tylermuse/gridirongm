@@ -192,7 +192,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <TeamLogo
               abbreviation={userTeam.abbreviation}
               primaryColor={userTeam.primaryColor}
-              secondaryColor={userTeam.secondaryColor}
+              secondaryColor={userTeam.secondaryColor} logoUrl={userTeam.logoUrl}
               size="md"
             />
             <div>

@@ -138,7 +138,7 @@ export default function HistoryPage() {
                       </span>
                       {champTeam && (
                         <div className="flex items-center gap-1">
-                          <TeamLogo abbreviation={champTeam.abbreviation} primaryColor={champTeam.primaryColor} secondaryColor={champTeam.secondaryColor} size="xs" />
+                          <TeamLogo abbreviation={champTeam.abbreviation} primaryColor={champTeam.primaryColor} secondaryColor={champTeam.secondaryColor} logoUrl={champTeam.logoUrl} size="xs" />
                           <span className="text-xs text-[var(--text-sec)]">{champTeam.abbreviation} won</span>
                         </div>
                       )}

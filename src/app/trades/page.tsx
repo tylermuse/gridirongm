@@ -304,7 +304,7 @@ function TradeFinderContent({
   onProposeTrade,
 }: {
   players: Player[];
-  teams: { id: string; name: string; city: string; abbreviation: string; primaryColor: string; secondaryColor: string; record: { wins: number; losses: number }; totalPayroll: number; salaryCap: number; draftPicks: DraftPick[] }[];
+  teams: { id: string; name: string; city: string; abbreviation: string; primaryColor: string; secondaryColor: string; logoUrl?: string; record: { wins: number; losses: number }; totalPayroll: number; salaryCap: number; draftPicks: DraftPick[] }[];
   userTeamId: string | null;
   isTradeOpen: boolean;
   phase: string;
@@ -391,7 +391,7 @@ function TradeFinderContent({
           <div>
             <div className="flex items-center gap-3 mb-2">
               {userTeam && (
-                <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="sm" />
+                <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} logoUrl={userTeam.logoUrl} size="sm" />
               )}
               <div>
                 <h3 className="font-bold text-sm">{userTeam?.city} {userTeam?.name}</h3>
@@ -975,8 +975,8 @@ function TradesPage() {
                             : rumor.type === 'deadline_buzz' ? 'border-orange-300 bg-orange-50/40' : 'border-[var(--border)] bg-[var(--surface)]'
                         }`}>
                           <div className="flex items-center gap-2 mb-1">
-                            {rumorTeam && <TeamLogo abbreviation={rumorTeam.abbreviation} primaryColor={rumorTeam.primaryColor} secondaryColor={rumorTeam.secondaryColor} size="sm" />}
-                            {targetTeam && <><span className="text-[10px] text-[var(--text-sec)]">&</span><TeamLogo abbreviation={targetTeam.abbreviation} primaryColor={targetTeam.primaryColor} secondaryColor={targetTeam.secondaryColor} size="sm" /></>}
+                            {rumorTeam && <TeamLogo abbreviation={rumorTeam.abbreviation} primaryColor={rumorTeam.primaryColor} secondaryColor={rumorTeam.secondaryColor} logoUrl={rumorTeam.logoUrl} size="sm" />}
+                            {targetTeam && <><span className="text-[10px] text-[var(--text-sec)]">&</span><TeamLogo abbreviation={targetTeam.abbreviation} primaryColor={targetTeam.primaryColor} secondaryColor={targetTeam.secondaryColor} logoUrl={targetTeam.logoUrl} size="sm" /></>}
                             <div className="flex-1 min-w-0">
                               <div className="text-xs text-[var(--text-sec)]">Week {rumor.week}</div>
                             </div>
@@ -1131,7 +1131,7 @@ function TradesPage() {
                           onClick={() => proposingTeam && setViewTeamId(proposingTeam.id)}
                           className="shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
                         >
-                          {proposingTeam && <TeamLogo abbreviation={proposingTeam.abbreviation} primaryColor={proposingTeam.primaryColor} secondaryColor={proposingTeam.secondaryColor} size="sm" />}
+                          {proposingTeam && <TeamLogo abbreviation={proposingTeam.abbreviation} primaryColor={proposingTeam.primaryColor} secondaryColor={proposingTeam.secondaryColor} logoUrl={proposingTeam.logoUrl} size="sm" />}
                         </button>
                         <button onClick={() => proposingTeam && setViewTeamId(proposingTeam.id)} className="font-bold hover:text-blue-600 transition-colors">{proposingTeam?.city} {proposingTeam?.name}</button>
                         <span className="text-xs text-[var(--text-sec)]">Week {proposal.week}</span>

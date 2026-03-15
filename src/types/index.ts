@@ -232,6 +232,8 @@ export interface Team {
   division: 'North' | 'South' | 'East' | 'West';
   primaryColor: string;
   secondaryColor: string;
+  /** Team logo URL (from imported league files, e.g. FBGM imgURL) */
+  logoUrl?: string;
   record: TeamRecord;
   salaryCap: number;
   totalPayroll: number;

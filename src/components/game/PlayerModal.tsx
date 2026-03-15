@@ -104,7 +104,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
         <div className="flex items-start gap-5">
           <div className="flex flex-col items-center gap-1.5 shrink-0">
             <PlayerAvatar player={player} size="md" teamColor={team?.primaryColor ?? '#374151'} />
-            {team && <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="sm" />}
+            {team && <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="sm" />}
             <div className="text-[10px] font-black text-[var(--text-sec)]">{player.position}</div>
           </div>
 

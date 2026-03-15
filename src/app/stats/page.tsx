@@ -236,7 +236,7 @@ export default function StatsPage() {
                       <td className="py-2.5 text-center text-[var(--text-sec)] text-xs">{i + 1}</td>
                       <td className="py-2.5">
                         <button onClick={() => setViewTeamId(ts.team.id)} className="flex items-center gap-2 hover:text-blue-600 transition-colors">
-                          <TeamLogo abbreviation={ts.team.abbreviation} primaryColor={ts.team.primaryColor} secondaryColor={ts.team.secondaryColor} size="xs" />
+                          <TeamLogo abbreviation={ts.team.abbreviation} primaryColor={ts.team.primaryColor} secondaryColor={ts.team.secondaryColor} logoUrl={ts.team.logoUrl} size="xs" />
                           <span className={isUser ? 'text-blue-600' : ''}>{ts.team.city} {ts.team.name}</span>
                         </button>
                       </td>
@@ -294,7 +294,7 @@ export default function StatsPage() {
                       </td>
                       <td className="py-2.5">
                         <button onClick={() => setViewTeamId(pr.team.id)} className="flex items-center gap-2 hover:text-blue-600 transition-colors">
-                          <TeamLogo abbreviation={pr.team.abbreviation} primaryColor={pr.team.primaryColor} secondaryColor={pr.team.secondaryColor} size="xs" />
+                          <TeamLogo abbreviation={pr.team.abbreviation} primaryColor={pr.team.primaryColor} secondaryColor={pr.team.secondaryColor} logoUrl={pr.team.logoUrl} size="xs" />
                           <span className={isUser ? 'text-blue-600' : ''}>{pr.team.city} {pr.team.name}</span>
                         </button>
                       </td>

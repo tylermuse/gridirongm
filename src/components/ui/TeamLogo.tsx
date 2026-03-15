@@ -8,6 +8,8 @@ interface TeamLogoProps {
   secondaryColor: string;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
+  /** External logo image URL (from imported league files) */
+  logoUrl?: string;
 }
 
 const SIZE_CLASSES: Record<string, string> = {
@@ -650,8 +652,32 @@ const ICONS: Record<string, IconFn> = {
   ),
 };
 
-export function TeamLogo({ abbreviation, primaryColor, secondaryColor, size = 'md', className = '' }: TeamLogoProps) {
+export function TeamLogo({ abbreviation, primaryColor, secondaryColor, size = 'md', className = '', logoUrl }: TeamLogoProps) {
   const sizeClass = SIZE_CLASSES[size] ?? SIZE_CLASSES.md;
+
+  // If an external logo URL is provided, render it as an image
+  if (logoUrl) {
+    return (
+      <div
+        className={`${sizeClass} shrink-0 overflow-hidden box-border relative ${className}`}
+        style={{
+          backgroundColor: primaryColor,
+          boxShadow: `0 3px 8px ${primaryColor}55, 0 1px 3px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(0,0,0,0.15)`,
+          border: `1px solid rgba(255,255,255,0.12)`,
+          borderRadius: '22%',
+        }}
+      >
+        <img
+          src={logoUrl}
+          alt={abbreviation}
+          className="w-full h-full object-contain relative z-10"
+          style={{ padding: PADDING[size] ?? PADDING.md }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+      </div>
+    );
+  }
+
   const iconFn = ICONS[abbreviation];
 
   if (iconFn) {
