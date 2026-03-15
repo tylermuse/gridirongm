@@ -88,7 +88,7 @@ function ProspectCard({
           </div>
           <div className="text-center">
             <div className="text-lg font-black">{ovrRank}</div>
-            <div className="text-[10px] text-[var(--text-sec)] uppercase">Ovr Rk</div>
+            <div className="text-[10px] text-[var(--text-sec)] uppercase">Proj</div>
           </div>
           <div className="text-center">
             <div className={`text-lg font-black ${ovrDisplay ? 'text-indigo-600' : ratingColor(player.ratings.overall)}`}>
@@ -165,7 +165,7 @@ function OnTheClockSection({
     return samePosProspects.findIndex(p => p.id === player.id) + 1;
   }
   function getOverallRank(player: Player): number {
-    return allProspects.findIndex(p => p.id === player.id) + 1;
+    return player.projectedRank ?? allProspects.findIndex(p => p.id === player.id) + 1;
   }
 
   const teamColor = currentTeam?.primaryColor ?? '#374151';

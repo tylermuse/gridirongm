@@ -328,8 +328,8 @@ export function generateDraftClass(count: number): Player[] {
     const trueOvr = prospect.ratings.overall;
     // Base rank from OVR (higher OVR = lower rank number = better)
     const baseRank = Math.round((1 - (trueOvr - 30) / 65) * totalProspects);
-    // More noise for lower-ranked prospects (less media coverage)
-    const noiseFactor = 0.25 + (baseRank / totalProspects) * 0.45;
+    // Moderate noise — top prospects have less variance, late picks more
+    const noiseFactor = 0.08 + (baseRank / totalProspects) * 0.15;
     const noise = Math.round((Math.random() - 0.5) * totalProspects * noiseFactor);
     // K/P penalty: push them down in projections
     const posPenalty = (prospect.position === 'K' || prospect.position === 'P') ? Math.round(totalProspects * 0.4) : 0;

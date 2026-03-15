@@ -561,12 +561,14 @@ function playerBustBoomRoll(id: string): number {
   return ((h * 48271) >>> 0) / 4294967296; // [0, 1)
 }
 
-/** Base error for a prospect at a given true rank (Entry scouting level) */
+/** Base error for a prospect at a given true rank.
+ *  Tighter ranges — the public has a reasonable read on most prospects.
+ *  Scouting narrows it further (to ±3). */
 function baseErrorForRank(rank: number): number {
-  if (rank <= 10) return 4 + Math.min(3, rank * 0.3);          // 4-7
-  if (rank <= 32) return 8 + Math.min(4, (rank - 10) * 0.18);  // 8-12
-  if (rank <= 100) return 12 + Math.min(6, (rank - 32) * 0.09); // 12-18
-  return 18 + Math.min(7, (rank - 100) * 0.05);                 // 18-25
+  if (rank <= 10) return 3 + Math.min(2, rank * 0.2);           // ±3-5
+  if (rank <= 32) return 5 + Math.min(3, (rank - 10) * 0.14);   // ±5-8
+  if (rank <= 100) return 7 + Math.min(4, (rank - 32) * 0.06);  // ±7-11
+  return 10 + Math.min(5, (rank - 100) * 0.03);                  // ±10-15
 }
 
 /** Scouting level multipliers — how much error is retained */
