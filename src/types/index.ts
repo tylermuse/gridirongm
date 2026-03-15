@@ -131,10 +131,6 @@ export interface Player {
   injury: { type: string; weeksLeft: number } | null;
   /** Currently on Injured Reserve */
   onIR: boolean;
-  /** Development trait — affects how the player grows over time */
-  devTrait?: 'star' | 'normal' | 'late_bloomer' | 'bust';
-  /** Season when the dev trait was revealed to the user (after 1 full season on roster) */
-  devTraitRevealedSeason?: number;
   /** Projected draft rank (noisy media perception, set at draft class creation) */
   projectedRank?: number;
   /** Whether the player is holding out for a new contract */

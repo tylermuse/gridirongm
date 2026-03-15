@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
@@ -9,15 +9,13 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
-import { ScoutingReportModal } from '@/components/draft/ScoutingReportModal';
 // playerGen import removed — POSITION_WEIGHTS no longer needed
 import { POSITIONS, ROSTER_LIMITS } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import type { Player, Position, Team } from '@/types';
-import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import { SCOUTING_LEVELS } from '@/lib/subscription';
 import { expectedOvrForPick, pickGrade, gradeValue, gradeColor, teamDraftGrade } from '@/lib/engine/draftGrades';
+import { generateDraftScoutEval, publicConsensusBlurb, type DraftScoutEvaluation } from '@/lib/engine/draftScoutEval';
 
 function ratingColor(val: number): string {
   if (val >= 80) return 'text-green-600';
@@ -121,7 +119,6 @@ function OnTheClockSection({
   bestFit,
   bestFitIsNeedMatch,
   scoutsPick,
-  scoutingLevel,
   draftScoutingData,
   needs,
   nextPickTeam,
@@ -145,7 +142,6 @@ function OnTheClockSection({
   bestFit: Player | null | undefined;
   bestFitIsNeedMatch: boolean;
   scoutsPick: Player | null | undefined;
-  scoutingLevel: number;
   draftScoutingData: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }>;
   needs: { position: Position; needScore: number; count: number; limits: { min: number; max: number } }[];
   nextPickTeam: Team | undefined;
@@ -298,19 +294,9 @@ function OnTheClockSection({
               />
             )}
             {/* Your Scouts Say — only shown when it's the user's pick */}
-            {isUserPick && (scoutingLevel === 0 ? (
-              <div className="flex-1 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] overflow-hidden opacity-60">
-                <div className="px-4 pt-3 pb-1">
-                  <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">Your Scouts Say</div>
-                </div>
-                <div className="px-4 pb-3 text-center py-4">
-                  <div className="text-3xl mb-1">?</div>
-                  <div className="text-xs text-[var(--text-sec)]">Set scouting to Pro or Elite for better intel</div>
-                </div>
-              </div>
-            ) : scoutsPick ? (
+            {isUserPick && scoutsPick && (
               <ProspectCard
-                label={`Your Scouts Say (${SCOUTING_LEVELS[scoutingLevel]?.name ?? 'Pro'})`}
+                label="Your Scouts Say"
                 player={scoutsPick}
                 posRank={getPositionRank(scoutsPick)}
                 ovrRank={getOverallRank(scoutsPick)}
@@ -325,7 +311,7 @@ function OnTheClockSection({
                 onDraft={onDraft}
                 onPlayerClick={onPlayerClick}
               />
-            ) : null)}
+            )}
           </div>
         </div>
       )}
@@ -370,6 +356,204 @@ function OnTheClockSection({
 }
 
 // ---------------------------------------------------------------------------
+// Fit badge color helpers
+// ---------------------------------------------------------------------------
+
+function fitBadgeColor(badge: DraftScoutEvaluation['fitBadge']): string {
+  switch (badge) {
+    case 'Strong Target': return 'text-green-700 bg-green-50 border-green-200';
+    case 'Worth a Look': return 'text-blue-700 bg-blue-50 border-blue-200';
+    case 'Not a Fit': return 'text-red-600 bg-red-50 border-red-200';
+    case 'Roster Redundancy': return 'text-gray-600 bg-gray-50 border-gray-200';
+  }
+}
+
+function fitBadgeEmoji(badge: DraftScoutEvaluation['fitBadge']): string {
+  switch (badge) {
+    case 'Strong Target': return '🎯';
+    case 'Worth a Look': return '🤔';
+    case 'Not a Fit': return '❌';
+    case 'Roster Redundancy': return '📋';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Unscouted Panel — shown in expanded row before scouting
+// ---------------------------------------------------------------------------
+
+function UnscoutedPanel({
+  player,
+  scoutsRemaining,
+  onScout,
+}: {
+  player: Player;
+  scoutsRemaining: number;
+  onScout: () => void;
+}) {
+  const blurb = publicConsensusBlurb(player);
+
+  return (
+    <div className="space-y-3">
+      {/* Public blurb */}
+      <div>
+        {player.scoutingLabel && (
+          <Badge variant={
+            player.scoutingLabel === 'Injury history' || player.scoutingLabel === 'Character concerns'
+              ? 'amber'
+              : player.scoutingLabel === 'Pro-ready' || player.scoutingLabel === 'Combine standout'
+                ? 'green'
+                : 'default'
+          }>
+            {player.scoutingLabel}
+          </Badge>
+        )}
+        <p className="text-sm text-[var(--text)] mt-1.5 leading-relaxed">{blurb}</p>
+      </div>
+
+      {/* Grayed-out scout report teaser */}
+      <div className="border border-dashed border-[var(--border)] rounded-lg p-4 opacity-60">
+        <div className="text-[10px] uppercase tracking-wider text-[var(--text-sec)] mb-2">Scout Report</div>
+        <div className="h-2 w-3/4 bg-[var(--surface-2)] rounded mb-2" />
+        <div className="h-2 w-1/2 bg-[var(--surface-2)] rounded mb-3" />
+        <button
+          onClick={(e) => { e.stopPropagation(); onScout(); }}
+          disabled={scoutsRemaining <= 0}
+          className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Spend 1 Scout Point to unlock full evaluation
+          <span className="ml-2 text-xs opacity-80">({scoutsRemaining} remaining)</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Scout Evaluation Panel — shown in expanded row after scouting
+// ---------------------------------------------------------------------------
+
+function ScoutEvaluationPanel({
+  player,
+  userRoster,
+  publicOvrRange,
+  isUserPick,
+  onDraft,
+}: {
+  player: Player;
+  userRoster: Player[];
+  publicOvrRange: { lo: number; hi: number };
+  isUserPick: boolean;
+  onDraft: () => void;
+}) {
+  const evaluation = generateDraftScoutEval(player, userRoster, publicOvrRange);
+
+  return (
+    <div className="space-y-3">
+      {/* Header: fit badge + fit score */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg border ${fitBadgeColor(evaluation.fitBadge)}`}>
+            {fitBadgeEmoji(evaluation.fitBadge)} {evaluation.fitBadge}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wider text-[var(--text-sec)]">Fit Score</span>
+            <div className="w-20 h-2 rounded-full bg-[var(--surface)] overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${evaluation.fitScore >= 70 ? 'bg-green-500' : evaluation.fitScore >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                style={{ width: `${evaluation.fitScore}%` }}
+              />
+            </div>
+            <span className="text-xs font-bold">{evaluation.fitScore}</span>
+          </div>
+        </div>
+        <span className="text-[10px] uppercase tracking-wider text-[var(--text-sec)]">Scout Evaluation</span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {/* Scout's Take (left 2/3) */}
+        <div className="col-span-2">
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-sec)] mb-1">Scout&apos;s Take</div>
+          <p className="text-sm leading-relaxed">{evaluation.scoutsTake}</p>
+        </div>
+
+        {/* Roster Comparison (right 1/3) */}
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-sec)] mb-1">Roster Comparison</div>
+          <p className="text-sm text-[var(--text)]">{evaluation.rosterComparison}</p>
+        </div>
+      </div>
+
+      {/* Scout's OVR Estimate */}
+      <div className="border-l-2 border-blue-400 pl-3">
+        <p className="text-sm italic text-[var(--text)]">
+          &ldquo;{evaluation.scoutOvrEstimate.quote}&rdquo;
+        </p>
+        <span className="text-[10px] text-[var(--text-sec)]">— Scout Staff</span>
+      </div>
+
+      {/* Risk Factors + Combine — side by side */}
+      <div className="grid grid-cols-3 gap-3">
+        {/* Risk Factors */}
+        {evaluation.riskFactors.length > 0 && (
+          <div className={evaluation.riskFactors.length > 0 ? 'col-span-1' : 'hidden'}>
+            <div className="text-[10px] uppercase tracking-wider text-[var(--text-sec)] mb-1">Risk Factors</div>
+            <ul className="space-y-0.5">
+              {evaluation.riskFactors.map((r, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-xs text-amber-600">
+                  <span className="mt-1 w-1 h-1 rounded-full bg-amber-500 shrink-0" />
+                  {r}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Combine Measurables */}
+        <div className={evaluation.riskFactors.length > 0 ? 'col-span-2' : 'col-span-3'}>
+          <div className="text-[10px] uppercase tracking-wider text-[var(--text-sec)] mb-1">Combine Measurables</div>
+          <div className="grid grid-cols-4 gap-1.5">
+            <div className="bg-[var(--surface-2)] rounded-lg px-2 py-1.5 text-center">
+              <div className="text-[9px] text-[var(--text-sec)] uppercase">40-Yard</div>
+              <div className="text-sm font-bold font-mono">{evaluation.combine.fortyYard}s</div>
+            </div>
+            <div className="bg-[var(--surface-2)] rounded-lg px-2 py-1.5 text-center">
+              <div className="text-[9px] text-[var(--text-sec)] uppercase">Bench</div>
+              <div className="text-sm font-bold font-mono">{evaluation.combine.benchPress}</div>
+            </div>
+            <div className="bg-[var(--surface-2)] rounded-lg px-2 py-1.5 text-center">
+              <div className="text-[9px] text-[var(--text-sec)] uppercase">Vertical</div>
+              <div className="text-sm font-bold font-mono">{evaluation.combine.verticalJump}&quot;</div>
+            </div>
+            <div className="bg-[var(--surface-2)] rounded-lg px-2 py-1.5 text-center">
+              <div className="text-[9px] text-[var(--text-sec)] uppercase">Shuttle</div>
+              <div className="text-sm font-bold font-mono">{evaluation.combine.shuttle}s</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Scout Quote */}
+      <div className="border-l-2 border-green-400 pl-3">
+        <p className="text-sm italic text-[var(--text)]">{evaluation.scoutQuote}</p>
+        <span className="text-[10px] text-[var(--text-sec)]">— Scout Staff</span>
+      </div>
+
+      {/* Draft button */}
+      {isUserPick && (
+        <div className="pt-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); onDraft(); }}
+            className="w-full min-h-[44px] px-4 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-lg active:bg-blue-700 touch-manipulation"
+          >
+            Draft {player.firstName} {player.lastName}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Draft Page
 // ---------------------------------------------------------------------------
 
@@ -384,17 +568,13 @@ export default function DraftPage() {
     userTeamId,
     teams,
     draftScoutingData,
-    scoutingLevel,
     draftPlayer,
     deepScoutPlayer,
     simDraftPick,
     simToUserDraftPick,
     simToEndDraft,
-    setScoutingLevel,
     season,
   } = useGameStore();
-
-  const { maxScoutingLevel: maxLevel } = useSubscription();
 
   // Auto-redirect to free agency when draft completes and phase advances
   useEffect(() => {
@@ -407,8 +587,8 @@ export default function DraftPage() {
   const [draftResultsTeamFilter, setDraftResultsTeamFilter] = useState<string>('ALL');
   const [positionFilter, setPositionFilter] = useState<Position | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  // scoutPlayerId removed — all scouting uses selectedProspectId + ScoutingReportModal
-  const [selectedProspectId, setSelectedProspectId] = useState<string | null>(null);
+  const [expandedProspectId, setExpandedProspectId] = useState<string | null>(null);
+  const [scoutedOnly, setScoutedOnly] = useState(false);
 
   if (phase !== 'draft') {
     return (
@@ -479,9 +659,15 @@ export default function DraftPage() {
       return bAdj - aAdj;
     });
 
+  const TOTAL_SCOUTS = 15;
+  const scoutedCount = Object.values(draftScoutingData).filter(d => d.deepScouted).length;
+  const scoutsRemaining = TOTAL_SCOUTS - scoutedCount;
+  const userRoster = players.filter(p => p.teamId === userTeamId && !p.retired);
+
   const prospects = allProspects
     .filter((player) => positionFilter === 'ALL' || player.position === positionFilter)
     .filter((player) => {
+      if (scoutedOnly && !draftScoutingData[player.id]?.deepScouted) return false;
       const query = searchQuery.trim().toLowerCase();
       if (!query) return true;
       return `${player.firstName} ${player.lastName}`.toLowerCase().includes(query);
@@ -608,7 +794,6 @@ export default function DraftPage() {
           bestFit={bestFit}
           bestFitIsNeedMatch={bestFitResult.isNeedMatch}
           scoutsPick={scoutsPick}
-          scoutingLevel={scoutingLevel}
           draftScoutingData={draftScoutingData}
           needs={currentTeamNeeds.slice(0, 5)}
           nextPickTeam={nextPickTeam}
@@ -625,14 +810,14 @@ export default function DraftPage() {
             router.push('/draft-recap');
           }}
           onDraft={(playerId) => draftPlayer(playerId)}
-          onPlayerClick={(playerId) => setSelectedProspectId(playerId)}
+          onPlayerClick={(playerId) => setExpandedProspectId(playerId)}
         />
 
         <div className="grid grid-cols-12 gap-4">
           {/* Top Prospects */}
           <Card className="col-span-12 lg:col-span-6">
             <CardHeader>
-              <CardTitle>Top Prospects</CardTitle>
+              <CardTitle>Draft Board</CardTitle>
               <div className="flex items-center gap-2">
                 <input
                   value={searchQuery}
@@ -654,78 +839,83 @@ export default function DraftPage() {
                 </select>
               </div>
             </CardHeader>
-            {/* Scouting level selector */}
-            <div className="mb-3 flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-[var(--text-sec)]">Scouting Level:</span>
-              <select
-                value={scoutingLevel}
-                onChange={e => {
-                  const val = Number(e.target.value) as 0|1|2;
-                  if (val <= maxLevel) setScoutingLevel(val);
-                }}
-                className="h-7 px-2 text-xs rounded border border-[var(--border)] bg-[var(--surface-2)]"
-                title={SCOUTING_LEVELS[scoutingLevel]?.tooltip}
+            {/* Scout points + scouted-only toggle */}
+            <div className="mb-3 flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-[var(--text-sec)]">Scouts:</span>
+                <div className="w-20 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${scoutsRemaining > 5 ? 'bg-blue-500' : scoutsRemaining > 2 ? 'bg-amber-500' : 'bg-red-500'}`}
+                    style={{ width: `${(scoutedCount / TOTAL_SCOUTS) * 100}%` }}
+                  />
+                </div>
+                <span className="text-xs font-bold">{scoutedCount}/{TOTAL_SCOUTS}</span>
+              </div>
+              <button
+                onClick={() => setScoutedOnly(!scoutedOnly)}
+                className={`px-3 py-1 text-xs rounded-lg font-medium border transition-colors ${
+                  scoutedOnly
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-[var(--surface)] text-[var(--text-sec)] border-[var(--border)] hover:text-[var(--text)]'
+                }`}
               >
-                {SCOUTING_LEVELS.map((level, i) => (
-                  <option key={i} value={i}>
-                    {level.name}
-                  </option>
-                ))}
-              </select>
-              {maxLevel < 2 && (
-                <a href="/pricing" className="text-[10px] text-blue-600 hover:underline ml-1">
-                  Upgrade →
-                </a>
-              )}
+                {scoutedOnly ? 'Scouted only' : 'Show all'}
+              </button>
             </div>
             <div className="overflow-x-auto">
             <table className="w-full text-sm sticky-col">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
-                  <th className="text-left pb-2 pl-2">#</th>
+                  <th className="text-left pb-2 pl-2 w-6"></th>
+                  <th className="text-center pb-2 w-12">Proj</th>
                   <th className="text-left pb-2">Player</th>
                   <th className="text-center pb-2">Pos</th>
-                  <th className="text-center pb-2 hidden sm:table-cell">OVR Range</th>
-                  <th className="text-center pb-2 sm:hidden">OVR</th>
-                  <th className="text-center pb-2 hidden sm:table-cell" title="Potential — a player's ceiling. Draft prospects show as Elite/High/Average/Low until scouted over 3+ seasons.">Pot <span className="inline-block w-3 h-3 text-[10px] rounded-full bg-[var(--surface-2)] text-[var(--text-sec)]">?</span></th>
+                  <th className="text-center pb-2">OVR</th>
                   <th className="text-right pb-2 pr-2">Draft</th>
                 </tr>
               </thead>
               <tbody>
-                {prospects.map((player, index) => {
+                {prospects.map((player) => {
                   const scout = draftScoutingData[player.id];
-                  const displayOvr = scout
-                    ? `${Math.max(20, scout.scoutedOvr - scout.error)}–${Math.min(99, scout.scoutedOvr + scout.error)}`
-                    : String(player.ratings.overall);
-                  const displayOvrShort = scout
-                    ? `${scout.scoutedOvr}`
-                    : String(player.ratings.overall);
+                  const isScouted = scout?.deepScouted === true;
+                  const lo = scout ? Math.max(20, scout.scoutedOvr - scout.error) : Math.max(20, player.ratings.overall - 10);
+                  const hi = scout ? Math.min(99, scout.scoutedOvr + scout.error) : Math.min(99, player.ratings.overall + 10);
                   const ovrForColor = scout ? scout.scoutedOvr : player.ratings.overall;
+                  const isExpanded = expandedProspectId === player.id;
+                  const projRank = player.projectedRank ?? '—';
+
                   return (
+                    <React.Fragment key={player.id}>
                     <tr
-                      key={player.id}
-                      className="border-t border-[var(--border)] hover:bg-[var(--surface-2)] cursor-pointer active:bg-[var(--surface-2)]"
-                      onClick={() => setSelectedProspectId(player.id)}
+                      className={`border-t border-[var(--border)] cursor-pointer transition-colors ${isExpanded ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
+                      onClick={() => setExpandedProspectId(isExpanded ? null : player.id)}
                     >
-                      <td className="py-3 pl-2 text-[var(--text-sec)]">{index + 1}</td>
-                      <td className="py-3">
-                        <div className="font-semibold">{player.firstName} {player.lastName}</div>
-                        {player.scoutingLabel && (
-                          <div className="text-[10px] text-[var(--text-sec)]">{player.scoutingLabel}</div>
-                        )}
+                      <td className="py-2.5 pl-2">
+                        <svg className={`w-3 h-3 text-[var(--text-sec)] transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
                       </td>
-                      <td className="py-3 text-center"><Badge>{player.position}</Badge></td>
-                      <td className={`py-3 text-center font-bold hidden sm:table-cell ${ratingColor(ovrForColor)}`}>
-                        {displayOvr}
+                      <td className="py-2.5 text-center text-xs text-[var(--text-sec)] font-mono">{projRank}</td>
+                      <td className="py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="min-w-0">
+                            <div className="font-semibold truncate">{player.firstName} {player.lastName}</div>
+                            <div className="text-[10px] text-[var(--text-sec)]">
+                              {player.scoutingLabel ?? 'Unranked'}
+                              {isScouted && <span className="ml-1 text-blue-600 font-medium">Scouted</span>}
+                            </div>
+                          </div>
+                        </div>
                       </td>
-                      <td className={`py-3 text-center font-bold sm:hidden ${ratingColor(ovrForColor)}`}>
-                        {displayOvrShort}
+                      <td className="py-2.5 text-center"><Badge>{player.position}</Badge></td>
+                      <td className={`py-2.5 text-center font-bold ${ratingColor(ovrForColor)}`}>
+                        <span className="hidden sm:inline">{lo}–{hi}</span>
+                        <span className="sm:hidden">{scout ? scout.scoutedOvr : player.ratings.overall}</span>
                       </td>
-                      <td className={`py-3 text-center text-xs hidden sm:table-cell ${potentialColor(player.potential, player.experience)}`}>{potentialLabel(player.potential, player.experience)}</td>
-                      <td className="py-3 pr-2 text-right">
+                      <td className="py-2.5 pr-2 text-right" onClick={e => e.stopPropagation()}>
                         {isUserPick ? (
                           <button
-                            onClick={(e) => { e.stopPropagation(); draftPlayer(player.id); }}
+                            onClick={() => draftPlayer(player.id)}
                             className="min-h-[44px] min-w-[44px] px-3 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg active:bg-blue-700 touch-manipulation"
                           >
                             Draft
@@ -735,6 +925,28 @@ export default function DraftPage() {
                         )}
                       </td>
                     </tr>
+                    {isExpanded && (
+                      <tr className="border-t border-[var(--border)]">
+                        <td colSpan={6} className="px-4 py-3 bg-[var(--surface-2)]/50">
+                          {isScouted ? (
+                            <ScoutEvaluationPanel
+                              player={player}
+                              userRoster={userRoster}
+                              publicOvrRange={{ lo, hi }}
+                              isUserPick={isUserPick}
+                              onDraft={() => draftPlayer(player.id)}
+                            />
+                          ) : (
+                            <UnscoutedPanel
+                              player={player}
+                              scoutsRemaining={scoutsRemaining}
+                              onScout={() => deepScoutPlayer(player.id)}
+                            />
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -972,28 +1184,6 @@ export default function DraftPage() {
         </div>
       </div>
 
-      {/* Scouting Report Modal */}
-      {selectedProspectId && (() => {
-        const prospect = players.find(p => p.id === selectedProspectId);
-        if (!prospect) return null;
-        const scout = draftScoutingData[selectedProspectId];
-        const isScouted = scout?.deepScouted === true;
-        const scoutedCount = Object.values(draftScoutingData).filter(d => d.deepScouted).length;
-        const TOTAL_SCOUTS = 15;
-        return (
-          <ScoutingReportModal
-            player={prospect}
-            isScouted={isScouted}
-            onClose={() => setSelectedProspectId(null)}
-            onDraft={isUserPick ? () => { draftPlayer(selectedProspectId); setSelectedProspectId(null); } : undefined}
-            onScout={() => deepScoutPlayer(selectedProspectId)}
-            isUserPick={isUserPick}
-            scoutsRemaining={TOTAL_SCOUTS - scoutedCount}
-            teamNeeds={getTeamNeeds(userTeamId)}
-            userTeamAbbr={teams.find(t => t.id === userTeamId)?.abbreviation}
-          />
-        );
-      })()}
     </GameShell>
   );
 }

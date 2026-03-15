@@ -391,16 +391,6 @@ export function ScoutingReportModal({
               )}
             </div>
             <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2.5">
-              <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Dev Trait</div>
-              {isScouted ? (
-                <div className="text-sm font-bold mt-1">
-                  {player.devTrait === 'star' ? 'Star' : player.devTrait === 'late_bloomer' ? 'Late Bloomer' : player.devTrait === 'bust' ? 'Bust' : 'Normal'}
-                </div>
-              ) : (
-                <div className="text-sm font-bold mt-1 text-[var(--text-sec)]">?</div>
-              )}
-            </div>
-            <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2.5">
               <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">
                 Team Fit {userTeamAbbr ? `(${userTeamAbbr})` : ''}
               </div>

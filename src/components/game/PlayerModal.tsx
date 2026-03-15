@@ -7,7 +7,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { potentialLabel, potentialColor, devTraitIcon, devTraitLabel, devTraitColor, devTraitDescription, isDevTraitVisible } from '@/lib/engine/development';
+import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { calculateDeadCap, calculateCapSavings } from '@/types';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -161,11 +161,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
               <span className={`text-sm ${potentialColor(player.potential, player.experience)}`}>
                 POT: {potentialLabel(player.potential, player.experience)}
               </span>
-              {isDevTraitVisible(player, userTeamId) && (
-                <span className={`text-sm ${devTraitColor(player.devTrait)}`} title={devTraitDescription(player.devTrait)}>
-                  DEV: {devTraitIcon(player.devTrait)} {devTraitLabel(player.devTrait)}
-                </span>
-              )}
+
               {player.mood !== undefined && (
                 <span className={`text-sm ${
                   player.mood >= 75 ? 'text-green-600' :

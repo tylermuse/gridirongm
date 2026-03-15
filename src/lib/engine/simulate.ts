@@ -204,8 +204,13 @@ function simulatePlay(
     const target = weightedPick(eligibleReceivers.map(r => r.player), recWeights);
 
     // ── Coverage matchup ──
+    // Match CB to receiver by weighted random pick (CB1 covers most, CB4 least)
     const coverageDefender = cbs.length > 0
-      ? cbs[Math.min(receivers.indexOf(target), cbs.length - 1)]
+      ? weightedPick(cbs, cbs.map((cb, i) => {
+          // CB1 gets ~40% of snaps, CB2 ~30%, CB3 ~20%, CB4+ ~10%
+          const snapShare = i === 0 ? 4 : i === 1 ? 3 : i === 2 ? 2 : 1;
+          return snapShare * (cb.ratings.coverage / 70);
+        }))
       : allDefenders.length > 0 ? allDefenders[0] : null;
     const coverageRating = coverageDefender
       ? coverageDefender.ratings.coverage

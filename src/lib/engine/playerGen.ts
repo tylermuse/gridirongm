@@ -231,17 +231,8 @@ export function generatePlayer(
     weight: generateWeight(position),
     college: randomCollege(),
     seasonLog: [],
-    devTrait: assignDevTrait(),
     combineStats: generateCombineStats(position, ratings, Math.floor(Math.random() * 10000)),
   };
-}
-
-function assignDevTrait(): 'star' | 'normal' | 'late_bloomer' | 'bust' {
-  const roll = Math.random();
-  if (roll < 0.08) return 'star';
-  if (roll < 0.20) return 'late_bloomer';
-  if (roll < 0.35) return 'bust';
-  return 'normal';
 }
 
 /** Generates a full roster of ~53 players for a team. */

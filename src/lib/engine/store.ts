@@ -526,6 +526,15 @@ function pickTradeValue(pick: DraftPick): number {
  * Bust/boom flags (~5% of top-20, ~4% of picks 40-80) add extra noise.
  */
 
+/** Simple hash from player ID + salt */
+function seedFromId(id: string, salt = 0): number {
+  let h = salt;
+  for (let i = 0; i < id.length; i++) {
+    h = (h * 31 + id.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
 /** Deterministic hash from player ID → stable noise factor in [-1, 1] */
 function playerNoiseDirection(id: string): number {
   let h = 0;
@@ -785,9 +794,7 @@ function computeHoldoutDemands(players: Player[], userTeamId: string, season: nu
 
   // Sort by underpaid ratio (most underpaid first), star priority
   eligible.sort((a, b) => {
-    const starA = a.player.devTrait === 'star' ? 1 : 0;
-    const starB = b.player.devTrait === 'star' ? 1 : 0;
-    return (b.underpaidRatio + starB * 0.5) - (a.underpaidRatio + starA * 0.5);
+    return b.underpaidRatio - a.underpaidRatio;
   });
 
   // Cap at 3
@@ -1114,8 +1121,8 @@ function allLeagueScore(p: Player): number {
     case 'P':
       statPts = p.ratings.overall * 0.6 + s.gamesPlayed * 2;
       break;
-    default: // OL
-      statPts = p.ratings.overall * 0.4 + s.gamesPlayed * 2;
+    default: // OL — no box score stats, so score conservatively to avoid dominating OROY
+      statPts = (p.ratings.overall - 55) * 0.25 + s.gamesPlayed * 0.5 + (s.sacksAllowed != null ? Math.max(0, 20 - s.sacksAllowed) * 0.5 : 0);
       break;
   }
   // 80% stats, 20% OVR
@@ -4184,19 +4191,27 @@ export const useGameStore = create<GameStore>()(
         set({ scoutingLevel: level, draftScoutingData: merged });
       },
 
-      // PRD-07: Deep scout a prospect
+      // Scout a prospect — costs 1 scout point, narrows OVR range to ±3 and unlocks evaluation
       deepScoutPlayer: (playerId: string) => {
         const state = get();
         const scoutData = state.draftScoutingData[playerId];
-        if (!scoutData) return;
+        if (!scoutData || scoutData.deepScouted) return;
 
         const deepScoutedCount = Object.values(state.draftScoutingData).filter(d => d.deepScouted).length;
-        // Deep scout limit is enforced on the UI side based on subscription tier
+        if (deepScoutedCount >= 15) return; // hard cap at 15 scouts
+
+        // Narrow the error to ±3 and re-center scoutedOvr closer to true OVR
+        const player = state.players.find(p => p.id === playerId);
+        const trueOvr = player?.ratings.overall ?? scoutData.scoutedOvr;
+        // Scout estimate: within ±3 of true OVR with deterministic noise
+        const seed = seedFromId(playerId, 88);
+        const noise = (seed % 7) - 3; // -3 to +3
+        const scoutedOvr = Math.max(20, Math.min(99, trueOvr + noise));
 
         set({
           draftScoutingData: {
             ...state.draftScoutingData,
-            [playerId]: { ...scoutData, deepScouted: true, error: Math.ceil(scoutData.error / 2) },
+            [playerId]: { ...scoutData, deepScouted: true, error: 3, scoutedOvr },
           },
         });
       },
