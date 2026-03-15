@@ -163,12 +163,15 @@ function randomAge(experience: number): number {
 }
 
 function randomSalary(overall: number, position: Position, age: number, potential: number): number {
-  // Use the canonical estimateSalary curve from store.ts so initial rosters
-  // have realistic salaries consistent with free agency / re-signing values.
+  // Use the canonical estimateSalary curve so initial rosters are consistent
   const base = estimateSalary(overall, position, age, potential);
   // Add ±15% noise for variety
   const noise = 0.85 + Math.random() * 0.30;
-  return Math.round(base * noise * 10) / 10;
+  let salary = Math.round(base * noise * 10) / 10;
+  // Enforce K/P caps after noise
+  if (position === 'K') salary = Math.min(salary, 4.0);
+  if (position === 'P') salary = Math.min(salary, 2.5);
+  return salary;
 }
 
 export function generatePlayer(

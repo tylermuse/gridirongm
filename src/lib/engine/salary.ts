@@ -107,10 +107,9 @@ export function estimateSalary(overall: number, position?: Position, age?: numbe
     salary += potentialBonus;
   }
 
-  // K/P hard cap at $5M
-  if (position === 'K' || position === 'P') {
-    salary = Math.min(salary, 5.0);
-  }
+  // K/P hard caps — realistic NFL market ceilings
+  if (position === 'K') salary = Math.min(salary, 4.0);  // Tucker-tier max ~$5-6M, most kickers $2-4M
+  if (position === 'P') salary = Math.min(salary, 2.5);  // Top punters ~$3-4M, most $1.5-2.5M
 
   return Math.round(salary * 10) / 10;
 }
