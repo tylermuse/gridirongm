@@ -278,7 +278,7 @@ const SCOUTING_LABELS = [
  */
 export function generateDraftClass(count: number): Player[] {
   const prospects: Player[] = [];
-  const positions: Position[] = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K'];
+  const positions: Position[] = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K', 'P'];
 
   for (let i = 0; i < count; i++) {
     const position = positions[Math.floor(Math.random() * positions.length)];
