@@ -87,7 +87,7 @@ function getStatValues(p: Player): [string, string] {
 type SortKey = 'name' | 'pos' | 'age' | 'ovr' | 'pot' | 'contract' | 'gp';
 
 export function TeamRosterModal({ teamId, onClose, onPlayerClick }: TeamRosterModalProps) {
-  const { teams, players, season, seasonHistory, champions } = useGameStore();
+  const { teams, players, season, seasonHistory, champions, phase } = useGameStore();
   const [filterPos, setFilterPos] = useState<Position | 'ALL'>('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('pos');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -108,15 +108,21 @@ export function TeamRosterModal({ teamId, onClose, onPlayerClick }: TeamRosterMo
 
   const capSpace = Math.round((team.salaryCap - team.totalPayroll) * 10) / 10;
 
-  // All-Pro players (current season live + last completed season)
+  // All-Pro stars: only after regular season ends, persist through offseason, gone at new season
   const allProPlayerIds = new Set<string>();
-  const currentAllLeague = computeAllLeagueTeams(useGameStore.getState() as never);
-  for (const entry of currentAllLeague.first) allProPlayerIds.add(entry.playerId);
-  for (const entry of currentAllLeague.second) allProPlayerIds.add(entry.playerId);
-  const lastSeason = seasonHistory.length > 0 ? seasonHistory[seasonHistory.length - 1] : null;
-  if (lastSeason) {
-    for (const entry of (lastSeason.allLeagueFirst ?? [])) allProPlayerIds.add(entry.playerId);
-    for (const entry of (lastSeason.allLeagueSecond ?? [])) allProPlayerIds.add(entry.playerId);
+  const offseasonPhases = ['playoffs', 'resigning', 'draft', 'freeAgency'];
+  if (offseasonPhases.includes(phase)) {
+    if (phase === 'playoffs') {
+      const currentAllLeague = computeAllLeagueTeams(useGameStore.getState() as never);
+      for (const entry of currentAllLeague.first) allProPlayerIds.add(entry.playerId);
+      for (const entry of currentAllLeague.second) allProPlayerIds.add(entry.playerId);
+    } else {
+      const lastSeason = seasonHistory.length > 0 ? seasonHistory[seasonHistory.length - 1] : null;
+      if (lastSeason) {
+        for (const entry of (lastSeason.allLeagueFirst ?? [])) allProPlayerIds.add(entry.playerId);
+        for (const entry of (lastSeason.allLeagueSecond ?? [])) allProPlayerIds.add(entry.playerId);
+      }
+    }
   }
 
   // Depth position for each player
