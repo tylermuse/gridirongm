@@ -2472,9 +2472,14 @@ export const useGameStore = create<GameStore>()(
           });
         }).filter((n): n is NewsItem => n !== null);
 
-        // Recalculate all team payrolls from scratch to prevent drift after regular season
+        // Grow salary cap for the upcoming offseason (so cap space is visible during re-signing)
+        const settings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
+        const capGrowthMult = 1 + (settings.capGrowthRate / 100);
+
+        // Recalculate all team payrolls from scratch + apply cap growth
         const recalcTeams = teamsAfterRetirement.map(t => ({
           ...t,
+          salaryCap: Math.round(t.salaryCap * capGrowthMult * 10) / 10,
           totalPayroll: recalculateTeamPayroll(t, playersAfterRetirement),
         }));
 
@@ -4623,13 +4628,8 @@ export const useGameStore = create<GameStore>()(
             age: p.age,
           }));
 
-        // Grow salary cap for new season
-        const settings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
-        const capGrowthMult = 1 + (settings.capGrowthRate / 100);
-        let grownTeams = newTeams.map(t => ({
-          ...t,
-          salaryCap: Math.round(t.salaryCap * capGrowthMult * 10) / 10,
-        }));
+        // Cap growth already applied in advanceToResigning — no double-apply
+        let grownTeams = newTeams;
 
         // Ensure no team starts short-handed: fill roster gaps with minimum-salary players
         let allPlayersForNewSeason = [...finalPlayers];
@@ -4682,7 +4682,7 @@ export const useGameStore = create<GameStore>()(
               : materializeContractYears(player.contract);
 
             const currentBase = contractYears[0].baseSalary;
-            const leagueMin = settings.leagueMinSalary ?? LEAGUE_MINIMUM_SALARY;
+            const leagueMin = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).leagueMinSalary ?? LEAGUE_MINIMUM_SALARY;
             const maxConversion = Math.max(0, currentBase - leagueMin);
             if (maxConversion < 2) continue;
 

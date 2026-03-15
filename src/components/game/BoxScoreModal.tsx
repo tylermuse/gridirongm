@@ -96,11 +96,17 @@ export function BoxScoreModal({ game, onClose, onPlayerClick }: BoxScoreModalPro
         });
       }
     } else {
-      // Default sort by first column descending
+      // Default sort by first numeric column descending (handles string columns like "REC/TGT")
       filtered.sort((a, b) => {
         const aVal = columns[0]?.getValue(a.stats);
         const bVal = columns[0]?.getValue(b.stats);
-        return (typeof bVal === 'number' ? bVal : 0) - (typeof aVal === 'number' ? aVal : 0);
+        const aNum = typeof aVal === 'number' ? aVal : parseFloat(String(aVal)) || 0;
+        const bNum = typeof bVal === 'number' ? bVal : parseFloat(String(bVal)) || 0;
+        if (aNum !== bNum) return bNum - aNum;
+        // Tiebreak by yards (second column)
+        const aYds = columns[1] ? (typeof columns[1].getValue(a.stats) === 'number' ? columns[1].getValue(a.stats) as number : 0) : 0;
+        const bYds = columns[1] ? (typeof columns[1].getValue(b.stats) === 'number' ? columns[1].getValue(b.stats) as number : 0) : 0;
+        return bYds - aYds;
       });
     }
 
