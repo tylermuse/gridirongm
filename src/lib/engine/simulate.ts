@@ -238,16 +238,16 @@ function simulatePlay(
     const compRate = clamp(compBase - (coverageRating / 100) * 0.12 + redZoneBonus, 0.42, 0.76);
 
     if (Math.random() < compRate) {
-      // Completed pass — yards tuned for realism
-      // Average: ~12.5 yards per completion, top WR ~1,000-1,400 yds/season
-      const baseYards = 5 + Math.random() * 11; // 5-16 base (avg 10.5)
-      const bonusYards = (qb.ratings.throwing / 100) * 3.5 + (target.ratings.speed / 100) * 2.5;
+      // Completed pass — tuned for NFL realism (~11.8 yards per completion)
+      // Top QBs: ~4,500 yds, ~35 TDs per season
+      const baseYards = 3 + Math.random() * 10; // 3-13 base (avg 8)
+      const bonusYards = (qb.ratings.throwing / 100) * 2.5 + (target.ratings.speed / 100) * 1.5;
       let yards = Math.round(baseYards + bonusYards * Math.random());
 
-      // Big play chance (~5-8% of completions go 20+) — explosive plays
-      const bigPlayChance = 0.03 + (target.ratings.speed / 100) * 0.04;
+      // Big play chance (~4-6% of completions go 20+) — explosive plays
+      const bigPlayChance = 0.02 + (target.ratings.speed / 100) * 0.03;
       if (Math.random() < bigPlayChance) {
-        yards += 15 + Math.floor(Math.random() * 25);
+        yards += 12 + Math.floor(Math.random() * 20);
       }
 
       const newPos = fieldPosition + yards;

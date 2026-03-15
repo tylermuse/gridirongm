@@ -158,8 +158,11 @@ function sortRosterByDepthChart(
   depthChart: Record<Position, string[]>,
 ): Player[] {
   return [...roster].sort((a, b) => {
-    const ai = depthChart[a.position]?.indexOf(a.id) ?? 999;
-    const bi = depthChart[b.position]?.indexOf(b.id) ?? 999;
+    const aRaw = depthChart[a.position]?.indexOf(a.id) ?? -1;
+    const bRaw = depthChart[b.position]?.indexOf(b.id) ?? -1;
+    // Players not in depth chart (indexOf returns -1) sort to the end
+    const ai = aRaw < 0 ? 999 : aRaw;
+    const bi = bRaw < 0 ? 999 : bRaw;
     return ai - bi;
   });
 }

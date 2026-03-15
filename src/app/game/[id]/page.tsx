@@ -19,8 +19,8 @@ type Speed = '1x' | '2x' | '5x' | 'max';
 
 const SPEED_MS: Record<Speed, number> = {
   '1x': 4800,
-  '2x': 1200,
-  '5x': 400,
+  '2x': 2400,
+  '5x': 800,
   'max': 0,
 };
 
