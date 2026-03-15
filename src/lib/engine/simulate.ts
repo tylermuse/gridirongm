@@ -256,8 +256,8 @@ function simulatePlay(
 
       const tackler = allDefenders.length > 0
         ? weightedPick(allDefenders, allDefenders.map(d => {
-            // Position-based tackle distribution: LB ~57%, DB ~28%, DL ~15%
-            const posWeight = d.position === 'LB' ? 3.5 : (d.position === 'CB' || d.position === 'S') ? 1.8 : 0.8;
+            // Position-based tackle distribution: LB ~45%, DB ~35%, DL ~20%
+            const posWeight = d.position === 'LB' ? 2.2 : (d.position === 'CB' || d.position === 'S') ? 1.6 : 1.0;
             return posWeight * (d.ratings.tackling / 70);
           }))
         : null;
@@ -328,8 +328,8 @@ function simulatePlay(
 
     const tackler = allDefenders.length > 0
       ? weightedPick(allDefenders, allDefenders.map(d => {
-          // Rush tackles: LB ~55%, DL ~25%, DB ~20%
-          const posWeight = d.position === 'LB' ? 3.5 : d.position === 'DL' ? 1.6 : 1.0;
+          // Rush tackles: LB ~40%, DL ~35%, DB ~25%
+          const posWeight = d.position === 'LB' ? 2.0 : d.position === 'DL' ? 1.6 : 1.0;
           return posWeight * (d.ratings.tackling / 70);
         }))
       : null;
@@ -362,9 +362,9 @@ function simulateDrive(
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
 
-  // Max 10 plays per drive (NFL avg ~6, long drives 9-11). Drives also end on
+  // Max 8 plays per drive (NFL avg ~6, long drives 8-10). Drives also end on
   // 4th-down stops, turnovers, or scores before hitting the cap.
-  for (let playNum = 0; playNum < 10; playNum++) {
+  for (let playNum = 0; playNum < 8; playNum++) {
     const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition);
     plays.push(play);
 
@@ -478,8 +478,8 @@ export function simulateGame(
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
-  // ~11 possessions per team per game (matches NFL average)
-  const possessions = 11;
+  // ~10 possessions per team per game (NFL avg ~10-11, tuned down to prevent stat inflation)
+  const possessions = 10;
 
   const allHomePlays: PlayResult[] = [];
   const allAwayPlays: PlayResult[] = [];
@@ -640,7 +640,8 @@ export function simulateGame(
           const s = ensure(playerStats, play.receiver.id);
           s.targets = (s.targets ?? 0) + 1;
         }
-        if (play.tackler && rosterIds.has(play.tackler.id)) {
+        if (play.tackler && rosterIds.has(play.tackler.id) && Math.random() > 0.35) {
+          // ~65% of tackles are credited as solo (rest are assisted / team tackles)
           const s = ensure(playerStats, play.tackler.id);
           s.tackles = (s.tackles ?? 0) + 1;
         }
@@ -658,7 +659,7 @@ export function simulateGame(
           if (play.touchdown) s.rushTDs = (s.rushTDs ?? 0) + 1;
           if (play.turnover) s.fumbles = (s.fumbles ?? 0) + 1;
         }
-        if (play.tackler && rosterIds.has(play.tackler.id)) {
+        if (play.tackler && rosterIds.has(play.tackler.id) && Math.random() > 0.35) {
           const s = ensure(playerStats, play.tackler.id);
           s.tackles = (s.tackles ?? 0) + 1;
           if (play.tackleForLoss) s.tacklesForLoss = (s.tacklesForLoss ?? 0) + 1;
