@@ -192,7 +192,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
             {/* Actions */}
             {isOnUserTeam && !player.retired && (
               <div className="mt-3">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Button
                     size="sm"
                     variant={confirmRelease ? 'danger' : 'secondary'}
@@ -203,6 +203,17 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                   {confirmRelease && (
                     <Button size="sm" variant="ghost" onClick={() => setConfirmRelease(false)}>
                       Cancel
+                    </Button>
+                  )}
+                  {isTradeOpen && !confirmRelease && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        onClose();
+                        router.push(`/trades?block=${player.id}&from=player`);
+                      }}
+                    >
+                      Add to Trading Block
                     </Button>
                   )}
                 </div>

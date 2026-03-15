@@ -3221,6 +3221,12 @@ export const useGameStore = create<GameStore>()(
           }));
         }
 
+        // Recalculate all team payrolls from scratch to prevent drift from incremental tracking
+        currentTeams = currentTeams.map(t => ({
+          ...t,
+          totalPayroll: recalculateTeamPayroll(t, currentPlayers),
+        }));
+
         // Recompute refusals for the new day
         const userTeamData = currentTeams.find(t => t.id === state.userTeamId);
         const newRefusals = userTeamData ? computeFARefusals(currentFreeAgents, currentPlayers, userTeamData, nextDay) : [];
@@ -3335,6 +3341,12 @@ export const useGameStore = create<GameStore>()(
 
           currentDay = nextDay;
         }
+
+        // Recalculate all team payrolls from scratch to prevent drift
+        currentTeams = currentTeams.map(t => ({
+          ...t,
+          totalPayroll: recalculateTeamPayroll(t, currentPlayers),
+        }));
 
         const userTeamData = currentTeams.find(t => t.id === initialState.userTeamId);
         const newRefusals = userTeamData ? computeFARefusals(currentFreeAgents, currentPlayers, userTeamData, currentDay) : [];
