@@ -98,8 +98,8 @@ function TeamPicker() {
   }
 
   // Use imported teams if available, otherwise default fictional teams
-  const displayTeams: { city: string; name: string; abbreviation: string; primaryColor: string; secondaryColor: string }[] = importedTeams
-    ? importedTeams.teams.map(t => ({ city: t.city, name: t.name, abbreviation: t.abbreviation, primaryColor: t.primaryColor, secondaryColor: t.secondaryColor ?? '#FFFFFF' }))
+  const displayTeams: { city: string; name: string; abbreviation: string; primaryColor: string; secondaryColor: string; logoUrl?: string }[] = importedTeams
+    ? importedTeams.teams.map(t => ({ city: t.city, name: t.name, abbreviation: t.abbreviation, primaryColor: t.primaryColor, secondaryColor: t.secondaryColor ?? '#FFFFFF', logoUrl: t.logoUrl }))
     : LEAGUE_TEAMS;
 
   return (
@@ -202,7 +202,7 @@ function TeamPicker() {
               className="group flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--surface)]
                          hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/10 transition-all text-left"
             >
-              <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="lg" />
+              <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="lg" />
               <div className="min-w-0">
                 <div className="text-sm font-bold truncate">{team.city}</div>
                 <div className="text-xs text-[var(--text-sec)] truncate">{team.name}</div>
