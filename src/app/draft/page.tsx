@@ -266,8 +266,9 @@ function OnTheClockSection({
                 ovrDisplay={(() => {
                   const scout = draftScoutingData[bestAvailable.id];
                   if (!scout) return undefined;
-                  const lo = Math.max(20, scout.scoutedOvr - scout.error);
-                  const hi = Math.min(99, scout.scoutedOvr + scout.error);
+                  const cappedErr = Math.min(scout.error, 6);
+                  const lo = Math.max(20, scout.scoutedOvr - cappedErr);
+                  const hi = Math.min(99, scout.scoutedOvr + cappedErr);
                   return `${lo}–${hi}`;
                 })()}
                 onDraft={isUserPick ? onDraft : undefined}
@@ -285,8 +286,9 @@ function OnTheClockSection({
                 ovrDisplay={(() => {
                   const scout = draftScoutingData[bestFit.id];
                   if (!scout) return undefined;
-                  const lo = Math.max(20, scout.scoutedOvr - scout.error);
-                  const hi = Math.min(99, scout.scoutedOvr + scout.error);
+                  const cappedErr = Math.min(scout.error, 6);
+                  const lo = Math.max(20, scout.scoutedOvr - cappedErr);
+                  const hi = Math.min(99, scout.scoutedOvr + cappedErr);
                   return `${lo}–${hi}`;
                 })()}
                 onDraft={isUserPick ? onDraft : undefined}
@@ -304,8 +306,9 @@ function OnTheClockSection({
                 ovrDisplay={(() => {
                   const scout = draftScoutingData[scoutsPick.id];
                   if (!scout) return String(scoutsPick.ratings.overall);
-                  const lo = Math.max(20, scout.scoutedOvr - scout.error);
-                  const hi = Math.min(99, scout.scoutedOvr + scout.error);
+                  const cappedErr = Math.min(scout.error, 6);
+                  const lo = Math.max(20, scout.scoutedOvr - cappedErr);
+                  const hi = Math.min(99, scout.scoutedOvr + cappedErr);
                   return `${lo}–${hi}`;
                 })()}
                 onDraft={onDraft}
@@ -643,16 +646,31 @@ export default function DraftPage() {
     }).sort((a, b) => b.needScore - a.needScore);
   }
 
-  const allProspects = freeAgents
+  const rawProspects = freeAgents
     .map((id) => players.find((player) => player.id === id))
     .filter((player): player is Player => Boolean(player))
-    .filter((player) => player.experience === 0)
-    .sort((a, b) => {
-      // Sort by projected rank (stable — doesn't change when scouted)
-      const aRank = a.projectedRank ?? 999;
-      const bRank = b.projectedRank ?? 999;
-      return aRank - bRank;
+    .filter((player) => player.experience === 0);
+
+  // If prospects have projectedRank, sort by it. Otherwise fall back to OVR sort.
+  const hasRanks = rawProspects.some(p => p.projectedRank != null);
+
+  // Assign ranks on the fly if missing (handles old saves / imported leagues)
+  if (!hasRanks && rawProspects.length > 0) {
+    const sorted = [...rawProspects].sort((a, b) => {
+      const aOvr = (a.position === 'K' || a.position === 'P') ? a.ratings.overall - 40 : a.ratings.overall;
+      const bOvr = (b.position === 'K' || b.position === 'P') ? b.ratings.overall - 40 : b.ratings.overall;
+      return bOvr - aOvr;
     });
+    for (let i = 0; i < sorted.length; i++) {
+      sorted[i].projectedRank = i + 1;
+    }
+  }
+
+  const allProspects = rawProspects.sort((a, b) => {
+    const aRank = a.projectedRank ?? 999;
+    const bRank = b.projectedRank ?? 999;
+    return aRank - bRank;
+  });
 
   const TOTAL_SCOUTS = 15;
   const scoutedCount = Object.values(draftScoutingData).filter(d => d.deepScouted).length;
@@ -862,8 +880,11 @@ export default function DraftPage() {
                 {prospects.map((player) => {
                   const scout = draftScoutingData[player.id];
                   const isScouted = scout?.deepScouted === true;
-                  const lo = scout ? Math.max(20, scout.scoutedOvr - scout.error) : Math.max(20, player.ratings.overall - 10);
-                  const hi = scout ? Math.min(99, scout.scoutedOvr + scout.error) : Math.min(99, player.ratings.overall + 10);
+                  // Cap displayed error to ±6 unscouted, ±3 scouted (handles old saves with massive ranges)
+                  const maxErr = isScouted ? 3 : 6;
+                  const err = scout ? Math.min(scout.error, maxErr) : 5;
+                  const lo = scout ? Math.max(20, scout.scoutedOvr - err) : Math.max(20, player.ratings.overall - err);
+                  const hi = scout ? Math.min(99, scout.scoutedOvr + err) : Math.min(99, player.ratings.overall + err);
                   const ovrForColor = scout ? scout.scoutedOvr : player.ratings.overall;
                   const isExpanded = expandedProspectId === player.id;
                   const projRank = player.projectedRank ?? '—';
