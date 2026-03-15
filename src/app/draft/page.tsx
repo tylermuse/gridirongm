@@ -669,51 +669,29 @@ export default function DraftPage() {
     })
     .slice(0, 50);
 
-  // BPA list sorted by scouted OVR (for On The Clock recommendations)
-  const prospectsByOvr = [...allProspects].sort((a, b) => {
-    const aScout = draftScoutingData[a.id];
-    const bScout = draftScoutingData[b.id];
-    const aOvr = aScout ? aScout.scoutedOvr : a.ratings.overall;
-    const bOvr = bScout ? bScout.scoutedOvr : b.ratings.overall;
-    const aAdj = (a.position === 'K' || a.position === 'P') ? aOvr * 0.5 : aOvr;
-    const bAdj = (b.position === 'K' || b.position === 'P') ? bOvr * 0.5 : bOvr;
-    return bAdj - aAdj;
-  });
-
   const currentTeam = teams.find((team) => team.id === currentPickTeamId);
   const nextPickTeam = teams.find((team) => team.id === draftOrder[1]);
   const currentTeamNeeds = currentPickTeamId ? getTeamNeeds(currentPickTeamId) : [];
   const nextPickNeeds = draftOrder[1] ? getTeamNeeds(draftOrder[1]).slice(0, 3) : [];
   const myNeeds = getTeamNeeds(userTeamId).slice(0, 5);
-  const bestAvailable = prospectsByOvr[0];
+
+  // BPA = top of the board (highest projected rank among remaining prospects)
+  // allProspects is already sorted by projectedRank, so [0] is BPA
+  const bestAvailable = allProspects[0];
+
+  // Best Fit = highest-ranked prospect at a need position
   const bestFitResult = (() => {
     if (!currentPickTeamId) return { player: null as Player | null, isNeedMatch: true };
     const needs = getTeamNeeds(currentPickTeamId);
-    // Get top need positions (needScore > 0, excluding K/P)
     const needPositions = new Set(
       needs.filter(n => n.needScore > 0 && n.position !== 'K' && n.position !== 'P').map(n => n.position),
     );
-    // Filter prospects to ONLY need positions
-    const needProspects = allProspects.filter(p => needPositions.has(p.position));
-    if (needProspects.length > 0) {
-      const sorted = [...needProspects].sort((a, b) => {
-        const aNeed = needs.find((n) => n.position === a.position)?.needScore ?? 0;
-        const bNeed = needs.find((n) => n.position === b.position)?.needScore ?? 0;
-        const aScout = draftScoutingData[a.id];
-        const bScout = draftScoutingData[b.id];
-        const aOvr = aScout ? aScout.scoutedOvr : a.ratings.overall;
-        const bOvr = bScout ? bScout.scoutedOvr : b.ratings.overall;
-        const aScore = aOvr + a.potential * 0.4 + aNeed * 0.5;
-        const bScore = bOvr + b.potential * 0.4 + bNeed * 0.5;
-        return bScore - aScore;
-      });
-      // Pick the top need-match that isn't the same as BPA (if possible)
-      const pick = sorted.find(p => p.id !== prospectsByOvr[0]?.id) ?? sorted[0];
-      return { player: pick ?? null, isNeedMatch: true };
-    }
-    // No need-matching prospects: fall back to BPA excluding the actual BPA
-    const fallback = prospectsByOvr.filter(p => p.position !== 'K' && p.position !== 'P' && p.id !== prospectsByOvr[0]?.id);
-    return { player: fallback[0] ?? null, isNeedMatch: false };
+    // allProspects is sorted by projected rank — first need-position match is best fit
+    const needMatch = allProspects.find(p => needPositions.has(p.position) && p.id !== allProspects[0]?.id);
+    if (needMatch) return { player: needMatch, isNeedMatch: true };
+    // No need match — second player on the board (excluding BPA)
+    const fallback = allProspects.find(p => p.position !== 'K' && p.position !== 'P' && p.id !== allProspects[0]?.id);
+    return { player: fallback ?? null, isNeedMatch: false };
   })();
   const bestFit = bestFitResult.player;
 
