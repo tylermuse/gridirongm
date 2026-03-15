@@ -320,39 +320,27 @@ export function generateDraftClass(count: number): Player[] {
   // Re-sort after sleeper adjustments (internal ordering for generation only)
   prospects.sort((a, b) => b.ratings.overall - a.ratings.overall);
 
-  // ── Assign projected ranks (noisy public perception of talent) ──
-  // These simulate pre-draft media rankings: correlated with true OVR
-  // but with significant error, especially for mid/late-round prospects.
-  const totalProspects = prospects.length;
-  for (const prospect of prospects) {
-    const trueOvr = prospect.ratings.overall;
-    // Base rank from OVR (higher OVR = lower rank number = better)
-    const baseRank = Math.round((1 - (trueOvr - 30) / 65) * totalProspects);
-    // Moderate noise — top prospects have less variance, late picks more
-    const noiseFactor = 0.08 + (baseRank / totalProspects) * 0.15;
-    const noise = Math.round((Math.random() - 0.5) * totalProspects * noiseFactor);
-    // K/P penalty: push them down in projections
-    const posPenalty = (prospect.position === 'K' || prospect.position === 'P') ? Math.round(totalProspects * 0.4) : 0;
-    prospect.projectedRank = Math.max(1, Math.min(totalProspects, baseRank + noise + posPenalty));
+  // ── Assign projected ranks (public mock-draft order) ──
+  // Sort by OVR descending with small noise to simulate media perception.
+  // K/P get pushed to the bottom. Rank = position in this sorted list.
+  const ranked = [...prospects].sort((a, b) => {
+    // K/P are never drafted high — heavy penalty
+    const aOvr = (a.position === 'K' || a.position === 'P') ? a.ratings.overall - 40 : a.ratings.overall;
+    const bOvr = (b.position === 'K' || b.position === 'P') ? b.ratings.overall - 40 : b.ratings.overall;
+    // Small noise: ±3 OVR points for top prospects, ±6 for mid, ±8 for late
+    const aIdx = prospects.indexOf(a);
+    const bIdx = prospects.indexOf(b);
+    const aNoise = ((aIdx * 7919 + 12347) % 17) - 8; // deterministic ±8
+    const bNoise = ((bIdx * 7919 + 12347) % 17) - 8;
+    const aAdj = aOvr + Math.round(aNoise * 0.5);
+    const bAdj = bOvr + Math.round(bNoise * 0.5);
+    return bAdj - aAdj;
+  });
+  for (let i = 0; i < ranked.length; i++) {
+    ranked[i].projectedRank = i + 1;
   }
 
-  // Deduplicate projected ranks (no two players share the same rank)
-  prospects.sort((a, b) => (a.projectedRank ?? 999) - (b.projectedRank ?? 999));
-  const usedRanks = new Set<number>();
-  for (const prospect of prospects) {
-    let rank = prospect.projectedRank ?? totalProspects;
-    while (usedRanks.has(rank) && rank <= totalProspects) rank++;
-    if (rank > totalProspects) {
-      // Find first available rank from the bottom
-      for (let r = totalProspects; r >= 1; r--) {
-        if (!usedRanks.has(r)) { rank = r; break; }
-      }
-    }
-    prospect.projectedRank = rank;
-    usedRanks.add(rank);
-  }
-
-  // Sort by projected rank for the final output (this is the "public" ordering)
+  // Sort by projected rank for the final output
   prospects.sort((a, b) => (a.projectedRank ?? 999) - (b.projectedRank ?? 999));
 
   return prospects;
