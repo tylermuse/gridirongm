@@ -1182,7 +1182,8 @@ export function computeAllLeagueTeams(state: LeagueState): {
 const TRADE_EXCLUDED_POSITIONS = new Set<Position>(['K', 'P']);
 
 function generateAITradeProposals(state: LeagueState): TradeProposal[] {
-  if (state.week > 12) return []; // Trade deadline after week 12
+  const dl = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).tradeDeadlineWeek;
+  if (state.week > dl + 1) return [];
   const proposals: TradeProposal[] = [];
   const userTeam = state.teams.find(t => t.id === state.userTeamId);
   if (!userTeam) return [];
@@ -1348,7 +1349,8 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
 // ---------------------------------------------------------------------------
 
 function generateTradeRumors(state: LeagueState): TradeRumor[] {
-  if (state.phase !== 'regular' || state.week < 4 || state.week > 12) return [];
+  const rumDl = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).tradeDeadlineWeek;
+  if (state.phase !== 'regular' || state.week < 4 || state.week > rumDl + 1) return [];
   const rumors: TradeRumor[] = [];
   const maxNew = 3;
 
@@ -1446,7 +1448,8 @@ function resolveTradeRumors(state: LeagueState): { rumors: TradeRumor[]; news: N
     if (r.resolved) return r;
 
     // Past trade deadline — all unresolved become false alarms
-    if (state.week > 12) {
+    const resDl = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).tradeDeadlineWeek;
+    if (state.week > resDl + 1) {
       const resolved = { ...r, resolved: true, outcome: 'false_alarm' as const, resolvedWeek: state.week };
       if (r.playerIds.length > 0) {
         const p = state.players.find(pl => pl.id === r.playerIds[0]);
@@ -1704,7 +1707,8 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
 
   const weekNews = generateWeekNews(state, updatedGames, newInjuries);
 
-  const newTradeProposals = state.week <= 12
+  const simDl = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).tradeDeadlineWeek;
+  const newTradeProposals = state.week <= simDl + 1
     ? generateAITradeProposals({ ...state, teams: newTeams, players: injuredPlayers })
     : [];
 
@@ -3693,8 +3697,8 @@ export const useGameStore = create<GameStore>()(
       ) => {
         const state = get();
         // Trade deadline only applies during regular season; offseason trades always allowed
-        const offseasonPhases = ['resigning', 'draft', 'freeAgency', 'offseason', 'preseason'];
-        if (state.phase === 'regular' && state.week > 12) return { success: false, reason: 'Trade deadline has passed' };
+        const tradeDeadline = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).tradeDeadlineWeek;
+        if (state.phase === 'regular' && state.week > tradeDeadline + 1) return { success: false, reason: 'Trade deadline has passed' };
         if (state.phase === 'playoffs') return { success: false, reason: 'No trades during playoffs' };
 
         const userTeam = state.teams.find(t => t.id === state.userTeamId);
@@ -4062,8 +4066,9 @@ export const useGameStore = create<GameStore>()(
       solicitTradingBlockProposals: (blockedPlayerIds: string[], blockedPickIds: string[], seekPositions: Position[], seekDraftPicks?: boolean) => {
         const state = get();
         // Block during playoffs and past in-season trade deadline
+        const blockDl = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).tradeDeadlineWeek;
         if (state.phase === 'playoffs') return;
-        if (state.phase === 'regular' && state.week > 12) return;
+        if (state.phase === 'regular' && state.week > blockDl + 1) return;
 
         const blockedPlayers = blockedPlayerIds
           .map(id => state.players.find(p => p.id === id))
