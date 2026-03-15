@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
@@ -19,6 +20,7 @@ import { DebateBubble } from '@/components/game/DebateBubble';
 
 function TeamPicker() {
   const { newLeague } = useGameStore();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
@@ -28,6 +30,26 @@ function TeamPicker() {
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
   const [savedGame, setSavedGame] = useState<{ teamAbbr: string; season: number; wins: number; losses: number; phase: string } | null>(null);
   const [resumeLoading, setResumeLoading] = useState(false);
+  const autoLoadedRef = useRef(false);
+
+  // Auto-load roster from ?roster= query param (e.g. from /rosters page)
+  useEffect(() => {
+    if (autoLoadedRef.current) return;
+    const rosterParam = searchParams.get('roster');
+    if (!rosterParam) return;
+    autoLoadedRef.current = true;
+    const url = rosterParam.startsWith('/') ? `${window.location.origin}${rosterParam}` : rosterParam;
+    setImportUrl(url);
+    setShowImport(true);
+    setImportLoading(true);
+    loadLeagueFromUrl(url)
+      .then((data) => {
+        setImportedTeams(data);
+        setActiveUrl(url);
+      })
+      .catch(() => setError('Failed to load roster file.'))
+      .finally(() => setImportLoading(false));
+  }, [searchParams]);
 
   // Check for existing autosave on mount
   useEffect(() => {
@@ -733,7 +755,17 @@ function Dashboard() {
   );
 }
 
-export default function Home() {
+import { Suspense } from 'react';
+
+function HomeContent() {
   const initialized = useGameStore(s => s.initialized);
   return initialized ? <Dashboard /> : <TeamPicker />;
+}
+
+export default function Home() {
+  return (
+    <Suspense>
+      <HomeContent />
+    </Suspense>
+  );
 }

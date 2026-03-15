@@ -148,16 +148,24 @@ export default function RostersPage() {
                 </div>
               </div>
 
-              <a
-                href={`/rosters/${roster.fileName}`}
-                download={roster.fileName}
-                className="shrink-0 inline-flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg transition-colors shadow-sm"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Download Roster
-              </a>
+              <div className="shrink-0 flex flex-col gap-2">
+                <Link
+                  href={`/?roster=/rosters/${roster.fileName}`}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-sm rounded-lg transition-colors shadow-sm"
+                >
+                  Play in Gridiron GM →
+                </Link>
+                <a
+                  href={`/rosters/${roster.fileName}`}
+                  download={roster.fileName}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[var(--surface-2)] hover:bg-[var(--border)] text-[var(--text)] font-medium text-xs rounded-lg transition-colors border border-[var(--border)]"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download JSON
+                </a>
+              </div>
             </div>
 
             <HowToUse roster={roster} />
