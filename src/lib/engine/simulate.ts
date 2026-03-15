@@ -167,10 +167,10 @@ function simulatePlay(
     ? dls.reduce((s, p) => s + p.ratings.passRush * 1.2 + p.ratings.strength, 0) / dls.length
     : 50;
 
-  // Decide pass vs rush (weighted by situation) — NFL avg ~60% pass
-  const passChance = down >= 3 && yardsToGo > 5 ? 0.80 :
-                     down >= 3 ? 0.65 :
-                     down === 1 ? 0.55 : 0.60;
+  // Decide pass vs rush — NFL avg ~57% pass, tuned for realistic volume
+  const passChance = down >= 3 && yardsToGo > 5 ? 0.78 :
+                     down >= 3 ? 0.60 :
+                     down === 1 ? 0.48 : 0.55;
 
   const isPass = Math.random() < passChance;
 
@@ -191,11 +191,13 @@ function simulatePlay(
     }
 
     // ── Pick receiver with position-based target shares ──
-    // NFL-realistic: WR1 ~28%, WR2 ~21%, WR3 ~12%, TE1 ~18%, TE2 ~6%, RB1 ~12%, RB2 ~3%
+    // Includes backup WRs so every rostered receiver gets some stats
     const eligibleReceivers: { player: Player; baseShare: number }[] = [];
     if (wrs[0]) eligibleReceivers.push({ player: wrs[0], baseShare: 0.28 });
     if (wrs[1]) eligibleReceivers.push({ player: wrs[1], baseShare: 0.21 });
-    if (wrs[2]) eligibleReceivers.push({ player: wrs[2], baseShare: 0.12 });
+    if (wrs[2]) eligibleReceivers.push({ player: wrs[2], baseShare: 0.14 });
+    if (wrs[3]) eligibleReceivers.push({ player: wrs[3], baseShare: 0.05 });
+    if (wrs[4]) eligibleReceivers.push({ player: wrs[4], baseShare: 0.02 });
     if (tes[0]) eligibleReceivers.push({ player: tes[0], baseShare: 0.18 });
     if (tes[1]) eligibleReceivers.push({ player: tes[1], baseShare: 0.06 });
     if (rbs[0]) eligibleReceivers.push({ player: rbs[0], baseShare: 0.12 });
@@ -478,8 +480,9 @@ export function simulateGame(
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
-  // ~10 possessions per team per game (NFL avg ~10-11, tuned down to prevent stat inflation)
-  const possessions = 10;
+  // ~9 possessions per team per game — tuned for realistic stat totals
+  // (NFL avg ~10-11 but shorter drives in sim means fewer total plays needed)
+  const possessions = 9;
 
   const allHomePlays: PlayResult[] = [];
   const allAwayPlays: PlayResult[] = [];

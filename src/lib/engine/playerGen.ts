@@ -278,15 +278,44 @@ const SCOUTING_LABELS = [
  */
 export function generateDraftClass(count: number): Player[] {
   const prospects: Player[] = [];
-  const positions: Position[] = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K', 'P'];
+
+  // Weighted position distribution — matches real NFL draft proportions
+  // K/P are rare (3-5 each per class), no position dominates late rounds
+  const positionWeights: { pos: Position; weight: number }[] = [
+    { pos: 'OL', weight: 20 },
+    { pos: 'DL', weight: 15 },
+    { pos: 'LB', weight: 15 },
+    { pos: 'CB', weight: 12 },
+    { pos: 'WR', weight: 12 },
+    { pos: 'S', weight: 8 },
+    { pos: 'RB', weight: 6 },
+    { pos: 'TE', weight: 5 },
+    { pos: 'QB', weight: 4 },
+    { pos: 'K', weight: 1.5 },
+    { pos: 'P', weight: 1.5 },
+  ];
+  const totalWeight = positionWeights.reduce((s, pw) => s + pw.weight, 0);
+
+  function pickPosition(): Position {
+    let roll = Math.random() * totalWeight;
+    for (const pw of positionWeights) {
+      roll -= pw.weight;
+      if (roll <= 0) return pw.pos;
+    }
+    return 'OL';
+  }
 
   for (let i = 0; i < count; i++) {
-    const position = positions[Math.floor(Math.random() * positions.length)];
+    const position = pickPosition();
     // Talent curve: top picks ~82, mid-round ~63, late-round ~44
     const progress = i / count;
     let talent = gaussian(82 - progress * 38, 7);
     // Ensure top 6 picks are truly elite (blue-chip prospects every class)
     if (i < 6) talent = Math.max(talent, 72 + Math.random() * 8);
+    // K/P should be lower rated — they don't need elite OVR
+    if (position === 'K' || position === 'P') {
+      talent = Math.min(talent, 35 + Math.random() * 30); // 35-65 OVR range
+    }
     const player = generatePlayer(position, talent, { age: 21 + Math.floor(Math.random() * 2), experience: 0 });
     player.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
     player.college = COLLEGES[Math.floor(Math.random() * COLLEGES.length)];
