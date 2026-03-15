@@ -669,12 +669,23 @@ export default function DraftPage() {
     })
     .slice(0, 50);
 
+  // BPA list sorted by scouted OVR (for On The Clock recommendations)
+  const prospectsByOvr = [...allProspects].sort((a, b) => {
+    const aScout = draftScoutingData[a.id];
+    const bScout = draftScoutingData[b.id];
+    const aOvr = aScout ? aScout.scoutedOvr : a.ratings.overall;
+    const bOvr = bScout ? bScout.scoutedOvr : b.ratings.overall;
+    const aAdj = (a.position === 'K' || a.position === 'P') ? aOvr * 0.5 : aOvr;
+    const bAdj = (b.position === 'K' || b.position === 'P') ? bOvr * 0.5 : bOvr;
+    return bAdj - aAdj;
+  });
+
   const currentTeam = teams.find((team) => team.id === currentPickTeamId);
   const nextPickTeam = teams.find((team) => team.id === draftOrder[1]);
   const currentTeamNeeds = currentPickTeamId ? getTeamNeeds(currentPickTeamId) : [];
   const nextPickNeeds = draftOrder[1] ? getTeamNeeds(draftOrder[1]).slice(0, 3) : [];
   const myNeeds = getTeamNeeds(userTeamId).slice(0, 5);
-  const bestAvailable = allProspects[0];
+  const bestAvailable = prospectsByOvr[0];
   const bestFitResult = (() => {
     if (!currentPickTeamId) return { player: null as Player | null, isNeedMatch: true };
     const needs = getTeamNeeds(currentPickTeamId);
@@ -697,11 +708,11 @@ export default function DraftPage() {
         return bScore - aScore;
       });
       // Pick the top need-match that isn't the same as BPA (if possible)
-      const pick = sorted.find(p => p.id !== allProspects[0]?.id) ?? sorted[0];
+      const pick = sorted.find(p => p.id !== prospectsByOvr[0]?.id) ?? sorted[0];
       return { player: pick ?? null, isNeedMatch: true };
     }
     // No need-matching prospects: fall back to BPA excluding the actual BPA
-    const fallback = allProspects.filter(p => p.position !== 'K' && p.position !== 'P' && p.id !== allProspects[0]?.id);
+    const fallback = prospectsByOvr.filter(p => p.position !== 'K' && p.position !== 'P' && p.id !== prospectsByOvr[0]?.id);
     return { player: fallback[0] ?? null, isNeedMatch: false };
   })();
   const bestFit = bestFitResult.player;
@@ -893,8 +904,22 @@ export default function DraftPage() {
                       <td className="py-2.5 text-center text-xs text-[var(--text-sec)] font-mono">{projRank}</td>
                       <td className="py-2.5">
                         <div className="flex items-center gap-2">
-                          <div className="min-w-0">
-                            <div className="font-semibold truncate">{player.firstName} {player.lastName}</div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold truncate">{player.firstName} {player.lastName}</span>
+                              {!isScouted && scoutsRemaining > 0 && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deepScoutPlayer(player.id);
+                                    setExpandedProspectId(player.id);
+                                  }}
+                                  className="shrink-0 px-1.5 py-0.5 text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
+                                >
+                                  Scout
+                                </button>
+                              )}
+                            </div>
                             <div className="text-[10px] text-[var(--text-sec)] flex items-center gap-1 flex-wrap">
                               {player.scoutingLabel ?? 'Unranked'}
                               {isScouted && (() => {
