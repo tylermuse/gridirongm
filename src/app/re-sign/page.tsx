@@ -27,7 +27,7 @@ function positionStats(p: { position: string; stats: { gamesPlayed: number; pass
   if (s.gamesPlayed === 0) return 'No games played';
   switch (p.position) {
     case 'QB': return `${s.gamesPlayed} GP · ${s.passYards} YDS · ${s.passTDs} TD · ${s.interceptions} INT`;
-    case 'RB': return `${s.gamesPlayed} GP · ${s.rushYards} YDS · ${s.rushTDs} TD · ${s.receptions} REC`;
+    case 'RB': return `${s.gamesPlayed} GP · ${s.rushYards} YDS · ${s.rushTDs} TD${s.receivingTDs > 0 ? ` · ${s.receivingTDs} REC TD` : ''}`;
     case 'WR': case 'TE': return `${s.gamesPlayed} GP · ${s.receptions} REC · ${s.receivingYards} YDS · ${s.receivingTDs} TD`;
     case 'OL': return `${s.gamesPlayed} GP · ${s.sacksAllowed ?? 0} SA · ${(s.passBlocks ?? 0) > 0 ? ((s.sacksAllowed ?? 0) / s.passBlocks * 100).toFixed(1) : '0.0'}%`;
     case 'DL': case 'LB': return `${s.gamesPlayed} GP · ${s.tackles} TKL · ${s.sacks} SCK`;
@@ -242,7 +242,7 @@ export default function ReSignPage() {
                     )}
                   </div>
                 </div>
-                <Button size="sm" variant="ghost" onClick={walkAway}>✕</Button>
+                <Button size="sm" variant="ghost" onClick={closeNegotiation}>✕</Button>
               </div>
 
               {/* Message feed */}

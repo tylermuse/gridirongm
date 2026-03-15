@@ -219,7 +219,7 @@ function SeasonDetail({
             let sbStatLine = '';
             if (gs) {
               if (pos === 'QB') sbStatLine = `${gs.passYards ?? 0} YDS · ${gs.passTDs ?? 0} TD · ${gs.interceptions ?? 0} INT`;
-              else if (pos === 'RB') sbStatLine = `${gs.rushYards ?? 0} YDS · ${gs.rushTDs ?? 0} TD · ${gs.receptions ?? 0} REC`;
+              else if (pos === 'RB') sbStatLine = `${gs.rushYards ?? 0} YDS · ${gs.rushTDs ?? 0} TD${(gs.receivingTDs ?? 0) > 0 ? ` · ${gs.receivingTDs} REC TD` : ''}`;
               else if (pos === 'WR' || pos === 'TE') sbStatLine = `${gs.receptions ?? 0} REC · ${gs.receivingYards ?? 0} YDS · ${gs.receivingTDs ?? 0} TD`;
               else if (pos === 'DL' || pos === 'LB') sbStatLine = `${gs.tackles ?? 0} TKL · ${gs.sacks ?? 0} SCK · ${gs.defensiveINTs ?? 0} INT`;
               else if (pos === 'CB' || pos === 'S') sbStatLine = `${gs.tackles ?? 0} TKL · ${gs.defensiveINTs ?? 0} INT`;

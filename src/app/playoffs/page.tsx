@@ -273,7 +273,7 @@ function posStatLine(p: { position: string; stats: StatShape }, overrideStats?: 
   if (!overrideStats && s.gamesPlayed === 0) return '';
   switch (p.position) {
     case 'QB': return `${s.passYards} YDS · ${s.passTDs} TD · ${s.interceptions} INT`;
-    case 'RB': return `${s.rushYards} YDS · ${s.rushTDs} TD · ${s.receptions} REC`;
+    case 'RB': return `${s.rushYards} YDS · ${s.rushTDs} TD${s.receivingTDs > 0 ? ` · ${s.receivingTDs} REC TD` : ''}`;
     case 'WR': case 'TE': return `${s.receptions} REC · ${s.receivingYards} YDS · ${s.receivingTDs} TD`;
     case 'OL': return `${s.gamesPlayed} GP · ${s.sacksAllowed ?? 0} SA · ${(s.passBlocks ?? 0) > 0 ? ((s.sacksAllowed ?? 0) / s.passBlocks * 100).toFixed(1) : '0.0'}%`;
     case 'DL': case 'LB': return `${s.tackles} TKL · ${s.sacks.toFixed(1)} SCK · ${s.defensiveINTs} INT`;
