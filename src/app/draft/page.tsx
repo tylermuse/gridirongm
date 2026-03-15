@@ -16,6 +16,7 @@ import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import type { Player, Position, Team } from '@/types';
 import { expectedOvrForPick, pickGrade, gradeValue, gradeColor, teamDraftGrade } from '@/lib/engine/draftGrades';
 import { generateDraftScoutEval, publicConsensusBlurb, type DraftScoutEvaluation } from '@/lib/engine/draftScoutEval';
+import { generateScoutingReport } from '@/lib/engine/scoutingReport';
 
 function ratingColor(val: number): string {
   if (val >= 80) return 'text-green-600';
@@ -541,6 +542,65 @@ function ScoutEvaluationPanel({
         <span className="text-[10px] text-[var(--text-sec)]">— Scout Staff</span>
       </div>
 
+      {/* Character & Development from full scouting report */}
+      {(() => {
+        const report = generateScoutingReport(player);
+        return (
+          <div className="grid grid-cols-2 gap-3">
+            {/* Character */}
+            {report.characterReport && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-[var(--text-sec)] mb-1">Character & Intangibles</div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div className="bg-[var(--surface-2)] rounded px-2 py-1 text-center">
+                    <div className="text-[9px] text-[var(--text-sec)] uppercase">Work Ethic</div>
+                    <div className={`text-xs font-bold ${report.characterReport.workEthic === 'Elite' ? 'text-green-600' : report.characterReport.workEthic === 'Strong' ? 'text-blue-600' : report.characterReport.workEthic === 'Questionable' ? 'text-red-600' : 'text-amber-600'}`}>{report.characterReport.workEthic}</div>
+                  </div>
+                  <div className="bg-[var(--surface-2)] rounded px-2 py-1 text-center">
+                    <div className="text-[9px] text-[var(--text-sec)] uppercase">Compete</div>
+                    <div className={`text-xs font-bold ${report.characterReport.competitiveness === 'Alpha Competitor' ? 'text-green-600' : report.characterReport.competitiveness === 'Competitive' ? 'text-blue-600' : 'text-red-600'}`}>{report.characterReport.competitiveness}</div>
+                  </div>
+                  <div className="bg-[var(--surface-2)] rounded px-2 py-1 text-center">
+                    <div className="text-[9px] text-[var(--text-sec)] uppercase">Leadership</div>
+                    <div className="text-xs font-bold">{report.characterReport.leadership}</div>
+                  </div>
+                  <div className="bg-[var(--surface-2)] rounded px-2 py-1 text-center">
+                    <div className="text-[9px] text-[var(--text-sec)] uppercase">Coachability</div>
+                    <div className="text-xs font-bold">{report.characterReport.coachability}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Development Projection */}
+            {report.developmentCurve && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-[var(--text-sec)] mb-1">Development Projection</div>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Badge variant={report.developmentCurve.trajectory === 'Rapid Riser' ? 'green' : report.developmentCurve.trajectory === 'Steady Climber' ? 'blue' : 'amber'} size="sm">
+                    {report.developmentCurve.trajectory}
+                  </Badge>
+                  <span className="text-[10px] text-[var(--text-sec)]">Peak at age {report.developmentCurve.peakAge}</span>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[
+                    { label: 'Now', value: player.ratings.overall },
+                    { label: 'Yr 1', value: report.developmentCurve.year1 },
+                    { label: 'Yr 2', value: report.developmentCurve.year2 },
+                    { label: 'Yr 3', value: report.developmentCurve.year3 },
+                  ].map(item => (
+                    <div key={item.label} className="bg-[var(--surface-2)] rounded px-2 py-1 text-center">
+                      <div className="text-[9px] text-[var(--text-sec)] uppercase">{item.label}</div>
+                      <div className={`text-sm font-bold ${ratingColor(item.value)}`}>{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Draft button */}
       {isUserPick && (
         <div className="pt-1">
@@ -878,6 +938,7 @@ export default function DraftPage() {
                   <th className="text-left pb-2">Player</th>
                   <th className="text-center pb-2">Pos</th>
                   <th className="text-center pb-2">OVR</th>
+                  <th className="text-center pb-2 hidden sm:table-cell">Scout</th>
                   <th className="text-right pb-2 pr-2">Draft</th>
                 </tr>
               </thead>
@@ -943,6 +1004,18 @@ export default function DraftPage() {
                         <span className="hidden sm:inline">{lo}–{hi}</span>
                         <span className="sm:hidden">{scout ? scout.scoutedOvr : player.ratings.overall}</span>
                       </td>
+                      <td className="py-2.5 text-center hidden sm:table-cell">
+                        {isScouted ? (() => {
+                          const eval_ = generateDraftScoutEval(player, userRoster, { lo, hi });
+                          return (
+                            <span className={`text-xs font-bold ${ratingColor(eval_.scoutOvrEstimate.high)}`}>
+                              {eval_.scoutOvrEstimate.low}–{eval_.scoutOvrEstimate.high}
+                            </span>
+                          );
+                        })() : (
+                          <span className="text-xs text-[var(--text-sec)]">?</span>
+                        )}
+                      </td>
                       <td className="py-2.5 pr-2 text-right" onClick={e => e.stopPropagation()}>
                         {isUserPick ? (
                           <button
@@ -958,7 +1031,7 @@ export default function DraftPage() {
                     </tr>
                     {isExpanded && (
                       <tr className="border-t border-[var(--border)]">
-                        <td colSpan={6} className="px-4 py-3 bg-[var(--surface-2)]/50">
+                        <td colSpan={7} className="px-4 py-3 bg-[var(--surface-2)]/50">
                           {isScouted ? (
                             <ScoutEvaluationPanel
                               player={player}
