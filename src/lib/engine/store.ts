@@ -755,7 +755,11 @@ function computeResigningEntry(player: Player, team: Team): ResigningEntry {
   else if (player.mood < 40) mult *= 1.08;
   // Older players accept slight discounts but not massive ones
   if (player.age >= 32) mult *= 0.90;
-  const askingSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, base * mult) * 10) / 10;
+  let askingSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, base * mult) * 10) / 10;
+  // K/P salary cap — even with bonuses, kickers/punters shouldn't exceed $5M
+  if (player.position === 'K' || player.position === 'P') {
+    askingSalary = Math.min(askingSalary, 5.0);
+  }
   // Players want long-term security — asking for multi-year deals
   // makes the 1-year franchise tag a meaningful strategic trade-off
   const askingYears = player.age >= 34 ? 2

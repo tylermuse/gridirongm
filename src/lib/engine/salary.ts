@@ -17,8 +17,8 @@ const POSITION_SALARY_MULTIPLIER: Partial<Record<Position, number>> = {
   S: 0.85,
   TE: 0.75,
   RB: 0.65,
-  K: 0.25,
-  P: 0.25,
+  K: 0.15,
+  P: 0.12,
 };
 
 export function estimateSalary(overall: number, position?: Position, age?: number, potential?: number): number {
