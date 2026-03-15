@@ -788,6 +788,7 @@ function TradesPage() {
   ) {
     if (list.includes(playerId)) setter(list.filter(id => id !== playerId));
     else setter([...list, playerId]);
+    setTradeResult(null); // Clear rejection when user adjusts the deal
   }
 
   function togglePickSelect(
@@ -797,6 +798,7 @@ function TradesPage() {
   ) {
     if (list.includes(pickId)) setter(list.filter(id => id !== pickId));
     else setter([...list, pickId]);
+    setTradeResult(null);
   }
 
   const offeredValue = offeredPlayerIds.reduce((sum, id) => {
@@ -1795,6 +1797,40 @@ function TradesPage() {
                           ({valueLabel})
                         </span>
                       </div>
+                      {/* Live cap impact */}
+                      {(() => {
+                        const outSalary = offeredPlayerIds.reduce((sum, id) => {
+                          const p = players.find(pl => pl.id === id);
+                          return sum + (p ? p.contract.salary : 0);
+                        }, 0);
+                        const inSalary = receivedPlayerIds.reduce((sum, id) => {
+                          const p = players.find(pl => pl.id === id);
+                          return sum + (p ? p.contract.salary : 0);
+                        }, 0);
+                        const netCapImpact = outSalary - inSalary;
+                        const currentCap = userTeamObj ? userTeamObj.salaryCap - userTeamObj.totalPayroll : 0;
+                        const postTradeCap = currentCap + netCapImpact;
+                        const overCap = postTradeCap < 0;
+
+                        if (offeredPlayerIds.length === 0 && receivedPlayerIds.length === 0) return null;
+                        return (
+                          <div className="text-xs mt-1.5 space-y-0.5">
+                            <div className="flex items-center gap-3">
+                              <span className="text-[var(--text-sec)]">
+                                Cap impact: <span className={netCapImpact >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>{netCapImpact >= 0 ? '+' : ''}${Math.round(netCapImpact * 10) / 10}M</span>
+                              </span>
+                              <span className="text-[var(--text-sec)]">
+                                Post-trade space: <span className={`font-medium ${overCap ? 'text-red-600' : 'text-green-600'}`}>${Math.round(postTradeCap * 10) / 10}M</span>
+                              </span>
+                            </div>
+                            {overCap && (
+                              <div className="text-amber-600 font-medium">
+                                Over cap by ${Math.round(Math.abs(postTradeCap) * 10) / 10}M — add players to send or remove players to receive
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                       {/* Dead money warning for restructured players being traded */}
                       {(() => {
                         const tradeDeadCap = offeredPlayerIds.reduce((sum, id) => {
@@ -1809,9 +1845,9 @@ function TradesPage() {
                         );
                       })()}
                       {tradeResult === 'rejected' && (
-                        <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-3">
-                          <p className="text-sm text-red-700 italic">
-                            {rejectionReason ?? 'Trade rejected.'}
+                        <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                          <p className="text-sm text-amber-700">
+                            {rejectionReason ?? 'Trade rejected.'} <span className="font-medium">Adjust the deal and try again.</span>
                           </p>
                         </div>
                       )}
