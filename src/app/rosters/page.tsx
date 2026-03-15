@@ -48,22 +48,7 @@ function HowToUse({ roster }: { roster: RosterEntry }) {
         <div className="mt-3 space-y-3 text-sm">
           <div>
             <div className="font-bold text-[var(--text)] mb-1">For Gridiron GM:</div>
-            <ol className="list-decimal list-inside space-y-1 text-[var(--text-sec)]">
-              <li>
-                Go to{' '}
-                <Link href="/" className="text-blue-600 hover:underline">
-                  Gridiron GM
-                </Link>
-              </li>
-              <li>Click <strong>Import League File</strong> on the team picker screen</li>
-              <li>
-                Paste this URL into the input:{' '}
-                <code className="text-xs bg-[var(--surface-2)] px-1.5 py-0.5 rounded font-mono">
-                  {typeof window !== 'undefined' ? window.location.origin : ''}/rosters/{roster.fileName}
-                </code>
-              </li>
-              <li>Click <strong>Load</strong>, then pick your team</li>
-            </ol>
+            <p className="text-[var(--text-sec)] mb-3">Click the <strong>&quot;Play in Gridiron GM&quot;</strong> button above.</p>
           </div>
           <div>
             <div className="font-bold text-[var(--text)] mb-1">For Football GM:</div>
