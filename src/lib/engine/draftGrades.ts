@@ -5,17 +5,19 @@
  * factoring in both current OVR and development potential.
  */
 
-/** Expected OVR for each round — calibrated to actual draft class output.
- *  Draft class talent curve: top picks ~75-82, mid ~55-65, late ~40-50.
- *  Sigma controls how forgiving the grade is — smaller = stricter. */
+/** Expected OVR for each round — calibrated to actual BPA draft results.
+ *  Draft class sorted by OVR: pick 1 ~82, pick 16 ~72, pick 32 ~67,
+ *  pick 64 ~60, pick 128 ~50, pick 224 ~40.
+ *  Expected = average OVR a team should get with competent BPA drafting.
+ *  Sigma controls spread — larger = more forgiving, better grade distribution. */
 const ROUND_EXPECTATIONS: Record<number, { expected: number; sigma: number }> = {
-  1: { expected: 72, sigma: 4 },
-  2: { expected: 65, sigma: 4 },
-  3: { expected: 60, sigma: 4 },
-  4: { expected: 55, sigma: 4 },
-  5: { expected: 50, sigma: 3 },
-  6: { expected: 46, sigma: 3 },
-  7: { expected: 42, sigma: 3 },
+  1: { expected: 67, sigma: 6 },
+  2: { expected: 60, sigma: 6 },
+  3: { expected: 55, sigma: 5 },
+  4: { expected: 50, sigma: 5 },
+  5: { expected: 46, sigma: 5 },
+  6: { expected: 42, sigma: 5 },
+  7: { expected: 38, sigma: 5 },
 };
 
 function getRoundFromPick(overallPick: number, totalPicks: number): number {
@@ -38,16 +40,16 @@ export function pickGrade(overallPick: number, totalPicks: number, playerOvr: nu
 
   const score = ovrDelta + potBonus;
 
-  // Strict grading: A is rare, C is common, D/F for bad picks
-  if (score >= 2.5) return 'A+';
-  if (score >= 1.8) return 'A';
-  if (score >= 1.0) return 'B+';
-  if (score >= 0.4) return 'B';
-  if (score >= -0.1) return 'B-';
-  if (score >= -0.6) return 'C+';
-  if (score >= -1.0) return 'C';
-  if (score >= -1.5) return 'C-';
-  if (score >= -2.0) return 'D';
+  // Grade distribution: B range is most common, A's for great picks, C/D for bad
+  if (score >= 2.0) return 'A+';
+  if (score >= 1.4) return 'A';
+  if (score >= 0.8) return 'B+';
+  if (score >= 0.2) return 'B';
+  if (score >= -0.3) return 'B-';
+  if (score >= -0.8) return 'C+';
+  if (score >= -1.3) return 'C';
+  if (score >= -1.8) return 'C-';
+  if (score >= -2.5) return 'D';
   return 'F';
 }
 
@@ -85,12 +87,12 @@ export function gradeBgColor(grade: string): string {
 /** Overall team draft grade from average grade value. */
 export function teamDraftGrade(avgVal: number): string {
   if (avgVal >= 10.5) return 'A+';
-  if (avgVal >= 9.5) return 'A';
-  if (avgVal >= 8.5) return 'B+';
-  if (avgVal >= 7.5) return 'B';
-  if (avgVal >= 6.5) return 'B-';
-  if (avgVal >= 5.5) return 'C+';
-  if (avgVal >= 4.5) return 'C';
-  if (avgVal >= 3.5) return 'C-';
+  if (avgVal >= 9.8) return 'A';
+  if (avgVal >= 9.0) return 'B+';
+  if (avgVal >= 8.2) return 'B';
+  if (avgVal >= 7.4) return 'B-';
+  if (avgVal >= 6.5) return 'C+';
+  if (avgVal >= 5.5) return 'C';
+  if (avgVal >= 4.5) return 'C-';
   return 'D';
 }
