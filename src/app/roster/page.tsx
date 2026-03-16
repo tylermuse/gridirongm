@@ -97,7 +97,7 @@ export default function RosterPage() {
     releasePlayer, placeOnIR, activateFromIR,
     reorderDepthChart, restructureContract,
     solicitTradingBlockProposals,
-    phase, week, seasonHistory, leagueSettings,
+    phase, week, seasonHistory, leagueSettings, resigningPlayers,
   } = useGameStore();
 
   const [filterPos, setFilterPos] = useState<Position | 'ALL'>('ALL');
@@ -150,8 +150,13 @@ export default function RosterPage() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const userTeam = teams.find(t => t.id === userTeamId);
+  // During re-signing phase, hide players pending re-signing (expiring contracts not yet re-signed)
+  // so the user can evaluate the roster without them
+  const pendingResignIds = phase === 'resigning'
+    ? new Set((resigningPlayers ?? []).map(r => r.playerId))
+    : new Set<string>();
   const roster = players
-    .filter(p => p.teamId === userTeamId && !p.retired);
+    .filter(p => p.teamId === userTeamId && !p.retired && !pendingResignIds.has(p.id));
 
   // Depth position for each player
   function getDepthLabel(player: Player): string {
