@@ -91,19 +91,6 @@ export default function RostersPage() {
         </div>
       </div>
 
-      {/* CTA Banner */}
-      <div className="max-w-4xl mx-auto px-4 mt-6">
-        <Link
-          href="/"
-          className="block bg-blue-600 hover:bg-blue-700 transition-colors text-white rounded-xl px-6 py-4 text-center"
-        >
-          <div className="text-sm font-bold">Want the full GM experience?</div>
-          <div className="text-lg font-black mt-0.5">
-            Play Gridiron GM <span className="ml-1">→</span>
-          </div>
-        </Link>
-      </div>
-
       {/* Roster Cards */}
       <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
         {ROSTERS.map((roster) => (
