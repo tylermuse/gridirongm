@@ -1274,6 +1274,8 @@ function TradesPage() {
                                   />
                                   <Badge size="sm">{p.position}</Badge>
                                   <span className="text-xs flex-1 truncate">{p.firstName} {p.lastName}</span>
+                                  <span className="text-[10px] text-[var(--text-sec)]">{p.age}y</span>
+                                  <span className="text-[10px] text-[var(--text-sec)]">${p.contract.salary}M/{p.contract.yearsLeft}yr</span>
                                   <span className={`text-[10px] font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
                                 </label>
                               ))}
@@ -1318,6 +1320,8 @@ function TradesPage() {
                                   />
                                   <Badge size="sm">{p.position}</Badge>
                                   <span className="text-xs flex-1 truncate">{p.firstName} {p.lastName}</span>
+                                  <span className="text-[10px] text-[var(--text-sec)]">{p.age}y</span>
+                                  <span className="text-[10px] text-[var(--text-sec)]">${p.contract.salary}M/{p.contract.yearsLeft}yr</span>
                                   <span className={`text-[10px] font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
                                 </label>
                               ))}
