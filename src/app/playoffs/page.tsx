@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useGameStore } from '@/lib/engine/store';
+import { useGameStore, computeAllLeagueTeams } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -499,34 +499,23 @@ export default function PlayoffsPage() {
             awards.push({ award: 'Defensive Rookie of the Year', icon: '🌟', player: droy });
           }
 
-          // All-Pro — expanded: multiple players per position, more positions
-          const allProPlayers: { conf: string; player: typeof activePlayers[0]; pos: string }[] = [];
-          const allProSlots: { pos: string; positions: string[]; count: number; sortFn: (a: typeof activePlayers[0], b: typeof activePlayers[0]) => number }[] = [
-            { pos: 'QB', positions: ['QB'], count: 2, sortFn: (a, b) => b.stats.passYards - a.stats.passYards },
-            { pos: 'RB', positions: ['RB'], count: 2, sortFn: (a, b) => b.stats.rushYards - a.stats.rushYards },
-            { pos: 'WR', positions: ['WR'], count: 2, sortFn: (a, b) => b.stats.receivingYards - a.stats.receivingYards },
-            { pos: 'TE', positions: ['TE'], count: 2, sortFn: (a, b) => b.stats.receivingYards - a.stats.receivingYards },
-            { pos: 'OL', positions: ['OL'], count: 4, sortFn: (a, b) => b.ratings.overall - a.ratings.overall },
-            { pos: 'DL', positions: ['DL'], count: 2, sortFn: (a, b) => b.stats.sacks - a.stats.sacks },
-            { pos: 'LB', positions: ['LB'], count: 2, sortFn: (a, b) => b.stats.tackles - a.stats.tackles },
-            { pos: 'CB', positions: ['CB'], count: 2, sortFn: (a, b) => b.stats.defensiveINTs - a.stats.defensiveINTs },
-            { pos: 'S', positions: ['S'], count: 2, sortFn: (a, b) => (b.stats.tackles + b.stats.defensiveINTs * 3) - (a.stats.tackles + a.stats.defensiveINTs * 3) },
-            { pos: 'K', positions: ['K'], count: 1, sortFn: (a, b) => b.ratings.overall - a.ratings.overall },
-            { pos: 'P', positions: ['P'], count: 1, sortFn: (a, b) => b.ratings.overall - a.ratings.overall },
-          ];
-
-          for (const conf of ['AC', 'NC'] as const) {
-            const confTeamIds = new Set(teams.filter(t => t.conference === conf).map(t => t.id));
-            const confPlayers = activePlayers.filter(p => confTeamIds.has(p.teamId!));
-            for (const slot of allProSlots) {
-              const eligible = confPlayers
-                .filter(p => slot.positions.includes(p.position))
-                .sort(slot.sortFn);
-              for (let i = 0; i < slot.count && i < eligible.length; i++) {
-                allProPlayers.push({ conf, player: eligible[i], pos: slot.pos });
-              }
-            }
+          // All-Pro — use the same computation as the roster star badges
+          const allLeague = computeAllLeagueTeams(useGameStore.getState() as never);
+          const allProFirstTeam: { conf: string; player: typeof activePlayers[0]; pos: string }[] = [];
+          const allProSecondTeam: { conf: string; player: typeof activePlayers[0]; pos: string }[] = [];
+          for (const entry of allLeague.first) {
+            const p = players.find(pl => pl.id === entry.playerId);
+            if (!p) continue;
+            const team = teams.find(t => t.id === p.teamId);
+            allProFirstTeam.push({ conf: team?.conference ?? 'AC', player: p, pos: entry.position });
           }
+          for (const entry of allLeague.second) {
+            const p = players.find(pl => pl.id === entry.playerId);
+            if (!p) continue;
+            const team = teams.find(t => t.id === p.teamId);
+            allProSecondTeam.push({ conf: team?.conference ?? 'AC', player: p, pos: entry.position });
+          }
+          const allProPlayers = allProFirstTeam;
 
           // Retired players who still have a team (retired this season, not prior seasons)
           // Players who retired in previous seasons have teamId: null and no current stats
@@ -574,9 +563,9 @@ export default function PlayoffsPage() {
                 })}
               </div>
 
-              {/* All-Pro selections */}
+              {/* All-Pro selections — First Team */}
               <div className="mt-4 pt-3 border-t border-[var(--border)]">
-                <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">All-Pro Selections</div>
+                <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">All-Pro First Team</div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {(['AC', 'NC'] as const).map(conf => (
                     <div key={conf}>
@@ -584,11 +573,11 @@ export default function PlayoffsPage() {
                         {conf}
                       </div>
                       <div className="space-y-1">
-                        {allProPlayers.filter(pb => pb.conf === conf).map((pb, idx) => {
+                        {allProFirstTeam.filter(pb => pb.conf === conf).map((pb, idx) => {
                           const t = teams.find(t => t.id === pb.player.teamId);
                           const isUserPlayer = pb.player.teamId === userTeamId;
                           return (
-                            <div key={`${pb.conf}-${pb.pos}-${idx}`} className={`flex items-center justify-between text-xs rounded px-1 py-0.5 ${isUserPlayer ? 'bg-blue-500/10 font-semibold' : ''}`}>
+                            <div key={`1st-${pb.conf}-${pb.pos}-${idx}`} className={`flex items-center justify-between text-xs rounded px-1 py-0.5 ${isUserPlayer ? 'bg-blue-500/10 font-semibold' : ''}`}>
                               <div className="flex items-center gap-1.5 min-w-0">
                                 <Badge size="sm">{pb.pos}</Badge>
                                 <button
@@ -609,6 +598,44 @@ export default function PlayoffsPage() {
                   ))}
                 </div>
               </div>
+
+              {/* All-Pro Second Team */}
+              {allProSecondTeam.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-[var(--border)]">
+                  <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">All-Pro Second Team</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {(['AC', 'NC'] as const).map(conf => (
+                      <div key={conf}>
+                        <div className={`text-xs font-bold mb-1.5 ${conf === 'AC' ? 'text-red-600' : 'text-blue-600'}`}>
+                          {conf}
+                        </div>
+                        <div className="space-y-1">
+                          {allProSecondTeam.filter(pb => pb.conf === conf).map((pb, idx) => {
+                            const t = teams.find(t => t.id === pb.player.teamId);
+                            const isUserPlayer = pb.player.teamId === userTeamId;
+                            return (
+                              <div key={`2nd-${pb.conf}-${pb.pos}-${idx}`} className={`flex items-center justify-between text-xs rounded px-1 py-0.5 ${isUserPlayer ? 'bg-blue-500/10 font-semibold' : ''}`}>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <Badge size="sm">{pb.pos}</Badge>
+                                  <button
+                                    onClick={() => setSelectedPlayerId(pb.player.id)}
+                                    className={`hover:text-blue-600 transition-colors shrink-0 ${isUserPlayer ? 'text-blue-600' : ''}`}
+                                  >
+                                    {pb.player.firstName[0]}. {pb.player.lastName}
+                                  </button>
+                                  {isUserPlayer && <span className="text-[9px] text-blue-600 font-bold shrink-0">★</span>}
+                                  <span className="text-[10px] text-[var(--text-sec)] truncate">{posStatLine(pb.player)}</span>
+                                </div>
+                                <span className="text-[var(--text-sec)] shrink-0 ml-1">{t?.abbreviation}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </Card>
 
             {/* All-Rookie Team */}

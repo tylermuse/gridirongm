@@ -812,7 +812,15 @@ export default function DraftPage() {
       c.player.id !== allProspects[0]?.id &&
       c.player.id !== bestFit?.id,
     ) ?? candidates[0];
-    return pick?.player ?? null;
+
+    // If no candidates pass the fit filter, fall back to best need-match (must be at a need position)
+    if (!pick) {
+      const needFallback = allProspects
+        .filter(p => needPositions.has(p.position) && p.id !== allProspects[0]?.id && p.id !== bestFit?.id)
+        .slice(0, 1)[0];
+      return needFallback ?? null;
+    }
+    return pick.player;
   })();
 
   const orderedTeamIds = [

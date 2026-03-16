@@ -279,7 +279,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             )}
             {phase === 'resigning' && (
               <>
-                {pathname !== '/re-sign' && (
+                {!pathname.startsWith('/re-sign') && (
                   <Link href="/re-sign">
                     <Button size="sm">
                       Go to Re-signing
@@ -303,7 +303,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             )}
             {phase === 'draft' && (
               <>
-                {pathname !== '/draft' && pathname !== '/draft-recap' && (
+                {!pathname.startsWith('/draft') && (
                   <Link href="/draft">
                     <Button size="sm">
                       Go to Draft
@@ -348,7 +348,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             )}
             {phase === 'freeAgency' && (
               <>
-                {pathname !== '/free-agency' && (
+                {!pathname.startsWith('/free-agency') && (
                   <Link href="/free-agency">
                     <Button size="sm">
                       Go to Free Agency
