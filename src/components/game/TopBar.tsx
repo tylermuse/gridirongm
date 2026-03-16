@@ -279,13 +279,11 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             )}
             {phase === 'resigning' && (
               <>
-                {pathname !== '/re-sign' && (
-                  <Link href="/re-sign">
-                    <Button size="sm">
-                      Go to Re-signing
-                    </Button>
-                  </Link>
-                )}
+                <Link href="/re-sign">
+                  <Button size="sm">
+                    Go to Re-signing
+                  </Button>
+                </Link>
                 <Button
                   onClick={() => {
                     const store = useGameStore.getState();
@@ -303,6 +301,11 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             )}
             {phase === 'draft' && (
               <>
+                <Link href="/draft">
+                  <Button size="sm">
+                    Go to Draft
+                  </Button>
+                </Link>
                 {draftOrder.length > 0 ? (
                   <>
                     {draftOrder[0] !== userTeamId && (
@@ -341,13 +344,11 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             )}
             {phase === 'freeAgency' && (
               <>
-                {pathname !== '/free-agency' && (
-                  <Link href="/free-agency">
-                    <Button size="sm">
-                      Go to Free Agency
-                    </Button>
-                  </Link>
-                )}
+                <Link href="/free-agency">
+                  <Button size="sm">
+                    Go to Free Agency
+                  </Button>
+                </Link>
                 {faDay >= 30 ? (
                   <Button onClick={() => {
                     startNewSeason(); router.push('/roster');

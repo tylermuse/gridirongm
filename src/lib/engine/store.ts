@@ -1394,17 +1394,35 @@ function generateTradeRumors(state: LeagueState): TradeRumor[] {
         continue;
       }
 
-      // Shopping pick
-      if (team.record.wins <= 3) {
-        rumors.push({
-          id: uuid(), season: state.season, week: state.week,
-          type: 'shopping_pick', teamId: team.id, playerIds: [],
-          headline: `${team.city} reportedly shopping their 1st round pick`,
-          detail: `With a ${team.record.wins}-${team.record.losses} record, the ${team.name} may look to acquire win-now talent by leveraging their high draft position.`,
-          resolved: false, _accurate: isAccurate,
-        });
-        continue;
+      // Bad teams want to accumulate picks, not sell them
+      if (Math.random() < 0.5) {
+        // Shopping a veteran for picks
+        const vets = teamRoster.filter(p => p.age >= 28 && p.contract.salary >= 5 && p.ratings.overall >= 65)
+          .sort((a, b) => b.contract.salary - a.contract.salary);
+        if (vets.length > 0) {
+          const vet = vets[0];
+          rumors.push({
+            id: uuid(), season: state.season, week: state.week,
+            type: 'star_available', teamId: team.id, playerIds: [vet.id],
+            headline: `${team.city} looking to move ${vet.firstName} ${vet.lastName} for draft capital`,
+            detail: `The ${team.name} (${team.record.wins}-${team.record.losses}) are in rebuild mode and may sell ${vet.firstName} ${vet.lastName} ($${vet.contract.salary}M) to stockpile picks.`,
+            resolved: false, _accurate: isAccurate,
+          });
+          continue;
+        }
       }
+    }
+
+    // Contenders shopping picks for win-now help
+    if (winPctVal >= 0.55 && team.record.wins >= 7 && Math.random() < 0.4) {
+      rumors.push({
+        id: uuid(), season: state.season, week: state.week,
+        type: 'shopping_pick', teamId: team.id, playerIds: [],
+        headline: `${team.city} may move future draft capital for impact player`,
+        detail: `With a ${team.record.wins}-${team.record.losses} record, the ${team.name} are reportedly willing to trade future picks to bolster their playoff push.`,
+        resolved: false, _accurate: isAccurate,
+      });
+      continue;
     }
 
     // Position need: team weak at a position
@@ -3744,7 +3762,9 @@ export const useGameStore = create<GameStore>()(
         // AI accepts if within 10% value (skip for AI-initiated proposals already approved)
         if (!skipValueCheck && offeredValue < receivedValue * 0.90) return { success: false, reason: 'Trade value too low — AI rejected' };
 
-        // Block trades that would push user over the salary cap
+        // Cap check: allow trades that reduce payroll (salary dumps) even when over cap.
+        // Only block if the trade would make cap situation WORSE when already over,
+        // or would push you over when currently under.
         const offeredSalaryTotal = offeredPlayerIds.reduce((sum, id) => {
           const p = state.players.find(pl => pl.id === id);
           return sum + (p ? p.contract.salary : 0);
@@ -3753,9 +3773,19 @@ export const useGameStore = create<GameStore>()(
           const p = state.players.find(pl => pl.id === id);
           return sum + (p ? p.contract.salary : 0);
         }, 0);
-        const newPayroll = userTeam.totalPayroll - offeredSalaryTotal + receivedSalaryTotal;
-        if (newPayroll > userTeam.salaryCap) {
-          return { success: false, reason: 'Trade would exceed salary cap' };
+        const netSalaryChange = receivedSalaryTotal - offeredSalaryTotal;
+        const currentlyOverCap = userTeam.totalPayroll > userTeam.salaryCap;
+        const newPayroll = userTeam.totalPayroll + netSalaryChange;
+        if (currentlyOverCap) {
+          // Over cap: only allow trades that reduce or maintain payroll
+          if (netSalaryChange > 0) {
+            return { success: false, reason: `Trade adds $${Math.round(netSalaryChange * 10) / 10}M in salary — must shed salary or stay flat when over the cap` };
+          }
+        } else {
+          // Under cap: don't allow trades that push you over
+          if (newPayroll > userTeam.salaryCap) {
+            return { success: false, reason: `Trade would put you $${Math.round((newPayroll - userTeam.salaryCap) * 10) / 10}M over the cap — send more salary out or receive less` };
+          }
         }
 
         // Execute the trade
