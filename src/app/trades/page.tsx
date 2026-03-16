@@ -655,6 +655,8 @@ function TradesPage() {
   const [seekPositions, setSeekPositions] = useState<Position[]>([]);
   const [seekDraftPicks, setSeekDraftPicks] = useState(false);
   const [blockSolicited, setBlockSolicited] = useState(false);
+  const [blockSort, setBlockSort] = useState<'ovr' | 'pos' | 'age' | 'salary'>('ovr');
+  const [blockSortDir, setBlockSortDir] = useState<'asc' | 'desc'>('desc');
 
   // Handle ?block=PLAYER_ID from roster page or ?counter=PROPOSAL_ID from popup
   const searchParams = useSearchParams();
@@ -1430,23 +1432,51 @@ function TradesPage() {
                     </CardHeader>
 
                     <div className="mb-3">
-                      <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Players</div>
-                      <div className="max-h-[400px] overflow-y-auto space-y-0">
-                        {userRoster.map(p => (
-                          <label key={p.id} className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1 flex-wrap sm:flex-nowrap">
-                            <input
-                              type="checkbox"
-                              checked={blockedPlayerIds.includes(p.id)}
-                              onChange={() => togglePlayerSelect(p.id, blockedPlayerIds, setBlockedPlayerIds)}
-                              className="accent-blue-500 shrink-0"
-                            />
-                            <Badge size="sm">{p.position}</Badge>
-                            <span className="text-sm flex-1 min-w-0 truncate">{p.firstName} {p.lastName}</span>
-                            <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
-                            <span className="text-xs text-[var(--text-sec)] shrink-0">{p.age}y</span>
-                            <span className="text-xs text-[var(--text-sec)] shrink-0">${p.contract.salary}M</span>
-                          </label>
-                        ))}
+                      <div className="max-h-[400px] overflow-y-auto">
+                        <table className="w-full text-sm">
+                          <thead className="sticky top-0 bg-[var(--surface)] z-10">
+                            <tr className="text-[var(--text-sec)] text-[10px] uppercase tracking-wider">
+                              <th className="text-left pb-1.5 pl-1 w-6"></th>
+                              <th className="text-center pb-1.5 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => { setBlockSort(s => s === 'pos' ? 'pos' : 'pos'); setBlockSortDir(d => blockSort === 'pos' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>Pos{blockSort === 'pos' ? (blockSortDir === 'asc' ? ' ↑' : ' ↓') : ''}</th>
+                              <th className="text-left pb-1.5">Player</th>
+                              <th className="text-center pb-1.5 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => { setBlockSort('ovr'); setBlockSortDir(d => blockSort === 'ovr' ? (d === 'asc' ? 'desc' : 'asc') : 'desc'); }}>OVR{blockSort === 'ovr' ? (blockSortDir === 'asc' ? ' ↑' : ' ↓') : ''}</th>
+                              <th className="text-center pb-1.5 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => { setBlockSort('age'); setBlockSortDir(d => blockSort === 'age' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>Age{blockSort === 'age' ? (blockSortDir === 'asc' ? ' ↑' : ' ↓') : ''}</th>
+                              <th className="text-right pb-1.5 pr-1 cursor-pointer select-none hover:text-[var(--text)]" onClick={() => { setBlockSort('salary'); setBlockSortDir(d => blockSort === 'salary' ? (d === 'asc' ? 'desc' : 'asc') : 'desc'); }}>Contract{blockSort === 'salary' ? (blockSortDir === 'asc' ? ' ↑' : ' ↓') : ''}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[...userRoster].sort((a, b) => {
+                              const dir = blockSortDir === 'asc' ? 1 : -1;
+                              switch (blockSort) {
+                                case 'pos': return dir * a.position.localeCompare(b.position);
+                                case 'ovr': return dir * (a.ratings.overall - b.ratings.overall);
+                                case 'age': return dir * (a.age - b.age);
+                                case 'salary': return dir * (a.contract.salary - b.contract.salary);
+                                default: return dir * (a.ratings.overall - b.ratings.overall);
+                              }
+                            }).map(p => (
+                              <tr
+                                key={p.id}
+                                onClick={() => togglePlayerSelect(p.id, blockedPlayerIds, setBlockedPlayerIds)}
+                                className={`border-t border-[var(--border)] cursor-pointer transition-colors ${blockedPlayerIds.includes(p.id) ? 'bg-blue-50' : 'hover:bg-[var(--surface-2)]'}`}
+                              >
+                                <td className="py-1.5 pl-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={blockedPlayerIds.includes(p.id)}
+                                    onChange={() => {}}
+                                    className="accent-blue-500"
+                                  />
+                                </td>
+                                <td className="py-1.5 text-center"><Badge size="sm">{p.position}</Badge></td>
+                                <td className="py-1.5 text-sm truncate max-w-[140px]">{p.firstName} {p.lastName}</td>
+                                <td className={`py-1.5 text-center text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
+                                <td className="py-1.5 text-center text-xs text-[var(--text-sec)]">{p.age}</td>
+                                <td className="py-1.5 text-right text-xs text-[var(--text-sec)] pr-1">${p.contract.salary}M/{p.contract.yearsLeft}yr</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
 
@@ -1602,7 +1632,6 @@ function TradesPage() {
                               <Button size="sm" onClick={() => {
                                 const success = respondToTradeProposal(proposal.id, true);
                                 if (success) {
-                                  // Reject all other pending proposals and redirect
                                   const otherPending = tradeProposals.filter(p => p.id !== proposal.id && p.status === 'pending');
                                   for (const op of otherPending) respondToTradeProposal(op.id, false);
                                   setBlockSolicited(false);
@@ -1611,6 +1640,10 @@ function TradesPage() {
                                   alert('Trade failed — you may be over the salary cap.');
                                 }
                               }}>Accept</Button>
+                              <Button size="sm" variant="secondary" onClick={() => {
+                                handleStartCounter(proposal.id);
+                                setActiveTab('incoming');
+                              }}>Counter</Button>
                               <Button size="sm" variant="ghost" onClick={() => respondToTradeProposal(proposal.id, false)}>Reject</Button>
                             </div>
                           </div>
