@@ -1353,13 +1353,16 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
 
 function generateTradeRumors(state: LeagueState): TradeRumor[] {
   const rumDl = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).tradeDeadlineWeek;
-  if (state.phase !== 'regular' || state.week < 4 || state.week > rumDl + 1) return [];
+  const isRegular = state.phase === 'regular' && state.week >= 4 && state.week <= rumDl + 1;
+  const isOffseason = state.phase === 'draft' || state.phase === 'freeAgency' || state.phase === 'resigning';
+  if (!isRegular && !isOffseason) return [];
   const rumors: TradeRumor[] = [];
   const maxNew = 3;
 
   for (const team of state.teams) {
     if (rumors.length >= maxNew) break;
-    if (Math.random() > 0.15) continue; // 15% chance per team
+    const rumorChance = isOffseason ? 0.25 : 0.15; // Higher chance during offseason (fewer trigger points)
+    if (Math.random() > rumorChance) continue;
 
     const teamRoster = state.players.filter(p => p.teamId === team.id && !p.retired);
     const winPctVal = team.record.wins / Math.max(1, team.record.wins + team.record.losses);
@@ -2886,6 +2889,21 @@ export const useGameStore = create<GameStore>()(
           holdoutDemands: [],
           draftScoutingData: scoutingData,
         });
+
+        // Generate offseason trade rumors entering the draft
+        const draftState = get();
+        const draftRumors = generateTradeRumors(draftState);
+        if (draftRumors.length > 0) {
+          const rumorNews: NewsItem[] = draftRumors.map(r => makeNews({
+            season: draftState.season, week: 0, type: 'rumor',
+            headline: r.headline, body: r.detail,
+            teamId: r.teamId, isUserTeam: r.teamId === draftState.userTeamId,
+          }));
+          set({
+            tradeRumors: [...(draftState.tradeRumors ?? []), ...draftRumors],
+            newsItems: [...draftState.newsItems, ...rumorNews],
+          });
+        }
       },
 
       draftPlayer: (playerId: string) => {
@@ -3198,6 +3216,21 @@ export const useGameStore = create<GameStore>()(
         const userTeamData = newState.teams.find(t => t.id === newState.userTeamId);
         if (userTeamData) {
           set({ faRefusals: computeFARefusals(newState.freeAgents, newState.players, userTeamData, 1) });
+        }
+
+        // Generate offseason trade rumors entering free agency
+        const faState = get();
+        const faRumors = generateTradeRumors(faState);
+        if (faRumors.length > 0) {
+          const rumorNews: NewsItem[] = faRumors.map(r => makeNews({
+            season: faState.season, week: 0, type: 'rumor',
+            headline: r.headline, body: r.detail,
+            teamId: r.teamId, isUserTeam: r.teamId === faState.userTeamId,
+          }));
+          set({
+            tradeRumors: [...(faState.tradeRumors ?? []), ...faRumors],
+            newsItems: [...faState.newsItems, ...rumorNews],
+          });
         }
       },
 
