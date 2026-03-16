@@ -779,8 +779,7 @@ export default function DraftPage() {
   const bestFit = bestFitResult.player;
 
   // "Your Scouts Say" — recommend a player they're excited about.
-  // Strongly favors: scouted players, high OVR, positions of need, good fit score.
-  // Should differ from BPA/Best Fit by using scouting intel (hidden OVR info).
+  // Must pass the fit evaluation (no "Not a Fit" or "Roster Redundancy").
   const scoutsPick = (() => {
     if (!currentPickTeamId) return null;
     const needs = getTeamNeeds(currentPickTeamId);
@@ -788,26 +787,31 @@ export default function DraftPage() {
       needs.filter(n => n.needScore > 0 && n.position !== 'K' && n.position !== 'P').map(n => n.position),
     );
 
-    // Score each prospect — scouts weight scouted OVR heavily + need fit
-    const scored = allProspects
+    // Score each prospect and check fit badge
+    const candidates = allProspects
       .filter(p => p.position !== 'K' && p.position !== 'P')
-      .slice(0, 30) // Only consider top 30 prospects (realistic scouting focus)
+      .slice(0, 30)
       .map(p => {
         const scout = draftScoutingData[p.id];
         const ovr = scout ? scout.scoutedOvr : p.ratings.overall;
+        const err = scout ? Math.min(scout.error, 6) : 5;
+        const lo = Math.max(20, ovr - err);
+        const hi = Math.min(99, ovr + err);
+        const eval_ = generateDraftScoutEval(p, userRoster, { lo, hi });
         const needBonus = needPositions.has(p.position) ? 8 : 0;
-        const scoutedBonus = scout?.deepScouted ? 5 : 0; // Prefer players we've actually scouted
-        // Scouts value raw talent (OVR) + positional need + scouting intel
+        const scoutedBonus = scout?.deepScouted ? 5 : 0;
         const score = ovr + needBonus + scoutedBonus;
-        return { player: p, score };
+        return { player: p, score, fitBadge: eval_.fitBadge };
       })
+      // Only recommend players the scouts actually like
+      .filter(c => c.fitBadge === 'Strong Target' || c.fitBadge === 'Worth a Look')
       .sort((a, b) => b.score - a.score);
 
-    // Pick the top-scored player that differs from BPA and Best Fit
-    const pick = scored.find(s =>
-      s.player.id !== allProspects[0]?.id &&
-      s.player.id !== bestFit?.id,
-    ) ?? scored[0];
+    // Pick someone different from BPA and Best Fit
+    const pick = candidates.find(c =>
+      c.player.id !== allProspects[0]?.id &&
+      c.player.id !== bestFit?.id,
+    ) ?? candidates[0];
     return pick?.player ?? null;
   })();
 
