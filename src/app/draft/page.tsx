@@ -991,9 +991,7 @@ export default function DraftPage() {
                 {prospects.map((player) => {
                   const scout = draftScoutingData[player.id];
                   const isScouted = scout?.deepScouted === true;
-                  // Cap displayed error to ±6 unscouted, ±3 scouted (handles old saves with massive ranges)
-                  const maxErr = isScouted ? 3 : 6;
-                  const err = scout ? Math.min(scout.error, maxErr) : 5;
+                  const err = scout?.error ?? 8;
                   const lo = scout ? Math.max(20, scout.scoutedOvr - err) : Math.max(20, player.ratings.overall - err);
                   const hi = scout ? Math.min(99, scout.scoutedOvr + err) : Math.min(99, player.ratings.overall + err);
                   const ovrForColor = scout ? scout.scoutedOvr : player.ratings.overall;

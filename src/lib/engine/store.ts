@@ -520,13 +520,14 @@ function pickTradeValue(pick: DraftPick): number {
  * Later picks have more uncertainty, making scouting valuable.
  *
  * Base OVR error by tier (Entry scouting, level 0):
- *   Top 10:    ±4-7    (everyone knows the top talent)
+ *   Top 10:    ±6-9    (everyone knows the top talent)
  *   Picks 11-32: ±8-12
- *   Day 2 (33-100): ±12-18
- *   Late/UDFA (100+): ±18-25
+ *   Day 2 (33-100): ±11-17
+ *   Late/UDFA (100+): ±15-23
  *
  * Pro scouting (level 1) cuts error by ~55%.
  * Elite scouting (level 2) cuts error by ~80%.
+ * Deep Scout narrows to ±2 and re-centers on true OVR.
  *
  * Bust/boom flags (~5% of top-20, ~4% of picks 40-80) add extra noise.
  */
@@ -564,13 +565,13 @@ function playerBustBoomRoll(id: string): number {
 }
 
 /** Base error for a prospect at a given true rank.
- *  Tighter ranges — the public has a reasonable read on most prospects.
- *  Scouting narrows it further (to ±3). */
+ *  Wide enough that scouting always adds meaningful value.
+ *  Deep scouting narrows to ±2. */
 function baseErrorForRank(rank: number): number {
-  if (rank <= 10) return 3 + Math.min(2, rank * 0.2);           // ±3-5
-  if (rank <= 32) return 5 + Math.min(3, (rank - 10) * 0.14);   // ±5-8
-  if (rank <= 100) return 7 + Math.min(4, (rank - 32) * 0.06);  // ±7-11
-  return 10 + Math.min(5, (rank - 100) * 0.03);                  // ±10-15
+  if (rank <= 10) return 6 + Math.min(3, rank * 0.3);            // ±6-9
+  if (rank <= 32) return 8 + Math.min(4, (rank - 10) * 0.18);    // ±8-12
+  if (rank <= 100) return 11 + Math.min(6, (rank - 32) * 0.09);  // ±11-17
+  return 15 + Math.min(8, (rank - 100) * 0.05);                   // ±15-23
 }
 
 /** Scouting level multipliers — how much error is retained.
@@ -4311,7 +4312,7 @@ export const useGameStore = create<GameStore>()(
         set({ scoutingLevel: level, draftScoutingData: merged });
       },
 
-      // Scout a prospect — costs 1 scout point, narrows OVR range to ±3 and unlocks evaluation
+      // Scout a prospect — costs 1 scout point, narrows OVR range to ±2 and unlocks evaluation
       deepScoutPlayer: (playerId: string) => {
         const state = get();
         const scoutData = state.draftScoutingData[playerId];
@@ -4320,18 +4321,18 @@ export const useGameStore = create<GameStore>()(
         const deepScoutedCount = Object.values(state.draftScoutingData).filter(d => d.deepScouted).length;
         if (deepScoutedCount >= 15) return; // hard cap at 15 scouts
 
-        // Narrow the error to ±3 and re-center scoutedOvr closer to true OVR
+        // Narrow the error to ±2 and re-center scoutedOvr closer to true OVR
         const player = state.players.find(p => p.id === playerId);
         const trueOvr = player?.ratings.overall ?? scoutData.scoutedOvr;
-        // Scout estimate: within ±3 of true OVR with deterministic noise
+        // Scout estimate: within ±2 of true OVR with deterministic noise
         const seed = seedFromId(playerId, 88);
-        const noise = (seed % 7) - 3; // -3 to +3
+        const noise = (seed % 5) - 2; // -2 to +2
         const scoutedOvr = Math.max(20, Math.min(99, trueOvr + noise));
 
         set({
           draftScoutingData: {
             ...state.draftScoutingData,
-            [playerId]: { ...scoutData, deepScouted: true, error: 3, scoutedOvr },
+            [playerId]: { ...scoutData, deepScouted: true, error: 2, scoutedOvr },
           },
         });
       },

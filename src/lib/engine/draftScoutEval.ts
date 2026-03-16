@@ -115,8 +115,8 @@ function generateScoutOvrEstimate(
   seed: number,
 ): { low: number; high: number; quote: string } {
   const trueOvr = player.ratings.overall;
-  // Scout estimate is ±3-5 from true OVR (tighter than public range)
-  const spreadHalf = 3 + (seed % 3); // 3, 4, or 5
+  // Scout estimate is ±2-3 from true OVR (tighter than public range)
+  const spreadHalf = 2 + (seed % 2); // 2 or 3
   const low = clamp(trueOvr - spreadHalf, 20, 99);
   const high = clamp(trueOvr + spreadHalf, 20, 99);
   const publicMid = Math.round((publicRange.lo + publicRange.hi) / 2);
