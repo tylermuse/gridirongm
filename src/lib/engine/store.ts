@@ -572,8 +572,8 @@ function baseErrorForRank(rank: number): number {
 }
 
 /** Scouting level multipliers — how much error is retained.
- *  Level 0 is the default (no tier system) — use moderate error. */
-const SCOUTING_LEVEL_MULT = [0.40, 0.40, 0.20]; // All levels use tighter ranges now
+ *  Entry: wide ranges, Pro: moderate, Elite: tight. */
+const SCOUTING_LEVEL_MULT = [1.0, 0.45, 0.20]; // Entry, Pro, Elite
 
 function computeScoutingData(
   prospects: Player[],
@@ -1333,7 +1333,7 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   resigningPlayers: [],
   holdoutDemands: [],
   tradeProposals: [],
-  scoutingLevel: 0,
+  scoutingLevel: 2,
   draftScoutingData: {},
   finalsMvpPlayerId: null,
   leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
@@ -1888,7 +1888,7 @@ export const useGameStore = create<GameStore>()(
             resigningPlayers: resigningEntries,
             holdoutDemands: [],
             tradeProposals: [],
-            scoutingLevel: 0,
+            scoutingLevel: 2,
             draftScoutingData: {},
             finalsMvpPlayerId: null,
             leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
@@ -2012,7 +2012,7 @@ export const useGameStore = create<GameStore>()(
           resigningPlayers: genResigningEntries,
           holdoutDemands: [],
           tradeProposals: [],
-          scoutingLevel: 0,
+          scoutingLevel: 2,
           draftScoutingData: {},
           finalsMvpPlayerId: null,
           leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },

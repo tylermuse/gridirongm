@@ -14,6 +14,8 @@ import { POSITIONS, ROSTER_LIMITS } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import type { Player, Position, Team } from '@/types';
+import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { SCOUTING_LEVELS } from '@/lib/subscription';
 import { expectedOvrForPick, pickGrade, gradeValue, gradeColor, teamDraftGrade } from '@/lib/engine/draftGrades';
 import { generateDraftScoutEval, publicConsensusBlurb, type DraftScoutEvaluation } from '@/lib/engine/draftScoutEval';
 import { generateScoutingReport } from '@/lib/engine/scoutingReport';
@@ -631,13 +633,17 @@ export default function DraftPage() {
     userTeamId,
     teams,
     draftScoutingData,
+    scoutingLevel,
     draftPlayer,
     deepScoutPlayer,
+    setScoutingLevel,
     simDraftPick,
     simToUserDraftPick,
     simToEndDraft,
     season,
   } = useGameStore();
+
+  const { maxScoutingLevel: maxLevel } = useSubscription();
 
   // Auto-redirect to free agency when draft completes and phase advances
   useEffect(() => {
@@ -927,8 +933,26 @@ export default function DraftPage() {
                 </select>
               </div>
             </CardHeader>
-            {/* Scout points + scouted-only toggle */}
+            {/* Scouting level + scout points + toggle */}
             <div className="mb-3 flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-[var(--text-sec)]">Level:</span>
+                <select
+                  value={scoutingLevel}
+                  onChange={e => {
+                    const val = Number(e.target.value) as 0|1|2;
+                    if (val <= maxLevel) setScoutingLevel(val);
+                  }}
+                  className="h-6 px-1.5 text-xs rounded border border-[var(--border)] bg-[var(--surface-2)]"
+                  title={SCOUTING_LEVELS[scoutingLevel]?.tooltip}
+                >
+                  {SCOUTING_LEVELS.map((level, i) => (
+                    <option key={i} value={i}>
+                      {level.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-[var(--text-sec)]">Scouts:</span>
                 <div className="w-20 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
