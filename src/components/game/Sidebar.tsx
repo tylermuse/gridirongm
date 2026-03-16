@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { getItem as idbGetItem } from '@/lib/storage';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: '🏟️' },
@@ -36,40 +37,49 @@ const PHASE_LABELS: Record<string, string> = {
   offseason: 'Offseason',
 };
 
+type SlotMeta = { season: number; teamAbbr: string; wins: number; losses: number } | null;
+
 function SaveSlotPanel({ onClose }: { onClose: () => void }) {
   const { saveToSlot, loadFromSlot } = useGameStore();
   const [refreshKey, setRefreshKey] = useState(0);
+  const [slotMetas, setSlotMetas] = useState<[SlotMeta, SlotMeta]>([null, null]);
 
-  function getSlotMeta(slot: 1 | 2) {
-    // refreshKey used to force re-read after save
-    void refreshKey;
-    try {
-      const raw = localStorage.getItem(`gridiron-gm-save-${slot}`);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      const state = parsed.state ?? parsed;
-      return {
-        season: state.season,
-        teamAbbr: state.teams?.find((t: { id: string; abbreviation: string }) => t.id === state.userTeamId)?.abbreviation,
-        wins: state.teams?.find((t: { id: string; record: { wins: number; losses: number } }) => t.id === state.userTeamId)?.record?.wins ?? 0,
-        losses: state.teams?.find((t: { id: string; record: { wins: number; losses: number } }) => t.id === state.userTeamId)?.record?.losses ?? 0,
-      };
-    } catch {
-      return null;
+  useEffect(() => {
+    async function loadMetas() {
+      const metas = await Promise.all(
+        ([1, 2] as const).map(async (slot): Promise<SlotMeta> => {
+          try {
+            const raw = await idbGetItem(`gridiron-gm-save-${slot}`);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            const state = parsed.state ?? parsed;
+            return {
+              season: state.season,
+              teamAbbr: state.teams?.find((t: { id: string; abbreviation: string }) => t.id === state.userTeamId)?.abbreviation ?? '???',
+              wins: state.teams?.find((t: { id: string; record: { wins: number; losses: number } }) => t.id === state.userTeamId)?.record?.wins ?? 0,
+              losses: state.teams?.find((t: { id: string; record: { wins: number; losses: number } }) => t.id === state.userTeamId)?.record?.losses ?? 0,
+            };
+          } catch {
+            return null;
+          }
+        })
+      );
+      setSlotMetas(metas as [SlotMeta, SlotMeta]);
     }
-  }
+    loadMetas();
+  }, [refreshKey]);
 
   return (
     <div className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3 shadow-xl z-50">
       <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-2">Save Slots</div>
       {([1, 2] as const).map(slot => {
-        const meta = getSlotMeta(slot);
+        const meta = slotMetas[slot - 1];
         return (
           <div key={slot} className="mb-2">
             <div className="text-xs text-[var(--text-sec)] mb-1">Slot {slot}: {meta ? `${meta.teamAbbr} S${meta.season} (${meta.wins}-${meta.losses})` : 'Empty'}</div>
             <div className="flex gap-1">
               <button
-                onClick={() => { saveToSlot(slot); setRefreshKey(k => k + 1); }}
+                onClick={async () => { await saveToSlot(slot); setRefreshKey(k => k + 1); }}
                 className="flex-1 text-xs py-1 rounded bg-blue-600/20 text-blue-600 hover:bg-blue-600/30 transition-colors"
               >
                 Save

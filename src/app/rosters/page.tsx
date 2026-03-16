@@ -117,6 +117,9 @@ export default function RostersPage() {
                 <p className="text-sm text-[var(--text-sec)] mt-1.5 leading-relaxed">
                   {roster.description}
                 </p>
+                <p className="text-xs mt-2 text-gray-500 italic">
+                  Original roster by Jack (boimenred). Free agency updates by Gridiron GM.
+                </p>
 
                 <div className="flex items-center gap-2 mt-3 flex-wrap">
                   {roster.compatibility.map((tag) => (

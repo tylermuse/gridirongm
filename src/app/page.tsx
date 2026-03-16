@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import { useGameStore } from '@/lib/engine/store';
+import { migrateFromLocalStorage, getItem as idbGetItem } from '@/lib/storage';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import { GameShell } from '@/components/game/GameShell';
@@ -51,31 +52,40 @@ function TeamPicker() {
       .finally(() => setImportLoading(false));
   }, [searchParams]);
 
-  // Check for existing autosave on mount
+  const [migrated, setMigrated] = useState(false);
+
+  // Migrate localStorage → IndexedDB on first load, then check for autosave
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('gridiron-gm-autosave');
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      const state = parsed.state ?? parsed;
-      if (state.userTeamId && state.teams?.length > 0) {
-        const team = state.teams.find((t: { id: string; abbreviation: string }) => t.id === state.userTeamId);
-        const userRecord = state.teams.find((t: { id: string; record: { wins: number; losses: number } }) => t.id === state.userTeamId)?.record;
-        const PHASE_LABELS: Record<string, string> = {
-          preseason: 'Preseason', regular: 'Regular Season', playoffs: 'Playoffs',
-          resigning: 'Re-signing', draft: 'Draft', freeAgency: 'Free Agency', offseason: 'Offseason',
-        };
-        setSavedGame({
-          teamAbbr: team?.abbreviation ?? '???',
-          season: state.season ?? 1,
-          wins: userRecord?.wins ?? 0,
-          losses: userRecord?.losses ?? 0,
-          phase: PHASE_LABELS[state.phase] ?? state.phase ?? 'Unknown',
-        });
+    async function checkSave() {
+      try {
+        // Run migration first (no-ops if already done)
+        const didMigrate = await migrateFromLocalStorage();
+        if (didMigrate) setMigrated(true);
+
+        const raw = await idbGetItem('gridiron-gm-autosave');
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        const state = parsed.state ?? parsed;
+        if (state.userTeamId && state.teams?.length > 0) {
+          const team = state.teams.find((t: { id: string; abbreviation: string }) => t.id === state.userTeamId);
+          const userRecord = state.teams.find((t: { id: string; record: { wins: number; losses: number } }) => t.id === state.userTeamId)?.record;
+          const PHASE_LABELS: Record<string, string> = {
+            preseason: 'Preseason', regular: 'Regular Season', playoffs: 'Playoffs',
+            resigning: 'Re-signing', draft: 'Draft', freeAgency: 'Free Agency', offseason: 'Offseason',
+          };
+          setSavedGame({
+            teamAbbr: team?.abbreviation ?? '???',
+            season: state.season ?? 1,
+            wins: userRecord?.wins ?? 0,
+            losses: userRecord?.losses ?? 0,
+            phase: PHASE_LABELS[state.phase] ?? state.phase ?? 'Unknown',
+          });
+        }
+      } catch {
+        // Ignore parse errors
       }
-    } catch {
-      // Ignore parse errors
     }
+    checkSave();
   }, []);
 
   function handleResume() {
@@ -132,6 +142,16 @@ function TeamPicker() {
         </h1>
         <p className="text-[var(--text-sec)] text-sm sm:text-lg">Choose your franchise. Build your dynasty.</p>
       </div>
+
+      {/* Migration toast */}
+      {migrated && (
+        <div className="mb-4 max-w-md w-full">
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/30 text-green-700 text-sm">
+            <span>Save data migrated to new storage system</span>
+            <button onClick={() => setMigrated(false)} className="ml-auto text-green-600 hover:text-green-800 font-bold">&times;</button>
+          </div>
+        </div>
+      )}
 
       {/* Resume saved game */}
       {savedGame && (

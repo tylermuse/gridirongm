@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { idbStorage, getItem as idbGetItem, setItem as idbSetItem } from '@/lib/storage';
 function uuid(): string {
   return crypto.randomUUID();
 }
@@ -101,8 +102,8 @@ interface GameStore extends LeagueState {
   commitLiveGame: (result: GameResult, matchupId?: string) => void;
   updateLeagueSettings: (settings: Partial<LeagueSettings>) => void;
   setSuppressTradePopups: (val: boolean) => void;
-  saveToSlot: (slot: 1 | 2) => void;
-  loadFromSlot: (slot: 1 | 2) => void;
+  saveToSlot: (slot: 1 | 2) => Promise<void>;
+  loadFromSlot: (slot: 1 | 2) => Promise<void>;
   getTeam: (id: string) => Team | undefined;
   getPlayer: (id: string) => Player | undefined;
   getTeamRoster: (teamId: string) => Player[];
@@ -3320,7 +3321,7 @@ export const useGameStore = create<GameStore>()(
 
       advanceFAWeek: () => {
         // Advance up to 7 days in a SINGLE state update (one set() call) to avoid
-        // persist middleware overhead (lz-string compression + localStorage write per call)
+        // persist middleware overhead (serialization + IndexedDB write per call)
         const initialState = get();
         if (initialState.phase !== 'freeAgency' || initialState.faDay >= 30) return;
 
@@ -5024,17 +5025,17 @@ export const useGameStore = create<GameStore>()(
         set({ suppressTradePopups: val });
       },
 
-      saveToSlot: (slot: 1 | 2) => {
-        const stored = localStorage.getItem('gridiron-gm-autosave');
+      saveToSlot: async (slot: 1 | 2) => {
+        const stored = await idbGetItem('gridiron-gm-autosave');
         if (stored) {
-          localStorage.setItem(`gridiron-gm-save-${slot}`, stored);
+          await idbSetItem(`gridiron-gm-save-${slot}`, stored);
         }
       },
 
-      loadFromSlot: (slot: 1 | 2) => {
-        const data = localStorage.getItem(`gridiron-gm-save-${slot}`);
+      loadFromSlot: async (slot: 1 | 2) => {
+        const data = await idbGetItem(`gridiron-gm-save-${slot}`);
         if (!data) return;
-        localStorage.setItem('gridiron-gm-autosave', data);
+        await idbSetItem('gridiron-gm-autosave', data);
         window.location.reload();
       },
 
@@ -5046,6 +5047,7 @@ export const useGameStore = create<GameStore>()(
     {
       name: 'gridiron-gm-autosave',
       version: SAVE_VERSION,
+      storage: createJSONStorage(() => idbStorage),
       partialize: (state) => {
         // Slim down schedule: only keep playerStats/scoringPlays for user-team games
         // (other games' stats are already aggregated into player .stats objects)
@@ -5161,7 +5163,7 @@ export const useGameStore = create<GameStore>()(
           }
         }
         if (version < 8) {
-          // Strip playerStats from non-user games to reduce localStorage size
+          // Strip playerStats from non-user games to reduce save size
           // playerStats are the biggest contributor to save bloat
           const userTeamId8 = state.userTeamId as string;
           const schedule8 = (state.schedule as Array<Record<string, unknown>>) ?? [];
