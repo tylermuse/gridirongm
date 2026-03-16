@@ -5,16 +5,17 @@
  * factoring in both current OVR and development potential.
  */
 
-/** Expected OVR range for each round (1-indexed). Accounts for the fact that
- *  rookies are raw — even 1st-rounders typically start in the 55-70 OVR range. */
+/** Expected OVR for each round — calibrated to actual draft class output.
+ *  Draft class talent curve: top picks ~75-82, mid ~55-65, late ~40-50.
+ *  Sigma controls how forgiving the grade is — smaller = stricter. */
 const ROUND_EXPECTATIONS: Record<number, { expected: number; sigma: number }> = {
-  1: { expected: 62, sigma: 6 },
-  2: { expected: 56, sigma: 5 },
-  3: { expected: 52, sigma: 5 },
-  4: { expected: 48, sigma: 5 },
-  5: { expected: 45, sigma: 4 },
-  6: { expected: 42, sigma: 4 },
-  7: { expected: 40, sigma: 4 },
+  1: { expected: 72, sigma: 4 },
+  2: { expected: 65, sigma: 4 },
+  3: { expected: 60, sigma: 4 },
+  4: { expected: 55, sigma: 4 },
+  5: { expected: 50, sigma: 3 },
+  6: { expected: 46, sigma: 3 },
+  7: { expected: 42, sigma: 3 },
 };
 
 function getRoundFromPick(overallPick: number, totalPicks: number): number {
@@ -37,16 +38,16 @@ export function pickGrade(overallPick: number, totalPicks: number, playerOvr: nu
 
   const score = ovrDelta + potBonus;
 
-  // Distribution target: ~10% A, ~25% B+/B, ~25% B-/C+, ~25% C/C-, ~15% D/F
-  if (score >= 2.0) return 'A+';
-  if (score >= 1.4) return 'A';
-  if (score >= 0.8) return 'B+';
-  if (score >= 0.3) return 'B';
-  if (score >= -0.2) return 'B-';
-  if (score >= -0.7) return 'C+';
-  if (score >= -1.2) return 'C';
-  if (score >= -1.8) return 'C-';
-  if (score >= -2.5) return 'D';
+  // Strict grading: A is rare, C is common, D/F for bad picks
+  if (score >= 2.5) return 'A+';
+  if (score >= 1.8) return 'A';
+  if (score >= 1.0) return 'B+';
+  if (score >= 0.4) return 'B';
+  if (score >= -0.1) return 'B-';
+  if (score >= -0.6) return 'C+';
+  if (score >= -1.0) return 'C';
+  if (score >= -1.5) return 'C-';
+  if (score >= -2.0) return 'D';
   return 'F';
 }
 
