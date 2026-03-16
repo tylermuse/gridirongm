@@ -328,6 +328,8 @@ export default function PlayoffsPage() {
     userTeamId,
     champions,
     finalsMvpPlayerId,
+    allStarGame,
+    simAllStarGame,
   } = useGameStore();
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -790,6 +792,52 @@ export default function PlayoffsPage() {
           </Card>
         </div>
 
+        {/* ---- All-Star Game (Pro Bowl) ---- */}
+        {(() => {
+          const acConf = playoffBracket.find(m => m.id === 'ac-conf');
+          const ncConf = playoffBracket.find(m => m.id === 'nc-conf');
+          const confsDone = !!acConf?.winnerId && !!ncConf?.winnerId;
+          if (!confsDone) return null;
+
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle>⭐ All-Star Game (Pro Bowl)</CardTitle>
+              </CardHeader>
+              {allStarGame?.played ? (
+                <div className="text-center py-4">
+                  <div className="text-lg font-black">
+                    AC {allStarGame.acScore} — NC {allStarGame.ncScore}
+                  </div>
+                  {allStarGame.mvpPlayerId && (() => {
+                    const mvp = players.find(p => p.id === allStarGame.mvpPlayerId);
+                    if (!mvp) return null;
+                    const mvpTeam = teams.find(t => t.id === mvp.teamId);
+                    return (
+                      <div className="text-sm text-[var(--text-sec)] mt-1">
+                        Pro Bowl MVP: <span className="font-bold text-[var(--text)]">{mvp.firstName} {mvp.lastName}</span>
+                        {mvpTeam && <span> ({mvpTeam.abbreviation})</span>}
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <p className="text-sm text-[var(--text-sec)] mb-3">
+                    The best from each conference face off before The Championship.
+                  </p>
+                  <button
+                    onClick={simAllStarGame}
+                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg transition-colors"
+                  >
+                    Sim Pro Bowl
+                  </button>
+                </div>
+              )}
+            </Card>
+          );
+        })()}
+
         {/* ---- The Championship ---- */}
         <Card>
           <CardHeader>
@@ -802,7 +850,7 @@ export default function PlayoffsPage() {
               userTeamId={userTeamId}
               onTeamClick={(id) => setViewTeamId(id)}
               onGameClick={handleGameClick}
-              onWatchLive={phase === 'playoffs' ? handleWatchLive : undefined}
+              onWatchLive={phase === 'playoffs' ? (allStarGame?.played ? handleWatchLive : undefined) : undefined}
             />
           </div>
         </Card>

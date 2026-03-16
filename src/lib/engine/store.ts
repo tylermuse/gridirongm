@@ -97,6 +97,7 @@ interface GameStore extends LeagueState {
   // PRD-13: Depth chart
   reorderDepthChart: (position: Position, playerIds: string[]) => void;
   resetDepthChart: (position: Position) => void;
+  simAllStarGame: () => void;
   commitLiveGame: (result: GameResult, matchupId?: string) => void;
   updateLeagueSettings: (settings: Partial<LeagueSettings>) => void;
   setSuppressTradePopups: (val: boolean) => void;
@@ -1335,7 +1336,7 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   tradeProposals: [],
   scoutingLevel: 2,
   draftScoutingData: {},
-  finalsMvpPlayerId: null,
+  finalsMvpPlayerId: null, allStarGame: null,
   leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
   suppressTradePopups: false,
   weeklyRecaps: [],
@@ -1890,7 +1891,7 @@ export const useGameStore = create<GameStore>()(
             tradeProposals: [],
             scoutingLevel: 2,
             draftScoutingData: {},
-            finalsMvpPlayerId: null,
+            finalsMvpPlayerId: null, allStarGame: null,
             leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
             suppressTradePopups: false,
             weeklyRecaps: [],
@@ -2014,7 +2015,7 @@ export const useGameStore = create<GameStore>()(
           tradeProposals: [],
           scoutingLevel: 2,
           draftScoutingData: {},
-          finalsMvpPlayerId: null,
+          finalsMvpPlayerId: null, allStarGame: null,
           leagueSettings: { ...DEFAULT_LEAGUE_SETTINGS },
           suppressTradePopups: false,
           weeklyRecaps: [],
@@ -2224,10 +2225,20 @@ export const useGameStore = create<GameStore>()(
       simNextPlayoffGame: () => {
         const state = get();
         if (!state.playoffBracket) return;
+        // Block championship until All-Star Game is played
         const next = state.playoffBracket
           .filter(m => !m.winnerId && m.homeTeamId && m.awayTeamId)
+          .filter(m => m.id !== 'championship' || state.allStarGame?.played)
           .sort((a, b) => a.round - b.round)[0];
-        if (next) get().simPlayoffGame(next.id);
+        if (!next) {
+          // If blocked on All-Star, auto-sim it
+          if (!state.allStarGame?.played) {
+            const confsDone = state.playoffBracket.find(m => m.id === 'ac-conf')?.winnerId && state.playoffBracket.find(m => m.id === 'nc-conf')?.winnerId;
+            if (confsDone) get().simAllStarGame();
+          }
+          return;
+        }
+        get().simPlayoffGame(next.id);
       },
 
       simAllPlayoffGames: () => {
@@ -2240,11 +2251,21 @@ export const useGameStore = create<GameStore>()(
         let finalsMvpPlayerId = state.finalsMvpPlayerId;
         const playoffResults: GameResult[] = [];
 
+        let allStarDone = !!state.allStarGame?.played;
         for (let guard = 0; guard < 200; guard++) {
           const next = bracket
             .filter(m => !m.winnerId && m.homeTeamId && m.awayTeamId)
+            .filter(m => m.id !== 'championship' || allStarDone)
             .sort((a, b) => a.round - b.round)[0];
-          if (!next) break;
+          if (!next) {
+            // Auto-sim All-Star if blocking
+            if (!allStarDone) {
+              get().simAllStarGame();
+              allStarDone = true;
+              continue;
+            }
+            break;
+          }
 
           const homeRosterRaw = state.players.filter(p => p.teamId === next.homeTeamId);
           const awayRosterRaw = state.players.filter(p => p.teamId === next.awayTeamId);
@@ -4338,6 +4359,56 @@ export const useGameStore = create<GameStore>()(
         set({ teams: updatedTeams });
       },
 
+      // All-Star Game (Pro Bowl) — played between conference championships and the big game
+      simAllStarGame: () => {
+        const state = get();
+        if (state.allStarGame?.played) return;
+
+        // Build All-Star rosters: top 25 healthy players per conference
+        const acTeamIds = new Set(state.teams.filter(t => t.conference === 'AC').map(t => t.id));
+        const ncTeamIds = new Set(state.teams.filter(t => t.conference === 'NC').map(t => t.id));
+        const healthy = (p: Player) => !p.retired && p.teamId && (!p.injury || p.injury.weeksLeft === 0);
+        const acAllStars = state.players.filter(p => healthy(p) && acTeamIds.has(p.teamId!))
+          .sort((a, b) => b.ratings.overall - a.ratings.overall).slice(0, 25);
+        const ncAllStars = state.players.filter(p => healthy(p) && ncTeamIds.has(p.teamId!))
+          .sort((a, b) => b.ratings.overall - a.ratings.overall).slice(0, 25);
+
+        // Pick a "home" team for display (use first AC team and first NC team)
+        const acTeam = state.teams.find(t => t.conference === 'AC');
+        const ncTeam = state.teams.find(t => t.conference === 'NC');
+
+        const tempGame: GameResult = {
+          id: 'all-star', week: 99, season: state.season,
+          homeTeamId: acTeam?.id ?? '', awayTeamId: ncTeam?.id ?? '',
+          homeScore: 0, awayScore: 0, played: false, playerStats: {},
+        };
+        const result = simulateGame(tempGame, acAllStars, ncAllStars);
+
+        // Find MVP (best performer)
+        let bestScore = -1;
+        let mvpId = '';
+        for (const [pid, stats] of Object.entries(result.playerStats)) {
+          const s = stats as Partial<import('@/types').PlayerStats>;
+          const score = (s.passYards ?? 0) * 0.04 + (s.passTDs ?? 0) * 6 +
+            (s.rushYards ?? 0) * 0.1 + (s.rushTDs ?? 0) * 6 +
+            (s.receivingYards ?? 0) * 0.1 + (s.receivingTDs ?? 0) * 6 +
+            (s.tackles ?? 0) * 1 + (s.sacks ?? 0) * 3 + (s.defensiveINTs ?? 0) * 5;
+          if (score > bestScore) { bestScore = score; mvpId = pid; }
+        }
+
+        const mvpPlayer = state.players.find(p => p.id === mvpId);
+        const newsItems = [...state.newsItems, makeNews({
+          season: state.season, week: 99, type: 'milestone',
+          headline: `Pro Bowl: AC ${result.homeScore} - NC ${result.awayScore}${mvpPlayer ? `. MVP: ${mvpPlayer.firstName} ${mvpPlayer.lastName}` : ''}`,
+          isUserTeam: false,
+        })];
+
+        set({
+          allStarGame: { played: true, acScore: result.homeScore, ncScore: result.awayScore, mvpPlayerId: mvpId || null },
+          newsItems,
+        });
+      },
+
       startNewSeason: () => {
         const state = get();
         const newSeason = state.season + 1;
@@ -4824,7 +4895,7 @@ export const useGameStore = create<GameStore>()(
           holdoutDemands: [],
           tradeProposals: [],
           draftScoutingData: {},
-          finalsMvpPlayerId: null,
+          finalsMvpPlayerId: null, allStarGame: null,
           weeklyRecaps: [],
           tradeRumors: [],
           rivalries: decayRivalries(state.rivalries ?? []),

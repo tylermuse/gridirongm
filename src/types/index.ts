@@ -573,6 +573,8 @@ export interface LeagueState {
   draftScoutingData: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }>;
   /** Player ID of the Championship MVP (set when championship is played, consumed when season summary is created) */
   finalsMvpPlayerId: string | null;
+  /** All-Star Game (Pro Bowl) result — played between conference championships and the big game */
+  allStarGame: { played: boolean; acScore: number; ncScore: number; mvpPlayerId: string | null } | null;
   /** Configurable league settings */
   leagueSettings: LeagueSettings;
   /** Suppress trade proposal popup notifications */
