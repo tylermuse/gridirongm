@@ -4856,8 +4856,9 @@ export const useGameStore = create<GameStore>()(
         const newSchedule = generateSchedule(grownTeams, newSeason);
 
         // Preserve unsigned players as free agents for in-season signings
+        // Exclude future draft prospects — they should only be available via the draft
         const unsignedPlayerIds = allPlayersForNewSeason
-          .filter(p => !p.teamId && !p.retired)
+          .filter(p => !p.teamId && !p.retired && !(p.draftYear != null && p.draftYear >= newSeason && p.experience === 0))
           .map(p => p.id);
 
         // Generate street free agents so there's always a pool for in-season signings
