@@ -331,6 +331,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     )}
                     <Button
                       onClick={() => {
+                        if (!window.confirm('Are you sure you want to auto-draft all remaining picks?')) return;
                         simToEndDraft({ skipAdvance: true });
                         router.push('/draft-recap');
                       }}
