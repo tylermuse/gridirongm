@@ -167,10 +167,10 @@ function simulatePlay(
     ? dls.reduce((s, p) => s + p.ratings.passRush * 1.2 + p.ratings.strength, 0) / dls.length
     : 50;
 
-  // Decide pass vs rush — NFL avg ~57% pass, tuned for realistic volume
-  const passChance = down >= 3 && yardsToGo > 5 ? 0.78 :
-                     down >= 3 ? 0.60 :
-                     down === 1 ? 0.48 : 0.55;
+  // Decide pass vs rush — NFL avg ~58% pass
+  const passChance = down >= 3 && yardsToGo > 5 ? 0.80 :
+                     down >= 3 ? 0.62 :
+                     down === 1 ? 0.52 : 0.57;
 
   const isPass = Math.random() < passChance;
 
@@ -364,9 +364,9 @@ function simulateDrive(
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
 
-  // Max 8 plays per drive (NFL avg ~6, long drives 8-10). Drives also end on
+  // Max 10 plays per drive (NFL avg ~6, long drives 9-12). Drives also end on
   // 4th-down stops, turnovers, or scores before hitting the cap.
-  for (let playNum = 0; playNum < 8; playNum++) {
+  for (let playNum = 0; playNum < 10; playNum++) {
     const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition);
     plays.push(play);
 
@@ -480,9 +480,8 @@ export function simulateGame(
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
-  // ~9 possessions per team per game — tuned for realistic stat totals
-  // (NFL avg ~10-11 but shorter drives in sim means fewer total plays needed)
-  const possessions = 9;
+  // ~10 possessions per team per game (NFL avg ~10-11)
+  const possessions = 10;
 
   const allHomePlays: PlayResult[] = [];
   const allAwayPlays: PlayResult[] = [];
