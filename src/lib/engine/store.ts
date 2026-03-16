@@ -4406,7 +4406,7 @@ export const useGameStore = create<GameStore>()(
         set({ teams: updatedTeams });
       },
 
-      // All-Star Game (Pro Bowl) — played between conference championships and the big game
+      // All-Pro Game — played between conference championships and the big game
       simAllStarGame: () => {
         const state = get();
         if (state.allStarGame?.played) return;
@@ -4446,7 +4446,7 @@ export const useGameStore = create<GameStore>()(
         const mvpPlayer = state.players.find(p => p.id === mvpId);
         const newsItems = [...state.newsItems, makeNews({
           season: state.season, week: 99, type: 'milestone',
-          headline: `Pro Bowl: AC ${result.homeScore} - NC ${result.awayScore}${mvpPlayer ? `. MVP: ${mvpPlayer.firstName} ${mvpPlayer.lastName}` : ''}`,
+          headline: `All-Pro Game: AC ${result.homeScore} - NC ${result.awayScore}${mvpPlayer ? `. MVP: ${mvpPlayer.firstName} ${mvpPlayer.lastName}` : ''}`,
           isUserTeam: false,
         })];
 

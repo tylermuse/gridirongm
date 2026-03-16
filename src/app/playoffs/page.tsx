@@ -814,7 +814,7 @@ export default function PlayoffsPage() {
           return (
             <Card>
               <CardHeader>
-                <CardTitle>⭐ All-Star Game (Pro Bowl)</CardTitle>
+                <CardTitle>⭐ All-Pro Game</CardTitle>
               </CardHeader>
               {allStarGame?.played ? (
                 <div className="text-center py-4">
@@ -827,7 +827,7 @@ export default function PlayoffsPage() {
                     const mvpTeam = teams.find(t => t.id === mvp.teamId);
                     return (
                       <div className="text-sm text-[var(--text-sec)] mt-1">
-                        Pro Bowl MVP: <span className="font-bold text-[var(--text)]">{mvp.firstName} {mvp.lastName}</span>
+                        All-Pro Game MVP: <span className="font-bold text-[var(--text)]">{mvp.firstName} {mvp.lastName}</span>
                         {mvpTeam && <span> ({mvpTeam.abbreviation})</span>}
                       </div>
                     );
@@ -842,7 +842,7 @@ export default function PlayoffsPage() {
                     onClick={simAllStarGame}
                     className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg transition-colors"
                   >
-                    Sim Pro Bowl
+                    Sim All-Pro Game
                   </button>
                 </div>
               )}
