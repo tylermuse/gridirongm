@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { simulatePlayByPlay, liveGameToGameResult } from '@/lib/engine/playByPlay';
 import { Confetti } from '@/components/ui/Confetti';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
-import type { Player } from '@/types';
+import type { Player, Position } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Speed settings
@@ -700,8 +700,28 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const isPlayoffGame = !!playoffMatchup || !!playoffBracket?.find(m => m.id === id);
   const homeTeam = game ? teams.find(t => t.id === game.homeTeamId) ?? null : null;
   const awayTeam = game ? teams.find(t => t.id === game.awayTeamId) ?? null : null;
-  const homePlayers = game ? players.filter(p => p.teamId === game.homeTeamId) : [];
-  const awayPlayers = game ? players.filter(p => p.teamId === game.awayTeamId) : [];
+  const homePlayers = useMemo(() => {
+    if (!game) return [];
+    const roster = players.filter(p => p.teamId === game.homeTeamId);
+    const dc = homeTeam?.depthChart;
+    if (!dc) return roster.sort((a, b) => b.ratings.overall - a.ratings.overall);
+    return [...roster].sort((a, b) => {
+      const ai = dc[a.position as Position]?.indexOf(a.id) ?? -1;
+      const bi = dc[b.position as Position]?.indexOf(b.id) ?? -1;
+      return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+    });
+  }, [game, players, homeTeam]);
+  const awayPlayers = useMemo(() => {
+    if (!game) return [];
+    const roster = players.filter(p => p.teamId === game.awayTeamId);
+    const dc = awayTeam?.depthChart;
+    if (!dc) return roster.sort((a, b) => b.ratings.overall - a.ratings.overall);
+    return [...roster].sort((a, b) => {
+      const ai = dc[a.position as Position]?.indexOf(a.id) ?? -1;
+      const bi = dc[b.position as Position]?.indexOf(b.id) ?? -1;
+      return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+    });
+  }, [game, players, awayTeam]);
 
   const simRef = useRef<LiveGameResult | null>(null);
   if (simRef.current === null && homeTeam && awayTeam && game && !game.played) {
