@@ -195,27 +195,16 @@ export default function RosterPage() {
       }
     });
 
-  // All-Pro stars: only show AFTER the regular season ends.
-  // Stars appear during playoffs and persist through the offseason (re-signing, draft, FA).
-  // They disappear when the new regular season starts (clean slate).
+  // All-Pro stars: show AFTER the regular season ends through the entire offseason.
+  // Compute live from current stats (they persist until startNewSeason clears them).
+  // Disappear when the new regular season starts (clean slate).
   const allProPlayerIds = new Set<string>();
   const offseasonPhases = ['playoffs', 'resigning', 'draft', 'freeAgency'];
   if (offseasonPhases.includes(phase)) {
-    // During playoffs: compute live from current season stats
-    if (phase === 'playoffs') {
-      const currentAllLeague = computeAllLeagueTeams(useGameStore.getState() as never);
-      for (const entry of currentAllLeague.first) allProPlayerIds.add(entry.playerId);
-      for (const entry of currentAllLeague.second) allProPlayerIds.add(entry.playerId);
-    } else {
-      // During offseason: use last completed season's saved data
-      const lastSeason = seasonHistory.length > 0 ? seasonHistory[seasonHistory.length - 1] : null;
-      if (lastSeason) {
-        for (const entry of (lastSeason.allLeagueFirst ?? [])) allProPlayerIds.add(entry.playerId);
-        for (const entry of (lastSeason.allLeagueSecond ?? [])) allProPlayerIds.add(entry.playerId);
-      }
-    }
+    const currentAllLeague = computeAllLeagueTeams(useGameStore.getState() as never);
+    for (const entry of currentAllLeague.first) allProPlayerIds.add(entry.playerId);
+    for (const entry of currentAllLeague.second) allProPlayerIds.add(entry.playerId);
   }
-  // During regular season: no stars (clean slate)
 
   const injuredPlayers = roster.filter(p => p.injury && p.injury.weeksLeft > 0);
   const capSpace = userTeam ? Math.round((userTeam.salaryCap - userTeam.totalPayroll) * 10) / 10 : 0;
