@@ -504,6 +504,7 @@ function Dashboard() {
                         <button onClick={() => setSelectedPlayerId(p.id)} className="flex items-center gap-2 hover:text-blue-600">
                           <Badge variant="red" size="sm">{p.position}</Badge>
                           <span className="font-medium">{p.firstName} {p.lastName}</span>
+                          <span className="text-xs text-[var(--text-sec)]">{p.ratings.overall} OVR</span>
                         </button>
                         <div className="text-xs text-[var(--text-sec)]">
                           <span className="text-red-600">{p.injury?.type}</span>
