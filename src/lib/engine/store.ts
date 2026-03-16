@@ -3247,12 +3247,12 @@ export const useGameStore = create<GameStore>()(
         let currentFreeAgents = [...state.freeAgents];
         const allNews: NewsItem[] = [];
 
-        // Signing pace: Early(1-5): 12-18, Mid-Early(6-10): 8-12, Mid(11-20): 5-8, Late(21-30): 2-4
+        // Signing pace: Early(1-5): 18-28, Mid-Early(6-10): 12-18, Mid(11-20): 8-12, Late(21-30): 4-8
         const signingsThisDay =
-          nextDay <= 5 ? 12 + Math.floor(Math.random() * 7) :
-          nextDay <= 10 ? 8 + Math.floor(Math.random() * 5) :
-          nextDay <= 20 ? 5 + Math.floor(Math.random() * 4) :
-          2 + Math.floor(Math.random() * 3);
+          nextDay <= 5 ? 18 + Math.floor(Math.random() * 11) :
+          nextDay <= 10 ? 12 + Math.floor(Math.random() * 7) :
+          nextDay <= 20 ? 8 + Math.floor(Math.random() * 5) :
+          4 + Math.floor(Math.random() * 5);
 
         // Score AI teams by need — check roster needs AND upgrade opportunities
         const teamNeedScores: { teamId: string; score: number; needPositions: Position[]; wantPositions: Position[] }[] = [];
@@ -3280,7 +3280,7 @@ export const useGameStore = create<GameStore>()(
           // Even teams without specific position needs still participate (BPA signings)
           const score = needPositions.length * 10 + wantPositions.length * 3 + (capSpace > 20 ? 5 : 0) + Math.random() * 5;
           // All teams with cap space participate — BPA, depth, upgrades
-          if (needPositions.length > 0 || wantPositions.length > 0 || rosterPlayers.length < 53 || Math.random() < 0.4) {
+          if (needPositions.length > 0 || wantPositions.length > 0 || rosterPlayers.length < 53 || Math.random() < 0.7) {
             teamNeedScores.push({ teamId: t.id, score, needPositions, wantPositions });
           }
         }
@@ -3293,12 +3293,14 @@ export const useGameStore = create<GameStore>()(
           if (!teamData) continue;
           const capSpace = teamData.salaryCap - teamData.totalPayroll;
 
+          // AI teams can stretch ~15% over cap for elite FAs (simulating restructures/backloading)
+          const effectiveCap = capSpace + teamData.salaryCap * 0.15;
           const availableFAs = currentFreeAgents
             .map(id => currentPlayers.find(p => p.id === id))
             .filter((p): p is Player => !!p && !p.retired)
             .filter(p => {
               const sal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential) * decay;
-              return sal <= capSpace || (capSpace >= LEAGUE_MINIMUM_SALARY && sal <= LEAGUE_MINIMUM_SALARY * 2);
+              return sal <= effectiveCap || (capSpace >= LEAGUE_MINIMUM_SALARY && sal <= LEAGUE_MINIMUM_SALARY * 2);
             })
             .sort((a, b) => {
               const aBonus = needPositions.includes(a.position) ? 200 : wantPositions.includes(a.position) ? 80 : 0;
@@ -3310,7 +3312,9 @@ export const useGameStore = create<GameStore>()(
           if (!target) continue;
 
           const marketSalary = estimateSalary(target.ratings.overall, target.position, target.age, target.potential) * decay;
-          const aiSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, Math.min(marketSalary, capSpace)) * 10) / 10;
+          // AI willing to slightly exceed current cap space for elite players (restructure assumption)
+          const maxAffordable = Math.max(capSpace, capSpace + teamData.salaryCap * 0.10);
+          const aiSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, Math.min(marketSalary, maxAffordable)) * 10) / 10;
           const aiYears = target.age >= 32 ? 1 : target.age >= 28 ? 2 : 3;
 
           currentPlayers = currentPlayers.map(p =>
@@ -3372,10 +3376,10 @@ export const useGameStore = create<GameStore>()(
           const decay = faPriceDecay(nextDay);
 
           const signingsThisDay =
-            nextDay <= 5 ? 12 + Math.floor(Math.random() * 7) :
-            nextDay <= 10 ? 8 + Math.floor(Math.random() * 5) :
-            nextDay <= 20 ? 5 + Math.floor(Math.random() * 4) :
-            2 + Math.floor(Math.random() * 3);
+            nextDay <= 5 ? 18 + Math.floor(Math.random() * 11) :
+            nextDay <= 10 ? 12 + Math.floor(Math.random() * 7) :
+            nextDay <= 20 ? 8 + Math.floor(Math.random() * 5) :
+            4 + Math.floor(Math.random() * 5);
 
           const teamNeedScores: { teamId: string; score: number; needPositions: Position[]; wantPositions: Position[] }[] = [];
           for (const t of currentTeams) {
@@ -3398,7 +3402,7 @@ export const useGameStore = create<GameStore>()(
               }
             }
             const score = needPositions.length * 10 + wantPositions.length * 3 + (capSpace > 20 ? 5 : 0) + Math.random() * 5;
-            if (needPositions.length > 0 || wantPositions.length > 0 || rosterPlayers.length < 53 || Math.random() < 0.4) {
+            if (needPositions.length > 0 || wantPositions.length > 0 || rosterPlayers.length < 53 || Math.random() < 0.7) {
               teamNeedScores.push({ teamId: t.id, score, needPositions, wantPositions });
             }
           }
@@ -3411,12 +3415,13 @@ export const useGameStore = create<GameStore>()(
             if (!teamData) continue;
             const capSpace = teamData.salaryCap - teamData.totalPayroll;
 
+            const effectiveCap = capSpace + teamData.salaryCap * 0.15;
             const availableFAs = currentFreeAgents
               .map(id => currentPlayers.find(p => p.id === id))
               .filter((p): p is Player => !!p && !p.retired)
               .filter(p => {
                 const sal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential) * decay;
-                return sal <= capSpace || (capSpace >= LEAGUE_MINIMUM_SALARY && sal <= LEAGUE_MINIMUM_SALARY * 2);
+                return sal <= effectiveCap || (capSpace >= LEAGUE_MINIMUM_SALARY && sal <= LEAGUE_MINIMUM_SALARY * 2);
               })
               .sort((a, b) => {
                 const aBonus = needPositions.includes(a.position) ? 200 : wantPositions.includes(a.position) ? 80 : 0;
@@ -3428,7 +3433,8 @@ export const useGameStore = create<GameStore>()(
             if (!target) continue;
 
             const marketSalary = estimateSalary(target.ratings.overall, target.position, target.age, target.potential) * decay;
-            const aiSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, Math.min(marketSalary, capSpace)) * 10) / 10;
+            const maxAffordable = Math.max(capSpace, capSpace + teamData.salaryCap * 0.10);
+            const aiSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, Math.min(marketSalary, maxAffordable)) * 10) / 10;
             const aiYears = target.age >= 32 ? 1 : target.age >= 28 ? 2 : 3;
 
             currentPlayers = currentPlayers.map(p =>
