@@ -443,8 +443,7 @@ export default function PlayoffsPage() {
             )}
           </div>
           );
-        })()
-        )}
+        })()}
 
         {/* ---- Season Awards ---- */}
         {sbDone && (() => {

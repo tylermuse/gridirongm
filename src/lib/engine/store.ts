@@ -2220,6 +2220,12 @@ export const useGameStore = create<GameStore>()(
         const updatedRecaps = [...(state.weeklyRecaps ?? []).filter(r => !(r.season === state.season && r.week === playoffWeek)), mergedRecap];
 
         set({ playoffBracket: updatedBracket, champions: newChampions, newsItems: newNewsItems, finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps });
+        // Check achievements after each playoff game (catches Champion, etc.)
+        const newAch = checkAchievements(get());
+        if (newAch.length > 0) {
+          const cur = get();
+          set({ achievements: [...cur.achievements, ...newAch] });
+        }
       },
 
       simNextPlayoffGame: () => {
