@@ -131,10 +131,17 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   if (phase === 'regular') {
     const wins = userTeam?.record.wins ?? 0;
     const losses = userTeam?.record.losses ?? 0;
-    const gamesLeft = maxWeek - week + 1;
+    const ties = userTeam?.record.ties ?? 0;
+    const gamesPlayed = wins + losses + ties;
+    const totalGames = maxWeek - 1; // 18-week season = 17 games (1 bye)
+    const gamesLeft = totalGames - gamesPlayed;
     const dl = leagueSettings?.tradeDeadlineWeek ?? 12;
     const tradeDeadlineNote = week <= dl + 1 ? '' : ' · Trade window closed';
-    bannerText = `Week ${week} of ${maxWeek} · Record: ${wins}-${losses} · ${gamesLeft} game${gamesLeft !== 1 ? 's' : ''} remaining${tradeDeadlineNote}`;
+    // Check for bye week
+    const userWeekGames = schedule.filter(g => g.week === week && (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId));
+    const isBye = userWeekGames.length === 0;
+    const recordStr = ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
+    bannerText = `Week ${week} of ${maxWeek}${isBye ? ' — BYE WEEK' : ''} · Record: ${recordStr} · ${gamesLeft} game${gamesLeft !== 1 ? 's' : ''} remaining${tradeDeadlineNote}`;
   } else if (phase === 'playoffs') {
     if (playoffSeeds && userTeamId) {
       const acSeed = playoffSeeds.AC.indexOf(userTeamId);
