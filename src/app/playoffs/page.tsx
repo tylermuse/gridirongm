@@ -404,10 +404,21 @@ export default function PlayoffsPage() {
         </div>
 
         {/* ---- Champion Banner ---- */}
-        {sbDone && champion && (
+        {sbDone && champion && (() => {
+          // Use secondary color if primary is too light (e.g. white)
+          const isLightColor = (hex: string) => {
+            const c = hex.replace('#', '');
+            const r = parseInt(c.substring(0, 2), 16);
+            const g = parseInt(c.substring(2, 4), 16);
+            const b = parseInt(c.substring(4, 6), 16);
+            return (r * 299 + g * 587 + b * 114) / 1000 > 180;
+          };
+          const bgColor = isLightColor(champion.primaryColor) ? (champion.secondaryColor ?? '#1E3A8A') : champion.primaryColor;
+          const textClass = isLightColor(bgColor) ? 'text-gray-900' : 'text-white';
+          return (
           <div
-            className="rounded-2xl px-8 py-10 text-center text-white relative overflow-hidden"
-            style={{ backgroundColor: champion.primaryColor }}
+            className={`rounded-2xl px-8 py-10 text-center ${textClass} relative overflow-hidden`}
+            style={{ backgroundColor: bgColor }}
           >
             <div className="text-5xl mb-2">🏆</div>
             <div className="text-3xl font-black mb-1">
@@ -431,6 +442,8 @@ export default function PlayoffsPage() {
               </div>
             )}
           </div>
+          );
+        })()
         )}
 
         {/* ---- Season Awards ---- */}

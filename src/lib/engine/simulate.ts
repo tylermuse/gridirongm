@@ -642,7 +642,7 @@ export function simulateGame(
           const s = ensure(playerStats, play.receiver.id);
           s.targets = (s.targets ?? 0) + 1;
         }
-        if (play.tackler && rosterIds.has(play.tackler.id) && Math.random() > 0.35) {
+        if (play.tackler && rosterIds.has(play.tackler.id) && Math.random() > 0.20) {
           // ~65% of tackles are credited as solo (rest are assisted / team tackles)
           const s = ensure(playerStats, play.tackler.id);
           s.tackles = (s.tackles ?? 0) + 1;
@@ -661,7 +661,7 @@ export function simulateGame(
           if (play.touchdown) s.rushTDs = (s.rushTDs ?? 0) + 1;
           if (play.turnover) s.fumbles = (s.fumbles ?? 0) + 1;
         }
-        if (play.tackler && rosterIds.has(play.tackler.id) && Math.random() > 0.35) {
+        if (play.tackler && rosterIds.has(play.tackler.id) && Math.random() > 0.20) {
           const s = ensure(playerStats, play.tackler.id);
           s.tackles = (s.tackles ?? 0) + 1;
           if (play.tackleForLoss) s.tacklesForLoss = (s.tacklesForLoss ?? 0) + 1;
