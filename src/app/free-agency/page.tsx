@@ -366,7 +366,7 @@ export default function FreeAgencyPage() {
               ${Math.abs(capSpace).toFixed(1)}M over the cap · Luxury tax: ${luxuryTax}M ({LUXURY_TAX_RATE}x penalty) · Can only sign at league minimum (${LEAGUE_MINIMUM_SALARY}M/yr)
             </div>
             <div className="text-xs text-red-600/60 mt-1">
-              Use the &quot;Vet Min&quot; button to sign available players to a 1-year, ${LEAGUE_MINIMUM_SALARY}M minimum deal.
+              You can still negotiate — offer league minimum (${LEAGUE_MINIMUM_SALARY}M/yr). As FA progresses, more players will accept lower offers.
             </div>
           </div>
         )}
@@ -730,20 +730,6 @@ export default function FreeAgencyPage() {
                               >
                                 Negotiate
                               </Button>
-                              {phase === 'freeAgency' && willAcceptMinimum(p, faDay) && (
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  onClick={() => {
-                                    const success = signFreeAgent(p.id, LEAGUE_MINIMUM_SALARY, 1);
-                                    if (!success) {
-                                      alert('Failed to sign player.');
-                                    }
-                                  }}
-                                >
-                                  Vet Min
-                                </Button>
-                              )}
                             </div>
                           )}
                         </td>
