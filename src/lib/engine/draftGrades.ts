@@ -31,21 +31,23 @@ export function pickGrade(overallPick: number, totalPicks: number, playerOvr: nu
   // How many standard deviations above/below expected?
   const ovrDelta = (playerOvr - expected) / sigma;
 
-  // Potential bonus: high-potential picks get a small grade boost (max ~1 sigma)
+  // Potential bonus: only significant for truly high-potential picks
   const pot = playerPotential ?? 50;
-  const potBonus = Math.max(0, (pot - 55) / 30); // 0 at pot=55, ~1.0 at pot=85
+  const potBonus = Math.max(0, (pot - 65) / 40); // 0 at pot=65, ~0.5 at pot=85
 
   const score = ovrDelta + potBonus;
 
+  // Distribution target: ~10% A, ~25% B+/B, ~25% B-/C+, ~25% C/C-, ~15% D/F
   if (score >= 2.0) return 'A+';
-  if (score >= 1.3) return 'A';
-  if (score >= 0.7) return 'B+';
-  if (score >= 0.0) return 'B';
-  if (score >= -0.7) return 'B-';
-  if (score >= -1.3) return 'C+';
-  if (score >= -2.0) return 'C';
-  if (score >= -2.7) return 'C-';
-  return 'D';
+  if (score >= 1.4) return 'A';
+  if (score >= 0.8) return 'B+';
+  if (score >= 0.3) return 'B';
+  if (score >= -0.2) return 'B-';
+  if (score >= -0.7) return 'C+';
+  if (score >= -1.2) return 'C';
+  if (score >= -1.8) return 'C-';
+  if (score >= -2.5) return 'D';
+  return 'F';
 }
 
 /** Backward-compatible overload without potential. */
@@ -58,7 +60,7 @@ export function expectedOvrForPick(overallPick: number, totalPicks: number): num
 export function gradeValue(grade: string): number {
   const map: Record<string, number> = {
     'A+': 12, 'A': 11, 'B+': 10, 'B': 9, 'B-': 8,
-    'C+': 7, 'C': 6, 'C-': 5, 'D': 3,
+    'C+': 7, 'C': 6, 'C-': 5, 'D': 3, 'F': 1,
   };
   return map[grade] ?? 5;
 }

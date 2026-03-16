@@ -778,29 +778,38 @@ export default function DraftPage() {
   })();
   const bestFit = bestFitResult.player;
 
-  // "Your Scouts Say" — uses only scouted data (noisy OVR + noisy potential estimate)
-  // At low scouting levels this will diverge from bestFit; at high levels they converge
-  const scoutsPick = !currentPickTeamId
-    ? null
-    : [...allProspects].sort((a, b) => {
-        const needs = getTeamNeeds(currentPickTeamId);
-        const aNeed = needs.find((n) => n.position === a.position)?.needScore ?? 0;
-        const bNeed = needs.find((n) => n.position === b.position)?.needScore ?? 0;
-        const aScout = draftScoutingData[a.id];
-        const bScout = draftScoutingData[b.id];
-        const aOvr = aScout ? aScout.scoutedOvr : a.ratings.overall;
-        const bOvr = bScout ? bScout.scoutedOvr : b.ratings.overall;
-        // Noisy potential: estimate from scouted OVR + small random offset based on error
-        const aError = aScout?.error ?? 12;
-        const bError = bScout?.error ?? 12;
-        const aPot = aOvr + Math.min(15, aError * 0.8);
-        const bPot = bOvr + Math.min(15, bError * 0.8);
-        let aScore = aOvr + aPot * 0.4 + aNeed * 0.25;
-        let bScore = bOvr + bPot * 0.4 + bNeed * 0.25;
-        if (a.position === 'K' || a.position === 'P') aScore *= 0.5;
-        if (b.position === 'K' || b.position === 'P') bScore *= 0.5;
-        return bScore - aScore;
-      })[0];
+  // "Your Scouts Say" — recommend a player they're excited about.
+  // Strongly favors: scouted players, high OVR, positions of need, good fit score.
+  // Should differ from BPA/Best Fit by using scouting intel (hidden OVR info).
+  const scoutsPick = (() => {
+    if (!currentPickTeamId) return null;
+    const needs = getTeamNeeds(currentPickTeamId);
+    const needPositions = new Set(
+      needs.filter(n => n.needScore > 0 && n.position !== 'K' && n.position !== 'P').map(n => n.position),
+    );
+
+    // Score each prospect — scouts weight scouted OVR heavily + need fit
+    const scored = allProspects
+      .filter(p => p.position !== 'K' && p.position !== 'P')
+      .slice(0, 30) // Only consider top 30 prospects (realistic scouting focus)
+      .map(p => {
+        const scout = draftScoutingData[p.id];
+        const ovr = scout ? scout.scoutedOvr : p.ratings.overall;
+        const needBonus = needPositions.has(p.position) ? 8 : 0;
+        const scoutedBonus = scout?.deepScouted ? 5 : 0; // Prefer players we've actually scouted
+        // Scouts value raw talent (OVR) + positional need + scouting intel
+        const score = ovr + needBonus + scoutedBonus;
+        return { player: p, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    // Pick the top-scored player that differs from BPA and Best Fit
+    const pick = scored.find(s =>
+      s.player.id !== allProspects[0]?.id &&
+      s.player.id !== bestFit?.id,
+    ) ?? scored[0];
+    return pick?.player ?? null;
+  })();
 
   const orderedTeamIds = [
     ...draftResults.sort((a, b) => a.overallPick - b.overallPick).map((result) => result.teamId),
