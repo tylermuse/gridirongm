@@ -31,6 +31,7 @@ function TeamPicker() {
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
   const [savedGame, setSavedGame] = useState<{ teamAbbr: string; season: number; wins: number; losses: number; phase: string } | null>(null);
   const [resumeLoading, setResumeLoading] = useState(false);
+  const [startMode, setStartMode] = useState<'offseason' | 'regular'>('regular');
   const autoLoadedRef = useRef(false);
 
   // Auto-load roster from ?roster= query param (e.g. from /rosters page)
@@ -99,7 +100,7 @@ function TeamPicker() {
     setLoading(true);
     setError(null);
     try {
-      await newLeague(abbr, activeUrl ?? undefined);
+      await newLeague(abbr, activeUrl ?? undefined, activeUrl ? startMode : undefined);
       // Store is now initialized — Dashboard renders automatically on this page
     } catch {
       setError('Failed to start league. Please try again.');
@@ -211,14 +212,46 @@ function TeamPicker() {
               </Button>
             </div>
             {importedTeams && (
-              <div className="mt-3 flex items-center justify-between">
-                <span className="text-xs text-green-600 font-medium">
-                  ✓ Loaded {importedTeams.teams.length} teams, {importedTeams.players.length} players
-                </span>
-                <button onClick={handleClearImport} className="text-xs text-[var(--text-sec)] hover:text-red-500">
-                  Clear & Use Default
-                </button>
-              </div>
+              <>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-xs text-green-600 font-medium">
+                    ✓ Loaded {importedTeams.teams.length} teams, {importedTeams.players.length} players
+                  </span>
+                  <button onClick={handleClearImport} className="text-xs text-[var(--text-sec)] hover:text-red-500">
+                    Clear & Use Default
+                  </button>
+                </div>
+                <div className="mt-3">
+                  <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-1.5">Start Mode</div>
+                  <div className="flex rounded-lg border border-[var(--border)] overflow-hidden">
+                    <button
+                      onClick={() => setStartMode('regular')}
+                      className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                        startMode === 'regular'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-[var(--surface)] text-[var(--text-sec)] hover:bg-[var(--surface-2)]'
+                      }`}
+                    >
+                      Jump to Regular Season
+                    </button>
+                    <button
+                      onClick={() => setStartMode('offseason')}
+                      className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                        startMode === 'offseason'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-[var(--surface)] text-[var(--text-sec)] hover:bg-[var(--surface-2)]'
+                      }`}
+                    >
+                      Start from Offseason
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-[var(--text-sec)] mt-1">
+                    {startMode === 'regular'
+                      ? 'Play with the roster as-is — no offseason moves before Week 1.'
+                      : 'Run free agency, draft, and re-signing before the season starts.'}
+                  </p>
+                </div>
+              </>
             )}
           </div>
         )}

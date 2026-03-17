@@ -44,7 +44,7 @@ export function computeLuxuryTax(payroll: number, cap: number): number {
 
 interface GameStore extends LeagueState {
   initialized: boolean;
-  newLeague: (teamId: string, leagueFileUrl?: string) => Promise<void>;
+  newLeague: (teamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular') => Promise<void>;
   resetLeague: () => void;
   simWeek: () => void;
   simToWeek: (targetWeek: number) => void;
@@ -1796,7 +1796,7 @@ export const useGameStore = create<GameStore>()(
       initialized: false,
       ...EMPTY_LEAGUE_STATE,
 
-      newLeague: async (userTeamId: string, leagueFileUrl?: string) => {
+      newLeague: async (userTeamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular') => {
         try {
           resetUsedNames();
           if (!leagueFileUrl) throw new Error('No league file URL provided');
@@ -1864,20 +1864,29 @@ export const useGameStore = create<GameStore>()(
             fbgmFAs.push(p);
           }
 
-          // Start in re-signing phase (offseason) since real NFL is in the offseason
+          const isRegularStart = startMode === 'regular';
           const allImportedPlayers = [...imported.players, ...fbgmFAs];
-          const expiringPlayers = allImportedPlayers.filter(
-            p => p.teamId === userTeam.id && p.contract.yearsLeft === 1 && !p.retired,
-          );
-          const resigningEntries = expiringPlayers.map(p => computeResigningEntry(p, userTeam));
+
+          // For regular season start, reset all records to 0-0
+          const startTeams = isRegularStart
+            ? imported.teams.map(t => ({ ...t, record: emptyRecord() }))
+            : imported.teams;
+
+          // Only compute re-signing entries for offseason start
+          const resigningEntries = isRegularStart ? [] : (() => {
+            const expiringPlayers = allImportedPlayers.filter(
+              p => p.teamId === userTeam.id && p.contract.yearsLeft === 1 && !p.retired,
+            );
+            return expiringPlayers.map(p => computeResigningEntry(p, userTeam));
+          })();
 
           set({
             initialized: true,
             season: imported.season,
             week: 1,
-            phase: 'resigning',
+            phase: isRegularStart ? 'regular' : 'resigning',
             userTeamId: userTeam.id,
-            teams: imported.teams,
+            teams: startTeams,
             players: allImportedPlayers,
             schedule,
             draftOrder: [],
