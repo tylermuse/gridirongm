@@ -1255,6 +1255,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
           {/* STATS TAB */}
           {activeTab === 'stats' && (() => {
+            if (!isFinished) {
+              return (
+                <div className="text-center py-12 text-[var(--text-sec)]">
+                  <p className="font-semibold">Stats available after the game ends.</p>
+                  <p className="text-sm mt-1">Watch the game or click &quot;End Game&quot; to see full stats.</p>
+                </div>
+              );
+            }
             const stats = liveResult.playerStats;
 
             // Build stat leaders for each category
