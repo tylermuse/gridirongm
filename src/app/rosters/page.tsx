@@ -15,11 +15,11 @@ interface RosterEntry {
 const ROSTERS: RosterEntry[] = [
   {
     id: 'nfl-2026-updated',
-    title: 'NFL 2026 Roster — Updated March 15, 2026',
+    title: 'NFL 2026 Roster — Updated March 17, 2026',
     description:
-      'Complete NFL roster with all 2026 free agency signings, trades, and cuts through mid-March. Includes Trey Hendrickson to Ravens, Mike Evans to 49ers, Kenneth Walker III to Chiefs, DJ Moore to Bills, Kyler Murray to Vikings, and 30+ more moves.',
+      'Complete NFL roster with 59 free agency moves through March 17, 2026. Includes Trey Hendrickson to Ravens, Mike Evans to 49ers, Kenneth Walker III to Chiefs, DJ Moore to Bills, Kyler Murray to Vikings, Jaylen Waddle to Broncos, Jaelan Phillips to Panthers, Boye Mafe to Bengals, Elgton Jenkins to Browns, Justin Fields to Chiefs, and more.',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
-    lastUpdated: 'March 15, 2026',
+    lastUpdated: 'March 17, 2026',
     compatibility: ['Football GM (FBGM)', 'Gridiron GM'],
   },
 ];
