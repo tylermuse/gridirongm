@@ -571,6 +571,8 @@ export interface LeagueState {
   scoutingLevel: 0 | 1 | 2;
   /** Scouting data keyed by prospect player ID */
   draftScoutingData: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }>;
+  /** NFL 2026 hardcoded first-round mock draft (empty if not NFL roster or past first draft) */
+  nflMockDraft?: { pickNum: number; teamAbbr: string; playerId: string; firstName: string; lastName: string; position: string; college: string; blurb: string }[];
   /** Player ID of the Championship MVP (set when championship is played, consumed when season summary is created) */
   finalsMvpPlayerId: string | null;
   /** All-Pro Game result — played between conference championships and the big game */

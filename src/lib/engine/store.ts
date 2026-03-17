@@ -12,6 +12,7 @@ import type {
 import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
+import { NFL_2026_FIRST_ROUND, isNfl2026Roster, type MockDraftPick } from '@/lib/data/nfl2026Draft';
 import { generateRoster, generateDraftClass, generatePlayer, generateCombineStats } from './playerGen';
 import { resetUsedNames } from '../data/names';
 import { generateSchedule } from './schedule';
@@ -174,17 +175,34 @@ function sortRosterByDepthChart(
 // ---------------------------------------------------------------------------
 
 function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | undefined {
+  const totalPicks = state.teams.length * 7;
+  const overallPick = totalPicks - state.draftOrder.length + 1;
+  const round = Math.ceil(overallPick / state.teams.length);
+
+  // NFL 2026 hardcoded first-round picks: ~85% follow the mock, 15% deviate (BPA)
+  if (round === 1 && state.nflMockDraft && state.nflMockDraft.length > 0) {
+    const pickingTeam = state.teams.find(t => t.id === pickingTeamId);
+    if (pickingTeam && Math.random() < 0.85) {
+      // Find the next mock draft pick assigned to this team that's still available
+      const availableIds = new Set(state.freeAgents);
+      for (const mock of state.nflMockDraft) {
+        if (mock.teamAbbr === pickingTeam.abbreviation && availableIds.has(mock.playerId)) {
+          return mock.playerId;
+        }
+      }
+      // If the hardcoded player was taken, find the next available mock pick by pick order
+      for (const mock of state.nflMockDraft) {
+        if (availableIds.has(mock.playerId)) {
+          return mock.playerId;
+        }
+      }
+    }
+    // 15% chance: fall through to normal BPA logic
+  }
+
   const roster = state.players.filter((player) => player.teamId === pickingTeamId);
   const countByPosition = POSITIONS.reduce<Record<Position, number>>((acc, position) => {
     acc[position] = roster.filter((player) => player.position === position).length;
-    return acc;
-  }, {} as Record<Position, number>);
-
-  const topOvrByPosition = POSITIONS.reduce<Record<Position, number>>((acc, position) => {
-    const top = roster
-      .filter((player) => player.position === position)
-      .sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
-    acc[position] = top?.ratings.overall ?? 0;
     return acc;
   }, {} as Record<Position, number>);
 
@@ -199,14 +217,9 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
       const limits = ROSTER_LIMITS[prospect.position];
       const count = countByPosition[prospect.position];
       const minNeed = Math.max(0, limits.min - count);
-      // BPA-dominant: OVR is by far the biggest factor.
-      // A 10 OVR gap = 150pts — need bonuses max out at ~25pts and can never bridge that.
-      // This means a 73 OVR S beats a 66 OVR WR even with strong positional need.
       const needScore = minNeed * 12;
       let score = prospect.ratings.overall * 15 + prospect.potential * 0.5 + needScore;
-      // Very small random to break ties, not to reshape the board
       score += (Math.random() - 0.5) * 8;
-      // K/P are the least important positions — heavily de-value them in draft
       if (prospect.position === 'K' || prospect.position === 'P') {
         score = minNeed > 0 ? score * 0.4 : score * 0.15;
       }
@@ -2829,12 +2842,65 @@ export const useGameStore = create<GameStore>()(
           (prospect) => prospect.draftYear === targetDraftYear,
         );
 
-        const rawDraftClass = importedDraftClass.length > 0
-          ? importedDraftClass
-          : generateDraftClass(224).map((player) => ({
-              ...player,
-              draftYear: targetDraftYear,
-            }));
+        // Detect NFL 2026 roster for hardcoded first-round picks
+        const isNfl = state.seasonHistory.length === 0 && isNfl2026Roster(updatedTeams, updatedPlayers);
+        let nflMockDraft: { pickNum: number; teamAbbr: string; playerId: string; firstName: string; lastName: string; position: Position; college: string; blurb: string }[] = [];
+
+        let rawDraftClass: Player[];
+        if (importedDraftClass.length > 0) {
+          rawDraftClass = importedDraftClass;
+        } else {
+          // Generate the normal draft class (rounds 2-7 will come from here)
+          const generated = generateDraftClass(224).map((player) => ({
+            ...player,
+            draftYear: targetDraftYear,
+          }));
+
+          if (isNfl) {
+            // Create hardcoded first-round prospects and prepend them
+            const nflProspects: Player[] = [];
+            for (const pick of NFL_2026_FIRST_ROUND) {
+              const variance = Math.floor(Math.random() * 7) - 3; // ±3
+              const ovr = Math.max(55, Math.min(85, pick.ovrBase + variance));
+              const p = generatePlayer(pick.position, ovr, {
+                age: 21 + (Math.random() < 0.3 ? 1 : 0),
+                experience: 0,
+              });
+              // Override name and details
+              p.firstName = pick.firstName;
+              p.lastName = pick.lastName;
+              p.position = pick.position;
+              p.college = pick.college;
+              p.potential = pick.potential;
+              p.ratings.overall = ovr;
+              p.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
+              p.draftYear = targetDraftYear;
+              p.projectedRank = pick.pick;
+              p.scoutingLabel = pick.blurb;
+              p.scoutingSeed = Math.floor(Math.random() * 10000);
+              p.combineStats = generateCombineStats(p.position, p.ratings, pick.pick);
+              nflProspects.push(p);
+
+              nflMockDraft.push({
+                pickNum: pick.pick,
+                teamAbbr: pick.teamAbbr,
+                playerId: p.id,
+                firstName: pick.firstName,
+                lastName: pick.lastName,
+                position: pick.position,
+                college: pick.college,
+                blurb: pick.blurb,
+              });
+            }
+
+            // Remove lowest-ranked generated prospects to keep total at ~224
+            const genSorted = generated.sort((a, b) => b.ratings.overall - a.ratings.overall);
+            const remaining = genSorted.slice(0, 224 - nflProspects.length);
+            rawDraftClass = [...nflProspects, ...remaining];
+          } else {
+            rawDraftClass = generated;
+          }
+        }
 
         // Ensure all prospects have projectedRank (imported prospects won't have it)
         const needsRanking = rawDraftClass.some(p => p.projectedRank == null);
@@ -2845,7 +2911,7 @@ export const useGameStore = create<GameStore>()(
             return bOvr - aOvr;
           });
           for (let i = 0; i < sorted.length; i++) {
-            sorted[i].projectedRank = i + 1;
+            if (sorted[i].projectedRank == null) sorted[i].projectedRank = i + 1;
           }
         }
         const draftClass = rawDraftClass;
@@ -2897,6 +2963,7 @@ export const useGameStore = create<GameStore>()(
           resigningPlayers: [],
           holdoutDemands: [],
           draftScoutingData: scoutingData,
+          nflMockDraft: nflMockDraft.length > 0 ? nflMockDraft : undefined,
         });
 
         // Generate offseason trade rumors entering the draft

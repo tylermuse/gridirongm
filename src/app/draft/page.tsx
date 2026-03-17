@@ -641,6 +641,7 @@ export default function DraftPage() {
     simToUserDraftPick,
     simToEndDraft,
     season,
+    nflMockDraft,
   } = useGameStore();
 
   const { maxScoutingLevel: maxLevel } = useSubscription();
@@ -658,6 +659,7 @@ export default function DraftPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedProspectId, setExpandedProspectId] = useState<string | null>(null);
   const [scoutedOnly, setScoutedOnly] = useState(false);
+  const [showMockDraft, setShowMockDraft] = useState(() => (nflMockDraft?.length ?? 0) > 0);
 
   if (phase !== 'draft') {
     return (
@@ -973,6 +975,14 @@ export default function DraftPage() {
               >
                 {scoutedOnly ? 'Scouted only' : 'Show all'}
               </button>
+              {nflMockDraft && nflMockDraft.length > 0 && (
+                <button
+                  onClick={() => setShowMockDraft(true)}
+                  className="px-3 py-1 text-xs rounded-lg font-medium border border-[var(--border)] bg-[var(--surface)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
+                >
+                  Expert Mock Draft
+                </button>
+              )}
             </div>
             <div className="overflow-x-auto">
             <table className="w-full text-sm sticky-col">
@@ -1331,6 +1341,60 @@ export default function DraftPage() {
         </div>
       </div>
 
+      {/* Mock Draft Overlay */}
+      {showMockDraft && nflMockDraft && nflMockDraft.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowMockDraft(false)}>
+          <div
+            className="bg-[var(--surface)] rounded-xl shadow-2xl border border-[var(--border)] w-full max-w-lg mx-4 max-h-[80vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+              <div>
+                <h2 className="text-lg font-black">Expert Mock Draft</h2>
+                <p className="text-xs text-[var(--text-sec)]">First Round Projections</p>
+              </div>
+              <button onClick={() => setShowMockDraft(false)} className="text-[var(--text-sec)] hover:text-[var(--text)] text-xl font-bold">&times;</button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-5 py-3">
+              {nflMockDraft.map(mock => {
+                const mockTeam = teams.find(t => t.abbreviation === mock.teamAbbr);
+                const isUserPick = mockTeam?.id === userTeamId;
+                const alreadyPicked = draftResults.some(r => r.playerId === mock.playerId);
+                return (
+                  <div
+                    key={mock.pickNum}
+                    className={`flex items-start gap-3 py-2.5 border-b border-[var(--border)] last:border-0 ${isUserPick ? 'bg-blue-50 -mx-2 px-2 rounded-lg' : ''} ${alreadyPicked ? 'opacity-40' : ''}`}
+                  >
+                    <div className="text-xs font-bold text-[var(--text-sec)] w-6 text-right shrink-0 pt-0.5">{mock.pickNum}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-[var(--text-sec)]">{mock.teamAbbr}</span>
+                        {isUserPick && <span className="text-[9px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">YOUR PICK</span>}
+                      </div>
+                      {isUserPick ? (
+                        <div className="text-sm font-semibold text-blue-600 mt-0.5">Who will you select?</div>
+                      ) : (
+                        <>
+                          <div className="text-sm font-semibold mt-0.5">{mock.firstName} {mock.lastName} <span className="text-xs text-[var(--text-sec)] font-normal">{mock.position} — {mock.college}</span></div>
+                          <div className="text-[11px] text-[var(--text-sec)] italic mt-0.5">{mock.blurb}</div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-5 py-3 border-t border-[var(--border)]">
+              <button
+                onClick={() => setShowMockDraft(false)}
+                className="w-full py-2 text-sm font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </GameShell>
   );
 }
