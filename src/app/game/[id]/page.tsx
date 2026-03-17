@@ -606,52 +606,62 @@ function WinProbabilityChart({
   const chartW = W - PAD_X * 2;
   const chartH = H - PAD_Y * 2;
 
-  // Calculate win probability at each event point
-  // Simple model: based on score differential, quarter, and time remaining
+  // Home win probability at each event (0 = away certain, 1 = home certain)
+  // Y-axis: top = home, bottom = away
   const probPoints: number[] = events.map(ev => {
-    const diff = ev.homeScore - ev.awayScore; // positive = home leading
+    const diff = ev.homeScore - ev.awayScore;
     const quarterWeight = ev.quarter >= 4 ? 3 : ev.quarter >= 3 ? 2 : 1;
-    // Sigmoid-like conversion: diff → probability
     const k = 0.12 * quarterWeight;
     return 1 / (1 + Math.exp(-k * diff));
   });
 
-  // X-axis scaled to full game length so line "grows" from left to right
   const fullLen = Math.max(totalEvents, events.length, 1);
   const xStep = chartW / Math.max(1, fullLen - 1);
+  const midY = PAD_Y + chartH / 2;
   const points = probPoints.map((p, i) => ({
     x: PAD_X + i * xStep,
-    y: PAD_Y + (1 - p) * chartH,
+    y: PAD_Y + (1 - p) * chartH, // top = home winning
   }));
 
-  const pathD = points.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(' ');
-  const midY = PAD_Y + chartH / 2;
-
-  // Fill area above/below 50% line — only up to current play position
   const lastPt = points[points.length - 1];
-  const homeAreaD = `${pathD} L ${lastPt.x.toFixed(1)} ${midY} L ${PAD_X} ${midY} Z`;
-
   const lastProb = probPoints[probPoints.length - 1];
   const homePct = Math.round(lastProb * 100);
   const awayPct = 100 - homePct;
+  const leadingColor = lastProb >= 0.5 ? homeColor : awayColor;
+
+  // Build separate home-fill (above 50%) and away-fill (below 50%) paths
+  // by splitting the line at the midY crossings
+  const pathD = points.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(' ');
+  const homeAreaD = `${pathD} L ${lastPt.x.toFixed(1)} ${midY} L ${PAD_X} ${midY} Z`;
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-4 py-3">
       <div className="flex items-center justify-between mb-1">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-sec)]">Win Probability</span>
         <div className="flex items-center gap-3 text-xs font-bold">
-          <span style={{ color: awayColor }}>{awayAbbr} {awayPct}%</span>
           <span style={{ color: homeColor }}>{homeAbbr} {homePct}%</span>
+          <span style={{ color: awayColor }}>{awayAbbr} {awayPct}%</span>
         </div>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 100 }} preserveAspectRatio="none">
         {/* 50% line */}
         <line x1={PAD_X} y1={midY} x2={W - PAD_X} y2={midY} stroke="var(--border)" strokeWidth="1" strokeDasharray="4 3" />
-        {/* Home fill — only up to current play */}
-        <path d={homeAreaD} fill={homeColor} opacity={0.12} />
-        {/* Probability line — only up to current play */}
-        <path d={pathD} fill="none" stroke={homeColor} strokeWidth="2" strokeLinejoin="round" />
-        {/* Quarter markers at fixed positions */}
+        {/* Fill between line and 50% — colored by leading team */}
+        <defs>
+          <clipPath id="clip-above-mid">
+            <rect x={PAD_X} y={0} width={chartW} height={midY} />
+          </clipPath>
+          <clipPath id="clip-below-mid">
+            <rect x={PAD_X} y={midY} width={chartW} height={chartH} />
+          </clipPath>
+        </defs>
+        {/* Home-colored fill above the 50% line */}
+        <path d={homeAreaD} fill={homeColor} opacity={0.15} clipPath="url(#clip-above-mid)" />
+        {/* Away-colored fill below the 50% line */}
+        <path d={homeAreaD} fill={awayColor} opacity={0.15} clipPath="url(#clip-below-mid)" />
+        {/* Probability line — colored by current leader */}
+        <path d={pathD} fill="none" stroke={leadingColor} strokeWidth="2" strokeLinejoin="round" />
+        {/* Quarter markers */}
         {[0.25, 0.5, 0.75].map((frac, i) => {
           const x = PAD_X + frac * chartW;
           return (
@@ -664,11 +674,14 @@ function WinProbabilityChart({
           );
         })}
         {/* Current position dot */}
-        <circle cx={lastPt.x} cy={lastPt.y} r="3" fill={homeColor} />
+        <circle cx={lastPt.x} cy={lastPt.y} r="3" fill={leadingColor} />
       </svg>
-      <div className="flex justify-between text-[10px] text-[var(--text-sec)] mt-0.5">
-        <span>{awayAbbr}</span>
-        <span>{homeAbbr}</span>
+      {/* Y-axis labels: home at top, away at bottom */}
+      <div className="flex justify-between text-[10px] mt-0.5">
+        <div className="flex flex-col">
+          <span style={{ color: homeColor }} className="font-bold">{homeAbbr}</span>
+          <span style={{ color: awayColor }} className="font-bold">{awayAbbr}</span>
+        </div>
       </div>
     </div>
   );
