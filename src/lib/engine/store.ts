@@ -2846,60 +2846,60 @@ export const useGameStore = create<GameStore>()(
         const isNfl = state.seasonHistory.length === 0 && isNfl2026Roster(updatedTeams, updatedPlayers);
         let nflMockDraft: { pickNum: number; teamAbbr: string; playerId: string; firstName: string; lastName: string; position: Position; college: string; blurb: string }[] = [];
 
-        let rawDraftClass: Player[];
+        // Base draft class: imported or generated
+        let baseDraftClass: Player[];
         if (importedDraftClass.length > 0) {
-          rawDraftClass = importedDraftClass;
+          baseDraftClass = importedDraftClass;
         } else {
-          // Generate the normal draft class (rounds 2-7 will come from here)
-          const generated = generateDraftClass(224).map((player) => ({
+          baseDraftClass = generateDraftClass(224).map((player) => ({
             ...player,
             draftYear: targetDraftYear,
           }));
+        }
 
-          if (isNfl) {
-            // Create hardcoded first-round prospects and prepend them
-            const nflProspects: Player[] = [];
-            for (const pick of NFL_2026_FIRST_ROUND) {
-              const variance = Math.floor(Math.random() * 7) - 3; // ±3
-              const ovr = Math.max(55, Math.min(85, pick.ovrBase + variance));
-              const p = generatePlayer(pick.position, ovr, {
-                age: 21 + (Math.random() < 0.3 ? 1 : 0),
-                experience: 0,
-              });
-              // Override name and details
-              p.firstName = pick.firstName;
-              p.lastName = pick.lastName;
-              p.position = pick.position;
-              p.college = pick.college;
-              p.potential = pick.potential;
-              p.ratings.overall = ovr;
-              p.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
-              p.draftYear = targetDraftYear;
-              p.projectedRank = pick.pick;
-              p.scoutingLabel = pick.blurb;
-              p.scoutingSeed = Math.floor(Math.random() * 10000);
-              p.combineStats = generateCombineStats(p.position, p.ratings, pick.pick);
-              nflProspects.push(p);
+        let rawDraftClass: Player[];
+        if (isNfl) {
+          // Create hardcoded first-round prospects and prepend them
+          const nflProspects: Player[] = [];
+          for (const pick of NFL_2026_FIRST_ROUND) {
+            const variance = Math.floor(Math.random() * 7) - 3; // ±3
+            const ovr = Math.max(55, Math.min(85, pick.ovrBase + variance));
+            const p = generatePlayer(pick.position, ovr, {
+              age: 21 + (Math.random() < 0.3 ? 1 : 0),
+              experience: 0,
+            });
+            p.firstName = pick.firstName;
+            p.lastName = pick.lastName;
+            p.position = pick.position;
+            p.college = pick.college;
+            p.potential = pick.potential;
+            p.ratings.overall = ovr;
+            p.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
+            p.draftYear = targetDraftYear;
+            p.projectedRank = pick.pick;
+            p.scoutingLabel = pick.blurb;
+            p.scoutingSeed = Math.floor(Math.random() * 10000);
+            p.combineStats = generateCombineStats(p.position, p.ratings, pick.pick);
+            nflProspects.push(p);
 
-              nflMockDraft.push({
-                pickNum: pick.pick,
-                teamAbbr: pick.teamAbbr,
-                playerId: p.id,
-                firstName: pick.firstName,
-                lastName: pick.lastName,
-                position: pick.position,
-                college: pick.college,
-                blurb: pick.blurb,
-              });
-            }
-
-            // Remove lowest-ranked generated prospects to keep total at ~224
-            const genSorted = generated.sort((a, b) => b.ratings.overall - a.ratings.overall);
-            const remaining = genSorted.slice(0, 224 - nflProspects.length);
-            rawDraftClass = [...nflProspects, ...remaining];
-          } else {
-            rawDraftClass = generated;
+            nflMockDraft.push({
+              pickNum: pick.pick,
+              teamAbbr: pick.teamAbbr,
+              playerId: p.id,
+              firstName: pick.firstName,
+              lastName: pick.lastName,
+              position: pick.position,
+              college: pick.college,
+              blurb: pick.blurb,
+            });
           }
+
+          // Replace top prospects in the base class with our hardcoded ones
+          const baseSorted = baseDraftClass.sort((a, b) => b.ratings.overall - a.ratings.overall);
+          const remaining = baseSorted.slice(nflProspects.length); // drop the top N
+          rawDraftClass = [...nflProspects, ...remaining];
+        } else {
+          rawDraftClass = baseDraftClass;
         }
 
         // Ensure all prospects have projectedRank (imported prospects won't have it)
