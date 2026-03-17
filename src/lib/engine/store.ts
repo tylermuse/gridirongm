@@ -2938,14 +2938,33 @@ export const useGameStore = create<GameStore>()(
           return (teamWinPctMap.get(a.originalTeamId) ?? 16) - (teamWinPctMap.get(b.originalTeamId) ?? 16);
         });
         // Draft order = the OWNER of each pick drafts
-        const draftOrder = allDraftYearPicks.map(pk => pk.ownerTeamId);
+        let draftOrder = allDraftYearPicks.map(pk => pk.ownerTeamId);
+
+        // NFL 2026: override first-round order to match the real mock draft
+        if (isNfl && nflMockDraft.length > 0) {
+          const teamsPerRound = updatedTeams.length;
+          const round1Order: string[] = [];
+          for (const mock of nflMockDraft) {
+            const team = updatedTeams.find(t => t.abbreviation === mock.teamAbbr);
+            if (team) round1Order.push(team.id);
+          }
+          // Replace the first round with the mock draft order, keep rounds 2-7 as-is
+          if (round1Order.length > 0) {
+            const laterRounds = draftOrder.slice(teamsPerRound);
+            draftOrder = [...round1Order, ...laterRounds];
+          }
+        }
 
         // PRD-07: Compute scouting data for draft prospects
         const scoutingData = computeScoutingData(draftClass, state.scoutingLevel);
 
-        const finalPlayers = importedDraftClass.length > 0
-          ? updatedPlayers
-          : [...updatedPlayers, ...draftClass];
+        // Add any new draft prospects not already in the players array
+        // (NFL mock draft creates new prospects that replace imported ones)
+        const existingIds = new Set(updatedPlayers.map(p => p.id));
+        const newProspects = draftClass.filter(p => !existingIds.has(p.id));
+        const finalPlayers = newProspects.length > 0
+          ? [...updatedPlayers, ...newProspects]
+          : (importedDraftClass.length > 0 ? updatedPlayers : [...updatedPlayers, ...draftClass]);
 
         // Recalculate all team payrolls from scratch to prevent drift
         const recalcTeams = updatedTeams.map(t => ({
