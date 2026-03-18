@@ -1180,6 +1180,7 @@ function TradesPage() {
                             {proposingTeam && <TeamLogo abbreviation={proposingTeam.abbreviation} primaryColor={proposingTeam.primaryColor} secondaryColor={proposingTeam.secondaryColor} logoUrl={proposingTeam.logoUrl} size="sm" />}
                           </button>
                           <button onClick={() => proposingTeam && setViewTeamId(proposingTeam.id)} className="font-bold hover:text-blue-600 transition-colors">{proposingTeam?.city} {proposingTeam?.name}</button>
+                          {proposingTeam && <span className="text-xs text-[var(--text-sec)]">({proposingTeam.record.wins}-{proposingTeam.record.losses})</span>}
                           <span className="text-xs text-[var(--text-sec)]">Week {proposal.week}</span>
                         </div>
                       <div className="flex items-center gap-2">
@@ -1639,6 +1640,7 @@ function TradesPage() {
                               <div className="flex items-center gap-2 mb-1">
                                 <Badge size="sm">{proposingTeam?.abbreviation}</Badge>
                                 <span className="font-bold text-sm">{proposingTeam?.city} {proposingTeam?.name}</span>
+                                {proposingTeam && <span className="text-xs text-[var(--text-sec)]">({proposingTeam.record.wins}-{proposingTeam.record.losses})</span>}
                                 {proposal.valueAssessment && <ValueAssessmentBadge assessment={proposal.valueAssessment} />}
                               </div>
                               {proposingTeam && (() => {
