@@ -2603,7 +2603,7 @@ export const useGameStore = create<GameStore>()(
 
         set({
           players: state.players.map(p =>
-            p.id === playerId ? { ...p, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, offseasonSigned: true } } : p,
+            p.id === playerId ? { ...p, acquiredVia: 're-signed' as const, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, offseasonSigned: true } } : p,
           ),
           teams: state.teams.map(t =>
             t.id === state.userTeamId
@@ -3079,6 +3079,7 @@ export const useGameStore = create<GameStore>()(
                   teamId: currentPickTeamId,
                   draftYear: state.season,
                   draftPick: overallPick,
+                  acquiredVia: 'draft' as const,
                   contract: { salary: finalSalary, yearsLeft: 4, guaranteed: generateGuaranteed(finalSalary, 4), totalYears: 4, offseasonSigned: true },
                 }
               : p,
@@ -3601,7 +3602,7 @@ export const useGameStore = create<GameStore>()(
         const isOffseason = state.phase === 'freeAgency' || state.phase === 'resigning' || state.phase === 'draft';
         let currentPlayers = state.players.map(p =>
           p.id === playerId
-            ? { ...p, teamId: state.userTeamId, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, ...(isOffseason ? { offseasonSigned: true } : {}) } }
+            ? { ...p, teamId: state.userTeamId, acquiredVia: 'free-agency' as const, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, ...(isOffseason ? { offseasonSigned: true } : {}) } }
             : p,
         );
         let currentTeams = state.teams.map(t => {
@@ -4023,7 +4024,7 @@ export const useGameStore = create<GameStore>()(
                   restructureHistory: undefined,
                 }
               : p.contract;
-            return { ...p, teamId: counterpartTeamId, contract: cleanContract };
+            return { ...p, teamId: counterpartTeamId, acquiredVia: 'trade' as const, contract: cleanContract };
           }
           if (receivedPlayerIdsSet.has(p.id)) {
             const cleanContract = p.contract.contractYears
@@ -4038,7 +4039,7 @@ export const useGameStore = create<GameStore>()(
                   restructureHistory: undefined,
                 }
               : p.contract;
-            return { ...p, teamId: state.userTeamId, contract: cleanContract };
+            return { ...p, teamId: state.userTeamId, acquiredVia: 'trade' as const, contract: cleanContract };
           }
           return p;
         });
@@ -5000,6 +5001,60 @@ export const useGameStore = create<GameStore>()(
         }
 
         const newSchedule = generateSchedule(grownTeams, newSeason);
+
+        // Final AI signing sweep: any unsigned player OVR >= 50 gets picked up
+        // This prevents good players from sitting unsigned at season start
+        const remainingFAs = allPlayersForNewSeason
+          .filter(p => !p.teamId && !p.retired && !(p.draftYear != null && p.draftYear >= newSeason && p.experience === 0))
+          .sort((a, b) => b.ratings.overall - a.ratings.overall);
+
+        for (const fa of remainingFAs) {
+          if (fa.ratings.overall < 50) break; // Only sign 50+ OVR players
+          // Find a team with cap space and need at this position
+          const targetTeam = grownTeams
+            .filter(t => t.id !== state.userTeamId)
+            .map(t => {
+              const rosterCount = allPlayersForNewSeason.filter(p => p.teamId === t.id && !p.retired).length;
+              const posCount = allPlayersForNewSeason.filter(p => p.teamId === t.id && !p.retired && p.position === fa.position).length;
+              const capSpace = t.salaryCap - t.totalPayroll;
+              const minNeeded = ROSTER_LIMITS[fa.position].min - posCount;
+              return { team: t, rosterCount, posCount, capSpace, minNeeded };
+            })
+            .filter(({ capSpace }) => capSpace >= LEAGUE_MINIMUM_SALARY)
+            .sort((a, b) => {
+              // Prioritize: position need, then most cap space
+              if (a.minNeeded > 0 && b.minNeeded <= 0) return -1;
+              if (b.minNeeded > 0 && a.minNeeded <= 0) return 1;
+              return b.capSpace - a.capSpace;
+            })[0];
+
+          if (!targetTeam) continue;
+          const sal = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, Math.min(
+            estimateSalary(fa.ratings.overall, fa.position, fa.age, fa.potential) * 0.5,
+            targetTeam.capSpace
+          )) * 10) / 10;
+          const years = fa.age >= 32 ? 1 : fa.age >= 28 ? 2 : 3;
+
+          // Sign the player
+          const faIdx = allPlayersForNewSeason.findIndex(p => p.id === fa.id);
+          if (faIdx >= 0) {
+            allPlayersForNewSeason[faIdx] = {
+              ...allPlayersForNewSeason[faIdx],
+              teamId: targetTeam.team.id,
+              contract: { salary: sal, yearsLeft: years, guaranteed: generateGuaranteed(sal, years), totalYears: years, offseasonSigned: true },
+            };
+          }
+          const teamIdx = grownTeams.findIndex(t => t.id === targetTeam.team.id);
+          if (teamIdx >= 0) {
+            const t = grownTeams[teamIdx];
+            grownTeams[teamIdx] = {
+              ...t,
+              roster: [...t.roster, fa.id],
+              totalPayroll: t.totalPayroll + sal,
+              depthChart: insertIntoDepthChart(t.depthChart, fa.position, fa.id, allPlayersForNewSeason),
+            };
+          }
+        }
 
         // Preserve unsigned players as free agents for in-season signings
         // Exclude future draft prospects — they should only be available via the draft

@@ -531,10 +531,15 @@ export default function RosterPage() {
 
                         {/* Acquired */}
                         <td className="py-2 px-2 text-xs text-[var(--text-sec)]">
-                          {p.draftYear && p.draftPick
-                            ? <span>Draft <span className="font-medium text-[var(--text)]">#{p.draftPick}</span> ({p.draftYear})</span>
-                            : <span>Free Agent{p.draftYear ? ` (${p.draftYear})` : ''}</span>
-                          }
+                          {(() => {
+                            const via = p.acquiredVia;
+                            if (via === 'draft') return <span>Draft <span className="font-medium text-[var(--text)]">#{p.draftPick}</span> ({p.draftYear})</span>;
+                            if (via === 'free-agency') return <span>Free Agent ({(p.contract.totalYears ?? 0) > 0 ? season : '—'})</span>;
+                            if (via === 'trade') return <span>Trade ({season})</span>;
+                            if (via === 're-signed') return <span>Re-signed ({season})</span>;
+                            // Fallback for players without acquiredVia (pre-existing saves / initial roster)
+                            return <span>{p.draftYear && p.draftPick ? `Draft #${p.draftPick} (${p.draftYear})` : 'Original Roster'}</span>;
+                          })()}
                         </td>
 
                         {/* Mood */}
