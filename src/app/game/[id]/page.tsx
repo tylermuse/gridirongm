@@ -661,7 +661,20 @@ function WinProbabilityChart({
         </defs>
         <path d={areaD} fill={topColor} opacity={0.15} clipPath="url(#clip-above-mid)" />
         <path d={areaD} fill={botColor} opacity={0.15} clipPath="url(#clip-below-mid)" />
-        <path d={pathD} fill="none" stroke={leadingColor} strokeWidth="2" strokeLinejoin="round" />
+        {/* Line segments colored by who's favored at each point */}
+        {points.map((pt, i) => {
+          if (i === 0) return null;
+          const prev = points[i - 1];
+          const segColor = probPoints[i] >= 0.5 ? topColor : botColor;
+          return (
+            <line
+              key={i}
+              x1={prev.x} y1={prev.y}
+              x2={pt.x} y2={pt.y}
+              stroke={segColor} strokeWidth="2" strokeLinejoin="round"
+            />
+          );
+        })}
         {[0.25, 0.5, 0.75].map((frac, i) => {
           const x = PAD_X + frac * chartW;
           return (
