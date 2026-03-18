@@ -659,7 +659,7 @@ export default function DraftPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedProspectId, setExpandedProspectId] = useState<string | null>(null);
   const [scoutedOnly, setScoutedOnly] = useState(false);
-  const [showMockDraft, setShowMockDraft] = useState(() => (nflMockDraft?.length ?? 0) > 0);
+  const [showMockDraft, setShowMockDraft] = useState(false);
 
   if (phase !== 'draft') {
     return (
@@ -977,10 +977,14 @@ export default function DraftPage() {
               </button>
               {nflMockDraft && nflMockDraft.length > 0 && (
                 <button
-                  onClick={() => setShowMockDraft(true)}
-                  className="px-3 py-1 text-xs rounded-lg font-medium border border-[var(--border)] bg-[var(--surface)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
+                  onClick={() => setShowMockDraft(!showMockDraft)}
+                  className={`px-3 py-1 text-xs rounded-lg font-medium border transition-colors ${
+                    showMockDraft
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-sec)] hover:text-[var(--text)]'
+                  }`}
                 >
-                  Expert Mock Draft
+                  {showMockDraft ? 'Hide Mock' : 'Expert Mock'}
                 </button>
               )}
             </div>
@@ -1341,59 +1345,41 @@ export default function DraftPage() {
         </div>
       </div>
 
-      {/* Mock Draft Overlay */}
+      {/* Expert Mock Draft — inline collapsible */}
       {showMockDraft && nflMockDraft && nflMockDraft.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowMockDraft(false)}>
-          <div
-            className="bg-[var(--surface)] rounded-xl shadow-2xl border border-[var(--border)] w-full max-w-lg mx-4 max-h-[80vh] flex flex-col"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-              <div>
-                <h2 className="text-lg font-black">Expert Mock Draft</h2>
-                <p className="text-xs text-[var(--text-sec)]">First Round Projections</p>
-              </div>
-              <button onClick={() => setShowMockDraft(false)} className="text-[var(--text-sec)] hover:text-[var(--text)] text-xl font-bold">&times;</button>
+        <Card className="mb-4">
+          <div className="flex items-center justify-between px-1 mb-2">
+            <div>
+              <h3 className="text-sm font-black">Expert Mock Draft</h3>
+              <p className="text-[10px] text-[var(--text-sec)]">First Round Projections — {draftResults.filter(r => r.round === 1).length > 0 ? 'drafted picks dimmed' : 'pre-draft'}</p>
             </div>
-            <div className="overflow-y-auto flex-1 px-5 py-3">
-              {nflMockDraft.map(mock => {
-                const mockTeam = teams.find(t => t.abbreviation === mock.teamAbbr);
-                const isUserPick = mockTeam?.id === userTeamId;
-                const alreadyPicked = draftResults.some(r => r.playerId === mock.playerId);
-                return (
-                  <div
-                    key={mock.pickNum}
-                    className={`flex items-start gap-3 py-2.5 border-b border-[var(--border)] last:border-0 ${isUserPick ? 'bg-blue-50 -mx-2 px-2 rounded-lg' : ''} ${alreadyPicked ? 'opacity-40' : ''}`}
-                  >
-                    <div className="text-xs font-bold text-[var(--text-sec)] w-6 text-right shrink-0 pt-0.5">{mock.pickNum}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-[var(--text-sec)]">{mock.teamAbbr}</span>
-                        {isUserPick && <span className="text-[9px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">YOUR PICK</span>}
-                      </div>
-                      {isUserPick ? (
-                        <div className="text-sm font-semibold text-blue-600 mt-0.5">Who will you select?</div>
-                      ) : (
-                        <>
-                          <div className="text-sm font-semibold mt-0.5">{mock.firstName} {mock.lastName} <span className="text-xs text-[var(--text-sec)] font-normal">{mock.position} — {mock.college}</span></div>
-                          <div className="text-[11px] text-[var(--text-sec)] italic mt-0.5">{mock.blurb}</div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="px-5 py-3 border-t border-[var(--border)]">
-              <button
-                onClick={() => setShowMockDraft(false)}
-                className="w-full py-2 text-sm font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-              >
-                Close
-              </button>
-            </div>
+            <button onClick={() => setShowMockDraft(false)} className="text-xs text-[var(--text-sec)] hover:text-[var(--text)]">Hide</button>
           </div>
-        </div>
+          <div className="max-h-[300px] overflow-y-auto">
+            {nflMockDraft.map(mock => {
+              const mockTeam = teams.find(t => t.abbreviation === mock.teamAbbr);
+              const isUserPick = mockTeam?.id === userTeamId;
+              const alreadyPicked = draftResults.some(r => r.playerId === mock.playerId);
+              return (
+                <div
+                  key={mock.pickNum}
+                  className={`flex items-center gap-2 py-1.5 border-t border-[var(--border)] first:border-0 text-xs ${isUserPick ? 'bg-blue-50 -mx-1 px-1 rounded' : ''} ${alreadyPicked ? 'opacity-30' : ''}`}
+                >
+                  <span className="font-bold text-[var(--text-sec)] w-5 text-right shrink-0">{mock.pickNum}</span>
+                  <span className="font-bold text-[var(--text-sec)] w-8">{mock.teamAbbr}</span>
+                  {isUserPick ? (
+                    <span className="text-blue-600 font-semibold">Your pick</span>
+                  ) : (
+                    <span className="flex-1 min-w-0 truncate">
+                      <span className="font-medium">{mock.firstName} {mock.lastName}</span>
+                      <span className="text-[var(--text-sec)] ml-1">{mock.position}</span>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
       )}
     </GameShell>
   );
