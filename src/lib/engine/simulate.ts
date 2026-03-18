@@ -176,7 +176,8 @@ function simulatePlay(
 
   if (isPass && qb && receivers.length > 0) {
     // ── Sack check ──
-    const sackChance = clamp((dlPower - olPower) / 300 + 0.06, 0.03, 0.12);
+    // NFL avg ~6.3% of dropbacks result in sack. Leader ~15-18 sacks/season.
+    const sackChance = clamp((dlPower - olPower) / 400 + 0.05, 0.025, 0.09);
     if (Math.random() < sackChance) {
       const sackYards = -(3 + Math.floor(Math.random() * 6));
       // Sack distribution: EDGE/DE ~55%, DT ~15%, LB ~25%, DB ~5%
@@ -227,10 +228,10 @@ function simulatePlay(
       : 50;
 
     // ── Interception check ──
-    // Avg INT rate ~2.5% of attempts. Elite QBs ~1.5% (~8/season), bad QBs ~3.5% (~18/season).
+    // Avg INT rate ~2.0% of attempts. Elite QBs ~1.2% (~7/season), bad QBs ~3.0% (~16/season).
     const intChance = clamp(
-      (coverageRating - qb.ratings.throwing) / 600 + 0.025,
-      0.012, 0.040,
+      (coverageRating - qb.ratings.throwing) / 700 + 0.020,
+      0.010, 0.032,
     );
     if (Math.random() < intChance) {
       const interceptor = coverageDefender ?? (cbs[0] || safeties[0] || allDefenders[0]);
@@ -258,6 +259,15 @@ function simulatePlay(
       const bigPlayChance = 0.015 + (target.ratings.speed / 100) * 0.02;
       if (Math.random() < bigPlayChance) {
         yards += 10 + Math.floor(Math.random() * 15);
+      }
+
+      // Red zone TD boost: inside the 20, passes are shorter and more likely to reach the end zone
+      if (fieldPosition >= 80) {
+        yards = Math.max(yards, Math.round(3 + Math.random() * 8)); // floor at 3-11 in red zone
+      }
+      // Goal line boost: inside the 5, high chance of reaching the end zone
+      if (fieldPosition >= 95 && Math.random() < 0.55) {
+        yards = 100 - fieldPosition; // score!
       }
 
       const newPos = fieldPosition + yards;
@@ -330,6 +340,15 @@ function simulatePlay(
         type: 'rush', yards: Math.max(0, yards), touchdown: false, turnover: true,
         rusher, tackler: tackler ?? undefined,
       };
+    }
+
+    // Goal line rush boost: inside the 5, rushing TDs are common
+    if (fieldPosition >= 95 && Math.random() < 0.45) {
+      yards = 100 - fieldPosition;
+    }
+    // Inside the 10: short yardage rushing is more effective
+    if (fieldPosition >= 90 && yards > 0) {
+      yards = Math.max(yards, Math.round(1 + Math.random() * 4));
     }
 
     const newPos = fieldPosition + yards;
