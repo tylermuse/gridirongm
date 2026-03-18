@@ -268,12 +268,8 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                   {stats.rushAttempts > 0 && (
                     <>
                       <div className="flex justify-between">
-                        <span className="text-[var(--text-sec)]">Rush Yards</span>
-                        <span className="font-mono">{stats.rushYards}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[var(--text-sec)]">Rush TDs</span>
-                        <span className="font-mono">{stats.rushTDs}</span>
+                        <span className="text-[var(--text-sec)]">Rush</span>
+                        <span className="font-mono">{stats.rushAttempts} att, {stats.rushYards} yds, {stats.rushTDs} TD</span>
                       </div>
                     </>
                   )}
@@ -505,7 +501,7 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                     <th className="text-left pb-2">Season</th>
                     <th className="text-left pb-2">Team</th>
                     <th className="text-center pb-2">GP</th>
-                    {(player.position === 'QB') && <><th className="text-right pb-2">YDS</th><th className="text-right pb-2">TD</th><th className="text-right pb-2">INT</th><th className="text-right pb-2">CMP%</th></>}
+                    {(player.position === 'QB') && <><th className="text-right pb-2">YDS</th><th className="text-right pb-2">TD</th><th className="text-right pb-2">INT</th><th className="text-right pb-2">CMP%</th><th className="text-right pb-2">RUSH</th><th className="text-right pb-2">RYDS</th><th className="text-right pb-2">RTD</th></>}
                     {(player.position === 'RB') && <><th className="text-right pb-2">CAR</th><th className="text-right pb-2">YDS</th><th className="text-right pb-2">TD</th><th className="text-right pb-2">REC</th></>}
                     {(player.position === 'WR' || player.position === 'TE') && <><th className="text-right pb-2">REC</th><th className="text-right pb-2">YDS</th><th className="text-right pb-2">TD</th></>}
                     {(['DL', 'LB', 'CB', 'S'].includes(player.position)) && <><th className="text-right pb-2">TKL</th><th className="text-right pb-2">SCK</th><th className="text-right pb-2">INT</th><th className="text-right pb-2">PD</th></>}
@@ -526,6 +522,9 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                           <td className="py-1.5 text-right">{s.passTDs}</td>
                           <td className="py-1.5 text-right">{s.interceptions}</td>
                           <td className="py-1.5 text-right">{s.passAttempts ? Math.round((s.passCompletions ?? 0) / s.passAttempts * 100) : 0}%</td>
+                          <td className="py-1.5 text-right">{s.rushAttempts ?? 0}</td>
+                          <td className="py-1.5 text-right">{s.rushYards ?? 0}</td>
+                          <td className="py-1.5 text-right">{s.rushTDs ?? 0}</td>
                         </>}
                         {(player.position === 'RB') && <>
                           <td className="py-1.5 text-right">{s.rushAttempts}</td>

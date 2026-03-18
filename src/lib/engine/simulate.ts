@@ -296,11 +296,16 @@ function simulatePlay(
     }
   } else if (rbs.length > 0) {
     // ── Rush play ──
-    const rushWeights = rbs.map((r, i) => {
-      const starterBonus = i === 0 ? 4 : i === 1 ? 2 : 1;
+    // ~10% of rush plays are QB scrambles/designed runs (NFL avg ~3-5 QB carries/game)
+    const qbScramble = qb && Math.random() < 0.10;
+    const rushPool = qbScramble ? [qb, ...rbs] : rbs;
+    const rushWeights = rushPool.map((r, i) => {
+      if (qbScramble && i === 0) return 3 * (r.ratings.speed / 70); // QB scramble weighted by speed
+      const rbIdx = qbScramble ? i - 1 : i;
+      const starterBonus = rbIdx === 0 ? 4 : rbIdx === 1 ? 2 : 1;
       return starterBonus * (r.ratings.carrying / 70);
     });
-    const rusher = weightedPick(rbs, rushWeights);
+    const rusher = weightedPick(rushPool, rushWeights);
 
     const defRushPower = [...dls, ...lbs].length > 0
       ? [...dls, ...lbs].reduce((s, p) => s + p.ratings.tackling + p.ratings.strength * 0.5, 0) / [...dls, ...lbs].length
