@@ -150,7 +150,10 @@ function AccountSection() {
           </Link>
         )}
         <button
-          onClick={async () => { await signOut(); window.location.href = '/login'; }}
+          onClick={async () => {
+            try { await signOut(); } catch { /* ignore sign out errors */ }
+            window.location.href = '/login';
+          }}
           className="flex-1 text-[10px] text-center py-1 rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
         >
           Sign Out
