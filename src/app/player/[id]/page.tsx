@@ -494,6 +494,66 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
           </Card>
         )}
 
+        {/* Season-by-Season Stats */}
+        {player.seasonLog && player.seasonLog.length > 0 && (
+          <Card>
+            <CardHeader><CardTitle>Season-by-Season Stats</CardTitle></CardHeader>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
+                    <th className="text-left pb-2">Season</th>
+                    <th className="text-left pb-2">Team</th>
+                    <th className="text-center pb-2">GP</th>
+                    {(player.position === 'QB') && <><th className="text-right pb-2">YDS</th><th className="text-right pb-2">TD</th><th className="text-right pb-2">INT</th><th className="text-right pb-2">CMP%</th></>}
+                    {(player.position === 'RB') && <><th className="text-right pb-2">CAR</th><th className="text-right pb-2">YDS</th><th className="text-right pb-2">TD</th><th className="text-right pb-2">REC</th></>}
+                    {(player.position === 'WR' || player.position === 'TE') && <><th className="text-right pb-2">REC</th><th className="text-right pb-2">YDS</th><th className="text-right pb-2">TD</th></>}
+                    {(['DL', 'LB', 'CB', 'S'].includes(player.position)) && <><th className="text-right pb-2">TKL</th><th className="text-right pb-2">SCK</th><th className="text-right pb-2">INT</th><th className="text-right pb-2">PD</th></>}
+                    {(player.position === 'OL') && <><th className="text-right pb-2">GP</th></>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {player.seasonLog.map((entry) => {
+                    const t = teams.find(tm => tm.id === entry.teamId);
+                    const s = entry.stats;
+                    return (
+                      <tr key={entry.season} className="border-t border-[var(--border)]">
+                        <td className="py-1.5 font-medium">{entry.season}</td>
+                        <td className="py-1.5 text-[var(--text-sec)]">{t?.abbreviation ?? '?'}</td>
+                        <td className="py-1.5 text-center">{s.gamesPlayed}</td>
+                        {(player.position === 'QB') && <>
+                          <td className="py-1.5 text-right">{s.passYards?.toLocaleString()}</td>
+                          <td className="py-1.5 text-right">{s.passTDs}</td>
+                          <td className="py-1.5 text-right">{s.interceptions}</td>
+                          <td className="py-1.5 text-right">{s.passAttempts ? Math.round((s.passCompletions ?? 0) / s.passAttempts * 100) : 0}%</td>
+                        </>}
+                        {(player.position === 'RB') && <>
+                          <td className="py-1.5 text-right">{s.rushAttempts}</td>
+                          <td className="py-1.5 text-right">{s.rushYards?.toLocaleString()}</td>
+                          <td className="py-1.5 text-right">{s.rushTDs}</td>
+                          <td className="py-1.5 text-right">{s.receptions}</td>
+                        </>}
+                        {(player.position === 'WR' || player.position === 'TE') && <>
+                          <td className="py-1.5 text-right">{s.receptions}</td>
+                          <td className="py-1.5 text-right">{s.receivingYards?.toLocaleString()}</td>
+                          <td className="py-1.5 text-right">{s.receivingTDs}</td>
+                        </>}
+                        {(['DL', 'LB', 'CB', 'S'].includes(player.position)) && <>
+                          <td className="py-1.5 text-right">{s.tackles}</td>
+                          <td className="py-1.5 text-right">{s.sacks?.toFixed(1)}</td>
+                          <td className="py-1.5 text-right">{s.defensiveINTs}</td>
+                          <td className="py-1.5 text-right">{s.passDeflections}</td>
+                        </>}
+                        {(player.position === 'OL') && <td className="py-1.5 text-right">{s.gamesPlayed}</td>}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+
         {/* Measurables */}
         {(player.combineStats || player.height || player.weight) && (
           <Card>

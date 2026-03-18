@@ -179,7 +179,8 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
   const overallPick = totalPicks - state.draftOrder.length + 1;
   const round = Math.ceil(overallPick / state.teams.length);
 
-  // Mock first-round picks: use mock in round 1, with ~15% BPA deviation
+  // Mock first-round picks: use mock in round 1, with ~40% BPA deviation
+  // Real NFL mocks are ~50-60% accurate — top 5 picks more predictable
   if (round === 1 && state.nflMockDraft && state.nflMockDraft.length > 0) {
     const availableIds = new Set(state.freeAgents);
 
@@ -199,8 +200,12 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
     }
 
     if (mockPickId) {
-      // 85% follow mock, 15% try BPA (will fall back to mock if BPA fails below)
-      if (Math.random() < 0.85) return mockPickId;
+      // Top 3 picks: 80% follow mock (highly predictable)
+      // Picks 4-10: 65% follow mock
+      // Picks 11-20: 55% follow mock
+      // Picks 21-32: 45% follow mock (lots of variance late R1)
+      const mockChance = overallPick <= 3 ? 0.80 : overallPick <= 10 ? 0.65 : overallPick <= 20 ? 0.55 : 0.45;
+      if (Math.random() < mockChance) return mockPickId;
     }
   }
 
@@ -4784,11 +4789,18 @@ export const useGameStore = create<GameStore>()(
             }
           }
 
+          // Save current season stats to seasonLog before clearing
+          const hasStats = p.stats.gamesPlayed > 0;
+          const updatedLog = hasStats && p.teamId
+            ? [...(p.seasonLog ?? []), { season: state.season, teamId: p.teamId, stats: { ...p.stats } }]
+            : (p.seasonLog ?? []);
+
           return {
             ...p,
             age: p.age + 1,
             experience: isUnsignedFutureProspect ? 0 : p.experience + 1,
             stats: emptyStats(),
+            seasonLog: updatedLog.length > 0 ? updatedLog : undefined,
             injury: null,
             onIR: false,
             contract: advancedContract,
