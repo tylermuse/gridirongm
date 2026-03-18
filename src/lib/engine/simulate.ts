@@ -245,7 +245,7 @@ function simulatePlay(
     const compBase = 0.52 + (qb.ratings.throwing / 100) * 0.18 + (target.ratings.catching / 100) * 0.10;
     // Red zone boost: shorter field compresses coverage, boosting completion rates
     const redZoneBonus = fieldPosition >= 80 ? 0.06 : 0;
-    const compRate = clamp(compBase - (coverageRating / 100) * 0.12 + redZoneBonus, 0.42, 0.76);
+    const compRate = clamp(compBase - (coverageRating / 100) * 0.12 + redZoneBonus, 0.42, 0.72);
 
     if (Math.random() < compRate) {
       // Completed pass — tuned for NFL realism (~11.8 yards per completion)
@@ -254,10 +254,10 @@ function simulatePlay(
       const bonusYards = (qb.ratings.throwing / 100) * 2.5 + (target.ratings.speed / 100) * 1.5;
       let yards = Math.round(baseYards + bonusYards * Math.random());
 
-      // Big play chance (~4-6% of completions go 20+) — explosive plays
-      const bigPlayChance = 0.02 + (target.ratings.speed / 100) * 0.03;
+      // Big play chance (~3-4% of completions go 20+) — explosive plays
+      const bigPlayChance = 0.015 + (target.ratings.speed / 100) * 0.02;
       if (Math.random() < bigPlayChance) {
-        yards += 12 + Math.floor(Math.random() * 20);
+        yards += 10 + Math.floor(Math.random() * 15);
       }
 
       const newPos = fieldPosition + yards;
@@ -306,9 +306,9 @@ function simulatePlay(
       (rushSkill - defRushPower) / 35 + 2.5 + (Math.random() * 2.5 - 0.75) + olBonus + rushRedZoneBonus,
     );
 
-    // Big rush chance (~2-3%) — breakaway runs
-    if (Math.random() < 0.01 + (rusher.ratings.speed / 100) * 0.02) {
-      yards += 10 + Math.floor(Math.random() * 15);
+    // Big rush chance (~1.5-2.5%) — breakaway runs
+    if (Math.random() < 0.008 + (rusher.ratings.speed / 100) * 0.015) {
+      yards += 8 + Math.floor(Math.random() * 12);
     }
 
     // Negative play chance (~15% of rushes go for loss)
@@ -367,7 +367,7 @@ function simulateDrive(
   defense: Player[],
 ): DriveResult {
   const plays: PlayResult[] = [];
-  let fieldPosition = 30 + Math.floor(Math.random() * 15); // start at own 30-45 (kickoff returns + touchbacks)
+  let fieldPosition = 25 + Math.floor(Math.random() * 15); // start at own 25-40 (touchbacks + returns)
   let down = 1;
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
@@ -488,8 +488,8 @@ export function simulateGame(
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
-  // ~10 possessions per team per game (NFL avg ~10-11)
-  const possessions = 10;
+  // ~11 possessions per team per game (NFL avg ~11-12)
+  const possessions = 11;
 
   const allHomePlays: PlayResult[] = [];
   const allAwayPlays: PlayResult[] = [];
@@ -561,19 +561,23 @@ export function simulateGame(
     // Quarter assignment: distribute possessions across 4 quarters
     const quarter = Math.min(4, Math.floor(i / (possessions / 4)) + 1);
 
-    // Home offense drives
+    // Home offense drives — scoring fatigue: teams with big leads run the clock
     const homeDrive = simulateDrive(homeRoster, awayRoster);
-    homeScore += homeDrive.points;
+    const homeStall = homeScore >= 42 ? 0.7 : homeScore >= 35 ? 0.35 : homeScore >= 28 && (homeScore - awayScore) >= 21 ? 0.2 : 0;
+    const homePoints = homeStall > 0 && Math.random() < homeStall ? 0 : homeDrive.points;
+    homeScore += homePoints;
     allHomePlays.push(...homeDrive.plays);
-    const afterHome = describeScoring(homeDrive, game.homeTeamId, quarter, runAway, runHome);
+    const afterHome = describeScoring({ ...homeDrive, points: homePoints }, game.homeTeamId, quarter, runAway, runHome);
     runAway = afterHome.away;
     runHome = afterHome.home;
 
-    // Away offense drives
+    // Away offense drives — same scoring fatigue
     const awayDrive = simulateDrive(awayRoster, homeRoster);
-    awayScore += awayDrive.points;
+    const awayStall = awayScore >= 42 ? 0.7 : awayScore >= 35 ? 0.35 : awayScore >= 28 && (awayScore - homeScore) >= 21 ? 0.2 : 0;
+    const awayPoints = awayStall > 0 && Math.random() < awayStall ? 0 : awayDrive.points;
+    awayScore += awayPoints;
     allAwayPlays.push(...awayDrive.plays);
-    const afterAway = describeScoring(awayDrive, game.awayTeamId, quarter, runAway, runHome);
+    const afterAway = describeScoring({ ...awayDrive, points: awayPoints }, game.awayTeamId, quarter, runAway, runHome);
     runAway = afterAway.away;
     runHome = afterAway.home;
   }
