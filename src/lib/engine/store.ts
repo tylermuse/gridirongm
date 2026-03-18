@@ -4336,20 +4336,44 @@ export const useGameStore = create<GameStore>()(
         const sendPickIds: string[] = [];
         let accumulated = 0;
 
-        // First try to fill with draft picks (less painful)
-        for (const pk of userPicks) {
-          if (accumulated >= neededValue) break;
+        // Strategy: build a realistic package — mix of a player + 1-2 picks
+        // First, find the best player match (closest to target value without massive overshoot)
+        const sortedByCloseness = [...userRoster]
+          .filter(p => p.ovr >= 55 && p.value <= neededValue * 1.3)
+          .sort((a, b) => b.value - a.value); // highest value first
+
+        // Add the best player match as anchor
+        if (sortedByCloseness.length > 0 && neededValue > 100) {
+          const anchor = sortedByCloseness[0];
+          sendPlayerIds.push(anchor.id);
+          accumulated += anchor.value;
+        }
+
+        // Fill remaining gap with high-value picks first (max 3 picks)
+        const picksByValue = [...userPicks].sort((a, b) => b.value - a.value);
+        for (const pk of picksByValue) {
+          if (accumulated >= neededValue || sendPickIds.length >= 3) break;
           sendPickIds.push(pk.id);
           accumulated += pk.value;
         }
 
-        // If still short, add players (lowest value first)
+        // If still short, add another player
         if (accumulated < neededValue) {
-          for (const p of userRoster) {
+          for (const p of sortedByCloseness) {
             if (accumulated >= neededValue) break;
-            if (p.ovr < 55) continue; // don't offer terrible players
+            if (sendPlayerIds.includes(p.id)) continue;
             sendPlayerIds.push(p.id);
             accumulated += p.value;
+          }
+        }
+
+        // Last resort: more picks (still capped at 5 total)
+        if (accumulated < neededValue) {
+          for (const pk of picksByValue) {
+            if (accumulated >= neededValue || sendPickIds.length >= 5) break;
+            if (sendPickIds.includes(pk.id)) continue;
+            sendPickIds.push(pk.id);
+            accumulated += pk.value;
           }
         }
 

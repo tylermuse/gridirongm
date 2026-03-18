@@ -130,6 +130,85 @@ function ValueAssessmentBadge({ assessment }: { assessment: string }) {
   return <Badge variant="red">They Win</Badge>;
 }
 
+type TradeSortKey = 'ovr' | 'pos' | 'salary' | 'years' | 'value' | 'age';
+
+function SortableTradeTable({
+  players: rawPlayers,
+  selectedIds,
+  toggleSelect,
+  playerTradeValue: ptv,
+}: {
+  players: Player[];
+  selectedIds: string[];
+  toggleSelect: (id: string) => void;
+  playerTradeValue: (p: Player) => number;
+}) {
+  const [sortKey, setSortKey] = useState<TradeSortKey>('ovr');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  const toggle = (key: TradeSortKey) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir(key === 'pos' ? 'asc' : 'desc'); }
+  };
+
+  const sorted = [...rawPlayers].sort((a, b) => {
+    let cmp = 0;
+    switch (sortKey) {
+      case 'ovr': cmp = a.ratings.overall - b.ratings.overall; break;
+      case 'pos': cmp = a.position.localeCompare(b.position); break;
+      case 'salary': cmp = a.contract.salary - b.contract.salary; break;
+      case 'years': cmp = a.contract.yearsLeft - b.contract.yearsLeft; break;
+      case 'value': cmp = ptv(a) - ptv(b); break;
+      case 'age': cmp = a.age - b.age; break;
+    }
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
+
+  const arrow = (key: TradeSortKey) => sortKey === key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : '';
+  const hdr = (key: TradeSortKey, label: string) => (
+    <th className="pb-1 px-1 cursor-pointer hover:text-[var(--text)] select-none whitespace-nowrap" onClick={() => toggle(key)}>
+      {label}{arrow(key)}
+    </th>
+  );
+
+  return (
+    <div className="overflow-x-auto max-h-[350px] overflow-y-auto">
+      <table className="w-full text-xs">
+        <thead className="sticky top-0 bg-[var(--surface)] text-[var(--text-sec)] text-[10px] uppercase tracking-wider">
+          <tr>
+            <th className="pb-1 w-5"></th>
+            {hdr('pos', 'Pos')}
+            <th className="pb-1 px-1 text-left">Player</th>
+            {hdr('ovr', 'OVR')}
+            {hdr('age', 'Age')}
+            {hdr('salary', 'Salary')}
+            {hdr('years', 'Yrs')}
+            {hdr('value', 'Pts')}
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(p => (
+            <tr
+              key={p.id}
+              className={`border-t border-[var(--border)] cursor-pointer hover:bg-[var(--surface-2)] ${selectedIds.includes(p.id) ? 'bg-blue-50' : ''}`}
+              onClick={() => toggleSelect(p.id)}
+            >
+              <td className="py-1 pl-1"><input type="checkbox" checked={selectedIds.includes(p.id)} readOnly className="accent-blue-500 pointer-events-none" /></td>
+              <td className="py-1 px-1"><Badge size="sm">{p.position}</Badge></td>
+              <td className="py-1 px-1 font-medium truncate max-w-[120px]">{p.firstName} {p.lastName}</td>
+              <td className={`py-1 px-1 font-bold text-center ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
+              <td className="py-1 px-1 text-center text-[var(--text-sec)]">{p.age}</td>
+              <td className="py-1 px-1 text-right text-[var(--text-sec)]">${p.contract.salary.toFixed(1)}M</td>
+              <td className="py-1 px-1 text-center text-[var(--text-sec)]">{p.contract.yearsLeft}</td>
+              <td className="py-1 px-1 text-right text-[var(--text-sec)]">~{Math.round(ptv(p))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Trade Finder — scans AI rosters for tradeable players
 // ---------------------------------------------------------------------------
@@ -1786,24 +1865,12 @@ function TradesPage() {
                     </CardHeader>
                     <div className="mb-3">
                       <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Players</div>
-                      {userRoster.map(p => (
-                        <label key={p.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1 flex-wrap sm:flex-nowrap">
-                          <input
-                            type="checkbox"
-                            checked={offeredPlayerIds.includes(p.id)}
-                            onChange={() => togglePlayerSelect(p.id, offeredPlayerIds, setOfferedPlayerIds)}
-                            className="accent-blue-500 shrink-0"
-                          />
-                          <Badge size="sm">{p.position}</Badge>
-                          <span className="text-sm flex-1 min-w-0 truncate">{p.firstName} {p.lastName}</span>
-                          <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
-                          {userTeam && calculateSchemeFit(p, userTeam) === 'poor' && (
-                            <span className="text-[9px] text-red-500 font-bold px-1 py-0.5 bg-red-50 rounded">Poor Fit</span>
-                          )}
-                          <span className="text-[10px] text-[var(--text-sec)] shrink-0">${p.contract.salary.toFixed(1)}M/{p.contract.yearsLeft}yr</span>
-                          <span className="text-xs text-[var(--text-sec)] shrink-0">~{Math.round(playerTradeValue(p)).toLocaleString()}</span>
-                        </label>
-                      ))}
+                      <SortableTradeTable
+                        players={userRoster}
+                        selectedIds={offeredPlayerIds}
+                        toggleSelect={(id) => togglePlayerSelect(id, offeredPlayerIds, setOfferedPlayerIds)}
+                        playerTradeValue={playerTradeValue}
+                      />
                     </div>
                     {userTeam && userTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
                       <div>
@@ -1839,21 +1906,12 @@ function TradesPage() {
                       <>
                         <div className="mb-3">
                           <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Players</div>
-                          {aiRoster.map(p => (
-                            <label key={p.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded px-1 flex-wrap sm:flex-nowrap">
-                              <input
-                                type="checkbox"
-                                checked={receivedPlayerIds.includes(p.id)}
-                                onChange={() => togglePlayerSelect(p.id, receivedPlayerIds, setReceivedPlayerIds)}
-                                className="accent-blue-500 shrink-0"
-                              />
-                              <Badge size="sm">{p.position}</Badge>
-                              <span className="text-sm flex-1 min-w-0 truncate">{p.firstName} {p.lastName}</span>
-                              <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
-                              <span className="text-[10px] text-[var(--text-sec)] shrink-0">${p.contract.salary.toFixed(1)}M/{p.contract.yearsLeft}yr</span>
-                              <span className="text-xs text-[var(--text-sec)] shrink-0">~{Math.round(playerTradeValue(p)).toLocaleString()}</span>
-                            </label>
-                          ))}
+                          <SortableTradeTable
+                            players={aiRoster}
+                            selectedIds={receivedPlayerIds}
+                            toggleSelect={(id) => togglePlayerSelect(id, receivedPlayerIds, setReceivedPlayerIds)}
+                            playerTradeValue={playerTradeValue}
+                          />
                         </div>
                         {selectedAITeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
                           <div>

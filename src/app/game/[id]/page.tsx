@@ -615,12 +615,13 @@ function WinProbabilityChart({
   const chartH = H - PAD_Y * 2;
 
   // Win probability for the "top" team (user's team) at each event
+  // Higher k = more sensitive to score changes, more visual movement
   const probPoints: number[] = events.map(ev => {
     const diff = ev.homeScore - ev.awayScore;
-    const quarterWeight = ev.quarter >= 4 ? 3 : ev.quarter >= 3 ? 2 : 1;
-    const k = 0.12 * quarterWeight;
+    const quarterWeight = ev.quarter >= 4 ? 4 : ev.quarter >= 3 ? 2.5 : ev.quarter >= 2 ? 1.5 : 1;
+    const k = 0.18 * quarterWeight; // 0.18 base: 3-pt lead ≈ 58% in Q1, 80% in Q4
     const homeProb = 1 / (1 + Math.exp(-k * diff));
-    return userIsHome ? homeProb : 1 - homeProb; // flip if user is away
+    return userIsHome ? homeProb : 1 - homeProb;
   });
 
   const fullLen = Math.max(totalEvents, events.length, 1);

@@ -491,10 +491,13 @@ export function simulatePlayByPlay(
       addEvent('field_goal_good', descFieldGoalGood(distanceYards, ok.k), 0, true);
       if (state.possession === 'home') state.homeScore += 3;
       else state.awayScore += 3;
+      doKickoff();
     } else {
       addEvent('field_goal_miss', descFieldGoalMiss(distanceYards, ok.k), 0, false);
+      // Missed FG: opposing team gets the ball at the line of scrimmage (or their 20)
+      const returnPos = Math.max(20, state.fieldPos);
+      switchPossession(100 - returnPos);
     }
-    doKickoff();
   }
 
   function doPunt() {
