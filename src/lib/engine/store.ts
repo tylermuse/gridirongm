@@ -3091,8 +3091,29 @@ export const useGameStore = create<GameStore>()(
       draftPlayer: (playerId: string) => {
         const state = get();
         if (state.phase !== 'draft') return;
-        const player = state.players.find(p => p.id === playerId);
-        if (!player) return;
+        let player = state.players.find(p => p.id === playerId);
+        if (!player) {
+          // Player ID is in freeAgents but not in players array — this can happen
+          // with NFL mock draft prospects. Log the issue and skip gracefully.
+          console.warn(`[draftPlayer] Player ${playerId} not in players array. freeAgents has it: ${state.freeAgents.includes(playerId)}`);
+          // Try to find in nflMockDraft and create a minimal player
+          const mock = state.nflMockDraft?.find(m => m.playerId === playerId);
+          if (mock) {
+            console.warn(`[draftPlayer] Found in nflMockDraft: ${mock.firstName} ${mock.lastName}. Creating player.`);
+            const created = generatePlayer(mock.position as Position, 70, { age: 21, experience: 0 });
+            created.id = playerId;
+            created.firstName = mock.firstName;
+            created.lastName = mock.lastName;
+            created.position = mock.position as Position;
+            created.college = mock.college;
+            created.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
+            // Add to players array
+            set({ players: [...state.players, created] });
+            player = created;
+          } else {
+            return;
+          }
+        }
 
         const currentPickTeamId = state.draftOrder[0];
         if (!currentPickTeamId) return;
@@ -3217,10 +3238,25 @@ export const useGameStore = create<GameStore>()(
             continue;
           }
 
-          const player = players.find(p => p.id === pid);
+          let player = players.find(p => p.id === pid);
           if (!player) {
-            draftOrder = draftOrder.slice(1);
-            continue;
+            // Player ID returned by autoDraftPlayerId but not in players array
+            // Create from nflMockDraft data if available
+            const mock = state.nflMockDraft?.find(m => m.playerId === pid);
+            if (mock) {
+              const created = generatePlayer(mock.position as Position, 70, { age: 21, experience: 0 });
+              created.id = pid;
+              created.firstName = mock.firstName;
+              created.lastName = mock.lastName;
+              created.position = mock.position as Position;
+              created.college = mock.college;
+              created.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
+              players = [...players, created];
+              player = created;
+            } else {
+              draftOrder = draftOrder.slice(1);
+              continue;
+            }
           }
 
           const overallPick = totalPicks - draftOrder.length + 1;
@@ -3286,10 +3322,25 @@ export const useGameStore = create<GameStore>()(
             continue;
           }
 
-          const player = players.find(p => p.id === pid);
+          let player = players.find(p => p.id === pid);
           if (!player) {
-            draftOrder = draftOrder.slice(1);
-            continue;
+            // Player ID returned by autoDraftPlayerId but not in players array
+            // Create from nflMockDraft data if available
+            const mock = state.nflMockDraft?.find(m => m.playerId === pid);
+            if (mock) {
+              const created = generatePlayer(mock.position as Position, 70, { age: 21, experience: 0 });
+              created.id = pid;
+              created.firstName = mock.firstName;
+              created.lastName = mock.lastName;
+              created.position = mock.position as Position;
+              created.college = mock.college;
+              created.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
+              players = [...players, created];
+              player = created;
+            } else {
+              draftOrder = draftOrder.slice(1);
+              continue;
+            }
           }
 
           const overallPick = totalPicks - draftOrder.length + 1;
