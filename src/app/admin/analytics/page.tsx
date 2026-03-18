@@ -309,16 +309,47 @@ function SignupsChart({ data, period }: { data: Record<string, number>; period: 
     return <div className="text-sm text-gray-400 py-4 text-center">No signups in this period</div>;
   }
 
+  // Pick ~5-7 evenly spaced X-axis labels
+  const xLabelCount = Math.min(days <= 7 ? days : 6, labels.length);
+  const xLabelStep = Math.max(1, Math.floor(labels.length / xLabelCount));
+  const xLabels = labels
+    .map((l, i) => ({ label: l, index: i }))
+    .filter((_, i) => i % xLabelStep === 0 || i === labels.length - 1);
+
+  // Y-axis ticks
+  const yTicks = max <= 3 ? Array.from({ length: max + 1 }, (_, i) => i) : [0, Math.round(max / 2), max];
+
   return (
-    <div className="flex items-end gap-px h-32">
-      {values.map((v, i) => (
-        <div
-          key={labels[i]}
-          className="flex-1 bg-blue-500 rounded-t-sm hover:bg-blue-600 transition-colors group relative min-w-[2px]"
-          style={{ height: `${(v / max) * 100}%`, minHeight: v > 0 ? '2px' : '0' }}
-          title={`${labels[i]}: ${v} signup${v !== 1 ? 's' : ''}`}
-        />
-      ))}
+    <div className="flex gap-2">
+      {/* Y-axis */}
+      <div className="flex flex-col justify-between h-32 text-[10px] text-gray-400 text-right w-6 shrink-0 py-0.5">
+        {[...yTicks].reverse().map(v => (
+          <span key={v}>{v}</span>
+        ))}
+      </div>
+      {/* Chart area */}
+      <div className="flex-1 flex flex-col">
+        <div className="flex items-end gap-px h-32">
+          {values.map((v, i) => (
+            <div
+              key={labels[i]}
+              className="flex-1 bg-blue-500 rounded-t-sm hover:bg-blue-600 transition-colors min-w-[2px]"
+              style={{ height: `${(v / max) * 100}%`, minHeight: v > 0 ? '2px' : '0' }}
+              title={`${labels[i]}: ${v} signup${v !== 1 ? 's' : ''}`}
+            />
+          ))}
+        </div>
+        {/* X-axis */}
+        <div className="flex justify-between mt-1.5">
+          {xLabels.map(({ label }) => {
+            const d = new Date(label + 'T00:00:00');
+            const fmt = `${d.getMonth() + 1}/${d.getDate()}`;
+            return (
+              <span key={label} className="text-[10px] text-gray-400">{fmt}</span>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
