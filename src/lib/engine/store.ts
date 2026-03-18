@@ -179,48 +179,28 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
   const overallPick = totalPicks - state.draftOrder.length + 1;
   const round = Math.ceil(overallPick / state.teams.length);
 
-  // Mock first-round picks: always use mock in round 1, with ~15% BPA deviation
+  // Mock first-round picks: use mock in round 1, with ~15% BPA deviation
   if (round === 1 && state.nflMockDraft && state.nflMockDraft.length > 0) {
-    const pickingTeam = state.teams.find(t => t.id === pickingTeamId);
     const availableIds = new Set(state.freeAgents);
 
-    // Find this team's mock pick
+    // Find the mock pick for this overall pick number
+    const mockForPick = state.nflMockDraft.find(m => m.pickNum === overallPick);
     let mockPickId: string | undefined;
-    if (pickingTeam) {
-      for (const mock of state.nflMockDraft) {
-        if (mock.teamAbbr === pickingTeam.abbreviation && availableIds.has(mock.playerId)) {
-          mockPickId = mock.playerId;
-          break;
-        }
-      }
+
+    // First try: use the specific mock pick for this slot
+    if (mockForPick && availableIds.has(mockForPick.playerId)) {
+      mockPickId = mockForPick.playerId;
     }
-    // Fallback: next available mock pick by order
+    // Second try: find any available mock pick by order
     if (!mockPickId) {
       for (const mock of state.nflMockDraft) {
         if (availableIds.has(mock.playerId)) { mockPickId = mock.playerId; break; }
       }
     }
 
-    // If mock found a player, return it (85% as-is, 15% try BPA first)
     if (mockPickId) {
-      // Check if the mock pick player exists in the players array
-      const mockPlayerExists = state.players.some(p => p.id === mockPickId);
-      if (!mockPlayerExists) {
-        // Player ID is in freeAgents but not in players — this is the bug
-        // Return the mock pick ID anyway; draftPlayer will handle it
-        // Actually, find ANY available player from freeAgents that IS in players
-        for (const faId of state.freeAgents) {
-          const p = state.players.find(pl => pl.id === faId);
-          if (p && p.experience === 0) return p.id;
-        }
-        for (const faId of state.freeAgents) {
-          if (state.players.some(pl => pl.id === faId)) return faId;
-        }
-        return undefined;
-      }
-      // 85% follow mock, 15% try BPA (will fall back to mock if BPA fails)
+      // 85% follow mock, 15% try BPA (will fall back to mock if BPA fails below)
       if (Math.random() < 0.85) return mockPickId;
-      // Fall through to BPA
     }
   }
 
