@@ -638,7 +638,12 @@ export function simulatePlayByPlay(
       const scoreDiff = state.possession === 'home'
         ? state.homeScore - state.awayScore
         : state.awayScore - state.homeScore;
-      const desperationGo = scoreDiff <= -8 && state.quarter === 4 && state.timeSecs <= 120;
+      // Go for it when trailing late: any deficit with < 3 min, or big deficit with < 5 min
+      const desperationGo = state.quarter >= 4 && scoreDiff < 0 && (
+        state.timeSecs <= 180 ||                           // any deficit, < 3 min
+        (scoreDiff <= -8 && state.timeSecs <= 300) ||      // down 8+, < 5 min
+        (scoreDiff <= -16 && state.timeSecs <= 600)        // down 16+, < 10 min
+      );
 
       if (state.yardsToGo <= 1 || desperationGo) {
         // Go for it — fall through to normal play
