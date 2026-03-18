@@ -206,12 +206,20 @@ function simulatePlay(
     const target = weightedPick(eligibleReceivers.map(r => r.player), recWeights);
 
     // ── Coverage matchup ──
-    // Match CB to receiver by weighted random pick (CB1 covers most, CB4 least)
-    const coverageDefender = cbs.length > 0
-      ? weightedPick(cbs, cbs.map((cb, i) => {
-          // CB1 gets ~40% of snaps, CB2 ~30%, CB3 ~20%, CB4+ ~10%
-          const snapShare = i === 0 ? 4 : i === 1 ? 3 : i === 2 ? 2 : 1;
-          return snapShare * (cb.ratings.coverage / 70);
+    // Match CB or S to receiver — safeties cover TEs, RBs, and zone coverage
+    const coveragePool = [...cbs, ...safeties];
+    const coverageDefender = coveragePool.length > 0
+      ? weightedPick(coveragePool, coveragePool.map((db, i) => {
+          // CBs get more coverage snaps, but safeties contribute ~25%
+          if (db.position === 'CB') {
+            const cbIdx = cbs.indexOf(db);
+            const snapShare = cbIdx === 0 ? 4 : cbIdx === 1 ? 3 : cbIdx === 2 ? 2 : 1;
+            return snapShare * (db.ratings.coverage / 70);
+          }
+          // Safeties: S1 gets ~15% of coverage, S2 ~10%
+          const sIdx = safeties.indexOf(db);
+          const snapShare = sIdx === 0 ? 2 : 1;
+          return snapShare * (db.ratings.coverage / 70);
         }))
       : allDefenders.length > 0 ? allDefenders[0] : null;
     const coverageRating = coverageDefender
@@ -258,8 +266,8 @@ function simulatePlay(
 
       const tackler = allDefenders.length > 0
         ? weightedPick(allDefenders, allDefenders.map(d => {
-            // Position-based tackle distribution: LB ~45%, DB ~35%, DL ~20%
-            const posWeight = d.position === 'LB' ? 2.2 : (d.position === 'CB' || d.position === 'S') ? 1.6 : 1.0;
+            // Position-based tackle distribution: LB ~40%, S ~20%, CB ~20%, DL ~20%
+            const posWeight = d.position === 'LB' ? 2.2 : d.position === 'S' ? 1.8 : d.position === 'CB' ? 1.4 : 1.0;
             return posWeight * (d.ratings.tackling / 70);
           }))
         : null;
@@ -314,7 +322,7 @@ function simulatePlay(
     if (Math.random() < fumbleChance) {
       const tackler = allDefenders.length > 0
         ? weightedPick(allDefenders, allDefenders.map(d => {
-            const posWeight = d.position === 'LB' ? 3.5 : d.position === 'DL' ? 1.2 : 1.0;
+            const posWeight = d.position === 'LB' ? 3.5 : d.position === 'DL' ? 1.2 : d.position === 'S' ? 1.5 : 1.0;
             return posWeight * (d.ratings.tackling / 70);
           }))
         : null;
@@ -330,8 +338,8 @@ function simulatePlay(
 
     const tackler = allDefenders.length > 0
       ? weightedPick(allDefenders, allDefenders.map(d => {
-          // Rush tackles: LB ~40%, DL ~35%, DB ~25%
-          const posWeight = d.position === 'LB' ? 2.0 : d.position === 'DL' ? 1.6 : 1.0;
+          // Rush tackles: LB ~40%, DL ~25%, S ~20%, CB ~15%
+          const posWeight = d.position === 'LB' ? 2.0 : d.position === 'DL' ? 1.6 : d.position === 'S' ? 1.5 : 1.0;
           return posWeight * (d.ratings.tackling / 70);
         }))
       : null;
