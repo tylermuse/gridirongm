@@ -109,6 +109,7 @@ export default function RosterPage() {
   const [restructurePlayer, setRestructurePlayer] = useState<string | null>(null);
   const [restructureAmount, setRestructureAmount] = useState(1);
   const [restructureVoidYears, setRestructureVoidYears] = useState(0);
+  const [viewingTeamId, setViewingTeamId] = useState<string | null>(null);
 
   // Whether we're in an offseason phase where restructuring makes sense
   const isOffseason = phase !== 'regular';
@@ -149,25 +150,28 @@ export default function RosterPage() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
+  const activeTeamId = viewingTeamId ?? userTeamId;
+  const isViewingOwnTeam = activeTeamId === userTeamId;
   const userTeam = teams.find(t => t.id === userTeamId);
+  const viewingTeam = teams.find(t => t.id === activeTeamId);
   // During re-signing phase, hide players pending re-signing (expiring contracts not yet re-signed)
   // so the user can evaluate the roster without them
-  const pendingResignIds = phase === 'resigning'
+  const pendingResignIds = phase === 'resigning' && isViewingOwnTeam
     ? new Set((resigningPlayers ?? []).map(r => r.playerId))
     : new Set<string>();
   const roster = players
-    .filter(p => p.teamId === userTeamId && !p.retired && !pendingResignIds.has(p.id));
+    .filter(p => p.teamId === activeTeamId && !p.retired && !pendingResignIds.has(p.id));
 
   // Depth position for each player
   function getDepthLabel(player: Player): string {
-    const dc = userTeam?.depthChart[player.position];
+    const dc = viewingTeam?.depthChart[player.position];
     if (!dc) return '';
     const idx = dc.indexOf(player.id);
     return idx >= 0 ? (DEPTH_LABELS[idx] ?? `${idx + 1}th`) : '';
   }
 
   function getDepthIndex(player: Player): number {
-    const dc = userTeam?.depthChart[player.position];
+    const dc = viewingTeam?.depthChart[player.position];
     if (!dc) return 999;
     const idx = dc.indexOf(player.id);
     return idx >= 0 ? idx : 999;
@@ -212,7 +216,7 @@ export default function RosterPage() {
   }
 
   const injuredPlayers = roster.filter(p => p.injury && p.injury.weeksLeft > 0);
-  const capSpace = userTeam ? Math.round((userTeam.salaryCap - userTeam.totalPayroll) * 10) / 10 : 0;
+  const capSpace = viewingTeam ? Math.round((viewingTeam.salaryCap - viewingTeam.totalPayroll) * 10) / 10 : 0;
   const deadCapTotal = (userTeam?.deadCap ?? []).reduce((sum, dc) => sum + dc.amount, 0);
 
   // Depth chart helpers
@@ -277,7 +281,22 @@ export default function RosterPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <TeamQuickNav currentPage="roster" />
-            <h2 className="text-2xl font-black">{userTeam?.city} {userTeam?.name} Roster</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-black">{viewingTeam?.city} {viewingTeam?.name} Roster</h2>
+              <select
+                value={activeTeamId}
+                onChange={e => setViewingTeamId(e.target.value === userTeamId ? null : e.target.value)}
+                className="h-8 px-2 text-xs rounded border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text)]"
+              >
+                {teams
+                  .sort((a, b) => a.city.localeCompare(b.city))
+                  .map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.abbreviation} — {t.city} {t.name}{t.id === userTeamId ? ' (You)' : ''}
+                    </option>
+                  ))}
+              </select>
+            </div>
             <div className="flex items-center gap-4 text-sm text-[var(--text-sec)] mt-1">
               <span>{roster.length} players</span>
               <span className={capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}>
@@ -534,8 +553,7 @@ export default function RosterPage() {
 
                         {/* Actions */}
                         <td className="py-2 px-2 text-right pr-3 relative">
-                          {/* Confirm Cut state */}
-                          {confirmRelease === p.id ? (
+                          {isViewingOwnTeam && (confirmRelease === p.id ? (
                             <div className="flex items-center gap-1 justify-end">
                               <Button
                                 size="sm"
@@ -559,7 +577,7 @@ export default function RosterPage() {
                             >
                               Actions ▾
                             </button>
-                          )}
+                          ))}
                         </td>
                       </tr>
                     );
