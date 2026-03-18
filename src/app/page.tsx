@@ -330,6 +330,68 @@ function TeamSpotlightSection({
   );
 }
 
+function DraftCapitalCard({ team, season, phase, teams }: { team: { draftPicks: { id: string; year: number; round: number; originalTeamId: string; ownerTeamId: string; playerId?: string }[] }; season: number; phase: string; teams: { id: string; abbreviation: string }[] }) {
+  const [showFuture, setShowFuture] = useState(false);
+  const nextDraftYear = phase === 'draft' ? season : season + 1;
+  const currentPicks = team.draftPicks
+    .filter(pk => pk.year === nextDraftYear && !pk.playerId)
+    .sort((a, b) => a.round - b.round);
+  const futurePicks = team.draftPicks
+    .filter(pk => pk.year > nextDraftYear && !pk.playerId)
+    .sort((a, b) => a.year - b.year || a.round - b.round);
+
+  if (currentPicks.length === 0 && futurePicks.length === 0) return null;
+
+  const pickLabel = (pk: typeof currentPicks[0]) => {
+    const orig = teams.find(t => t.id === pk.originalTeamId);
+    const isOwn = pk.originalTeamId === pk.ownerTeamId;
+    return `Rd ${pk.round}${isOwn ? '' : ` (via ${orig?.abbreviation ?? '?'})`}`;
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Draft Capital</CardTitle>
+        <span className="text-xs text-[var(--text-sec)]">{nextDraftYear} Draft</span>
+      </CardHeader>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {currentPicks.map(pk => (
+          <span key={pk.id} className="px-2 py-1 text-xs font-medium rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
+            {pickLabel(pk)}
+          </span>
+        ))}
+        {currentPicks.length === 0 && <span className="text-xs text-[var(--text-sec)]">No picks in {nextDraftYear}</span>}
+      </div>
+      {futurePicks.length > 0 && (
+        <>
+          <button
+            onClick={() => setShowFuture(!showFuture)}
+            className="text-xs text-blue-600 hover:underline"
+          >
+            {showFuture ? 'Hide future picks' : `View all (${futurePicks.length} future picks)`}
+          </button>
+          {showFuture && (
+            <div className="mt-2 space-y-1.5">
+              {Array.from(new Set(futurePicks.map(pk => pk.year))).map(year => (
+                <div key={year}>
+                  <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase">{year}</div>
+                  <div className="flex flex-wrap gap-1">
+                    {futurePicks.filter(pk => pk.year === year).map(pk => (
+                      <span key={pk.id} className="px-2 py-0.5 text-[10px] font-medium rounded bg-[var(--surface-2)] text-[var(--text-sec)]">
+                        {pickLabel(pk)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
 function Dashboard() {
   const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -641,6 +703,9 @@ function Dashboard() {
             })()}
           </Card>
         </div>
+
+        {/* Draft Capital */}
+        <DraftCapitalCard team={userTeam} season={season} phase={phase} teams={teams} />
 
         {/* Row 2: League Leaders, Team Leaders, News */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
