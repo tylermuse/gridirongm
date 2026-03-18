@@ -2967,9 +2967,6 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
-        // PRD-07: Compute scouting data for draft prospects
-        const scoutingData = computeScoutingData(draftClass, state.scoutingLevel);
-
         // Add any new draft prospects not already in the players array
         // (NFL mock draft creates new prospects that replace imported ones)
         const existingIds = new Set(updatedPlayers.map(p => p.id));
@@ -2977,6 +2974,59 @@ export const useGameStore = create<GameStore>()(
         const finalPlayers = newProspects.length > 0
           ? [...updatedPlayers, ...newProspects]
           : (importedDraftClass.length > 0 ? updatedPlayers : [...updatedPlayers, ...draftClass]);
+
+        // Generate dynamic mock draft for non-NFL years (or if NFL mock wasn't created)
+        if (nflMockDraft.length === 0) {
+          const teamsPerRound = updatedTeams.length;
+          const r1Order = draftOrder.slice(0, teamsPerRound);
+          let mockFreeAgents = new Set(draftClass.map(p => p.id));
+          for (let pi = 0; pi < Math.min(r1Order.length, 32); pi++) {
+            const pickTeamId = r1Order[pi];
+            const pickTeam = updatedTeams.find(t => t.id === pickTeamId);
+            if (!pickTeam) continue;
+            // Use BPA to project the pick
+            const mockState = {
+              ...state,
+              draftOrder: r1Order.slice(pi),
+              freeAgents: [...mockFreeAgents],
+              players: finalPlayers,
+              teams: updatedTeams,
+              nflMockDraft: undefined, // don't use hardcoded mock for projection
+            } as LeagueState;
+            const projectedId = autoDraftPlayerId(mockState, pickTeamId);
+            if (!projectedId) continue;
+            const prospect = finalPlayers.find(p => p.id === projectedId);
+            if (!prospect) continue;
+            mockFreeAgents.delete(projectedId);
+
+            const blurbs: Record<string, string[]> = {
+              QB: ['Strong-armed passer with excellent pocket presence.', 'Dual-threat playmaker who can beat you with his arm and legs.', 'Accurate passer with high football IQ and quick release.'],
+              RB: ['Dynamic runner with breakaway speed and vision.', 'Physical back who excels between the tackles.', 'Versatile three-down back with soft hands.'],
+              WR: ['Route-running technician with reliable hands.', 'Big-play threat with elite speed and separation.', 'Physical receiver who wins contested catches.'],
+              TE: ['Matchup nightmare with size and athleticism.', 'Complete tight end who blocks and receives at a high level.', 'Red zone weapon with reliable hands.'],
+              OL: ['Powerful lineman with excellent technique.', 'Versatile blocker who can play multiple positions.', 'Anchor in pass protection with strong run blocking.'],
+              DL: ['Disruptive force with a quick first step.', 'Interior presence who collapses the pocket.', 'Relentless pass rusher with a deep move arsenal.'],
+              LB: ['Sideline-to-sideline defender with range.', 'Hard-hitting linebacker with blitz ability.', 'Instinctive player who reads and reacts quickly.'],
+              CB: ['Lockdown corner with fluid hips and ball skills.', 'Physical press corner who disrupts at the line.', 'Rangy defender with elite recovery speed.'],
+              S: ['Ball-hawk safety with range and football IQ.', 'Hard-hitting safety who excels in run support.', 'Versatile defender who can play deep or in the box.'],
+              K: ['Accurate kicker with strong leg.'], P: ['Booming punter with excellent hangtime.'],
+            };
+            const posBlurbs = blurbs[prospect.position] ?? ['Solid prospect with upside.'];
+            nflMockDraft.push({
+              pickNum: pi + 1,
+              teamAbbr: pickTeam.abbreviation,
+              playerId: projectedId,
+              firstName: prospect.firstName,
+              lastName: prospect.lastName,
+              position: prospect.position,
+              college: prospect.college ?? '',
+              blurb: posBlurbs[pi % posBlurbs.length],
+            });
+          }
+        }
+
+        // PRD-07: Compute scouting data for draft prospects
+        const scoutingData = computeScoutingData(draftClass, state.scoutingLevel);
 
         // Recalculate all team payrolls from scratch to prevent drift
         const recalcTeams = updatedTeams.map(t => ({

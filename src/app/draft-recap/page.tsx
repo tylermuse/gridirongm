@@ -69,7 +69,7 @@ function GradeCircle({ grade, size = 'md' }: { grade: string; size?: 'sm' | 'md'
 
 export default function DraftRecapPage() {
   const router = useRouter();
-  const { draftResults, players, teams, userTeamId, season, phase, advanceToFreeAgency } = useGameStore();
+  const { draftResults, players, teams, userTeamId, season, phase, advanceToFreeAgency, nflMockDraft } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
 
@@ -302,7 +302,69 @@ export default function DraftRecapPage() {
           </Section>
         )}
 
-        {/* ─── 5. All Team Rankings ─── */}
+        {/* ─── 5. Mock Draft vs Reality ─── */}
+        {nflMockDraft && nflMockDraft.length > 0 && (() => {
+          const r1Results = draftResults.filter(r => r.round === 1).sort((a, b) => a.overallPick - b.overallPick);
+          let matchCount = 0;
+          let aiPickCount = 0;
+          const rows = nflMockDraft.map(mock => {
+            const actual = r1Results.find(r => r.overallPick === mock.pickNum);
+            const actualPlayer = actual ? playerMap.get(actual.playerId) : null;
+            const actualTeam = actual ? teamMap.get(actual.teamId) : null;
+            const mockTeam = teams.find(t => t.abbreviation === mock.teamAbbr);
+            const isUserPick = actualTeam?.id === userTeamId;
+            const matched = actualPlayer ? (actual?.playerId === mock.playerId) : false;
+            if (!isUserPick && actual) {
+              aiPickCount++;
+              if (matched) matchCount++;
+            }
+            return { mock, actual, actualPlayer, actualTeam, mockTeam, isUserPick, matched };
+          });
+          return (
+            <Section title="Mock Draft vs Reality" icon="🔮" defaultOpen badge={`${matchCount} of ${aiPickCount} AI picks matched`}>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
+                      <th className="text-left pb-2 pl-2 w-10">Pick</th>
+                      <th className="text-left pb-2">Mock Projection</th>
+                      <th className="text-left pb-2">Actual Pick</th>
+                      <th className="text-center pb-2 w-12">Match</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(({ mock, actualPlayer, actualTeam, mockTeam, isUserPick, matched }) => (
+                      <tr key={mock.pickNum} className={`border-t border-[var(--border)] ${isUserPick ? 'bg-blue-50' : ''}`}>
+                        <td className="py-2 pl-2 text-[var(--text-sec)] font-mono">{mock.pickNum}</td>
+                        <td className="py-2">
+                          <span className="font-medium">{mock.firstName} {mock.lastName}</span>
+                          <span className="text-xs text-[var(--text-sec)] ml-1">{mock.position} — {mockTeam?.abbreviation ?? mock.teamAbbr}</span>
+                        </td>
+                        <td className="py-2">
+                          {actualPlayer ? (
+                            <>
+                              <button onClick={() => setSelectedPlayerId(actualPlayer.id)} className="font-medium hover:text-blue-600">
+                                {actualPlayer.firstName} {actualPlayer.lastName}
+                              </button>
+                              <span className="text-xs text-[var(--text-sec)] ml-1">{actualPlayer.position} — {actualTeam?.abbreviation ?? '?'}</span>
+                            </>
+                          ) : <span className="text-[var(--text-sec)]">—</span>}
+                        </td>
+                        <td className="py-2 text-center">
+                          {isUserPick ? <span className="text-[var(--text-sec)]">—</span>
+                            : matched ? <span className="text-green-600">✅</span>
+                            : <span className="text-red-500">❌</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          );
+        })()}
+
+        {/* ─── 6. All Team Rankings ─── */}
         <Section title="All Team Rankings" icon="🏅" defaultOpen badge={`${teams.length} teams`}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm sticky-col">
