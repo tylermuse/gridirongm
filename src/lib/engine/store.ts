@@ -2603,7 +2603,7 @@ export const useGameStore = create<GameStore>()(
 
         set({
           players: state.players.map(p =>
-            p.id === playerId ? { ...p, acquiredVia: 're-signed' as const, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, offseasonSigned: true } } : p,
+            p.id === playerId ? { ...p, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, offseasonSigned: true } } : p,
           ),
           teams: state.teams.map(t =>
             t.id === state.userTeamId

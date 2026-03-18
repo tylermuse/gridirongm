@@ -135,8 +135,8 @@ export interface Player {
   projectedRank?: number;
   /** Whether the player is holding out for a new contract */
   holdout?: boolean;
-  /** How this player was acquired by their current team */
-  acquiredVia?: 'draft' | 'free-agency' | 'trade' | 'initial' | 're-signed';
+  /** How this player was acquired by their current team (set once on first joining) */
+  acquiredVia?: 'draft' | 'free-agency' | 'trade' | 'initial';
   /** Scouting label assigned at draft (cosmetic flavor) */
   scoutingLabel?: string;
   /** Deterministic seed for scouting report generation (set at draft class creation) */
