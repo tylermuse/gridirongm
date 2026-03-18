@@ -83,6 +83,47 @@ function StrategyBadge({ label }: { label: string }) {
   return <span className={`text-[10px] font-medium ${color}`}>{label}</span>;
 }
 
+/** Generate a one-line motivation explaining why the AI team wants this trade */
+function getTradeMotivation(
+  team: { record: { wins: number; losses: number }; totalPayroll: number; salaryCap: number; city: string },
+  roster: { age: number; ratings: { overall: number }; position: string }[],
+  offeredPlayers: { age: number; ratings: { overall: number }; contract: { salary: number } }[],
+  receivedPlayers: { age: number; ratings: { overall: number }; contract: { salary: number } }[],
+  offeredPicks: unknown[],
+  receivedPicks: unknown[],
+): string {
+  const strategy = getTeamStrategy(team, roster);
+  const avgAge = roster.length > 0 ? roster.reduce((s, p) => s + p.age, 0) / roster.length : 26;
+  const capSpace = team.salaryCap - team.totalPayroll;
+  const netSalary = offeredPlayers.reduce((s, p) => s + p.contract.salary, 0) - receivedPlayers.reduce((s, p) => s + p.contract.salary, 0);
+  const gettingYounger = receivedPlayers.length > 0 && offeredPlayers.length > 0 &&
+    receivedPlayers.reduce((s, p) => s + p.age, 0) / receivedPlayers.length < offeredPlayers.reduce((s, p) => s + p.age, 0) / offeredPlayers.length;
+  const gettingPicks = receivedPicks.length > offeredPicks.length;
+  const shedSalary = netSalary > 5;
+
+  if (strategy === 'Rebuilding') {
+    if (gettingPicks) return `${team.city} is rebuilding and wants draft capital to accelerate their rebuild.`;
+    if (shedSalary) return `${team.city} is in teardown mode — clearing salary to create cap flexibility.`;
+    if (gettingYounger) return `${team.city} is getting younger as part of their rebuild.`;
+    return `${team.city} is rebuilding and looking for future assets.`;
+  }
+  if (strategy === 'Win Now') {
+    if (offeredPlayers.some(p => p.ratings.overall >= 75)) return `${team.city} is going all-in and trading proven talent to fill a need.`;
+    if (gettingPicks) return `${team.city} is pivoting — stockpiling picks after a disappointing stretch.`;
+    return `${team.city} is in win-now mode and looking to upgrade their roster.`;
+  }
+  if (strategy === 'Contending') {
+    if (shedSalary) return `${team.city} is managing their cap to stay competitive long-term.`;
+    if (gettingYounger) return `${team.city} is retooling with younger talent while staying competitive.`;
+    return `${team.city} sees a chance to improve their roster for a playoff push.`;
+  }
+  // Developing
+  if (gettingYounger) return `${team.city} is investing in youth development.`;
+  if (gettingPicks) return `${team.city} wants picks to build through the draft.`;
+  if (capSpace < 10) return `${team.city} needs cap relief to sign their own players.`;
+  return `${team.city} sees a fit and wants to make a move.`;
+}
+
 function ValueAssessmentBadge({ assessment }: { assessment: string }) {
   if (assessment === 'fair') return <Badge variant="green">Fair</Badge>;
   if (assessment === 'lopsided-you-win') return <Badge variant="blue">You Win</Badge>;
@@ -1129,17 +1170,18 @@ function TradesPage() {
 
                 return (
                   <Card key={proposal.id}>
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => proposingTeam && setViewTeamId(proposingTeam.id)}
-                          className="shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-                        >
-                          {proposingTeam && <TeamLogo abbreviation={proposingTeam.abbreviation} primaryColor={proposingTeam.primaryColor} secondaryColor={proposingTeam.secondaryColor} logoUrl={proposingTeam.logoUrl} size="sm" />}
-                        </button>
-                        <button onClick={() => proposingTeam && setViewTeamId(proposingTeam.id)} className="font-bold hover:text-blue-600 transition-colors">{proposingTeam?.city} {proposingTeam?.name}</button>
-                        <span className="text-xs text-[var(--text-sec)]">Week {proposal.week}</span>
-                      </div>
+                    <div className="mb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => proposingTeam && setViewTeamId(proposingTeam.id)}
+                            className="shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                          >
+                            {proposingTeam && <TeamLogo abbreviation={proposingTeam.abbreviation} primaryColor={proposingTeam.primaryColor} secondaryColor={proposingTeam.secondaryColor} logoUrl={proposingTeam.logoUrl} size="sm" />}
+                          </button>
+                          <button onClick={() => proposingTeam && setViewTeamId(proposingTeam.id)} className="font-bold hover:text-blue-600 transition-colors">{proposingTeam?.city} {proposingTeam?.name}</button>
+                          <span className="text-xs text-[var(--text-sec)]">Week {proposal.week}</span>
+                        </div>
                       <div className="flex items-center gap-2">
                         <span className={`text-xs font-bold px-2 py-0.5 rounded ${
                           userOvrDelta > 0 ? 'bg-green-100 text-green-600' :
@@ -1156,6 +1198,12 @@ function TradesPage() {
                           Their OVR: {currentOtherOvr} → {afterOtherOvr}
                         </span>
                       </div>
+                      </div>
+                      {proposingTeam && (
+                        <div className="text-[11px] text-[var(--text-sec)] italic mt-1.5">
+                          {getTradeMotivation(proposingTeam, otherRoster, offPlayers, reqPlayers, proposal.offeredPickIds.map(id => proposingTeam.draftPicks.find(pk => pk.id === id)).filter(Boolean), proposal.requestedPickIds.map(id => userTeam?.draftPicks.find(pk => pk.id === id)).filter(Boolean))}
+                        </div>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -1588,11 +1636,20 @@ function TradesPage() {
                         <Card key={proposal.id}>
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
+                              <div className="flex items-center gap-2 mb-1">
                                 <Badge size="sm">{proposingTeam?.abbreviation}</Badge>
                                 <span className="font-bold text-sm">{proposingTeam?.city} {proposingTeam?.name}</span>
                                 {proposal.valueAssessment && <ValueAssessmentBadge assessment={proposal.valueAssessment} />}
                               </div>
+                              {proposingTeam && (() => {
+                                const trRoster = players.filter(p => p.teamId === proposingTeam.id && !p.retired);
+                                const reqP = proposal.requestedPlayerIds.map(id => players.find(p => p.id === id)).filter(Boolean) as Player[];
+                                return (
+                                  <div className="text-[11px] text-[var(--text-sec)] italic mb-2">
+                                    {getTradeMotivation(proposingTeam, trRoster, offPlayers, reqP, proposal.offeredPickIds.map(id => proposingTeam.draftPicks.find(pk => pk.id === id)).filter(Boolean), proposal.requestedPickIds.map(id => userTeam?.draftPicks.find(pk => pk.id === id)).filter(Boolean))}
+                                  </div>
+                                );
+                              })()}
                               <div className="text-xs text-[var(--text-sec)] uppercase font-bold mb-1">They Offer</div>
                               <div className="space-y-0.5 mb-2">
                                 {offPlayers.map(p => (
