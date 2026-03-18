@@ -179,27 +179,33 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
   const overallPick = totalPicks - state.draftOrder.length + 1;
   const round = Math.ceil(overallPick / state.teams.length);
 
-  // NFL 2026 hardcoded first-round picks: ~85% follow the mock, 15% deviate (BPA)
+  // NFL/dynamic mock first-round picks: ~85% follow the mock, 15% deviate (BPA)
   if (round === 1 && state.nflMockDraft && state.nflMockDraft.length > 0) {
     const pickingTeam = state.teams.find(t => t.id === pickingTeamId);
     const availableIds = new Set(state.freeAgents);
-    const usesMock = Math.random() < 0.85;
 
-    if (pickingTeam && usesMock) {
-      // Find the next mock draft pick assigned to this team that's still available
+    // Find this team's mock pick
+    let mockPickId: string | undefined;
+    if (pickingTeam) {
       for (const mock of state.nflMockDraft) {
         if (mock.teamAbbr === pickingTeam.abbreviation && availableIds.has(mock.playerId)) {
-          return mock.playerId;
+          mockPickId = mock.playerId;
+          break;
         }
       }
-      // If the hardcoded player was taken, find the next available mock pick by pick order
-      for (const mock of state.nflMockDraft) {
-        if (availableIds.has(mock.playerId)) {
-          return mock.playerId;
+      // Fallback: next available mock pick
+      if (!mockPickId) {
+        for (const mock of state.nflMockDraft) {
+          if (availableIds.has(mock.playerId)) { mockPickId = mock.playerId; break; }
         }
       }
     }
-    // 15% chance: fall through to BPA below, but if BPA fails, use mock as safety net
+
+    // 85% follow mock, 15% deviate to BPA (but only if BPA can find someone)
+    if (mockPickId && Math.random() < 0.85) {
+      return mockPickId;
+    }
+    // Fall through to BPA — if BPA fails, mockPickId is the safety net (set below)
   }
 
   const roster = state.players.filter((player) => player.teamId === pickingTeamId);
@@ -208,11 +214,26 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
     return acc;
   }, {} as Record<Position, number>);
 
-  const prospects = state.freeAgents
+  let prospects = state.freeAgents
     .map((id) => state.players.find((player) => player.id === id))
     .filter((player): player is Player => Boolean(player))
     .filter((player) => player.experience === 0);
-  if (prospects.length === 0) return undefined;
+  // Fallback: if experience filter killed all prospects, include all free agents
+  if (prospects.length === 0) {
+    prospects = state.freeAgents
+      .map((id) => state.players.find((player) => player.id === id))
+      .filter((player): player is Player => Boolean(player));
+  }
+  if (prospects.length === 0) {
+    // Last resort: if no BPA prospects found in round 1, fall back to mock pick
+    if (round === 1 && state.nflMockDraft && state.nflMockDraft.length > 0) {
+      const availableIds = new Set(state.freeAgents);
+      for (const mock of state.nflMockDraft) {
+        if (availableIds.has(mock.playerId)) return mock.playerId;
+      }
+    }
+    return undefined;
+  }
 
   const ranked = prospects
     .map((prospect) => {
@@ -231,15 +252,18 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
 
   const bpaResult = ranked[0]?.playerId;
 
-  // Safety net: if BPA failed in round 1 with mock data, fall back to mock pick
-  if (!bpaResult && round === 1 && state.nflMockDraft && state.nflMockDraft.length > 0) {
+  // If BPA found someone in the 15% deviation case, use them
+  if (bpaResult) return bpaResult;
+
+  // Safety net: fall back to mock pick for round 1
+  if (round === 1 && state.nflMockDraft && state.nflMockDraft.length > 0) {
     const availableIds = new Set(state.freeAgents);
     for (const mock of state.nflMockDraft) {
       if (availableIds.has(mock.playerId)) return mock.playerId;
     }
   }
 
-  return bpaResult;
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
