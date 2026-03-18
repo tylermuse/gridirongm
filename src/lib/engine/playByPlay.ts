@@ -598,6 +598,37 @@ export function simulatePlayByPlay(
       if (replayed) return true;
     }
 
+    // Victory formation: kneel the ball when winning late
+    const kneelScoreDiff = state.possession === 'home'
+      ? state.homeScore - state.awayScore
+      : state.awayScore - state.homeScore;
+    if (kneelScoreDiff > 0 && state.quarter >= 4 && state.timeSecs <= 120 && state.down <= 3) {
+      const offQb = ok.qb;
+      const desc = offQb
+        ? `${offQb.firstName[0]}. ${offQb.lastName} takes a knee. Victory formation.`
+        : 'Quarterback kneels. Victory formation.';
+      events.push({
+        id: playId++,
+        type: 'run',
+        description: desc,
+        quarter: state.quarter,
+        timeStr: formatTime(state.timeSecs),
+        possession: state.possession,
+        fieldPos: state.fieldPos,
+        down: state.down,
+        yardsToGo: state.yardsToGo,
+        yardsGained: -1,
+        homeScore: state.homeScore,
+        awayScore: state.awayScore,
+        isScoring: false,
+      });
+      state.fieldPos = Math.max(1, state.fieldPos - 1);
+      state.down++;
+      state.yardsToGo++;
+      advanceClock(40);
+      return state.timeSecs > 0;
+    }
+
     // 4th down decision
     if (state.down === 4) {
       const distanceToGoal = 100 - state.fieldPos;

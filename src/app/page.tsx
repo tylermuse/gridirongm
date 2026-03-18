@@ -470,9 +470,18 @@ function Dashboard() {
 
         {/* Next Game: Watch Live + Injury Report */}
         {(() => {
-          const nextGame = phase === 'regular'
+          let nextGame = phase === 'regular'
             ? schedule.find(g => g.week === week && !g.played && (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId))
             : null;
+          // During playoffs, find the user's next unplayed matchup
+          if (!nextGame && phase === 'playoffs' && playoffBracket) {
+            const userMatchup = playoffBracket.find(m =>
+              !m.winnerId && (m.homeTeamId === userTeamId || m.awayTeamId === userTeamId)
+            );
+            if (userMatchup && userMatchup.homeTeamId && userMatchup.awayTeamId) {
+              nextGame = { id: userMatchup.id, week: 99, season, homeTeamId: userMatchup.homeTeamId, awayTeamId: userMatchup.awayTeamId, homeScore: 0, awayScore: 0, played: false, playerStats: {} };
+            }
+          }
           const injuredPlayers = roster.filter(p => p.injury && !p.retired).sort((a, b) => (b.injury?.weeksLeft ?? 0) - (a.injury?.weeksLeft ?? 0));
           const oppTeam = nextGame ? teams.find(t => t.id === (nextGame.homeTeamId === userTeamId ? nextGame.awayTeamId : nextGame.homeTeamId)) : null;
           return (nextGame || injuredPlayers.length > 0) ? (
@@ -483,7 +492,7 @@ function Dashboard() {
                     <div className="flex items-center gap-3">
                       <TeamLogo abbreviation={oppTeam.abbreviation} primaryColor={oppTeam.primaryColor} secondaryColor={oppTeam.secondaryColor} logoUrl={oppTeam.logoUrl} size="md" />
                       <div>
-                        <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider">Week {week} · {nextGame.homeTeamId === userTeamId ? 'Home' : 'Away'}</div>
+                        <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider">{phase === 'playoffs' ? 'Playoffs' : `Week ${week}`} · {nextGame.homeTeamId === userTeamId ? 'Home' : 'Away'}</div>
                         <div className="font-bold">{nextGame.homeTeamId === userTeamId ? 'vs' : '@'} {oppTeam.city} {oppTeam.name}</div>
                         <div className="text-xs text-[var(--text-sec)]">{oppTeam.record.wins}-{oppTeam.record.losses}</div>
                       </div>
