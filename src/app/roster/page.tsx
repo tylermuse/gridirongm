@@ -85,7 +85,7 @@ function getGenericStat(p: Player): string {
     case 'S': return `${s.tackles} tkl · ${s.passDeflections ?? 0} PD · ${s.defensiveINTs} INT`;
     case 'K': return `${s.fieldGoalsMade}/${s.fieldGoalAttempts} FG${s.fieldGoalAttempts > 0 ? ` (${Math.round(s.fieldGoalsMade / s.fieldGoalAttempts * 100)}%)` : ''}`;
     case 'OL': return `${s.gamesPlayed} GP · ${s.sacksAllowed ?? 0} SA · ${(s.passBlocks ?? 0) > 0 ? ((s.sacksAllowed ?? 0) / s.passBlocks * 100).toFixed(1) : '0.0'}%`;
-    case 'P': return `${s.gamesPlayed} GP`;
+    case 'P': return `${s.puntAttempts ?? 0} punts · ${s.puntYards ?? 0} yds${(s.puntAttempts ?? 0) > 0 ? ` · ${(Math.round((s.puntYards ?? 0) / (s.puntAttempts ?? 1) * 10) / 10)} avg` : ''}`;
     default: return '—';
   }
 }

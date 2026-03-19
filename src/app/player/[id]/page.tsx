@@ -305,6 +305,14 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                       </div>
                     </>
                   )}
+                  {stats.puntAttempts > 0 && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-[var(--text-sec)]">Punts</span>
+                        <span className="font-mono">{stats.puntAttempts} att, {stats.puntYards} yds ({stats.puntAttempts > 0 ? Math.round(stats.puntYards / stats.puntAttempts * 10) / 10 : 0} avg)</span>
+                      </div>
+                    </>
+                  )}
                   <div className="border-t border-[var(--border)] pt-2 mt-2">
                     <div className="text-xs font-bold text-[var(--text-sec)] mb-1">Career</div>
                     {career.passAttempts > 0 && (
@@ -506,6 +514,7 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                     {(player.position === 'WR' || player.position === 'TE') && <><th className="text-right pb-2">REC</th><th className="text-right pb-2">YDS</th><th className="text-right pb-2">TD</th></>}
                     {(['DL', 'LB', 'CB', 'S'].includes(player.position)) && <><th className="text-right pb-2">TKL</th><th className="text-right pb-2">SCK</th><th className="text-right pb-2">INT</th><th className="text-right pb-2">PD</th></>}
                     {(player.position === 'OL') && <><th className="text-right pb-2">GP</th></>}
+                    {(player.position === 'P') && <><th className="text-right pb-2">PUNTS</th><th className="text-right pb-2">YDS</th><th className="text-right pb-2">AVG</th></>}
                   </tr>
                 </thead>
                 <tbody>
@@ -544,6 +553,11 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                           <td className="py-1.5 text-right">{s.passDeflections}</td>
                         </>}
                         {(player.position === 'OL') && <td className="py-1.5 text-right">{s.gamesPlayed}</td>}
+                        {(player.position === 'P') && <>
+                          <td className="py-1.5 text-right">{s.puntAttempts ?? 0}</td>
+                          <td className="py-1.5 text-right">{s.puntYards ?? 0}</td>
+                          <td className="py-1.5 text-right">{(s.puntAttempts ?? 0) > 0 ? (Math.round((s.puntYards ?? 0) / (s.puntAttempts ?? 1) * 10) / 10) : 0}</td>
+                        </>}
                       </tr>
                     );
                   })}

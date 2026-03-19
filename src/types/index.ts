@@ -76,6 +76,9 @@ export interface PlayerStats {
   fieldGoalsMade: number;
   extraPointAttempts: number;
   extraPointsMade: number;
+  // Punting
+  puntAttempts: number;
+  puntYards: number;
 }
 
 /** Per-year contract breakdown used for restructured contracts */
@@ -690,6 +693,7 @@ export function emptyStats(): PlayerStats {
     tackles: 0, tacklesForLoss: 0, sacks: 0, defensiveINTs: 0, passDeflections: 0, forcedFumbles: 0,
     sacksAllowed: 0, passBlocks: 0,
     fieldGoalAttempts: 0, fieldGoalsMade: 0, extraPointAttempts: 0, extraPointsMade: 0,
+    puntAttempts: 0, puntYards: 0,
   };
 }
 

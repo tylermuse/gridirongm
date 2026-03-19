@@ -1107,15 +1107,29 @@ function computeSeasonAwards(state: LeagueState): { award: string; playerId: str
     awards.push({ award: 'Defensive POY', playerId: dpoy.id, teamId: dpoy.teamId! });
   }
 
-  // OPOY — total yards based
+  // OPOY — yards + TDs based, QBs must be 20% better to win (since they accumulate way more yards)
   const opoyCandidates = withGames(['QB', 'RB', 'WR', 'TE']);
   if (opoyCandidates.length > 0) {
-    const opoy = opoyCandidates.sort((a, b) => {
-      const aYds = a.stats.passYards + a.stats.rushYards + a.stats.receivingYards;
-      const bYds = b.stats.passYards + b.stats.rushYards + b.stats.receivingYards;
-      return bYds - aYds;
-    })[0];
-    awards.push({ award: 'Offensive POY', playerId: opoy.id, teamId: opoy.teamId! });
+    const opoyScore = (p: Player) => {
+      const yards = p.stats.passYards + p.stats.rushYards + p.stats.receivingYards;
+      const tds = p.stats.passTDs + p.stats.rushTDs + p.stats.receivingTDs;
+      return yards + tds * 30; // 30 bonus pts per TD
+    };
+    const sorted = opoyCandidates.sort((a, b) => opoyScore(b) - opoyScore(a));
+    const top = sorted[0];
+    const second = sorted[1];
+    // QBs must outscore the next candidate by 20% to win OPOY
+    if (top.position === 'QB' && second && opoyScore(top) < opoyScore(second) * 1.20) {
+      // QB didn't clear the 20% threshold — give it to the best non-QB
+      const nonQB = sorted.find(p => p.position !== 'QB');
+      if (nonQB) {
+        awards.push({ award: 'Offensive POY', playerId: nonQB.id, teamId: nonQB.teamId! });
+      } else {
+        awards.push({ award: 'Offensive POY', playerId: top.id, teamId: top.teamId! });
+      }
+    } else {
+      awards.push({ award: 'Offensive POY', playerId: top.id, teamId: top.teamId! });
+    }
   }
 
   const rookies = activePlayers.filter(p => p.experience === 1 && p.stats.gamesPlayed >= 10);

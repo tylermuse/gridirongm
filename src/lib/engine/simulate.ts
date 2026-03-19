@@ -128,6 +128,8 @@ type PlayResult = {
   kicker?: Player;
   fieldGoalMade?: boolean;
   passDefender?: Player; // CB/S who broke up an incomplete pass
+  punter?: Player;       // P who punted the ball
+  puntYards?: number;    // yards of the punt
   tackleForLoss?: boolean; // rush play went for negative yards
 };
 
@@ -452,7 +454,12 @@ function simulateDrive(
         });
         return { points: made ? 3 : 0, plays };
       }
-      // Turnover on downs / punt
+      // Punt
+      const punter = offense.find(p => p.position === 'P' && (!p.injury || p.injury.weeksLeft === 0));
+      const puntDist = 35 + Math.floor(Math.random() * 20); // 35-55 yards
+      if (punter) {
+        plays.push({ type: 'punt', yards: puntDist, touchdown: false, turnover: false, punter, puntYards: puntDist });
+      }
       return { points: 0, plays };
     }
 
@@ -752,6 +759,12 @@ export function simulateGame(
             if (play.fieldGoalMade) s.fieldGoalsMade = (s.fieldGoalsMade ?? 0) + 1;
           }
         }
+      }
+      // Punt stats
+      if (play.type === 'punt' && play.punter) {
+        const s = ensure(playerStats, play.punter.id);
+        s.puntAttempts = (s.puntAttempts ?? 0) + 1;
+        s.puntYards = (s.puntYards ?? 0) + (play.puntYards ?? 0);
       }
     }
     // Mark gamesPlayed for all healthy roster players
