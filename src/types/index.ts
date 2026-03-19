@@ -647,7 +647,7 @@ export interface WeeklyRecapData {
 }
 
 export interface RecapSegmentData {
-  type: 'headline' | 'upset' | 'comeback' | 'blowout' | 'shootout' | 'defensive' | 'performance' | 'streak' | 'rivalry' | 'milestone' | 'summary';
+  type: 'headline' | 'upset' | 'comeback' | 'blowout' | 'shootout' | 'defensive' | 'performance' | 'streak' | 'rivalry' | 'milestone' | 'trade' | 'summary';
   title: string;
   body: string;
   teamIds: string[];

@@ -59,7 +59,8 @@ function playerTradeValue(player: Player): number {
   return Math.round(rawValue - contractCost);
 }
 
-const PICK_VALUES = [150, 90, 55, 35, 20, 10, 5];
+// Reduced R1 value — was 150 which made AI overvalue 1st rounders in trades
+const PICK_VALUES = [110, 65, 40, 25, 15, 8, 4];
 function pickTradeValue(pick: DraftPick): number {
   return PICK_VALUES[(pick.round - 1)] ?? 5;
 }

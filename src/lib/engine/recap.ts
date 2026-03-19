@@ -16,12 +16,12 @@
  *   - Player milestones
  */
 
-import type { GameResult, Player, PlayerStats, Team } from '@/types';
+import type { GameResult, Player, PlayerStats, Team, NewsItem } from '@/types';
 
 /* ─── Public Types ─── */
 
 export interface RecapSegment {
-  type: 'headline' | 'upset' | 'comeback' | 'blowout' | 'shootout' | 'defensive' | 'performance' | 'streak' | 'rivalry' | 'milestone' | 'summary';
+  type: 'headline' | 'upset' | 'comeback' | 'blowout' | 'shootout' | 'defensive' | 'performance' | 'streak' | 'rivalry' | 'milestone' | 'summary' | 'trade';
   title: string;
   body: string;
   /** IDs of teams involved */
@@ -471,12 +471,60 @@ function generateWeekSummary(games: GameResult[], teams: Team[], week: number): 
  * @param season - Current season number
  * @param week - Week number that was just played
  */
+// ── Trade Analysis ─────────────────────────────────────────────────────────
+
+function detectTrades(
+  newsItems: NewsItem[],
+  teams: Team[],
+  players: Player[],
+  season: number,
+  week: number,
+): RecapSegment[] {
+  const tradeNews = newsItems.filter(n => n.type === 'trade' && n.season === season && n.week === week);
+  if (tradeNews.length === 0) return [];
+
+  return tradeNews.map(news => {
+    const involvedPlayers = (news.playerIds ?? []).map(id => players.find(p => p.id === id)).filter(Boolean) as Player[];
+    const bestPlayer = involvedPlayers.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+    const team = teams.find(t => t.id === news.teamId);
+
+    // Analyze the trade
+    let analysis = '';
+    if (bestPlayer) {
+      const age = bestPlayer.age;
+      const ovr = bestPlayer.ratings.overall;
+      if (ovr >= 80) {
+        analysis = age <= 27
+          ? `Moving a ${ovr} OVR star in their prime is a bold move. This could define the franchise for years.`
+          : `A ${ovr} OVR veteran changes hands. The acquiring team gets an immediate impact player, but the window is limited.`;
+      } else if (ovr >= 70) {
+        analysis = `A solid ${ovr} OVR contributor moves. Both sides have a case that they came out ahead.`;
+      } else {
+        analysis = `A depth swap with future implications. The draft capital exchanged may end up being the real story.`;
+      }
+    } else {
+      analysis = 'A picks-for-picks swap — both teams betting on their ability to draft well.';
+    }
+
+    return {
+      type: 'trade' as const,
+      title: 'Trade Alert',
+      body: `${news.headline} ${analysis}`,
+      teamIds: team ? [team.id] : [],
+      playerIds: news.playerIds ?? [],
+      icon: '🔄',
+      priority: bestPlayer && bestPlayer.ratings.overall >= 75 ? 85 : 60,
+    };
+  });
+}
+
 export function generateWeeklyRecap(
   games: GameResult[],
   teams: Team[],
   players: Player[],
   season: number,
   week: number,
+  newsItems?: NewsItem[],
 ): WeeklyRecap {
   const playedGames = games.filter(g => g.played);
   if (playedGames.length === 0) return { season, week, segments: [] };
@@ -490,6 +538,7 @@ export function generateWeeklyRecap(
     ...detectStandoutPerformances(playedGames, teams, players),
     ...detectStreaks(teams),
     ...detectRivalries(playedGames, teams),
+    ...detectTrades(newsItems ?? [], teams, players, season, week),
     generateWeekSummary(playedGames, teams, week),
   ];
 

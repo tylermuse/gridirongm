@@ -21,6 +21,7 @@ const SEGMENT_TYPE_LABELS: Record<RecapSegmentData['type'], string> = {
   streak: 'Streak Watch',
   rivalry: 'Division Rivalry',
   milestone: 'Milestone',
+  trade: 'Trade Analysis',
   summary: 'League Summary',
 };
 
@@ -35,6 +36,7 @@ const SEGMENT_TYPE_COLORS: Record<RecapSegmentData['type'], string> = {
   streak: 'bg-indigo-500',
   rivalry: 'bg-rose-600',
   milestone: 'bg-teal-500',
+  trade: 'bg-cyan-600',
   summary: 'bg-gray-500',
 };
 

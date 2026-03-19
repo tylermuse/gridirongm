@@ -2116,7 +2116,7 @@ export const useGameStore = create<GameStore>()(
         // Generate weekly recap from this week's games
         const simmedWeek = state.week;
         const weekGames = (result.patch.schedule as GameResult[]).filter(g => g.week === simmedWeek && g.played);
-        const recap = generateWeeklyRecap(weekGames, result.patch.teams as Team[], result.patch.players as Player[], state.season, simmedWeek);
+        const recap = generateWeeklyRecap(weekGames, result.patch.teams as Team[], result.patch.players as Player[], state.season, simmedWeek, result.patch.newsItems as import('@/types').NewsItem[]);
         const weeklyRecaps = [...state.weeklyRecaps, recap];
 
         if (result.isSeasonOver) {
@@ -2169,7 +2169,7 @@ export const useGameStore = create<GameStore>()(
 
           // Generate recap for the week just simmed
           const weekGames = schedule.filter(g => g.week === simmedWeek && g.played);
-          const recap = generateWeeklyRecap(weekGames, teams, players, current.season, simmedWeek);
+          const recap = generateWeeklyRecap(weekGames, teams, players, current.season, simmedWeek, newsItems);
           weeklyRecaps = [...weeklyRecaps, recap];
 
           if (result.isSeasonOver) {

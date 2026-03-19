@@ -531,6 +531,7 @@ const TEMPLATE_MAP: Record<RecapSegmentData['type'], TemplateFunc[]> = {
   summary: summaryTemplates,
   headline: genericTemplates,
   milestone: genericTemplates,
+  trade: genericTemplates,
 };
 
 /* ─── Intro / Outro Templates ─── */
