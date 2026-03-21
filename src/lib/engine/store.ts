@@ -4452,11 +4452,16 @@ export const useGameStore = create<GameStore>()(
           true, // skip AI value check — AI already proposed this
         );
 
-        set({
-          tradeProposals: state.tradeProposals.map(p =>
-            p.id === proposalId ? { ...p, status: accept && tradeResult.success ? 'accepted' : 'rejected' } : p,
-          ),
-        });
+        // Only mark as accepted/rejected if the trade succeeded or was explicitly rejected
+        // If it failed (e.g. cap issue), keep it pending so user can try again
+        if (tradeResult.success) {
+          set({
+            tradeProposals: state.tradeProposals.map(p =>
+              p.id === proposalId ? { ...p, status: 'accepted' } : p,
+            ),
+          });
+        }
+        // If trade failed, proposal stays 'pending' — user can adjust roster and retry
 
         return tradeResult.success;
       },
