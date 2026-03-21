@@ -52,7 +52,7 @@ const RATING_LABELS: Record<keyof Omit<PlayerRatings, 'overall'>, string> = {
 
 export default function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { players, teams, userTeamId, releasePlayer } = useGameStore();
+  const { players, teams, userTeamId, releasePlayer, seasonHistory } = useGameStore();
   const [confirmRelease, setConfirmRelease] = useState(false);
 
   const player = players.find(p => p.id === id);
@@ -468,6 +468,55 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
             </div>
           </Card>
         )}
+
+        {/* Career Awards */}
+        {(() => {
+          const playerAwards: { label: string; count: number; icon: string }[] = [];
+          // Collect from seasonHistory
+          for (const sh of (seasonHistory ?? [])) {
+            // Individual awards (MVP, OPOY, DPOY, ROY)
+            for (const a of (sh.awards ?? [])) {
+              if (a.playerId === player.id) {
+                const existing = playerAwards.find(pa => pa.label === a.award);
+                if (existing) existing.count++;
+                else playerAwards.push({ label: a.award, count: 1, icon: a.award === 'MVP' ? '⭐' : a.award.includes('Defensive') ? '🛡️' : a.award.includes('Offensive') ? '⚡' : a.award.includes('Rookie') ? '🌟' : a.award === 'Championship MVP' ? '🏆' : '🏅' });
+              }
+            }
+            // Championship MVP
+            if (sh.finalsMvpId === player.id) {
+              const existing = playerAwards.find(pa => pa.label === 'Championship MVP');
+              if (existing) existing.count++;
+              else playerAwards.push({ label: 'Championship MVP', count: 1, icon: '🏆' });
+            }
+            // All-Pro 1st Team
+            if ((sh.allLeagueFirst ?? []).some(e => e.playerId === player.id)) {
+              const existing = playerAwards.find(pa => pa.label === 'All-Pro 1st Team');
+              if (existing) existing.count++;
+              else playerAwards.push({ label: 'All-Pro 1st Team', count: 1, icon: '🥇' });
+            }
+            // All-Pro 2nd Team
+            if ((sh.allLeagueSecond ?? []).some(e => e.playerId === player.id)) {
+              const existing = playerAwards.find(pa => pa.label === 'All-Pro 2nd Team');
+              if (existing) existing.count++;
+              else playerAwards.push({ label: 'All-Pro 2nd Team', count: 1, icon: '🥈' });
+            }
+          }
+          if (playerAwards.length === 0) return null;
+          return (
+            <Card>
+              <CardHeader><CardTitle>Career Awards</CardTitle></CardHeader>
+              <div className="flex flex-wrap gap-2">
+                {playerAwards.map(a => (
+                  <div key={a.label} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-xs">
+                    <span>{a.icon}</span>
+                    <span className="font-semibold text-amber-800">{a.label}</span>
+                    {a.count > 1 && <span className="text-amber-600 font-bold">×{a.count}</span>}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          );
+        })()}
 
         {/* Rating history */}
         {player.ratingHistory.length >= 1 && (
