@@ -3008,13 +3008,10 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
-        // Add any new draft prospects not already in the players array
-        // (NFL mock draft creates new prospects that replace imported ones)
+        // Ensure EVERY draft class player is in the players array
         const existingIds = new Set(updatedPlayers.map(p => p.id));
-        const newProspects = draftClass.filter(p => !existingIds.has(p.id));
-        const finalPlayers = newProspects.length > 0
-          ? [...updatedPlayers, ...newProspects]
-          : (importedDraftClass.length > 0 ? updatedPlayers : [...updatedPlayers, ...draftClass]);
+        const missingFromPlayers = draftClass.filter(p => !existingIds.has(p.id));
+        let finalPlayers = [...updatedPlayers, ...missingFromPlayers];
 
         // Generate dynamic mock draft for non-NFL years (or if NFL mock wasn't created)
         if (nflMockDraft.length === 0) {
@@ -3069,6 +3066,24 @@ export const useGameStore = create<GameStore>()(
         // PRD-07: Compute scouting data for draft prospects
         const scoutingData = computeScoutingData(draftClass, state.scoutingLevel);
 
+        // Verify all draft class and mock draft players are in finalPlayers
+        if (nflMockDraft.length > 0) {
+          const fpIds = new Set(finalPlayers.map(p => p.id));
+          for (const mock of nflMockDraft) {
+            if (!fpIds.has(mock.playerId)) {
+              console.error(`[advanceToDraft] Mock draft player ${mock.firstName} ${mock.lastName} (${mock.playerId}) NOT in finalPlayers! Adding now.`);
+              const fix = generatePlayer(mock.position as Position, 70, { age: 21, experience: 0 });
+              fix.id = mock.playerId;
+              fix.firstName = mock.firstName;
+              fix.lastName = mock.lastName;
+              fix.position = mock.position as Position;
+              fix.college = mock.college;
+              fix.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
+              finalPlayers.push(fix);
+            }
+          }
+        }
+
         // Recalculate all team payrolls from scratch to prevent drift
         const recalcTeams = updatedTeams.map(t => ({
           ...t,
@@ -3105,27 +3120,12 @@ export const useGameStore = create<GameStore>()(
       },
 
       draftPlayer: (playerId: string) => {
-        let state = get();
+        const state = get();
         if (state.phase !== 'draft') return;
-        let player = state.players.find(p => p.id === playerId);
+        const player = state.players.find(p => p.id === playerId);
         if (!player) {
-          // Player not in players array — create from nflMockDraft if available
-          const mock = state.nflMockDraft?.find(m => m.playerId === playerId);
-          if (mock) {
-            const created = generatePlayer(mock.position as Position, 70, { age: 21, experience: 0 });
-            created.id = playerId;
-            created.firstName = mock.firstName;
-            created.lastName = mock.lastName;
-            created.position = mock.position as Position;
-            created.college = mock.college;
-            created.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
-            // Add to players array and get fresh state
-            set({ players: [...state.players, created] });
-            state = get(); // re-read state after adding the player
-            player = created;
-          } else {
-            return;
-          }
+          console.error(`[draftPlayer] Player ${playerId} not found in players array (${state.players.length} players, ${state.freeAgents.length} FAs)`);
+          return;
         }
 
         const currentPickTeamId = state.draftOrder[0];
