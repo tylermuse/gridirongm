@@ -679,7 +679,7 @@ export default function PlayoffsPage() {
               return (
                 <Card>
                   <CardHeader><CardTitle>All-Rookie Team</CardTitle></CardHeader>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                  <div className="space-y-1">
                     {allRookiePlayers.map((ar, idx) => {
                       const t = teams.find(t => t.id === ar.player.teamId);
                       const isUserPlayer = ar.player.teamId === userTeamId;
@@ -694,10 +694,10 @@ export default function PlayoffsPage() {
                               {ar.player.firstName[0]}. {ar.player.lastName}
                             </button>
                             {isUserPlayer && <span className="text-[9px] text-blue-600 font-bold shrink-0">★</span>}
-                            <span className="text-[10px] text-[var(--text-sec)] truncate">{posStatLine(ar.player)}</span>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-[var(--text-sec)]">{t?.abbreviation}</span>
+                            <span className="text-[10px] text-[var(--text-sec)]">{posStatLine(ar.player)}</span>
+                            <span className="text-[var(--text-sec)] ml-1">{t?.abbreviation}</span>
                           </div>
                         </div>
                       );
