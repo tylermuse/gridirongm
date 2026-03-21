@@ -610,8 +610,11 @@ export default function RosterPage() {
         {/* ── DEPTH CHART VIEW ── */}
         {viewMode === 'depth' && (
           <div className="space-y-4">
-            <p className="text-xs text-[var(--text-sec)]">
-              Drag players to reorder the depth chart. ★ = All-League selection.
+            <p className="text-xs text-[var(--text-sec)] hidden sm:block">
+              Drag players to reorder the depth chart. Use ▲▼ buttons on mobile. ★ = All-League selection.
+            </p>
+            <p className="text-xs text-[var(--text-sec)] sm:hidden">
+              Use ▲▼ to reorder. ★ = All-League selection.
             </p>
             {positionGroups.map(group => (
               <Card key={group.label}>
@@ -621,9 +624,9 @@ export default function RosterPage() {
                     const depthGroup = getDepthGroup(pos);
                     return (
                       <div key={pos} className="border-t border-[var(--border)] first:border-t-0">
-                        <div className="flex items-center gap-2 py-2 px-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 py-2 px-2">
                           <div className="w-8 text-xs font-bold text-[var(--text-sec)]">{pos}</div>
-                          <div className="flex-1 grid grid-cols-4 gap-2">
+                          <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
                             {Array.from({ length: Math.max(4, depthGroup.length) }).map((_, idx) => {
                               const player = depthGroup[idx];
                               if (!player) {
@@ -675,12 +678,12 @@ export default function RosterPage() {
                                   </div>
                                   <button
                                     onClick={(e) => { e.stopPropagation(); setSelectedPlayerId(player.id); }}
-                                    className="text-xs font-semibold truncate block hover:text-blue-600 transition-colors"
+                                    className="text-xs font-semibold sm:truncate block hover:text-blue-600 transition-colors text-left"
                                   >
                                     {isAllPro && <span className="text-amber-600 mr-0.5">★</span>}
                                     {player.firstName[0]}. {player.lastName}
                                   </button>
-                                  <div className="text-[10px] text-[var(--text-sec)] mt-0.5 truncate">
+                                  <div className="text-[10px] text-[var(--text-sec)] mt-0.5 sm:truncate">
                                     {getGenericStat(player)}
                                   </div>
                                   {player.injury && (
