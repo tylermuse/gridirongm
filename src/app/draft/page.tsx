@@ -219,7 +219,7 @@ function OnTheClockSection({
                   Sim to My Pick
                 </Button>
               )}
-              <Button onClick={() => { if (window.confirm('Are you sure you want to auto-draft all remaining picks?')) onSimAll?.(); }} size="sm" variant="secondary" disabled={!canSimulate}>
+              <Button onClick={() => onSimAll?.()} size="sm" variant="secondary" disabled={!canSimulate}>
                 Auto-Draft All
               </Button>
             </div>
