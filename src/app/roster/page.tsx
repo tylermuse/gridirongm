@@ -258,6 +258,15 @@ export default function RosterPage() {
     setDragOverIndex(null);
   }
 
+  function handleMovePlayer(position: Position, fromIdx: number, toIdx: number) {
+    const group = getDepthGroup(position);
+    if (toIdx < 0 || toIdx >= group.length) return;
+    const ids = group.map(p => p.id);
+    const [movedId] = ids.splice(fromIdx, 1);
+    ids.splice(toIdx, 0, movedId);
+    reorderDepthChart(position, ids);
+  }
+
   const positionGroups: Array<{ label: string; positions: Position[] }> = [
     { label: 'Offense', positions: ['QB', 'RB', 'WR', 'TE', 'OL'] },
     { label: 'Defense', positions: ['DL', 'LB', 'CB', 'S'] },
@@ -635,9 +644,31 @@ export default function RosterPage() {
                                   } ${isDragOver ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-[var(--bg)]' : ''}`}
                                 >
                                   <div className="flex items-center justify-between mb-0.5">
-                                    <span className="text-[10px] text-[var(--text-sec)]">
-                                      {DEPTH_LABELS[idx] ?? `${idx + 1}th`}
-                                    </span>
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px] text-[var(--text-sec)]">
+                                        {DEPTH_LABELS[idx] ?? `${idx + 1}th`}
+                                      </span>
+                                      {isViewingOwnTeam && depthGroup.length > 1 && (
+                                        <div className="flex gap-0.5">
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); handleMovePlayer(pos, idx, idx - 1); }}
+                                            disabled={idx === 0}
+                                            className="w-4 h-4 flex items-center justify-center rounded text-[8px] bg-[var(--surface)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-20 border border-[var(--border)]"
+                                            title="Move up"
+                                          >
+                                            ▲
+                                          </button>
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); handleMovePlayer(pos, idx, idx + 1); }}
+                                            disabled={idx >= depthGroup.length - 1}
+                                            className="w-4 h-4 flex items-center justify-center rounded text-[8px] bg-[var(--surface)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-20 border border-[var(--border)]"
+                                            title="Move down"
+                                          >
+                                            ▼
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
                                     <span className={`text-xs font-bold ${ratingColor(player.ratings.overall)}`}>
                                       {player.ratings.overall}
                                     </span>
