@@ -21,7 +21,7 @@ import { developPlayers } from './development';
 import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
-import { generateCoachingStaff, coachingBonus } from './coaching';
+import { generateCoachingStaff, generateCoach, coachingBonus } from './coaching';
 
 const SAVE_VERSION = 18;
 
@@ -96,6 +96,8 @@ interface GameStore extends LeagueState {
   // PRD-07: Scouting
   setScoutingLevel: (level: 0 | 1 | 2) => void;
   deepScoutPlayer: (playerId: string) => void;
+  // Coaching
+  replaceCoach: (role: import('@/types').CoachRole) => void;
   // PRD-13: Depth chart
   reorderDepthChart: (position: Position, playerIds: string[]) => void;
   resetDepthChart: (position: Position) => void;
@@ -4661,6 +4663,30 @@ export const useGameStore = create<GameStore>()(
             ...state.draftScoutingData,
             [playerId]: { ...scoutData, deepScouted: true, error: 2, scoutedOvr },
           },
+        });
+      },
+
+      // Replace a coach (fire + hire new one in the same role)
+      replaceCoach: (role: import('@/types').CoachRole) => {
+        const state = get();
+        const newCoach = generateCoach(role);
+        const updatedTeams = state.teams.map(t => {
+          if (t.id !== state.userTeamId) return t;
+          const coaches = (t.coaches ?? []).map(c => c.role === role ? newCoach : c);
+          // If role didn't exist, add it
+          if (!coaches.some(c => c.role === role)) coaches.push(newCoach);
+          return { ...t, coaches };
+        });
+        const oldCoach = state.teams.find(t => t.id === state.userTeamId)?.coaches?.find(c => c.role === role);
+        const roleLabel = role === 'HC' ? 'Head Coach' : role === 'OC' ? 'Offensive Coordinator' : 'Defensive Coordinator';
+        set({
+          teams: updatedTeams,
+          newsItems: [...state.newsItems, makeNews({
+            season: state.season, week: state.week, type: 'signing',
+            teamId: state.userTeamId,
+            headline: `${roleLabel} change: ${oldCoach ? `${oldCoach.firstName} ${oldCoach.lastName} fired` : 'Vacancy filled'}. ${newCoach.firstName} ${newCoach.lastName} hired.`,
+            isUserTeam: true,
+          })],
         });
       },
 

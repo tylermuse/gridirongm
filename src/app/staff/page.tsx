@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -32,7 +33,7 @@ function ovrColor(ovr: number): string {
   return 'text-red-600';
 }
 
-function CoachCard({ coach, roster, userTeam }: { coach: Coach; roster: Player[]; userTeam: import('@/types').Team }) {
+function CoachCard({ coach, roster, userTeam, onReplace }: { coach: Coach; roster: Player[]; userTeam: import('@/types').Team; onReplace?: () => void }) {
   const offSchemeLabel = coach.offensiveScheme ? OFFENSIVE_SCHEME_LABELS[coach.offensiveScheme] : null;
   const defSchemeLabel = coach.defensiveScheme ? DEFENSIVE_SCHEME_LABELS[coach.defensiveScheme] : null;
   const winPct = coach.careerWins + coach.careerLosses > 0
@@ -68,6 +69,14 @@ function CoachCard({ coach, roster, userTeam }: { coach: Coach; roster: Player[]
           <div className="text-right">
             <div className={`text-2xl font-black ${ovrColor(coach.ovr)}`}>{coach.ovr}</div>
             <div className="text-[10px] text-[var(--text-sec)] uppercase">OVR</div>
+            {onReplace && (
+              <button
+                onClick={onReplace}
+                className="mt-2 text-[10px] px-2.5 py-1 rounded bg-red-50 text-red-600 hover:bg-red-100 font-medium transition-colors border border-red-200"
+              >
+                Replace
+              </button>
+            )}
           </div>
         </div>
 
@@ -182,7 +191,8 @@ function generateRecommendations(
 }
 
 export default function StaffPage() {
-  const { teams, userTeamId, players } = useGameStore();
+  const { teams, userTeamId, players, replaceCoach } = useGameStore();
+  const [confirmReplace, setConfirmReplace] = useState<import('@/types').CoachRole | null>(null);
   const userTeam = teams.find(t => t.id === userTeamId);
   const coaches = userTeam?.coaches ?? [];
   const roster = players.filter(p => p.teamId === userTeamId && !p.retired);
@@ -223,7 +233,21 @@ export default function StaffPage() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {orderedCoaches.map(coach => (
-                <CoachCard key={coach.id} coach={coach} roster={roster} userTeam={userTeam} />
+                confirmReplace === coach.role ? (
+                  <Card key={coach.id}>
+                    <div className="p-5 text-center">
+                      <p className="font-bold mb-1">Replace {ROLE_LABELS[coach.role]}?</p>
+                      <p className="text-xs text-[var(--text-sec)] mb-3">
+                        Fire {coach.firstName} {coach.lastName} and hire a new {coach.role}. The replacement will have a random scheme and rating.
+                      </p>
+                      <div className="flex justify-center gap-2">
+                        <button onClick={() => { replaceCoach(coach.role); setConfirmReplace(null); }} className="px-4 py-1.5 text-xs font-bold rounded bg-red-600 text-white hover:bg-red-700 transition-colors">Fire &amp; Replace</button>
+                        <button onClick={() => setConfirmReplace(null)} className="px-4 py-1.5 text-xs rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors">Cancel</button>
+                      </div>
+                    </div>
+                  </Card>
+                ) :
+                <CoachCard key={coach.id} coach={coach} roster={roster} userTeam={userTeam} onReplace={() => setConfirmReplace(coach.role)} />
               ))}
             </div>
 
