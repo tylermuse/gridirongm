@@ -3103,17 +3103,13 @@ export const useGameStore = create<GameStore>()(
       },
 
       draftPlayer: (playerId: string) => {
-        const state = get();
+        let state = get();
         if (state.phase !== 'draft') return;
         let player = state.players.find(p => p.id === playerId);
         if (!player) {
-          // Player ID is in freeAgents but not in players array — this can happen
-          // with NFL mock draft prospects. Log the issue and skip gracefully.
-          console.warn(`[draftPlayer] Player ${playerId} not in players array. freeAgents has it: ${state.freeAgents.includes(playerId)}`);
-          // Try to find in nflMockDraft and create a minimal player
+          // Player not in players array — create from nflMockDraft if available
           const mock = state.nflMockDraft?.find(m => m.playerId === playerId);
           if (mock) {
-            console.warn(`[draftPlayer] Found in nflMockDraft: ${mock.firstName} ${mock.lastName}. Creating player.`);
             const created = generatePlayer(mock.position as Position, 70, { age: 21, experience: 0 });
             created.id = playerId;
             created.firstName = mock.firstName;
@@ -3121,8 +3117,9 @@ export const useGameStore = create<GameStore>()(
             created.position = mock.position as Position;
             created.college = mock.college;
             created.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
-            // Add to players array
+            // Add to players array and get fresh state
             set({ players: [...state.players, created] });
+            state = get(); // re-read state after adding the player
             player = created;
           } else {
             return;
