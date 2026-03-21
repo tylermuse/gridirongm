@@ -436,7 +436,8 @@ export default function RosterPage() {
                               onClick={() => setSelectedPlayerId(p.id)}
                               className="font-semibold hover:text-blue-600 transition-colors truncate"
                             >
-                              {p.firstName} {p.lastName}
+                              <span className="sm:hidden">{p.firstName[0]}. {p.lastName}</span>
+                              <span className="hidden sm:inline">{p.firstName} {p.lastName}</span>
                               {champTeamId === userTeamId && <span className="ml-0.5 text-xs" title="Championship Ring">💍</span>}
                             </button>
                             {p.contract.contractYears?.some(y => y.proratedBonus > 0) && (
@@ -737,7 +738,8 @@ export default function RosterPage() {
                         <td className="py-2.5 pl-2">
                           <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-600 transition-colors">
                             {allProPlayerIds.has(p.id) && <span className="text-amber-600 mr-1">★</span>}
-                            {p.firstName} {p.lastName}
+                            <span className="sm:hidden">{p.firstName[0]}. {p.lastName}</span>
+                            <span className="hidden sm:inline">{p.firstName} {p.lastName}</span>
                           </button>
                         </td>
                         <td className="py-2.5 text-center text-xs font-bold text-[var(--text-sec)]">{p.position}</td>
