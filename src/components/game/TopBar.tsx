@@ -381,6 +381,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                 ) : (
                   <Button
                     onClick={() => {
+                      if (!window.confirm('End free agency early? Any unsigned free agents will remain available for in-season signings, but AI teams will stop making moves.')) return;
                       startNewSeason();
                       router.push('/roster');
                     }}
