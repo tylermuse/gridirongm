@@ -3269,8 +3269,9 @@ export const useGameStore = create<GameStore>()(
 
           const fakeState = { ...state, draftOrder, freeAgents: freeAgentIds, players, teams } as LeagueState;
           const pid = autoDraftPlayerId(fakeState, pickTeam);
+          const overallPickDbg = totalPicks - draftOrder.length + 1;
           if (!pid) {
-            // Skip this pick — advance draft order and continue
+            console.error(`[simToUser] Pick ${overallPickDbg}: NO PLAYER FOUND for team ${pickTeam}. Skipping.`);
             draftOrder = draftOrder.slice(1);
             continue;
           }
