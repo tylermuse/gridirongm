@@ -17,7 +17,7 @@ import { generateRoster, generateDraftClass, generatePlayer, generateCombineStat
 import { resetUsedNames } from '../data/names';
 import { generateSchedule } from './schedule';
 import { simulateGame, generateBettingLine } from './simulate';
-import { developPlayers } from './development';
+import { developPlayers, POSITION_AGING } from './development';
 import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
@@ -2570,8 +2570,11 @@ export const useGameStore = create<GameStore>()(
         const retiredIds = new Set<string>();
         const retirementNews: NewsItem[] = [];
         const playersAfterRetirement = state.players.map(p => {
-          if (p.retired || !p.teamId || p.age < 35) return p;
-          const retirementChance = Math.min(0.90, 0.10 + (p.age - 35) * 0.10);
+          const posAging = POSITION_AGING[p.position];
+          if (p.retired || !p.teamId || p.age < (posAging?.retireAge ?? 35)) return p;
+          const retireAge = posAging?.retireAge ?? 35;
+          const retireRate = posAging?.retireRate ?? 0.10;
+          const retirementChance = Math.min(0.90, retireRate + (p.age - retireAge) * 0.12);
           if (Math.random() < retirementChance) {
             retiredIds.add(p.id);
             if (p.ratings.overall >= 70) {

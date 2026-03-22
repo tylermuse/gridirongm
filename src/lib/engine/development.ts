@@ -15,6 +15,35 @@ function clamp(val: number, lo = 20, hi = 99): number {
   return Math.round(Math.max(lo, Math.min(hi, val)));
 }
 
+/**
+ * Position-specific aging profiles.
+ *   peakEnd: age when decline starts (prime ends)
+ *   declineRate: multiplier on decline amount (1.0 = normal, 1.5 = faster, 0.7 = slower)
+ *   retireAge: age when retirement chance kicks in
+ *   retireRate: base retirement chance per year after retireAge (0.10 = 10%)
+ *
+ * Real NFL aging:
+ *   QB: can play into late 30s/40s, decline is gradual (arm stays, legs go)
+ *   K/P: longevity specialists, can play into 40s
+ *   OL: durable, play well into mid-30s
+ *   TE/LB/DL: moderate aging, decline mid-30s
+ *   WR/S: speed-dependent, decline early-mid 30s
+ *   RB/CB: most athletic, decline fastest, retire youngest
+ */
+export const POSITION_AGING: Record<Position, { peakEnd: number; declineRate: number; retireAge: number; retireRate: number }> = {
+  QB:  { peakEnd: 33, declineRate: 0.6,  retireAge: 37, retireRate: 0.15 },
+  RB:  { peakEnd: 27, declineRate: 1.5,  retireAge: 31, retireRate: 0.20 },
+  WR:  { peakEnd: 30, declineRate: 1.1,  retireAge: 34, retireRate: 0.15 },
+  TE:  { peakEnd: 31, declineRate: 0.9,  retireAge: 35, retireRate: 0.12 },
+  OL:  { peakEnd: 32, declineRate: 0.8,  retireAge: 36, retireRate: 0.12 },
+  DL:  { peakEnd: 31, declineRate: 1.0,  retireAge: 35, retireRate: 0.12 },
+  LB:  { peakEnd: 30, declineRate: 1.1,  retireAge: 34, retireRate: 0.15 },
+  CB:  { peakEnd: 29, declineRate: 1.4,  retireAge: 33, retireRate: 0.18 },
+  S:   { peakEnd: 30, declineRate: 1.2,  retireAge: 34, retireRate: 0.15 },
+  K:   { peakEnd: 35, declineRate: 0.4,  retireAge: 40, retireRate: 0.15 },
+  P:   { peakEnd: 35, declineRate: 0.4,  retireAge: 40, retireRate: 0.15 },
+}
+
 function gaussian(mean: number, stdDev: number): number {
   // Box-Muller
   const u1 = Math.max(1e-10, Math.random());
@@ -87,9 +116,11 @@ export function developPlayers(
       { season: completedSeason, overall: p.ratings.overall },
     ];
 
-    // Age-based retirement: only active roster players (teamId !== null)
-    if (p.teamId !== null && p.age >= 35) {
-      const retirementChance = Math.min(0.90, 0.10 + (p.age - 35) * 0.10);
+    // Age-based retirement: position-specific retirement ages
+    const aging = POSITION_AGING[p.position];
+    if (p.teamId !== null && p.age >= aging.retireAge) {
+      const yearsOverRetire = p.age - aging.retireAge;
+      const retirementChance = Math.min(0.90, aging.retireRate + yearsOverRetire * 0.12);
       if (Math.random() < retirementChance) {
         return { ...p, ratingHistory, retired: true };
       }
@@ -147,8 +178,8 @@ export function developPlayers(
         }
         ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
       }
-    } else if (p.age <= 30) {
-      // ── Prime Years ─────────────────────────────────────────────────
+    } else if (p.age <= aging.peakEnd) {
+      // ── Prime Years (position-specific peak) ─────────────────────────
       // Stable with slight improvements possible (awareness peaks here)
       ratings.awareness = clamp(ratings.awareness + gaussian(0.8, 0.5));
       for (const key of primaryKeys) {
@@ -157,22 +188,22 @@ export function developPlayers(
           (ratings as Record<string, number>)[k] + gaussian(0.1, 0.6),
         );
       }
-      // Slight speed decline starts at 29-30
-      if (p.age >= 29) {
-        ratings.speed = clamp(ratings.speed - gaussian(0.3, 0.3) * regressionMult);
+      // Slight speed decline starts 2 years before peak ends
+      if (p.age >= aging.peakEnd - 1) {
+        ratings.speed = clamp(ratings.speed - gaussian(0.3, 0.3) * regressionMult * aging.declineRate);
       }
       ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
-    } else if (p.age <= 33) {
-      // ── Early Decline ───────────────────────────────────────────────
-      // Gradual physical decline, awareness can still grow slightly
-      const yearsOver30 = p.age - 30;
-      const declineAmount = clamp(gaussian(0.8 + yearsOver30 * 0.3, 0.8), 0, 3) * regressionMult;
+    } else if (p.age <= aging.peakEnd + 3) {
+      // ── Early Decline (position-specific) ─────────────────────────────
+      const yearsOverPeak = p.age - aging.peakEnd;
+      const declineAmount = clamp(gaussian(0.8 + yearsOverPeak * 0.3, 0.8), 0, 3) * regressionMult * aging.declineRate;
       for (const key of primaryKeys) {
         const k = key as string;
-        // Physical attributes decline, mental ones (awareness) can offset
         if (key === 'awareness') {
+          // Mental attributes can still grow (especially for QBs)
+          const awarenessGrowth = p.position === 'QB' ? 0.8 : 0.5;
           (ratings as Record<string, number>)[k] = clamp(
-            (ratings as Record<string, number>)[k] + gaussian(0.5, 0.5),
+            (ratings as Record<string, number>)[k] + gaussian(awarenessGrowth, 0.5),
           );
         } else {
           (ratings as Record<string, number>)[k] = clamp(
@@ -180,15 +211,13 @@ export function developPlayers(
           );
         }
       }
-      // Speed decline
-      const speedDecline = clamp(gaussian(0.5 + yearsOver30 * 0.2, 0.5), 0, 2) * regressionMult;
+      const speedDecline = clamp(gaussian(0.5 + yearsOverPeak * 0.2, 0.5), 0, 2) * regressionMult * aging.declineRate;
       ratings.speed = clamp(ratings.speed - speedDecline);
       ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
     } else {
-      // ── Late Career Decline (34+) ───────────────────────────────────
-      // More noticeable decline but still not catastrophic per year
-      const yearsOver33 = p.age - 33;
-      const declineAmount = clamp(gaussian(1.5 + yearsOver33 * 0.5, 1), 0, 4) * regressionMult;
+      // ── Late Career Decline (position-specific) ───────────────────────
+      const yearsOverLate = p.age - (aging.peakEnd + 3);
+      const declineAmount = clamp(gaussian(1.5 + yearsOverLate * 0.5, 1), 0, 4) * regressionMult * aging.declineRate;
       for (const key of primaryKeys) {
         const k = key as string;
         (ratings as Record<string, number>)[k] = clamp(
@@ -196,10 +225,10 @@ export function developPlayers(
         );
       }
       // Faster speed decline
-      const speedDecline = clamp(gaussian(1 + yearsOver33 * 0.4, 0.6), 0, 3) * regressionMult;
+      const speedDecline = clamp(gaussian(1 + yearsOverLate * 0.4, 0.6), 0, 3) * regressionMult * aging.declineRate;
       ratings.speed = clamp(ratings.speed - speedDecline);
       // Stamina declines
-      const staminaDecline = clamp(gaussian(1 + yearsOver33 * 0.3, 0.5), 0, 3) * regressionMult;
+      const staminaDecline = clamp(gaussian(1 + yearsOverLate * 0.3, 0.5), 0, 3) * regressionMult * aging.declineRate;
       ratings.stamina = clamp(ratings.stamina - staminaDecline);
       ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
     }
