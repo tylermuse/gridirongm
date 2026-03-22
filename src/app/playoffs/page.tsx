@@ -577,6 +577,30 @@ export default function PlayoffsPage() {
                 })}
               </div>
 
+              {/* Notable Retirements */}
+              {notableRetirees.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-[var(--border)]">
+                  <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Notable Retirements</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+                    {notableRetirees.map(p => {
+                      const t = teams.find(t => t.id === p.teamId);
+                      return (
+                        <div key={p.id} className="flex items-center justify-between text-xs py-0.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <Badge size="sm">{p.position}</Badge>
+                            <button onClick={() => setSelectedPlayerId(p.id)} className="hover:text-blue-600 transition-colors">
+                              {p.firstName} {p.lastName}
+                            </button>
+                            <span className="text-[var(--text-sec)]">Age {p.age} · {p.experience}yr · {p.ratings.overall} OVR</span>
+                          </div>
+                          <span className="text-[var(--text-sec)] shrink-0 ml-1">{t?.abbreviation}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* All-Pro selections — First Team */}
               <div className="mt-4 pt-3 border-t border-[var(--border)]">
                 <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">All-Pro First Team</div>
@@ -707,33 +731,7 @@ export default function PlayoffsPage() {
               );
             })()}
 
-            {/* Notable Retirements */}
-            {notableRetirees.length > 0 && (
-              <Card>
-                <CardHeader><CardTitle>Notable Retirements</CardTitle></CardHeader>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                  {notableRetirees.map(p => {
-                    const t = teams.find(t => t.id === p.teamId);
-                    return (
-                      <div key={p.id} className="flex items-center gap-3">
-                        <div className="flex-1 min-w-0">
-                          <button
-                            onClick={() => setSelectedPlayerId(p.id)}
-                            className="font-semibold text-sm hover:text-blue-600 transition-colors truncate block"
-                          >
-                            {p.firstName} {p.lastName}
-                          </button>
-                          <div className="text-xs text-[var(--text-sec)]">
-                            {p.position} · Age {p.age} · {p.experience} seasons · OVR {p.ratings.overall}
-                          </div>
-                        </div>
-                        <span className="text-xs text-[var(--text-sec)] shrink-0">{t?.abbreviation}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            )}
+            {/* Notable Retirements moved to after awards */}
             </>
           );
         })()}
