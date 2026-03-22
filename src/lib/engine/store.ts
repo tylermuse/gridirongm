@@ -3238,18 +3238,26 @@ export const useGameStore = create<GameStore>()(
         if (state.phase !== 'draft') return;
         const currentPickTeamId = state.draftOrder[0];
         if (!currentPickTeamId) return;
+        const totalP = state.teams.length * 7;
+        const pickNum = totalP - state.draftOrder.length + 1;
+        const teamObj = state.teams.find(t => t.id === currentPickTeamId);
         const playerId = autoDraftPlayerId(state, currentPickTeamId);
+        console.log(`[simDraftPick] Pick ${pickNum} ${teamObj?.abbreviation}: pid=${playerId}, inPlayers=${state.players.some(p => p.id === playerId)}`);
         if (playerId) {
           get().draftPlayer(playerId);
+          // Verify the result was recorded
+          const after = get();
+          const recorded = after.draftResults.some(r => r.overallPick === pickNum);
+          if (!recorded) console.error(`[simDraftPick] Pick ${pickNum} was NOT recorded in draftResults!`);
         } else {
-          // Skip this pick if no player could be found (advance draft order)
-          console.warn('Draft pick skipped — no player found for', currentPickTeamId);
+          console.error(`[simDraftPick] NO PLAYER for pick ${pickNum} ${teamObj?.abbreviation}. Skipping.`);
           set({ draftOrder: state.draftOrder.slice(1) });
         }
       },
 
       simToUserDraftPick: () => {
         const state = get();
+        console.log(`[simToUser] CALLED. phase=${state.phase}, draftOrder[0]=${state.draftOrder[0]}, userTeamId=${state.userTeamId}, playersCount=${state.players.length}`);
         if (state.phase !== 'draft') return;
         // If it's already the user's pick, do nothing — they need to pick first
         if (state.draftOrder[0] === state.userTeamId) return;
