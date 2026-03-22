@@ -202,12 +202,16 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
     }
 
     if (mockPickId) {
-      // Top 3 picks: 80% follow mock (highly predictable)
-      // Picks 4-10: 65% follow mock
-      // Picks 11-20: 55% follow mock
-      // Picks 21-32: 45% follow mock (lots of variance late R1)
-      const mockChance = overallPick <= 3 ? 0.80 : overallPick <= 10 ? 0.65 : overallPick <= 20 ? 0.55 : 0.45;
+      // Pick 1: ALWAYS use mock (guaranteed #1 overall)
+      if (overallPick === 1) return mockPickId;
+      // Picks 2-3: 75% follow mock
+      // Picks 4-10: 60% follow mock
+      // Picks 11-20: 50% follow mock
+      // Picks 21-32: 40% follow mock
+      const mockChance = overallPick <= 3 ? 0.75 : overallPick <= 10 ? 0.60 : overallPick <= 20 ? 0.50 : 0.40;
       if (Math.random() < mockChance) return mockPickId;
+    } else {
+      // No mock pick found — shouldn't happen but return undefined gracefully
     }
   }
 
@@ -254,8 +258,6 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
     .sort((a, b) => b.score - a.score);
 
   const bpaResult = ranked[0]?.playerId;
-
-  // If BPA found someone in the 15% deviation case, use them
   if (bpaResult) return bpaResult;
 
   // Safety net: fall back to mock pick for round 1
@@ -264,7 +266,13 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
     for (const mock of state.nflMockDraft) {
       if (availableIds.has(mock.playerId)) return mock.playerId;
     }
+    // Ultra safety: return the mock player ID even if not in freeAgents
+    // draftPlayer will handle creating the player if needed
+    return state.nflMockDraft[0]?.playerId;
   }
+
+  // Last resort for any round: pick the first free agent
+  if (state.freeAgents.length > 0) return state.freeAgents[0];
 
   return undefined;
 }
