@@ -1392,23 +1392,12 @@ function TradesPage() {
                               <span className="text-xs text-[var(--text-sec)]">{Math.round(counterOfferedValue)} pts</span>
                             </div>
                             <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Players</div>
-                            <div className="max-h-[250px] overflow-y-auto space-y-0 mb-2">
-                              {userRoster.map(p => (
-                                <label key={p.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface)] rounded px-1">
-                                  <input
-                                    type="checkbox"
-                                    checked={counterOfferedPlayerIds.includes(p.id)}
-                                    onChange={() => togglePlayerSelect(p.id, counterOfferedPlayerIds, setCounterOfferedPlayerIds)}
-                                    className="accent-blue-500"
-                                  />
-                                  <Badge size="sm">{p.position}</Badge>
-                                  <span className="text-xs flex-1 truncate">{p.firstName} {p.lastName}</span>
-                                  <span className="text-[10px] text-[var(--text-sec)]">{p.age}y</span>
-                                  <span className="text-[10px] text-[var(--text-sec)]">${p.contract.salary}M/{p.contract.yearsLeft}yr</span>
-                                  <span className={`text-[10px] font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
-                                </label>
-                              ))}
-                            </div>
+                            <SortableTradeTable
+                              players={userRoster}
+                              selectedIds={counterOfferedPlayerIds}
+                              toggleSelect={(id) => togglePlayerSelect(id, counterOfferedPlayerIds, setCounterOfferedPlayerIds)}
+                              playerTradeValue={playerTradeValue}
+                            />
                             {userTeam && userTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
                               <>
                                 <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Draft Picks</div>
@@ -1438,23 +1427,12 @@ function TradesPage() {
                               <span className="text-xs text-[var(--text-sec)]">{Math.round(counterReceivedValue)} pts</span>
                             </div>
                             <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Players</div>
-                            <div className="max-h-[250px] overflow-y-auto space-y-0 mb-2">
-                              {counterTeamRoster.map(p => (
-                                <label key={p.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-[var(--surface)] rounded px-1">
-                                  <input
-                                    type="checkbox"
-                                    checked={counterReceivedPlayerIds.includes(p.id)}
-                                    onChange={() => togglePlayerSelect(p.id, counterReceivedPlayerIds, setCounterReceivedPlayerIds)}
-                                    className="accent-blue-500"
-                                  />
-                                  <Badge size="sm">{p.position}</Badge>
-                                  <span className="text-xs flex-1 truncate">{p.firstName} {p.lastName}</span>
-                                  <span className="text-[10px] text-[var(--text-sec)]">{p.age}y</span>
-                                  <span className="text-[10px] text-[var(--text-sec)]">${p.contract.salary}M/{p.contract.yearsLeft}yr</span>
-                                  <span className={`text-[10px] font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
-                                </label>
-                              ))}
-                            </div>
+                            <SortableTradeTable
+                              players={counterTeamRoster}
+                              selectedIds={counterReceivedPlayerIds}
+                              toggleSelect={(id) => togglePlayerSelect(id, counterReceivedPlayerIds, setCounterReceivedPlayerIds)}
+                              playerTradeValue={playerTradeValue}
+                            />
                             {counterTeam && counterTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
                               <>
                                 <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-1">Draft Picks</div>
