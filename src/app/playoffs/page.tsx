@@ -679,7 +679,7 @@ export default function PlayoffsPage() {
               return (
                 <Card>
                   <CardHeader><CardTitle>All-Rookie Team</CardTitle></CardHeader>
-                  <div className="space-y-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
                     {allRookiePlayers.map((ar, idx) => {
                       const t = teams.find(t => t.id === ar.player.teamId);
                       const isUserPlayer = ar.player.teamId === userTeamId;

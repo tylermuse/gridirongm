@@ -1227,16 +1227,22 @@ export function computeAllLeagueTeams(state: LeagueState): {
   const second: { position: Position; playerId: string; teamId: string }[] = [];
   const allRookie: { position: Position; playerId: string; teamId: string }[] = [];
 
-  for (const { position, count } of ALL_LEAGUE_SLOTS) {
-    const posPlayers = activePlayers
-      .filter(p => p.position === position)
-      .sort((a, b) => allLeagueScore(b) - allLeagueScore(a));
+  // Build conference lookup
+  const teamConf = new Map(state.teams.map(t => [t.id, t.conference]));
 
-    for (let i = 0; i < count && i < posPlayers.length; i++) {
-      first.push({ position, playerId: posPlayers[i].id, teamId: posPlayers[i].teamId! });
-    }
-    for (let i = count; i < count * 2 && i < posPlayers.length; i++) {
-      second.push({ position, playerId: posPlayers[i].id, teamId: posPlayers[i].teamId! });
+  for (const { position, count } of ALL_LEAGUE_SLOTS) {
+    // Select per conference so both AC and NC are represented
+    for (const conf of ['AC', 'NC']) {
+      const confPlayers = activePlayers
+        .filter(p => p.position === position && teamConf.get(p.teamId!) === conf)
+        .sort((a, b) => allLeagueScore(b) - allLeagueScore(a));
+
+      for (let i = 0; i < count && i < confPlayers.length; i++) {
+        first.push({ position, playerId: confPlayers[i].id, teamId: confPlayers[i].teamId! });
+      }
+      for (let i = count; i < count * 2 && i < confPlayers.length; i++) {
+        second.push({ position, playerId: confPlayers[i].id, teamId: confPlayers[i].teamId! });
+      }
     }
 
     // All-Rookie: 1 per position
