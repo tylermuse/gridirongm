@@ -140,6 +140,8 @@ export interface Player {
   holdout?: boolean;
   /** How this player was acquired by their current team (set once on first joining) */
   acquiredVia?: 'draft' | 'free-agency' | 'trade' | 'initial';
+  /** Season when the player was acquired by their current team */
+  acquiredSeason?: number;
   /** Scouting label assigned at draft (cosmetic flavor) */
   scoutingLabel?: string;
   /** Deterministic seed for scouting report generation (set at draft class creation) */

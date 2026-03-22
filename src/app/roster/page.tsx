@@ -544,8 +544,8 @@ export default function RosterPage() {
                           {(() => {
                             const via = p.acquiredVia;
                             if (via === 'draft') return <span>Draft <span className="font-medium text-[var(--text)]">#{p.draftPick}</span> ({p.draftYear})</span>;
-                            if (via === 'free-agency') return <span>Free Agent</span>;
-                            if (via === 'trade') return <span>Trade</span>;
+                            if (via === 'free-agency') return <span>Free Agent{p.acquiredSeason ? ` (${p.acquiredSeason})` : ''}</span>;
+                            if (via === 'trade') return <span>Trade{p.acquiredSeason ? ` (${p.acquiredSeason})` : ''}</span>;
                             // Fallback for players without acquiredVia (pre-existing saves / initial roster)
                             return <span>Original Roster</span>;
                           })()}

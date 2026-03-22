@@ -3312,7 +3312,7 @@ export const useGameStore = create<GameStore>()(
           teamId: currentPickTeamId,
           draftYear: state.season,
           draftPick: overallPick,
-          acquiredVia: 'draft' as const,
+          acquiredVia: 'draft' as const, acquiredSeason: state.season,
           contract: { salary: finalSalary, yearsLeft: 4, guaranteed: generateGuaranteed(finalSalary, 4), totalYears: 4, offseasonSigned: true },
         };
         const updatedPlayers2 = playerInArray
@@ -3885,7 +3885,7 @@ export const useGameStore = create<GameStore>()(
         const isOffseason = state.phase === 'freeAgency' || state.phase === 'resigning' || state.phase === 'draft';
         let currentPlayers = state.players.map(p =>
           p.id === playerId
-            ? { ...p, teamId: state.userTeamId, acquiredVia: 'free-agency' as const, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, ...(isOffseason ? { offseasonSigned: true } : {}) } }
+            ? { ...p, teamId: state.userTeamId, acquiredVia: 'free-agency' as const, acquiredSeason: state.season, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, ...(isOffseason ? { offseasonSigned: true } : {}) } }
             : p,
         );
         let currentTeams = state.teams.map(t => {
@@ -4307,7 +4307,7 @@ export const useGameStore = create<GameStore>()(
                   restructureHistory: undefined,
                 }
               : p.contract;
-            return { ...p, teamId: counterpartTeamId, acquiredVia: 'trade' as const, contract: cleanContract };
+            return { ...p, teamId: counterpartTeamId, acquiredVia: 'trade' as const, acquiredSeason: state.season, contract: cleanContract };
           }
           if (receivedPlayerIdsSet.has(p.id)) {
             const cleanContract = p.contract.contractYears
@@ -4322,7 +4322,7 @@ export const useGameStore = create<GameStore>()(
                   restructureHistory: undefined,
                 }
               : p.contract;
-            return { ...p, teamId: state.userTeamId, acquiredVia: 'trade' as const, contract: cleanContract };
+            return { ...p, teamId: state.userTeamId, acquiredVia: 'trade' as const, acquiredSeason: state.season, contract: cleanContract };
           }
           return p;
         });
