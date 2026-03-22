@@ -3122,10 +3122,23 @@ export const useGameStore = create<GameStore>()(
       draftPlayer: (playerId: string) => {
         const state = get();
         if (state.phase !== 'draft') return;
-        const player = state.players.find(p => p.id === playerId);
+        let player = state.players.find(p => p.id === playerId);
         if (!player) {
-          console.error(`[draftPlayer] Player ${playerId} not found in players array (${state.players.length} players, ${state.freeAgents.length} FAs)`);
-          return;
+          // Last resort: create the player from mock draft data if available
+          const mock = state.nflMockDraft?.find(m => m.playerId === playerId);
+          if (mock) {
+            const created = generatePlayer(mock.position as Position, 75, { age: 21, experience: 0 });
+            created.id = playerId;
+            created.firstName = mock.firstName;
+            created.lastName = mock.lastName;
+            created.position = mock.position as Position;
+            created.college = mock.college;
+            created.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
+            player = created;
+            // Inject into state in the same set() call below
+          } else {
+            return;
+          }
         }
 
         const currentPickTeamId = state.draftOrder[0];
@@ -3180,19 +3193,22 @@ export const useGameStore = create<GameStore>()(
         const newDraftOrder = state.draftOrder.slice(1);
         const newFreeAgents = state.freeAgents.filter(id => id !== playerId);
 
+        // Build updated players array — include created player if it wasn't in the original array
+        const playerInArray = state.players.some(p => p.id === playerId);
+        const draftedPlayer = {
+          ...player,
+          teamId: currentPickTeamId,
+          draftYear: state.season,
+          draftPick: overallPick,
+          acquiredVia: 'draft' as const,
+          contract: { salary: finalSalary, yearsLeft: 4, guaranteed: generateGuaranteed(finalSalary, 4), totalYears: 4, offseasonSigned: true },
+        };
+        const updatedPlayers2 = playerInArray
+          ? state.players.map(p => p.id === playerId ? draftedPlayer : p)
+          : [...state.players, draftedPlayer];
+
         set({
-          players: state.players.map(p =>
-            p.id === playerId
-              ? {
-                  ...p,
-                  teamId: currentPickTeamId,
-                  draftYear: state.season,
-                  draftPick: overallPick,
-                  acquiredVia: 'draft' as const,
-                  contract: { salary: finalSalary, yearsLeft: 4, guaranteed: generateGuaranteed(finalSalary, 4), totalYears: 4, offseasonSigned: true },
-                }
-              : p,
-          ),
+          players: updatedPlayers2,
           teams: updatedTeams,
           freeAgents: newFreeAgents,
           draftOrder: newDraftOrder,
