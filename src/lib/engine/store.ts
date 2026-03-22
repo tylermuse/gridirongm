@@ -3009,9 +3009,8 @@ export const useGameStore = create<GameStore>()(
             if (team) round1Order.push(team.id);
           }
           if (round1Order.length > 0) {
-            const r1PickCount = allDraftYearPicks.filter(pk => pk.round === 1).length;
-            const laterRounds = draftOrder.slice(r1PickCount);
-            console.log(`[draftOrder] round1Order=${round1Order.length}, r1PickCount=${r1PickCount}, originalLen=${draftOrder.length}, laterLen=${laterRounds.length}, newLen=${round1Order.length + laterRounds.length}, totalPicks=${updatedTeams.length * 7}`);
+            // Slice the same number of entries we're replacing to keep total length correct
+            const laterRounds = draftOrder.slice(round1Order.length);
             draftOrder = [...round1Order, ...laterRounds];
           }
         }
