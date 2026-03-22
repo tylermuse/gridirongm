@@ -512,18 +512,22 @@ function Dashboard() {
           <div className="flex items-center gap-1 flex-wrap">
             {ALL_ACHIEVEMENTS.map(def => {
               const unlocked = achievements.find(a => a.id === def.id);
+              const prog = !unlocked && def.progress ? def.progress(useGameStore.getState() as never) : null;
               return (
                 <div
                   key={def.id}
                   className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition-all ${
                     unlocked
                       ? 'bg-amber-50 border-amber-300 text-amber-800'
-                      : 'bg-[var(--surface-2)] border-[var(--border)] text-[var(--text-sec)] opacity-40'
+                      : 'bg-[var(--surface-2)] border-[var(--border)] text-[var(--text-sec)] opacity-50'
                   }`}
-                  title={`${def.name}: ${def.description}${unlocked ? ` (Unlocked S${unlocked.unlockedSeason})` : ''}`}
+                  title={`${def.name}: ${def.description}${unlocked ? ` (Unlocked S${unlocked.unlockedSeason})` : prog ? ` (${prog.current}/${prog.target} ${prog.label})` : ''}`}
                 >
                   <span className="text-sm">{def.icon}</span>
                   <span className="font-medium hidden sm:inline">{def.name}</span>
+                  {prog && prog.target > 1 && (
+                    <span className="text-[9px] text-[var(--text-sec)] hidden sm:inline">{prog.current}/{prog.target}</span>
+                  )}
                 </div>
               );
             })}

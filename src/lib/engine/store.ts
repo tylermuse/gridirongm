@@ -5497,7 +5497,48 @@ export const useGameStore = create<GameStore>()(
           faRefusals: [],
           playoffBracket: null,
           playoffSeeds: null,
-          newsItems: [...retirementNews, ...voidNews, ...aiRestructureNews],
+          newsItems: [...retirementNews, ...voidNews, ...aiRestructureNews, ...(() => {
+            // Generate preseason news
+            const preseasonNews: NewsItem[] = [];
+            const userT = grownTeams.find(t => t.id === state.userTeamId);
+            const userRoster = allPlayersForNewSeason.filter(p => p.teamId === state.userTeamId && !p.retired);
+            if (userT) {
+              const avgOvr = userRoster.length > 0 ? Math.round(userRoster.reduce((s, p) => s + p.ratings.overall, 0) / userRoster.length) : 60;
+              preseasonNews.push(makeNews({
+                season: newSeason, week: 0, type: 'system', teamId: state.userTeamId,
+                headline: `Season ${newSeason} Preview: ${userT.city} ${userT.name}`,
+                body: `The ${userT.name} enter the season with a roster averaging ${avgOvr} OVR across ${userRoster.length} players. ${avgOvr >= 70 ? 'This is a playoff-caliber squad.' : avgOvr >= 63 ? 'A competitive roster with room to grow.' : 'A rebuilding year — development is key.'}`,
+                isUserTeam: true,
+              }));
+              // Top rookies
+              const rookies = userRoster.filter(p => p.experience === 0).sort((a, b) => b.ratings.overall - a.ratings.overall);
+              if (rookies.length > 0) {
+                const top = rookies[0];
+                preseasonNews.push(makeNews({
+                  season: newSeason, week: 0, type: 'system', teamId: state.userTeamId, playerIds: [top.id],
+                  headline: `Rookie Watch: ${top.firstName} ${top.lastName} (${top.position}, ${top.ratings.overall} OVR)`,
+                  body: `The ${top.position} ${top.draftPick ? `was picked #${top.draftPick} overall` : 'signed as a free agent'} and is expected to contribute immediately.`,
+                  isUserTeam: true,
+                }));
+              }
+            }
+            // Power rankings headline
+            const ranked = [...grownTeams].sort((a, b) => {
+              const aRoster = allPlayersForNewSeason.filter(p => p.teamId === a.id && !p.retired);
+              const bRoster = allPlayersForNewSeason.filter(p => p.teamId === b.id && !p.retired);
+              const aAvg = aRoster.length > 0 ? aRoster.reduce((s, p) => s + p.ratings.overall, 0) / aRoster.length : 0;
+              const bAvg = bRoster.length > 0 ? bRoster.reduce((s, p) => s + p.ratings.overall, 0) / bRoster.length : 0;
+              return bAvg - aAvg;
+            });
+            const top3 = ranked.slice(0, 3);
+            preseasonNews.push(makeNews({
+              season: newSeason, week: 0, type: 'system',
+              headline: `Preseason Power Rankings: ${top3.map((t, i) => `${i + 1}. ${t.abbreviation}`).join(', ')}`,
+              body: `The ${top3[0]?.city} ${top3[0]?.name} are the preseason favorites heading into Season ${newSeason}.`,
+              isUserTeam: false,
+            }));
+            return preseasonNews;
+          })()],
           seasonHistory: state.seasonHistory.some(s => s.season === state.season)
             ? state.seasonHistory.map(s => s.season === state.season ? newSummary : s)
             : [...state.seasonHistory, newSummary],

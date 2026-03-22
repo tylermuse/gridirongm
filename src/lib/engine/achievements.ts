@@ -6,6 +6,8 @@ export interface AchievementDef {
   description: string;
   icon: string;
   check: (state: LeagueState) => boolean;
+  /** Returns { current, target } for progress display. Omit if binary (no progress). */
+  progress?: (state: LeagueState) => { current: number; target: number; label: string };
 }
 
 const ACHIEVEMENT_DEFS: AchievementDef[] = [
@@ -15,6 +17,7 @@ const ACHIEVEMENT_DEFS: AchievementDef[] = [
     description: 'Win the Super Bowl.',
     icon: '🏆',
     check: (s) => s.champions.some(c => c.teamId === s.userTeamId),
+    progress: (s) => ({ current: s.champions.filter(c => c.teamId === s.userTeamId).length, target: 1, label: 'championships' }),
   },
   {
     id: 'dynasty',
@@ -22,6 +25,7 @@ const ACHIEVEMENT_DEFS: AchievementDef[] = [
     description: 'Win 3 or more championships.',
     icon: '📈',
     check: (s) => s.champions.filter(c => c.teamId === s.userTeamId).length >= 3,
+    progress: (s) => ({ current: s.champions.filter(c => c.teamId === s.userTeamId).length, target: 3, label: 'championships' }),
   },
   {
     id: 'perfect_season',
@@ -107,6 +111,10 @@ const ACHIEVEMENT_DEFS: AchievementDef[] = [
       ).length;
       return wonTrades >= 5;
     },
+    progress: (s) => ({
+      current: s.tradeProposals.filter(p => p.status === 'accepted' && p.valueAssessment === 'lopsided-you-win').length,
+      target: 5, label: 'winning trades',
+    }),
   },
   {
     id: 'on_fire',
@@ -116,6 +124,10 @@ const ACHIEVEMENT_DEFS: AchievementDef[] = [
     check: (s) => {
       const team = s.teams.find(t => t.id === s.userTeamId);
       return !!team && team.record.streak >= 10;
+    },
+    progress: (s) => {
+      const team = s.teams.find(t => t.id === s.userTeamId);
+      return { current: Math.max(0, team?.record.streak ?? 0), target: 10, label: 'win streak' };
     },
   },
   {
@@ -185,4 +197,5 @@ export const ALL_ACHIEVEMENTS = ACHIEVEMENT_DEFS.map(d => ({
   name: d.name,
   description: d.description,
   icon: d.icon,
+  progress: d.progress,
 }));
