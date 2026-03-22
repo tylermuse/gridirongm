@@ -3342,6 +3342,14 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
+        // Debug: verify pick 1
+        const pick1Result = draftResults.find(r => r.overallPick === 1);
+        if (pick1Result) {
+          const p1 = players.find(p => p.id === pick1Result.playerId);
+          console.log(`[simToUser SET] Pick1: pid=${pick1Result.playerId}, inPlayers=${!!p1}, name=${p1?.firstName} ${p1?.lastName}, totalResults=${draftResults.length}`);
+        } else {
+          console.error(`[simToUser SET] NO result for overallPick=1! Results: ${draftResults.map(r => r.overallPick).join(',')}`);
+        }
         set({ players, teams, freeAgents: freeAgentIds, draftOrder, draftResults, newsItems });
       },
 
