@@ -3257,7 +3257,8 @@ export const useGameStore = create<GameStore>()(
 
       simToUserDraftPick: () => {
         const state = get();
-        console.log(`[simToUser] CALLED. phase=${state.phase}, draftOrder[0]=${state.draftOrder[0]}, userTeamId=${state.userTeamId}, playersCount=${state.players.length}`);
+        const totalPicksDbg = state.teams.length * 7;
+        console.log(`[simToUser] CALLED. phase=${state.phase}, draftOrder[0]=${state.draftOrder[0]}, userTeamId=${state.userTeamId}, playersCount=${state.players.length}, draftOrderLen=${state.draftOrder.length}, totalPicks=${totalPicksDbg}, firstOverallPick=${totalPicksDbg - state.draftOrder.length + 1}`);
         if (state.phase !== 'draft') return;
         // If it's already the user's pick, do nothing — they need to pick first
         if (state.draftOrder[0] === state.userTeamId) return;
