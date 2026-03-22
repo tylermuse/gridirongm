@@ -340,18 +340,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       </Button>
                     )}
                     <Button
-                      onClick={async () => {
-                        // Async auto-draft: process in batches to avoid freezing
-                        for (let safety = 0; safety < 250; safety++) {
-                          const s = useGameStore.getState();
-                          if (s.phase !== 'draft' || s.draftOrder.length === 0) break;
-                          for (let i = 0; i < 5; i++) {
-                            const st = useGameStore.getState();
-                            if (st.phase !== 'draft' || st.draftOrder.length === 0) break;
-                            simDraftPick();
-                          }
-                          await new Promise(r => setTimeout(r, 0));
-                        }
+                      onClick={() => {
+                        simToEndDraft({ skipAdvance: true });
                         router.push('/draft-recap');
                       }}
                       size="sm"

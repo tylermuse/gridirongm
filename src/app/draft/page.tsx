@@ -914,29 +914,8 @@ export default function DraftPage() {
           simDraftPick={simDraftPick}
           simToUserDraftPick={simToUserDraftPick}
           simToEndDraft={simToEndDraft}
-          onSimAll={async () => {
-            setAutoDrafting(true);
-            // Process picks in batches of 5, yielding to browser between batches
-            const batchSize = 5;
-            let safety = 0;
-            while (safety++ < 250) {
-              const s = useGameStore.getState();
-              if (s.phase !== 'draft' || s.draftOrder.length === 0 || s.freeAgents.length === 0) break;
-              for (let i = 0; i < batchSize; i++) {
-                const st = useGameStore.getState();
-                if (st.phase !== 'draft' || st.draftOrder.length === 0) break;
-                if (st.draftOrder[0] === st.userTeamId) {
-                  // Auto-draft for user too in "auto-draft all" mode
-                  const pid = st.freeAgents[0];
-                  if (pid) draftPlayer(pid);
-                  else break;
-                } else {
-                  simDraftPick();
-                }
-              }
-              await new Promise(r => setTimeout(r, 0)); // yield to browser
-            }
-            setAutoDrafting(false);
+          onSimAll={() => {
+            simToEndDraft({ skipAdvance: true });
             router.push('/draft-recap');
           }}
           onDraft={(playerId) => draftPlayer(playerId)}
