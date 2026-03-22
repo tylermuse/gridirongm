@@ -703,8 +703,9 @@ export default function FreeAgencyPage() {
                         <td className="py-2.5 text-left text-xs text-[var(--text-sec)] hidden md:table-cell">
                           {positionStats({ position: p.position, stats: p.previousSeasonStats ?? p.stats })}
                         </td>
-                        <td className="py-2.5 text-right font-mono">
-                          ${salary}M/yr
+                        <td className="py-2.5 text-right font-mono text-xs sm:text-sm">
+                          <span className="hidden sm:inline">${salary}M/yr</span>
+                          <span className="sm:hidden">${Math.round(salary)}M</span>
                           {decay < 1.0 && (
                             <span className="text-[10px] text-amber-600 ml-1">↓</span>
                           )}

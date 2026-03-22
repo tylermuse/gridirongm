@@ -47,7 +47,9 @@ export function GameTicker() {
 
   return (
     <>
-      <div className="border-b border-[var(--border)] bg-[var(--bg)] flex items-stretch">
+      <div className="border-b border-[var(--border)] bg-[var(--bg)] flex items-stretch relative">
+        {/* Right edge fade to hint more content */}
+        <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-[var(--bg)] to-transparent pointer-events-none z-10 sm:hidden" />
         {/* Scrollable game ticker */}
         <div
           ref={scrollRef}

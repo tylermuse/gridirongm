@@ -194,7 +194,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             {onMenuToggle && (
               <button
                 onClick={onMenuToggle}
-                className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[var(--surface-2)] transition-colors"
+                className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--surface-2)] hover:bg-[var(--border)] transition-colors"
                 aria-label="Toggle menu"
               >
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
