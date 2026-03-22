@@ -220,7 +220,8 @@ function OnTheClockSection({
                 </Button>
               )}
               <Button onClick={() => onSimAll?.()} size="sm" variant="secondary" disabled={!canSimulate}>
-                Auto-Draft All
+                <span className="hidden sm:inline">Auto-Draft All</span>
+                <span className="sm:hidden">Auto All</span>
               </Button>
             </div>
           </div>
@@ -655,6 +656,7 @@ export default function DraftPage() {
 
   const [selectedRound, setSelectedRound] = useState(1);
   const [draftResultsTeamFilter, setDraftResultsTeamFilter] = useState<string>('ALL');
+  const [autoDrafting, setAutoDrafting] = useState(false);
   const [positionFilter, setPositionFilter] = useState<Position | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedProspectId, setExpandedProspectId] = useState<string | null>(null);
@@ -880,6 +882,17 @@ export default function DraftPage() {
       <div className="max-w-7xl mx-auto space-y-4">
         <h2 className="text-2xl font-black">Draft</h2>
 
+        {/* Auto-drafting progress */}
+        {autoDrafting && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+            <div className="text-sm font-bold text-blue-700 mb-1">Auto-Drafting...</div>
+            <div className="text-xs text-blue-600">Round {Math.ceil((draftResults.length + 1) / teams.length)}, Pick {draftResults.length + 1} of {teams.length * 7}</div>
+            <div className="w-full h-2 bg-blue-100 rounded-full mt-2 overflow-hidden">
+              <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${(draftResults.length / (teams.length * 7)) * 100}%` }} />
+            </div>
+          </div>
+        )}
+
         {/* On The Clock */}
         <OnTheClockSection
           currentTeam={currentTeam}
@@ -901,8 +914,29 @@ export default function DraftPage() {
           simDraftPick={simDraftPick}
           simToUserDraftPick={simToUserDraftPick}
           simToEndDraft={simToEndDraft}
-          onSimAll={() => {
-            simToEndDraft({ skipAdvance: true });
+          onSimAll={async () => {
+            setAutoDrafting(true);
+            // Process picks in batches of 5, yielding to browser between batches
+            const batchSize = 5;
+            let safety = 0;
+            while (safety++ < 250) {
+              const s = useGameStore.getState();
+              if (s.phase !== 'draft' || s.draftOrder.length === 0 || s.freeAgents.length === 0) break;
+              for (let i = 0; i < batchSize; i++) {
+                const st = useGameStore.getState();
+                if (st.phase !== 'draft' || st.draftOrder.length === 0) break;
+                if (st.draftOrder[0] === st.userTeamId) {
+                  // Auto-draft for user too in "auto-draft all" mode
+                  const pid = st.freeAgents[0];
+                  if (pid) draftPlayer(pid);
+                  else break;
+                } else {
+                  simDraftPick();
+                }
+              }
+              await new Promise(r => setTimeout(r, 0)); // yield to browser
+            }
+            setAutoDrafting(false);
             router.push('/draft-recap');
           }}
           onDraft={(playerId) => draftPlayer(playerId)}

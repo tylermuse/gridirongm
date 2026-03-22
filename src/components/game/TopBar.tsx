@@ -107,19 +107,28 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     }
   }, [leagueSettings, router]);
 
-  const handleSimSeason = useCallback(() => {
+  const [simProgress, setSimProgress] = useState<{ week: number; total: number } | null>(null);
+
+  const handleSimSeason = useCallback(async () => {
     const store = useGameStore.getState();
     const beforeIds = new Set(store.tradeProposals.map(p => p.id));
     const max = Math.max(...store.schedule.map(g => g.week));
-    // simToWeek computes all weeks in a single set() call — no stale state
-    useGameStore.getState().simToWeek(max + 1);
+
+    // Sim week by week with async yields for UI updates
+    for (let safety = 0; safety < 30; safety++) {
+      const s = useGameStore.getState();
+      if (s.phase !== 'regular' || s.week > max) break;
+      setSimProgress({ week: s.week, total: max });
+      s.simWeek();
+      await new Promise(r => setTimeout(r, 0));
+    }
+    setSimProgress(null);
+
     // Auto-reject any trade proposals generated during the bulk sim
     const afterState = useGameStore.getState();
     const newProposals = afterState.tradeProposals.filter(p => !beforeIds.has(p.id) && p.status === 'pending');
-    if (newProposals.length > 0) {
-      for (const p of newProposals) {
-        afterState.respondToTradeProposal(p.id, false);
-      }
+    for (const p of newProposals) {
+      afterState.respondToTradeProposal(p.id, false);
     }
     if (useGameStore.getState().phase === 'playoffs') {
       router.push('/playoffs');
@@ -233,8 +242,9 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                   onClick={handleSimSeason}
                   variant="secondary"
                   size="sm"
+                  disabled={!!simProgress}
                 >
-                  Sim Season
+                  {simProgress ? `Week ${simProgress.week}/${simProgress.total}...` : 'Sim Season'}
                 </Button>
               </>
             )}
@@ -330,9 +340,18 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       </Button>
                     )}
                     <Button
-                      onClick={() => {
-                        // confirmation temporarily disabled for testing
-                        simToEndDraft({ skipAdvance: true });
+                      onClick={async () => {
+                        // Async auto-draft: process in batches to avoid freezing
+                        for (let safety = 0; safety < 250; safety++) {
+                          const s = useGameStore.getState();
+                          if (s.phase !== 'draft' || s.draftOrder.length === 0) break;
+                          for (let i = 0; i < 5; i++) {
+                            const st = useGameStore.getState();
+                            if (st.phase !== 'draft' || st.draftOrder.length === 0) break;
+                            simDraftPick();
+                          }
+                          await new Promise(r => setTimeout(r, 0));
+                        }
                         router.push('/draft-recap');
                       }}
                       size="sm"
