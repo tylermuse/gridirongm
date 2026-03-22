@@ -2610,11 +2610,22 @@ export const useGameStore = create<GameStore>()(
         const capGrowthMult = 1 + (settings.capGrowthRate / 100);
 
         // Recalculate all team payrolls from scratch + apply cap growth
-        const recalcTeams = teamsAfterRetirement.map(t => ({
-          ...t,
-          salaryCap: Math.round(t.salaryCap * capGrowthMult * 10) / 10,
-          totalPayroll: recalculateTeamPayroll(t, playersAfterRetirement),
-        }));
+        // For user's team: exclude expiring players so cap space shows "committed" payroll
+        // Each re-signing will add to payroll, making cap space go down (intuitive UX)
+        const expiringIds = new Set(expiringPlayers.map(p => p.id));
+        const recalcTeams = teamsAfterRetirement.map(t => {
+          const basePayroll = recalculateTeamPayroll(t, playersAfterRetirement);
+          const expiringPayroll = t.id === state.userTeamId
+            ? playersAfterRetirement
+                .filter(p => expiringIds.has(p.id) && p.teamId === t.id)
+                .reduce((sum, p) => sum + getCapHit(p.contract), 0)
+            : 0;
+          return {
+            ...t,
+            salaryCap: Math.round(t.salaryCap * capGrowthMult * 10) / 10,
+            totalPayroll: Math.round((basePayroll - expiringPayroll) * 10) / 10,
+          };
+        });
 
         set({
           phase: 'resigning',
@@ -2638,7 +2649,9 @@ export const useGameStore = create<GameStore>()(
         const player = state.players.find(p => p.id === playerId);
         if (!player) return false;
 
-        const capSpaceNeeded = salary - player.contract.salary;
+        // During re-signing phase, expiring salaries were already removed from payroll
+        // so we just add the new salary (no delta needed)
+        const capSpaceNeeded = salary;
 
         const newNewsItems = [...state.newsItems, makeNews({
           season: state.season,
