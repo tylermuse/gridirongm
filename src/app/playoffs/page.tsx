@@ -63,10 +63,10 @@ function TeamRow({
             {team ? <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="xs" /> : <div className="w-5 h-5 rounded bg-gray-400" />}
           </button>
           <button onClick={() => team && onTeamClick?.(team.id)} className={`text-xs truncate hover:text-blue-600 transition-colors ${isUser ? 'text-blue-600' : ''}`}>
-            {team ? `${team.city}` : 'Unknown'}
+            {team ? team.abbreviation : '?'}
           </button>
           {team && (
-            <span className="text-[9px] text-[var(--text-sec)] shrink-0 font-mono hidden sm:inline">
+            <span className="text-[9px] text-[var(--text-sec)] shrink-0 font-mono">
               ({team.record.wins}-{team.record.losses})
             </span>
           )}

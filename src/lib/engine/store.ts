@@ -2633,6 +2633,91 @@ export const useGameStore = create<GameStore>()(
           };
         });
 
+        // Build SeasonSummary for the just-completed season so /history shows it immediately
+        const alreadyInHistory = state.seasonHistory.some(s => s.season === state.season);
+        let updatedSeasonHistory = state.seasonHistory;
+        if (!alreadyInHistory) {
+          const awards = computeSeasonAwards(state);
+          const userTeamObj = state.teams.find(t => t.id === state.userTeamId);
+
+          let userPlayoffResult: import('@/types').SeasonSummary['userPlayoffResult'] = 'missed';
+          if (state.playoffBracket && state.playoffSeeds) {
+            const userInPlayoffs = Object.values(state.playoffSeeds).flat().includes(state.userTeamId);
+            if (userInPlayoffs) {
+              const sbGame = state.playoffBracket.find(m => m.id === 'championship');
+              const confGames = state.playoffBracket.filter(m => m.round === 3);
+              const divGames = state.playoffBracket.filter(m => m.round === 2);
+
+              if (sbGame?.winnerId === state.userTeamId) userPlayoffResult = 'champion';
+              else if (sbGame?.homeTeamId === state.userTeamId || sbGame?.awayTeamId === state.userTeamId) userPlayoffResult = 'runnerup';
+              else if (confGames.some(m => m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId)) userPlayoffResult = 'conference';
+              else if (divGames.some(m => m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId)) userPlayoffResult = 'divisional';
+              else userPlayoffResult = 'wildcard';
+            }
+          }
+
+          const champion = state.champions.find(c => c.season === state.season);
+
+          const acTeams = state.teams.filter(t => t.conference === 'AC');
+          const ncTeams = state.teams.filter(t => t.conference === 'NC');
+          const bestAc = [...acTeams].sort((a, b) => b.record.wins - a.record.wins || a.record.losses - b.record.losses)[0];
+          const bestNc = [...ncTeams].sort((a, b) => b.record.wins - a.record.wins || a.record.losses - b.record.losses)[0];
+
+          const { first: allLeagueFirst, second: allLeagueSecond, allRookie: allRookieTeam } = computeAllLeagueTeams(state);
+
+          const seasonSummary: import('@/types').SeasonSummary = {
+            season: state.season,
+            championTeamId: champion?.teamId ?? '',
+            finalsMvpId: state.finalsMvpPlayerId ?? '',
+            finalsMvpGameStats: (() => {
+              const sbGame = state.schedule.find(g => g.id === 'championship' && g.played);
+              return sbGame && state.finalsMvpPlayerId ? sbGame.playerStats[state.finalsMvpPlayerId] : undefined;
+            })(),
+            awards,
+            bestRecord: {
+              ac: { teamId: bestAc?.id ?? '', wins: bestAc?.record.wins ?? 0, losses: bestAc?.record.losses ?? 0 },
+              nc: { teamId: bestNc?.id ?? '', wins: bestNc?.record.wins ?? 0, losses: bestNc?.record.losses ?? 0 },
+            },
+            allLeagueFirst,
+            allLeagueSecond,
+            allRookieTeam,
+            retiredPlayers: playersAfterRetirement
+              .filter(p => retiredIds.has(p.id) && (p.ratings.overall >= 65 || p.experience >= 5))
+              .sort((a, b) => b.ratings.overall - a.ratings.overall)
+              .map(p => ({
+                playerId: p.id,
+                name: `${p.firstName} ${p.lastName}`,
+                position: p.position,
+                teamId: p.teamId ?? '',
+                age: p.age,
+              })),
+            statLeaders: {
+              passYards: (() => {
+                const top = state.players.reduce((best, p) =>
+                  p.stats.passYards > (best?.stats.passYards ?? 0) ? p : best, state.players[0]);
+                return top ? { playerId: top.id, value: top.stats.passYards } : { playerId: '', value: 0 };
+              })(),
+              rushYards: (() => {
+                const top = state.players.reduce((best, p) =>
+                  p.stats.rushYards > (best?.stats.rushYards ?? 0) ? p : best, state.players[0]);
+                return top ? { playerId: top.id, value: top.stats.rushYards } : { playerId: '', value: 0 };
+              })(),
+              sacks: (() => {
+                const top = state.players.reduce((best, p) =>
+                  p.stats.sacks > (best?.stats.sacks ?? 0) ? p : best, state.players[0]);
+                return top ? { playerId: top.id, value: top.stats.sacks } : { playerId: '', value: 0 };
+              })(),
+            },
+            userRecord: {
+              wins: userTeamObj?.record.wins ?? 0,
+              losses: userTeamObj?.record.losses ?? 0,
+            },
+            userPlayoffResult,
+          };
+
+          updatedSeasonHistory = [...state.seasonHistory, seasonSummary];
+        }
+
         set({
           phase: 'resigning',
           resigningPlayers,
@@ -2640,6 +2725,7 @@ export const useGameStore = create<GameStore>()(
           teams: recalcTeams,
           players: playersAfterRetirement,
           newsItems: [...state.newsItems, ...retirementNews, ...holdoutNews],
+          seasonHistory: updatedSeasonHistory,
         });
       },
 
@@ -4815,6 +4901,61 @@ export const useGameStore = create<GameStore>()(
       },
 
       startNewSeason: () => {
+        // Auto-fill K and P for user's team if missing — sign best available from FA
+        {
+          const preState = get();
+          const userTeam = preState.teams.find(t => t.id === preState.userTeamId);
+          if (userTeam && preState.phase === 'freeAgency') {
+            let updatedPlayers = preState.players;
+            let updatedTeams = preState.teams;
+            let updatedFreeAgents = [...(preState.freeAgents ?? [])];
+            const autoSignNews: NewsItem[] = [];
+
+            for (const specialPos of ['K', 'P'] as Position[]) {
+              const rosterPlayers = updatedPlayers.filter(p => p.teamId === preState.userTeamId && !p.retired && p.position === specialPos);
+              if (rosterPlayers.length > 0) continue;
+
+              // Find best available FA at this position
+              const bestFA = updatedFreeAgents
+                .map(id => updatedPlayers.find(p => p.id === id))
+                .filter((p): p is Player => !!p && !p.retired && p.position === specialPos)
+                .sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+
+              if (bestFA) {
+                const sal = LEAGUE_MINIMUM_SALARY;
+                updatedPlayers = updatedPlayers.map(p =>
+                  p.id === bestFA.id
+                    ? { ...p, teamId: preState.userTeamId, contract: { salary: sal, yearsLeft: 1, guaranteed: 0, totalYears: 1, offseasonSigned: true } }
+                    : p,
+                );
+                updatedFreeAgents = updatedFreeAgents.filter(id => id !== bestFA.id);
+                const ut = updatedTeams.find(t => t.id === preState.userTeamId)!;
+                const chart = insertIntoDepthChart(ut.depthChart, specialPos, bestFA.id, updatedPlayers);
+                updatedTeams = updatedTeams.map(t =>
+                  t.id === preState.userTeamId
+                    ? { ...t, roster: [...t.roster, bestFA.id], totalPayroll: t.totalPayroll + sal, depthChart: chart }
+                    : t,
+                );
+                autoSignNews.push(makeNews({
+                  season: preState.season, week: 0, type: 'signing',
+                  teamId: preState.userTeamId, playerIds: [bestFA.id],
+                  headline: `Auto-signed ${bestFA.firstName} ${bestFA.lastName} (${specialPos}) to fill roster requirement.`,
+                  isUserTeam: true,
+                }));
+              }
+            }
+
+            if (autoSignNews.length > 0) {
+              set({
+                players: updatedPlayers,
+                teams: updatedTeams,
+                freeAgents: updatedFreeAgents,
+                newsItems: [...preState.newsItems, ...autoSignNews],
+              });
+            }
+          }
+        }
+
         const state = get();
         const newSeason = state.season + 1;
         const previouslyRetiredIds = new Set(state.players.filter(p => p.retired).map(p => p.id));
@@ -5357,7 +5498,9 @@ export const useGameStore = create<GameStore>()(
           playoffBracket: null,
           playoffSeeds: null,
           newsItems: [...retirementNews, ...voidNews, ...aiRestructureNews],
-          seasonHistory: [...state.seasonHistory, newSummary],
+          seasonHistory: state.seasonHistory.some(s => s.season === state.season)
+            ? state.seasonHistory.map(s => s.season === state.season ? newSummary : s)
+            : [...state.seasonHistory, newSummary],
           resigningPlayers: [],
           holdoutDemands: [],
           tradeProposals: [],
