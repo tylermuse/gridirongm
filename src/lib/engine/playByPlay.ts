@@ -377,6 +377,7 @@ export function simulatePlayByPlay(
   awayTeam: Team,
   homePlayers: Player[],
   awayPlayers: Player[],
+  isPlayoff: boolean = false,
 ): LiveGameResult {
   const homeKey = extractKeyPlayers(homePlayers);
   const awayKey = extractKeyPlayers(awayPlayers);
@@ -878,12 +879,15 @@ export function simulatePlayByPlay(
       break;
     }
     if (state.overtime && state.timeSecs <= 0) {
-      // Sudden death expired — add FG
-      if (state.homeScore === state.awayScore) {
-        if (Math.random() < 0.5) state.homeScore += 3;
-        else state.awayScore += 3;
+      if (state.homeScore === state.awayScore && isPlayoff) {
+        // Playoff OT: reset clock for another OT period until someone scores
+        state.timeSecs = 600;
+        addEvent('overtime', `Another overtime period! The game continues until someone scores.`, 0, false);
+        doKickoff();
+      } else {
+        // Regular season: game ends as a tie
+        break;
       }
-      break;
     }
   }
 

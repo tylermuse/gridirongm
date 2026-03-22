@@ -750,7 +750,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
   const simRef = useRef<LiveGameResult | null>(null);
   if (simRef.current === null && homeTeam && awayTeam && game && !game.played) {
-    simRef.current = simulatePlayByPlay(homeTeam, awayTeam, homePlayers, awayPlayers);
+    simRef.current = simulatePlayByPlay(homeTeam, awayTeam, homePlayers, awayPlayers, isPlayoffGame);
   }
   const liveResult = simRef.current;
 
