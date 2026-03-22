@@ -3003,15 +3003,16 @@ export const useGameStore = create<GameStore>()(
 
         // NFL 2026: override first-round order to match the real mock draft
         if (isNfl && nflMockDraft.length > 0) {
-          const teamsPerRound = updatedTeams.length;
           const round1Order: string[] = [];
           for (const mock of nflMockDraft) {
             const team = updatedTeams.find(t => t.abbreviation === mock.teamAbbr);
             if (team) round1Order.push(team.id);
           }
-          // Replace the first round with the mock draft order, keep rounds 2-7 as-is
           if (round1Order.length > 0) {
-            const laterRounds = draftOrder.slice(teamsPerRound);
+            // Count how many R1 picks are in the original draft order
+            // (may differ from teamsPerRound due to traded picks)
+            const r1PickCount = allDraftYearPicks.filter(pk => pk.round === 1).length;
+            const laterRounds = draftOrder.slice(r1PickCount);
             draftOrder = [...round1Order, ...laterRounds];
           }
         }
