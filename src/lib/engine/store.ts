@@ -250,6 +250,26 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
       const needScore = minNeed * 12;
       let score = prospect.ratings.overall * 15 + prospect.potential * 0.5 + needScore;
       score += (Math.random() - 0.5) * 8;
+
+      // QB premium: teams without a quality QB (none, or starter < 65 OVR) draft QBs much higher
+      if (prospect.position === 'QB') {
+        const bestQB = roster.filter(p => p.position === 'QB').sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+        const qbOvr = bestQB?.ratings.overall ?? 0;
+        if (count === 0) {
+          // No QB at all — massive premium
+          score += 300;
+        } else if (qbOvr < 60) {
+          // Terrible QB — big premium
+          score += 200;
+        } else if (qbOvr < 68) {
+          // Below average QB — moderate premium
+          score += 100;
+        } else if (qbOvr < 75) {
+          // Average QB — slight premium for high-potential upgrade
+          score += prospect.potential >= 80 ? 50 : 0;
+        }
+      }
+
       if (prospect.position === 'K' || prospect.position === 'P') {
         score = minNeed > 0 ? score * 0.4 : score * 0.15;
       }
