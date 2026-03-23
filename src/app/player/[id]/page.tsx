@@ -52,7 +52,7 @@ const RATING_LABELS: Record<keyof Omit<PlayerRatings, 'overall'>, string> = {
 
 export default function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { players, teams, userTeamId, releasePlayer, seasonHistory } = useGameStore();
+  const { players, teams, userTeamId, releasePlayer, seasonHistory, restructureContract, phase } = useGameStore();
   const [confirmRelease, setConfirmRelease] = useState(false);
 
   const player = players.find(p => p.id === id);
@@ -200,7 +200,7 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
 
               {/* Actions */}
               {isOnUserTeam && !player.retired && (
-                <div className="flex gap-2 mt-3">
+                <div className="flex gap-2 mt-3 flex-wrap">
                   <Button
                     size="sm"
                     variant={confirmRelease ? 'danger' : 'secondary'}
@@ -212,6 +212,13 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                     <Button size="sm" variant="ghost" onClick={() => setConfirmRelease(false)}>
                       Cancel
                     </Button>
+                  )}
+                  {player.contract.yearsLeft >= 2 && player.contract.salary >= 3 && phase !== 'regular' && (
+                    <Link href={`/roster?restructure=${player.id}`}>
+                      <Button size="sm" variant="secondary">
+                        Restructure
+                      </Button>
+                    </Link>
                   )}
                 </div>
               )}

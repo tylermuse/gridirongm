@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGameStore, computeAllLeagueTeams } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
@@ -384,30 +384,41 @@ export default function RosterPage() {
             </div>
 
             {/* Mobile card view */}
-            <div className="sm:hidden space-y-2">
-              {sortedRoster.map(p => {
+            <div className="sm:hidden space-y-1.5">
+              {sortedRoster.map((p, idx) => {
                 const depthLabel = getDepthLabel(p);
+                const prevPos = idx > 0 ? sortedRoster[idx - 1].position : null;
+                const showSeparator = prevPos && prevPos !== p.position && sortKey === 'pos';
+                const posGroupLabel: Record<string, string> = { QB: 'Offense', DL: 'Defense', K: 'Special Teams' };
+                const groupHeader = showSeparator && posGroupLabel[p.position];
                 return (
-                  <div
-                    key={p.id}
-                    className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3 cursor-pointer hover:bg-[var(--surface-2)]"
-                    onClick={() => setSelectedPlayerId(p.id)}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-[var(--text-sec)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded">{p.position}</span>
-                        <span className="font-semibold text-sm">{p.firstName[0]}. {p.lastName}</span>
-                        {allProPlayerIds.has(p.id) && <span className="text-amber-600 text-xs">★</span>}
+                  <React.Fragment key={p.id}>
+                    {showSeparator && (
+                      <div className={`${groupHeader ? 'pt-3 pb-1' : 'pt-1'}`}>
+                        {groupHeader && <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-sec)]/50 px-1">{groupHeader}</div>}
+                        {!groupHeader && <div className="border-t border-[var(--border)]" />}
                       </div>
-                      <span className={`text-lg font-black ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                    )}
+                    <div
+                      className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3 cursor-pointer hover:bg-[var(--surface-2)]"
+                      onClick={() => setSelectedPlayerId(p.id)}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-[var(--text-sec)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded">{p.position}</span>
+                          <span className="font-semibold text-sm">{p.firstName[0]}. {p.lastName}</span>
+                          {allProPlayerIds.has(p.id) && <span className="text-amber-600 text-xs">★</span>}
+                        </div>
+                        <span className={`text-lg font-black ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] text-[var(--text-sec)]">
+                        <span>Age {p.age}</span>
+                        <span>${p.contract.salary}M/{p.contract.yearsLeft}yr</span>
+                        {depthLabel && <span className="font-medium text-[var(--text)]">{depthLabel}</span>}
+                        {p.injury && <span className="text-red-600">{p.injury.type} ({p.injury.weeksLeft}w)</span>}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 text-[11px] text-[var(--text-sec)]">
-                      <span>Age {p.age}</span>
-                      <span>${p.contract.salary}M/{p.contract.yearsLeft}yr</span>
-                      {depthLabel && <span className="font-medium text-[var(--text)]">{depthLabel}</span>}
-                      {p.injury && <span className="text-red-600">{p.injury.type} ({p.injury.weeksLeft}w)</span>}
-                    </div>
-                  </div>
+                  </React.Fragment>
                 );
               })}
             </div>
