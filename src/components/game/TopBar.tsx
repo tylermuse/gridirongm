@@ -405,6 +405,25 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
         )}
       </header>
 
+      {/* Mobile bottom action bar — thumb-accessible */}
+      {phase === 'regular' && !pathname.startsWith('/game/') && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-[var(--surface)] border-t border-[var(--border)] px-3 py-2 flex items-center justify-center gap-2 sm:hidden safe-bottom">
+          <Button onClick={handleSimWeek} size="sm" className="flex-1">
+            {simProgress ? `Wk ${simProgress.week}/${simProgress.total}` : `Sim Week ${week}`}
+          </Button>
+          <Button onClick={handleSimSeason} size="sm" variant="secondary" className="flex-1" disabled={!!simProgress}>
+            {simProgress ? `${simProgress.week}/${simProgress.total}...` : 'Sim Season'}
+          </Button>
+          {pendingTradeCount > 0 && (
+            <Link href="/trades">
+              <Button size="sm" variant="secondary">
+                Trades ({pendingTradeCount})
+              </Button>
+            </Link>
+          )}
+        </div>
+      )}
+
       {/* Trade proposal popup — disabled, user prefers inline notifications */}
     </>
   );

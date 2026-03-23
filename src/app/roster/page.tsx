@@ -383,7 +383,37 @@ export default function RosterPage() {
               ))}
             </div>
 
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-x-auto">
+            {/* Mobile card view */}
+            <div className="sm:hidden space-y-2">
+              {sortedRoster.map(p => {
+                const depthLabel = getDepthLabel(p);
+                return (
+                  <div
+                    key={p.id}
+                    className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3 cursor-pointer hover:bg-[var(--surface-2)]"
+                    onClick={() => setSelectedPlayerId(p.id)}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-[var(--text-sec)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded">{p.position}</span>
+                        <span className="font-semibold text-sm">{p.firstName[0]}. {p.lastName}</span>
+                        {allProPlayerIds.has(p.id) && <span className="text-amber-600 text-xs">★</span>}
+                      </div>
+                      <span className={`text-lg font-black ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] text-[var(--text-sec)]">
+                      <span>Age {p.age}</span>
+                      <span>${p.contract.salary}M/{p.contract.yearsLeft}yr</span>
+                      {depthLabel && <span className="font-medium text-[var(--text)]">{depthLabel}</span>}
+                      {p.injury && <span className="text-red-600">{p.injury.type} ({p.injury.weeksLeft}w)</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop table view */}
+            <div className="hidden sm:block bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-x-auto">
               <table className="w-full text-sm min-w-[700px] sticky-col">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
