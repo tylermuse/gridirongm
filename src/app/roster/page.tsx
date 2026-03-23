@@ -417,6 +417,11 @@ export default function RosterPage() {
                         {depthLabel && <span className="font-medium text-[var(--text)]">{depthLabel}</span>}
                         {p.injury && <span className="text-red-600">{p.injury.type} ({p.injury.weeksLeft}w)</span>}
                       </div>
+                      {p.stats.gamesPlayed > 0 && (
+                        <div className="text-[10px] text-[var(--text-sec)] mt-1">
+                          {getGenericStat(p)}
+                        </div>
+                      )}
                     </div>
                   </React.Fragment>
                 );
