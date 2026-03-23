@@ -518,6 +518,44 @@ function detectTrades(
   });
 }
 
+// ── FA Signing Analysis ────────────────────────────────────────────────────
+
+function detectSignings(
+  newsItems: NewsItem[],
+  teams: Team[],
+  players: Player[],
+  season: number,
+  week: number,
+): RecapSegment[] {
+  const signingNews = newsItems.filter(n => n.type === 'signing' && n.season === season && n.week === week && n.headline?.includes('signed'));
+  if (signingNews.length === 0) return [];
+
+  // Find notable signings (high OVR players)
+  const notable = signingNews.filter(n => {
+    const pIds = n.playerIds ?? [];
+    return pIds.some(id => {
+      const p = players.find(pl => pl.id === id);
+      return p && p.ratings.overall >= 70;
+    });
+  });
+
+  if (notable.length === 0) return [];
+
+  return notable.slice(0, 2).map(news => {
+    const p = (news.playerIds ?? []).map(id => players.find(pl => pl.id === id)).filter(Boolean)[0];
+    const team = teams.find(t => t.id === news.teamId);
+    return {
+      type: 'trade' as const, // reuse trade styling
+      title: 'Free Agent Signing',
+      body: news.headline ?? `${team?.city} made a notable free agent addition.`,
+      teamIds: team ? [team.id] : [],
+      playerIds: news.playerIds ?? [],
+      icon: '🖊️',
+      priority: p && p.ratings.overall >= 80 ? 80 : 55,
+    };
+  });
+}
+
 export function generateWeeklyRecap(
   games: GameResult[],
   teams: Team[],
@@ -539,6 +577,7 @@ export function generateWeeklyRecap(
     ...detectStreaks(teams),
     ...detectRivalries(playedGames, teams),
     ...detectTrades(newsItems ?? [], teams, players, season, week),
+    ...detectSignings(newsItems ?? [], teams, players, season, week),
     generateWeekSummary(playedGames, teams, week),
   ];
 

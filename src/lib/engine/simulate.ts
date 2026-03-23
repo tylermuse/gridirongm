@@ -443,9 +443,10 @@ function simulateDrive(
       // Field goal range?
       const fgDistance = 100 - fieldPosition + 17;
       if (fgDistance <= 52 && kicker) {
+        // NFL FG%: ~97% under 30yd, ~90% 30-39, ~83% 40-49, ~65% 50+
         const fgChance = clamp(
-          0.92 - (fgDistance - 20) * 0.018 + (kicker.ratings.kicking / 100) * 0.08,
-          0.20, 0.97,
+          0.97 - Math.max(0, fgDistance - 30) * 0.012 + (kicker.ratings.kicking / 100) * 0.06,
+          0.25, 0.98,
         );
         const made = Math.random() < fgChance;
         plays.push({

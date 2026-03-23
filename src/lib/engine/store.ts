@@ -97,7 +97,7 @@ interface GameStore extends LeagueState {
   setScoutingLevel: (level: 0 | 1 | 2) => void;
   deepScoutPlayer: (playerId: string) => void;
   // Coaching
-  replaceCoach: (role: import('@/types').CoachRole) => void;
+  replaceCoach: (role: import('@/types').CoachRole, specificCoach?: import('@/types').Coach) => void;
   // PRD-13: Depth chart
   reorderDepthChart: (position: Position, playerIds: string[]) => void;
   resetDepthChart: (position: Position) => void;
@@ -4820,9 +4820,9 @@ export const useGameStore = create<GameStore>()(
       },
 
       // Replace a coach (fire + hire new one in the same role)
-      replaceCoach: (role: import('@/types').CoachRole) => {
+      replaceCoach: (role: import('@/types').CoachRole, specificCoach?: import('@/types').Coach) => {
         const state = get();
-        const newCoach = generateCoach(role);
+        const newCoach = specificCoach ?? generateCoach(role);
         const updatedTeams = state.teams.map(t => {
           if (t.id !== state.userTeamId) return t;
           const coaches = (t.coaches ?? []).map(c => c.role === role ? newCoach : c);

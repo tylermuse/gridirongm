@@ -10,6 +10,7 @@ import {
   DEFENSIVE_SCHEME_LABELS,
   calculateSchemeFit,
   schemeFitDot,
+  generateCoach,
   type SchemeFit,
 } from '@/lib/engine/coaching';
 import type { Coach, Player } from '@/types';
@@ -193,6 +194,7 @@ function generateRecommendations(
 export default function StaffPage() {
   const { teams, userTeamId, players, replaceCoach } = useGameStore();
   const [confirmReplace, setConfirmReplace] = useState<import('@/types').CoachRole | null>(null);
+  const [candidates, setCandidates] = useState<import('@/types').Coach[]>([]);
   const userTeam = teams.find(t => t.id === userTeamId);
   const coaches = userTeam?.coaches ?? [];
   const roster = players.filter(p => p.teamId === userTeamId && !p.retired);
@@ -234,20 +236,39 @@ export default function StaffPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {orderedCoaches.map(coach => (
                 confirmReplace === coach.role ? (
-                  <Card key={coach.id}>
-                    <div className="p-5 text-center">
-                      <p className="font-bold mb-1">Replace {ROLE_LABELS[coach.role]}?</p>
-                      <p className="text-xs text-[var(--text-sec)] mb-3">
-                        Fire {coach.firstName} {coach.lastName} and hire a new {coach.role}. The replacement will have a random scheme and rating.
-                      </p>
-                      <div className="flex justify-center gap-2">
-                        <button onClick={() => { replaceCoach(coach.role); setConfirmReplace(null); }} className="px-4 py-1.5 text-xs font-bold rounded bg-red-600 text-white hover:bg-red-700 transition-colors">Fire &amp; Replace</button>
-                        <button onClick={() => setConfirmReplace(null)} className="px-4 py-1.5 text-xs rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors">Cancel</button>
+                  <Card key={coach.id} className="md:col-span-3">
+                    <div className="p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="font-bold">Replace {ROLE_LABELS[coach.role]}: Choose a candidate</p>
+                        <button onClick={() => { setConfirmReplace(null); setCandidates([]); }} className="text-xs text-[var(--text-sec)] hover:text-[var(--text)]">Cancel</button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {candidates.map((c, i) => (
+                          <button
+                            key={i}
+                            onClick={() => { replaceCoach(coach.role, c); setConfirmReplace(null); setCandidates([]); }}
+                            className="text-left border border-[var(--border)] rounded-lg p-3 hover:border-blue-500 hover:bg-blue-50 transition-all"
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-bold text-sm">{c.firstName} {c.lastName}</span>
+                              <span className={`text-lg font-black ${ovrColor(c.ovr)}`}>{c.ovr}</span>
+                            </div>
+                            <div className="text-xs text-[var(--text-sec)] space-y-0.5">
+                              <div>Age {c.age} · {c.trait}</div>
+                              {c.offensiveScheme && <div>Offense: <span className="font-medium text-[var(--text)]">{OFFENSIVE_SCHEME_LABELS[c.offensiveScheme]}</span></div>}
+                              {c.defensiveScheme && <div>Defense: <span className="font-medium text-[var(--text)]">{DEFENSIVE_SCHEME_LABELS[c.defensiveScheme]}</span></div>}
+                              <div className="text-[10px]">{c.careerWins}-{c.careerLosses} career</div>
+                            </div>
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </Card>
                 ) :
-                <CoachCard key={coach.id} coach={coach} roster={roster} userTeam={userTeam} onReplace={() => setConfirmReplace(coach.role)} />
+                <CoachCard key={coach.id} coach={coach} roster={roster} userTeam={userTeam} onReplace={() => {
+                  setCandidates([generateCoach(coach.role), generateCoach(coach.role), generateCoach(coach.role)]);
+                  setConfirmReplace(coach.role);
+                }} />
               ))}
             </div>
 
