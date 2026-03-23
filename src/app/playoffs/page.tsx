@@ -199,9 +199,9 @@ function ConferenceBracket({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="flex gap-2 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:overflow-visible">
         {/* Wild Card */}
-        <div>
+        <div className="min-w-[180px] sm:min-w-0 flex-shrink-0 sm:flex-shrink">
           <div className="text-[10px] font-medium text-[var(--text-sec)] mb-1.5 text-center uppercase tracking-wide">
             Wild Card
           </div>
@@ -221,7 +221,7 @@ function ConferenceBracket({
         </div>
 
         {/* Divisional */}
-        <div className="flex flex-col justify-center">
+        <div className="min-w-[180px] sm:min-w-0 flex-shrink-0 sm:flex-shrink flex flex-col justify-center">
           <div className="text-[10px] font-medium text-[var(--text-sec)] mb-1.5 text-center uppercase tracking-wide">
             Divisional
           </div>
@@ -241,7 +241,7 @@ function ConferenceBracket({
         </div>
 
         {/* Conference Championship */}
-        <div className="flex flex-col justify-center">
+        <div className="min-w-[180px] sm:min-w-0 flex-shrink-0 sm:flex-shrink flex flex-col justify-center">
           <div className="text-[10px] font-medium text-[var(--text-sec)] mb-1.5 text-center uppercase tracking-wide">
             Conference
           </div>
