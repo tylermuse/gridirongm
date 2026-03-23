@@ -8,24 +8,47 @@ import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { getItem as idbGetItem } from '@/lib/storage';
 
-const NAV_ITEMS = [
-  { href: '/', label: 'Dashboard', icon: '🏟️' },
-  { href: '/roster', label: 'Roster', icon: '👥' },
-  { href: '/staff', label: 'Staff', icon: '🧑‍💼' },
-  { href: '/standings', label: 'Standings', icon: '📊' },
-  { href: '/playoffs', label: 'Playoffs', icon: '🏆' },
-  { href: '/re-sign', label: 'Re-signing', icon: '✍️' },
-  { href: '/draft', label: 'Draft', icon: '🎯' },
-  { href: '/draft-recap', label: 'Draft Recap', icon: '📋' },
-  { href: '/free-agency', label: 'Free Agency', icon: '🖊️' },
-  { href: '/trades', label: 'Trades', icon: '🔄' },
-  { href: '/finances', label: 'Finances', icon: '💰' },
-  { href: '/stats', label: 'Stats', icon: '📈' },
-  { href: '/recap', label: 'Recap', icon: '🎙️' },
-  { href: '/news', label: 'News', icon: '📰' },
-  { href: '/history', label: 'History', icon: '🗃️' },
-  { href: '/settings', label: 'Settings', icon: '⚙️' },
+const NAV_SECTIONS = [
+  {
+    label: 'League',
+    items: [
+      { href: '/', label: 'Dashboard', icon: '🏟️' },
+      { href: '/standings', label: 'Standings', icon: '📊' },
+      { href: '/playoffs', label: 'Playoffs', icon: '🏆' },
+      { href: '/stats', label: 'Stats', icon: '📈' },
+      { href: '/news', label: 'News', icon: '📰' },
+      { href: '/recap', label: 'Recap', icon: '🎙️' },
+      { href: '/history', label: 'History', icon: '🗃️' },
+    ],
+  },
+  {
+    label: 'Team',
+    items: [
+      { href: '/roster', label: 'Roster', icon: '👥' },
+      { href: '/staff', label: 'Staff', icon: '🧑‍💼' },
+      { href: '/finances', label: 'Finances', icon: '💰' },
+    ],
+  },
+  {
+    label: 'Players',
+    items: [
+      { href: '/re-sign', label: 'Re-signing', icon: '✍️' },
+      { href: '/draft', label: 'Draft', icon: '🎯' },
+      { href: '/draft-recap', label: 'Draft Recap', icon: '📋' },
+      { href: '/free-agency', label: 'Free Agency', icon: '🖊️' },
+      { href: '/trades', label: 'Trades', icon: '🔄' },
+    ],
+  },
+  {
+    label: 'Other',
+    items: [
+      { href: '/settings', label: 'Settings', icon: '⚙️' },
+    ],
+  },
 ];
+
+// Flat list for backward compatibility
+const NAV_ITEMS = NAV_SECTIONS.flatMap(s => s.items);
 
 const PHASE_LABELS: Record<string, string> = {
   preseason: 'Preseason',
@@ -227,17 +250,21 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       </div>
 
       <nav className="flex-1 p-2 overflow-y-auto">
-        {NAV_ITEMS.filter(item => {
-          // Hide Trades link only during playoffs and after regular-season trade deadline
-          if (item.href === '/trades') {
-            if (phase === 'playoffs') return false;
-            const deadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
-            if (phase === 'regular' && week > deadlineWeek + 1) return false;
-          }
-          // Hide Draft Recap when no draft results exist
-          if (item.href === '/draft-recap' && draftResults.length === 0) return false;
-          return true;
-        }).map(item => {
+        {NAV_SECTIONS.map(section => {
+          const visibleItems = section.items.filter(item => {
+            if (item.href === '/trades') {
+              if (phase === 'playoffs') return false;
+              const deadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
+              if (phase === 'regular' && week > deadlineWeek + 1) return false;
+            }
+            if (item.href === '/draft-recap' && draftResults.length === 0) return false;
+            return true;
+          });
+          if (visibleItems.length === 0) return null;
+          return (
+            <div key={section.label} className="mb-2">
+              <div className="text-[9px] font-bold uppercase tracking-widest text-[var(--text-sec)]/50 px-3 pt-2 pb-1">{section.label}</div>
+              {visibleItems.map(item => {
           const active = pathname === item.href;
           const badge = getBadge(item.href);
           return (
@@ -246,7 +273,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
               href={item.href}
               onClick={onNavigate}
               className={`
-                flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium mb-0.5
+                flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium mb-0.5
                 transition-colors
                 ${active
                   ? 'bg-blue-600/15 text-blue-600'
@@ -265,6 +292,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                 </span>
               )}
             </Link>
+          );
+              })}
+            </div>
           );
         })}
       </nav>
