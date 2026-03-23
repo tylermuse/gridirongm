@@ -127,6 +127,9 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                     ) : (
                       <span className="text-sm text-[var(--text-sec)]">Free Agent</span>
                     )}
+                    {player.college && (
+                      <span className="text-sm text-[var(--text-sec)]">· {player.college}</span>
+                    )}
                     {player.retired && <Badge variant="red">Retired</Badge>}
                   </div>
                 </div>
