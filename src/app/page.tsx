@@ -97,6 +97,10 @@ function TeamPicker() {
   }
 
   async function handlePick(abbr: string) {
+    // Warn if overwriting an existing save
+    if (savedGame && !window.confirm(`Starting a new league will overwrite your current save (${savedGame.teamAbbr}, Season ${savedGame.season}, ${savedGame.wins}-${savedGame.losses}). Continue?`)) {
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
