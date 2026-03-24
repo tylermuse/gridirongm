@@ -9,6 +9,46 @@ export const POSITIONS: Position[] = [
   'K', 'P',
 ];
 
+/**
+ * Display sub-position for LB and DL based on ratings.
+ * Doesn't change the core Position type — just a UI label.
+ * OLB: speed/pass-rush focused (edge rushers)
+ * ILB: tackling/coverage focused (off-ball linebackers)
+ * EDGE: DL with high pass rush + speed (defensive ends)
+ * DT: DL with high strength (interior defensive line)
+ */
+export function getSubPosition(player: { position: Position; ratings: { passRush: number; speed: number; tackling: number; coverage: number; strength: number } }): string {
+  if (player.position === 'LB') {
+    // OLB: speed + pass rush dominant; ILB: tackling + coverage dominant
+    const edgeScore = player.ratings.passRush + player.ratings.speed;
+    const insideScore = player.ratings.tackling + player.ratings.coverage;
+    return edgeScore > insideScore ? 'OLB' : 'ILB';
+  }
+  if (player.position === 'DL') {
+    // EDGE: speed + pass rush; DT: strength dominant
+    const edgeScore = player.ratings.passRush + player.ratings.speed;
+    const interiorScore = player.ratings.strength * 2;
+    return edgeScore > interiorScore ? 'EDGE' : 'DT';
+  }
+  if (player.position === 'S') {
+    // FS: coverage + speed; SS: tackling + strength
+    const fsScore = player.ratings.coverage + player.ratings.speed;
+    const ssScore = player.ratings.tackling + player.ratings.strength;
+    return fsScore > ssScore ? 'FS' : 'SS';
+  }
+  return player.position;
+}
+
+/** NFL Passer Rating (scale 0-158.3). Pass attempts must be > 0. */
+export function calcPasserRating(comp: number, att: number, yds: number, td: number, int: number): number {
+  if (att === 0) return 0;
+  const a = Math.min(2.375, Math.max(0, ((comp / att) - 0.3) * 5));
+  const b = Math.min(2.375, Math.max(0, ((yds / att) - 3) * 0.25));
+  const c = Math.min(2.375, Math.max(0, (td / att) * 20));
+  const d = Math.min(2.375, Math.max(0, 2.375 - ((int / att) * 25)));
+  return Math.round(((a + b + c + d) / 6) * 1000) / 10;
+}
+
 export const ROSTER_LIMITS: Record<Position, { min: number; max: number }> = {
   QB: { min: 1, max: 3 },
   RB: { min: 2, max: 4 },

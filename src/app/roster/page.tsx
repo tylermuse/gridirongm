@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { calculateSchemeFit, schemeFitDot, schemeFitColor, OFFENSIVE_SCHEME_LABELS, DEFENSIVE_SCHEME_LABELS } from '@/lib/engine/coaching';
 import { calculateDeadCap, calculateCapSavings, getCapHit, getUnamortizedBonus, materializeContractYears } from '@/types';
+import { getSubPosition } from '@/types';
 import type { Player, Position, ContractYear } from '@/types';
 import { POSITIONS, ROSTER_LIMITS } from '@/types';
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
@@ -405,7 +406,7 @@ export default function RosterPage() {
                     >
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-[var(--text-sec)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded">{p.position}</span>
+                          <span className="text-[10px] font-bold text-[var(--text-sec)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded">{getSubPosition(p)}</span>
                           <span className="font-semibold text-sm">{p.firstName[0]}. {p.lastName}</span>
                           {allProPlayerIds.has(p.id) && <span className="text-amber-600 text-xs">★</span>}
                         </div>
@@ -499,7 +500,7 @@ export default function RosterPage() {
 
                         {/* Position */}
                         <td className="py-2 px-2 text-center">
-                          <span className="text-xs font-bold text-[var(--text-sec)]">{p.position}</span>
+                          <span className="text-xs font-bold text-[var(--text-sec)]">{getSubPosition(p)}</span>
                         </td>
 
                         {/* Age */}

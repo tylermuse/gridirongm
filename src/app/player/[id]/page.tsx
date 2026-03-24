@@ -11,6 +11,7 @@ import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { generateCoachEvaluation, generateRosterEvaluation, type CoachEvaluation, type RosterEvaluation } from '@/lib/engine/personnelReport';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { getSubPosition, calcPasserRating } from '@/types';
 import type { Position, PlayerRatings } from '@/types';
 import { getCapHit, getUnamortizedBonus } from '@/types';
 
@@ -115,7 +116,7 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                 <div>
                   <h1 className="text-3xl font-black">{player.firstName} {player.lastName}</h1>
                   <div className="flex items-center gap-3 mt-2">
-                    <Badge>{player.position}</Badge>
+                    <Badge>{getSubPosition(player)}</Badge>
                     <span className="text-sm text-[var(--text-sec)]">Age {player.age}</span>
                     <span className="text-sm text-[var(--text-sec)]">
                       {player.experience === 0 ? 'Rookie' : `${player.experience}${player.experience === 1 ? 'st' : player.experience === 2 ? 'nd' : player.experience === 3 ? 'rd' : 'th'} Year`}
@@ -272,6 +273,10 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                       <div className="flex justify-between">
                         <span className="text-[var(--text-sec)]">Completions</span>
                         <span className="font-mono">{stats.passCompletions}/{stats.passAttempts}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[var(--text-sec)]">Passer Rating</span>
+                        <span className="font-mono">{calcPasserRating(stats.passCompletions, stats.passAttempts, stats.passYards, stats.passTDs, stats.interceptions)}</span>
                       </div>
                     </>
                   )}
