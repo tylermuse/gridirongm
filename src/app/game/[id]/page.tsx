@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { simulatePlayByPlay, liveGameToGameResult } from '@/lib/engine/playByPlay';
 import { Confetti } from '@/components/ui/Confetti';
+import { GameFieldCanvas } from '@/components/game/GameFieldCanvas';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import type { Player, Position } from '@/types';
 
@@ -1103,17 +1104,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 </div>
               )}
 
-              {/* Football field */}
-              <FootballField
-                fieldPos={liveFieldPos}
-                possession={livePoss}
+              {/* 2D Animated Football Field */}
+              <GameFieldCanvas
+                event={currentEvent}
+                prevEvent={revealedEvents.length >= 2 ? revealedEvents[revealedEvents.length - 2] : null}
                 homeColor={homeColor}
                 awayColor={awayColor}
                 homeAbbr={homeAbbr}
                 awayAbbr={awayAbbr}
-                firstDownMarker={liveYtg}
-                lastYardsGained={currentEvent?.yardsGained ?? 0}
-                lastPlayType={currentEvent?.type ?? 'run'}
+                isPlaying={isPlaying}
+                animationSpeed={SPEED_MS[speed]}
               />
 
               {/* Info bar */}
