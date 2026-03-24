@@ -17,21 +17,28 @@ export const POSITIONS: Position[] = [
  * EDGE: DL with high pass rush + speed (defensive ends)
  * DT: DL with high strength (interior defensive line)
  */
-export function getSubPosition(player: { position: Position; ratings: { passRush: number; speed: number; tackling: number; coverage: number; strength: number } }): string {
+export function getSubPosition(player: { position: Position; ratings: { passRush: number; speed: number; tackling: number; coverage: number; strength: number; agility: number; blocking: number } }): string {
+  if (player.position === 'OL') {
+    // OT (Tackle): agility + speed dominant — pass protectors on the edge
+    // OG (Guard): strength + blocking dominant — interior run blockers
+    // C (Center): balanced blocking + awareness-like (use agility as proxy)
+    const tackleScore = player.ratings.agility + player.ratings.speed;
+    const guardScore = player.ratings.strength + player.ratings.blocking;
+    // Top ~40% agility/speed → Tackle, bottom ~60% → Guard/Center
+    if (tackleScore > guardScore * 0.95) return 'OT';
+    return 'OG';
+  }
   if (player.position === 'LB') {
-    // OLB: speed + pass rush dominant; ILB: tackling + coverage dominant
     const edgeScore = player.ratings.passRush + player.ratings.speed;
     const insideScore = player.ratings.tackling + player.ratings.coverage;
     return edgeScore > insideScore ? 'OLB' : 'ILB';
   }
   if (player.position === 'DL') {
-    // EDGE: speed + pass rush; DT: strength dominant
     const edgeScore = player.ratings.passRush + player.ratings.speed;
     const interiorScore = player.ratings.strength * 2;
     return edgeScore > interiorScore ? 'EDGE' : 'DT';
   }
   if (player.position === 'S') {
-    // FS: coverage + speed; SS: tackling + strength
     const fsScore = player.ratings.coverage + player.ratings.speed;
     const ssScore = player.ratings.tackling + player.ratings.strength;
     return fsScore > ssScore ? 'FS' : 'SS';
