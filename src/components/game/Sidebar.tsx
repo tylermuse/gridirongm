@@ -302,7 +302,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       {/* Community links */}
       <div className="px-2 pb-2">
         <a
-          href="https://discord.gg/t9qM9TEq"
+          href="https://discord.gg/RMtusS2GKW"
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors"

@@ -165,7 +165,7 @@ export default function RostersPage() {
           </p>
           <div className="flex items-center justify-center gap-4 mt-3">
             <a
-              href="https://discord.gg/t9qM9TEq"
+              href="https://discord.gg/RMtusS2GKW"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-sm text-[var(--text-sec)] hover:text-blue-600 transition-colors"
