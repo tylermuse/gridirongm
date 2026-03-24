@@ -1360,7 +1360,7 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
         // Prefer lower-round picks (less valuable) to add as sweetener
         // Don't add a pick that would make the offer more than 2x target value
         const sortedPicks = [...aiPicks].sort((a, b) => b.round - a.round);
-        const pick = sortedPicks.find(pk => offeredValue + pickTradeValue(pk) <= targetValue * 2.0);
+        const pick = sortedPicks.find(pk => offeredValue + pickTradeValue(pk) <= targetValue * 1.5);
         if (pick) {
           offeredPickIds.push(pick.id);
           offeredValue += pickTradeValue(pick);
@@ -1370,14 +1370,14 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
 
     // ~20% chance: offer ONLY a draft pick (no player) for a mid-tier player
     // Pick must be proportional to player value — don't offer Rd 1 for a scrub
-    const pickOnlyTrade = Math.random() < 0.20 && targetValue >= 50 && targetValue < 400;
+    const pickOnlyTrade = Math.random() < 0.20 && targetValue >= 80 && targetValue < 400;
     let offeredPlayerIds = [aiOffer.id];
     if (pickOnlyTrade) {
       // Find the best-fit pick that doesn't massively overshoot
       const aiPicks = aiTeam.draftPicks
         .filter(pk => pk.year >= state.season)
         .map(pk => ({ pick: pk, pv: pickTradeValue(pk) }))
-        .filter(({ pv }) => pv <= targetValue * 2.0) // Don't overshoot by more than 2x
+        .filter(({ pv }) => pv <= targetValue * 1.3) // Don't overshoot by more than 30%
         .sort((a, b) => Math.abs(a.pv - targetValue) - Math.abs(b.pv - targetValue));
       if (aiPicks.length > 0) {
         const { pick, pv } = aiPicks[0];
@@ -3048,27 +3048,46 @@ export const useGameStore = create<GameStore>()(
 
         let rawDraftClass: Player[];
         if (isNfl) {
-          // Create hardcoded first-round prospects and prepend them
+          // Create hardcoded first-round prospects — reuse existing imported players if same name exists
           const nflProspects: Player[] = [];
           for (const pick of NFL_2026_FIRST_ROUND) {
-            const variance = Math.floor(Math.random() * 7) - 3; // ±3
-            const ovr = Math.max(55, Math.min(85, pick.ovrBase + variance));
-            const p = generatePlayer(pick.position, ovr, {
-              age: 21 + (Math.random() < 0.3 ? 1 : 0),
-              experience: 0,
-            });
-            p.firstName = pick.firstName;
-            p.lastName = pick.lastName;
-            p.position = pick.position;
-            p.college = pick.college;
-            p.potential = pick.potential;
-            p.ratings.overall = ovr;
-            p.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
-            p.draftYear = targetDraftYear;
+            // Check if this player already exists in the base draft class (from FBGM import)
+            const existing = baseDraftClass.find(
+              bp => bp.firstName === pick.firstName && bp.lastName === pick.lastName
+            );
+            let p: Player;
+            if (existing) {
+              // Reuse the imported player, just update OVR/potential/rank
+              p = { ...existing };
+              const variance = Math.floor(Math.random() * 7) - 3;
+              p.ratings = { ...p.ratings, overall: Math.max(55, Math.min(85, pick.ovrBase + variance)) };
+              p.potential = pick.potential;
+              p.projectedRank = pick.pick;
+              p.scoutingLabel = pick.blurb;
+              // Remove from baseDraftClass so it's not duplicated
+              const idx = baseDraftClass.findIndex(bp => bp.id === existing.id);
+              if (idx >= 0) baseDraftClass.splice(idx, 1);
+            } else {
+              // Create new player
+              const variance = Math.floor(Math.random() * 7) - 3;
+              const ovr = Math.max(55, Math.min(85, pick.ovrBase + variance));
+              p = generatePlayer(pick.position, ovr, {
+                age: 21 + (Math.random() < 0.3 ? 1 : 0),
+                experience: 0,
+              });
+              p.firstName = pick.firstName;
+              p.lastName = pick.lastName;
+              p.position = pick.position;
+              p.college = pick.college;
+              p.ratings.overall = Math.max(55, Math.min(85, pick.ovrBase + (Math.floor(Math.random() * 7) - 3)));
+              p.potential = pick.potential;
+              p.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
+              p.draftYear = targetDraftYear;
+            }
             p.projectedRank = pick.pick;
             p.scoutingLabel = pick.blurb;
-            p.scoutingSeed = Math.floor(Math.random() * 10000);
-            p.combineStats = generateCombineStats(p.position, p.ratings, pick.pick);
+            p.scoutingSeed = p.scoutingSeed ?? Math.floor(Math.random() * 10000);
+            p.combineStats = p.combineStats ?? generateCombineStats(p.position, p.ratings, pick.pick);
             nflProspects.push(p);
 
             nflMockDraft.push({
@@ -5061,7 +5080,9 @@ export const useGameStore = create<GameStore>()(
           if (p.teamId === null) {
             const isFutureProspect =
               p.draftYear !== null && p.draftYear >= newSeason && p.experience === 0;
-            if (!isFutureProspect) {
+            // Also protect rookies drafted this season who are unsigned (UDFAs etc.)
+            const isRecentDraft = p.draftYear !== null && p.draftYear >= state.season && p.experience <= 1;
+            if (!isFutureProspect && !isRecentDraft) {
               return { ...p, retired: true, stats: emptyStats() };
             }
           }
