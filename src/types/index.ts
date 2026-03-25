@@ -130,6 +130,15 @@ export interface PlayerStats {
   // Punting
   puntAttempts: number;
   puntYards: number;
+  puntsInside20: number;
+  touchbacks: number;
+  // Kick/Punt Returns
+  kickReturns: number;
+  kickReturnYards: number;
+  kickReturnTDs: number;
+  puntReturns: number;
+  puntReturnYards: number;
+  puntReturnTDs: number;
 }
 
 /** Per-year contract breakdown used for restructured contracts */
@@ -586,6 +595,7 @@ export interface LeagueSettings {
   regressionRate: number;    // 0-200, 100 = normal (default 100)
   retirementAge: number;     // Min age for retirement consideration (default 32)
   bsMode: boolean;           // BS Mode: adds drama and variance
+  mcafeeMode: boolean;       // McAfee Mode: special teams matter
 }
 
 export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
@@ -599,6 +609,7 @@ export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
   regressionRate: 100,
   retirementAge: 32,
   bsMode: false,
+  mcafeeMode: false,
 };
 
 export interface LeagueState {
@@ -756,7 +767,9 @@ export function emptyStats(): PlayerStats {
     tackles: 0, tacklesForLoss: 0, sacks: 0, defensiveINTs: 0, passDeflections: 0, forcedFumbles: 0,
     sacksAllowed: 0, passBlocks: 0,
     fieldGoalAttempts: 0, fieldGoalsMade: 0, extraPointAttempts: 0, extraPointsMade: 0,
-    puntAttempts: 0, puntYards: 0,
+    puntAttempts: 0, puntYards: 0, puntsInside20: 0, touchbacks: 0,
+    kickReturns: 0, kickReturnYards: 0, kickReturnTDs: 0,
+    puntReturns: 0, puntReturnYards: 0, puntReturnTDs: 0,
   };
 }
 
