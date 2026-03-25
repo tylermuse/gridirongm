@@ -1056,7 +1056,7 @@ export default function DraftPage() {
                               )}
                             </div>
                             <div className="text-[10px] text-[var(--text-sec)] flex items-center gap-1 flex-wrap">
-                              {player.scoutingLabel ?? 'Unranked'}
+                              {player.college ?? player.scoutingLabel ?? 'Unranked'}
                               {isScouted && (() => {
                                 const eval_ = generateDraftScoutEval(player, userRoster, { lo, hi });
                                 return (
