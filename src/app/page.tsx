@@ -32,6 +32,7 @@ function TeamPicker() {
   const [savedGame, setSavedGame] = useState<{ teamAbbr: string; season: number; wins: number; losses: number; phase: string } | null>(null);
   const [resumeLoading, setResumeLoading] = useState(false);
   const [startMode] = useState<'offseason' | 'regular'>('offseason');
+  const [bsModePreselect, setBsModePreselect] = useState(false);
   const autoLoadedRef = useRef(false);
 
   // Auto-load roster from ?roster= query param (e.g. from /rosters page)
@@ -105,6 +106,10 @@ function TeamPicker() {
     setError(null);
     try {
       await newLeague(abbr, activeUrl ?? undefined, activeUrl ? startMode : undefined);
+      // Enable BS Mode if preselected from the banner
+      if (bsModePreselect) {
+        useGameStore.getState().updateLeagueSettings({ bsMode: true });
+      }
       // Store is now initialized — Dashboard renders automatically on this page
     } catch {
       setError('Failed to start league. Please try again.');
@@ -147,6 +152,50 @@ function TeamPicker() {
         </h1>
         <p className="text-[var(--text-sec)] text-sm sm:text-lg">Choose your franchise. Build your dynasty.</p>
       </div>
+
+      {/* BS Mode Banner */}
+      {!savedGame && (
+        <button
+          onClick={() => {
+            setBsModePreselect(true);
+            // Auto-load the NFL roster for the best BS Mode experience
+            if (!importedTeams) {
+              setImportUrl('/rosters/FBGM_NFL_Roster_2026_Updated.json');
+              setShowImport(true);
+              setImportLoading(true);
+              loadLeagueFromUrl(`${window.location.origin}/rosters/FBGM_NFL_Roster_2026_Updated.json`)
+                .then((data) => { setImportedTeams(data); setActiveUrl(`/rosters/FBGM_NFL_Roster_2026_Updated.json`); })
+                .catch(() => {})
+                .finally(() => setImportLoading(false));
+            }
+          }}
+          className={`mb-6 max-w-2xl w-full rounded-2xl overflow-hidden transition-all hover:scale-[1.02] hover:shadow-xl ${
+            bsModePreselect ? 'ring-2 ring-amber-400 shadow-amber-400/20 shadow-lg' : ''
+          }`}
+        >
+          <div className="relative bg-gradient-to-r from-gray-950 via-gray-900 to-teal-950 p-6 sm:p-8 text-left">
+            <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'url(/images/bs-mode-banner.jpg)', backgroundSize: 'cover', backgroundPosition: 'right center' }} />
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-amber-400 text-xs font-bold uppercase tracking-widest bg-amber-400/10 px-2 py-0.5 rounded">New Mode</span>
+              </div>
+              <h3 className="text-white text-xl sm:text-2xl font-black mb-1">
+                Play Bill Simmons&apos; Ideal NFL
+              </h3>
+              <p className="text-gray-400 text-sm sm:text-base mb-3">
+                Draft Lottery. Ewing Theory. QB Tier Pyramid. Irrational Confidence Guys. The way football <em>should</em> be.
+              </p>
+              <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-colors ${
+                bsModePreselect
+                  ? 'bg-amber-500 text-black'
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}>
+                {bsModePreselect ? '✓ BS Mode Active — Pick Your Team Below' : 'Launch in BS Mode →'}
+              </div>
+            </div>
+          </div>
+        </button>
+      )}
 
       {/* Migration toast */}
       {migrated && (
