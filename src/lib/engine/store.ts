@@ -22,6 +22,7 @@ import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
 import { generateCoachingStaff, generateCoach, coachingBonus } from './coaching';
+import { computeLeagueQBTiers, getQBTierModifier } from './qbTierPyramid';
 
 const SAVE_VERSION = 18;
 
@@ -3134,6 +3135,49 @@ export const useGameStore = create<GameStore>()(
           return a.record.pointsFor - b.record.pointsFor;
         });
 
+        // BS Mode: Anti-Tanking Draft Lottery for bottom 6 non-playoff teams
+        const bsMode = state.leagueSettings?.bsMode ?? false;
+        let lotteryNews: NewsItem[] = [];
+        if (bsMode) {
+          const playoffTeamIds = new Set(
+            state.playoffSeeds ? [...(state.playoffSeeds.AC ?? []), ...(state.playoffSeeds.NC ?? [])] : []
+          );
+          const nonPlayoff = sortedTeams.filter(t => !playoffTeamIds.has(t.id));
+          const lotteryPool = nonPlayoff.slice(0, 6);
+          if (lotteryPool.length >= 6) {
+            const weights = [25, 20, 17, 15, 13, 10];
+            const lotteryResult: typeof lotteryPool = [];
+            const remaining = [...lotteryPool];
+            const remWeights = [...weights];
+            for (let pick = 0; pick < lotteryPool.length; pick++) {
+              const total = remWeights.reduce((a, b) => a + b, 0);
+              let roll = Math.random() * total;
+              let winner = 0;
+              for (let i = 0; i < remWeights.length; i++) {
+                roll -= remWeights[i];
+                if (roll <= 0) { winner = i; break; }
+              }
+              lotteryResult.push(remaining[winner]);
+              remaining.splice(winner, 1);
+              remWeights.splice(winner, 1);
+            }
+            const restNonPlayoff = nonPlayoff.slice(6);
+            const playoffSorted = sortedTeams.filter(t => playoffTeamIds.has(t.id));
+            // Reassign sortedTeams order (used for draft pick ordering)
+            const newOrder = [...lotteryResult, ...restNonPlayoff, ...playoffSorted];
+            // Rebuild the teamWinPctMap based on lottery order
+            for (let i = 0; i < sortedTeams.length; i++) {
+              (sortedTeams as typeof newOrder)[i] = newOrder[i];
+            }
+            lotteryNews.push(makeNews({
+              season: state.season, week: 0, type: 'system',
+              headline: `DRAFT LOTTERY: ${lotteryResult[0].city} ${lotteryResult[0].name} win the #1 overall pick!`,
+              body: `Lottery order: ${lotteryResult.map((t, i) => `${i + 1}. ${t.abbreviation}`).join(', ')}`,
+              isUserTeam: lotteryResult.some(t => t.id === state.userTeamId),
+            }));
+          }
+        }
+
         // Build draft order from draftPicks (respects trades — ownerTeamId may differ from originalTeamId)
         // Collect all picks for this draft year from all teams
         const allDraftYearPicks = updatedTeams.flatMap(t =>
@@ -3256,6 +3300,12 @@ export const useGameStore = create<GameStore>()(
           draftScoutingData: scoutingData,
           nflMockDraft: nflMockDraft.length > 0 ? nflMockDraft : undefined,
         });
+
+        // Add lottery news if any
+        if (lotteryNews.length > 0) {
+          const s = get();
+          set({ newsItems: [...s.newsItems, ...lotteryNews] });
+        }
 
         // Generate offseason trade rumors entering the draft
         const draftState = get();
@@ -5594,7 +5644,31 @@ export const useGameStore = create<GameStore>()(
           weeklyRecaps: [],
           tradeRumors: [],
           rivalries: decayRivalries(state.rivalries ?? []),
+          // BS Mode: compute QB tiers at season start
+          ...(state.leagueSettings?.bsMode ? {
+            qbTiers: computeLeagueQBTiers(grownTeams, allPlayersForNewSeason),
+          } : { qbTiers: undefined }),
         });
+
+        // BS Mode: generate QB Pyramid news
+        if (state.leagueSettings?.bsMode) {
+          const freshState = get();
+          const tiers = freshState.qbTiers ?? {};
+          const elites = Object.entries(tiers).filter(([, v]) => v.tier === 'Elite' || v.tier === 'Franchise');
+          if (elites.length > 0) {
+            const names = elites.map(([tid, v]) => {
+              const qb = freshState.players.find(p => p.id === v.playerId);
+              const tm = freshState.teams.find(t => t.id === tid);
+              return `${qb?.firstName} ${qb?.lastName} (${tm?.abbreviation}, ${v.tier})`;
+            }).join(', ');
+            set({ newsItems: [...freshState.newsItems, makeNews({
+              season: newSeason, week: 0, type: 'system',
+              headline: `QB Tier Pyramid: ${elites.length} Elite/Franchise QBs this season`,
+              body: names,
+              isUserTeam: false,
+            })] });
+          }
+        }
       },
 
       updateLeagueSettings: (updates: Partial<LeagueSettings>) => {
@@ -5606,7 +5680,23 @@ export const useGameStore = create<GameStore>()(
         if (updates.salaryCap !== undefined && updates.salaryCap !== oldSettings.salaryCap) {
           updatedTeams = state.teams.map(t => ({ ...t, salaryCap: updates.salaryCap! }));
         }
-        set({ leagueSettings: newSettings, teams: updatedTeams });
+        // BS Mode: assign personalities to existing players when first enabled
+        let updatedPlayers = state.players;
+        if (newSettings.bsMode && !oldSettings.bsMode) {
+          updatedPlayers = state.players.map(p => {
+            if (p.personality) return p;
+            // Deterministic hash from player ID
+            let h = 0;
+            for (let i = 0; i < (p.id?.length ?? 0); i++) h = ((h << 5) - h + p.id.charCodeAt(i)) | 0;
+            const roll = (Math.abs(h) % 100) / 100;
+            const personality: import('@/types').PersonalityTrait =
+              roll < 0.08 ? 'irrational_confidence' :
+              roll < 0.20 ? 'clutch' :
+              roll < 0.30 ? 'pressure_fold' : 'steady';
+            return { ...p, personality };
+          });
+        }
+        set({ leagueSettings: newSettings, teams: updatedTeams, players: updatedPlayers });
       },
 
       commitLiveGame: (result: GameResult, matchupId?: string) => {

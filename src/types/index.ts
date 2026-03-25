@@ -3,6 +3,10 @@ export type Position =
   | 'DL' | 'LB' | 'CB' | 'S'
   | 'K' | 'P';
 
+/** BS Mode personality traits */
+export type PersonalityTrait = 'irrational_confidence' | 'steady' | 'pressure_fold' | 'clutch';
+export type QBTier = 'Elite' | 'Franchise' | 'Bridge' | 'Game Manager' | 'Backup' | 'Camp Arm';
+
 export const POSITIONS: Position[] = [
   'QB', 'RB', 'WR', 'TE', 'OL',
   'DL', 'LB', 'CB', 'S',
@@ -185,6 +189,8 @@ export interface Player {
   projectedRank?: number;
   /** Whether the player is holding out for a new contract */
   holdout?: boolean;
+  /** BS Mode: personality trait affecting performance variance */
+  personality?: PersonalityTrait;
   /** How this player was acquired by their current team (set once on first joining) */
   acquiredVia?: 'draft' | 'free-agency' | 'trade' | 'initial';
   /** Season when the player was acquired by their current team */
@@ -301,6 +307,8 @@ export interface Team {
   franchiseTagUsed: boolean;
   /** Coaching staff (HC, OC, DC) */
   coaches?: Coach[];
+  /** BS Mode: Ewing Theory active */
+  ewingTheory?: { injuredPlayerId: string; teamPowerBoost: number };
   /** Revenue breakdown (computed at start of each season) */
   revenue: {
     tickets: number;
@@ -577,6 +585,7 @@ export interface LeagueSettings {
   progressionRate: number;   // 0-200, 100 = normal (default 100)
   regressionRate: number;    // 0-200, 100 = normal (default 100)
   retirementAge: number;     // Min age for retirement consideration (default 32)
+  bsMode: boolean;           // BS Mode: adds drama and variance
 }
 
 export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
@@ -589,6 +598,7 @@ export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
   progressionRate: 100,
   regressionRate: 100,
   retirementAge: 32,
+  bsMode: false,
 };
 
 export interface LeagueState {
@@ -627,6 +637,10 @@ export interface LeagueState {
   draftScoutingData: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }>;
   /** NFL 2026 hardcoded first-round mock draft (empty if not NFL roster or past first draft) */
   nflMockDraft?: { pickNum: number; teamAbbr: string; playerId: string; firstName: string; lastName: string; position: string; college: string; blurb: string }[];
+  /** BS Mode: QB tier assignments */
+  qbTiers?: Record<string, { playerId: string; tier: QBTier }>;
+  /** BS Mode: opponent selection for top seeds */
+  bsPickOpponent?: { conference: 'AC' | 'NC'; seed: number; options: string[] } | null;
   /** Player ID of the Championship MVP (set when championship is played, consumed when season summary is created) */
   finalsMvpPlayerId: string | null;
   /** All-Pro Game result — played between conference championships and the big game */

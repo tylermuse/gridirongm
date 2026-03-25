@@ -200,6 +200,14 @@ export function generatePlayer(
   const potential = clamp(ratings.overall + potentialBonus);
   const salary = randomSalary(ratings.overall, position, age, potential);
 
+  // Assign personality trait (used by BS Mode)
+  const personalityRoll = Math.random();
+  let personality: Player['personality'];
+  if (personalityRoll < 0.08) personality = 'irrational_confidence';
+  else if (personalityRoll < 0.20) personality = 'clutch';
+  else if (personalityRoll < 0.30) personality = 'pressure_fold';
+  else personality = 'steady';
+
   return {
     id: uuid(),
     firstName,
@@ -230,6 +238,7 @@ export function generatePlayer(
     injury: null,
     onIR: false,
     mood: 60 + Math.floor(Math.random() * 30), // 60-90 initial mood
+    personality,
     height: generateHeight(position),
     weight: generateWeight(position),
     college: randomCollege(),

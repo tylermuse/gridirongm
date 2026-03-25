@@ -235,6 +235,40 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        {/* BS Mode */}
+        <Card className="mb-4">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CardTitle>BS Mode</CardTitle>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-300">
+                Experimental
+              </span>
+            </div>
+          </CardHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-[var(--text-sec)]">
+              Activates the Entertaining as Hell Tournament, Draft Lottery, QB Tier Pyramid, Ewing Theory, and Irrational Confidence Guys. Adds drama and variance to your league.
+            </p>
+            <button
+              onClick={() => setDraft(d => ({ ...d, bsMode: !d.bsMode }))}
+              className={`
+                relative inline-flex h-7 w-12 items-center rounded-full transition-colors
+                ${draft.bsMode ? 'bg-amber-500' : 'bg-gray-300'}
+              `}
+            >
+              <span
+                className={`
+                  inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform
+                  ${draft.bsMode ? 'translate-x-6' : 'translate-x-1'}
+                `}
+              />
+            </button>
+            <span className={`ml-2 text-sm font-semibold ${draft.bsMode ? 'text-amber-600' : 'text-[var(--text-sec)]'}`}>
+              {draft.bsMode ? 'ON' : 'OFF'}
+            </span>
+          </div>
+        </Card>
+
         {/* Current league info */}
         <Card>
           <CardHeader><CardTitle>Current League Status</CardTitle></CardHeader>
