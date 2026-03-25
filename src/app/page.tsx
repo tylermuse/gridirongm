@@ -174,7 +174,7 @@ function TeamPicker() {
           }`}
         >
           <div className="relative bg-gradient-to-r from-gray-950 via-gray-900 to-teal-950 p-6 sm:p-8 text-left">
-            <div className="absolute inset-0 opacity-40" style={{ backgroundImage: 'url(/images/bs-mode-banner.jpg)', backgroundSize: 'cover', backgroundPosition: 'right center' }} />
+            <div className="absolute inset-0 opacity-70" style={{ backgroundImage: 'url(/images/bs-mode-banner.jpg)', backgroundSize: 'cover', backgroundPosition: 'right center' }} />
             <div className="relative z-10">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-amber-400 text-xs font-bold uppercase tracking-widest bg-amber-400/10 px-2 py-0.5 rounded">New Mode</span>
