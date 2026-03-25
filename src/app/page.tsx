@@ -446,7 +446,7 @@ function DraftCapitalCard({ team, season, phase, teams }: { team: { draftPicks: 
 }
 
 function Dashboard() {
-  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements } = useGameStore();
+  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements, leagueSettings } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const spotlightRef = useRef<HTMLDivElement>(null);
@@ -559,6 +559,24 @@ function Dashboard() {
             </div>
           </div>
         </div>
+
+        {/* Active Mode Indicators */}
+        {(leagueSettings?.bsMode || leagueSettings?.mcafeeMode) && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {leagueSettings?.bsMode && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-xs">
+                <span className="text-amber-600 font-bold">BS Mode Active</span>
+                <span className="text-amber-500">· Draft Lottery · QB Tiers · Ewing Theory · IC Guys</span>
+              </div>
+            )}
+            {leagueSettings?.mcafeeMode && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-xs">
+                <span className="text-blue-600 font-bold">McAfee Mode Active</span>
+                <span className="text-blue-500">· Punt God · Returns · Fake Punts · Onside Kicks</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Achievements row */}
         {ALL_ACHIEVEMENTS.length > 0 && (
