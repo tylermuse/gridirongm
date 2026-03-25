@@ -643,6 +643,8 @@ export default function DraftPage() {
     simToEndDraft,
     season,
     nflMockDraft,
+    draftLotteryResults,
+    leagueSettings,
   } = useGameStore();
 
   const { maxScoutingLevel: maxLevel } = useSubscription();
@@ -891,6 +893,33 @@ export default function DraftPage() {
               <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${(draftResults.length / (teams.length * 7)) * 100}%` }} />
             </div>
           </div>
+        )}
+
+        {/* Draft Lottery Results */}
+        {draftLotteryResults && draftLotteryResults.length > 0 && leagueSettings?.bsMode && (
+          <Card className="border-amber-200 bg-amber-50">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">🎰</span>
+              <div className="flex-1">
+                <div className="font-bold text-sm text-amber-800 mb-1">BS Mode Draft Lottery Results</div>
+                <div className="flex flex-wrap gap-2">
+                  {draftLotteryResults.map(r => {
+                    const moved = r.originalRank - r.lotteryPick;
+                    return (
+                      <div key={r.teamId} className="flex items-center gap-1 bg-white rounded-lg px-2 py-1 border border-amber-200 text-xs">
+                        <span className="font-black text-amber-700">#{r.lotteryPick}</span>
+                        <span className="font-semibold">{r.abbr}</span>
+                        {moved > 0 && <span className="text-green-600 font-bold">↑{moved}</span>}
+                        {moved < 0 && <span className="text-red-500 font-bold">↓{Math.abs(moved)}</span>}
+                        {moved === 0 && <span className="text-[var(--text-sec)]">—</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-amber-600 mt-1">Top 6 picks determined by weighted lottery. Remaining picks follow standard reverse-record order.</p>
+              </div>
+            </div>
+          </Card>
         )}
 
         {/* On The Clock */}

@@ -3184,11 +3184,15 @@ export const useGameStore = create<GameStore>()(
         // BS Mode: Anti-Tanking Draft Lottery for bottom 6 non-playoff teams
         const bsMode = state.leagueSettings?.bsMode ?? false;
         let lotteryNews: NewsItem[] = [];
+        let lotteryResults: { teamId: string; abbr: string; originalRank: number; lotteryPick: number }[] = [];
         if (bsMode) {
+          // If no playoffs happened yet (first season), treat all teams as non-playoff
           const playoffTeamIds = new Set(
             state.playoffSeeds ? [...(state.playoffSeeds.AC ?? []), ...(state.playoffSeeds.NC ?? [])] : []
           );
-          const nonPlayoff = sortedTeams.filter(t => !playoffTeamIds.has(t.id));
+          const nonPlayoff = playoffTeamIds.size > 0
+            ? sortedTeams.filter(t => !playoffTeamIds.has(t.id))
+            : sortedTeams; // first season: all teams eligible
           const lotteryPool = nonPlayoff.slice(0, 6);
           if (lotteryPool.length >= 6) {
             const weights = [25, 20, 17, 15, 13, 10];
@@ -3215,6 +3219,13 @@ export const useGameStore = create<GameStore>()(
             for (let i = 0; i < sortedTeams.length; i++) {
               (sortedTeams as typeof newOrder)[i] = newOrder[i];
             }
+            // Store lottery results for UI display
+            lotteryResults = lotteryResult.map((t, i) => ({
+              teamId: t.id,
+              abbr: t.abbreviation,
+              originalRank: nonPlayoff.indexOf(t) + 1,
+              lotteryPick: i + 1,
+            }));
             lotteryNews.push(makeNews({
               season: state.season, week: 0, type: 'system',
               headline: `DRAFT LOTTERY: ${lotteryResult[0].city} ${lotteryResult[0].name} win the #1 overall pick!`,
@@ -3352,10 +3363,13 @@ export const useGameStore = create<GameStore>()(
           nflMockDraft: nflMockDraft.length > 0 ? nflMockDraft : undefined,
         });
 
-        // Add lottery news if any
-        if (lotteryNews.length > 0) {
+        // Add lottery news and results if any
+        if (lotteryNews.length > 0 || lotteryResults.length > 0) {
           const s = get();
-          set({ newsItems: [...s.newsItems, ...lotteryNews] });
+          set({
+            ...(lotteryNews.length > 0 ? { newsItems: [...s.newsItems, ...lotteryNews] } : {}),
+            ...(lotteryResults.length > 0 ? { draftLotteryResults: lotteryResults } : {}),
+          });
         }
 
         // Generate offseason trade rumors entering the draft

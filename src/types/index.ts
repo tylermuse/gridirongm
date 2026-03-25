@@ -652,6 +652,8 @@ export interface LeagueState {
   qbTiers?: Record<string, { playerId: string; tier: QBTier }>;
   /** BS Mode: opponent selection for top seeds */
   bsPickOpponent?: { conference: 'AC' | 'NC'; seed: number; options: string[] } | null;
+  /** BS Mode: draft lottery results */
+  draftLotteryResults?: { teamId: string; abbr: string; originalRank: number; lotteryPick: number }[];
   /** Player ID of the Championship MVP (set when championship is played, consumed when season summary is created) */
   finalsMvpPlayerId: string | null;
   /** All-Pro Game result — played between conference championships and the big game */
