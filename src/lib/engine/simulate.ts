@@ -391,6 +391,7 @@ interface DriveResult {
 function simulateDrive(
   offense: Player[],
   defense: Player[],
+  mcafeeMode: boolean = false,
 ): DriveResult {
   const plays: PlayResult[] = [];
   let fieldPosition = 25 + Math.floor(Math.random() * 15); // start at own 25-40 (touchbacks + returns)
@@ -457,7 +458,10 @@ function simulateDrive(
       }
       // Punt
       const punter = offense.find(p => p.position === 'P' && (!p.injury || p.injury.weeksLeft === 0));
-      const puntDist = 35 + Math.floor(Math.random() * 20); // 35-55 yards
+      const pRating = punter?.ratings.kicking ?? 60;
+      const puntDist = mcafeeMode && punter
+        ? Math.max(25, Math.min(65, Math.round(38 + (pRating - 50) * 0.2 + (Math.random() * 14 - 4))))
+        : 35 + Math.floor(Math.random() * 20); // 35-55 yards
       if (punter) {
         plays.push({ type: 'punt', yards: puntDist, touchdown: false, turnover: false, punter, puntYards: puntDist });
       }
@@ -517,11 +521,29 @@ export function simulateGame(
   homeCoachBonus: number = 0,
   awayCoachBonus: number = 0,
   rivalryIntensity: number = 0,
+  bsMode: boolean = false,
+  mcafeeMode: boolean = false,
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
   // ~11 possessions per team per game (NFL avg ~11-12)
   const possessions = 11;
+
+  // BS Mode: Irrational Confidence variance
+  const applyIC = (roster: Player[]) => {
+    if (!bsMode) return roster;
+    return roster.map(p => {
+      if (p.personality !== 'irrational_confidence') return p;
+      const roll = Math.random();
+      let mod = 0;
+      if (roll < 0.15) mod = 10; // hero game
+      else if (roll < 0.25) mod = -8; // disaster game
+      else mod = Math.round((Math.random() - 0.5) * 12); // wider variance
+      return { ...p, ratings: { ...p.ratings, overall: Math.max(30, Math.min(99, p.ratings.overall + mod)) } };
+    });
+  };
+  const effectiveHomeRoster = applyIC(homeRoster);
+  const effectiveAwayRoster = applyIC(awayRoster);
 
   const allHomePlays: PlayResult[] = [];
   const allAwayPlays: PlayResult[] = [];
@@ -594,7 +616,7 @@ export function simulateGame(
     const quarter = Math.min(4, Math.floor(i / (possessions / 4)) + 1);
 
     // Home offense drives — scoring fatigue: teams with big leads run the clock
-    const homeDrive = simulateDrive(homeRoster, awayRoster);
+    const homeDrive = simulateDrive(effectiveHomeRoster, effectiveAwayRoster, mcafeeMode);
     const homeStall = homeScore >= 42 ? 0.7 : homeScore >= 35 ? 0.35 : homeScore >= 28 && (homeScore - awayScore) >= 21 ? 0.2 : 0;
     const homePoints = homeStall > 0 && Math.random() < homeStall ? 0 : homeDrive.points;
     homeScore += homePoints;
@@ -604,7 +626,7 @@ export function simulateGame(
     runHome = afterHome.home;
 
     // Away offense drives — same scoring fatigue
-    const awayDrive = simulateDrive(awayRoster, homeRoster);
+    const awayDrive = simulateDrive(effectiveAwayRoster, effectiveHomeRoster, mcafeeMode);
     const awayStall = awayScore >= 42 ? 0.7 : awayScore >= 35 ? 0.35 : awayScore >= 28 && (awayScore - homeScore) >= 21 ? 0.2 : 0;
     const awayPoints = awayStall > 0 && Math.random() < awayStall ? 0 : awayDrive.points;
     awayScore += awayPoints;

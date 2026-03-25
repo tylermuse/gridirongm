@@ -23,6 +23,7 @@ import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
 import { generateCoachingStaff, generateCoach, coachingBonus } from './coaching';
 import { computeLeagueQBTiers, getQBTierModifier } from './qbTierPyramid';
+import { teamSpecialTeamsRating } from './specialTeams';
 
 const SAVE_VERSION = 18;
 
@@ -1729,8 +1730,25 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       : awayRosterRaw;
 
     // Coaching bonus applied to team power
-    const homeCoachBonus = homeTeam ? coachingBonus(homeTeam, homeRosterRaw) : 0;
-    const awayCoachBonus = awayTeam ? coachingBonus(awayTeam, awayRosterRaw) : 0;
+    let homeCoachBonus = homeTeam ? coachingBonus(homeTeam, homeRosterRaw) : 0;
+    let awayCoachBonus = awayTeam ? coachingBonus(awayTeam, awayRosterRaw) : 0;
+
+    // McAfee Mode: special teams rating modifier
+    const mcafeeMode = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).mcafeeMode;
+    if (mcafeeMode) {
+      const homeST = teamSpecialTeamsRating(homeRosterRaw);
+      const awayST = teamSpecialTeamsRating(awayRosterRaw);
+      homeCoachBonus += (homeST.overall - 65) * 0.05;
+      awayCoachBonus += (awayST.overall - 65) * 0.05;
+    }
+
+    const bsMode = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).bsMode;
+
+    // BS Mode: Ewing Theory boost
+    if (bsMode) {
+      if (homeTeam?.ewingTheory) homeCoachBonus += homeTeam.ewingTheory.teamPowerBoost;
+      if (awayTeam?.ewingTheory) awayCoachBonus += awayTeam.ewingTheory.teamPowerBoost;
+    }
 
     // Generate betting line before game
     const bettingLine = generateBettingLine(homeRosterRaw, awayRosterRaw, homeCoachBonus, awayCoachBonus);
@@ -1742,7 +1760,7 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     );
     const rivalryIntensity = rivalry?.intensity ?? 0;
 
-    const result = simulateGame(game, homeRoster, awayRoster, homeCoachBonus, awayCoachBonus, rivalryIntensity);
+    const result = simulateGame(game, homeRoster, awayRoster, homeCoachBonus, awayCoachBonus, rivalryIntensity, bsMode, mcafeeMode);
 
     // Compute ATS coverage
     const scoreDiff = result.homeScore - result.awayScore;
@@ -1830,6 +1848,34 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     return { ...p, injury };
   });
 
+  // BS Mode: Ewing Theory — when a team's best player is injured 3+ weeks, 15% chance to activate
+  const ewingBsMode = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).bsMode;
+  const ewingNews: NewsItem[] = [];
+  if (ewingBsMode) {
+    for (const team of newTeams) {
+      if (team.ewingTheory) {
+        // Check if star returned — clear Ewing Theory
+        const star = injuredPlayers.find(p => p.id === team.ewingTheory!.injuredPlayerId);
+        if (star && (!star.injury || star.injury.weeksLeft === 0)) {
+          team.ewingTheory = undefined;
+        }
+        continue;
+      }
+      const teamRoster = injuredPlayers.filter(p => team.roster.includes(p.id) && !p.retired);
+      const bestPlayer = teamRoster.reduce((best, p) =>
+        p.ratings.overall > (best?.ratings.overall ?? 0) ? p : best, null as Player | null);
+      if (bestPlayer?.injury && bestPlayer.injury.weeksLeft >= 3 && Math.random() < 0.15) {
+        team.ewingTheory = { injuredPlayerId: bestPlayer.id, teamPowerBoost: 3 };
+        ewingNews.push(makeNews({
+          season: state.season, week: state.week, type: 'rumor',
+          headline: `${team.city} rallies after losing ${bestPlayer.firstName} ${bestPlayer.lastName}`,
+          body: `The ${team.name} seem to be playing with renewed energy after their star's injury. Teammates are stepping up.`,
+          teamId: team.id, isUserTeam: team.id === state.userTeamId,
+        }));
+      }
+    }
+  }
+
   const weekNews = generateWeekNews(state, updatedGames, newInjuries);
 
   const simDl = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).tradeDeadlineWeek;
@@ -1882,7 +1928,7 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       players: moodUpdatedPlayers,
       week: isSeasonOver ? state.week : nextWeek,
       phase: isSeasonOver ? 'playoffs' : 'regular',
-      newsItems: [...state.newsItems, ...weekNews, ...rumorNews, ...rumorResolutionNews, ...rivalryNews],
+      newsItems: [...state.newsItems, ...weekNews, ...ewingNews, ...rumorNews, ...rumorResolutionNews, ...rivalryNews],
       tradeProposals: [...state.tradeProposals, ...newTradeProposals],
       tradeRumors: resolvedRumors,
       rivalries: updatedRivalries,

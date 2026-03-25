@@ -378,6 +378,7 @@ export function simulatePlayByPlay(
   homePlayers: Player[],
   awayPlayers: Player[],
   isPlayoff: boolean = false,
+  mcafeeMode: boolean = false,
 ): LiveGameResult {
   const homeKey = extractKeyPlayers(homePlayers);
   const awayKey = extractKeyPlayers(awayPlayers);
@@ -442,6 +443,46 @@ export function simulatePlayByPlay(
   }
 
   function doKickoff() {
+    if (mcafeeMode) {
+      // Onside kick check: if kicking team is trailing in Q4 with < 5 min
+      const kickScore = state.possession === 'home' ? state.homeScore : state.awayScore;
+      const recvScore = state.possession === 'home' ? state.awayScore : state.homeScore;
+      const shouldOnside = state.quarter >= 4 && state.timeSecs <= 300 && kickScore < recvScore;
+
+      if (shouldOnside && Math.random() < 0.10) {
+        // Onside kick recovered!
+        addEvent('kickoff', 'ONSIDE KICK — RECOVERED by the kicking team!', 0, false);
+        state.fieldPos = 45 + Math.floor(Math.random() * 10);
+        state.down = 1;
+        state.yardsToGo = 10;
+        advanceClock(10);
+        return;
+      } else if (shouldOnside) {
+        addEvent('kickoff', 'Onside kick attempt — receiving team recovers.', 0, false);
+        switchPossession(45);
+        advanceClock(10);
+        return;
+      }
+
+      // Normal kickoff with return
+      const baseReturn = 20 + Math.floor(Math.random() * 10);
+      const returnYards = Math.min(99, baseReturn + Math.floor(Math.random() * 8));
+
+      // 1% kick return TD chance
+      if (Math.random() < 0.01) {
+        addEvent('kickoff', 'Kick return TOUCHDOWN! Taken all the way back!', 100, true);
+        if (state.possession === 'home') state.awayScore += 7;
+        else state.homeScore += 7;
+        doKickoff(); // re-kick after TD
+        return;
+      }
+
+      addEvent('kickoff', `Kicking team lines up — kickoff. Returned to the ${returnYards}.`, 0, false);
+      switchPossession(returnYards);
+      advanceClock(10);
+      return;
+    }
+
     addEvent('kickoff', descKickoff(), 0, false, 25);
     // receiving team starts at own 25
     switchPossession(25);
@@ -506,6 +547,37 @@ export function simulatePlayByPlay(
     // New field pos for receiving team: 100 - (100 - state.fieldPos - puntYards) but clamped
     const returnTeamFieldPos = clamp(100 - state.fieldPos - puntYards, 5, 50);
     addEvent('punt', descPunt(puntYards), puntYards, false);
+
+    if (mcafeeMode) {
+      // 1.5% muffed punt — turnover, punting team keeps the ball
+      if (Math.random() < 0.015) {
+        addEvent('punt', 'Muffed punt! The kicking team recovers!', 0, false);
+        state.fieldPos = clamp(100 - returnTeamFieldPos, 20, 90);
+        state.down = 1;
+        state.yardsToGo = 10;
+        return;
+      }
+
+      // 0.5% punt return TD
+      if (Math.random() < 0.005) {
+        addEvent('punt', 'Punt return TOUCHDOWN! He takes it all the way!', 100, true);
+        if (state.possession === 'home') state.awayScore += 7;
+        else state.homeScore += 7;
+        switchPossession(25); // set up for kickoff position
+        doKickoff();
+        return;
+      }
+
+      // Normal punt return: 0-15 yards
+      const returnYds = Math.floor(Math.random() * 16);
+      const adjustedFieldPos = clamp(returnTeamFieldPos + returnYds, 5, 75);
+      if (returnYds > 0) {
+        addEvent('punt', `Punt returned ${returnYds} yards.`, returnYds, false);
+      }
+      switchPossession(adjustedFieldPos);
+      return;
+    }
+
     switchPossession(returnTeamFieldPos);
   }
 
@@ -657,6 +729,43 @@ export function simulatePlayByPlay(
         advanceClock(30);
         return true;
       } else {
+        // McAfee Mode: 3% fake punt chance
+        if (mcafeeMode && Math.random() < 0.03) {
+          const isRun = Math.random() < 0.60;
+          if (isRun) {
+            const fakeYards = 2 + Math.floor(Math.random() * 5); // 2-6 yards
+            const success = fakeYards >= state.yardsToGo;
+            addEvent('run', `FAKE PUNT! The punter takes off and gains ${fakeYards} yard${fakeYards !== 1 ? 's' : ''}!${success ? ' First down!' : ' Comes up short!'}`, fakeYards, false);
+            state.fieldPos = clamp(state.fieldPos + fakeYards, 1, 99);
+            state.yardsToGo -= fakeYards;
+            advanceClock(30);
+            if (success) {
+              state.down = 1;
+              state.yardsToGo = 10;
+            } else {
+              // Turnover on downs
+              switchPossession(clamp(100 - state.fieldPos, 10, 90));
+            }
+            return true;
+          } else {
+            // Fake punt pass
+            const complete = Math.random() < 0.45;
+            if (complete) {
+              const passYards = 10 + Math.floor(Math.random() * 16); // 10-25 yards
+              addEvent('pass_complete', `FAKE PUNT PASS! Completed for ${passYards} yards! First down!`, passYards, false);
+              state.fieldPos = clamp(state.fieldPos + passYards, 1, 99);
+              state.down = 1;
+              state.yardsToGo = 10;
+              advanceClock(30);
+            } else {
+              addEvent('pass_incomplete', `FAKE PUNT PASS! Incomplete — turnover on downs!`, 0, false);
+              switchPossession(clamp(100 - state.fieldPos, 10, 90));
+              advanceClock(30);
+            }
+            return true;
+          }
+        }
+
         // Punt
         doPunt();
         advanceClock(35);
