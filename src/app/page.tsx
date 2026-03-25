@@ -154,7 +154,7 @@ function TeamPicker() {
       </div>
 
       {/* BS Mode Banner */}
-      {!savedGame && (
+      {(
         <button
           onClick={() => {
             setBsModePreselect(true);
