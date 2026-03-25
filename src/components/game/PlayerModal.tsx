@@ -162,22 +162,40 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                 POT: {potentialLabel(player.potential, player.experience)}
               </span>
 
-              {player.mood !== undefined && (
-                <span className={`text-sm ${
-                  player.mood >= 75 ? 'text-green-600' :
-                  player.mood >= 50 ? 'text-amber-600' :
-                  'text-red-600'
-                }`}>
-                  {player.mood >= 75 ? '😊' : player.mood >= 50 ? '😐' : '😠'} {
-                    player.mood >= 90 ? 'Ecstatic' :
-                    player.mood >= 75 ? 'Happy' :
-                    player.mood >= 60 ? 'Content' :
-                    player.mood >= 45 ? 'Unhappy' :
-                    player.mood >= 25 ? 'Frustrated' :
-                    'Holdout Risk'
-                  }
-                </span>
-              )}
+              {player.mood !== undefined && (() => {
+                const mood = player.mood;
+                const label = mood >= 90 ? 'Ecstatic' : mood >= 75 ? 'Happy' : mood >= 60 ? 'Content' : mood >= 45 ? 'Unhappy' : mood >= 25 ? 'Frustrated' : 'Holdout Risk';
+                const emoji = mood >= 75 ? '😊' : mood >= 50 ? '😐' : '😠';
+                const color = mood >= 75 ? 'text-green-600' : mood >= 50 ? 'text-amber-600' : 'text-red-600';
+
+                // Build mood reasons
+                const reasons: string[] = [];
+                if (team) {
+                  const gp = team.record.wins + team.record.losses;
+                  const wp = gp > 0 ? team.record.wins / gp : 0.5;
+                  if (wp >= 0.6) reasons.push('Team winning');
+                  else if (wp <= 0.35) reasons.push('Losing record');
+                  if (team.record.streak >= 3) reasons.push(`${team.record.streak}-game win streak`);
+                  else if (team.record.streak <= -3) reasons.push(`${Math.abs(team.record.streak)}-game losing streak`);
+                  const dc = team.depthChart[player.position as import('@/types').Position] ?? [];
+                  const depthIdx = dc.indexOf(player.id);
+                  if (depthIdx === 0) reasons.push('Starting');
+                  else if (depthIdx > 2) reasons.push('Wants more playing time');
+                }
+                if (player.contract.yearsLeft <= 1 && player.ratings.overall >= 70) reasons.push('Wants extension');
+                if (player.holdout) reasons.push('Holding out');
+                const marketEst = player.ratings.overall * 0.3;
+                if (player.contract.salary < marketEst * 0.6) reasons.push('Underpaid');
+
+                return (
+                  <div>
+                    <span className={`text-sm ${color}`}>{emoji} {label}</span>
+                    {reasons.length > 0 && (
+                      <div className="text-[10px] text-[var(--text-sec)] mt-0.5">{reasons.join(' · ')}</div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Injury */}

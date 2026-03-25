@@ -71,6 +71,42 @@ function getStatValues(p: Player): [string, string] {
   }
 }
 
+/** Get mood explanation for a player */
+function getMoodReason(p: Player, team: { record: { wins: number; losses: number; streak: number }; salaryCap: number } | undefined, depthIdx: number): string {
+  const reasons: string[] = [];
+  const mood = p.mood ?? 70;
+
+  if (team) {
+    const gp = team.record.wins + team.record.losses;
+    const wp = gp > 0 ? team.record.wins / gp : 0.5;
+    if (wp >= 0.6) reasons.push('Team is winning');
+    else if (wp <= 0.35) reasons.push('Frustrated with losing record');
+    if (team.record.streak >= 3) reasons.push(`${team.record.streak}-game win streak`);
+    else if (team.record.streak <= -3) reasons.push(`${Math.abs(team.record.streak)}-game losing streak`);
+  }
+
+  if (depthIdx === 0) reasons.push('Starting role');
+  else if (depthIdx <= 1) reasons.push('Getting playing time');
+  else if (depthIdx > 2) reasons.push('Wants more playing time');
+
+  // Contract satisfaction
+  const marketEst = p.ratings.overall * 0.3; // rough market estimate
+  if (p.contract.salary < marketEst * 0.6) reasons.push('Underpaid for his talent');
+  else if (p.contract.salary >= marketEst * 1.2) reasons.push('Happy with his contract');
+
+  if (p.contract.yearsLeft <= 1 && p.ratings.overall >= 70) reasons.push('Wants a new deal');
+  if (p.holdout) reasons.push('Holding out for a new contract');
+  if (p.injury && p.injury.weeksLeft > 0) reasons.push('Dealing with injury');
+
+  if (reasons.length === 0) {
+    if (mood >= 75) reasons.push('No complaints');
+    else if (mood >= 50) reasons.push('Nothing specific');
+    else reasons.push('Generally unhappy with situation');
+  }
+
+  return reasons.join(' · ');
+}
+
 /** Get generic stat columns for the "ALL" view */
 function getGenericStat(p: Player): string {
   const s = p.stats;
@@ -604,8 +640,13 @@ export default function RosterPage() {
                             const mood = p.mood ?? 70;
                             const label = mood >= 85 ? 'Thrilled' : mood >= 75 ? 'Happy' : mood >= 60 ? 'Content' : mood >= 45 ? 'Unhappy' : 'Angry';
                             const color = mood >= 75 ? 'text-green-600 bg-green-50' : mood >= 50 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50';
+                            const depthIdx = getDepthIndex(p);
+                            const reason = getMoodReason(p, viewingTeam, depthIdx);
                             return (
-                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color}`}>
+                              <span
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded cursor-help ${color}`}
+                                title={reason}
+                              >
                                 {label}
                               </span>
                             );
