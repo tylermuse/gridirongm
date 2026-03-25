@@ -3253,9 +3253,14 @@ export const useGameStore = create<GameStore>()(
         }
 
         // Ensure EVERY draft class player is in the players array
+        // AND update any existing players whose ratings were modified by NFL mock draft
+        const draftClassById = new Map(draftClass.map(p => [p.id, p]));
         const existingIds = new Set(updatedPlayers.map(p => p.id));
         const missingFromPlayers = draftClass.filter(p => !existingIds.has(p.id));
-        let finalPlayers = [...updatedPlayers, ...missingFromPlayers];
+        let finalPlayers = [
+          ...updatedPlayers.map(p => draftClassById.get(p.id) ?? p), // overlay modified draft prospects
+          ...missingFromPlayers,
+        ];
 
         // Generate dynamic mock draft for non-NFL years (or if NFL mock wasn't created)
         if (nflMockDraft.length === 0) {
