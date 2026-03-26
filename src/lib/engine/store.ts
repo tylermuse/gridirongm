@@ -3110,10 +3110,40 @@ export const useGameStore = create<GameStore>()(
 
         // Base draft class: imported or generated
         let baseDraftClass: Player[];
+        const draftSettings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
         if (importedDraftClass.length > 0) {
-          baseDraftClass = importedDraftClass;
+          // Imported prospects (from FBGM) lack scouting/combine/college/draftProfile fields.
+          // Enrich them so scouting, boom/bust, and display work correctly.
+          const scoutLabels = ['High motor', 'Raw but explosive', 'Pro-ready', 'Injury history', 'Combine standout', 'Character concerns', 'Sleeper'];
+          baseDraftClass = importedDraftClass.map(p => ({
+            ...p,
+            scoutingLabel: p.scoutingLabel ?? scoutLabels[Math.floor(Math.random() * scoutLabels.length)],
+            scoutingSeed: p.scoutingSeed ?? Math.floor(Math.random() * 10000),
+            college: p.college ?? '',
+            combineStats: p.combineStats ?? generateCombineStats(p.position, p.ratings, Math.floor(Math.random() * 10000)),
+            draftProfile: p.draftProfile ?? 'normal' as const,
+          }));
+
+          // Apply boom/bust profiles to imported prospects (same logic as generateDraftClass)
+          const sortedByOvr = [...baseDraftClass].sort((a, b) => b.ratings.overall - a.ratings.overall);
+          const mid = Math.floor(sortedByOvr.length / 2);
+          const bustRate = draftSettings.chaosDraft ? 1.0 : 0.08;
+          const boomRate = draftSettings.chaosDraft ? 1.0 : 0.06;
+          for (let i = 0; i < sortedByOvr.length; i++) {
+            const p = sortedByOvr[i];
+            if (p.draftProfile !== 'normal') continue; // already assigned
+            if (p.position === 'K' || p.position === 'P') continue;
+            if (i < mid && Math.random() < bustRate) {
+              p.draftProfile = 'bust';
+              const potDrop = draftSettings.chaosDraft ? 10 + Math.floor(Math.random() * 8) : 5 + Math.floor(Math.random() * 6);
+              p.potential = Math.max(30, Math.min(99, p.ratings.overall - potDrop));
+            } else if (i >= mid && p.scoutingLabel !== 'Sleeper' && Math.random() < boomRate) {
+              p.draftProfile = 'boom';
+              const potBoost = draftSettings.chaosDraft ? 20 + Math.floor(Math.random() * 10) : 15 + Math.floor(Math.random() * 10);
+              p.potential = Math.max(30, Math.min(95, p.ratings.overall + potBoost));
+            }
+          }
         } else {
-          const draftSettings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
           baseDraftClass = generateDraftClass(224, { chaosDraft: draftSettings.chaosDraft }).map((player) => ({
             ...player,
             draftYear: targetDraftYear,
