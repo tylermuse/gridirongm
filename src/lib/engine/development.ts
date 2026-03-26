@@ -129,11 +129,68 @@ export function developPlayers(
     const ratings = { ...p.ratings };
     const primaryKeys = getPrimaryKeys(p.position);
 
-    if (p.age <= 23) {
+    // ── Boom/Bust effects for young drafted players ──────────────────
+    // Applies in years 1-3 after being drafted (experience 1-3).
+    // Busts: potential craters, development stalls or reverses.
+    // Booms: potential spikes, accelerated growth beyond normal curves.
+    let updatedPotential = p.potential;
+    const isBusting = p.draftProfile === 'bust' && p.experience >= 1 && p.experience <= 3;
+    const isBooming = p.draftProfile === 'boom' && p.experience >= 1 && p.experience <= 3;
+    if (isBusting) {
+      // Bust: potential craters — drops 5-10 pts per year
+      const potDrop = clamp(gaussian(7, 3), 5, 12);
+      updatedPotential = Math.max(30, p.potential - Math.round(potDrop));
+    } else if (isBooming) {
+      // Boom: potential rises — gains 3-6 pts per year
+      const potBoost = clamp(gaussian(4, 2), 2, 7);
+      updatedPotential = Math.min(95, p.potential + Math.round(potBoost));
+    }
+
+    // Use updatedPotential for ALL growth calculations below
+    // This is critical — busts grow toward their lowered ceiling, booms toward their raised one
+    const effectivePotential = updatedPotential;
+
+    if (isBusting) {
+      // ── Bust: Override normal growth — stagnation or decline ────────
+      // Busts don't follow normal youth curves. They plateau or get worse.
+      if (p.experience === 1) {
+        // Year 1: stagnation — no meaningful growth, slight random fluctuation
+        for (const key of primaryKeys) {
+          const k = key as string;
+          (ratings as Record<string, number>)[k] = clamp(
+            (ratings as Record<string, number>)[k] + gaussian(-0.5, 1),
+          );
+        }
+        ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
+      } else {
+        // Years 2-3: active regression — ratings decline
+        const declineAmount = clamp(gaussian(2.5, 1.5), 1, 5) * regressionMult;
+        for (const key of primaryKeys) {
+          const k = key as string;
+          (ratings as Record<string, number>)[k] = clamp(
+            (ratings as Record<string, number>)[k] - declineAmount * 0.5,
+          );
+        }
+        ratings.speed = clamp(ratings.speed - gaussian(0.5, 0.5));
+        ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
+      }
+    } else if (isBooming) {
+      // ── Boom: Override normal growth — accelerated development ──────
+      // Booms develop significantly faster than normal young players
+      const growthAmount = clamp(gaussian(5, 2), 3, 9) * progressionMult;
+      for (const key of primaryKeys) {
+        const k = key as string;
+        (ratings as Record<string, number>)[k] = clamp(
+          (ratings as Record<string, number>)[k] + growthAmount * 0.6,
+        );
+      }
+      ratings.awareness = clamp(ratings.awareness + gaussian(3, 1) * progressionMult);
+      ratings.overall = clamp(Math.min(effectivePotential, p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position))));
+    } else if (p.age <= 23) {
       // ── Strong Youth Progression ────────────────────────────────────
       // Young players grow quickly towards their potential
-      if (p.potential > ratings.overall) {
-        const gap = p.potential - ratings.overall;
+      if (effectivePotential > ratings.overall) {
+        const gap = effectivePotential - ratings.overall;
         const growthAmount = clamp(gaussian(3.5, 2), 1, 7) * progressionMult;
         for (const key of primaryKeys) {
           const k = key as string;
@@ -143,7 +200,7 @@ export function developPlayers(
         }
         // Awareness always improves with experience for young players
         ratings.awareness = clamp(ratings.awareness + gaussian(2, 1) * progressionMult);
-        ratings.overall = clamp(Math.min(p.potential, p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position))));
+        ratings.overall = clamp(Math.min(effectivePotential, p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position))));
       } else {
         // Already at potential — mostly stable, slight upward bias
         for (const key of primaryKeys) {
@@ -157,7 +214,7 @@ export function developPlayers(
     } else if (p.age <= 26) {
       // ── Moderate Progression ────────────────────────────────────────
       // Still improving, but more slowly
-      if (p.potential > ratings.overall) {
+      if (effectivePotential > ratings.overall) {
         const growthAmount = clamp(gaussian(2, 1.5), 0, 5) * progressionMult;
         for (const key of primaryKeys) {
           const k = key as string;
@@ -166,7 +223,7 @@ export function developPlayers(
           );
         }
         ratings.awareness = clamp(ratings.awareness + gaussian(1.5, 1) * progressionMult);
-        ratings.overall = clamp(Math.min(p.potential, p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position))));
+        ratings.overall = clamp(Math.min(effectivePotential, p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position))));
       } else {
         // At or above potential — awareness can still grow, stable otherwise
         ratings.awareness = clamp(ratings.awareness + gaussian(0.8, 0.5));
@@ -234,10 +291,10 @@ export function developPlayers(
     }
 
     // Adjust potential based on age — past-prime players should lose upside
-    let newPotential = p.potential;
+    let newPotential = updatedPotential;
     if (p.age >= 30) {
       // Potential decays towards current OVR (or below) as player ages
-      const targetPot = Math.min(ratings.overall, p.potential);
+      const targetPot = Math.min(ratings.overall, updatedPotential);
       const decay = p.age >= 34 ? 3 : p.age >= 32 ? 2 : 1;
       newPotential = Math.max(targetPot - decay, Math.round(ratings.overall * 0.9));
       newPotential = clamp(newPotential);

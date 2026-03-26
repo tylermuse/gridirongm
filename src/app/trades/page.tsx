@@ -59,10 +59,21 @@ function playerTradeValue(player: Player): number {
   return Math.round(rawValue - contractCost);
 }
 
-// Reduced R1 value — was 150 which made AI overvalue 1st rounders in trades
-const PICK_VALUES = [110, 65, 40, 25, 15, 8, 4];
+// Pick base values aligned with store — record-adjusted at display time
+const PICK_BASE_VALUES = [500, 250, 120, 60, 30, 15, 8];
+let _tradesTeams: { id: string; record: { wins: number; losses: number } }[] = [];
+function setTradesTeams(teams: { id: string; record: { wins: number; losses: number } }[]) { _tradesTeams = teams; }
 function pickTradeValue(pick: DraftPick): number {
-  return PICK_VALUES[(pick.round - 1)] ?? 5;
+  const baseValue = PICK_BASE_VALUES[(pick.round - 1)] ?? 5;
+  const team = _tradesTeams.find(t => t.id === pick.originalTeamId);
+  if (team) {
+    const total = team.record.wins + team.record.losses;
+    if (total >= 4) {
+      const winPct = team.record.wins / total;
+      return Math.round(baseValue * (1.6 - winPct));
+    }
+  }
+  return baseValue;
 }
 
 function getTeamStrategy(team: { record: { wins: number; losses: number }; totalPayroll: number; salaryCap: number }, roster: { age: number }[]): string {
@@ -749,6 +760,9 @@ function TradesPage() {
     draftOrder, tradeProposals, executeTrade, generateCounterOffer, respondToTradeProposal, rejectAllTradeProposals,
     solicitTradingBlockProposals, leagueSettings, tradeRumors,
   } = useGameStore();
+
+  // Keep pick value calculator in sync with current team records
+  setTradesTeams(teams);
 
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [offeredPlayerIds, setOfferedPlayerIds] = useState<string[]>([]);

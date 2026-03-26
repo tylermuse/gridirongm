@@ -303,6 +303,40 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        {/* Chaos Draft Mode */}
+        <Card className="mb-4">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CardTitle>Chaos Draft</CardTitle>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-100 text-red-700 border border-red-300">
+                Fun Mode
+              </span>
+            </div>
+          </CardHeader>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-[var(--text-sec)] max-w-md">
+              The JaMarcus Russell / Brock Purdy League. Every top prospect busts and every late-round pick booms. Scouting becomes essential — high picks are traps and the real stars are hiding at the bottom of the board. Applies to future draft classes only.
+            </p>
+            <button
+              onClick={() => setDraft(d => ({ ...d, chaosDraft: !d.chaosDraft }))}
+              className={`
+                relative inline-flex h-7 w-12 items-center rounded-full transition-colors
+                ${draft.chaosDraft ? 'bg-red-500' : 'bg-gray-300'}
+              `}
+            >
+              <span
+                className={`
+                  inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform
+                  ${draft.chaosDraft ? 'translate-x-6' : 'translate-x-1'}
+                `}
+              />
+            </button>
+            <span className={`ml-2 text-sm font-semibold ${draft.chaosDraft ? 'text-red-600' : 'text-[var(--text-sec)]'}`}>
+              {draft.chaosDraft ? 'ON' : 'OFF'}
+            </span>
+          </div>
+        </Card>
+
         {/* Current league info */}
         <Card>
           <CardHeader><CardTitle>Current League Status</CardTitle></CardHeader>

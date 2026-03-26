@@ -208,6 +208,11 @@ export interface Player {
   scoutingLabel?: string;
   /** Deterministic seed for scouting report generation (set at draft class creation) */
   scoutingSeed?: number;
+  /** Draft prospect archetype — affects post-draft development.
+   *  boom: late bloomer who can dramatically exceed expectations (potential jumps)
+   *  bust: high-profile prospect who fails to develop (potential drops sharply)
+   *  normal: standard development curve */
+  draftProfile?: 'boom' | 'bust' | 'normal';
   /**
    * Player sentiment / mood (0-100).
    * Affected by: team winning, playing time (depth chart), contract satisfaction, team location.
@@ -596,6 +601,8 @@ export interface LeagueSettings {
   retirementAge: number;     // Min age for retirement consideration (default 32)
   bsMode: boolean;           // BS Mode: adds drama and variance
   mcafeeMode: boolean;       // McAfee Mode: special teams matter
+  /** Chaos Draft mode: top picks bust, late picks boom (JaMarcus Russell / Brock Purdy League) */
+  chaosDraft: boolean;
 }
 
 export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
@@ -610,6 +617,7 @@ export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
   retirementAge: 32,
   bsMode: false,
   mcafeeMode: false,
+  chaosDraft: false,
 };
 
 export interface LeagueState {

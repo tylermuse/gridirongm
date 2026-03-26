@@ -561,10 +561,10 @@ function generateWeekNews(
 // Trade value formula (PRD-04)
 // ---------------------------------------------------------------------------
 
-// Realistic pick values: 1st rounders are extremely valuable.
-// A 1st round pick should only be traded for elite players (85+ OVR).
-// Two 1sts should cost a true superstar (90+ OVR, young).
-const PICK_VALUES = [1000, 450, 200, 100, 50, 20, 10]; // Rounds 1-7
+// Pick base values calibrated to player values.
+// A 1st round pick ≈ good young starter (75-80 OVR), not a star.
+// Actual value scales with team record: bad team's 1st is worth much more.
+const PICK_BASE_VALUES = [500, 250, 120, 60, 30, 15, 8]; // Rounds 1-7
 
 const POSITION_VALUE_MULT: Record<string, number> = {
   QB: 1.5, RB: 0.9, WR: 1.1, TE: 0.85, OL: 0.95,
@@ -587,8 +587,24 @@ function playerTradeValue(player: Player): number {
   return (base + potBonus) * ageMultiplier * posMultiplier;
 }
 
-function pickTradeValue(pick: DraftPick): number {
-  return PICK_VALUES[(pick.round - 1)] ?? 10;
+/** Pick value scales with the originating team's record:
+ *  Bad team (low win%) → higher pick → more valuable (up to 1.6x).
+ *  Good team (high win%) → lower pick → less valuable (down to 0.6x). */
+function pickTradeValue(pick: DraftPick, teams?: Team[]): number {
+  const baseValue = PICK_BASE_VALUES[(pick.round - 1)] ?? 8;
+  if (teams) {
+    const team = teams.find(t => t.id === pick.originalTeamId);
+    if (team) {
+      const total = team.record.wins + team.record.losses;
+      if (total >= 4) { // need enough games for meaningful record
+        const winPct = team.record.wins / total;
+        // 0% wins → 1.6x, 50% → 1.0x, 100% → 0.6x
+        const recordMult = 1.6 - winPct;
+        return Math.round(baseValue * recordMult);
+      }
+    }
+  }
+  return baseValue;
 }
 
 // ---------------------------------------------------------------------------
@@ -1355,31 +1371,38 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
     let offeredValue = playerTradeValue(aiOffer);
     const offeredPickIds: string[] = [];
 
-    // ~40% chance to include a draft pick to sweeten the deal
-    if (Math.random() < 0.40) {
+    // Determine AI team strategy — rebuilding teams should HOARD picks, not give them away
+    const aiTotal = aiTeam.record.wins + aiTeam.record.losses;
+    const aiWinPct = aiTotal > 0 ? aiTeam.record.wins / aiTotal : 0.5;
+    const isRebuilding = aiWinPct < 0.35;
+
+    // Rebuilding teams: NEVER add pick sweeteners (they want picks, not to trade them)
+    // Contending teams: ~40% chance to include a draft pick to sweeten
+    if (!isRebuilding && Math.random() < 0.40) {
       const aiPicks = aiTeam.draftPicks.filter(pk => pk.year >= state.season);
       if (aiPicks.length > 0) {
         // Prefer lower-round picks (less valuable) to add as sweetener
-        // Don't add a pick that would make the offer more than 2x target value
+        // Don't add a pick that would make the offer more than 1.15x target value
         const sortedPicks = [...aiPicks].sort((a, b) => b.round - a.round);
-        const pick = sortedPicks.find(pk => offeredValue + pickTradeValue(pk) <= targetValue * 1.5);
+        const pick = sortedPicks.find(pk => offeredValue + pickTradeValue(pk, state.teams) <= targetValue * 1.15);
         if (pick) {
           offeredPickIds.push(pick.id);
-          offeredValue += pickTradeValue(pick);
+          offeredValue += pickTradeValue(pick, state.teams);
         }
       }
     }
 
     // ~20% chance: offer ONLY a draft pick (no player) for a mid-tier player
     // Pick must be proportional to player value — don't offer Rd 1 for a scrub
-    const pickOnlyTrade = Math.random() < 0.20 && targetValue >= 80 && targetValue < 400;
+    // Rebuilding teams skip this — they don't trade picks for players
+    const pickOnlyTrade = !isRebuilding && Math.random() < 0.20 && targetValue >= 80 && targetValue < 400;
     let offeredPlayerIds = [aiOffer.id];
     if (pickOnlyTrade) {
       // Find the best-fit pick that doesn't massively overshoot
       const aiPicks = aiTeam.draftPicks
         .filter(pk => pk.year >= state.season)
-        .map(pk => ({ pick: pk, pv: pickTradeValue(pk) }))
-        .filter(({ pv }) => pv <= targetValue * 1.3) // Don't overshoot by more than 30%
+        .map(pk => ({ pick: pk, pv: pickTradeValue(pk, state.teams) }))
+        .filter(({ pv }) => pv <= targetValue * 1.15) // Don't overshoot by more than 15%
         .sort((a, b) => Math.abs(a.pv - targetValue) - Math.abs(b.pv - targetValue));
       if (aiPicks.length > 0) {
         const { pick, pv } = aiPicks[0];
@@ -1389,6 +1412,9 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
         offeredValue = pv;
       }
     }
+
+    // Cap total offered value — AI should never overpay by more than 15%
+    if (offeredValue > targetValue * 1.15) continue;
 
     const ratio = offeredValue / Math.max(1, targetValue);
     const valueAssessment: TradeProposal['valueAssessment'] =
@@ -3087,7 +3113,8 @@ export const useGameStore = create<GameStore>()(
         if (importedDraftClass.length > 0) {
           baseDraftClass = importedDraftClass;
         } else {
-          baseDraftClass = generateDraftClass(224).map((player) => ({
+          const draftSettings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
+          baseDraftClass = generateDraftClass(224, { chaosDraft: draftSettings.chaosDraft }).map((player) => ({
             ...player,
             draftYear: targetDraftYear,
           }));
@@ -4358,13 +4385,13 @@ export const useGameStore = create<GameStore>()(
         const aiTeam = state.teams.find(t => t.id === counterpartTeamId);
         if (!userTeam || !aiTeam) return { success: false, reason: 'Team not found' };
 
-        // Evaluate trade values
+        // Evaluate trade values (pick values account for team record)
         const offeredValue = offeredPlayerIds.reduce((sum, id) => {
           const p = state.players.find(pl => pl.id === id);
           return sum + (p ? playerTradeValue(p) : 0);
         }, 0) + offeredPickIds.reduce((sum, id) => {
           const pick = userTeam.draftPicks.find(pk => pk.id === id);
-          return sum + (pick ? pickTradeValue(pick) : 0);
+          return sum + (pick ? pickTradeValue(pick, state.teams) : 0);
         }, 0);
 
         const receivedValue = receivedPlayerIds.reduce((sum, id) => {
@@ -4372,7 +4399,7 @@ export const useGameStore = create<GameStore>()(
           return sum + (p ? playerTradeValue(p) : 0);
         }, 0) + receivedPickIds.reduce((sum, id) => {
           const pick = aiTeam.draftPicks.find(pk => pk.id === id);
-          return sum + (pick ? pickTradeValue(pick) : 0);
+          return sum + (pick ? pickTradeValue(pick, state.teams) : 0);
         }, 0);
 
         // AI accepts if within 10% value (skip for AI-initiated proposals already approved)
@@ -4610,7 +4637,7 @@ export const useGameStore = create<GameStore>()(
           return sum + (p ? playerTradeValue(p) : 0);
         }, 0) + receivedPickIds.reduce((sum, id) => {
           const pick = aiTeam.draftPicks.find(pk => pk.id === id);
-          return sum + (pick ? pickTradeValue(pick) : 0);
+          return sum + (pick ? pickTradeValue(pick, state.teams) : 0);
         }, 0);
 
         // AI wants at least 90% of the value
@@ -4624,7 +4651,7 @@ export const useGameStore = create<GameStore>()(
 
         const userPicks = userTeam.draftPicks
           .filter(pk => pk.year >= state.season && !pk.playerId)
-          .map(pk => ({ id: pk.id, value: pickTradeValue(pk), round: pk.round }))
+          .map(pk => ({ id: pk.id, value: pickTradeValue(pk, state.teams), round: pk.round }))
           .sort((a, b) => b.round - a.round); // prefer sending later picks first
 
         const sendPlayerIds: string[] = [];
@@ -4775,7 +4802,7 @@ export const useGameStore = create<GameStore>()(
         if (blockedPlayers.length === 0 && blockedPicks.length === 0) return;
 
         const totalBlockedValue = blockedPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
-          + blockedPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
+          + blockedPicks.reduce((s, pk) => s + pickTradeValue(pk, state.teams), 0);
 
         if (totalBlockedValue < 10) return;
 
@@ -4803,7 +4830,7 @@ export const useGameStore = create<GameStore>()(
 
           const aiPicks = aiTeam.draftPicks
             .filter(pk => pk.year >= state.season && !pk.playerId)
-            .sort((a, b) => pickTradeValue(b) - pickTradeValue(a));
+            .sort((a, b) => pickTradeValue(b, state.teams) - pickTradeValue(a, state.teams));
 
           // ── Build offer based on what user WANTS ──
 
@@ -4811,7 +4838,7 @@ export const useGameStore = create<GameStore>()(
           if (seekDraftPicks) {
             for (const pk of aiPicks) {
               if (offeredValue >= targetMin) break;
-              const pv = pickTradeValue(pk);
+              const pv = pickTradeValue(pk, state.teams);
               if (offeredValue + pv > hardCeiling) continue;
               offeredPickIds.push(pk.id);
               offeredValue += pv;
@@ -4875,7 +4902,7 @@ export const useGameStore = create<GameStore>()(
           if (offeredValue < targetMin && !seekDraftPicks) {
             for (const pk of aiPicks) {
               if (offeredValue >= targetMin) break;
-              const pv = pickTradeValue(pk);
+              const pv = pickTradeValue(pk, state.teams);
               if (offeredValue + pv > hardCeiling) continue;
               offeredPickIds.push(pk.id);
               offeredValue += pv;
@@ -5394,8 +5421,12 @@ export const useGameStore = create<GameStore>()(
             roster: newRoster,
             deadCap: updatedDeadCap,
           };
-          // Recalculate payroll from scratch using helper
-          const totalPayroll = recalculateTeamPayroll(updatedTeam, afterVoidPlayers);
+          // For user team: freeze payroll so cap space stays consistent from end of FA
+          // through the regular season. advanceToResigning will recalculate next offseason.
+          // For AI teams: recalculate normally since they don't show cap to the user.
+          const totalPayroll = t.id === state.userTeamId
+            ? t.totalPayroll
+            : recalculateTeamPayroll(updatedTeam, afterVoidPlayers);
 
           return {
             ...updatedTeam,

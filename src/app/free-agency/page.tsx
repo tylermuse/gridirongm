@@ -371,22 +371,50 @@ export default function FreeAgencyPage() {
           </div>
         )}
 
-        {/* Mobile compact summary — only visible below md */}
-        <div className="md:hidden mb-4 flex flex-wrap items-center gap-3 text-sm">
-          <span className="font-semibold">Roster: {roster.length}/53</span>
-          <span className="text-[var(--text-sec)]">|</span>
-          <span className={`font-mono font-bold ${capSpace > 0 ? 'text-green-600' : 'text-red-600'}`}>
-            Cap: ${capSpace}M
-          </span>
-          {(() => {
-            const needPositions = POSITIONS.filter(pos => positionCounts[pos] < ROSTER_LIMITS[pos].min);
-            return needPositions.length > 0 ? (
-              <>
-                <span className="text-[var(--text-sec)]">|</span>
-                <span className="text-red-600 text-xs">Needs: {needPositions.join(', ')}</span>
-              </>
-            ) : null;
-          })()}
+        {/* Roster Composition — top-level on mobile, hidden on md+ (sidebar has it) */}
+        <div className="md:hidden mb-4">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-bold">Roster: {roster.length}/53</span>
+              <span className={`text-sm font-mono font-bold ${capSpace > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                Cap: ${capSpace}M
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {POSITIONS.map(pos => {
+                const count = positionCounts[pos];
+                const limits = ROSTER_LIMITS[pos];
+                const belowMin = count < limits.min;
+                const ideal = Math.ceil((limits.min + limits.max) / 2);
+                const belowIdeal = count < ideal;
+                const bgColor = belowMin ? 'bg-red-50 border-red-300' : belowIdeal ? 'bg-amber-50 border-amber-300' : 'bg-green-50/50 border-[var(--border)]';
+                const textColor = belowMin ? 'text-red-600' : belowIdeal ? 'text-amber-600' : 'text-[var(--text-sec)]';
+
+                return (
+                  <button
+                    key={pos}
+                    onClick={() => setFilterPos(filterPos === pos ? 'ALL' : pos)}
+                    className={`flex items-center justify-between px-2 py-1.5 rounded border text-xs transition-colors ${
+                      filterPos === pos ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-400' : bgColor
+                    }`}
+                  >
+                    <span className="font-bold">{pos}</span>
+                    <span className={`tabular-nums ${filterPos === pos ? 'text-blue-600 font-bold' : textColor}`}>
+                      {count}<span className="text-[10px] opacity-60">/{limits.max}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {(() => {
+              const needPositions = POSITIONS.filter(pos => positionCounts[pos] < ROSTER_LIMITS[pos].min);
+              return needPositions.length > 0 ? (
+                <div className="mt-2 text-xs text-red-600 font-medium">
+                  Needs: {needPositions.map(pos => `${pos} (${positionCounts[pos]}/${ROSTER_LIMITS[pos].min})`).join(' · ')}
+                </div>
+              ) : null;
+            })()}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6">

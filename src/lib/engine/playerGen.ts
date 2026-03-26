@@ -285,7 +285,8 @@ const SCOUTING_LABELS = [
  *  declining through mid-round role players (~55-65) to late-round
  *  projects (~35-45). This mirrors real pro draft talent distribution.
  */
-export function generateDraftClass(count: number): Player[] {
+export function generateDraftClass(count: number, options?: { chaosDraft?: boolean }): Player[] {
+  const chaosDraft = options?.chaosDraft ?? false;
   const prospects: Player[] = [];
 
   // Weighted position distribution — matches real NFL draft proportions
@@ -330,20 +331,59 @@ export function generateDraftClass(count: number): Player[] {
     player.college = COLLEGES[Math.floor(Math.random() * COLLEGES.length)];
     player.scoutingLabel = SCOUTING_LABELS[Math.floor(Math.random() * SCOUTING_LABELS.length)];
     player.scoutingSeed = Math.floor(Math.random() * 10000);
+    player.draftProfile = 'normal';
     prospects.push(player);
   }
 
   // Sort by OVR so pick order aligns with talent
   prospects.sort((a, b) => b.ratings.overall - a.ratings.overall);
 
+  // ── Boom/Bust assignment ──
+  // Normal mode: ~8% busts in top half, ~6% booms in bottom half.
+  // Chaos Draft mode: ALL top-half prospects bust, ALL bottom-half boom.
+  // This creates realistic draft variance — not every high pick pans out,
+  // and diamonds can be found late.
+  const midIdx = Math.floor(prospects.length / 2);
+  const topHalf = prospects.slice(0, midIdx);
+  const bottomHalfForBoomBust = prospects.slice(midIdx);
+
+  const bustRate = chaosDraft ? 1.0 : 0.08;
+  const boomRate = chaosDraft ? 1.0 : 0.06;
+
+  // Assign busts to top-half prospects (high picks that disappoint)
+  for (const p of topHalf) {
+    if (p.position === 'K' || p.position === 'P') continue;
+    if (Math.random() < bustRate) {
+      p.draftProfile = 'bust';
+      // Bust's true potential is much lower than their OVR suggests
+      const potDrop = chaosDraft
+        ? 10 + Math.floor(Math.random() * 8) // Chaos: -10 to -18
+        : 5 + Math.floor(Math.random() * 6);  // Normal: -5 to -10
+      p.potential = clamp(p.ratings.overall - potDrop, 30, 99);
+    }
+  }
+
+  // Assign booms to bottom-half prospects (late picks that overperform)
+  for (const p of bottomHalfForBoomBust) {
+    if (p.position === 'K' || p.position === 'P') continue;
+    if (p.scoutingLabel === 'Sleeper') continue; // sleepers already have high potential
+    if (Math.random() < boomRate) {
+      p.draftProfile = 'boom';
+      // Boom's true potential is much higher than expected
+      const potBoost = chaosDraft
+        ? 20 + Math.floor(Math.random() * 10) // Chaos: +20 to +30
+        : 15 + Math.floor(Math.random() * 10); // Normal: +15 to +25
+      p.potential = clamp(p.ratings.overall + potBoost, 30, 95);
+    }
+  }
+
   // ── Sleeper pass: upgrade 2-3 late-round prospects into hidden gems ──
   // These have modest OVR (fall to rounds 4-7) but elite potential (develop
   // into stars over 2-3 seasons). At low scouting levels the high potential
   // is hidden; elite scouting reveals the upside.
   const halfIdx = Math.floor(prospects.length / 2);
-  const bottomHalf = prospects.slice(halfIdx);
+  const shuffled = [...prospects.slice(halfIdx)].sort(() => Math.random() - 0.5);
   const sleeperCount = 2 + (Math.random() < 0.5 ? 1 : 0); // 2 or 3
-  const shuffled = [...bottomHalf].sort(() => Math.random() - 0.5);
   const sleepers = shuffled.slice(0, sleeperCount);
 
   for (const prospect of sleepers) {
@@ -356,6 +396,7 @@ export function generateDraftClass(count: number): Player[] {
     // High potential — develops into a star over 2-3 seasons
     prospect.potential = clamp(75 + Math.floor(Math.random() * 11), 75, 85); // 75-85
     prospect.scoutingLabel = 'Sleeper';
+    prospect.draftProfile = 'boom'; // sleepers are always booms
   }
 
   // Re-sort after sleeper adjustments (internal ordering for generation only)

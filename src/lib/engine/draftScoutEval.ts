@@ -65,6 +65,27 @@ function generateScoutsTake(player: Player, seed: number): string {
   const pot = player.potential;
   const pos = player.position;
   const label = player.scoutingLabel ?? '';
+  const profile = player.draftProfile ?? 'normal';
+
+  // Bust override for elite/solid prospects — scout adds a cautionary note
+  if (profile === 'bust' && ovr >= 68 && ((seed * 3571 + 8923) % 100) < 75) {
+    const bustTakes = [
+      `The physical tools are undeniable, but our staff has questions about ${pos === 'QB' ? 'his ability to process at the NFL speed' : pos === 'WR' || pos === 'TE' ? 'whether the production will translate without a scheme advantage' : pos === 'OL' ? 'his ability to handle NFL-level pass rushers consistently' : 'whether the college production was inflated by the system he played in'}. There's a real scenario where this pick doesn't develop the way everyone expects.`,
+      `I know the consensus loves this kid, but something doesn't sit right with our evaluators. The ${pos === 'QB' ? 'decision-making under pressure' : 'consistency from snap to snap'} concerns me. ${ovr >= 78 ? "He's got all the talent in the world — but talent doesn't always translate." : "I'd think twice before investing a high pick here."}`,
+      `There's a disconnect between the measurables and the tape. ${pos === 'QB' ? "The arm is electric but the football IQ hasn't caught up." : "Dominates with athleticism but gets exposed when the opponent schemes around it."} Our staff is worried this one could be a mirage.`,
+    ];
+    return pick(bustTakes, seed);
+  }
+
+  // Boom override for mid/raw prospects — scout flags unexpected upside
+  if (profile === 'boom' && ovr < 68 && ((seed * 3571 + 8923) % 100) < 75) {
+    const boomTakes = [
+      `Don't sleep on this kid. The OVR doesn't tell the whole story. ${pos === 'QB' ? "There's arm talent here that you can't teach, and the improvement from year 3 to year 4 was dramatic." : pos === 'WR' || pos === 'TE' ? "The route-running has improved every single year. Give him NFL coaching and watch out." : pos === 'OL' ? "The technique is raw but the physical tools are first-round caliber." : "Every coach who worked with him says the same thing — this player has another gear."} Could be the steal of the draft.`,
+      `Our scouts are higher on this one than the consensus — significantly higher. ${pot > ovr + 10 ? `There's a world where this player becomes a legitimate starter within two years.` : `The improvement trajectory is what caught our eye.`} Late bloomer profile that NFL development could supercharge.`,
+      `This is the type of prospect that makes you look like a genius in three years. Raw? Absolutely. But the tools are tantalizing and the work ethic is off the charts. I'd bet on the upside here.`,
+    ];
+    return pick(boomTakes, seed);
+  }
 
   // Elite prospect (OVR >= 78)
   if (ovr >= 78) {
@@ -191,13 +212,35 @@ function generateRiskFactors(player: Player, seed: number): string[] {
   const risks: string[] = [];
   const label = player.scoutingLabel ?? '';
 
+  // ── Boom/Bust scouting hints ──
+  // Scouting doesn't reveal the flag directly but gives strong directional hints.
+  // ~75% chance the scout correctly identifies the profile; 25% they miss it.
+  const scoutAccuracy = ((seed * 3571 + 8923) % 100);
+  if (player.draftProfile === 'bust' && scoutAccuracy < 75) {
+    const bustHints = [
+      'Development red flag — our staff sees a significant gap between tools and football instincts',
+      'Concerning lack of improvement over his college career despite elite physical traits',
+      'Film study raises questions — production came from scheme, not individual dominance',
+      'Warning: our scouts see a player whose ceiling may be much lower than the measurables suggest',
+    ];
+    risks.push(pick(bustHints, seed + 33));
+  } else if (player.draftProfile === 'boom' && scoutAccuracy < 75) {
+    const boomHints = [
+      'Upside alert — our staff sees traits that the stats and consensus don\'t capture',
+      'Late bloomer profile: improvement trajectory over his final college season was dramatic',
+      'Hidden gem potential — the raw tools here are special, just needs NFL coaching to unlock them',
+      'Our scouts believe this player is significantly better than his draft stock suggests',
+    ];
+    risks.push(pick(boomHints, seed + 33));
+  }
+
   if (label === 'Injury history') {
     risks.push('Medical red flag — injury history raises durability concerns');
   }
   if (label === 'Character concerns') {
     risks.push('Character concerns flagged by multiple sources');
   }
-  if (player.potential > player.ratings.overall + 12 && player.ratings.overall < 65) {
+  if (player.potential > player.ratings.overall + 12 && player.ratings.overall < 65 && player.draftProfile !== 'boom') {
     risks.push('Boom or bust — our scouts are split on this one');
   }
   if (player.ratings.stamina < 55) {
