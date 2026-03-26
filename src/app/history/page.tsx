@@ -110,62 +110,80 @@ export default function HistoryPage() {
             </div>
           </Card>
         ) : (
-          <div className="grid grid-cols-[240px_1fr] gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6">
             {/* Season list */}
             <div className="space-y-2">
               {[...seasonHistory].reverse().map(summary => {
                 const champTeam = teams.find(t => t.id === summary.championTeamId);
                 const isActive = selectedSeason === summary.season;
+                const summaryDetail = isActive ? seasonHistory.find(s => s.season === summary.season) : null;
                 return (
-                  <button
-                    key={summary.season}
-                    onClick={() => setSelectedSeason(isActive ? null : summary.season)}
-                    className={`w-full text-left rounded-xl border p-4 transition-colors ${
-                      isActive
-                        ? 'border-blue-500 bg-blue-500/10'
-                        : 'border-[var(--border)] bg-[var(--surface)] hover:border-blue-500/50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-bold">Season {summary.season}</span>
-                      <Badge variant={RESULT_VARIANTS[summary.userPlayoffResult]} size="sm">
-                        {PLAYOFF_LABELS[summary.userPlayoffResult]}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-[var(--text-sec)]">
-                        {summary.userRecord.wins}-{summary.userRecord.losses}
-                      </span>
-                      {champTeam && (
-                        <div className="flex items-center gap-1">
-                          <TeamLogo abbreviation={champTeam.abbreviation} primaryColor={champTeam.primaryColor} secondaryColor={champTeam.secondaryColor} logoUrl={champTeam.logoUrl} size="xs" />
-                          <span className="text-xs text-[var(--text-sec)]">{champTeam.abbreviation} won</span>
-                        </div>
-                      )}
-                    </div>
-                  </button>
+                  <div key={summary.season}>
+                    <button
+                      onClick={() => setSelectedSeason(isActive ? null : summary.season)}
+                      className={`w-full text-left rounded-xl border p-4 transition-colors ${
+                        isActive
+                          ? 'border-blue-500 bg-blue-500/10'
+                          : 'border-[var(--border)] bg-[var(--surface)] hover:border-blue-500/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold">Season {summary.season}</span>
+                        <Badge variant={RESULT_VARIANTS[summary.userPlayoffResult]} size="sm">
+                          {PLAYOFF_LABELS[summary.userPlayoffResult]}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-[var(--text-sec)]">
+                          {summary.userRecord.wins}-{summary.userRecord.losses}
+                        </span>
+                        {champTeam && (
+                          <div className="flex items-center gap-1">
+                            <TeamLogo abbreviation={champTeam.abbreviation} primaryColor={champTeam.primaryColor} secondaryColor={champTeam.secondaryColor} logoUrl={champTeam.logoUrl} size="xs" />
+                            <span className="text-xs text-[var(--text-sec)]">{champTeam.abbreviation} won</span>
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                    {/* Inline accordion on mobile */}
+                    {isActive && summaryDetail && (
+                      <div className="md:hidden mt-2">
+                        <SeasonDetail
+                          selected={summaryDetail}
+                          playerName={playerName}
+                          playerPosition={playerPosition}
+                          teamAbbr={teamAbbr}
+                          teamColor={teamColor}
+                          teamName={teamName}
+                          onSelectPlayer={setSelectedPlayerId}
+                        />
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
 
-            {/* Season detail */}
-            {!selected ? (
-              <Card>
-                <div className="text-center py-12 text-[var(--text-sec)]">
-                  Select a season to view details.
-                </div>
-              </Card>
-            ) : (
-              <SeasonDetail
-                selected={selected}
-                playerName={playerName}
-                playerPosition={playerPosition}
-                teamAbbr={teamAbbr}
-                teamColor={teamColor}
-                teamName={teamName}
-                onSelectPlayer={setSelectedPlayerId}
-              />
-            )}
+            {/* Season detail — desktop only */}
+            <div className="hidden md:block">
+              {!selected ? (
+                <Card>
+                  <div className="text-center py-12 text-[var(--text-sec)]">
+                    Select a season to view details.
+                  </div>
+                </Card>
+              ) : (
+                <SeasonDetail
+                  selected={selected}
+                  playerName={playerName}
+                  playerPosition={playerPosition}
+                  teamAbbr={teamAbbr}
+                  teamColor={teamColor}
+                  teamName={teamName}
+                  onSelectPlayer={setSelectedPlayerId}
+                />
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -192,7 +210,7 @@ function SeasonDetail({
   onSelectPlayer: (id: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {/* Column 1: Champs + Awards */}
       <div className="space-y-4">
         {/* League Champs */}

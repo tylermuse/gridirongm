@@ -207,19 +207,19 @@ function OnTheClockSection({
             <div className="text-xs sm:text-sm font-bold mb-1 hidden sm:block">
               Round {currentRound}, Pick {currentPickInRound}
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold sm:hidden">Rd {currentRound}, Pick {currentPickInRound}</span>
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-xs font-bold sm:hidden w-full">Rd {currentRound}, Pick {currentPickInRound}</span>
               {!isUserPick && (
-                <Button onClick={simDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
+                <Button onClick={simDraftPick} size="sm" variant="secondary" disabled={!canSimulate} className="flex-1 min-w-[80px]">
                   Sim Pick
                 </Button>
               )}
               {!isUserPick && (
-                <Button onClick={simToUserDraftPick} size="sm" variant="secondary" disabled={!canSimulate}>
+                <Button onClick={simToUserDraftPick} size="sm" variant="secondary" disabled={!canSimulate} className="flex-1 min-w-[80px]">
                   Sim to My Pick
                 </Button>
               )}
-              <Button onClick={() => onSimAll?.()} size="sm" variant="secondary" disabled={!canSimulate}>
+              <Button onClick={() => onSimAll?.()} size="sm" variant="secondary" disabled={!canSimulate} className="flex-1 min-w-[80px]">
                 <span className="hidden sm:inline">Auto-Draft All</span>
                 <span className="sm:hidden">Auto All</span>
               </Button>
@@ -233,12 +233,13 @@ function OnTheClockSection({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold text-[var(--text-sec)] uppercase">Needs</span>
-            <div className="flex gap-1">
+            <div className="flex flex-wrap gap-2">
               {needs.map(need => (
                 <Badge
                   key={need.position}
                   variant={need.needScore >= 40 ? 'red' : need.needScore >= 25 ? 'amber' : 'default'}
                   size="sm"
+                  className="min-h-[36px] min-w-[36px] flex items-center justify-center"
                 >
                   {need.position}
                 </Badge>

@@ -226,7 +226,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     </Link>
                   </span>
                 )}
-                <Button onClick={handleSimWeek} size="sm">
+                <Button onClick={handleSimWeek} size="sm" className="active:scale-95 transition-transform">
                   Sim Week {week}
                 </Button>
                 {week <= (leagueSettings?.tradeDeadlineWeek ?? 12) + 1 && (
@@ -234,6 +234,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     onClick={handleSimToDeadline}
                     variant="secondary"
                     size="sm"
+                    className="active:scale-95 transition-transform"
                   >
                     Sim to Deadline
                   </Button>
@@ -243,6 +244,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                   variant="secondary"
                   size="sm"
                   disabled={!!simProgress}
+                  className="active:scale-95 transition-transform"
                 >
                   {simProgress ? `Week ${simProgress.week}/${simProgress.total}...` : 'Sim Season'}
                 </Button>
@@ -256,6 +258,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       onClick={simNextPlayoffGame}
                       size="sm"
                       disabled={!nextPlayoffGame}
+                      className="active:scale-95 transition-transform"
                     >
                       Sim Next Game
                     </Button>
@@ -264,6 +267,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       size="sm"
                       variant="secondary"
                       disabled={!nextPlayoffGame}
+                      className="active:scale-95 transition-transform"
                     >
                       Sim Round
                     </Button>
@@ -272,6 +276,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       size="sm"
                       variant="secondary"
                       disabled={!nextPlayoffGame}
+                      className="active:scale-95 transition-transform"
                     >
                       Sim Remaining
                     </Button>
@@ -415,10 +420,10 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
       {/* Mobile bottom action bar — thumb-accessible */}
       {phase === 'regular' && !pathname.startsWith('/game/') && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-[var(--surface)] border-t border-[var(--border)] px-3 py-2 flex items-center justify-center gap-2 sm:hidden safe-bottom">
-          <Button onClick={handleSimWeek} size="sm" className="flex-1">
+          <Button onClick={handleSimWeek} size="sm" className="flex-1 active:scale-95 transition-transform">
             {simProgress ? `Wk ${simProgress.week}/${simProgress.total}` : `Sim Week ${week}`}
           </Button>
-          <Button onClick={handleSimSeason} size="sm" variant="secondary" className="flex-1" disabled={!!simProgress}>
+          <Button onClick={handleSimSeason} size="sm" variant="secondary" className="flex-1 active:scale-95 transition-transform" disabled={!!simProgress}>
             {simProgress ? `${simProgress.week}/${simProgress.total}...` : 'Sim Season'}
           </Button>
           {pendingTradeCount > 0 && (

@@ -326,9 +326,10 @@ export default function StandingsPage() {
                     key={game.id}
                     className={`flex items-center justify-between py-3 px-5 ${
                       game.played
-                        ? won ? 'border-l-2 border-l-green-500' : 'border-l-2 border-l-red-500'
+                        ? `${won ? 'border-l-2 border-l-green-500' : 'border-l-2 border-l-red-500'} cursor-pointer active:scale-[0.98] transition-transform`
                         : ''
                     }`}
+                    {...(game.played ? { onClick: () => setSelectedGame(game) } : {})}
                   >
                     <div className="flex items-center gap-4 w-32">
                       <span className="text-xs text-[var(--text-sec)] w-12">Wk {game.week}</span>
@@ -375,11 +376,14 @@ export default function StandingsPage() {
                             </span>
                           )}
                           <button
-                            onClick={() => setSelectedGame(game)}
+                            onClick={(e) => { e.stopPropagation(); setSelectedGame(game); }}
                             className="text-xs text-blue-600 hover:text-blue-400 transition-colors"
                           >
                             Box Score
                           </button>
+                          <svg className="w-4 h-4 text-[var(--text-sec)] shrink-0 sm:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
                         </div>
                       ) : (
                         (() => {

@@ -33,6 +33,7 @@ function TeamPicker() {
   const [resumeLoading, setResumeLoading] = useState(false);
   const [startMode] = useState<'offseason' | 'regular'>('offseason');
   const [bsModePreselect, setBsModePreselect] = useState(false);
+  const [teamSearch, setTeamSearch] = useState('');
   const autoLoadedRef = useRef(false);
 
   // Auto-load roster from ?roster= query param (e.g. from /rosters page)
@@ -290,8 +291,23 @@ function TeamPicker() {
           Loading league data...
         </div>
       ) : (
+        <>
+        <input
+          type="text"
+          placeholder="Search teams..."
+          value={teamSearch}
+          onChange={e => setTeamSearch(e.target.value)}
+          className="w-full max-w-md mb-4 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm"
+        />
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-w-4xl">
-          {[...displayTeams].sort((a, b) => a.city.localeCompare(b.city)).map(team => (
+          {[...displayTeams]
+            .filter(t =>
+              !teamSearch ||
+              t.city.toLowerCase().includes(teamSearch.toLowerCase()) ||
+              t.name.toLowerCase().includes(teamSearch.toLowerCase()) ||
+              t.abbreviation.toLowerCase().includes(teamSearch.toLowerCase())
+            )
+            .sort((a, b) => a.city.localeCompare(b.city)).map(team => (
             <button
               key={team.abbreviation}
               onClick={() => handlePick(team.abbreviation)}
@@ -306,6 +322,7 @@ function TeamPicker() {
             </button>
           ))}
         </div>
+        </>
       )}
     </div>
   );
