@@ -396,9 +396,10 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                 const draftTeam = player.draftTeamId ? teams.find(t => t.id === player.draftTeamId) : null;
                 return draftTeam ? ` by ${draftTeam.city} ${draftTeam.name}` : '';
               })()}
+              {player.college && <> · {player.college}</>}
             </span>
           ) : (
-            <span>Undrafted</span>
+            <span>Undrafted{player.college && <> · {player.college}</>}</span>
           )}
         </div>
 
