@@ -154,12 +154,12 @@ export default function RostersPage() {
           <p className="text-sm text-[var(--text)]">
             Have a custom roster to share? Post it in{' '}
             <a
-              href="https://www.reddit.com/r/GMGridiron/"
+              href="https://www.reddit.com/r/Gridiron_GM_Game/"
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-600 hover:underline font-medium"
             >
-              r/GMGridiron
+              r/Gridiron_GM_Game
             </a>{' '}
             and we&apos;ll feature it here.
           </p>
