@@ -213,16 +213,16 @@ export default function StatsPage() {
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                   <th className="text-center pb-3 w-8">#</th>
                   <th className="text-left pb-3">Team</th>
-                  <th className="text-center pb-3">W</th>
-                  <th className="text-center pb-3">L</th>
-                  <th className="text-center pb-3">PF</th>
-                  <th className="text-center pb-3">PA</th>
-                  <th className="text-center pb-3">DIFF</th>
-                  <th className="text-center pb-3">Pass YDS/G</th>
-                  <th className="text-center pb-3">Rush YDS/G</th>
-                  <th className="text-center pb-3">Total YDS/G</th>
-                  <th className="text-center pb-3">Opp Pass YDS/G</th>
-                  <th className="text-right pb-3 pr-2">Opp Rush YDS/G</th>
+                  <th className="text-center pb-3 whitespace-nowrap min-w-[40px]">W</th>
+                  <th className="text-center pb-3 whitespace-nowrap min-w-[40px]">L</th>
+                  <th className="text-center pb-3 whitespace-nowrap min-w-[40px]">PF</th>
+                  <th className="text-center pb-3 whitespace-nowrap min-w-[40px]">PA</th>
+                  <th className="text-center pb-3 whitespace-nowrap min-w-[48px]">DIFF</th>
+                  <th className="text-center pb-3 whitespace-nowrap">Pass YDS/G</th>
+                  <th className="text-center pb-3 whitespace-nowrap">Rush YDS/G</th>
+                  <th className="text-center pb-3 whitespace-nowrap">Total YDS/G</th>
+                  <th className="text-center pb-3 whitespace-nowrap">Opp Pass YDS/G</th>
+                  <th className="text-right pb-3 pr-2 whitespace-nowrap">Opp Rush YDS/G</th>
                 </tr>
               </thead>
               <tbody>
@@ -240,18 +240,18 @@ export default function StatsPage() {
                           <span className={isUser ? 'text-blue-600' : ''}>{ts.team.city} {ts.team.name}</span>
                         </button>
                       </td>
-                      <td className="py-2.5 text-center">{ts.team.record.wins}</td>
-                      <td className="py-2.5 text-center">{ts.team.record.losses}</td>
-                      <td className="py-2.5 text-center font-mono">{ts.pf}</td>
-                      <td className="py-2.5 text-center font-mono">{ts.pa}</td>
-                      <td className={`py-2.5 text-center font-mono ${ts.diff > 0 ? 'text-green-600' : ts.diff < 0 ? 'text-red-600' : ''}`}>
+                      <td className="py-2.5 text-center whitespace-nowrap">{ts.team.record.wins}</td>
+                      <td className="py-2.5 text-center whitespace-nowrap">{ts.team.record.losses}</td>
+                      <td className="py-2.5 text-center font-mono whitespace-nowrap">{ts.pf}</td>
+                      <td className="py-2.5 text-center font-mono whitespace-nowrap">{ts.pa}</td>
+                      <td className={`py-2.5 text-center font-mono whitespace-nowrap ${ts.diff > 0 ? 'text-green-600' : ts.diff < 0 ? 'text-red-600' : ''}`}>
                         {ts.diff > 0 ? '+' : ''}{ts.diff}
                       </td>
-                      <td className="py-2.5 text-center font-mono">{ts.passYPG.toFixed(1)}</td>
-                      <td className="py-2.5 text-center font-mono">{ts.rushYPG.toFixed(1)}</td>
-                      <td className="py-2.5 text-center font-mono">{ts.totalYPG.toFixed(1)}</td>
-                      <td className="py-2.5 text-center font-mono">{ts.oppPassYPG.toFixed(1)}</td>
-                      <td className="py-2.5 text-right pr-2 font-mono">{ts.oppRushYPG.toFixed(1)}</td>
+                      <td className="py-2.5 text-center font-mono whitespace-nowrap">{ts.passYPG.toFixed(1)}</td>
+                      <td className="py-2.5 text-center font-mono whitespace-nowrap">{ts.rushYPG.toFixed(1)}</td>
+                      <td className="py-2.5 text-center font-mono whitespace-nowrap">{ts.totalYPG.toFixed(1)}</td>
+                      <td className="py-2.5 text-center font-mono whitespace-nowrap">{ts.oppPassYPG.toFixed(1)}</td>
+                      <td className="py-2.5 text-right pr-2 font-mono whitespace-nowrap">{ts.oppRushYPG.toFixed(1)}</td>
                     </tr>
                   );
                 })}

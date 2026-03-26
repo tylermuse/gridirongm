@@ -65,15 +65,15 @@ function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams,
         <tr className="text-[var(--text-sec)] text-xs">
           <th className="text-left pb-1">#</th>
           <th className="text-left pb-1">Team</th>
-          <th className="text-center pb-1">W</th>
-          <th className="text-center pb-1">L</th>
-          <th className="text-center pb-1">T</th>
-          <th className="text-center pb-1">PCT</th>
-          <th className="text-center pb-1">GB</th>
-          <th className="text-right pb-1 hidden sm:table-cell">PF</th>
-          <th className="text-right pb-1 hidden sm:table-cell">PA</th>
-          <th className="text-right pb-1">DIFF</th>
-          <th className="text-center pb-1">STRK</th>
+          <th className="text-center pb-1 whitespace-nowrap min-w-[40px]">W</th>
+          <th className="text-center pb-1 whitespace-nowrap min-w-[40px]">L</th>
+          <th className="text-center pb-1 whitespace-nowrap min-w-[40px]">T</th>
+          <th className="text-center pb-1 whitespace-nowrap min-w-[48px]">PCT</th>
+          <th className="text-center pb-1 whitespace-nowrap min-w-[40px]">GB</th>
+          <th className="text-right pb-1 hidden sm:table-cell whitespace-nowrap min-w-[40px]">PF</th>
+          <th className="text-right pb-1 hidden sm:table-cell whitespace-nowrap min-w-[40px]">PA</th>
+          <th className="text-right pb-1 whitespace-nowrap min-w-[48px]">DIFF</th>
+          <th className="text-center pb-1 whitespace-nowrap min-w-[48px]">STRK</th>
           {expanded && (
             <>
               <th className="text-center pb-1 hidden lg:table-cell">HOME</th>
@@ -116,17 +116,17 @@ function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams,
                   </span>
                 </div>
               </td>
-              <td className="py-1.5 text-center">{t.record.wins}</td>
-              <td className="py-1.5 text-center">{t.record.losses}</td>
-              <td className="py-1.5 text-center">{t.record.ties}</td>
-              <td className="py-1.5 text-center font-mono text-xs">{pct}</td>
-              <td className="py-1.5 text-center text-xs text-[var(--text-sec)]">{gb === 0 ? '-' : gb % 1 === 0.5 ? gb.toFixed(1) : gb}</td>
-              <td className="py-1.5 text-right hidden sm:table-cell">{t.record.pointsFor}</td>
-              <td className="py-1.5 text-right hidden sm:table-cell">{t.record.pointsAgainst}</td>
-              <td className={`py-1.5 text-right font-mono ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : ''}`}>
+              <td className="py-1.5 text-center whitespace-nowrap">{t.record.wins}</td>
+              <td className="py-1.5 text-center whitespace-nowrap">{t.record.losses}</td>
+              <td className="py-1.5 text-center whitespace-nowrap">{t.record.ties}</td>
+              <td className="py-1.5 text-center font-mono text-xs whitespace-nowrap">{pct}</td>
+              <td className="py-1.5 text-center text-xs text-[var(--text-sec)] whitespace-nowrap">{gb === 0 ? '-' : gb % 1 === 0.5 ? gb.toFixed(1) : gb}</td>
+              <td className="py-1.5 text-right hidden sm:table-cell whitespace-nowrap">{t.record.pointsFor}</td>
+              <td className="py-1.5 text-right hidden sm:table-cell whitespace-nowrap">{t.record.pointsAgainst}</td>
+              <td className={`py-1.5 text-right font-mono whitespace-nowrap ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : ''}`}>
                 {diff > 0 ? '+' : ''}{diff}
               </td>
-              <td className={`py-1.5 text-center text-xs font-medium ${streak > 0 ? 'text-green-600' : streak < 0 ? 'text-red-600' : ''}`}>
+              <td className={`py-1.5 text-center text-xs font-medium whitespace-nowrap ${streak > 0 ? 'text-green-600' : streak < 0 ? 'text-red-600' : ''}`}>
                 {streakStr}
               </td>
               {expanded && (

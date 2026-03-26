@@ -214,7 +214,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   }
 
   return (
-    <aside className="w-56 shrink-0 bg-[var(--surface)] border-r border-[var(--border)] flex flex-col h-screen sticky top-0">
+    <aside className="w-[260px] min-w-[260px] shrink-0 bg-[var(--surface)] border-r border-[var(--border)] flex flex-col h-screen sticky top-0">
       <div className="p-4 border-b border-[var(--border)]">
         <h1 className="text-xl font-extrabold tracking-tight">
           <span className="text-blue-600">GRIDIRON</span>
