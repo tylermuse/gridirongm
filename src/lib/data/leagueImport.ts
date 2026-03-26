@@ -1,5 +1,6 @@
 import type { Player, PlayerRatings, Position, Team } from '@/types';
 import { emptyRecord, emptyStats, POSITIONS, generateGuaranteed } from '@/types';
+import { estimateSalary, LEAGUE_MINIMUM_SALARY } from '@/lib/engine/salary';
 import { LEAGUE_TEAMS } from './teams';
 
 function uuid(): string {
@@ -274,6 +275,22 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
   }
 
   players.push(...importedProspects);
+
+  // ── Fix stale / minimum-salary contracts for imported players ──────────
+  // Roster files often update a player's team (tid) to reflect real FA moves
+  // without also updating the contract object. This leaves good players on
+  // league-minimum deals. Re-price any rostered player whose salary is
+  // significantly below what their OVR warrants.
+  for (const p of players) {
+    if (!p.teamId || p.experience === 0) continue; // skip FAs and prospects
+    const fair = estimateSalary(p.ratings.overall, p.position, p.age, p.potential);
+    // Flag as stale: on a team, paid near the league minimum, but fair value is much higher
+    if (p.contract.salary <= LEAGUE_MINIMUM_SALARY + 0.1 && fair > LEAGUE_MINIMUM_SALARY * 2) {
+      const salary = Math.round(fair * 10) / 10;
+      const yearsLeft = Math.max(1, p.contract.yearsLeft);
+      p.contract = { salary, yearsLeft, guaranteed: generateGuaranteed(salary, yearsLeft), totalYears: yearsLeft };
+    }
+  }
 
   const rosterByTeamId = new Map<string, string[]>();
   const payrollByTeamId = new Map<string, number>();
