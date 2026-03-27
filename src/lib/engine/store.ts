@@ -253,6 +253,11 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
       let score = prospect.ratings.overall * 15 + prospect.potential * 0.5 + needScore;
       score += (Math.random() - 0.5) * 8;
 
+      // Position max enforcement: heavily penalize positions already at or above max
+      if (count >= limits.max) {
+        score *= 0.05; // Nearly eliminate chance of drafting surplus positions
+      }
+
       // QB premium: teams without a quality QB (none, or starter < 65 OVR) draft QBs much higher
       if (prospect.position === 'QB') {
         const bestQB = roster.filter(p => p.position === 'QB').sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
@@ -3898,12 +3903,20 @@ export const useGameStore = create<GameStore>()(
           if (!teamData) continue;
           const capSpace = teamData.salaryCap - teamData.totalPayroll;
 
+          // Compute position counts for this team to enforce roster limits
+          const aiRoster = currentPlayers.filter(p => p.teamId === aiTeamId && !p.retired);
+          const aiPosCounts: Record<string, number> = {};
+          for (const p of aiRoster) aiPosCounts[p.position] = (aiPosCounts[p.position] || 0) + 1;
+
           // AI teams can stretch ~15% over cap for elite FAs (simulating restructures/backloading)
           const effectiveCap = capSpace + teamData.salaryCap * 0.15;
           const availableFAs = currentFreeAgents
             .map(id => currentPlayers.find(p => p.id === id))
             .filter((p): p is Player => !!p && !p.retired)
             .filter(p => {
+              // Skip positions already at or above max
+              const posCount = aiPosCounts[p.position] || 0;
+              if (posCount >= ROSTER_LIMITS[p.position].max) return false;
               const sal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential) * decay;
               return sal <= effectiveCap || (capSpace >= LEAGUE_MINIMUM_SALARY && sal <= LEAGUE_MINIMUM_SALARY * 2);
             })
@@ -4148,10 +4161,17 @@ export const useGameStore = create<GameStore>()(
             const teamData = currentTeams.find(t => t.id === aiTeamId);
             if (!teamData) continue;
             const capSpace = teamData.salaryCap - teamData.totalPayroll;
+            // Compute position counts for this team to enforce roster limits
+            const aiRosterRS = currentPlayers.filter(p => p.teamId === aiTeamId && !p.retired);
+            const aiPosCountsRS: Record<string, number> = {};
+            for (const p of aiRosterRS) aiPosCountsRS[p.position] = (aiPosCountsRS[p.position] || 0) + 1;
             const availableFAs = currentFreeAgents
               .map(id => currentPlayers.find(p => p.id === id))
               .filter((p): p is Player => !!p && !p.retired)
               .filter(p => {
+                // Skip positions already at or above max
+                const posCount = aiPosCountsRS[p.position] || 0;
+                if (posCount >= ROSTER_LIMITS[p.position].max) return false;
                 const sal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential);
                 return sal <= capSpace || (capSpace >= LEAGUE_MINIMUM_SALARY && sal <= LEAGUE_MINIMUM_SALARY * 2);
               })
