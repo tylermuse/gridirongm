@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useGameStore, computeFranchiseTagSalary } from '@/lib/engine/store';
+import { useGameStore, computeFranchiseTagSalary, flushToStorage } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { LEAGUE_MINIMUM_SALARY, computeLuxuryTax, LUXURY_TAX_RATE } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
@@ -401,8 +401,9 @@ export default function ReSignPage() {
               <p className="text-sm mt-1">All your players have at least 2 years remaining.</p>
               <Button
                 className="mt-4"
-                onClick={() => {
+                onClick={async () => {
                   advanceToDraft();
+                  await flushToStorage();
                   router.push('/draft');
                 }}
               >
@@ -625,8 +626,9 @@ export default function ReSignPage() {
             <div className="text-4xl mb-2">✅</div>
             <p className="text-[var(--text-sec)] mb-4">All re-signing decisions complete.</p>
             <Button
-              onClick={() => {
+              onClick={async () => {
                 advanceToDraft();
+                await flushToStorage();
                 router.push('/draft');
               }}
             >

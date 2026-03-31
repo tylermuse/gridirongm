@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { idbStorage, getItem as idbGetItem, setItem as idbSetItem } from '@/lib/storage';
+import { idbStorage, getItem as idbGetItem, setItem as idbSetItem, flushPersist, flushPersistSync } from '@/lib/storage';
 function uuid(): string {
   return crypto.randomUUID();
 }
@@ -6216,3 +6216,37 @@ export const useGameStore = create<GameStore>()(
     },
   ),
 );
+
+// ---------------------------------------------------------------------------
+// flushToStorage: force-write current state to IndexedDB
+// ---------------------------------------------------------------------------
+
+/**
+ * Serialize the current store state using the same partialize logic as the
+ * persist middleware, then write directly to IndexedDB. Returns a Promise
+ * that resolves once the write is confirmed.
+ *
+ * Call this before router.push() after any store mutation to guarantee the
+ * navigation target will rehydrate fresh data.
+ */
+export async function flushToStorage(): Promise<void> {
+  const state = useGameStore.getState();
+  const opts = (useGameStore as any).persist?.getOptions?.();
+  const partialize = opts?.partialize ?? ((s: any) => s);
+  const partialized = partialize(state);
+  const serialized = JSON.stringify({ state: partialized, version: SAVE_VERSION });
+  await flushPersist(serialized);
+}
+
+/**
+ * Synchronous fallback: write a recovery snapshot to localStorage.
+ * Use in beforeunload handlers where async is unreliable.
+ */
+export function flushToStorageSync(): void {
+  const state = useGameStore.getState();
+  const opts = (useGameStore as any).persist?.getOptions?.();
+  const partialize = opts?.partialize ?? ((s: any) => s);
+  const partialized = partialize(state);
+  const serialized = JSON.stringify({ state: partialized, version: SAVE_VERSION });
+  flushPersistSync(serialized);
+}

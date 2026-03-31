@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
-import { useGameStore } from '@/lib/engine/store';
+import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -1764,12 +1764,13 @@ function TradesPage() {
                               </div>
                             </div>
                             <div className="flex gap-2">
-                              <Button size="sm" onClick={() => {
+                              <Button size="sm" onClick={async () => {
                                 const success = respondToTradeProposal(proposal.id, true);
                                 if (success) {
                                   const otherPending = tradeProposals.filter(p => p.id !== proposal.id && p.status === 'pending');
                                   for (const op of otherPending) respondToTradeProposal(op.id, false);
                                   setBlockSolicited(false);
+                                  await flushToStorage();
                                   router.push('/');
                                 } else {
                                   alert('Trade failed — you may be over the salary cap.');

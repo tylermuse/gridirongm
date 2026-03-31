@@ -2,7 +2,7 @@
 
 import { use, useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useGameStore } from '@/lib/engine/store';
+import { useGameStore, flushToStorage, flushToStorageSync } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -570,13 +570,23 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     }
   }, [liveResult, totalEvents, revealedCount]);
 
-  const handleCommit = useCallback(() => {
+  const handleCommit = useCallback(async () => {
     if (!liveResult || !game || committed) return;
     const gameResult = liveGameToGameResult(liveResult, game);
     commitLiveGame(gameResult, isPlayoffGame ? id : undefined);
     setCommitted(true);
+    await flushToStorage();
     router.push(isPlayoffGame ? '/playoffs' : '/');
   }, [liveResult, game, committed, commitLiveGame, router, isPlayoffGame, id]);
+
+  // Safety net: write recovery snapshot if tab closes during/after game
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      flushToStorageSync();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   // Guard conditions
   if (phase !== 'regular' && phase !== 'playoffs') {

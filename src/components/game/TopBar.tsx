@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { useGameStore } from '@/lib/engine/store';
+import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
 // TradeProposalPopup disabled — user prefers checking trades inline
 
@@ -81,7 +81,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
 
   const pendingTradeCount = tradeProposals.filter(p => p.status === 'pending').length;
 
-  const handleSimWeek = useCallback(() => {
+  const handleSimWeek = useCallback(async () => {
     const beforeIds = new Set(useGameStore.getState().tradeProposals.filter(p => p.status === 'pending').map(p => p.id));
     simWeek();
     const afterState = useGameStore.getState();
@@ -94,15 +94,17 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     }
     // Auto-redirect to playoffs when regular season ends
     if (afterState.phase === 'playoffs') {
+      await flushToStorage();
       router.push('/playoffs');
     }
   }, [simWeek, router]);
 
-  const handleSimToDeadline = useCallback(() => {
+  const handleSimToDeadline = useCallback(async () => {
     const deadlineWeek = (leagueSettings?.tradeDeadlineWeek ?? 12) + 1;
     // simToWeek computes all weeks in a single set() call — no stale state
     useGameStore.getState().simToWeek(deadlineWeek);
     if (useGameStore.getState().phase === 'playoffs') {
+      await flushToStorage();
       router.push('/playoffs');
     }
   }, [leagueSettings, router]);
@@ -131,6 +133,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
       afterState.respondToTradeProposal(p.id, false);
     }
     if (useGameStore.getState().phase === 'playoffs') {
+      await flushToStorage();
       router.push('/playoffs');
     }
   }, [router]);
@@ -284,11 +287,12 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                 )}
                 {superBowlDone && (
                   <Button
-                    onClick={() => {
+                    onClick={async () => {
                       const store = useGameStore.getState();
                       if (store.phase !== 'resigning') {
                         store.advanceToResigning();
                       }
+                      await flushToStorage();
                       router.push('/re-sign');
                     }}
                     size="sm"
@@ -311,11 +315,12 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                   </Link>
                 )}
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
                     const store = useGameStore.getState();
                     if (store.phase !== 'draft') {
                       store.advanceToDraft();
                     }
+                    await flushToStorage();
                     router.push('/draft');
                   }}
                   variant="secondary"
@@ -347,8 +352,9 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                       </Button>
                     )}
                     <Button
-                      onClick={() => {
+                      onClick={async () => {
                         simToEndDraft({ skipAdvance: true });
+                        await flushToStorage();
                         router.push('/draft-recap');
                       }}
                       size="sm"
@@ -363,7 +369,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                         Draft Recap
                       </Button>
                     </Link>
-                    <Button size="sm" onClick={() => { advanceToFreeAgency(); router.push('/free-agency'); }}>
+                    <Button size="sm" onClick={async () => { advanceToFreeAgency(); await flushToStorage(); router.push('/free-agency'); }}>
                       <span className="hidden sm:inline">Advance to Free Agency</span>
                       <span className="sm:hidden">Free Agency</span>
                       {' '}→
@@ -382,8 +388,8 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                   </Link>
                 )}
                 {faDay >= 30 ? (
-                  <Button onClick={() => {
-                    startNewSeason(); router.push('/roster');
+                  <Button onClick={async () => {
+                    startNewSeason(); await flushToStorage(); router.push('/roster');
                   }} variant="secondary" size="sm">
                     <span className="hidden sm:inline">Start New Season</span>
                     <span className="sm:hidden">New Season</span>
@@ -391,9 +397,10 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                   </Button>
                 ) : (
                   <Button
-                    onClick={() => {
+                    onClick={async () => {
                       if (!window.confirm('End free agency early? Any unsigned free agents will remain available for in-season signings, but AI teams will stop making moves.')) return;
                       startNewSeason();
+                      await flushToStorage();
                       router.push('/roster');
                     }}
                     variant="secondary"

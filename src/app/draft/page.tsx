@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useGameStore } from '@/lib/engine/store';
+import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -944,8 +944,9 @@ export default function DraftPage() {
           simDraftPick={simDraftPick}
           simToUserDraftPick={simToUserDraftPick}
           simToEndDraft={simToEndDraft}
-          onSimAll={() => {
+          onSimAll={async () => {
             simToEndDraft({ skipAdvance: true });
+            await flushToStorage();
             router.push('/draft-recap');
           }}
           onDraft={(playerId) => draftPlayer(playerId)}

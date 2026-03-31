@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useGameStore } from '@/lib/engine/store';
+import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -446,8 +446,9 @@ export default function DraftRecapPage() {
         {phase === 'draft' && (
           <div className="text-center pt-2 pb-4">
             <Button
-              onClick={() => {
+              onClick={async () => {
                 advanceToFreeAgency();
+                await flushToStorage();
                 router.push('/free-agency');
               }}
               size="lg"

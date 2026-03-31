@@ -75,6 +75,57 @@ export const idbStorage = {
 };
 
 // ---------------------------------------------------------------------------
+// Flush: force-write current Zustand state to IndexedDB
+// ---------------------------------------------------------------------------
+
+const PERSIST_KEY = 'gridiron-gm-autosave';
+
+/**
+ * Force-write the current Zustand store state to IndexedDB, bypassing the
+ * persist middleware's async queue. Call this before navigating away after
+ * a store mutation to guarantee the write has landed.
+ *
+ * Accepts a getStateFn so we don't create a circular import with store.ts.
+ * The caller passes `useGameStore.persist.getOptions()` or the raw state.
+ *
+ * @param serializedState - The JSON string to write (already partialize'd +
+ *   serialized by the persist middleware). If not provided, falls back to
+ *   triggering the persist middleware's rehydration-safe manual save.
+ */
+export async function flushPersist(serializedState: string): Promise<void> {
+  await setItem(PERSIST_KEY, serializedState);
+}
+
+/**
+ * Synchronous fallback for beforeunload: writes a recovery copy to
+ * localStorage. The app checks this during rehydration and prefers it
+ * over stale IndexedDB data when present.
+ */
+export function flushPersistSync(serializedState: string): void {
+  try {
+    localStorage.setItem(PERSIST_KEY + '-recovery', serializedState);
+  } catch {
+    // localStorage full or unavailable — nothing we can do synchronously
+  }
+}
+
+/**
+ * Check for and consume a recovery snapshot written by beforeunload.
+ * Returns the snapshot string if found, null otherwise.
+ */
+export function consumeRecoverySnapshot(): string | null {
+  try {
+    const snapshot = localStorage.getItem(PERSIST_KEY + '-recovery');
+    if (snapshot) {
+      localStorage.removeItem(PERSIST_KEY + '-recovery');
+    }
+    return snapshot;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Migration: localStorage → IndexedDB (runs once)
 // ---------------------------------------------------------------------------
 

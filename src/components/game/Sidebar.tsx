@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useGameStore } from '@/lib/engine/store';
+import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { getItem as idbGetItem } from '@/lib/storage';
@@ -330,7 +330,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           </button>
           {confirmReset ? (
             <button
-              onClick={() => { resetLeague(); setConfirmReset(false); router.push('/'); }}
+              onClick={async () => { resetLeague(); setConfirmReset(false); await flushToStorage(); router.push('/'); }}
               className="flex-1 text-xs py-1.5 rounded-lg bg-red-600/20 text-red-600 hover:bg-red-600/30 transition-colors"
             >
               Confirm?
