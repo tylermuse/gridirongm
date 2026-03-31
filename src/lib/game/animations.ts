@@ -46,6 +46,9 @@ export interface BallArc {
 export interface PlayAnimation {
   type: string;
   ballArc: BallArc | null;
+  /** Where the ball should rest after the animation completes (absolute yard).
+   *  For incomplete passes this is the LOS (ball returns to scrimmage). */
+  ballRestX: number;
   movingDots: Array<{
     team: 'offense' | 'defense';
     index: number;
@@ -68,7 +71,11 @@ export function buildPlayAnimation(
   event: PlayEvent,
   speedMs: number,
 ): PlayAnimation {
-  const baseDuration = Math.min(speedMs * 0.6, 500);
+  // Distance-based duration: short plays animate quickly, long plays take longer
+  const absYards = Math.abs(event.yardsGained);
+  const baseDuration = Math.min(speedMs * 0.5, 300) + absYards * 8;
+  const cappedDuration = Math.min(baseDuration, speedMs * 0.8);
+
   const effects: EffectType[] = [];
   let ballArc: BallArc | null = null;
   const movingDots: PlayAnimation['movingDots'] = [];
@@ -84,9 +91,10 @@ export function buildPlayAnimation(
     .map((d, i) => d.label === 'WR' ? i : -1)
     .filter(i => i >= 0);
 
-  // Compute post-play ball position
-  const postBallX = nextState.ballYard;
+  // Pre-play LOS position (ball starts here)
   const preBallX = prevState.scrimmageYard;
+  // Post-play ball position from the next state
+  const postBallX = nextState.ballYard;
 
   switch (type) {
     case 'pass_complete': {
@@ -149,11 +157,13 @@ export function buildPlayAnimation(
     }
 
     case 'sack': {
-      // DE rushes QB, QB moves backward
+      // DE rushes QB, QB moves backward (toward own endzone)
       const deIndex = prevState.defenseDots.findIndex(d => d.label === 'DE');
       if (deIndex >= 0 && qbIndex >= 0) {
         const de = prevState.defenseDots[deIndex];
         const qb = prevState.offenseDots[qbIndex];
+        // Sack moves QB backward: yardsGained is negative, so move in -dir
+        const sackYard = clampYard(preBallX + event.yardsGained * dir);
         movingDots.push({
           team: 'defense',
           index: deIndex,
@@ -167,7 +177,7 @@ export function buildPlayAnimation(
           index: qbIndex,
           fromX: qb.x,
           fromY: qb.y,
-          toX: postBallX,
+          toX: sackYard,
           toY: qb.y,
         });
       }
@@ -290,6 +300,7 @@ export function buildPlayAnimation(
     }
 
     case 'penalty': {
+      // No ball movement — flag thrown, field position shifts after
       effects.push('flag');
       break;
     }
@@ -306,13 +317,27 @@ export function buildPlayAnimation(
     }
   }
 
+  // For incomplete passes, ball rests back at LOS (pre-play position).
+  // For penalties, ball rests at LOS. For everything else, use the post-play position.
+  let ballRestX = postBallX;
+  if (type === 'pass_incomplete') {
+    ballRestX = preBallX;
+  } else if (type === 'penalty') {
+    ballRestX = postBallX; // penalty shifts field pos, show the result
+  }
+
   return {
     type,
     ballArc,
+    ballRestX,
     movingDots,
     effects,
-    durationMs: Math.max(baseDuration, 200),
+    durationMs: Math.max(cappedDuration, 200),
   };
+}
+
+function clampYard(v: number): number {
+  return Math.max(0, Math.min(100, v));
 }
 
 // ---------------------------------------------------------------------------

@@ -42,6 +42,7 @@ interface Props {
   awayAbbr: string;
   isPlaying: boolean;
   animationSpeed: number;
+  onAnimationComplete?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -475,9 +476,12 @@ export function AnimatedField({
   awayAbbr,
   isPlaying,
   animationSpeed,
+  onAnimationComplete,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const onAnimCompleteRef = useRef(onAnimationComplete);
+  onAnimCompleteRef.current = onAnimationComplete;
 
   // Animation state refs (avoid re-renders during animation loop)
   const animRef = useRef<{
@@ -488,6 +492,7 @@ export function AnimatedField({
     confetti: ConfettiParticle[];
     lastTimestamp: number;
     isAnimating: boolean;
+    completeFired: boolean;  // ensure onAnimationComplete fires only once per play
   }>({
     prevState: idleFieldState(),
     nextState: idleFieldState(),
@@ -496,6 +501,7 @@ export function AnimatedField({
     confetti: [],
     lastTimestamp: 0,
     isAnimating: false,
+    completeFired: true,
   });
 
   const rafRef = useRef<number>(0);
@@ -531,6 +537,7 @@ export function AnimatedField({
       ref.animation = buildPlayAnimation(prevState, nextState, event, animationSpeed);
       ref.progress = 0;
       ref.isAnimating = true;
+      ref.completeFired = false;
 
       // Spawn confetti on TD
       if (ref.animation.effects.includes('confetti')) {
@@ -545,6 +552,9 @@ export function AnimatedField({
       ref.animation = null;
       ref.progress = 1;
       ref.isAnimating = false;
+      ref.completeFired = true;
+      // Separator events (quarter_end, halftime, etc.) complete immediately
+      onAnimCompleteRef.current?.();
     }
   }, [event, prevEvent, animationSpeed, canvasSize.w, canvasSize.h, homeColor, awayColor]);
 
@@ -568,6 +578,10 @@ export function AnimatedField({
       ref.progress = Math.min(1, ref.progress + dt / duration);
       if (ref.progress >= 1) {
         ref.isAnimating = false;
+        if (!ref.completeFired) {
+          ref.completeFired = true;
+          onAnimCompleteRef.current?.();
+        }
       }
     }
 
@@ -587,8 +601,13 @@ export function AnimatedField({
     const progress = ref.progress;
     const state = ref.nextState;
 
+    // During animation, show pre-play LOS/first-down. After animation, show post-play.
+    const showPrev = anim && progress < 1;
+    const losYard = showPrev ? ref.prevState.scrimmageYard : state.scrimmageYard;
+    const fdYard = showPrev ? ref.prevState.firstDownYard : state.firstDownYard;
+
     // Draw LOS and first down marker
-    drawLines(ctx, w, h, state.scrimmageYard, state.firstDownYard);
+    drawLines(ctx, w, h, losYard, fdYard);
 
     // Interpolate dots
     let offDots = state.offenseDots;
@@ -645,8 +664,10 @@ export function AnimatedField({
       const ballPos = bezierArcPoint(anim.ballArc, easeInOutQuad(progress), w, h, endzoneW);
       drawBall(ctx, ballPos.x, ballPos.y, true);
     } else {
-      // Ball at current position
-      const ballX = absYardToCanvasX(state.ballYard, w);
+      // Ball at rest position — use ballRestX from animation if available
+      // (e.g., incomplete pass snaps ball back to LOS)
+      const restYard = anim ? anim.ballRestX : state.ballYard;
+      const ballX = absYardToCanvasX(restYard, w);
       const ballY = lateralToCanvasY(0.5, h);
       drawBall(ctx, ballX, ballY, false);
     }

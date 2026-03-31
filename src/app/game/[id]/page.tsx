@@ -483,11 +483,18 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const [speed, setSpeed] = useState<Speed>('1x');
   const [committed, setCommitted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('gamecast');
+  // Two-phase reveal: animationComplete tracks whether the current play's
+  // field animation has finished. ScoreBug shows previous event's numbers
+  // until this becomes true.
+  const [animationComplete, setAnimationComplete] = useState(true);
 
   const totalEvents = liveResult?.events.length ?? 0;
   const isFinished = revealedCount >= totalEvents;
 
   const currentEvent = liveResult?.events[revealedCount - 1] ?? null;
+  const previousEvent = revealedCount >= 2
+    ? (liveResult?.events[revealedCount - 2] ?? null)
+    : null;
   const revealedEvents = liveResult?.events.slice(0, revealedCount) ?? [];
   const displayEvents = useMemo(() => [...revealedEvents].reverse(), [revealedEvents]);
   const drives = useMemo(() => parseDrives(revealedEvents), [revealedEvents]);
@@ -501,48 +508,66 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     return { plays: last.plays, yards: last.yards };
   }, [drives]);
 
-  // Interval-based play reveal
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Two-phase play reveal: animation-gated sequential advance
+  // Pattern: reveal event → animation plays → onAnimationComplete fires →
+  // short pause → reveal next event. No setInterval overlap.
+  const nextPlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const clearIntervalRef = useCallback(() => {
-    if (intervalRef.current !== null) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+  const clearNextPlayTimer = useCallback(() => {
+    if (nextPlayTimerRef.current !== null) {
+      clearTimeout(nextPlayTimerRef.current);
+      nextPlayTimerRef.current = null;
     }
   }, []);
 
-  const skipToEnd = useCallback(() => {
-    setRevealedCount(totalEvents);
-    setIsPlaying(false);
-    clearIntervalRef();
-  }, [totalEvents, clearIntervalRef]);
+  // Called by AnimatedField when the play animation finishes
+  const handleAnimationComplete = useCallback(() => {
+    setAnimationComplete(true);
+  }, []);
 
+  // When animation completes and we're playing, schedule the next play reveal
   useEffect(() => {
-    clearIntervalRef();
-    if (!isPlaying || isFinished || speed === 'max') return;
-    const ms = SPEED_MS[speed];
-    intervalRef.current = setInterval(() => {
+    clearNextPlayTimer();
+    if (!animationComplete || !isPlaying || isFinished || speed === 'max') return;
+    // Post-animation pause before next play
+    const PAUSE_MS: Record<Speed, number> = { '1x': 300, '2x': 150, '5x': 60, 'max': 0 };
+    const pause = PAUSE_MS[speed];
+    nextPlayTimerRef.current = setTimeout(() => {
       setRevealedCount(prev => {
         if (prev >= totalEvents) {
-          clearIntervalRef();
           setIsPlaying(false);
           return prev;
         }
         return prev + 1;
       });
-    }, ms);
-    return clearIntervalRef;
-  }, [isPlaying, speed, totalEvents, isFinished, clearIntervalRef]);
+      setAnimationComplete(false);
+    }, pause);
+    return clearNextPlayTimer;
+  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer]);
+
+  const skipToEnd = useCallback(() => {
+    clearNextPlayTimer();
+    setRevealedCount(totalEvents);
+    setAnimationComplete(true);
+    setIsPlaying(false);
+  }, [totalEvents, clearNextPlayTimer]);
 
   useEffect(() => {
     if (speed === 'max' && isPlaying && !isFinished) {
+      clearNextPlayTimer();
       setRevealedCount(totalEvents);
+      setAnimationComplete(true);
       setIsPlaying(false);
     }
-  }, [speed, isPlaying, isFinished, totalEvents]);
+  }, [speed, isPlaying, isFinished, totalEvents, clearNextPlayTimer]);
 
+  // Auto-start: reveal first play when game starts
   useEffect(() => {
-    if (liveResult && totalEvents > 0 && revealedCount === 0) setIsPlaying(true);
+    if (liveResult && totalEvents > 0 && revealedCount === 0) {
+      setIsPlaying(true);
+      setRevealedCount(1);
+      setAnimationComplete(false);
+    }
   }, [liveResult, totalEvents, revealedCount]);
 
   const handleCommit = useCallback(() => {
@@ -603,14 +628,18 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const homeRecord = homeTeam?.record;
   const awayRecord = awayTeam?.record;
 
-  const liveHomeScore = currentEvent?.homeScore ?? 0;
-  const liveAwayScore = currentEvent?.awayScore ?? 0;
-  const liveQuarter = currentEvent?.quarter ?? 1;
-  const liveTime = currentEvent?.timeStr ?? '15:00';
-  const livePoss = currentEvent?.possession ?? 'home';
-  const liveFieldPos = currentEvent?.fieldPos ?? 25;
-  const liveDown = currentEvent?.down ?? 1;
-  const liveYtg = currentEvent?.yardsToGo ?? 10;
+  // Two-phase ScoreBug: while animation is running, show the PREVIOUS event's
+  // score/down/distance so the scoreboard updates when the animation finishes.
+  // The play description text shows immediately (like a radio call).
+  const displayEvent = animationComplete ? currentEvent : previousEvent;
+  const liveHomeScore = displayEvent?.homeScore ?? 0;
+  const liveAwayScore = displayEvent?.awayScore ?? 0;
+  const liveQuarter = displayEvent?.quarter ?? currentEvent?.quarter ?? 1;
+  const liveTime = displayEvent?.timeStr ?? currentEvent?.timeStr ?? '15:00';
+  const livePoss = displayEvent?.possession ?? currentEvent?.possession ?? 'home';
+  const liveFieldPos = displayEvent?.fieldPos ?? currentEvent?.fieldPos ?? 25;
+  const liveDown = displayEvent?.down ?? currentEvent?.down ?? 1;
+  const liveYtg = displayEvent?.yardsToGo ?? currentEvent?.yardsToGo ?? 10;
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'gamecast', label: 'Gamecast' },
@@ -650,13 +679,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
         <AnimatedField
           event={currentEvent}
-          prevEvent={revealedEvents.length >= 2 ? revealedEvents[revealedEvents.length - 2] : null}
+          prevEvent={previousEvent}
           homeColor={homeColor}
           awayColor={awayColor}
           homeAbbr={homeAbbr}
           awayAbbr={awayAbbr}
           isPlaying={isPlaying}
           animationSpeed={SPEED_MS[speed]}
+          onAnimationComplete={handleAnimationComplete}
         />
 
         {/* Quarter score table */}
