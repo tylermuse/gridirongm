@@ -260,6 +260,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             if (item.href === '/draft-recap' && draftResults.length === 0) return false;
             return true;
           });
+          // Inject QB Pyramid link into League section when BS Mode is active
+          if (section.label === 'League' && leagueSettings?.bsMode) {
+            visibleItems.push({ href: '/qb-pyramid', label: 'QB Pyramid', icon: '🔺' });
+          }
           if (visibleItems.length === 0) return null;
           return (
             <div key={section.label} className="mb-2">

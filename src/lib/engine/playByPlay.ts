@@ -1,4 +1,5 @@
 import type { Player, PlayerStats, GameResult, Team } from '@/types';
+import { computeQBTier, getQBTierModifier } from './qbTierPyramid';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -382,6 +383,10 @@ export function simulatePlayByPlay(
 ): LiveGameResult {
   const homeKey = extractKeyPlayers(homePlayers);
   const awayKey = extractKeyPlayers(awayPlayers);
+
+  // QB tier modifiers: ±3% on completion probability
+  const homeQBTierMod = homeKey.qb ? getQBTierModifier(computeQBTier(homeKey.qb)) : 0;
+  const awayQBTierMod = awayKey.qb ? getQBTierModifier(computeQBTier(awayKey.qb)) : 0;
 
   const homeBucket = emptyBucket();
   const awayBucket = emptyBucket();
@@ -840,7 +845,9 @@ export function simulatePlayByPlay(
 
       const sackChance = clamp(0.085 + (dlPassRush - olBlocking) / 80 * 0.03, 0.04, 0.14);
       const intChance = 0.025;
-      const compBase = clamp(0.62 + (qbThrowing - 70) / 100 * 0.08, 0.50, 0.75);
+      // QB tier modifier: ±0.03 per tier level (Elite +0.06, Franchise +0.03, Backup -0.03, Camp Arm -0.06)
+      const tierMod = (state.possession === 'home' ? homeQBTierMod : awayQBTierMod) * 0.03;
+      const compBase = clamp(0.62 + (qbThrowing - 70) / 100 * 0.08 + tierMod, 0.50, 0.75);
 
       const roll = Math.random();
 
