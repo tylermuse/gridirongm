@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { simulatePlayByPlay, liveGameToGameResult } from '@/lib/engine/playByPlay';
 import { Confetti } from '@/components/ui/Confetti';
-import { GameFieldCanvas } from '@/components/game/GameFieldCanvas';
+import { AnimatedField } from '@/components/game/AnimatedField';
+import { ScoreBug } from '@/components/game/ScoreBug';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import type { Player, Position } from '@/types';
 
@@ -43,289 +44,9 @@ function downLabel(down: number, yardsToGo: number): string {
   return `${ordinals[down - 1]} & ${yardsToGo <= 0 ? 'Goal' : yardsToGo}`;
 }
 
-/** Convert field position (yards from own endzone) to a yard-line label like "OPP 25" */
-function fieldPosLabel(
-  fieldPos: number,
-  possession: 'home' | 'away',
-  homeAbbr: string,
-  awayAbbr: string,
-): string {
-  const possAbbr = possession === 'home' ? homeAbbr : awayAbbr;
-  const oppAbbr = possession === 'home' ? awayAbbr : homeAbbr;
-  if (fieldPos === 50) return '50';
-  if (fieldPos < 50) return `${possAbbr} ${fieldPos}`;
-  return `${oppAbbr} ${100 - fieldPos}`;
-}
 
-// ---------------------------------------------------------------------------
-// ESPN-style Football Field Visualization
-// ---------------------------------------------------------------------------
 
-function FootballField({
-  fieldPos,
-  possession,
-  homeColor,
-  awayColor,
-  homeAbbr,
-  awayAbbr,
-  firstDownMarker,
-  lastYardsGained,
-  lastPlayType,
-}: {
-  fieldPos: number;
-  possession: 'home' | 'away';
-  homeColor: string;
-  awayColor: string;
-  homeAbbr: string;
-  awayAbbr: string;
-  firstDownMarker: number;
-  lastYardsGained: number;
-  lastPlayType: string;
-}) {
-  const prevPctRef = useRef<number | null>(null);
 
-  // fieldPos = yards from possessing team's own end zone (1-99)
-  const absPct = possession === 'home'
-    ? ((10 + fieldPos) / 120) * 100
-    : ((10 + (100 - fieldPos)) / 120) * 100;
-
-  const firstDownPos = clamp(fieldPos + firstDownMarker, 1, 100);
-  const absFirstDown = possession === 'home'
-    ? ((10 + firstDownPos) / 120) * 100
-    : ((10 + (100 - firstDownPos)) / 120) * 100;
-
-  // Track previous position for trail animation
-  const prevPct = prevPctRef.current ?? absPct;
-  useEffect(() => {
-    prevPctRef.current = absPct;
-  }, [absPct]);
-
-  // Trail: show where ball came from → where it is now
-  const trailLeft = Math.min(prevPct, absPct);
-  const trailWidth = Math.abs(absPct - prevPct);
-  const movedForward = lastYardsGained > 0;
-  const isTurnoverPlay = lastPlayType === 'interception' || lastPlayType === 'fumble';
-
-  // Trail color: green for gains, red for losses/turnovers, yellow for neutral
-  let trailColor = 'rgba(251,191,36,0.4)'; // yellow/neutral
-  if (isTurnoverPlay) trailColor = 'rgba(239,68,68,0.6)'; // bright red
-  else if (movedForward) trailColor = 'rgba(34,197,94,0.45)'; // green
-  else if (lastYardsGained < 0) trailColor = 'rgba(239,68,68,0.35)'; // red
-
-  const yardLines = [10, 20, 30, 40, 50, 60, 70, 80, 90];
-
-  return (
-    <div className="relative w-full overflow-hidden rounded-lg" style={{ height: 130 }}>
-      {/* Field background */}
-      <div className="absolute inset-0 bg-[#2d8a4e]" />
-
-      {/* Field stripes */}
-      {Array.from({ length: 12 }).map((_, i) => (
-        <div
-          key={i}
-          className="absolute top-0 bottom-0"
-          style={{
-            left: `${(i / 12) * 100}%`,
-            width: `${100 / 12}%`,
-            backgroundColor: i % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent',
-          }}
-        />
-      ))}
-
-      {/* Away end zone (left) */}
-      <div
-        className="absolute top-0 bottom-0 left-0 flex items-center justify-center"
-        style={{
-          width: `${(10 / 120) * 100}%`,
-          backgroundColor: awayColor,
-          opacity: 0.85,
-        }}
-      >
-        <span className="text-white/80 text-[10px] font-black tracking-widest"
-          style={{ writingMode: 'vertical-lr', transform: 'rotate(180deg)' }}
-        >
-          {awayAbbr}
-        </span>
-      </div>
-
-      {/* Home end zone (right) */}
-      <div
-        className="absolute top-0 bottom-0 right-0 flex items-center justify-center"
-        style={{
-          width: `${(10 / 120) * 100}%`,
-          backgroundColor: homeColor,
-          opacity: 0.85,
-        }}
-      >
-        <span className="text-white/80 text-[10px] font-black tracking-widest"
-          style={{ writingMode: 'vertical-lr' }}
-        >
-          {homeAbbr}
-        </span>
-      </div>
-
-      {/* Yard lines and numbers */}
-      {yardLines.map(yd => {
-        const pct = ((10 + yd) / 120) * 100;
-        const label = yd <= 50 ? yd : 100 - yd;
-        return (
-          <div key={yd}>
-            <div className="absolute top-0 bottom-0 w-px"
-              style={{ left: `${pct}%`, backgroundColor: 'rgba(255,255,255,0.25)' }} />
-            <div className="absolute text-[10px] font-bold text-white/40 select-none"
-              style={{ left: `${pct}%`, transform: 'translateX(-50%)', bottom: 4 }}>
-              {label}
-            </div>
-          </div>
-        );
-      })}
-
-      {/* Ball movement trail */}
-      {trailWidth > 0.5 && (
-        <div
-          className="absolute transition-all duration-300"
-          style={{
-            left: `${trailLeft}%`,
-            width: `${trailWidth}%`,
-            top: '38%',
-            height: '24%',
-            backgroundColor: trailColor,
-            borderRadius: 4,
-          }}
-        />
-      )}
-
-      {/* First down line (yellow) */}
-      <div
-        className="absolute top-0 bottom-0 w-0.5 transition-all duration-300"
-        style={{
-          left: `${absFirstDown}%`,
-          backgroundColor: '#fbbf24',
-          boxShadow: '0 0 6px rgba(251, 191, 36, 0.6)',
-        }}
-      />
-
-      {/* Scrimmage line (blue) */}
-      <div
-        className="absolute top-0 bottom-0 w-0.5 transition-all duration-300"
-        style={{
-          left: `${absPct}%`,
-          backgroundColor: '#60a5fa',
-          opacity: 0.7,
-        }}
-      />
-
-      {/* Ball position marker */}
-      <div
-        className="absolute transition-all duration-300 flex flex-col items-center z-10"
-        style={{
-          left: `${absPct}%`,
-          top: '50%',
-          transform: 'translate(-50%, -50%)',
-        }}
-      >
-        <div
-          className={`w-11 h-11 rounded-full flex items-center justify-center shadow-lg border-2 ${
-            isTurnoverPlay ? 'border-red-400 animate-bounce' : 'border-white/60'
-          }`}
-          style={{
-            backgroundColor: possession === 'home' ? homeColor : awayColor,
-            boxShadow: isTurnoverPlay
-              ? '0 0 20px rgba(239,68,68,0.7)'
-              : `0 0 12px ${possession === 'home' ? homeColor : awayColor}88`,
-          }}
-        >
-          <span className="text-white text-[10px] font-black">
-            {possession === 'home' ? homeAbbr : awayAbbr}
-          </span>
-        </div>
-
-        {/* Yards gained indicator below ball */}
-        {lastYardsGained !== 0 && !isSeparator(lastPlayType as PlayEvent['type']) && (
-          <div
-            className={`mt-1 px-1.5 py-0.5 rounded text-[9px] font-bold ${
-              isTurnoverPlay ? 'bg-red-600 text-white' :
-              lastYardsGained > 0 ? 'bg-green-600/90 text-white' : 'bg-red-500/90 text-white'
-            }`}
-          >
-            {lastYardsGained > 0 ? `+${lastYardsGained}` : lastYardsGained} yds
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Info Bar (Down & Distance, Ball On, Drive)
-// ---------------------------------------------------------------------------
-
-function InfoBar({
-  down, yardsToGo, fieldPos, possession,
-  homeAbbr, awayAbbr,
-  drivePlays, driveYards,
-}: {
-  down: number;
-  yardsToGo: number;
-  fieldPos: number;
-  possession: 'home' | 'away';
-  homeAbbr: string;
-  awayAbbr: string;
-  drivePlays: number;
-  driveYards: number;
-}) {
-  return (
-    <div className="flex items-stretch divide-x divide-[var(--border)] bg-[var(--surface-2)] rounded-lg overflow-hidden text-center">
-      <div className="flex-1 py-2.5 px-3">
-        <div className="text-[10px] font-semibold text-[var(--text-sec)] uppercase tracking-wider">Down</div>
-        <div className="text-sm font-black text-[var(--text)] mt-0.5">
-          {down >= 1 && down <= 4 ? downLabel(down, yardsToGo) : '—'}
-        </div>
-      </div>
-      <div className="flex-1 py-2.5 px-3">
-        <div className="text-[10px] font-semibold text-[var(--text-sec)] uppercase tracking-wider">Ball On</div>
-        <div className="text-sm font-black text-[var(--text)] mt-0.5">
-          {fieldPosLabel(fieldPos, possession, homeAbbr, awayAbbr)}
-        </div>
-      </div>
-      <div className="flex-1 py-2.5 px-3">
-        <div className="text-[10px] font-semibold text-[var(--text-sec)] uppercase tracking-wider">Drive</div>
-        <div className="text-sm font-black text-[var(--text)] mt-0.5">
-          {drivePlays > 0 ? `${drivePlays} play${drivePlays !== 1 ? 's' : ''}, ${driveYards >= 0 ? '+' : ''}${driveYards} yds` : '—'}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Last Play display
-// ---------------------------------------------------------------------------
-
-function LastPlay({ event, homeAbbr, awayAbbr }: {
-  event: PlayEvent | null;
-  homeAbbr: string;
-  awayAbbr: string;
-}) {
-  if (!event || isSeparator(event.type)) return null;
-
-  const possAbbr = event.possession === 'home' ? homeAbbr : awayAbbr;
-  const downStr = event.down >= 1 && event.down <= 4
-    ? downLabel(event.down, event.yardsToGo)
-    : '';
-  const posLabel = fieldPosLabel(event.fieldPos, event.possession, homeAbbr, awayAbbr);
-
-  return (
-    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg px-4 py-3">
-      <div className="text-[10px] font-semibold text-[var(--text-sec)] uppercase tracking-wider mb-1">
-        Last Play: {downStr && `${downStr} at ${posLabel}`}
-      </div>
-      <p className="text-sm text-[var(--text)] leading-relaxed">
-        {event.description}
-      </p>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Quarter-by-quarter scoring table
@@ -905,95 +626,50 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       <div className="flex-1 min-w-0 space-y-3">
 
         {/* ================================================================
-            SCOREBOARD
+            SCORE BUG + ANIMATED FIELD
         ================================================================ */}
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
-          {/* Top bar: Away SCORE - clock - SCORE Home */}
-          <div className="flex items-center justify-between px-6 py-4">
-            {/* Away team */}
-            <div className="flex items-center gap-4 flex-1">
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center text-white text-sm font-black shadow-md"
-                style={{ backgroundColor: awayColor }}
-              >
-                {awayAbbr}
-              </div>
-              <div>
-                <div className="font-bold text-[var(--text)]">{awayTeam?.city} {awayTeam?.name}</div>
-                <div className="text-xs text-[var(--text-sec)]">
-                  {awayRecord ? `${awayRecord.wins}-${awayRecord.losses}` : ''}
-                </div>
-              </div>
-            </div>
+        <ScoreBug
+          homeAbbr={homeAbbr}
+          awayAbbr={awayAbbr}
+          homeColor={homeColor}
+          awayColor={awayColor}
+          homeScore={liveHomeScore}
+          awayScore={liveAwayScore}
+          quarter={liveQuarter}
+          timeStr={liveTime}
+          possession={livePoss}
+          down={liveDown}
+          yardsToGo={liveYtg}
+          fieldPos={liveFieldPos}
+          isFinished={isFinished}
+          isPlaying={isPlaying}
+          drivePlays={currentDrive.plays}
+          driveYards={currentDrive.yards}
+          lastPlayDescription={currentEvent && !isSeparator(currentEvent.type) ? currentEvent.description : null}
+        />
 
-            {/* Score + clock center */}
-            <div className="text-center px-6">
-              <div className="flex items-center gap-4">
-                <span
-                  className="text-4xl font-black tabular-nums"
-                  style={{ color: awayColor }}
-                >
-                  {liveAwayScore}
-                </span>
-                <div className="flex flex-col items-center">
-                  {isFinished ? (
-                    <span className="text-xs font-bold text-[var(--text-sec)] uppercase">Final</span>
-                  ) : (
-                    <>
-                      <span className="text-xs font-bold text-[var(--text-sec)]">
-                        Q{liveQuarter}
-                      </span>
-                      <span className="text-lg font-mono font-bold text-[var(--text)]">
-                        {liveTime}
-                      </span>
-                    </>
-                  )}
-                  {/* Live indicator */}
-                  {!isFinished && isPlaying && (
-                    <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 mt-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                      LIVE
-                    </span>
-                  )}
-                </div>
-                <span
-                  className="text-4xl font-black tabular-nums"
-                  style={{ color: homeColor }}
-                >
-                  {liveHomeScore}
-                </span>
-              </div>
-            </div>
+        <AnimatedField
+          event={currentEvent}
+          prevEvent={revealedEvents.length >= 2 ? revealedEvents[revealedEvents.length - 2] : null}
+          homeColor={homeColor}
+          awayColor={awayColor}
+          homeAbbr={homeAbbr}
+          awayAbbr={awayAbbr}
+          isPlaying={isPlaying}
+          animationSpeed={SPEED_MS[speed]}
+        />
 
-            {/* Home team */}
-            <div className="flex items-center gap-4 flex-1 justify-end">
-              <div className="text-right">
-                <div className="font-bold text-[var(--text)]">{homeTeam?.city} {homeTeam?.name}</div>
-                <div className="text-xs text-[var(--text-sec)]">
-                  {homeRecord ? `${homeRecord.wins}-${homeRecord.losses}` : ''}
-                </div>
-              </div>
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center text-white text-sm font-black shadow-md"
-                style={{ backgroundColor: homeColor }}
-              >
-                {homeAbbr}
-              </div>
-            </div>
-          </div>
-
-          {/* Quarter score table */}
-          <div className="border-t border-[var(--border)] px-6 py-2">
-            <QuarterScoreTable
-              events={revealedEvents}
-              homeAbbr={homeAbbr}
-              awayAbbr={awayAbbr}
-              homeColor={homeColor}
-              awayColor={awayColor}
-              homeTotal={liveHomeScore}
-              awayTotal={liveAwayScore}
-            />
-          </div>
+        {/* Quarter score table */}
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-6 py-2">
+          <QuarterScoreTable
+            events={revealedEvents}
+            homeAbbr={homeAbbr}
+            awayAbbr={awayAbbr}
+            homeColor={homeColor}
+            awayColor={awayColor}
+            homeTotal={liveHomeScore}
+            awayTotal={liveAwayScore}
+          />
         </div>
 
         {/* ================================================================
@@ -1104,37 +780,6 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   <span className="text-2xl">🚨</span>
                 </div>
               )}
-
-              {/* 2D Animated Football Field */}
-              <GameFieldCanvas
-                event={currentEvent}
-                prevEvent={revealedEvents.length >= 2 ? revealedEvents[revealedEvents.length - 2] : null}
-                homeColor={homeColor}
-                awayColor={awayColor}
-                homeAbbr={homeAbbr}
-                awayAbbr={awayAbbr}
-                isPlaying={isPlaying}
-                animationSpeed={SPEED_MS[speed]}
-              />
-
-              {/* Info bar */}
-              <InfoBar
-                down={liveDown}
-                yardsToGo={liveYtg}
-                fieldPos={liveFieldPos}
-                possession={livePoss}
-                homeAbbr={homeAbbr}
-                awayAbbr={awayAbbr}
-                drivePlays={currentDrive.plays}
-                driveYards={currentDrive.yards}
-              />
-
-              {/* Last play */}
-              <LastPlay
-                event={currentEvent}
-                homeAbbr={homeAbbr}
-                awayAbbr={awayAbbr}
-              />
 
               {/* All plays — scrollable */}
               {displayEvents.length > 0 && (
