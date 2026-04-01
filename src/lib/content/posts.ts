@@ -16,10 +16,10 @@ export const blogPosts: BlogPost[] = [
   // ─── Post 1 ───────────────────────────────────────────────
   {
     slug: 'draft-strategy-guide',
-    title: 'Draft Strategy Guide: How to Build Through the Draft in Gridiron GM',
+    title: 'Draft Strategy Guide: How to Build Through the Draft in BS Football',
     seoTitle: 'Draft Strategy Guide for Football GM Games — Scouting, Picks & Tips',
     metaDescription:
-      'Master the draft in Gridiron GM with this complete guide. Learn scouting tiers, when to use Deep Scout, which positions to prioritize, and how to find late-round gems.',
+      'Master the draft in BS Football with this complete guide. Learn scouting tiers, when to use Deep Scout, which positions to prioritize, and how to find late-round gems.',
     keywords: [
       'football gm draft strategy',
       'how to draft football gm',
@@ -37,13 +37,13 @@ export const blogPosts: BlogPost[] = [
       { label: 'For NFL Draft Fans', href: '/for/nfl-draft-fans' },
     ],
     content: `
-<p>Every dynasty in football starts in the same place: the draft. Free agency can patch holes and trades can accelerate timelines, but the draft is where championship rosters are built from the ground up. In Gridiron GM, the draft is your single most powerful tool for reshaping a franchise — and the difference between a perennial contender and a basement dweller often comes down to how well you use it.</p>
+<p>Every dynasty in football starts in the same place: the draft. Free agency can patch holes and trades can accelerate timelines, but the draft is where championship rosters are built from the ground up. In BS Football, the draft is your single most powerful tool for reshaping a franchise — and the difference between a perennial contender and a basement dweller often comes down to how well you use it.</p>
 
-<p>This guide covers everything you need to know about drafting in Gridiron GM: how the scouting system works, when to spend your Deep Scouts, which positions deliver the most value, and how to execute on draft day without panicking when your guy gets taken one pick early.</p>
+<p>This guide covers everything you need to know about drafting in BS Football: how the scouting system works, when to spend your Deep Scouts, which positions deliver the most value, and how to execute on draft day without panicking when your guy gets taken one pick early.</p>
 
 <h2>Understanding the Scouting Tiers</h2>
 
-<p>Gridiron GM uses a tiered scouting system that reveals progressively more information about each prospect. Understanding what each tier tells you — and what it hides — is the foundation of good drafting.</p>
+<p>BS Football uses a tiered scouting system that reveals progressively more information about each prospect. Understanding what each tier tells you — and what it hides — is the foundation of good drafting.</p>
 
 <h3>Entry-Level Scouting</h3>
 <p>Every prospect starts here. You can see their position, age, and a general scouting range for their overall rating. Think of this as the "public information" tier — the stuff any fan watching tape could figure out. The ranges are wide, so a prospect listed as 62–78 OVR could be a solid starter or a roster filler. Entry-level scouting is enough to identify the obvious top-tier talent, but it leaves a lot of uncertainty in the middle rounds where games are won and lost.</p>
@@ -125,7 +125,7 @@ export const blogPosts: BlogPost[] = [
 <h3>Use Draft Capital as Trade Currency</h3>
 <p>Draft picks are not just for drafting. They are trade assets. A surplus of mid-round picks can be packaged to move up for a player you love, or traded for a proven veteran who fills an immediate need. Think of your picks as currency — sometimes spending them on draft day is the right move, and sometimes trading them gets you more value.</p>
 
-<p>The draft is where Gridiron GM is won and lost. Master scouting, build a real board, stay disciplined on draft day, and develop your picks — and you will build a roster that competes for championships year after year. Ready to put this strategy to work? <a href="/">Start a new league in Gridiron GM</a> and build your dynasty from the ground up.</p>
+<p>The draft is where BS Football is won and lost. Master scouting, build a real board, stay disciplined on draft day, and develop your picks — and you will build a roster that competes for championships year after year. Ready to put this strategy to work? <a href="/">Start a new league in BS Football</a> and build your dynasty from the ground up.</p>
 `,
   },
 
@@ -153,7 +153,7 @@ export const blogPosts: BlogPost[] = [
       { label: 'What Is Dynasty Mode?', href: '/glossary/dynasty-mode' },
     ],
     content: `
-<p>The salary cap is the great equalizer in football management games. It does not matter how good your eye for talent is or how well you draft — if you cannot manage the cap, your roster will eventually collapse under its own weight. The best GMs in Gridiron GM are not just talent evaluators; they are financial architects who understand that every dollar spent is a dollar unavailable somewhere else.</p>
+<p>The salary cap is the great equalizer in football management games. It does not matter how good your eye for talent is or how well you draft — if you cannot manage the cap, your roster will eventually collapse under its own weight. The best GMs in BS Football are not just talent evaluators; they are financial architects who understand that every dollar spent is a dollar unavailable somewhere else.</p>
 
 <p>Here is how to manage your salary cap without gutting your roster — and how to use the cap as a competitive advantage rather than a constraint.</p>
 
@@ -189,7 +189,7 @@ export const blogPosts: BlogPost[] = [
 
 <h2>Time Your Re-Signings</h2>
 
-<p>When you re-sign a player matters almost as much as whether you re-sign him. In Gridiron GM, the re-signing window opens before free agency, which means you have a chance to lock up your own players before they hit the open market.</p>
+<p>When you re-sign a player matters almost as much as whether you re-sign him. In BS Football, the re-signing window opens before free agency, which means you have a chance to lock up your own players before they hit the open market.</p>
 
 <p>Use this window aggressively for players you want to keep. Once a player hits free agency, other teams drive up his price. A player who would re-sign for $12M per year during the re-signing window might demand $16M on the open market. That $4M difference, multiplied across several re-signings, is the difference between a complete roster and one with glaring holes.</p>
 
@@ -197,7 +197,7 @@ export const blogPosts: BlogPost[] = [
 
 <h2>Use the Rising Cap</h2>
 
-<p>The salary cap in Gridiron GM increases over time, just as it does in the real NFL. This means that contracts signed today become relatively cheaper as the cap grows. A $20M per year deal that represents 7% of the cap today might only represent 6% of the cap in three years.</p>
+<p>The salary cap in BS Football increases over time, just as it does in the real NFL. This means that contracts signed today become relatively cheaper as the cap grows. A $20M per year deal that represents 7% of the cap today might only represent 6% of the cap in three years.</p>
 
 <p>Smart GMs use this to their advantage by signing long-term deals with their best players. The early years of the contract might feel expensive, but by year three or four, the deal looks like a steal relative to the market. This is how real NFL teams like the Chiefs and Eagles keep their rosters together — they lock up core players early and let the rising cap absorb the cost.</p>
 
@@ -214,7 +214,7 @@ export const blogPosts: BlogPost[] = [
 
 <p>The GMs who win consistently are the ones who recognize where they are in this cycle and act accordingly. Do not spend like a contender when you are rebuilding, and do not hoard cap space when your window is open.</p>
 
-<p>Salary cap management is not glamorous, but it is the backbone of every successful franchise. Master the cap, and the wins will follow. Ready to test your financial skills? <a href="/">Jump into Gridiron GM</a> and see if you can build a champion without breaking the bank.</p>
+<p>Salary cap management is not glamorous, but it is the backbone of every successful franchise. Master the cap, and the wins will follow. Ready to test your financial skills? <a href="/">Jump into BS Football</a> and see if you can build a champion without breaking the bank.</p>
 `,
   },
 
@@ -237,7 +237,7 @@ export const blogPosts: BlogPost[] = [
     schema: 'ItemList',
     internalLinks: [
       { label: 'Best Football GM Games', href: '/best/football-gm-games' },
-      { label: 'Gridiron GM vs Football GM', href: '/vs/football-gm' },
+      { label: 'BS Football vs Football GM', href: '/vs/football-gm' },
       { label: 'What Is a Football GM Simulator?', href: '/glossary/football-gm-simulator' },
     ],
     content: `
@@ -249,8 +249,8 @@ export const blogPosts: BlogPost[] = [
 
 <p>If you want to think like a general manager — drafting players, managing salary caps, building rosters — these are your best options.</p>
 
-<h3>Gridiron GM</h3>
-<p>A modern football GM simulator built specifically for the browser. You take over an NFL-style franchise and manage every aspect: drafting rookies with a tiered scouting system, negotiating free agent contracts, managing the salary cap, and guiding your team through multiple seasons. The interface is clean and modern, the draft experience is the best in any browser football game, and it runs smoothly on any device including mobile. If you have played Football GM and wished it looked better and had a more polished draft, Gridiron GM is what you are looking for.</p>
+<h3>BS Football</h3>
+<p>A modern football GM simulator built specifically for the browser. You take over an NFL-style franchise and manage every aspect: drafting rookies with a tiered scouting system, negotiating free agent contracts, managing the salary cap, and guiding your team through multiple seasons. The interface is clean and modern, the draft experience is the best in any browser football game, and it runs smoothly on any device including mobile. If you have played Football GM and wished it looked better and had a more polished draft, BS Football is what you are looking for.</p>
 
 <h3>Football GM</h3>
 <p>The original open-source football management sim. Football GM has been around for years and has a deeply loyal community. It offers incredible depth — multiple leagues, historical rosters, deep customization, and drive-level simulation. The interface is functional rather than pretty (it looks like a spreadsheet), but the underlying simulation engine is robust. If you want maximum customization and do not mind a steeper learning curve, Football GM delivers.</p>
@@ -294,7 +294,7 @@ export const blogPosts: BlogPost[] = [
 </thead>
 <tbody>
 <tr>
-<td>Gridiron GM</td>
+<td>BS Football</td>
 <td>GM Sim</td>
 <td>Modern draft and roster management</td>
 <td>Yes</td>
@@ -349,13 +349,13 @@ export const blogPosts: BlogPost[] = [
 <p>The right game depends on what you are looking for:</p>
 
 <ul>
-<li><strong>Want to build a franchise from scratch?</strong> Start with Gridiron GM or Football GM. Gridiron GM is more polished and easier to get into; Football GM offers more depth and customization.</li>
+<li><strong>Want to build a franchise from scratch?</strong> Start with BS Football or Football GM. BS Football is more polished and easier to get into; Football GM offers more depth and customization.</li>
 <li><strong>Want to play actual football?</strong> Retro Bowl is the clear winner. Fun on-field gameplay with just enough management to keep you invested between games.</li>
 <li><strong>Want to compete against real people?</strong> DeepRoute is the only option with true multiplayer leagues.</li>
 <li><strong>Want to focus on strategy?</strong> Pro Football Coach and RedZoneAction put you in the tactical seat rather than the front office.</li>
 </ul>
 
-<p>The best part? They are all free, so you can try several and see which one clicks. No commitments, no downloads — just open a tab and start playing. Ready to try the most polished GM experience in the browser? <a href="/">Launch Gridiron GM</a> and start building your dynasty today.</p>
+<p>The best part? They are all free, so you can try several and see which one clicks. No commitments, no downloads — just open a tab and start playing. Ready to try the most polished GM experience in the browser? <a href="/">Launch BS Football</a> and start building your dynasty today.</p>
 `,
   },
 
@@ -365,7 +365,7 @@ export const blogPosts: BlogPost[] = [
     title: 'Best Draft Picks by Position: Which Positions Should You Draft First?',
     seoTitle: 'Which Positions to Draft First in Football GM Games — Position Value Guide',
     metaDescription:
-      'Should you draft a QB first? Or grab an edge rusher? A position-by-position breakdown of draft value in football management games like Gridiron GM.',
+      'Should you draft a QB first? Or grab an edge rusher? A position-by-position breakdown of draft value in football management games like BS Football.',
     keywords: [
       'which position to draft first football gm',
       'best draft position football',
@@ -392,7 +392,7 @@ export const blogPosts: BlogPost[] = [
 
 <p>Quarterback is in a tier by itself. No other position comes close to the impact a great QB has on your team's chances of winning.</p>
 
-<p>In Gridiron GM, quarterback performance influences every offensive drive. A high-rated QB elevates the entire offense — he makes average receivers look good, he extends drives with third-down conversions, and he gives you a chance to win games where your defense struggles. A below-average QB does the opposite. He turns winnable games into losses, he wastes the talent around him, and he puts a ceiling on your roster that no amount of defensive talent can overcome.</p>
+<p>In BS Football, quarterback performance influences every offensive drive. A high-rated QB elevates the entire offense — he makes average receivers look good, he extends drives with third-down conversions, and he gives you a chance to win games where your defense struggles. A below-average QB does the opposite. He turns winnable games into losses, he wastes the talent around him, and he puts a ceiling on your roster that no amount of defensive talent can overcome.</p>
 
 <p>The rule is simple: if you do not have a franchise QB and one is available, take him. Do not get clever. Do not talk yourself into an edge rusher because your offensive line is bad. Fix the quarterback position first, then build around him. The only exception is if you are deep in a rebuild and a QB-needy team is willing to trade a king's ransom for the pick.</p>
 
@@ -401,12 +401,12 @@ export const blogPosts: BlogPost[] = [
 <p>After quarterback, pass rushers and corners are the most impactful positions on the field.</p>
 
 <h3>Edge Rusher</h3>
-<p>A great edge rusher is a cheat code for your defense. In Gridiron GM's simulation engine, pass rush directly impacts the opposing quarterback's effectiveness. When your edge rusher is winning his matchup, the opposing QB has less time, makes worse decisions, and is more likely to turn the ball over. One elite edge rusher can make your entire defense better — he does not just get sacks, he creates pressure that makes every other defender's job easier.</p>
+<p>A great edge rusher is a cheat code for your defense. In BS Football's simulation engine, pass rush directly impacts the opposing quarterback's effectiveness. When your edge rusher is winning his matchup, the opposing QB has less time, makes worse decisions, and is more likely to turn the ball over. One elite edge rusher can make your entire defense better — he does not just get sacks, he creates pressure that makes every other defender's job easier.</p>
 
 <p>Edge rushers are also among the hardest positions to find in the middle rounds. The gap between an elite pass rusher and an average one is enormous, and elite talent at this position almost always goes in the first round. If a top edge prospect is available and you do not have an immediate need at QB, this is often the correct pick.</p>
 
 <h3>Cornerback</h3>
-<p>Cornerback is the defensive mirror of quarterback — one great corner can neutralize an entire side of the field. In Gridiron GM, a high-rated CB reduces the effectiveness of opposing passing attacks, which means fewer completions, fewer yards, and fewer points. A weak cornerback, on the other hand, gets exploited repeatedly and turns your defense into a liability.</p>
+<p>Cornerback is the defensive mirror of quarterback — one great corner can neutralize an entire side of the field. In BS Football, a high-rated CB reduces the effectiveness of opposing passing attacks, which means fewer completions, fewer yards, and fewer points. A weak cornerback, on the other hand, gets exploited repeatedly and turns your defense into a liability.</p>
 
 <p>The challenge with cornerbacks is that they take time to develop. Many CB prospects have high ceilings but low floors, and first-year corners often struggle. But the investment pays off — once a corner develops, he provides elite value at a premium position for years.</p>
 
@@ -450,27 +450,27 @@ export const blogPosts: BlogPost[] = [
 
 <p>The guardrails are: do not take a kicker over an edge rusher because the kicker grades higher on your board. Use common sense. If two players are close in grade, lean toward the one who fills a need. But if there is a clear talent gap, take the better player every time.</p>
 
-<h2>How This Applies in Gridiron GM</h2>
+<h2>How This Applies in BS Football</h2>
 
-<p>Gridiron GM's simulation engine reflects these positional values. High-rated quarterbacks have an outsized impact on team performance. Elite edge rushers and corners improve your defense more than elite linebackers or safeties. And running backs provide diminishing returns relative to their draft cost.</p>
+<p>BS Football's simulation engine reflects these positional values. High-rated quarterbacks have an outsized impact on team performance. Elite edge rushers and corners improve your defense more than elite linebackers or safeties. And running backs provide diminishing returns relative to their draft cost.</p>
 
 <p>When you are building your draft board, keep these tiers in mind. Draft quarterbacks when you need them, prioritize pass rushers and corners in the first two rounds, find your offensive line and skill positions in the middle rounds, and save the late rounds for depth and specialists.</p>
 
-<p>Ready to put positional value theory into practice? <a href="/">Start a new league in Gridiron GM</a> and see if drafting by tier produces better results than drafting by need.</p>
+<p>Ready to put positional value theory into practice? <a href="/">Start a new league in BS Football</a> and see if drafting by tier produces better results than drafting by need.</p>
 `,
   },
 
   // ─── Post 5 ───────────────────────────────────────────────
   {
     slug: 'football-gm-vs-gridiron-gm-review',
-    title: "I Played Football GM and Gridiron GM for 30 Days — Here's My Honest Take",
-    seoTitle: 'Football GM vs Gridiron GM — 30 Day Review From a Real Player',
+    title: "I Played Football GM and BS Football for 30 Days — Here's My Honest Take",
+    seoTitle: 'Football GM vs BS Football — 30 Day Review From a Real Player',
     metaDescription:
-      "I spent 30 days playing both Football GM and Gridiron GM. Here's what I loved, what frustrated me, and which one I kept playing.",
+      "I spent 30 days playing both Football GM and BS Football. Here's what I loved, what frustrated me, and which one I kept playing.",
     keywords: [
       'football gm review',
-      'gridiron gm review',
-      'football gm vs gridiron gm',
+      'bs football review',
+      'football gm vs bs football',
       'football management game review',
     ],
     publishDate: '2026-03-24',
@@ -478,12 +478,12 @@ export const blogPosts: BlogPost[] = [
     readingTime: 9,
     schema: 'FAQ',
     internalLinks: [
-      { label: 'Gridiron GM vs Football GM', href: '/vs/football-gm' },
+      { label: 'BS Football vs Football GM', href: '/vs/football-gm' },
       { label: 'Best Football GM Games', href: '/best/football-gm-games' },
       { label: 'Draft Strategy Guide', href: '/blog/draft-strategy-guide' },
     ],
     content: `
-<p>I have been playing football management sims for years. I started with the old text-based games, moved to Football GM when it launched, and have tried pretty much every browser-based football sim that has come along since. So when Gridiron GM showed up, I figured I would give it the same test I give everything: 30 days of real play, multiple seasons, and an honest assessment of what works and what does not.</p>
+<p>I have been playing football management sims for years. I started with the old text-based games, moved to Football GM when it launched, and have tried pretty much every browser-based football sim that has come along since. So when BS Football showed up, I figured I would give it the same test I give everything: 30 days of real play, multiple seasons, and an honest assessment of what works and what does not.</p>
 
 <p>Here is what I found.</p>
 
@@ -494,20 +494,20 @@ export const blogPosts: BlogPost[] = [
 
 <p>For experienced players, this is fine. The information is all there, and once you know where everything lives, the interface gets out of your way. But for new players, the learning curve is steep. I have watched friends try Football GM and give up within 10 minutes because they could not figure out what they were supposed to do first.</p>
 
-<h3>Gridiron GM</h3>
-<p>Gridiron GM's first impression is the opposite. The interface is modern — clean cards, clear typography, a sidebar that tells you where you are in the season, and visual cues that guide you through each phase. The color scheme is easy on the eyes, and the layout makes it obvious what your next action should be.</p>
+<h3>BS Football</h3>
+<p>BS Football's first impression is the opposite. The interface is modern — clean cards, clear typography, a sidebar that tells you where you are in the season, and visual cues that guide you through each phase. The color scheme is easy on the eyes, and the layout makes it obvious what your next action should be.</p>
 
 <p>The onboarding is significantly better. You pick a team, and the game walks you through the season flow naturally. The phase banner at the top tells you what is happening (preseason, regular season, playoffs, draft, free agency), and the navigation badges let you know when something needs your attention. Within five minutes of starting, I knew what I was supposed to do and how to do it.</p>
 
 <h2>The Draft: Where They Split</h2>
 
-<p>The draft is where these two games diverge most dramatically, and it is the feature that defines the Gridiron GM experience.</p>
+<p>The draft is where these two games diverge most dramatically, and it is the feature that defines the BS Football experience.</p>
 
 <p>Football GM's draft is functional but bare-bones. You see a list of prospects with ratings (potentially hidden if you have scouting uncertainty enabled), you make your pick, and the AI makes its picks. It works, but it feels transactional. There is no drama, no tension, and no sense of occasion.</p>
 
-<p>Gridiron GM's draft is an event. The scouting tier system (Entry, Pro, Elite) adds genuine uncertainty. You are not just looking at numbers — you are making risk assessments based on incomplete information. The Deep Scout mechanic forces you to allocate a limited resource, which creates real decision-making tension. On draft day, watching players get taken before your pick and scrambling to adjust your board feels like watching the actual NFL Draft.</p>
+<p>BS Football's draft is an event. The scouting tier system (Entry, Pro, Elite) adds genuine uncertainty. You are not just looking at numbers — you are making risk assessments based on incomplete information. The Deep Scout mechanic forces you to allocate a limited resource, which creates real decision-making tension. On draft day, watching players get taken before your pick and scrambling to adjust your board feels like watching the actual NFL Draft.</p>
 
-<p>The draft is where I spent the most time in Gridiron GM, and it is where the game is at its best. If draft day is your favorite part of football management, Gridiron GM is the better experience by a significant margin.</p>
+<p>The draft is where I spent the most time in BS Football, and it is where the game is at its best. If draft day is your favorite part of football management, BS Football is the better experience by a significant margin.</p>
 
 <h2>Multi-Season Dynasty Play</h2>
 
@@ -515,39 +515,39 @@ export const blogPosts: BlogPost[] = [
 
 <p>Football GM is built for the long game. The simulation engine handles 20, 30, even 50-season runs without breaking a sweat. The game generates realistic-feeling historical records, and the depth of the statistical tracking makes it satisfying to look back at a dynasty's arc. If you want to simulate an entire franchise history and see how your decisions compound over decades, Football GM is unmatched.</p>
 
-<p>Gridiron GM is earlier in its lifespan, so the multi-season experience is not as deep yet. But what is there is polished. Season history tracking, awards, development arcs for young players — the core loop of draft, develop, compete, re-sign (or let walk) is satisfying and creates genuine attachment to your roster. I found myself caring more about individual players in Gridiron GM because the interface made their stories more visible.</p>
+<p>BS Football is earlier in its lifespan, so the multi-season experience is not as deep yet. But what is there is polished. Season history tracking, awards, development arcs for young players — the core loop of draft, develop, compete, re-sign (or let walk) is satisfying and creates genuine attachment to your roster. I found myself caring more about individual players in BS Football because the interface made their stories more visible.</p>
 
 <h2>Where Football GM Still Wins</h2>
 
 <p>After 30 days, there are areas where Football GM's maturity and depth give it clear advantages.</p>
 
 <h3>Customization</h3>
-<p>Football GM lets you customize nearly everything. League size, schedule format, salary cap rules, playoff structure — if you want a 40-team league with a relegation system, you can build it. Gridiron GM currently offers a more fixed experience: 32 teams, standard schedule, standard playoffs. If customization matters to you, Football GM is the answer.</p>
+<p>Football GM lets you customize nearly everything. League size, schedule format, salary cap rules, playoff structure — if you want a 40-team league with a relegation system, you can build it. BS Football currently offers a more fixed experience: 32 teams, standard schedule, standard playoffs. If customization matters to you, Football GM is the answer.</p>
 
 <h3>Multi-League and Historical Play</h3>
-<p>Football GM supports historical rosters and multi-league setups. You can replay the 2005 NFL season with real rosters, or run multiple leagues simultaneously. These features add enormous replayability that Gridiron GM does not yet match.</p>
+<p>Football GM supports historical rosters and multi-league setups. You can replay the 2005 NFL season with real rosters, or run multiple leagues simultaneously. These features add enormous replayability that BS Football does not yet match.</p>
 
 <h3>Community and Maturity</h3>
-<p>Football GM has years of community-driven development, user mods, and collective knowledge. The subreddit and forums are active, and there are guides and strategies that have been refined over many seasons of community play. Gridiron GM's community is growing but is not yet at the same scale.</p>
+<p>Football GM has years of community-driven development, user mods, and collective knowledge. The subreddit and forums are active, and there are guides and strategies that have been refined over many seasons of community play. BS Football's community is growing but is not yet at the same scale.</p>
 
 <h3>Drive-Level Simulation</h3>
-<p>Football GM simulates games at a more granular level than Gridiron GM (though Gridiron GM has recently added play-by-play simulation for live games). The depth of the game simulation engine in Football GM is impressive and gives the results a sense of authenticity that comes from years of tuning.</p>
+<p>Football GM simulates games at a more granular level than BS Football (though BS Football has recently added play-by-play simulation for live games). The depth of the game simulation engine in Football GM is impressive and gives the results a sense of authenticity that comes from years of tuning.</p>
 
-<h2>Where Gridiron GM Wins</h2>
+<h2>Where BS Football Wins</h2>
 
-<p>Gridiron GM's advantages are mostly about experience quality rather than feature depth.</p>
+<p>BS Football's advantages are mostly about experience quality rather than feature depth.</p>
 
 <h3>Design and Visual Polish</h3>
-<p>Gridiron GM looks better than Football GM. This is not a minor point — the visual design affects how long you want to spend with a game. Clean cards, readable fonts, thoughtful color usage, and a responsive layout that works on any screen size. Football GM is functional, but Gridiron GM is pleasant to use.</p>
+<p>BS Football looks better than Football GM. This is not a minor point — the visual design affects how long you want to spend with a game. Clean cards, readable fonts, thoughtful color usage, and a responsive layout that works on any screen size. Football GM is functional, but BS Football is pleasant to use.</p>
 
 <h3>The Draft Experience</h3>
-<p>As mentioned above, the draft in Gridiron GM is the best draft experience in any browser football game. The scouting tiers, Deep Scout mechanic, and the overall presentation make draft day feel like an event rather than a chore.</p>
+<p>As mentioned above, the draft in BS Football is the best draft experience in any browser football game. The scouting tiers, Deep Scout mechanic, and the overall presentation make draft day feel like an event rather than a chore.</p>
 
 <h3>Onboarding and Accessibility</h3>
-<p>If you are new to football management games, Gridiron GM is dramatically easier to get into. The interface guides you, the season phases are clearly communicated, and the learning curve is gentle without being patronizing. Football GM assumes you already know what you are doing.</p>
+<p>If you are new to football management games, BS Football is dramatically easier to get into. The interface guides you, the season phases are clearly communicated, and the learning curve is gentle without being patronizing. Football GM assumes you already know what you are doing.</p>
 
 <h3>Mobile Experience</h3>
-<p>Gridiron GM works beautifully on phones and tablets. The responsive design adapts to any screen size without losing functionality. Football GM on mobile is usable but cramped — the spreadsheet-style interface does not translate well to small screens.</p>
+<p>BS Football works beautifully on phones and tablets. The responsive design adapts to any screen size without losing functionality. Football GM on mobile is usable but cramped — the spreadsheet-style interface does not translate well to small screens.</p>
 
 <h2>Which One Did I Keep Playing?</h2>
 
@@ -555,13 +555,13 @@ export const blogPosts: BlogPost[] = [
 
 <p>I kept Football GM for my long-running dynasty saves. When I want to simulate 10 seasons and track the arc of a franchise over decades, Football GM's depth and customization are hard to beat. It is the game I play at my desktop when I have an hour to dig into the numbers.</p>
 
-<p>I kept Gridiron GM for shorter sessions and for the draft. When I have 20 minutes on my phone or tablet and want to manage a team through a draft or a free agency period, Gridiron GM is the better experience. The polish makes it more enjoyable moment-to-moment, and the draft is genuinely fun in a way that Football GM's draft is not.</p>
+<p>I kept BS Football for shorter sessions and for the draft. When I have 20 minutes on my phone or tablet and want to manage a team through a draft or a free agency period, BS Football is the better experience. The polish makes it more enjoyable moment-to-moment, and the draft is genuinely fun in a way that Football GM's draft is not.</p>
 
 <h2>The Bottom Line</h2>
 
 <p>Football GM is the deeper game with more features, more customization, and a more mature simulation engine. If you are a hardcore football management fan who wants maximum control and does not mind a utilitarian interface, it is excellent.</p>
 
-<p>Gridiron GM is the more polished game with a better user experience, a superior draft, and dramatically better accessibility. If you are new to the genre, value design, or play primarily on mobile, it is the better choice.</p>
+<p>BS Football is the more polished game with a better user experience, a superior draft, and dramatically better accessibility. If you are new to the genre, value design, or play primarily on mobile, it is the better choice.</p>
 
 <p>The good news? They are both free, so you do not have to choose. Try both, see which one fits your style, and enjoy the fact that browser football management has never been better than it is right now.</p>
 `,
@@ -597,7 +597,7 @@ export const blogPosts: BlogPost[] = [
 
 <h2>The Cardinal Rule: Free Agency Fills Gaps, the Draft Builds Cores</h2>
 
-<p>This is the most important principle in free agency, and it applies in Gridiron GM just as it does in the real NFL. Your core players — your quarterback, your best defensive players, your franchise pieces — should come from the draft. Free agency is for filling the gaps between those core pieces.</p>
+<p>This is the most important principle in free agency, and it applies in BS Football just as it does in the real NFL. Your core players — your quarterback, your best defensive players, your franchise pieces — should come from the draft. Free agency is for filling the gaps between those core pieces.</p>
 
 <p>Why? Because drafted players are cheaper and younger. A player you draft in the first round costs a fraction of what a comparable free agent commands, and he is under team control for years at that price. A free agent costs market rate from day one, and that rate is inflated by competition from every other team in the league.</p>
 
@@ -628,7 +628,7 @@ export const blogPosts: BlogPost[] = [
 
 <h2>Timing Matters More Than You Think</h2>
 
-<p>In Gridiron GM's free agency system, timing your signings can save you significant money. The best free agents go early when demand is highest and teams are willing to overpay. If you can wait for the second or third wave of signings, you often find similar talent at lower prices.</p>
+<p>In BS Football's free agency system, timing your signings can save you significant money. The best free agents go early when demand is highest and teams are willing to overpay. If you can wait for the second or third wave of signings, you often find similar talent at lower prices.</p>
 
 <p>This does not mean you should wait on your Tier 1 signing — if you have identified the player you want and the price is right, act decisively. But for Tier 2 and Tier 3 signings, patience pays. Let other teams overspend on the first wave, then pick through what remains for value deals.</p>
 
@@ -654,7 +654,7 @@ export const blogPosts: BlogPost[] = [
 
 <p>Additionally, free agents who remain unsigned after the draft are often willing to accept lower offers. The market has cooled, fewer teams have cap space, and players who expected bigger deals are now willing to take what they can get. This is where patient GMs find bargains.</p>
 
-<p>Free agency is a tool, not a solution. Use it carefully, budget before you spend, and always remember that the draft is where real rosters are built. Ready to put this strategy to work? <a href="/">Start a new league in Gridiron GM</a> and see how far disciplined free agency spending takes you.</p>
+<p>Free agency is a tool, not a solution. Use it carefully, budget before you spend, and always remember that the draft is where real rosters are built. Ready to put this strategy to work? <a href="/">Start a new league in BS Football</a> and see how far disciplined free agency spending takes you.</p>
 `,
   },
 
@@ -664,7 +664,7 @@ export const blogPosts: BlogPost[] = [
     title: 'The Complete Guide to Football GM Scouting',
     seoTitle: 'Football GM Scouting Guide — How Scouting Works + Tips to Find Sleepers',
     metaDescription:
-      'Master scouting in football management games. Learn how scouting tiers work in Gridiron GM, when to use Deep Scout, and how to find draft-day sleepers.',
+      'Master scouting in football management games. Learn how scouting tiers work in BS Football, when to use Deep Scout, and how to find draft-day sleepers.',
     keywords: [
       'football gm scouting',
       'how does scouting work football gm',
@@ -682,13 +682,13 @@ export const blogPosts: BlogPost[] = [
       { label: 'For NFL Draft Fans', href: '/for/nfl-draft-fans' },
     ],
     content: `
-<p>Scouting is the engine that drives every successful draft. You can have perfect positional strategy and flawless draft-day execution, but if your scouting information is wrong, none of it matters. In football management games — and particularly in Gridiron GM — the scouting system is designed to simulate the uncertainty that real NFL front offices face. You never have perfect information, and how you handle that uncertainty determines whether your picks become stars or busts.</p>
+<p>Scouting is the engine that drives every successful draft. You can have perfect positional strategy and flawless draft-day execution, but if your scouting information is wrong, none of it matters. In football management games — and particularly in BS Football — the scouting system is designed to simulate the uncertainty that real NFL front offices face. You never have perfect information, and how you handle that uncertainty determines whether your picks become stars or busts.</p>
 
 <p>This guide explains exactly how scouting works, when to invest your scouting resources, and how to find the sleepers that other teams miss.</p>
 
 <h2>How Scouting Tiers Work</h2>
 
-<p>Gridiron GM uses a three-tier scouting system. Each tier reveals more precise information about a prospect, but the cost increases with each level. Understanding what each tier tells you — and more importantly, what it does not tell you — is essential for making good draft decisions.</p>
+<p>BS Football uses a three-tier scouting system. Each tier reveals more precise information about a prospect, but the cost increases with each level. Understanding what each tier tells you — and more importantly, what it does not tell you — is essential for making good draft decisions.</p>
 
 <h3>Entry-Level Scouting</h3>
 <p>Every prospect in the draft class starts at Entry-level scouting. At this tier, you can see the player's position, age, and a wide overall rating range. A prospect might show as 58–78 OVR, which tells you he is somewhere between a deep reserve and a quality starter. That is a massive range, and it is intentionally so.</p>
@@ -758,7 +758,7 @@ export const blogPosts: BlogPost[] = [
 
 <p>Use Deep Scout on mid-round prospects with intriguing profiles. The extra information you get from Deep Scout might reveal that a player everyone else is ignoring has legitimate starter potential. This information asymmetry — knowing something other teams do not — is the key to finding sleepers consistently.</p>
 
-<p>Scouting is not just preparation for the draft — it is the foundation of your entire team-building strategy. Master the scouting system, allocate your resources wisely, and build a board that turns uncertainty into opportunity. <a href="/">Jump into Gridiron GM</a> and see how your scouting skills translate to draft-day success.</p>
+<p>Scouting is not just preparation for the draft — it is the foundation of your entire team-building strategy. Master the scouting system, allocate your resources wisely, and build a board that turns uncertainty into opportunity. <a href="/">Jump into BS Football</a> and see how your scouting skills translate to draft-day success.</p>
 `,
   },
 
@@ -811,7 +811,7 @@ export const blogPosts: BlogPost[] = [
 
 <h2>Mistake 3: You Kept Too Many Veterans</h2>
 
-<p>Veterans on a rebuilding team serve one purpose: mentoring young players. That is a real thing in some games, but in Gridiron GM, player development is based on potential rating, not proximity to veterans. Keeping a 30-year-old starter on a big contract does not help your 22-year-old rookie develop faster — it just eats cap space you could use elsewhere.</p>
+<p>Veterans on a rebuilding team serve one purpose: mentoring young players. That is a real thing in some games, but in BS Football, player development is based on potential rating, not proximity to veterans. Keeping a 30-year-old starter on a big contract does not help your 22-year-old rookie develop faster — it just eats cap space you could use elsewhere.</p>
 
 <p>Every veteran on your roster represents a roster spot that is not going to a young player who needs development reps. Every dollar in veteran salary is a dollar you cannot spend on extending your young core in two years. The math does not support keeping veterans during a rebuild unless they have positive trade value.</p>
 
@@ -860,7 +860,7 @@ export const blogPosts: BlogPost[] = [
 <li><strong>Year 4:</strong> This is your target year for competitive football. Your Year 1 and Year 2 draft picks should be entering their primes. Use remaining cap space to sign the final pieces. Compete for the playoffs.</li>
 </ul>
 
-<p>Patience, discipline, and thorough scouting. That is the formula for a successful rebuild. No shortcuts, no half-measures. <a href="/">Start a fresh rebuild in Gridiron GM</a> and prove that this time, you can see it through.</p>
+<p>Patience, discipline, and thorough scouting. That is the formula for a successful rebuild. No shortcuts, no half-measures. <a href="/">Start a fresh rebuild in BS Football</a> and prove that this time, you can see it through.</p>
 `,
   },
 
@@ -870,7 +870,7 @@ export const blogPosts: BlogPost[] = [
     title: 'How to Build a Dynasty: Multi-Season Strategy for Football GM Games',
     seoTitle: 'How to Build a Dynasty in Football GM Games — Multi-Season Strategy Guide',
     metaDescription:
-      'Building a dynasty takes more than one good draft. Learn the multi-season strategies for sustained success in football management games like Gridiron GM.',
+      'Building a dynasty takes more than one good draft. Learn the multi-season strategies for sustained success in football management games like BS Football.',
     keywords: [
       'how to build a dynasty football gm',
       'football gm dynasty tips',
@@ -889,7 +889,7 @@ export const blogPosts: BlogPost[] = [
       { label: 'For Fantasy Football Players', href: '/for/fantasy-football-players' },
     ],
     content: `
-<p>Anyone can win a championship. Dynasties are different. A dynasty means sustained excellence over multiple seasons — making the playoffs year after year, competing for titles consistently, and recovering from inevitable setbacks without starting over from scratch. In football management games like Gridiron GM, building a dynasty requires thinking in multi-year arcs rather than single-season sprints.</p>
+<p>Anyone can win a championship. Dynasties are different. A dynasty means sustained excellence over multiple seasons — making the playoffs year after year, competing for titles consistently, and recovering from inevitable setbacks without starting over from scratch. In football management games like BS Football, building a dynasty requires thinking in multi-year arcs rather than single-season sprints.</p>
 
 <p>This guide lays out the five phases of dynasty building, from the initial foundation through the championship window and into the graceful reset that keeps the cycle going.</p>
 
@@ -987,7 +987,7 @@ export const blogPosts: BlogPost[] = [
 <li><strong>No player is bigger than the team.</strong> When a player's contract demands exceed his marginal value, let him walk. Sentiment is the enemy of sustained success.</li>
 </ul>
 
-<p>Dynasties are not built in a single offseason. They are built through years of disciplined drafting, smart cap management, and the willingness to make hard decisions before they become urgent. Ready to start your dynasty run? <a href="/">Launch Gridiron GM</a> and see how many consecutive seasons you can compete at the top.</p>
+<p>Dynasties are not built in a single offseason. They are built through years of disciplined drafting, smart cap management, and the willingness to make hard decisions before they become urgent. Ready to start your dynasty run? <a href="/">Launch BS Football</a> and see how many consecutive seasons you can compete at the top.</p>
 `,
   },
 
@@ -1086,7 +1086,7 @@ export const blogPosts: BlogPost[] = [
 
 <p><strong>The fix:</strong> Before every offseason, write down (or at least think through) your plan for the next 2–3 years. Are you rebuilding, emerging, contending, or resetting? What specific actions does that phase require? What benchmarks will tell you when it is time to shift to the next phase? A clear plan prevents the random, contradictory decisions that doom most new players' rosters.</p>
 
-<p>Every expert was once a beginner who made all of these mistakes. The difference is that experts learned from them. Now you know what to watch for. <a href="/">Start a new league in Gridiron GM</a> and see how many of these traps you can avoid on your first run.</p>
+<p>Every expert was once a beginner who made all of these mistakes. The difference is that experts learned from them. Now you know what to watch for. <a href="/">Start a new league in BS Football</a> and see how many of these traps you can avoid on your first run.</p>
 `,
   },
 
@@ -1096,7 +1096,7 @@ export const blogPosts: BlogPost[] = [
     title: 'What Real NFL GMs Do That Most Football Games Get Wrong',
     seoTitle: 'What Real NFL GMs Do That Most Football Games Get Wrong',
     metaDescription:
-      'Real NFL front offices think differently than most football games assume. Here are what actual GMs prioritize and how Gridiron GM gets closer to reality.',
+      'Real NFL front offices think differently than most football games assume. Here are what actual GMs prioritize and how BS Football gets closer to reality.',
     keywords: [
       'how do nfl gms work',
       'real nfl gm decisions',
@@ -1112,7 +1112,7 @@ export const blogPosts: BlogPost[] = [
       { label: 'Salary Cap Management Tips', href: '/blog/salary-cap-management-tips' },
       { label: 'Football GM Scouting Guide', href: '/blog/football-gm-scouting-guide' },
       { label: 'What Is a Football GM Simulator?', href: '/glossary/football-gm-simulator' },
-      { label: 'Gridiron GM vs Football GM', href: '/vs/football-gm' },
+      { label: 'BS Football vs Football GM', href: '/vs/football-gm' },
     ],
     content: `
 <p>Most football management games let you play as a general manager, but very few of them capture what real NFL general managers actually do. The decisions that define real front offices — the information they prioritize, the timelines they operate on, the trade-offs they navigate — are fundamentally different from what most games simulate.</p>
@@ -1125,7 +1125,7 @@ export const blogPosts: BlogPost[] = [
 
 <p>Real NFL GMs operate in a fundamentally different environment. Their primary job is gathering information that other teams do not have. Scouting departments exist to create information advantages — knowing that a college quarterback's mechanics break down under pressure, knowing that a free agent has an undisclosed injury history, knowing that a rival GM is desperate to trade down.</p>
 
-<p>This is why scouting uncertainty in games like Gridiron GM matters. When you do not have perfect information about a draft prospect — when his rating shows as a range rather than an exact number — you are experiencing a simulation of what real GMs face. The uncertainty is not a nuisance; it is the game. The GMs who handle uncertainty best are the ones who win.</p>
+<p>This is why scouting uncertainty in games like BS Football matters. When you do not have perfect information about a draft prospect — when his rating shows as a range rather than an exact number — you are experiencing a simulation of what real GMs face. The uncertainty is not a nuisance; it is the game. The GMs who handle uncertainty best are the ones who win.</p>
 
 <p>What this means for your gameplay: embrace scouting systems rather than resenting them. Use scouting resources strategically to create information advantages over AI teams. When you Deep Scout a prospect that other teams have not fully evaluated, you are doing exactly what real front offices do — investing in information that reduces risk.</p>
 
@@ -1185,17 +1185,17 @@ export const blogPosts: BlogPost[] = [
 <li><strong>Never stop evaluating.</strong> Scouting is not a pre-draft activity — it is a year-round mindset.</li>
 </ul>
 
-<p>Football management games are simplified versions of an incredibly complex job, but the core principles translate. Think like a real GM, and you will build better teams in any sim. <a href="/">Try Gridiron GM</a> and see how real front office thinking translates to in-game success.</p>
+<p>Football management games are simplified versions of an incredibly complex job, but the core principles translate. Think like a real GM, and you will build better teams in any sim. <a href="/">Try BS Football</a> and see how real front office thinking translates to in-game success.</p>
 `,
   },
 
   // ─── Post 12 ──────────────────────────────────────────────
   {
     slug: 'play-during-nfl-offseason',
-    title: 'The Best Time to Play Gridiron GM (Hint: The NFL Offseason)',
+    title: 'The Best Time to Play BS Football (Hint: The NFL Offseason)',
     seoTitle: 'Best Football Games to Play During the NFL Offseason (2026)',
     metaDescription:
-      'No football on TV? The NFL offseason is the perfect time to play Gridiron GM. Draft prospects, build a dynasty, and scratch your football itch for free.',
+      'No football on TV? The NFL offseason is the perfect time to play BS Football. Draft prospects, build a dynasty, and scratch your football itch for free.',
     keywords: [
       'what to do during nfl offseason',
       'football games for offseason',
@@ -1217,34 +1217,34 @@ export const blogPosts: BlogPost[] = [
     content: `
 <p>The Super Bowl is over. The confetti has been swept up. Your team either won it all, lost in heartbreaking fashion, or never made it in the first place. And now you face the longest stretch in the sports calendar: the NFL offseason. No games on Sunday. No Thursday Night Football. No Monday Night Football. Just months of speculation, combine coverage, and mock drafts that will be wrong the moment round one starts.</p>
 
-<p>The offseason is a void, and football fans have been trying to fill it for decades. That is exactly why Gridiron GM exists.</p>
+<p>The offseason is a void, and football fans have been trying to fill it for decades. That is exactly why BS Football exists.</p>
 
 <h2>The Offseason Itch Is Real</h2>
 
 <p>If you are a football fan, you know the feeling. By late February, you start refreshing NFL news feeds for any scrap of information — a free agent rumor, a combine result, a mock draft that confirms your biases. You rewatch old games. You argue with strangers on the internet about whether your team should draft a tackle or a receiver. You consider joining a second fantasy league just to have something football-related to think about.</p>
 
-<p>The offseason itch is real because football is not just a sport — it is a mental exercise. You are constantly evaluating players, projecting outcomes, debating strategy. When the games stop, the thinking does not. Your brain wants football problems to solve, and Gridiron GM gives it exactly that.</p>
+<p>The offseason itch is real because football is not just a sport — it is a mental exercise. You are constantly evaluating players, projecting outcomes, debating strategy. When the games stop, the thinking does not. Your brain wants football problems to solve, and BS Football gives it exactly that.</p>
 
 <h2>Why the NFL Offseason Is the Perfect Time to Play</h2>
 
-<p>Gridiron GM's season structure mirrors the real NFL calendar in ways that make the offseason an especially satisfying time to play.</p>
+<p>BS Football's season structure mirrors the real NFL calendar in ways that make the offseason an especially satisfying time to play.</p>
 
 <h3>February–March: Free Agency</h3>
-<p>While real NFL teams are negotiating free agent contracts and you are refreshing Twitter for signing announcements, you can be doing the same thing in Gridiron GM. Evaluate which of your players to re-sign, set your budget, identify free agent targets, and navigate the negotiation rounds. The same strategic thinking that makes real free agency exciting — should I pay the premium for this player, or let him walk and address the need in the draft? — drives the in-game experience.</p>
+<p>While real NFL teams are negotiating free agent contracts and you are refreshing Twitter for signing announcements, you can be doing the same thing in BS Football. Evaluate which of your players to re-sign, set your budget, identify free agent targets, and navigate the negotiation rounds. The same strategic thinking that makes real free agency exciting — should I pay the premium for this player, or let him walk and address the need in the draft? — drives the in-game experience.</p>
 
 <h3>April: The Draft</h3>
-<p>Draft season is when football management is at its most exciting, and Gridiron GM's draft is designed to capture that energy. Scout prospects using the tiered scouting system, build your draft board, use Deep Scout on the players you are torn about, and then navigate the seven rounds of the draft as other teams grab players you had targeted.</p>
+<p>Draft season is when football management is at its most exciting, and BS Football's draft is designed to capture that energy. Scout prospects using the tiered scouting system, build your draft board, use Deep Scout on the players you are torn about, and then navigate the seven rounds of the draft as other teams grab players you had targeted.</p>
 
-<p>Playing the Gridiron GM draft during real draft season is a uniquely satisfying experience. You are doing in-game what real GMs are doing in real life — making risk-reward calculations with imperfect information, adjusting your board on the fly, and hoping that your scouting was better than everyone else's.</p>
+<p>Playing the BS Football draft during real draft season is a uniquely satisfying experience. You are doing in-game what real GMs are doing in real life — making risk-reward calculations with imperfect information, adjusting your board on the fly, and hoping that your scouting was better than everyone else's.</p>
 
 <h3>May–August: Development and Preparation</h3>
-<p>The real NFL's training camp and preseason corresponds to Gridiron GM's offseason development period, where your drafted players grow (or do not) based on their potential. This is when you see the results of your draft investment — the third-round pick who jumps 6 OVR points and looks like a future starter, or the first-round pick who barely improves and starts looking like a bust.</p>
+<p>The real NFL's training camp and preseason corresponds to BS Football's offseason development period, where your drafted players grow (or do not) based on their potential. This is when you see the results of your draft investment — the third-round pick who jumps 6 OVR points and looks like a future starter, or the first-round pick who barely improves and starts looking like a bust.</p>
 
 <p>Monitoring player development, adjusting your depth chart, and planning for the upcoming season scratches the same itch that real preseason coverage provides — but with the advantage that you actually control the outcomes.</p>
 
 <h2>What You Can Do in One Sitting</h2>
 
-<p>One of Gridiron GM's strengths is session flexibility. You can accomplish meaningful progress in whatever time you have.</p>
+<p>One of BS Football's strengths is session flexibility. You can accomplish meaningful progress in whatever time you have.</p>
 
 <h3>15 Minutes</h3>
 <p>Scout 10–15 draft prospects, or simulate 2–3 weeks of the regular season. Quick, satisfying, and you have made measurable progress on your franchise.</p>
@@ -1256,29 +1256,29 @@ export const blogPosts: BlogPost[] = [
 <p>Play through a full offseason: re-sign your key players, navigate free agency, scout and draft your rookie class, and check development results. You have set up your entire next season in a single session.</p>
 
 <h3>An Afternoon</h3>
-<p>Run a complete multi-season dynasty arc. Draft, develop, compete, re-sign, repeat. See your franchise evolve over 5–10 seasons. Watch your first draft pick develop into a star, then age and decline while his replacement emerges. An afternoon with Gridiron GM can provide the kind of long-term narrative that makes management games addictive.</p>
+<p>Run a complete multi-season dynasty arc. Draft, develop, compete, re-sign, repeat. See your franchise evolve over 5–10 seasons. Watch your first draft pick develop into a star, then age and decline while his replacement emerges. An afternoon with BS Football can provide the kind of long-term narrative that makes management games addictive.</p>
 
 <h2>The Draft Is the Main Event</h2>
 
-<p>If there is one feature that makes Gridiron GM perfect for the NFL offseason, it is the draft. The scouting tier system creates genuine pre-draft strategy: which prospects do you scout to Pro level? Where do you spend your limited Elite scouts? Who deserves a Deep Scout?</p>
+<p>If there is one feature that makes BS Football perfect for the NFL offseason, it is the draft. The scouting tier system creates genuine pre-draft strategy: which prospects do you scout to Pro level? Where do you spend your limited Elite scouts? Who deserves a Deep Scout?</p>
 
 <p>Then draft day itself plays out with real tension. Your board gets disrupted by other teams' picks. A player you did not scout falls unexpectedly, and you have to decide whether to gamble on him or stick to your board. A run on quarterbacks in the first round creates value at other positions that you did not anticipate.</p>
 
-<p>For NFL Draft fans who spend weeks studying prospects, building mock drafts, and debating picks with friends, Gridiron GM's draft is the interactive version of that experience. You are not just predicting what will happen — you are making it happen, with real consequences for your franchise.</p>
+<p>For NFL Draft fans who spend weeks studying prospects, building mock drafts, and debating picks with friends, BS Football's draft is the interactive version of that experience. You are not just predicting what will happen — you are making it happen, with real consequences for your franchise.</p>
 
 <h2>Your Offseason Survival Kit</h2>
 
-<p>Here is a challenge to get you through the NFL offseason: take over one of the worst teams in Gridiron GM and rebuild it into a championship contender. Track your progress as the real NFL offseason unfolds:</p>
+<p>Here is a challenge to get you through the NFL offseason: take over one of the worst teams in BS Football and rebuild it into a championship contender. Track your progress as the real NFL offseason unfolds:</p>
 
 <ul>
 <li><strong>February:</strong> Evaluate your roster. Identify which veterans to trade and which to keep. Start your rebuild by trading for draft picks.</li>
 <li><strong>March:</strong> Navigate free agency. Sign cheap depth pieces only — save your cap for later. Begin scouting for the upcoming draft.</li>
 <li><strong>April:</strong> Execute your draft. This is the most important month of your rebuild. Hit on your first and second-round picks and you are on track.</li>
 <li><strong>May–July:</strong> Simulate the season. Check development. Did your rookies improve? Are your veterans declining? Adjust your long-term plan based on results.</li>
-<li><strong>August:</strong> Enter your second offseason. Repeat the cycle with more draft picks and better cap positioning. By the time real football starts, your Gridiron GM team should be competitive.</li>
+<li><strong>August:</strong> Enter your second offseason. Repeat the cycle with more draft picks and better cap positioning. By the time real football starts, your BS Football team should be competitive.</li>
 </ul>
 
-<p>The NFL offseason does not have to be a football desert. Gridiron GM turns the wait for real football into an opportunity to build something of your own — a franchise shaped by your decisions, your strategy, and your scouting. No downloads, no cost, no console required. Just open your browser and start building. <a href="/">Launch Gridiron GM</a> and make this the most productive offseason you have ever had.</p>
+<p>The NFL offseason does not have to be a football desert. BS Football turns the wait for real football into an opportunity to build something of your own — a franchise shaped by your decisions, your strategy, and your scouting. No downloads, no cost, no console required. Just open your browser and start building. <a href="/">Launch BS Football</a> and make this the most productive offseason you have ever had.</p>
 `,
   },
 ];

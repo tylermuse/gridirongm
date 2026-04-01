@@ -149,7 +149,7 @@ function TeamPicker() {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8">
       <div className="text-center mb-8">
         <h1 className="text-3xl sm:text-5xl font-black tracking-tight mb-3">
-          <span className="text-blue-600">GRIDIRON</span> GM
+          <span className="text-blue-600">BS</span> Football
         </h1>
         <p className="text-[var(--text-sec)] text-sm sm:text-lg">Choose your franchise. Build your dynasty.</p>
       </div>

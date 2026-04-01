@@ -51,8 +51,8 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <span className="text-blue-600">GRIDIRON</span>
-            <span className="text-gray-900">GM</span>
+            <span className="text-blue-600">BS</span>
+            <span className="text-gray-900">Football</span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-6">
@@ -101,7 +101,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             ))}
           </div>
           <div className="mt-10 pt-6 border-t border-gray-100 flex items-center justify-between">
-            <p className="text-xs text-gray-400">&copy; {new Date().getFullYear()} Gridiron GM. All rights reserved.</p>
+            <p className="text-xs text-gray-400">&copy; {new Date().getFullYear()} BS Football. All rights reserved.</p>
             <Link href="/" className="text-xs text-blue-600 hover:text-blue-700 font-medium">
               Play Now &mdash; It&apos;s Free
             </Link>

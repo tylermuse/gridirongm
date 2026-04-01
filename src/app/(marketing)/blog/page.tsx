@@ -3,12 +3,12 @@ import type { Metadata } from 'next';
 import { getPublishedPosts } from '@/lib/content/posts';
 
 export const metadata: Metadata = {
-  title: 'Blog — Gridiron GM',
+  title: 'Blog — BS Football',
   description: 'Tips, strategies, and guides for football management games. Draft strategy, salary cap management, dynasty building, and more.',
   openGraph: {
-    title: 'Blog — Gridiron GM',
+    title: 'Blog — BS Football',
     description: 'Tips, strategies, and guides for football management games.',
-    url: 'https://gridirongm.com/blog',
+    url: 'https://bs-football.com/blog',
   },
 };
 
@@ -94,7 +94,7 @@ export default function BlogIndex() {
       <div className="mt-16 text-center py-10 px-6 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Ready to play?</h2>
         <p className="text-gray-600 mb-6">
-          Gridiron GM is free, runs in your browser, and you&apos;ll be drafting in 60 seconds.
+          BS Football is free, runs in your browser, and you&apos;ll be drafting in 60 seconds.
         </p>
         <Link
           href="/"

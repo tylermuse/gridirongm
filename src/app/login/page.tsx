@@ -80,7 +80,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-black">
-            <span className="text-blue-600">GRIDIRON</span> GM
+            <span className="text-blue-600">BS</span> Football
           </h1>
           <p className="text-[var(--text-sec)] mt-2">
             {isSignUp ? 'Create your account' : 'Sign in to your account'}

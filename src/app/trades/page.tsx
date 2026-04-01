@@ -826,6 +826,11 @@ function TradesPage() {
     } else if (teamParam && !blockPlayerId) {
       // Pre-select team for trade (e.g. from PlayerModal "Trade for" button)
       setSelectedTeamId(teamParam);
+      const targetParam = searchParams.get('target');
+      if (targetParam) {
+        // Pre-select the target player to receive in the trade
+        setReceivedPlayerIds(prev => prev.includes(targetParam) ? prev : [...prev, targetParam]);
+      }
       setActiveTab('propose');
     }
     if (searchParams.get('from') === 'draft') {

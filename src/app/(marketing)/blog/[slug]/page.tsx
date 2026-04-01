@@ -22,11 +22,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title: post.seoTitle,
       description: post.metaDescription,
-      url: `https://gridirongm.com/blog/${post.slug}`,
+      url: `https://bs-football.com/blog/${post.slug}`,
       type: 'article',
     },
     alternates: {
-      canonical: `https://gridirongm.com/blog/${post.slug}`,
+      canonical: `https://bs-football.com/blog/${post.slug}`,
     },
   };
 }
@@ -131,7 +131,7 @@ export default async function BlogPostPage({ params }: Props) {
         <div className="mt-12 py-8 px-6 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 text-center">
           <h2 className="text-xl font-bold text-gray-900 mb-2">Ready to put this into practice?</h2>
           <p className="text-gray-600 mb-5">
-            Gridiron GM is free, runs in your browser, and you&apos;ll be drafting in 60 seconds.
+            BS Football is free, runs in your browser, and you&apos;ll be drafting in 60 seconds.
           </p>
           <Link
             href="/"

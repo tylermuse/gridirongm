@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next';
 import { blogPosts } from '@/lib/content/posts';
 import { seoPages } from '@/lib/content/pages';
 
-const BASE_URL = 'https://gridirongm.com';
+const BASE_URL = 'https://bs-football.com';
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date().toISOString();

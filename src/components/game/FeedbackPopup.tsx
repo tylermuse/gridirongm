@@ -102,7 +102,7 @@ export function FeedbackPopup() {
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="bg-blue-600 px-4 py-3 flex items-center justify-between">
-          <span className="text-white text-sm font-bold">How&apos;s Gridiron GM?</span>
+          <span className="text-white text-sm font-bold">How&apos;s BS Football?</span>
           <button
             onClick={handleDismiss}
             className="text-white/70 hover:text-white text-lg leading-none"

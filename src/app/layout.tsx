@@ -4,7 +4,7 @@ import { FeedbackWidget } from '@/components/game/FeedbackWidget';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Gridiron GM',
+  title: 'BS Football',
   description: 'Build your dynasty. Run the franchise.',
 };
 

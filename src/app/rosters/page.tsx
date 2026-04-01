@@ -20,7 +20,7 @@ const ROSTERS: RosterEntry[] = [
       'Complete NFL roster with 90+ free agency moves through March 23, 2026. Includes all Week 2 free agency signings, the Jaylen Waddle trade to Broncos, Justin Fields trade to Chiefs, Andy Dalton trade to Eagles, Sydney Brown trade to Falcons, Jaxon Smith-Njigba record extension, and more.',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
     lastUpdated: 'March 23, 2026',
-    compatibility: ['Football GM (FBGM)', 'Gridiron GM'],
+    compatibility: ['Football GM (FBGM)', 'BS Football'],
   },
 ];
 
@@ -47,8 +47,8 @@ function HowToUse({ roster }: { roster: RosterEntry }) {
       {open && (
         <div className="mt-3 space-y-3 text-sm">
           <div>
-            <div className="font-bold text-[var(--text)] mb-1">For Gridiron GM:</div>
-            <p className="text-[var(--text-sec)] mb-3">Click the <strong>&quot;Play in Gridiron GM&quot;</strong> button above.</p>
+            <div className="font-bold text-[var(--text)] mb-1">For BS Football:</div>
+            <p className="text-[var(--text-sec)] mb-3">Click the <strong>&quot;Play in BS Football&quot;</strong> button above.</p>
           </div>
           <div>
             <div className="font-bold text-[var(--text)] mb-1">For Football GM:</div>
@@ -86,7 +86,7 @@ export default function RostersPage() {
             Community Rosters
           </h1>
           <p className="text-[var(--text-sec)] text-sm sm:text-base">
-            Download updated NFL rosters for Football GM and Gridiron GM
+            Download updated NFL rosters for Football GM and BS Football
           </p>
         </div>
       </div>
@@ -105,7 +105,7 @@ export default function RostersPage() {
                   {roster.description}
                 </p>
                 <p className="text-xs mt-2 text-gray-500 italic">
-                  Original roster by Jack (boimenred). Free agency updates by Gridiron GM.
+                  Original roster by Jack (boimenred). Free agency updates by BS Football.
                 </p>
 
                 <div className="flex items-center gap-2 mt-3 flex-wrap">
@@ -128,7 +128,7 @@ export default function RostersPage() {
                   href={`/?roster=/rosters/${roster.fileName}`}
                   className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-sm rounded-lg transition-colors shadow-sm"
                 >
-                  Play in Gridiron GM →
+                  Play in BS Football →
                 </Link>
                 <a
                   href={`/rosters/${roster.fileName}`}

@@ -25,7 +25,7 @@ import { generateCoachingStaff, generateCoach, coachingBonus } from './coaching'
 import { computeLeagueQBTiers, getQBTierModifier } from './qbTierPyramid';
 import { teamSpecialTeamsRating } from './specialTeams';
 
-const SAVE_VERSION = 18;
+const SAVE_VERSION = 19;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
@@ -2128,7 +2128,7 @@ export const useGameStore = create<GameStore>()(
         });
 
         // Real 2026 NFL draft order — original team by record (worst to best)
-        // Uses Gridiron GM abbreviations: NYS (not NYJ), LAA (not LAR for Rams equiv)
+        // Uses BS Football abbreviations: NYS (not NYJ), LAA (not LAR for Rams equiv)
         const GEN_ORIGINAL_ORDER = [
           'LV','NYS','ARI','TEN','NYG','CLE','WAS','NO','KC','CIN',
           'MIA','DAL','ATL','BAL','TB','IND','DET','MIN','CAR','GB',
@@ -6208,6 +6208,30 @@ export const useGameStore = create<GameStore>()(
           for (const team of (state as any).teams ?? []) {
             if (!team.coaches || team.coaches.length === 0) {
               team.coaches = generateCoachingStaff();
+            }
+          }
+        }
+        if (version < 19) {
+          // Ensure all teams have draft picks for current season + next 2 years
+          const currentSeason = (state as any).season ?? 2026;
+          const yearsNeeded = [currentSeason, currentSeason + 1, currentSeason + 2];
+          for (const team of (state as any).teams ?? []) {
+            if (!team.draftPicks) team.draftPicks = [];
+            for (const yr of yearsNeeded) {
+              const hasPicksForYear = team.draftPicks.some(
+                (pk: any) => pk.year === yr && pk.originalTeamId === team.id
+              );
+              if (!hasPicksForYear) {
+                for (let round = 1; round <= 7; round++) {
+                  team.draftPicks.push({
+                    id: uuid(),
+                    year: yr,
+                    round,
+                    originalTeamId: team.id,
+                    ownerTeamId: team.id,
+                  });
+                }
+              }
             }
           }
         }

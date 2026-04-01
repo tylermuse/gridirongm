@@ -107,7 +107,7 @@ export default function PricingPage() {
           <div className="text-3xl mb-2">🎉</div>
           <h2 className="text-2xl font-black mb-2">All Features Are Free!</h2>
           <p className="text-blue-100 max-w-lg mx-auto">
-            For a limited time, every Gridiron GM player gets full access to all Elite features — no account required. Enjoy elite scouting, ad-free gameplay, and everything else. Just play!
+            For a limited time, every BS Football player gets full access to all Elite features — no account required. Enjoy elite scouting, ad-free gameplay, and everything else. Just play!
           </p>
           <button
             onClick={() => router.push('/')}
@@ -140,7 +140,7 @@ export default function PricingPage() {
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-black mb-2">
-            <span className="text-blue-600">GRIDIRON</span> GM Pro
+            <span className="text-blue-600">BS</span> Football Pro
           </h1>
           <p className="text-lg text-[var(--text-sec)]">
             Upgrade your scouting department. Unlock elite intel.

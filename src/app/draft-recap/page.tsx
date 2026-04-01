@@ -157,7 +157,7 @@ export default function DraftRecapPage() {
             {/* Share to social */}
             <div className="flex gap-2 mt-3">
               <a
-                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Just drafted my class for the ${userTeam?.city} ${userTeam?.name}! Grade: ${userReport.grade} (Ranked #${userRank} of ${teams.length}) 🏈 Play Gridiron GM free:`)}&url=${encodeURIComponent('https://gmgridiron.com?ref=twitter')}`}
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Just drafted my class for the ${userTeam?.city} ${userTeam?.name}! Grade: ${userReport.grade} (Ranked #${userRank} of ${teams.length}) 🏈 Play BS Football free:`)}&url=${encodeURIComponent('https://bs-football.com?ref=twitter')}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-3 py-1.5 text-xs font-medium text-[var(--text-sec)] hover:text-[var(--text)] bg-[var(--surface-2)] hover:bg-[var(--border)] rounded-lg transition-colors"
@@ -165,7 +165,7 @@ export default function DraftRecapPage() {
                 Share on X
               </a>
               <a
-                href={`https://reddit.com/submit?title=${encodeURIComponent(`My ${userTeam?.city} ${userTeam?.name} draft class got a ${userReport.grade} grade (#${userRank} of ${teams.length}) — Gridiron GM`)}&url=${encodeURIComponent('https://gmgridiron.com?ref=reddit')}`}
+                href={`https://reddit.com/submit?title=${encodeURIComponent(`My ${userTeam?.city} ${userTeam?.name} draft class got a ${userReport.grade} grade (#${userRank} of ${teams.length}) — BS Football`)}&url=${encodeURIComponent('https://bs-football.com?ref=reddit')}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-3 py-1.5 text-xs font-medium text-[var(--text-sec)] hover:text-[var(--text)] bg-[var(--surface-2)] hover:bg-[var(--border)] rounded-lg transition-colors"

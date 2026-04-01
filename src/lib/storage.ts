@@ -1,5 +1,5 @@
 /**
- * IndexedDB storage layer for Gridiron GM save data.
+ * IndexedDB storage layer for BS Football save data.
  *
  * Replaces localStorage (5MB cap) with IndexedDB (hundreds of MB+).
  * Uses the `idb` library for a clean Promise-based API.

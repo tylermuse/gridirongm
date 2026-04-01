@@ -261,7 +261,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                   size="sm"
                   onClick={() => {
                     onClose();
-                    router.push(`/trades?team=${player.teamId}`);
+                    router.push(`/trades?team=${player.teamId}&target=${player.id}`);
                   }}
                   className="bg-blue-600 hover:bg-blue-700 text-white"
                 >

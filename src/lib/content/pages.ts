@@ -15,12 +15,12 @@ export const seoPages: SEOPage[] = [
   {
     section: 'vs',
     slug: 'football-gm',
-    title: 'Gridiron GM vs Football GM — Honest Comparison',
-    seoTitle: 'Gridiron GM vs Football GM — Honest Comparison (2026)',
+    title: 'BS Football vs Football GM — Honest Comparison',
+    seoTitle: 'BS Football vs Football GM — Honest Comparison (2026)',
     metaDescription:
-      'See how Gridiron GM compares to Football GM for design, scouting, draft experience, and dynasty play. Free browser football GM with modern UI and scouting tiers.',
+      'See how BS Football compares to Football GM for design, scouting, draft experience, and dynasty play. Free browser football GM with modern UI and scouting tiers.',
     keywords: [
-      'gridiron gm vs football gm',
+      'bs football vs football gm',
       'football gm comparison',
       'football gm alternative',
     ],
@@ -36,14 +36,14 @@ export const seoPages: SEOPage[] = [
     ],
     content: `
 <h2>TL;DR</h2>
-<p>Football GM is the original open-source football management sim and it deserves respect. Gridiron GM is a newer free browser game that focuses on modern design, deeper scouting, and a smoother draft experience. Both are free. Both run in your browser. Which one fits you depends on what you care about most.</p>
+<p>Football GM is the original open-source football management sim and it deserves respect. BS Football is a newer free browser game that focuses on modern design, deeper scouting, and a smoother draft experience. Both are free. Both run in your browser. Which one fits you depends on what you care about most.</p>
 
 <h2>At-a-Glance Comparison</h2>
 <table>
   <thead>
     <tr>
       <th>Feature</th>
-      <th>Gridiron GM</th>
+      <th>BS Football</th>
       <th>Football GM</th>
     </tr>
   </thead>
@@ -62,21 +62,21 @@ export const seoPages: SEOPage[] = [
 </table>
 
 <h2>Design &amp; UX</h2>
-<p>Football GM uses a dense, spreadsheet-style interface that packs a ton of data on screen. If you grew up on early-2000s sports sims, it feels familiar. Gridiron GM takes a different approach with a modern card-based layout, clear navigation, and color-coded indicators that surface the info you need without hunting through tables.</p>
+<p>Football GM uses a dense, spreadsheet-style interface that packs a ton of data on screen. If you grew up on early-2000s sports sims, it feels familiar. BS Football takes a different approach with a modern card-based layout, clear navigation, and color-coded indicators that surface the info you need without hunting through tables.</p>
 <p>Neither is objectively better here — it depends on whether you want raw data density or guided readability.</p>
 
 <h2>Draft &amp; Scouting</h2>
 <p>This is where the two games diverge the most. Football GM shows you player ratings up front. You sort, you pick, you move on. It is efficient but it removes the uncertainty that makes real drafts exciting.</p>
-<p>Gridiron GM introduces a <strong>3-tier scouting system</strong>. You start with surface-level info and invest scouting resources to unlock deeper reports. The Deep Scout tier gives you detailed breakdowns that mirror real NFL scouting. You will miss on prospects. You will find sleepers. That tension is the point.</p>
+<p>BS Football introduces a <strong>3-tier scouting system</strong>. You start with surface-level info and invest scouting resources to unlock deeper reports. The Deep Scout tier gives you detailed breakdowns that mirror real NFL scouting. You will miss on prospects. You will find sleepers. That tension is the point.</p>
 
 <h2>Game Simulation</h2>
-<p>Both games simulate games under the hood without real-time play-calling. Football GM uses a well-tested engine that has been refined over years. Gridiron GM features drive-by-drive simulation with a live play-by-play option so you can watch your team execute in real time. Box scores track passing, rushing, receiving, and defensive stats.</p>
+<p>Both games simulate games under the hood without real-time play-calling. Football GM uses a well-tested engine that has been refined over years. BS Football features drive-by-drive simulation with a live play-by-play option so you can watch your team execute in real time. Box scores track passing, rushing, receiving, and defensive stats.</p>
 
 <h2>Multi-Season Dynasty</h2>
-<p>Both games let you run a franchise across many seasons. You will draft, develop players, manage aging rosters, and chase championships. Football GM has a slight edge here simply because its engine has been stress-tested over more seasons by more players. Gridiron GM tracks season history, awards (MVP, DPOY, ROY), and gives you a clear dynasty timeline.</p>
+<p>Both games let you run a franchise across many seasons. You will draft, develop players, manage aging rosters, and chase championships. Football GM has a slight edge here simply because its engine has been stress-tested over more seasons by more players. BS Football tracks season history, awards (MVP, DPOY, ROY), and gives you a clear dynasty timeline.</p>
 
 <h2>Customization &amp; Modding</h2>
-<p>Football GM wins this category decisively. It is open source, supports custom rosters, custom leagues, God Mode, and has an active modding community. Gridiron GM is newer and more opinionated — you get a polished experience out of the box, but fewer knobs to turn. If modding is your thing, Football GM is hard to beat.</p>
+<p>Football GM wins this category decisively. It is open source, supports custom rosters, custom leagues, God Mode, and has an active modding community. BS Football is newer and more opinionated — you get a polished experience out of the box, but fewer knobs to turn. If modding is your thing, Football GM is hard to beat.</p>
 
 <h2>Who Should Choose Football GM</h2>
 <ul>
@@ -86,7 +86,7 @@ export const seoPages: SEOPage[] = [
   <li>You run multiple leagues simultaneously</li>
 </ul>
 
-<h2>Who Should Choose Gridiron GM</h2>
+<h2>Who Should Choose BS Football</h2>
 <ul>
   <li>You want a modern, clean interface that is easy to navigate</li>
   <li>You want scouting that adds real draft-day uncertainty</li>
@@ -96,19 +96,19 @@ export const seoPages: SEOPage[] = [
 </ul>
 
 <h2>Frequently Asked Questions</h2>
-<h3>Is Gridiron GM a copy of Football GM?</h3>
-<p>No. Gridiron GM is inspired by the football management genre that Football GM helped popularize, but it is built from scratch with different design priorities — modern UI, scouting tiers, and live play-by-play.</p>
+<h3>Is BS Football a copy of Football GM?</h3>
+<p>No. BS Football is inspired by the football management genre that Football GM helped popularize, but it is built from scratch with different design priorities — modern UI, scouting tiers, and live play-by-play.</p>
 
-<h3>Can I import Football GM rosters into Gridiron GM?</h3>
-<p>Not directly. The two games use different data formats. Gridiron GM has its own roster system with position-aware salary generation.</p>
+<h3>Can I import Football GM rosters into BS Football?</h3>
+<p>Not directly. The two games use different data formats. BS Football has its own roster system with position-aware salary generation.</p>
 
 <h3>Which one is more realistic?</h3>
-<p>Both are abstractions of real NFL management. Gridiron GM leans into scouting uncertainty and salary cap realism. Football GM offers more configurable realism through its settings and God Mode.</p>
+<p>Both are abstractions of real NFL management. BS Football leans into scouting uncertainty and salary cap realism. Football GM offers more configurable realism through its settings and God Mode.</p>
 
 <h3>Are both really free?</h3>
 <p>Yes. Both games are completely free to play in your browser with no downloads required.</p>
 
-<p><strong><a href="/">Play Gridiron GM Now — Free in Your Browser</a></strong></p>
+<p><strong><a href="/">Play BS Football Now — Free in Your Browser</a></strong></p>
 `,
   },
 
@@ -116,11 +116,11 @@ export const seoPages: SEOPage[] = [
   {
     section: 'vs',
     slug: 'madden-franchise-mode',
-    title: 'Gridiron GM vs Madden Franchise Mode',
+    title: 'BS Football vs Madden Franchise Mode',
     seoTitle:
-      'Gridiron GM vs Madden Franchise Mode — Free Alternative (2026)',
+      'BS Football vs Madden Franchise Mode — Free Alternative (2026)',
     metaDescription:
-      'Want Madden franchise mode without the $70 price tag? Gridiron GM is a free browser football GM with drafting, salary caps, and dynasty play. No console required.',
+      'Want Madden franchise mode without the $70 price tag? BS Football is a free browser football GM with drafting, salary caps, and dynasty play. No console required.',
     keywords: [
       'madden franchise mode alternative',
       'free madden alternative',
@@ -134,19 +134,19 @@ export const seoPages: SEOPage[] = [
         label: 'Madden Franchise Alternative',
         href: '/alternatives/madden-franchise-mode',
       },
-      { label: 'Gridiron GM vs Football GM', href: '/vs/football-gm' },
+      { label: 'BS Football vs Football GM', href: '/vs/football-gm' },
       { label: 'What Is Dynasty Mode?', href: '/glossary/dynasty-mode' },
     ],
     content: `
 <h2>TL;DR</h2>
-<p>Madden is a $70 console game where franchise mode is one feature among many. Gridiron GM is a free browser game where the GM experience <strong>is</strong> the entire game. If you play Madden only for franchise mode and skip the on-field gameplay, Gridiron GM gives you the management side for free — instantly, in your browser.</p>
+<p>Madden is a $70 console game where franchise mode is one feature among many. BS Football is a free browser game where the GM experience <strong>is</strong> the entire game. If you play Madden only for franchise mode and skip the on-field gameplay, BS Football gives you the management side for free — instantly, in your browser.</p>
 
 <h2>At-a-Glance Comparison</h2>
 <table>
   <thead>
     <tr>
       <th>Feature</th>
-      <th>Gridiron GM</th>
+      <th>BS Football</th>
       <th>Madden Franchise Mode</th>
     </tr>
   </thead>
@@ -167,7 +167,7 @@ export const seoPages: SEOPage[] = [
 <p>Every year, franchise mode gets the same complaints: neglected features, buggy scouting, CPU trade logic that makes no sense, and a mode that clearly takes a back seat to Ultimate Team. EA has improved it in recent years, but franchise mode still feels like an afterthought in a game built around monetized card packs.</p>
 <p>If you are the kind of player who simulates every game and spends 90% of your time in menus managing rosters, you are paying $70 for the 10% of Madden that you actually use.</p>
 
-<h2>What You Get with Gridiron GM</h2>
+<h2>What You Get with BS Football</h2>
 <ul>
   <li><strong>Full 7-round draft</strong> with a 3-tier scouting system that creates real uncertainty</li>
   <li><strong>Hard salary cap</strong> with dead cap on released players</li>
@@ -180,7 +180,7 @@ export const seoPages: SEOPage[] = [
 </ul>
 
 <h2>What You Give Up</h2>
-<p>Let us be honest about what Gridiron GM does not have. There is no 3D on-field gameplay. You cannot call plays or control players during a game. There are no real NFL rosters or team names. If playing the actual football games is important to you, Madden is the only option.</p>
+<p>Let us be honest about what BS Football does not have. There is no 3D on-field gameplay. You cannot call plays or control players during a game. There are no real NFL rosters or team names. If playing the actual football games is important to you, Madden is the only option.</p>
 
 <h2>What You Gain</h2>
 <ul>
@@ -199,7 +199,7 @@ export const seoPages: SEOPage[] = [
   <li>You enjoy Ultimate Team alongside franchise mode</li>
 </ul>
 
-<h2>Who Should Choose Gridiron GM</h2>
+<h2>Who Should Choose BS Football</h2>
 <ul>
   <li>You sim most Madden games and live in the menus</li>
   <li>You do not want to pay $70 every year</li>
@@ -209,16 +209,16 @@ export const seoPages: SEOPage[] = [
 </ul>
 
 <h2>Frequently Asked Questions</h2>
-<h3>Can Gridiron GM replace Madden franchise mode?</h3>
-<p>If you only use franchise mode for roster management, drafting, and dynasty building — yes. If you also want to play the on-field games, no. Gridiron GM simulates games rather than letting you play them.</p>
+<h3>Can BS Football replace Madden franchise mode?</h3>
+<p>If you only use franchise mode for roster management, drafting, and dynasty building — yes. If you also want to play the on-field games, no. BS Football simulates games rather than letting you play them.</p>
 
-<h3>Does Gridiron GM have real NFL teams?</h3>
-<p>Gridiron GM uses fictional teams and players. The focus is on the management mechanics, not licensed content.</p>
+<h3>Does BS Football have real NFL teams?</h3>
+<p>BS Football uses fictional teams and players. The focus is on the management mechanics, not licensed content.</p>
 
 <h3>Is it really free?</h3>
-<p>Yes. Gridiron GM is completely free to play in your browser. No downloads, no subscriptions, no microtransactions.</p>
+<p>Yes. BS Football is completely free to play in your browser. No downloads, no subscriptions, no microtransactions.</p>
 
-<p><strong><a href="/">Play Gridiron GM Now — Free in Your Browser</a></strong></p>
+<p><strong><a href="/">Play BS Football Now — Free in Your Browser</a></strong></p>
 `,
   },
 
@@ -226,11 +226,11 @@ export const seoPages: SEOPage[] = [
   {
     section: 'alternatives',
     slug: 'football-gm',
-    title: 'Best Football GM Alternative — Gridiron GM',
+    title: 'Best Football GM Alternative — BS Football',
     seoTitle:
-      'Best Football GM Alternative — Gridiron GM (Free, No Download)',
+      'Best Football GM Alternative — BS Football (Free, No Download)',
     metaDescription:
-      'Looking for an alternative to Football GM? Gridiron GM is a free browser football management game with modern design, scouting tiers, and instant playability.',
+      'Looking for an alternative to Football GM? BS Football is a free browser football management game with modern design, scouting tiers, and instant playability.',
     keywords: [
       'football gm alternative',
       'alternative to football gm',
@@ -239,7 +239,7 @@ export const seoPages: SEOPage[] = [
     ],
     schema: 'FAQ',
     internalLinks: [
-      { label: 'Gridiron GM vs Football GM', href: '/vs/football-gm' },
+      { label: 'BS Football vs Football GM', href: '/vs/football-gm' },
       { label: 'Best Football GM Games', href: '/best/football-gm-games' },
       {
         label: 'What Is a Football GM Simulator?',
@@ -257,8 +257,8 @@ export const seoPages: SEOPage[] = [
 </ul>
 <p>None of these are dealbreakers, but they add up — especially for players who want a more polished, modern experience.</p>
 
-<h2>Gridiron GM: Built for Football GM Players</h2>
-<p>Gridiron GM is not trying to clone Football GM. It is built from the ground up with different priorities:</p>
+<h2>BS Football: Built for Football GM Players</h2>
+<p>BS Football is not trying to clone Football GM. It is built from the ground up with different priorities:</p>
 
 <h3>Modern Design</h3>
 <p>Clean card-based layouts, color-coded indicators, and intuitive navigation. You spend less time hunting for information and more time making decisions.</p>
@@ -277,7 +277,7 @@ export const seoPages: SEOPage[] = [
   <thead>
     <tr>
       <th>Feature</th>
-      <th>Gridiron GM</th>
+      <th>BS Football</th>
       <th>Football GM</th>
     </tr>
   </thead>
@@ -293,7 +293,7 @@ export const seoPages: SEOPage[] = [
 </table>
 
 <h2>What Football GM Does Better</h2>
-<p>We are not going to pretend Gridiron GM is better at everything. Football GM has clear advantages:</p>
+<p>We are not going to pretend BS Football is better at everything. Football GM has clear advantages:</p>
 <ul>
   <li><strong>Customization</strong> — Custom leagues, rosters, God Mode, and extensive settings</li>
   <li><strong>Maturity</strong> — Years of development and community testing</li>
@@ -302,19 +302,19 @@ export const seoPages: SEOPage[] = [
 </ul>
 
 <h2>Who Switches</h2>
-<p>Players who switch to Gridiron GM typically care about three things: a modern interface that does not feel like a tax spreadsheet, scouting that creates genuine draft uncertainty, and a mobile-friendly experience. If those matter to you, give it a try. If you love Football GM's depth and customization, stick with what works.</p>
+<p>Players who switch to BS Football typically care about three things: a modern interface that does not feel like a tax spreadsheet, scouting that creates genuine draft uncertainty, and a mobile-friendly experience. If those matter to you, give it a try. If you love Football GM's depth and customization, stick with what works.</p>
 
 <h2>Frequently Asked Questions</h2>
-<h3>Is Gridiron GM really free?</h3>
+<h3>Is BS Football really free?</h3>
 <p>Yes. Completely free, runs in your browser, no account required.</p>
 
 <h3>Can I switch back and forth between the two?</h3>
 <p>Absolutely. They are separate games with separate saves. Play both and see which one clicks.</p>
 
-<h3>Will Gridiron GM add more customization?</h3>
+<h3>Will BS Football add more customization?</h3>
 <p>More features are actively being developed. The game is newer and growing, but the core dynasty experience is fully playable today.</p>
 
-<p><strong><a href="/">Try Gridiron GM Now — Free, No Download</a></strong></p>
+<p><strong><a href="/">Try BS Football Now — Free, No Download</a></strong></p>
 `,
   },
 
@@ -326,7 +326,7 @@ export const seoPages: SEOPage[] = [
     seoTitle:
       'Best Madden Franchise Mode Alternative — Free, No Console (2026)',
     metaDescription:
-      'Want Madden franchise mode without the $70 price tag or console? Gridiron GM is a free browser football GM with drafting, salary caps, and dynasty play.',
+      'Want Madden franchise mode without the $70 price tag or console? BS Football is a free browser football GM with drafting, salary caps, and dynasty play.',
     keywords: [
       'madden franchise mode alternative',
       'free alternative to madden',
@@ -335,7 +335,7 @@ export const seoPages: SEOPage[] = [
     ],
     schema: 'FAQ',
     internalLinks: [
-      { label: 'Gridiron GM vs Madden', href: '/vs/madden-franchise-mode' },
+      { label: 'BS Football vs Madden', href: '/vs/madden-franchise-mode' },
       { label: 'Best Football GM Games', href: '/best/football-gm-games' },
       {
         label: 'For Casual Football Fans',
@@ -356,7 +356,7 @@ export const seoPages: SEOPage[] = [
 <p>If you sim most of your games and spend 80% of your time in menus, you are paying a premium for features you barely use.</p>
 
 <h2>What If Franchise Mode Was the Whole Game?</h2>
-<p>That is exactly what Gridiron GM is. Every feature, every screen, every mechanic is built around the GM experience:</p>
+<p>That is exactly what BS Football is. Every feature, every screen, every mechanic is built around the GM experience:</p>
 <ul>
   <li><strong>Scout and draft</strong> with a 3-tier scouting system that creates real uncertainty</li>
   <li><strong>Manage a hard salary cap</strong> with dead cap implications when you cut players</li>
@@ -368,7 +368,7 @@ export const seoPages: SEOPage[] = [
 <p>And it costs nothing. Open your browser. Start playing. That is it.</p>
 
 <h2>What You Trade Off</h2>
-<p>Gridiron GM is not Madden. Here is what you will not find:</p>
+<p>BS Football is not Madden. Here is what you will not find:</p>
 <ul>
   <li>No 3D on-field gameplay — games are simulated, not played</li>
   <li>No real NFL teams, players, or stadiums</li>
@@ -392,15 +392,15 @@ export const seoPages: SEOPage[] = [
 <p>Yes. Drafting, free agency, salary cap, trades, player development, injuries, playoffs, and multi-season dynasty play are all included.</p>
 
 <h3>Do I need to download anything?</h3>
-<p>No. Gridiron GM runs entirely in your browser. Your saves are stored locally so you can pick up where you left off.</p>
+<p>No. BS Football runs entirely in your browser. Your saves are stored locally so you can pick up where you left off.</p>
 
 <h3>Can I play on my phone?</h3>
 <p>Yes. The interface is responsive and designed to work on mobile devices and tablets.</p>
 
 <h3>Will I miss Madden if I switch?</h3>
-<p>If you only played franchise mode, probably not. If you also enjoyed playing the on-field games, you might want to keep Madden for that and use Gridiron GM for the management side.</p>
+<p>If you only played franchise mode, probably not. If you also enjoyed playing the on-field games, you might want to keep Madden for that and use BS Football for the management side.</p>
 
-<p><strong><a href="/">Play Gridiron GM Now — Free, No Download, No Console</a></strong></p>
+<p><strong><a href="/">Play BS Football Now — Free, No Download, No Console</a></strong></p>
 `,
   },
 
@@ -410,7 +410,7 @@ export const seoPages: SEOPage[] = [
     slug: 'nfl-draft-fans',
     title: 'The Football GM Game Built for NFL Draft Fans',
     seoTitle:
-      'NFL Draft Simulator Game — Scout, Draft & Build a Dynasty | Gridiron GM',
+      'NFL Draft Simulator Game — Scout, Draft & Build a Dynasty | BS Football',
     metaDescription:
       'Love the NFL Draft? Play a free football GM game with 3-tier scouting, Deep Scout reports, and round-by-round draft strategy. No download — play instantly in your browser.',
     keywords: [
@@ -428,9 +428,9 @@ export const seoPages: SEOPage[] = [
     content: `
 <h2>Draft Day, Any Day</h2>
 <p>The NFL Draft is the best night in football. Three days of drama, surprise picks, trades, and the hope that your team just found its franchise quarterback. But it only happens once a year.</p>
-<p>Gridiron GM lets you experience draft day whenever you want. Scout prospects, agonize over rankings, and make the call — all in your browser, all for free.</p>
+<p>BS Football lets you experience draft day whenever you want. Scout prospects, agonize over rankings, and make the call — all in your browser, all for free.</p>
 
-<h2>How the Draft Works in Gridiron GM</h2>
+<h2>How the Draft Works in BS Football</h2>
 
 <h3>Tier 1: Surface Scouting</h3>
 <p>When draft season opens, you see every prospect's name, position, and a rough overall range. This is the equivalent of reading mock drafts in January — you have a general idea, but the details are fuzzy.</p>
@@ -450,7 +450,7 @@ export const seoPages: SEOPage[] = [
   <li>Watches every minute of all seven rounds</li>
   <li>Tracks how your favorite team's picks develop over years</li>
 </ul>
-<p>Then Gridiron GM was built for you. This is not a one-and-done mock draft simulator. It is a full GM experience where your draft picks play out across seasons. That third-round sleeper you took a chance on? Watch him develop into a Pro Bowl player — or flame out as a bust. The payoff (or regret) comes years later.</p>
+<p>Then BS Football was built for you. This is not a one-and-done mock draft simulator. It is a full GM experience where your draft picks play out across seasons. That third-round sleeper you took a chance on? Watch him develop into a Pro Bowl player — or flame out as a bust. The payoff (or regret) comes years later.</p>
 
 <h2>Beyond the Draft</h2>
 <p>The draft is the hook, but the dynasty is the game. After draft day, you will:</p>
@@ -472,9 +472,9 @@ export const seoPages: SEOPage[] = [
 <p>Yes. You can trade picks during the draft and during the regular season to move up, move down, or stockpile future assets.</p>
 
 <h3>Do I need to download anything?</h3>
-<p>No. Gridiron GM runs in your browser. Open the site and start scouting.</p>
+<p>No. BS Football runs in your browser. Open the site and start scouting.</p>
 
-<p><strong><a href="/">Start Scouting Now — Play Gridiron GM Free</a></strong></p>
+<p><strong><a href="/">Start Scouting Now — Play BS Football Free</a></strong></p>
 `,
   },
 
@@ -484,9 +484,9 @@ export const seoPages: SEOPage[] = [
     slug: 'fantasy-football-players',
     title: 'Football GM Game for Fantasy Football Players',
     seoTitle:
-      'Fantasy Football Not Enough? Try Gridiron GM — Full Control, Free',
+      'Fantasy Football Not Enough? Try BS Football — Full Control, Free',
     metaDescription:
-      'Fantasy football only scratches the surface. Gridiron GM gives you full GM control — draft rookies, manage salary caps, build dynasties. Free in your browser.',
+      'Fantasy football only scratches the surface. BS Football gives you full GM control — draft rookies, manage salary caps, build dynasties. Free in your browser.',
     keywords: [
       'football gm for fantasy players',
       'football game like fantasy football',
@@ -506,37 +506,37 @@ export const seoPages: SEOPage[] = [
     content: `
 <h2>Fantasy Football Only Lets You Manage Half the Team</h2>
 <p>Fantasy football is great. You draft players, manage a lineup, work the waiver wire, and compete against friends. But you only control the offensive skill positions. No defense. No offensive line. No salary cap. No developing rookies over multiple seasons. No real GM decisions.</p>
-<p>Gridiron GM gives you the full picture. You are not just picking skill players for a weekly lineup — you are building an entire 53-man roster, managing a salary cap, scouting draft classes, and making the hard decisions that real GMs face.</p>
+<p>BS Football gives you the full picture. You are not just picking skill players for a weekly lineup — you are building an entire 53-man roster, managing a salary cap, scouting draft classes, and making the hard decisions that real GMs face.</p>
 
-<h2>What You Get with Gridiron GM</h2>
+<h2>What You Get with BS Football</h2>
 
 <h3>Real Drafts, Not Snake Drafts</h3>
-<p>Fantasy drafts are fun but artificial. In Gridiron GM, you draft against 31 other teams with a scouting system that mirrors real NFL operations. You do not know exactly how good a prospect is until you invest scouting resources. Late-round steals and first-round busts are part of the game.</p>
+<p>Fantasy drafts are fun but artificial. In BS Football, you draft against 31 other teams with a scouting system that mirrors real NFL operations. You do not know exactly how good a prospect is until you invest scouting resources. Late-round steals and first-round busts are part of the game.</p>
 
 <h3>Salary Cap Management</h3>
-<p>Fantasy football has no salary cap (unless you play auction). In Gridiron GM, every signing has cap implications. Cut a player and eat dead cap. Overpay a free agent and watch your roster flexibility disappear. The cap forces real trade-offs.</p>
+<p>Fantasy football has no salary cap (unless you play auction). In BS Football, every signing has cap implications. Cut a player and eat dead cap. Overpay a free agent and watch your roster flexibility disappear. The cap forces real trade-offs.</p>
 
 <h3>Multi-Season Continuity</h3>
-<p>Redraft fantasy leagues reset every year. Even dynasty fantasy leagues only track a fraction of an NFL roster. Gridiron GM carries everything forward — player development, aging, contract expirations, draft pick trades, and franchise history.</p>
+<p>Redraft fantasy leagues reset every year. Even dynasty fantasy leagues only track a fraction of an NFL roster. BS Football carries everything forward — player development, aging, contract expirations, draft pick trades, and franchise history.</p>
 
 <h3>The Full Offseason</h3>
-<p>Fantasy football is mostly an in-season game. Gridiron GM makes the offseason just as engaging: re-sign your own free agents, scout the draft class, negotiate with free agents, and reshape your roster before the season starts.</p>
+<p>Fantasy football is mostly an in-season game. BS Football makes the offseason just as engaging: re-sign your own free agents, scout the draft class, negotiate with free agents, and reshape your roster before the season starts.</p>
 
 <h2>How Your Fantasy Skills Transfer</h2>
 <ul>
   <li><strong>Player evaluation</strong> — You already know how to assess talent. Now do it with 22 positions instead of 8.</li>
-  <li><strong>Waiver wire instincts</strong> — Free agency in Gridiron GM rewards the same opportunistic thinking.</li>
+  <li><strong>Waiver wire instincts</strong> — Free agency in BS Football rewards the same opportunistic thinking.</li>
   <li><strong>Trade negotiation</strong> — If you are good at fantasy trades, you will be good at GM trades.</li>
   <li><strong>Roster construction</strong> — Balancing stars and depth is the same skill, just at a bigger scale.</li>
 </ul>
 
-<h2>Fantasy Football vs Gridiron GM</h2>
+<h2>Fantasy Football vs BS Football</h2>
 <table>
   <thead>
     <tr>
       <th>Feature</th>
       <th>Fantasy Football</th>
-      <th>Gridiron GM</th>
+      <th>BS Football</th>
     </tr>
   </thead>
   <tbody>
@@ -553,20 +553,20 @@ export const seoPages: SEOPage[] = [
 </table>
 
 <h2>The One Thing Fantasy Does Better</h2>
-<p>Playing against your friends. Fantasy football is a social game, and that competitive banter is something a single-player GM sim cannot replicate. Gridiron GM is a solo experience — it is you against the league. If trash-talking your buddy after beating his team is the best part of fantasy, keep playing fantasy.</p>
-<p>But if you have ever wished you could control the whole team, manage a real salary cap, and build a dynasty that lasts decades — Gridiron GM is your game.</p>
+<p>Playing against your friends. Fantasy football is a social game, and that competitive banter is something a single-player GM sim cannot replicate. BS Football is a solo experience — it is you against the league. If trash-talking your buddy after beating his team is the best part of fantasy, keep playing fantasy.</p>
+<p>But if you have ever wished you could control the whole team, manage a real salary cap, and build a dynasty that lasts decades — BS Football is your game.</p>
 
 <h2>Frequently Asked Questions</h2>
 <h3>Is this a multiplayer game?</h3>
-<p>No. Gridiron GM is a single-player experience where you manage one team against AI-controlled opponents.</p>
+<p>No. BS Football is a single-player experience where you manage one team against AI-controlled opponents.</p>
 
 <h3>Can I play during fantasy season?</h3>
-<p>Absolutely. Gridiron GM is a year-round game. Play it during the offseason when you miss football, or alongside your fantasy league during the season.</p>
+<p>Absolutely. BS Football is a year-round game. Play it during the offseason when you miss football, or alongside your fantasy league during the season.</p>
 
 <h3>Do I need football knowledge to play?</h3>
 <p>Basic football knowledge helps, but the game is designed to be intuitive. If you play fantasy football, you already know more than enough.</p>
 
-<p><strong><a href="/">Try Gridiron GM — Free, No Download Required</a></strong></p>
+<p><strong><a href="/">Try BS Football — Free, No Download Required</a></strong></p>
 `,
   },
 
@@ -589,7 +589,7 @@ export const seoPages: SEOPage[] = [
       { label: 'What Is Dynasty Mode?', href: '/glossary/dynasty-mode' },
       { label: 'What Is a Mock Draft?', href: '/glossary/mock-draft' },
       { label: 'Best Football GM Games', href: '/best/football-gm-games' },
-      { label: 'Gridiron GM vs Football GM', href: '/vs/football-gm' },
+      { label: 'BS Football vs Football GM', href: '/vs/football-gm' },
     ],
     content: `
 <p>A <strong>football GM simulator</strong> is a video game that puts you in the role of a professional football team's general manager. Instead of playing the on-field action, you make the front office decisions: scouting prospects, drafting players, negotiating contracts, managing a salary cap, and building a roster designed to win championships over multiple seasons.</p>
@@ -616,7 +616,7 @@ export const seoPages: SEOPage[] = [
 
 <h2>Popular Football GM Simulators</h2>
 <ul>
-  <li><strong>Gridiron GM</strong> — Free browser-based football GM with modern UI, 3-tier scouting, and live play-by-play. No download required.</li>
+  <li><strong>BS Football</strong> — Free browser-based football GM with modern UI, 3-tier scouting, and live play-by-play. No download required.</li>
   <li><strong>Football GM</strong> — Open-source browser football sim with extensive customization and God Mode.</li>
   <li><strong>Madden Franchise Mode</strong> — The franchise mode within EA's Madden NFL series, combining GM management with on-field gameplay.</li>
   <li><strong>Pocket GM</strong> — Mobile football GM game available on iOS and Android.</li>
@@ -624,9 +624,9 @@ export const seoPages: SEOPage[] = [
 </ul>
 
 <h2>Try It Yourself</h2>
-<p>The best way to understand a football GM simulator is to play one. Gridiron GM runs in your browser, costs nothing, and requires no download. You can start managing a team in seconds.</p>
+<p>The best way to understand a football GM simulator is to play one. BS Football runs in your browser, costs nothing, and requires no download. You can start managing a team in seconds.</p>
 
-<p><strong><a href="/">Play Gridiron GM — Free Football GM Simulator</a></strong></p>
+<p><strong><a href="/">Play BS Football — Free Football GM Simulator</a></strong></p>
 `,
   },
 
@@ -679,12 +679,12 @@ export const seoPages: SEOPage[] = [
 
 <h2>Mock Draft vs Football GM Simulator</h2>
 <p>A mock draft is a one-time prediction exercise. A football GM simulator takes the draft experience further by letting you actually make the picks and live with the consequences across multiple seasons.</p>
-<p>In a GM simulator like Gridiron GM, you do not just predict picks — you scout prospects, invest scouting resources to learn more about them, and then draft players who join your roster and develop (or bust) over their careers. The draft is not the end of the story — it is the beginning.</p>
+<p>In a GM simulator like BS Football, you do not just predict picks — you scout prospects, invest scouting resources to learn more about them, and then draft players who join your roster and develop (or bust) over their careers. The draft is not the end of the story — it is the beginning.</p>
 
 <h2>Try a Draft Right Now</h2>
-<p>If you love mock drafts, you will love running your own draft in Gridiron GM. Scout the class with a 3-tier scouting system, make your picks across all seven rounds, and then watch your rookies develop over multiple seasons. It is free and runs in your browser.</p>
+<p>If you love mock drafts, you will love running your own draft in BS Football. Scout the class with a 3-tier scouting system, make your picks across all seven rounds, and then watch your rookies develop over multiple seasons. It is free and runs in your browser.</p>
 
-<p><strong><a href="/">Run Your Own Draft — Play Gridiron GM Free</a></strong></p>
+<p><strong><a href="/">Run Your Own Draft — Play BS Football Free</a></strong></p>
 `,
   },
 
@@ -740,8 +740,8 @@ export const seoPages: SEOPage[] = [
 </ul>
 <p>Dynasty mode rewards patience, planning, and the ability to evaluate talent before it fully develops.</p>
 
-<h2>Dynasty Mode in Gridiron GM</h2>
-<p>Gridiron GM is built entirely around dynasty play. There is no single-season mode — every decision you make carries forward:</p>
+<h2>Dynasty Mode in BS Football</h2>
+<p>BS Football is built entirely around dynasty play. There is no single-season mode — every decision you make carries forward:</p>
 <ul>
   <li><strong>Player aging</strong> — Rookies grow through youth development, hit their peak years, and eventually decline and retire</li>
   <li><strong>Salary cap consequences</strong> — Overpay a free agent and feel the cap squeeze for years. Cut a player and eat dead cap.</li>
@@ -751,7 +751,7 @@ export const seoPages: SEOPage[] = [
 </ul>
 <p>Your dynasty is your story. Some GMs build a quick contender and win early. Others tank for draft picks and build a decade-long powerhouse. The choice is yours.</p>
 
-<p><strong><a href="/">Build Your Dynasty — Play Gridiron GM Free</a></strong></p>
+<p><strong><a href="/">Build Your Dynasty — Play BS Football Free</a></strong></p>
 `,
   },
 
@@ -763,7 +763,7 @@ export const seoPages: SEOPage[] = [
     seoTitle:
       'What Is a Salary Cap in Football? — Simple Explanation + How It Works in Games',
     metaDescription:
-      'The salary cap limits how much NFL teams can spend on players. Learn how it works in real football and football management games like Gridiron GM.',
+      'The salary cap limits how much NFL teams can spend on players. Learn how it works in real football and football management games like BS Football.',
     keywords: [
       'what is a salary cap',
       'nfl salary cap explained',
@@ -809,9 +809,9 @@ export const seoPages: SEOPage[] = [
 
 <h2>Why Salary Cap Strategy Matters in Games</h2>
 <p>Without a salary cap, you could just sign every good free agent and trade for every star. The cap is what makes the game a puzzle. You have limited resources and unlimited wants. The best GMs find ways to build championship rosters while staying under the cap — and that means making hard choices about who to keep, who to let go, and when to invest in the future.</p>
-<p>In Gridiron GM, the salary cap is a hard cap with dead cap penalties for releasing players mid-contract. Every dollar matters, and cap mismanagement can set your franchise back for years.</p>
+<p>In BS Football, the salary cap is a hard cap with dead cap penalties for releasing players mid-contract. Every dollar matters, and cap mismanagement can set your franchise back for years.</p>
 
-<p><strong><a href="/">Test Your Cap Management — Play Gridiron GM Free</a></strong></p>
+<p><strong><a href="/">Test Your Cap Management — Play BS Football Free</a></strong></p>
 `,
   },
 
@@ -831,9 +831,9 @@ export const seoPages: SEOPage[] = [
       'best football sim games 2026',
     ],
     internalLinks: [
-      { label: 'Gridiron GM vs Football GM', href: '/vs/football-gm' },
+      { label: 'BS Football vs Football GM', href: '/vs/football-gm' },
       {
-        label: 'Gridiron GM vs Madden',
+        label: 'BS Football vs Madden',
         href: '/vs/madden-franchise-mode',
       },
       { label: 'Football GM Alternative', href: '/alternatives/football-gm' },
@@ -845,9 +845,9 @@ export const seoPages: SEOPage[] = [
     content: `
 <p>Whether you want a free browser game you can play during lunch or a deep console experience, there is a football GM game for you. We compared the top options in 2026 based on features, price, platform, and who each game is best for.</p>
 
-<h2>1. Gridiron GM</h2>
+<h2>1. BS Football</h2>
 <p><strong>Price:</strong> Free | <strong>Platform:</strong> Browser (any device)</p>
-<p>Gridiron GM is a modern football management simulator that runs entirely in your browser. It features a clean, card-based interface, a 3-tier scouting system that adds real uncertainty to the draft, and live play-by-play game simulation. The full dynasty experience includes player development, salary cap with dead cap, multi-round free agency negotiation, and season awards tracking.</p>
+<p>BS Football is a modern football management simulator that runs entirely in your browser. It features a clean, card-based interface, a 3-tier scouting system that adds real uncertainty to the draft, and live play-by-play game simulation. The full dynasty experience includes player development, salary cap with dead cap, multi-round free agency negotiation, and season awards tracking.</p>
 <p><strong>Best for:</strong> Players who want a polished, modern football GM experience with no download and no cost.</p>
 
 <h2>2. Football GM</h2>
@@ -893,7 +893,7 @@ export const seoPages: SEOPage[] = [
     </tr>
   </thead>
   <tbody>
-    <tr><td>Gridiron GM</td><td>Free</td><td>Browser</td><td>3-tier system</td><td>No</td><td>Modern UI, scouting depth</td></tr>
+    <tr><td>BS Football</td><td>Free</td><td>Browser</td><td>3-tier system</td><td>No</td><td>Modern UI, scouting depth</td></tr>
     <tr><td>Football GM</td><td>Free</td><td>Browser</td><td>Full ratings</td><td>No</td><td>Customization, modding</td></tr>
     <tr><td>DeepRoute</td><td>Free*</td><td>Browser/Mobile</td><td>Basic</td><td>Yes</td><td>Competitive leagues</td></tr>
     <tr><td>Pocket GM 3</td><td>$3.99</td><td>Mobile</td><td>Basic</td><td>No</td><td>Mobile-first experience</td></tr>
@@ -906,7 +906,7 @@ export const seoPages: SEOPage[] = [
 <h2>How to Choose</h2>
 <p>The right football GM game depends on what you value most:</p>
 <ul>
-  <li><strong>Modern design + scouting depth</strong> — Gridiron GM</li>
+  <li><strong>Modern design + scouting depth</strong> — BS Football</li>
   <li><strong>Maximum customization</strong> — Football GM</li>
   <li><strong>Multiplayer competition</strong> — DeepRoute</li>
   <li><strong>Mobile-first</strong> — Pocket GM 3</li>
@@ -916,7 +916,7 @@ export const seoPages: SEOPage[] = [
 </ul>
 <p>Most of these games are free, so the best approach is to try a few and see which one clicks with your play style.</p>
 
-<p><strong><a href="/">Try Gridiron GM — Free in Your Browser</a></strong></p>
+<p><strong><a href="/">Try BS Football — Free in Your Browser</a></strong></p>
 `,
   },
 
@@ -937,7 +937,7 @@ export const seoPages: SEOPage[] = [
     ],
     internalLinks: [
       { label: 'Best Football GM Games', href: '/best/football-gm-games' },
-      { label: 'Gridiron GM vs Football GM', href: '/vs/football-gm' },
+      { label: 'BS Football vs Football GM', href: '/vs/football-gm' },
       {
         label: 'What Is a Football GM Simulator?',
         href: '/glossary/football-gm-simulator',
@@ -949,7 +949,7 @@ export const seoPages: SEOPage[] = [
 <h2>GM &amp; Management Games</h2>
 <p>These games put you in the front office. You build the roster, manage the cap, and make the decisions that determine whether your franchise lifts a trophy or tanks for a draft pick.</p>
 
-<h3>Gridiron GM</h3>
+<h3>BS Football</h3>
 <p>A modern football management simulator with a clean interface, 3-tier scouting system, live play-by-play simulation, and full dynasty mode. Covers everything from drafting to salary cap management to free agency negotiation. Runs in any browser on any device.</p>
 <p><strong>Why play it:</strong> The most polished free football GM experience available. Great scouting, intuitive UI, instant playability.</p>
 
@@ -999,7 +999,7 @@ export const seoPages: SEOPage[] = [
     </tr>
   </thead>
   <tbody>
-    <tr><td>Gridiron GM</td><td>GM Sim</td><td>Simulated</td><td>Deep</td><td>No</td></tr>
+    <tr><td>BS Football</td><td>GM Sim</td><td>Simulated</td><td>Deep</td><td>No</td></tr>
     <tr><td>Football GM</td><td>GM Sim</td><td>Simulated</td><td>Deep</td><td>No</td></tr>
     <tr><td>DeepRoute</td><td>GM Sim</td><td>Simulated</td><td>Medium</td><td>Yes</td></tr>
     <tr><td>Progression Football</td><td>GM Sim</td><td>Simulated</td><td>Light</td><td>Yes</td></tr>
@@ -1012,14 +1012,14 @@ export const seoPages: SEOPage[] = [
 
 <h2>How to Choose</h2>
 <ul>
-  <li><strong>Want to be a GM?</strong> Start with Gridiron GM or Football GM</li>
+  <li><strong>Want to be a GM?</strong> Start with BS Football or Football GM</li>
   <li><strong>Want arcade football?</strong> Retro Bowl is the go-to</li>
   <li><strong>Want tactical control?</strong> RedZoneAction or Pro Football Coach</li>
   <li><strong>Want multiplayer?</strong> DeepRoute or Progression Football</li>
 </ul>
 <p>They are all free. Try a few, keep the ones you like.</p>
 
-<p><strong><a href="/">Play Gridiron GM — Free Football GM in Your Browser</a></strong></p>
+<p><strong><a href="/">Play BS Football — Free Football GM in Your Browser</a></strong></p>
 `,
   },
 ];
