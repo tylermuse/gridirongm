@@ -1029,6 +1029,8 @@ function TradesPage() {
       // Reject the original proposal since we completed a counter
       respondToTradeProposal(proposal.id, false);
       handleCancelCounter();
+      // Show success in the main trade view
+      setTradeResult('accepted');
     }
   }
 
@@ -2000,7 +2002,19 @@ function TradesPage() {
                         </div>
                       )}
                       {tradeResult === 'accepted' && (
-                        <p className="text-sm text-green-600 mt-1">Trade accepted!</p>
+                        <div className="mt-2 bg-green-50 border border-green-300 rounded-lg p-4 flex items-center gap-3">
+                          <span className="text-2xl">✅</span>
+                          <div>
+                            <p className="text-sm font-bold text-green-700">Trade Accepted!</p>
+                            <p className="text-xs text-green-600 mt-0.5">The deal is done. Check your roster to see the new additions.</p>
+                          </div>
+                          <button
+                            onClick={() => setTradeResult(null)}
+                            className="ml-auto text-xs text-green-600 hover:text-green-800 font-medium"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
                       )}
                     </div>
                     <div className="flex gap-2 items-center">
