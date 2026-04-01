@@ -337,6 +337,40 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        {/* AI Commentary */}
+        <Card className="mb-4">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CardTitle>AI Commentary</CardTitle>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-300">
+                Claude AI
+              </span>
+            </div>
+          </CardHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-[var(--text-sec)]">
+              Uses your Anthropic API key to generate unique, dynamic Team Spotlight commentary instead of template-based dialogue. Requires ANTHROPIC_API_KEY in your environment.
+            </p>
+            <button
+              onClick={() => setDraft(d => ({ ...d, aiCommentary: !d.aiCommentary }))}
+              className={`
+                relative inline-flex h-7 w-12 items-center rounded-full transition-colors
+                ${draft.aiCommentary ? 'bg-purple-500' : 'bg-gray-300'}
+              `}
+            >
+              <span
+                className={`
+                  inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform
+                  ${draft.aiCommentary ? 'translate-x-6' : 'translate-x-1'}
+                `}
+              />
+            </button>
+            <span className={`ml-2 text-sm font-semibold ${draft.aiCommentary ? 'text-purple-600' : 'text-[var(--text-sec)]'}`}>
+              {draft.aiCommentary ? 'ON' : 'OFF'}
+            </span>
+          </div>
+        </Card>
+
         {/* Current league info */}
         <Card>
           <CardHeader><CardTitle>Current League Status</CardTitle></CardHeader>

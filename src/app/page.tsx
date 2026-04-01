@@ -16,6 +16,7 @@ import { LEAGUE_TEAMS, type TeamTemplate } from '@/lib/data/teams';
 import { type ImportedLeagueData, loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { generateTeamSpotlight, COMMENTATORS, type SpotlightContext } from '@/lib/engine/debate';
+import { getAiSpotlightState, subscribeAiSpotlight, fetchAiSpotlight } from '@/lib/engine/aiSpotlight';
 import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
 
@@ -342,17 +343,32 @@ function TeamSpotlightSection({
   ctx?: SpotlightContext;
   onPlayerClick: (id: string) => void;
 }) {
-  // All features are free — no tier gating
+  const { leagueSettings } = useGameStore();
+  const aiCommentary = leagueSettings?.aiCommentary ?? true;
 
-  const topics = React.useMemo(
+  const templateTopics = React.useMemo(
     () => generateTeamSpotlight(team, roster, allTeams, allPlayers, season, week, ctx),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [team, roster, allTeams, allPlayers, season, week, ctx?.phase, ctx?.faDay, ctx?.draftResults?.length, ctx?.playoffBracket],
   );
 
-  if (topics.length === 0) return null;
+  // Subscribe to shared AI spotlight cache (pre-fetched by SpotlightPopup)
+  const [aiState, setAiState] = useState(getAiSpotlightState);
+  React.useEffect(() => {
+    return subscribeAiSpotlight(() => setAiState(getAiSpotlightState()));
+  }, []);
 
-  // Free tier: show first topic with only 2 exchanges as teaser
+  // If AI is enabled but nothing was pre-fetched yet (e.g. direct page load), trigger fetch
+  React.useEffect(() => {
+    if (aiCommentary && !aiState.topics && !aiState.loading && !aiState.error && templateTopics.length > 0) {
+      fetchAiSpotlight(team, roster, allTeams, season, week, ctx?.phase ?? 'regular');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiCommentary, templateTopics.length]);
+
+  const topics = (aiCommentary && aiState.topics) ? aiState.topics : templateTopics;
+
+  if (templateTopics.length === 0) return null;
 
   return (
     <div className="mt-6">
@@ -365,11 +381,24 @@ function TeamSpotlightSection({
               </CardTitle>
               <p className="text-xs text-[var(--text-sec)] mt-0.5">
                 with {COMMENTATORS.stats.name} {COMMENTATORS.stats.avatar} & {COMMENTATORS.hottake.name} {COMMENTATORS.hottake.avatar}
+                {aiCommentary && aiState.topics && (
+                  <span className="ml-2 text-purple-500 font-medium">AI</span>
+                )}
               </p>
             </div>
           </div>
         </CardHeader>
         <div className="px-4 pb-4">
+          {aiCommentary && aiState.loading && (
+            <div className="text-xs text-[var(--text-sec)] mb-3 flex items-center gap-2">
+              <span className="animate-pulse">Generating commentary...</span>
+            </div>
+          )}
+          {aiCommentary && aiState.error && (
+            <div className="text-xs text-amber-600 mb-3">
+              AI commentary unavailable — showing template version
+            </div>
+          )}
           <div className="space-y-5">
             {topics.map((topic, topicIdx) => (
               <div key={topicIdx}>

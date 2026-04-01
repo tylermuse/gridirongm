@@ -71,10 +71,11 @@ export function buildPlayAnimation(
   event: PlayEvent,
   speedMs: number,
 ): PlayAnimation {
-  // Distance-based duration: short plays animate quickly, long plays take longer
+  // Distance-based duration: short plays animate quickly, long plays take longer.
+  // The base scales with the speed setting so 1x actually feels slow and watchable.
   const absYards = Math.abs(event.yardsGained);
-  const baseDuration = Math.min(speedMs * 0.5, 300) + absYards * 8;
-  const cappedDuration = Math.min(baseDuration, speedMs * 0.8);
+  const baseDuration = speedMs * 0.35 + absYards * 12;
+  const cappedDuration = Math.min(baseDuration, speedMs * 0.75);
 
   const effects: EffectType[] = [];
   let ballArc: BallArc | null = null;

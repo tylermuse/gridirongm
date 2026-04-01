@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { COMMENTATORS } from '@/lib/engine/debate';
+import { fetchAiSpotlight } from '@/lib/engine/aiSpotlight';
 
 /**
  * Floating corner popup that nudges the user to check the Team Spotlight.
@@ -36,7 +37,7 @@ const TRIGGER_PHASES = new Set(['draft', 'freeAgency', 'preseason']);
 export function SpotlightPopup() {
   const router = useRouter();
   const pathname = usePathname();
-  const { teams, userTeamId, season, week, phase, playoffBracket } = useGameStore();
+  const { teams, userTeamId, season, week, phase, playoffBracket, players, leagueSettings } = useGameStore();
 
   const [dismissed, setDismissed] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -84,6 +85,12 @@ export function SpotlightPopup() {
       sessionStorage.setItem(STORAGE_KEY, currentKey);
       setShouldShow(true);
       setDismissed(false);
+
+      // Pre-fetch AI commentary so it's ready when user clicks through
+      if (leagueSettings?.aiCommentary && userTeam) {
+        const roster = players.filter(p => p.teamId === userTeam.id);
+        fetchAiSpotlight(userTeam, roster, teams, season, week, phase);
+      }
     }
   }, [currentKey, userTeamId, gamesPlayed, phase, playoffGamesPlayed]);
 

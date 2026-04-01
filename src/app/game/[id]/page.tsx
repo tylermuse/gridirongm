@@ -529,8 +529,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   useEffect(() => {
     clearNextPlayTimer();
     if (!animationComplete || !isPlaying || isFinished || speed === 'max') return;
-    // Post-animation pause before next play
-    const PAUSE_MS: Record<Speed, number> = { '1x': 300, '2x': 150, '5x': 60, 'max': 0 };
+    // Post-animation pause — gives time to read the play description before advancing
+    const PAUSE_MS: Record<Speed, number> = { '1x': 2200, '2x': 1000, '5x': 250, 'max': 0 };
     const pause = PAUSE_MS[speed];
     nextPlayTimerRef.current = setTimeout(() => {
       setRevealedCount(prev => {

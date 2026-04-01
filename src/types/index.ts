@@ -603,6 +603,8 @@ export interface LeagueSettings {
   mcafeeMode: boolean;       // McAfee Mode: special teams matter
   /** Chaos Draft mode: top picks bust, late picks boom (JaMarcus Russell / Brock Purdy League) */
   chaosDraft: boolean;
+  /** Use Claude AI to generate unique Team Spotlight commentary */
+  aiCommentary: boolean;
 }
 
 export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
@@ -618,6 +620,7 @@ export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
   bsMode: false,
   mcafeeMode: false,
   chaosDraft: false,
+  aiCommentary: true,
 };
 
 export interface LeagueState {
