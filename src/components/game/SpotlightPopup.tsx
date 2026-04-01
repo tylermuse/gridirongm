@@ -83,13 +83,17 @@ export function SpotlightPopup() {
 
     if (isRegularSeasonSim || isPlayoffUpdate || isPhaseTransition) {
       sessionStorage.setItem(STORAGE_KEY, currentKey);
-      setShouldShow(true);
-      setDismissed(false);
 
-      // Pre-fetch AI commentary so it's ready when user clicks through
+      // If AI commentary is on, generate it first, then show the popup
       if (leagueSettings?.aiCommentary && userTeam) {
         const roster = players.filter(p => p.teamId === userTeam.id);
-        fetchAiSpotlight(userTeam, roster, teams, season, week, phase);
+        fetchAiSpotlight(userTeam, roster, teams, season, week, phase).then(() => {
+          setShouldShow(true);
+          setDismissed(false);
+        });
+      } else {
+        setShouldShow(true);
+        setDismissed(false);
       }
     }
   }, [currentKey, userTeamId, gamesPlayed, phase, playoffGamesPlayed]);

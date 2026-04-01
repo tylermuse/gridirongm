@@ -60,13 +60,13 @@ export function fetchAiSpotlight(
   season: number,
   week: number,
   phase: string,
-) {
+): Promise<void> {
   const gp = team.record.wins + team.record.losses;
-  if (gp === 0) return;
+  if (gp === 0) return Promise.resolve();
 
   const key = buildCacheKey(team.id, season, week, team.record.wins, team.record.losses, phase);
   // Already fetched or in-flight for this state
-  if (key === cache.key && (cache.topics || cache.loading)) return;
+  if (key === cache.key && (cache.topics || cache.loading)) return cache.promise ?? Promise.resolve();
 
   cache.key = key;
   cache.topics = null;
@@ -95,7 +95,7 @@ export function fetchAiSpotlight(
     youngStars: youngStars.map(p => ({ name: `${p.firstName} ${p.lastName}`, pos: p.position, ovr: p.ratings.overall, age: p.age, potential: p.potential })),
   };
 
-  cache.promise = fetch('/api/spotlight', {
+  const p = fetch('/api/spotlight', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ teamData }),
@@ -123,4 +123,7 @@ export function fetchAiSpotlight(
       cache.key = '';
       notify();
     });
+
+  cache.promise = p;
+  return p;
 }
