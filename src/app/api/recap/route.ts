@@ -66,12 +66,14 @@ Return ONLY the JSON array, no markdown fences, no other text.`,
       return NextResponse.json({ error: 'Unexpected response type' }, { status: 500 });
     }
 
-    let jsonText = content.text.trim();
-    if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+    const raw = content.text;
+    const start = raw.indexOf('[');
+    const end = raw.lastIndexOf(']');
+    if (start === -1 || end === -1) {
+      console.error('Recap API: no JSON array found in response:', raw.slice(0, 200));
+      return NextResponse.json({ error: 'Invalid response format' }, { status: 500 });
     }
-
-    const topics = JSON.parse(jsonText);
+    const topics = JSON.parse(raw.slice(start, end + 1));
     return NextResponse.json({ topics });
   } catch (err) {
     console.error('Recap API error:', err);
