@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { COMMENTATORS } from '@/lib/engine/debate';
-import { fetchAiSpotlight } from '@/lib/engine/aiSpotlight';
+import { fetchAiSpotlight, detectNarrativeMoment } from '@/lib/engine/aiSpotlight';
 
 /**
  * Floating corner popup that nudges the user to check the Team Spotlight.
@@ -37,7 +37,10 @@ const TRIGGER_PHASES = new Set(['draft', 'freeAgency', 'preseason']);
 export function SpotlightPopup() {
   const router = useRouter();
   const pathname = usePathname();
-  const { teams, userTeamId, season, week, phase, playoffBracket, players, leagueSettings } = useGameStore();
+  const {
+    teams, userTeamId, season, week, phase, playoffBracket, playoffSeeds,
+    players, leagueSettings, newsItems, draftResults, champions,
+  } = useGameStore();
 
   const [dismissed, setDismissed] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -86,8 +89,23 @@ export function SpotlightPopup() {
 
       // If AI commentary is on, generate it first, then show the popup
       if (leagueSettings?.aiCommentary && userTeam) {
+        const tradeDeadlineWeek = leagueSettings.tradeDeadlineWeek ?? 12;
+        const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id);
         const roster = players.filter(p => p.teamId === userTeam.id);
-        fetchAiSpotlight(userTeam, roster, teams, season, week, phase).then(() => {
+
+        fetchAiSpotlight({
+          team: userTeam,
+          roster,
+          allTeams: teams,
+          allPlayers: players,
+          season, week, phase, narrative,
+          newsItems,
+          draftResults,
+          playoffBracket,
+          playoffSeeds,
+          champions,
+          tradeDeadlineWeek,
+        }).then(() => {
           setShouldShow(true);
           setDismissed(false);
         });

@@ -4,9 +4,18 @@
  * The SpotlightPopup triggers fetchAiSpotlight() as soon as a spotlight-worthy
  * state change is detected. By the time the user clicks through to the home page,
  * the result is already cached and ready to render.
+ *
+ * Supports narrative-specific moments:
+ *  - preseason: offseason recap (draft picks, FA signings, trades)
+ *  - tradeDeadline: midseason assessment, trade suggestions
+ *  - playoffsStart: end-of-regular-season playoffs preview
+ *  - seasonOver: elimination or championship wrap-up
+ *  - weekly: standard weekly analysis (default)
  */
 
-import type { Team, Player } from '@/types';
+import type { Team, Player, NewsItem, PlayoffMatchup, DraftSelection } from '@/types';
+
+export type NarrativeMoment = 'preseason' | 'tradeDeadline' | 'playoffsStart' | 'seasonOver' | 'weekly';
 
 export interface AiSpotlightTopic {
   headline: string;
@@ -53,19 +62,59 @@ export function buildCacheKey(teamId: string, season: number, week: number, wins
   return `${teamId}-s${season}-w${week}-${wins}-${losses}-${phase}`;
 }
 
-export function fetchAiSpotlight(
-  team: Team,
-  roster: Player[],
-  allTeams: Team[],
-  season: number,
-  week: number,
+/** Detect narrative moment from game state */
+export function detectNarrativeMoment(
   phase: string,
-): Promise<void> {
-  const gp = team.record.wins + team.record.losses;
-  if (gp === 0) return Promise.resolve();
+  week: number,
+  tradeDeadlineWeek: number,
+  playoffBracket: PlayoffMatchup[] | null,
+  userTeamId: string,
+): NarrativeMoment {
+  if (phase === 'preseason') return 'preseason';
 
-  const key = buildCacheKey(team.id, season, week, team.record.wins, team.record.losses, phase);
-  // Already fetched or in-flight for this state
+  // Season over: user team eliminated or won championship (check during resigning/draft/FA phases)
+  if ((phase === 'resigning' || phase === 'draft' || phase === 'freeAgency') && playoffBracket) {
+    return 'seasonOver';
+  }
+
+  // Playoffs start: phase just became playoffs
+  if (phase === 'playoffs') {
+    // Check if any playoff games have been played yet
+    const gamesPlayed = playoffBracket?.filter(m => m.winnerId).length ?? 0;
+    if (gamesPlayed === 0) return 'playoffsStart';
+  }
+
+  // Trade deadline: regular season at the deadline week
+  if (phase === 'regular' && week === tradeDeadlineWeek) return 'tradeDeadline';
+
+  return 'weekly';
+}
+
+interface FetchOptions {
+  team: Team;
+  roster: Player[];
+  allTeams: Team[];
+  allPlayers: Player[];
+  season: number;
+  week: number;
+  phase: string;
+  narrative: NarrativeMoment;
+  newsItems?: NewsItem[];
+  draftResults?: DraftSelection[];
+  playoffBracket?: PlayoffMatchup[] | null;
+  playoffSeeds?: { AC: string[]; NC: string[] } | null;
+  champions?: { season: number; teamId: string }[];
+  tradeDeadlineWeek?: number;
+}
+
+export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
+  const { team, roster, allTeams, allPlayers, season, week, phase, narrative } = opts;
+
+  const gp = team.record.wins + team.record.losses;
+  // Allow preseason (gp=0) and seasonOver
+  if (gp === 0 && narrative !== 'preseason' && narrative !== 'seasonOver') return Promise.resolve();
+
+  const key = buildCacheKey(team.id, season, week, team.record.wins, team.record.losses, `${phase}-${narrative}`);
   if (key === cache.key && (cache.topics || cache.loading)) return cache.promise ?? Promise.resolve();
 
   cache.key = key;
@@ -75,34 +124,182 @@ export function fetchAiSpotlight(
   notify();
 
   const activeRoster = roster.filter(p => !p.retired);
-  const topPlayers = [...activeRoster].sort((a, b) => b.ratings.overall - a.ratings.overall).slice(0, 8);
+  const topPlayers = [...activeRoster].sort((a, b) => b.ratings.overall - a.ratings.overall).slice(0, 10);
   const injured = activeRoster.filter(p => p.injury).sort((a, b) => b.ratings.overall - a.ratings.overall).slice(0, 3);
   const youngStars = activeRoster.filter(p => p.age <= 25 && p.potential >= 75).sort((a, b) => b.potential - a.potential).slice(0, 3);
 
   const allTeamsPpg = allTeams.map(t => ({ id: t.id, ppg: t.record.pointsFor / Math.max(1, t.record.wins + t.record.losses) })).sort((a, b) => b.ppg - a.ppg);
   const allTeamsDefPpg = allTeams.map(t => ({ id: t.id, oppPpg: t.record.pointsAgainst / Math.max(1, t.record.wins + t.record.losses) })).sort((a, b) => a.oppPpg - b.oppPpg);
-  const ppgRank = allTeamsPpg.findIndex(t => t.id === team.id) + 1;
-  const defRank = allTeamsDefPpg.findIndex(t => t.id === team.id) + 1;
+  const ppgRank = gp > 0 ? allTeamsPpg.findIndex(t => t.id === team.id) + 1 : 0;
+  const defRank = gp > 0 ? allTeamsDefPpg.findIndex(t => t.id === team.id) + 1 : 0;
 
-  const teamData = {
+  // Build player data with acquisition context
+  const mapPlayer = (p: Player) => ({
+    name: `${p.firstName} ${p.lastName}`,
+    pos: p.position,
+    ovr: p.ratings.overall,
+    age: p.age,
+    potential: p.potential,
+    salary: p.contract.salary,
+    yearsLeft: p.contract.yearsLeft,
+    acquiredVia: p.acquiredVia ?? 'initial',
+    acquiredSeason: p.acquiredSeason,
+    draftYear: p.draftYear,
+    draftRound: p.draftRound,
+    draftPick: p.draftPick,
+    stats: {
+      passYds: p.stats.passYards, passTDs: p.stats.passTDs,
+      rushYds: p.stats.rushYards, rushTDs: p.stats.rushTDs,
+      recYds: p.stats.receivingYards, recTDs: p.stats.receivingTDs,
+      tackles: p.stats.tackles, sacks: p.stats.sacks, ints: p.stats.interceptions,
+    },
+  });
+
+  const teamData: Record<string, unknown> = {
     team: { name: team.name, city: team.city, record: `${team.record.wins}-${team.record.losses}`, conference: team.conference, streak: team.record.streak, pointsFor: team.record.pointsFor, pointsAgainst: team.record.pointsAgainst },
     rankings: { ppgRank, defRank, totalTeams: allTeams.length },
     season, week, phase,
     capSpace: Math.round((team.salaryCap - team.totalPayroll) * 10) / 10,
     capPct: Math.round(team.totalPayroll / team.salaryCap * 100),
-    topPlayers: topPlayers.map(p => ({ name: `${p.firstName} ${p.lastName}`, pos: p.position, ovr: p.ratings.overall, age: p.age, potential: p.potential, salary: p.contract.salary, yearsLeft: p.contract.yearsLeft, stats: { passYds: p.stats.passYards, passTDs: p.stats.passTDs, rushYds: p.stats.rushYards, rushTDs: p.stats.rushTDs, recYds: p.stats.receivingYards, recTDs: p.stats.receivingTDs, tackles: p.stats.tackles, sacks: p.stats.sacks, ints: p.stats.interceptions } })),
+    topPlayers: topPlayers.map(mapPlayer),
     injured: injured.map(p => ({ name: `${p.firstName} ${p.lastName}`, pos: p.position, ovr: p.ratings.overall, injury: p.injury?.type, weeksLeft: p.injury?.weeksLeft })),
     youngStars: youngStars.map(p => ({ name: `${p.firstName} ${p.lastName}`, pos: p.position, ovr: p.ratings.overall, age: p.age, potential: p.potential })),
   };
 
+  // Add narrative-specific context
+  if (narrative === 'preseason' && opts.newsItems) {
+    // Offseason transactions for the user's team
+    const offseasonNews = opts.newsItems
+      .filter(n => n.isUserTeam && (n.type === 'trade' || n.type === 'signing' || n.type === 'release'))
+      .map(n => ({ type: n.type, headline: n.headline, week: n.week }));
+    teamData.offseasonMoves = offseasonNews;
+
+    // Draft picks this season
+    if (opts.draftResults) {
+      const teamPicks = opts.draftResults.filter(dr => dr.teamId === team.id);
+      const draftedPlayers = teamPicks.map(dr => {
+        const p = allPlayers.find(pl => pl.id === dr.playerId);
+        return p ? { name: `${p.firstName} ${p.lastName}`, pos: p.position, ovr: p.ratings.overall, potential: p.potential, round: dr.round, pick: dr.overallPick } : null;
+      }).filter(Boolean);
+      teamData.draftPicks = draftedPlayers;
+    }
+
+    // Recent FA signings
+    const recentSignings = activeRoster
+      .filter(p => p.acquiredVia === 'free-agency' && p.acquiredSeason === season)
+      .map(mapPlayer);
+    teamData.freeAgencySignings = recentSignings;
+  }
+
+  if (narrative === 'tradeDeadline') {
+    teamData.tradeDeadlineWeek = opts.tradeDeadlineWeek ?? 12;
+    // Trades made this season
+    const seasonTrades = (opts.newsItems ?? [])
+      .filter(n => n.isUserTeam && n.type === 'trade' && n.season === season)
+      .map(n => n.headline);
+    teamData.tradesThisSeason = seasonTrades;
+
+    // Roster needs: find weakest position groups
+    const posGroups: Record<string, Player[]> = {};
+    for (const p of activeRoster) {
+      (posGroups[p.position] ??= []).push(p);
+    }
+    const groupAvgs = Object.entries(posGroups).map(([pos, players]) => ({
+      pos, avgOvr: Math.round(players.reduce((s, p) => s + p.ratings.overall, 0) / players.length), count: players.length,
+    })).sort((a, b) => a.avgOvr - b.avgOvr);
+    teamData.positionGroupStrength = groupAvgs;
+  }
+
+  if (narrative === 'playoffsStart') {
+    // Conference standings
+    const confTeams = allTeams.filter(t => t.conference === team.conference);
+    const confSorted = [...confTeams].sort((a, b) => {
+      const wa = a.record.wins / Math.max(1, a.record.wins + a.record.losses);
+      const wb = b.record.wins / Math.max(1, b.record.wins + b.record.losses);
+      return wb - wa;
+    });
+    teamData.conferenceStandings = confSorted.slice(0, 7).map((t, i) => ({
+      seed: i + 1, name: `${t.city} ${t.name}`, record: `${t.record.wins}-${t.record.losses}`, isUser: t.id === team.id,
+    }));
+
+    if (opts.playoffSeeds) {
+      const conf = team.conference as 'AC' | 'NC';
+      const userSeed = (opts.playoffSeeds[conf]?.indexOf(team.id) ?? -1) + 1;
+      teamData.userSeed = userSeed > 0 && userSeed <= 7 ? userSeed : null;
+
+      // First round opponent
+      if (userSeed > 0 && userSeed <= 7 && opts.playoffBracket) {
+        const firstGame = opts.playoffBracket.find(m =>
+          m.round === 1 && (m.homeTeamId === team.id || m.awayTeamId === team.id));
+        if (firstGame) {
+          const oppId = firstGame.homeTeamId === team.id ? firstGame.awayTeamId : firstGame.homeTeamId;
+          const opp = allTeams.find(t => t.id === oppId);
+          if (opp) {
+            const oppRoster = allPlayers.filter(p => p.teamId === opp.id && !p.retired);
+            const oppStar = [...oppRoster].sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+            teamData.firstRoundOpponent = {
+              name: `${opp.city} ${opp.name}`, record: `${opp.record.wins}-${opp.record.losses}`,
+              star: oppStar ? `${oppStar.firstName} ${oppStar.lastName} (${oppStar.position}, ${oppStar.ratings.overall} OVR)` : null,
+            };
+          }
+        }
+      }
+    }
+  }
+
+  if (narrative === 'seasonOver') {
+    // Determine result
+    const bracket = opts.playoffBracket ?? [];
+    const championship = bracket.find(m => m.id === 'championship');
+    const wonChampionship = championship?.winnerId === team.id;
+    const madeChampionship = championship && (championship.homeTeamId === team.id || championship.awayTeamId === team.id);
+
+    // User's playoff record
+    const userGames = bracket.filter(m => m.winnerId && (m.homeTeamId === team.id || m.awayTeamId === team.id));
+    const userWins = userGames.filter(m => m.winnerId === team.id).length;
+    const userLosses = userGames.filter(m => m.winnerId && m.winnerId !== team.id).length;
+
+    // Find who eliminated them
+    const eliminationGame = userGames.find(m => m.winnerId !== team.id);
+    const eliminatedById = eliminationGame?.winnerId;
+    const eliminatedBy = eliminatedById ? allTeams.find(t => t.id === eliminatedById) : null;
+
+    const roundNames = ['', 'Wild Card', 'Divisional', 'Conference Championship', 'Championship'];
+    const eliminationRound = eliminationGame ? roundNames[eliminationGame.round] ?? 'Playoffs' : null;
+
+    // Dynasty check
+    const champCount = (opts.champions ?? []).filter(c => c.teamId === team.id).length;
+
+    // Key acquisitions that contributed this season
+    const keyAcquisitions = activeRoster
+      .filter(p => p.acquiredVia && p.acquiredVia !== 'initial' && p.ratings.overall >= 70)
+      .sort((a, b) => b.ratings.overall - a.ratings.overall)
+      .slice(0, 5)
+      .map(mapPlayer);
+
+    teamData.seasonResult = {
+      wonChampionship, madeChampionship: !!madeChampionship,
+      playoffRecord: `${userWins}-${userLosses}`,
+      eliminatedBy: eliminatedBy ? `${eliminatedBy.city} ${eliminatedBy.name}` : null,
+      eliminationRound,
+      championshipCount: champCount,
+    };
+    teamData.keyAcquisitions = keyAcquisitions;
+
+    // Season trades
+    const seasonTrades = (opts.newsItems ?? [])
+      .filter(n => n.isUserTeam && n.type === 'trade' && n.season === season)
+      .map(n => n.headline);
+    teamData.tradesThisSeason = seasonTrades;
+  }
+
   const p = fetch('/api/spotlight', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ teamData }),
+    body: JSON.stringify({ teamData, narrative }),
   })
     .then(res => res.ok ? res.json() : Promise.reject(new Error('API error')))
     .then(data => {
-      // Only update if this is still the current request
       if (cache.key !== key) return;
       cache.topics = (data.topics as { headline: string; icon: string; exchanges: { speakerId: 'stats' | 'hottake'; text: string }[] }[]).map(t => ({
         headline: t.headline,
@@ -119,7 +316,6 @@ export function fetchAiSpotlight(
       if (cache.key !== key) return;
       cache.loading = false;
       cache.error = true;
-      // Clear the key so a retry is possible
       cache.key = '';
       notify();
     });

@@ -16,7 +16,7 @@ import { LEAGUE_TEAMS, type TeamTemplate } from '@/lib/data/teams';
 import { type ImportedLeagueData, loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { generateTeamSpotlight, COMMENTATORS, type SpotlightContext } from '@/lib/engine/debate';
-import { getAiSpotlightState, subscribeAiSpotlight, fetchAiSpotlight } from '@/lib/engine/aiSpotlight';
+import { getAiSpotlightState, subscribeAiSpotlight, fetchAiSpotlight, detectNarrativeMoment } from '@/lib/engine/aiSpotlight';
 import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
 
@@ -343,7 +343,7 @@ function TeamSpotlightSection({
   ctx?: SpotlightContext;
   onPlayerClick: (id: string) => void;
 }) {
-  const { leagueSettings } = useGameStore();
+  const { leagueSettings, newsItems, draftResults, playoffBracket, playoffSeeds, champions, players: allPlayersFromStore } = useGameStore();
   const aiCommentary = leagueSettings?.aiCommentary ?? true;
 
   const templateTopics = React.useMemo(
@@ -360,11 +360,18 @@ function TeamSpotlightSection({
 
   // If AI is enabled but nothing was pre-fetched yet (e.g. direct page load), trigger fetch
   React.useEffect(() => {
-    if (aiCommentary && !aiState.topics && !aiState.loading && !aiState.error && templateTopics.length > 0) {
-      fetchAiSpotlight(team, roster, allTeams, season, week, ctx?.phase ?? 'regular');
+    if (aiCommentary && !aiState.topics && !aiState.loading && !aiState.error) {
+      const phase = ctx?.phase ?? 'regular';
+      const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
+      const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, team.id);
+      fetchAiSpotlight({
+        team, roster, allTeams, allPlayers, season, week, phase, narrative,
+        newsItems, draftResults, playoffBracket, playoffSeeds, champions,
+        tradeDeadlineWeek,
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiCommentary, templateTopics.length]);
+  }, [aiCommentary, team, season, week, ctx?.phase]);
 
   const topics = (aiCommentary && aiState.topics) ? aiState.topics : templateTopics;
 
