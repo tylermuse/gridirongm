@@ -21,7 +21,21 @@ const POSITION_SALARY_MULTIPLIER: Partial<Record<Position, number>> = {
   P: 0.12,
 };
 
-export function estimateSalary(overall: number, position?: Position, age?: number, potential?: number): number {
+/** Base cap the salary curve was designed for */
+const BASE_CAP = DEFAULT_LEAGUE_SETTINGS.salaryCap; // 300
+
+/** Compute cap inflation factor from the current team salary cap */
+export function capInflationFactor(currentCap: number): number {
+  return currentCap / BASE_CAP;
+}
+
+/**
+ * Estimate a player's market salary.
+ * @param capInflation  Ratio of current salary cap to the base cap (e.g. 420/300 = 1.4).
+ *                      Pass `currentCap / 300` to scale salaries with cap growth.
+ *                      Defaults to 1.0 (no scaling — backwards compatible).
+ */
+export function estimateSalary(overall: number, position?: Position, age?: number, potential?: number, capInflation = 1.0): number {
   // Piecewise salary curve tuned to pro reality:
   //   40 OVR → league min (~$0.75M)  — practice squad / camp body
   //   50 OVR → ~$2M                  — depth / backup
@@ -66,6 +80,7 @@ export function estimateSalary(overall: number, position?: Position, age?: numbe
       salary += Math.max(0, potential - overall) * 0.10;
     }
 
+    salary *= capInflation;
     return Math.round(Math.max(LEAGUE_MINIMUM_SALARY, salary) * 10) / 10;
   }
 
@@ -107,9 +122,12 @@ export function estimateSalary(overall: number, position?: Position, age?: numbe
     salary += potentialBonus;
   }
 
-  // K/P hard caps — realistic NFL market ceilings
-  if (position === 'K') salary = Math.min(salary, 4.0);  // Tucker-tier max ~$5-6M, most kickers $2-4M
-  if (position === 'P') salary = Math.min(salary, 2.5);  // Top punters ~$3-4M, most $1.5-2.5M
+  // Scale with cap inflation — salaries grow as the cap grows
+  salary *= capInflation;
 
-  return Math.round(salary * 10) / 10;
+  // K/P hard caps — scale with inflation too
+  if (position === 'K') salary = Math.min(salary, 4.0 * capInflation);
+  if (position === 'P') salary = Math.min(salary, 2.5 * capInflation);
+
+  return Math.round(Math.max(LEAGUE_MINIMUM_SALARY, salary) * 10) / 10;
 }

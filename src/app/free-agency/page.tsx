@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
-import { LEAGUE_MINIMUM_SALARY, LUXURY_TAX_RATE, computeLuxuryTax, faPriceDecay, estimateSalary } from '@/lib/engine/store';
+import { LEAGUE_MINIMUM_SALARY, LUXURY_TAX_RATE, computeLuxuryTax, faPriceDecay, estimateSalary, capInflationFactor } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -188,6 +188,7 @@ export default function FreeAgencyPage() {
   }
 
   const userTeam = teams.find(t => t.id === userTeamId);
+  const ci = userTeam ? capInflationFactor(userTeam.salaryCap) : 1.0;
   const capSpace = userTeam ? Math.round((userTeam.salaryCap - userTeam.totalPayroll) * 10) / 10 : 0;
   const overCap = capSpace < 0;
   const luxuryTax = userTeam ? computeLuxuryTax(userTeam.totalPayroll, userTeam.salaryCap) : 0;
@@ -223,8 +224,8 @@ export default function FreeAgencyPage() {
         case 'ovr': return dir * (a.ratings.overall - b.ratings.overall);
         case 'pot': return dir * (a.potential - b.potential);
         case 'salary': {
-          const aSal = estimateSalary(a.ratings.overall, a.position, a.age, a.potential) * decay;
-          const bSal = estimateSalary(b.ratings.overall, b.position, b.age, b.potential) * decay;
+          const aSal = estimateSalary(a.ratings.overall, a.position, a.age, a.potential, ci) * decay;
+          const bSal = estimateSalary(b.ratings.overall, b.position, b.age, b.potential, ci) * decay;
           return dir * (aSal - bSal);
         }
         default: return 0;
@@ -240,20 +241,20 @@ export default function FreeAgencyPage() {
       // Over cap: can only sign at league minimum. Only show players whose decayed market rate
       // is close enough to minimum that they might accept (within 2x league min).
       filteredAgents = filteredAgents.filter(p => {
-        const market = estimateSalary(p.ratings.overall, p.position, p.age, p.potential) * decay;
+        const market = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci) * decay;
         return market <= LEAGUE_MINIMUM_SALARY * 2;
       });
     } else {
       // Under cap: filter to players whose market salary fits within cap space
       const affordCap = Math.max(capSpace, LEAGUE_MINIMUM_SALARY);
-      filteredAgents = filteredAgents.filter(p => estimateSalary(p.ratings.overall, p.position, p.age, p.potential) * decay <= affordCap);
+      filteredAgents = filteredAgents.filter(p => estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci) * decay <= affordCap);
     }
   }
   const agents = filteredAgents.slice(0, 60);
 
   function startNegotiation(player: typeof agents[0]) {
     if (faRefusals.includes(player.id)) return;
-    const baseSal = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
+    const baseSal = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci);
     const salary = Math.round(baseSal * decay * 10) / 10;
     const neg = initNegotiation(player, salary);
     setNegotiation(neg);
@@ -698,7 +699,7 @@ export default function FreeAgencyPage() {
                 </thead>
                 <tbody>
                   {agents.map(p => {
-                    const baseSal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential);
+                    const baseSal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci);
                     const salary = Math.round(baseSal * decay * 10) / 10;
                     const isRefused = faRefusals.includes(p.id);
                     const isExpanded = expandedPlayerId === p.id;

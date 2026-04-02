@@ -20,7 +20,7 @@ import { simulateGame, generateBettingLine } from './simulate';
 import { developPlayers, POSITION_AGING } from './development';
 import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
-import { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
+import { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
 import { generateCoachingStaff, generateCoach, coachingBonus } from './coaching';
 import { computeLeagueQBTiers, getQBTierModifier } from './qbTierPyramid';
 import { teamSpecialTeamsRating } from './specialTeams';
@@ -28,7 +28,7 @@ import { teamSpecialTeamsRating } from './specialTeams';
 const SAVE_VERSION = 19;
 
 // Re-export for UI consumers
-export { estimateSalary, LEAGUE_MINIMUM_SALARY } from './salary';
+export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
 export const LUXURY_TAX_RATE = DEFAULT_LEAGUE_SETTINGS.luxuryTaxRate;
 
 /** Market size multipliers by team abbreviation (1.0 = average) */
@@ -732,6 +732,11 @@ function computeScoutingData(
 
 // estimateSalary is now imported from ./salary.ts (re-exported above for external consumers)
 
+/** estimateSalary with cap inflation derived from a team's current salary cap */
+function marketSalary(p: Player, teamCap: number): number {
+  return estimateSalary(p.ratings.overall, p.position, p.age, p.potential, capInflationFactor(teamCap));
+}
+
 /** Compute franchise tag salary: blended positional average scaled by the player's quality.
  *  For elite players (OVR 85+), this equals the top-5 positional average (like the real league).
  *  For average or below players, the tag is capped at a reasonable multiple of their market value
@@ -767,6 +772,8 @@ export function computeFranchiseTagSalary(position: Position, players: Player[],
   // making it a viable "guaranteed retention" tool vs. the negotiation risk of extending.
   // Elite players: tag approaches the top-5 positional average (real NFL formula).
   // Others: tag = market value + small premium (5-15%).
+  // Market value — franchise tag is based on top-5 positional averages which already
+  // reflect cap inflation through existing contracts, so no explicit inflation needed here.
   const playerMarket = estimateSalary(taggedPlayer.ratings.overall, taggedPlayer.position, taggedPlayer.age, taggedPlayer.potential);
   const ovr = taggedPlayer.ratings.overall;
 
@@ -846,13 +853,14 @@ function computeFARefusals(
 }
 
 function computeResigningEntry(player: Player, team: Team): ResigningEntry {
+  const ci = capInflationFactor(team.salaryCap);
   // Very unhappy players (mood < 20) refuse to re-sign entirely
   if (player.mood < 20) {
-    const base = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
+    const base = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci);
     return { playerId: player.id, askingSalary: Math.round(base * 10) / 10, askingYears: 1, refusesToResign: true };
   }
 
-  const base = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
+  const base = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci);
   const tg = team.record.wins + team.record.losses + team.record.ties;
   const winPct = tg > 0 ? (team.record.wins + team.record.ties * 0.5) / tg : 0.5;
   let mult = 1.0;
@@ -865,9 +873,9 @@ function computeResigningEntry(player: Player, team: Team): ResigningEntry {
   // Older players accept slight discounts but not massive ones
   if (player.age >= 32) mult *= 0.90;
   let askingSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, base * mult) * 10) / 10;
-  // K/P salary caps — realistic NFL market ceilings
-  if (player.position === 'K') askingSalary = Math.min(askingSalary, 4.0);
-  if (player.position === 'P') askingSalary = Math.min(askingSalary, 2.5);
+  // K/P salary caps — scale with cap inflation
+  if (player.position === 'K') askingSalary = Math.min(askingSalary, 4.0 * ci);
+  if (player.position === 'P') askingSalary = Math.min(askingSalary, 2.5 * ci);
   // Players want long-term security — asking for multi-year deals
   // makes the 1-year franchise tag a meaningful strategic trade-off
   const askingYears = player.age >= 34 ? 2
