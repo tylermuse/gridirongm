@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { generateDebateTranscript, COMMENTATORS } from '@/lib/engine/debate';
+import type { DebateTopic } from '@/lib/engine/debate';
 import { generateWeeklyRecap } from '@/lib/engine/recap';
 import { DebateBubble } from '@/components/game/DebateBubble';
 import type { RecapSegmentData, Player, Team } from '@/types';
@@ -54,31 +55,108 @@ function weekLabel(week: number): string {
   return `Week ${week}`;
 }
 
+/* ─── AI Recap Cache ─── */
+
+interface AiRecapCache {
+  key: string;
+  topics: DebateTopic[] | null;
+  loading: boolean;
+  error: boolean;
+}
+
+function useAiRecap(
+  segments: RecapSegmentData[] | undefined,
+  seasonNum: number,
+  weekNum: number,
+  aiEnabled: boolean,
+  teams: Team[],
+) {
+  const [state, setState] = useState<AiRecapCache>({ key: '', topics: null, loading: false, error: false });
+  const cacheRef = useRef<Map<string, DebateTopic[]>>(new Map());
+
+  useEffect(() => {
+    if (!aiEnabled || !segments || segments.length === 0) {
+      setState(s => ({ ...s, topics: null, loading: false, error: false }));
+      return;
+    }
+
+    const key = `s${seasonNum}-w${weekNum}`;
+
+    // Check cache
+    const cached = cacheRef.current.get(key);
+    if (cached) {
+      setState({ key, topics: cached, loading: false, error: false });
+      return;
+    }
+
+    setState({ key, topics: null, loading: true, error: false });
+
+    // Build compact segment data for the API
+    const segmentData = segments.map(s => ({
+      type: s.type,
+      title: s.title,
+      body: s.body,
+      icon: s.icon,
+      teams: s.teamIds.map(id => {
+        const t = teams.find(tm => tm.id === id);
+        return t ? { name: `${t.city} ${t.name}`, abbr: t.abbreviation, record: `${t.record.wins}-${t.record.losses}` } : null;
+      }).filter(Boolean),
+      playerIds: s.playerIds,
+    }));
+
+    fetch('/api/recap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        segments: segmentData,
+        season: seasonNum,
+        week: weekNum,
+        isPlayoffs: weekNum >= 100,
+      }),
+    })
+      .then(res => res.ok ? res.json() : Promise.reject(new Error('API error')))
+      .then(data => {
+        const topics: DebateTopic[] = (data.topics as { headline: string; icon: string; context?: string; exchanges: { speakerId: 'stats' | 'hottake'; text: string }[] }[]).map(t => ({
+          headline: t.headline,
+          icon: t.icon,
+          context: t.context,
+          exchanges: t.exchanges,
+          teamIds: [] as string[],
+          playerIds: [] as string[],
+        }));
+        cacheRef.current.set(key, topics);
+        setState({ key, topics, loading: false, error: false });
+      })
+      .catch(() => {
+        setState(s => ({ ...s, loading: false, error: true }));
+      });
+  }, [aiEnabled, segments, seasonNum, weekNum, teams]);
+
+  return state;
+}
+
 /* ─── Main Page ─── */
 
 export default function RecapPage() {
-  const { weeklyRecaps, teams, players, season, week, playoffBracket, schedule } = useGameStore();
+  const { weeklyRecaps, teams, players, season, week, playoffBracket, schedule, leagueSettings } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('show');
+  const aiCommentary = leagueSettings?.aiCommentary ?? true;
 
   // Generate playoff recaps on the fly if they're missing from weeklyRecaps
-  // (handles saves from before playoff recap generation was added)
   const allRecaps = useMemo(() => {
     const recaps = [...weeklyRecaps];
     if (!playoffBracket) return recaps;
 
-    // Find played playoff matchups grouped by round
     const playedMatchups = playoffBracket.filter(m => m.winnerId);
     if (playedMatchups.length === 0) return recaps;
 
     const rounds = [...new Set(playedMatchups.map(m => m.round))];
     for (const round of rounds) {
       const playoffWeek = 100 + round;
-      // Skip if we already have a recap for this playoff round
       if (recaps.some(r => r.season === season && r.week === playoffWeek)) continue;
 
-      // Find matching game results in schedule
       const roundMatchups = playedMatchups.filter(m => m.round === round);
       const matchupIds = new Set(roundMatchups.map(m => m.id));
       const gameResults = schedule.filter(g => matchupIds.has(g.id) && g.played);
@@ -100,11 +178,23 @@ export default function RecapPage() {
   const activeWeek = selectedWeek ?? (seasonRecaps.length > 0 ? seasonRecaps[0].week : null);
   const activeRecap = seasonRecaps.find(r => r.week === activeWeek);
 
-  // Generate debate transcript (memoized — derived from recap data)
+  // Template-based debate transcript (fallback)
   const debateTranscript = useMemo(() => {
     if (!activeRecap) return null;
     return generateDebateTranscript(activeRecap, teams, players);
   }, [activeRecap, teams, players]);
+
+  // AI-powered debate
+  const aiRecap = useAiRecap(
+    activeRecap?.segments,
+    season,
+    activeWeek ?? 0,
+    aiCommentary,
+    teams,
+  );
+
+  // Use AI topics if available, otherwise fall back to template
+  const showTopics = (aiCommentary && aiRecap.topics) ? aiRecap.topics : debateTranscript?.topics ?? [];
 
   function teamAbbr(teamId: string) {
     return teams.find(t => t.id === teamId)?.abbreviation ?? '???';
@@ -173,88 +263,106 @@ export default function RecapPage() {
             {/* Tab content */}
             {activeTab === 'show' ? (
               /* ─── The Show (Debate) ─── */
-              debateTranscript && debateTranscript.topics.length > 0 ? (
-                <div className="space-y-6">
-                  {/* Show header */}
-                  <div className="text-center mb-4">
-                    <div className="text-sm font-bold text-[var(--text-sec)] uppercase tracking-widest">
-                      Season {debateTranscript.season} — {weekLabel(debateTranscript.week)}
-                    </div>
-                    <div className="flex items-center justify-center gap-4 mt-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl">{COMMENTATORS.stats.avatar}</span>
-                        <div className="text-left">
-                          <div className="text-xs font-bold">{COMMENTATORS.stats.name}</div>
-                          <div className="text-[10px] text-blue-600">{COMMENTATORS.stats.title}</div>
-                        </div>
-                      </div>
-                      <span className="text-lg font-black text-[var(--text-sec)]">vs</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl">{COMMENTATORS.hottake.avatar}</span>
-                        <div className="text-left">
-                          <div className="text-xs font-bold">{COMMENTATORS.hottake.name}</div>
-                          <div className="text-[10px] text-red-600">{COMMENTATORS.hottake.title}</div>
-                        </div>
-                      </div>
-                    </div>
+              <>
+                {aiCommentary && aiRecap.loading && (
+                  <div className="text-center py-8 text-[var(--text-sec)]">
+                    <div className="text-2xl mb-3 animate-pulse">🎬</div>
+                    <p className="text-sm">Generating this week's show...</p>
                   </div>
-
-                  {/* Topics */}
-                  {debateTranscript.topics.map((topic, topicIdx) => (
-                    <div key={topicIdx}>
-                      {/* Topic divider */}
-                      <div className="mb-4">
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg">{topic.icon}</span>
-                          <h4 className="text-sm font-bold flex-1">{topic.headline}</h4>
-                          {/* Team badges */}
-                          <div className="flex gap-1">
-                            {topic.teamIds.slice(0, 3).map(tid => (
-                              <span
-                                key={tid}
-                                className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                                style={{ backgroundColor: teamColor(tid) + '33', color: teamColor(tid) }}
-                              >
-                                {teamAbbr(tid)}
-                              </span>
-                            ))}
+                )}
+                {aiCommentary && aiRecap.error && (
+                  <div className="text-xs text-amber-600 mb-3">
+                    AI commentary unavailable — showing template version
+                  </div>
+                )}
+                {showTopics.length > 0 && !aiRecap.loading ? (
+                  <div className="space-y-6">
+                    {/* Show header */}
+                    <div className="text-center mb-4">
+                      <div className="text-sm font-bold text-[var(--text-sec)] uppercase tracking-widest">
+                        Season {season} — {activeWeek !== null ? weekLabel(activeWeek) : ''}
+                      </div>
+                      <div className="flex items-center justify-center gap-4 mt-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl">{COMMENTATORS.stats.avatar}</span>
+                          <div className="text-left">
+                            <div className="text-xs font-bold">{COMMENTATORS.stats.name}</div>
+                            <div className="text-[10px] text-blue-600">{COMMENTATORS.stats.title}</div>
                           </div>
                         </div>
-                        {/* Context line — stat lines, scores, etc. */}
-                        {topic.context && (
-                          <p className="text-xs text-[var(--text-sec)] mt-1.5 ml-8 leading-relaxed italic">
-                            {topic.context}
-                          </p>
-                        )}
+                        <span className="text-lg font-black text-[var(--text-sec)]">vs</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl">{COMMENTATORS.hottake.avatar}</span>
+                          <div className="text-left">
+                            <div className="text-xs font-bold">{COMMENTATORS.hottake.name}</div>
+                            <div className="text-[10px] text-red-600">{COMMENTATORS.hottake.title}</div>
+                          </div>
+                        </div>
                       </div>
-
-                      {/* Exchanges */}
-                      <div className="space-y-3 pl-2 pr-2">
-                        {topic.exchanges.map((exchange, exIdx) => (
-                          <DebateBubble
-                            key={exIdx}
-                            exchange={exchange}
-                            onPlayerClick={setSelectedPlayerId}
-                            playerIds={topic.playerIds}
-                            players={players}
-                            teams={teams}
-                          />
-                        ))}
-                      </div>
-
-                      {/* Separator between topics (not after last) */}
-                      {topicIdx < debateTranscript.topics.length - 1 && (
-                        <div className="border-b border-[var(--border)] mt-6" />
+                      {aiCommentary && aiRecap.topics && (
+                        <div className="mt-2">
+                          <span className="text-[10px] font-medium text-purple-500">AI</span>
+                        </div>
                       )}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-16 text-[var(--text-sec)]">
-                  <div className="text-4xl mb-4">😴</div>
-                  <p>Nothing to debate this week — even Marcus and Tony agreed it was boring.</p>
-                </div>
-              )
+
+                    {/* Topics */}
+                    {showTopics.map((topic, topicIdx) => (
+                      <div key={topicIdx}>
+                        {/* Topic divider */}
+                        <div className="mb-4">
+                          <div className="flex items-center gap-3">
+                            <span className="text-lg">{topic.icon}</span>
+                            <h4 className="text-sm font-bold flex-1">{topic.headline}</h4>
+                            {/* Team badges */}
+                            <div className="flex gap-1">
+                              {topic.teamIds.slice(0, 3).map(tid => (
+                                <span
+                                  key={tid}
+                                  className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                                  style={{ backgroundColor: teamColor(tid) + '33', color: teamColor(tid) }}
+                                >
+                                  {teamAbbr(tid)}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Context line */}
+                          {topic.context && (
+                            <p className="text-xs text-[var(--text-sec)] mt-1.5 ml-8 leading-relaxed italic">
+                              {topic.context}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Exchanges */}
+                        <div className="space-y-3 pl-2 pr-2">
+                          {topic.exchanges.map((exchange, exIdx) => (
+                            <DebateBubble
+                              key={exIdx}
+                              exchange={exchange}
+                              onPlayerClick={setSelectedPlayerId}
+                              playerIds={topic.playerIds}
+                              players={players}
+                              teams={teams}
+                            />
+                          ))}
+                        </div>
+
+                        {/* Separator between topics (not after last) */}
+                        {topicIdx < showTopics.length - 1 && (
+                          <div className="border-b border-[var(--border)] mt-6" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : !aiRecap.loading ? (
+                  <div className="text-center py-16 text-[var(--text-sec)]">
+                    <div className="text-4xl mb-4">😴</div>
+                    <p>Nothing to debate this week — even Marcus and Tony agreed it was boring.</p>
+                  </div>
+                ) : null}
+              </>
             ) : (
               /* ─── Classic Recap ─── */
               activeRecap && activeRecap.segments.length > 0 ? (
