@@ -70,6 +70,7 @@ function useAiRecap(
   weekNum: number,
   aiEnabled: boolean,
   teams: Team[],
+  schedule: import('@/types').GameResult[],
 ) {
   const [state, setState] = useState<AiRecapCache>({ key: '', topics: null, loading: false, error: false });
   const cacheRef = useRef<Map<string, DebateTopic[]>>(new Map());
@@ -103,11 +104,26 @@ function useAiRecap(
       }).filter(Boolean),
     }));
 
+    // Build scoreboard for this week's games
+    const weekGames = schedule
+      .filter(g => g.played && g.week === weekNum)
+      .map(g => {
+        const home = teams.find(t => t.id === g.homeTeamId);
+        const away = teams.find(t => t.id === g.awayTeamId);
+        return {
+          away: away ? `${away.city} ${away.name}` : '???',
+          awayScore: g.awayScore,
+          home: home ? `${home.city} ${home.name}` : '???',
+          homeScore: g.homeScore,
+        };
+      });
+
     fetch('/api/recap', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         segments: segmentData,
+        scores: weekGames,
         season: seasonNum,
         week: weekNum,
         isPlayoffs: weekNum >= 100,
@@ -190,6 +206,7 @@ export default function RecapPage() {
     activeWeek ?? 0,
     aiCommentary,
     teams,
+    schedule,
   );
 
   // Use AI topics if available, otherwise fall back to template
