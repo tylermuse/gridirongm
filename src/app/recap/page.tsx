@@ -180,7 +180,7 @@ export default function RecapPage() {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('show');
-  const aiCommentary = leagueSettings?.aiCommentary ?? true;
+  const aiCommentary = leagueSettings?.aiCommentary ?? false;
 
   // Generate playoff recaps on the fly if they're missing from weeklyRecaps
   const allRecaps = useMemo(() => {

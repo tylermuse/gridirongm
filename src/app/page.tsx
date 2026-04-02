@@ -344,7 +344,7 @@ function TeamSpotlightSection({
   onPlayerClick: (id: string) => void;
 }) {
   const { leagueSettings, newsItems, draftResults, playoffBracket, playoffSeeds, champions, players: allPlayersFromStore } = useGameStore();
-  const aiCommentary = leagueSettings?.aiCommentary ?? true;
+  const aiCommentary = leagueSettings?.aiCommentary ?? false;
 
   const templateTopics = React.useMemo(
     () => generateTeamSpotlight(team, roster, allTeams, allPlayers, season, week, ctx),

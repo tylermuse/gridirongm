@@ -620,7 +620,7 @@ export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
   bsMode: false,
   mcafeeMode: false,
   chaosDraft: false,
-  aiCommentary: true,
+  aiCommentary: false,
 };
 
 export interface LeagueState {
