@@ -2,10 +2,9 @@
 
 import { useRef, useEffect, useCallback, useState } from 'react';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
-import { deriveFieldState, idleFieldState, type GameFieldState, type DotState } from '@/lib/game/fieldState';
+import { deriveFieldState, idleFieldState, type GameFieldState } from '@/lib/game/fieldState';
 import {
   buildPlayAnimation,
-  interpolateDots,
   bezierArcPoint,
   spawnConfetti,
   updateConfetti,
@@ -26,8 +25,7 @@ const FIELD_GREEN_DARK = '#1e6b38';
 const FIELD_GREEN_LIGHT = '#238442';
 const YARD_LINE_COLOR = 'rgba(255,255,255,0.35)';
 const HASH_MARK_COLOR = 'rgba(255,255,255,0.2)';
-const PLAYER_RADIUS = 7;
-const BALL_RADIUS = 4;
+const BALL_RADIUS = 5;
 
 // ---------------------------------------------------------------------------
 // Props
@@ -197,54 +195,7 @@ function drawLines(
 }
 
 // ---------------------------------------------------------------------------
-// Draw player dots
-// ---------------------------------------------------------------------------
-
-function drawDot(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  color: string,
-  radius: number,
-  isHighlighted: boolean,
-) {
-  // Glow for highlighted dot
-  if (isHighlighted) {
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 12;
-  }
-
-  // Dot fill
-  ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
-
-  // Border
-  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  ctx.shadowBlur = 0;
-}
-
-function drawDots(
-  ctx: CanvasRenderingContext2D,
-  dots: DotState[],
-  color: string,
-  w: number,
-  h: number,
-  highlightIndex: number = -1,
-) {
-  dots.forEach((dot, i) => {
-    const px = absYardToCanvasX(dot.x, w);
-    const py = lateralToCanvasY(dot.y, h);
-    drawDot(ctx, px, py, color, PLAYER_RADIUS, i === highlightIndex);
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Draw ball
+// Draw ball (prominent — the main visual element on the field)
 // ---------------------------------------------------------------------------
 
 function drawBall(
@@ -252,29 +203,43 @@ function drawBall(
   x: number,
   y: number,
   isAirborne: boolean,
+  possessionColor?: string,
 ) {
   ctx.save();
-  if (isAirborne) {
-    ctx.shadowColor = 'rgba(139, 90, 43, 0.6)';
-    ctx.shadowBlur = 8;
-  }
+
+  // Outer glow to make ball highly visible
+  ctx.shadowColor = isAirborne
+    ? 'rgba(255, 255, 255, 0.7)'
+    : (possessionColor ?? 'rgba(139, 90, 43, 0.6)');
+  ctx.shadowBlur = isAirborne ? 16 : 10;
+
+  const r = BALL_RADIUS;
 
   // Brown oval
   ctx.beginPath();
-  ctx.ellipse(x, y, BALL_RADIUS * 1.4, BALL_RADIUS, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y, r * 1.6, r, 0, 0, Math.PI * 2);
   ctx.fillStyle = '#8B5A2B';
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.lineWidth = 1.5;
   ctx.stroke();
 
   // Laces
-  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-  ctx.lineWidth = 0.8;
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(x - 2, y - 1);
-  ctx.lineTo(x + 2, y - 1);
+  ctx.moveTo(x - 3, y - 1.5);
+  ctx.lineTo(x + 3, y - 1.5);
   ctx.stroke();
+
+  // Small ticks on laces
+  for (let i = -2; i <= 2; i++) {
+    ctx.beginPath();
+    ctx.moveTo(x + i * 1.5, y - 2.5);
+    ctx.lineTo(x + i * 1.5, y - 0.5);
+    ctx.stroke();
+  }
 
   ctx.restore();
 }
@@ -609,33 +574,10 @@ export function AnimatedField({
     // Draw LOS and first down marker
     drawLines(ctx, w, h, losYard, fdYard);
 
-    // Interpolate dots
-    let offDots = state.offenseDots;
-    let defDots = state.defenseDots;
+    // Determine possession color for ball glow
+    const possColor = state.possession === 'home' ? homeColor : awayColor;
 
-    if (anim && progress < 1) {
-      offDots = interpolateDots(ref.prevState.offenseDots, state.offenseDots, progress);
-      defDots = interpolateDots(ref.prevState.defenseDots, state.defenseDots, progress);
-
-      // Apply moving dots overrides
-      for (const md of anim.movingDots) {
-        const dots = md.team === 'offense' ? offDots : defDots;
-        if (md.index < dots.length) {
-          const t = easeOutCubic(progress);
-          dots[md.index] = {
-            ...dots[md.index],
-            x: md.fromX + (md.toX - md.fromX) * t,
-            y: md.fromY + (md.toY - md.fromY) * t,
-          };
-        }
-      }
-    }
-
-    // Determine colors: offense = possessing team, defense = other
-    const offColor = state.possession === 'home' ? homeColor : awayColor;
-    const defColor = state.possession === 'home' ? awayColor : homeColor;
-
-    // Draw rush trail for run plays
+    // Draw ball trail for run plays (ball moves along the ground)
     if (anim && anim.type === 'run' && progress < 1) {
       const rushDot = anim.movingDots.find(m => m.team === 'offense');
       if (rushDot) {
@@ -646,30 +588,55 @@ export function AnimatedField({
           absYardToCanvasX(rushDot.toX, w),
           lateralToCanvasY(rushDot.toY, h),
           progress,
-          offColor,
+          possColor,
         );
       }
     }
 
-    // Draw defense dots (behind offense visually)
-    drawDots(ctx, defDots, defColor, w, h);
-
-    // Draw offense dots
-    drawDots(ctx, offDots, offColor, w, h);
-
-    // Draw ball
+    // Draw ball — the single focal element on the field
     if (anim && anim.ballArc && progress < 1) {
-      // Airborne ball following arc
+      // Airborne ball following arc (passes, punts, kicks)
       const endzoneW = w * (10 / 120);
       const ballPos = bezierArcPoint(anim.ballArc, easeInOutQuad(progress), w, h, endzoneW);
-      drawBall(ctx, ballPos.x, ballPos.y, true);
+      drawBall(ctx, ballPos.x, ballPos.y, true, possColor);
+    } else if (anim && anim.type === 'run' && progress < 1) {
+      // Run play: ball follows the rush path
+      const rushDot = anim.movingDots.find(m => m.team === 'offense');
+      if (rushDot) {
+        const t = easeOutCubic(progress);
+        const bx = absYardToCanvasX(rushDot.fromX + (rushDot.toX - rushDot.fromX) * t, w);
+        const by = lateralToCanvasY(rushDot.fromY + (rushDot.toY - rushDot.fromY) * t, h);
+        drawBall(ctx, bx, by, false, possColor);
+      } else {
+        const restYard = anim ? anim.ballRestX : state.ballYard;
+        const ballX = absYardToCanvasX(restYard, w);
+        const ballY = lateralToCanvasY(0.5, h);
+        drawBall(ctx, ballX, ballY, false, possColor);
+      }
+    } else if (anim && anim.type === 'sack' && progress < 1) {
+      // Sack: ball moves backward with QB
+      const qbMove = anim.movingDots.find(m => m.team === 'offense');
+      if (qbMove) {
+        const t = easeOutCubic(progress);
+        const bx = absYardToCanvasX(qbMove.fromX + (qbMove.toX - qbMove.fromX) * t, w);
+        const by = lateralToCanvasY(qbMove.fromY + (qbMove.toY - qbMove.fromY) * t, h);
+        drawBall(ctx, bx, by, false, possColor);
+      }
+    } else if (anim && anim.type === 'touchdown' && progress < 1) {
+      // Touchdown: ball moves into endzone
+      const scorer = anim.movingDots.find(m => m.team === 'offense');
+      if (scorer) {
+        const t = easeOutCubic(progress);
+        const bx = absYardToCanvasX(scorer.fromX + (scorer.toX - scorer.fromX) * t, w);
+        const by = lateralToCanvasY(scorer.fromY + (scorer.toY - scorer.fromY) * t, h);
+        drawBall(ctx, bx, by, false, possColor);
+      }
     } else {
-      // Ball at rest position — use ballRestX from animation if available
-      // (e.g., incomplete pass snaps ball back to LOS)
+      // Ball at rest position
       const restYard = anim ? anim.ballRestX : state.ballYard;
       const ballX = absYardToCanvasX(restYard, w);
       const ballY = lateralToCanvasY(0.5, h);
-      drawBall(ctx, ballX, ballY, false);
+      drawBall(ctx, ballX, ballY, false, possColor);
     }
 
     // Draw effects
