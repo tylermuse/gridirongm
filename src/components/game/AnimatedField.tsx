@@ -20,7 +20,7 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
-const FIELD_ASPECT = 2.25;
+const FIELD_ASPECT = 2.8;
 const FIELD_GREEN_DARK = '#1e6b38';
 const FIELD_GREEN_LIGHT = '#238442';
 const YARD_LINE_COLOR = 'rgba(255,255,255,0.35)';
@@ -245,6 +245,126 @@ function drawBall(
 }
 
 // ---------------------------------------------------------------------------
+// Draw yard-gain indicator (green/red zone between old and new ball position)
+// ---------------------------------------------------------------------------
+
+function drawYardGainIndicator(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  fromYard: number,
+  toYard: number,
+  fadeProgress: number,
+) {
+  if (fadeProgress <= 0 || fadeProgress > 1) return;
+  const fromX = absYardToCanvasX(fromYard, w);
+  const toX = absYardToCanvasX(toYard, w);
+  if (Math.abs(fromX - toX) < 2) return;
+
+  const alpha = 0.25 * (1 - fadeProgress);
+  const isPositive = toX > fromX; // right = positive yards (toward home endzone)
+  ctx.save();
+  ctx.fillStyle = isPositive
+    ? `rgba(34, 197, 94, ${alpha})`
+    : `rgba(239, 68, 68, ${alpha})`;
+  const x = Math.min(fromX, toX);
+  const width = Math.abs(toX - fromX);
+  ctx.fillRect(x, 0, width, h);
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Draw field position label near the ball
+// ---------------------------------------------------------------------------
+
+function drawFieldPositionLabel(
+  ctx: CanvasRenderingContext2D,
+  ballX: number,
+  ballY: number,
+  event: PlayEvent | null,
+) {
+  if (!event || !event.fieldPos) return;
+  const fp = event.fieldPos; // yards from own end zone (1-99)
+  // fieldPos ≤ 50 means own side, > 50 means opponent side
+  const label = fp <= 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
+
+  ctx.save();
+  ctx.font = 'bold 10px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.shadowColor = 'rgba(0,0,0,0.8)';
+  ctx.shadowBlur = 3;
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.fillText(label, ballX, ballY - 12);
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Draw pass arc trail (dotted line along the bezier path)
+// ---------------------------------------------------------------------------
+
+function drawPassArcTrail(
+  ctx: CanvasRenderingContext2D,
+  arc: BallArc,
+  w: number,
+  h: number,
+  color: string,
+  isComplete: boolean,
+  fadeProgress: number,
+) {
+  if (fadeProgress <= 0) return;
+  const endzoneW = w * (10 / 120);
+  const alpha = (isComplete ? 0.4 : 0.25) * (1 - fadeProgress);
+  const dotColor = isComplete ? color : 'rgba(156,163,175,1)';
+  const steps = 16;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const pt = bezierArcPoint(arc, t, w, h, endzoneW);
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = dotColor;
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Draw quarter transition overlay
+// ---------------------------------------------------------------------------
+
+function drawQuarterOverlay(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  label: string,
+  progress: number,
+) {
+  // Fade in for first 30%, hold, fade out for last 30%
+  let alpha: number;
+  if (progress < 0.3) alpha = progress / 0.3;
+  else if (progress > 0.7) alpha = (1 - progress) / 0.3;
+  else alpha = 1;
+
+  // Dark overlay
+  ctx.save();
+  ctx.fillStyle = `rgba(0, 0, 0, ${0.6 * alpha})`;
+  ctx.fillRect(0, 0, w, h);
+
+  // Centered text
+  ctx.font = 'bold 22px system-ui, sans-serif';
+  ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 4;
+  ctx.fillText(label, w / 2, h / 2);
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
 // Effect overlays
 // ---------------------------------------------------------------------------
 
@@ -429,6 +549,21 @@ function drawRushTrail(
 }
 
 // ---------------------------------------------------------------------------
+// Separator label helper
+// ---------------------------------------------------------------------------
+
+function separatorLabel(type: string): string {
+  switch (type) {
+    case 'quarter_end': return 'END OF QUARTER';
+    case 'halftime': return 'HALFTIME';
+    case 'two_minute_warning': return 'TWO-MINUTE WARNING';
+    case 'overtime': return 'OVERTIME';
+    case 'final': return 'FINAL';
+    default: return '';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main AnimatedField component
 // ---------------------------------------------------------------------------
 
@@ -457,7 +592,19 @@ export function AnimatedField({
     confetti: ConfettiParticle[];
     lastTimestamp: number;
     isAnimating: boolean;
-    completeFired: boolean;  // ensure onAnimationComplete fires only once per play
+    completeFired: boolean;
+    // Yard-gain indicator fade
+    gainFadeProgress: number;
+    gainFromYard: number;
+    gainToYard: number;
+    // Pass arc trail fade
+    arcTrailFadeProgress: number;
+    arcTrailArc: BallArc | null;
+    arcTrailComplete: boolean;
+    // Quarter overlay
+    quarterOverlayProgress: number;
+    quarterOverlayLabel: string;
+    quarterOverlayActive: boolean;
   }>({
     prevState: idleFieldState(),
     nextState: idleFieldState(),
@@ -467,10 +614,19 @@ export function AnimatedField({
     lastTimestamp: 0,
     isAnimating: false,
     completeFired: true,
+    gainFadeProgress: 1,
+    gainFromYard: 50,
+    gainToYard: 50,
+    arcTrailFadeProgress: 1,
+    arcTrailArc: null,
+    arcTrailComplete: false,
+    quarterOverlayProgress: 1,
+    quarterOverlayLabel: '',
+    quarterOverlayActive: false,
   });
 
   const rafRef = useRef<number>(0);
-  const [canvasSize, setCanvasSize] = useState({ w: 800, h: 356 });
+  const [canvasSize, setCanvasSize] = useState({ w: 800, h: Math.round(800 / FIELD_ASPECT) });
 
   // Resize observer
   useEffect(() => {
@@ -498,11 +654,21 @@ export function AnimatedField({
     ref.prevState = prevState;
     ref.nextState = nextState;
 
-    if (event && !isSeparator(event.type)) {
+    if (event && isSeparator(event.type)) {
+      // Quarter transition overlay
+      ref.animation = null;
+      ref.progress = 0;
+      ref.isAnimating = true;
+      ref.completeFired = false;
+      ref.quarterOverlayProgress = 0;
+      ref.quarterOverlayLabel = separatorLabel(event.type);
+      ref.quarterOverlayActive = true;
+    } else if (event) {
       ref.animation = buildPlayAnimation(prevState, nextState, event, animationSpeed);
       ref.progress = 0;
       ref.isAnimating = true;
       ref.completeFired = false;
+      ref.quarterOverlayActive = false;
 
       // Spawn confetti on TD
       if (ref.animation.effects.includes('confetti')) {
@@ -518,8 +684,7 @@ export function AnimatedField({
       ref.progress = 1;
       ref.isAnimating = false;
       ref.completeFired = true;
-      // Separator events (quarter_end, halftime, etc.) complete immediately
-      onAnimCompleteRef.current?.();
+      ref.quarterOverlayActive = false;
     }
   }, [event, prevEvent, animationSpeed, canvasSize.w, canvasSize.h, homeColor, awayColor]);
 
@@ -537,17 +702,56 @@ export function AnimatedField({
     const dt = ref.lastTimestamp > 0 ? Math.min((timestamp - ref.lastTimestamp) / 1000, 0.05) : 0.016;
     ref.lastTimestamp = timestamp;
 
-    // Update animation progress
-    if (ref.isAnimating && ref.animation) {
-      const duration = ref.animation.durationMs / 1000;
-      ref.progress = Math.min(1, ref.progress + dt / duration);
-      if (ref.progress >= 1) {
+    // Update quarter overlay
+    if (ref.quarterOverlayActive) {
+      const overlayDuration = 1.2; // seconds
+      ref.quarterOverlayProgress = Math.min(1, ref.quarterOverlayProgress + dt / overlayDuration);
+      if (ref.quarterOverlayProgress >= 1) {
+        ref.quarterOverlayActive = false;
         ref.isAnimating = false;
         if (!ref.completeFired) {
           ref.completeFired = true;
           onAnimCompleteRef.current?.();
         }
       }
+    }
+
+    // Update animation progress
+    if (ref.isAnimating && ref.animation && !ref.quarterOverlayActive) {
+      const duration = ref.animation.durationMs / 1000;
+      ref.progress = Math.min(1, ref.progress + dt / duration);
+      if (ref.progress >= 1) {
+        ref.isAnimating = false;
+        if (!ref.completeFired) {
+          ref.completeFired = true;
+
+          // Start yard-gain indicator fade
+          const prevYard = ref.prevState.ballYard;
+          const nextYard = ref.nextState.ballYard;
+          if (Math.abs(prevYard - nextYard) >= 1) {
+            ref.gainFromYard = prevYard;
+            ref.gainToYard = nextYard;
+            ref.gainFadeProgress = 0;
+          }
+
+          // Start pass arc trail fade
+          if (ref.animation && ref.animation.ballArc) {
+            ref.arcTrailArc = ref.animation.ballArc;
+            ref.arcTrailComplete = !ref.animation.effects.includes('incomplete');
+            ref.arcTrailFadeProgress = 0;
+          }
+
+          onAnimCompleteRef.current?.();
+        }
+      }
+    }
+
+    // Update fading effects
+    if (ref.gainFadeProgress < 1) {
+      ref.gainFadeProgress = Math.min(1, ref.gainFadeProgress + dt);
+    }
+    if (ref.arcTrailFadeProgress < 1) {
+      ref.arcTrailFadeProgress = Math.min(1, ref.arcTrailFadeProgress + dt * 0.8);
     }
 
     // Update confetti
@@ -574,6 +778,17 @@ export function AnimatedField({
     // Draw LOS and first down marker
     drawLines(ctx, w, h, losYard, fdYard);
 
+    // Draw yard-gain indicator (fading zone between old and new ball position)
+    if (ref.gainFadeProgress < 1) {
+      drawYardGainIndicator(ctx, w, h, ref.gainFromYard, ref.gainToYard, ref.gainFadeProgress);
+    }
+
+    // Draw pass arc trail (fading dotted line)
+    if (ref.arcTrailFadeProgress < 1 && ref.arcTrailArc) {
+      const possColor = state.possession === 'home' ? homeColor : awayColor;
+      drawPassArcTrail(ctx, ref.arcTrailArc, w, h, possColor, ref.arcTrailComplete, ref.arcTrailFadeProgress);
+    }
+
     // Determine possession color for ball glow
     const possColor = state.possession === 'home' ? homeColor : awayColor;
 
@@ -594,49 +809,59 @@ export function AnimatedField({
     }
 
     // Draw ball — the single focal element on the field
+    let ballScreenX = 0;
+    let ballScreenY = 0;
+
     if (anim && anim.ballArc && progress < 1) {
       // Airborne ball following arc (passes, punts, kicks)
       const endzoneW = w * (10 / 120);
       const ballPos = bezierArcPoint(anim.ballArc, easeInOutQuad(progress), w, h, endzoneW);
-      drawBall(ctx, ballPos.x, ballPos.y, true, possColor);
+      ballScreenX = ballPos.x;
+      ballScreenY = ballPos.y;
+      drawBall(ctx, ballScreenX, ballScreenY, true, possColor);
     } else if (anim && anim.type === 'run' && progress < 1) {
       // Run play: ball follows the rush path
       const rushDot = anim.movingDots.find(m => m.team === 'offense');
       if (rushDot) {
         const t = easeOutCubic(progress);
-        const bx = absYardToCanvasX(rushDot.fromX + (rushDot.toX - rushDot.fromX) * t, w);
-        const by = lateralToCanvasY(rushDot.fromY + (rushDot.toY - rushDot.fromY) * t, h);
-        drawBall(ctx, bx, by, false, possColor);
+        ballScreenX = absYardToCanvasX(rushDot.fromX + (rushDot.toX - rushDot.fromX) * t, w);
+        ballScreenY = lateralToCanvasY(rushDot.fromY + (rushDot.toY - rushDot.fromY) * t, h);
+        drawBall(ctx, ballScreenX, ballScreenY, false, possColor);
       } else {
         const restYard = anim ? anim.ballRestX : state.ballYard;
-        const ballX = absYardToCanvasX(restYard, w);
-        const ballY = lateralToCanvasY(0.5, h);
-        drawBall(ctx, ballX, ballY, false, possColor);
+        ballScreenX = absYardToCanvasX(restYard, w);
+        ballScreenY = lateralToCanvasY(0.5, h);
+        drawBall(ctx, ballScreenX, ballScreenY, false, possColor);
       }
     } else if (anim && anim.type === 'sack' && progress < 1) {
       // Sack: ball moves backward with QB
       const qbMove = anim.movingDots.find(m => m.team === 'offense');
       if (qbMove) {
         const t = easeOutCubic(progress);
-        const bx = absYardToCanvasX(qbMove.fromX + (qbMove.toX - qbMove.fromX) * t, w);
-        const by = lateralToCanvasY(qbMove.fromY + (qbMove.toY - qbMove.fromY) * t, h);
-        drawBall(ctx, bx, by, false, possColor);
+        ballScreenX = absYardToCanvasX(qbMove.fromX + (qbMove.toX - qbMove.fromX) * t, w);
+        ballScreenY = lateralToCanvasY(qbMove.fromY + (qbMove.toY - qbMove.fromY) * t, h);
+        drawBall(ctx, ballScreenX, ballScreenY, false, possColor);
       }
     } else if (anim && anim.type === 'touchdown' && progress < 1) {
       // Touchdown: ball moves into endzone
       const scorer = anim.movingDots.find(m => m.team === 'offense');
       if (scorer) {
         const t = easeOutCubic(progress);
-        const bx = absYardToCanvasX(scorer.fromX + (scorer.toX - scorer.fromX) * t, w);
-        const by = lateralToCanvasY(scorer.fromY + (scorer.toY - scorer.fromY) * t, h);
-        drawBall(ctx, bx, by, false, possColor);
+        ballScreenX = absYardToCanvasX(scorer.fromX + (scorer.toX - scorer.fromX) * t, w);
+        ballScreenY = lateralToCanvasY(scorer.fromY + (scorer.toY - scorer.fromY) * t, h);
+        drawBall(ctx, ballScreenX, ballScreenY, false, possColor);
       }
     } else {
       // Ball at rest position
       const restYard = anim ? anim.ballRestX : state.ballYard;
-      const ballX = absYardToCanvasX(restYard, w);
-      const ballY = lateralToCanvasY(0.5, h);
-      drawBall(ctx, ballX, ballY, false, possColor);
+      ballScreenX = absYardToCanvasX(restYard, w);
+      ballScreenY = lateralToCanvasY(0.5, h);
+      drawBall(ctx, ballScreenX, ballScreenY, false, possColor);
+    }
+
+    // Field position label near the ball (only when ball at rest)
+    if (!ref.isAnimating && event && !isSeparator(event.type)) {
+      drawFieldPositionLabel(ctx, ballScreenX, ballScreenY, event);
     }
 
     // Draw effects
@@ -644,13 +869,19 @@ export function AnimatedField({
       drawEffects(ctx, w, h, anim.effects, progress, homeColor, state.possession);
     }
 
+    // Draw quarter transition overlay
+    if (ref.quarterOverlayActive) {
+      drawQuarterOverlay(ctx, w, h, ref.quarterOverlayLabel, ref.quarterOverlayProgress);
+    }
+
     // Draw confetti
     if (ref.confetti.length > 0) {
       drawConfetti(ctx, ref.confetti);
     }
 
-    // Continue loop if animating or confetti active
-    if (ref.isAnimating || ref.confetti.length > 0) {
+    // Continue loop if animating, fading effects active, or confetti active
+    const hasFadingEffects = ref.gainFadeProgress < 1 || ref.arcTrailFadeProgress < 1;
+    if (ref.isAnimating || ref.confetti.length > 0 || hasFadingEffects || ref.quarterOverlayActive) {
       rafRef.current = requestAnimationFrame(render);
     }
   }, [canvasSize, homeColor, awayColor, homeAbbr, awayAbbr]);
