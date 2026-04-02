@@ -71,6 +71,7 @@ function useAiRecap(
   aiEnabled: boolean,
   teams: Team[],
   schedule: import('@/types').GameResult[],
+  allPlayers: Player[],
 ) {
   const [state, setState] = useState<AiRecapCache>({ key: '', topics: null, loading: false, error: false });
   const cacheRef = useRef<Map<string, DebateTopic[]>>(new Map());
@@ -83,7 +84,6 @@ function useAiRecap(
 
     const key = `s${seasonNum}-w${weekNum}`;
 
-    // Check cache
     const cached = cacheRef.current.get(key);
     if (cached) {
       setState({ key, topics: cached, loading: false, error: false });
@@ -92,38 +92,61 @@ function useAiRecap(
 
     setState({ key, topics: null, loading: true, error: false });
 
-    // Build compact segment data — cap at 6 segments to keep payload manageable
-    const segmentData = segments.slice(0, 6).map(s => ({
-      type: s.type,
-      title: s.title,
-      body: s.body,
-      icon: s.icon,
-      teams: s.teamIds.map(id => {
-        const t = teams.find(tm => tm.id === id);
-        return t ? { name: `${t.city} ${t.name}`, abbr: t.abbreviation, record: `${t.record.wins}-${t.record.losses}` } : null;
-      }).filter(Boolean),
-    }));
-
-    // Build scoreboard for this week's games
+    // Build game-by-game data with key stats for each game
     const weekGames = schedule
       .filter(g => g.played && g.week === weekNum)
       .map(g => {
         const home = teams.find(t => t.id === g.homeTeamId);
         const away = teams.find(t => t.id === g.awayTeamId);
-        return {
-          away: away ? `${away.city} ${away.name}` : '???',
-          awayScore: g.awayScore,
-          home: home ? `${home.city} ${home.name}` : '???',
-          homeScore: g.homeScore,
+
+        // Extract key player stats for each team
+        const getTopStats = (teamId: string) => {
+          const entries = Object.entries(g.playerStats)
+            .map(([pid, stats]) => {
+              const p = allPlayers.find(pl => pl.id === pid);
+              if (!p || p.teamId !== teamId) return null;
+              return { name: `${p.firstName} ${p.lastName}`, pos: p.position, ...stats };
+            })
+            .filter(Boolean) as { name: string; pos: string; passYards?: number; passTDs?: number; interceptions?: number; rushYards?: number; rushTDs?: number; receivingYards?: number; receivingTDs?: number; tackles?: number; sacks?: number }[];
+
+          const qb = entries.find(e => e.pos === 'QB');
+          const rusher = entries.filter(e => (e.rushYards ?? 0) > 0).sort((a, b) => (b.rushYards ?? 0) - (a.rushYards ?? 0))[0];
+          const receiver = entries.filter(e => (e.receivingYards ?? 0) > 0).sort((a, b) => (b.receivingYards ?? 0) - (a.receivingYards ?? 0))[0];
+
+          return {
+            qb: qb ? { name: qb.name, passYds: qb.passYards ?? 0, tds: qb.passTDs ?? 0, ints: qb.interceptions ?? 0 } : null,
+            rusher: rusher ? { name: rusher.name, rushYds: rusher.rushYards ?? 0, tds: rusher.rushTDs ?? 0 } : null,
+            receiver: receiver ? { name: receiver.name, recYds: receiver.receivingYards ?? 0, tds: receiver.receivingTDs ?? 0 } : null,
+          };
         };
-      });
+
+        // Find matching storyline from segments
+        const storyline = segments.find(s =>
+          s.teamIds.includes(g.homeTeamId) || s.teamIds.includes(g.awayTeamId));
+
+        return {
+          away: { name: away ? `${away.city} ${away.name}` : '???', abbr: away?.abbreviation ?? '???', record: away ? `${away.record.wins}-${away.record.losses}` : '?', score: g.awayScore },
+          home: { name: home ? `${home.city} ${home.name}` : '???', abbr: home?.abbreviation ?? '???', record: home ? `${home.record.wins}-${home.record.losses}` : '?', score: g.homeScore },
+          margin: Math.abs(g.homeScore - g.awayScore),
+          awayStats: getTopStats(g.awayTeamId),
+          homeStats: getTopStats(g.homeTeamId),
+          storyline: storyline ? { type: storyline.type, title: storyline.title } : null,
+        };
+      })
+      // Sort: biggest storylines first (upsets, comebacks, shootouts), then by margin
+      .sort((a, b) => {
+        const storyPriority: Record<string, number> = { upset: 5, comeback: 4, shootout: 3, blowout: 2, defensive: 1 };
+        const aP = a.storyline ? (storyPriority[a.storyline.type] ?? 0) : 0;
+        const bP = b.storyline ? (storyPriority[b.storyline.type] ?? 0) : 0;
+        return bP - aP || b.margin - a.margin;
+      })
+      .slice(0, 8); // Cap at 8 games
 
     fetch('/api/recap', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        segments: segmentData,
-        scores: weekGames,
+        games: weekGames,
         season: seasonNum,
         week: weekNum,
         isPlayoffs: weekNum >= 100,
@@ -207,6 +230,7 @@ export default function RecapPage() {
     aiCommentary,
     teams,
     schedule,
+    players,
   );
 
   // Use AI topics if available, otherwise fall back to template
