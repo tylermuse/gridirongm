@@ -91,8 +91,8 @@ function useAiRecap(
 
     setState({ key, topics: null, loading: true, error: false });
 
-    // Build compact segment data for the API
-    const segmentData = segments.map(s => ({
+    // Build compact segment data — cap at 6 segments to keep payload manageable
+    const segmentData = segments.slice(0, 6).map(s => ({
       type: s.type,
       title: s.title,
       body: s.body,
@@ -101,7 +101,6 @@ function useAiRecap(
         const t = teams.find(tm => tm.id === id);
         return t ? { name: `${t.city} ${t.name}`, abbr: t.abbreviation, record: `${t.record.wins}-${t.record.losses}` } : null;
       }).filter(Boolean),
-      playerIds: s.playerIds,
     }));
 
     fetch('/api/recap', {

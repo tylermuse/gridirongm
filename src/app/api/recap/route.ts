@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
     const message = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 3000,
+      max_tokens: 4000,
       messages: [
         {
           role: 'user',
@@ -73,7 +73,13 @@ Return ONLY the JSON array, no markdown fences, no other text.`,
       console.error('Recap API: no JSON array found in response:', raw.slice(0, 200));
       return NextResponse.json({ error: 'Invalid response format' }, { status: 500 });
     }
-    const topics = JSON.parse(raw.slice(start, end + 1));
+    let topics;
+    try {
+      topics = JSON.parse(raw.slice(start, end + 1));
+    } catch (parseErr) {
+      console.error('Recap API JSON parse failed. Raw response (first 500 chars):', raw.slice(0, 500));
+      return NextResponse.json({ error: 'JSON parse error' }, { status: 500 });
+    }
     return NextResponse.json({ topics });
   } catch (err) {
     console.error('Recap API error:', err);
