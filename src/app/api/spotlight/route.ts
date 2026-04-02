@@ -1,7 +1,24 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import crypto from 'crypto';
 
 const anthropic = new Anthropic();
+
+// Server-side cache
+const cache = new Map<string, { topics: unknown[]; ts: number }>();
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const CACHE_MAX = 200;
+
+function cacheKey(data: unknown): string {
+  return crypto.createHash('md5').update(JSON.stringify(data)).digest('hex');
+}
+
+function pruneCache() {
+  if (cache.size <= CACHE_MAX) return;
+  const entries = [...cache.entries()].sort((a, b) => a[1].ts - b[1].ts);
+  const toRemove = entries.slice(0, entries.length - CACHE_MAX);
+  for (const [k] of toRemove) cache.delete(k);
+}
 
 type NarrativeMoment = 'preseason' | 'tradeDeadline' | 'playoffsStart' | 'seasonOver' | 'weekly';
 
@@ -74,6 +91,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'teamData required' }, { status: 400 });
     }
 
+    // Check server-side cache
+    const key = cacheKey({ teamData, narrative });
+    const cached = cache.get(key);
+    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+      return NextResponse.json({ topics: cached.topics });
+    }
+
     const narrativePrompt = buildNarrativePrompt(narrative as NarrativeMoment);
 
     const message = await anthropic.messages.create({
@@ -128,6 +152,11 @@ Return ONLY the JSON array, no markdown fences, no other text.`,
       return NextResponse.json({ error: 'Invalid response format' }, { status: 500 });
     }
     const topics = JSON.parse(raw.slice(start, end + 1));
+
+    // Cache the result
+    cache.set(key, { topics, ts: Date.now() });
+    pruneCache();
+
     return NextResponse.json({ topics });
   } catch (err) {
     console.error('Spotlight API error:', err);

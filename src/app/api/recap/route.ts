@@ -1,7 +1,26 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import crypto from 'crypto';
 
 const anthropic = new Anthropic();
+
+// Server-side cache: survives across requests within the same serverless instance.
+// Key = content hash of game data, Value = { topics, timestamp }.
+// Entries expire after 1 hour. Max 200 entries to bound memory.
+const cache = new Map<string, { topics: unknown[]; ts: number }>();
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const CACHE_MAX = 200;
+
+function cacheKey(data: unknown): string {
+  return crypto.createHash('md5').update(JSON.stringify(data)).digest('hex');
+}
+
+function pruneCache() {
+  if (cache.size <= CACHE_MAX) return;
+  const entries = [...cache.entries()].sort((a, b) => a[1].ts - b[1].ts);
+  const toRemove = entries.slice(0, entries.length - CACHE_MAX);
+  for (const [k] of toRemove) cache.delete(k);
+}
 
 export async function POST(request: Request) {
   try {
@@ -12,6 +31,13 @@ export async function POST(request: Request) {
     const { games, season, week, isPlayoffs } = await request.json();
     if (!games || !Array.isArray(games) || games.length === 0) {
       return NextResponse.json({ error: 'games array required' }, { status: 400 });
+    }
+
+    // Check server-side cache
+    const key = cacheKey({ games, season, week });
+    const cached = cache.get(key);
+    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+      return NextResponse.json({ topics: cached.topics });
     }
 
     const weekContext = isPlayoffs
@@ -80,6 +106,10 @@ Return ONLY the JSON array.`,
       console.error('Recap API JSON parse failed. Raw (first 500):', raw.slice(0, 500));
       return NextResponse.json({ error: 'JSON parse error' }, { status: 500 });
     }
+    // Cache the result
+    cache.set(key, { topics, ts: Date.now() });
+    pruneCache();
+
     return NextResponse.json({ topics });
   } catch (err) {
     console.error('Recap API error:', err);
