@@ -25,7 +25,7 @@ const FIELD_GREEN_DARK = '#1e6b38';
 const FIELD_GREEN_LIGHT = '#238442';
 const YARD_LINE_COLOR = 'rgba(255,255,255,0.35)';
 const HASH_MARK_COLOR = 'rgba(255,255,255,0.2)';
-const BALL_RADIUS = 5;
+const BALL_RADIUS = 8;
 
 // ---------------------------------------------------------------------------
 // Props
@@ -182,15 +182,17 @@ function drawLines(
   ctx.stroke();
   ctx.globalAlpha = 1;
 
-  // First down line (yellow)
+  // First down line (yellow, dashed — distinct from solid blue LOS)
   ctx.strokeStyle = '#fbbf24';
-  ctx.lineWidth = 2;
-  ctx.shadowColor = 'rgba(251, 191, 36, 0.5)';
-  ctx.shadowBlur = 6;
+  ctx.lineWidth = 2.5;
+  ctx.setLineDash([8, 4]);
+  ctx.shadowColor = 'rgba(251, 191, 36, 0.6)';
+  ctx.shadowBlur = 8;
   ctx.beginPath();
   ctx.moveTo(fdX, 0);
   ctx.lineTo(fdX, h);
   ctx.stroke();
+  ctx.setLineDash([]);
   ctx.shadowBlur = 0;
 }
 
@@ -211,7 +213,7 @@ function drawBall(
   ctx.shadowColor = isAirborne
     ? 'rgba(255, 255, 255, 0.7)'
     : (possessionColor ?? 'rgba(139, 90, 43, 0.6)');
-  ctx.shadowBlur = isAirborne ? 16 : 10;
+  ctx.shadowBlur = isAirborne ? 20 : 14;
 
   const r = BALL_RADIUS;
 
@@ -282,11 +284,14 @@ function drawFieldPositionLabel(
   ballX: number,
   ballY: number,
   event: PlayEvent | null,
+  homeAbbr: string,
+  awayAbbr: string,
 ) {
   if (!event || !event.fieldPos) return;
-  const fp = event.fieldPos; // yards from own end zone (1-99)
-  // fieldPos ≤ 50 means own side, > 50 means opponent side
-  const label = fp <= 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
+  const fp = event.fieldPos;
+  const possAbbr = event.possession === 'home' ? homeAbbr : awayAbbr;
+  const oppAbbr = event.possession === 'home' ? awayAbbr : homeAbbr;
+  const label = fp <= 50 ? `${possAbbr} ${fp}` : `${oppAbbr} ${100 - fp}`;
 
   ctx.save();
   ctx.font = 'bold 10px system-ui, sans-serif';
@@ -386,13 +391,17 @@ function drawEffects(
         ctx.lineWidth = 6;
         ctx.strokeRect(0, 0, w, h);
 
-        // TURNOVER text
+        // TURNOVER text with outline
         if (progress < 0.7) {
+          const tAlpha = Math.max(0, 1 - progress * 1.5);
           ctx.save();
-          ctx.font = 'bold 24px system-ui, sans-serif';
-          ctx.fillStyle = `rgba(239, 68, 68, ${Math.max(0, 1 - progress * 1.5)})`;
+          ctx.font = 'bold 26px system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
+          ctx.strokeStyle = `rgba(0, 0, 0, ${tAlpha * 0.8})`;
+          ctx.lineWidth = 4;
+          ctx.strokeText('TURNOVER', w / 2, h / 2);
+          ctx.fillStyle = `rgba(239, 68, 68, ${tAlpha})`;
           ctx.fillText('TURNOVER', w / 2, h / 2);
           ctx.restore();
         }
@@ -410,20 +419,22 @@ function drawEffects(
       case 'touchdown': {
         // End zone pulse
         const endzoneW = w * (10 / 120);
-        const alpha = Math.max(0, 0.5 * (1 - progress));
+        const tdAlpha = Math.max(0, 0.5 * (1 - progress));
         const ezX = possession === 'home' ? w - endzoneW : 0;
-        ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`;
+        ctx.fillStyle = `rgba(255, 215, 0, ${tdAlpha})`;
         ctx.fillRect(ezX, 0, endzoneW, h);
 
-        // TD text
+        // TD text with outline
         if (progress < 0.8) {
+          const tAlpha = Math.max(0, 1 - progress * 1.3);
           ctx.save();
           ctx.font = 'bold 32px system-ui, sans-serif';
-          ctx.fillStyle = `rgba(255, 215, 0, ${Math.max(0, 1 - progress * 1.3)})`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.shadowColor = 'rgba(0,0,0,0.5)';
-          ctx.shadowBlur = 4;
+          ctx.strokeStyle = `rgba(0, 0, 0, ${tAlpha * 0.8})`;
+          ctx.lineWidth = 5;
+          ctx.strokeText('TOUCHDOWN!', w / 2, h / 2);
+          ctx.fillStyle = `rgba(255, 215, 0, ${tAlpha})`;
           ctx.fillText('TOUCHDOWN!', w / 2, h / 2);
           ctx.restore();
         }
@@ -448,13 +459,17 @@ function drawEffects(
           ctx.restore();
         }
 
-        // PENALTY text
+        // PENALTY text with outline
         if (progress < 0.6) {
+          const pAlpha = Math.max(0, 1 - progress * 2);
           ctx.save();
-          ctx.font = 'bold 18px system-ui, sans-serif';
-          ctx.fillStyle = `rgba(251, 191, 36, ${Math.max(0, 1 - progress * 2)})`;
+          ctx.font = 'bold 22px system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
+          ctx.strokeStyle = `rgba(0, 0, 0, ${pAlpha * 0.8})`;
+          ctx.lineWidth = 4;
+          ctx.strokeText('PENALTY', w / 2, h * 0.35);
+          ctx.fillStyle = `rgba(251, 191, 36, ${pAlpha})`;
           ctx.fillText('PENALTY', w / 2, h * 0.35);
           ctx.restore();
         }
@@ -463,11 +478,15 @@ function drawEffects(
 
       case 'field_goal_good': {
         if (progress < 0.7) {
+          const fgAlpha = Math.max(0, 1 - progress * 1.5);
           ctx.save();
-          ctx.font = 'bold 20px system-ui, sans-serif';
-          ctx.fillStyle = `rgba(34, 197, 94, ${Math.max(0, 1 - progress * 1.5)})`;
+          ctx.font = 'bold 24px system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
+          ctx.strokeStyle = `rgba(0, 0, 0, ${fgAlpha * 0.8})`;
+          ctx.lineWidth = 4;
+          ctx.strokeText('FIELD GOAL!', w / 2, h / 2);
+          ctx.fillStyle = `rgba(34, 197, 94, ${fgAlpha})`;
           ctx.fillText('FIELD GOAL!', w / 2, h / 2);
           ctx.restore();
         }
@@ -476,11 +495,15 @@ function drawEffects(
 
       case 'field_goal_miss': {
         if (progress < 0.7) {
+          const ngAlpha = Math.max(0, 1 - progress * 1.5);
           ctx.save();
-          ctx.font = 'bold 20px system-ui, sans-serif';
-          ctx.fillStyle = `rgba(239, 68, 68, ${Math.max(0, 1 - progress * 1.5)})`;
+          ctx.font = 'bold 24px system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
+          ctx.strokeStyle = `rgba(0, 0, 0, ${ngAlpha * 0.8})`;
+          ctx.lineWidth = 4;
+          ctx.strokeText('NO GOOD', w / 2, h / 2);
+          ctx.fillStyle = `rgba(239, 68, 68, ${ngAlpha})`;
           ctx.fillText('NO GOOD', w / 2, h / 2);
           ctx.restore();
         }
@@ -488,12 +511,17 @@ function drawEffects(
       }
 
       case 'incomplete': {
-        if (progress > 0.5 && progress < 0.9) {
+        // Bug 2 fix: wider display window, larger font, outlined text
+        if (progress < 0.85) {
+          const iAlpha = progress < 0.15 ? progress / 0.15 : Math.max(0, 1 - (progress - 0.3) * 1.8);
           ctx.save();
-          ctx.font = 'bold 14px system-ui, sans-serif';
-          ctx.fillStyle = `rgba(156, 163, 175, ${Math.max(0, 1 - (progress - 0.5) * 3)})`;
+          ctx.font = 'bold 22px system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
+          ctx.strokeStyle = `rgba(0, 0, 0, ${iAlpha * 0.8})`;
+          ctx.lineWidth = 4;
+          ctx.strokeText('INCOMPLETE', w / 2, h / 2);
+          ctx.fillStyle = `rgba(255, 255, 255, ${iAlpha})`;
           ctx.fillText('INCOMPLETE', w / 2, h / 2);
           ctx.restore();
         }
@@ -626,18 +654,24 @@ export function AnimatedField({
   });
 
   const rafRef = useRef<number>(0);
+  const dprRef = useRef(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
   const [canvasSize, setCanvasSize] = useState({ w: 800, h: Math.round(800 / FIELD_ASPECT) });
 
-  // Resize observer
+  // Resize observer — DPR-aware canvas sizing
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
 
     const observer = new ResizeObserver(entries => {
       const entry = entries[0];
       if (!entry) return;
       const w = entry.contentRect.width;
       const h = Math.round(w / FIELD_ASPECT);
+      const dpr = window.devicePixelRatio || 1;
+      dprRef.current = dpr;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
       setCanvasSize({ w, h });
     });
 
@@ -697,6 +731,10 @@ export function AnimatedField({
 
     const ref = animRef.current;
     const { w, h } = canvasSize;
+
+    // DPR scaling — render at physical resolution
+    const dpr = dprRef.current;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // Delta time
     const dt = ref.lastTimestamp > 0 ? Math.min((timestamp - ref.lastTimestamp) / 1000, 0.05) : 0.016;
@@ -792,6 +830,23 @@ export function AnimatedField({
     // Determine possession color for ball glow
     const possColor = state.possession === 'home' ? homeColor : awayColor;
 
+    // Real-time pass arc trail during animation (Bug 8)
+    if (anim && anim.ballArc && progress < 1 && progress > 0.05) {
+      const steps = Math.floor(progress * 20);
+      const endzoneW = w * (10 / 120);
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / 20;
+        const pt = bezierArcPoint(anim.ballArc, t, w, h, endzoneW);
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 2, 0, Math.PI * 2);
+        ctx.fillStyle = possColor;
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
     // Draw ball trail for run plays (ball moves along the ground)
     if (anim && anim.type === 'run' && progress < 1) {
       const rushDot = anim.movingDots.find(m => m.team === 'offense');
@@ -859,9 +914,31 @@ export function AnimatedField({
       drawBall(ctx, ballScreenX, ballScreenY, false, possColor);
     }
 
-    // Field position label near the ball (only when ball at rest)
+    // Field position label and down & distance near the ball (only when ball at rest)
     if (!ref.isAnimating && event && !isSeparator(event.type)) {
-      drawFieldPositionLabel(ctx, ballScreenX, ballScreenY, event);
+      drawFieldPositionLabel(ctx, ballScreenX, ballScreenY, event, homeAbbr, awayAbbr);
+      // Down & distance pill at LOS
+      const losX = absYardToCanvasX(state.scrimmageYard, w);
+      if (event.down >= 1 && event.down <= 4) {
+        const ordinals = ['1st', '2nd', '3rd', '4th'];
+        const ddLabel = `${ordinals[event.down - 1]} & ${event.yardsToGo <= 0 ? 'Goal' : event.yardsToGo}`;
+        ctx.save();
+        ctx.font = 'bold 9px system-ui, sans-serif';
+        const textW = ctx.measureText(ddLabel).width;
+        const pillW = textW + 10;
+        const pillH = 16;
+        const pillX = losX - pillW / 2;
+        const pillY = h - pillH - 4;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.beginPath();
+        ctx.roundRect(pillX, pillY, pillW, pillH, 4);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(ddLabel, losX, pillY + pillH / 2);
+        ctx.restore();
+      }
     }
 
     // Draw effects

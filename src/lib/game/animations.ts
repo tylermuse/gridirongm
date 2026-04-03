@@ -292,7 +292,7 @@ export function buildPlayAnimation(
         ballArc = {
           startX: punter.x,
           startY: 0.5,
-          peakHeight: 40,
+          peakHeight: 55, // higher arc for punts (was 40)
           endX: postBallX,
           endY: 0.5,
         };
@@ -310,7 +310,7 @@ export function buildPlayAnimation(
       ballArc = {
         startX: possession === 'home' ? 35 : 65,
         startY: 0.5,
-        peakHeight: 45,
+        peakHeight: 65, // higher arc for kickoffs (was 45)
         endX: postBallX,
         endY: 0.5,
       };
@@ -327,13 +327,23 @@ export function buildPlayAnimation(
     ballRestX = postBallX; // penalty shifts field pos, show the result
   }
 
+  // Bug 7 fix: enforce minimum duration for big plays so text overlays are readable at fast speeds
+  let finalDuration = Math.max(cappedDuration, 200);
+  if (effects.includes('touchdown') || effects.includes('confetti')) {
+    finalDuration = Math.max(finalDuration, 1200);
+  } else if (effects.includes('turnover')) {
+    finalDuration = Math.max(finalDuration, 1000);
+  } else if (effects.includes('flag')) {
+    finalDuration = Math.max(finalDuration, 800);
+  }
+
   return {
     type,
     ballArc,
     ballRestX,
     movingDots,
     effects,
-    durationMs: Math.max(cappedDuration, 200),
+    durationMs: finalDuration,
   };
 }
 
