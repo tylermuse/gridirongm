@@ -1140,31 +1140,47 @@ function computeSeasonAwards(state: LeagueState): { award: string; playerId: str
   const withGames = (pos: string[]) =>
     activePlayers.filter(p => pos.includes(p.position) && p.stats.gamesPlayed >= 10);
 
-  // MVP — stats-based scoring, heavily favors QBs
-  // TEs get position-adjusted scoring (75 catches / 900 yds / 7 TDs is elite for TE)
+  // MVP — QBs should win ~70-80% of the time (matching real NFL patterns).
+  // Team wins are a near-prerequisite, passing stats dominate for QBs.
   const mvpCandidates = withGames(['QB', 'RB', 'WR', 'TE']);
   const mvpScore = (p: typeof mvpCandidates[0]) => {
-    if (p.position === 'QB')
-      return p.stats.passYards * 0.04 + p.stats.passTDs * 6 - p.stats.interceptions * 4 + p.ratings.overall * 2;
+    // Team win bonus — winning record is critical for MVP candidacy
+    const team = state.teams.find(t => t.id === p.teamId);
+    const gp = team ? team.record.wins + team.record.losses : 1;
+    const winPct = team ? team.record.wins / Math.max(1, gp) : 0.5;
+    const wins = team?.record.wins ?? 0;
+    // Strong bonus for winning: 10+ wins gets significant boost, sub-.500 gets penalty
+    const winBonus = wins * 8 + (winPct >= 0.65 ? 50 : winPct >= 0.5 ? 20 : -40);
+
+    if (p.position === 'QB') {
+      // QBs: passing production is king. Elite stat line + wins = MVP.
+      return p.stats.passYards * 0.05 + p.stats.passTDs * 8 - p.stats.interceptions * 6
+        + p.stats.rushTDs * 4 + p.stats.rushYards * 0.02
+        + winBonus * 1.2; // QBs get extra win credit (they drive wins)
+    }
     if (p.position === 'RB')
-      return p.stats.rushYards * 0.06 + p.stats.rushTDs * 6 + p.ratings.overall;
+      return p.stats.rushYards * 0.06 + p.stats.rushTDs * 6 + p.stats.receivingYards * 0.02 + winBonus;
     if (p.position === 'TE')
-      return p.stats.receivingYards * 0.09 + p.stats.receivingTDs * 8 + p.ratings.overall * 1.2;
+      return p.stats.receivingYards * 0.08 + p.stats.receivingTDs * 8 + winBonus;
     // WR
-    return p.stats.receivingYards * 0.06 + p.stats.receivingTDs * 6 + p.ratings.overall;
+    return p.stats.receivingYards * 0.06 + p.stats.receivingTDs * 6 + winBonus;
   };
   if (mvpCandidates.length > 0) {
     const mvp = mvpCandidates.sort((a, b) => mvpScore(b) - mvpScore(a))[0];
     awards.push({ award: 'MVP', playerId: mvp.id, teamId: mvp.teamId! });
   }
 
-  // DPOY — stats-based (tackles, sacks, INTs)
+  // DPOY — weighted defensive stats, edge rushers and playmakers favored
   const defensivePlayers = withGames(['DL', 'LB', 'CB', 'S']);
   if (defensivePlayers.length > 0) {
-    const dpoy = defensivePlayers.sort((a, b) =>
-      (b.stats.tackles + b.stats.sacks * 5 + b.stats.defensiveINTs * 4) -
-      (a.stats.tackles + a.stats.sacks * 5 + a.stats.defensiveINTs * 4)
-    )[0];
+    const dpoyScore = (p: Player) => {
+      const team = state.teams.find(t => t.id === p.teamId);
+      const winBonus = team ? team.record.wins * 3 : 0;
+      return p.stats.tackles * 0.5 + p.stats.sacks * 8 + p.stats.defensiveINTs * 7
+        + (p.stats.tacklesForLoss ?? 0) * 2 + (p.stats.passDeflections ?? 0) * 2
+        + (p.stats.forcedFumbles ?? 0) * 4 + winBonus;
+    };
+    const dpoy = defensivePlayers.sort((a, b) => dpoyScore(b) - dpoyScore(a))[0];
     awards.push({ award: 'Defensive POY', playerId: dpoy.id, teamId: dpoy.teamId! });
   }
 
