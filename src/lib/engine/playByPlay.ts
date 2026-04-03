@@ -97,24 +97,35 @@ interface KeyPlayers {
   rb: Player | null;
   wr1: Player | null;
   wr2: Player | null;
+  wr3: Player | null;
   te: Player | null;
+  ols: Player[];
   dl1: Player | null;
   lb1: Player | null;
   cb1: Player | null;
+  cb2: Player | null;
+  s1: Player | null;
   k: Player | null;
 }
 
 function extractKeyPlayers(players: Player[]): KeyPlayers {
   const byPos = (pos: string) => players.filter(p => p.position === pos && (!p.injury || p.injury.weeksLeft === 0));
+  const wrs = byPos('WR');
+  const cbs = byPos('CB');
+  const safeties = byPos('S');
   return {
     qb: byPos('QB')[0] ?? null,
     rb: byPos('RB')[0] ?? null,
-    wr1: byPos('WR')[0] ?? null,
-    wr2: byPos('WR')[1] ?? null,
+    wr1: wrs[0] ?? null,
+    wr2: wrs[1] ?? null,
+    wr3: wrs[2] ?? null,
     te: byPos('TE')[0] ?? null,
+    ols: byPos('OL'),
     dl1: byPos('DL')[0] ?? null,
     lb1: byPos('LB')[0] ?? null,
-    cb1: byPos('CB')[0] ?? byPos('S')[0] ?? null,
+    cb1: cbs[0] ?? safeties[0] ?? null,
+    cb2: cbs[1] ?? safeties[0] ?? null,
+    s1: safeties[0] ?? null,
     k: byPos('K')[0] ?? null,
   };
 }
@@ -804,9 +815,17 @@ export function simulatePlayByPlay(
     if (isRun) {
       // RUN play
       const rbCarrying = rating(ok.rb, 'carrying', 70);
+      const rbSpeed = rating(ok.rb, 'speed', 70);
       const lbTackling = rating(dk.lb1, 'tackling', 70);
-      const yards = Math.round(gaussian(4.5, 3.5) + (rbCarrying - lbTackling) / 80 * 2);
-      const yardsGained = clamp(yards, -5, 25);
+      let yardsGained = Math.round(gaussian(4.5, 3.0) + (rbCarrying - lbTackling) / 60 * 2 + (rbSpeed - 70) / 100);
+      yardsGained = clamp(yardsGained, -5, 25);
+
+      // Red zone / goal-line rush boost
+      if (state.fieldPos >= 95 && Math.random() < 0.45) {
+        yardsGained = 100 - state.fieldPos; // score!
+      } else if (state.fieldPos >= 90) {
+        yardsGained = Math.max(yardsGained, Math.round(1 + Math.random() * 4));
+      }
 
       ob.rushAttempts += 1;
       ob.rushYards += yardsGained;
@@ -827,11 +846,11 @@ export function simulatePlayByPlay(
       state.yardsToGo -= yardsGained;
       advanceClock(Math.floor(Math.random() * 8) + 30);
 
-      // Check fumble (3% of runs)
-      if (Math.random() < 0.03) {
+      // Skill-based fumble rate (Bug 3 fix)
+      const fumbleChance = clamp(0.015 - (rbCarrying / 100) * 0.008, 0.003, 0.02);
+      if (Math.random() < fumbleChance) {
         const desc2 = descFumble(ok.rb, dk.lb1);
         addEvent('fumble', desc2, 0, false);
-        // Turnover at current position
         const newPos = clamp(100 - state.fieldPos, 15, 75);
         switchPossession(newPos);
         return true;
@@ -841,13 +860,24 @@ export function simulatePlayByPlay(
       // PASS play
       const qbThrowing = rating(ok.qb, 'throwing', 70);
       const dlPassRush = rating(dk.dl1, 'passRush', 70);
-      const olBlocking = rating(ok.wr1, 'blocking', 60); // proxy (no dedicated OL in keyPlayers)
+      // Bug 1 fix: use actual OL blocking ratings instead of WR1 proxy
+      const olBlocking = ok.ols.length > 0
+        ? ok.ols.reduce((s, p) => s + p.ratings.blocking * 1.2 + p.ratings.strength, 0) / ok.ols.length
+        : 50;
 
-      const sackChance = clamp(0.085 + (dlPassRush - olBlocking) / 80 * 0.03, 0.04, 0.14);
-      const intChance = 0.025;
-      // QB tier modifier: ±0.03 per tier level (Elite +0.06, Franchise +0.03, Backup -0.03, Camp Arm -0.06)
+      const cbCoverage = rating(dk.cb1, 'coverage', 70);
+      const wr1Catching = rating(ok.wr1, 'catching', 70);
+      const wr1Speed = rating(ok.wr1, 'speed', 70);
+
+      const sackChance = clamp(0.07 + (dlPassRush - olBlocking) / 120 * 0.04, 0.03, 0.12);
+      // Bug 2 fix: INT rate scales with QB vs coverage matchup
+      const intChance = clamp((cbCoverage - qbThrowing) / 700 + 0.020, 0.010, 0.032);
+      // Missing 5 fix: completion % uses QB, receiver catching, and CB coverage
       const tierMod = (state.possession === 'home' ? homeQBTierMod : awayQBTierMod) * 0.03;
-      const compBase = clamp(0.62 + (qbThrowing - 70) / 100 * 0.08 + tierMod, 0.50, 0.75);
+      const compBase = clamp(
+        0.52 + (qbThrowing / 100) * 0.18 + (wr1Catching / 100) * 0.10 - (cbCoverage / 100) * 0.12 + tierMod,
+        0.42, 0.72,
+      );
 
       const roll = Math.random();
 
@@ -861,7 +891,7 @@ export function simulatePlayByPlay(
         addEvent('sack', desc, sackYards, false);
 
         state.fieldPos = clamp(state.fieldPos + sackYards, 1, 99);
-        state.yardsToGo -= sackYards; // yards to go increases
+        state.yardsToGo -= sackYards;
         advanceClock(8);
 
       } else if (roll < sackChance + intChance) {
@@ -873,24 +903,40 @@ export function simulatePlayByPlay(
         const desc = descInterception(ok.qb, dk.cb1);
         addEvent('interception', desc, 0, false);
 
-        // Turnover — pick typically returned to middle of field
         const returnPos = clamp(100 - state.fieldPos + Math.floor(Math.random() * 20) - 10, 10, 60);
         switchPossession(returnPos);
         advanceClock(5);
 
       } else if (roll < sackChance + intChance + (1 - sackChance - intChance) * compBase) {
-        // COMPLETION
-        const cbCoverage = rating(dk.cb1, 'coverage', 70);
-        const rawYards = Math.round(gaussian(8, 7) + (qbThrowing - cbCoverage) / 80 * 3);
-        const yardsGained = clamp(rawYards, -2, 45);
+        // COMPLETION — Bug 4 fix: realistic yards per completion
+        const baseYards = 3 + Math.random() * 10; // 3-13 base
+        const bonusYards = (qbThrowing / 100) * 2.5 + (wr1Speed / 100) * 1.5;
+        let yardsGained = Math.round(baseYards + bonusYards * Math.random());
+
+        // Big play chance (~3-4% of completions)
+        if (Math.random() < 0.015 + (wr1Speed / 100) * 0.02) {
+          yardsGained += 10 + Math.floor(Math.random() * 15);
+        }
+        yardsGained = clamp(yardsGained, 1, 50); // completions never lose yards
+
+        // Red zone pass boost (Missing 1)
+        if (state.fieldPos >= 80) {
+          yardsGained = Math.max(yardsGained, Math.round(3 + Math.random() * 8));
+        }
+        if (state.fieldPos >= 95 && Math.random() < 0.55) {
+          yardsGained = 100 - state.fieldPos; // score!
+        }
+
         const isLong = yardsGained >= 20;
 
-        // Pick receiver: WR1 40%, WR2 30%, TE 30% (TE gets realistic share)
+        // Expanded receiver targeting: WR1 28%, WR2 21%, WR3 14%, TE 18%, RB 12%, other 7%
         const recRoll = Math.random();
         let receiver: Player | null;
-        if (recRoll < 0.40) receiver = ok.wr1;
-        else if (recRoll < 0.70) receiver = ok.wr2;
-        else receiver = ok.te;
+        if (recRoll < 0.28) receiver = ok.wr1;
+        else if (recRoll < 0.49) receiver = ok.wr2;
+        else if (recRoll < 0.63) receiver = ok.wr3 ?? ok.wr2;
+        else if (recRoll < 0.81) receiver = ok.te;
+        else receiver = ok.rb; // RB catches (screens, check-downs)
 
         ob.passAttempts += 1;
         ob.passCompletions += 1;
@@ -921,9 +967,11 @@ export function simulatePlayByPlay(
 
         const recRoll2 = Math.random();
         let receiver: Player | null;
-        if (recRoll2 < 0.40) receiver = ok.wr1;
-        else if (recRoll2 < 0.70) receiver = ok.wr2;
-        else receiver = ok.te;
+        if (recRoll2 < 0.28) receiver = ok.wr1;
+        else if (recRoll2 < 0.49) receiver = ok.wr2;
+        else if (recRoll2 < 0.63) receiver = ok.wr3 ?? ok.wr2;
+        else if (recRoll2 < 0.81) receiver = ok.te;
+        else receiver = ok.rb;
 
         ob.receivingTargets += 1;
 
@@ -1048,37 +1096,32 @@ export function simulatePlayByPlay(
       };
     }
 
-    // Receivers — NFL-realistic target shares: WR1 ~40%, WR2 ~30%, TE ~30%
+    // Receivers — distribute by target share matching play selection
     const totalRecYards = bucket.receivingYards;
     const totalRec = bucket.receptions;
     const totalTgts = bucket.receivingTargets;
     const passTDs = bucket.passTDs;
 
-    if (keyPlayers.wr1) {
-      playerStats[keyPlayers.wr1.id] = {
+    const recShares: { player: Player | null; share: number }[] = [
+      { player: keyPlayers.wr1, share: 0.28 },
+      { player: keyPlayers.wr2, share: 0.21 },
+      { player: keyPlayers.wr3, share: 0.14 },
+      { player: keyPlayers.te, share: 0.18 },
+      { player: keyPlayers.rb, share: 0.12 },
+    ];
+    let assignedTDs = 0;
+    for (const { player, share } of recShares) {
+      if (!player) continue;
+      const tds = assignedTDs < passTDs && share >= 0.14 ? Math.round(passTDs * share) : 0;
+      assignedTDs += tds;
+      const existing = playerStats[player.id];
+      playerStats[player.id] = {
+        ...existing,
         gamesPlayed: 1,
-        targets: Math.round(totalTgts * 0.40),
-        receptions: Math.round(totalRec * 0.40),
-        receivingYards: Math.round(totalRecYards * 0.40),
-        receivingTDs: passTDs > 0 ? Math.round(passTDs * 0.40) : 0,
-      };
-    }
-    if (keyPlayers.wr2) {
-      playerStats[keyPlayers.wr2.id] = {
-        gamesPlayed: 1,
-        targets: Math.round(totalTgts * 0.30),
-        receptions: Math.round(totalRec * 0.30),
-        receivingYards: Math.round(totalRecYards * 0.30),
-        receivingTDs: passTDs > 1 ? Math.round(passTDs * 0.30) : 0,
-      };
-    }
-    if (keyPlayers.te) {
-      playerStats[keyPlayers.te.id] = {
-        gamesPlayed: 1,
-        targets: Math.round(totalTgts * 0.30),
-        receptions: Math.round(totalRec * 0.30),
-        receivingYards: Math.round(totalRecYards * 0.30),
-        receivingTDs: passTDs > 1 ? Math.round(passTDs * 0.30) : 0,
+        targets: (existing?.targets ?? 0) + Math.round(totalTgts * share),
+        receptions: (existing?.receptions ?? 0) + Math.round(totalRec * share),
+        receivingYards: (existing?.receivingYards ?? 0) + Math.round(totalRecYards * share),
+        receivingTDs: (existing?.receivingTDs ?? 0) + tds,
       };
     }
 
