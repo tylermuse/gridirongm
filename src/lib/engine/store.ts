@@ -3319,15 +3319,26 @@ export const useGameStore = create<GameStore>()(
         // Draft order = the OWNER of each pick drafts
         let draftOrder = allDraftYearPicks.map(pk => pk.ownerTeamId);
 
-        // NFL 2026: override first-round order to match the real mock draft
+        // NFL 2026: override first-round order to match the real mock draft,
+        // but respect any traded picks (ownerTeamId may differ from originalTeamId)
         if (isNfl && nflMockDraft.length > 0) {
+          // Build a map of originalTeamId → ownerTeamId for round 1 picks
+          const round1Picks = allDraftYearPicks.filter(pk => pk.round === 1);
+          const pickOwnerMap = new Map<string, string>();
+          for (const pk of round1Picks) {
+            pickOwnerMap.set(pk.originalTeamId, pk.ownerTeamId);
+          }
+
           const round1Order: string[] = [];
           for (const mock of nflMockDraft) {
-            const team = updatedTeams.find(t => t.abbreviation === mock.teamAbbr);
-            if (team) round1Order.push(team.id);
+            const originalTeam = updatedTeams.find(t => t.abbreviation === mock.teamAbbr);
+            if (originalTeam) {
+              // Use the current owner of this pick (respects trades)
+              const ownerId = pickOwnerMap.get(originalTeam.id) ?? originalTeam.id;
+              round1Order.push(ownerId);
+            }
           }
           if (round1Order.length > 0) {
-            // Slice the same number of entries we're replacing to keep total length correct
             const laterRounds = draftOrder.slice(round1Order.length);
             draftOrder = [...round1Order, ...laterRounds];
           }
