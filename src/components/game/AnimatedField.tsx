@@ -41,6 +41,9 @@ interface Props {
   isPlaying: boolean;
   animationSpeed: number;
   onAnimationComplete?: () => void;
+  /** Current drive info for drive progress indicator */
+  driveYards?: number;
+  drivePossession?: 'home' | 'away';
 }
 
 // ---------------------------------------------------------------------------
@@ -577,6 +580,60 @@ function drawRushTrail(
 }
 
 // ---------------------------------------------------------------------------
+// Draw drive progress zone (translucent team-colored strip showing drive yards)
+// ---------------------------------------------------------------------------
+
+function drawDriveZone(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  fromYard: number,
+  toYard: number,
+  color: string,
+) {
+  const fromX = absYardToCanvasX(fromYard, w);
+  const toX = absYardToCanvasX(toYard, w);
+  if (Math.abs(fromX - toX) < 2) return;
+
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.12;
+  const x = Math.min(fromX, toX);
+  const width = Math.abs(toX - fromX);
+  ctx.fillRect(x, 0, width, h);
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Draw score flash on end zone (Enhancement 3)
+// ---------------------------------------------------------------------------
+
+function drawScoreFlash(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  possession: 'home' | 'away',
+  progress: number,
+  color: string,
+) {
+  if (progress >= 1) return;
+  const endzoneW = w * (10 / 120);
+  // Scoring team's TARGET endzone (opposite of their own)
+  const ezX = possession === 'home' ? 0 : w - endzoneW;
+
+  // Pulsing alpha — two pulses
+  const pulse = Math.sin(progress * Math.PI * 3) * 0.5 + 0.5;
+  const fadeOut = 1 - progress;
+  const alpha = pulse * fadeOut * 0.5;
+
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.globalAlpha = alpha;
+  ctx.fillRect(ezX, 0, endzoneW, h);
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
 // Separator label helper
 // ---------------------------------------------------------------------------
 
@@ -605,6 +662,8 @@ export function AnimatedField({
   isPlaying,
   animationSpeed,
   onAnimationComplete,
+  driveYards = 0,
+  drivePossession,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -633,6 +692,15 @@ export function AnimatedField({
     quarterOverlayProgress: number;
     quarterOverlayLabel: string;
     quarterOverlayActive: boolean;
+    // Bug 5: smooth reset between plays
+    resetPhase: boolean;
+    resetProgress: number;
+    resetFromYard: number;
+    resetToYard: number;
+    // Enhancement 3: score confirmed flash
+    scoreFlashProgress: number;
+    scoreFlashPossession: 'home' | 'away';
+    scoreFlashActive: boolean;
   }>({
     prevState: idleFieldState(),
     nextState: idleFieldState(),
@@ -651,6 +719,13 @@ export function AnimatedField({
     quarterOverlayProgress: 1,
     quarterOverlayLabel: '',
     quarterOverlayActive: false,
+    resetPhase: false,
+    resetProgress: 0,
+    resetFromYard: 50,
+    resetToYard: 50,
+    scoreFlashProgress: 1,
+    scoreFlashPossession: 'home',
+    scoreFlashActive: false,
   });
 
   const rafRef = useRef<number>(0);
@@ -698,11 +773,27 @@ export function AnimatedField({
       ref.quarterOverlayLabel = separatorLabel(event.type);
       ref.quarterOverlayActive = true;
     } else if (event) {
+      // Bug 5: start with a brief reset phase if the ball needs to move to new LOS
+      const prevBallYard = ref.animation ? ref.animation.ballRestX : ref.prevState.ballYard;
+      const newScrimmage = prevState.scrimmageYard;
+      const needsReset = Math.abs(absYardToCanvasX(prevBallYard, canvasSize.w) - absYardToCanvasX(newScrimmage, canvasSize.w)) > 3;
+
       ref.animation = buildPlayAnimation(prevState, nextState, event, animationSpeed);
-      ref.progress = 0;
-      ref.isAnimating = true;
       ref.completeFired = false;
       ref.quarterOverlayActive = false;
+
+      if (needsReset) {
+        ref.resetPhase = true;
+        ref.resetProgress = 0;
+        ref.resetFromYard = prevBallYard;
+        ref.resetToYard = newScrimmage;
+        ref.progress = 0;
+        ref.isAnimating = true;
+      } else {
+        ref.resetPhase = false;
+        ref.progress = 0;
+        ref.isAnimating = true;
+      }
 
       // Spawn confetti on TD
       if (ref.animation.effects.includes('confetti')) {
@@ -754,8 +845,18 @@ export function AnimatedField({
       }
     }
 
-    // Update animation progress
-    if (ref.isAnimating && ref.animation && !ref.quarterOverlayActive) {
+    // Bug 5: smooth reset phase — ball glides to new LOS before play animation
+    if (ref.resetPhase) {
+      const resetDuration = 0.2; // 200ms
+      ref.resetProgress = Math.min(1, ref.resetProgress + dt / resetDuration);
+      if (ref.resetProgress >= 1) {
+        ref.resetPhase = false;
+        // Now start the actual play animation
+      }
+    }
+
+    // Update animation progress (only after reset phase completes)
+    if (ref.isAnimating && ref.animation && !ref.quarterOverlayActive && !ref.resetPhase) {
       const duration = ref.animation.durationMs / 1000;
       ref.progress = Math.min(1, ref.progress + dt / duration);
       if (ref.progress >= 1) {
@@ -779,9 +880,22 @@ export function AnimatedField({
             ref.arcTrailFadeProgress = 0;
           }
 
+          // Enhancement 3: trigger score flash on scoring plays
+          if (ref.animation.effects.includes('touchdown') || ref.animation.effects.includes('field_goal_good')) {
+            ref.scoreFlashProgress = 0;
+            ref.scoreFlashPossession = ref.nextState.possession;
+            ref.scoreFlashActive = true;
+          }
+
           onAnimCompleteRef.current?.();
         }
       }
+    }
+
+    // Update score flash
+    if (ref.scoreFlashActive) {
+      ref.scoreFlashProgress = Math.min(1, ref.scoreFlashProgress + dt * 0.8);
+      if (ref.scoreFlashProgress >= 1) ref.scoreFlashActive = false;
     }
 
     // Update fading effects
@@ -863,11 +977,27 @@ export function AnimatedField({
       }
     }
 
+    // Enhancement 2: draw drive progress zone
+    if (driveYards !== 0 && drivePossession && !ref.isAnimating) {
+      const dir = drivePossession === 'home' ? -1 : 1;
+      const currentLOS = state.scrimmageYard;
+      const driveStartYard = currentLOS - driveYards * dir;
+      drawDriveZone(ctx, w, h, driveStartYard, currentLOS, drivePossession === 'home' ? homeColor : awayColor);
+    }
+
     // Draw ball — the single focal element on the field
     let ballScreenX = 0;
     let ballScreenY = 0;
 
-    if (anim && anim.ballArc && progress < 1) {
+    // Bug 5: during reset phase, smoothly glide ball from old position to new LOS
+    if (ref.resetPhase) {
+      const t = easeOutCubic(ref.resetProgress);
+      const fromX = absYardToCanvasX(ref.resetFromYard, w);
+      const toX = absYardToCanvasX(ref.resetToYard, w);
+      ballScreenX = fromX + (toX - fromX) * t;
+      ballScreenY = lateralToCanvasY(0.5, h);
+      drawBall(ctx, ballScreenX, ballScreenY, false, possColor);
+    } else if (anim && anim.ballArc && progress < 1) {
       // Airborne ball following arc (passes, punts, kicks)
       const endzoneW = w * (10 / 120);
       const ballPos = bezierArcPoint(anim.ballArc, easeInOutQuad(progress), w, h, endzoneW);
@@ -951,6 +1081,12 @@ export function AnimatedField({
       drawQuarterOverlay(ctx, w, h, ref.quarterOverlayLabel, ref.quarterOverlayProgress);
     }
 
+    // Enhancement 3: score confirmed end zone pulse
+    if (ref.scoreFlashActive) {
+      const flashColor = ref.scoreFlashPossession === 'home' ? homeColor : awayColor;
+      drawScoreFlash(ctx, w, h, ref.scoreFlashPossession, ref.scoreFlashProgress, flashColor);
+    }
+
     // Draw confetti
     if (ref.confetti.length > 0) {
       drawConfetti(ctx, ref.confetti);
@@ -958,7 +1094,7 @@ export function AnimatedField({
 
     // Continue loop if animating, fading effects active, or confetti active
     const hasFadingEffects = ref.gainFadeProgress < 1 || ref.arcTrailFadeProgress < 1;
-    if (ref.isAnimating || ref.confetti.length > 0 || hasFadingEffects || ref.quarterOverlayActive) {
+    if (ref.isAnimating || ref.confetti.length > 0 || hasFadingEffects || ref.quarterOverlayActive || ref.scoreFlashActive) {
       rafRef.current = requestAnimationFrame(render);
     }
   }, [canvasSize, homeColor, awayColor, homeAbbr, awayAbbr]);

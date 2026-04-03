@@ -697,6 +697,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           isPlaying={isPlaying}
           animationSpeed={SPEED_MS[speed]}
           onAnimationComplete={handleAnimationComplete}
+          driveYards={currentDrive.yards}
+          drivePossession={currentEvent?.possession}
         />
 
         {/* Quarter score table */}
