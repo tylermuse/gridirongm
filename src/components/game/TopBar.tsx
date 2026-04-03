@@ -317,17 +317,57 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                 <Button
                   onClick={async () => {
                     const store = useGameStore.getState();
+                    if (store.phase !== 'freeAgency') {
+                      store.advanceToFreeAgency();
+                    }
+                    await flushToStorage();
+                    router.push('/free-agency');
+                  }}
+                  variant="secondary"
+                  size="sm"
+                >
+                  {resigningPlayers.length === 0 ? (<><span className="hidden sm:inline">Advance to Free Agency</span><span className="sm:hidden">Free Agency</span>{' '}→</>) : (<><span className="hidden sm:inline">Skip to Free Agency</span><span className="sm:hidden">FA →</span></>)}
+                </Button>
+              </>
+            )}
+            {phase === 'freeAgency' && (
+              <>
+                {!pathname.startsWith('/free-agency') && (
+                  <Link href="/free-agency">
+                    <Button size="sm">
+                      Go to Free Agency
+                    </Button>
+                  </Link>
+                )}
+                {faDay >= 30 ? (
+                  <Button onClick={async () => {
+                    const store = useGameStore.getState();
                     if (store.phase !== 'draft') {
                       store.advanceToDraft();
                     }
                     await flushToStorage();
                     router.push('/draft');
-                  }}
-                  variant="secondary"
-                  size="sm"
-                >
-                  {resigningPlayers.length === 0 ? (<><span className="hidden sm:inline">Advance to Draft</span><span className="sm:hidden">Draft</span>{' '}→</>) : (<><span className="hidden sm:inline">Skip to Draft</span><span className="sm:hidden">Draft →</span></>)}
-                </Button>
+                  }} variant="secondary" size="sm">
+                    <span className="hidden sm:inline">Advance to Draft</span>
+                    <span className="sm:hidden">Draft</span>
+                    {' '}→
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={async () => {
+                      if (!window.confirm('End free agency early? AI teams will stop making moves and you\'ll advance to the draft.')) return;
+                      const store = useGameStore.getState();
+                      store.advanceToDraft();
+                      await flushToStorage();
+                      router.push('/draft');
+                    }}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    <span className="hidden sm:inline">End Free Agency Early</span>
+                    <span className="sm:hidden">End FA Early</span>
+                  </Button>
+                )}
               </>
             )}
             {phase === 'draft' && (
@@ -369,46 +409,12 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                         Draft Recap
                       </Button>
                     </Link>
-                    <Button size="sm" onClick={async () => { advanceToFreeAgency(); await flushToStorage(); router.push('/free-agency'); }}>
-                      <span className="hidden sm:inline">Advance to Free Agency</span>
-                      <span className="sm:hidden">Free Agency</span>
+                    <Button size="sm" onClick={async () => { startNewSeason(); await flushToStorage(); router.push('/roster'); }}>
+                      <span className="hidden sm:inline">Start New Season</span>
+                      <span className="sm:hidden">New Season</span>
                       {' '}→
                     </Button>
                   </>
-                )}
-              </>
-            )}
-            {phase === 'freeAgency' && (
-              <>
-                {!pathname.startsWith('/free-agency') && (
-                  <Link href="/free-agency">
-                    <Button size="sm">
-                      Go to Free Agency
-                    </Button>
-                  </Link>
-                )}
-                {faDay >= 30 ? (
-                  <Button onClick={async () => {
-                    startNewSeason(); await flushToStorage(); router.push('/roster');
-                  }} variant="secondary" size="sm">
-                    <span className="hidden sm:inline">Start New Season</span>
-                    <span className="sm:hidden">New Season</span>
-                    {' '}→
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={async () => {
-                      if (!window.confirm('End free agency early? Any unsigned free agents will remain available for in-season signings, but AI teams will stop making moves.')) return;
-                      startNewSeason();
-                      await flushToStorage();
-                      router.push('/roster');
-                    }}
-                    variant="secondary"
-                    size="sm"
-                  >
-                    <span className="hidden sm:inline">End Free Agency Early</span>
-                    <span className="sm:hidden">End FA Early</span>
-                  </Button>
                 )}
               </>
             )}

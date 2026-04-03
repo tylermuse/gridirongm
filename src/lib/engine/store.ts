@@ -3036,80 +3036,9 @@ export const useGameStore = create<GameStore>()(
 
       advanceToDraft: () => {
         const state = get();
-        // PRD-03: AI teams re-sign their own expiring players when coming from resigning phase
+        // Draft now comes after free agency (Re-signing → Free Agency → Draft)
         let updatedPlayers = [...state.players];
         let updatedTeams = [...state.teams];
-
-        if (state.phase === 'resigning') {
-          // Handle remaining unsigned user players — remove from team
-          const unhandledUserExpiring = new Set(state.resigningPlayers.map(e => e.playerId));
-          const unhandledSalary = updatedPlayers
-            .filter(p => unhandledUserExpiring.has(p.id))
-            .reduce((sum, p) => sum + p.contract.salary, 0);
-          updatedPlayers = updatedPlayers.map(p =>
-            unhandledUserExpiring.has(p.id) ? { ...p, teamId: null, contract: { ...p.contract, yearsLeft: 0 } } : p,
-          );
-          updatedTeams = updatedTeams.map(t => {
-            if (t.id !== state.userTeamId) return t;
-            const newRoster = t.roster.filter(id => !unhandledUserExpiring.has(id));
-            const newDepthChart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
-              acc[pos] = (t.depthChart[pos] ?? []).filter(id => !unhandledUserExpiring.has(id));
-              return acc;
-            }, {} as Record<Position, string[]>);
-            return { ...t, roster: newRoster, depthChart: newDepthChart, totalPayroll: Math.max(0, t.totalPayroll - unhandledSalary) };
-          });
-
-          // AI teams use franchise tag on their best expiring player (OVR >= 70)
-          const aiTeamsForTag = updatedTeams.filter(t => t.id !== state.userTeamId && !t.franchiseTagUsed);
-          for (const aiTeam of aiTeamsForTag) {
-            const expiring = updatedPlayers
-              .filter(p => p.teamId === aiTeam.id && p.contract.yearsLeft === 1 && !p.retired)
-              .sort((a, b) => b.ratings.overall - a.ratings.overall);
-            const bestPlayer = expiring[0];
-            if (bestPlayer && bestPlayer.ratings.overall >= 70) {
-              const tagSalary = computeFranchiseTagSalary(bestPlayer.position, updatedPlayers, bestPlayer);
-              const oldSalary = bestPlayer.contract.salary;
-              const aiTeamData = updatedTeams.find(t => t.id === aiTeam.id);
-              const canAffordTag = aiTeamData ? (aiTeamData.totalPayroll + tagSalary - oldSalary) <= aiTeamData.salaryCap : false;
-              if (canAffordTag) {
-                updatedPlayers = updatedPlayers.map(p =>
-                  p.id === bestPlayer.id ? { ...p, contract: { salary: tagSalary, yearsLeft: 1, guaranteed: tagSalary, totalYears: 1, offseasonSigned: true } } : p,
-                );
-                updatedTeams = updatedTeams.map(t =>
-                  t.id === aiTeam.id ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + (tagSalary - oldSalary)), franchiseTagUsed: true } : t,
-                );
-              }
-            }
-          }
-
-          // AI teams auto-resign their own expiring players
-          const aiTeams = updatedTeams.filter(t => t.id !== state.userTeamId);
-          for (const aiTeam of aiTeams) {
-            const expiringFromAI = updatedPlayers.filter(
-              p => p.teamId === aiTeam.id && p.contract.yearsLeft === 1 && !p.retired,
-            );
-            for (const player of expiringFromAI) {
-              const marketSalary = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
-              const capSpace = aiTeam.salaryCap - aiTeam.totalPayroll;
-              // 70% chance if cap space available
-              if (capSpace >= marketSalary && Math.random() < 0.70) {
-                const newYears = 1 + Math.floor(Math.random() * 3);
-                const salaryDiff = marketSalary - player.contract.salary;
-                updatedPlayers = updatedPlayers.map(p =>
-                  p.id === player.id ? { ...p, contract: { salary: marketSalary, yearsLeft: newYears, guaranteed: generateGuaranteed(marketSalary, newYears), totalYears: newYears, offseasonSigned: true } } : p,
-                );
-                updatedTeams = updatedTeams.map(t =>
-                  t.id === aiTeam.id ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + salaryDiff) } : t,
-                );
-              } else {
-                // Let contract expire
-                updatedPlayers = updatedPlayers.map(p =>
-                  p.id === player.id ? { ...p, contract: { ...p.contract, yearsLeft: 0 } } : p,
-                );
-              }
-            }
-          }
-        }
 
         // Find/generate draft class
         const allImportedProspects = updatedPlayers
@@ -3585,10 +3514,7 @@ export const useGameStore = create<GameStore>()(
           newsItems: newNewsItems,
         });
 
-        // Auto-advance to free agency when draft is complete
-        if (newDraftOrder.length === 0 || newFreeAgents.length === 0) {
-          get().advanceToFreeAgency();
-        }
+        // Draft complete — no auto-advance; user clicks "Start New Season"
       },
 
       simDraftPick: () => {
@@ -3774,42 +3700,118 @@ export const useGameStore = create<GameStore>()(
 
         set({ players, teams, freeAgents: freeAgentIds, draftOrder, draftResults, newsItems });
 
-        // Auto-advance to free agency when draft is complete (unless caller opts out)
-        if (!options?.skipAdvance) {
-          get().advanceToFreeAgency();
-        }
+        // Draft complete — no auto-advance; user clicks "Start New Season"
       },
 
       advanceToFreeAgency: () => {
         const state = get();
-        const expiredPlayers = state.players.filter(
+
+        // When coming from resigning phase, handle unsigned players and AI re-signings first
+        let prePlayers = [...state.players];
+        let preTeams = [...state.teams];
+
+        if (state.phase === 'resigning') {
+          // Handle remaining unsigned user players — remove from team
+          const unhandledUserExpiring = new Set(state.resigningPlayers.map(e => e.playerId));
+          const unhandledSalary = prePlayers
+            .filter(p => unhandledUserExpiring.has(p.id))
+            .reduce((sum, p) => sum + p.contract.salary, 0);
+          prePlayers = prePlayers.map(p =>
+            unhandledUserExpiring.has(p.id) ? { ...p, teamId: null, contract: { ...p.contract, yearsLeft: 0 } } : p,
+          );
+          preTeams = preTeams.map(t => {
+            if (t.id !== state.userTeamId) return t;
+            const newRoster = t.roster.filter(id => !unhandledUserExpiring.has(id));
+            const newDepthChart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
+              acc[pos] = (t.depthChart[pos] ?? []).filter(id => !unhandledUserExpiring.has(id));
+              return acc;
+            }, {} as Record<Position, string[]>);
+            return { ...t, roster: newRoster, depthChart: newDepthChart, totalPayroll: Math.max(0, t.totalPayroll - unhandledSalary) };
+          });
+
+          // AI teams use franchise tag on their best expiring player (OVR >= 70)
+          const aiTeamsForTag = preTeams.filter(t => t.id !== state.userTeamId && !t.franchiseTagUsed);
+          for (const aiTeam of aiTeamsForTag) {
+            const expiring = prePlayers
+              .filter(p => p.teamId === aiTeam.id && p.contract.yearsLeft === 1 && !p.retired)
+              .sort((a, b) => b.ratings.overall - a.ratings.overall);
+            const bestPlayer = expiring[0];
+            if (bestPlayer && bestPlayer.ratings.overall >= 70) {
+              const tagSalary = computeFranchiseTagSalary(bestPlayer.position, prePlayers, bestPlayer);
+              const oldSalary = bestPlayer.contract.salary;
+              const aiTeamData = preTeams.find(t => t.id === aiTeam.id);
+              const canAffordTag = aiTeamData ? (aiTeamData.totalPayroll + tagSalary - oldSalary) <= aiTeamData.salaryCap : false;
+              if (canAffordTag) {
+                prePlayers = prePlayers.map(p =>
+                  p.id === bestPlayer.id ? { ...p, contract: { salary: tagSalary, yearsLeft: 1, guaranteed: tagSalary, totalYears: 1, offseasonSigned: true } } : p,
+                );
+                preTeams = preTeams.map(t =>
+                  t.id === aiTeam.id ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + (tagSalary - oldSalary)), franchiseTagUsed: true } : t,
+                );
+              }
+            }
+          }
+
+          // AI teams auto-resign their own expiring players
+          const aiTeams = preTeams.filter(t => t.id !== state.userTeamId);
+          for (const aiTeam of aiTeams) {
+            const expiringFromAI = prePlayers.filter(
+              p => p.teamId === aiTeam.id && p.contract.yearsLeft === 1 && !p.retired,
+            );
+            for (const player of expiringFromAI) {
+              const marketSalary = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
+              const capSpace = aiTeam.salaryCap - aiTeam.totalPayroll;
+              if (capSpace >= marketSalary && Math.random() < 0.70) {
+                const newYears = 1 + Math.floor(Math.random() * 3);
+                const salaryDiff = marketSalary - player.contract.salary;
+                prePlayers = prePlayers.map(p =>
+                  p.id === player.id ? { ...p, contract: { salary: marketSalary, yearsLeft: newYears, guaranteed: generateGuaranteed(marketSalary, newYears), totalYears: newYears, offseasonSigned: true } } : p,
+                );
+                preTeams = preTeams.map(t =>
+                  t.id === aiTeam.id ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + salaryDiff) } : t,
+                );
+              } else {
+                prePlayers = prePlayers.map(p =>
+                  p.id === player.id ? { ...p, contract: { ...p.contract, yearsLeft: 0 } } : p,
+                );
+              }
+            }
+          }
+
+          // Persist the pre-processed state before FA setup
+          set({ players: prePlayers, teams: preTeams });
+        }
+
+        // Now set up free agency using current state (which includes resigning cleanup if applicable)
+        const faState = get();
+        const expiredPlayers = faState.players.filter(
           p => p.teamId && p.contract.yearsLeft <= 0,
         );
 
         const releaseNews: NewsItem[] = expiredPlayers
           .filter(p => p.ratings.overall >= 75)
           .map(p => {
-            const t = state.teams.find(t => t.id === p.teamId);
+            const t = faState.teams.find(t => t.id === p.teamId);
             return makeNews({
-              season: state.season,
+              season: faState.season,
               week: 0,
               type: 'release',
               teamId: p.teamId!,
               playerIds: [p.id],
               headline: `${p.firstName} ${p.lastName} (${p.position}, ${t?.abbreviation ?? '?'}) enters free agency.`,
-              isUserTeam: p.teamId === state.userTeamId,
+              isUserTeam: p.teamId === faState.userTeamId,
             });
           });
 
-        // Include undrafted players (still in freeAgents from draft) as UDFAs
-        const undraftedIds = state.freeAgents.filter(id => {
-          const p = state.players.find(pl => pl.id === id);
+        // Include any existing free agents (from prior phases)
+        const existingFAIds = (faState.freeAgents ?? []).filter(id => {
+          const p = faState.players.find(pl => pl.id === id);
           return p && !p.teamId;
         });
 
         // Generate supplemental free agents to ensure a healthy market
         // Target: at least 150 FAs available (real pro FA class is 200-400+)
-        const baseFACount = expiredPlayers.length + undraftedIds.length;
+        const baseFACount = expiredPlayers.length + existingFAIds.length;
         const supplementalCount = Math.max(0, 150 - baseFACount);
         const supplementalPlayers: Player[] = [];
         if (supplementalCount > 0) {
@@ -3827,13 +3829,13 @@ export const useGameStore = create<GameStore>()(
         }
 
         const allPlayers = [
-          ...state.players.map(p =>
+          ...faState.players.map(p =>
             p.contract.yearsLeft <= 0 ? { ...p, teamId: null } : p,
           ),
           ...supplementalPlayers,
         ];
 
-        const faTeams = state.teams.map(t => {
+        const faTeams = faState.teams.map(t => {
           const newRoster = t.roster.filter(pid => !expiredPlayers.find(ep => ep.id === pid));
           // Remove expired players from depth chart
           const newDepthChart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
@@ -3851,9 +3853,9 @@ export const useGameStore = create<GameStore>()(
           phase: 'freeAgency',
           players: allPlayers,
           teams: faTeams,
-          freeAgents: [...expiredPlayers.map(p => p.id), ...undraftedIds, ...supplementalPlayers.map(p => p.id)],
+          freeAgents: [...expiredPlayers.map(p => p.id), ...existingFAIds, ...supplementalPlayers.map(p => p.id)],
           faDay: 1,
-          newsItems: [...state.newsItems, ...releaseNews],
+          newsItems: [...faState.newsItems, ...releaseNews],
         });
 
         // Compute initial refusals
@@ -3864,17 +3866,17 @@ export const useGameStore = create<GameStore>()(
         }
 
         // Generate offseason trade rumors entering free agency
-        const faState = get();
-        const faRumors = generateTradeRumors(faState);
+        const rumorState = get();
+        const faRumors = generateTradeRumors(rumorState);
         if (faRumors.length > 0) {
           const rumorNews: NewsItem[] = faRumors.map(r => makeNews({
-            season: faState.season, week: 0, type: 'rumor',
+            season: rumorState.season, week: 0, type: 'rumor',
             headline: r.headline, body: r.detail,
-            teamId: r.teamId, isUserTeam: r.teamId === faState.userTeamId,
+            teamId: r.teamId, isUserTeam: r.teamId === rumorState.userTeamId,
           }));
           set({
-            tradeRumors: [...(faState.tradeRumors ?? []), ...faRumors],
-            newsItems: [...faState.newsItems, ...rumorNews],
+            tradeRumors: [...(rumorState.tradeRumors ?? []), ...faRumors],
+            newsItems: [...rumorState.newsItems, ...rumorNews],
           });
         }
       },
@@ -5174,7 +5176,7 @@ export const useGameStore = create<GameStore>()(
         {
           const preState = get();
           const userTeam = preState.teams.find(t => t.id === preState.userTeamId);
-          if (userTeam && preState.phase === 'freeAgency') {
+          if (userTeam && (preState.phase === 'freeAgency' || preState.phase === 'draft')) {
             let updatedPlayers = preState.players;
             let updatedTeams = preState.teams;
             let updatedFreeAgents = [...(preState.freeAgents ?? [])];
