@@ -15,11 +15,11 @@ interface RosterEntry {
 const ROSTERS: RosterEntry[] = [
   {
     id: 'nfl-2026-updated',
-    title: 'NFL 2026 Roster — Updated March 23, 2026',
+    title: 'NFL 2026 Roster — Updated April 3, 2026',
     description:
-      'Complete NFL roster with 90+ free agency moves through March 23, 2026. Includes all Week 2 free agency signings, the Jaylen Waddle trade to Broncos, Justin Fields trade to Chiefs, Andy Dalton trade to Eagles, Sydney Brown trade to Falcons, Jaxon Smith-Njigba record extension, and more.',
+      'Complete NFL roster with all free agency moves and verified contract data. Every active player contract (AAV and expiration year) has been cross-checked against Spotrac for accuracy across all 32 teams. Includes 90+ free agency signings, the Jaylen Waddle trade to Broncos, Justin Fields trade to Chiefs, Jaxon Smith-Njigba record extension, and more.',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
-    lastUpdated: 'March 23, 2026',
+    lastUpdated: 'April 3, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
   },
 ];
