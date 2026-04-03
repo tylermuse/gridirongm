@@ -6,6 +6,10 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'BS Football',
   description: 'Build your dynasty. Run the franchise.',
+  icons: {
+    icon: '/icon.svg',
+    apple: '/apple-icon.svg',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

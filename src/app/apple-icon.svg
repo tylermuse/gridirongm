@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
+  <!-- Background -->
+  <rect width="180" height="180" rx="36" fill="#1a365d"/>
+
+  <!-- Shield -->
+  <path d="M90 20 L150 45 L150 95 Q150 140 90 165 Q30 140 30 95 L30 45 Z" fill="#2d4a7a"/>
+
+  <!-- Football -->
+  <ellipse cx="90" cy="92" rx="38" ry="25" fill="#8B4513" transform="rotate(-30 90 92)"/>
+  <ellipse cx="90" cy="92" rx="36" ry="23" fill="#A0522D" transform="rotate(-30 90 92)"/>
+
+  <!-- Laces -->
+  <line x1="79" y1="76" x2="101" y2="108" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <line x1="82" y1="83" x2="92" y2="80" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="85" y1="90" x2="95" y2="87" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="88" y1="97" x2="98" y2="94" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- "GM" text -->
+  <text x="90" y="152" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="28" fill="#f6ad55" letter-spacing="2">GM</text>
+</svg>
