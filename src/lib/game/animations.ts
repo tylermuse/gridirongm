@@ -83,7 +83,7 @@ export function buildPlayAnimation(
 
   const type = event.type;
   const possession = prevState.possession;
-  const dir = possession === 'home' ? 1 : -1;
+  const dir = possession === 'home' ? -1 : 1;
 
   // Find QB and key dots in offense
   const qbIndex = prevState.offenseDots.findIndex(d => d.label === 'QB');
@@ -308,7 +308,7 @@ export function buildPlayAnimation(
 
     case 'kickoff': {
       ballArc = {
-        startX: possession === 'home' ? 35 : 65,
+        startX: possession === 'home' ? 65 : 35,
         startY: 0.5,
         peakHeight: 65, // higher arc for kickoffs (was 45)
         endX: postBallX,

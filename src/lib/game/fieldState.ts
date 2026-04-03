@@ -44,10 +44,11 @@ function clamp(v: number, min: number, max: number): number {
 
 /** Convert "yards from possessing team's endzone" to absolute yard (0=away EZ, 100=home EZ) */
 function toAbsoluteYard(fieldPos: number, possession: 'home' | 'away'): number {
-  // Home offense goes left-to-right: fieldPos 0 = yard 0, fieldPos 100 = yard 100
-  // Away offense goes right-to-left: fieldPos 0 = yard 100, fieldPos 100 = yard 0
-  if (possession === 'home') return fieldPos;
-  return 100 - fieldPos;
+  // Canvas layout: LEFT=away endzone (absYard 0), RIGHT=home endzone (absYard 100)
+  // Away at fieldPos 0 = own goal line = absYard 0 (left). Away attacks left→right.
+  // Home at fieldPos 0 = own goal line = absYard 100 (right). Home attacks right→left.
+  if (possession === 'home') return 100 - fieldPos;
+  return fieldPos;
 }
 
 /** Place formation dots relative to an absolute scrimmage yard */
@@ -58,8 +59,8 @@ function placeDots(
   role: 'offense' | 'defense',
 ): DotState[] {
   // Offense behind LOS, defense in front. Direction depends on possession.
-  // Home attacks right (+), Away attacks left (-)
-  const dir = possession === 'home' ? 1 : -1;
+  // Home attacks left (decreasing absYard, -1), Away attacks right (increasing absYard, +1)
+  const dir = possession === 'home' ? -1 : 1;
   const offenseDir = role === 'offense' ? -1 : 1; // offense is behind LOS, defense in front
 
   return formation.map(dot => {
@@ -87,7 +88,7 @@ export function deriveFieldState(
   const { possession, fieldPos, down, yardsToGo, yardsGained, type } = event;
 
   const scrimmageAbsYard = toAbsoluteYard(fieldPos, possession);
-  const dir = possession === 'home' ? 1 : -1;
+  const dir = possession === 'home' ? -1 : 1;
   const firstDownAbsYard = clamp(scrimmageAbsYard + yardsToGo * dir, 0, 100);
 
   // Ball position after play result
