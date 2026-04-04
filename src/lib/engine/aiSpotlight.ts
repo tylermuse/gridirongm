@@ -70,22 +70,24 @@ export function detectNarrativeMoment(
   playoffBracket: PlayoffMatchup[] | null,
   userTeamId: string,
 ): NarrativeMoment {
+  // Preseason: either the literal preseason phase OR when starting a new season (week 1, regular)
   if (phase === 'preseason') return 'preseason';
+  if (phase === 'regular' && week === 1) return 'preseason';
 
-  // Season over: user team eliminated or won championship (check during resigning/draft/FA phases)
+  // Season over: entering re-signing/draft/FA after playoffs
   if ((phase === 'resigning' || phase === 'draft' || phase === 'freeAgency') && playoffBracket) {
     return 'seasonOver';
   }
 
-  // Playoffs start: phase just became playoffs
+  // Playoffs start: entered playoffs phase (regardless of games played)
   if (phase === 'playoffs') {
-    // Check if any playoff games have been played yet
-    const gamesPlayed = playoffBracket?.filter(m => m.winnerId).length ?? 0;
-    if (gamesPlayed === 0) return 'playoffsStart';
+    return 'playoffsStart';
   }
 
-  // Trade deadline: regular season at the deadline week
-  if (phase === 'regular' && week === tradeDeadlineWeek) return 'tradeDeadline';
+  // Trade deadline: at or just past the deadline week (catches sim-past-it)
+  if (phase === 'regular' && week >= tradeDeadlineWeek && week <= tradeDeadlineWeek + 1) {
+    return 'tradeDeadline';
+  }
 
   return 'weekly';
 }

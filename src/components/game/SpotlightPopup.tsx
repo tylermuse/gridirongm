@@ -80,8 +80,8 @@ export function SpotlightPopup() {
     if (lastShownKey === currentKey) return;
 
     // Determine if this is a trigger moment
-    const isRegularSeasonSim = phase === 'regular' && gamesPlayed > 0;
-    const isPlayoffUpdate = phase === 'playoffs' && playoffGamesPlayed > 0;
+    const isRegularSeasonSim = phase === 'regular' && (gamesPlayed > 0 || week === 1);
+    const isPlayoffUpdate = phase === 'playoffs' && playoffGamesPlayed >= 0;
     const isPhaseTransition = TRIGGER_PHASES.has(phase);
 
     if (isRegularSeasonSim || isPlayoffUpdate || isPhaseTransition) {
