@@ -1378,7 +1378,11 @@ function TradesPage() {
                         size="sm"
                         onClick={() => {
                           const success = respondToTradeProposal(proposal.id, true);
-                          if (!success) alert('Trade failed — you may be over the salary cap or the players are no longer available.');
+                          if (success) {
+                            setTradeResult('accepted');
+                          } else {
+                            alert('Trade failed — you may be over the salary cap or the players are no longer available.');
+                          }
                         }}
                         disabled={!isTradeOpen}
                       >
@@ -1778,6 +1782,7 @@ function TradesPage() {
                               <Button size="sm" onClick={async () => {
                                 const success = respondToTradeProposal(proposal.id, true);
                                 if (success) {
+                                  setTradeResult('accepted');
                                   const otherPending = tradeProposals.filter(p => p.id !== proposal.id && p.status === 'pending');
                                   for (const op of otherPending) respondToTradeProposal(op.id, false);
                                   setBlockSolicited(false);
