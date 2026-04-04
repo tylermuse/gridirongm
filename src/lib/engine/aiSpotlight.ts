@@ -133,27 +133,40 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
   const ppgRank = gp > 0 ? allTeamsPpg.findIndex(t => t.id === team.id) + 1 : 0;
   const defRank = gp > 0 ? allTeamsDefPpg.findIndex(t => t.id === team.id) + 1 : 0;
 
-  // Build player data with acquisition context
-  const mapPlayer = (p: Player) => ({
-    name: `${p.firstName} ${p.lastName}`,
-    pos: p.position,
-    ovr: p.ratings.overall,
-    age: p.age,
-    potential: p.potential,
-    salary: p.contract.salary,
-    yearsLeft: p.contract.yearsLeft,
-    acquiredVia: p.acquiredVia ?? 'initial',
-    acquiredSeason: p.acquiredSeason,
-    draftYear: p.draftYear,
-    draftRound: p.draftRound,
-    draftPick: p.draftPick,
-    stats: {
-      passYds: p.stats.passYards, passTDs: p.stats.passTDs,
-      rushYds: p.stats.rushYards, rushTDs: p.stats.rushTDs,
-      recYds: p.stats.receivingYards, recTDs: p.stats.receivingTDs,
-      tackles: p.stats.tackles, sacks: p.stats.sacks, ints: p.stats.interceptions,
-    },
-  });
+  // Build player data with clear acquisition context
+  const mapPlayer = (p: Player) => {
+    // Determine how THIS TEAM acquired the player (not how they entered the league)
+    let howAcquired: string;
+    const draftedByThisTeam = p.draftTeamId === team.id;
+    if (p.acquiredVia === 'trade') {
+      howAcquired = `traded for${p.acquiredSeason ? ` in ${p.acquiredSeason}` : ''}`;
+    } else if (p.acquiredVia === 'free-agency') {
+      howAcquired = `signed in free agency${p.acquiredSeason ? ` in ${p.acquiredSeason}` : ''}`;
+    } else if (p.acquiredVia === 'draft' && draftedByThisTeam) {
+      howAcquired = `drafted by this team${p.draftRound ? ` in round ${p.draftRound}` : ''}${p.draftYear ? ` (${p.draftYear})` : ''}`;
+    } else if (p.acquiredVia === 'draft' && !draftedByThisTeam) {
+      howAcquired = 'original roster';
+    } else {
+      howAcquired = 'original roster';
+    }
+
+    return {
+      name: `${p.firstName} ${p.lastName}`,
+      pos: p.position,
+      ovr: p.ratings.overall,
+      age: p.age,
+      potential: p.potential,
+      salary: p.contract.salary,
+      yearsLeft: p.contract.yearsLeft,
+      howAcquired,
+      stats: {
+        passYds: p.stats.passYards, passTDs: p.stats.passTDs,
+        rushYds: p.stats.rushYards, rushTDs: p.stats.rushTDs,
+        recYds: p.stats.receivingYards, recTDs: p.stats.receivingTDs,
+        tackles: p.stats.tackles, sacks: p.stats.sacks, ints: p.stats.interceptions,
+      },
+    };
+  };
 
   const teamData: Record<string, unknown> = {
     team: { name: team.name, city: team.city, record: `${team.record.wins}-${team.record.losses}`, conference: team.conference, streak: team.record.streak, pointsFor: team.record.pointsFor, pointsAgainst: team.record.pointsAgainst },

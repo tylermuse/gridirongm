@@ -137,8 +137,7 @@ THE COMMENTATORS:
 KEY RULES:
 - They must RESPOND to each other, not deliver parallel monologues. Tony interrupts, Marcus corrects, they riff off each other's points.
 - Use ALL the real stats and data provided below. Do NOT invent any numbers.
-- When discussing players, weave in HOW they were acquired (drafted, signed in free agency, traded for) when it adds narrative value. For example: "They signed him last offseason to do exactly this and he's completely elevated this defense" or "That first-round pick is starting to look like a steal."
-- The acquiredVia field tells you how each player joined: "draft", "free-agency", "trade", or "initial" (original roster).
+- Each player has a "howAcquired" field describing how THIS TEAM got them (e.g. "traded for in 2025", "signed in free agency in 2026", "drafted by this team in round 1 (2024)", or "original roster"). Only mention acquisition if it's a trade or recent FA signing that adds narrative value. Do NOT say "they drafted him" unless howAcquired says "drafted by this team". Keep acquisition references sparse — focus on stats and performance, not roster history.
 - Vary your openings — never start two topics the same way.
 - Each topic should have 3-4 exchanges.
 - Keep it entertaining but grounded in the actual data.
