@@ -106,6 +106,8 @@ interface GameStore extends LeagueState {
   simAllStarGame: () => void;
   commitLiveGame: (result: GameResult, matchupId?: string) => void;
   updateLeagueSettings: (settings: Partial<LeagueSettings>) => void;
+  /** God Mode: edit any player's attributes */
+  editPlayer: (playerId: string, updates: Partial<Player>) => void;
   setSuppressTradePopups: (val: boolean) => void;
   saveToSlot: (slot: 1 | 2) => Promise<void>;
   loadFromSlot: (slot: 1 | 2) => Promise<void>;
@@ -5991,6 +5993,46 @@ export const useGameStore = create<GameStore>()(
           });
           set({ schedule: newSchedule, teams: newTeams, players: newPlayers });
         }
+      },
+
+      editPlayer: (playerId: string, updates: Partial<Player>) => {
+        const state = get();
+        const settings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
+        if (!settings.godMode) return;
+
+        const updatedPlayers = state.players.map(p => {
+          if (p.id !== playerId) return p;
+          const merged = { ...p, ...updates };
+          // If ratings were updated, recalculate OVR
+          if (updates.ratings) {
+            merged.ratings = { ...p.ratings, ...updates.ratings };
+          }
+          return merged;
+        });
+
+        // Handle team transfers
+        const oldPlayer = state.players.find(p => p.id === playerId);
+        let updatedTeams = state.teams;
+        if (oldPlayer && updates.teamId !== undefined && updates.teamId !== oldPlayer.teamId) {
+          // Remove from old team roster
+          if (oldPlayer.teamId) {
+            updatedTeams = updatedTeams.map(t =>
+              t.id === oldPlayer.teamId
+                ? { ...t, roster: t.roster.filter(id => id !== playerId) }
+                : t,
+            );
+          }
+          // Add to new team roster
+          if (updates.teamId) {
+            updatedTeams = updatedTeams.map(t =>
+              t.id === updates.teamId
+                ? { ...t, roster: [...t.roster, playerId] }
+                : t,
+            );
+          }
+        }
+
+        set({ players: updatedPlayers, teams: updatedTeams });
       },
 
       setSuppressTradePopups: (val: boolean) => {

@@ -605,6 +605,10 @@ export interface LeagueSettings {
   chaosDraft: boolean;
   /** Use Claude AI to generate unique Team Spotlight commentary */
   aiCommentary: boolean;
+  /** God Mode: full commissioner control — edit players, force trades, etc. */
+  godMode: boolean;
+  /** Permanently set once God Mode is enabled — disables achievements */
+  godModeUsed: boolean;
 }
 
 export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
@@ -621,6 +625,8 @@ export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
   mcafeeMode: false,
   chaosDraft: false,
   aiCommentary: false,
+  godMode: false,
+  godModeUsed: false,
 };
 
 export interface LeagueState {

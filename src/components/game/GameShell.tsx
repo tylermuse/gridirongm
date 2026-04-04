@@ -5,9 +5,11 @@ import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { GameTicker } from './GameTicker';
 import { SpotlightPopup } from './SpotlightPopup';
+import { useGameStore } from '@/lib/engine/store';
 
 export function GameShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const godMode = useGameStore(s => s.leagueSettings?.godMode ?? false);
 
   return (
     <div className="flex min-h-screen">
@@ -33,6 +35,11 @@ export function GameShell({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col min-w-0">
         <GameTicker />
         <TopBar onMenuToggle={() => setSidebarOpen(v => !v)} />
+        {godMode && (
+          <div className="bg-yellow-500/10 border-b border-yellow-400/30 px-4 py-1 text-center">
+            <span className="text-xs font-bold text-yellow-600">God Mode Active</span>
+          </div>
+        )}
         <main className="flex-1 p-3 md:p-6 overflow-auto pb-20 sm:pb-6">{children}</main>
       </div>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -86,6 +86,21 @@ export default function SettingsPage() {
   useEffect(() => {
     setDraft({ ...settings });
   }, [settings]);
+
+  // Auto-save whenever draft changes (debounced)
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    const timer = setTimeout(() => {
+      if (JSON.stringify(draft) !== JSON.stringify(settings)) {
+        updateLeagueSettings(draft);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 1500);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft]);
 
   function handleSave() {
     updateLeagueSettings(draft);
@@ -232,6 +247,45 @@ export default function SettingsPage() {
               step={1}
               formatValue={v => `${v} yrs`}
             />
+          </div>
+        </Card>
+
+        {/* God Mode */}
+        <Card className="mb-4">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CardTitle>God Mode</CardTitle>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 border border-yellow-300">
+                Commissioner
+              </span>
+            </div>
+          </CardHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-[var(--text-sec)]">
+              Full control over your league. Edit players, force trades, and modify any team. Enabling God Mode permanently marks this league as modified.
+            </p>
+            <button
+              onClick={() => {
+                if (!draft.godMode && !draft.godModeUsed) {
+                  if (!window.confirm('Enabling God Mode will permanently mark this league as modified. Continue?')) return;
+                }
+                setDraft(d => ({ ...d, godMode: !d.godMode, godModeUsed: true }));
+              }}
+              className={`
+                relative inline-flex h-7 w-12 items-center rounded-full transition-colors
+                ${draft.godMode ? 'bg-yellow-500' : 'bg-gray-300'}
+              `}
+            >
+              <span
+                className={`
+                  inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform
+                  ${draft.godMode ? 'translate-x-6' : 'translate-x-1'}
+                `}
+              />
+            </button>
+            <span className={`ml-2 text-sm font-semibold ${draft.godMode ? 'text-yellow-600' : 'text-[var(--text-sec)]'}`}>
+              {draft.godMode ? 'ON' : 'OFF'}
+            </span>
           </div>
         </Card>
 

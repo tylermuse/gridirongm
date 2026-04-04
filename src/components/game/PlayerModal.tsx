@@ -54,9 +54,11 @@ interface PlayerModalProps {
 }
 
 export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
-  const { players, teams, userTeamId, releasePlayer, champions, season, phase, week, leagueSettings } = useGameStore();
+  const { players, teams, userTeamId, releasePlayer, editPlayer, champions, season, phase, week, leagueSettings } = useGameStore();
   const router = useRouter();
   const [confirmRelease, setConfirmRelease] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const godMode = leagueSettings?.godMode ?? false;
 
   const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
   const offseasonPhases = ['resigning', 'draft', 'freeAgency', 'offseason', 'preseason'];
@@ -252,6 +254,27 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                   );
                 })()}
               </div>
+            )}
+
+            {/* God Mode: Edit Player */}
+            {godMode && !player.retired && !editing && (
+              <div className="mt-2">
+                <Button
+                  size="sm"
+                  onClick={() => setEditing(true)}
+                  className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                >
+                  Edit Player
+                </Button>
+              </div>
+            )}
+
+            {/* God Mode: Player Editor */}
+            {godMode && editing && (
+              <PlayerEditor player={player} teams={teams} onSave={(updates) => {
+                editPlayer(player.id, updates);
+                setEditing(false);
+              }} onCancel={() => setEditing(false)} />
             )}
 
             {/* Trade for player */}
@@ -455,6 +478,139 @@ function StatLine({ label, value, small }: { label: string; value: string | numb
     <div className={`flex justify-between ${small ? 'text-xs' : ''}`}>
       <span className="text-[var(--text-sec)]">{label}</span>
       <span className="font-mono">{value}</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// God Mode: Player Editor
+// ---------------------------------------------------------------------------
+
+import type { Player, Team } from '@/types';
+import { POSITIONS } from '@/types';
+
+function PlayerEditor({
+  player,
+  teams,
+  onSave,
+  onCancel,
+}: {
+  player: Player;
+  teams: Team[];
+  onSave: (updates: Partial<Player>) => void;
+  onCancel: () => void;
+}) {
+  const [firstName, setFirstName] = useState(player.firstName);
+  const [lastName, setLastName] = useState(player.lastName);
+  const [position, setPosition] = useState<Position>(player.position);
+  const [age, setAge] = useState(player.age);
+  const [overall, setOverall] = useState(player.ratings.overall);
+  const [potential, setPotential] = useState(player.potential);
+  const [salary, setSalary] = useState(player.contract.salary);
+  const [yearsLeft, setYearsLeft] = useState(player.contract.yearsLeft);
+  const [ratings, setRatings] = useState({ ...player.ratings });
+  const [teamId, setTeamId] = useState<string | null>(player.teamId);
+
+  const relevantRatings = POSITION_RELEVANT_RATINGS[position] ?? [];
+
+  function handleSave() {
+    onSave({
+      firstName, lastName, position, age,
+      potential,
+      ratings: { ...ratings, overall },
+      teamId,
+      contract: { ...player.contract, salary, yearsLeft },
+    });
+  }
+
+  return (
+    <div className="mt-3 border border-yellow-400/40 rounded-lg bg-yellow-50/50 p-3 space-y-3">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-sm font-bold text-yellow-700">Edit Player</span>
+      </div>
+
+      {/* Name */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] text-[var(--text-sec)] uppercase">First Name</label>
+          <input className="w-full text-sm border rounded px-2 py-1" value={firstName} onChange={e => setFirstName(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-[10px] text-[var(--text-sec)] uppercase">Last Name</label>
+          <input className="w-full text-sm border rounded px-2 py-1" value={lastName} onChange={e => setLastName(e.target.value)} />
+        </div>
+      </div>
+
+      {/* Position, Age, Team */}
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <label className="text-[10px] text-[var(--text-sec)] uppercase">Position</label>
+          <select className="w-full text-sm border rounded px-2 py-1" value={position} onChange={e => setPosition(e.target.value as Position)}>
+            {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] text-[var(--text-sec)] uppercase">Age</label>
+          <input type="number" className="w-full text-sm border rounded px-2 py-1" value={age} min={18} max={50} onChange={e => setAge(parseInt(e.target.value) || 22)} />
+        </div>
+        <div>
+          <label className="text-[10px] text-[var(--text-sec)] uppercase">Team</label>
+          <select className="w-full text-sm border rounded px-1 py-1 text-xs" value={teamId ?? ''} onChange={e => setTeamId(e.target.value || null)}>
+            <option value="">Free Agent</option>
+            {teams.map(t => <option key={t.id} value={t.id}>{t.abbreviation}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* OVR, POT, Contract */}
+      <div className="grid grid-cols-4 gap-2">
+        <div>
+          <label className="text-[10px] text-[var(--text-sec)] uppercase">OVR</label>
+          <input type="number" className="w-full text-sm border rounded px-2 py-1 font-bold" value={overall} min={30} max={99} onChange={e => setOverall(parseInt(e.target.value) || 50)} />
+        </div>
+        <div>
+          <label className="text-[10px] text-[var(--text-sec)] uppercase">POT</label>
+          <input type="number" className="w-full text-sm border rounded px-2 py-1" value={potential} min={30} max={99} onChange={e => setPotential(parseInt(e.target.value) || 60)} />
+        </div>
+        <div>
+          <label className="text-[10px] text-[var(--text-sec)] uppercase">Salary ($M)</label>
+          <input type="number" className="w-full text-sm border rounded px-2 py-1" value={salary} min={0} step={0.1} onChange={e => setSalary(parseFloat(e.target.value) || 0.75)} />
+        </div>
+        <div>
+          <label className="text-[10px] text-[var(--text-sec)] uppercase">Years</label>
+          <input type="number" className="w-full text-sm border rounded px-2 py-1" value={yearsLeft} min={0} max={8} onChange={e => setYearsLeft(parseInt(e.target.value) || 1)} />
+        </div>
+      </div>
+
+      {/* Ratings */}
+      <div>
+        <label className="text-[10px] text-[var(--text-sec)] uppercase mb-1 block">Ratings</label>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+          {relevantRatings.map(key => (
+            <div key={key} className="flex items-center gap-2">
+              <span className="text-xs text-[var(--text-sec)] w-16 shrink-0">{RATING_LABELS[key]}</span>
+              <input
+                type="range"
+                min={20} max={99}
+                value={ratings[key]}
+                onChange={e => setRatings(r => ({ ...r, [key]: parseInt(e.target.value) }))}
+                className="flex-1 accent-yellow-500 h-1.5"
+              />
+              <span className="text-xs font-mono w-6 text-right">{ratings[key]}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-2 pt-1">
+        <Button size="sm" onClick={handleSave} className="bg-yellow-500 hover:bg-yellow-600 text-white">
+          Save Changes
+        </Button>
+        <Button size="sm" variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
     </div>
   );
 }
