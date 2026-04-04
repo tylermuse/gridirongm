@@ -64,20 +64,38 @@ export function SpotlightPopup() {
 
     const lastShownKey = sessionStorage.getItem(STORAGE_KEY) ?? '';
 
-    // First mount — store key but don't trigger popup
+    // First mount — skip for weekly moments (prevents popup on every refresh).
+    // But DO trigger for special narrative moments (preseason, seasonOver, etc.)
+    // so they aren't silently consumed on initial load.
     if (!mountedRef.current) {
       mountedRef.current = true;
       prevKeyRef.current = currentKey;
       if (!lastShownKey) sessionStorage.setItem(STORAGE_KEY, currentKey);
-      return;
+      const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
+      const narrative = userTeam
+        ? detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id)
+        : 'weekly';
+      if (narrative === 'weekly') return; // skip on refresh for weekly
+      // Fall through for special moments — let them trigger below
     }
 
     // Nothing changed
     if (currentKey === prevKeyRef.current) return;
     prevKeyRef.current = currentKey;
 
-    // Already shown for this state
-    if (lastShownKey === currentKey) return;
+    // Already shown for this state — but still allow AI fetch for special moments
+    // (the popup won't show again but the content will be in the cache for the dashboard)
+    if (lastShownKey === currentKey) {
+      if (leagueSettings?.aiCommentary && userTeam) {
+        const tradeDeadlineWeek = leagueSettings.tradeDeadlineWeek ?? 12;
+        const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id);
+        if (narrative !== 'weekly') {
+          const rosterForFetch = players.filter(p => p.teamId === userTeam.id);
+          fetchAiSpotlight({ team: userTeam, roster: rosterForFetch, allTeams: teams, allPlayers: players, season, week, phase, narrative, newsItems, draftResults, playoffBracket, playoffSeeds, champions, tradeDeadlineWeek });
+        }
+      }
+      return;
+    }
 
     // Determine if this is a trigger moment
     const isRegularSeasonSim = phase === 'regular' && (gamesPlayed > 0 || week === 1);
