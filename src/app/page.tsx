@@ -367,8 +367,7 @@ function TeamSpotlightSection({
   }, [ctx?.phase, week, leagueSettings?.tradeDeadlineWeek, playoffBracket, team.id]);
 
   // If AI is enabled and this is a special narrative moment, trigger fetch.
-  // Let fetchAiSpotlight handle cache key comparison — don't guard on aiState.topics
-  // because stale topics from a previous moment would block new fetches.
+  // fetchAiSpotlight handles cache key comparison internally so dupes are harmless.
   React.useEffect(() => {
     if (aiCommentary && currentNarrative !== 'weekly') {
       const phase = ctx?.phase ?? 'regular';
