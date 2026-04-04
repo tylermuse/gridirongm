@@ -381,10 +381,14 @@ function TeamSpotlightSection({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiCommentary, currentNarrative, team, season, week, ctx?.phase]);
 
-  // Use AI topics only for special moments — weekly uses templates
-  const topics = (aiCommentary && currentNarrative !== 'weekly' && aiState.topics) ? aiState.topics : templateTopics;
+  // When AI commentary is on: show AI content (persists until the next special moment).
+  // When AI commentary is off: always show templates.
+  const topics = aiCommentary
+    ? (aiState.topics ?? [])   // show last AI content, or empty if none yet
+    : templateTopics;
 
-  if (templateTopics.length === 0) return null;
+  if (topics.length === 0 && !aiCommentary) return null;
+  if (topics.length === 0 && aiCommentary && !aiState.loading) return null;
 
   return (
     <div className="mt-6">
