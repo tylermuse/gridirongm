@@ -32,7 +32,7 @@ function computeSpotlightKey(
 }
 
 /** Phases that should trigger the popup when entered */
-const TRIGGER_PHASES = new Set(['draft', 'freeAgency', 'preseason']);
+const TRIGGER_PHASES = new Set(['resigning', 'draft', 'freeAgency', 'preseason']);
 
 export function SpotlightPopup() {
   const router = useRouter();
