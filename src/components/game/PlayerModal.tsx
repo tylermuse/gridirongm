@@ -488,6 +488,13 @@ function StatLine({ label, value, small }: { label: string; value: string | numb
 
 import type { Player, Team } from '@/types';
 import { POSITIONS } from '@/types';
+import { POSITION_WEIGHTS } from '@/lib/engine/playerGen';
+
+const ALL_RATING_KEYS: (keyof Omit<PlayerRatings, 'overall'>)[] = [
+  'speed', 'strength', 'agility', 'awareness', 'stamina',
+  'throwing', 'catching', 'carrying', 'blocking',
+  'tackling', 'coverage', 'passRush', 'kicking',
+];
 
 function PlayerEditor({
   player,
@@ -504,20 +511,41 @@ function PlayerEditor({
   const [lastName, setLastName] = useState(player.lastName);
   const [position, setPosition] = useState<Position>(player.position);
   const [age, setAge] = useState(player.age);
-  const [overall, setOverall] = useState(player.ratings.overall);
   const [potential, setPotential] = useState(player.potential);
   const [salary, setSalary] = useState(player.contract.salary);
   const [yearsLeft, setYearsLeft] = useState(player.contract.yearsLeft);
   const [ratings, setRatings] = useState({ ...player.ratings });
+  const [ovrOverride, setOvrOverride] = useState<number | null>(null);
   const [teamId, setTeamId] = useState<string | null>(player.teamId);
 
   const relevantRatings = POSITION_RELEVANT_RATINGS[position] ?? [];
 
+  // Auto-recalculate OVR preview from current ratings + position
+  // Uses same formula as the store
+  const autoOvr = (() => {
+    const weights = POSITION_WEIGHTS[position] ?? {};
+    const allKeys: (keyof Omit<PlayerRatings, 'overall'>)[] = [
+      'speed', 'strength', 'agility', 'awareness', 'stamina',
+      'throwing', 'catching', 'carrying', 'blocking',
+      'tackling', 'coverage', 'passRush', 'kicking',
+    ];
+    const weightedSum = allKeys.reduce((sum, key) => {
+      const w = (weights[key] ?? 0) || 0.2;
+      return sum + ratings[key] * w;
+    }, 0);
+    const totalWeight = allKeys.reduce((sum, key) => sum + ((weights[key] ?? 0) || 0.2), 0);
+    return Math.max(20, Math.min(99, Math.round(weightedSum / totalWeight)));
+  })();
+
+  const displayOvr = ovrOverride ?? autoOvr;
+
   function handleSave() {
+    // Build final ratings: merge edited ratings with the OVR value
+    const finalRatings = { ...ratings, overall: displayOvr };
     onSave({
       firstName, lastName, position, age,
       potential,
-      ratings: { ...ratings, overall },
+      ratings: finalRatings,
       teamId,
       contract: { ...player.contract, salary, yearsLeft },
     });
@@ -566,7 +594,7 @@ function PlayerEditor({
       <div className="grid grid-cols-4 gap-2">
         <div>
           <label className="text-[10px] text-[var(--text-sec)] uppercase">OVR</label>
-          <input type="number" className="w-full text-sm border rounded px-2 py-1 font-bold" value={overall} min={30} max={99} onChange={e => setOverall(parseInt(e.target.value) || 50)} />
+          <input type="number" className="w-full text-sm border rounded px-2 py-1 font-bold" value={displayOvr} min={30} max={99} onChange={e => setOvrOverride(parseInt(e.target.value) || 50)} />
         </div>
         <div>
           <label className="text-[10px] text-[var(--text-sec)] uppercase">POT</label>
@@ -582,18 +610,18 @@ function PlayerEditor({
         </div>
       </div>
 
-      {/* Ratings */}
+      {/* Ratings — all 13, with primary ones highlighted */}
       <div>
         <label className="text-[10px] text-[var(--text-sec)] uppercase mb-1 block">Ratings</label>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-          {relevantRatings.map(key => (
-            <div key={key} className="flex items-center gap-2">
+          {([...relevantRatings, ...ALL_RATING_KEYS.filter(k => !relevantRatings.includes(k))] as (keyof Omit<PlayerRatings, 'overall'>)[]).map(key => (
+            <div key={key} className={`flex items-center gap-2 ${relevantRatings.includes(key) ? '' : 'opacity-50'}`}>
               <span className="text-xs text-[var(--text-sec)] w-16 shrink-0">{RATING_LABELS[key]}</span>
               <input
                 type="range"
                 min={20} max={99}
                 value={ratings[key]}
-                onChange={e => setRatings(r => ({ ...r, [key]: parseInt(e.target.value) }))}
+                onChange={e => { setRatings(r => ({ ...r, [key]: parseInt(e.target.value) })); setOvrOverride(null); }}
                 className="flex-1 accent-yellow-500 h-1.5"
               />
               <span className="text-xs font-mono w-6 text-right">{ratings[key]}</span>
