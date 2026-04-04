@@ -6011,9 +6011,13 @@ export const useGameStore = create<GameStore>()(
           if (updates.ratings) {
             merged.ratings = { ...p.ratings, ...updates.ratings };
           }
-          // Recalculate OVR from ratings using the (possibly new) position
-          const pos = updates.position ?? p.position;
-          merged.ratings.overall = recalculateOvr(merged.ratings, pos);
+          // If user explicitly set OVR, respect it. Otherwise recalculate from ratings.
+          if (updates.ratings?.overall !== undefined) {
+            merged.ratings.overall = updates.ratings.overall;
+          } else {
+            const pos = updates.position ?? p.position;
+            merged.ratings.overall = recalculateOvr(merged.ratings, pos);
+          }
           return merged;
         });
 
