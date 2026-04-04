@@ -380,14 +380,15 @@ function TeamSpotlightSection({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiCommentary, currentNarrative, team, season, week, ctx?.phase]);
 
-  // When AI commentary is on: show AI content (persists until the next special moment).
+  // When AI commentary is on: ONLY show AI content. No templates.
   // When AI commentary is off: always show templates.
-  const topics = aiCommentary
-    ? (aiState.topics ?? [])   // show last AI content, or empty if none yet
-    : templateTopics;
+  if (aiCommentary) {
+    // Hide the entire section until AI content is ready
+    if (!aiState.topics || aiState.topics.length === 0) return null;
+  }
+  const topics = aiCommentary ? aiState.topics! : templateTopics;
 
-  if (topics.length === 0 && !aiCommentary) return null;
-  if (topics.length === 0 && aiCommentary && !aiState.loading) return null;
+  if (topics.length === 0) return null;
 
   return (
     <div className="mt-6">
@@ -408,16 +409,6 @@ function TeamSpotlightSection({
           </div>
         </CardHeader>
         <div className="px-4 pb-4">
-          {aiCommentary && aiState.loading && (
-            <div className="text-xs text-[var(--text-sec)] mb-3 flex items-center gap-2">
-              <span className="animate-pulse">Generating commentary...</span>
-            </div>
-          )}
-          {aiCommentary && aiState.error && (
-            <div className="text-xs text-amber-600 mb-3">
-              AI commentary unavailable — showing template version
-            </div>
-          )}
           <div className="space-y-5">
             {topics.map((topic, topicIdx) => (
               <div key={topicIdx}>
