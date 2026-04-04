@@ -133,9 +133,12 @@ export default function RosterPage() {
     players, teams, userTeamId, season, champions,
     releasePlayer, placeOnIR, activateFromIR,
     reorderDepthChart, restructureContract,
-    solicitTradingBlockProposals,
+    solicitTradingBlockProposals, createPlayer,
     phase, week, seasonHistory, leagueSettings, resigningPlayers,
   } = useGameStore();
+  const godMode = leagueSettings?.godMode ?? false;
+  const [showCreatePlayer, setShowCreatePlayer] = useState(false);
+  const [newPlayer, setNewPlayer] = useState({ firstName: '', lastName: '', position: 'QB' as Position, age: 22, overall: 65, potential: 75 });
 
   const [filterPos, setFilterPos] = useState<Position | 'ALL'>('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('pos');
@@ -345,6 +348,14 @@ export default function RosterPage() {
             </div>
             <div className="flex items-center gap-4 text-sm text-[var(--text-sec)] mt-1">
               <span>{roster.length} players</span>
+              {godMode && activeTeamId === userTeamId && (
+                <button
+                  onClick={() => setShowCreatePlayer(true)}
+                  className="text-xs font-bold text-yellow-600 hover:text-yellow-700 flex items-center gap-1"
+                >
+                  + Create Player
+                </button>
+              )}
               <span className={capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}>
                 ${capSpace}M cap space
               </span>
@@ -870,6 +881,63 @@ export default function RosterPage() {
         )}
       </div>
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
+
+      {/* God Mode: Create Player Dialog */}
+      {showCreatePlayer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowCreatePlayer(false)}>
+          <div className="bg-[var(--surface)] rounded-xl border border-yellow-400/40 shadow-xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-yellow-700 mb-3">Create Player</h3>
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-[var(--text-sec)] uppercase">First Name</label>
+                  <input className="w-full text-sm border rounded px-2 py-1" value={newPlayer.firstName} onChange={e => setNewPlayer(p => ({ ...p, firstName: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-[var(--text-sec)] uppercase">Last Name</label>
+                  <input className="w-full text-sm border rounded px-2 py-1" value={newPlayer.lastName} onChange={e => setNewPlayer(p => ({ ...p, lastName: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[10px] text-[var(--text-sec)] uppercase">Position</label>
+                  <select className="w-full text-sm border rounded px-2 py-1" value={newPlayer.position} onChange={e => setNewPlayer(p => ({ ...p, position: e.target.value as Position }))}>
+                    {POSITIONS.map(pos => <option key={pos} value={pos}>{pos}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] text-[var(--text-sec)] uppercase">Age</label>
+                  <input type="number" className="w-full text-sm border rounded px-2 py-1" value={newPlayer.age} min={18} max={45} onChange={e => setNewPlayer(p => ({ ...p, age: parseInt(e.target.value) || 22 }))} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-[var(--text-sec)] uppercase">OVR</label>
+                  <input type="number" className="w-full text-sm border rounded px-2 py-1" value={newPlayer.overall} min={30} max={99} onChange={e => setNewPlayer(p => ({ ...p, overall: parseInt(e.target.value) || 65 }))} />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-[var(--text-sec)] uppercase">Potential</label>
+                <input type="number" className="w-full text-sm border rounded px-2 py-1 w-20" value={newPlayer.potential} min={30} max={99} onChange={e => setNewPlayer(p => ({ ...p, potential: parseInt(e.target.value) || 75 }))} />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                className="px-4 py-2 text-sm font-bold bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg disabled:opacity-50"
+                disabled={!newPlayer.firstName || !newPlayer.lastName}
+                onClick={() => {
+                  createPlayer(newPlayer);
+                  setShowCreatePlayer(false);
+                  setNewPlayer({ firstName: '', lastName: '', position: 'QB', age: 22, overall: 65, potential: 75 });
+                }}
+              >
+                Create
+              </button>
+              <button className="px-4 py-2 text-sm text-[var(--text-sec)] hover:text-[var(--text)]" onClick={() => setShowCreatePlayer(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Fixed-position action menu (rendered outside table to avoid overflow:hidden clipping) */}
       {actionMenu && (() => {

@@ -86,6 +86,7 @@ interface GameStore extends LeagueState {
     receivedPickIds: string[],
     counterpartTeamId: string,
     skipValueCheck?: boolean,
+    forceGodMode?: boolean,
   ) => { success: boolean; reason?: string };
   generateCounterOffer: (
     receivedPlayerIds: string[],
@@ -108,6 +109,8 @@ interface GameStore extends LeagueState {
   updateLeagueSettings: (settings: Partial<LeagueSettings>) => void;
   /** God Mode: edit any player's attributes */
   editPlayer: (playerId: string, updates: Partial<Player>) => void;
+  /** God Mode: create a new player and add to the user's team */
+  createPlayer: (data: { firstName: string; lastName: string; position: Position; age: number; overall: number; potential: number }) => string | null;
   setSuppressTradePopups: (val: boolean) => void;
   saveToSlot: (slot: 1 | 2) => Promise<void>;
   loadFromSlot: (slot: 1 | 2) => Promise<void>;
@@ -4474,12 +4477,15 @@ export const useGameStore = create<GameStore>()(
         receivedPickIds,
         counterpartTeamId,
         skipValueCheck,
+        forceGodMode,
       ) => {
         const state = get();
-        // Trade deadline only applies during regular season; offseason trades always allowed
-        const tradeDeadline = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).tradeDeadlineWeek;
-        if (state.phase === 'regular' && state.week > tradeDeadline + 1) return { success: false, reason: 'Trade deadline has passed' };
-        if (state.phase === 'playoffs') return { success: false, reason: 'No trades during playoffs' };
+        // God Mode force: skip deadline and playoff checks
+        if (!forceGodMode) {
+          const tradeDeadline = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).tradeDeadlineWeek;
+          if (state.phase === 'regular' && state.week > tradeDeadline + 1) return { success: false, reason: 'Trade deadline has passed' };
+          if (state.phase === 'playoffs') return { success: false, reason: 'No trades during playoffs' };
+        }
 
         const userTeam = state.teams.find(t => t.id === state.userTeamId);
         const aiTeam = state.teams.find(t => t.id === counterpartTeamId);
@@ -4502,12 +4508,10 @@ export const useGameStore = create<GameStore>()(
           return sum + (pick ? pickTradeValue(pick, state.teams) : 0);
         }, 0);
 
-        // AI accepts if within 10% value (skip for AI-initiated proposals already approved)
-        if (!skipValueCheck && offeredValue < receivedValue * 0.95) return { success: false, reason: 'Trade value too low — AI rejected' };
+        // AI accepts if within 5% value (skip for AI-initiated proposals or God Mode force)
+        if (!skipValueCheck && !forceGodMode && offeredValue < receivedValue * 0.95) return { success: false, reason: 'Trade value too low — AI rejected' };
 
-        // Cap check: allow trades that reduce payroll (salary dumps) even when over cap.
-        // Only block if the trade would make cap situation WORSE when already over,
-        // or would push you over when currently under.
+        // Cap check (skipped in God Mode force)
         const offeredSalaryTotal = offeredPlayerIds.reduce((sum, id) => {
           const p = state.players.find(pl => pl.id === id);
           return sum + (p ? p.contract.salary : 0);
@@ -4517,17 +4521,17 @@ export const useGameStore = create<GameStore>()(
           return sum + (p ? p.contract.salary : 0);
         }, 0);
         const netSalaryChange = receivedSalaryTotal - offeredSalaryTotal;
-        const currentlyOverCap = userTeam.totalPayroll > userTeam.salaryCap;
-        const newPayroll = userTeam.totalPayroll + netSalaryChange;
-        if (currentlyOverCap) {
-          // Over cap: only allow trades that reduce or maintain payroll
-          if (netSalaryChange > 0) {
-            return { success: false, reason: `Trade adds $${Math.round(netSalaryChange * 10) / 10}M in salary — must shed salary or stay flat when over the cap` };
-          }
-        } else {
-          // Under cap: don't allow trades that push you over
-          if (newPayroll > userTeam.salaryCap) {
-            return { success: false, reason: `Trade would put you $${Math.round((newPayroll - userTeam.salaryCap) * 10) / 10}M over the cap — send more salary out or receive less` };
+        if (!forceGodMode) {
+          const currentlyOverCap = userTeam.totalPayroll > userTeam.salaryCap;
+          const newPayroll = userTeam.totalPayroll + netSalaryChange;
+          if (currentlyOverCap) {
+            if (netSalaryChange > 0) {
+              return { success: false, reason: `Trade adds $${Math.round(netSalaryChange * 10) / 10}M in salary — must shed salary or stay flat when over the cap` };
+            }
+          } else {
+            if (newPayroll > userTeam.salaryCap) {
+              return { success: false, reason: `Trade would put you $${Math.round((newPayroll - userTeam.salaryCap) * 10) / 10}M over the cap — send more salary out or receive less` };
+            }
           }
         }
 
@@ -6033,6 +6037,38 @@ export const useGameStore = create<GameStore>()(
         }
 
         set({ players: updatedPlayers, teams: updatedTeams });
+      },
+
+      createPlayer: (data) => {
+        const state = get();
+        const settings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
+        if (!settings.godMode) return null;
+
+        const p = generatePlayer(data.position, data.overall, {
+          age: data.age,
+          experience: 0,
+          teamId: state.userTeamId,
+        });
+        p.firstName = data.firstName;
+        p.lastName = data.lastName;
+        p.potential = data.potential;
+        p.ratings.overall = data.overall;
+        p.acquiredVia = 'initial';
+        p.acquiredSeason = state.season;
+
+        // Add to user team roster
+        const updatedTeams = state.teams.map(t =>
+          t.id === state.userTeamId
+            ? { ...t, roster: [...t.roster, p.id] }
+            : t,
+        );
+
+        set({
+          players: [...state.players, p],
+          teams: updatedTeams,
+        });
+
+        return p.id;
       },
 
       setSuppressTradePopups: (val: boolean) => {

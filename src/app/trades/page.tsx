@@ -764,6 +764,7 @@ function TradesPage() {
     draftOrder, tradeProposals, executeTrade, generateCounterOffer, respondToTradeProposal, rejectAllTradeProposals,
     solicitTradingBlockProposals, leagueSettings, tradeRumors,
   } = useGameStore();
+  const godMode = leagueSettings?.godMode ?? false;
 
   // Keep pick value calculator in sync with current team records
   setTradesTeams(teams);
@@ -968,6 +969,25 @@ function TradesPage() {
     Math.abs(valueDiff) < Math.max(offeredValue, receivedValue, 1) * 0.1 ? 'Fair trade' :
     valueDiff > 0 ? `You gain ~${Math.round(valueDiff).toLocaleString()} pts` :
     `You lose ~${Math.round(Math.abs(valueDiff)).toLocaleString()} pts`;
+
+  function handleForceTrade() {
+    if (!selectedTeamId) return;
+    const result = executeTrade(
+      offeredPlayerIds, offeredPickIds,
+      receivedPlayerIds, receivedPickIds,
+      selectedTeamId,
+      true, // skipValueCheck
+      true, // forceGodMode
+    );
+    setTradeResult(result.success ? 'accepted' : 'rejected');
+    setRejectionReason(result.reason ?? null);
+    if (result.success) {
+      setOfferedPlayerIds([]);
+      setOfferedPickIds([]);
+      setReceivedPlayerIds([]);
+      setReceivedPickIds([]);
+    }
+  }
 
   function handleSendTrade() {
     if (!selectedTeamId) return;
@@ -2051,6 +2071,19 @@ function TradesPage() {
                       >
                         Send Offer
                       </Button>
+                      {godMode && (
+                        <Button
+                          onClick={handleForceTrade}
+                          disabled={
+                            !selectedTeamId ||
+                            (offeredPlayerIds.length === 0 && offeredPickIds.length === 0 &&
+                             receivedPlayerIds.length === 0 && receivedPickIds.length === 0)
+                          }
+                          className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                        >
+                          Force Trade
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </Card>
