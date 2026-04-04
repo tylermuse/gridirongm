@@ -851,27 +851,42 @@ function TradesPage() {
   // Compute pick number label (e.g., "#21") for current-year picks during/after draft ordering
   const pickNumberMap = useMemo(() => {
     const map = new Map<string, number>(); // pickId → overall pick number
-    if (phase !== 'draft' || !draftOrder || draftOrder.length === 0) return map;
-    const numTeams = teams.length;
-    const totalPicks = numTeams * 7;
-    // draftOrder contains remaining picks; already-drafted picks are gone
-    // Reconstruct full order from all teams' draftPicks for current season
+    // Determine which draft year to show pick numbers for
+    const offseasonPhases = ['resigning', 'freeAgency', 'draft', 'playoffs'];
+    const targetYear = offseasonPhases.includes(phase) ? season + (phase === 'draft' ? 0 : 1) : season;
+    // During draft phase, use the current season; during earlier offseason, use next season
+    const draftYear = phase === 'draft' ? season : season + (phase === 'regular' ? 1 : 1);
+
+    // Collect all unplayed picks for the upcoming/current draft
     const allPicks = teams.flatMap(t =>
-      t.draftPicks.filter(pk => pk.year === season && !pk.playerId),
+      t.draftPicks.filter(pk => pk.year === draftYear && !pk.playerId),
     );
-    // Sort same way as store: by round, then by original team record (worst first)
-    const teamRecords = new Map(teams.map(t => [t.id, t.record]));
+    if (allPicks.length === 0) {
+      // Fallback: try current season picks (for draft phase)
+      const currentPicks = teams.flatMap(t =>
+        t.draftPicks.filter(pk => pk.year === season && !pk.playerId),
+      );
+      if (currentPicks.length === 0) return map;
+      allPicks.push(...currentPicks);
+    }
+
+    // Sort by round, then by original team record (worst first = highest pick)
     const winPct = (r: { wins: number; losses: number }) => r.wins + r.losses > 0 ? r.wins / (r.wins + r.losses) : 0;
     allPicks.sort((a, b) => {
       if (a.round !== b.round) return a.round - b.round;
-      const aWp = winPct(teamRecords.get(a.originalTeamId) ?? { wins: 0, losses: 0 });
-      const bWp = winPct(teamRecords.get(b.originalTeamId) ?? { wins: 0, losses: 0 });
+      const aTeam = teams.find(t => t.id === a.originalTeamId);
+      const bTeam = teams.find(t => t.id === b.originalTeamId);
+      const aWp = aTeam ? winPct(aTeam.record) : 0.5;
+      const bWp = bTeam ? winPct(bTeam.record) : 0.5;
       return aWp - bWp;
     });
-    // Already-drafted picks offset
-    const draftedCount = totalPicks - draftOrder.length;
+
+    // During draft phase, account for already-drafted picks
+    const draftedOffset = phase === 'draft' && draftOrder
+      ? (teams.length * 7) - draftOrder.length - allPicks.length
+      : 0;
     allPicks.forEach((pk, i) => {
-      map.set(pk.id, draftedCount + i + 1);
+      map.set(pk.id, Math.max(1, draftedOffset + i + 1));
     });
     return map;
   }, [phase, draftOrder, teams, season]);
