@@ -13,7 +13,7 @@ import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTI
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { NFL_2026_FIRST_ROUND, isNfl2026Roster, type MockDraftPick } from '@/lib/data/nfl2026Draft';
-import { generateRoster, generateDraftClass, generatePlayer, generateCombineStats } from './playerGen';
+import { generateRoster, generateDraftClass, generatePlayer, generateCombineStats, recalculateOvr } from './playerGen';
 import { resetUsedNames } from '../data/names';
 import { generateSchedule } from './schedule';
 import { simulateGame, generateBettingLine } from './simulate';
@@ -6007,10 +6007,13 @@ export const useGameStore = create<GameStore>()(
         const updatedPlayers = state.players.map(p => {
           if (p.id !== playerId) return p;
           const merged = { ...p, ...updates };
-          // If ratings were updated, recalculate OVR
+          // Merge ratings if provided
           if (updates.ratings) {
             merged.ratings = { ...p.ratings, ...updates.ratings };
           }
+          // Recalculate OVR from ratings using the (possibly new) position
+          const pos = updates.position ?? p.position;
+          merged.ratings.overall = recalculateOvr(merged.ratings, pos);
           return merged;
         });
 

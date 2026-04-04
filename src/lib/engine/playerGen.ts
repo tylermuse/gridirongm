@@ -25,6 +25,23 @@ function clamp(val: number, min = 20, max = 99): number {
   return Math.round(Math.max(min, Math.min(max, val)));
 }
 
+const ALL_RATING_KEYS: (keyof Omit<PlayerRatings, 'overall'>)[] = [
+  'speed', 'strength', 'agility', 'awareness', 'stamina',
+  'throwing', 'catching', 'carrying', 'blocking',
+  'tackling', 'coverage', 'passRush', 'kicking',
+];
+
+/** Recalculate OVR from individual ratings using position-specific weights. */
+export function recalculateOvr(ratings: PlayerRatings, position: Position): number {
+  const weights = POSITION_WEIGHTS[position] ?? {};
+  const weightedSum = ALL_RATING_KEYS.reduce((sum, key) => {
+    const w = (weights[key] ?? 0) || 0.2;
+    return sum + ratings[key] * w;
+  }, 0);
+  const totalWeight = ALL_RATING_KEYS.reduce((sum, key) => sum + ((weights[key] ?? 0) || 0.2), 0);
+  return clamp(Math.round(weightedSum / totalWeight));
+}
+
 // Height/weight ranges by position (inches, lbs)
 const POSITION_BODY: Record<Position, { heightMin: number; heightMax: number; weightMin: number; weightMax: number }> = {
   QB:  { heightMin: 72, heightMax: 77, weightMin: 210, weightMax: 240 },
