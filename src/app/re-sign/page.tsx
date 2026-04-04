@@ -43,7 +43,7 @@ type NegMode = 'extend' | 'restructure';
 
 export default function ReSignPage() {
   const router = useRouter();
-  const { phase, players, teams, userTeamId, resigningPlayers, resignPlayer, passOnResigning, passOnResigningBatch, franchiseTagPlayer, advanceToDraft } = useGameStore();
+  const { phase, players, teams, userTeamId, resigningPlayers, resignPlayer, passOnResigning, passOnResigningBatch, franchiseTagPlayer, advanceToFreeAgency } = useGameStore();
   const roster = players.filter(p => p.teamId === userTeamId && !p.retired);
 
   const [results, setResults] = useState<Record<string, ReSignResult>>({});
@@ -402,12 +402,12 @@ export default function ReSignPage() {
               <Button
                 className="mt-4"
                 onClick={async () => {
-                  advanceToDraft();
+                  advanceToFreeAgency();
                   await flushToStorage();
-                  router.push('/draft');
+                  router.push('/free-agency');
                 }}
               >
-                Advance to Draft →
+                Advance to Free Agency →
               </Button>
             </div>
           </Card>
@@ -627,12 +627,12 @@ export default function ReSignPage() {
             <p className="text-[var(--text-sec)] mb-4">All re-signing decisions complete.</p>
             <Button
               onClick={async () => {
-                advanceToDraft();
+                advanceToFreeAgency();
                 await flushToStorage();
-                router.push('/draft');
+                router.push('/free-agency');
               }}
             >
-              Advance to Draft →
+              Advance to Free Agency →
             </Button>
           </div>
         )}
