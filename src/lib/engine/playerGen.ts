@@ -356,23 +356,28 @@ export function generateDraftClass(count: number, options?: { chaosDraft?: boole
   prospects.sort((a, b) => b.ratings.overall - a.ratings.overall);
 
   // ── Boom/Bust assignment ──
-  // Normal mode: ~8% busts in top half, ~6% booms in bottom half.
-  // Chaos Draft mode: ALL top-half prospects bust, ALL bottom-half boom.
-  // This creates realistic draft variance — not every high pick pans out,
-  // and diamonds can be found late.
+  // Position-aware bust rates (QBs/RBs bust most often).
+  // Flat 12% boom rate for bottom-half. Chaos mode overrides to 100%.
   const midIdx = Math.floor(prospects.length / 2);
   const topHalf = prospects.slice(0, midIdx);
   const bottomHalfForBoomBust = prospects.slice(midIdx);
 
-  const bustRate = chaosDraft ? 1.0 : 0.08;
-  const boomRate = chaosDraft ? 1.0 : 0.06;
+  const POSITION_BUST_RATE: Partial<Record<Position, number>> = {
+    QB: 0.35, RB: 0.35,           // High bust risk
+    WR: 0.25, CB: 0.25, S: 0.25,  // Medium bust risk
+    OL: 0.18, DL: 0.18, LB: 0.18, TE: 0.18, // Lower bust risk
+    K: 0.10, P: 0.10,             // Lowest
+  };
 
   // Assign busts to top-half prospects (high picks that disappoint)
-  for (const p of topHalf) {
+  for (let i = 0; i < topHalf.length; i++) {
+    const p = topHalf[i];
     if (p.position === 'K' || p.position === 'P') continue;
+    let bustRate = chaosDraft ? 1.0 : (POSITION_BUST_RATE[p.position] ?? 0.18);
+    // Top-10 prospects have 1.3x bust risk — outsized expectations
+    if (!chaosDraft && i < 10) bustRate *= 1.3;
     if (Math.random() < bustRate) {
       p.draftProfile = 'bust';
-      // Bust's true potential is much lower than their OVR suggests
       const potDrop = chaosDraft
         ? 10 + Math.floor(Math.random() * 8) // Chaos: -10 to -18
         : 5 + Math.floor(Math.random() * 6);  // Normal: -5 to -10
@@ -381,15 +386,15 @@ export function generateDraftClass(count: number, options?: { chaosDraft?: boole
   }
 
   // Assign booms to bottom-half prospects (late picks that overperform)
+  const boomRate = chaosDraft ? 1.0 : 0.12;
   for (const p of bottomHalfForBoomBust) {
     if (p.position === 'K' || p.position === 'P') continue;
-    if (p.scoutingLabel === 'Sleeper') continue; // sleepers already have high potential
+    if (p.scoutingLabel === 'Sleeper') continue;
     if (Math.random() < boomRate) {
       p.draftProfile = 'boom';
-      // Boom's true potential is much higher than expected
       const potBoost = chaosDraft
         ? 20 + Math.floor(Math.random() * 10) // Chaos: +20 to +30
-        : 15 + Math.floor(Math.random() * 10); // Normal: +15 to +25
+        : Math.round(clamp(gaussian(12, 3), 10, 18));   // Normal: +10 to +18 (centered on 12)
       p.potential = clamp(p.ratings.overall + potBoost, 30, 95);
     }
   }

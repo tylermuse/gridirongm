@@ -446,14 +446,16 @@ function ScoutEvaluationPanel({
   publicOvrRange,
   isUserPick,
   onDraft,
+  scoutingLevel: scoutLvl,
 }: {
   player: Player;
   userRoster: Player[];
   publicOvrRange: { lo: number; hi: number };
   isUserPick: boolean;
   onDraft: () => void;
+  scoutingLevel: number;
 }) {
-  const evaluation = generateDraftScoutEval(player, userRoster, publicOvrRange);
+  const evaluation = generateDraftScoutEval(player, userRoster, publicOvrRange, undefined, scoutLvl);
 
   return (
     <div className="space-y-3">
@@ -808,7 +810,7 @@ export default function DraftPage() {
         const err = scout ? Math.min(scout.error, 6) : 5;
         const lo = Math.max(20, ovr - err);
         const hi = Math.min(99, ovr + err);
-        const eval_ = generateDraftScoutEval(p, userRoster, { lo, hi });
+        const eval_ = generateDraftScoutEval(p, userRoster, { lo, hi }, undefined, scoutingLevel);
         const needBonus = needPositions.has(p.position) ? 8 : 0;
         const scoutedBonus = scout?.deepScouted ? 5 : 0;
         const score = ovr + needBonus + scoutedBonus;
@@ -1075,7 +1077,7 @@ export default function DraftPage() {
                             <div className="text-[10px] text-[var(--text-sec)] flex items-center gap-1 flex-wrap">
                               {player.college ?? player.scoutingLabel ?? 'Unranked'}
                               {isScouted && (() => {
-                                const eval_ = generateDraftScoutEval(player, userRoster, { lo, hi });
+                                const eval_ = generateDraftScoutEval(player, userRoster, { lo, hi }, undefined, scoutingLevel);
                                 return (
                                   <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded border ${fitBadgeColor(eval_.fitBadge)}`}>
                                     {fitBadgeEmoji(eval_.fitBadge)} {eval_.fitBadge}
@@ -1093,7 +1095,7 @@ export default function DraftPage() {
                       </td>
                       <td className="py-2.5 text-center hidden sm:table-cell">
                         {isScouted ? (() => {
-                          const eval_ = generateDraftScoutEval(player, userRoster, { lo, hi });
+                          const eval_ = generateDraftScoutEval(player, userRoster, { lo, hi }, undefined, scoutingLevel);
                           return (
                             <span className={`text-xs font-bold ${ratingColor(eval_.scoutOvrEstimate.high)}`}>
                               {eval_.scoutOvrEstimate.low}–{eval_.scoutOvrEstimate.high}
@@ -1126,6 +1128,7 @@ export default function DraftPage() {
                               publicOvrRange={{ lo, hi }}
                               isUserPick={isUserPick}
                               onDraft={() => draftPlayer(player.id)}
+                              scoutingLevel={scoutingLevel}
                             />
                           ) : (
                             <UnscoutedPanel

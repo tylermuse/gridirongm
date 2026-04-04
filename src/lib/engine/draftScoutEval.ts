@@ -208,28 +208,30 @@ function generateRosterComparison(
 
 /* ─── Risk Factors ───────────────────────────────────────────── */
 
-function generateRiskFactors(player: Player, seed: number): string[] {
+function generateRiskFactors(player: Player, seed: number, scoutingLevel = 0): string[] {
   const risks: string[] = [];
   const label = player.scoutingLabel ?? '';
 
   // ── Boom/Bust scouting hints ──
-  // Scouting doesn't reveal the flag directly but gives strong directional hints.
-  // ~75% chance the scout correctly identifies the profile; 25% they miss it.
+  // Detection rate scales with scouting investment:
+  //   Level 0 (Entry): 35%, Level 1 (Pro): 50%, Level 2 (Elite): 65%
+  const DETECTION_RATES = [35, 50, 65];
+  const detectionThreshold = DETECTION_RATES[Math.min(scoutingLevel, 2)] ?? 35;
   const scoutAccuracy = ((seed * 3571 + 8923) % 100);
-  if (player.draftProfile === 'bust' && scoutAccuracy < 75) {
+  if (player.draftProfile === 'bust' && scoutAccuracy < detectionThreshold) {
     const bustHints = [
-      'Development red flag — our staff sees a significant gap between tools and football instincts',
-      'Concerning lack of improvement over his college career despite elite physical traits',
-      'Film study raises questions — production came from scheme, not individual dominance',
-      'Warning: our scouts see a player whose ceiling may be much lower than the measurables suggest',
+      'Some evaluators question whether his college production will translate to the next level',
+      'Our staff notes a plateau in development during his final college season — worth monitoring',
+      'There\'s a gap between the measurables and the tape that gives our scouts pause',
+      'Production was heavily scheme-dependent — may struggle to adapt without the same system',
     ];
     risks.push(pick(bustHints, seed + 33));
-  } else if (player.draftProfile === 'boom' && scoutAccuracy < 75) {
+  } else if (player.draftProfile === 'boom' && scoutAccuracy < detectionThreshold) {
     const boomHints = [
-      'Upside alert — our staff sees traits that the stats and consensus don\'t capture',
-      'Late bloomer profile: improvement trajectory over his final college season was dramatic',
-      'Hidden gem potential — the raw tools here are special, just needs NFL coaching to unlock them',
-      'Our scouts believe this player is significantly better than his draft stock suggests',
+      'Intriguing athletic profile that may take time to develop at the pro level',
+      'Our staff sees a player whose improvement trajectory suggests untapped potential',
+      'Raw tools that could translate with patient coaching — not a day-one starter but worth the wait',
+      'There\'s more here than the stats suggest — a late bloomer who may surprise',
     ];
     risks.push(pick(boomHints, seed + 33));
   }
@@ -308,6 +310,7 @@ export function generateDraftScoutEval(
   userRoster: Player[],
   publicOvrRange: { lo: number; hi: number },
   schemeFit?: number, // 0-100, optional from coaching
+  scoutingLevel?: number, // 0=entry, 1=pro, 2=elite
 ): DraftScoutEvaluation {
   const seed = seedFromId(player.id, 55);
   const ovr = player.ratings.overall;
@@ -360,7 +363,7 @@ export function generateDraftScoutEval(
   const rosterComparison = generateRosterComparison(player, userRoster);
 
   // ── Risk Factors ──
-  const riskFactors = generateRiskFactors(player, seed);
+  const riskFactors = generateRiskFactors(player, seed, scoutingLevel ?? 0);
 
   // ── Combine ──
   const combine = extendedCombine(player);

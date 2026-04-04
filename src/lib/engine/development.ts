@@ -135,7 +135,7 @@ export function developPlayers(
     // Booms: potential spikes, accelerated growth beyond normal curves.
     let updatedPotential = p.potential;
     const isBusting = p.draftProfile === 'bust' && p.experience >= 1 && p.experience <= 3;
-    const isBooming = p.draftProfile === 'boom' && p.experience >= 1 && p.experience <= 3;
+    const isBooming = p.draftProfile === 'boom' && p.experience >= 1 && p.experience <= 4;
     if (isBusting) {
       // Bust: potential craters — drops 5-10 pts per year
       const potDrop = clamp(gaussian(7, 3), 5, 12);
@@ -163,21 +163,30 @@ export function developPlayers(
         }
         ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
       } else {
-        // Years 2-3: active regression — ratings decline
-        const declineAmount = clamp(gaussian(2.5, 1.5), 1, 5) * regressionMult;
+        // Years 2-3: active regression — position-specific severity
+        const posDeclineRate = POSITION_AGING[p.position]?.declineRate ?? 1.0;
+        const declineAmount = clamp(gaussian(2.5, 1.5), 1, 5) * regressionMult * posDeclineRate;
         for (const key of primaryKeys) {
           const k = key as string;
           (ratings as Record<string, number>)[k] = clamp(
             (ratings as Record<string, number>)[k] - declineAmount * 0.5,
           );
         }
-        ratings.speed = clamp(ratings.speed - gaussian(0.5, 0.5));
+        ratings.speed = clamp(ratings.speed - gaussian(0.5, 0.5) * posDeclineRate);
         ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
       }
     } else if (isBooming) {
       // ── Boom: Override normal growth — accelerated development ──────
-      // Booms develop significantly faster than normal young players
-      const growthAmount = clamp(gaussian(5, 2), 3, 9) * progressionMult;
+      // Year 1: modest growth (2-5), Years 2-3: strong growth (3-9), Year 4: tapering (2-4)
+      let growthAmount: number;
+      if (p.experience === 1) {
+        growthAmount = clamp(gaussian(3.5, 1.5), 2, 5) * progressionMult;
+      } else if (p.experience <= 3) {
+        growthAmount = clamp(gaussian(5, 2), 3, 9) * progressionMult;
+      } else {
+        // Year 4: tapering off
+        growthAmount = clamp(gaussian(3, 1), 2, 4) * progressionMult;
+      }
       for (const key of primaryKeys) {
         const k = key as string;
         (ratings as Record<string, number>)[k] = clamp(
