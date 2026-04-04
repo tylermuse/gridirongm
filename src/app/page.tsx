@@ -358,26 +358,28 @@ function TeamSpotlightSection({
     return subscribeAiSpotlight(() => setAiState(getAiSpotlightState()));
   }, []);
 
-  // If AI is enabled but nothing was pre-fetched yet (e.g. direct page load), trigger fetch
-  // Only for special narrative moments — weekly uses templates to save API costs
+  // Detect current narrative moment
+  const currentNarrative = React.useMemo(() => {
+    const phase = ctx?.phase ?? 'regular';
+    const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
+    return detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, team.id);
+  }, [ctx?.phase, week, leagueSettings?.tradeDeadlineWeek, playoffBracket, team.id]);
+
+  // If AI is enabled and this is a special narrative moment, trigger fetch
   React.useEffect(() => {
-    if (aiCommentary && !aiState.topics && !aiState.loading && !aiState.error) {
+    if (aiCommentary && currentNarrative !== 'weekly' && !aiState.topics && !aiState.loading && !aiState.error) {
       const phase = ctx?.phase ?? 'regular';
-      const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
-      const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, team.id);
-      // Skip AI for weekly — template engine handles these cheaply
-      if (narrative !== 'weekly') {
-        fetchAiSpotlight({
-          team, roster, allTeams, allPlayers, season, week, phase, narrative,
-          newsItems, draftResults, playoffBracket, playoffSeeds, champions,
-          tradeDeadlineWeek,
-        });
-      }
+      fetchAiSpotlight({
+        team, roster, allTeams, allPlayers, season, week, phase, narrative: currentNarrative,
+        newsItems, draftResults, playoffBracket, playoffSeeds, champions,
+        tradeDeadlineWeek: leagueSettings?.tradeDeadlineWeek ?? 12,
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiCommentary, team, season, week, ctx?.phase]);
+  }, [aiCommentary, currentNarrative, team, season, week, ctx?.phase]);
 
-  const topics = (aiCommentary && aiState.topics) ? aiState.topics : templateTopics;
+  // Only use AI topics for special narrative moments — weekly always uses templates
+  const topics = (aiCommentary && currentNarrative !== 'weekly' && aiState.topics) ? aiState.topics : templateTopics;
 
   if (templateTopics.length === 0) return null;
 
