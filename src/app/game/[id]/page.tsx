@@ -21,8 +21,8 @@ type Speed = '1x' | '2x' | '5x' | 'max';
 
 const SPEED_MS: Record<Speed, number> = {
   '1x': 4800,
-  '2x': 2400,
-  '5x': 800,
+  '2x': 2000,
+  '5x': 500,
   'max': 0,
 };
 
@@ -530,7 +530,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     clearNextPlayTimer();
     if (!animationComplete || !isPlaying || isFinished || speed === 'max') return;
     // Post-animation pause — gives time to read the play description before advancing
-    const PAUSE_MS: Record<Speed, number> = { '1x': 2200, '2x': 1000, '5x': 250, 'max': 0 };
+    const PAUSE_MS: Record<Speed, number> = { '1x': 2200, '2x': 800, '5x': 100, 'max': 0 };
     const pause = PAUSE_MS[speed];
     nextPlayTimerRef.current = setTimeout(() => {
       setRevealedCount(prev => {

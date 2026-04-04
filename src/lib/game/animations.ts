@@ -327,14 +327,16 @@ export function buildPlayAnimation(
     ballRestX = postBallX; // penalty shifts field pos, show the result
   }
 
-  // Bug 7 fix: enforce minimum duration for big plays so text overlays are readable at fast speeds
-  let finalDuration = Math.max(cappedDuration, 200);
+  // Minimum durations for big plays — scale with speed so 5x still feels fast.
+  // At 1x (4800ms), big plays get full dramatic pause. At 5x (800ms), minimums shrink.
+  const speedScale = Math.max(0.25, speedMs / 4800); // 1.0 at 1x, ~0.17 at 5x
+  let finalDuration = Math.max(cappedDuration, 150);
   if (effects.includes('touchdown') || effects.includes('confetti')) {
-    finalDuration = Math.max(finalDuration, 1200);
+    finalDuration = Math.max(finalDuration, Math.round(1200 * speedScale));
   } else if (effects.includes('turnover')) {
-    finalDuration = Math.max(finalDuration, 1000);
+    finalDuration = Math.max(finalDuration, Math.round(1000 * speedScale));
   } else if (effects.includes('flag')) {
-    finalDuration = Math.max(finalDuration, 800);
+    finalDuration = Math.max(finalDuration, Math.round(800 * speedScale));
   }
 
   return {
