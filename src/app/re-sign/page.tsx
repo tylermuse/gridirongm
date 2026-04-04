@@ -192,25 +192,47 @@ export default function ReSignPage() {
               Extend or restructure your expiring contracts before they hit free agency.
             </p>
             {activeEntries.length > 1 && (
-              <Button
-                size="sm"
-                variant="danger"
-                className="mt-2"
-                onClick={() => {
-                  if (!confirm(`Let all ${activeEntries.length} players walk? They'll become free agents.`)) return;
-                  const ids = activeEntries.map(e => e.playerId);
-                  passOnResigningBatch(ids);
-                  setNegotiation(null);
-                  setActivePlayerId(null);
-                  setResults(prev => {
-                    const next = { ...prev };
-                    for (const id of ids) next[id] = 'passed';
-                    return next;
-                  });
-                }}
-              >
-                Let All Walk ({activeEntries.length})
-              </Button>
+              <div className="flex gap-2 mt-2 flex-wrap">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (!confirm(`Re-sign all ${activeEntries.length} players at their asking price?`)) return;
+                    setNegotiation(null);
+                    setActivePlayerId(null);
+                    const newResults: Record<string, ReSignResult> = {};
+                    for (const entry of activeEntries) {
+                      if (entry.refusesToResign) {
+                        passOnResigning(entry.playerId);
+                        newResults[entry.playerId] = 'passed';
+                      } else {
+                        resignPlayer(entry.playerId, entry.askingSalary, entry.askingYears);
+                        newResults[entry.playerId] = 'accepted';
+                      }
+                    }
+                    setResults(prev => ({ ...prev, ...newResults }));
+                  }}
+                >
+                  Re-sign All ({activeEntries.filter(e => !e.refusesToResign).length})
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => {
+                    if (!confirm(`Let all ${activeEntries.length} players walk? They'll become free agents.`)) return;
+                    const ids = activeEntries.map(e => e.playerId);
+                    passOnResigningBatch(ids);
+                    setNegotiation(null);
+                    setActivePlayerId(null);
+                    setResults(prev => {
+                      const next = { ...prev };
+                      for (const id of ids) next[id] = 'passed';
+                      return next;
+                    });
+                  }}
+                >
+                  Let All Walk ({activeEntries.length})
+                </Button>
+              </div>
             )}
           </div>
           <div className="text-right">
