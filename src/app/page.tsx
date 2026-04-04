@@ -366,9 +366,9 @@ function TeamSpotlightSection({
     return detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, team.id);
   }, [ctx?.phase, week, leagueSettings?.tradeDeadlineWeek, playoffBracket, team.id]);
 
-  // If AI is enabled and this is a special narrative moment, trigger fetch
+  // If AI is enabled, trigger fetch for all narrative moments
   React.useEffect(() => {
-    if (aiCommentary && currentNarrative !== 'weekly' && !aiState.topics && !aiState.loading && !aiState.error) {
+    if (aiCommentary && !aiState.topics && !aiState.loading && !aiState.error) {
       const phase = ctx?.phase ?? 'regular';
       fetchAiSpotlight({
         team, roster, allTeams, allPlayers, season, week, phase, narrative: currentNarrative,
@@ -379,8 +379,7 @@ function TeamSpotlightSection({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiCommentary, currentNarrative, team, season, week, ctx?.phase]);
 
-  // Only use AI topics for special narrative moments — weekly always uses templates
-  const topics = (aiCommentary && currentNarrative !== 'weekly' && aiState.topics) ? aiState.topics : templateTopics;
+  const topics = (aiCommentary && aiState.topics) ? aiState.topics : templateTopics;
 
   if (templateTopics.length === 0) return null;
 

@@ -112,8 +112,8 @@ interface GameStore extends LeagueState {
   /** God Mode: create a new player and add to the user's team */
   createPlayer: (data: { firstName: string; lastName: string; position: Position; age: number; overall: number; potential: number }) => string | null;
   setSuppressTradePopups: (val: boolean) => void;
-  saveToSlot: (slot: 1 | 2) => Promise<void>;
-  loadFromSlot: (slot: 1 | 2) => Promise<void>;
+  saveToSlot: (slot: number) => Promise<void>;
+  loadFromSlot: (slot: number) => Promise<void>;
   getTeam: (id: string) => Team | undefined;
   getPlayer: (id: string) => Player | undefined;
   getTeamRoster: (teamId: string) => Player[];
@@ -6082,14 +6082,14 @@ export const useGameStore = create<GameStore>()(
         set({ suppressTradePopups: val });
       },
 
-      saveToSlot: async (slot: 1 | 2) => {
+      saveToSlot: async (slot: number) => {
         const stored = await idbGetItem('gridiron-gm-autosave');
         if (stored) {
           await idbSetItem(`gridiron-gm-save-${slot}`, stored);
         }
       },
 
-      loadFromSlot: async (slot: 1 | 2) => {
+      loadFromSlot: async (slot: number) => {
         const data = await idbGetItem(`gridiron-gm-save-${slot}`);
         if (!data) return;
         await idbSetItem('gridiron-gm-autosave', data);

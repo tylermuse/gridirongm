@@ -92,14 +92,6 @@ export function SpotlightPopup() {
       if (leagueSettings?.aiCommentary && userTeam) {
         const tradeDeadlineWeek = leagueSettings.tradeDeadlineWeek ?? 12;
         const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id);
-
-        // Skip AI for weekly — template engine handles these
-        if (narrative === 'weekly') {
-          setShouldShow(true);
-          setDismissed(false);
-          return;
-        }
-
         const roster = players.filter(p => p.teamId === userTeam.id);
 
         fetchAiSpotlight({

@@ -62,16 +62,17 @@ const PHASE_LABELS: Record<string, string> = {
 };
 
 type SlotMeta = { season: number; teamAbbr: string; wins: number; losses: number } | null;
+const SAVE_SLOTS = [1, 2, 3, 4, 5];
 
 function SaveSlotPanel({ onClose }: { onClose: () => void }) {
   const { saveToSlot, loadFromSlot } = useGameStore();
   const [refreshKey, setRefreshKey] = useState(0);
-  const [slotMetas, setSlotMetas] = useState<[SlotMeta, SlotMeta]>([null, null]);
+  const [slotMetas, setSlotMetas] = useState<SlotMeta[]>(SAVE_SLOTS.map(() => null));
 
   useEffect(() => {
     async function loadMetas() {
       const metas = await Promise.all(
-        ([1, 2] as const).map(async (slot): Promise<SlotMeta> => {
+        SAVE_SLOTS.map(async (slot): Promise<SlotMeta> => {
           try {
             const raw = await idbGetItem(`gridiron-gm-save-${slot}`);
             if (!raw) return null;
@@ -88,15 +89,15 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
           }
         })
       );
-      setSlotMetas(metas as [SlotMeta, SlotMeta]);
+      setSlotMetas(metas);
     }
     loadMetas();
   }, [refreshKey]);
 
   return (
-    <div className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3 shadow-xl z-50">
+    <div className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3 shadow-xl z-50 max-h-[60vh] overflow-y-auto">
       <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-2">Save Slots</div>
-      {([1, 2] as const).map(slot => {
+      {SAVE_SLOTS.map(slot => {
         const meta = slotMetas[slot - 1];
         return (
           <div key={slot} className="mb-2">
