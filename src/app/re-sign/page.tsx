@@ -97,8 +97,23 @@ export default function ReSignPage() {
   }
 
   const userTeam = teams.find(t => t.id === userTeamId);
-  const capSpace = userTeam ? Math.round((userTeam.salaryCap - userTeam.totalPayroll) * 10) / 10 : 0;
-  const luxuryTax = userTeam ? computeLuxuryTax(userTeam.totalPayroll, userTeam.salaryCap) : 0;
+  // Recalculate payroll from actual contracts to avoid drift from incremental tracking
+  const actualPayroll = userTeam ? (() => {
+    const rosterPayroll = userTeam.roster.reduce((sum, pid) => {
+      const p = players.find(pl => pl.id === pid);
+      if (!p || p.retired) return sum;
+      // Use cap hit (accounts for restructured contracts with prorated bonuses)
+      if (p.contract.contractYears && p.contract.contractYears.length > 0) {
+        const yr = p.contract.contractYears[0];
+        return sum + yr.baseSalary + yr.proratedBonus;
+      }
+      return sum + p.contract.salary;
+    }, 0);
+    const deadCap = (userTeam.deadCap ?? []).reduce((sum, dc) => sum + dc.amount, 0);
+    return Math.round((rosterPayroll + deadCap) * 10) / 10;
+  })() : 0;
+  const capSpace = userTeam ? Math.round((userTeam.salaryCap - actualPayroll) * 10) / 10 : 0;
+  const luxuryTax = userTeam ? computeLuxuryTax(actualPayroll, userTeam.salaryCap) : 0;
 
   function startNegotiation(playerId: string, mode: NegMode) {
     const entry = resigningPlayers.find(e => e.playerId === playerId);
