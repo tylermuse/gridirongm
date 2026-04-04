@@ -241,6 +241,11 @@ export interface Player {
   seasonLog?: { season: number; teamId: string; stats: PlayerStats }[];
 }
 
+/** Format a team record as "W-L" or "W-L-T" if ties > 0 */
+export function formatRecord(r: { wins: number; losses: number; ties?: number }): string {
+  return r.ties ? `${r.wins}-${r.losses}-${r.ties}` : `${r.wins}-${r.losses}`;
+}
+
 export interface TeamRecord {
   wins: number;
   losses: number;

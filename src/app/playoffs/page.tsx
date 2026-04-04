@@ -10,7 +10,7 @@ import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { BoxScoreModal } from '@/components/game/BoxScoreModal';
 import { TeamLogo } from '@/components/ui/TeamLogo';
-import type { PlayoffMatchup, Team, GameResult } from '@/types';
+import { formatRecord, type PlayoffMatchup, type Team, type GameResult } from '@/types';
 
 const ROUND_LABELS: Record<number, string> = {
   1: 'Wild Card',
@@ -67,7 +67,7 @@ function TeamRow({
           </button>
           {team && (
             <span className="text-[9px] text-[var(--text-sec)] shrink-0 font-mono">
-              ({team.record.wins}-{team.record.losses})
+              ({formatRecord(team.record)})
             </span>
           )}
           {isUser && (
@@ -194,7 +194,7 @@ function ConferenceBracket({
           <button onClick={() => onTeamClick?.(byeTeamObj.id)} className="hover:text-blue-600 transition-colors">
             {byeTeamObj.city} {byeTeamObj.name}
           </button>
-          <span className="font-mono text-[10px] hidden sm:inline">({byeTeamObj.record.wins}-{byeTeamObj.record.losses})</span>
+          <span className="font-mono text-[10px] hidden sm:inline">({formatRecord(byeTeamObj.record)})</span>
           <Badge size="sm" variant="default">#1 Seed — Bye</Badge>
         </div>
       )}
@@ -746,7 +746,7 @@ export default function PlayoffsPage() {
                   {userTeam.city} {userTeam.name}
                 </div>
                 <div className="text-xs text-[var(--text-sec)]">
-                  {userTeam.record.wins}–{userTeam.record.losses} Regular Season
+                  {formatRecord(userTeam.record)} Regular Season
                 </div>
               </div>
               <div className="shrink-0">

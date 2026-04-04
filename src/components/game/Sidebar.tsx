@@ -7,6 +7,7 @@ import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { getItem as idbGetItem } from '@/lib/storage';
+import { formatRecord } from '@/types';
 
 const NAV_SECTIONS = [
   {
@@ -237,7 +238,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             </div>
           </div>
           <div className="mt-2 text-xs text-[var(--text-sec)]">
-            {userTeam.record.wins}-{userTeam.record.losses}
+            {formatRecord(userTeam.record)}
             {userTeam.record.ties > 0 ? `-${userTeam.record.ties}` : ''}
           </div>
         </div>

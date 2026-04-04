@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useGameStore, computeAllLeagueTeams } from '@/lib/engine/store';
 import { Modal } from '@/components/ui/Modal';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
-import { POSITIONS } from '@/types';
+import { POSITIONS, formatRecord } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { Player, Position } from '@/types';
 
@@ -177,7 +177,7 @@ export function TeamRosterModal({ teamId, onClose, onPlayerClick }: TeamRosterMo
           <div>
             <h3 className="text-lg font-black">{team.city} {team.name}</h3>
             <div className="flex items-center gap-3 text-xs text-[var(--text-sec)]">
-              <span>{team.record.wins}-{team.record.losses}</span>
+              <span>{formatRecord(team.record)}</span>
               <span>OVR {avgOvr}</span>
               <span>{teamRoster.length} players</span>
               <span className={capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}>

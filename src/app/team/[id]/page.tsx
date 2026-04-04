@@ -7,7 +7,7 @@ import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
-import type { Position } from '@/types';
+import { formatRecord, type Position } from '@/types';
 import { POSITIONS } from '@/types';
 
 function ratingColor(val: number): string {
@@ -68,7 +68,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
               {isUserTeam && <Badge variant="blue">Your Team</Badge>}
             </div>
             <div className="text-sm text-[var(--text-sec)] mt-0.5">
-              {team.conference} {team.division} · {team.record.wins}–{team.record.losses} ({pct})
+              {team.conference} {team.division} · {formatRecord(team.record)} ({pct})
             </div>
           </div>
 

@@ -19,6 +19,7 @@ import { generateTeamSpotlight, COMMENTATORS, type SpotlightContext } from '@/li
 import { getAiSpotlightState, subscribeAiSpotlight, fetchAiSpotlight, detectNarrativeMoment } from '@/lib/engine/aiSpotlight';
 import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
+import { formatRecord } from '@/types';
 
 function TeamPicker() {
   const { newLeague } = useGameStore();
@@ -602,7 +603,7 @@ function Dashboard() {
             <h2 className="text-2xl font-black">{userTeam.city} {userTeam.name}</h2>
             <div className="flex items-center gap-3 mt-1">
               <Badge variant={userTeam.record.wins > userTeam.record.losses ? 'green' : userTeam.record.wins < userTeam.record.losses ? 'red' : 'default'} size="md">
-                {userTeam.record.wins}-{userTeam.record.losses}
+                {formatRecord(userTeam.record)}
               </Badge>
               <span className="text-sm text-[var(--text-sec)]">
                 {userTeam.conference} {userTeam.division}
@@ -690,7 +691,7 @@ function Dashboard() {
                       <div>
                         <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider">{phase === 'playoffs' ? 'Playoffs' : `Week ${week}`} · {nextGame.homeTeamId === userTeamId ? 'Home' : 'Away'}</div>
                         <div className="font-bold">{nextGame.homeTeamId === userTeamId ? 'vs' : '@'} {oppTeam.city} {oppTeam.name}</div>
-                        <div className="text-xs text-[var(--text-sec)]">{oppTeam.record.wins}-{oppTeam.record.losses}</div>
+                        <div className="text-xs text-[var(--text-sec)]">{formatRecord(oppTeam.record)}</div>
                       </div>
                     </div>
                     <Link href={`/game/${nextGame.id}`}>

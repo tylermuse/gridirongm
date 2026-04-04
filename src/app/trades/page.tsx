@@ -10,7 +10,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
-import type { Player, DraftPick, Position } from '@/types';
+import { formatRecord, type Player, type DraftPick, type Position } from '@/types';
 import { POSITIONS, getUnamortizedBonus } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
@@ -1305,7 +1305,7 @@ function TradesPage() {
                             {proposingTeam && <TeamLogo abbreviation={proposingTeam.abbreviation} primaryColor={proposingTeam.primaryColor} secondaryColor={proposingTeam.secondaryColor} logoUrl={proposingTeam.logoUrl} size="sm" />}
                           </button>
                           <button onClick={() => proposingTeam && setViewTeamId(proposingTeam.id)} className="font-bold hover:text-blue-600 transition-colors">{proposingTeam?.city} {proposingTeam?.name}</button>
-                          {proposingTeam && <span className="text-xs text-[var(--text-sec)]">({proposingTeam.record.wins}-{proposingTeam.record.losses})</span>}
+                          {proposingTeam && <span className="text-xs text-[var(--text-sec)]">({formatRecord(proposingTeam.record)})</span>}
                           <span className="text-xs text-[var(--text-sec)]">Week {proposal.week}</span>
                         </div>
                       <div className="flex items-center gap-2">
@@ -1760,7 +1760,7 @@ function TradesPage() {
                               <div className="flex items-center gap-2 mb-1">
                                 <Badge size="sm">{proposingTeam?.abbreviation}</Badge>
                                 <span className="font-bold text-sm">{proposingTeam?.city} {proposingTeam?.name}</span>
-                                {proposingTeam && <span className="text-xs text-[var(--text-sec)]">({proposingTeam.record.wins}-{proposingTeam.record.losses})</span>}
+                                {proposingTeam && <span className="text-xs text-[var(--text-sec)]">({formatRecord(proposingTeam.record)})</span>}
                                 {proposal.valueAssessment && <ValueAssessmentBadge assessment={proposal.valueAssessment} />}
                               </div>
                               {proposingTeam && (() => {
@@ -1877,7 +1877,7 @@ function TradesPage() {
                     <option value="">— Choose a team —</option>
                     {aiTeams.map(t => (
                       <option key={t.id} value={t.id}>
-                        {t.city} {t.name} ({t.record.wins}-{t.record.losses})
+                        {t.city} {t.name} ({formatRecord(t.record)})
                       </option>
                     ))}
                   </select>

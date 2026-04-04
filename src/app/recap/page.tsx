@@ -8,7 +8,7 @@ import { generateDebateTranscript, COMMENTATORS } from '@/lib/engine/debate';
 import type { DebateTopic } from '@/lib/engine/debate';
 import { generateWeeklyRecap } from '@/lib/engine/recap';
 import { DebateBubble } from '@/components/game/DebateBubble';
-import type { RecapSegmentData, Player, Team } from '@/types';
+import { formatRecord, type RecapSegmentData, type Player, type Team } from '@/types';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 
 const SEGMENT_TYPE_LABELS: Record<RecapSegmentData['type'], string> = {
@@ -128,8 +128,8 @@ function useAiRecap(
           s.teamIds.includes(g.homeTeamId) || s.teamIds.includes(g.awayTeamId));
 
         return {
-          away: { name: away ? `${away.city} ${away.name}` : '???', abbr: away?.abbreviation ?? '???', record: away ? `${away.record.wins}-${away.record.losses}` : '?', score: g.awayScore },
-          home: { name: home ? `${home.city} ${home.name}` : '???', abbr: home?.abbreviation ?? '???', record: home ? `${home.record.wins}-${home.record.losses}` : '?', score: g.homeScore },
+          away: { name: away ? `${away.city} ${away.name}` : '???', abbr: away?.abbreviation ?? '???', record: away ? `${formatRecord(away.record)}` : '?', score: g.awayScore },
+          home: { name: home ? `${home.city} ${home.name}` : '???', abbr: home?.abbreviation ?? '???', record: home ? `${formatRecord(home.record)}` : '?', score: g.homeScore },
           margin: Math.abs(g.homeScore - g.awayScore),
           awayStats: getTopStats(g.awayTeamId),
           homeStats: getTopStats(g.homeTeamId),

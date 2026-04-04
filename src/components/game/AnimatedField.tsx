@@ -373,6 +373,52 @@ function drawQuarterOverlay(
 }
 
 // ---------------------------------------------------------------------------
+// Possession change overlay — shows "→ DAL BALL →" when possession switches
+// ---------------------------------------------------------------------------
+
+function drawPossessionChange(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  label: string,
+  progress: number,
+  teamColor: string,
+) {
+  // Fade in quickly, hold, fade out
+  let alpha: number;
+  if (progress < 0.15) alpha = progress / 0.15;
+  else if (progress > 0.6) alpha = (1 - progress) / 0.4;
+  else alpha = 1;
+
+  if (alpha <= 0) return;
+
+  ctx.save();
+  // Colored banner across the middle of the field
+  const bannerH = 36;
+  const bannerY = h / 2 - bannerH / 2;
+  ctx.fillStyle = `rgba(0, 0, 0, ${0.55 * alpha})`;
+  ctx.fillRect(0, bannerY - 4, w, bannerH + 8);
+
+  // Team color accent line
+  ctx.fillStyle = teamColor;
+  ctx.globalAlpha = alpha * 0.8;
+  ctx.fillRect(0, bannerY - 4, w, 3);
+  ctx.fillRect(0, bannerY + bannerH + 5, w, 3);
+  ctx.globalAlpha = 1;
+
+  // Text
+  ctx.font = 'bold 18px system-ui, sans-serif';
+  ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.strokeStyle = `rgba(0, 0, 0, ${alpha * 0.6})`;
+  ctx.lineWidth = 3;
+  ctx.strokeText(label, w / 2, h / 2);
+  ctx.fillText(label, w / 2, h / 2);
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
 // Effect overlays
 // ---------------------------------------------------------------------------
 
@@ -697,6 +743,12 @@ export function AnimatedField({
     resetProgress: number;
     resetFromYard: number;
     resetToYard: number;
+    resetFromLOS: number;
+    resetFromFD: number;
+    // Possession change overlay
+    possessionChangeActive: boolean;
+    possessionChangeProgress: number;
+    possessionChangeLabel: string;
     // Enhancement 3: score confirmed flash
     scoreFlashProgress: number;
     scoreFlashPossession: 'home' | 'away';
@@ -723,6 +775,11 @@ export function AnimatedField({
     resetProgress: 0,
     resetFromYard: 50,
     resetToYard: 50,
+    resetFromLOS: 50,
+    resetFromFD: 60,
+    possessionChangeActive: false,
+    possessionChangeProgress: 1,
+    possessionChangeLabel: '',
     scoreFlashProgress: 1,
     scoreFlashPossession: 'home',
     scoreFlashActive: false,
@@ -782,15 +839,34 @@ export function AnimatedField({
       ref.completeFired = false;
       ref.quarterOverlayActive = false;
 
-      if (needsReset) {
+      // Detect possession change for overlay
+      const prevPossession = ref.prevState?.possession;
+      const nextPossession = prevState.possession;
+      const possessionChanged = prevPossession && prevPossession !== nextPossession;
+
+      if (needsReset || possessionChanged) {
         ref.resetPhase = true;
         ref.resetProgress = 0;
         ref.resetFromYard = prevBallYard;
         ref.resetToYard = newScrimmage;
+        // Capture old LOS/FD positions for smooth line interpolation
+        ref.resetFromLOS = ref.prevState?.scrimmageYard ?? newScrimmage;
+        ref.resetFromFD = ref.prevState?.firstDownYard ?? nextState.firstDownYard;
         ref.progress = 0;
         ref.isAnimating = true;
+
+        // Trigger possession change overlay
+        if (possessionChanged) {
+          const newPossAbbr = nextPossession === 'home' ? homeAbbr : awayAbbr;
+          const arrow = nextPossession === 'home' ? '\u2190' : '\u2192';
+          ref.possessionChangeActive = true;
+          ref.possessionChangeProgress = 0;
+          ref.possessionChangeLabel = `${arrow} ${newPossAbbr} BALL ${arrow}`;
+        }
       } else {
         ref.resetPhase = false;
+        ref.resetFromLOS = nextState.scrimmageYard;
+        ref.resetFromFD = nextState.firstDownYard;
         ref.progress = 0;
         ref.isAnimating = true;
       }
@@ -845,13 +921,22 @@ export function AnimatedField({
       }
     }
 
-    // Bug 5: smooth reset phase — ball glides to new LOS before play animation
+    // Bug 5: smooth reset phase — ball and lines glide to new positions before play animation
     if (ref.resetPhase) {
-      const resetDuration = 0.2; // 200ms
+      // Longer reset for possession changes so overlay is readable
+      const resetDuration = ref.possessionChangeActive ? 0.6 : 0.25;
       ref.resetProgress = Math.min(1, ref.resetProgress + dt / resetDuration);
       if (ref.resetProgress >= 1) {
         ref.resetPhase = false;
         // Now start the actual play animation
+      }
+    }
+
+    // Update possession change overlay
+    if (ref.possessionChangeActive) {
+      ref.possessionChangeProgress = Math.min(1, ref.possessionChangeProgress + dt / 0.8);
+      if (ref.possessionChangeProgress >= 1) {
+        ref.possessionChangeActive = false;
       }
     }
 
@@ -922,10 +1007,17 @@ export function AnimatedField({
     const progress = ref.progress;
     const state = ref.nextState;
 
-    // During animation, show pre-play LOS/first-down. After animation, show post-play.
-    const showPrev = anim && progress < 1;
-    const losYard = showPrev ? ref.prevState.scrimmageYard : state.scrimmageYard;
-    const fdYard = showPrev ? ref.prevState.firstDownYard : state.firstDownYard;
+    // LOS and first-down lines: always show the CURRENT play's pre-snap positions.
+    // state = ref.nextState = deriveFieldState(currentEvent), where scrimmageYard
+    // is computed from event.fieldPos (the pre-snap field position for this play).
+    // During reset phase, interpolate from old positions to new.
+    let losYard = state.scrimmageYard;
+    let fdYard = state.firstDownYard;
+    if (ref.resetPhase) {
+      const t = easeOutCubic(ref.resetProgress);
+      losYard = ref.resetFromLOS + (state.scrimmageYard - ref.resetFromLOS) * t;
+      fdYard = ref.resetFromFD + (state.firstDownYard - ref.resetFromFD) * t;
+    }
 
     // Draw LOS and first down marker
     drawLines(ctx, w, h, losYard, fdYard);
@@ -1076,6 +1168,12 @@ export function AnimatedField({
       drawEffects(ctx, w, h, anim.effects, progress, homeColor, state.possession);
     }
 
+    // Possession change overlay
+    if (ref.possessionChangeActive) {
+      const changePossColor = state.possession === 'home' ? homeColor : awayColor;
+      drawPossessionChange(ctx, w, h, ref.possessionChangeLabel, ref.possessionChangeProgress, changePossColor);
+    }
+
     // Draw quarter transition overlay
     if (ref.quarterOverlayActive) {
       drawQuarterOverlay(ctx, w, h, ref.quarterOverlayLabel, ref.quarterOverlayProgress);
@@ -1094,7 +1192,7 @@ export function AnimatedField({
 
     // Continue loop if animating, fading effects active, or confetti active
     const hasFadingEffects = ref.gainFadeProgress < 1 || ref.arcTrailFadeProgress < 1;
-    if (ref.isAnimating || ref.confetti.length > 0 || hasFadingEffects || ref.quarterOverlayActive || ref.scoreFlashActive) {
+    if (ref.isAnimating || ref.confetti.length > 0 || hasFadingEffects || ref.quarterOverlayActive || ref.scoreFlashActive || ref.possessionChangeActive) {
       rafRef.current = requestAnimationFrame(render);
     }
   }, [canvasSize, homeColor, awayColor, homeAbbr, awayAbbr]);

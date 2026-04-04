@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
 // playerGen import removed — POSITION_WEIGHTS no longer needed
-import { POSITIONS, ROSTER_LIMITS } from '@/types';
+import { POSITIONS, ROSTER_LIMITS, formatRecord } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import type { Player, Position, Team } from '@/types';
@@ -248,7 +248,7 @@ function OnTheClockSection({
           </div>
           <div className="text-xs text-[var(--text-sec)]">
             {currentTeam
-              ? `${currentTeam.record.wins}-${currentTeam.record.losses}, ${currentTeam.conference} ${currentTeam.division}`
+              ? `${formatRecord(currentTeam.record)}, ${currentTeam.conference} ${currentTeam.division}`
               : '--'}
           </div>
         </div>
