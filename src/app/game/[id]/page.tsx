@@ -579,6 +579,17 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     router.push(isPlayoffGame ? '/playoffs' : '/');
   }, [liveResult, game, committed, commitLiveGame, router, isPlayoffGame, id]);
 
+  // Auto-commit when game finishes — no manual "Save & Continue" needed
+  useEffect(() => {
+    if (isFinished && liveResult && game && !committed) {
+      const gameResult = liveGameToGameResult(liveResult, game);
+      commitLiveGame(gameResult, isPlayoffGame ? id : undefined);
+      setCommitted(true);
+      flushToStorage();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFinished, committed]);
+
   // Safety net: write recovery snapshot if tab closes during/after game
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -1133,13 +1144,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               <Button
                 variant="primary"
                 size="md"
-                onClick={handleCommit}
-                disabled={committed}
+                onClick={async () => { await flushToStorage(); router.push(isPlayoffGame ? '/playoffs' : '/'); }}
               >
-                {committed ? 'Saving...' : 'Save & Continue →'}
+                Continue →
               </Button>
-              <p className="text-[10px] text-[var(--text-sec)] mt-2">
-                Saves result and simulates all other Week {game.week} games.
+              <p className="text-[10px] text-green-600 mt-2">
+                Game result saved automatically.
               </p>
             </div>
           </div>
