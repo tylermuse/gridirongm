@@ -175,7 +175,20 @@ Return ONLY the JSON array, no markdown fences, no other text.`;
       console.error('Spotlight API: no JSON array found in response:', raw.slice(0, 200));
       return NextResponse.json({ error: 'Invalid response format' }, { status: 500 });
     }
-    const topics = JSON.parse(raw.slice(start, end + 1));
+    let topics;
+    try {
+      topics = JSON.parse(raw.slice(start, end + 1));
+    } catch {
+      // JSON was malformed — try to fix common issues (unescaped newlines in strings)
+      try {
+        const cleaned = raw.slice(start, end + 1)
+          .replace(/[\x00-\x1f]/g, (c) => c === '\n' ? '\\n' : c === '\r' ? '\\r' : c === '\t' ? '\\t' : '');
+        topics = JSON.parse(cleaned);
+      } catch (parseErr2) {
+        console.error('Spotlight API JSON parse failed. Raw (first 500):', raw.slice(0, 500));
+        return NextResponse.json({ error: 'JSON parse error' }, { status: 500 });
+      }
+    }
 
     // Cache the result persistently
     await setCache(key, topics);
