@@ -54,10 +54,11 @@ interface PlayerModalProps {
 }
 
 export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
-  const { players, teams, userTeamId, releasePlayer, editPlayer, champions, season, phase, week, leagueSettings } = useGameStore();
+  const { players, teams, userTeamId, releasePlayer, editPlayer, restructureContract, champions, season, phase, week, leagueSettings } = useGameStore();
   const router = useRouter();
   const [confirmRelease, setConfirmRelease] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [showRestructure, setShowRestructure] = useState(false);
   const godMode = leagueSettings?.godMode ?? false;
 
   const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
@@ -254,6 +255,26 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                   );
                 })()}
               </div>
+            )}
+
+            {/* Restructure Contract */}
+            {isOnUserTeam && !player.retired && player.contract.yearsLeft >= 2 && player.lastRestructuredSeason !== season && !showRestructure && (
+              <div className="mt-2">
+                <Button size="sm" variant="secondary" onClick={() => setShowRestructure(true)}>
+                  Restructure Contract
+                </Button>
+              </div>
+            )}
+            {showRestructure && (
+              <RestructureInline
+                player={player}
+                season={season}
+                onRestructure={(amount, voidYears) => {
+                  restructureContract(player.id, amount, voidYears);
+                  setShowRestructure(false);
+                }}
+                onCancel={() => setShowRestructure(false)}
+              />
             )}
 
             {/* God Mode: Edit Player */}
@@ -489,6 +510,77 @@ function StatLine({ label, value, small }: { label: string; value: string | numb
 import type { Player, Team } from '@/types';
 import { POSITIONS } from '@/types';
 import { POSITION_WEIGHTS } from '@/lib/engine/playerGen';
+
+// ---------------------------------------------------------------------------
+// Restructure Contract Inline
+// ---------------------------------------------------------------------------
+
+function RestructureInline({
+  player,
+  season,
+  onRestructure,
+  onCancel,
+}: {
+  player: Player;
+  season: number;
+  onRestructure: (amount: number, voidYears: number) => void;
+  onCancel: () => void;
+}) {
+  const baseSalary = player.contract.salary;
+  const maxConvert = Math.max(1, Math.round((baseSalary - 0.75) * 10) / 10);
+  const [amount, setAmount] = useState(Math.min(Math.round(baseSalary / 2 * 10) / 10, maxConvert));
+  const [voidYears, setVoidYears] = useState(0);
+
+  const newCapHit = Math.round((baseSalary - amount + amount / (player.contract.yearsLeft + voidYears)) * 10) / 10;
+  const savings = Math.round((baseSalary - newCapHit) * 10) / 10;
+
+  return (
+    <div className="mt-2 border border-amber-300/40 rounded-lg bg-amber-50/50 p-3 space-y-2">
+      <div className="text-sm font-bold text-amber-700">Restructure Contract</div>
+      <p className="text-xs text-[var(--text-sec)]">
+        Convert base salary to signing bonus, spreading the cap hit over remaining years.
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] text-[var(--text-sec)] uppercase">Convert ($M)</label>
+          <input
+            type="number"
+            className="w-full text-sm border rounded px-2 py-1"
+            value={amount}
+            min={0.5}
+            max={maxConvert}
+            step={0.5}
+            onChange={e => setAmount(Math.min(parseFloat(e.target.value) || 0.5, maxConvert))}
+          />
+        </div>
+        <div>
+          <label className="text-[10px] text-[var(--text-sec)] uppercase">Void Years</label>
+          <input
+            type="number"
+            className="w-full text-sm border rounded px-2 py-1"
+            value={voidYears}
+            min={0}
+            max={3}
+            onChange={e => setVoidYears(parseInt(e.target.value) || 0)}
+          />
+        </div>
+      </div>
+      <div className="text-xs space-y-0.5">
+        <div>Current cap hit: <span className="font-mono font-bold">${baseSalary}M</span></div>
+        <div>New cap hit: <span className="font-mono font-bold text-green-600">${newCapHit}M</span></div>
+        <div className="text-green-600 font-medium">Saves ${savings}M this year</div>
+      </div>
+      <div className="flex gap-2">
+        <Button size="sm" onClick={() => onRestructure(amount, voidYears)}>
+          Restructure
+        </Button>
+        <Button size="sm" variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 const ALL_RATING_KEYS: (keyof Omit<PlayerRatings, 'overall'>)[] = [
   'speed', 'strength', 'agility', 'awareness', 'stamina',
