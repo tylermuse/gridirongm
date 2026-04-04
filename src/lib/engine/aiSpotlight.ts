@@ -170,12 +170,18 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
     };
   };
 
+  // Starting QB is the most important player — always include with full stats
+  const startingQB = activeRoster
+    .filter(p => p.position === 'QB')
+    .sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+
   const teamData: Record<string, unknown> = {
     team: { name: team.name, city: team.city, record: `${team.record.wins}-${team.record.losses}`, conference: team.conference, streak: team.record.streak, pointsFor: team.record.pointsFor, pointsAgainst: team.record.pointsAgainst },
     rankings: { ppgRank, defRank, totalTeams: allTeams.length },
     season, week, phase,
     capSpace: Math.round((team.salaryCap - team.totalPayroll) * 10) / 10,
     capPct: Math.round(team.totalPayroll / team.salaryCap * 100),
+    startingQB: startingQB ? mapPlayer(startingQB) : null,
     topPlayers: topPlayers.map(mapPlayer),
     injured: injured.map(p => ({ name: `${p.firstName} ${p.lastName}`, pos: p.position, ovr: p.ratings.overall, injury: p.injury?.type, weeksLeft: p.injury?.weeksLeft })),
     youngStars: youngStars.map(p => ({ name: `${p.firstName} ${p.lastName}`, pos: p.position, ovr: p.ratings.overall, age: p.age, potential: p.potential })),

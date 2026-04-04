@@ -137,7 +137,8 @@ THE COMMENTATORS:
 KEY RULES:
 - They must RESPOND to each other, not deliver parallel monologues. Tony interrupts, Marcus corrects, they riff off each other's points.
 - Use ALL the real stats and data provided below. Do NOT invent any numbers.
-- Each player has a "howAcquired" field describing how THIS TEAM got them (e.g. "traded for in 2025", "signed in free agency in 2026", "drafted by this team in round 1 (2024)", or "original roster"). Only mention acquisition if it's a trade or recent FA signing that adds narrative value. Do NOT say "they drafted him" unless howAcquired says "drafted by this team". Keep acquisition references sparse — focus on stats and performance, not roster history.
+- THE QB IS THE STORY. Always lead with or prominently feature the starting QB's performance. If the QB is playing well (high pass yards, TDs, low INTs), celebrate it. If the QB is struggling (high INTs, low TDs), critique it. The QB drives everything — the team's ceiling is their QB's ceiling. Reference their specific passing stats (yards, TDs, INTs) in the dialogue.
+- Each player has a "howAcquired" field. Only mention acquisition if it's a trade or recent FA signing. Do NOT say "they drafted him" unless howAcquired says "drafted by this team". Keep acquisition references sparse.
 - Vary your openings — never start two topics the same way.
 - Each topic should have 3-4 exchanges.
 - Keep it entertaining but grounded in the actual data.
