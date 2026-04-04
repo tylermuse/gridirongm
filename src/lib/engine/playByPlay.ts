@@ -737,10 +737,10 @@ export function simulatePlayByPlay(
         (scoreDiff <= -16 && state.timeSecs <= 600)        // down 16+, < 10 min
       );
 
-      if (state.yardsToGo <= 1 || desperationGo) {
-        // Go for it — fall through to normal play
-      } else if (state.fieldPos >= 65) {
-        // Attempt field goal
+      if (state.yardsToGo <= 2 || desperationGo || (state.yardsToGo <= 4 && state.fieldPos >= 60)) {
+        // Go for it — short yardage, desperation, or in opponent territory with manageable distance
+      } else if (state.fieldPos >= 55) {
+        // Attempt field goal (up to ~62-yard attempts)
         doFieldGoal(fgDistance);
         advanceClock(30);
         return true;
@@ -875,8 +875,8 @@ export function simulatePlayByPlay(
       // Missing 5 fix: completion % uses QB, receiver catching, and CB coverage
       const tierMod = (state.possession === 'home' ? homeQBTierMod : awayQBTierMod) * 0.03;
       const compBase = clamp(
-        0.52 + (qbThrowing / 100) * 0.18 + (wr1Catching / 100) * 0.10 - (cbCoverage / 100) * 0.12 + tierMod,
-        0.42, 0.72,
+        0.54 + (qbThrowing / 100) * 0.20 + (wr1Catching / 100) * 0.10 - (cbCoverage / 100) * 0.10 + tierMod,
+        0.45, 0.78,
       );
 
       const roll = Math.random();
@@ -908,16 +908,16 @@ export function simulatePlayByPlay(
         advanceClock(5);
 
       } else if (roll < sackChance + intChance + (1 - sackChance - intChance) * compBase) {
-        // COMPLETION — Bug 4 fix: realistic yards per completion
-        const baseYards = 3 + Math.random() * 10; // 3-13 base
-        const bonusYards = (qbThrowing / 100) * 2.5 + (wr1Speed / 100) * 1.5;
+        // COMPLETION — yards per completion targeting NFL avg ~11.8
+        const baseYards = 5 + Math.random() * 12; // 5-17 base (avg 11)
+        const bonusYards = (qbThrowing / 100) * 3.0 + (wr1Speed / 100) * 2.0;
         let yardsGained = Math.round(baseYards + bonusYards * Math.random());
 
-        // Big play chance (~3-4% of completions)
-        if (Math.random() < 0.015 + (wr1Speed / 100) * 0.02) {
-          yardsGained += 10 + Math.floor(Math.random() * 15);
+        // Big play chance (~5% of completions for average, higher for fast WRs)
+        if (Math.random() < 0.02 + (wr1Speed / 100) * 0.03) {
+          yardsGained += 15 + Math.floor(Math.random() * 20);
         }
-        yardsGained = clamp(yardsGained, 1, 50); // completions never lose yards
+        yardsGained = clamp(yardsGained, 1, 60); // completions never lose yards
 
         // Red zone pass boost (Missing 1)
         if (state.fieldPos >= 80) {
