@@ -1045,20 +1045,20 @@ function TradesPage() {
     setCounterResult(null);
   }
 
-  function handleSubmitCounter() {
+  function handleSubmitCounter(force = false) {
     const proposal = tradeProposals.find(p => p.id === counteringProposalId);
     if (!proposal) return;
     const result = executeTrade(
       counterOfferedPlayerIds, counterOfferedPickIds,
       counterReceivedPlayerIds, counterReceivedPickIds,
       proposal.proposingTeamId,
+      force, // skipValueCheck
+      force, // forceGodMode
     );
     setCounterResult(result.success ? 'accepted' : 'rejected');
     if (result.success) {
-      // Reject the original proposal since we completed a counter
       respondToTradeProposal(proposal.id, false);
       handleCancelCounter();
-      // Show success in the main trade view
       setTradeResult('accepted');
     }
   }
@@ -1523,7 +1523,7 @@ function TradesPage() {
                           </div>
                           <Button
                             size="sm"
-                            onClick={handleSubmitCounter}
+                            onClick={() => handleSubmitCounter(false)}
                             disabled={
                               (counterOfferedPlayerIds.length === 0 && counterOfferedPickIds.length === 0) &&
                               (counterReceivedPlayerIds.length === 0 && counterReceivedPickIds.length === 0)
@@ -1531,6 +1531,19 @@ function TradesPage() {
                           >
                             Submit Counter
                           </Button>
+                          {godMode && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleSubmitCounter(true)}
+                              disabled={
+                                (counterOfferedPlayerIds.length === 0 && counterOfferedPickIds.length === 0) &&
+                                (counterReceivedPlayerIds.length === 0 && counterReceivedPickIds.length === 0)
+                              }
+                              className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                            >
+                              Force Counter
+                            </Button>
+                          )}
                         </div>
                       </div>
                     )}
