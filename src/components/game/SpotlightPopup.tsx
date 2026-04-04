@@ -87,10 +87,19 @@ export function SpotlightPopup() {
     if (isRegularSeasonSim || isPlayoffUpdate || isPhaseTransition) {
       sessionStorage.setItem(STORAGE_KEY, currentKey);
 
-      // If AI commentary is on, generate it first, then show the popup
+      // If AI commentary is on, generate it for SPECIAL narrative moments only.
+      // Weekly recaps use the template engine to save ~90% of API costs.
       if (leagueSettings?.aiCommentary && userTeam) {
         const tradeDeadlineWeek = leagueSettings.tradeDeadlineWeek ?? 12;
         const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id);
+
+        // Skip AI for weekly — template engine handles these
+        if (narrative === 'weekly') {
+          setShouldShow(true);
+          setDismissed(false);
+          return;
+        }
+
         const roster = players.filter(p => p.teamId === userTeam.id);
 
         fetchAiSpotlight({

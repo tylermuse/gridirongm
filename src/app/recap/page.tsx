@@ -78,7 +78,9 @@ function useAiRecap(
   const cacheRef = useRef<Map<string, DebateTopic[]>>(new Map());
 
   useEffect(() => {
-    if (!aiEnabled || !segments || segments.length === 0) {
+    // Only use AI for playoff games — regular season recaps use the template engine
+    const isPlayoffs = weekNum >= 100;
+    if (!aiEnabled || !isPlayoffs || !segments || segments.length === 0) {
       setState(s => ({ ...s, topics: null, loading: false, error: false }));
       return;
     }

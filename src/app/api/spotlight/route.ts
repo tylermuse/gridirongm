@@ -1,23 +1,50 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
 const anthropic = new Anthropic();
 
-// Server-side cache
-const cache = new Map<string, { topics: unknown[]; ts: number }>();
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
-const CACHE_MAX = 200;
+// ── Persistent cache via Supabase ──────────────────────────────────────────
+// Falls back to in-memory Map if Supabase isn't configured.
+// Table: ai_cache (key TEXT PRIMARY KEY, topics JSONB, created_at TIMESTAMPTZ DEFAULT now())
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days (special moments are rare, cache aggressively)
+
+function supabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createSupabaseAdmin(url, key);
+}
+
+// In-memory fallback
+const memCache = new Map<string, { topics: unknown[]; ts: number }>();
 
 function cacheKey(data: unknown): string {
   return crypto.createHash('md5').update(JSON.stringify(data)).digest('hex');
 }
 
-function pruneCache() {
-  if (cache.size <= CACHE_MAX) return;
-  const entries = [...cache.entries()].sort((a, b) => a[1].ts - b[1].ts);
-  const toRemove = entries.slice(0, entries.length - CACHE_MAX);
-  for (const [k] of toRemove) cache.delete(k);
+async function getCache(key: string): Promise<unknown[] | null> {
+  // Try Supabase first
+  const sb = supabaseAdmin();
+  if (sb) {
+    const { data } = await sb.from('ai_cache').select('topics, created_at').eq('key', key).single();
+    if (data && Date.now() - new Date(data.created_at).getTime() < CACHE_TTL_MS) {
+      return data.topics as unknown[];
+    }
+  }
+  // Fallback to in-memory
+  const mem = memCache.get(key);
+  if (mem && Date.now() - mem.ts < CACHE_TTL_MS) return mem.topics;
+  return null;
+}
+
+async function setCache(key: string, topics: unknown[]): Promise<void> {
+  memCache.set(key, { topics, ts: Date.now() });
+  const sb = supabaseAdmin();
+  if (sb) {
+    await sb.from('ai_cache').upsert({ key, topics, created_at: new Date().toISOString() }).select();
+  }
 }
 
 type NarrativeMoment = 'preseason' | 'tradeDeadline' | 'playoffsStart' | 'seasonOver' | 'weekly';
@@ -91,22 +118,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'teamData required' }, { status: 400 });
     }
 
-    // Check server-side cache
+    // Check persistent cache (Supabase → in-memory fallback)
     const key = cacheKey({ teamData, narrative });
-    const cached = cache.get(key);
-    if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      return NextResponse.json({ topics: cached.topics });
+    const cached = await getCache(key);
+    if (cached) {
+      return NextResponse.json({ topics: cached });
     }
 
     const narrativePrompt = buildNarrativePrompt(narrative as NarrativeMoment);
 
-    const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 3000,
-      messages: [
-        {
-          role: 'user',
-          content: `You write the dialogue for a football GM simulation game's "Team Spotlight" — a debate show segment where two commentators break down the user's team.
+    // System prompt is static → use prompt caching to reduce input token costs ~90%
+    const systemPrompt = `You write the dialogue for a football GM simulation game's "Team Spotlight" — a debate show segment where two commentators break down the user's team.
 
 THE COMMENTATORS:
 - **Marcus Cole** (speakerId: "stats") — The analytics guy. Think Nate Silver meets Tony Romo. Uses real stats but makes them interesting. Has dry wit. Occasionally surprises with a hot take or gut feeling. References historical parallels. Can be self-deprecating about being a nerd.
@@ -121,12 +143,6 @@ KEY RULES:
 - Each topic should have 3-4 exchanges.
 - Keep it entertaining but grounded in the actual data.
 
-NARRATIVE CONTEXT:
-${narrativePrompt}
-
-TEAM DATA:
-${JSON.stringify(teamData, null, 2)}
-
 Respond with a JSON array. Each element:
 {
   "headline": "short topic title",
@@ -134,7 +150,16 @@ Respond with a JSON array. Each element:
   "exchanges": [{ "speakerId": "stats" | "hottake", "text": "dialogue line" }]
 }
 
-Return ONLY the JSON array, no markdown fences, no other text.`,
+Return ONLY the JSON array, no markdown fences, no other text.`;
+
+    const message = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 3000,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      messages: [
+        {
+          role: 'user',
+          content: `NARRATIVE CONTEXT:\n${narrativePrompt}\n\nTEAM DATA:\n${JSON.stringify(teamData)}`,
         },
       ],
     });
@@ -153,9 +178,8 @@ Return ONLY the JSON array, no markdown fences, no other text.`,
     }
     const topics = JSON.parse(raw.slice(start, end + 1));
 
-    // Cache the result
-    cache.set(key, { topics, ts: Date.now() });
-    pruneCache();
+    // Cache the result persistently
+    await setCache(key, topics);
 
     return NextResponse.json({ topics });
   } catch (err) {

@@ -1,25 +1,45 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
 const anthropic = new Anthropic();
 
-// Server-side cache: survives across requests within the same serverless instance.
-// Key = content hash of game data, Value = { topics, timestamp }.
-// Entries expire after 1 hour. Max 200 entries to bound memory.
-const cache = new Map<string, { topics: unknown[]; ts: number }>();
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
-const CACHE_MAX = 200;
+// ── Persistent cache via Supabase ──────────────────────────────────────────
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function supabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createSupabaseAdmin(url, key);
+}
+
+const memCache = new Map<string, { topics: unknown[]; ts: number }>();
 
 function cacheKey(data: unknown): string {
   return crypto.createHash('md5').update(JSON.stringify(data)).digest('hex');
 }
 
-function pruneCache() {
-  if (cache.size <= CACHE_MAX) return;
-  const entries = [...cache.entries()].sort((a, b) => a[1].ts - b[1].ts);
-  const toRemove = entries.slice(0, entries.length - CACHE_MAX);
-  for (const [k] of toRemove) cache.delete(k);
+async function getCache(key: string): Promise<unknown[] | null> {
+  const sb = supabaseAdmin();
+  if (sb) {
+    const { data } = await sb.from('ai_cache').select('topics, created_at').eq('key', key).single();
+    if (data && Date.now() - new Date(data.created_at).getTime() < CACHE_TTL_MS) {
+      return data.topics as unknown[];
+    }
+  }
+  const mem = memCache.get(key);
+  if (mem && Date.now() - mem.ts < CACHE_TTL_MS) return mem.topics;
+  return null;
+}
+
+async function setCache(key: string, topics: unknown[]): Promise<void> {
+  memCache.set(key, { topics, ts: Date.now() });
+  const sb = supabaseAdmin();
+  if (sb) {
+    await sb.from('ai_cache').upsert({ key, topics, created_at: new Date().toISOString() }).select();
+  }
 }
 
 export async function POST(request: Request) {
@@ -33,24 +53,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'games array required' }, { status: 400 });
     }
 
-    // Check server-side cache
+    // Check persistent cache (Supabase → in-memory fallback)
     const key = cacheKey({ games, season, week });
-    const cached = cache.get(key);
-    if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      return NextResponse.json({ topics: cached.topics });
+    const cached = await getCache(key);
+    if (cached) {
+      return NextResponse.json({ topics: cached });
     }
 
     const weekContext = isPlayoffs
       ? `This is the PLAYOFFS — ${week === 101 ? 'Wild Card Round' : week === 102 ? 'Divisional Round' : week === 103 ? 'Conference Championships' : week === 104 ? 'The Championship Game' : `Playoff Round ${week - 100}`}. The stakes are EVERYTHING.`
       : `This is Week ${week} of an 18-week regular season.`;
 
-    const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2000,
-      messages: [
-        {
-          role: 'user',
-          content: `You write "Gridiron Tonight" — a post-game breakdown. Two commentators do a deep dive on the user's team game.
+    // System prompt is static → use prompt caching to reduce input token costs ~90%
+    const systemPrompt = `You write "Gridiron Tonight" — a post-game breakdown. Two commentators do a deep dive on the user's team game.
 
 COMMENTATORS:
 - **Marcus Cole** (speakerId: "stats") — Analytics guy. Dry wit, historical parallels. Uses actual stats.
@@ -65,14 +80,18 @@ Generate 3-4 topics about THIS GAME:
 Each topic: 3 exchanges. Context field = box score summary.
 Do NOT invent stats. If a storyline type is provided (upset, comeback, blowout), lean into it.
 
-Season ${season}, ${weekContext}
-
-GAME:
-${JSON.stringify(games, null, 2)}
-
 JSON array: [{ "headline": "...", "icon": "emoji", "context": "box score", "exchanges": [{ "speakerId": "stats"|"hottake", "text": "..." }] }]
 
-Return ONLY the JSON array.`,
+Return ONLY the JSON array.`;
+
+    const message = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2000,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      messages: [
+        {
+          role: 'user',
+          content: `Season ${season}, ${weekContext}\n\nGAME:\n${JSON.stringify(games)}`,
         },
       ],
     });
@@ -96,9 +115,8 @@ Return ONLY the JSON array.`,
       console.error('Recap API JSON parse failed. Raw (first 500):', raw.slice(0, 500));
       return NextResponse.json({ error: 'JSON parse error' }, { status: 500 });
     }
-    // Cache the result
-    cache.set(key, { topics, ts: Date.now() });
-    pruneCache();
+    // Cache the result persistently
+    await setCache(key, topics);
 
     return NextResponse.json({ topics });
   } catch (err) {

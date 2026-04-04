@@ -359,16 +359,20 @@ function TeamSpotlightSection({
   }, []);
 
   // If AI is enabled but nothing was pre-fetched yet (e.g. direct page load), trigger fetch
+  // Only for special narrative moments — weekly uses templates to save API costs
   React.useEffect(() => {
     if (aiCommentary && !aiState.topics && !aiState.loading && !aiState.error) {
       const phase = ctx?.phase ?? 'regular';
       const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
       const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, team.id);
-      fetchAiSpotlight({
-        team, roster, allTeams, allPlayers, season, week, phase, narrative,
-        newsItems, draftResults, playoffBracket, playoffSeeds, champions,
-        tradeDeadlineWeek,
-      });
+      // Skip AI for weekly — template engine handles these cheaply
+      if (narrative !== 'weekly') {
+        fetchAiSpotlight({
+          team, roster, allTeams, allPlayers, season, week, phase, narrative,
+          newsItems, draftResults, playoffBracket, playoffSeeds, champions,
+          tradeDeadlineWeek,
+        });
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiCommentary, team, season, week, ctx?.phase]);
