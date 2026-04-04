@@ -46,41 +46,31 @@ export async function POST(request: Request) {
 
     const message = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 4000,
+      max_tokens: 2000,
       messages: [
         {
           role: 'user',
-          content: `You write "Gridiron Tonight" — a weekly football recap show. Two commentators break down each game.
+          content: `You write "Gridiron Tonight" — a post-game breakdown. Two commentators do a deep dive on the user's team game.
 
-THE COMMENTATORS:
-- **Marcus Cole** (speakerId: "stats") — Analytics guy. Dry wit, loves historical parallels. Uses the actual stats provided.
-- **Tony Blaze** (speakerId: "hottake") — Passion guy. Uses CAPS, bold declarations, vivid metaphors. Occasionally sharp.
+COMMENTATORS:
+- **Marcus Cole** (speakerId: "stats") — Analytics guy. Dry wit, historical parallels. Uses actual stats.
+- **Tony Blaze** (speakerId: "hottake") — Passion guy. CAPS, bold declarations, vivid metaphors.
 
-FORMAT:
-- Each topic = ONE GAME. The headline should be the matchup (e.g. "Bengals 34, Patriots 17").
-- The "context" field = the box score summary line (e.g. "CIN 34 @ NE 17 | Bo Nix: 457 yds, 4 TD, 0 INT").
-- For each game, discuss: who won and WHY, which players dominated or struggled, what this means for both teams.
-- Reference actual player stats from the data (passing yards, TDs, rushing yards, etc). Do NOT invent stats.
-- When a storyline type is provided (upset, comeback, blowout, etc.), lean into that narrative.
-- 3-4 exchanges per game. They should respond to each other, not monologue.
+Generate 3-4 topics about THIS GAME:
+1. **Game result** — headline = score (e.g. "Cowboys 31, Eagles 17"). Who won and why.
+2. **QB duel** — compare both QBs' stats. Who outplayed whom?
+3. **Key matchup** — what decided it? Run game, defense, big play?
+4. **What's next** — what this means for both teams going forward.
 
-RULES:
-- First topic = brief show intro (1-2 lines). Last topic = brief outro.
-- Cover the top 4-6 most interesting games. Skip boring/close games without notable stats.
-- Winning QB gets credit. Losing QB gets scrutiny. Mention the running game. Mention the defense if relevant.
-- Example tone: "The Bengals are rolling with Bo Nix who just outplayed Drake Maye. He was ON FIRE — 457 yards, 4 TDs, zero picks. Meanwhile the Patriots' run game was nonexistent — 27 yards from Henderson. You can't win football games like that."
+Each topic: 3 exchanges. Context field = box score summary.
+Do NOT invent stats. If a storyline type is provided (upset, comeback, blowout), lean into it.
 
 Season ${season}, ${weekContext}
 
-GAMES THIS WEEK:
+GAME:
 ${JSON.stringify(games, null, 2)}
 
-Each game has: away/home team (name, record, score), margin, key player stats per team (QB, top rusher, top receiver), and an optional storyline type.
-
-Generate as JSON array:
-[
-  { "headline": "matchup or intro title", "icon": "emoji", "context": "box score line", "exchanges": [{ "speakerId": "stats"|"hottake", "text": "..." }] }
-]
+JSON array: [{ "headline": "...", "icon": "emoji", "context": "box score", "exchanges": [{ "speakerId": "stats"|"hottake", "text": "..." }] }]
 
 Return ONLY the JSON array.`,
         },

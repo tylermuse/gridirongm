@@ -72,6 +72,7 @@ function useAiRecap(
   teams: Team[],
   schedule: import('@/types').GameResult[],
   allPlayers: Player[],
+  userTeamId: string,
 ) {
   const [state, setState] = useState<AiRecapCache>({ key: '', topics: null, loading: false, error: false });
   const cacheRef = useRef<Map<string, DebateTopic[]>>(new Map());
@@ -92,9 +93,9 @@ function useAiRecap(
 
     setState({ key, topics: null, loading: true, error: false });
 
-    // Build game-by-game data with key stats for each game
+    // Only send the user's team game to minimize API token usage
     const weekGames = schedule
-      .filter(g => g.played && g.week === weekNum)
+      .filter(g => g.played && g.week === weekNum && (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId))
       .map(g => {
         const home = teams.find(t => t.id === g.homeTeamId);
         const away = teams.find(t => t.id === g.awayTeamId);
@@ -133,14 +134,7 @@ function useAiRecap(
           storyline: storyline ? { type: storyline.type, title: storyline.title } : null,
         };
       })
-      // Sort: biggest storylines first (upsets, comebacks, shootouts), then by margin
-      .sort((a, b) => {
-        const storyPriority: Record<string, number> = { upset: 5, comeback: 4, shootout: 3, blowout: 2, defensive: 1 };
-        const aP = a.storyline ? (storyPriority[a.storyline.type] ?? 0) : 0;
-        const bP = b.storyline ? (storyPriority[b.storyline.type] ?? 0) : 0;
-        return bP - aP || b.margin - a.margin;
-      })
-      .slice(0, 8); // Cap at 8 games
+      .slice(0, 1); // Only user's team game
 
     fetch('/api/recap', {
       method: 'POST',
@@ -176,7 +170,7 @@ function useAiRecap(
 /* ─── Main Page ─── */
 
 export default function RecapPage() {
-  const { weeklyRecaps, teams, players, season, week, playoffBracket, schedule, leagueSettings } = useGameStore();
+  const { weeklyRecaps, teams, players, season, week, playoffBracket, schedule, leagueSettings, userTeamId } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('show');
@@ -231,6 +225,7 @@ export default function RecapPage() {
     teams,
     schedule,
     players,
+    userTeamId,
   );
 
   // Use AI topics if available, otherwise fall back to template
