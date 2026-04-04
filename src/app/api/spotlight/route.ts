@@ -75,14 +75,22 @@ Reference how existing players were acquired where relevant, e.g. "The trade for
 Generate 4-5 topics.`;
 
     case 'playoffsStart':
-      return `This is the PLAYOFFS PREVIEW episode — the regular season just ended and the bracket is set. Focus on:
-- Final regular season assessment: did they meet, exceed, or fall short of expectations?
-- Their seed and first-round matchup breakdown — strengths vs opponent's weaknesses and vice versa
-- Key players who need to step up in the playoffs — reference their stats and how they were acquired
-- X-factor: one player or unit that will determine how far they go
-- Bold prediction: how far do they go and why?
+      return `This is the END OF REGULAR SEASON episode. Check the "madePlayoffs" field in the data.
 
-If they missed the playoffs, discuss what went wrong and what needs to change.
+IF madePlayoffs is TRUE:
+- This is a PLAYOFFS PREVIEW. They're in! Discuss their seed and what it means.
+- Break down the first-round matchup: their strengths vs the opponent's weaknesses and vice versa
+- Which players need to step up in the postseason? Reference their stats.
+- X-factor: one player or unit that will determine how far they go
+- Bold prediction: how deep do they go?
+
+IF madePlayoffs is FALSE or null:
+- They MISSED THE PLAYOFFS. This is a season autopsy, NOT a playoff preview.
+- Do NOT mention playoff matchups, seeds, or "round one" — they're not in it.
+- What went wrong? Was it the QB? The defense? Injuries? Be specific with stats.
+- Was this a rebuilding year or a disappointment? Grade the season.
+- What are the biggest offseason priorities? QB upgrade? Draft focus? Cap moves?
+- Is the coaching staff on the hot seat?
 
 Generate 4-5 topics.`;
 

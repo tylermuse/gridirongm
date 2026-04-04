@@ -246,7 +246,9 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
     if (opts.playoffSeeds) {
       const conf = team.conference as 'AC' | 'NC';
       const userSeed = (opts.playoffSeeds[conf]?.indexOf(team.id) ?? -1) + 1;
-      teamData.userSeed = userSeed > 0 && userSeed <= 7 ? userSeed : null;
+      const madePlayoffs = userSeed > 0 && userSeed <= 7;
+      teamData.madePlayoffs = madePlayoffs;
+      teamData.userSeed = madePlayoffs ? userSeed : null;
 
       // First round opponent
       if (userSeed > 0 && userSeed <= 7 && opts.playoffBracket) {
