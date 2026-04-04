@@ -45,35 +45,39 @@ const POSITION_VALUE_MULT: Record<string, number> = {
 function playerTradeValue(player: Player): number {
   const ageMultiplier =
     player.age <= 25 ? 1.3 :
-    player.age <= 27 ? 1.15 :
+    player.age <= 27 ? 1.1 :
     player.age <= 29 ? 1.0 :
-    player.age <= 31 ? 0.85 :
-    player.age <= 33 ? 0.65 : 0.45;
+    player.age <= 31 ? 0.7 :
+    player.age <= 33 ? 0.45 : 0.2;
   const posMultiplier = POSITION_VALUE_MULT[player.position] ?? 1.0;
   const normalized = Math.max(0, (player.ratings.overall - 40) / 55);
-  const base = Math.pow(normalized, 2.5) * 1200;
-  const potBonus = Math.max(0, player.potential - player.ratings.overall) * 3;
+  const base = Math.pow(normalized, 2.5) * 3500;
+  const potBonus = Math.max(0, player.potential - player.ratings.overall) * 8;
   const rawValue = (base + potBonus) * ageMultiplier * posMultiplier;
-  // Light contract burden: only penalize expensive + long deals
   const contractCost = Math.max(0, player.contract.salary - 8) * player.contract.yearsLeft * 0.8;
   return Math.round(rawValue - contractCost);
 }
 
-// Pick base values aligned with store — record-adjusted at display time
-const PICK_BASE_VALUES = [500, 250, 120, 60, 30, 15, 8];
+// Draft pick value: exponential decay by estimated overall pick number
+function draftPickPointValue(overallPick: number): number {
+  return Math.round(3000 * Math.exp(-0.032 * (overallPick - 1)));
+}
 let _tradesTeams: { id: string; record: { wins: number; losses: number } }[] = [];
 function setTradesTeams(teams: { id: string; record: { wins: number; losses: number } }[]) { _tradesTeams = teams; }
 function pickTradeValue(pick: DraftPick): number {
-  const baseValue = PICK_BASE_VALUES[(pick.round - 1)] ?? 5;
-  const team = _tradesTeams.find(t => t.id === pick.originalTeamId);
-  if (team) {
-    const total = team.record.wins + team.record.losses;
-    if (total >= 4) {
-      const winPct = team.record.wins / total;
-      return Math.round(baseValue * (1.6 - winPct));
-    }
+  if (_tradesTeams.length > 0) {
+    const sorted = [..._tradesTeams].sort((a, b) => {
+      const aWp = a.record.wins / Math.max(1, a.record.wins + a.record.losses);
+      const bWp = b.record.wins / Math.max(1, b.record.wins + b.record.losses);
+      return aWp - bWp;
+    });
+    const pos = sorted.findIndex(t => t.id === pick.originalTeamId);
+    const slot = pos >= 0 ? pos : Math.floor(sorted.length / 2);
+    const overallPick = (pick.round - 1) * sorted.length + slot + 1;
+    return draftPickPointValue(overallPick);
   }
-  return baseValue;
+  const midPick = (pick.round - 1) * 32 + 16;
+  return draftPickPointValue(midPick);
 }
 
 function getTeamStrategy(team: { record: { wins: number; losses: number }; totalPayroll: number; salaryCap: number }, roster: { age: number }[]): string {

@@ -566,10 +566,28 @@ function generateWeekNews(
 // Trade value formula (PRD-04)
 // ---------------------------------------------------------------------------
 
-// Pick base values calibrated to player values.
-// A 1st round pick ≈ good young starter (75-80 OVR), not a star.
-// Actual value scales with team record: bad team's 1st is worth much more.
-const PICK_BASE_VALUES = [500, 250, 120, 60, 30, 15, 8]; // Rounds 1-7
+// Draft pick value chart — exponential decay by overall pick number.
+// Inspired by NFL draft value charts (Jimmy Johnson). Pick #1 ≈ 3000, pick #32 ≈ 600.
+// Value = 3000 * e^(-0.032 * (pickNum - 1)) for picks 1-224.
+// This makes top picks DRAMATICALLY more valuable than late picks,
+// preventing exploits like trading pick #30 for pick #2.
+function draftPickPointValue(overallPick: number): number {
+  return Math.round(3000 * Math.exp(-0.032 * (overallPick - 1)));
+}
+
+// Estimate overall pick number from round + team record
+function estimateOverallPick(round: number, teams: Team[], originalTeamId: string): number {
+  const numTeams = teams.length || 32;
+  // Sort teams by record (worst first) to estimate pick position within round
+  const sorted = [...teams].sort((a, b) => {
+    const aWp = a.record.wins / Math.max(1, a.record.wins + a.record.losses);
+    const bWp = b.record.wins / Math.max(1, b.record.wins + b.record.losses);
+    return aWp - bWp;
+  });
+  const posInRound = sorted.findIndex(t => t.id === originalTeamId);
+  const slot = posInRound >= 0 ? posInRound : Math.floor(numTeams / 2); // default to middle
+  return (round - 1) * numTeams + slot + 1;
+}
 
 const POSITION_VALUE_MULT: Record<string, number> = {
   QB: 1.5, RB: 0.9, WR: 1.1, TE: 0.85, OL: 0.95,
@@ -584,32 +602,25 @@ function playerTradeValue(player: Player): number {
     player.age <= 31 ? 0.7 :
     player.age <= 33 ? 0.45 : 0.2;
   const posMultiplier = POSITION_VALUE_MULT[player.position] ?? 1.0;
-  // Exponential curve: stars (85+) are worth dramatically more than average (65) players.
-  // 56 OVR → ~30 value, 70 OVR → ~200, 80 OVR → ~500, 90 OVR → ~1200
+  // Exponential curve scaled to match draft pick values.
+  // 56 OVR → ~80, 65 OVR → ~350, 70 OVR → ~600, 80 OVR → ~1500, 90 OVR → ~3500
+  // A 90 OVR player should be worth roughly a top-3 pick.
   const normalized = Math.max(0, (player.ratings.overall - 40) / 55);
-  const base = Math.pow(normalized, 2.5) * 1200;
-  const potBonus = Math.max(0, player.potential - player.ratings.overall) * 3;
+  const base = Math.pow(normalized, 2.5) * 3500;
+  const potBonus = Math.max(0, player.potential - player.ratings.overall) * 8;
   return (base + potBonus) * ageMultiplier * posMultiplier;
 }
 
-/** Pick value scales with the originating team's record:
- *  Bad team (low win%) → higher pick → more valuable (up to 1.6x).
- *  Good team (high win%) → lower pick → less valuable (down to 0.6x). */
+/** Pick value based on estimated overall pick number.
+ *  Uses exponential curve: pick #1 ≈ 3000, #10 ≈ 2200, #20 ≈ 1600, #32 ≈ 1100, #64 ≈ 400. */
 function pickTradeValue(pick: DraftPick, teams?: Team[]): number {
-  const baseValue = PICK_BASE_VALUES[(pick.round - 1)] ?? 8;
-  if (teams) {
-    const team = teams.find(t => t.id === pick.originalTeamId);
-    if (team) {
-      const total = team.record.wins + team.record.losses;
-      if (total >= 4) { // need enough games for meaningful record
-        const winPct = team.record.wins / total;
-        // 0% wins → 1.6x, 50% → 1.0x, 100% → 0.6x
-        const recordMult = 1.6 - winPct;
-        return Math.round(baseValue * recordMult);
-      }
-    }
+  if (teams && teams.length > 0) {
+    const overallPick = estimateOverallPick(pick.round, teams, pick.originalTeamId);
+    return draftPickPointValue(overallPick);
   }
-  return baseValue;
+  // Fallback: use round midpoint estimate (assumes 32 teams)
+  const midPick = (pick.round - 1) * 32 + 16;
+  return draftPickPointValue(midPick);
 }
 
 // ---------------------------------------------------------------------------
@@ -4490,7 +4501,7 @@ export const useGameStore = create<GameStore>()(
         }, 0);
 
         // AI accepts if within 10% value (skip for AI-initiated proposals already approved)
-        if (!skipValueCheck && offeredValue < receivedValue * 0.90) return { success: false, reason: 'Trade value too low — AI rejected' };
+        if (!skipValueCheck && offeredValue < receivedValue * 0.95) return { success: false, reason: 'Trade value too low — AI rejected' };
 
         // Cap check: allow trades that reduce payroll (salary dumps) even when over cap.
         // Only block if the trade would make cap situation WORSE when already over,
