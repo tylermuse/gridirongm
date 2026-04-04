@@ -668,7 +668,7 @@ export interface LeagueState {
   /** BS Mode: QB tier assignments */
   qbTiers?: Record<string, { playerId: string; tier: QBTier }>;
   /** BS Mode: opponent selection for top seeds */
-  bsPickOpponent?: { conference: 'AC' | 'NC'; seed: number; options: string[] } | null;
+  // Reserved for future use
   /** BS Mode: draft lottery results */
   draftLotteryResults?: { teamId: string; abbr: string; originalRank: number; lotteryPick: number }[];
   /** Player ID of the Championship MVP (set when championship is played, consumed when season summary is created) */

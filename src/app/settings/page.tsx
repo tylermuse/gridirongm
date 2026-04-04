@@ -301,7 +301,7 @@ export default function SettingsPage() {
           </CardHeader>
           <div className="space-y-3">
             <p className="text-xs text-[var(--text-sec)]">
-              Activates the Entertaining as Hell Tournament, Draft Lottery, QB Tier Pyramid, Ewing Theory, and Irrational Confidence Guys. Adds drama and variance to your league.
+              Activates the Draft Lottery, QB Tier Pyramid, Ewing Theory, and Irrational Confidence Guys. Adds drama and variance to your league.
             </p>
             <button
               onClick={() => setDraft(d => ({ ...d, bsMode: !d.bsMode }))}
