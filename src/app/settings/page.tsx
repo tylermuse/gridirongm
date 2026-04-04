@@ -403,7 +403,7 @@ export default function SettingsPage() {
           </CardHeader>
           <div className="space-y-3">
             <p className="text-xs text-[var(--text-sec)]">
-              Uses your Anthropic API key to generate unique, dynamic Team Spotlight commentary instead of template-based dialogue. Requires ANTHROPIC_API_KEY in your environment.
+              Generate unique, dynamic Team Spotlight and Recap commentary using AI instead of template-based dialogue.
             </p>
             <button
               onClick={() => setDraft(d => ({ ...d, aiCommentary: !d.aiCommentary }))}
