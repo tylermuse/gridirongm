@@ -214,13 +214,36 @@ export default function ReSignPage() {
             )}
           </div>
           <div className="text-right">
-            <div className={`text-2xl font-black ${capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}`}>
-              ${capSpace}M
-            </div>
-            <div className="text-xs text-[var(--text-sec)]">Cap Space</div>
-            {luxuryTax > 0 && (
-              <div className="text-xs text-red-600 mt-0.5">Luxury Tax: ${luxuryTax}M</div>
-            )}
+            {(() => {
+              // Cap space excluding expiring players' current contracts (they'll come off the books)
+              const expiringCurrentSalary = activeEntries.reduce((sum, e) => {
+                const p = players.find(pl => pl.id === e.playerId);
+                return sum + (p?.contract.salary ?? 0);
+              }, 0);
+              const projectedCapSpace = Math.round((capSpace + expiringCurrentSalary) * 10) / 10;
+              const totalAsking = Math.round(activeEntries.reduce((sum, e) => sum + e.askingSalary, 0) * 10) / 10;
+              const netAfterSigning = Math.round((projectedCapSpace - totalAsking) * 10) / 10;
+
+              return (
+                <>
+                  <div className={`text-2xl font-black ${projectedCapSpace > 10 ? 'text-green-600' : projectedCapSpace > 0 ? 'text-amber-600' : 'text-red-600'}`}>
+                    ${projectedCapSpace}M
+                  </div>
+                  <div className="text-xs text-[var(--text-sec)]">Projected Cap Space</div>
+                  {activeEntries.length > 0 && (
+                    <div className="text-xs mt-1.5 space-y-0.5">
+                      <div className="text-amber-600">Players asking: ${totalAsking}M</div>
+                      <div className={netAfterSigning >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                        {netAfterSigning >= 0 ? `$${netAfterSigning}M remaining if all re-sign` : `$${Math.abs(netAfterSigning)}M over if all re-sign`}
+                      </div>
+                    </div>
+                  )}
+                  {luxuryTax > 0 && (
+                    <div className="text-xs text-red-600 mt-0.5">Luxury Tax: ${luxuryTax}M</div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
 
