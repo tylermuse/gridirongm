@@ -284,6 +284,17 @@ export default function FreeAgencyPage() {
     }
   }
 
+  // Auto-dismiss rejected negotiations after 2 seconds and block re-negotiation
+  React.useEffect(() => {
+    if (negotiation?.outcome === 'rejected') {
+      const timer = setTimeout(() => {
+        setWalkedAwayIds(prev => new Set(prev).add(negotiation.playerId));
+        setNegotiation(null);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [negotiation?.outcome, negotiation?.playerId]);
+
   function walkAway() {
     if (negotiation) {
       setWalkedAwayIds(prev => new Set(prev).add(negotiation.playerId));
