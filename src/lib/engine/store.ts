@@ -3768,23 +3768,35 @@ export const useGameStore = create<GameStore>()(
             }
           }
 
-          // AI teams auto-resign their own expiring players
+          // AI teams auto-resign their own expiring players.
+          // Re-sign probability scales with player quality — elite players almost never walk.
           const aiTeams = preTeams.filter(t => t.id !== state.userTeamId);
           for (const aiTeam of aiTeams) {
             const expiringFromAI = prePlayers.filter(
               p => p.teamId === aiTeam.id && p.contract.yearsLeft === 1 && !p.retired,
-            );
+            ).sort((a, b) => b.ratings.overall - a.ratings.overall); // prioritize best players
+            let aiTeamPayroll = aiTeam.totalPayroll;
             for (const player of expiringFromAI) {
-              const marketSalary = estimateSalary(player.ratings.overall, player.position, player.age, player.potential);
-              const capSpace = aiTeam.salaryCap - aiTeam.totalPayroll;
-              if (capSpace >= marketSalary && Math.random() < 0.70) {
-                const newYears = 1 + Math.floor(Math.random() * 3);
-                const salaryDiff = marketSalary - player.contract.salary;
+              const ci = capInflationFactor(aiTeam.salaryCap);
+              const marketSalary = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci);
+              const capSpace = aiTeam.salaryCap - aiTeamPayroll;
+              // Re-sign probability based on OVR: elite (85+) = 98%, good (75+) = 90%, avg (65+) = 75%, below = 55%
+              const resignProb = player.ratings.overall >= 85 ? 0.98
+                : player.ratings.overall >= 75 ? 0.90
+                : player.ratings.overall >= 65 ? 0.75
+                : 0.55;
+              // Teams will stretch to keep elite players (up to 15% over cap, like a restructure)
+              const canAfford = capSpace >= marketSalary || (player.ratings.overall >= 80 && capSpace >= marketSalary * -0.15);
+              if (canAfford && Math.random() < resignProb) {
+                const salary = Math.max(marketSalary, capSpace > 0 ? marketSalary : capSpace + marketSalary); // reduce if over cap
+                const newYears = player.age >= 33 ? 1 + Math.floor(Math.random() * 2) : 2 + Math.floor(Math.random() * 3);
+                const salaryDiff = salary - player.contract.salary;
                 prePlayers = prePlayers.map(p =>
-                  p.id === player.id ? { ...p, contract: { salary: marketSalary, yearsLeft: newYears, guaranteed: generateGuaranteed(marketSalary, newYears), totalYears: newYears, offseasonSigned: true } } : p,
+                  p.id === player.id ? { ...p, contract: { salary, yearsLeft: newYears, guaranteed: generateGuaranteed(salary, newYears), totalYears: newYears, offseasonSigned: true } } : p,
                 );
+                aiTeamPayroll += salaryDiff;
                 preTeams = preTeams.map(t =>
-                  t.id === aiTeam.id ? { ...t, totalPayroll: Math.max(0, t.totalPayroll + salaryDiff) } : t,
+                  t.id === aiTeam.id ? { ...t, totalPayroll: Math.max(0, aiTeamPayroll) } : t,
                 );
               } else {
                 prePlayers = prePlayers.map(p =>
