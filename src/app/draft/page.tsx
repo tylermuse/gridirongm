@@ -647,6 +647,10 @@ export default function DraftPage() {
     season,
     draftLotteryResults,
     leagueSettings,
+    scoutingState,
+    sendScoutTrip,
+    interviewProspect,
+    visitProDay,
   } = useGameStore();
 
   const { maxScoutingLevel: maxLevel } = useSubscription();
@@ -1121,6 +1125,80 @@ export default function DraftPage() {
                     {isExpanded && (
                       <tr className="border-t border-[var(--border)]">
                         <td colSpan={7} className="px-4 py-3 bg-[var(--surface-2)]/50">
+                          {/* Scouting action buttons */}
+                          {(() => {
+                            const ss = scoutingState;
+                            const pts = ss?.scoutPoints ?? 15;
+                            const hasTrip = !!ss?.scoutTrips[player.id];
+                            const hasInterview = !!ss?.interviews[player.id];
+                            const hasProDay = !!ss?.proDays[player.id];
+                            const proDayCount = ss?.proDayCount ?? 0;
+                            return (
+                              <div className="mb-3">
+                                <div className="flex items-center gap-2 flex-wrap mb-2">
+                                  <span className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Scout Points: {pts}</span>
+                                  {!hasTrip && (
+                                    <button
+                                      onClick={() => sendScoutTrip(player.id)}
+                                      disabled={pts < 1}
+                                      className="text-[11px] px-2.5 py-1 rounded-lg bg-blue-100 text-blue-700 font-medium hover:bg-blue-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                      Scout Trip (1pt)
+                                    </button>
+                                  )}
+                                  {!hasInterview && (
+                                    <button
+                                      onClick={() => interviewProspect(player.id)}
+                                      disabled={pts < 1}
+                                      className="text-[11px] px-2.5 py-1 rounded-lg bg-purple-100 text-purple-700 font-medium hover:bg-purple-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                      Interview (1pt)
+                                    </button>
+                                  )}
+                                  {!hasProDay && (
+                                    <button
+                                      onClick={() => visitProDay(player.id)}
+                                      disabled={pts < 1 || proDayCount >= 5}
+                                      className="text-[11px] px-2.5 py-1 rounded-lg bg-amber-100 text-amber-700 font-medium hover:bg-amber-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                      Pro Day ({proDayCount}/5, 1pt)
+                                    </button>
+                                  )}
+                                </div>
+                                {/* Show scouting results */}
+                                <div className="flex flex-wrap gap-2 text-xs mb-2">
+                                  {hasTrip && (
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5">
+                                      <div className="font-bold text-blue-700 text-[10px] uppercase">Scout Trip</div>
+                                      <div>OVR: {ss!.scoutTrips[player.id].ovrEstimate.low}–{ss!.scoutTrips[player.id].ovrEstimate.high}</div>
+                                      <div>Potential: {ss!.scoutTrips[player.id].potentialHint}</div>
+                                      <div className="text-green-600">+ {ss!.scoutTrips[player.id].strength}</div>
+                                      <div className="text-red-600">− {ss!.scoutTrips[player.id].weakness}</div>
+                                    </div>
+                                  )}
+                                  {hasInterview && (
+                                    <div className="bg-purple-50 border border-purple-200 rounded-lg px-2.5 py-1.5">
+                                      <div className="font-bold text-purple-700 text-[10px] uppercase">Interview</div>
+                                      <div>Character: {ss!.interviews[player.id].personality.replace('_', ' ')}</div>
+                                      <div className="italic text-[var(--text-sec)]">{ss!.interviews[player.id].notes}</div>
+                                      {ss!.interviews[player.id].revealedBustBoom && ss!.interviews[player.id].bustBoomResult && (
+                                        <div className={ss!.interviews[player.id].bustBoomResult === 'bust' ? 'text-red-600 font-bold' : ss!.interviews[player.id].bustBoomResult === 'boom' ? 'text-green-600 font-bold' : ''}>
+                                          {ss!.interviews[player.id].bustBoomResult === 'bust' ? '⚠️ Bust risk detected' : ss!.interviews[player.id].bustBoomResult === 'boom' ? '🌟 Boom potential detected' : 'Normal profile'}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  {hasProDay && (
+                                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                                      <div className="font-bold text-amber-700 text-[10px] uppercase">Pro Day</div>
+                                      <div>Impression: {ss!.proDays[player.id].impression}</div>
+                                      <div>{ss!.proDays[player.id].revealedRating}: <span className="font-bold">{ss!.proDays[player.id].revealedValue}</span></div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
                           {isScouted ? (
                             <ScoutEvaluationPanel
                               player={player}
