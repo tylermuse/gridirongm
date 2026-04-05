@@ -21,7 +21,7 @@ import { developPlayers, POSITION_AGING } from './development';
 import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
-import { generateCoachingStaff, generateCoach, coachingBonus } from './coaching';
+import { generateCoachingStaff, generateCoach, coachingBonus, progressCoaches, processCoachingCarousel } from './coaching';
 import { computeLeagueQBTiers, getQBTierModifier } from './qbTierPyramid';
 import { generateSeasonObjectives, evaluateObjectives } from './objectives';
 import { defaultApproval, updateApprovalAfterGame, updateApprovalEndOfSeason, updateApprovalForMove } from './approval';
@@ -5876,12 +5876,20 @@ export const useGameStore = create<GameStore>()(
 
         const seasonFreeAgents = [...unsignedPlayerIds, ...streetFAs.map(p => p.id)];
 
+        // Coach progression and AI coaching carousel
+        const coachProgress = progressCoaches(grownTeams);
+        const coachCarousel = processCoachingCarousel(coachProgress.teams, state.userTeamId);
+        const coachNews: import('@/types').NewsItem[] = [...coachProgress.news, ...coachCarousel.news].map(headline =>
+          makeNews({ season: newSeason, week: 0, type: 'signing', headline, isUserTeam: false }),
+        );
+        const teamsAfterCoaches = coachCarousel.teams;
+
         set({
           season: newSeason,
           week: 1,
           phase: 'regular',
           players: allPlayersForNewSeason,
-          teams: grownTeams,
+          teams: teamsAfterCoaches,
           schedule: newSchedule,
           draftResults: [],
           freeAgents: seasonFreeAgents,
@@ -5889,7 +5897,7 @@ export const useGameStore = create<GameStore>()(
           faRefusals: [],
           playoffBracket: null,
           playoffSeeds: null,
-          newsItems: [...retirementNews, ...voidNews, ...aiRestructureNews, ...(() => {
+          newsItems: [...retirementNews, ...voidNews, ...aiRestructureNews, ...coachNews, ...(() => {
             // Generate preseason news
             const preseasonNews: NewsItem[] = [];
             const userT = grownTeams.find(t => t.id === state.userTeamId);

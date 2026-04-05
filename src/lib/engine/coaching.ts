@@ -256,3 +256,94 @@ export function coachingBonus(team: Team, roster?: Player[]): number {
 
   return bonus;
 }
+
+// ---------------------------------------------------------------------------
+// Coach Progression (called during offseason)
+// ---------------------------------------------------------------------------
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+/** Progress all coaches: OVR changes based on team record, aging, retirement checks */
+export function progressCoaches(teams: Team[]): { teams: Team[]; news: string[] } {
+  const news: string[] = [];
+  const updatedTeams = teams.map(t => {
+    if (!t.coaches || t.coaches.length === 0) return t;
+    const wins = t.record.wins;
+    const coaches = t.coaches.map(c => {
+      let ovr = c.ovr;
+      // Season performance
+      if (wins >= 10) ovr += 1 + Math.floor(Math.random() * 2); // +1 to +2
+      else if (wins <= 5) ovr -= 1 + Math.floor(Math.random() * 3); // -1 to -3
+      else ovr += Math.floor(Math.random() * 3) - 1; // -1 to +1
+      ovr = clamp(ovr, 40, 95);
+
+      const newAge = c.age + 1;
+      const newWins = c.careerWins + t.record.wins;
+      const newLosses = c.careerLosses + t.record.losses;
+      const newYears = c.yearsWithTeam + 1;
+
+      // Retirement check
+      const retireChance = newAge >= 70 ? 0.25 : newAge >= 65 ? 0.10 : 0;
+      if (retireChance > 0 && Math.random() < retireChance) {
+        news.push(`${t.city} ${c.role} Coach ${c.firstName} ${c.lastName} (age ${newAge}) announces retirement after ${newYears} seasons.`);
+        const replacement = generateCoach(c.role);
+        replacement.yearsWithTeam = 0;
+        return replacement;
+      }
+
+      return { ...c, ovr, age: newAge, careerWins: newWins, careerLosses: newLosses, yearsWithTeam: newYears };
+    });
+    return { ...t, coaches };
+  });
+  return { teams: updatedTeams, news };
+}
+
+// ---------------------------------------------------------------------------
+// AI Coaching Carousel (called during offseason)
+// ---------------------------------------------------------------------------
+
+/** AI teams fire underperforming coaches */
+export function processCoachingCarousel(teams: Team[], userTeamId: string): { teams: Team[]; news: string[] } {
+  const news: string[] = [];
+  const updatedTeams = teams.map(t => {
+    if (t.id === userTeamId) return t; // user manages their own coaches
+    if (!t.coaches || t.coaches.length === 0) return t;
+
+    const hc = t.coaches.find(c => c.role === 'HC');
+    if (!hc) return t;
+
+    const wins = t.record.wins;
+    const tenure = hc.yearsWithTeam;
+
+    let fireChance = 0;
+    if (wins <= 4) fireChance = 0.75;
+    else if (wins <= 5 && tenure >= 3) fireChance = 0.50;
+    // Missing playoffs 3+ years tracked by low win totals over tenure
+    else if (wins <= 8 && tenure >= 3) fireChance = 0.15;
+
+    if (fireChance > 0 && Math.random() < fireChance) {
+      news.push(`${t.city} fires HC ${hc.firstName} ${hc.lastName} after ${tenure} season${tenure !== 1 ? 's' : ''} (${hc.careerWins}-${hc.careerLosses} career).`);
+
+      const newHC = generateCoach('HC');
+      newHC.yearsWithTeam = 0;
+
+      let coaches = t.coaches.map(c => c.role === 'HC' ? newHC : c);
+
+      // 40% chance coordinators also get replaced
+      if (Math.random() < 0.40) {
+        const replaceOC = Math.random() < 0.5;
+        const role = replaceOC ? 'OC' : 'DC';
+        const newCoord = generateCoach(role as CoachRole);
+        newCoord.yearsWithTeam = 0;
+        coaches = coaches.map(c => c.role === role ? newCoord : c);
+        news.push(`${t.city} also parts ways with ${role} Coach.`);
+      }
+
+      return { ...t, coaches };
+    }
+    return t;
+  });
+  return { teams: updatedTeams, news };
+}
