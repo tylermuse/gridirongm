@@ -101,9 +101,29 @@ function TeamPicker() {
   }
 
   async function handlePick(abbr: string) {
-    // Warn if overwriting an existing save
-    if (savedGame && !window.confirm(`Starting a new league will overwrite your current save (${savedGame.teamAbbr}, Season ${savedGame.season}, ${savedGame.wins}-${savedGame.losses}). Continue?`)) {
-      return;
+    // Auto-save current league to next available slot before starting new one
+    if (savedGame) {
+      const { saveToSlot } = useGameStore.getState();
+      // Find an empty slot (1-5), or use slot 5 as overflow
+      let savedToSlot = 0;
+      for (let slot = 1; slot <= 5; slot++) {
+        try {
+          const existing = await idbGetItem(`gridiron-gm-save-${slot}`);
+          if (!existing) {
+            await saveToSlot(slot);
+            savedToSlot = slot;
+            break;
+          }
+        } catch { /* skip */ }
+      }
+      if (savedToSlot === 0) {
+        // All slots full — ask user
+        if (!window.confirm(`All 5 save slots are full. Your current league (${savedGame.teamAbbr}, Season ${savedGame.season}, ${formatRecord({ wins: savedGame.wins, losses: savedGame.losses })}) will be overwritten. Use Save/Load to free a slot first, or continue to overwrite.`)) {
+          return;
+        }
+      } else {
+        // Saved successfully — brief notification would be nice but just proceed
+      }
     }
     setLoading(true);
     setError(null);
