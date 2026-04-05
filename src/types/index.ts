@@ -687,6 +687,19 @@ export interface LeagueState {
   scoutingLevel: 0 | 1 | 2;
   /** Scouting data keyed by prospect player ID */
   draftScoutingData: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }>;
+  /** Multi-layer scouting state */
+  scoutingState?: {
+    scoutPoints: number;
+    maxScoutPoints: number;
+    /** Players that have had a scout trip (layer 2) */
+    scoutTrips: Record<string, { strength: string; weakness: string; potentialHint: 'high' | 'medium' | 'low'; ovrEstimate: { low: number; high: number } }>;
+    /** Players that have been interviewed (layer 4) */
+    interviews: Record<string, { personality: string; notes: string; revealedBustBoom: boolean; bustBoomResult?: 'bust' | 'boom' | 'normal' }>;
+    /** Players that have had a pro day visit (layer 5) */
+    proDays: Record<string, { impression: string; revealedRating: string; revealedValue: number }>;
+    /** Number of pro day visits used this draft season (max 5) */
+    proDayCount: number;
+  };
   /** NFL 2026 hardcoded first-round mock draft (empty if not NFL roster or past first draft) */
   nflMockDraft?: { pickNum: number; teamAbbr: string; playerId: string; firstName: string; lastName: string; position: string; college: string; blurb: string }[];
   /** BS Mode: QB tier assignments */

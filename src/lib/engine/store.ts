@@ -113,6 +113,12 @@ interface GameStore extends LeagueState {
   editPlayer: (playerId: string, updates: Partial<Player>) => void;
   /** God Mode: create a new player and add to the user's team */
   createPlayer: (data: { firstName: string; lastName: string; position: Position; age: number; overall: number; potential: number }) => string | null;
+  /** Scouting: send a scout trip (1 point, narrows OVR estimate) */
+  sendScoutTrip: (playerId: string) => boolean;
+  /** Scouting: interview a prospect (1 point, reveals character + bust/boom) */
+  interviewProspect: (playerId: string) => boolean;
+  /** Scouting: pro day visit (1 point, reveals a rating, max 5 per draft) */
+  visitProDay: (playerId: string) => boolean;
   setSuppressTradePopups: (val: boolean) => void;
   saveToSlot: (slot: number) => Promise<void>;
   loadFromSlot: (slot: number) => Promise<void>;
@@ -6168,6 +6174,108 @@ export const useGameStore = create<GameStore>()(
         });
 
         return p.id;
+      },
+
+      sendScoutTrip: (playerId: string) => {
+        const state = get();
+        const ss = state.scoutingState ?? { scoutPoints: 15, maxScoutPoints: 20, scoutTrips: {}, interviews: {}, proDays: {}, proDayCount: 0 };
+        if (ss.scoutPoints < 1) return false;
+        if (ss.scoutTrips[playerId]) return false; // already scouted
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return false;
+
+        const ovr = player.ratings.overall;
+        const pot = player.potential;
+        const primaryKeys = ['throwing', 'carrying', 'catching', 'coverage', 'passRush', 'blocking', 'tackling', 'kicking'];
+        const bestKey = primaryKeys.reduce((best, k) => (player.ratings[k as keyof typeof player.ratings] ?? 0) > (player.ratings[best as keyof typeof player.ratings] ?? 0) ? k : best, primaryKeys[0]);
+        const worstKey = primaryKeys.reduce((worst, k) => (player.ratings[k as keyof typeof player.ratings] ?? 0) < (player.ratings[worst as keyof typeof player.ratings] ?? 0) ? k : worst, primaryKeys[0]);
+
+        const STRENGTH_NOTES: Record<string, string> = { throwing: 'Elite arm talent', carrying: 'Natural ball carrier', catching: 'Sure hands', coverage: 'Lockdown coverage skills', passRush: 'Explosive first step', blocking: 'Mauler in the trenches', tackling: 'Sure tackler', kicking: 'Big leg' };
+        const WEAKNESS_NOTES: Record<string, string> = { throwing: 'Accuracy concerns', carrying: 'Ball security issues', catching: 'Inconsistent hands', coverage: 'Struggles in man coverage', passRush: 'Disappears against good tackles', blocking: 'Gets overpowered', tackling: 'Missed tackles', kicking: 'Inconsistent under pressure' };
+
+        const trip = {
+          strength: STRENGTH_NOTES[bestKey] ?? 'Solid all-around',
+          weakness: WEAKNESS_NOTES[worstKey] ?? 'Limited upside',
+          potentialHint: (pot >= 80 ? 'high' : pot >= 65 ? 'medium' : 'low') as 'high' | 'medium' | 'low',
+          ovrEstimate: { low: Math.max(30, ovr - 5), high: Math.min(99, ovr + 5) },
+        };
+
+        set({
+          scoutingState: {
+            ...ss,
+            scoutPoints: ss.scoutPoints - 1,
+            scoutTrips: { ...ss.scoutTrips, [playerId]: trip },
+          },
+        });
+        return true;
+      },
+
+      interviewProspect: (playerId: string) => {
+        const state = get();
+        const ss = state.scoutingState ?? { scoutPoints: 15, maxScoutPoints: 20, scoutTrips: {}, interviews: {}, proDays: {}, proDayCount: 0 };
+        if (ss.scoutPoints < 1) return false;
+        if (ss.interviews[playerId]) return false;
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return false;
+
+        const profile = player.draftProfile ?? 'normal';
+        const detected = Math.random() < 0.6; // 60% chance to reveal bust/boom
+
+        const PERSONALITIES = ['high_character', 'confident', 'reserved', 'red_flag'] as const;
+        const NOTES: Record<string, string[]> = {
+          high_character: ['Mature beyond his years. Coaches rave about his work ethic.', 'First one in, last one out. Team captain type.'],
+          confident: ['Carries himself like a pro. Confident but not cocky.', 'Believes he can be the best. That drive shows on tape.'],
+          reserved: ['Quiet, kept to himself in the interview. Hard to read.', 'Not flashy but focused. Let his play speak for itself.'],
+          red_flag: ['Some maturity concerns flagged by our staff.', 'Inconsistent effort level reported by college coaches.'],
+        };
+
+        const personality = profile === 'bust' && Math.random() < 0.4 ? 'red_flag'
+          : profile === 'boom' && Math.random() < 0.4 ? 'high_character'
+          : PERSONALITIES[Math.floor(Math.random() * PERSONALITIES.length)];
+
+        const interview = {
+          personality,
+          notes: NOTES[personality][Math.floor(Math.random() * NOTES[personality].length)],
+          revealedBustBoom: detected,
+          bustBoomResult: detected ? profile as 'bust' | 'boom' | 'normal' : undefined,
+        };
+
+        set({
+          scoutingState: {
+            ...ss,
+            scoutPoints: ss.scoutPoints - 1,
+            interviews: { ...ss.interviews, [playerId]: interview },
+          },
+        });
+        return true;
+      },
+
+      visitProDay: (playerId: string) => {
+        const state = get();
+        const ss = state.scoutingState ?? { scoutPoints: 15, maxScoutPoints: 20, scoutTrips: {}, interviews: {}, proDays: {}, proDayCount: 0 };
+        if (ss.scoutPoints < 1) return false;
+        if (ss.proDayCount >= 5) return false;
+        if (ss.proDays[playerId]) return false;
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return false;
+
+        const ratingKeys = ['speed', 'strength', 'agility', 'awareness', 'throwing', 'catching', 'carrying', 'blocking', 'tackling', 'coverage', 'passRush', 'kicking'] as const;
+        const revealed = ratingKeys[Math.floor(Math.random() * ratingKeys.length)];
+        const LABELS: Record<string, string> = { speed: 'Speed', strength: 'Strength', agility: 'Agility', awareness: 'Awareness', throwing: 'Arm Talent', catching: 'Hands', carrying: 'Ball Skills', blocking: 'Blocking', tackling: 'Tackling', coverage: 'Coverage', passRush: 'Pass Rush', kicking: 'Kicking' };
+        const value = player.ratings[revealed];
+
+        const profile = player.draftProfile ?? 'normal';
+        const impression = value >= 80 ? 'impressive' : value >= 65 ? 'solid' : value >= 50 ? 'unremarkable' : 'concerning';
+
+        set({
+          scoutingState: {
+            ...ss,
+            scoutPoints: ss.scoutPoints - 1,
+            proDayCount: ss.proDayCount + 1,
+            proDays: { ...ss.proDays, [playerId]: { impression, revealedRating: LABELS[revealed], revealedValue: value } },
+          },
+        });
+        return true;
       },
 
       setSuppressTradePopups: (val: boolean) => {
