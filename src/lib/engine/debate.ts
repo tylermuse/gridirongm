@@ -16,8 +16,10 @@ import type { RecapSegmentData, Team, Player, Position, PlayoffMatchup, DraftSel
 /* ─── Types ─── */
 
 export interface DebateExchange {
-  speakerId: 'stats' | 'hottake' | 'fans';
+  speakerId: 'stats' | 'hottake' | 'fans' | 'player';
   text: string;
+  /** Player name for social media posts */
+  playerName?: string;
 }
 
 export interface DebateTopic {

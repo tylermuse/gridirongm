@@ -17,7 +17,8 @@ export function DebateBubble({
   teams?: Team[];
 }) {
   const isFans = exchange.speakerId === 'fans';
-  const commentator = isFans ? null : COMMENTATORS[exchange.speakerId as 'stats' | 'hottake'];
+  const isPlayer = exchange.speakerId === 'player';
+  const commentator = (isFans || isPlayer) ? null : COMMENTATORS[exchange.speakerId as 'stats' | 'hottake'];
   const isHotTake = exchange.speakerId === 'hottake';
 
   // Render text with clickable player names
@@ -63,6 +64,22 @@ export function DebateBubble({
     }
 
     return <>{result}</>;
+  }
+
+  // Player social media post
+  if (isPlayer) {
+    return (
+      <div className="flex justify-center my-2">
+        <div className="max-w-[90%]">
+          <div className="text-[10px] font-bold uppercase tracking-wide mb-0.5 text-center text-violet-600">
+            {exchange.playerName ? `${exchange.playerName} on social media` : 'Player Post'}
+          </div>
+          <div className="rounded-xl px-4 py-2 text-sm leading-relaxed bg-violet-50 border border-violet-200 text-violet-800">
+            {renderText(exchange.text)}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Fan reaction: centered, different style

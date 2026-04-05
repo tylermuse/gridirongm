@@ -141,21 +141,30 @@ export async function POST(request: Request) {
 THE VOICES:
 - **Marcus Cole** (speakerId: "stats") — Analytics guy. Nate Silver meets Tony Romo. Dry wit, historical parallels, uses real stats.
 - **Tony Blaze** (speakerId: "hottake") — Passion guy. Stephen A. Smith meets Pat McAfee. CAPS, bold declarations, vivid metaphors.
-- **Fan Pulse** (speakerId: "fans") — The voice of the fanbase. Raw, emotional, unfiltered fan reactions. These are tweets, bar arguments, radio call-ins. SHORT punchy quotes (1-2 sentences max). Use fan slang and emotion — "Fire the OC!", "We should've kept [player]", "SUPER BOWL BABY LET'S GO!", "Trade up for a QB or I'm done with this franchise.", "This front office is a JOKE." Fans react to the team's situation — angry when losing, excited about draft picks, divided about the QB, demanding trades.
+- **Fan Pulse** (speakerId: "fans") — The voice of the fanbase. Raw, emotional, unfiltered. SHORT punchy quotes (1-2 sentences). Fan slang — "Fire the OC!", "SUPER BOWL BABY!", "This front office is a JOKE."
+- **Player Posts** (speakerId: "player") — Social media posts from actual players on the team. These are Instagram stories, tweets, postgame quotes. Use the player's REAL NAME from the data in the "playerName" field. Match tone to their situation:
+  - Star playing well: confident, hyped ("Best is yet to come. We're just getting started." — with fire emojis)
+  - Underpaid/expiring contract: cryptic or frustrated ("Loyalty is a two-way street..." or "Know your worth.")
+  - Recently traded for: proving doubters wrong ("New city, same me. Watch.")
+  - Team losing: motivational or frustrated ("We gotta be better. Period." or "I didn't come here to lose.")
+  - Young player breaking out: excited and hungry ("Dreams becoming reality. God is good.")
+  Keep posts SHORT (1 sentence + maybe emojis). Use the social media style — not full sentences, more vibes.
 
 KEY RULES:
-- Marcus and Tony RESPOND to each other. Fan reactions punctuate — add 1 fan quote per topic after the 2nd or 3rd exchange.
+- Marcus and Tony RESPOND to each other.
+- Add 1 fan reaction AND 1 player post per topic (not every topic needs both — alternate or mix).
+- At minimum, include 2 fan reactions and 2 player posts across all topics.
 - Use ALL the real stats. Do NOT invent numbers.
-- THE QB IS THE STORY. Lead with QB performance — celebrate or critique based on stats.
+- THE QB IS THE STORY. Lead with QB performance.
 - Each player has a "howAcquired" field. Only mention acquisition for trades/recent FA signings.
-- Vary openings. Each topic: 3-4 exchanges from Marcus/Tony + 1 fan reaction.
+- Vary openings. Each topic: 3-4 exchanges from Marcus/Tony + fan/player reactions.
 - Keep it entertaining but grounded in actual data.
 
 Respond with a JSON array. Each element:
 {
   "headline": "short topic title",
   "icon": "single emoji",
-  "exchanges": [{ "speakerId": "stats" | "hottake" | "fans", "text": "dialogue line" }]
+  "exchanges": [{ "speakerId": "stats" | "hottake" | "fans" | "player", "text": "dialogue line", "playerName": "only for player posts — use the actual player name from the data" }]
 }
 
 Return ONLY the JSON array, no markdown fences, no other text.`;
