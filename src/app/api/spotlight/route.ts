@@ -136,26 +136,26 @@ export async function POST(request: Request) {
     const narrativePrompt = buildNarrativePrompt(narrative as NarrativeMoment);
 
     // System prompt is static → use prompt caching to reduce input token costs ~90%
-    const systemPrompt = `You write the dialogue for a football GM simulation game's "Team Spotlight" — a debate show segment where two commentators break down the user's team.
+    const systemPrompt = `You write the dialogue for a football GM simulation game's "Team Spotlight" — a debate show with commentators AND fan reactions.
 
-THE COMMENTATORS:
-- **Marcus Cole** (speakerId: "stats") — The analytics guy. Think Nate Silver meets Tony Romo. Uses real stats but makes them interesting. Has dry wit. Occasionally surprises with a hot take or gut feeling. References historical parallels. Can be self-deprecating about being a nerd.
-- **Tony Blaze** (speakerId: "hottake") — The passion guy. Think Stephen A. Smith meets Pat McAfee. Uses CAPS for emphasis, makes bold declarations, genuinely funny. But he's NOT stupid — occasionally drops surprisingly sharp analysis between the yelling. Uses vivid metaphors. Gets personally invested.
+THE VOICES:
+- **Marcus Cole** (speakerId: "stats") — Analytics guy. Nate Silver meets Tony Romo. Dry wit, historical parallels, uses real stats.
+- **Tony Blaze** (speakerId: "hottake") — Passion guy. Stephen A. Smith meets Pat McAfee. CAPS, bold declarations, vivid metaphors.
+- **Fan Pulse** (speakerId: "fans") — The voice of the fanbase. Raw, emotional, unfiltered fan reactions. These are tweets, bar arguments, radio call-ins. SHORT punchy quotes (1-2 sentences max). Use fan slang and emotion — "Fire the OC!", "We should've kept [player]", "SUPER BOWL BABY LET'S GO!", "Trade up for a QB or I'm done with this franchise.", "This front office is a JOKE." Fans react to the team's situation — angry when losing, excited about draft picks, divided about the QB, demanding trades.
 
 KEY RULES:
-- They must RESPOND to each other, not deliver parallel monologues. Tony interrupts, Marcus corrects, they riff off each other's points.
-- Use ALL the real stats and data provided below. Do NOT invent any numbers.
-- THE QB IS THE STORY. Always lead with or prominently feature the starting QB's performance. If the QB is playing well (high pass yards, TDs, low INTs), celebrate it. If the QB is struggling (high INTs, low TDs), critique it. The QB drives everything — the team's ceiling is their QB's ceiling. Reference their specific passing stats (yards, TDs, INTs) in the dialogue.
-- Each player has a "howAcquired" field. Only mention acquisition if it's a trade or recent FA signing. Do NOT say "they drafted him" unless howAcquired says "drafted by this team". Keep acquisition references sparse.
-- Vary your openings — never start two topics the same way.
-- Each topic should have 3-4 exchanges.
-- Keep it entertaining but grounded in the actual data.
+- Marcus and Tony RESPOND to each other. Fan reactions punctuate — add 1 fan quote per topic after the 2nd or 3rd exchange.
+- Use ALL the real stats. Do NOT invent numbers.
+- THE QB IS THE STORY. Lead with QB performance — celebrate or critique based on stats.
+- Each player has a "howAcquired" field. Only mention acquisition for trades/recent FA signings.
+- Vary openings. Each topic: 3-4 exchanges from Marcus/Tony + 1 fan reaction.
+- Keep it entertaining but grounded in actual data.
 
 Respond with a JSON array. Each element:
 {
   "headline": "short topic title",
   "icon": "single emoji",
-  "exchanges": [{ "speakerId": "stats" | "hottake", "text": "dialogue line" }]
+  "exchanges": [{ "speakerId": "stats" | "hottake" | "fans", "text": "dialogue line" }]
 }
 
 Return ONLY the JSON array, no markdown fences, no other text.`;
