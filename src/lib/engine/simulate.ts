@@ -145,6 +145,7 @@ function simulatePlay(
   down: number,
   yardsToGo: number,
   fieldPosition: number, // yards from own end zone (0-100)
+  rivalryIntensity: number = 0,
 ): PlayResult {
   const qbs = offense.filter(p => p.position === 'QB' && (!p.injury || p.injury.weeksLeft === 0));
   const rbs = offense.filter(p => p.position === 'RB' && (!p.injury || p.injury.weeksLeft === 0));
@@ -334,8 +335,8 @@ function simulatePlay(
       yards = -(1 + Math.floor(Math.random() * 4));
     }
 
-    // Fumble check
-    const fumbleChance = clamp(0.015 - (rusher.ratings.carrying / 100) * 0.008, 0.003, 0.02);
+    // Fumble check — rivalry games are more physical
+    const fumbleChance = clamp(0.015 - (rusher.ratings.carrying / 100) * 0.008 + rivalryIntensity / 5000, 0.003, 0.025);
     if (Math.random() < fumbleChance) {
       const tackler = allDefenders.length > 0
         ? weightedPick(allDefenders, allDefenders.map(d => {
@@ -392,17 +393,16 @@ function simulateDrive(
   offense: Player[],
   defense: Player[],
   mcafeeMode: boolean = false,
+  rivalryIntensity: number = 0,
 ): DriveResult {
   const plays: PlayResult[] = [];
-  let fieldPosition = 25 + Math.floor(Math.random() * 15); // start at own 25-40 (touchbacks + returns)
+  let fieldPosition = 25 + Math.floor(Math.random() * 15);
   let down = 1;
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
 
-  // Max 10 plays per drive (NFL avg ~6, long drives 9-12). Drives also end on
-  // 4th-down stops, turnovers, or scores before hitting the cap.
   for (let playNum = 0; playNum < 10; playNum++) {
-    const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition);
+    const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition, rivalryIntensity);
     plays.push(play);
 
     if (play.touchdown) {
@@ -616,7 +616,7 @@ export function simulateGame(
     const quarter = Math.min(4, Math.floor(i / (possessions / 4)) + 1);
 
     // Home offense drives — scoring fatigue: teams with big leads run the clock
-    const homeDrive = simulateDrive(effectiveHomeRoster, effectiveAwayRoster, mcafeeMode);
+    const homeDrive = simulateDrive(effectiveHomeRoster, effectiveAwayRoster, mcafeeMode, rivalryIntensity);
     const homeStall = homeScore >= 42 ? 0.7 : homeScore >= 35 ? 0.35 : homeScore >= 28 && (homeScore - awayScore) >= 21 ? 0.2 : 0;
     const homePoints = homeStall > 0 && Math.random() < homeStall ? 0 : homeDrive.points;
     homeScore += homePoints;
@@ -626,7 +626,7 @@ export function simulateGame(
     runHome = afterHome.home;
 
     // Away offense drives — same scoring fatigue
-    const awayDrive = simulateDrive(effectiveAwayRoster, effectiveHomeRoster, mcafeeMode);
+    const awayDrive = simulateDrive(effectiveAwayRoster, effectiveHomeRoster, mcafeeMode, rivalryIntensity);
     const awayStall = awayScore >= 42 ? 0.7 : awayScore >= 35 ? 0.35 : awayScore >= 28 && (awayScore - homeScore) >= 21 ? 0.2 : 0;
     const awayPoints = awayStall > 0 && Math.random() < awayStall ? 0 : awayDrive.points;
     awayScore += awayPoints;

@@ -1402,6 +1402,13 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
 
     if (!targetPlayer) continue;
 
+    // Rivalry restriction: AI won't trade stars (75+) to rivals with intensity >= 50
+    const rivalry = (state.rivalries ?? []).find(r =>
+      r.intensity >= 50 &&
+      ((r.team1Id === aiTeam.id && r.team2Id === state.userTeamId) ||
+       (r.team2Id === aiTeam.id && r.team1Id === state.userTeamId)));
+    if (rivalry && targetPlayer.ratings.overall >= 75) continue;
+
     const targetValue = playerTradeValue(targetPlayer);
 
     // AI offers a player of similar value from their roster (excluding K/P)
