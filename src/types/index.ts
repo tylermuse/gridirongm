@@ -302,6 +302,23 @@ export interface Coach {
   careerLosses: number;
 }
 
+export interface OwnerObjective {
+  id: string;
+  description: string;
+  type: 'wins' | 'playoffs' | 'cap' | 'development' | 'championship';
+  target: number | string;
+  season: number;
+  status: 'active' | 'completed' | 'failed';
+}
+
+export interface ApprovalState {
+  fanApproval: number;
+  ownerApproval: number;
+  objectives: OwnerObjective[];
+  tenureSeasons: number;
+  warningIssued: boolean;
+}
+
 export interface Team {
   id: string;
   city: string;
@@ -335,6 +352,8 @@ export interface Team {
     tvDeal: number;
     total: number;
   };
+  /** Fan and owner approval + seasonal objectives */
+  approval?: ApprovalState;
 }
 
 /**

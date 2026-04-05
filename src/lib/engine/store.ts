@@ -23,6 +23,8 @@ import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
 import { generateCoachingStaff, generateCoach, coachingBonus } from './coaching';
 import { computeLeagueQBTiers, getQBTierModifier } from './qbTierPyramid';
+import { generateSeasonObjectives, evaluateObjectives } from './objectives';
+import { defaultApproval, updateApprovalAfterGame, updateApprovalEndOfSeason, updateApprovalForMove } from './approval';
 import { teamSpecialTeamsRating } from './specialTeams';
 
 const SAVE_VERSION = 19;
@@ -2098,13 +2100,20 @@ export const useGameStore = create<GameStore>()(
             return expiringPlayers.map(p => computeResigningEntry(p, userTeam));
           })();
 
+          // Initialize approval for user team
+          const userApproval = defaultApproval();
+          userApproval.objectives = generateSeasonObjectives(userTeam, allImportedPlayers, imported.season);
+          const teamsWithApproval = startTeams.map(t =>
+            t.id === userTeam.id ? { ...t, approval: userApproval } : t,
+          );
+
           set({
             initialized: true,
             season: imported.season,
             week: 1,
             phase: isRegularStart ? 'regular' : 'resigning',
             userTeamId: userTeam.id,
-            teams: startTeams,
+            teams: teamsWithApproval,
             players: allImportedPlayers,
             schedule,
             draftOrder: [],
@@ -2222,13 +2231,20 @@ export const useGameStore = create<GameStore>()(
         );
         const genResigningEntries = genExpiring.map(p => computeResigningEntry(p, userTeam));
 
+        // Initialize approval
+        const genApproval = defaultApproval();
+        genApproval.objectives = generateSeasonObjectives(userTeam, allPlayers, 2026);
+        const genTeamsWithApproval = teams.map(t =>
+          t.id === userTeam.id ? { ...t, approval: genApproval } : t,
+        );
+
         set({
           initialized: true,
           season: 2026,
           week: 1,
           phase: 'resigning',
           userTeamId: userTeam.id,
-          teams,
+          teams: genTeamsWithApproval,
           players: allPlayers,
           schedule,
           draftOrder: [],
@@ -2274,7 +2290,6 @@ export const useGameStore = create<GameStore>()(
         const weeklyRecaps = [...state.weeklyRecaps, recap];
 
         if (result.isSeasonOver) {
-          // Compute playoff bracket in the same set() call
           const teams = result.patch.teams as Team[];
           const seeds = computePlayoffSeeds(teams);
           const bracket = buildBracket(seeds, teams);
@@ -2282,6 +2297,27 @@ export const useGameStore = create<GameStore>()(
         } else {
           set({ ...result.patch, weeklyRecaps });
         }
+
+        // Update approval for user team based on this week's game
+        {
+          const st = get();
+          const userTeam = st.teams.find(t => t.id === st.userTeamId);
+          if (userTeam) {
+            const userGame = weekGames.find(g => g.homeTeamId === st.userTeamId || g.awayTeamId === st.userTeamId);
+            if (userGame) {
+              const won = (userGame.homeTeamId === st.userTeamId && userGame.homeScore > userGame.awayScore) ||
+                          (userGame.awayTeamId === st.userTeamId && userGame.awayScore > userGame.homeScore);
+              const margin = Math.abs(userGame.homeScore - userGame.awayScore);
+              const oppId = userGame.homeTeamId === st.userTeamId ? userGame.awayTeamId : userGame.homeTeamId;
+              const isRivalry = (st.rivalries ?? []).some(r => r.intensity >= 30 &&
+                ((r.team1Id === st.userTeamId && r.team2Id === oppId) || (r.team2Id === st.userTeamId && r.team1Id === oppId)));
+              const approval = userTeam.approval ?? defaultApproval();
+              const updated = updateApprovalAfterGame(approval, won, margin, isRivalry);
+              set({ teams: st.teams.map(t => t.id === st.userTeamId ? { ...t, approval: updated } : t) });
+            }
+          }
+        }
+
         // Check achievements after state update
         const newAchievements = checkAchievements(get());
         if (newAchievements.length > 0) {
@@ -2868,13 +2904,48 @@ export const useGameStore = create<GameStore>()(
           updatedSeasonHistory = [...state.seasonHistory, seasonSummary];
         }
 
+        // Process end-of-season approval for user team
+        const approvalNews: import('@/types').NewsItem[] = [];
+        // Determine user's playoff result for approval
+        const userPR: string = (() => {
+          if (!state.playoffBracket) return 'missed';
+          const userInPlayoffs = state.playoffBracket.some(m =>
+            m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId);
+          if (!userInPlayoffs) return 'missed';
+          const sb = state.playoffBracket.find(m => m.id === 'championship');
+          if (sb?.winnerId === state.userTeamId) return 'champion';
+          if (sb?.homeTeamId === state.userTeamId || sb?.awayTeamId === state.userTeamId) return 'runnerup';
+          const confGames = state.playoffBracket.filter(m => m.round === 3);
+          if (confGames.some(m => m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId)) return 'conference';
+          const divGames = state.playoffBracket.filter(m => m.round === 2);
+          if (divGames.some(m => m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId)) return 'divisional';
+          return 'wildcard';
+        })();
+        const finalTeams = recalcTeams.map(t => {
+          if (t.id !== state.userTeamId) return t;
+          const approval = t.approval ?? defaultApproval();
+          const evaluated = evaluateObjectives(approval.objectives, t, userPR, playersAfterRetirement, state.season);
+          const updated = updateApprovalEndOfSeason({ ...approval, objectives: evaluated }, userPR, evaluated);
+          // Generate new objectives for next season
+          updated.objectives = generateSeasonObjectives(t, playersAfterRetirement, state.season + 1, userPR);
+          // Warning news
+          if (updated.warningIssued && !approval.warningIssued) {
+            approvalNews.push(makeNews({
+              season: state.season, week: 99, type: 'system',
+              headline: `Sources say ${t.city} ownership is losing patience with GM. One more bad season could mean changes.`,
+              isUserTeam: true,
+            }));
+          }
+          return { ...t, approval: updated };
+        });
+
         set({
           phase: 'resigning',
           resigningPlayers,
           holdoutDemands,
-          teams: recalcTeams,
+          teams: finalTeams,
           players: playersAfterRetirement,
-          newsItems: [...state.newsItems, ...retirementNews, ...holdoutNews],
+          newsItems: [...state.newsItems, ...retirementNews, ...holdoutNews, ...approvalNews],
           seasonHistory: updatedSeasonHistory,
         });
       },

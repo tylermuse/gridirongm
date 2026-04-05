@@ -627,6 +627,44 @@ function Dashboard() {
           </div>
         </div>
 
+        {/* Approval & Objectives */}
+        {userTeam.approval && (
+          <Card>
+            <div className="flex items-center gap-6 flex-wrap">
+              {/* Approval gauges */}
+              <div className="flex items-center gap-4">
+                <div className="text-center">
+                  <div className={`text-lg font-black ${userTeam.approval.fanApproval >= 65 ? 'text-green-600' : userTeam.approval.fanApproval >= 35 ? 'text-amber-600' : 'text-red-600'}`}>
+                    {userTeam.approval.fanApproval}%
+                  </div>
+                  <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Fan Pulse</div>
+                </div>
+                <div className="text-center">
+                  <div className={`text-lg font-black ${userTeam.approval.ownerApproval >= 65 ? 'text-green-600' : userTeam.approval.ownerApproval >= 35 ? 'text-amber-600' : 'text-red-600'}`}>
+                    {userTeam.approval.ownerApproval}%
+                  </div>
+                  <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Owner</div>
+                </div>
+                {userTeam.approval.warningIssued && (
+                  <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded">Hot Seat</span>
+                )}
+              </div>
+              {/* Objectives */}
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider mb-1">Owner Objectives</div>
+                <div className="flex flex-col gap-0.5">
+                  {userTeam.approval.objectives.filter(o => o.season === season).map(obj => (
+                    <div key={obj.id} className="flex items-center gap-2 text-xs">
+                      <span>{obj.status === 'completed' ? '✅' : obj.status === 'failed' ? '❌' : '⏳'}</span>
+                      <span className={obj.status === 'failed' ? 'text-red-600 line-through' : obj.status === 'completed' ? 'text-green-600' : ''}>{obj.description}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Active Mode Indicators */}
         {(leagueSettings?.bsMode || leagueSettings?.mcafeeMode) && (
           <div className="flex items-center gap-2 flex-wrap">
