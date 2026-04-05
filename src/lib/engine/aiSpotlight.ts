@@ -175,12 +175,28 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
     .filter(p => p.position === 'QB')
     .sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
 
+  const gamesPlayed = team.record.wins + team.record.losses;
+  const winPct = gamesPlayed > 0 ? Math.round((team.record.wins / gamesPlayed) * 1000) / 10 : 0;
+  const ppg = gamesPlayed > 0 ? Math.round(team.record.pointsFor / gamesPlayed * 10) / 10 : 0;
+  const oppPpg = gamesPlayed > 0 ? Math.round(team.record.pointsAgainst / gamesPlayed * 10) / 10 : 0;
+  const pointDiff = team.record.pointsFor - team.record.pointsAgainst;
+
   const teamData: Record<string, unknown> = {
-    team: { name: team.name, city: team.city, record: `${team.record.wins}-${team.record.losses}`, conference: team.conference, streak: team.record.streak, pointsFor: team.record.pointsFor, pointsAgainst: team.record.pointsAgainst },
-    rankings: { ppgRank, defRank, totalTeams: allTeams.length },
+    team: {
+      name: team.name, city: team.city,
+      wins: team.record.wins, losses: team.record.losses, ties: team.record.ties ?? 0,
+      record: `${team.record.wins}-${team.record.losses}${team.record.ties ? `-${team.record.ties}` : ''}`,
+      winPct: `${winPct}%`,
+      conference: team.conference,
+      streak: team.record.streak,
+      pointsFor: team.record.pointsFor, pointsAgainst: team.record.pointsAgainst,
+      pointDiff: pointDiff > 0 ? `+${pointDiff}` : `${pointDiff}`,
+      ppg, oppPpg,
+    },
+    rankings: { ppgRank: `${ppgRank} of ${allTeams.length}`, defRank: `${defRank} of ${allTeams.length}` },
     season, week, phase,
-    capSpace: Math.round((team.salaryCap - team.totalPayroll) * 10) / 10,
-    capPct: Math.round(team.totalPayroll / team.salaryCap * 100),
+    capSpace: `$${Math.round((team.salaryCap - team.totalPayroll) * 10) / 10}M`,
+    capPct: `${Math.round(team.totalPayroll / team.salaryCap * 100)}%`,
     startingQB: startingQB ? mapPlayer(startingQB) : null,
     topPlayers: topPlayers.map(mapPlayer),
     injured: injured.map(p => ({ name: `${p.firstName} ${p.lastName}`, pos: p.position, ovr: p.ratings.overall, injury: p.injury?.type, weeksLeft: p.injury?.weeksLeft })),
