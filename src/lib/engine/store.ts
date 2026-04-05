@@ -2728,9 +2728,18 @@ export const useGameStore = create<GameStore>()(
             })
           : state.teams;
 
-        const expiringPlayers = playersAfterRetirement.filter(
-          p => p.teamId === state.userTeamId && p.contract.yearsLeft === 1 && !p.retired,
-        );
+        // Include players whose contract expires OR whose next year is all void years
+        // (void year contracts need to be re-signed before they auto-void)
+        const expiringPlayers = playersAfterRetirement.filter(p => {
+          if (p.teamId !== state.userTeamId || p.retired) return false;
+          if (p.contract.yearsLeft === 1) return true;
+          // Check if only 1 real year left (rest are void)
+          if (p.contract.contractYears && p.contract.contractYears.length > 1) {
+            const realYears = p.contract.contractYears.filter(y => !y.isVoidYear).length;
+            if (realYears === 1) return true;
+          }
+          return false;
+        });
 
         const currentUserTeam = teamsAfterRetirement.find(t => t.id === state.userTeamId) ?? userTeam;
         const resigningPlayers = expiringPlayers.map(p => computeResigningEntry(p, currentUserTeam));
