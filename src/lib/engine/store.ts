@@ -3867,13 +3867,25 @@ export const useGameStore = create<GameStore>()(
           for (const aiTeam of aiTeams) {
             const expiringFromAI = prePlayers.filter(
               p => p.teamId === aiTeam.id && p.contract.yearsLeft === 1 && !p.retired,
-            ).sort((a, b) => b.ratings.overall - a.ratings.overall); // prioritize best players
+            ).sort((a, b) => b.ratings.overall - a.ratings.overall);
             let aiTeamPayroll = aiTeam.totalPayroll;
+            // Track position counts to enforce roster limits during re-signing
+            const aiPosCount: Record<string, number> = {};
+            for (const p of prePlayers.filter(pp => pp.teamId === aiTeam.id && !pp.retired && pp.contract.yearsLeft > 1)) {
+              aiPosCount[p.position] = (aiPosCount[p.position] || 0) + 1;
+            }
             for (const player of expiringFromAI) {
+              // Skip if already at position max
+              const currentCount = aiPosCount[player.position] || 0;
+              if (currentCount >= ROSTER_LIMITS[player.position].max) {
+                prePlayers = prePlayers.map(p =>
+                  p.id === player.id ? { ...p, contract: { ...p.contract, yearsLeft: 0 } } : p,
+                );
+                continue;
+              }
               const ci = capInflationFactor(aiTeam.salaryCap);
               const marketSalary = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci);
               const capSpace = aiTeam.salaryCap - aiTeamPayroll;
-              // Re-sign probability based on OVR: elite (85+) = 98%, good (75+) = 90%, avg (65+) = 75%, below = 55%
               const resignProb = player.ratings.overall >= 85 ? 0.98
                 : player.ratings.overall >= 75 ? 0.90
                 : player.ratings.overall >= 65 ? 0.75
@@ -3888,6 +3900,7 @@ export const useGameStore = create<GameStore>()(
                   p.id === player.id ? { ...p, contract: { salary, yearsLeft: newYears, guaranteed: generateGuaranteed(salary, newYears), totalYears: newYears, offseasonSigned: true } } : p,
                 );
                 aiTeamPayroll += salaryDiff;
+                aiPosCount[player.position] = (aiPosCount[player.position] || 0) + 1;
                 preTeams = preTeams.map(t =>
                   t.id === aiTeam.id ? { ...t, totalPayroll: Math.max(0, aiTeamPayroll) } : t,
                 );
