@@ -380,15 +380,26 @@ function TeamSpotlightSection({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiCommentary, currentNarrative, team, season, week, ctx?.phase]);
 
-  // When AI commentary is on: ONLY show AI content. No templates.
+  // When AI commentary is on: show AI content or loading state. No templates.
   // When AI commentary is off: always show templates.
-  if (aiCommentary) {
-    // Hide the entire section until AI content is ready
-    if (!aiState.topics || aiState.topics.length === 0) return null;
-  }
-  const topics = aiCommentary ? aiState.topics! : templateTopics;
+  const aiLoading = aiCommentary && currentNarrative !== 'weekly' && (!aiState.topics || aiState.topics.length === 0);
+  if (aiCommentary && !aiLoading && (!aiState.topics || aiState.topics.length === 0)) return null;
+  const topics = aiCommentary ? (aiState.topics ?? []) : templateTopics;
 
-  if (topics.length === 0) return null;
+  if (topics.length === 0 && !aiLoading) return null;
+
+  if (aiLoading) {
+    return (
+      <div className="mt-6">
+        <Card>
+          <div className="px-4 py-8 text-center">
+            <div className="text-2xl mb-2 animate-pulse">🎬</div>
+            <p className="text-sm text-[var(--text-sec)]">Generating Team Spotlight...</p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-6">
