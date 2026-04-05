@@ -152,6 +152,8 @@ function descRun(rb: Player | null, yards: number, fieldPosLabel_: string): stri
       `${name} stuffed at the line for no gain.`,
       `${name} stopped for a loss of ${abs} yard${abs !== 1 ? 's' : ''}.`,
       `Stack at the line — ${name} gains nothing.`,
+      `Nowhere to go. ${name} gets swallowed up behind the line.`,
+      `The defense blows this one up. ${name} loses ${abs}.`,
     ]);
   }
   if (yards >= 15) {
@@ -159,6 +161,8 @@ function descRun(rb: Player | null, yards: number, fieldPosLabel_: string): stri
       `${name} breaks free for a big gain of ${yards} yards!`,
       `${name} takes it ${yards} yards, weaving through traffic!`,
       `Explosive run — ${name} rumbles ${yards} yards!`,
+      `Patience from ${name}... finds a crease... bursts through for ${yards} yards!`,
+      `Spin move! ${name} makes a defender miss and rips off ${yards}!`,
     ]);
   }
   if (yards >= 8) {
@@ -189,6 +193,8 @@ function descPassComplete(
       `${qbName} airs it out — ${recName} hauls in a massive ${yards}-yard strike!${star}`,
       `Deep ball! ${recName} catches a ${yards}-yarder from ${qbName}!${star}`,
       `${qbName} finds ${recName} deep for ${yards} yards!${star}`,
+      `Beautiful throw by ${qbName} — drops it in the bucket to ${recName} for ${yards} yards!${star}`,
+      `${recName} gets behind the secondary! ${qbName} delivers a ${yards}-yard bomb!${star}`,
     ]);
   }
   if (yards >= 20) {
@@ -196,6 +202,8 @@ function descPassComplete(
       `${qbName} hits ${recName} for ${yards} yards!${star}`,
       `${recName} with the catch, picks up ${yards} yards!${star}`,
       `Big play — ${recName} hauls in a ${yards}-yard pass from ${qbName}.${star}`,
+      `Play-action works perfectly. ${qbName} finds ${recName} wide open for ${yards}.${star}`,
+      `${qbName} with the touch pass — ${recName} secures it for ${yards}.${star}`,
     ]);
   }
   if (yards >= 10) {
@@ -203,6 +211,8 @@ function descPassComplete(
       `${qbName} connects with ${recName} for ${yards} yards.`,
       `Solid gain — ${recName} catches it for ${yards}.`,
       `${recName} grabs the pass and picks up ${yards} yards.`,
+      `Timing route — ${qbName} to ${recName} on the out cut. Clean ${yards}-yard pickup.`,
+      `${qbName} fires over the middle to ${recName}. ${yards} yards.`,
     ]);
   }
   return pick([
@@ -230,6 +240,9 @@ function descSack(qb: Player | null, dl: Player | null, yards: number): string {
     `💥 ${dlName} gets home — ${qbName} sacked for ${Math.abs(yards)} yards!`,
     `💥 Sack! ${dlName} brings down ${qbName} for a ${Math.abs(yards)}-yard loss!`,
     `💥 ${qbName} has no time — taken down by ${dlName} for a loss of ${Math.abs(yards)}.`,
+    `💥 ${dlName} beats the tackle off the edge and buries ${qbName}!`,
+    `💥 Interior pressure! ${dlName} collapses the pocket — ${Math.abs(yards)}-yard loss.`,
+    `💥 ${qbName} holds it too long — ${dlName} cleans up for the sack!`,
   ]);
 }
 
@@ -240,6 +253,9 @@ function descInterception(qb: Player | null, cb: Player | null): string {
     `🚨 Intercepted! ${cbName} picks off ${qbName}!`,
     `🚨 ${qbName} throws into coverage — ${cbName} makes the pick!`,
     `🚨 Turnover! ${cbName} intercepts the pass from ${qbName}!`,
+    `🚨 ${cbName} reads ${qbName}'s eyes the whole way — easy interception!`,
+    `🚨 ${qbName} forces it into double coverage — ${cbName} makes him pay!`,
+    `🚨 Tipped at the line! ${cbName} comes down with the pick!`,
   ]);
 }
 
@@ -292,12 +308,16 @@ function descTouchdown(
       `🏈 TOUCHDOWN! ${scorerName} punches it in from ${yards} yard${yards !== 1 ? 's' : ''} out!`,
       `🏈 TOUCHDOWN! ${scorerName} crosses the goal line!`,
       `🏈 ${scorerName} scores on the ${yards}-yard rush! TOUCHDOWN!`,
+      `🏈 ${scorerName} stretches across the goal line! ${yards}-yard TD!`,
+      `🏈 Dive to the pylon by ${scorerName}! TOUCHDOWN!`,
     ]);
   }
   return pick([
     `🏈 TOUCHDOWN! ${qbName} hits ${scorerName} for the ${yards}-yard score!`,
     `🏈 ${scorerName} hauls in the ${yards}-yard pass — TOUCHDOWN!`,
     `🏈 ${qbName} to ${scorerName} — ${yards}-yard TOUCHDOWN! What a throw!`,
+    `🏈 ${qbName} rolls right, fires — ${scorerName} makes the grab in the end zone! TOUCHDOWN!`,
+    `🏈 END ZONE! ${scorerName} gets in! ${yards}-yard score from ${qbName}!`,
   ]);
 }
 
@@ -332,6 +352,7 @@ function descPenalty(penaltyName: string, yards: number, side: string): string {
 interface GameState {
   quarter: number;
   timeSecs: number;       // seconds left in quarter (starts at 900)
+  momentum: number;       // -100 to +100 (negative=away, positive=home)
   possession: 'home' | 'away';
   fieldPos: number;       // yards from own end zone
   down: number;
@@ -408,6 +429,7 @@ export function simulatePlayByPlay(
   const state: GameState = {
     quarter: 1,
     timeSecs: 900,
+    momentum: 0,
     possession: Math.random() < 0.5 ? 'home' : 'away',
     fieldPos: 25,
     down: 1,
@@ -504,10 +526,21 @@ export function simulatePlayByPlay(
     switchPossession(25);
   }
 
+  function shiftMomentum(amount: number) {
+    // Positive = toward home, negative = toward away
+    const dir = state.possession === 'home' ? 1 : -1;
+    state.momentum = Math.max(-100, Math.min(100, state.momentum + amount * dir));
+  }
+
+  function decayMomentum() {
+    state.momentum *= 0.95; // regress 5% toward zero each play
+  }
+
   function doTouchdown(isRush: boolean, scorer: Player | null, yards: number) {
     const ok = offKey();
     const desc = descTouchdown(isRush, scorer, ok.qb, yards);
     addEvent('touchdown', desc, yards, true);
+    shiftMomentum(25); // big momentum swing
     if (state.possession === 'home') {
       state.homeScore += 6;
       homeBucket.passTDs += isRush ? 0 : 1;
@@ -673,10 +706,17 @@ export function simulatePlayByPlay(
     // Returns false if game is over
     if (events.length >= 400) return false;
 
+    decayMomentum();
+
     // Two-minute warning check
     checkTwoMinWarning();
 
     if (state.timeSecs <= 0) return false;
+
+    // Momentum effects on gameplay
+    const possessionMomentum = state.possession === 'home' ? state.momentum : -state.momentum;
+    const momentumCompBonus = possessionMomentum > 50 ? 0.02 : possessionMomentum > 75 ? 0.04 : 0;
+    const momentumRushBonus = possessionMomentum > 50 ? 0.5 : possessionMomentum > 75 ? 1.0 : 0;
 
     const ok = offKey();
     const dk = defKey();
@@ -851,6 +891,7 @@ export function simulatePlayByPlay(
       if (Math.random() < fumbleChance) {
         const desc2 = descFumble(ok.rb, dk.lb1);
         addEvent('fumble', desc2, 0, false);
+        shiftMomentum(-20); // turnover momentum
         const newPos = clamp(100 - state.fieldPos, 15, 75);
         switchPossession(newPos);
         return true;
@@ -889,6 +930,7 @@ export function simulatePlayByPlay(
 
         const desc = descSack(ok.qb, dk.dl1, sackYards);
         addEvent('sack', desc, sackYards, false);
+        shiftMomentum(-8); // momentum shifts to defense
 
         state.fieldPos = clamp(state.fieldPos + sackYards, 1, 99);
         state.yardsToGo -= sackYards;
@@ -902,6 +944,7 @@ export function simulatePlayByPlay(
 
         const desc = descInterception(ok.qb, dk.cb1);
         addEvent('interception', desc, 0, false);
+        shiftMomentum(-20); // big momentum shift to defense
 
         const returnPos = clamp(100 - state.fieldPos + Math.floor(Math.random() * 20) - 10, 10, 60);
         switchPossession(returnPos);
@@ -956,6 +999,7 @@ export function simulatePlayByPlay(
 
         const desc = descPassComplete(ok.qb, receiver, yardsGained, isLong);
         addEvent('pass_complete', desc, yardsGained, false);
+        if (isLong) shiftMomentum(12); // big play momentum
 
         state.fieldPos = clamp(state.fieldPos + yardsGained, 1, 99);
         state.yardsToGo -= yardsGained;
