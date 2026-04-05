@@ -3,6 +3,7 @@
 import { COMMENTATORS } from '@/lib/engine/debate';
 import type { DebateExchange } from '@/lib/engine/debate';
 import type { Player, Team } from '@/types';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 
 export function DebateBubble({
   exchange,
@@ -69,16 +70,24 @@ export function DebateBubble({
   // Player social media post — styled like a tweet
   if (isPlayer) {
     const name = exchange.playerName ?? 'Player';
-    const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
     const handle = '@' + name.replace(/[^a-zA-Z]/g, '').slice(0, 15);
+    // Find matching player for avatar
+    const matchedPlayer = players.find(p => `${p.firstName} ${p.lastName}` === name || p.lastName === name);
+    const teamColor = matchedPlayer?.teamId
+      ? '#555' // default, could look up team color if teams prop available
+      : '#555';
     return (
       <div className="flex justify-center my-3">
         <div className="w-full max-w-[400px] bg-[#15202b] rounded-2xl px-4 pt-3 pb-3 text-white shadow-lg">
           {/* Header: avatar + name + handle */}
           <div className="flex items-center gap-2.5 mb-2">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
-              {initials}
-            </div>
+            {matchedPlayer ? (
+              <PlayerAvatar player={matchedPlayer} size="sm" teamColor={teamColor} />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                {name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+              </div>
+            )}
             <div className="min-w-0">
               <div className="flex items-center gap-1">
                 <span className="text-sm font-bold text-white truncate">{name}</span>
