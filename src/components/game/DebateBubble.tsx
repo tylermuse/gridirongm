@@ -66,16 +66,36 @@ export function DebateBubble({
     return <>{result}</>;
   }
 
-  // Player social media post
+  // Player social media post — styled like a tweet
   if (isPlayer) {
+    const name = exchange.playerName ?? 'Player';
+    const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    const handle = '@' + name.replace(/[^a-zA-Z]/g, '').slice(0, 15);
     return (
-      <div className="flex justify-center my-2">
-        <div className="max-w-[90%]">
-          <div className="text-[10px] font-bold uppercase tracking-wide mb-0.5 text-center text-violet-600">
-            {exchange.playerName ? `${exchange.playerName} on social media` : 'Player Post'}
+      <div className="flex justify-center my-3">
+        <div className="w-full max-w-[400px] bg-[#15202b] rounded-2xl px-4 pt-3 pb-3 text-white shadow-lg">
+          {/* Header: avatar + name + handle */}
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1">
+                <span className="text-sm font-bold text-white truncate">{name}</span>
+                <svg className="w-4 h-4 text-blue-400 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.998-3.818-3.998-.47 0-.92.084-1.336.25C14.818 2.415 13.51 1.5 12 1.5s-2.816.917-3.437 2.25c-.415-.165-.866-.25-1.336-.25-2.11 0-3.818 1.79-3.818 4 0 .494.083.964.237 1.4-1.272.65-2.147 2.018-2.147 3.6 0 1.495.782 2.798 1.942 3.486-.02.17-.032.34-.032.514 0 2.21 1.708 4 3.818 4 .47 0 .92-.086 1.335-.25.62 1.334 1.926 2.25 3.437 2.25 1.512 0 2.818-.916 3.437-2.25.415.163.865.248 1.336.248 2.11 0 3.818-1.79 3.818-4 0-.174-.012-.344-.033-.513 1.158-.687 1.943-1.99 1.943-3.484zm-6.616-3.334l-4.334 6.5c-.145.217-.382.334-.625.334-.143 0-.288-.04-.416-.126l-.115-.094-2.415-2.415c-.293-.293-.293-.768 0-1.06s.768-.294 1.06 0l1.77 1.767 3.825-5.74c.23-.345.696-.436 1.04-.207.346.23.44.696.21 1.04z"/></svg>
+              </div>
+              <div className="text-xs text-gray-500">{handle}</div>
+            </div>
           </div>
-          <div className="rounded-xl px-4 py-2 text-sm leading-relaxed bg-violet-50 border border-violet-200 text-violet-800">
+          {/* Post content */}
+          <div className="text-[15px] leading-snug text-white/95 mb-2">
             {renderText(exchange.text)}
+          </div>
+          {/* Footer: fake engagement */}
+          <div className="flex items-center gap-5 text-xs text-gray-500 pt-1.5 border-t border-gray-700/50">
+            <span>💬 {Math.floor(Math.random() * 500) + 50}</span>
+            <span>🔁 {Math.floor(Math.random() * 2000) + 200}</span>
+            <span>❤️ {(Math.floor(Math.random() * 30) + 5)}K</span>
           </div>
         </div>
       </div>
