@@ -555,16 +555,36 @@ export function simulatePlayByPlay(
       awayBucket.rushTDs += isRush ? 1 : 0;
     }
 
-    // Extra point
+    // Extra point or 2-point conversion decision
     const k = ok.k;
-    const epGood = Math.random() < 0.95;
-    offBucket().extraPointAttempts += 1;
-    if (epGood) {
-      offBucket().extraPointsMade += 1;
-      if (state.possession === 'home') state.homeScore += 1;
-      else state.awayScore += 1;
+    const scoreDiffAfterTD = state.possession === 'home'
+      ? state.homeScore - state.awayScore
+      : state.awayScore - state.homeScore;
+
+    // Go for 2 when: down by 2 (ties it), down by 5 (makes it 3), down by 8+ late, or up by 1 late (go up 3)
+    const goFor2 = scoreDiffAfterTD === -2 || scoreDiffAfterTD === -5 ||
+      (scoreDiffAfterTD <= -8 && state.quarter >= 4) ||
+      (scoreDiffAfterTD === 1 && state.quarter >= 4 && state.timeSecs <= 300);
+
+    if (goFor2) {
+      const twoPointSuccess = Math.random() < 0.48; // NFL average ~48%
+      if (twoPointSuccess) {
+        if (state.possession === 'home') state.homeScore += 2;
+        else state.awayScore += 2;
+        addEvent('extra_point', `Two-point conversion is GOOD! ${state.possession === 'home' ? homeTeam.abbreviation : awayTeam.abbreviation} goes for two and gets it!`, 0, false);
+      } else {
+        addEvent('extra_point', `Two-point conversion FAILS. ${state.possession === 'home' ? homeTeam.abbreviation : awayTeam.abbreviation} comes up short.`, 0, false);
+      }
+    } else {
+      const epGood = Math.random() < 0.95;
+      offBucket().extraPointAttempts += 1;
+      if (epGood) {
+        offBucket().extraPointsMade += 1;
+        if (state.possession === 'home') state.homeScore += 1;
+        else state.awayScore += 1;
+      }
+      addEvent('extra_point', descExtraPoint(epGood, k), 0, false);
     }
-    addEvent('extra_point', descExtraPoint(epGood, k), 0, false);
 
     // Kick off
     doKickoff();
@@ -761,6 +781,38 @@ export function simulatePlayByPlay(
       return state.timeSecs > 0;
     }
 
+    // ── End-of-half / end-of-game field goal logic ──
+    // If time is critically low and we're in FG range, kick it regardless of down
+    {
+      const distToGoal = 100 - state.fieldPos;
+      const fgDist = distToGoal + 17;
+      const inFGRange = fgDist <= 58; // reasonable FG range
+      const offScoreDiff = state.possession === 'home'
+        ? state.homeScore - state.awayScore
+        : state.awayScore - state.homeScore;
+      const isEndOfHalf = (state.quarter === 2 && state.timeSecs <= 10) ||
+                          (state.quarter >= 4 && state.timeSecs <= 10);
+      const isLateAndClose = state.quarter >= 4 && state.timeSecs <= 30 && state.down >= 2;
+
+      // Kick FG if: in range AND (time expiring OR trailing by ≤3 with <30s left)
+      const shouldKickNow = inFGRange && (
+        (isEndOfHalf && offScoreDiff <= 0) || // end of half, tied or trailing → kick
+        (isLateAndClose && offScoreDiff >= -3 && offScoreDiff <= 0) // late Q4, within FG range of tying/winning
+      );
+
+      if (shouldKickNow) {
+        // Spike the ball first if clock is running and we have time
+        if (state.timeSecs > 5 && state.timeSecs <= 15) {
+          const offQb = ok.qb;
+          addEvent('run', offQb ? `${offQb.firstName[0]}. ${offQb.lastName} spikes the ball to stop the clock!` : 'Quarterback spikes the ball!', 0, false);
+          advanceClock(2);
+        }
+        doFieldGoal(fgDist);
+        advanceClock(5);
+        return true;
+      }
+    }
+
     // 4th down decision
     if (state.down === 4) {
       const distanceToGoal = 100 - state.fieldPos;
@@ -777,7 +829,16 @@ export function simulatePlayByPlay(
         (scoreDiff <= -16 && state.timeSecs <= 600)        // down 16+, < 10 min
       );
 
-      if (state.yardsToGo <= 2 || desperationGo || (state.yardsToGo <= 4 && state.fieldPos >= 60)) {
+      // BUT: if a FG would tie or win and we're in range, kick it instead of going for it
+      const fgWouldTieOrWin = scoreDiff >= -3 && scoreDiff <= 0 && fgDistance <= 55;
+      const smartFG = fgWouldTieOrWin && state.quarter >= 4;
+
+      if (smartFG) {
+        // Kick the FG — it ties or wins the game
+        doFieldGoal(fgDistance);
+        advanceClock(30);
+        return true;
+      } else if (state.yardsToGo <= 2 || desperationGo || (state.yardsToGo <= 4 && state.fieldPos >= 60)) {
         // Go for it — short yardage, desperation, or in opponent territory with manageable distance
       } else if (state.fieldPos >= 55) {
         // Attempt field goal (up to ~62-yard attempts)
