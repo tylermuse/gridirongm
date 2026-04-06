@@ -181,14 +181,19 @@ function TradeValueBar({ userReceiveValue, userSendValue }: { userReceiveValue: 
   const total = Math.max(userReceiveValue + userSendValue, 1);
   const yourPct = Math.max(2, Math.min(98, (userReceiveValue / total) * 100));
   const favorsYou = yourPct >= 50;
+  const diff = yourPct - 50;
+  const label = diff > 5 ? 'Great Deal' : diff > -5 ? 'Fair Trade' : diff > -15 ? 'Slight Overpay' : 'Bad Deal';
+  const labelColor = diff > 5 ? 'text-green-600' : diff > -5 ? 'text-[var(--text-sec)]' : diff > -15 ? 'text-amber-600' : 'text-red-600';
   return (
     <div>
       <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-100 mt-2">
         <div className={`${favorsYou ? 'bg-green-500' : 'bg-red-400'}`} style={{ width: `${yourPct}%` }} />
         <div className={`${favorsYou ? 'bg-green-200' : 'bg-red-200'}`} style={{ width: `${100 - yourPct}%` }} />
       </div>
-      <div className="text-xs text-center mt-1 font-medium">
-        {favorsYou ? `+${Math.round(yourPct - 50)}% in your favor` : `${Math.round(50 - yourPct)}% against you`}
+      <div className="flex justify-between items-center text-xs mt-1">
+        <span className="text-[var(--text-sec)]">{Math.round(yourPct)}%</span>
+        <span className={`font-bold ${labelColor}`}>{label}</span>
+        <span className="text-[var(--text-sec)]">{Math.round(100 - yourPct)}%</span>
       </div>
     </div>
   );

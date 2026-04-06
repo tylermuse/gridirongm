@@ -112,57 +112,79 @@ export default function HistoryPage() {
           />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6">
-            {/* Season list */}
-            <div className="space-y-2">
-              {[...seasonHistory].reverse().map(summary => {
-                const champTeam = teams.find(t => t.id === summary.championTeamId);
-                const isActive = selectedSeason === summary.season;
-                const summaryDetail = isActive ? seasonHistory.find(s => s.season === summary.season) : null;
-                return (
-                  <div key={summary.season}>
-                    <button
-                      onClick={() => setSelectedSeason(isActive ? null : summary.season)}
-                      className={`w-full text-left rounded-xl border p-4 transition-colors ${
-                        isActive
-                          ? 'border-blue-500 bg-blue-500/10'
-                          : 'border-[var(--border)] bg-[var(--surface)] hover:border-blue-500/50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-bold">Season {summary.season}</span>
-                        <Badge variant={RESULT_VARIANTS[summary.userPlayoffResult]} size="sm">
-                          {PLAYOFF_LABELS[summary.userPlayoffResult]}
-                        </Badge>
+            {/* Season list with timeline */}
+            <div className="relative">
+              {/* Timeline vertical line */}
+              <div className="absolute left-[11px] top-4 bottom-4 w-0.5 bg-[var(--border)]" />
+              <div className="space-y-2">
+                {[...seasonHistory].reverse().map((summary) => {
+                  const champTeam = teams.find(t => t.id === summary.championTeamId);
+                  const isActive = selectedSeason === summary.season;
+                  const summaryDetail = isActive ? seasonHistory.find(s => s.season === summary.season) : null;
+                  const isChampion = summary.userPlayoffResult === 'champion';
+                  const madePlayoffs = summary.userPlayoffResult !== 'missed';
+                  const dotColor = isChampion ? 'bg-amber-500' : madePlayoffs ? 'bg-green-500' : 'bg-gray-300';
+                  // Card styling based on outcome
+                  const cardStyle = isActive
+                    ? 'border-blue-500 bg-blue-500/10'
+                    : isChampion
+                      ? 'border-amber-200 bg-amber-50 hover:border-amber-400'
+                      : madePlayoffs
+                        ? 'border-green-200 bg-green-50 hover:border-green-400'
+                        : 'border-[var(--border)] bg-[var(--surface)] hover:border-blue-500/50';
+                  return (
+                    <div key={summary.season} className="flex items-start gap-3">
+                      {/* Timeline dot */}
+                      <div className="relative z-10 flex flex-col items-center pt-5 shrink-0">
+                        <div className={`w-6 h-6 rounded-full ${dotColor} flex items-center justify-center text-xs shadow-sm`}>
+                          {isChampion ? '🏆' : ''}
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-[var(--text-sec)]">
-                          {summary.userRecord.wins}-{summary.userRecord.losses}
-                        </span>
-                        {champTeam && (
-                          <div className="flex items-center gap-1">
-                            <TeamLogo abbreviation={champTeam.abbreviation} primaryColor={champTeam.primaryColor} secondaryColor={champTeam.secondaryColor} logoUrl={champTeam.logoUrl} size="xs" />
-                            <span className="text-xs text-[var(--text-sec)]">{champTeam.abbreviation} won</span>
+                      {/* Card */}
+                      <div className="flex-1 min-w-0">
+                        <button
+                          onClick={() => setSelectedSeason(isActive ? null : summary.season)}
+                          className={`w-full text-left rounded-xl border p-4 transition-colors ${cardStyle}`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-bold">Season {summary.season}</span>
+                            <Badge variant={RESULT_VARIANTS[summary.userPlayoffResult]} size="sm">
+                              {PLAYOFF_LABELS[summary.userPlayoffResult]}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span>
+                              <span className="text-green-600 font-bold">{summary.userRecord.wins}</span>
+                              <span className="text-[var(--text-sec)]">-</span>
+                              <span className="text-red-600 font-bold">{summary.userRecord.losses}</span>
+                            </span>
+                            {champTeam && (
+                              <div className="flex items-center gap-1">
+                                <TeamLogo abbreviation={champTeam.abbreviation} primaryColor={champTeam.primaryColor} secondaryColor={champTeam.secondaryColor} logoUrl={champTeam.logoUrl} size="xs" />
+                                <span className="text-xs text-[var(--text-sec)]">{champTeam.abbreviation} won</span>
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                        {/* Inline accordion on mobile */}
+                        {isActive && summaryDetail && (
+                          <div className="md:hidden mt-2">
+                            <SeasonDetail
+                              selected={summaryDetail}
+                              playerName={playerName}
+                              playerPosition={playerPosition}
+                              teamAbbr={teamAbbr}
+                              teamColor={teamColor}
+                              teamName={teamName}
+                              onSelectPlayer={setSelectedPlayerId}
+                            />
                           </div>
                         )}
                       </div>
-                    </button>
-                    {/* Inline accordion on mobile */}
-                    {isActive && summaryDetail && (
-                      <div className="md:hidden mt-2">
-                        <SeasonDetail
-                          selected={summaryDetail}
-                          playerName={playerName}
-                          playerPosition={playerPosition}
-                          teamAbbr={teamAbbr}
-                          teamColor={teamColor}
-                          teamName={teamName}
-                          onSelectPlayer={setSelectedPlayerId}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Season detail — desktop only */}

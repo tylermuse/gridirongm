@@ -3,11 +3,9 @@
 import React from 'react';
 
 export function getOvrColor(ovr: number): string {
-  if (ovr >= 85) return 'text-green-600';
-  if (ovr >= 75) return 'text-emerald-600';
-  if (ovr >= 65) return 'text-yellow-600';
-  if (ovr >= 55) return 'text-orange-500';
-  if (ovr >= 45) return 'text-orange-600';
+  if (ovr >= 80) return 'text-green-600';
+  if (ovr >= 65) return 'text-blue-600';
+  if (ovr >= 50) return 'text-amber-600';
   return 'text-red-600';
 }
 
@@ -20,7 +18,22 @@ export function getOvrBgColor(ovr: number): string {
   return 'bg-red-600';
 }
 
-export function OvrBadge({ value, size = 'md' }: { value: number; size?: 'sm' | 'md' | 'lg' }) {
-  const sizeClass = size === 'sm' ? 'text-sm font-bold' : size === 'lg' ? 'text-2xl font-extrabold' : 'text-base font-extrabold';
-  return <span className={`${getOvrColor(value)} ${sizeClass} tabular-nums`}>{value}</span>;
+export function getOvrBg(ovr: number): string {
+  if (ovr >= 80) return 'bg-green-100';
+  if (ovr >= 65) return 'bg-blue-100';
+  if (ovr >= 50) return 'bg-amber-100';
+  return 'bg-red-100';
+}
+
+export function OvrBadge({ value, size = 'sm' }: { value: number; size?: 'sm' | 'md' | 'lg' }) {
+  const sizeClasses = {
+    sm: 'w-8 h-6 text-sm',
+    md: 'w-10 h-7 text-base',
+    lg: 'w-14 h-10 text-xl',
+  };
+  return (
+    <span className={`inline-flex items-center justify-center rounded-md font-extrabold tabular-nums ${getOvrBg(value)} ${getOvrColor(value)} ${sizeClasses[size]}`}>
+      {value}
+    </span>
+  );
 }

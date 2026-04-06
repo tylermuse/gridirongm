@@ -5,31 +5,33 @@ import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Badge } from '@/components/ui/Badge';
-import type { NewsItem } from '@/types';
 
-const TYPE_ICONS: Record<NewsItem['type'], string> = {
-  injury: '🏥',
-  trade: '🔄',
-  signing: '✍️',
-  release: '📋',
-  performance: '⭐',
-  milestone: '🏆',
-  system: 'ℹ️',
-  quote: '🎤',
-  rumor: '👀',
+const NEWS_BADGE: Record<string, { label: string; color: string; bg: string; icon: string; border: string }> = {
+  injury:      { label: 'Injury',      color: 'text-orange-700', bg: 'bg-orange-50',  icon: '🏥', border: 'border-l-orange-400' },
+  trade:       { label: 'Trade',       color: 'text-purple-700', bg: 'bg-purple-50',  icon: '🔄', border: 'border-l-purple-400' },
+  signing:     { label: 'Signing',     color: 'text-blue-700',   bg: 'bg-blue-50',    icon: '✍️', border: 'border-l-blue-400' },
+  release:     { label: 'Released',    color: 'text-red-600',    bg: 'bg-red-50',     icon: '✂️', border: 'border-l-red-400' },
+  performance: { label: 'Performance', color: 'text-green-700',  bg: 'bg-green-50',   icon: '📊', border: 'border-l-green-400' },
+  milestone:   { label: 'Milestone',   color: 'text-amber-700',  bg: 'bg-amber-50',   icon: '⭐', border: 'border-l-amber-400' },
+  system:      { label: 'League',      color: 'text-gray-700',   bg: 'bg-gray-50',    icon: '📰', border: 'border-l-gray-400' },
+  quote:       { label: 'Quote',       color: 'text-indigo-700', bg: 'bg-indigo-50',  icon: '💬', border: 'border-l-indigo-400' },
+  rumor:       { label: 'Rumor',       color: 'text-teal-700',   bg: 'bg-teal-50',    icon: '👀', border: 'border-l-teal-400' },
+  coaching:    { label: 'Coaching',    color: 'text-red-700',    bg: 'bg-red-50',     icon: '🏈', border: 'border-l-red-400' },
 };
 
-const TYPE_LABELS: Record<NewsItem['type'], string> = {
-  injury: 'Injury',
-  trade: 'Trade',
-  signing: 'Signing',
-  release: 'Release',
-  performance: 'Performance',
-  milestone: 'Milestone',
-  system: 'System',
-  quote: 'Coach Quote',
-  rumor: 'Trade Rumor',
-};
+/** Detect sub-type overrides from headline text */
+function resolveNewsBadge(type: string, headline: string) {
+  const h = headline.toLowerCase();
+  if (h.includes('fires') || h.includes('fired'))
+    return { label: 'Fired', icon: '🚫', color: 'text-red-700', bg: 'bg-red-50', border: 'border-l-red-500' };
+  if (h.includes('hires') || h.includes('hired') || h.includes('names'))
+    return { label: 'Hired', icon: '✅', color: 'text-green-700', bg: 'bg-green-50', border: 'border-l-green-500' };
+  if (h.includes('retires') || h.includes('retirement'))
+    return { label: 'Retired', icon: '👋', color: 'text-gray-700', bg: 'bg-gray-100', border: 'border-l-gray-400' };
+  if (h.includes('draft') || h.includes('selects'))
+    return { label: 'Draft', icon: '🎯', color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-l-indigo-500' };
+  return NEWS_BADGE[type] ?? NEWS_BADGE.system;
+}
 
 type FilterTab = 'all' | 'myteam' | 'transactions' | 'injuries';
 
@@ -37,8 +39,6 @@ export default function NewsPage() {
   const { newsItems, teams, players, userTeamId } = useGameStore();
   const [filter, setFilter] = useState<FilterTab>('all');
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
-
-  const userTeam = teams.find(t => t.id === userTeamId);
 
   const sorted = [...newsItems].sort((a, b) => {
     if (b.season !== a.season) return b.season - a.season;
@@ -100,62 +100,59 @@ export default function NewsPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {filtered.map(item => (
-              <div
-                key={item.id}
-                className={`rounded-xl border p-4 transition-colors ${
-                  item.isUserTeam
-                    ? 'border-blue-500/40 bg-blue-500/5'
-                    : 'border-[var(--border)] bg-[var(--surface)]'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  {/* Team color accent */}
-                  {item.teamId && (
-                    <div
-                      className="w-2 self-stretch rounded-full shrink-0"
-                      style={{ backgroundColor: teamColor(item.teamId) }}
-                    />
-                  )}
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm">{TYPE_ICONS[item.type]}</span>
-                      <Badge variant="default" size="sm">{TYPE_LABELS[item.type]}</Badge>
-                      {item.teamId && (
-                        <span
-                          className="text-xs font-bold px-1.5 py-0.5 rounded"
-                          style={{ backgroundColor: teamColor(item.teamId) + '33', color: teamColor(item.teamId) }}
-                        >
-                          {teamAbbr(item.teamId)}
+            {filtered.map(item => {
+              const badge = resolveNewsBadge(item.type, item.headline);
+              return (
+                <div
+                  key={item.id}
+                  className={`rounded-xl border border-l-[3px] p-4 transition-colors ${badge.border} ${
+                    item.isUserTeam
+                      ? 'border-r-blue-500/40 border-t-blue-500/40 border-b-blue-500/40 bg-blue-500/5'
+                      : 'border-r-[var(--border)] border-t-[var(--border)] border-b-[var(--border)] bg-[var(--surface)]'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${badge.bg} ${badge.color}`}>
+                          <span>{badge.icon}</span>
+                          {badge.label}
                         </span>
-                      )}
-                      {item.isUserTeam && <Badge variant="blue" size="sm">Your Team</Badge>}
-                      <span className="text-xs text-[var(--text-sec)] ml-auto shrink-0">
-                        S{item.season}{item.week > 0 ? ` Wk${item.week}` : ' Offseason'}
-                      </span>
-                    </div>
-
-                    <p className="text-sm">{item.headline}</p>
-
-                    {/* Player links */}
-                    {item.playerIds && item.playerIds.length > 0 && (
-                      <div className="flex gap-2 mt-1.5">
-                        {item.playerIds.map(pid => {
-                          const p = players.find(pl => pl.id === pid);
-                          if (!p) return null;
-                          return (
-                            <button key={pid} onClick={() => setSelectedPlayerId(pid)} className="text-xs text-blue-600 hover:underline">
-                              {p.firstName} {p.lastName}
-                            </button>
-                          );
-                        })}
+                        {item.teamId && (
+                          <span
+                            className="text-xs font-bold px-1.5 py-0.5 rounded"
+                            style={{ backgroundColor: teamColor(item.teamId) + '33', color: teamColor(item.teamId) }}
+                          >
+                            {teamAbbr(item.teamId)}
+                          </span>
+                        )}
+                        {item.isUserTeam && <Badge variant="blue" size="sm">Your Team</Badge>}
+                        <span className="text-xs text-[var(--text-sec)] ml-auto shrink-0">
+                          S{item.season}{item.week > 0 ? ` Wk${item.week}` : ' Offseason'}
+                        </span>
                       </div>
-                    )}
+
+                      <p className="text-sm">{item.headline}</p>
+
+                      {/* Player links */}
+                      {item.playerIds && item.playerIds.length > 0 && (
+                        <div className="flex gap-2 mt-1.5">
+                          {item.playerIds.map(pid => {
+                            const p = players.find(pl => pl.id === pid);
+                            if (!p) return null;
+                            return (
+                              <button key={pid} onClick={() => setSelectedPlayerId(pid)} className="text-xs text-blue-600 hover:underline">
+                                {p.firstName} {p.lastName}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -99,7 +99,7 @@ function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams,
           return (
             <tr
               key={t.id}
-              className={`border-t border-[var(--border)] cursor-pointer hover:bg-[var(--surface-2)] transition-colors duration-150 ${t.id === userTeamId ? 'text-blue-600 font-semibold' : ''}`}
+              className={`border-t border-[var(--border)] cursor-pointer hover:bg-[var(--surface-2)] transition-colors duration-150 ${t.id === userTeamId ? 'bg-blue-50 border-l-4 border-l-blue-600 text-blue-600 font-semibold' : ''}`}
               onClick={() => onTeamClick(t.id)}
             >
               <td className="py-1.5 text-[var(--text-sec)] text-xs w-6">{i + 1}</td>
@@ -108,6 +108,7 @@ function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams,
                   <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} logoUrl={t.logoUrl} size="sm" />
                   <span className="truncate">
                     {t.city} {t.name}
+                    {i === 0 && <span className="text-amber-500 text-xs ml-1">👑</span>}
                     {clinch && (
                       <span className={`ml-1 text-[10px] font-bold ${clinch === 'e' ? 'text-red-500' : 'text-green-600'}`}>
                         {clinch}

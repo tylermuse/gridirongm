@@ -593,8 +593,20 @@ export default function RosterPage() {
                             ? `Poor Fit: -1 OVR in games (${schemeName})`
                             : 'Neutral: No scheme bonus or penalty';
                           return (
-                            <td className={`py-2 px-2 text-center text-xs ${schemeFitColor(fit)}`} title={tooltip}>
-                              {schemeFitDot(fit)}
+                            <td className={`py-2 px-2 text-center text-xs ${schemeFitColor(fit)}`}>
+                              <div className="group relative inline-flex justify-center">
+                                {schemeFitDot(fit)}
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50 pointer-events-none">
+                                  <div className="bg-[var(--text)] text-white text-[10px] rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg text-center">
+                                    <div className="font-bold">{fit === 'great' ? 'Great Fit' : fit === 'poor' ? 'Poor Fit' : 'Neutral'}</div>
+                                    <div className="opacity-70">{schemeName}</div>
+                                    <div className={fit === 'great' ? 'text-green-300' : fit === 'poor' ? 'text-red-300' : 'opacity-70'}>
+                                      {fit === 'great' ? '+2 OVR in games' : fit === 'poor' ? '-1 OVR in games' : 'No bonus or penalty'}
+                                    </div>
+                                  </div>
+                                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-2 h-2 bg-[var(--text)] rotate-45" />
+                                </div>
+                              </div>
                             </td>
                           );
                         })()}

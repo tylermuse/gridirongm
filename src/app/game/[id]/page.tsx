@@ -530,7 +530,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     clearNextPlayTimer();
     if (!animationComplete || !isPlaying || isFinished || speed === 'max') return;
     // Post-animation pause — gives time to read the play description before advancing
-    const PAUSE_MS: Record<Speed, number> = { '1x': 2200, '2x': 800, '5x': 100, 'max': 0 };
+    const PAUSE_MS: Record<Speed, number> = { '1x': 1400, '2x': 600, '5x': 80, 'max': 0 };
     const pause = PAUSE_MS[speed];
     nextPlayTimerRef.current = setTimeout(() => {
       setRevealedCount(prev => {
@@ -773,7 +773,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           isPlaying={isPlaying}
           drivePlays={currentDrive.plays}
           driveYards={currentDrive.yards}
-          lastPlayDescription={currentEvent && !isSeparator(currentEvent.type) ? currentEvent.description : null}
+          lastPlayDescription={displayEvent && !isSeparator(displayEvent.type) ? displayEvent.description : null}
         />
 
         <AnimatedField

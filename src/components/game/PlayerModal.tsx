@@ -90,6 +90,30 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
   const team = player.teamId ? teams.find(t => t.id === player.teamId) : null;
   const isOnUserTeam = player.teamId === userTeamId;
   const relevantRatings = POSITION_RELEVANT_RATINGS[player.position] ?? [];
+
+  const archetypeMap: Record<string, { label: string; emoji: string }> = {
+    throwing: { label: 'Gunslinger', emoji: '🎯' },
+    awareness: { label: 'Field General', emoji: '🧠' },
+    speed: { label: 'Speedster', emoji: '⚡' },
+    strength: { label: 'Power Player', emoji: '💪' },
+    catching: { label: 'Reliable Hands', emoji: '🙌' },
+    blocking: { label: 'Trench Warrior', emoji: '🛡️' },
+    tackling: { label: 'Heat Seeker', emoji: '💥' },
+    coverage: { label: 'Lockdown', emoji: '🔒' },
+    passRush: { label: 'Edge Rusher', emoji: '🌪️' },
+    carrying: { label: 'Workhorse', emoji: '🐎' },
+    agility: { label: 'Elusive', emoji: '🦎' },
+    kicking: { label: 'Clutch Leg', emoji: '🦵' },
+  };
+  const primaryRatingKeys: (keyof Omit<PlayerRatings, 'overall'>)[] = [
+    'throwing', 'carrying', 'catching', 'coverage', 'passRush', 'blocking',
+    'tackling', 'kicking', 'speed', 'strength', 'agility', 'awareness',
+  ];
+  const topRatingKey = primaryRatingKeys.reduce((best, key) =>
+    (player.ratings[key] ?? 0) > (player.ratings[best] ?? 0) ? key : best
+  , primaryRatingKeys[0]);
+  const archetype = archetypeMap[topRatingKey];
+
   const currentChamp = champions?.find(c => c.season === season);
   const isChampionPlayer = !!currentChamp && player.teamId === currentChamp.teamId;
   const stats = player.stats;
@@ -123,6 +147,13 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                   {player.firstName} {player.lastName}
                   {isChampionPlayer && <span className="ml-1.5 text-lg" title="Championship Ring">💍</span>}
                 </h2>
+                {archetype && (
+                  <div className="mt-0.5">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-xs font-medium text-indigo-700">
+                      <span>{archetype.emoji}</span> {archetype.label}
+                    </span>
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-2 mt-1">
                   <Badge>{player.position}</Badge>
                   {player.height && player.weight && (
@@ -338,6 +369,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
             <div className="space-y-1.5">
               {relevantRatings.map(key => {
                 const val = player.ratings[key];
+                const tierLabel = val >= 85 ? 'Elite' : val >= 70 ? 'Good' : val >= 55 ? 'Avg' : 'Poor';
                 return (
                   <div key={key} className="flex items-center gap-3">
                     <div className="w-20 text-xs text-[var(--text-sec)]">{RATING_LABELS[key]}</div>
@@ -348,6 +380,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                       />
                     </div>
                     <div className={`text-xs font-bold w-7 text-right ${ratingColor(val)}`}>{val}</div>
+                    <div className={`text-[10px] w-8 ${ratingColor(val)}`}>{tierLabel}</div>
                   </div>
                 );
               })}
@@ -408,6 +441,28 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
         {player.ratingHistory.length >= 1 && (
           <Card>
             <CardHeader><CardTitle>Rating History</CardTitle></CardHeader>
+            {/* Sparkline */}
+            {(() => {
+              const history = [...player.ratingHistory, { season: season, overall: player.ratings.overall }];
+              if (history.length >= 2) {
+                const overalls = history.map(h => h.overall);
+                const minOvr = Math.min(...overalls);
+                const maxOvr = Math.max(...overalls);
+                const points = history.map((h, i) => {
+                  const x = (i / Math.max(1, history.length - 1)) * 200;
+                  const y = 48 - ((h.overall - minOvr) / Math.max(1, maxOvr - minOvr)) * 48;
+                  return `${x},${y}`;
+                }).join(' ');
+                return (
+                  <div className="flex justify-center pb-2">
+                    <svg width={200} height={48}>
+                      <polyline points={points} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                  </div>
+                );
+              }
+              return null;
+            })()}
             <div className="flex items-end gap-3 pt-1">
               {player.ratingHistory.map((entry, i) => {
                 const prev = i > 0 ? player.ratingHistory[i - 1].overall : entry.overall;

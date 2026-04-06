@@ -733,23 +733,31 @@ function Dashboard() {
         )}
 
         {/* Achievements row */}
-        {ALL_ACHIEVEMENTS.length > 0 && (
-          <div className="flex items-center gap-1 flex-wrap">
+        {ALL_ACHIEVEMENTS.length > 0 && (() => {
+          const achievementEmojiMap: Record<string, string> = {
+            'Champion': '🏆', 'Dynasty Builder': '👑', 'Perfect Season': '💎',
+            'Cap Wizard': '🧙', 'Rebuilder': '🔨', 'Stat Stacker': '📊',
+            'Trade Master': '🤝', 'On Fire': '🔥', 'Lockdown': '🔒',
+            'All-Star Factory': '⭐',
+          };
+          return (
+          <div className="flex items-center gap-1.5 flex-wrap">
             {ALL_ACHIEVEMENTS.map(def => {
               const unlocked = achievements.find(a => a.id === def.id);
               const prog = !unlocked && def.progress ? def.progress(useGameStore.getState() as never) : null;
+              const emoji = achievementEmojiMap[def.name] ?? def.icon;
               return (
                 <div
                   key={def.id}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition-all ${
+                  className={`flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl text-xs border transition-all ${
                     unlocked
-                      ? 'bg-amber-50 border-amber-300 text-amber-800'
-                      : 'bg-[var(--surface-2)] border-[var(--border)] text-[var(--text-sec)] opacity-50'
+                      ? 'bg-amber-50 border-amber-200'
+                      : 'bg-gray-50 opacity-40'
                   }`}
                   title={`${def.name}: ${def.description}${unlocked ? ` (Unlocked S${unlocked.unlockedSeason})` : prog ? ` (${prog.current}/${prog.target} ${prog.label})` : ''}`}
                 >
-                  <span className="text-sm">{def.icon}</span>
-                  <span className="font-medium hidden sm:inline">{def.name}</span>
+                  <span className={`text-lg ${unlocked ? '' : 'grayscale'}`}>{emoji}</span>
+                  <span className="font-medium hidden sm:inline text-[10px]">{def.name}</span>
                   {prog && prog.target > 1 && (
                     <span className="text-[9px] text-[var(--text-sec)] hidden sm:inline">{prog.current}/{prog.target}</span>
                   )}
@@ -757,7 +765,8 @@ function Dashboard() {
               );
             })}
           </div>
-        )}
+          );
+        })()}
 
         {/* Next Game: Watch Live + Injury Report */}
         {(() => {
@@ -778,23 +787,23 @@ function Dashboard() {
           return (nextGame || injuredPlayers.length > 0) ? (
             <div className={`grid grid-cols-1 ${nextGame && injuredPlayers.length > 0 ? 'md:grid-cols-2' : ''} gap-4`}>
               {nextGame && oppTeam && (
-                <Card>
-                  <div className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <TeamLogo abbreviation={oppTeam.abbreviation} primaryColor={oppTeam.primaryColor} secondaryColor={oppTeam.secondaryColor} logoUrl={oppTeam.logoUrl} size="md" />
+                <div className="rounded-xl bg-gradient-to-r from-[var(--surface)] to-blue-50 border border-blue-200 overflow-hidden">
+                  <div className="p-5 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <TeamLogo abbreviation={oppTeam.abbreviation} primaryColor={oppTeam.primaryColor} secondaryColor={oppTeam.secondaryColor} logoUrl={oppTeam.logoUrl} size="lg" />
                       <div>
-                        <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider">{phase === 'playoffs' ? 'Playoffs' : `Week ${week}`} · {nextGame.homeTeamId === userTeamId ? 'Home' : 'Away'}</div>
-                        <div className="font-bold">{nextGame.homeTeamId === userTeamId ? 'vs' : '@'} {oppTeam.city} {oppTeam.name}</div>
-                        <div className="text-xs text-[var(--text-sec)]">{formatRecord(oppTeam.record)}</div>
+                        <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider font-medium">{phase === 'playoffs' ? 'Playoffs' : `Week ${week}`} · {nextGame.homeTeamId === userTeamId ? 'Home' : 'Away'}</div>
+                        <div className="text-lg font-black mt-0.5">{nextGame.homeTeamId === userTeamId ? 'vs' : '@'} {oppTeam.city} {oppTeam.name}</div>
+                        <div className="text-sm text-[var(--text-sec)] font-medium">{formatRecord(oppTeam.record)}</div>
                       </div>
                     </div>
                     <Link href={`/game/${nextGame.id}`}>
-                      <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white font-bold">
+                      <Button size="md" className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 text-base">
                         Watch Live
                       </Button>
                     </Link>
                   </div>
-                </Card>
+                </div>
               )}
               {injuredPlayers.length > 0 && (
                 <Card>
