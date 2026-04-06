@@ -618,15 +618,93 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       </GameShell>
     );
   }
-  if (game.played) {
+  if (game.played && !simRef.current) {
+    // Show post-game summary for already-played games
+    const scoringPlays = game.scoringPlays ?? [];
+    const pStats = game.playerStats ?? {};
     return (
       <GameShell>
-        <div className="max-w-2xl mx-auto mt-16 text-center space-y-4">
-          <h2 className="text-2xl font-black">Game Already Played</h2>
-          <p className="text-[var(--text-sec)]">
-            {homeTeam?.abbreviation ?? '??'} {game.homeScore} — {game.awayScore} {awayTeam?.abbreviation ?? '??'}
-          </p>
-          <Button onClick={() => router.push('/')}>Back to Dashboard</Button>
+        <div className="max-w-4xl mx-auto space-y-4 py-4">
+          {/* Score header */}
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6 text-center">
+            <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider mb-2">Final</div>
+            <div className="flex items-center justify-center gap-6">
+              <div className="text-center">
+                <div className="text-3xl font-black">{game.awayScore}</div>
+                <div className="text-sm font-bold text-[var(--text-sec)]">{awayTeam?.abbreviation ?? '??'}</div>
+              </div>
+              <div className="text-xl text-[var(--text-sec)]">—</div>
+              <div className="text-center">
+                <div className="text-3xl font-black">{game.homeScore}</div>
+                <div className="text-sm font-bold text-[var(--text-sec)]">{homeTeam?.abbreviation ?? '??'}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Scoring Summary */}
+          {scoringPlays.length > 0 && (
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-sec)] mb-3">Scoring Summary</h3>
+              <div className="space-y-2">
+                {scoringPlays.map((play, i) => (
+                  <div key={i} className="flex items-center gap-3 text-sm border-b border-[var(--border)] last:border-0 pb-2 last:pb-0">
+                    <span className="text-xs font-bold text-[var(--text-sec)] w-8">{play.quarter ? `Q${play.quarter}` : ''}</span>
+                    <span className="font-medium">{play.teamId === game.homeTeamId ? homeTeam?.abbreviation : awayTeam?.abbreviation}</span>
+                    <span className="flex-1 text-[var(--text-sec)]">{play.description}</span>
+                    <span className="font-mono font-bold text-xs">{play.score[0]}-{play.score[1]}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Player Stats */}
+          {Object.keys(pStats).length > 0 && (
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-sec)] mb-3">Key Performers</h3>
+              <div className="grid grid-cols-2 gap-4">
+                {[{ teamId: game.homeTeamId, team: homeTeam }, { teamId: game.awayTeamId, team: awayTeam }].map(({ teamId, team }) => {
+                  const teamPlayerStats = Object.entries(pStats)
+                    .filter(([pid]) => players.find(p => p.id === pid)?.teamId === teamId)
+                    .map(([pid, stats]) => ({ player: players.find(p => p.id === pid), stats }))
+                    .filter(x => x.player)
+                    .sort((a, b) => {
+                      const aVal = (a.stats.passYards ?? 0) + (a.stats.rushYards ?? 0) + (a.stats.receivingYards ?? 0) + (a.stats.tackles ?? 0) * 3;
+                      const bVal = (b.stats.passYards ?? 0) + (b.stats.rushYards ?? 0) + (b.stats.receivingYards ?? 0) + (b.stats.tackles ?? 0) * 3;
+                      return bVal - aVal;
+                    })
+                    .slice(0, 5);
+                  return (
+                    <div key={teamId}>
+                      <div className="text-xs font-bold text-[var(--text-sec)] mb-2">{team?.abbreviation ?? '??'}</div>
+                      <div className="space-y-1.5">
+                        {teamPlayerStats.map(({ player: p, stats: s }) => {
+                          if (!p) return null;
+                          let statLine = '';
+                          if ((s.passYards ?? 0) > 0) statLine = `${s.passYards} YDS, ${s.passTDs ?? 0} TD, ${s.interceptions ?? 0} INT`;
+                          else if ((s.rushYards ?? 0) > 0) statLine = `${s.rushYards} YDS, ${s.rushTDs ?? 0} TD`;
+                          else if ((s.receivingYards ?? 0) > 0) statLine = `${s.receptions ?? 0} REC, ${s.receivingYards} YDS`;
+                          else if ((s.tackles ?? 0) > 0) statLine = `${s.tackles} TKL${(s.sacks ?? 0) > 0 ? `, ${s.sacks} SCK` : ''}`;
+                          if (!statLine) return null;
+                          return (
+                            <div key={p.id} className="text-xs">
+                              <span className="font-medium">{p.firstName[0]}. {p.lastName}</span>
+                              <span className="text-[var(--text-sec)] ml-1">{p.position}</span>
+                              <span className="text-[var(--text-sec)] ml-2">{statLine}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="text-center">
+            <Button onClick={() => router.push('/')}>Back to Dashboard</Button>
+          </div>
         </div>
       </GameShell>
     );
