@@ -314,6 +314,39 @@ function getUserPlayoffStatus(
 }
 
 // ---------------------------------------------------------------------------
+// Retirement quote helper
+// ---------------------------------------------------------------------------
+
+function retirementQuote(name: string, age: number, _position: string): string {
+  if (age <= 28) {
+    const young = [
+      `"My body just can't take it anymore. I've had a good run but my health has to come first." — ${name}`,
+      `"I've accomplished what I wanted in this league. Time to move on to the next chapter." — ${name}`,
+      `"The injuries have taken their toll. I want to walk away while I still can." — ${name}`,
+      `"Football gave me everything, but I've lost the passion. Better to step away now than go through the motions." — ${name}`,
+    ];
+    return young[name.length % young.length];
+  }
+  if (age >= 36) {
+    const veteran = [
+      `"What a ride. I gave this game everything I had, and it gave me more than I ever dreamed." — ${name}`,
+      `"${age - 21} years in this league. I'm walking away on my own terms, and that's all you can ask for." — ${name}`,
+      `"I've been blessed to play this game as long as I have. Time to be a full-time dad." — ${name}`,
+      `"My body's telling me it's time. I leave with no regrets." — ${name}`,
+      `"I'll miss the locker room more than anything. The guys, the competition — that's what I'll remember." — ${name}`,
+    ];
+    return veteran[name.length % veteran.length];
+  }
+  const mid = [
+    `"I've thought about this for a while. It's the right time for me and my family." — ${name}`,
+    `"I still love the game, but my body is telling me something different every morning." — ${name}`,
+    `"I want to go out while I can still walk without a limp. No regrets." — ${name}`,
+    `"The game has changed, and I've given it my best. Time to see what's next." — ${name}`,
+  ];
+  return mid[name.length % mid.length];
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -578,30 +611,6 @@ export default function PlayoffsPage() {
                 })}
               </div>
 
-              {/* Notable Retirements */}
-              {notableRetirees.length > 0 && (
-                <div className="mt-4 pt-3 border-t border-[var(--border)]">
-                  <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">Notable Retirements</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
-                    {notableRetirees.map(p => {
-                      const t = teams.find(t => t.id === p.teamId);
-                      return (
-                        <div key={p.id} className="flex items-center justify-between text-xs py-0.5">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <Badge size="sm">{p.position}</Badge>
-                            <button onClick={() => setSelectedPlayerId(p.id)} className="hover:text-blue-600 transition-colors">
-                              {p.firstName} {p.lastName}
-                            </button>
-                            <span className="text-[var(--text-sec)]">Age {p.age} · {p.experience}yr · {p.ratings.overall} OVR</span>
-                          </div>
-                          <span className="text-[var(--text-sec)] shrink-0 ml-1">{t?.abbreviation}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
               {/* All-Pro selections — First Team */}
               <div className="mt-4 pt-3 border-t border-[var(--border)]">
                 <div className="text-xs font-bold text-[var(--text-sec)] uppercase mb-2">All-Pro First Team</div>
@@ -732,32 +741,6 @@ export default function PlayoffsPage() {
               );
             })()}
 
-            {/* Notable Retirements */}
-            {(() => {
-              const lastSummary = seasonHistory.length > 0 ? seasonHistory[seasonHistory.length - 1] : null;
-              const retirees = lastSummary?.retiredPlayers ?? [];
-              if (retirees.length === 0) return null;
-              return (
-                <Card>
-                  <CardHeader><CardTitle>Notable Retirements</CardTitle></CardHeader>
-                  <div className="space-y-2">
-                    {retirees.map((r, i) => {
-                      const t = teams.find(t => t.id === r.teamId);
-                      return (
-                        <div key={i} className="flex items-center gap-3 text-sm border-t border-[var(--border)] pt-2 first:border-t-0 first:pt-0">
-                          <Badge size="sm">{r.position}</Badge>
-                          <button onClick={() => setSelectedPlayerId(r.playerId)} className="font-medium hover:text-blue-600 transition-colors">
-                            {r.name}
-                          </button>
-                          {t && <span className="text-xs text-[var(--text-sec)]">{t.abbreviation}</span>}
-                          <span className="text-xs text-[var(--text-sec)] ml-auto">Retired at age {r.age}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Card>
-              );
-            })()}
             </>
           );
         })()}
@@ -937,6 +920,38 @@ export default function PlayoffsPage() {
               <div className="px-1 pb-1">
                 <p className="text-sm text-[var(--text)] leading-relaxed italic">&ldquo;{message}&rdquo;</p>
                 <p className="text-xs text-[var(--text-sec)] mt-2 text-right">— {userTeam.city} {userTeam.name} Ownership</p>
+              </div>
+            </Card>
+          );
+        })()}
+
+        {/* Notable Retirements — after owner message, before team status */}
+        {sbDone && (() => {
+          const lastSummary = seasonHistory.length > 0 ? seasonHistory[seasonHistory.length - 1] : null;
+          const retirees = lastSummary?.retiredPlayers ?? [];
+          if (retirees.length === 0) return null;
+          return (
+            <Card>
+              <CardHeader><CardTitle>Notable Retirements</CardTitle></CardHeader>
+              <div className="space-y-3">
+                {retirees.map((r, i) => {
+                  const t = teams.find(t => t.id === r.teamId);
+                  return (
+                    <div key={i} className="border-t border-[var(--border)] pt-2 first:border-t-0 first:pt-0">
+                      <div className="flex items-center gap-3 text-sm">
+                        <Badge size="sm">{r.position}</Badge>
+                        <button onClick={() => setSelectedPlayerId(r.playerId)} className="font-medium hover:text-blue-600 transition-colors">
+                          {r.name}
+                        </button>
+                        {t && <span className="text-xs text-[var(--text-sec)]">{t.abbreviation}</span>}
+                        <span className="text-xs text-[var(--text-sec)] ml-auto">Retired at age {r.age}</span>
+                      </div>
+                      <p className="text-xs italic text-[var(--text-sec)] mt-1 ml-8">
+                        {retirementQuote(r.name, r.age, r.position)}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             </Card>
           );
