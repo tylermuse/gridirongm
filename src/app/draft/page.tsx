@@ -1267,7 +1267,13 @@ export default function DraftPage() {
                           : `${row.pickInRound} (${row.overallPick})`
                         }
                       </td>
-                      <td className="py-2 font-semibold">{row.team?.abbreviation ?? '--'}</td>
+                      <td className="py-2 font-semibold">
+                        {row.team ? (
+                          <Link href={`/team/${row.team.id}`} className="hover:text-blue-600 transition-colors">
+                            {row.team.abbreviation}
+                          </Link>
+                        ) : '--'}
+                      </td>
                       <td className="py-2">
                         {row.player
                           ? `${row.player.firstName} ${row.player.lastName}`

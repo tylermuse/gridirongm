@@ -275,22 +275,22 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
         score *= 0.05; // Nearly eliminate chance of drafting surplus positions
       }
 
-      // QB premium: teams without a quality QB (none, or starter < 65 OVR) draft QBs much higher
+      // QB premium: only teams with NO QB or a truly terrible one draft QBs early
       if (prospect.position === 'QB') {
         const bestQB = roster.filter(p => p.position === 'QB').sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
         const qbOvr = bestQB?.ratings.overall ?? 0;
         if (count === 0) {
-          // No QB at all — massive premium
-          score += 300;
-        } else if (qbOvr < 60) {
-          // Terrible QB — big premium
-          score += 200;
-        } else if (qbOvr < 68) {
-          // Below average QB — moderate premium
-          score += 100;
-        } else if (qbOvr < 75) {
-          // Average QB — slight premium for high-potential upgrade
-          score += prospect.potential >= 80 ? 50 : 0;
+          // No QB at all — big premium
+          score += 150;
+        } else if (qbOvr < 55) {
+          // Terrible QB — moderate premium
+          score += 80;
+        } else if (qbOvr < 65 && prospect.potential >= 80) {
+          // Below average QB — slight premium only for elite prospects
+          score += 30;
+        } else if (count >= 1) {
+          // Already have a serviceable QB — strong penalty to avoid QB hoarding
+          score *= 0.4;
         }
       }
 
