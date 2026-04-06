@@ -331,6 +331,7 @@ export default function PlayoffsPage() {
     finalsMvpPlayerId,
     allStarGame,
     simAllStarGame,
+    seasonHistory,
   } = useGameStore();
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -731,7 +732,32 @@ export default function PlayoffsPage() {
               );
             })()}
 
-            {/* Notable Retirements moved to after awards */}
+            {/* Notable Retirements */}
+            {(() => {
+              const lastSummary = seasonHistory.length > 0 ? seasonHistory[seasonHistory.length - 1] : null;
+              const retirees = lastSummary?.retiredPlayers ?? [];
+              if (retirees.length === 0) return null;
+              return (
+                <Card>
+                  <CardHeader><CardTitle>Notable Retirements</CardTitle></CardHeader>
+                  <div className="space-y-2">
+                    {retirees.map((r, i) => {
+                      const t = teams.find(t => t.id === r.teamId);
+                      return (
+                        <div key={i} className="flex items-center gap-3 text-sm border-t border-[var(--border)] pt-2 first:border-t-0 first:pt-0">
+                          <Badge size="sm">{r.position}</Badge>
+                          <button onClick={() => setSelectedPlayerId(r.playerId)} className="font-medium hover:text-blue-600 transition-colors">
+                            {r.name}
+                          </button>
+                          {t && <span className="text-xs text-[var(--text-sec)]">{t.abbreviation}</span>}
+                          <span className="text-xs text-[var(--text-sec)] ml-auto">Retired at age {r.age}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              );
+            })()}
             </>
           );
         })()}

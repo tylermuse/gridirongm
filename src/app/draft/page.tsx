@@ -1123,15 +1123,19 @@ export default function DraftPage() {
                     {isExpanded && (
                       <tr className="border-t border-[var(--border)]">
                         <td colSpan={7} className="px-4 py-3 bg-[var(--surface-2)]/50">
-                          {isPlayerScouted(player.id) && ss?.fullEvals?.[player.id] ? (() => {
-                            const filmData = ss.filmReviews?.[player.id];
-                            const inPersonData = ss.inPersonEvals?.[player.id];
-                            const fullData = ss.fullEvals[player.id];
+                          {isPlayerScouted(player.id) ? (() => {
+                            const filmData = ss?.filmReviews?.[player.id];
+                            const inPersonData = ss?.inPersonEvals?.[player.id];
+                            const fullData = ss?.fullEvals?.[player.id];
                             const evaluation = generateDraftScoutEval(player, userRoster, { lo, hi }, undefined, scoutingLevel);
                             return (
                               <div className="space-y-3">
-                                {/* Full evaluation at top */}
-                                <FullEvalContent evalData={fullData} player={player} fitBadge={evaluation.fitBadge} />
+                                {/* Full evaluation at top (or film review summary if full eval failed) */}
+                                {fullData ? (
+                                  <FullEvalContent evalData={fullData} player={player} fitBadge={evaluation.fitBadge} />
+                                ) : filmData ? (
+                                  <FilmReviewContent data={filmData} evaluation={evaluation} />
+                                ) : null}
 
                                 {/* Scout's Take + Roster Comparison */}
                                 <div className="grid grid-cols-2 gap-3 text-xs border-t border-[var(--border)] pt-3">
@@ -1164,7 +1168,7 @@ export default function DraftPage() {
                                       👁 In-Person Observations
                                     </summary>
                                     <div className="px-3 py-2.5 border-t border-[var(--border)]">
-                                      <InPersonEvalContent evalData={inPersonData} filmData={filmData} player={player} />
+                                      <InPersonEvalContent evalData={inPersonData!} filmData={filmData!} player={player} />
                                     </div>
                                   </details>
                                 )}

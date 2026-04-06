@@ -17,15 +17,29 @@ export function generateSeasonObjectives(
 ): OwnerObjective[] {
   const objectives: OwnerObjective[] = [];
   const roster = players.filter(p => p.teamId === team.id && !p.retired);
-  const avgOvr = roster.length > 0
-    ? Math.round(roster.reduce((s, p) => s + p.ratings.overall, 0) / roster.length)
+  // Use top-22 starter average (more representative than full 53-man roster)
+  const starterAvgOvr = roster.length > 0
+    ? Math.round(
+        [...roster].sort((a, b) => b.ratings.overall - a.ratings.overall)
+          .slice(0, 22)
+          .reduce((s, p) => s + p.ratings.overall, 0) / Math.min(22, roster.length),
+      )
     : 60;
 
-  // 1. Always: win target based on roster quality
+  // Factor in last season's playoff result — teams that were good stay expected to be good
+  const playoffBoost = lastSeasonPlayoffResult === 'champion' ? 12
+    : lastSeasonPlayoffResult === 'runnerup' ? 10
+    : lastSeasonPlayoffResult === 'conference' ? 8
+    : lastSeasonPlayoffResult === 'divisional' ? 6
+    : lastSeasonPlayoffResult === 'wildcard' ? 4
+    : 0;
+  const effectiveOvr = Math.max(starterAvgOvr, starterAvgOvr + Math.floor(playoffBoost / 2));
+
+  // 1. Always: win target based on roster quality + recent success
   let winTarget: number;
-  if (avgOvr >= 72) {
+  if (effectiveOvr >= 72 || lastSeasonPlayoffResult === 'champion' || lastSeasonPlayoffResult === 'runnerup') {
     winTarget = 10 + Math.floor(Math.random() * 3); // 10-12
-  } else if (avgOvr >= 64) {
+  } else if (effectiveOvr >= 64 || lastSeasonPlayoffResult === 'conference' || lastSeasonPlayoffResult === 'divisional') {
     winTarget = 7 + Math.floor(Math.random() * 3); // 7-9
   } else {
     winTarget = 4 + Math.floor(Math.random() * 3); // 4-6
@@ -40,7 +54,7 @@ export function generateSeasonObjectives(
   });
 
   // 2. Context-based objective
-  if (avgOvr >= 78) {
+  if (effectiveOvr >= 78 || lastSeasonPlayoffResult === 'champion' || lastSeasonPlayoffResult === 'runnerup') {
     objectives.push({
       id: uuid(),
       description: 'Win the championship',
@@ -49,7 +63,7 @@ export function generateSeasonObjectives(
       season,
       status: 'active',
     });
-  } else if (avgOvr >= 72) {
+  } else if (effectiveOvr >= 72 || lastSeasonPlayoffResult === 'conference' || lastSeasonPlayoffResult === 'divisional') {
     objectives.push({
       id: uuid(),
       description: 'Reach the conference championship',
@@ -58,7 +72,7 @@ export function generateSeasonObjectives(
       season,
       status: 'active',
     });
-  } else if (avgOvr >= 64) {
+  } else if (effectiveOvr >= 64 || lastSeasonPlayoffResult === 'wildcard') {
     objectives.push({
       id: uuid(),
       description: 'Make the playoffs',
