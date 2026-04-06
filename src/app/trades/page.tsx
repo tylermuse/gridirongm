@@ -146,6 +146,54 @@ function ValueAssessmentBadge({ assessment }: { assessment: string }) {
   return <Badge variant="red">They Win</Badge>;
 }
 
+// ---------------------------------------------------------------------------
+// Trade Grade Computation
+// ---------------------------------------------------------------------------
+
+type TradeGrade = 'A+' | 'A' | 'B+' | 'B' | 'C' | 'D' | 'F';
+
+function computeTradeGrade(userReceiveValue: number, userSendValue: number): TradeGrade {
+  const total = Math.max(userReceiveValue + userSendValue, 1);
+  const pctDiff = ((userReceiveValue - userSendValue) / total) * 200; // percentage difference scaled
+  if (pctDiff > 25) return 'A+';
+  if (pctDiff > 15) return 'A';
+  if (pctDiff > 5) return 'B+';
+  if (pctDiff > -5) return 'B';
+  if (pctDiff > -15) return 'C';
+  if (pctDiff > -25) return 'D';
+  return 'F';
+}
+
+function tradeGradeColor(grade: TradeGrade): string {
+  if (grade === 'A+' || grade === 'A') return 'bg-green-100 text-green-700 border-green-300';
+  if (grade === 'B+' || grade === 'B') return 'bg-blue-100 text-blue-700 border-blue-300';
+  if (grade === 'C') return 'bg-amber-100 text-amber-700 border-amber-300';
+  return 'bg-red-100 text-red-700 border-red-300';
+}
+
+function tradeGradeCardStyle(grade: TradeGrade): string {
+  if (grade === 'A+' || grade === 'A') return 'border-green-400 bg-green-50/30';
+  if (grade === 'D' || grade === 'F') return 'border-red-300 bg-red-50/30';
+  return '';
+}
+
+function TradeValueBar({ userReceiveValue, userSendValue }: { userReceiveValue: number; userSendValue: number }) {
+  const total = Math.max(userReceiveValue + userSendValue, 1);
+  const yourPct = Math.max(2, Math.min(98, (userReceiveValue / total) * 100));
+  const favorsYou = yourPct >= 50;
+  return (
+    <div>
+      <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-100 mt-2">
+        <div className={`${favorsYou ? 'bg-green-500' : 'bg-red-400'}`} style={{ width: `${yourPct}%` }} />
+        <div className={`${favorsYou ? 'bg-green-200' : 'bg-red-200'}`} style={{ width: `${100 - yourPct}%` }} />
+      </div>
+      <div className="text-xs text-center mt-1 font-medium">
+        {favorsYou ? `+${Math.round(yourPct - 50)}% in your favor` : `${Math.round(50 - yourPct)}% against you`}
+      </div>
+    </div>
+  );
+}
+
 type TradeSortKey = 'ovr' | 'pos' | 'salary' | 'years' | 'value' | 'age';
 
 function SortableTradeTable({
@@ -206,7 +254,7 @@ function SortableTradeTable({
           {sorted.map(p => (
             <tr
               key={p.id}
-              className={`border-t border-[var(--border)] cursor-pointer hover:bg-[var(--surface-2)] ${selectedIds.includes(p.id) ? 'bg-blue-50' : ''}`}
+              className={`border-t border-[var(--border)] cursor-pointer hover:bg-[var(--surface-2)] transition-colors duration-150 ${selectedIds.includes(p.id) ? 'bg-blue-50' : ''}`}
               onClick={() => toggleSelect(p.id)}
             >
               <td className="py-1 pl-1"><input type="checkbox" checked={selectedIds.includes(p.id)} readOnly className="accent-blue-500 pointer-events-none" /></td>
@@ -1110,7 +1158,7 @@ function TradesPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
           <div>
             <TeamQuickNav currentPage="trades" />
-            <h2 className="text-2xl font-black">Trade Center</h2>
+            <h2 className="text-2xl font-black font-display uppercase tracking-tight">Trade Center</h2>
           </div>
           <div className="text-sm text-[var(--text-sec)]">
             {isTradeOpen
@@ -1300,8 +1348,16 @@ function TradesPage() {
 
                 const userOvrDelta = afterUserOvr - currentUserOvr;
 
+                // Trade value + grade
+                const proposalReceiveValue = offPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
+                  + offPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
+                const proposalSendValue = reqPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
+                  + reqPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
+                const proposalGrade = computeTradeGrade(proposalReceiveValue, proposalSendValue);
+                const proposalCardExtra = tradeGradeCardStyle(proposalGrade);
+
                 return (
-                  <Card key={proposal.id}>
+                  <Card key={proposal.id} className={proposalCardExtra}>
                     <div className="mb-3">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-2">
@@ -1314,6 +1370,9 @@ function TradesPage() {
                           <button onClick={() => proposingTeam && setViewTeamId(proposingTeam.id)} className="font-bold hover:text-blue-600 transition-colors">{proposingTeam?.city} {proposingTeam?.name}</button>
                           {proposingTeam && <span className="text-xs text-[var(--text-sec)]">({formatRecord(proposingTeam.record)})</span>}
                           <span className="text-xs text-[var(--text-sec)]">Week {proposal.week}</span>
+                          <span className={`text-sm font-black px-2 py-0.5 rounded border ${tradeGradeColor(proposalGrade)}`}>
+                            {proposalGrade}
+                          </span>
                         </div>
                       <div className="flex items-center gap-2">
                         <span className={`text-xs font-bold px-2 py-0.5 rounded ${
@@ -1321,14 +1380,14 @@ function TradesPage() {
                           userOvrDelta < 0 ? 'bg-red-100 text-red-600' :
                           'bg-amber-50 text-amber-600'
                         }`}>
-                          Your OVR: {currentUserOvr} → {afterUserOvr}
+                          Your OVR: <span className="text-sm">{currentUserOvr}</span> → <span className={`text-sm ${afterUserOvr > currentUserOvr ? 'text-green-600 font-bold' : afterUserOvr < currentUserOvr ? 'text-red-600 font-bold' : ''}`}>{afterUserOvr}</span>
                         </span>
                         <span className={`text-xs font-bold px-2 py-0.5 rounded ${
                           afterOtherOvr > currentOtherOvr ? 'bg-green-100 text-green-600' :
                           afterOtherOvr < currentOtherOvr ? 'bg-red-100 text-red-600' :
                           'bg-amber-50 text-amber-600'
                         }`}>
-                          Their OVR: {currentOtherOvr} → {afterOtherOvr}
+                          Their OVR: <span className="text-sm">{currentOtherOvr}</span> → <span className={`text-sm ${afterOtherOvr > currentOtherOvr ? 'text-green-600 font-bold' : afterOtherOvr < currentOtherOvr ? 'text-red-600 font-bold' : ''}`}>{afterOtherOvr}</span>
                         </span>
                       </div>
                       </div>
@@ -1400,7 +1459,9 @@ function TradesPage() {
                       </div>
                     </div>
 
-                    <div className="flex gap-2">
+                    <TradeValueBar userReceiveValue={proposalReceiveValue} userSendValue={proposalSendValue} />
+
+                    <div className="flex gap-2 mt-3">
                       <Button
                         size="sm"
                         onClick={() => {
@@ -1638,7 +1699,7 @@ function TradesPage() {
                               <tr
                                 key={p.id}
                                 onClick={() => togglePlayerSelect(p.id, blockedPlayerIds, setBlockedPlayerIds)}
-                                className={`border-t border-[var(--border)] cursor-pointer transition-colors ${blockedPlayerIds.includes(p.id) ? 'bg-blue-50' : 'hover:bg-[var(--surface-2)]'}`}
+                                className={`border-t border-[var(--border)] cursor-pointer transition-colors duration-150 ${blockedPlayerIds.includes(p.id) ? 'bg-blue-50' : 'hover:bg-[var(--surface-2)]'}`}
                               >
                                 <td className="py-1.5 pl-1">
                                   <input
@@ -1760,14 +1821,30 @@ function TradesPage() {
                       const theirOvrBefore = proposingTeam ? teamAvgOvr(proposingTeam.id) : 0;
                       const theirOvrAfter = proposingTeam ? teamAvgOvr(proposingTeam.id, proposal.requestedPlayerIds, proposal.offeredPlayerIds) : 0;
                       const theirDelta = Math.round((theirOvrAfter - theirOvrBefore) * 10) / 10;
+
+                      // Trade value + grade for block proposals
+                      const reqPlayers = proposal.requestedPlayerIds.map(id => players.find(p => p.id === id)).filter(Boolean) as Player[];
+                      const reqPicks = proposal.requestedPickIds.map(id =>
+                        userTeam?.draftPicks.find(pk => pk.id === id),
+                      ).filter(Boolean) as DraftPick[];
+                      const blockReceiveValue = offPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
+                        + offPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
+                      const blockSendValue = reqPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
+                        + reqPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
+                      const blockGrade = computeTradeGrade(blockReceiveValue, blockSendValue);
+                      const blockCardExtra = tradeGradeCardStyle(blockGrade);
+
                       return (
-                        <Card key={proposal.id}>
+                        <Card key={proposal.id} className={blockCardExtra}>
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
                                 <Badge size="sm">{proposingTeam?.abbreviation}</Badge>
                                 <span className="font-bold text-sm">{proposingTeam?.city} {proposingTeam?.name}</span>
                                 {proposingTeam && <span className="text-xs text-[var(--text-sec)]">({formatRecord(proposingTeam.record)})</span>}
+                                <span className={`text-sm font-black px-2 py-0.5 rounded border ${tradeGradeColor(blockGrade)}`}>
+                                  {blockGrade}
+                                </span>
                                 {proposal.valueAssessment && <ValueAssessmentBadge assessment={proposal.valueAssessment} />}
                               </div>
                               {proposingTeam && (() => {
@@ -1796,22 +1873,25 @@ function TradesPage() {
                                   </div>
                                 ))}
                               </div>
+
+                              <TradeValueBar userReceiveValue={blockReceiveValue} userSendValue={blockSendValue} />
+
                               {/* OVR Impact */}
                               <div className="flex gap-4 mt-2 pt-2 border-t border-[var(--border)]">
                                 <div className="text-xs">
                                   <span className="text-[var(--text-sec)]">Your OVR: </span>
-                                  <span className="font-bold">{userOvrBefore}</span>
+                                  <span className="text-sm font-bold">{userOvrBefore}</span>
                                   <span className="text-[var(--text-sec)]"> → </span>
-                                  <span className="font-bold">{userOvrAfter}</span>
+                                  <span className={`text-sm font-bold ${userOvrAfter > userOvrBefore ? 'text-green-600' : userOvrAfter < userOvrBefore ? 'text-red-600' : ''}`}>{userOvrAfter}</span>
                                   <span className={`ml-1 font-bold ${userDelta > 0 ? 'text-green-600' : userDelta < 0 ? 'text-red-600' : 'text-[var(--text-sec)]'}`}>
                                     ({userDelta > 0 ? '+' : ''}{userDelta})
                                   </span>
                                 </div>
                                 <div className="text-xs">
                                   <span className="text-[var(--text-sec)]">Their OVR: </span>
-                                  <span className="font-bold">{theirOvrBefore}</span>
+                                  <span className="text-sm font-bold">{theirOvrBefore}</span>
                                   <span className="text-[var(--text-sec)]"> → </span>
-                                  <span className="font-bold">{theirOvrAfter}</span>
+                                  <span className={`text-sm font-bold ${theirOvrAfter > theirOvrBefore ? 'text-green-600' : theirOvrAfter < theirOvrBefore ? 'text-red-600' : ''}`}>{theirOvrAfter}</span>
                                   <span className={`ml-1 font-bold ${theirDelta > 0 ? 'text-green-600' : theirDelta < 0 ? 'text-red-600' : 'text-[var(--text-sec)]'}`}>
                                     ({theirDelta > 0 ? '+' : ''}{theirDelta})
                                   </span>

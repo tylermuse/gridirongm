@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 type StatCategory = 'passYards' | 'rushYards' | 'receivingYards' | 'passTDs' | 'rushTDs' | 'sacks' | 'defensiveINTs' | 'tackles' | 'tacklesForLoss' | 'passDeflections' | 'receptions' | 'forcedFumbles';
 type Tab = 'leaders' | 'teams' | 'power';
@@ -115,12 +116,23 @@ export default function StatsPage() {
     { key: 'power' as Tab, label: 'Power Rankings' },
   ];
 
+  const hasStats = activePlayers.length > 0;
+
   return (
     <GameShell>
       <div className="max-w-5xl mx-auto">
         <TeamQuickNav currentPage="stats" />
-        <h2 className="text-2xl font-black mb-6">League Stats</h2>
+        <h2 className="text-2xl font-black mb-6 font-display uppercase tracking-tight">League Stats</h2>
 
+        {!hasStats ? (
+          <EmptyState
+            icon="📊"
+            title="No stats yet"
+            description="Stats populate once games are played. Sim your first week to see who's balling out."
+            cta="Simulate Week 1"
+            ctaHref="/"
+          />
+        ) : (<>
         {/* Tab bar */}
         <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-6 w-fit">
           {tabs.map(t => (
@@ -171,7 +183,7 @@ export default function StatsPage() {
                   return (
                     <tr
                       key={p.id}
-                      className={`border-t border-[var(--border)] ${isUser ? 'bg-blue-500/5' : 'hover:bg-[var(--surface-2)]'} transition-colors`}
+                      className={`border-t border-[var(--border)] ${isUser ? 'bg-blue-500/5' : 'hover:bg-[var(--surface-2)]'} transition-colors duration-150`}
                     >
                       <td className="py-2.5 text-center text-[var(--text-sec)] text-xs">{i + 1}</td>
                       <td className="py-2.5">
@@ -231,7 +243,7 @@ export default function StatsPage() {
                   return (
                     <tr
                       key={ts.team.id}
-                      className={`border-t border-[var(--border)] ${isUser ? 'bg-blue-500/5 font-semibold' : 'hover:bg-[var(--surface-2)]'} transition-colors`}
+                      className={`border-t border-[var(--border)] ${isUser ? 'bg-blue-500/5 font-semibold' : 'hover:bg-[var(--surface-2)]'} transition-colors duration-150`}
                     >
                       <td className="py-2.5 text-center text-[var(--text-sec)] text-xs">{i + 1}</td>
                       <td className="py-2.5">
@@ -285,7 +297,7 @@ export default function StatsPage() {
                   return (
                     <tr
                       key={pr.team.id}
-                      className={`border-t border-[var(--border)] ${isUser ? 'bg-blue-500/5 font-semibold' : 'hover:bg-[var(--surface-2)]'} transition-colors`}
+                      className={`border-t border-[var(--border)] ${isUser ? 'bg-blue-500/5 font-semibold' : 'hover:bg-[var(--surface-2)]'} transition-colors duration-150`}
                     >
                       <td className="py-2.5 text-center">
                         <span className={`text-sm font-bold ${i < 3 ? 'text-amber-600' : 'text-[var(--text-sec)]'}`}>
@@ -312,6 +324,7 @@ export default function StatsPage() {
             </table></div>
           </Card>
         )}
+        </>)}
       </div>
       <TeamRosterModal teamId={viewTeamId} onClose={() => setViewTeamId(null)} onPlayerClick={(id) => setSelectedPlayerId(id)} />
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />

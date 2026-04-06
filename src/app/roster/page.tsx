@@ -331,7 +331,7 @@ export default function RosterPage() {
           <div>
             <TeamQuickNav currentPage="roster" />
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-black">{viewingTeam?.city} {viewingTeam?.name} Roster</h2>
+              <h2 className="text-2xl font-black font-display uppercase tracking-tight">{viewingTeam?.city} {viewingTeam?.name} Roster</h2>
               <select
                 value={activeTeamId}
                 onChange={e => setViewingTeamId(e.target.value === userTeamId ? null : e.target.value)}
@@ -518,7 +518,7 @@ export default function RosterPage() {
                     return (
                       <tr
                         key={p.id}
-                        className={`transition-colors hover:bg-[var(--surface-2)] ${
+                        className={`transition-colors duration-150 hover:bg-[var(--surface-2)] ${
                           isStarter ? '' : 'opacity-80'
                         } ${showPosSeparator ? 'border-t-2 border-[var(--accent)]/30' : 'border-t border-[var(--border)]'}`}
                       >
@@ -650,7 +650,7 @@ export default function RosterPage() {
                           {(() => {
                             const mood = p.mood ?? 70;
                             const label = mood >= 85 ? 'Thrilled' : mood >= 75 ? 'Happy' : mood >= 60 ? 'Content' : mood >= 45 ? 'Unhappy' : 'Angry';
-                            const color = mood >= 75 ? 'text-green-600 bg-green-50' : mood >= 50 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50';
+                            const color = mood >= 85 ? 'text-green-600 bg-green-50' : mood >= 75 ? 'text-blue-600 bg-blue-50' : mood >= 60 ? 'text-gray-600 bg-gray-100' : mood >= 45 ? 'text-orange-600 bg-orange-50' : 'text-red-600 bg-red-50';
                             const depthIdx = getDepthIndex(p);
                             const reason = getMoodReason(p, viewingTeam, depthIdx);
                             return (
@@ -833,7 +833,7 @@ export default function RosterPage() {
                   </thead>
                   <tbody>
                     {injuredPlayers.map(p => (
-                      <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
+                      <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors duration-150">
                         <td className="py-2.5 pl-2">
                           <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-600 transition-colors">
                             {allProPlayerIds.has(p.id) && <span className="text-amber-600 mr-1">★</span>}

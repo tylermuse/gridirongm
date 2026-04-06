@@ -39,6 +39,7 @@ function ProspectCard({
   teamColor,
   ovrDisplay,
   subtitle,
+  variant = 'default',
   onDraft,
   onPlayerClick,
 }: {
@@ -49,14 +50,25 @@ function ProspectCard({
   teamColor: string;
   ovrDisplay?: string;
   subtitle?: string;
+  variant?: 'default' | 'bestfit' | 'scout';
   onDraft?: (playerId: string) => void;
   onPlayerClick?: (playerId: string) => void;
 }) {
   if (!player) return null;
+
+  const cardClass = variant === 'scout'
+    ? 'flex-1 min-w-0 rounded-xl border border-amber-200 bg-amber-50 overflow-hidden'
+    : 'flex-1 min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden';
+
+  const draftBtnClass = 'mt-3 w-full py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors whitespace-nowrap';
+
   return (
-    <div className="flex-1 min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+    <div className={cardClass}>
       <div className="px-4 pt-3 pb-1">
-        <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">
+        <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider flex items-center gap-1.5">
+          {variant === 'scout' && (
+            <svg className="w-3.5 h-3.5 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+          )}
           {label}
         </div>
         {subtitle && (
@@ -103,7 +115,7 @@ function ProspectCard({
         {onDraft && (
           <button
             onClick={() => onDraft(player.id)}
-            className="mt-3 w-full py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors whitespace-nowrap"
+            className={draftBtnClass}
           >
             Draft Now
           </button>
@@ -178,6 +190,47 @@ function OnTheClockSection({
   return (
     <div className="space-y-0">
       {/* On The Clock Header */}
+      {isUserPick ? (
+        <div
+          className="rounded-xl p-6 mb-6 relative overflow-hidden"
+          style={{ backgroundColor: teamColor, color: 'var(--team-text-on-primary, #fff)' }}
+        >
+          {/* Subtle animated gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 animate-pulse-slow pointer-events-none" />
+          <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-sm font-black shrink-0">
+                {currentTeam?.abbreviation ?? '--'}
+              </div>
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider opacity-80">You&apos;re On the Clock</div>
+                <div className="text-2xl sm:text-3xl font-black leading-tight">
+                  Round {currentRound}, Pick #{currentPickInRound}
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {needs.slice(0, 5).map(need => (
+                    <span key={need.position} className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-full">
+                      {need.position}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {/* Next pick team on the right */}
+            <div className="sm:text-right flex flex-col items-start sm:items-end gap-2">
+              {nextPickTeam && (
+                <div className="text-xs opacity-80">
+                  <span className="font-bold">Next:</span> {nextPickTeam.city} {nextPickTeam.name}
+                </div>
+              )}
+              <Button onClick={() => onSimAll?.()} size="sm" variant="secondary" disabled={!canSimulate} className="min-w-[80px]">
+                <span className="hidden sm:inline">Auto-Draft All</span>
+                <span className="sm:hidden">Auto All</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
       <div
         className="rounded-t-xl border border-[var(--border)] px-5 py-4"
         style={{ borderLeft: `4px solid ${teamColor}` }}
@@ -194,9 +247,6 @@ function OnTheClockSection({
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-black text-base sm:text-lg">On The Clock</span>
-                {isUserPick && (
-                  <Badge variant="green" size="sm">Your Pick</Badge>
-                )}
               </div>
               <div className="text-xs sm:text-sm text-[var(--text-sec)]">
                 {currentTeam ? `${currentTeam.city} ${currentTeam.name}` : 'Draft Complete'}
@@ -209,16 +259,12 @@ function OnTheClockSection({
             </div>
             <div className="flex flex-wrap gap-2 items-center">
               <span className="text-xs font-bold sm:hidden w-full">Rd {currentRound}, Pick {currentPickInRound}</span>
-              {!isUserPick && (
-                <Button onClick={simDraftPick} size="sm" variant="secondary" disabled={!canSimulate} className="flex-1 min-w-[80px]">
-                  Sim Pick
-                </Button>
-              )}
-              {!isUserPick && (
-                <Button onClick={simToUserDraftPick} size="sm" variant="secondary" disabled={!canSimulate} className="flex-1 min-w-[80px]">
-                  Sim to My Pick
-                </Button>
-              )}
+              <Button onClick={simDraftPick} size="sm" variant="secondary" disabled={!canSimulate} className="flex-1 min-w-[80px]">
+                Sim Pick
+              </Button>
+              <Button onClick={simToUserDraftPick} size="sm" variant="secondary" disabled={!canSimulate} className="flex-1 min-w-[80px]">
+                Sim to My Pick
+              </Button>
               <Button onClick={() => onSimAll?.()} size="sm" variant="secondary" disabled={!canSimulate} className="flex-1 min-w-[80px]">
                 <span className="hidden sm:inline">Auto-Draft All</span>
                 <span className="sm:hidden">Auto All</span>
@@ -227,9 +273,10 @@ function OnTheClockSection({
           </div>
         </div>
       </div>
+      )}
 
-      {/* Needs Row */}
-      <div className="border-x border-[var(--border)] px-5 py-3 bg-[var(--surface)]" style={{ borderLeft: `4px solid ${teamColor}` }}>
+      {/* Needs Row (hidden when user pick — hero already shows needs) */}
+      {!isUserPick && <div className="border-x border-[var(--border)] px-5 py-3 bg-[var(--surface)]" style={{ borderLeft: `4px solid ${teamColor}` }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold text-[var(--text-sec)] uppercase">Needs</span>
@@ -252,12 +299,12 @@ function OnTheClockSection({
               : '--'}
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Best Available + Best Fit */}
       {!draftComplete && (
         <div
-          className="border-x border-[var(--border)] px-5 py-4 bg-[var(--surface-2)]"
+          className={`border-x border-[var(--border)] px-5 py-4 bg-[var(--surface-2)] ${isUserPick ? 'rounded-t-xl border-t' : ''}`}
           style={{ borderLeft: `4px solid ${teamColor}` }}
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -283,6 +330,7 @@ function OnTheClockSection({
             {bestFit && (
               <ProspectCard
                 label="Best Fit"
+                variant="bestfit"
                 subtitle={!bestFitIsNeedMatch ? 'No position need match' : undefined}
                 player={bestFit}
                 posRank={getPositionRank(bestFit)}
@@ -304,6 +352,7 @@ function OnTheClockSection({
             {isUserPick && scoutsPick && (
               <ProspectCard
                 label="Your Scouts Say"
+                variant="scout"
                 player={scoutsPick}
                 posRank={getPositionRank(scoutsPick)}
                 ovrRank={getOverallRank(scoutsPick)}
@@ -493,14 +542,6 @@ function ScoutEvaluationPanel({
         </div>
       </div>
 
-      {/* Scout's OVR Estimate */}
-      <div className="border-l-2 border-blue-400 pl-3">
-        <p className="text-sm italic text-[var(--text)]">
-          &ldquo;{evaluation.scoutOvrEstimate.quote}&rdquo;
-        </p>
-        <span className="text-[10px] text-[var(--text-sec)]">— Scout Staff</span>
-      </div>
-
       {/* Risk Factors + Combine — side by side */}
       <div className="grid grid-cols-3 gap-3">
         {/* Risk Factors */}
@@ -540,12 +581,6 @@ function ScoutEvaluationPanel({
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Scout Quote */}
-      <div className="border-l-2 border-green-400 pl-3">
-        <p className="text-sm italic text-[var(--text)]">{evaluation.scoutQuote}</p>
-        <span className="text-[10px] text-[var(--text-sec)]">— Scout Staff</span>
       </div>
 
       {/* Character & Development from full scouting report */}
@@ -669,12 +704,13 @@ export default function DraftPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedProspectId, setExpandedProspectId] = useState<string | null>(null);
   const [scoutedOnly, setScoutedOnly] = useState(false);
+  const [draftTab, setDraftTab] = useState<'board' | 'results'>('board');
 
   if (phase !== 'draft') {
     return (
       <GameShell>
         <div className="max-w-4xl mx-auto text-center py-20">
-          <h2 className="text-2xl font-black mb-3">Draft</h2>
+          <h2 className="text-2xl font-black mb-3 font-display uppercase tracking-tight">Draft</h2>
           <p className="text-[var(--text-sec)] mb-6">
             {phase === 'regular' ? 'The draft begins after the playoffs. Sim the season and compete for a title first.' :
              phase === 'playoffs' ? 'The draft begins after the playoffs conclude. Keep simulating!' :
@@ -887,7 +923,7 @@ export default function DraftPage() {
   return (
     <GameShell>
       <div className="max-w-7xl mx-auto space-y-4">
-        <h2 className="text-2xl font-black">Draft</h2>
+        <h2 className="text-2xl font-black font-display uppercase tracking-tight">Draft</h2>
 
         {/* Auto-drafting progress */}
         {autoDrafting && (
@@ -957,9 +993,33 @@ export default function DraftPage() {
           onPlayerClick={(playerId) => setExpandedProspectId(playerId)}
         />
 
-        <div className="grid grid-cols-12 gap-4">
+        {/* Tab buttons */}
+        <div className="flex gap-1 mb-4 bg-[var(--surface-2)] rounded-lg p-1 w-fit">
+          <button
+            onClick={() => setDraftTab('board')}
+            className={`px-4 py-2 text-sm font-bold rounded-md transition-colors ${
+              draftTab === 'board'
+                ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm'
+                : 'text-[var(--text-sec)] hover:text-[var(--text)]'
+            }`}
+          >
+            Draft Board
+          </button>
+          <button
+            onClick={() => setDraftTab('results')}
+            className={`px-4 py-2 text-sm font-bold rounded-md transition-colors ${
+              draftTab === 'results'
+                ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm'
+                : 'text-[var(--text-sec)] hover:text-[var(--text)]'
+            }`}
+          >
+            Draft Results {draftResults.length > 0 && <span className="ml-1.5 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">{draftResults.length}</span>}
+          </button>
+        </div>
+
+        <div>
           {/* Top Prospects */}
-          <Card className="col-span-12 lg:col-span-6">
+          {draftTab === 'board' && <Card>
             <CardHeader>
               <CardTitle>Draft Board</CardTitle>
               <div className="flex items-center gap-2">
@@ -1051,7 +1111,7 @@ export default function DraftPage() {
                   return (
                     <React.Fragment key={player.id}>
                     <tr
-                      className={`border-t border-[var(--border)] cursor-pointer transition-colors ${isExpanded ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
+                      className={`border-t border-[var(--border)] cursor-pointer transition-colors duration-150 ${isExpanded ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
                       onClick={() => setExpandedProspectId(isExpanded ? null : player.id)}
                     >
                       <td className="py-2.5 pl-2">
@@ -1065,6 +1125,9 @@ export default function DraftPage() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
                               <span className="font-semibold truncate">{player.firstName} {player.lastName}</span>
+                              {currentTeamNeeds.some(n => n.position === player.position && n.needScore >= 25) && (
+                                <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium ml-1 shrink-0">Fills Need</span>
+                              )}
                               {!isScouted && scoutsRemaining > 0 && (
                                 <button
                                   onClick={(e) => {
@@ -1129,9 +1192,9 @@ export default function DraftPage() {
                           {(() => {
                             const ss = scoutingState;
                             const pts = ss?.scoutPoints ?? 15;
-                            const hasTrip = !!ss?.scoutTrips[player.id];
-                            const hasInterview = !!ss?.interviews[player.id];
-                            const hasProDay = !!ss?.proDays[player.id];
+                            const hasTrip = !!ss?.scoutTrips?.[player.id];
+                            const hasInterview = !!ss?.interviews?.[player.id];
+                            const hasProDay = !!ss?.proDays?.[player.id];
                             const proDayCount = ss?.proDayCount ?? 0;
                             return (
                               <div className="mb-3">
@@ -1224,10 +1287,10 @@ export default function DraftPage() {
               </tbody>
             </table>
             </div>
-          </Card>
+          </Card>}
 
           {/* Draft Results */}
-          <Card className="col-span-12 lg:col-span-6">
+          {draftTab === 'results' && <Card>
             <CardHeader>
               <CardTitle>Draft Results</CardTitle>
               <div className="flex items-center gap-2">
@@ -1337,7 +1400,7 @@ export default function DraftPage() {
               </tbody>
             </table>
             </div>
-          </Card>
+          </Card>}
         </div>
 
         {/* Draft Recap - Team Grades (shown when draft is complete) */}

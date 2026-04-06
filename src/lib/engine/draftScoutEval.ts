@@ -30,7 +30,7 @@ export interface DraftScoutEvaluation {
   fitBadge: 'Strong Target' | 'Worth a Look' | 'Not a Fit' | 'Roster Redundancy';
   fitScore: number;
   scoutsTake: string;
-  scoutOvrEstimate: { low: number; high: number; quote: string };
+  scoutOvrEstimate: { low: number; high: number };
   rosterComparison: string;
   riskFactors: string[];
   combine: {
@@ -39,7 +39,6 @@ export interface DraftScoutEvaluation {
     verticalJump: number;
     shuttle: number;
   };
-  scoutQuote: string;
 }
 
 /* ─── Position context ───────────────────────────────────────── */
@@ -60,72 +59,92 @@ const POSITION_ROLES: Record<Position, { starter: string; depth: string; elite: 
 
 /* ─── Scout's Take templates ─────────────────────────────────── */
 
-function generateScoutsTake(player: Player, seed: number): string {
+function generateScoutsTake(
+  player: Player,
+  seed: number,
+  scoutOvr: { low: number; high: number },
+  publicOvrRange: { lo: number; hi: number },
+  fitBadge: DraftScoutEvaluation['fitBadge'],
+  userRoster: Player[],
+): string {
   const ovr = player.ratings.overall;
   const pot = player.potential;
   const pos = player.position;
   const label = player.scoutingLabel ?? '';
   const profile = player.draftProfile ?? 'normal';
+  const publicMid = Math.round((publicOvrRange.lo + publicOvrRange.hi) / 2);
 
-  // Bust override for elite/solid prospects — scout adds a cautionary note
+  // ── Talent assessment ──
+  let talent: string;
+
   if (profile === 'bust' && ovr >= 68 && ((seed * 3571 + 8923) % 100) < 75) {
     const bustTakes = [
-      `The physical tools are undeniable, but our staff has questions about ${pos === 'QB' ? 'his ability to process at the NFL speed' : pos === 'WR' || pos === 'TE' ? 'whether the production will translate without a scheme advantage' : pos === 'OL' ? 'his ability to handle NFL-level pass rushers consistently' : 'whether the college production was inflated by the system he played in'}. There's a real scenario where this pick doesn't develop the way everyone expects.`,
-      `I know the consensus loves this kid, but something doesn't sit right with our evaluators. The ${pos === 'QB' ? 'decision-making under pressure' : 'consistency from snap to snap'} concerns me. ${ovr >= 78 ? "He's got all the talent in the world — but talent doesn't always translate." : "I'd think twice before investing a high pick here."}`,
-      `There's a disconnect between the measurables and the tape. ${pos === 'QB' ? "The arm is electric but the football IQ hasn't caught up." : "Dominates with athleticism but gets exposed when the opponent schemes around it."} Our staff is worried this one could be a mirage.`,
+      `The physical tools are undeniable, but our staff has questions about ${pos === 'QB' ? 'his ability to process at NFL speed' : pos === 'WR' || pos === 'TE' ? 'whether the production will translate without a scheme advantage' : pos === 'OL' ? 'his ability to handle NFL-level pass rushers consistently' : 'whether the college production was inflated by the system he played in'}.`,
+      `The consensus loves this kid, but something doesn't sit right with our evaluators. The ${pos === 'QB' ? 'decision-making under pressure' : 'consistency from snap to snap'} concerns me.`,
+      `There's a disconnect between the measurables and the tape. ${pos === 'QB' ? "The arm is electric but the football IQ hasn't caught up." : "Dominates with athleticism but gets exposed when the opponent schemes around it."}`,
     ];
-    return pick(bustTakes, seed);
-  }
-
-  // Boom override for mid/raw prospects — scout flags unexpected upside
-  if (profile === 'boom' && ovr < 68 && ((seed * 3571 + 8923) % 100) < 75) {
+    talent = pick(bustTakes, seed);
+  } else if (profile === 'boom' && ovr < 68 && ((seed * 3571 + 8923) % 100) < 75) {
     const boomTakes = [
-      `Don't sleep on this kid. The OVR doesn't tell the whole story. ${pos === 'QB' ? "There's arm talent here that you can't teach, and the improvement from year 3 to year 4 was dramatic." : pos === 'WR' || pos === 'TE' ? "The route-running has improved every single year. Give him NFL coaching and watch out." : pos === 'OL' ? "The technique is raw but the physical tools are first-round caliber." : "Every coach who worked with him says the same thing — this player has another gear."} Could be the steal of the draft.`,
-      `Our scouts are higher on this one than the consensus — significantly higher. ${pot > ovr + 10 ? `There's a world where this player becomes a legitimate starter within two years.` : `The improvement trajectory is what caught our eye.`} Late bloomer profile that NFL development could supercharge.`,
-      `This is the type of prospect that makes you look like a genius in three years. Raw? Absolutely. But the tools are tantalizing and the work ethic is off the charts. I'd bet on the upside here.`,
+      `Don't sleep on this kid. ${pos === 'QB' ? "There's arm talent here that you can't teach, and the improvement from year 3 to year 4 was dramatic." : pos === 'WR' || pos === 'TE' ? "The route-running has improved every single year. Give him NFL coaching and watch out." : pos === 'OL' ? "The technique is raw but the physical tools are first-round caliber." : "Every coach who worked with him says the same thing — this player has another gear."}`,
+      `Our scouts are higher on this one than the consensus — significantly higher. ${pot > ovr + 10 ? 'There\'s a world where this player becomes a legitimate starter within two years.' : 'The improvement trajectory is what caught our eye.'}`,
+      `This is the type of prospect that makes you look like a genius in three years. Raw? Absolutely. But the tools are tantalizing and the work ethic is off the charts.`,
     ];
-    return pick(boomTakes, seed);
-  }
-
-  // Elite prospect (OVR >= 78)
-  if (ovr >= 78) {
+    talent = pick(boomTakes, seed);
+  } else if (ovr >= 78) {
     const eliteTemplates = [
-      `Most complete ${pos} in this class. Does everything at a high level and projects as a day-one starter. The kind of player you build a unit around.`,
-      `Rare combination of physical tools and football instincts. Tape is consistently dominant against top competition. This is an impact player from Week 1.`,
+      `Most complete ${pos} in this class. Does everything at a high level and projects as a day-one starter.`,
+      `Rare combination of physical tools and football instincts. Tape is consistently dominant against top competition.`,
       `Pro-ready in every sense. ${pos === 'QB' ? 'Command of the pocket, accuracy in all three levels, and leadership that jumps off the tape.' : pos === 'WR' || pos === 'TE' ? 'Route tree is NFL-caliber already, and the hands are as reliable as they come.' : pos === 'OL' ? 'Anchor strength and pass sets are already at a professional level.' : 'Instincts and closing speed set him apart from everyone else in this class.'}`,
-      `Blue-chip prospect. ${pot > ovr + 3 ? "Hasn't even scratched his ceiling yet — and he's already this good." : "What you see is what you get, and what you get is a difference-maker."}`,
     ];
-    return pick(eliteTemplates, seed);
-  }
-
-  // Solid prospect (OVR 68-77)
-  if (ovr >= 68) {
+    talent = pick(eliteTemplates, seed);
+  } else if (ovr >= 68) {
     const solidTemplates = [
-      `Reliable, well-rounded ${pos} who should compete for a starting role early. ${pot > ovr + 5 ? 'Still has significant upside to unlock with the right coaching.' : 'Safe floor as a quality starter.'}`,
-      `Good tape against solid competition. ${pos === 'QB' ? "Processes the field well and limits mistakes, though the arm talent isn't elite." : pos === 'RB' ? 'Runs with power and vision between the tackles, needs work in pass protection.' : pos === 'DL' || pos === 'LB' ? 'Plays with a high motor and fills his gaps consistently.' : 'Technically sound with room to add more explosive plays to his game.'}`,
-      `Starter-caliber prospect with a clear role at the next level. ${label === 'High motor' ? "Work ethic is off the charts — this kid doesn't take plays off." : label === 'Pro-ready' ? 'Most polished player at the position in this draft.' : 'Not a flashy pick but a smart one.'}`,
-      `Solid foundation to build on. ${pot >= 80 ? 'The ceiling here is tantalizing if the development staff can unlock it.' : 'Projects as a dependable starter for years.'}`,
+      `Reliable, well-rounded ${pos} who should compete for a starting role early. ${pot > ovr + 5 ? 'Still has significant upside to unlock.' : 'Safe floor as a quality starter.'}`,
+      `Good tape against solid competition. ${pos === 'QB' ? "Processes the field well and limits mistakes." : pos === 'RB' ? 'Runs with power and vision between the tackles.' : pos === 'DL' || pos === 'LB' ? 'Plays with a high motor and fills his gaps consistently.' : 'Technically sound with room to add more explosive plays.'}`,
+      `Starter-caliber prospect with a clear role at the next level. ${label === 'High motor' ? "Work ethic is off the charts." : label === 'Pro-ready' ? 'Most polished player at the position in this draft.' : 'Not a flashy pick but a smart one.'}`,
     ];
-    return pick(solidTemplates, seed);
-  }
-
-  // Mid-tier prospect (OVR 58-67)
-  if (ovr >= 58) {
+    talent = pick(solidTemplates, seed);
+  } else if (ovr >= 58) {
     const midTemplates = [
-      `Developmental prospect with ${pot > ovr + 8 ? 'intriguing upside' : 'a defined role'}. ${label === 'Raw but explosive' ? 'Athletic tools are clear but the technique needs work.' : label === 'Sleeper' ? 'Flying under the radar — our staff sees something the consensus doesn\'t.' : 'Needs time but could earn a spot in the rotation.'}`,
-      `${pos === 'QB' ? 'Arm talent is there but decision-making is inconsistent. Will need time behind a veteran.' : pos === 'WR' || pos === 'TE' ? 'Flashes of separation ability but drops are a concern.' : pos === 'OL' ? 'Has the frame and feet, needs to add strength and refine technique.' : 'Showed improvement through the college season. Trending in the right direction.'}`,
-      `Project pick with ${pot > ovr + 10 ? 'legitimate starter potential in 2-3 years' : 'a ceiling as a quality backup'}. ${label === 'Combine standout' ? 'Combine numbers will inflate his stock, but the game tape tells a more modest story.' : 'Needs reps and coaching to close the gap between tools and production.'}`,
+      `Developmental prospect with ${pot > ovr + 8 ? 'intriguing upside' : 'a defined role'}. ${label === 'Raw but explosive' ? 'Athletic tools are clear but the technique needs work.' : 'Needs time but could earn a spot in the rotation.'}`,
+      `${pos === 'QB' ? 'Arm talent is there but decision-making is inconsistent.' : pos === 'WR' || pos === 'TE' ? 'Flashes of separation ability but drops are a concern.' : pos === 'OL' ? 'Has the frame and feet, needs to add strength and refine technique.' : 'Showed improvement through the college season. Trending in the right direction.'}`,
+      `Project pick with ${pot > ovr + 10 ? 'legitimate starter potential in 2-3 years' : 'a ceiling as a quality backup'}. Needs reps and coaching to close the gap between tools and production.`,
     ];
-    return pick(midTemplates, seed);
+    talent = pick(midTemplates, seed);
+  } else {
+    const rawTemplates = [
+      `Long-term project. ${pot > ovr + 12 ? 'There\'s a player in there — it just might take 2-3 years to find him.' : 'Camp body who will need to show something special to stick.'}`,
+      `Raw athleticism that hasn't translated to consistent production yet. ${pot > 70 ? 'If the light comes on, you\'re looking at a late-round steal.' : 'Likely practice squad or special teams contributor early.'}`,
+      `Depth pick at best right now. ${label === 'High motor' ? 'Effort is never a question — the physical tools just need to catch up.' : 'Will need significant development to contribute on game days.'}`,
+    ];
+    talent = pick(rawTemplates, seed);
   }
 
-  // Raw prospect (OVR < 58)
-  const rawTemplates = [
-    `Long-term project. ${pot > ovr + 12 ? 'There\'s a player in there — it just might take 2-3 years to find him.' : 'Camp body who will need to show something special to stick.'} ${label === 'Sleeper' ? 'But our scouts see traits that don\'t show up in the box score.' : ''}`,
-    `Raw athleticism that hasn't translated to consistent production yet. ${pot > 70 ? 'If the light comes on, you\'re looking at a late-round steal.' : 'Likely practice squad or special teams contributor early.'}`,
-    `Depth pick at best right now. ${label === 'High motor' ? 'Effort is never a question — the physical tools just need to catch up.' : 'Will need significant development to contribute on game days.'}`,
-  ];
-  return pick(rawTemplates, seed);
+  // ── OVR opinion (only if scout disagrees with consensus) ──
+  let ovrOpinion = '';
+  if (ovr > publicMid + 3) {
+    ovrOpinion = ` Our staff has him higher than consensus — more of a ${scoutOvr.low}-${scoutOvr.high} player.`;
+  } else if (ovr < publicMid - 3) {
+    ovrOpinion = ` We're lower on him than most — ${scoutOvr.low}-${scoutOvr.high} range for us.`;
+  } else {
+    ovrOpinion = ` ${scoutOvr.low}-${scoutOvr.high} feels right based on our evaluations.`;
+  }
+
+  // ── Fit opinion ──
+  const samePos = userRoster.filter(p => p.position === pos && !p.retired);
+  let fitOpinion = '';
+  if (fitBadge === 'Strong Target') {
+    fitOpinion = ` ${player.lastName} fills a real need — I'd be aggressive to get him.`;
+  } else if (fitBadge === 'Roster Redundancy') {
+    fitOpinion = ` We're already deep at ${pos} though, so the opportunity cost is too high.`;
+  } else if (fitBadge === 'Not a Fit') {
+    fitOpinion = ` Just doesn't match what we need right now.`;
+  } else if (samePos.length >= 3) {
+    fitOpinion = ` Solid pick if the board falls this way.`;
+  }
+
+  return talent + ovrOpinion + fitOpinion;
 }
 
 /* ─── Scout's OVR Estimate ───────────────────────────────────── */
@@ -134,42 +153,12 @@ function generateScoutOvrEstimate(
   player: Player,
   publicRange: { lo: number; hi: number },
   seed: number,
-): { low: number; high: number; quote: string } {
+): { low: number; high: number } {
   const trueOvr = player.ratings.overall;
-  // Scout estimate is ±2-3 from true OVR (tighter than public range)
   const spreadHalf = 2 + (seed % 2); // 2 or 3
   const low = clamp(trueOvr - spreadHalf, 20, 99);
   const high = clamp(trueOvr + spreadHalf, 20, 99);
-  const publicMid = Math.round((publicRange.lo + publicRange.hi) / 2);
-
-  let quote: string;
-  if (trueOvr > publicMid + 3) {
-    // Scout thinks player is better than consensus
-    const quotes = [
-      `I think this guy is more of a ${low}-${high} player, not the ${publicMid} everyone's projecting. Could be a steal here.`,
-      `Consensus has him undervalued. I'm seeing ${low}-${high} on tape — the athletic testing doesn't do him justice.`,
-      `He's better than his draft stock suggests. I'd put him at ${low}-${high}, which makes him a value pick at this spot.`,
-    ];
-    quote = pick(quotes, seed + 7);
-  } else if (trueOvr < publicMid - 3) {
-    // Scout thinks player is worse than consensus
-    const quotes = [
-      `Consensus has him at ${publicMid} but I'm seeing more like ${low}-${high}. The athletic testing is inflating his stock.`,
-      `I'm lower on this one than most — ${low}-${high} range for me. The tape doesn't match the hype.`,
-      `Everyone loves the measurables, but I've got him at ${low}-${high}. There are technique concerns that will matter at the next level.`,
-    ];
-    quote = pick(quotes, seed + 7);
-  } else {
-    // Scout agrees with consensus
-    const quotes = [
-      `I agree with the ${publicMid} projection. What you see is what you get — ${high >= 75 ? 'a solid starter' : high >= 65 ? 'a reliable contributor' : 'a developmental piece'}, nothing more.`,
-      `Our evaluation lines up with consensus — ${low}-${high} range. ${high >= 75 ? 'No surprises here, just a quality player.' : 'Fair assessment of his current ability.'}`,
-      `Right in line with where everyone has him. ${low}-${high} feels right based on our evaluations.`,
-    ];
-    quote = pick(quotes, seed + 7);
-  }
-
-  return { low, high, quote };
+  return { low, high };
 }
 
 /* ─── Roster Comparison ──────────────────────────────────────── */
@@ -353,10 +342,7 @@ export function generateDraftScoutEval(
     fitBadge = 'Not a Fit';
   }
 
-  // ── Scout's Take ──
-  const scoutsTake = generateScoutsTake(player, seed);
-
-  // ── Scout's OVR Estimate ──
+  // ── Scout's OVR Estimate (numeric range) ──
   const scoutOvrEstimate = generateScoutOvrEstimate(player, publicOvrRange, seed);
 
   // ── Roster Comparison ──
@@ -368,29 +354,8 @@ export function generateDraftScoutEval(
   // ── Combine ──
   const combine = extendedCombine(player);
 
-  // ── Scout Quote ──
-  const roles = POSITION_ROLES[pos];
-  const scoutQuotes: Record<DraftScoutEvaluation['fitBadge'], string[]> = {
-    'Strong Target': [
-      `"This is the guy. ${player.lastName} fills a real need and the talent is there. I'd be aggressive to get him."`,
-      `"${player.lastName} is my favorite player at ${pos} in this class. If he's there at our pick, we should sprint to the podium."`,
-      `"I've watched every snap of ${player.lastName}'s tape. He's the real deal — ${roles.elite} potential."`,
-    ],
-    'Worth a Look': [
-      `"${player.lastName} is interesting. Not a home run, but a solid pick if the board falls this way."`,
-      `"I could see ${player.lastName} in our system. Good value if he slides to us."`,
-      `"There's something here with ${player.lastName}. Worth keeping on the board — wouldn't reach for him though."`,
-    ],
-    'Not a Fit': [
-      `"Talented player, just doesn't match what we need right now. I'd pass unless there's nobody else."`,
-      `"${player.lastName} is fine, but we've got bigger holes to fill. Let someone else draft him."`,
-    ],
-    'Roster Redundancy': [
-      `"We're already deep at ${pos}. Even if ${player.lastName} is talented, the opportunity cost is too high."`,
-      `"Good player, wrong team. We'd be drafting for depth when we need starters elsewhere."`,
-    ],
-  };
-  const scoutQuote = pick(scoutQuotes[fitBadge], seed + 11);
+  // ── Scout's Take (unified: talent + OVR opinion + fit) ──
+  const scoutsTake = generateScoutsTake(player, seed, scoutOvrEstimate, publicOvrRange, fitBadge, userRoster);
 
   return {
     fitBadge,
@@ -400,6 +365,5 @@ export function generateDraftScoutEval(
     rosterComparison,
     riskFactors,
     combine,
-    scoutQuote,
   };
 }

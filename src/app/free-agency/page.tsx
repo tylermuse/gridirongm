@@ -717,7 +717,7 @@ export default function FreeAgencyPage() {
                     return (
                       <React.Fragment key={p.id}>
                       <tr
-                        className={`border-t border-[var(--border)] transition-colors cursor-pointer ${
+                        className={`border-t border-[var(--border)] transition-colors duration-150 cursor-pointer ${
                           negotiation?.playerId === p.id ? 'bg-blue-50' : isRefused ? 'opacity-60' : isExpanded ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'
                         }`}
                         onClick={() => setExpandedPlayerId(isExpanded ? null : p.id)}

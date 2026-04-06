@@ -15,16 +15,20 @@ import type { Position, PlayerRatings } from '@/types';
 
 function ratingColor(val: number) {
   if (val >= 85) return 'text-green-600';
-  if (val >= 70) return 'text-blue-600';
-  if (val >= 55) return 'text-amber-600';
+  if (val >= 75) return 'text-emerald-600';
+  if (val >= 65) return 'text-yellow-600';
+  if (val >= 55) return 'text-orange-500';
+  if (val >= 45) return 'text-orange-600';
   return 'text-red-600';
 }
 
 function ratingBarColor(val: number) {
-  if (val >= 85) return 'bg-green-500';
-  if (val >= 70) return 'bg-blue-500';
-  if (val >= 55) return 'bg-amber-500';
-  return 'bg-red-500';
+  if (val >= 85) return 'bg-green-600';
+  if (val >= 75) return 'bg-emerald-600';
+  if (val >= 65) return 'bg-yellow-600';
+  if (val >= 55) return 'bg-orange-500';
+  if (val >= 45) return 'bg-orange-600';
+  return 'bg-red-600';
 }
 
 const POSITION_RELEVANT_RATINGS: Record<Position, (keyof Omit<PlayerRatings, 'overall'>)[]> = {
@@ -106,9 +110,13 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
         {/* Header */}
         <div className="flex items-start gap-5">
           <div className="flex flex-col items-center gap-1.5 shrink-0">
-            <PlayerAvatar player={player} size="md" teamColor={team?.primaryColor ?? '#374151'} />
+            <div className="relative">
+              <PlayerAvatar player={player} size="xl" teamColor={team?.primaryColor ?? '#374151'} />
+              <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 text-[10px] font-black text-white rounded-full bg-gray-700">
+                {player.position}
+              </span>
+            </div>
             {team && <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="sm" />}
-            <div className="text-[10px] font-black text-[var(--text-sec)]">{player.position}</div>
           </div>
 
           <div className="flex-1 min-w-0">
@@ -141,11 +149,13 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                 </div>
               </div>
 
-              <div className="text-right shrink-0">
-                <div className={`text-4xl font-black ${ratingColor(player.ratings.overall)}`}>
+              <div className="flex flex-col items-center shrink-0">
+                <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white font-extrabold text-xl ${
+                  player.ratings.overall >= 80 ? 'bg-green-600' : player.ratings.overall >= 65 ? 'bg-yellow-500' : player.ratings.overall >= 50 ? 'bg-orange-500' : 'bg-red-500'
+                }`}>
                   {player.ratings.overall}
                 </div>
-                <div className="text-xs text-[var(--text-sec)]">Overall</div>
+                <div className="text-xs text-[var(--text-sec)] mt-1">OVR</div>
               </div>
             </div>
 
@@ -167,9 +177,9 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
 
               {player.mood !== undefined && (() => {
                 const mood = player.mood;
-                const label = mood >= 90 ? 'Ecstatic' : mood >= 75 ? 'Happy' : mood >= 60 ? 'Content' : mood >= 45 ? 'Unhappy' : mood >= 25 ? 'Frustrated' : 'Holdout Risk';
-                const emoji = mood >= 75 ? '😊' : mood >= 50 ? '😐' : '😠';
-                const color = mood >= 75 ? 'text-green-600' : mood >= 50 ? 'text-amber-600' : 'text-red-600';
+                const label = mood >= 90 ? 'Thrilled' : mood >= 75 ? 'Happy' : mood >= 60 ? 'Content' : mood >= 45 ? 'Unhappy' : mood >= 25 ? 'Angry' : 'Holdout Risk';
+                const emoji = mood >= 75 ? '😊' : mood >= 60 ? '😐' : '😠';
+                const color = mood >= 90 ? 'text-green-600' : mood >= 75 ? 'text-blue-600' : mood >= 60 ? 'text-gray-500' : mood >= 45 ? 'text-orange-500' : 'text-red-600';
 
                 // Build mood reasons
                 const reasons: string[] = [];
@@ -213,11 +223,25 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
             {/* Actions */}
             {isOnUserTeam && !player.retired && (
               <div className="mt-3">
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex flex-col gap-2">
+                  {isTradeOpen && !confirmRelease && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        onClose();
+                        router.push(`/trades?block=${player.id}&from=player`);
+                      }}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      Add to Trading Block
+                    </Button>
+                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
                   <Button
                     size="sm"
                     variant={confirmRelease ? 'danger' : 'secondary'}
                     onClick={handleRelease}
+                    className={!confirmRelease ? 'border border-red-200 text-red-600 bg-transparent hover:bg-red-50' : ''}
                   >
                     {confirmRelease ? 'Confirm Release?' : 'Release Player'}
                   </Button>
@@ -226,17 +250,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                       Cancel
                     </Button>
                   )}
-                  {isTradeOpen && !confirmRelease && (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        onClose();
-                        router.push(`/trades?block=${player.id}&from=player`);
-                      }}
-                    >
-                      Add to Trading Block
-                    </Button>
-                  )}
+                  </div>
                 </div>
                 {player.contract.salary > 0 && (() => {
                   const deadCap = calculateDeadCap(player.contract);
@@ -260,7 +274,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
             {/* Restructure Contract */}
             {isOnUserTeam && !player.retired && player.contract.yearsLeft >= 2 && player.lastRestructuredSeason !== season && !showRestructure && (
               <div className="mt-2">
-                <Button size="sm" variant="secondary" onClick={() => setShowRestructure(true)}>
+                <Button size="sm" variant="secondary" onClick={() => setShowRestructure(true)} className="border border-[var(--border)] text-[var(--text-sec)]">
                   Restructure Contract
                 </Button>
               </div>

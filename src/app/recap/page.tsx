@@ -10,6 +10,7 @@ import { generateWeeklyRecap } from '@/lib/engine/recap';
 import { DebateBubble } from '@/components/game/DebateBubble';
 import { formatRecord, type RecapSegmentData, type Player, type Team } from '@/types';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const SEGMENT_TYPE_LABELS: Record<RecapSegmentData['type'], string> = {
   headline: 'Headlines',
@@ -472,15 +473,13 @@ export default function RecapPage() {
             )}
           </>
         ) : (
-          <div className="text-center py-16">
-            <div className="text-4xl mb-4">🎙️</div>
-            <p className="text-[var(--text-sec)]">
-              No recaps yet. Simulate games to generate your weekly show!
-            </p>
-            <p className="text-xs text-[var(--text-sec)] mt-2">
-              Season {season} · Week {week}
-            </p>
-          </div>
+          <EmptyState
+            icon="🎙️"
+            title="Gridiron Tonight"
+            description="Your weekly recap show — storylines, standout performances, and league trends. Simulate games to generate your first episode."
+            cta="Simulate Week 1"
+            ctaHref="/"
+          />
         )}
       </div>
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />

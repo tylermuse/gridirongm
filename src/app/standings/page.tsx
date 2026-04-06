@@ -99,7 +99,7 @@ function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams,
           return (
             <tr
               key={t.id}
-              className={`border-t border-[var(--border)] cursor-pointer hover:bg-[var(--surface-2)] ${t.id === userTeamId ? 'text-blue-600 font-semibold' : ''}`}
+              className={`border-t border-[var(--border)] cursor-pointer hover:bg-[var(--surface-2)] transition-colors duration-150 ${t.id === userTeamId ? 'text-blue-600 font-semibold' : ''}`}
               onClick={() => onTeamClick(t.id)}
             >
               <td className="py-1.5 text-[var(--text-sec)] text-xs w-6">{i + 1}</td>
@@ -209,7 +209,7 @@ export default function StandingsPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <TeamQuickNav currentPage="standings" />
-            <h2 className="text-2xl font-black">Standings & Schedule</h2>
+            <h2 className="text-2xl font-black font-display uppercase tracking-tight">Standings & Schedule</h2>
           </div>
           <div className="flex bg-[var(--surface-2)] rounded-lg p-0.5">
             <button

@@ -194,7 +194,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const {
     season, week, phase, teams, userTeamId, resetLeague,
     newsItems, resigningPlayers, tradeProposals, freeAgents, draftOrder, draftResults,
-    leagueSettings,
+    leagueSettings, players,
   } = useGameStore();
   const userTeam = teams.find(t => t.id === userTeamId);
   const [showSavePanel, setShowSavePanel] = useState(false);
@@ -203,20 +203,24 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const unreadNews = newsItems.filter(n => n.isUserTeam).length;
   const pendingTrades = tradeProposals.filter(p => p.status === 'pending').length;
 
-  function getBadge(href: string): { text: string; variant: 'blue' | 'red' | 'amber' } | null {
+  const rosterCount = players.filter(p => p.teamId === userTeamId && !p.retired).length;
+
+  function getBadge(href: string): { text: string; variant: 'blue' | 'red' | 'amber' | 'pulse' } | null {
     if (href === '/news' && unreadNews > 0) return { text: String(unreadNews > 99 ? '99+' : unreadNews), variant: 'blue' };
     if (href === '/trades' && pendingTrades > 0) return { text: String(pendingTrades), variant: 'red' };
     if (href === '/re-sign' && phase === 'resigning' && resigningPlayers.length > 0)
       return { text: String(resigningPlayers.length), variant: 'amber' };
     if (href === '/draft' && phase === 'draft' && draftOrder[0] === userTeamId)
-      return { text: 'Your Pick!', variant: 'red' };
+      return { text: '', variant: 'pulse' };
     if (href === '/free-agency' && phase === 'freeAgency' && freeAgents.length > 0)
       return { text: 'FA Open', variant: 'amber' };
+    if (href === '/finances' && userTeam && userTeam.totalPayroll > userTeam.salaryCap)
+      return { text: '!', variant: 'red' };
     return null;
   }
 
   return (
-    <aside className="w-[260px] min-w-[260px] shrink-0 bg-[var(--surface)] border-r border-[var(--border)] flex flex-col h-screen sticky top-0">
+    <aside className="w-[260px] min-w-[260px] shrink-0 bg-[var(--surface)] border-r border-[var(--border)] border-l-[3px] border-l-[var(--team-primary)] flex flex-col h-screen sticky top-0">
       <div className="p-4 border-b border-[var(--border)]">
         <h1 className="text-xl font-extrabold tracking-tight">
           <span className="text-blue-600">BS</span>
@@ -225,22 +229,23 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       </div>
 
       {userTeam && (
-        <div className="p-4 border-b border-[var(--border)]">
-          <div className="flex items-center gap-2 mb-1">
+        <div className="p-4 border-b border-[var(--border)] bg-[var(--team-primary)] text-[var(--team-text-on-primary)]">
+          <div className="flex items-center gap-3 mb-1">
             <TeamLogo
               abbreviation={userTeam.abbreviation}
               primaryColor={userTeam.primaryColor}
               secondaryColor={userTeam.secondaryColor} logoUrl={userTeam.logoUrl}
-              size="md"
+              size="lg"
             />
             <div>
-              <div className="text-sm font-bold">{userTeam.city}</div>
-              <div className="text-xs text-[var(--text-sec)]">{userTeam.name}</div>
+              <div className="text-sm font-bold leading-tight">{userTeam.city}</div>
+              <div className="text-base font-extrabold leading-tight">{userTeam.name}</div>
             </div>
           </div>
-          <div className="mt-2 text-xs text-[var(--text-sec)]">
+          <div className="mt-2 text-xs opacity-80">
             {formatRecord(userTeam.record)}
             {userTeam.record.ties > 0 ? `-${userTeam.record.ties}` : ''}
+            {' · Season ' + season}
           </div>
         </div>
       )}
@@ -269,7 +274,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           if (visibleItems.length === 0) return null;
           return (
             <div key={section.label} className="mb-2">
-              <div className="text-[9px] font-bold uppercase tracking-widest text-[var(--text-sec)]/50 px-3 pt-2 pb-1">{section.label}</div>
+              <div className="text-[9px] font-bold uppercase tracking-widest text-[var(--text)] opacity-40 px-3 mb-1 mt-4 first:mt-0">{section.label}</div>
               {visibleItems.map(item => {
           const active = pathname === item.href;
           const badge = getBadge(item.href);
@@ -280,15 +285,20 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
               onClick={onNavigate}
               className={`
                 flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium mb-0.5
-                transition-colors
+                transition-all duration-150
                 ${active
-                  ? 'bg-blue-600/15 text-blue-600'
-                  : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'}
+                  ? 'bg-[var(--team-primary-light)] text-[var(--team-primary)] border-l-[3px] border-l-[var(--team-primary)]'
+                  : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] hover:translate-x-0.5'}
               `}
             >
               <span className="text-base">{item.icon}</span>
               <span className="flex-1">{item.label}</span>
-              {badge && (
+              {badge && badge.variant === 'pulse' ? (
+                <span className="ml-auto relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-600 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-600" />
+                </span>
+              ) : badge ? (
                 <span className={`text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center font-bold ${
                   badge.variant === 'red' ? 'bg-red-600 text-white' :
                   badge.variant === 'amber' ? 'bg-amber-500 text-black' :
@@ -296,7 +306,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                 }`}>
                   {badge.text}
                 </span>
-              )}
+              ) : null}
             </Link>
           );
               })}

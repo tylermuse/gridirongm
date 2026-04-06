@@ -170,7 +170,7 @@ function TeamPicker() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8">
       <div className="text-center mb-8">
-        <h1 className="text-3xl sm:text-5xl font-black tracking-tight mb-3">
+        <h1 className="text-3xl sm:text-5xl font-black tracking-tight mb-3 font-display uppercase">
           <span className="text-blue-600">BS</span> Football
         </h1>
         <p className="text-[var(--text-sec)] text-sm sm:text-lg">Choose your franchise. Build your dynasty.</p>
@@ -197,7 +197,7 @@ function TeamPicker() {
           }`}
         >
           <div className="relative bg-gradient-to-r from-gray-950 via-gray-900 to-teal-950 p-6 sm:p-8 text-left">
-            <div className="absolute inset-0 opacity-55" style={{ backgroundImage: 'url(/images/bs-mode-banner.jpg)', backgroundSize: 'cover', backgroundPosition: 'right center' }} />
+            <div className="absolute inset-0 opacity-55 hover:scale-105 transition-transform duration-[10000ms]" style={{ backgroundImage: 'url(/images/bs-mode-banner.jpg)', backgroundSize: 'cover', backgroundPosition: 'right center' }} />
             <div className="relative z-10">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-amber-400 text-xs font-bold uppercase tracking-widest bg-amber-400/10 px-2 py-0.5 rounded">New Mode</span>
@@ -230,33 +230,42 @@ function TeamPicker() {
         </div>
       )}
 
-      {/* Resume saved game */}
-      {savedGame && (
-        <div className="mb-6 max-w-md w-full">
-          <button
-            onClick={handleResume}
-            disabled={resumeLoading}
-            className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-blue-500 bg-blue-500/5
-                       hover:bg-blue-500/10 hover:shadow-lg hover:shadow-blue-500/10 transition-all group"
-          >
-            <div className="flex items-center gap-3 text-left">
-              <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-lg font-black shrink-0">
-                {savedGame.teamAbbr.slice(0, 2)}
-              </div>
-              <div>
-                <div className="text-sm font-bold text-blue-600">Continue League</div>
-                <div className="text-xs text-[var(--text-sec)]">
-                  {savedGame.teamAbbr} · Season {savedGame.season} · {savedGame.wins}-{savedGame.losses} · {savedGame.phase}
+      {/* Resume saved game — dominant CTA */}
+      {savedGame && (() => {
+        const savedTeam = LEAGUE_TEAMS.find(t => t.abbreviation === savedGame.teamAbbr);
+        const teamColor = savedTeam?.primaryColor ?? '#2563EB';
+        return (
+          <div className="mb-6 max-w-4xl w-full">
+            <button
+              onClick={handleResume}
+              disabled={resumeLoading}
+              className="w-full flex items-center justify-between p-6 sm:p-8 rounded-2xl shadow-lg
+                         bg-gradient-to-r from-blue-700 to-blue-600 hover:shadow-xl hover:scale-[1.01] transition-all group"
+              style={{ background: `linear-gradient(to right, ${teamColor}, ${teamColor}dd)` }}
+            >
+              <div className="flex items-center gap-4 text-left">
+                <TeamLogo
+                  abbreviation={savedGame.teamAbbr}
+                  primaryColor={teamColor}
+                  secondaryColor={savedTeam?.secondaryColor ?? '#FFFFFF'}
+                  size="lg"
+                />
+                <div>
+                  <div className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1">Resume</div>
+                  <div className="text-white text-xl sm:text-2xl font-black">Continue Your Dynasty</div>
+                  <div className="text-white/80 text-sm mt-1">
+                    {savedGame.teamAbbr} &middot; Season {savedGame.season} &middot; {savedGame.wins}-{savedGame.losses} &middot; {savedGame.phase}
+                  </div>
                 </div>
               </div>
+              <div className="text-white text-3xl group-hover:translate-x-2 transition-transform">→</div>
+            </button>
+            <div className="text-center mt-3">
+              <span className="text-xs text-[var(--text-sec)]">or start a new league below</span>
             </div>
-            <div className="text-blue-600 text-xl group-hover:translate-x-1 transition-transform">→</div>
-          </button>
-          <div className="text-center mt-2">
-            <span className="text-xs text-[var(--text-sec)]">or start a new league below</span>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Import League File Section */}
       <div className="mb-6 max-w-4xl w-full">
@@ -333,10 +342,20 @@ function TeamPicker() {
             <button
               key={team.abbreviation}
               onClick={() => handlePick(team.abbreviation)}
-              className="group flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--surface)]
-                         hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/10 transition-all text-left"
+              className="group flex items-center gap-3 p-3 rounded-xl border-2 border-[var(--border)] bg-[var(--surface)]
+                         hover:shadow-lg transition-all text-left"
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = team.primaryColor;
+                e.currentTarget.style.backgroundColor = `${team.primaryColor}10`;
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = '';
+                e.currentTarget.style.backgroundColor = '';
+              }}
             >
-              <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="lg" />
+              <div className="group-hover:scale-110 transition-transform">
+                <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="lg" />
+              </div>
               <div className="min-w-0">
                 <div className="text-sm font-bold truncate">{team.city}</div>
                 <div className="text-xs text-[var(--text-sec)] truncate">{team.name}</div>
@@ -533,7 +552,7 @@ function DraftCapitalCard({ team, season, phase, teams }: { team: { draftPicks: 
 }
 
 function Dashboard() {
-  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements, leagueSettings } = useGameStore();
+  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements, leagueSettings, tradeProposals, draftOrder } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const spotlightRef = useRef<HTMLDivElement>(null);
@@ -619,6 +638,127 @@ function Dashboard() {
   return (
     <GameShell>
       <div className="max-w-6xl mx-auto space-y-4">
+        {/* Action Hero Card */}
+        {(() => {
+          const capSpace = Math.round((userTeam.salaryCap - userTeam.totalPayroll) * 10) / 10;
+          const totalPicks = teams.length * 7;
+          const overallPick = draftOrder.length > 0 ? totalPicks - draftOrder.length + 1 : 0;
+          const draftRound = overallPick > 0 ? Math.ceil(overallPick / teams.length) : 0;
+          const pickInRound = overallPick > 0 ? overallPick - (draftRound - 1) * teams.length : 0;
+          const isOnClock = draftOrder.length > 0 && draftOrder[0] === userTeamId;
+          const resignCount = roster.filter(p => p.contract.yearsLeft <= 1 && !p.retired).length;
+
+          if (phase === 'regular') return (
+            <div className="rounded-xl p-6 mb-2 bg-[var(--team-primary)] text-[var(--team-text-on-primary)] flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-4">
+                <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} logoUrl={userTeam.logoUrl} size="lg" />
+                <div>
+                  <div className="text-lg font-black font-display uppercase tracking-tight">{userTeam.city} {userTeam.name}</div>
+                  <div className="text-sm opacity-90">{formatRecord(userTeam.record)} &middot; Week {week}</div>
+                </div>
+              </div>
+              <Link href="/schedule">
+                <Button size="sm" className="bg-white/20 hover:bg-white/30 text-inherit font-bold border border-white/30">
+                  Simulate Week
+                </Button>
+              </Link>
+            </div>
+          );
+          if (phase === 'draft') return (
+            <div className="rounded-xl p-6 mb-2 bg-[var(--team-primary)] text-[var(--team-text-on-primary)] flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <div className="text-lg font-black font-display uppercase tracking-tight">Draft Day</div>
+                <div className="text-sm opacity-90">
+                  {isOnClock
+                    ? `You are on the clock! Round ${draftRound}, Pick ${pickInRound}`
+                    : draftOrder.length > 0
+                      ? `Round ${draftRound}, Pick ${pickInRound} — waiting...`
+                      : 'Draft complete'}
+                </div>
+              </div>
+              <Link href="/draft">
+                <Button size="sm" className="bg-white/20 hover:bg-white/30 text-inherit font-bold border border-white/30">
+                  Go to Draft
+                </Button>
+              </Link>
+            </div>
+          );
+          if (phase === 'freeAgency') return (
+            <div className="rounded-xl p-6 mb-2 bg-[var(--team-primary)] text-[var(--team-text-on-primary)] flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <div className="text-lg font-black font-display uppercase tracking-tight">Free Agency &mdash; Day {faDay}</div>
+                <div className="text-sm opacity-90">Cap Space: ${capSpace}M</div>
+              </div>
+              <Link href="/free-agency">
+                <Button size="sm" className="bg-white/20 hover:bg-white/30 text-inherit font-bold border border-white/30">
+                  Go to Free Agency
+                </Button>
+              </Link>
+            </div>
+          );
+          if (phase === 'resigning') return (
+            <div className="rounded-xl p-6 mb-2 bg-[var(--team-primary)] text-[var(--team-text-on-primary)] flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <div className="text-lg font-black font-display uppercase tracking-tight">Re-signing Period</div>
+                <div className="text-sm opacity-90">{resignCount} player{resignCount !== 1 ? 's' : ''} eligible to re-sign</div>
+              </div>
+              <Link href="/re-sign">
+                <Button size="sm" className="bg-white/20 hover:bg-white/30 text-inherit font-bold border border-white/30">
+                  Go to Re-sign
+                </Button>
+              </Link>
+            </div>
+          );
+          if (phase === 'playoffs') return (
+            <div className="rounded-xl p-6 mb-2 bg-[var(--team-primary)] text-[var(--team-text-on-primary)] flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-4">
+                <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} logoUrl={userTeam.logoUrl} size="lg" />
+                <div>
+                  <div className="text-lg font-black font-display uppercase tracking-tight">Playoffs</div>
+                  <div className="text-sm opacity-90">{formatRecord(userTeam.record)}</div>
+                </div>
+              </div>
+              <Link href="/playoffs">
+                <Button size="sm" className="bg-white/20 hover:bg-white/30 text-inherit font-bold border border-white/30">
+                  Go to Playoffs
+                </Button>
+              </Link>
+            </div>
+          );
+          return null;
+        })()}
+
+        {/* Attention Needed Widget */}
+        {(() => {
+          const capSpace = userTeam.salaryCap - userTeam.totalPayroll;
+          const pendingTrades = tradeProposals.filter((p: { status: string }) => p.status === 'pending').length;
+          const injuredCount = roster.filter(p => p.injury && !p.retired).length;
+          const rosterCount = roster.filter(p => !p.retired).length;
+
+          const alerts: { icon: string; text: string; href: string }[] = [];
+          if (pendingTrades > 0) alerts.push({ icon: '🔄', text: `${pendingTrades} incoming trade offer${pendingTrades !== 1 ? 's' : ''}`, href: '/trades' });
+          if (rosterCount > 53) alerts.push({ icon: '🚨', text: `Roster at ${rosterCount}/53 — over limit`, href: '/roster' });
+          if (rosterCount < 46) alerts.push({ icon: '⚠️', text: `Roster at ${rosterCount}/53 — under minimum`, href: '/roster' });
+          if (injuredCount > 0) alerts.push({ icon: '🏥', text: `${injuredCount} player${injuredCount !== 1 ? 's' : ''} injured`, href: '/roster' });
+          if (capSpace < 0) alerts.push({ icon: '💰', text: 'Over the salary cap', href: '/finances' });
+
+          if (alerts.length === 0) return null;
+          return (
+            <Card>
+              <CardHeader><CardTitle>Attention Needed</CardTitle></CardHeader>
+              <div className="space-y-1">
+                {alerts.map((a, i) => (
+                  <Link key={i} href={a.href} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--surface-2)] transition-colors text-sm">
+                    <span>{a.icon}</span>
+                    <span className="font-medium">{a.text}</span>
+                    <span className="ml-auto text-xs text-[var(--text-sec)]">&rarr;</span>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+          );
+        })()}
+
         {/* Team header */}
         <div className="flex items-center gap-4">
           <div
@@ -627,7 +767,7 @@ function Dashboard() {
             <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} logoUrl={userTeam.logoUrl} size="xl" />
           </div>
           <div>
-            <h2 className="text-2xl font-black">{userTeam.city} {userTeam.name}</h2>
+            <h2 className="text-2xl font-black font-display uppercase tracking-tight">{userTeam.city} {userTeam.name}</h2>
             <div className="flex items-center gap-3 mt-1">
               <Badge variant={userTeam.record.wins > userTeam.record.losses ? 'green' : userTeam.record.wins < userTeam.record.losses ? 'red' : 'default'} size="md">
                 {formatRecord(userTeam.record)}
@@ -791,65 +931,8 @@ function Dashboard() {
           ) : null;
         })()}
 
-        {/* Row 1: Standings, Finances, Team Stats */}
+        {/* Row 1: Team Stats, Standings */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Conference standings with GB */}
-          <Card>
-            <CardHeader><CardTitle>{userTeam.conference} Standings</CardTitle></CardHeader>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-[var(--text-sec)] text-xs">
-                  <th className="text-left pb-2">Team</th>
-                  <th className="text-center pb-2">W</th>
-                  <th className="text-center pb-2">L</th>
-                  <th className="text-right pb-2">GB</th>
-                </tr>
-              </thead>
-              <tbody>
-                {conferenceTeams.slice(0, 10).map((t, i) => (
-                  <tr
-                    key={t.id}
-                    className={`border-t border-[var(--border)] ${t.id === userTeamId ? 'text-blue-600 font-semibold' : ''} cursor-pointer hover:bg-[var(--surface-2)]`}
-                    onClick={() => setViewTeamId(t.id)}
-                  >
-                    <td className="py-1 text-left flex items-center gap-1.5">
-                      <span className="text-[10px] text-[var(--text-sec)] w-4">{i + 1}</span>
-                      <div
-                        className="w-3 h-3 rounded-sm shrink-0"
-                        style={{ backgroundColor: t.primaryColor }}
-                      />
-                      <span className="truncate">{t.abbreviation}</span>
-                    </td>
-                    <td className="py-1 text-center">{t.record.wins}</td>
-                    <td className="py-1 text-center">{t.record.losses}</td>
-                    <td className="py-1 text-right text-[var(--text-sec)]">{getGB(t)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
-
-          {/* Finances */}
-          <Card>
-            <CardHeader><CardTitle>Finances</CardTitle></CardHeader>
-            {(() => {
-              const capSpace = Math.round((userTeam.salaryCap - userTeam.totalPayroll) * 10) / 10;
-              const deadCapTotal = (userTeam.deadCap ?? []).reduce((sum: number, dc: { amount: number }) => sum + dc.amount, 0);
-              return (
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Revenue</span><span className="font-bold text-green-600">${totalRevenue}M</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Payroll</span><span className="font-bold">${expenses}M</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Profit</span><span className={`font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{profit >= 0 ? '+' : ''}${profit}M</span></div>
-                  <div className="border-t border-[var(--border)] my-1" />
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Salary Cap</span><span className="font-bold">${userTeam.salaryCap}M</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Cap Space</span><span className={`font-bold ${capSpace < 10 ? 'text-red-600' : 'text-green-600'}`}>${capSpace}M</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Dead Cap</span><span className="font-bold text-amber-600">${Math.round(deadCapTotal * 10) / 10}M</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Roster</span><span className="font-bold">{roster.length} / 53</span></div>
-                </div>
-              );
-            })()}
-          </Card>
-
           {/* Team Stats */}
           <Card>
             <CardHeader><CardTitle>Team Stats</CardTitle></CardHeader>
@@ -902,49 +985,41 @@ function Dashboard() {
               );
             })()}
           </Card>
-        </div>
 
-        {/* Row 2: League Leaders, Team Leaders, News */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* League Leaders */}
+          {/* Conference standings with GB */}
           <Card>
-            <CardHeader><CardTitle>League Leaders</CardTitle></CardHeader>
-            {gamesPlayed === 0 ? (
-              <div className="text-sm text-[var(--text-sec)] text-center py-4">
-                Season hasn&apos;t started — sim some games!
-              </div>
-            ) : (
-            <div className="space-y-3">
-              {(() => {
-                const allActive = players.filter(p => p.teamId && !p.retired);
-                const passLeader = allActive.filter(p => p.position === 'QB').sort((a, b) => b.stats.passYards - a.stats.passYards)[0];
-                const rushLeader = allActive.sort((a, b) => b.stats.rushYards - a.stats.rushYards)[0];
-                const recLeader = allActive.sort((a, b) => b.stats.receivingYards - a.stats.receivingYards)[0];
-                const sackLeader = allActive.sort((a, b) => b.stats.sacks - a.stats.sacks)[0];
-                const leaders = [
-                  passLeader && { label: 'Pass YDS', player: passLeader, stat: `${passLeader.stats.passYards}` },
-                  rushLeader && { label: 'Rush YDS', player: rushLeader, stat: `${rushLeader.stats.rushYards}` },
-                  recLeader && { label: 'Rec YDS', player: recLeader, stat: `${recLeader.stats.receivingYards}` },
-                  sackLeader && { label: 'Sacks', player: sackLeader, stat: `${sackLeader.stats.sacks}` },
-                ].filter(Boolean) as { label: string; player: typeof passLeader; stat: string }[];
-                return leaders.map(l => {
-                  const t = teams.find(t => t.id === l.player!.teamId);
-                  return (
-                    <div key={l.label} className="flex items-center justify-between text-sm">
-                      <div>
-                        <div className="text-xs text-[var(--text-sec)]">{l.label}</div>
-                        <button onClick={() => setSelectedPlayerId(l.player!.id)} className="font-semibold hover:text-blue-600 transition-colors">
-                          {l.player!.firstName[0]}. {l.player!.lastName}
-                        </button>
-                        <span className="text-xs text-[var(--text-sec)] ml-1">{t?.abbreviation}</span>
-                      </div>
-                      <div className="text-xs font-bold">{l.stat}</div>
-                    </div>
-                  );
-                });
-              })()}
-            </div>
-            )}
+            <CardHeader><CardTitle>{userTeam.conference} Standings</CardTitle></CardHeader>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[var(--text-sec)] text-xs">
+                  <th className="text-left pb-2">Team</th>
+                  <th className="text-center pb-2">W</th>
+                  <th className="text-center pb-2">L</th>
+                  <th className="text-right pb-2">GB</th>
+                </tr>
+              </thead>
+              <tbody>
+                {conferenceTeams.slice(0, 10).map((t, i) => (
+                  <tr
+                    key={t.id}
+                    className={`border-t border-[var(--border)] ${t.id === userTeamId ? 'text-blue-600 font-semibold' : ''} cursor-pointer hover:bg-[var(--surface-2)]`}
+                    onClick={() => setViewTeamId(t.id)}
+                  >
+                    <td className="py-1 text-left flex items-center gap-1.5">
+                      <span className="text-[10px] text-[var(--text-sec)] w-4">{i + 1}</span>
+                      <div
+                        className="w-3 h-3 rounded-sm shrink-0"
+                        style={{ backgroundColor: t.primaryColor }}
+                      />
+                      <span className="truncate">{t.abbreviation}</span>
+                    </td>
+                    <td className="py-1 text-center">{t.record.wins}</td>
+                    <td className="py-1 text-center">{t.record.losses}</td>
+                    <td className="py-1 text-right text-[var(--text-sec)]">{getGB(t)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </Card>
 
           {/* Team Leaders */}
@@ -985,6 +1060,30 @@ function Dashboard() {
             </div>
             )}
           </Card>
+        </div>
+
+        {/* Row 2: Finances, News, League Leaders */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Finances */}
+          <Card>
+            <CardHeader><CardTitle>Finances</CardTitle></CardHeader>
+            {(() => {
+              const capSpace = Math.round((userTeam.salaryCap - userTeam.totalPayroll) * 10) / 10;
+              const deadCapTotal = (userTeam.deadCap ?? []).reduce((sum: number, dc: { amount: number }) => sum + dc.amount, 0);
+              return (
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Revenue</span><span className="font-bold text-green-600">${totalRevenue}M</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Payroll</span><span className="font-bold">${expenses}M</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Profit</span><span className={`font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{profit >= 0 ? '+' : ''}${profit}M</span></div>
+                  <div className="border-t border-[var(--border)] my-1" />
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Salary Cap</span><span className="font-bold">${userTeam.salaryCap}M</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Cap Space</span><span className={`font-bold ${capSpace < 10 ? 'text-red-600' : 'text-green-600'}`}>${capSpace}M</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Dead Cap</span><span className="font-bold text-amber-600">${Math.round(deadCapTotal * 10) / 10}M</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Roster</span><span className="font-bold">{roster.length} / 53</span></div>
+                </div>
+              );
+            })()}
+          </Card>
 
           {/* News */}
           <Card>
@@ -1021,6 +1120,47 @@ function Dashboard() {
                   </div>
                 ))}
               </div>
+            )}
+          </Card>
+
+          {/* League Leaders */}
+          <Card>
+            <CardHeader><CardTitle>League Leaders</CardTitle></CardHeader>
+            {gamesPlayed === 0 ? (
+              <div className="text-sm text-[var(--text-sec)] text-center py-4">
+                Season hasn&apos;t started — sim some games!
+              </div>
+            ) : (
+            <div className="space-y-3">
+              {(() => {
+                const allActive = players.filter(p => p.teamId && !p.retired);
+                const passLeader = allActive.filter(p => p.position === 'QB').sort((a, b) => b.stats.passYards - a.stats.passYards)[0];
+                const rushLeader = allActive.sort((a, b) => b.stats.rushYards - a.stats.rushYards)[0];
+                const recLeader = allActive.sort((a, b) => b.stats.receivingYards - a.stats.receivingYards)[0];
+                const sackLeader = allActive.sort((a, b) => b.stats.sacks - a.stats.sacks)[0];
+                const leaders = [
+                  passLeader && { label: 'Pass YDS', player: passLeader, stat: `${passLeader.stats.passYards}` },
+                  rushLeader && { label: 'Rush YDS', player: rushLeader, stat: `${rushLeader.stats.rushYards}` },
+                  recLeader && { label: 'Rec YDS', player: recLeader, stat: `${recLeader.stats.receivingYards}` },
+                  sackLeader && { label: 'Sacks', player: sackLeader, stat: `${sackLeader.stats.sacks}` },
+                ].filter(Boolean) as { label: string; player: typeof passLeader; stat: string }[];
+                return leaders.map(l => {
+                  const t = teams.find(t => t.id === l.player!.teamId);
+                  return (
+                    <div key={l.label} className="flex items-center justify-between text-sm">
+                      <div>
+                        <div className="text-xs text-[var(--text-sec)]">{l.label}</div>
+                        <button onClick={() => setSelectedPlayerId(l.player!.id)} className="font-semibold hover:text-blue-600 transition-colors">
+                          {l.player!.firstName[0]}. {l.player!.lastName}
+                        </button>
+                        <span className="text-xs text-[var(--text-sec)] ml-1">{t?.abbreviation}</span>
+                      </div>
+                      <div className="text-xs font-bold">{l.stat}</div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
             )}
           </Card>
         </div>

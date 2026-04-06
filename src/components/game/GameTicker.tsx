@@ -7,6 +7,7 @@ import { BoxScoreModal } from './BoxScoreModal';
 import { PlayerModal } from './PlayerModal';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { Button } from '@/components/ui/Button';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { GameResult } from '@/types';
 
 /**
@@ -45,12 +46,26 @@ export function GameTicker() {
     return teams.find(t => t.id === id)?.primaryColor ?? '#666';
   }
 
+  function getTeamSecondaryColor(id: string) {
+    return teams.find(t => t.id === id)?.secondaryColor ?? '#fff';
+  }
+
+  function getTeamLogoUrl(id: string) {
+    return teams.find(t => t.id === id)?.logoUrl;
+  }
+
   return (
     <>
       <div className="border-b border-[var(--border)] bg-[var(--bg)] flex items-stretch relative">
         {/* Right edge fade to hint more content */}
         <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-[var(--bg)] to-transparent pointer-events-none z-10 sm:hidden" />
         {/* Scrollable game ticker */}
+        {/* W/L Legend */}
+        <div className="flex items-center gap-2 text-xs text-[var(--text-sec)] pr-3 border-r border-[var(--border)] shrink-0 pl-3">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> W</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> L</span>
+        </div>
+
         <div
           ref={scrollRef}
           className="flex-1 flex overflow-x-auto no-scrollbar min-w-0 snap-x snap-mandatory sm:snap-none"
@@ -78,23 +93,38 @@ export function GameTicker() {
             }
 
             const isCurrentWeek = phase === 'regular' && game.week === week && !game.played;
+            const isUserGame = game.homeTeamId === userTeamId || game.awayTeamId === userTeamId;
+
+            // Tooltip content
+            const tooltipLine1 = `Week ${game.week}`;
+            const tooltipLine2 = game.played
+              ? `${getTeamAbbr(game.awayTeamId)} ${game.awayScore} - ${game.homeScore} ${getTeamAbbr(game.homeTeamId)}`
+              : `${getTeamAbbr(game.awayTeamId)} @ ${getTeamAbbr(game.homeTeamId)}`;
 
             return (
               <div
                 key={game.id}
                 onClick={() => game.played && setSelectedGame(game)}
-                className={`flex-shrink-0 flex flex-col items-center px-2 py-1 border-r border-[var(--border)] last:border-r-0 snap-center ${bgClass} ${isCurrentWeek ? 'ring-1 ring-inset ring-blue-500' : ''} ${game.played ? 'cursor-pointer hover:brightness-95 transition-all' : ''}`}
+                className={`group relative flex-shrink-0 flex flex-col items-center px-2 py-1 border-r border-[var(--border)] last:border-r-0 snap-center ${isUserGame ? `${bgClass} font-bold` : `${bgClass} opacity-60`} ${isCurrentWeek ? 'ring-1 ring-inset ring-blue-500' : ''} ${game.played ? 'cursor-pointer hover:brightness-95 transition-all' : ''}`}
                 style={{ minWidth: '72px' }}
               >
+                {/* Hover tooltip */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 rounded bg-[var(--surface)] border border-[var(--border)] shadow-lg text-[10px] text-[var(--text)] whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">
+                  <div className="font-bold">{tooltipLine1}</div>
+                  <div className="text-[var(--text-sec)]">{tooltipLine2}</div>
+                </div>
                 {/* Away team row */}
                 {(() => {
                   const awayWon = game.played && game.awayScore > game.homeScore;
                   return (
                     <div className={`flex items-center gap-1 w-full justify-between ${game.played && !awayWon ? 'opacity-50' : ''}`}>
                       <div className="flex items-center gap-1">
-                        <div
-                          className="w-3 h-3 rounded-sm flex items-center justify-center"
-                          style={{ backgroundColor: getTeamColor(game.awayTeamId) }}
+                        <TeamLogo
+                          abbreviation={getTeamAbbr(game.awayTeamId)}
+                          primaryColor={getTeamColor(game.awayTeamId)}
+                          secondaryColor={getTeamSecondaryColor(game.awayTeamId)}
+                          logoUrl={getTeamLogoUrl(game.awayTeamId)}
+                          size="xs"
                         />
                         <span className={`text-[10px] font-bold ${game.awayTeamId === userTeamId ? 'text-blue-600' : ''} ${awayWon ? 'text-[var(--text)]' : ''}`}>
                           {getTeamAbbr(game.awayTeamId)}
@@ -112,9 +142,12 @@ export function GameTicker() {
                   return (
                     <div className={`flex items-center gap-1 w-full justify-between ${game.played && !homeWon ? 'opacity-50' : ''}`}>
                       <div className="flex items-center gap-1">
-                        <div
-                          className="w-3 h-3 rounded-sm flex items-center justify-center"
-                          style={{ backgroundColor: getTeamColor(game.homeTeamId) }}
+                        <TeamLogo
+                          abbreviation={getTeamAbbr(game.homeTeamId)}
+                          primaryColor={getTeamColor(game.homeTeamId)}
+                          secondaryColor={getTeamSecondaryColor(game.homeTeamId)}
+                          logoUrl={getTeamLogoUrl(game.homeTeamId)}
+                          size="xs"
                         />
                         <span className={`text-[10px] font-bold ${game.homeTeamId === userTeamId ? 'text-blue-600' : ''} ${homeWon ? 'text-[var(--text)]' : ''}`}>
                           {getTeamAbbr(game.homeTeamId)}
