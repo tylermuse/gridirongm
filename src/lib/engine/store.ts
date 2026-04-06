@@ -5367,7 +5367,6 @@ export const useGameStore = create<GameStore>()(
         if (ss.scoutPoints < 3) return false;
         if (!ss.filmReviews[playerId]) return false; // requires tier 1
         if (ss.inPersonEvals[playerId]) return false;
-        if (ss.inPersonEvalCount >= 8) return false;
         const player = state.players.find(p => p.id === playerId);
         if (!player) return false;
 
@@ -5485,7 +5484,6 @@ export const useGameStore = create<GameStore>()(
         if (ss.scoutPoints < 5) return false;
         if (!ss.inPersonEvals[playerId]) return false; // requires tier 2
         if (ss.fullEvals[playerId]) return false;
-        if (ss.fullEvalCount >= 3) return false;
         const player = state.players.find(p => p.id === playerId);
         if (!player) return false;
 
