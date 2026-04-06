@@ -82,3 +82,8 @@ html, body {
 }
 .animate-pulse-slow { animation: pulse-slow 3s ease-in-out infinite; }
 .font-display { font-family: var(--font-display), sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: -0.01em; }
+
+@keyframes shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}

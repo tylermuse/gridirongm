@@ -247,7 +247,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
 
       <div className="p-3 border-b border-[var(--border)] text-xs">
         <div className="text-[var(--text-sec)]">
-          Season {season} · Week {week} · <span className="text-blue-600">{PHASE_LABELS[phase] ?? phase}</span>
+          Season {season} · Week {week} · <span style={{ color: 'var(--team-primary)' }}>{PHASE_LABELS[phase] ?? phase}</span>
         </div>
       </div>
 
@@ -289,7 +289,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                 flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium mb-0.5
                 transition-colors
                 ${active
-                  ? 'bg-blue-600/15 text-blue-600'
+                  ? 'bg-[var(--team-primary-light)] text-[var(--team-primary)]'
                   : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'}
               `}
             >

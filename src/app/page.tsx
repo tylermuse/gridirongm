@@ -649,26 +649,27 @@ function Dashboard() {
     <GameShell>
       <div className="max-w-6xl mx-auto space-y-4">
         {/* Team header */}
-        <div className="flex items-center gap-4">
-          <div
-            className="shrink-0"
-          >
+        <div
+          className="flex items-center gap-4 rounded-xl px-5 py-4"
+          style={{ background: `linear-gradient(135deg, var(--team-primary) 0%, ${userTeam.secondaryColor} 100%)` }}
+        >
+          <div className="shrink-0">
             <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} logoUrl={userTeam.logoUrl} size="xl" />
           </div>
           <div>
-            <h2 className="text-2xl font-black">{userTeam.city} {userTeam.name}</h2>
+            <h2 className="text-2xl font-black" style={{ color: 'var(--team-text-on-primary)' }}>{userTeam.city} {userTeam.name}</h2>
             <div className="flex items-center gap-3 mt-1">
               <Badge variant={userTeam.record.wins > userTeam.record.losses ? 'green' : userTeam.record.wins < userTeam.record.losses ? 'red' : 'default'} size="md">
                 {formatRecord(userTeam.record)}
               </Badge>
-              <span className="text-sm text-[var(--text-sec)]">
+              <span className="text-sm" style={{ color: 'var(--team-text-on-primary)', opacity: 0.8 }}>
                 {userTeam.conference} {userTeam.division}
               </span>
-              <span className={`text-sm ${capPct > 0.95 ? 'text-red-600' : 'text-[var(--text-sec)]'}`}>
+              <span className="text-sm" style={{ color: capPct > 0.95 ? '#dc2626' : 'var(--team-text-on-primary)', opacity: capPct > 0.95 ? 1 : 0.8 }}>
                 Cap: ${Math.round(userTeam.totalPayroll)}M / ${userTeam.salaryCap}M
               </span>
               {champions.length > 0 && champions.filter(c => c.teamId === userTeamId).length > 0 && (
-                <span className="text-sm text-amber-600 font-bold">
+                <span className="text-sm font-bold" style={{ color: 'var(--team-text-on-primary)' }}>
                   {champions.filter(c => c.teamId === userTeamId).length}x Champion
                 </span>
               )}

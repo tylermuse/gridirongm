@@ -182,36 +182,56 @@ function OnTheClockSection({
     <div className="space-y-0">
       {/* On The Clock Header */}
       <div
-        className="rounded-t-xl border border-[var(--border)] px-5 py-4"
-        style={{ borderLeft: `4px solid ${teamColor}` }}
+        className={`rounded-t-xl border border-[var(--border)] px-5 py-4${isUserPick ? ' border-transparent' : ''}`}
+        style={isUserPick
+          ? { background: `linear-gradient(135deg, ${teamColor}, ${currentTeam?.secondaryColor ?? teamColor})` }
+          : { borderLeft: `4px solid ${teamColor}` }
+        }
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3 sm:gap-4">
             {/* Team badge */}
             <div
-              className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-xs sm:text-sm font-black text-white shrink-0"
-              style={{ backgroundColor: teamColor }}
+              className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-xs sm:text-sm font-black text-white shrink-0${isUserPick ? ' ring-4 ring-white/30 shadow-lg scale-110' : ''}`}
+              style={{ backgroundColor: isUserPick ? 'rgba(255,255,255,0.2)' : teamColor }}
             >
               {currentTeam?.abbreviation ?? '--'}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-black text-base sm:text-lg">On The Clock</span>
-                {isUserPick && (
-                  <Badge variant="green" size="sm">Your Pick</Badge>
+                {isUserPick ? (
+                  <>
+                    <span className="text-xl animate-pulse">⏰</span>
+                    <span className="font-black text-xl sm:text-2xl" style={{ color: 'var(--team-text-on-primary)' }}>YOU&apos;RE ON THE CLOCK</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-black text-base sm:text-lg">On The Clock</span>
+                  </>
                 )}
               </div>
-              <div className="text-xs sm:text-sm text-[var(--text-sec)]">
-                {currentTeam ? `${currentTeam.city} ${currentTeam.name}` : 'Draft Complete'}
+              <div
+                className="text-xs sm:text-sm"
+                style={isUserPick ? { color: 'var(--team-text-on-primary)', opacity: 0.85 } : undefined}
+              >
+                <span className={isUserPick ? '' : 'text-[var(--text-sec)]'}>
+                  {currentTeam ? `${currentTeam.city} ${currentTeam.name}` : 'Draft Complete'}
+                </span>
               </div>
             </div>
           </div>
           <div className="sm:text-right">
-            <div className="text-xs sm:text-sm font-bold mb-1 hidden sm:block">
+            <div
+              className="text-xs sm:text-sm font-bold mb-1 hidden sm:block"
+              style={isUserPick ? { color: 'var(--team-text-on-primary)', opacity: 0.85 } : undefined}
+            >
               Round {currentRound}, Pick {currentPickInRound}
             </div>
             <div className="flex flex-wrap gap-2 items-center">
-              <span className="text-xs font-bold sm:hidden w-full">Rd {currentRound}, Pick {currentPickInRound}</span>
+              <span
+                className="text-xs font-bold sm:hidden w-full"
+                style={isUserPick ? { color: 'var(--team-text-on-primary)', opacity: 0.85 } : undefined}
+              >Rd {currentRound}, Pick {currentPickInRound}</span>
               {!isUserPick && (
                 <Button onClick={simDraftPick} size="sm" variant="secondary" disabled={!canSimulate} className="flex-1 min-w-[80px]">
                   Sim Pick
@@ -229,6 +249,11 @@ function OnTheClockSection({
             </div>
           </div>
         </div>
+        {isUserPick && (
+          <div className="h-1 bg-white/20 rounded-full overflow-hidden mt-3">
+            <div className="h-full bg-white/60 rounded-full" style={{ animation: 'shrink 30s linear forwards' }} />
+          </div>
+        )}
       </div>
 
       {/* Needs Row */}
