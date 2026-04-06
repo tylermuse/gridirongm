@@ -727,18 +727,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const homeRecord = homeTeam?.record;
   const awayRecord = awayTeam?.record;
 
-  // Two-phase ScoreBug: while animation is running, show the PREVIOUS event's
-  // score/down/distance so the scoreboard updates when the animation finishes.
-  // The play description text shows immediately (like a radio call).
-  const displayEvent = animationComplete ? currentEvent : previousEvent;
-  const liveHomeScore = displayEvent?.homeScore ?? 0;
-  const liveAwayScore = displayEvent?.awayScore ?? 0;
-  const liveQuarter = displayEvent?.quarter ?? currentEvent?.quarter ?? 1;
-  const liveTime = displayEvent?.timeStr ?? currentEvent?.timeStr ?? '15:00';
-  const livePoss = displayEvent?.possession ?? currentEvent?.possession ?? 'home';
-  const liveFieldPos = displayEvent?.fieldPos ?? currentEvent?.fieldPos ?? 25;
-  const liveDown = displayEvent?.down ?? currentEvent?.down ?? 1;
-  const liveYtg = displayEvent?.yardsToGo ?? currentEvent?.yardsToGo ?? 10;
+  // ScoreBug shows current event data immediately (synced with play description)
+  const liveHomeScore = currentEvent?.homeScore ?? 0;
+  const liveAwayScore = currentEvent?.awayScore ?? 0;
+  const liveQuarter = currentEvent?.quarter ?? 1;
+  const liveTime = currentEvent?.timeStr ?? '15:00';
+  const livePoss = currentEvent?.possession ?? 'home';
+  const liveFieldPos = currentEvent?.fieldPos ?? 25;
+  const liveDown = currentEvent?.down ?? 1;
+  const liveYtg = currentEvent?.yardsToGo ?? 10;
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'gamecast', label: 'Gamecast' },
@@ -773,7 +770,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           isPlaying={isPlaying}
           drivePlays={currentDrive.plays}
           driveYards={currentDrive.yards}
-          lastPlayDescription={displayEvent && !isSeparator(displayEvent.type) ? displayEvent.description : null}
+          lastPlayDescription={currentEvent && !isSeparator(currentEvent.type) ? currentEvent.description : null}
         />
 
         <AnimatedField
