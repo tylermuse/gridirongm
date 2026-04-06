@@ -1992,7 +1992,7 @@ function TradesPage() {
                 <Card>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <div className="text-sm font-semibold">
+                      <div className="text-sm font-semibold flex items-center gap-2">
                         Value: {Math.round(offeredValue).toLocaleString()} → {Math.round(receivedValue).toLocaleString()} pts
                         <span className={`ml-2 text-xs ${
                           Math.abs(valueDiff) < Math.max(offeredValue, receivedValue, 1) * 0.1 ? 'text-green-600' :
@@ -2000,7 +2000,31 @@ function TradesPage() {
                         }`}>
                           ({valueLabel})
                         </span>
+                        {/* Trade grade badge */}
+                        {(() => {
+                          const maxVal = Math.max(offeredValue, receivedValue, 1);
+                          const pct = valueDiff / maxVal;
+                          const grade = pct > 0.3 ? 'A+' : pct > 0.15 ? 'A' : pct > 0.05 ? 'B+' : pct > -0.05 ? 'B' : pct > -0.15 ? 'C' : pct > -0.3 ? 'D' : 'F';
+                          const gradeColor = grade.startsWith('A') ? 'bg-green-100 text-green-700' : grade.startsWith('B') ? 'bg-blue-100 text-blue-700' : grade === 'C' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700';
+                          return <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${gradeColor}`}>{grade}</span>;
+                        })()}
                       </div>
+                      {/* Value comparison bars */}
+                      {(offeredValue > 0 || receivedValue > 0) && (() => {
+                        const maxBar = Math.max(offeredValue, receivedValue, 1);
+                        return (
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-[10px] text-[var(--text-sec)] w-12">Send</span>
+                            <div className="flex-1 h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
+                              <div className="h-full bg-red-400 rounded-full" style={{ width: `${(offeredValue / maxBar) * 100}%` }} />
+                            </div>
+                            <span className="text-[10px] text-[var(--text-sec)] w-12">Get</span>
+                            <div className="flex-1 h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
+                              <div className="h-full bg-green-400 rounded-full" style={{ width: `${(receivedValue / maxBar) * 100}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })()}
                       {/* Live cap impact */}
                       {(() => {
                         const outSalary = offeredPlayerIds.reduce((sum, id) => {

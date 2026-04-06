@@ -6,13 +6,17 @@ import { TopBar } from './TopBar';
 import { GameTicker } from './GameTicker';
 import { SpotlightPopup } from './SpotlightPopup';
 import { useGameStore } from '@/lib/engine/store';
+import { getTeamColorVars } from '@/lib/teamColors';
 
 export function GameShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const godMode = useGameStore(s => s.leagueSettings?.godMode ?? false);
+  const teams = useGameStore(s => s.teams);
+  const userTeamId = useGameStore(s => s.userTeamId);
+  const userTeam = teams.find(t => t.id === userTeamId);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen" style={userTeam ? getTeamColorVars(userTeam) as React.CSSProperties : undefined}>
       {/* Mobile overlay backdrop */}
       {sidebarOpen && (
         <div

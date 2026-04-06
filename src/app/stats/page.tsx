@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 type StatCategory = 'passYards' | 'rushYards' | 'receivingYards' | 'passTDs' | 'rushTDs' | 'sacks' | 'defensiveINTs' | 'tackles' | 'tacklesForLoss' | 'passDeflections' | 'receptions' | 'forcedFumbles';
 type Tab = 'leaders' | 'teams' | 'power';
@@ -137,7 +138,14 @@ export default function StatsPage() {
         </div>
 
         {/* League Leaders */}
-        {tab === 'leaders' && (
+        {tab === 'leaders' && leaders.length === 0 && (
+          <EmptyState
+            icon="📊"
+            title="No Stats Yet"
+            description="Simulate games to see league leaders here."
+          />
+        )}
+        {tab === 'leaders' && leaders.length > 0 && (
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">

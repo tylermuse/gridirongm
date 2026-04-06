@@ -11,19 +11,24 @@ import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { calculateDeadCap, calculateCapSavings } from '@/types';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { getOvrColor, getOvrBgColor } from '@/lib/ovrColor';
 import type { Position, PlayerRatings } from '@/types';
 
 function ratingColor(val: number) {
   if (val >= 85) return 'text-green-600';
-  if (val >= 70) return 'text-blue-600';
-  if (val >= 55) return 'text-amber-600';
+  if (val >= 75) return 'text-emerald-600';
+  if (val >= 65) return 'text-yellow-600';
+  if (val >= 55) return 'text-orange-500';
+  if (val >= 45) return 'text-orange-600';
   return 'text-red-600';
 }
 
 function ratingBarColor(val: number) {
   if (val >= 85) return 'bg-green-500';
-  if (val >= 70) return 'bg-blue-500';
-  if (val >= 55) return 'bg-amber-500';
+  if (val >= 75) return 'bg-emerald-500';
+  if (val >= 65) return 'bg-yellow-500';
+  if (val >= 55) return 'bg-orange-400';
+  if (val >= 45) return 'bg-orange-600';
   return 'bg-red-500';
 }
 
@@ -106,7 +111,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
         {/* Header */}
         <div className="flex items-start gap-5">
           <div className="flex flex-col items-center gap-1.5 shrink-0">
-            <PlayerAvatar player={player} size="md" teamColor={team?.primaryColor ?? '#374151'} />
+            <PlayerAvatar player={player} size="lg" teamColor={team?.primaryColor ?? '#374151'} />
             {team && <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="sm" />}
             <div className="text-[10px] font-black text-[var(--text-sec)]">{player.position}</div>
           </div>
@@ -141,11 +146,11 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                 </div>
               </div>
 
-              <div className="text-right shrink-0">
-                <div className={`text-4xl font-black ${ratingColor(player.ratings.overall)}`}>
-                  {player.ratings.overall}
+              <div className="text-right shrink-0 flex flex-col items-center">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${getOvrBgColor(player.ratings.overall)}`}>
+                  <span className="text-2xl font-black text-white tabular-nums">{player.ratings.overall}</span>
                 </div>
-                <div className="text-xs text-[var(--text-sec)]">Overall</div>
+                <div className="text-xs text-[var(--text-sec)] mt-1">Overall</div>
               </div>
             </div>
 
@@ -169,7 +174,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                 const mood = player.mood;
                 const label = mood >= 90 ? 'Ecstatic' : mood >= 75 ? 'Happy' : mood >= 60 ? 'Content' : mood >= 45 ? 'Unhappy' : mood >= 25 ? 'Frustrated' : 'Holdout Risk';
                 const emoji = mood >= 75 ? '😊' : mood >= 50 ? '😐' : '😠';
-                const color = mood >= 75 ? 'text-green-600' : mood >= 50 ? 'text-amber-600' : 'text-red-600';
+                const color = mood >= 90 ? 'text-green-500' : mood >= 75 ? 'text-green-600' : mood >= 60 ? 'text-yellow-600' : mood >= 45 ? 'text-orange-500' : mood >= 25 ? 'text-red-500' : 'text-red-700';
 
                 // Build mood reasons
                 const reasons: string[] = [];
@@ -214,18 +219,6 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
             {isOnUserTeam && !player.retired && (
               <div className="mt-3">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Button
-                    size="sm"
-                    variant={confirmRelease ? 'danger' : 'secondary'}
-                    onClick={handleRelease}
-                  >
-                    {confirmRelease ? 'Confirm Release?' : 'Release Player'}
-                  </Button>
-                  {confirmRelease && (
-                    <Button size="sm" variant="ghost" onClick={() => setConfirmRelease(false)}>
-                      Cancel
-                    </Button>
-                  )}
                   {isTradeOpen && !confirmRelease && (
                     <Button
                       size="sm"
@@ -235,6 +228,18 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                       }}
                     >
                       Add to Trading Block
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant={confirmRelease ? 'danger' : 'ghost'}
+                    onClick={handleRelease}
+                  >
+                    {confirmRelease ? 'Confirm Release?' : 'Release Player'}
+                  </Button>
+                  {confirmRelease && (
+                    <Button size="sm" variant="ghost" onClick={() => setConfirmRelease(false)}>
+                      Cancel
                     </Button>
                   )}
                 </div>

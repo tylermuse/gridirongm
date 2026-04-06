@@ -19,6 +19,9 @@ import { SCOUTING_LEVELS } from '@/lib/subscription';
 import { expectedOvrForPick, pickGrade, gradeValue, gradeColor, teamDraftGrade } from '@/lib/engine/draftGrades';
 import { generateDraftScoutEval, publicConsensusBlurb, type DraftScoutEvaluation } from '@/lib/engine/draftScoutEval';
 import { generateScoutingReport } from '@/lib/engine/scoutingReport';
+import { FilmReviewContent } from '@/components/draft/FilmReviewContent';
+import { InPersonEvalContent } from '@/components/draft/InPersonEvalContent';
+import { FullEvalContent } from '@/components/draft/FullEvalContent';
 
 function ratingColor(val: number): string {
   if (val >= 80) return 'text-green-600';
@@ -447,6 +450,7 @@ function ScoutEvaluationPanel({
   isUserPick,
   onDraft,
   scoutingLevel: scoutLvl,
+  scoutTier = 3,
 }: {
   player: Player;
   userRoster: Player[];
@@ -454,6 +458,7 @@ function ScoutEvaluationPanel({
   isUserPick: boolean;
   onDraft: () => void;
   scoutingLevel: number;
+  scoutTier?: number;
 }) {
   const evaluation = generateDraftScoutEval(player, userRoster, publicOvrRange, undefined, scoutLvl);
 
@@ -553,8 +558,8 @@ function ScoutEvaluationPanel({
         const report = generateScoutingReport(player);
         return (
           <div className="grid grid-cols-2 gap-3">
-            {/* Character */}
-            {report.characterReport && (
+            {/* Character — only at Full Eval (Tier 3) */}
+            {scoutTier >= 3 && report.characterReport && (
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-[var(--text-sec)] mb-1">Character & Intangibles</div>
                 <div className="grid grid-cols-2 gap-1.5">
@@ -578,8 +583,8 @@ function ScoutEvaluationPanel({
               </div>
             )}
 
-            {/* Development Projection */}
-            {report.developmentCurve && (
+            {/* Development Projection — only at Full Eval (Tier 3) */}
+            {scoutTier >= 3 && report.developmentCurve && (
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-[var(--text-sec)] mb-1">Development Projection</div>
                 <div className="flex items-center gap-2 mb-1.5">
@@ -639,7 +644,7 @@ export default function DraftPage() {
     draftScoutingData,
     scoutingLevel,
     draftPlayer,
-    deepScoutPlayer,
+    scoutPlayer,
     setScoutingLevel,
     simDraftPick,
     simToUserDraftPick,
@@ -648,19 +653,16 @@ export default function DraftPage() {
     draftLotteryResults,
     leagueSettings,
     scoutingState,
-    sendScoutTrip,
-    interviewProspect,
-    visitProDay,
   } = useGameStore();
 
   const { maxScoutingLevel: maxLevel } = useSubscription();
 
-  // Auto-redirect to free agency when draft completes and phase advances
-  useEffect(() => {
-    if (phase === 'freeAgency') {
-      router.push('/free-agency');
-    }
-  }, [phase, router]);
+  const ss = scoutingState;
+  const scoutPointsLeft = ss?.scoutPoints ?? 15;
+
+  function isPlayerScouted(playerId: string): boolean {
+    return !!ss?.filmReviews?.[playerId];
+  }
 
   const [selectedRound, setSelectedRound] = useState(1);
   const [draftResultsTeamFilter, setDraftResultsTeamFilter] = useState<string>('ALL');
@@ -754,15 +756,13 @@ export default function DraftPage() {
     return aRank - bRank;
   });
 
-  const TOTAL_SCOUTS = 15;
-  const scoutedCount = Object.values(draftScoutingData).filter(d => d.deepScouted).length;
-  const scoutsRemaining = TOTAL_SCOUTS - scoutedCount;
+  const scoutsRemaining = scoutPointsLeft;
   const userRoster = players.filter(p => p.teamId === userTeamId && !p.retired);
 
   const prospects = allProspects
     .filter((player) => positionFilter === 'ALL' || player.position === positionFilter)
     .filter((player) => {
-      if (scoutedOnly && !draftScoutingData[player.id]?.deepScouted) return false;
+      if (scoutedOnly && !isPlayerScouted(player.id)) return false;
       const query = searchQuery.trim().toLowerCase();
       if (!query) return true;
       return `${player.firstName} ${player.lastName}`.toLowerCase().includes(query);
@@ -1004,14 +1004,14 @@ export default function DraftPage() {
                 </select>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-[var(--text-sec)]">Scouts:</span>
+                <span className="text-xs text-[var(--text-sec)]">Scout Pts:</span>
                 <div className="w-20 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all ${scoutsRemaining > 5 ? 'bg-blue-500' : scoutsRemaining > 2 ? 'bg-amber-500' : 'bg-red-500'}`}
-                    style={{ width: `${(scoutedCount / TOTAL_SCOUTS) * 100}%` }}
+                    className={`h-full rounded-full transition-all ${scoutPointsLeft > 5 ? 'bg-blue-500' : scoutPointsLeft > 2 ? 'bg-amber-500' : 'bg-red-500'}`}
+                    style={{ width: `${(scoutPointsLeft / (ss?.maxScoutPoints ?? 15)) * 100}%` }}
                   />
                 </div>
-                <span className="text-xs font-bold">{scoutedCount}/{TOTAL_SCOUTS}</span>
+                <span className="text-xs font-bold">{scoutPointsLeft}/{ss?.maxScoutPoints ?? 15}</span>
               </div>
               <button
                 onClick={() => setScoutedOnly(!scoutedOnly)}
@@ -1040,7 +1040,7 @@ export default function DraftPage() {
               <tbody>
                 {prospects.map((player) => {
                   const scout = draftScoutingData[player.id];
-                  const isScouted = scout?.deepScouted === true;
+                  const isScouted = scout?.deepScouted === true || isPlayerScouted(player.id);
                   const err = scout?.error ?? 8;
                   const lo = scout ? Math.max(20, scout.scoutedOvr - err) : Math.max(20, player.ratings.overall - err);
                   const hi = scout ? Math.min(99, scout.scoutedOvr + err) : Math.min(99, player.ratings.overall + err);
@@ -1065,17 +1065,16 @@ export default function DraftPage() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
                               <span className="font-semibold truncate">{player.firstName} {player.lastName}</span>
-                              {!isScouted && scoutsRemaining > 0 && (
+                              {!isPlayerScouted(player.id) && scoutPointsLeft > 0 && (
                                 <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deepScoutPlayer(player.id);
-                                    setExpandedProspectId(player.id);
-                                  }}
+                                  onClick={(e) => { e.stopPropagation(); scoutPlayer(player.id); setExpandedProspectId(player.id); }}
                                   className="shrink-0 px-1.5 py-0.5 text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
                                 >
                                   Scout
                                 </button>
+                              )}
+                              {myNeeds.slice(0, 5).some(n => n.position === player.position) && (
+                                <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium shrink-0">Fills Need</span>
                               )}
                             </div>
                             <div className="text-[10px] text-[var(--text-sec)] flex items-center gap-1 flex-wrap">
@@ -1098,16 +1097,15 @@ export default function DraftPage() {
                         <span className="sm:hidden">{scout ? scout.scoutedOvr : player.ratings.overall}</span>
                       </td>
                       <td className="py-2.5 text-center hidden sm:table-cell">
-                        {isScouted ? (() => {
-                          const eval_ = generateDraftScoutEval(player, userRoster, { lo, hi }, undefined, scoutingLevel);
-                          return (
-                            <span className={`text-xs font-bold ${ratingColor(eval_.scoutOvrEstimate.high)}`}>
-                              {eval_.scoutOvrEstimate.low}–{eval_.scoutOvrEstimate.high}
-                            </span>
-                          );
-                        })() : (
-                          <span className="text-xs text-[var(--text-sec)]">?</span>
-                        )}
+                        {(() => {
+                          const fullD = ss?.fullEvals?.[player.id];
+                          const inPersonD = ss?.inPersonEvals?.[player.id];
+                          const filmD = ss?.filmReviews?.[player.id];
+                          if (fullD) return <span className={`text-xs font-black ${ratingColor(fullD.exactOvr)}`}>{fullD.exactOvr}</span>;
+                          if (inPersonD) return <span className={`text-xs font-bold ${ratingColor((inPersonD.ovrRange.low + inPersonD.ovrRange.high) / 2)}`}>{inPersonD.ovrRange.low}–{inPersonD.ovrRange.high}</span>;
+                          if (filmD) return <span className={`text-xs font-bold ${ratingColor((filmD.ovrRange.low + filmD.ovrRange.high) / 2)}`}>{filmD.ovrRange.low}–{filmD.ovrRange.high}</span>;
+                          return <span className="text-xs text-[var(--text-sec)]">?</span>;
+                        })()}
                       </td>
                       <td className="py-2.5 pr-2 text-right" onClick={e => e.stopPropagation()}>
                         {isUserPick ? (
@@ -1125,94 +1123,58 @@ export default function DraftPage() {
                     {isExpanded && (
                       <tr className="border-t border-[var(--border)]">
                         <td colSpan={7} className="px-4 py-3 bg-[var(--surface-2)]/50">
-                          {/* Scouting action buttons */}
-                          {(() => {
-                            const ss = scoutingState;
-                            const pts = ss?.scoutPoints ?? 15;
-                            const hasTrip = !!ss?.scoutTrips[player.id];
-                            const hasInterview = !!ss?.interviews[player.id];
-                            const hasProDay = !!ss?.proDays[player.id];
-                            const proDayCount = ss?.proDayCount ?? 0;
+                          {isPlayerScouted(player.id) && ss?.fullEvals?.[player.id] ? (() => {
+                            const filmData = ss.filmReviews?.[player.id];
+                            const inPersonData = ss.inPersonEvals?.[player.id];
+                            const fullData = ss.fullEvals[player.id];
+                            const evaluation = generateDraftScoutEval(player, userRoster, { lo, hi }, undefined, scoutingLevel);
                             return (
-                              <div className="mb-3">
-                                <div className="flex items-center gap-2 flex-wrap mb-2">
-                                  <span className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Scout Points: {pts}</span>
-                                  {!hasTrip && (
-                                    <button
-                                      onClick={() => sendScoutTrip(player.id)}
-                                      disabled={pts < 1}
-                                      className="text-[11px] px-2.5 py-1 rounded-lg bg-blue-100 text-blue-700 font-medium hover:bg-blue-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                                    >
-                                      Scout Trip (1pt)
-                                    </button>
-                                  )}
-                                  {!hasInterview && (
-                                    <button
-                                      onClick={() => interviewProspect(player.id)}
-                                      disabled={pts < 1}
-                                      className="text-[11px] px-2.5 py-1 rounded-lg bg-purple-100 text-purple-700 font-medium hover:bg-purple-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                                    >
-                                      Interview (1pt)
-                                    </button>
-                                  )}
-                                  {!hasProDay && (
-                                    <button
-                                      onClick={() => visitProDay(player.id)}
-                                      disabled={pts < 1 || proDayCount >= 5}
-                                      className="text-[11px] px-2.5 py-1 rounded-lg bg-amber-100 text-amber-700 font-medium hover:bg-amber-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                                    >
-                                      Pro Day ({proDayCount}/5, 1pt)
-                                    </button>
-                                  )}
+                              <div className="space-y-3">
+                                {/* Full evaluation at top */}
+                                <FullEvalContent evalData={fullData} player={player} fitBadge={evaluation.fitBadge} />
+
+                                {/* Scout's Take + Roster Comparison */}
+                                <div className="grid grid-cols-2 gap-3 text-xs border-t border-[var(--border)] pt-3">
+                                  <div>
+                                    <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase mb-0.5">Scout&apos;s Take</div>
+                                    <p className="text-[var(--text)] leading-relaxed">{evaluation.scoutsTake}</p>
+                                  </div>
+                                  <div>
+                                    <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase mb-0.5">Roster Comparison</div>
+                                    <p className="text-[var(--text)] leading-relaxed">{evaluation.rosterComparison}</p>
+                                  </div>
                                 </div>
-                                {/* Show scouting results */}
-                                <div className="flex flex-wrap gap-2 text-xs mb-2">
-                                  {hasTrip && (
-                                    <div className="bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5">
-                                      <div className="font-bold text-blue-700 text-[10px] uppercase">Scout Trip</div>
-                                      <div>OVR: {ss!.scoutTrips[player.id].ovrEstimate.low}–{ss!.scoutTrips[player.id].ovrEstimate.high}</div>
-                                      <div>Potential: {ss!.scoutTrips[player.id].potentialHint}</div>
-                                      <div className="text-green-600">+ {ss!.scoutTrips[player.id].strength}</div>
-                                      <div className="text-red-600">− {ss!.scoutTrips[player.id].weakness}</div>
+
+                                {/* Collapsible Film Review */}
+                                {filmData && (
+                                  <details className="border border-[var(--border)] rounded-lg overflow-hidden">
+                                    <summary className="px-3 py-2 bg-sky-50 text-sky-700 text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-sky-100 transition-colors">
+                                      📋 Film Review
+                                    </summary>
+                                    <div className="px-3 py-2.5 border-t border-[var(--border)]">
+                                      <FilmReviewContent data={filmData} evaluation={evaluation} />
                                     </div>
-                                  )}
-                                  {hasInterview && (
-                                    <div className="bg-purple-50 border border-purple-200 rounded-lg px-2.5 py-1.5">
-                                      <div className="font-bold text-purple-700 text-[10px] uppercase">Interview</div>
-                                      <div>Character: {ss!.interviews[player.id].personality.replace('_', ' ')}</div>
-                                      <div className="italic text-[var(--text-sec)]">{ss!.interviews[player.id].notes}</div>
-                                      {ss!.interviews[player.id].revealedBustBoom && ss!.interviews[player.id].bustBoomResult && (
-                                        <div className={ss!.interviews[player.id].bustBoomResult === 'bust' ? 'text-red-600 font-bold' : ss!.interviews[player.id].bustBoomResult === 'boom' ? 'text-green-600 font-bold' : ''}>
-                                          {ss!.interviews[player.id].bustBoomResult === 'bust' ? '⚠️ Bust risk detected' : ss!.interviews[player.id].bustBoomResult === 'boom' ? '🌟 Boom potential detected' : 'Normal profile'}
-                                        </div>
-                                      )}
+                                  </details>
+                                )}
+
+                                {/* Collapsible In-Person Observations */}
+                                {inPersonData && (
+                                  <details className="border border-[var(--border)] rounded-lg overflow-hidden">
+                                    <summary className="px-3 py-2 bg-indigo-50 text-indigo-700 text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-indigo-100 transition-colors">
+                                      👁 In-Person Observations
+                                    </summary>
+                                    <div className="px-3 py-2.5 border-t border-[var(--border)]">
+                                      <InPersonEvalContent evalData={inPersonData} filmData={filmData} player={player} />
                                     </div>
-                                  )}
-                                  {hasProDay && (
-                                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-                                      <div className="font-bold text-amber-700 text-[10px] uppercase">Pro Day</div>
-                                      <div>Impression: {ss!.proDays[player.id].impression}</div>
-                                      <div>{ss!.proDays[player.id].revealedRating}: <span className="font-bold">{ss!.proDays[player.id].revealedValue}</span></div>
-                                    </div>
-                                  )}
-                                </div>
+                                  </details>
+                                )}
                               </div>
                             );
-                          })()}
-                          {isScouted ? (
-                            <ScoutEvaluationPanel
-                              player={player}
-                              userRoster={userRoster}
-                              publicOvrRange={{ lo, hi }}
-                              isUserPick={isUserPick}
-                              onDraft={() => draftPlayer(player.id)}
-                              scoutingLevel={scoutingLevel}
-                            />
-                          ) : (
+                          })() : (
                             <UnscoutedPanel
                               player={player}
-                              scoutsRemaining={scoutsRemaining}
-                              onScout={() => deepScoutPlayer(player.id)}
+                              scoutsRemaining={scoutPointsLeft}
+                              onScout={() => scoutPlayer(player.id)}
                             />
                           )}
                         </td>

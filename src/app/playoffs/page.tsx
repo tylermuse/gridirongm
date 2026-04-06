@@ -11,6 +11,7 @@ import { PlayerModal } from '@/components/game/PlayerModal';
 import { BoxScoreModal } from '@/components/game/BoxScoreModal';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { formatRecord, type PlayoffMatchup, type Team, type GameResult } from '@/types';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const ROUND_LABELS: Record<number, string> = {
   1: 'Wild Card',
@@ -349,12 +350,11 @@ export default function PlayoffsPage() {
   if (phase !== 'playoffs' && !playoffBracket) {
     return (
       <GameShell>
-        <div className="max-w-4xl mx-auto text-center py-20">
-          <h2 className="text-2xl font-black mb-4">Playoffs</h2>
-          <p className="text-[var(--text-sec)]">
-            The playoffs haven&apos;t started yet. Finish the regular season first.
-          </p>
-        </div>
+        <EmptyState
+          icon="🏆"
+          title="Playoffs"
+          description="The playoffs haven't started yet. Finish the regular season first."
+        />
       </GameShell>
     );
   }

@@ -533,12 +533,41 @@ function DraftCapitalCard({ team, season, phase, teams }: { team: { draftPicks: 
 }
 
 function Dashboard() {
-  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements, leagueSettings } = useGameStore();
+  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements, leagueSettings, firedState } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const spotlightRef = useRef<HTMLDivElement>(null);
   const userTeam = teams.find(t => t.id === userTeamId)!;
   const roster = players.filter(p => p.teamId === userTeamId);
+
+  if (firedState?.fired) {
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80">
+        <div className="bg-[var(--surface)] rounded-2xl shadow-2xl max-w-md w-full mx-4 p-8 text-center space-y-6">
+          <div className="text-6xl">🔥</div>
+          <h1 className="text-3xl font-black text-red-600">You&apos;ve Been Fired</h1>
+          <p className="text-[var(--text-sec)]">{firedState.reason}</p>
+          <p className="text-sm text-[var(--text-sec)]">Season {firedState.season}</p>
+          <div className="flex flex-col gap-3 pt-2">
+            <Button onClick={() => useGameStore.setState({ initialized: false, firedState: null })}>
+              Start New League
+            </Button>
+            <button onClick={() => {
+              const team = useGameStore.getState().teams.find(t => t.id === userTeamId);
+              useGameStore.setState({
+                firedState: null,
+                teams: useGameStore.getState().teams.map(t =>
+                  t.id === userTeamId ? { ...t, approval: { fanApproval: 50, ownerApproval: 50, objectives: team?.approval?.objectives ?? [], tenureSeasons: 0, warningIssued: false } } : t,
+                ),
+              });
+            }} className="text-sm text-[var(--text-sec)] hover:text-[var(--text)] underline">
+              Continue as New GM (reset approval)
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Listen for spotlight scroll requests (from SpotlightPopup in GameShell or ?spotlight=1 query)
   useEffect(() => {

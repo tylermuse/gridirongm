@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { SeasonSummary, AllLeagueEntry } from '@/types';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const PLAYOFF_LABELS: Record<string, string> = {
   missed: 'Missed Playoffs',
@@ -104,11 +105,11 @@ export default function HistoryPage() {
         </p>
 
         {seasonHistory.length === 0 ? (
-          <Card>
-            <div className="text-center py-16 text-[var(--text-sec)]">
-              <p>No completed seasons yet. Finish your first season to see history here.</p>
-            </div>
-          </Card>
+          <EmptyState
+            icon="📜"
+            title="No History Yet"
+            description="No completed seasons yet. Finish your first season to see history here."
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6">
             {/* Season list */}

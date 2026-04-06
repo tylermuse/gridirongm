@@ -989,6 +989,55 @@ export function generateScoutingReport(
   };
 }
 
+export function generateFilmReviewBlurb(player: Player): string {
+  const seed = seedFromId(player.id);
+  const ovr = player.ratings.overall;
+  const pos = player.position;
+
+  const eliteBlurbs: Record<string, string[]> = {
+    QB: ['Commands the pocket with poise. Arm talent jumps off the tape and he processes reads at an advanced level.', 'Dynamic playmaker who can beat you with his arm and his legs. Shows elite anticipation on timing routes.'],
+    RB: ['Explosive runner who hits the hole with conviction. Shows the burst and vision to be an every-down back.', 'Physical runner with surprising agility. Breaks tackles consistently and shows soft hands in the passing game.'],
+    WR: ['Route-running is crisp and polished. Creates separation at every level and tracks the deep ball naturally.', 'Game-changing speed with reliable hands. Dominates contested catches and is a legitimate deep threat.'],
+    TE: ['Matchup nightmare with rare combination of size and athleticism. Equally effective as blocker and receiver.'],
+    OL: ['Technically sound with excellent anchor in pass protection. Moves people in the run game consistently.'],
+    DL: ['Disruptive presence who collapses the pocket. Quick first step and a deep arsenal of pass-rush moves.'],
+    LB: ['Sideline-to-sideline range with instincts that jump off the tape. Fills gaps aggressively and covers well.'],
+    CB: ['Lockdown coverage ability with fluid hips and excellent ball skills. Shuts down his side of the field.'],
+    S: ['Ball-hawk with elite range and football IQ. Consistently puts himself in position to make plays.'],
+    K: ['Strong leg with accuracy to all parts of the field. Clutch under pressure.'],
+    P: ['Booming leg with excellent hangtime and directional control.'],
+  };
+  const solidBlurbs: Record<string, string[]> = {
+    QB: ['Good tape against solid competition. Processes the field well and shows accuracy on intermediate routes.'],
+    RB: ['Reliable runner who hits assigned gaps. Shows patience and enough burst to pick up chunk plays.'],
+    WR: ['Solid route runner who wins with technique over athleticism. Reliable on possession routes.'],
+    TE: ['Useful as an inline blocker with developing receiving skills.'],
+    OL: ['Solid technique and sufficient anchor. Competitive blocker who holds up against most pass rushers.'],
+    DL: ['Plays with good effort and technique. Holds the point of attack and shows occasional pass-rush ability.'],
+    LB: ['Reliable tackler with decent range. Reads plays well but may lack elite closing speed.'],
+    CB: ['Adequate coverage skills with room to develop. Competes hard and shows fight at the catch point.'],
+    S: ['Reliable in run support with developing coverage skills. Shows good angles to the ball.'],
+    K: ['Solid accuracy but may struggle from distance.'], P: ['Adequate leg with room to improve.'],
+  };
+  const rawBlurbs: Record<string, string[]> = {
+    QB: ['Raw passer with tools to develop. Arm strength is there but accuracy and processing need work.'],
+    RB: ['Raw runner who relies on athleticism over technique. Vision and patience need development.'],
+    WR: ['Athletic profile is exciting but route running is undeveloped. Could be special with coaching.'],
+    TE: ['Athletic but raw. Blocking needs significant work before he can contribute.'],
+    OL: ['Has the physical tools but technique is raw. Needs a patient coaching staff.'],
+    DL: ['Athletic freak who hasn\'t put it all together yet. Could be a steal if he develops.'],
+    LB: ['Athletically gifted but reads are slow. Needs development before contributing.'],
+    CB: ['Flashes intriguing athleticism but technique is inconsistent. Needs development time.'],
+    S: ['Project safety with tools. Needs to learn positioning and reads at the NFL level.'],
+    K: ['Inconsistent from distance. Has a strong leg but accuracy is a concern.'],
+    P: ['Inconsistent with directional punting. Leg strength is average.'],
+  };
+
+  const pool = ovr >= 75 ? eliteBlurbs : ovr >= 62 ? solidBlurbs : rawBlurbs;
+  const options = pool[pos] ?? ['Solid prospect with development potential.'];
+  return options[seed % options.length];
+}
+
 /** Returns the scouting level name needed to unlock a given section. */
 export function unlockLevelName(section: 'overview' | 'strengths' | 'comparison' | 'weaknesses' | 'combine' | 'draftGrade' | 'devCurve' | 'character' | 'scoutsTake'): string {
   switch (section) {

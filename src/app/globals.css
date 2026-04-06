@@ -75,3 +75,10 @@ html, body {
   background: linear-gradient(to left, rgba(0,0,0,0.08), transparent);
   pointer-events: none;
 }
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.15; }
+}
+.animate-pulse-slow { animation: pulse-slow 3s ease-in-out infinite; }
+.font-display { font-family: var(--font-display), sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: -0.01em; }

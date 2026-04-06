@@ -31,7 +31,7 @@ export function Button({
       disabled={disabled}
       className={`
         inline-flex items-center justify-center gap-2 font-semibold rounded-lg
-        transition-all duration-150 disabled:opacity-40 disabled:pointer-events-none
+        transition-all duration-150 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none
         ${variants[variant]} ${sizes[size]} ${className}
       `}
     >

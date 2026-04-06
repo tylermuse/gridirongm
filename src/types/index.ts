@@ -691,14 +691,34 @@ export interface LeagueState {
   scoutingState?: {
     scoutPoints: number;
     maxScoutPoints: number;
-    /** Players that have had a scout trip (layer 2) */
-    scoutTrips: Record<string, { strength: string; weakness: string; potentialHint: 'high' | 'medium' | 'low'; ovrEstimate: { low: number; high: number } }>;
-    /** Players that have been interviewed (layer 4) */
-    interviews: Record<string, { personality: string; notes: string; revealedBustBoom: boolean; bustBoomResult?: 'bust' | 'boom' | 'normal' }>;
-    /** Players that have had a pro day visit (layer 5) */
-    proDays: Record<string, { impression: string; revealedRating: string; revealedValue: number }>;
-    /** Number of pro day visits used this draft season (max 5) */
-    proDayCount: number;
+    filmReviews: Record<string, {
+      ovrRange: { low: number; high: number };
+      strength: string;
+      weakness: string;
+      projectionTier: 'Starter' | 'Rotational' | 'Backup' | 'Project';
+      potentialHint: 'high' | 'medium' | 'low';
+      blurb: string;
+    }>;
+    inPersonEvals: Record<string, {
+      ovrRange: { low: number; high: number };
+      personality: string;
+      characterNotes: string;
+      revealedBustBoom: boolean;
+      bustBoomResult?: 'bust' | 'boom' | 'normal';
+      revealedRatingKeys: string[];
+      /** In-person observations */
+      bodyType: string;
+      footballIQ: string;
+      competitiveness: string;
+      medicalFlag: string | null;
+      motivation: string;
+    }>;
+    inPersonEvalCount: number;
+    fullEvals: Record<string, {
+      exactOvr: number;
+      bustBoomResult: 'bust' | 'boom' | 'normal';
+    }>;
+    fullEvalCount: number;
   };
   /** NFL 2026 hardcoded first-round mock draft (empty if not NFL roster or past first draft) */
   nflMockDraft?: { pickNum: number; teamAbbr: string; playerId: string; firstName: string; lastName: string; position: string; college: string; blurb: string }[];
@@ -726,6 +746,29 @@ export interface LeagueState {
   tradeRumors: TradeRumor[];
   /** Underpaid stars demanding new deals during re-signing */
   holdoutDemands: HoldoutEntry[];
+  /** Game over state when owner fires the GM */
+  firedState: { fired: boolean; season: number; reason: string } | null;
+  /** Expansion draft state (null when not active) */
+  expansionDraft: ExpansionDraftState | null;
+}
+
+export interface ExpansionTeamConfig {
+  city: string;
+  name: string;
+  abbreviation: string;
+  conference: 'AC' | 'NC';
+  division: 'North' | 'South' | 'East' | 'West';
+  primaryColor: string;
+  secondaryColor: string;
+}
+
+export interface ExpansionDraftState {
+  phase: 'setup' | 'protection' | 'drafting' | 'complete';
+  configs: ExpansionTeamConfig[];
+  expansionTeamIds: string[];
+  protectedPlayers: Record<string, string[]>;
+  picks: { expansionTeamId: string; fromTeamId: string; playerId: string }[];
+  currentPickIndex: number;
 }
 
 export interface Rivalry {

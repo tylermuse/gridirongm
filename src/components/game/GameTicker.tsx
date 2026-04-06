@@ -85,6 +85,7 @@ export function GameTicker() {
                 onClick={() => game.played && setSelectedGame(game)}
                 className={`flex-shrink-0 flex flex-col items-center px-2 py-1 border-r border-[var(--border)] last:border-r-0 snap-center ${bgClass} ${isCurrentWeek ? 'ring-1 ring-inset ring-blue-500' : ''} ${game.played ? 'cursor-pointer hover:brightness-95 transition-all' : ''}`}
                 style={{ minWidth: '72px' }}
+                title={game.played ? `${result} ${userScore}-${oppScore} ${isHome ? 'vs' : '@'} ${getTeamAbbr(oppId)}` : `Week ${game.week} ${isHome ? 'vs' : '@'} ${getTeamAbbr(oppId)}`}
               >
                 {/* Away team row */}
                 {(() => {
@@ -129,6 +130,12 @@ export function GameTicker() {
               </div>
             );
           })}
+        </div>
+
+        {/* W/L legend */}
+        <div className="hidden sm:flex items-center gap-1.5 px-2 border-l border-[var(--border)] shrink-0">
+          <span className="w-2 h-2 rounded-full bg-green-400" /><span className="text-[9px] text-[var(--text-sec)]">W</span>
+          <span className="w-2 h-2 rounded-full bg-red-400" /><span className="text-[9px] text-[var(--text-sec)]">L</span>
         </div>
 
         {/* Auth: Sign In or user pill — pinned to top-right */}

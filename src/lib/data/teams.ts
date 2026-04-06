@@ -50,3 +50,18 @@ export const LEAGUE_TEAMS: TeamTemplate[] = [
   { city: 'San Francisco', name: 'Fog', abbreviation: 'SF', conference: 'NC', division: 'West', primaryColor: '#1C3A50', secondaryColor: '#00B4A0' },
   { city: 'Seattle', name: 'Sasquatch', abbreviation: 'SEA', conference: 'NC', division: 'West', primaryColor: '#D45820', secondaryColor: '#5C2D91' },
 ];
+
+export const EXPANSION_CITIES = [
+  { city: 'Portland', suggestedName: 'Pioneers', suggestedAbbr: 'POR' },
+  { city: 'San Antonio', suggestedName: 'Armadillos', suggestedAbbr: 'SA' },
+  { city: 'Salt Lake City', suggestedName: 'Stallions', suggestedAbbr: 'SLC' },
+  { city: 'Austin', suggestedName: 'Outlaws', suggestedAbbr: 'AUS' },
+  { city: 'St. Louis', suggestedName: 'Arch', suggestedAbbr: 'STL' },
+  { city: 'Oakland', suggestedName: 'Oaks', suggestedAbbr: 'OAK' },
+  { city: 'San Diego', suggestedName: 'Surf', suggestedAbbr: 'SD' },
+  { city: 'Toronto', suggestedName: 'Huskies', suggestedAbbr: 'TOR' },
+  { city: 'Mexico City', suggestedName: 'Aztecs', suggestedAbbr: 'MEX' },
+  { city: 'London', suggestedName: 'Monarchs', suggestedAbbr: 'LON' },
+  { city: 'Orlando', suggestedName: 'Gators', suggestedAbbr: 'ORL' },
+  { city: 'Columbus', suggestedName: 'Crew', suggestedAbbr: 'COL' },
+];

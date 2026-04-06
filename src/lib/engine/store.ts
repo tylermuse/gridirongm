@@ -8,6 +8,7 @@ import type {
   LeagueState, Team, Player, GameResult, PlayerStats,
   NewsItem, TradeProposal, ResigningEntry, DraftPick, LeagueSettings,
   HoldoutEntry, TradeRumor, Rivalry, RivalryEvent,
+  ExpansionTeamConfig,
 } from '@/types';
 import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
@@ -26,6 +27,8 @@ import { computeLeagueQBTiers, getQBTierModifier } from './qbTierPyramid';
 import { generateSeasonObjectives, evaluateObjectives } from './objectives';
 import { defaultApproval, updateApprovalAfterGame, updateApprovalEndOfSeason, updateApprovalForMove } from './approval';
 import { teamSpecialTeamsRating } from './specialTeams';
+import { createExpansionTeamObject, runExpansionDraft, computeProtectionLimit } from './expansionDraft';
+import { generateFilmReviewBlurb } from './scoutingReport';
 
 const SAVE_VERSION = 19;
 
@@ -100,7 +103,10 @@ interface GameStore extends LeagueState {
   solicitTradingBlockProposals: (playerIds: string[], pickIds: string[], seekPositions: Position[], seekDraftPicks?: boolean) => void;
   // PRD-07: Scouting
   setScoutingLevel: (level: 0 | 1 | 2) => void;
-  deepScoutPlayer: (playerId: string) => void;
+  scoutPlayer: (playerId: string) => boolean;
+  filmReviewPlayer: (playerId: string) => boolean;
+  inPersonEvalPlayer: (playerId: string) => boolean;
+  fullEvalPlayer: (playerId: string) => boolean;
   // Coaching
   replaceCoach: (role: import('@/types').CoachRole, specificCoach?: import('@/types').Coach) => void;
   // PRD-13: Depth chart
@@ -113,15 +119,13 @@ interface GameStore extends LeagueState {
   editPlayer: (playerId: string, updates: Partial<Player>) => void;
   /** God Mode: create a new player and add to the user's team */
   createPlayer: (data: { firstName: string; lastName: string; position: Position; age: number; overall: number; potential: number }) => string | null;
-  /** Scouting: send a scout trip (1 point, narrows OVR estimate) */
-  sendScoutTrip: (playerId: string) => boolean;
-  /** Scouting: interview a prospect (1 point, reveals character + bust/boom) */
-  interviewProspect: (playerId: string) => boolean;
-  /** Scouting: pro day visit (1 point, reveals a rating, max 5 per draft) */
-  visitProDay: (playerId: string) => boolean;
   setSuppressTradePopups: (val: boolean) => void;
   saveToSlot: (slot: number) => Promise<void>;
   loadFromSlot: (slot: number) => Promise<void>;
+  createExpansionTeam: (config: ExpansionTeamConfig) => boolean;
+  protectPlayers: (teamId: string, playerIds: string[]) => boolean;
+  runExpansionDraftAction: () => void;
+  cancelExpansionDraft: () => void;
   getTeam: (id: string) => Team | undefined;
   getPlayer: (id: string) => Player | undefined;
   getTeamRoster: (teamId: string) => Player[];
@@ -660,6 +664,12 @@ function pickTradeValue(pick: DraftPick, teams?: Team[]): number {
  */
 
 /** Simple hash from player ID + salt */
+type NewScoutingState = NonNullable<LeagueState['scoutingState']>;
+function migrateScoutingState(raw: LeagueState['scoutingState']): NewScoutingState {
+  if (raw && 'filmReviews' in raw) return raw as NewScoutingState;
+  return { scoutPoints: (raw as any)?.scoutPoints ?? 10, maxScoutPoints: (raw as any)?.maxScoutPoints ?? 20, filmReviews: {}, inPersonEvals: {}, inPersonEvalCount: 0, fullEvals: {}, fullEvalCount: 0 };
+}
+
 function seedFromId(id: string, salt = 0): number {
   let h = salt;
   for (let i = 0; i < id.length; i++) {
@@ -1533,6 +1543,8 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   achievements: [],
   tradeRumors: [],
   rivalries: [],
+  firedState: null,
+  expansionDraft: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -2152,6 +2164,8 @@ export const useGameStore = create<GameStore>()(
             achievements: [],
             tradeRumors: [],
             rivalries: [],
+            firedState: null,
+            expansionDraft: null,
           });
           return;
         } catch (error) {
@@ -2283,6 +2297,8 @@ export const useGameStore = create<GameStore>()(
           achievements: [],
           tradeRumors: [],
           rivalries: [],
+          firedState: null,
+          expansionDraft: null,
         });
       },
 
@@ -2952,6 +2968,19 @@ export const useGameStore = create<GameStore>()(
           return { ...t, approval: updated };
         });
 
+        // Check if user has been fired (approval dropped to 0)
+        const userFinalTeam = finalTeams.find(t => t.id === state.userTeamId);
+        const userApprovalVal = userFinalTeam?.approval?.ownerApproval ?? 50;
+        let firedState: LeagueState['firedState'] = null;
+        if (userApprovalVal <= 0) {
+          firedState = { fired: true, season: state.season, reason: 'Owner lost patience after repeated underperformance.' };
+          approvalNews.push(makeNews({
+            season: state.season, week: 99, type: 'system',
+            headline: `${userFinalTeam?.city ?? 'Team'} ownership has fired the GM after a disastrous tenure. Your time is up.`,
+            isUserTeam: true,
+          }));
+        }
+
         set({
           phase: 'resigning',
           resigningPlayers,
@@ -2960,6 +2989,7 @@ export const useGameStore = create<GameStore>()(
           players: playersAfterRetirement,
           newsItems: [...state.newsItems, ...retirementNews, ...holdoutNews, ...approvalNews],
           seasonHistory: updatedSeasonHistory,
+          ...(firedState ? { firedState } : {}),
         });
       },
 
@@ -3496,6 +3526,15 @@ export const useGameStore = create<GameStore>()(
           holdoutDemands: [],
           draftScoutingData: scoutingData,
           nflMockDraft: nflMockDraft.length > 0 ? nflMockDraft : undefined,
+          scoutingState: {
+            scoutPoints: 10 + (state.scoutingLevel || 0) * 5,
+            maxScoutPoints: 20,
+            filmReviews: {},
+            inPersonEvals: {},
+            inPersonEvalCount: 0,
+            fullEvals: {},
+            fullEvalCount: 0,
+          },
         });
 
         // Add lottery news and results if any
@@ -4377,6 +4416,15 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
+        // Approval impact for signing star players
+        if (player && player.ratings.overall >= 70) {
+          currentTeams = currentTeams.map(t => {
+            if (t.id !== state.userTeamId) return t;
+            const approval = t.approval ?? defaultApproval();
+            return { ...t, approval: updateApprovalForMove(approval, 'sign_star') };
+          });
+        }
+
         // --- Single set() call with user signing (+ AI signings if regular season) ---
         set({
           players: currentPlayers,
@@ -4460,13 +4508,23 @@ export const useGameStore = create<GameStore>()(
           };
         });
 
+        // Approval impact for releasing star players
+        let finalRelTeams = updatedTeams;
+        if (player.ratings.overall >= 70) {
+          finalRelTeams = finalRelTeams.map(t => {
+            if (t.id !== state.userTeamId) return t;
+            const approval = t.approval ?? defaultApproval();
+            return { ...t, approval: updateApprovalForMove(approval, 'trade_away_star') };
+          });
+        }
+
         set({
           players: state.players.map(p =>
             p.id === playerId
               ? { ...p, teamId: null, onIR: false, contract: { salary: contract.salary, yearsLeft: contract.yearsLeft, guaranteed: contract.guaranteed, totalYears: contract.totalYears } }
               : p,
           ),
-          teams: updatedTeams,
+          teams: finalRelTeams,
           freeAgents: [...state.freeAgents, playerId],
           newsItems: [...state.newsItems, releaseNews],
         });
@@ -4837,9 +4895,24 @@ export const useGameStore = create<GameStore>()(
           });
         }
 
+        // Approval impact for trading star players
+        const tradedStars = [...offeredPlayerIds, ...receivedPlayerIds]
+          .map(id => state.players.find(p => p.id === id))
+          .filter((p): p is Player => !!p && p.ratings.overall >= 70);
+        let finalTeams = updatedTeams;
+        for (const star of tradedStars) {
+          const isAcquiring = receivedPlayerIds.includes(star.id);
+          const moveType = isAcquiring ? 'trade_for_star' : 'trade_away_star';
+          finalTeams = finalTeams.map(t => {
+            if (t.id !== state.userTeamId) return t;
+            const approval = t.approval ?? defaultApproval();
+            return { ...t, approval: updateApprovalForMove(approval, moveType as 'trade_for_star' | 'trade_away_star') };
+          });
+        }
+
         set({
           players: updatedPlayers,
-          teams: updatedTeams,
+          teams: finalTeams,
           draftOrder: updatedDraftOrder,
           newsItems: [...state.newsItems, tradeNews],
         });
@@ -4863,7 +4936,7 @@ export const useGameStore = create<GameStore>()(
         }, 0);
 
         // AI wants at least 90% of the value
-        const neededValue = targetValue * 0.90;
+        const neededValue = targetValue * 0.95;
 
         // Collect user's available assets sorted by value
         const userRoster = state.players
@@ -5200,6 +5273,241 @@ export const useGameStore = create<GameStore>()(
             [playerId]: { ...scoutData, deepScouted: true, error: 2, scoutedOvr },
           },
         });
+      },
+
+      // Full scout — generates all tier data in one action for 1 scout point
+      scoutPlayer: (playerId: string) => {
+        const state = get();
+        const ss = migrateScoutingState(state.scoutingState);
+        if (ss.scoutPoints < 1) return false;
+        if (ss.filmReviews[playerId]) return false; // already scouted
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return false;
+
+        // Temporarily give enough points for all tiers
+        const savedPoints = ss.scoutPoints;
+        set({ scoutingState: { ...ss, scoutPoints: 100 } });
+
+        // Generate all three tiers
+        get().filmReviewPlayer(playerId);
+        get().inPersonEvalPlayer(playerId);
+        get().fullEvalPlayer(playerId);
+
+        // Set final points (1 point spent from original)
+        const finalSs = get().scoutingState!;
+        set({ scoutingState: { ...finalSs, scoutPoints: savedPoints - 1 } });
+
+        // Also mark as deep-scouted in legacy system
+        const scoutData = state.draftScoutingData[playerId];
+        if (scoutData && !scoutData.deepScouted) {
+          const seed = seedFromId(playerId, 88);
+          const noise = (seed % 5) - 2;
+          set({
+            draftScoutingData: {
+              ...get().draftScoutingData,
+              [playerId]: { ...scoutData, deepScouted: true, error: 2, scoutedOvr: Math.max(20, Math.min(99, player.ratings.overall + noise)) },
+            },
+          });
+        }
+        return true;
+      },
+
+      // Tier 1: Film Review (free if called after scoutPlayer) — OVR range ±6, strength/weakness, projection tier, potential hint, blurb
+      filmReviewPlayer: (playerId: string) => {
+        const state = get();
+        const ss = migrateScoutingState(state.scoutingState);
+        if (ss.scoutPoints < 1) return false;
+        if (ss.filmReviews[playerId]) return false;
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return false;
+
+        const POS_KEYS: Record<string, string[]> = {
+          QB: ['throwing', 'carrying', 'blocking'], RB: ['carrying', 'catching', 'blocking'],
+          WR: ['catching', 'carrying', 'blocking'], TE: ['catching', 'blocking', 'carrying'],
+          OL: ['blocking', 'tackling', 'carrying'], DL: ['passRush', 'tackling', 'blocking'],
+          LB: ['tackling', 'coverage', 'passRush'], CB: ['coverage', 'tackling', 'catching'],
+          S: ['coverage', 'tackling', 'catching'], K: ['kicking', 'blocking'], P: ['kicking', 'blocking'],
+        };
+        const keys = POS_KEYS[player.position] ?? ['throwing', 'carrying', 'catching'];
+        const bestKey = keys.reduce((best, k) => (player.ratings[k as keyof typeof player.ratings] ?? 0) > (player.ratings[best as keyof typeof player.ratings] ?? 0) ? k : best, keys[0]);
+        const worstKey = keys.reduce((worst, k) => (player.ratings[k as keyof typeof player.ratings] ?? 0) < (player.ratings[worst as keyof typeof player.ratings] ?? 0) ? k : worst, keys[0]);
+
+        const STRENGTH_NOTES: Record<string, string> = { throwing: 'Elite arm talent', carrying: 'Natural ball carrier', catching: 'Sure hands', coverage: 'Lockdown coverage skills', passRush: 'Explosive first step', blocking: 'Mauler in the trenches', tackling: 'Sure tackler', kicking: 'Big leg' };
+        const WEAKNESS_NOTES: Record<string, string> = { throwing: 'Accuracy concerns', carrying: 'Ball security issues', catching: 'Inconsistent hands', coverage: 'Struggles in man coverage', passRush: 'Disappears against good tackles', blocking: 'Gets overpowered', tackling: 'Missed tackles', kicking: 'Inconsistent under pressure' };
+
+        const ovr = player.ratings.overall;
+        const pot = player.potential;
+        const seed = seedFromId(playerId, 77);
+        const noise = ((seed % 13) - 6); // -6 to +6
+        const projTier = ovr >= 80 ? 'Starter' : ovr >= 70 ? 'Rotational' : ovr >= 60 ? 'Backup' : 'Project';
+
+        const review = {
+          ovrRange: { low: Math.max(30, ovr + noise - 6), high: Math.min(99, ovr + noise + 6) },
+          strength: STRENGTH_NOTES[bestKey] ?? 'Solid all-around',
+          weakness: WEAKNESS_NOTES[worstKey] ?? 'Limited upside',
+          projectionTier: projTier as 'Starter' | 'Rotational' | 'Backup' | 'Project',
+          potentialHint: (pot >= 80 ? 'high' : pot >= 65 ? 'medium' : 'low') as 'high' | 'medium' | 'low',
+          blurb: generateFilmReviewBlurb(player),
+        };
+
+        set({
+          scoutingState: {
+            ...ss,
+            scoutPoints: ss.scoutPoints - 1,
+            filmReviews: { ...ss.filmReviews, [playerId]: review },
+          },
+        });
+        return true;
+      },
+
+      // Tier 2: In-Person Eval (3 points, requires tier 1, cap 8) — tighter OVR ±3, personality, character, bust/boom 50%
+      inPersonEvalPlayer: (playerId: string) => {
+        const state = get();
+        const ss = migrateScoutingState(state.scoutingState);
+        if (ss.scoutPoints < 3) return false;
+        if (!ss.filmReviews[playerId]) return false; // requires tier 1
+        if (ss.inPersonEvals[playerId]) return false;
+        if (ss.inPersonEvalCount >= 8) return false;
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return false;
+
+        const ovr = player.ratings.overall;
+        const seed = seedFromId(playerId, 99);
+        const noise = ((seed % 7) - 3); // -3 to +3
+        const profile = player.draftProfile ?? 'normal';
+        const detected = Math.random() < 0.5;
+
+        const PERSONALITIES = ['high_character', 'confident', 'reserved', 'red_flag'] as const;
+        const personality = profile === 'bust' && Math.random() < 0.4 ? 'red_flag'
+          : profile === 'boom' && Math.random() < 0.4 ? 'high_character'
+          : PERSONALITIES[Math.floor(Math.random() * PERSONALITIES.length)];
+
+        const CHARACTER_NOTES: Record<string, string> = {
+          high_character: 'Coaches rave about his work ethic and leadership.',
+          confident: 'Carries himself like a pro. Confident presence.',
+          reserved: 'Quiet demeanor. Hard to read but focused.',
+          red_flag: 'Some maturity concerns flagged by our staff.',
+        };
+
+        // Reveal some position-relevant rating keys
+        const POS_KEYS_EVAL: Record<string, string[]> = {
+          QB: ['throwing', 'carrying', 'blocking'], RB: ['carrying', 'catching', 'blocking'],
+          WR: ['catching', 'carrying', 'blocking'], TE: ['catching', 'blocking', 'carrying'],
+          OL: ['blocking', 'tackling', 'carrying'], DL: ['passRush', 'tackling', 'blocking'],
+          LB: ['tackling', 'coverage', 'passRush'], CB: ['coverage', 'tackling', 'catching'],
+          S: ['coverage', 'tackling', 'catching'], K: ['kicking', 'blocking'], P: ['kicking', 'blocking'],
+        };
+        const revealedKeys = (POS_KEYS_EVAL[player.position] ?? ['throwing']).slice(0, 2);
+
+        // In-person observation generation (deterministic from seed)
+        const spd = player.ratings.speed ?? 50;
+        const str = player.ratings.strength ?? 50;
+        const agi = player.ratings.agility ?? 50;
+
+        const BODY_TYPES: Record<string, string[]> = {
+          QB: [spd >= 70 ? 'Lean, athletic build. Moves like a basketball player in the pocket.' : 'Thick lower half, sturdy frame. Built to absorb hits and stand tall.', str >= 70 ? 'Surprisingly powerful through the core. Shrugs off contact at the line.' : 'Slight frame. Scouts worry about durability over a 17-game season.'],
+          RB: [spd >= 75 ? 'Compact, explosive build. Low center of gravity with burst you can see from the stands.' : 'Thick, between-the-tackles frame. Carries his weight well for the position.', str >= 70 ? 'Tree-trunk legs. Defenders bounce off him at the point of contact.' : 'Lean build, more of a finesse runner. Needs to add functional strength.'],
+          WR: [spd >= 80 ? 'Long strider with track speed. Passes the eyeball test immediately — elite build for the position.' : agi >= 70 ? 'Quick-twitch athlete. Fluid in and out of breaks, hips are loose.' : 'Solidly built but nothing that jumps off the page physically. Wins with technique.'],
+          OL: [str >= 75 ? 'Massive frame, moves well for his size. Feet are quicker than the tape suggests.' : 'Adequate size but scouts flagged he carries some bad weight. Needs to convert to lean muscle.'],
+          DL: [spd >= 70 ? 'Explosive first step is even more apparent in person. Long arms, great leverage.' : str >= 75 ? 'Thick, powerful build. Hard to move at the point of attack.' : 'Tweener body type — not quite big enough inside, not quite fast enough outside.'],
+          LB: [spd >= 70 ? 'Sideline-to-sideline athlete. Covers ground effortlessly.' : 'Downhill thumper. Built to fill gaps and take on blocks.'],
+          CB: [agi >= 75 ? 'Fluid hips, smooth transitions. Passes the eyeball test for coverage ability.' : 'Stiff in transition. Hips are tighter than the tape showed — could be an issue against elite route runners.'],
+          S: [spd >= 70 ? 'Rangey athlete. Covers a lot of ground and closes on the ball quickly.' : 'Compact, physical safety. More of a box player than a center-field type.'],
+          TE: [str >= 70 ? 'Thick, Y-tight end frame. In-line blocker who can also run seams.' : spd >= 65 ? 'Move tight end build. Matchup weapon but needs to develop as a blocker.' : 'Tweener body. Not quite athletic enough to be a consistent mismatch.'],
+          K: ['Smooth delivery, consistent mechanics.'], P: ['Good leg speed and follow-through.'],
+        };
+        const bodyPool = BODY_TYPES[player.position] ?? ['Adequate build for the position.'];
+        const bodyType = bodyPool[seed % bodyPool.length];
+
+        const awareness = player.ratings.awareness ?? 50;
+        const IQ_NOTES = awareness >= 80
+          ? ['Lit up the whiteboard session. Diagnosed coverages before coaches finished drawing them.', 'Exceptional football IQ. Articulated his reads with the detail of a coach.']
+          : awareness >= 65
+          ? ['Solid understanding of concepts. Answered questions competently but didn\'t blow anyone away.', 'Adequate processor. Can handle a standard playbook but may struggle with complex pre-snap reads.']
+          : ['Struggled in the film room. When asked about specific reads, gave vague, athletic-instinct answers.', 'Processing speed is a concern. Production may have been scheme-dependent rather than IQ-driven.'];
+        const footballIQ = IQ_NOTES[seed % IQ_NOTES.length];
+
+        const COMPETE_NOTES = personality === 'high_character'
+          ? ['Welcomed every challenge during the workout. When he failed a drill, he immediately asked to run it again.', 'Teammates gravitate toward him. Coaches said he raised the intensity of every drill just by being there.']
+          : personality === 'red_flag'
+          ? ['Body language flagged during competitive drills. Got visibly frustrated after mistakes and went quiet.', 'Coaches deliberately challenged his opinions during meetings. He got defensive rather than engaging.']
+          : personality === 'confident'
+          ? ['Carries himself with alpha energy. Talked trash during competitive drills — but backed it up.', 'Stayed composed under pressure. When put in uncomfortable situations, handled it with maturity.']
+          : ['Reserved during group activities but competed hard individually. Internalized corrections without pushback.', 'Quiet competitor. Didn\'t say much but his effort never wavered. Let his play speak.'];
+        const competitiveness = COMPETE_NOTES[seed % COMPETE_NOTES.length];
+
+        const medicalSeed = (seed * 7) % 100;
+        const medicalFlag = medicalSeed < 12
+          ? player.age >= 22 ? 'Team doctors flagged range of motion concern in the right shoulder. Needs follow-up imaging.' : 'Mild lateral knee laxity noted during physical. Not a dealbreaker but worth monitoring.'
+          : medicalSeed < 20
+          ? 'Minor ankle sprain history. Full range of motion, no structural concerns.'
+          : null;
+
+        const MOTIVATION_NOTES = [
+          'Comes from a football family. Father played college ball. This isn\'t just a job — it\'s identity.',
+          'First-generation college student. Football was his way out. The drive is real and deeply personal.',
+          'Stable background, supportive family. Mature beyond his years. Low-maintenance personality.',
+          'Lost a parent young. Coaches say it gave him a perspective and seriousness beyond his age.',
+          'Grew up in a tough neighborhood. Football is his lifeline — expect maximum effort every snap.',
+          'Well-rounded kid. Interests outside football. Some scouts love the maturity, others worry about commitment.',
+        ];
+        const motivation = MOTIVATION_NOTES[seed % MOTIVATION_NOTES.length];
+
+        const evalResult = {
+          ovrRange: { low: Math.max(30, ovr + noise - 3), high: Math.min(99, ovr + noise + 3) },
+          personality,
+          characterNotes: CHARACTER_NOTES[personality],
+          revealedBustBoom: detected,
+          bustBoomResult: detected ? profile as 'bust' | 'boom' | 'normal' : undefined,
+          revealedRatingKeys: revealedKeys,
+          bodyType,
+          footballIQ,
+          competitiveness,
+          medicalFlag,
+          motivation,
+        };
+
+        set({
+          scoutingState: {
+            ...ss,
+            scoutPoints: ss.scoutPoints - 3,
+            inPersonEvals: { ...ss.inPersonEvals, [playerId]: evalResult },
+            inPersonEvalCount: ss.inPersonEvalCount + 1,
+          },
+        });
+        return true;
+      },
+
+      // Tier 3: Full Eval (5 points, requires tier 2, cap 3) — exact OVR ±1, guaranteed bust/boom
+      fullEvalPlayer: (playerId: string) => {
+        const state = get();
+        const ss = migrateScoutingState(state.scoutingState);
+        if (ss.scoutPoints < 5) return false;
+        if (!ss.inPersonEvals[playerId]) return false; // requires tier 2
+        if (ss.fullEvals[playerId]) return false;
+        if (ss.fullEvalCount >= 3) return false;
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return false;
+
+        const ovr = player.ratings.overall;
+        const seed = seedFromId(playerId, 111);
+        const noise = ((seed % 3) - 1); // -1 to +1
+        const profile = player.draftProfile ?? 'normal';
+
+        const fullResult = {
+          exactOvr: Math.max(30, Math.min(99, ovr + noise)),
+          bustBoomResult: profile as 'bust' | 'boom' | 'normal',
+        };
+
+        set({
+          scoutingState: {
+            ...ss,
+            scoutPoints: ss.scoutPoints - 5,
+            fullEvals: { ...ss.fullEvals, [playerId]: fullResult },
+            fullEvalCount: ss.fullEvalCount + 1,
+          },
+        });
+        return true;
       },
 
       // Replace a coach (fire + hire new one in the same role)
@@ -6169,6 +6477,17 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
+        // Rebuild depth chart for the affected team
+        const editedPlayer = updatedPlayers.find(p => p.id === playerId);
+        const affectedTeamId = editedPlayer?.teamId ?? oldPlayer?.teamId;
+        if (affectedTeamId) {
+          updatedTeams = updatedTeams.map(t => {
+            if (t.id !== affectedTeamId) return t;
+            const teamPlayers = updatedPlayers.filter(p => p.teamId === affectedTeamId && !p.retired);
+            return { ...t, depthChart: buildDefaultDepthChart(teamPlayers) };
+          });
+        }
+
         set({ players: updatedPlayers, teams: updatedTeams });
       },
 
@@ -6204,108 +6523,6 @@ export const useGameStore = create<GameStore>()(
         return p.id;
       },
 
-      sendScoutTrip: (playerId: string) => {
-        const state = get();
-        const ss = state.scoutingState ?? { scoutPoints: 15, maxScoutPoints: 20, scoutTrips: {}, interviews: {}, proDays: {}, proDayCount: 0 };
-        if (ss.scoutPoints < 1) return false;
-        if (ss.scoutTrips[playerId]) return false; // already scouted
-        const player = state.players.find(p => p.id === playerId);
-        if (!player) return false;
-
-        const ovr = player.ratings.overall;
-        const pot = player.potential;
-        const primaryKeys = ['throwing', 'carrying', 'catching', 'coverage', 'passRush', 'blocking', 'tackling', 'kicking'];
-        const bestKey = primaryKeys.reduce((best, k) => (player.ratings[k as keyof typeof player.ratings] ?? 0) > (player.ratings[best as keyof typeof player.ratings] ?? 0) ? k : best, primaryKeys[0]);
-        const worstKey = primaryKeys.reduce((worst, k) => (player.ratings[k as keyof typeof player.ratings] ?? 0) < (player.ratings[worst as keyof typeof player.ratings] ?? 0) ? k : worst, primaryKeys[0]);
-
-        const STRENGTH_NOTES: Record<string, string> = { throwing: 'Elite arm talent', carrying: 'Natural ball carrier', catching: 'Sure hands', coverage: 'Lockdown coverage skills', passRush: 'Explosive first step', blocking: 'Mauler in the trenches', tackling: 'Sure tackler', kicking: 'Big leg' };
-        const WEAKNESS_NOTES: Record<string, string> = { throwing: 'Accuracy concerns', carrying: 'Ball security issues', catching: 'Inconsistent hands', coverage: 'Struggles in man coverage', passRush: 'Disappears against good tackles', blocking: 'Gets overpowered', tackling: 'Missed tackles', kicking: 'Inconsistent under pressure' };
-
-        const trip = {
-          strength: STRENGTH_NOTES[bestKey] ?? 'Solid all-around',
-          weakness: WEAKNESS_NOTES[worstKey] ?? 'Limited upside',
-          potentialHint: (pot >= 80 ? 'high' : pot >= 65 ? 'medium' : 'low') as 'high' | 'medium' | 'low',
-          ovrEstimate: { low: Math.max(30, ovr - 5), high: Math.min(99, ovr + 5) },
-        };
-
-        set({
-          scoutingState: {
-            ...ss,
-            scoutPoints: ss.scoutPoints - 1,
-            scoutTrips: { ...ss.scoutTrips, [playerId]: trip },
-          },
-        });
-        return true;
-      },
-
-      interviewProspect: (playerId: string) => {
-        const state = get();
-        const ss = state.scoutingState ?? { scoutPoints: 15, maxScoutPoints: 20, scoutTrips: {}, interviews: {}, proDays: {}, proDayCount: 0 };
-        if (ss.scoutPoints < 1) return false;
-        if (ss.interviews[playerId]) return false;
-        const player = state.players.find(p => p.id === playerId);
-        if (!player) return false;
-
-        const profile = player.draftProfile ?? 'normal';
-        const detected = Math.random() < 0.6; // 60% chance to reveal bust/boom
-
-        const PERSONALITIES = ['high_character', 'confident', 'reserved', 'red_flag'] as const;
-        const NOTES: Record<string, string[]> = {
-          high_character: ['Mature beyond his years. Coaches rave about his work ethic.', 'First one in, last one out. Team captain type.'],
-          confident: ['Carries himself like a pro. Confident but not cocky.', 'Believes he can be the best. That drive shows on tape.'],
-          reserved: ['Quiet, kept to himself in the interview. Hard to read.', 'Not flashy but focused. Let his play speak for itself.'],
-          red_flag: ['Some maturity concerns flagged by our staff.', 'Inconsistent effort level reported by college coaches.'],
-        };
-
-        const personality = profile === 'bust' && Math.random() < 0.4 ? 'red_flag'
-          : profile === 'boom' && Math.random() < 0.4 ? 'high_character'
-          : PERSONALITIES[Math.floor(Math.random() * PERSONALITIES.length)];
-
-        const interview = {
-          personality,
-          notes: NOTES[personality][Math.floor(Math.random() * NOTES[personality].length)],
-          revealedBustBoom: detected,
-          bustBoomResult: detected ? profile as 'bust' | 'boom' | 'normal' : undefined,
-        };
-
-        set({
-          scoutingState: {
-            ...ss,
-            scoutPoints: ss.scoutPoints - 1,
-            interviews: { ...ss.interviews, [playerId]: interview },
-          },
-        });
-        return true;
-      },
-
-      visitProDay: (playerId: string) => {
-        const state = get();
-        const ss = state.scoutingState ?? { scoutPoints: 15, maxScoutPoints: 20, scoutTrips: {}, interviews: {}, proDays: {}, proDayCount: 0 };
-        if (ss.scoutPoints < 1) return false;
-        if (ss.proDayCount >= 5) return false;
-        if (ss.proDays[playerId]) return false;
-        const player = state.players.find(p => p.id === playerId);
-        if (!player) return false;
-
-        const ratingKeys = ['speed', 'strength', 'agility', 'awareness', 'throwing', 'catching', 'carrying', 'blocking', 'tackling', 'coverage', 'passRush', 'kicking'] as const;
-        const revealed = ratingKeys[Math.floor(Math.random() * ratingKeys.length)];
-        const LABELS: Record<string, string> = { speed: 'Speed', strength: 'Strength', agility: 'Agility', awareness: 'Awareness', throwing: 'Arm Talent', catching: 'Hands', carrying: 'Ball Skills', blocking: 'Blocking', tackling: 'Tackling', coverage: 'Coverage', passRush: 'Pass Rush', kicking: 'Kicking' };
-        const value = player.ratings[revealed];
-
-        const profile = player.draftProfile ?? 'normal';
-        const impression = value >= 80 ? 'impressive' : value >= 65 ? 'solid' : value >= 50 ? 'unremarkable' : 'concerning';
-
-        set({
-          scoutingState: {
-            ...ss,
-            scoutPoints: ss.scoutPoints - 1,
-            proDayCount: ss.proDayCount + 1,
-            proDays: { ...ss.proDays, [playerId]: { impression, revealedRating: LABELS[revealed], revealedValue: value } },
-          },
-        });
-        return true;
-      },
-
       setSuppressTradePopups: (val: boolean) => {
         set({ suppressTradePopups: val });
       },
@@ -6322,6 +6539,103 @@ export const useGameStore = create<GameStore>()(
         if (!data) return;
         await idbSetItem('gridiron-gm-autosave', data);
         window.location.reload();
+      },
+
+      // Expansion draft actions
+      createExpansionTeam: (config: ExpansionTeamConfig) => {
+        const state = get();
+        if (state.expansionDraft) return false; // already in progress
+        if (state.phase !== 'freeAgency' && state.phase !== 'resigning') return false;
+        const settings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
+        if (!settings.godMode) return false;
+
+        const newTeam = createExpansionTeamObject(config, state.season, state.teams.length);
+
+        set({
+          expansionDraft: {
+            phase: 'protection',
+            configs: [config],
+            expansionTeamIds: [newTeam.id],
+            protectedPlayers: {},
+            picks: [],
+            currentPickIndex: 0,
+          },
+          // Store new team in teams array
+          teams: [...state.teams, newTeam],
+        });
+        return true;
+      },
+
+      protectPlayers: (teamId: string, playerIds: string[]) => {
+        const state = get();
+        const ed = state.expansionDraft;
+        if (!ed || ed.phase !== 'protection') return false;
+        const limit = computeProtectionLimit(53);
+        if (playerIds.length > limit) return false;
+
+        set({
+          expansionDraft: {
+            ...ed,
+            protectedPlayers: { ...ed.protectedPlayers, [teamId]: playerIds },
+          },
+        });
+        return true;
+      },
+
+      runExpansionDraftAction: () => {
+        const state = get();
+        const ed = state.expansionDraft;
+        if (!ed || ed.phase !== 'protection') return;
+
+        const expansionTeams = state.teams.filter(t => ed.expansionTeamIds.includes(t.id));
+        const otherTeams = state.teams.filter(t => !ed.expansionTeamIds.includes(t.id));
+        const result = runExpansionDraft(
+          otherTeams,
+          ed.expansionTeamIds,
+          state.teams,
+          state.players,
+          ed.protectedPlayers,
+          state.season,
+        );
+
+        const expansionNews: NewsItem[] = result.picks.map(pick => {
+          const player = result.updatedPlayers.find(p => p.id === pick.playerId);
+          const fromTeam = state.teams.find(t => t.id === pick.fromTeamId);
+          return makeNews({
+            season: state.season, week: 0, type: 'trade',
+            teamId: pick.expansionTeamId, playerIds: [pick.playerId],
+            headline: `Expansion Draft: ${player?.firstName ?? '?'} ${player?.lastName ?? '?'} (${player?.position ?? '?'}) selected from ${fromTeam?.abbreviation ?? '?'}.`,
+            isUserTeam: pick.fromTeamId === state.userTeamId,
+          });
+        });
+
+        // Use the updated players and teams from the result, rebuild depth charts
+        let updatedTeams = result.updatedTeams.map(t => {
+          const teamPlayers = result.updatedPlayers.filter(p => p.teamId === t.id && !p.retired);
+          return { ...t, depthChart: buildDefaultDepthChart(teamPlayers), totalPayroll: recalculateTeamPayroll(t, result.updatedPlayers) };
+        });
+
+        set({
+          teams: updatedTeams,
+          players: result.updatedPlayers,
+          newsItems: [...state.newsItems, ...expansionNews],
+          expansionDraft: { ...ed, phase: 'complete', picks: result.picks, currentPickIndex: result.picks.length },
+        });
+      },
+
+      cancelExpansionDraft: () => {
+        const state = get();
+        const ed = state.expansionDraft;
+        // Remove expansion teams that were added
+        if (ed) {
+          const expIds = new Set(ed.expansionTeamIds);
+          set({
+            teams: state.teams.filter(t => !expIds.has(t.id)),
+            expansionDraft: null,
+          });
+        } else {
+          set({ expansionDraft: null });
+        }
       },
 
       getTeam: (id: string) => get().teams.find(t => t.id === id),

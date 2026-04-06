@@ -194,7 +194,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const {
     season, week, phase, teams, userTeamId, resetLeague,
     newsItems, resigningPlayers, tradeProposals, freeAgents, draftOrder, draftResults,
-    leagueSettings,
+    leagueSettings, expansionDraft,
   } = useGameStore();
   const userTeam = teams.find(t => t.id === userTeamId);
   const [showSavePanel, setShowSavePanel] = useState(false);
@@ -265,6 +265,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           // Inject QB Pyramid link into League section when BS Mode is active
           if (section.label === 'League' && leagueSettings?.bsMode) {
             visibleItems.push({ href: '/qb-pyramid', label: 'QB Pyramid', icon: '🔺' });
+          }
+          // Inject Expansion link into Other section during offseason
+          if (section.label === 'Other') {
+            const isOffseason = ['resigning', 'freeAgency', 'offseason', 'draft'].includes(phase);
+            if (isOffseason || expansionDraft) {
+              visibleItems.unshift({ href: '/expansion', label: 'Expansion', icon: '🏗️' });
+            }
           }
           if (visibleItems.length === 0) return null;
           return (
