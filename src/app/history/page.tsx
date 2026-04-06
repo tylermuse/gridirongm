@@ -107,10 +107,8 @@ export default function HistoryPage() {
         {seasonHistory.length === 0 ? (
           <EmptyState
             icon="📜"
-            title="Your dynasty starts now"
-            description="Complete your first season to start building your franchise's legacy. Every great dynasty has a Chapter 1."
-            cta="Go to Dashboard"
-            ctaHref="/"
+            title="No History Yet"
+            description="No completed seasons yet. Finish your first season to see history here."
           />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6">

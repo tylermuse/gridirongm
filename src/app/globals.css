@@ -15,13 +15,6 @@
   --amber: #d97706;
 }
 
-.font-display {
-  font-family: var(--font-display), sans-serif;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: -0.01em;
-}
-
 html, body {
   background-color: var(--bg) !important;
   color: var(--text) !important;
@@ -83,11 +76,9 @@ html, body {
   pointer-events: none;
 }
 
-/* Slow pulse animation for draft page skeleton / loading states */
 @keyframes pulse-slow {
   0%, 100% { opacity: 0.3; }
   50% { opacity: 0.15; }
 }
-.animate-pulse-slow {
-  animation: pulse-slow 3s ease-in-out infinite;
-}
+.animate-pulse-slow { animation: pulse-slow 3s ease-in-out infinite; }
+.font-display { font-family: var(--font-display), sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: -0.01em; }

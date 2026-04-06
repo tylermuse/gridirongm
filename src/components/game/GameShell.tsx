@@ -14,10 +14,9 @@ export function GameShell({ children }: { children: React.ReactNode }) {
   const teams = useGameStore(s => s.teams);
   const userTeamId = useGameStore(s => s.userTeamId);
   const userTeam = teams.find(t => t.id === userTeamId);
-  const teamStyle = userTeam ? getTeamColorVars(userTeam) : undefined;
 
   return (
-    <div className="flex min-h-screen" style={teamStyle as React.CSSProperties}>
+    <div className="flex min-h-screen" style={userTeam ? getTeamColorVars(userTeam) as React.CSSProperties : undefined}>
       {/* Mobile overlay backdrop */}
       {sidebarOpen && (
         <div

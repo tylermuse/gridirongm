@@ -432,7 +432,7 @@ export default function RosterPage() {
             </div>
 
             {/* Mobile card view */}
-            <div className="sm:hidden space-y-1.5">
+            <div className="hidden space-y-1.5">
               {sortedRoster.map((p, idx) => {
                 const depthLabel = getDepthLabel(p);
                 const prevPos = idx > 0 ? sortedRoster[idx - 1].position : null;
@@ -477,7 +477,7 @@ export default function RosterPage() {
             </div>
 
             {/* Desktop table view */}
-            <div className="hidden sm:block bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-x-auto">
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-x-auto">
               <table className="w-full text-sm min-w-[700px] sticky-col">
                 <thead>
                   <tr className="border-b border-[var(--border)]">

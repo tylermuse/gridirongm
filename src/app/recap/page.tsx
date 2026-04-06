@@ -475,10 +475,8 @@ export default function RecapPage() {
         ) : (
           <EmptyState
             icon="🎙️"
-            title="Gridiron Tonight"
-            description="Your weekly recap show — storylines, standout performances, and league trends. Simulate games to generate your first episode."
-            cta="Simulate Week 1"
-            ctaHref="/"
+            title="No Recaps Yet"
+            description={`Simulate games to generate your weekly show! Season ${season}, Week ${week}.`}
           />
         )}
       </div>

@@ -26,10 +26,10 @@ const sizeClasses: Record<string, string> = {
   sm: 'w-6 h-6 text-[8px]',
   md: 'w-10 h-10 text-xs',
   lg: 'w-16 h-16 text-lg',
-  xl: 'w-20 h-20 text-xl',
+  xl: 'w-24 h-24 text-2xl',
 };
 
-const sizePx: Record<string, number> = { xs: 16, sm: 24, md: 40, lg: 64, xl: 80 };
+const sizePx: Record<string, number> = { xs: 16, sm: 24, md: 40, lg: 64, xl: 96 };
 
 export function PlayerAvatar({ player, size = 'md', teamColor = '#555', className = '' }: PlayerAvatarProps) {
   const [imgError, setImgError] = useState(false);

@@ -350,15 +350,11 @@ export default function PlayoffsPage() {
   if (phase !== 'playoffs' && !playoffBracket) {
     return (
       <GameShell>
-        <div className="max-w-4xl mx-auto">
-          <EmptyState
-            icon="🏆"
-            title="The road to the title"
-            description="Finish the regular season to see who makes the playoffs. Your team's destiny awaits."
-            cta="View Standings"
-            ctaHref="/standings"
-          />
-        </div>
+        <EmptyState
+          icon="🏆"
+          title="Playoffs"
+          description="The playoffs haven't started yet. Finish the regular season first."
+        />
       </GameShell>
     );
   }

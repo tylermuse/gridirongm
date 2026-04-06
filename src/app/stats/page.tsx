@@ -149,7 +149,14 @@ export default function StatsPage() {
         </div>
 
         {/* League Leaders */}
-        {tab === 'leaders' && (
+        {tab === 'leaders' && leaders.length === 0 && (
+          <EmptyState
+            icon="📊"
+            title="No Stats Yet"
+            description="Simulate games to see league leaders here."
+          />
+        )}
+        {tab === 'leaders' && leaders.length > 0 && (
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">

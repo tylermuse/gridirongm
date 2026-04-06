@@ -4,11 +4,10 @@ import { Providers } from '@/components/providers/Providers';
 import { FeedbackWidget } from '@/components/game/FeedbackWidget';
 import './globals.css';
 
-const display = Barlow_Condensed({
+const barlowCondensed = Barlow_Condensed({
   subsets: ['latin'],
   weight: ['700', '800'],
   variable: '--font-display',
-  display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -22,7 +21,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={display.variable}>
+    <html lang="en" className={barlowCondensed.variable}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
