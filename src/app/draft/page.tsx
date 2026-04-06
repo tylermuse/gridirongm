@@ -501,7 +501,7 @@ function ScoutEvaluationPanel({
       {/* Scout's OVR Estimate */}
       <div className="border-l-2 border-blue-400 pl-3">
         <p className="text-sm italic text-[var(--text)]">
-          &ldquo;{evaluation.scoutOvrEstimate.quote}&rdquo;
+          &ldquo;{evaluation.scoutsTake}&rdquo;
         </p>
         <span className="text-[10px] text-[var(--text-sec)]">— Scout Staff</span>
       </div>
@@ -549,7 +549,7 @@ function ScoutEvaluationPanel({
 
       {/* Scout Quote */}
       <div className="border-l-2 border-green-400 pl-3">
-        <p className="text-sm italic text-[var(--text)]">{evaluation.scoutQuote}</p>
+        <p className="text-sm italic text-[var(--text)]">{evaluation.scoutsTake}</p>
         <span className="text-[10px] text-[var(--text-sec)]">— Scout Staff</span>
       </div>
 
