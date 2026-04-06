@@ -318,6 +318,18 @@ export function buildPlayAnimation(
     }
   }
 
+  // Instant transitions for non-play events (extra point, two-minute warning, etc.)
+  if (type === 'extra_point' || type === 'two_minute_warning') {
+    return {
+      type,
+      ballArc: null,
+      ballRestX: postBallX,
+      movingDots: [],
+      effects: [],
+      durationMs: 50, // near-instant
+    };
+  }
+
   // For incomplete passes, ball rests back at LOS (pre-play position).
   // For penalties, ball rests at LOS. For everything else, use the post-play position.
   let ballRestX = postBallX;
