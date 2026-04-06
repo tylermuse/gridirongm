@@ -1367,7 +1367,9 @@ const TRADE_EXCLUDED_POSITIONS = new Set<Position>(['K', 'P']);
 
 function generateAITradeProposals(state: LeagueState): TradeProposal[] {
   const dl = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).tradeDeadlineWeek;
-  if (state.week > dl + 1) return [];
+  const isOffseason = state.phase === 'resigning' || state.phase === 'draft' || state.phase === 'freeAgency';
+  // Block proposals only during regular season after the deadline (offseason is always open)
+  if (!isOffseason && state.week > dl + 1) return [];
   const proposals: TradeProposal[] = [];
   const userTeam = state.teams.find(t => t.id === state.userTeamId);
   if (!userTeam) return [];
@@ -3546,10 +3548,11 @@ export const useGameStore = create<GameStore>()(
           });
         }
 
-        // Generate offseason trade rumors entering the draft
+        // Generate offseason trade rumors + AI proposals entering the draft
         const draftState = get();
         const draftRumors = generateTradeRumors(draftState);
-        if (draftRumors.length > 0) {
+        const draftProposals = generateAITradeProposals(draftState);
+        if (draftRumors.length > 0 || draftProposals.length > 0) {
           const rumorNews: NewsItem[] = draftRumors.map(r => makeNews({
             season: draftState.season, week: 0, type: 'rumor',
             headline: r.headline, body: r.detail,
@@ -3557,6 +3560,7 @@ export const useGameStore = create<GameStore>()(
           }));
           set({
             tradeRumors: [...(draftState.tradeRumors ?? []), ...draftRumors],
+            tradeProposals: [...draftState.tradeProposals, ...draftProposals],
             newsItems: [...draftState.newsItems, ...rumorNews],
           });
         }
@@ -4038,10 +4042,11 @@ export const useGameStore = create<GameStore>()(
           set({ faRefusals: computeFARefusals(newState.freeAgents, newState.players, userTeamData, 1) });
         }
 
-        // Generate offseason trade rumors entering free agency
+        // Generate offseason trade rumors + AI proposals entering free agency
         const rumorState = get();
         const faRumors = generateTradeRumors(rumorState);
-        if (faRumors.length > 0) {
+        const faProposals = generateAITradeProposals(rumorState);
+        if (faRumors.length > 0 || faProposals.length > 0) {
           const rumorNews: NewsItem[] = faRumors.map(r => makeNews({
             season: rumorState.season, week: 0, type: 'rumor',
             headline: r.headline, body: r.detail,
@@ -4049,6 +4054,7 @@ export const useGameStore = create<GameStore>()(
           }));
           set({
             tradeRumors: [...(rumorState.tradeRumors ?? []), ...faRumors],
+            tradeProposals: [...rumorState.tradeProposals, ...faProposals],
             newsItems: [...rumorState.newsItems, ...rumorNews],
           });
         }
