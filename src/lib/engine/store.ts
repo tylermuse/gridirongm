@@ -5334,7 +5334,7 @@ export const useGameStore = create<GameStore>()(
           LB: ['tackling', 'coverage', 'passRush'], CB: ['coverage', 'tackling', 'catching'],
           S: ['coverage', 'tackling', 'catching'], K: ['kicking', 'blocking'], P: ['kicking', 'blocking'],
         };
-        const keys = POS_KEYS[player.position] ?? ['throwing', 'carrying', 'catching'];
+        const keys = POS_KEYS[player.position] ?? ['tackling', 'coverage', 'blocking'];
         const bestKey = keys.reduce((best, k) => (player.ratings[k as keyof typeof player.ratings] ?? 0) > (player.ratings[best as keyof typeof player.ratings] ?? 0) ? k : best, keys[0]);
         const worstKey = keys.reduce((worst, k) => (player.ratings[k as keyof typeof player.ratings] ?? 0) < (player.ratings[worst as keyof typeof player.ratings] ?? 0) ? k : worst, keys[0]);
 
