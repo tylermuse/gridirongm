@@ -451,7 +451,7 @@ function simulateDrive(
         );
         const made = Math.random() < fgChance;
         plays.push({
-          type: 'fieldGoal', yards: 0, touchdown: false, turnover: false,
+          type: 'fieldGoal', yards: fgDistance, touchdown: false, turnover: false,
           kicker, fieldGoalMade: made,
         });
         return { points: made ? 3 : 0, plays };
@@ -484,7 +484,7 @@ function simulateDrive(
       );
       const made = Math.random() < fgChance;
       plays.push({
-        type: 'fieldGoal', yards: 0, touchdown: false, turnover: false,
+        type: 'fieldGoal', yards: fgDistance, touchdown: false, turnover: false,
         kicker, fieldGoalMade: made,
       });
       return { points: made ? 3 : 0, plays };
@@ -575,7 +575,9 @@ export function simulateGame(
       }
       desc += ` (${pts === 7 ? 'XP good' : 'XP missed'})`;
     } else if (fgPlay && fgPlay.kicker) {
-      desc = `${fgPlay.kicker.firstName[0]}. ${fgPlay.kicker.lastName} field goal`;
+      desc = fgPlay.yards > 0
+        ? `${fgPlay.kicker.firstName[0]}. ${fgPlay.kicker.lastName} ${fgPlay.yards}-yard field goal`
+        : `${fgPlay.kicker.firstName[0]}. ${fgPlay.kicker.lastName} field goal`;
       pts = 3;
     } else {
       desc = `${pts} points`;
@@ -661,12 +663,16 @@ export function simulateGame(
       }
       const otMinutes = Math.floor(Math.random() * 8) + 1;
       const otSeconds = Math.floor(Math.random() * 60);
+      const otWinnerRoster = homeWinsOT ? effectiveHomeRoster : effectiveAwayRoster;
+      const otKicker = otWinnerRoster.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
+      const otFgDist = 20 + Math.floor(Math.random() * 30); // 20-49 yard FG
+      const otKickerName = otKicker ? `${otKicker.firstName[0]}. ${otKicker.lastName}` : 'Kicker';
       scoringPlays.push({
         quarter: 5,
         timeLeft: `${otMinutes}:${otSeconds.toString().padStart(2, '0')}`,
         teamId: homeWinsOT ? game.homeTeamId : game.awayTeamId,
         points: 3,
-        description: 'OT field goal',
+        description: `${otKickerName} ${otFgDist}-yard field goal`,
         score: [runAway, runHome],
       });
     }
