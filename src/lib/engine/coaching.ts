@@ -1,4 +1,4 @@
-import type { Coach, CoachRole, OffensiveScheme, DefensiveScheme, Player, Team } from '@/types';
+import type { Coach, CoachRole, CoachHistory, OffensiveScheme, DefensiveScheme, Player, Team } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Coach generation
@@ -28,6 +28,12 @@ const COACH_TRAITS = [
 const OFF_SCHEMES: OffensiveScheme[] = ['spread', 'west_coast', 'power_run', 'air_raid', 'rpo'];
 const DEF_SCHEMES: DefensiveScheme[] = ['cover_3', 'man_press', 'tampa_2', 'blitz_34', 'zone_blitz'];
 
+const PERSONALITIES = ['fiery', 'cerebral', 'old-school', 'innovator', 'disciplinarian', "players' coach", 'tactician', 'motivator'];
+
+const HC_SPECS = ['Game Management', 'Player Development', 'Locker Room Culture', 'Clock Management', 'In-Game Adjustments', 'Recruiting Free Agents'];
+const OC_SPECS = ['QB Development', 'Play Design', 'Red Zone Offense', 'RPO Schemes', 'Pass Protection', 'Screen Game'];
+const DC_SPECS = ['Pass Rush Schemes', 'Run Stopping', 'Coverage Design', 'Blitz Packages', 'Secondary Development', 'Situational Defense'];
+
 function randomFrom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -40,25 +46,86 @@ export function generateCoach(role: CoachRole): Coach {
   const ovr = 45 + Math.floor(Math.random() * 45);  // 45-89
   const yearsExp = Math.max(0, age - 35 - Math.floor(Math.random() * 10));
   const winsPerYear = ovr > 70 ? 9 + Math.random() * 3 : ovr > 55 ? 7 + Math.random() * 3 : 5 + Math.random() * 4;
+  const name = `${randomFrom(FIRST_NAMES)} ${randomFrom(LAST_NAMES)}`;
+  const trait = randomFrom(COACH_TRAITS);
+  const personality = randomFrom(PERSONALITIES);
+  const scheme = role === 'DC' ? undefined : randomFrom(OFF_SCHEMES);
+
+  // Bio generation
+  const BIO_TEMPLATES = [
+    `${name} is a ${yearsExp > 0 ? yearsExp + '-year' : 'first-year'} ${role} known for his ${trait} approach to the game.`,
+    `A ${personality} leader, ${name} has built his reputation on ${scheme ? scheme + ' scheme mastery' : 'defensive excellence'}.`,
+    `${name} spent ${yearsExp} years climbing the coaching ranks before landing his ${role === 'HC' ? 'head coaching' : 'coordinator'} role.`,
+    `Known as a ${personality} presence on the sideline, ${name} brings ${yearsExp} years of experience.`,
+  ];
+  const bio = BIO_TEMPLATES[Math.floor(Math.random() * BIO_TEMPLATES.length)];
+
+  // Specialties (2-3 based on role)
+  const specPool = role === 'HC' ? HC_SPECS : role === 'OC' ? OC_SPECS : DC_SPECS;
+  const specCount = 2 + Math.floor(Math.random() * 2); // 2-3
+  const shuffled = [...specPool].sort(() => Math.random() - 0.5);
+  const specialties = shuffled.slice(0, specCount);
+
+  // Contract and salary
+  const contractYears = 3 + Math.floor(Math.random() * 3); // 3-5
+  const salary = ovr >= 80
+    ? 8 + Math.round(Math.random() * 4 * 10) / 10
+    : ovr >= 60
+      ? 4 + Math.round(Math.random() * 3 * 10) / 10
+      : 2 + Math.round(Math.random() * 2 * 10) / 10;
+
+  const firstName = name.split(' ')[0];
+  const lastName = name.split(' ').slice(1).join(' ');
 
   return {
     id: `coach_${_coachId}_${Date.now()}`,
-    firstName: randomFrom(FIRST_NAMES),
-    lastName: randomFrom(LAST_NAMES),
+    firstName,
+    lastName,
     role,
     ovr,
     age,
-    offensiveScheme: role === 'DC' ? undefined : randomFrom(OFF_SCHEMES),
+    offensiveScheme: role === 'DC' ? undefined : scheme,
     defensiveScheme: role === 'OC' ? undefined : randomFrom(DEF_SCHEMES),
-    trait: randomFrom(COACH_TRAITS),
+    trait,
     yearsWithTeam: Math.floor(Math.random() * 6),
     careerWins: Math.round(winsPerYear * yearsExp),
     careerLosses: Math.round((17 - winsPerYear) * yearsExp),
+    bio,
+    history: [],
+    ratingHistory: [{ season: 0, ovr }],
+    personality,
+    specialties,
+    contractYears,
+    salary,
   };
 }
 
 export function generateCoachingStaff(): Coach[] {
   return [generateCoach('HC'), generateCoach('OC'), generateCoach('DC')];
+}
+
+/** Backfill 1-2 fake coaching history stints for initial league generation */
+export function backfillCoachHistory(coach: Coach, currentTeamId: string, teams: Team[], season: number): CoachHistory[] {
+  const stints = 1 + Math.floor(Math.random() * 2); // 1-2 previous stints
+  const history: CoachHistory[] = [];
+  const otherTeams = teams.filter(t => t.id !== currentTeamId);
+  for (let i = 0; i < stints && otherTeams.length > 0; i++) {
+    const prevTeam = otherTeams[Math.floor(Math.random() * otherTeams.length)];
+    const duration = 1 + Math.floor(Math.random() * 4); // 1-4 years
+    const startSeason = season - duration - Math.floor(Math.random() * 3);
+    history.push({
+      teamId: prevTeam.id,
+      teamName: `${prevTeam.city} ${prevTeam.name}`,
+      role: coach.role,
+      seasonStart: startSeason,
+      seasonEnd: startSeason + duration - 1,
+      wins: Math.floor(Math.random() * 10 * duration),
+      losses: Math.floor(Math.random() * 10 * duration),
+      playoffAppearances: Math.floor(Math.random() * (duration > 2 ? 2 : 1)),
+      championships: Math.random() < 0.1 ? 1 : 0,
+    });
+  }
+  return history;
 }
 
 // ---------------------------------------------------------------------------
@@ -266,7 +333,7 @@ function clamp(v: number, lo: number, hi: number): number {
 }
 
 /** Progress all coaches: OVR changes based on team record, aging, retirement checks */
-export function progressCoaches(teams: Team[]): { teams: Team[]; news: string[] } {
+export function progressCoaches(teams: Team[], season?: number): { teams: Team[]; news: string[] } {
   const news: string[] = [];
   const updatedTeams = teams.map(t => {
     if (!t.coaches || t.coaches.length === 0) return t;
@@ -293,7 +360,25 @@ export function progressCoaches(teams: Team[]): { teams: Team[]; news: string[] 
         return replacement;
       }
 
-      return { ...c, ovr, age: newAge, careerWins: newWins, careerLosses: newLosses, yearsWithTeam: newYears };
+      // Update rating history
+      const ratingHistory = [...(c.ratingHistory ?? []), { season: season ?? 0, ovr }];
+
+      // Decrement contract years
+      const updatedContractYears = Math.max(0, (c.contractYears ?? 3) - 1);
+
+      // Recalculate salary based on updated OVR
+      const updatedSalary = ovr >= 80
+        ? 8 + Math.round(Math.random() * 4 * 10) / 10
+        : ovr >= 60
+          ? 4 + Math.round(Math.random() * 3 * 10) / 10
+          : 2 + Math.round(Math.random() * 2 * 10) / 10;
+
+      return {
+        ...c, ovr, age: newAge, careerWins: newWins, careerLosses: newLosses, yearsWithTeam: newYears,
+        ratingHistory,
+        contractYears: updatedContractYears,
+        salary: updatedSalary,
+      };
     });
     return { ...t, coaches };
   });
@@ -305,7 +390,7 @@ export function progressCoaches(teams: Team[]): { teams: Team[]; news: string[] 
 // ---------------------------------------------------------------------------
 
 /** AI teams fire underperforming coaches */
-export function processCoachingCarousel(teams: Team[], userTeamId: string): { teams: Team[]; news: string[] } {
+export function processCoachingCarousel(teams: Team[], userTeamId: string, season?: number): { teams: Team[]; news: string[] } {
   const news: string[] = [];
   const updatedTeams = teams.map(t => {
     if (t.id === userTeamId) return t; // user manages their own coaches
@@ -326,8 +411,31 @@ export function processCoachingCarousel(teams: Team[], userTeamId: string): { te
     if (fireChance > 0 && Math.random() < fireChance) {
       news.push(`${t.city} fires HC ${hc.firstName} ${hc.lastName} after ${tenure} season${tenure !== 1 ? 's' : ''} (${hc.careerWins}-${hc.careerLosses} career).`);
 
+      // Close out fired HC's history entry
+      const currentSeason = season ?? 0;
+      if (hc.history) {
+        const openEntry = hc.history.find(h => h.seasonEnd >= currentSeason - 1 && h.teamId === t.id);
+        if (openEntry) {
+          openEntry.seasonEnd = currentSeason;
+          openEntry.wins += t.record.wins;
+          openEntry.losses += t.record.losses;
+        }
+      }
+
       const newHC = generateCoach('HC');
       newHC.yearsWithTeam = 0;
+      // Start a new history entry for the hired coach
+      newHC.history = [...(newHC.history ?? []), {
+        teamId: t.id,
+        teamName: `${t.city} ${t.name}`,
+        role: 'HC' as const,
+        seasonStart: currentSeason,
+        seasonEnd: currentSeason, // will be updated each season
+        wins: 0,
+        losses: 0,
+        playoffAppearances: 0,
+        championships: 0,
+      }];
 
       let coaches = t.coaches.map(c => c.role === 'HC' ? newHC : c);
 
@@ -335,8 +443,30 @@ export function processCoachingCarousel(teams: Team[], userTeamId: string): { te
       if (Math.random() < 0.40) {
         const replaceOC = Math.random() < 0.5;
         const role = replaceOC ? 'OC' : 'DC';
+        // Close out fired coordinator's history
+        const firedCoord = t.coaches.find(c => c.role === role);
+        if (firedCoord?.history) {
+          const openEntry = firedCoord.history.find(h => h.seasonEnd >= currentSeason - 1 && h.teamId === t.id);
+          if (openEntry) {
+            openEntry.seasonEnd = currentSeason;
+            openEntry.wins += t.record.wins;
+            openEntry.losses += t.record.losses;
+          }
+        }
         const newCoord = generateCoach(role as CoachRole);
         newCoord.yearsWithTeam = 0;
+        // Start a new history entry for the hired coordinator
+        newCoord.history = [...(newCoord.history ?? []), {
+          teamId: t.id,
+          teamName: `${t.city} ${t.name}`,
+          role: role as 'HC' | 'OC' | 'DC',
+          seasonStart: currentSeason,
+          seasonEnd: currentSeason,
+          wins: 0,
+          losses: 0,
+          playoffAppearances: 0,
+          championships: 0,
+        }];
         coaches = coaches.map(c => c.role === role ? newCoord : c);
         news.push(`${t.city} also parts ways with ${role} Coach.`);
       }

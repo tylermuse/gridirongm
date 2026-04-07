@@ -287,6 +287,18 @@ export type CoachRole = 'HC' | 'OC' | 'DC';
 export type OffensiveScheme = 'spread' | 'west_coast' | 'power_run' | 'air_raid' | 'rpo';
 export type DefensiveScheme = 'cover_3' | 'man_press' | 'tampa_2' | 'blitz_34' | 'zone_blitz';
 
+export interface CoachHistory {
+  teamId: string;
+  teamName: string;
+  role: 'HC' | 'OC' | 'DC';
+  seasonStart: number;
+  seasonEnd: number;
+  wins: number;
+  losses: number;
+  playoffAppearances: number;
+  championships: number;
+}
+
 export interface Coach {
   id: string;
   firstName: string;
@@ -300,6 +312,13 @@ export interface Coach {
   yearsWithTeam: number;
   careerWins: number;
   careerLosses: number;
+  bio?: string;
+  history?: CoachHistory[];
+  ratingHistory?: { season: number; ovr: number }[];
+  personality?: string;
+  specialties?: string[];
+  contractYears?: number;
+  salary?: number;
 }
 
 export interface OwnerObjective {

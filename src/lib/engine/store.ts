@@ -22,7 +22,7 @@ import { developPlayers, POSITION_AGING } from './development';
 import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
-import { generateCoachingStaff, generateCoach, coachingBonus, progressCoaches, processCoachingCarousel } from './coaching';
+import { generateCoachingStaff, generateCoach, backfillCoachHistory, coachingBonus, progressCoaches, processCoachingCarousel } from './coaching';
 import { computeLeagueQBTiers, getQBTierModifier } from './qbTierPyramid';
 import { generateSeasonObjectives, evaluateObjectives } from './objectives';
 import { defaultApproval, updateApprovalAfterGame, updateApprovalEndOfSeason, updateApprovalForMove } from './approval';
@@ -2093,6 +2093,16 @@ export const useGameStore = create<GameStore>()(
               team.coaches = generateCoachingStaff();
             }
           }
+          // Backfill coaching history for all coaches
+          for (const team of imported.teams) {
+            if (team.coaches) {
+              for (const coach of team.coaches) {
+                if (!coach.history || coach.history.length === 0) {
+                  coach.history = backfillCoachHistory(coach, team.id, imported.teams, imported.season);
+                }
+              }
+            }
+          }
 
           const userTeam = imported.teams.find((t) => t.abbreviation === userTeamId) ?? imported.teams[0];
           const schedule = generateSchedule(imported.teams, imported.season);
@@ -2231,6 +2241,17 @@ export const useGameStore = create<GameStore>()(
               if (r1Pick) {
                 t.draftPicks = t.draftPicks.filter(pk => pk.id !== r1Pick.id);
                 newOwner.draftPicks.push({ ...r1Pick, ownerTeamId: newOwner.id });
+              }
+            }
+          }
+        }
+
+        // Backfill coaching history for generated teams
+        for (const team of teams) {
+          if (team.coaches) {
+            for (const coach of team.coaches) {
+              if (!coach.history || coach.history.length === 0) {
+                coach.history = backfillCoachHistory(coach, team.id, teams, 2026);
               }
             }
           }
@@ -6209,8 +6230,8 @@ export const useGameStore = create<GameStore>()(
         const seasonFreeAgents = [...unsignedPlayerIds, ...streetFAs.map(p => p.id)];
 
         // Coach progression and AI coaching carousel
-        const coachProgress = progressCoaches(grownTeams);
-        const coachCarousel = processCoachingCarousel(coachProgress.teams, state.userTeamId);
+        const coachProgress = progressCoaches(grownTeams, newSeason);
+        const coachCarousel = processCoachingCarousel(coachProgress.teams, state.userTeamId, newSeason);
         const coachNews: import('@/types').NewsItem[] = [...coachProgress.news, ...coachCarousel.news].map(headline =>
           makeNews({ season: newSeason, week: 0, type: 'signing', headline, isUserTeam: false }),
         );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -65,7 +66,11 @@ function CoachCard({ coach, roster, userTeam, onReplace }: { coach: Coach; roste
               </span>
               <span className="text-xs text-[var(--text-sec)]">{ROLE_LABELS[coach.role]}</span>
             </div>
-            <h3 className="text-xl font-bold">{coach.firstName} {coach.lastName}</h3>
+            <h3 className="text-xl font-bold">
+              <Link href={`/coach/${coach.id}`} className="hover:text-blue-500 transition-colors">
+                {coach.firstName} {coach.lastName}
+              </Link>
+            </h3>
           </div>
           <div className="text-right">
             <div className={`text-2xl font-black ${ovrColor(coach.ovr)}`}>{coach.ovr}</div>
@@ -115,6 +120,22 @@ function CoachCard({ coach, roster, userTeam, onReplace }: { coach: Coach; roste
             </div>
           )}
         </div>
+
+        {/* Contract Info */}
+        <div className="text-xs text-[var(--text-sec)] mb-1">
+          {coach.contractYears ?? '?'} years &middot; ${coach.salary != null ? `${coach.salary.toFixed(1)}M/yr` : '?'}
+        </div>
+
+        {/* Specialties */}
+        {coach.specialties && coach.specialties.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-4">
+            {coach.specialties.map((s: string, i: number) => (
+              <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                {s}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Scheme Fit Summary */}
         {relevantPlayers.length > 0 && (
