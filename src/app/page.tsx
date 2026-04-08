@@ -406,7 +406,29 @@ function TeamSpotlightSection({
   if (aiCommentary && !aiLoading && (!aiState.topics || aiState.topics.length === 0)) return null;
   const topics = aiCommentary ? (aiState.topics ?? []) : templateTopics;
 
-  if (topics.length === 0 && !aiLoading) return null;
+  // During playoffs (or other non-regular phases), show a fallback instead of unmounting
+  if (topics.length === 0 && !aiLoading) {
+    const phase = ctx?.phase ?? 'regular';
+    if (phase === 'playoffs') {
+      return (
+        <div className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <span className="flex items-center gap-2"><span>🏆</span> Playoff Spotlight</span>
+              </CardTitle>
+            </CardHeader>
+            <div className="px-4 pb-4">
+              <p className="text-sm text-[var(--text-sec)]">
+                The playoffs are underway! Spotlight updates will appear as matchups are decided.
+              </p>
+            </div>
+          </Card>
+        </div>
+      );
+    }
+    return null;
+  }
 
   if (aiLoading) {
     return (

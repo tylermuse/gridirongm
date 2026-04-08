@@ -1049,6 +1049,38 @@ export default function DraftPage() {
                 {scoutedOnly ? 'Scouted only' : 'Show all'}
               </button>
             </div>
+            {/* Roster Needs Snapshot */}
+            <details className="mb-3" open>
+              <summary className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider cursor-pointer hover:text-[var(--text)] transition-colors">
+                Roster Needs
+              </summary>
+              {(() => {
+                const allNeeds = getTeamNeeds(userTeamId);
+                return (
+                  <div className="grid grid-cols-5 sm:grid-cols-11 gap-1.5 mt-2">
+                    {POSITIONS.map(pos => {
+                      const need = allNeeds.find(n => n.position === pos);
+                      const count = need?.count ?? 0;
+                      const limits = ROSTER_LIMITS[pos];
+                      const isCritical = count < limits.min;
+                      const isLow = count < Math.ceil((limits.min + limits.max) / 2);
+                      return (
+                        <div key={pos} className={`text-center rounded-lg px-1 py-1.5 border ${
+                          isCritical ? 'bg-red-50 border-red-200 text-red-700' :
+                          isLow ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                          'bg-green-50 border-green-200 text-green-700'
+                        }`}>
+                          <div className="text-[10px] font-bold">{pos}</div>
+                          <div className="text-sm font-black">{count}</div>
+                          <div className="text-[8px] opacity-70">{limits.min}-{limits.max}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </details>
+
             <div className="overflow-x-auto">
             <table className="w-full text-sm sticky-col">
               <thead>

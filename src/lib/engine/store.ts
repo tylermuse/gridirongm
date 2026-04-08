@@ -625,7 +625,13 @@ function playerTradeValue(player: Player): number {
   const normalized = Math.max(0, (player.ratings.overall - 40) / 55);
   const base = Math.pow(normalized, 2.5) * 3500;
   const potBonus = Math.max(0, player.potential - player.ratings.overall) * 8;
-  return (base + potBonus) * ageMultiplier * posMultiplier;
+  const rawValue = (base + potBonus) * ageMultiplier * posMultiplier;
+  // Contract multiplier — expiring players are nearly worthless in trades
+  let contractMult = 1.0;
+  if (player.contract.yearsLeft <= 0) contractMult = 0.15;       // expiring / FA — almost no value
+  else if (player.contract.yearsLeft === 1) contractMult = 0.50;  // 1 year left — half value
+  else if (player.contract.yearsLeft === 2) contractMult = 0.80;  // 2 years — slight discount
+  return rawValue * contractMult;
 }
 
 /** Pick value based on estimated overall pick number.
@@ -1171,8 +1177,12 @@ function computeSeasonAwards(state: LeagueState): { award: string; playerId: str
   const awards: { award: string; playerId: string; teamId: string }[] = [];
   const activePlayers = state.players.filter(p => !p.retired && p.teamId);
 
-  const withGames = (pos: string[]) =>
-    activePlayers.filter(p => pos.includes(p.position) && p.stats.gamesPlayed >= 10);
+  // OVR threshold — major awards require minimum talent level
+  const majorEligible = activePlayers.filter(p => p.ratings.overall >= 70);
+  const rookieEligible = activePlayers.filter(p => p.ratings.overall >= 60);
+
+  const withGames = (pos: string[], pool: typeof activePlayers = majorEligible) =>
+    pool.filter(p => pos.includes(p.position) && p.stats.gamesPlayed >= 10);
 
   // MVP — QBs should win ~70-80% of the time (matching real NFL patterns).
   // Team wins are a near-prerequisite, passing stats dominate for QBs.
@@ -1243,7 +1253,7 @@ function computeSeasonAwards(state: LeagueState): { award: string; playerId: str
     }
   }
 
-  const rookies = activePlayers.filter(p => p.experience === 1 && p.stats.gamesPlayed >= 10);
+  const rookies = rookieEligible.filter(p => p.experience === 1 && p.stats.gamesPlayed >= 10);
   const offensiveRookies = rookies.filter(p => ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position));
   if (offensiveRookies.length > 0) {
     const oroy = offensiveRookies.sort((a, b) => allLeagueScore(b) - allLeagueScore(a))[0];
@@ -3348,15 +3358,105 @@ export const useGameStore = create<GameStore>()(
         }
         const draftClass = rawDraftClass;
 
-        const sortedTeams = [...updatedTeams].sort((a, b) => {
+        // --- NFL-correct draft order: group by playoff exit round ---
+        // Helper: sort teams by record (worst first)
+        const byRecordWorstFirst = (a: Team, b: Team) => {
           const aGames = a.record.wins + a.record.losses + a.record.ties;
           const bGames = b.record.wins + b.record.losses + b.record.ties;
           const aWinPct = aGames > 0 ? (a.record.wins + a.record.ties * 0.5) / aGames : 0;
           const bWinPct = bGames > 0 ? (b.record.wins + b.record.ties * 0.5) / bGames : 0;
           if (aWinPct !== bWinPct) return aWinPct - bWinPct;
-          // Tiebreak by points scored (fewer points = worse team = earlier pick)
           return a.record.pointsFor - b.record.pointsFor;
-        });
+        };
+
+        // Determine each team's playoff exit round from the bracket
+        // 0 = missed playoffs, 1 = lost wild card, 2 = lost divisional,
+        // 3 = lost conference championship, 4 = lost super bowl, 5 = won super bowl
+        const playoffExitRound = new Map<string, number>();
+        const bracket = state.playoffBracket ?? [];
+        const playoffTeamIdsSet = new Set<string>();
+
+        if (bracket.length > 0) {
+          // Collect all teams that appeared in the playoff bracket
+          for (const m of bracket) {
+            if (m.homeTeamId) playoffTeamIdsSet.add(m.homeTeamId);
+            if (m.awayTeamId) playoffTeamIdsSet.add(m.awayTeamId);
+          }
+
+          // Find Super Bowl (round 4) winner
+          const superBowl = bracket.find(m => m.round === 4 && m.winnerId);
+          const sbWinnerId = superBowl?.winnerId ?? null;
+          const sbLoserId = superBowl
+            ? (superBowl.homeTeamId === sbWinnerId ? superBowl.awayTeamId : superBowl.homeTeamId)
+            : null;
+
+          if (sbWinnerId) playoffExitRound.set(sbWinnerId, 5); // SB winner = last pick
+          if (sbLoserId) playoffExitRound.set(sbLoserId, 4);   // SB loser = pick 31
+
+          // Conference championship losers (round 3)
+          for (const m of bracket.filter(m => m.round === 3 && m.winnerId)) {
+            const loserId = m.homeTeamId === m.winnerId ? m.awayTeamId : m.homeTeamId;
+            if (loserId && !playoffExitRound.has(loserId)) {
+              playoffExitRound.set(loserId, 3);
+            }
+          }
+
+          // Divisional round losers (round 2)
+          for (const m of bracket.filter(m => m.round === 2 && m.winnerId)) {
+            const loserId = m.homeTeamId === m.winnerId ? m.awayTeamId : m.homeTeamId;
+            if (loserId && !playoffExitRound.has(loserId)) {
+              playoffExitRound.set(loserId, 2);
+            }
+          }
+
+          // Wild card losers (round 1)
+          for (const m of bracket.filter(m => m.round === 1 && m.winnerId)) {
+            const loserId = m.homeTeamId === m.winnerId ? m.awayTeamId : m.homeTeamId;
+            if (loserId && !playoffExitRound.has(loserId)) {
+              playoffExitRound.set(loserId, 1);
+            }
+          }
+
+          // Any playoff team not yet assigned (e.g. bye-week teams who lost in divisional
+          // should already be covered, but just in case)
+          for (const tid of playoffTeamIdsSet) {
+            if (!playoffExitRound.has(tid)) {
+              playoffExitRound.set(tid, 1);
+            }
+          }
+        }
+
+        // Build sorted draft order: non-playoff by record, then each playoff exit group by record
+        const nonPlayoffTeams = updatedTeams
+          .filter(t => !playoffTeamIdsSet.has(t.id))
+          .sort(byRecordWorstFirst);
+
+        const wcLosers = updatedTeams
+          .filter(t => playoffExitRound.get(t.id) === 1)
+          .sort(byRecordWorstFirst);
+
+        const divLosers = updatedTeams
+          .filter(t => playoffExitRound.get(t.id) === 2)
+          .sort(byRecordWorstFirst);
+
+        const confLosers = updatedTeams
+          .filter(t => playoffExitRound.get(t.id) === 3)
+          .sort(byRecordWorstFirst);
+
+        const sbLoser = updatedTeams
+          .filter(t => playoffExitRound.get(t.id) === 4);
+
+        const sbWinner = updatedTeams
+          .filter(t => playoffExitRound.get(t.id) === 5);
+
+        const sortedTeams = [
+          ...nonPlayoffTeams,
+          ...wcLosers,
+          ...divLosers,
+          ...confLosers,
+          ...sbLoser,
+          ...sbWinner,
+        ] as Team[];
 
         // BS Mode: Anti-Tanking Draft Lottery for bottom 6 non-playoff teams
         const bsMode = state.leagueSettings?.bsMode ?? false;

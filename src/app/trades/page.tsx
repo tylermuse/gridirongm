@@ -55,7 +55,12 @@ function playerTradeValue(player: Player): number {
   const potBonus = Math.max(0, player.potential - player.ratings.overall) * 8;
   const rawValue = (base + potBonus) * ageMultiplier * posMultiplier;
   const contractCost = Math.max(0, player.contract.salary - 8) * player.contract.yearsLeft * 0.8;
-  return Math.round(rawValue - contractCost);
+  // Contract multiplier — expiring players are nearly worthless in trades
+  let contractMult = 1.0;
+  if (player.contract.yearsLeft <= 0) contractMult = 0.15;       // expiring / FA — almost no value
+  else if (player.contract.yearsLeft === 1) contractMult = 0.50;  // 1 year left — half value
+  else if (player.contract.yearsLeft === 2) contractMult = 0.80;  // 2 years — slight discount
+  return Math.round((rawValue - contractCost) * contractMult);
 }
 
 // Draft pick value: exponential decay by estimated overall pick number

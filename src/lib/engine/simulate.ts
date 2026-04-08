@@ -281,7 +281,8 @@ function simulatePlay(
         ? weightedPick(allDefenders, allDefenders.map(d => {
             // Position-based tackle distribution: LB ~40%, S ~20%, CB ~20%, DL ~20%
             const posWeight = d.position === 'LB' ? 2.2 : d.position === 'S' ? 1.8 : d.position === 'CB' ? 1.4 : 1.0;
-            return posWeight * (d.ratings.tackling / 70);
+            const ovrFactor = Math.max(0.1, d.ratings.overall / 80); // low-OVR players rarely make tackles
+            return posWeight * (d.ratings.tackling / 70) * ovrFactor;
           }))
         : null;
 
@@ -341,7 +342,8 @@ function simulatePlay(
       const tackler = allDefenders.length > 0
         ? weightedPick(allDefenders, allDefenders.map(d => {
             const posWeight = d.position === 'LB' ? 3.5 : d.position === 'DL' ? 1.2 : d.position === 'S' ? 1.5 : 1.0;
-            return posWeight * (d.ratings.tackling / 70);
+            const ovrFactor = Math.max(0.1, d.ratings.overall / 80);
+            return posWeight * (d.ratings.tackling / 70) * ovrFactor;
           }))
         : null;
       return {
@@ -367,7 +369,8 @@ function simulatePlay(
       ? weightedPick(allDefenders, allDefenders.map(d => {
           // Rush tackles: LB ~40%, DL ~25%, S ~20%, CB ~15%
           const posWeight = d.position === 'LB' ? 2.0 : d.position === 'DL' ? 1.6 : d.position === 'S' ? 1.5 : 1.0;
-          return posWeight * (d.ratings.tackling / 70);
+          const ovrFactor = Math.max(0.1, d.ratings.overall / 80); // low-OVR players rarely make tackles
+          return posWeight * (d.ratings.tackling / 70) * ovrFactor;
         }))
       : null;
 
