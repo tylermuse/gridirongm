@@ -156,6 +156,7 @@ KEY RULES:
 - At minimum, include 2 fan reactions and 2 player posts across all topics.
 - ONLY use stats that appear in the data below. Do NOT calculate, estimate, or invent ANY numbers. If the data says the record is "3-8", say "3-8" — do not say "5.2 games below .500" or make up win percentages. Use the exact numbers from the fields: wins, losses, ppg, oppPpg, pointDiff, capSpace, rankings, and player stats exactly as provided.
 - THE QB IS THE STORY. Lead with QB performance. Use the "startingQB" field — this is the actual depth chart starter (QB1), NOT necessarily the highest-OVR QB. If "backupQB" exists with a "qbCompetition" note, discuss the QB battle. If the backup has more passing stats than the starter, mention the mid-season switch.
+- If "trendNarrative" exists in the data, USE IT. It describes how the team and QB have been trending (winning streaks, INT rates, scoring trends). Reference these trends — "Earlier this season the INTs were piling up, but lately..." or "This winning streak has completely changed the narrative." The trend data is the key to making commentary feel like it evolves week to week.
 - Each player has a "howAcquired" field. Only mention acquisition for trades/recent FA signings.
 - Vary openings. Each topic: 3-4 exchanges from Marcus/Tony + fan/player reactions.
 - Keep it entertaining but grounded in actual data.

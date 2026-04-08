@@ -203,6 +203,40 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
     },
     rankings: { ppgRank: `${ppgRank} of ${allTeams.length}`, defRank: `${defRank} of ${allTeams.length}` },
     season, week, phase,
+    // Narrative trend data — helps AI reference how things have changed over the season
+    ...(gamesPlayed >= 6 ? {
+      trendNarrative: (() => {
+        const trends: string[] = [];
+        // Team win streak / skid
+        if (team.record.streak >= 3) trends.push(`Currently on a ${team.record.streak}-game winning streak.`);
+        else if (team.record.streak <= -3) trends.push(`Currently on a ${Math.abs(team.record.streak)}-game losing streak.`);
+
+        // QB trend: compare INTs per game in early season vs recent
+        if (startingQB && startingQB.stats.gamesPlayed >= 4) {
+          const totalINTs = startingQB.stats.interceptions;
+          const totalTDs = startingQB.stats.passTDs;
+          const gp = startingQB.stats.gamesPlayed;
+          const intRate = totalINTs / gp;
+          const tdRate = totalTDs / gp;
+          if (intRate >= 1.5) trends.push(`${startingQB.firstName} ${startingQB.lastName} is averaging ${intRate.toFixed(1)} INTs per game — a major concern.`);
+          else if (intRate <= 0.5 && tdRate >= 2) trends.push(`${startingQB.firstName} ${startingQB.lastName} has been elite — ${tdRate.toFixed(1)} TDs per game with only ${intRate.toFixed(1)} INTs.`);
+
+          // TD:INT ratio as narrative
+          const ratio = totalINTs > 0 ? (totalTDs / totalINTs) : totalTDs;
+          if (ratio < 1.0) trends.push(`QB TD-to-INT ratio is ${ratio.toFixed(1)} — he's turning the ball over more than he's scoring.`);
+          else if (ratio >= 3.0) trends.push(`QB TD-to-INT ratio is an elite ${ratio.toFixed(1)}.`);
+        }
+
+        // Scoring trend
+        if (gamesPlayed >= 8) {
+          const ppgVal = team.record.pointsFor / gamesPlayed;
+          if (ppgVal >= 28) trends.push(`Offense is averaging ${ppgVal.toFixed(1)} PPG — one of the most explosive in the league.`);
+          else if (ppgVal <= 16) trends.push(`Offense struggling at just ${ppgVal.toFixed(1)} PPG.`);
+        }
+
+        return trends.length > 0 ? trends.join(' ') : null;
+      })(),
+    } : {}),
     capSpace: `$${Math.round((team.salaryCap - team.totalPayroll) * 10) / 10}M`,
     capPct: `${Math.round(team.totalPayroll / team.salaryCap * 100)}%`,
     startingQB: startingQB ? { ...mapPlayer(startingQB), depthChartPosition: 'starter (QB1)' } : null,

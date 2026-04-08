@@ -1018,7 +1018,67 @@ export function generateTeamSpotlight(
       teamIds: [team.id],
       playerIds,
     });
+
+    // ─── QB Trend Topic (INT struggles, streaks, TD:INT ratio) ───
+    if (teamQB && gamesPlayed >= 6) {
+    const qbGP = teamQB.stats.gamesPlayed || 1;
+    const intRate = teamQB.stats.interceptions / qbGP;
+    const tdRate = teamQB.stats.passTDs / qbGP;
+    const ratio = teamQB.stats.interceptions > 0 ? teamQB.stats.passTDs / teamQB.stats.interceptions : teamQB.stats.passTDs;
+    const qbName = `${teamQB.firstName} ${teamQB.lastName}`;
+
+    if (intRate >= 1.5) {
+      topics.push({
+        headline: `${teamQB.lastName}'s Turnover Problem`,
+        icon: '⚠️',
+        exchanges: [
+          { speakerId: 'stats' as const, text: `We need to address the elephant in the room. ${qbName} has ${teamQB.stats.interceptions} interceptions in ${qbGP} games — that's ${intRate.toFixed(1)} per game. His TD-to-INT ratio is ${ratio.toFixed(1)}. At some point the coaching staff has to simplify the playbook or make a change.` },
+          { speakerId: 'hottake' as const, text: `${intRate >= 2 ? `${intRate.toFixed(1)} INTs per game?! He's literally GIVING games away! At what point do they sit him down and go to the backup?!` : `The turnovers are KILLING this team! You can't win in this league turning the ball over every game! ${qbName} has to clean it up or this season is OVER!`}` },
+          { speakerId: 'stats' as const, text: `To be fair, ${teamQB.stats.passYards} passing yards shows he CAN move the ball. But ${teamQB.stats.interceptions} picks is a decision-making problem, not a talent problem. The question is whether he can correct it.` },
+        ],
+        teamIds: [team.id],
+        playerIds: [teamQB.id],
+      });
+    } else if (ratio >= 3.0 && tdRate >= 2.0) {
+      topics.push({
+        headline: `${teamQB.lastName} Playing at Elite Level`,
+        icon: '🔥',
+        exchanges: [
+          { speakerId: 'hottake' as const, text: `Can we talk about ${qbName}?! ${teamQB.stats.passTDs} TDs and only ${teamQB.stats.interceptions} INTs — that's a ${ratio.toFixed(1)} ratio! That's MVP-caliber ball! He is BALLING and I don't want to hear anyone say otherwise!` },
+          { speakerId: 'stats' as const, text: `The numbers back it up. ${tdRate.toFixed(1)} touchdowns per game with ${intRate.toFixed(1)} interceptions. That kind of efficiency puts him among the best in the league. ${qbName} has taken a real step forward.` },
+          { speakerId: 'hottake' as const, text: `This is a DIFFERENT quarterback than what they started with! The growth, the poise, the decision-making — they've got their franchise guy and it's TIME to build around him!` },
+        ],
+        teamIds: [team.id],
+        playerIds: [teamQB.id],
+      });
+    }
+
+    // Winning/losing streak narrative
+    if (team.record.streak >= 4) {
+      topics.push({
+        headline: `${team.record.streak}-Game Win Streak`,
+        icon: '🔥',
+        exchanges: [
+          { speakerId: 'hottake' as const, text: `${team.record.streak} STRAIGHT WINS! The ${team.name} are the HOTTEST team in football right now! Nobody wants to play them in January!` },
+          { speakerId: 'stats' as const, text: `${team.record.streak} consecutive victories. The ${team.name} have completely turned their season around. If they keep this up, they're a legitimate contender.` },
+        ],
+        teamIds: [team.id],
+        playerIds: teamQB ? [teamQB.id] : [],
+      });
+    } else if (team.record.streak <= -4) {
+      topics.push({
+        headline: `${Math.abs(team.record.streak)}-Game Losing Skid`,
+        icon: '📉',
+        exchanges: [
+          { speakerId: 'hottake' as const, text: `${Math.abs(team.record.streak)} straight losses! This team has QUIT! The body language, the effort — it's OVER! Something drastic needs to happen!` },
+          { speakerId: 'stats' as const, text: `A ${Math.abs(team.record.streak)}-game losing streak is concerning at any point, but at this stage of the season it could be fatal to their playoff hopes. The coaching staff needs to find a spark.` },
+        ],
+        teamIds: [team.id],
+        playerIds: [],
+      });
+    }
   }
+  } // end if (gamesPlayed > 0)
 
   // ─── 3. Star Player Spotlight (stats-driven) ───
   const star = [...activeRoster].sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
