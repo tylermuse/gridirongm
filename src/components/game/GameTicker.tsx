@@ -17,7 +17,7 @@ import type { GameResult } from '@/types';
  */
 export function GameTicker() {
   const { schedule, teams, userTeamId, week, phase } = useGameStore();
-  const { user, tier, signOut } = useSubscription();
+  const { user, tier, isFoundingMember, signOut } = useSubscription();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -179,13 +179,19 @@ export function GameTicker() {
                 <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[9px] font-bold">
                   {user.email?.[0]?.toUpperCase() ?? '?'}
                 </div>
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                  tier === 'elite' ? 'bg-amber-100 text-amber-700' :
-                  tier === 'pro' ? 'bg-blue-100 text-blue-700' :
-                  'bg-gray-100 text-gray-700'
-                }`}>
-                  {tier === 'elite' ? 'Elite' : tier === 'pro' ? 'Pro' : 'Free'}
-                </span>
+                {isFoundingMember ? (
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                    ⭐ Founder
+                  </span>
+                ) : (
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                    tier === 'elite' ? 'bg-amber-100 text-amber-700' :
+                    tier === 'pro' ? 'bg-blue-100 text-blue-700' :
+                    'bg-gray-100 text-gray-700'
+                  }`}>
+                    {tier === 'elite' ? 'Elite' : tier === 'pro' ? 'Pro' : 'Free'}
+                  </span>
+                )}
               </div>
               <button
                 onClick={signOut}
