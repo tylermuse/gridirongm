@@ -874,7 +874,7 @@ export default function PlayoffsPage() {
           </div>
         </Card>
         {/* ---- Owner Message ---- */}
-        {status !== 'active' && status !== 'missed' && (() => {
+        {status !== 'active' && (() => {
           const userTeam = teams.find(t => t.id === userTeamId);
           if (!userTeam) return null;
           const record = userTeam.record;
@@ -897,6 +897,13 @@ export default function PlayoffsPage() {
             message = wins >= 10
               ? `A ${wins}-${losses} record and a divisional round exit. We had a good regular season but couldn't get it done when it mattered. I need you to evaluate what went wrong in that game and address it.`
               : `We squeezed into the playoffs at ${wins}-${losses} and bowed out in the divisional round. The fans expected more. I expect more. This offseason needs to be aggressive.`;
+          } else if (status === 'missed') {
+            tone = wins >= 8 ? 'disappointed' : 'frustrated';
+            message = wins >= 8
+              ? `${wins}-${losses} and no playoff berth. We were right there but couldn't close it out. I'm frustrated, but I still believe in the direction. Make the right moves this offseason.`
+              : wins >= 5
+              ? `${wins}-${losses}. Missing the playoffs is unacceptable for this franchise. The fans deserve better. You've got one more offseason to turn this around, or we'll need to have a harder conversation.`
+              : `${wins}-${losses}. I don't need to tell you how bad that is. The fans are furious. I'm furious. We need a complete overhaul. If I don't see major changes this offseason, we're going in a different direction.`;
           } else {
             tone = wins >= 9 ? 'disappointed' : 'frustrated';
             message = wins >= 9

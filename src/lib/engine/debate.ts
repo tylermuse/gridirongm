@@ -966,7 +966,11 @@ export function generateTeamSpotlight(
     const offenseGood = ppgRank <= totalTeams / 2;
     const defenseGood = defRank <= totalTeams / 2;
     // Find team's stat leaders for context
-    const teamQB = activeRoster.filter(p => p.position === 'QB').sort((a, b) => b.stats.passYards - a.stats.passYards)[0];
+    // Use depth chart for QB1 if available, fall back to most pass yards
+    const qbDepth = team.depthChart?.QB ?? [];
+    const teamQB = qbDepth.length > 0
+      ? activeRoster.find(p => p.id === qbDepth[0]) ?? activeRoster.filter(p => p.position === 'QB').sort((a, b) => b.stats.passYards - a.stats.passYards)[0]
+      : activeRoster.filter(p => p.position === 'QB').sort((a, b) => b.stats.passYards - a.stats.passYards)[0];
     const teamRusher = activeRoster.sort((a, b) => b.stats.rushYards - a.stats.rushYards)[0];
     const teamReceiver = activeRoster.filter(p => ['WR', 'TE'].includes(p.position)).sort((a, b) => b.stats.receivingYards - a.stats.receivingYards)[0];
     const teamSacker = activeRoster.filter(p => ['DL', 'LB'].includes(p.position)).sort((a, b) => b.stats.sacks - a.stats.sacks)[0];

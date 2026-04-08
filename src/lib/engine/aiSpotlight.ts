@@ -170,10 +170,18 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
     };
   };
 
-  // Starting QB is the most important player — always include with full stats
-  const startingQB = activeRoster
-    .filter(p => p.position === 'QB')
-    .sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+  // Starting QB — use depth chart if available, fall back to highest OVR
+  const qbDepthChart = team.depthChart?.QB ?? [];
+  const allQBs = activeRoster.filter(p => p.position === 'QB').sort((a, b) => {
+    const aIdx = qbDepthChart.indexOf(a.id);
+    const bIdx = qbDepthChart.indexOf(b.id);
+    if (aIdx >= 0 && bIdx >= 0) return aIdx - bIdx; // depth chart order
+    if (aIdx >= 0) return -1;
+    if (bIdx >= 0) return 1;
+    return b.ratings.overall - a.ratings.overall;
+  });
+  const startingQB = allQBs[0] ?? null;
+  const backupQB = allQBs[1] ?? null;
 
   const gamesPlayed = team.record.wins + team.record.losses;
   const winPct = gamesPlayed > 0 ? Math.round((team.record.wins / gamesPlayed) * 1000) / 10 : 0;
@@ -197,7 +205,8 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
     season, week, phase,
     capSpace: `$${Math.round((team.salaryCap - team.totalPayroll) * 10) / 10}M`,
     capPct: `${Math.round(team.totalPayroll / team.salaryCap * 100)}%`,
-    startingQB: startingQB ? mapPlayer(startingQB) : null,
+    startingQB: startingQB ? { ...mapPlayer(startingQB), depthChartPosition: 'starter (QB1)' } : null,
+    backupQB: backupQB ? { ...mapPlayer(backupQB), depthChartPosition: 'backup (QB2)', ovrGap: startingQB ? startingQB.ratings.overall - backupQB.ratings.overall : 0, qbCompetition: backupQB && startingQB && Math.abs(startingQB.ratings.overall - backupQB.ratings.overall) <= 5 ? 'close — potential QB competition' : null } : null,
     topPlayers: topPlayers.map(mapPlayer),
     injured: injured.map(p => ({ name: `${p.firstName} ${p.lastName}`, pos: p.position, ovr: p.ratings.overall, injury: p.injury?.type, weeksLeft: p.injury?.weeksLeft })),
     youngStars: youngStars.map(p => ({ name: `${p.firstName} ${p.lastName}`, pos: p.position, ovr: p.ratings.overall, age: p.age, potential: p.potential })),
