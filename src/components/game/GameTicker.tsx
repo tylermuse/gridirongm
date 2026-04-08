@@ -109,14 +109,6 @@ export function GameTicker() {
                 style={{ minWidth: '72px' }}
                 title={game.played ? `${result} ${userScore}-${oppScore} ${isHome ? 'vs' : '@'} ${getTeamAbbr(oppId)}` : `Week ${game.week} ${isHome ? 'vs' : '@'} ${getTeamAbbr(oppId)}`}
               >
-                {/* W/L/T badge */}
-                {game.played && result && (
-                  <span className={`absolute top-0 right-0 text-[8px] font-black leading-none px-1 py-0.5 rounded-bl ${
-                    result === 'W' ? 'bg-green-600 text-white' : result === 'L' ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'
-                  }`}>
-                    {result}
-                  </span>
-                )}
                 {/* Hover tooltip */}
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 rounded bg-[var(--surface)] border border-[var(--border)] shadow-lg text-[10px] text-[var(--text)] whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">
                   <div className="font-bold">{tooltipLine1}</div>
