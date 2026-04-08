@@ -1524,5 +1524,36 @@ export function generateTeamSpotlight(
     }
   }
 
+  // ─── Add fan reactions and player social media posts to topics ───
+  const FAN_REACTIONS = [
+    (t: Team, wp: number) => wp >= 0.6 ? `${t.city} fans are ELECTRIC right now. This team is for real.` : `${t.city} faithful are getting restless. They need a win badly.`,
+    (t: Team, wp: number) => wp >= 0.7 ? `The bandwagon is FULL. ${t.city} is the hottest ticket in football.` : wp <= 0.35 ? `Paper bags spotted in the stands. ${t.city} fans are losing patience.` : `The fanbase is cautiously optimistic. A few more wins and this city will be buzzing.`,
+    (t: Team, wp: number) => wp >= 0.5 ? `Social media is blowing up with ${t.name} highlights. The vibes are immaculate.` : `${t.name} Twitter is in full meltdown mode. The hot takes are flying.`,
+  ];
+
+  const PLAYER_POSTS = [
+    (p: Player, t: Team, wp: number) => wp >= 0.6 ? `We're just getting started. This team is special. #${t.name}` : `Tough stretch but we're locked in. Trust the process.`,
+    (p: Player, _t: Team, _wp: number) => p.ratings.overall >= 80 ? `Blessed to be in this position. Best is yet to come.` : `Working every day to earn my spot. Grateful for the opportunity.`,
+    (p: Player, t: Team, wp: number) => wp >= 0.7 ? `${t.city} let's GOOO!! This crowd is unreal` : `Real ones stick around through the tough times. We coming.`,
+  ];
+
+  for (const topic of topics) {
+    if (rng() < 0.6) {
+      const fanText = pick(FAN_REACTIONS, rng)(team, winPct);
+      topic.exchanges.push({ speakerId: 'fans', text: fanText });
+    }
+    if (rng() < 0.4 && activeRoster.length > 0) {
+      const starPlayer = [...activeRoster].sort((a, b) => b.ratings.overall - a.ratings.overall)[Math.floor(rng() * Math.min(5, activeRoster.length))];
+      if (starPlayer) {
+        const postText = pick(PLAYER_POSTS, rng)(starPlayer, team, winPct);
+        topic.exchanges.push({
+          speakerId: 'player',
+          text: postText,
+          playerName: `${starPlayer.firstName} ${starPlayer.lastName}`,
+        });
+      }
+    }
+  }
+
   return topics;
 }

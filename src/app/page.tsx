@@ -408,6 +408,13 @@ function TeamSpotlightSection({
   const aiLoading = false; // never block rendering
   const topics = hasAiTopics ? aiState.topics! : templateTopics;
 
+  // Delay podcast button 8s so AI has a chance to replace templates first
+  const [podcastReady, setPodcastReady] = React.useState(false);
+  React.useEffect(() => {
+    const timer = setTimeout(() => setPodcastReady(true), aiCommentary ? 8000 : 0);
+    return () => clearTimeout(timer);
+  }, [aiCommentary]);
+
   // During playoffs (or other non-regular phases), show a fallback instead of unmounting
   if (topics.length === 0 && !aiLoading) {
     const phase = ctx?.phase ?? 'regular';
@@ -461,7 +468,7 @@ function TeamSpotlightSection({
                 )}
               </p>
             </div>
-            {topics.length > 0 && (
+            {topics.length > 0 && podcastReady && (
               <div className="shrink-0 pt-0.5">
                 <SpotlightAudioPlayer
                   topics={topics}
