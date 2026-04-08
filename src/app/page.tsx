@@ -416,6 +416,16 @@ function TeamSpotlightSection({
     return () => clearTimeout(timer);
   }, [aiCommentary]);
 
+  // Accordion state — first topic expanded by default
+  const [expandedTopics, setExpandedTopics] = useState<Set<number>>(new Set([0]));
+  const toggleTopic = (idx: number) => {
+    setExpandedTopics(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  };
+
   // During playoffs (or other non-regular phases), show a fallback instead of unmounting
   if (topics.length === 0 && !aiLoading) {
     const phase = ctx?.phase ?? 'regular';
@@ -453,6 +463,17 @@ function TeamSpotlightSection({
     );
   }
 
+  const getTopicBadge = (headline: string): { label: string; color: string } | null => {
+    if (headline.includes('Trade')) return { label: 'Trade', color: 'bg-orange-100 text-orange-700 border-orange-200' };
+    if (headline.includes('Draft')) return { label: 'Draft', color: 'bg-blue-100 text-blue-700 border-blue-200' };
+    if (headline.includes('Playoff')) return { label: 'Playoffs', color: 'bg-purple-100 text-purple-700 border-purple-200' };
+    if (headline.includes('QB')) return { label: 'QB Watch', color: 'bg-red-100 text-red-700 border-red-200' };
+    if (headline.includes('Free Agenc') || headline.includes('Free Agent')) return { label: 'Free Agency', color: 'bg-green-100 text-green-700 border-green-200' };
+    if (headline.includes('Cap')) return { label: 'Cap', color: 'bg-yellow-100 text-yellow-700 border-yellow-200' };
+    if (headline.includes('Overview') || headline.includes('State of')) return { label: 'Overview', color: 'bg-gray-100 text-gray-700 border-gray-200' };
+    return null;
+  };
+
   return (
     <div className="mt-6">
       <Card>
@@ -469,40 +490,71 @@ function TeamSpotlightSection({
                 )}
               </p>
             </div>
-            {topics.length > 0 && podcastReady && (
-              <div className="shrink-0 pt-0.5">
+            <div className="flex items-center gap-3 shrink-0 pt-0.5">
+              {topics.length > 1 && (
+                <button
+                  onClick={() => {
+                    if (expandedTopics.size === topics.length) setExpandedTopics(new Set([0]));
+                    else setExpandedTopics(new Set(topics.map((_, i) => i)));
+                  }}
+                  className="text-xs text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
+                >
+                  {expandedTopics.size === topics.length ? 'Collapse All' : 'Expand All'}
+                </button>
+              )}
+              {topics.length > 0 && podcastReady && (
                 <SpotlightAudioPlayer
                   topics={topics}
                   teamName={`${team.city} ${team.name}`}
                 />
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </CardHeader>
         <div className="px-4 pb-4">
-          <div className="space-y-5">
-            {topics.map((topic, topicIdx) => (
-              <div key={topicIdx}>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-base">{topic.icon}</span>
-                  <h4 className="text-sm font-bold">{topic.headline}</h4>
+          <div className="space-y-2">
+            {topics.map((topic, topicIdx) => {
+              const isExpanded = expandedTopics.has(topicIdx);
+              const badge = getTopicBadge(topic.headline);
+              return (
+                <div key={topicIdx} className="border border-[var(--border)] rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => toggleTopic(topicIdx)}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-[var(--bg-hover)] transition-colors"
+                  >
+                    <span className="text-base shrink-0">{topic.icon}</span>
+                    {badge && (
+                      <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded border shrink-0 ${badge.color}`}>
+                        {badge.label}
+                      </span>
+                    )}
+                    <h4 className="text-sm font-bold flex-1 truncate">{topic.headline}</h4>
+                    <svg
+                      className={`w-4 h-4 shrink-0 text-[var(--text-sec)] transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {isExpanded && (
+                    <div className="px-3 pb-3 space-y-2.5">
+                      {topic.exchanges.map((exchange, exIdx) => (
+                        <DebateBubble
+                          key={exIdx}
+                          exchange={exchange}
+                          onPlayerClick={onPlayerClick}
+                          playerIds={topic.playerIds}
+                          players={allPlayers}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-2.5">
-                  {topic.exchanges.map((exchange, exIdx) => (
-                    <DebateBubble
-                      key={exIdx}
-                      exchange={exchange}
-                      onPlayerClick={onPlayerClick}
-                      playerIds={topic.playerIds}
-                      players={allPlayers}
-                    />
-                  ))}
-                </div>
-                {topicIdx < topics.length - 1 && (
-                  <div className="border-b border-[var(--border)] mt-4" />
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </Card>
@@ -1110,20 +1162,20 @@ function Dashboard() {
             )}
           </Card>
         </div>
-      </div>
 
-      {/* Team Spotlight */}
-      <div ref={spotlightRef}>
-        <TeamSpotlightSection
-          team={userTeam}
-          roster={roster}
-          allTeams={teams}
-          allPlayers={players}
-          season={season}
-          week={week}
-          ctx={{ phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay }}
-          onPlayerClick={setSelectedPlayerId}
-        />
+        {/* Team Spotlight */}
+        <div ref={spotlightRef}>
+          <TeamSpotlightSection
+            team={userTeam}
+            roster={roster}
+            allTeams={teams}
+            allPlayers={players}
+            season={season}
+            week={week}
+            ctx={{ phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay }}
+            onPlayerClick={setSelectedPlayerId}
+          />
+        </div>
       </div>
 
       {/* Team Roster Modal */}

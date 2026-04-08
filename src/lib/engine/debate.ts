@@ -1588,6 +1588,20 @@ export function generateTeamSpotlight(
     }
   }
 
+  // ─── Cap topics to 3, prioritizing key storylines ───
+  const MAX_TOPICS = 3;
+  if (topics.length > MAX_TOPICS) {
+    const priority = ['Trade Deadline', 'QB', 'Draft', 'Playoff'];
+    const first = topics[0];
+    const rest = topics.slice(1).sort((a, b) => {
+      const aScore = priority.findIndex(p => a.headline.includes(p));
+      const bScore = priority.findIndex(p => b.headline.includes(p));
+      return (aScore === -1 ? 99 : aScore) - (bScore === -1 ? 99 : bScore);
+    });
+    topics.length = 0;
+    topics.push(first, ...rest.slice(0, MAX_TOPICS - 1));
+  }
+
   // ─── Add fan reactions and player social media posts to topics ───
   const FAN_REACTIONS = [
     (t: Team, wp: number) => wp >= 0.6 ? `${t.city} fans are ELECTRIC right now. This team is for real.` : `${t.city} faithful are getting restless. They need a win badly.`,
