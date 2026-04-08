@@ -449,20 +449,20 @@ function TeamSpotlightSection({
     <div className="mt-6">
       <Card>
         <CardHeader>
-          <div>
-            <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between gap-4">
+            <div>
               <CardTitle>
                 <span className="flex items-center gap-2"><span>🎬</span> Team Spotlight</span>
               </CardTitle>
+              <p className="text-xs text-[var(--text-sec)] mt-0.5">
+                with {COMMENTATORS.stats.name} {COMMENTATORS.stats.avatar} & {COMMENTATORS.hottake.name} {COMMENTATORS.hottake.avatar}
+                {aiCommentary && aiState.topics && (
+                  <span className="ml-2 text-purple-500 font-medium">AI</span>
+                )}
+              </p>
             </div>
-            <p className="text-xs text-[var(--text-sec)] mt-0.5">
-              with {COMMENTATORS.stats.name} {COMMENTATORS.stats.avatar} & {COMMENTATORS.hottake.name} {COMMENTATORS.hottake.avatar}
-              {aiCommentary && aiState.topics && (
-                <span className="ml-2 text-purple-500 font-medium">AI</span>
-              )}
-            </p>
             {topics.length > 0 && (
-              <div className="mt-2">
+              <div className="shrink-0 pt-0.5">
                 <SpotlightAudioPlayer
                   topics={topics}
                   teamName={`${team.city} ${team.name}`}
