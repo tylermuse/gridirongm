@@ -133,7 +133,7 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
 }
 
 function AccountSection() {
-  const { user, tier, isAdmin, signOut } = useSubscription();
+  const { user, tier, isAdmin, isFoundingMember, signOut } = useSubscription();
 
   if (!user) {
     return (
@@ -156,6 +156,9 @@ function AccountSection() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-xs font-medium truncate">{user.email}</div>
+          {isFoundingMember && (
+            <div className="text-[9px] font-bold text-amber-600">⭐ Founding Member</div>
+          )}
         </div>
       </div>
       {isAdmin && (

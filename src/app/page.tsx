@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useSubscription } from '@/components/providers/SubscriptionProvider';
 
 import { useGameStore } from '@/lib/engine/store';
 import { migrateFromLocalStorage, getItem as idbGetItem } from '@/lib/storage';
@@ -556,6 +557,7 @@ function DraftCapitalCard({ team, season, phase, teams }: { team: { draftPicks: 
 
 function Dashboard() {
   const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements, leagueSettings, firedState } = useGameStore();
+  const { isFoundingMember } = useSubscription();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const spotlightRef = useRef<HTMLDivElement>(null);
@@ -693,6 +695,11 @@ function Dashboard() {
               {champions.length > 0 && champions.filter(c => c.teamId === userTeamId).length > 0 && (
                 <span className="text-sm font-bold" style={{ color: 'var(--team-text-on-primary)' }}>
                   {champions.filter(c => c.teamId === userTeamId).length}x Champion
+                </span>
+              )}
+              {isFoundingMember && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-100 border border-amber-400/30">
+                  ⭐ Founding Member
                 </span>
               )}
             </div>

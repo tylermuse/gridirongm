@@ -6,10 +6,14 @@ import { type Tier, type Feature, hasFeature as checkFeature, maxScoutingLevel }
 import { trackEvent } from '@/lib/analytics';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
+// Anyone who signed up before this date is a Founding Member forever
+const FOUNDING_MEMBER_CUTOFF = '2026-07-01T00:00:00Z';
+
 interface SubscriptionContextValue {
   user: User | null;
   tier: Tier;
   isAdmin: boolean;
+  isFoundingMember: boolean;
   loading: boolean;
   hasFeature: (feature: Feature) => boolean;
   maxScoutingLevel: number;
@@ -20,6 +24,7 @@ const SubscriptionContext = createContext<SubscriptionContextValue>({
   user: null,
   tier: 'free',
   isAdmin: false,
+  isFoundingMember: false,
   loading: true,
   hasFeature: () => false,
   maxScoutingLevel: 0,
@@ -136,13 +141,18 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     setIsAdmin(false);
   }, [supabase]);
 
+  // Founding member = signed up before cutoff date
+  const isFoundingMember = !!user?.created_at && new Date(user.created_at) < new Date(FOUNDING_MEMBER_CUTOFF);
+
   const value: SubscriptionContextValue = {
     user,
     tier,
     isAdmin,
+    isFoundingMember,
     loading,
-    hasFeature: (feature: Feature) => isAdmin || checkFeature(tier, feature),
-    maxScoutingLevel: isAdmin ? 2 : maxScoutingLevel(tier),
+    // Founding members always get all features, even if tier is free
+    hasFeature: (feature: Feature) => isAdmin || isFoundingMember || checkFeature(tier, feature),
+    maxScoutingLevel: isAdmin || isFoundingMember ? 2 : maxScoutingLevel(tier),
     signOut,
   };
 
