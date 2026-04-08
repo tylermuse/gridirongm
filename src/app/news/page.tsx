@@ -17,6 +17,7 @@ const NEWS_BADGE: Record<string, { label: string; color: string; bg: string; ico
   quote:       { label: 'Quote',       color: 'text-indigo-700', bg: 'bg-indigo-50',  icon: '💬', border: 'border-l-indigo-400' },
   rumor:       { label: 'Rumor',       color: 'text-teal-700',   bg: 'bg-teal-50',    icon: '👀', border: 'border-l-teal-400' },
   coaching:    { label: 'Coaching',    color: 'text-red-700',    bg: 'bg-red-50',     icon: '🏈', border: 'border-l-red-400' },
+  recap:       { label: 'Recap',      color: 'text-sky-700',    bg: 'bg-sky-50',     icon: '🏟️', border: 'border-l-sky-400' },
 };
 
 /** Detect sub-type overrides from headline text */
@@ -138,6 +139,19 @@ export default function NewsPage() {
                       </div>
 
                       <p className="text-sm">{item.headline}</p>
+
+                      {item.body && (
+                        <div className="mt-2 text-xs text-[var(--text-sec)] space-y-1 leading-relaxed whitespace-pre-line">
+                          {item.body.split('\n').map((line, i) => {
+                            if (line.startsWith('KEY PERFORMERS:')) return <div key={i} className="font-bold text-[var(--text)] uppercase text-[10px] tracking-wider mt-1">{line}</div>;
+                            if (line.startsWith('\u2022 ')) return <div key={i} className="ml-2">{line}</div>;
+                            if (line.startsWith('POSTGAME:')) return <div key={i} className="italic text-[var(--text)] mt-1">{line.replace('POSTGAME: ', '')}</div>;
+                            if (line.startsWith('FANS:')) return <div key={i} className="text-[var(--text-sec)] mt-1">{line.replace('FANS: ', '\uD83D\uDCE3 ')}</div>;
+                            if (line.trim() === '') return null;
+                            return <div key={i}>{line}</div>;
+                          })}
+                        </div>
+                      )}
 
                       {/* Player links */}
                       {item.playerIds && item.playerIds.length > 0 && (

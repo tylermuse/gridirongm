@@ -1093,6 +1093,17 @@ function Dashboard() {
                       )}
                     </div>
                     <p className="leading-tight">{item.headline}</p>
+                    {item.type === 'recap' && item.body && (() => {
+                      const perfLines = item.body.split('\n').filter(l => l.startsWith('\u2022 ')).slice(0, 2);
+                      if (perfLines.length === 0) return null;
+                      return (
+                        <div className="mt-1 text-[10px] text-[var(--text-sec)] space-y-0.5">
+                          {perfLines.map((line, i) => (
+                            <div key={i} className="truncate">{line}</div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>

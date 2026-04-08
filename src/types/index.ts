@@ -558,7 +558,7 @@ export interface NewsItem {
   id: string;
   season: number;
   week: number;
-  type: 'injury' | 'trade' | 'signing' | 'release' | 'performance' | 'milestone' | 'system' | 'quote' | 'rumor';
+  type: 'injury' | 'trade' | 'signing' | 'release' | 'performance' | 'milestone' | 'system' | 'quote' | 'rumor' | 'recap';
   teamId?: string;
   playerIds?: string[];
   headline: string;

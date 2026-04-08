@@ -431,54 +431,90 @@ function generateWeekNews(
     }
   }
 
-  // Post-game coach quotes for user team games
-  const coachWinQuotes = [
-    (team: string, opp: string, margin: number) => `"We came out focused and executed the game plan." — ${team} HC after ${margin > 14 ? 'dominant ' : ''}win over ${opp}.`,
-    (team: string, opp: string) => `"Defense really stepped up today. That's the standard." — ${team} HC after beating ${opp}.`,
-    (team: string, opp: string) => `"Great team win. Everyone contributed." — ${team} HC after victory over ${opp}.`,
-    (team: string, opp: string) => `"Good week of practice and it showed on the field." — ${team} HC after defeating ${opp}.`,
-    (team: string, opp: string, margin: number) => margin <= 7
-      ? `"That was a dogfight. Respect to ${opp} — they made us earn it." — ${team} HC.`
-      : `"When we play our brand of football, we're tough to beat." — ${team} HC.`,
-    (team: string) => `"We're not looking ahead. One week at a time." — ${team} HC.`,
-    (team: string, opp: string) => `"Our guys showed resilience today against ${opp}. Proud of this team." — ${team} HC.`,
-    (team: string, opp: string) => `"Preparation was there all week. Took care of business against ${opp}." — ${team} HC.`,
-  ];
-  const coachLossQuotes = [
-    (team: string, opp: string) => `"We need to look in the mirror. That's not good enough." — ${team} HC after loss to ${opp}.`,
-    (team: string, opp: string) => `"Can't turn the ball over like that and expect to win." — ${team} HC after loss to ${opp}.`,
-    (team: string) => `"We'll go back to the drawing board. Lot of football left." — ${team} HC.`,
-    (team: string, opp: string, margin: number) => margin >= 20
-      ? `"I have to do better putting our players in position to succeed. That's on me." — ${team} HC after blowout loss to ${opp}.`
-      : `"We were in it but couldn't finish." — ${team} HC.`,
-    (team: string, opp: string) => `"${opp} was the better team today. We need to respond." — ${team} HC.`,
-    (team: string) => `"Disappointing result. Got to get back to fundamentals." — ${team} HC.`,
-    (team: string) => `"Not the result we wanted. We'll learn from this." — ${team} HC.`,
-    (team: string, opp: string) => `"Credit to ${opp}. They came out with more energy." — ${team} HC.`,
-  ];
-
+  // Post-game report cards for user team games
   for (const game of updatedGames) {
     if (!game.played) continue;
     const isUserHome = game.homeTeamId === userTeamId;
     const isUserAway = game.awayTeamId === userTeamId;
     if (!isUserHome && !isUserAway) continue;
+
     const ut = teams.find(t => t.id === userTeamId);
     const oppId = isUserHome ? game.awayTeamId : game.homeTeamId;
     const ot = teams.find(t => t.id === oppId);
     if (!ut || !ot) continue;
+
     const userScore = isUserHome ? game.homeScore : game.awayScore;
     const oppScore = isUserHome ? game.awayScore : game.homeScore;
     const margin = Math.abs(userScore - oppScore);
     const won = userScore > oppScore;
-    const templates = won ? coachWinQuotes : coachLossQuotes;
+    const tied = userScore === oppScore;
+    const resultWord = won ? 'defeat' : tied ? 'tie' : 'fall to';
+
+    const headline = `${ut.abbreviation} ${resultWord} ${ot.abbreviation} ${userScore}\u2013${oppScore}`;
+
+    const performers: { name: string; line: string }[] = [];
+    for (const [pid, stats] of Object.entries(game.playerStats)) {
+      const p = players.find(pl => pl.id === pid);
+      if (!p || p.teamId !== userTeamId) continue;
+      const s = stats as Record<string, number>;
+
+      if (p.position === 'QB' && (s.passYards ?? 0) > 0) {
+        const tds = s.passTDs ?? 0; const ints = s.interceptions ?? 0;
+        performers.push({ name: `${p.firstName} ${p.lastName}`, line: `${s.passYards} yds, ${tds} TD${tds !== 1 ? 's' : ''}${ints > 0 ? `, ${ints} INT${ints !== 1 ? 's' : ''}` : ''} passing` });
+      }
+      if ((s.rushYards ?? 0) >= 40) {
+        const tds = s.rushTDs ?? 0;
+        performers.push({ name: `${p.firstName} ${p.lastName}`, line: `${s.rushYards} yds${tds > 0 ? `, ${tds} TD${tds !== 1 ? 's' : ''}` : ''} rushing` });
+      }
+      if ((s.receivingYards ?? 0) >= 40) {
+        const rec = s.receptions ?? 0; const tds = s.receivingTDs ?? 0;
+        performers.push({ name: `${p.firstName} ${p.lastName}`, line: `${rec} rec, ${s.receivingYards} yds${tds > 0 ? `, ${tds} TD${tds !== 1 ? 's' : ''}` : ''}` });
+      }
+      if ((s.sacks ?? 0) >= 1) performers.push({ name: `${p.firstName} ${p.lastName}`, line: `${s.sacks} sack${(s.sacks ?? 0) !== 1 ? 's' : ''}` });
+      if ((s.defensiveINTs ?? 0) >= 1) performers.push({ name: `${p.firstName} ${p.lastName}`, line: `${s.defensiveINTs} INT${(s.defensiveINTs ?? 0) !== 1 ? 's' : ''}` });
+    }
+    const topPerformers = performers.slice(0, 4);
+
     const seed = season * 10000 + week * 100 + (won ? 1 : 0);
-    const quote = templates[seed % templates.length](ut.abbreviation, ot.abbreviation, margin);
-    news.push(makeNews({
-      season, week, type: 'quote',
-      teamId: userTeamId!,
-      headline: quote,
-      isUserTeam: true,
-    }));
+    const coachQuotes = won
+      ? margin >= 21 ? [`"Complete performance on both sides of the ball."`, `"That's our standard. We brought it tonight."`, `"Dominant effort. Proud of these guys."`, `"Everything clicked today. That's championship football."`]
+      : margin >= 10 ? [`"Solid win. We controlled the game start to finish."`, `"Really pleased with how we executed the game plan."`, `"The guys came out focused. That's what good teams do."`, `"Good complementary football. Defense and offense both showed up."`]
+      : [`"Gutsy win. These close ones build character."`, `"That was a dogfight. Respect to ${ot.abbreviation} — they made us earn it."`, `"Finding ways to win tight games — that's growth."`, `"We kept our composure in a tough environment."`]
+      : tied ? [`"Frustrating not to close that out."`, `"A tie feels like a loss when you had chances to win."`]
+      : margin >= 21 ? [`"That's on me. I have to put our guys in better positions."`, `"Embarrassing. We got outcoached and outplayed."`, `"No excuses. We weren't prepared and it showed."`, `"Unacceptable. We'll be making changes this week."`]
+      : margin >= 10 ? [`"We were outmatched today. Back to the drawing board."`, `"${ot.abbreviation} was the better team. We have to respond."`, `"Too many mistakes. Can't beat good teams playing like that."`, `"Disappointing. We're better than what we showed today."`]
+      : [`"We were in it until the end but couldn't finish."`, `"Close loss. We need to learn how to win these."`, `"Just didn't make the plays when it mattered."`, `"A few plays away. We'll get it corrected."`];
+
+    const coachLine = coachQuotes[seed % coachQuotes.length];
+
+    const record = ut.record;
+    const totalGames = record.wins + record.losses;
+    const winPct = totalGames > 0 ? record.wins / totalGames : 0.5;
+    const fanReactions = won
+      ? winPct >= 0.7 ? [`Fans chanting "Super Bowl!" as the stadium empties.`, `Electric atmosphere. Season ticket renewals through the roof.`]
+      : winPct >= 0.4 ? [`A much-needed win gives the fanbase reason for optimism.`, `Solid crowd energy today. Fans starting to believe.`]
+      : [`Fans relieved to finally see a W. "About time."`, `A rare bright spot in a tough season.`]
+      : winPct <= 0.3 ? [`Boos rain down as the clock hits zero.`, `Sections of empty seats by the fourth quarter.`, `Fan frustration boiling over.`]
+      : winPct <= 0.5 ? [`A quiet crowd files out. Patience wearing thin.`, `Mixed reactions from a fanbase searching for answers.`]
+      : [`Stunned silence from a crowd that expected more.`, `Disappointing result for a team with higher aspirations.`];
+    const fanLine = fanReactions[seed % fanReactions.length];
+
+    const bodyLines: string[] = [];
+    if (topPerformers.length > 0) {
+      bodyLines.push('KEY PERFORMERS:');
+      for (const perf of topPerformers) bodyLines.push(`\u2022 ${perf.name}: ${perf.line}`);
+      bodyLines.push('');
+    }
+    bodyLines.push(`POSTGAME: ${coachLine} \u2014 ${ut.abbreviation} HC`);
+    bodyLines.push('');
+    bodyLines.push(`FANS: ${fanLine}`);
+
+    const recapPlayerIds = topPerformers.map(perf => {
+      const match = players.find(p => p.teamId === userTeamId && `${p.firstName} ${p.lastName}` === perf.name);
+      return match?.id;
+    }).filter((id): id is string => !!id);
+
+    news.push(makeNews({ season, week, type: 'recap' as any, teamId: userTeamId!, playerIds: recapPlayerIds, headline, body: bodyLines.join('\n'), isUserTeam: true }));
   }
 
   // Trade rumors (losing teams with high-OVR veterans, weeks 4-14)
