@@ -81,10 +81,10 @@ export function GameTicker() {
             let result = '';
             if (game.played) {
               if (userScore > oppScore) {
-                bgClass = 'bg-green-50';
+                bgClass = 'bg-green-100';
                 result = 'W';
               } else if (userScore < oppScore) {
-                bgClass = 'bg-red-50';
+                bgClass = 'bg-red-100';
                 result = 'L';
               } else {
                 bgClass = 'bg-amber-50';
@@ -105,10 +105,18 @@ export function GameTicker() {
               <div
                 key={game.id}
                 onClick={() => game.played && setSelectedGame(game)}
-                className={`group relative flex-shrink-0 flex flex-col items-center px-2 py-1 border-r border-[var(--border)] last:border-r-0 snap-center ${isUserGame ? `${bgClass} font-bold` : `${bgClass} opacity-60`} ${isCurrentWeek ? 'ring-1 ring-inset ring-blue-500' : ''} ${game.played ? 'cursor-pointer hover:brightness-95 transition-all' : ''}`}
+                className={`group relative flex-shrink-0 flex flex-col items-center px-2 py-1 border-r border-[var(--border)] last:border-r-0 snap-center ${isUserGame ? `${bgClass} font-bold` : `${bgClass} opacity-60`} ${isCurrentWeek ? 'ring-2 ring-[var(--accent)] bg-[var(--accent)]/5' : ''} ${game.played ? 'cursor-pointer hover:brightness-95 transition-all' : ''}`}
                 style={{ minWidth: '72px' }}
                 title={game.played ? `${result} ${userScore}-${oppScore} ${isHome ? 'vs' : '@'} ${getTeamAbbr(oppId)}` : `Week ${game.week} ${isHome ? 'vs' : '@'} ${getTeamAbbr(oppId)}`}
               >
+                {/* W/L/T badge */}
+                {game.played && result && (
+                  <span className={`absolute top-0 right-0 text-[8px] font-black leading-none px-1 py-0.5 rounded-bl ${
+                    result === 'W' ? 'bg-green-600 text-white' : result === 'L' ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'
+                  }`}>
+                    {result}
+                  </span>
+                )}
                 {/* Hover tooltip */}
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 rounded bg-[var(--surface)] border border-[var(--border)] shadow-lg text-[10px] text-[var(--text)] whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">
                   <div className="font-bold">{tooltipLine1}</div>

@@ -696,6 +696,10 @@ export interface LeagueState {
   champions: { season: number; teamId: string }[];
   /** News feed items */
   newsItems: NewsItem[];
+  /** Last-read news marker (week) */
+  newsLastReadWeek: number;
+  /** Last-read news marker (season) */
+  newsLastReadSeason: number;
   /** Season-end summaries for history */
   seasonHistory: SeasonSummary[];
   /** Save version for migration detection */

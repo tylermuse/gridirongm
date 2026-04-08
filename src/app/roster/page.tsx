@@ -396,11 +396,12 @@ export default function RosterPage() {
                   const count = roster.filter(p => p.position === pos).length;
                   const limits = ROSTER_LIMITS[pos];
                   const isBelowMin = count < limits.min;
-                  const isAtMax = count >= limits.max;
+                  const isAtMin = count === limits.min;
+                  const isAboveMax = count > limits.max;
                   return (
                     <div key={pos} className="text-center">
                       <div className={`text-sm font-black ${
-                        isBelowMin ? 'text-red-600' : isAtMax ? 'text-amber-600' : 'text-green-600'
+                        isBelowMin ? 'text-red-600' : isAtMin ? 'text-amber-600' : isAboveMax ? 'text-blue-600' : 'text-green-600'
                       }`}>
                         {count}
                       </div>
@@ -531,7 +532,9 @@ export default function RosterPage() {
                       <tr
                         className={`transition-colors duration-150 hover:bg-[var(--surface-2)] ${
                           isStarter ? '' : 'opacity-80'
-                        } border-t border-[var(--border)]`}
+                        } border-t border-[var(--border)] ${
+                          isStarter && p.contract.yearsLeft <= 1 ? 'bg-amber-50/50' : ''
+                        }`}
                       >
                         {/* Name */}
                         <td className="py-2 px-2 pl-3">
@@ -626,7 +629,7 @@ export default function RosterPage() {
                         <td className="py-2 px-2 text-right font-mono text-xs tabular-nums">
                           <span className="font-semibold">${p.contract.salary}M</span>
                           <span className={`ml-1 ${p.contract.yearsLeft <= 1 ? 'font-bold text-amber-600' : 'text-[var(--text-sec)]'}`}>
-                            {p.contract.yearsLeft <= 1 ? 'expiring ⚠' : `${p.contract.yearsLeft}yr left`}
+                            {p.contract.yearsLeft <= 1 ? (isStarter ? '⚠️ expiring' : 'expiring') : `${p.contract.yearsLeft}yr left`}
                           </span>
                         </td>
 

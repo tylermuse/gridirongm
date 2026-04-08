@@ -123,6 +123,20 @@ export default function PowerRankingsPage() {
           ))}
         </div>
 
+        {/* Overall Rank Hero */}
+        {tab === 'overview' && (() => {
+          const ranks = RANKED_POSITIONS.map(pos => getUserRanking(pos)?.rank ?? 32);
+          const avg = ranks.reduce((s, r) => s + r, 0) / ranks.length;
+          const rounded = Math.round(avg);
+          const tier = rounded <= 8 ? 'Elite' : rounded <= 16 ? 'Above Average' : rounded <= 24 ? 'Below Average' : 'Bottom Tier';
+          return (
+            <div className="text-center mb-6">
+              <div className={`text-5xl font-black ${rankTextClass(rounded)}`}>#{rounded}</div>
+              <div className="text-sm text-[var(--text-sec)] mt-1">{tier} — Overall Power Rank</div>
+            </div>
+          );
+        })()}
+
         {/* Overview: Your Team */}
         {tab === 'overview' && (
           <Card>
@@ -156,7 +170,7 @@ export default function PowerRankingsPage() {
                         <td className="py-3">
                           <Badge>{pos}</Badge>
                           <span className="ml-2 text-xs text-[var(--text-sec)]">
-                            (Top {ROSTER_LIMITS[pos].min})
+                            ({ROSTER_LIMITS[pos].min} starter{ROSTER_LIMITS[pos].min > 1 ? 's' : ''})
                           </span>
                         </td>
                         <td className="py-3 text-center font-mono font-bold">

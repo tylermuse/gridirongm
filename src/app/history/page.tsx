@@ -10,6 +10,37 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { SeasonSummary, AllLeagueEntry } from '@/types';
 import { EmptyState } from '@/components/ui/EmptyState';
 
+function WinLossSparkline({ seasonHistory, userTeamId }: { seasonHistory: SeasonSummary[]; userTeamId: string }) {
+  if (seasonHistory.length === 0) return null;
+  const maxGames = Math.max(...seasonHistory.map(s => s.userRecord.wins + s.userRecord.losses), 1);
+  return (
+    <div className="mb-6">
+      <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-3">Win-Loss by Season</div>
+      <div className="flex items-end gap-2">
+        {seasonHistory.map((s) => {
+          const total = s.userRecord.wins + s.userRecord.losses;
+          const pct = total > 0 ? s.userRecord.wins / total : 0;
+          const barHeight = Math.max(12, (total / maxGames) * 80);
+          const isWinning = pct >= 0.5;
+          return (
+            <div key={s.season} className="flex flex-col items-center gap-1 flex-1 min-w-[28px]">
+              <span className="text-[9px] font-mono text-[var(--text-sec)]">
+                {s.userRecord.wins}-{s.userRecord.losses}
+              </span>
+              <div
+                className={`w-full rounded-t-sm transition-all ${isWinning ? 'bg-green-500' : 'bg-red-500'}`}
+                style={{ height: barHeight }}
+                title={`Season ${s.season}: ${s.userRecord.wins}-${s.userRecord.losses} (${(pct * 100).toFixed(0)}%)`}
+              />
+              <span className="text-[9px] font-mono text-[var(--text-sec)]">S{s.season}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const PLAYOFF_LABELS: Record<string, string> = {
   missed: 'Missed Playoffs',
   wildcard: 'Wild Card',
@@ -103,6 +134,10 @@ export default function HistoryPage() {
         <p className="text-[var(--text-sec)] text-sm mb-6">
           Currently in Season {season}. {seasonHistory.length} season{seasonHistory.length !== 1 ? 's' : ''} completed.
         </p>
+
+        {seasonHistory.length > 0 && (
+          <WinLossSparkline seasonHistory={seasonHistory} userTeamId={userTeamId} />
+        )}
 
         {seasonHistory.length === 0 ? (
           <EmptyState

@@ -36,7 +36,7 @@ function resolveNewsBadge(type: string, headline: string) {
 type FilterTab = 'all' | 'myteam' | 'transactions' | 'injuries';
 
 export default function NewsPage() {
-  const { newsItems, teams, players, userTeamId } = useGameStore();
+  const { newsItems, teams, players, userTeamId, season, week } = useGameStore();
   const [filter, setFilter] = useState<FilterTab>('all');
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
@@ -79,7 +79,12 @@ export default function NewsPage() {
           {tabs.map(tab => (
             <button
               key={tab.key}
-              onClick={() => setFilter(tab.key)}
+              onClick={() => {
+                setFilter(tab.key);
+                if (tab.key === 'myteam') {
+                  useGameStore.setState({ newsLastReadWeek: week, newsLastReadSeason: season });
+                }
+              }}
               className={`px-3 py-1.5 text-xs rounded font-medium transition-colors ${
                 filter === tab.key ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)]'
               }`}

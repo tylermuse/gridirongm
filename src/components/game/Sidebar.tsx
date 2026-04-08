@@ -198,13 +198,15 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const {
     season, week, phase, teams, userTeamId, resetLeague,
     newsItems, resigningPlayers, tradeProposals, freeAgents, draftOrder, draftResults,
-    leagueSettings, expansionDraft,
+    leagueSettings, expansionDraft, newsLastReadWeek, newsLastReadSeason,
   } = useGameStore();
   const userTeam = teams.find(t => t.id === userTeamId);
   const [showSavePanel, setShowSavePanel] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
 
-  const unreadNews = newsItems.filter(n => n.isUserTeam).length;
+  const unreadNews = newsItems.filter(n =>
+    n.isUserTeam && (n.season > newsLastReadSeason || (n.season === newsLastReadSeason && n.week > newsLastReadWeek))
+  ).length;
   const pendingTrades = tradeProposals.filter(p => p.status === 'pending').length;
 
   function getBadge(href: string): { text: string; variant: 'blue' | 'red' | 'amber' } | null {

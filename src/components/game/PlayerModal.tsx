@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
+import { calculateSchemeFit } from '@/lib/engine/coaching';
 import { calculateDeadCap, calculateCapSavings } from '@/types';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -248,6 +249,24 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                 );
               })()}
             </div>
+
+            {/* Scheme Fit */}
+            {(() => {
+              const userTeam = teams.find(t => t.id === userTeamId);
+              if (!userTeam) return null;
+              const fit = calculateSchemeFit(player, userTeam);
+              if (!fit) return null;
+              return (
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`w-2.5 h-2.5 rounded-full ${fit === 'great' ? 'bg-green-500' : fit === 'poor' ? 'bg-red-500' : 'bg-yellow-500'}`} />
+                  <span className="text-xs text-[var(--text-sec)]">
+                    {fit === 'great' ? 'Great' : fit === 'poor' ? 'Poor' : 'Neutral'} Scheme Fit
+                    {fit === 'great' && <span className="ml-1 font-bold text-green-600">(+2 OVR)</span>}
+                    {fit === 'poor' && <span className="ml-1 font-bold text-red-600">(-1 OVR)</span>}
+                  </span>
+                </div>
+              );
+            })()}
 
             {/* Injury */}
             {player.injury && (

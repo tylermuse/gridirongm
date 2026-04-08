@@ -22,6 +22,7 @@ import { getAiSpotlightState, subscribeAiSpotlight, fetchAiSpotlight, detectNarr
 import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
 import { formatRecord } from '@/types';
+import { ProgressRing } from '@/components/shared/ProgressRing';
 
 function TeamPicker() {
   const { newLeague } = useGameStore();
@@ -728,20 +729,10 @@ function Dashboard() {
             <div className="flex items-center gap-6 flex-wrap">
               {/* Approval gauges */}
               <div className="flex items-center gap-4">
-                <div className="text-center">
-                  <div className={`text-lg font-black ${userTeam.approval.fanApproval >= 65 ? 'text-green-600' : userTeam.approval.fanApproval >= 35 ? 'text-amber-600' : 'text-red-600'}`}>
-                    {userTeam.approval.fanApproval}%
-                  </div>
-                  <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Fan Pulse</div>
-                </div>
-                <div className="text-center">
-                  <div className={`text-lg font-black ${userTeam.approval.ownerApproval >= 65 ? 'text-green-600' : userTeam.approval.ownerApproval >= 35 ? 'text-amber-600' : 'text-red-600'}`}>
-                    {userTeam.approval.ownerApproval}%
-                  </div>
-                  <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider">Owner</div>
-                </div>
+                <ProgressRing value={userTeam.approval.fanApproval} label="Fan Pulse" />
+                <ProgressRing value={userTeam.approval.ownerApproval} label="Owner" />
                 {userTeam.approval.warningIssued && (
-                  <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded">Hot Seat</span>
+                  <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded animate-pulse">🔥 Hot Seat</span>
                 )}
               </div>
               {/* Objectives */}
