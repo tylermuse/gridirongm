@@ -175,20 +175,115 @@ function simulatePlay(
                      down >= 3 ? 0.62 :
                      down === 1 ? 0.52 : 0.57;
 
+  // ── QB designed run check ──
+  // Fast QBs (speed >= 70) get designed runs; scales with speed
+  const qbSpeed = qb?.ratings.speed ?? 0;
+  const qbDesignedRunChance = qbSpeed >= 80 ? 0.20 :
+                              qbSpeed >= 70 ? 0.15 :
+                              0;
+  if (qb && qbDesignedRunChance > 0 && Math.random() < qbDesignedRunChance) {
+    const defRushPower = [...dls, ...lbs].length > 0
+      ? [...dls, ...lbs].reduce((s, p) => s + p.ratings.tackling + p.ratings.strength * 0.5, 0) / [...dls, ...lbs].length
+      : 50;
+    const rushSkill = qb.ratings.speed * 0.5 + qb.ratings.agility * 0.3 + qb.ratings.carrying * 0.2;
+    const olBonus = (olPower - 60) / 100 * 2.6;
+    const rushRedZoneBonus = fieldPosition >= 80 ? 1.0 : 0;
+    let yards = Math.round(
+      (rushSkill - defRushPower) / 35 + 2.5 + (Math.random() * 2.5 - 0.75) + olBonus + rushRedZoneBonus,
+    );
+    if (Math.random() < 0.01 + (qb.ratings.speed / 100) * 0.02) {
+      yards += 8 + Math.floor(Math.random() * 12);
+    }
+    if (Math.random() < 0.12) yards = -(1 + Math.floor(Math.random() * 3));
+
+    const fumbleChance = clamp(0.018 - (qb.ratings.carrying / 100) * 0.006 + rivalryIntensity / 5000, 0.005, 0.03);
+    if (Math.random() < fumbleChance) {
+      const tackler = allDefenders.length > 0
+        ? weightedPick(allDefenders, allDefenders.map(d => {
+            const posWeight = d.position === 'LB' ? 3.5 : d.position === 'DL' ? 1.2 : d.position === 'S' ? 1.5 : 1.0;
+            const ovrFactor = Math.max(0.1, d.ratings.overall / 80);
+            return posWeight * (d.ratings.tackling / 70) * ovrFactor;
+          }))
+        : null;
+      return {
+        type: 'rush', yards: Math.max(0, yards), touchdown: false, turnover: true,
+        rusher: qb, tackler: tackler ?? undefined,
+      };
+    }
+
+    if (fieldPosition >= 95 && Math.random() < 0.45) yards = 100 - fieldPosition;
+    if (fieldPosition >= 90 && yards > 0) yards = Math.max(yards, Math.round(1 + Math.random() * 4));
+
+    const newPos = fieldPosition + yards;
+    const td = newPos >= 100;
+    if (td) yards = 100 - fieldPosition;
+    const tackler = allDefenders.length > 0
+      ? weightedPick(allDefenders, allDefenders.map(d => {
+          const posWeight = d.position === 'LB' ? 3.5 : d.position === 'DL' ? 1.2 : d.position === 'S' ? 1.5 : 1.0;
+          const ovrFactor = Math.max(0.1, d.ratings.overall / 80);
+          return posWeight * (d.ratings.tackling / 70) * ovrFactor;
+        }))
+      : null;
+    return {
+      type: 'rush', yards, touchdown: td, turnover: false,
+      rusher: qb, tackler: tackler ?? undefined,
+    };
+  }
+
   const isPass = Math.random() < passChance;
 
   if (isPass && qb && receivers.length > 0) {
+    // ── QB scramble on pass plays ──
+    // Fast QBs scramble instead of throwing: speed 80+ = 12%, 70-79 = 10%, 60-69 = 8%
+    const scrambleChance = qbSpeed >= 80 ? 0.12 :
+                           qbSpeed >= 70 ? 0.10 :
+                           qbSpeed >= 60 ? 0.08 :
+                           0.02;
+    if (Math.random() < scrambleChance) {
+      const defRushPower = [...dls, ...lbs].length > 0
+        ? [...dls, ...lbs].reduce((s, p) => s + p.ratings.tackling + p.ratings.strength * 0.5, 0) / [...dls, ...lbs].length
+        : 50;
+      const rushSkill = qb.ratings.speed * 0.5 + qb.ratings.agility * 0.3 + qb.ratings.carrying * 0.2;
+      let yards = Math.round(
+        (rushSkill - defRushPower) / 35 + 2.0 + (Math.random() * 2.0 - 0.5),
+      );
+      if (Math.random() < 0.01 + (qb.ratings.speed / 100) * 0.02) {
+        yards += 6 + Math.floor(Math.random() * 10);
+      }
+      if (Math.random() < 0.15) yards = -(1 + Math.floor(Math.random() * 3));
+      if (fieldPosition >= 95 && Math.random() < 0.35) yards = 100 - fieldPosition;
+
+      const newPos = fieldPosition + yards;
+      const td = newPos >= 100;
+      if (td) yards = 100 - fieldPosition;
+      const tackler = allDefenders.length > 0
+        ? weightedPick(allDefenders, allDefenders.map(d => {
+            const posWeight = d.position === 'LB' ? 3.5 : d.position === 'DL' ? 1.2 : d.position === 'S' ? 1.5 : 1.0;
+            const ovrFactor = Math.max(0.1, d.ratings.overall / 80);
+            return posWeight * (d.ratings.tackling / 70) * ovrFactor;
+          }))
+        : null;
+      return {
+        type: 'rush', yards, touchdown: td, turnover: false,
+        rusher: qb, tackler: tackler ?? undefined,
+      };
+    }
+
     // ── Sack check ──
-    // NFL avg ~6.3% of dropbacks result in sack. Leader ~15-18 sacks/season.
-    const sackChance = clamp((dlPower - olPower) / 400 + 0.05, 0.025, 0.09);
+    // NFL avg ~6.3% of dropbacks result in sack. Elite rusher ~10-16 sacks/season, avg DL 3-7.
+    // Reduced base and tighter scaling so 60-rated DL doesn't approach 10 sacks.
+    const sackChance = clamp((dlPower - olPower) / 600 + 0.04, 0.018, 0.07);
     if (Math.random() < sackChance) {
       const sackYards = -(3 + Math.floor(Math.random() * 6));
       // Sack distribution: EDGE/DE ~55%, DT ~15%, LB ~25%, DB ~5%
+      // Rating-gated: low passRush players rarely get sacks
       const sackerPool = [...dls.slice(0, 4), ...lbs.slice(0, 3), ...cbs.slice(0, 1), ...safeties.slice(0, 1)];
       const sacker = sackerPool.length > 0
         ? weightedPick(sackerPool, sackerPool.map(p => {
             const posWeight = p.position === 'DL' ? 4.0 : p.position === 'LB' ? 2.0 : 0.4;
-            return posWeight * (p.ratings.passRush / 70);
+            // Steeper rating curve: 60-rated gets ~0.73x, 80-rated gets ~1.14x, 90-rated gets ~1.65x
+            const ratingFactor = Math.pow(p.ratings.passRush / 70, 2);
+            return posWeight * ratingFactor;
           }))
         : allDefenders[0];
       return { type: 'sack', yards: sackYards, touchdown: false, turnover: false, passer: qb, sacker };
@@ -231,10 +326,13 @@ function simulatePlay(
       : 50;
 
     // ── Interception check ──
-    // Avg INT rate ~2.0% of attempts. Elite QBs ~1.2% (~7/season), bad QBs ~3.0% (~16/season).
+    // Elite QBs (80+ OVR) = 8-14 INTs/season, Average (65-79) = 14-20, Bad (<65) = 20+.
+    // Factor in QB throwing + awareness heavily to differentiate elite from bad.
+    const qbIntRating = (qb.ratings.throwing + qb.ratings.awareness) / 2;
+    const baseIntRate = 0.022;
     const intChance = clamp(
-      (coverageRating - qb.ratings.throwing) / 700 + 0.020,
-      0.010, 0.032,
+      baseIntRate * (1.3 - qbIntRating / 100) + (coverageRating - qb.ratings.throwing) / 900,
+      0.006, 0.035,
     );
     if (Math.random() < intChance) {
       const interceptor = coverageDefender ?? (cbs[0] || safeties[0] || allDefenders[0]);
@@ -254,9 +352,12 @@ function simulatePlay(
     if (Math.random() < compRate) {
       // Completed pass — tuned for NFL realism (~11.8 yards per completion)
       // Top QBs: ~4,500 yds, ~35 TDs per season
+      // Rating multiplier: elite players produce more, bad players less
+      const recRatingMult = 0.5 + (target.ratings.catching / 100) * 1.0; // 50-rated=1.0x, 80=1.3x
+      const qbRatingMult = 0.5 + (qb.ratings.throwing / 100) * 1.0;
       const baseYards = 3 + Math.random() * 10; // 3-13 base (avg 8)
       const bonusYards = (qb.ratings.throwing / 100) * 2.5 + (target.ratings.speed / 100) * 1.5;
-      let yards = Math.round(baseYards + bonusYards * Math.random());
+      let yards = Math.round((baseYards + bonusYards * Math.random()) * ((qbRatingMult + recRatingMult) / 2));
 
       // Big play chance (~3-4% of completions go 20+) — explosive plays
       const bigPlayChance = 0.015 + (target.ratings.speed / 100) * 0.02;
@@ -318,11 +419,12 @@ function simulatePlay(
     const olBonus = (olPower - 60) / 100 * 2.6; // 1.3x OL bonus multiplier (was 2)
 
     // Average: ~4.3 yards per carry, top RB ~1,000-1,400 yds/season
-    // Increased signal: divisor 35 (was 50), reduced noise range 2.5 (was 3.0)
+    // Rating multiplier: elite rushers produce more, bad rushers less
+    const rushRatingMult = 0.5 + (rusher.ratings.carrying / 100) * 1.0; // 50-rated=1.0x, 80=1.3x, 40=0.9x
     // Red zone boost: goal-line runs benefit from compressed field
     const rushRedZoneBonus = fieldPosition >= 80 ? 1.0 : 0;
     let yards = Math.round(
-      (rushSkill - defRushPower) / 35 + 2.5 + (Math.random() * 2.5 - 0.75) + olBonus + rushRedZoneBonus,
+      ((rushSkill - defRushPower) / 35 + 2.5 + (Math.random() * 2.5 - 0.75) + olBonus + rushRedZoneBonus) * rushRatingMult,
     );
 
     // Big rush chance (~1.5-2.5%) — breakaway runs

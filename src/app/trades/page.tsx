@@ -908,12 +908,13 @@ function TradesPage() {
 
   // Compute pick number label (e.g., "#21") for current-year picks during/after draft ordering
   const pickNumberMap = useMemo(() => {
-    const map = new Map<string, number>(); // pickId → overall pick number
+    const map = new Map<string, number>(); // pickId → within-round pick number
     // Only estimate pick numbers for the NEXT draft — future years are unknown
     const draftYear = phase === 'draft' ? season : season + 1;
 
+    // Include ALL picks for the draft year (even already-drafted ones) so numbering is stable
     const allPicks = teams.flatMap(t =>
-      t.draftPicks.filter(pk => pk.year === draftYear && !pk.playerId),
+      t.draftPicks.filter(pk => pk.year === draftYear),
     );
     if (allPicks.length === 0) return map;
 
@@ -928,12 +929,16 @@ function TradesPage() {
       return aWp - bWp;
     });
 
-    // During draft phase, account for already-drafted picks
-    const draftedOffset = phase === 'draft' && draftOrder
-      ? (teams.length * 7) - draftOrder.length - allPicks.length
-      : 0;
-    allPicks.forEach((pk, i) => {
-      map.set(pk.id, Math.max(1, draftedOffset + i + 1));
+    // Assign within-round pick numbers (e.g., Pick #1 through #N for each round)
+    let currentRound = 0;
+    let pickInRound = 0;
+    allPicks.forEach((pk) => {
+      if (pk.round !== currentRound) {
+        currentRound = pk.round;
+        pickInRound = 0;
+      }
+      pickInRound++;
+      map.set(pk.id, pickInRound);
     });
     return map;
   }, [phase, draftOrder, teams, season]);

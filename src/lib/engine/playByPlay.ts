@@ -911,6 +911,55 @@ export function simulatePlayByPlay(
       }
     }
 
+    // ── QB designed run check ──
+    const qbSpeed = rating(ok.qb, 'speed', 50);
+    const qbDesignedRunChance = qbSpeed >= 80 ? 0.20 :
+                                qbSpeed >= 70 ? 0.15 :
+                                0;
+    if (ok.qb && qbDesignedRunChance > 0 && Math.random() < qbDesignedRunChance) {
+      const qbAgility = rating(ok.qb, 'agility', 60);
+      const qbCarrying = rating(ok.qb, 'carrying', 55);
+      const lbTackling = rating(dk.lb1, 'tackling', 70);
+      const rushSkill = qbSpeed * 0.5 + qbAgility * 0.3 + qbCarrying * 0.2;
+      let yardsGained = Math.round(gaussian(4.0, 3.0) + (rushSkill - lbTackling) / 60 * 2);
+      yardsGained = clamp(yardsGained, -4, 25);
+
+      if (state.fieldPos >= 95 && Math.random() < 0.45) {
+        yardsGained = 100 - state.fieldPos;
+      } else if (state.fieldPos >= 90) {
+        yardsGained = Math.max(yardsGained, Math.round(1 + Math.random() * 4));
+      }
+
+      ob.rushAttempts += 1;
+      ob.rushYards += yardsGained;
+      db.tackles += 1;
+
+      const isTD = state.fieldPos + yardsGained >= 100;
+      if (isTD) {
+        const tdYards = 100 - state.fieldPos;
+        doTouchdown(true, ok.qb, tdYards);
+        advanceClock(Math.floor(Math.random() * 8) + 30);
+        return true;
+      }
+
+      const desc = descRun(ok.qb, yardsGained, fieldPosLabel(state.fieldPos, state.possession));
+      addEvent('run', desc, yardsGained, false);
+
+      state.fieldPos = clamp(state.fieldPos + yardsGained, 1, 99);
+      state.yardsToGo -= yardsGained;
+      advanceClock(Math.floor(Math.random() * 8) + 30);
+
+      const fumbleChance = clamp(0.018 - (qbCarrying / 100) * 0.006, 0.005, 0.025);
+      if (Math.random() < fumbleChance) {
+        const desc2 = descFumble(ok.qb, dk.lb1);
+        addEvent('fumble', desc2, 0, false);
+        shiftMomentum(-20);
+        const newPos = clamp(100 - state.fieldPos, 15, 75);
+        switchPossession(newPos);
+        return true;
+      }
+    } else {
+
     const isRun = Math.random() < runChance;
 
     if (isRun) {
@@ -960,6 +1009,45 @@ export function simulatePlayByPlay(
 
     } else {
       // PASS play
+
+      // ── QB scramble on pass plays ──
+      const scrambleChance = qbSpeed >= 80 ? 0.12 :
+                             qbSpeed >= 70 ? 0.10 :
+                             qbSpeed >= 60 ? 0.08 :
+                             0.02;
+      if (ok.qb && Math.random() < scrambleChance) {
+        const qbAgility = rating(ok.qb, 'agility', 60);
+        const qbCarrying = rating(ok.qb, 'carrying', 55);
+        const lbTackling = rating(dk.lb1, 'tackling', 70);
+        const rushSkill = qbSpeed * 0.5 + qbAgility * 0.3 + qbCarrying * 0.2;
+        let yardsGained = Math.round(gaussian(3.5, 2.5) + (rushSkill - lbTackling) / 60 * 2);
+        yardsGained = clamp(yardsGained, -4, 20);
+
+        if (state.fieldPos >= 95 && Math.random() < 0.35) {
+          yardsGained = 100 - state.fieldPos;
+        }
+
+        ob.rushAttempts += 1;
+        ob.rushYards += yardsGained;
+        db.tackles += 1;
+
+        const isTD = state.fieldPos + yardsGained >= 100;
+        if (isTD) {
+          const tdYards = 100 - state.fieldPos;
+          doTouchdown(true, ok.qb, tdYards);
+          advanceClock(Math.floor(Math.random() * 8) + 25);
+          return true;
+        }
+
+        const desc = descRun(ok.qb, yardsGained, fieldPosLabel(state.fieldPos, state.possession));
+        addEvent('run', desc, yardsGained, false);
+
+        state.fieldPos = clamp(state.fieldPos + yardsGained, 1, 99);
+        state.yardsToGo -= yardsGained;
+        advanceClock(Math.floor(Math.random() * 8) + 25);
+
+      } else {
+
       const qbThrowing = rating(ok.qb, 'throwing', 70);
       const dlPassRush = rating(dk.dl1, 'passRush', 70);
       // Bug 1 fix: use actual OL blocking ratings instead of WR1 proxy
@@ -1086,7 +1174,11 @@ export function simulatePlayByPlay(
         // Clock stops on incomplete
         advanceClock(5);
       }
+
+      } // end QB scramble else block
     }
+
+    } // end QB designed run else block
 
     // Update down & distance
     if (state.yardsToGo <= 0) {

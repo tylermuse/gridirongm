@@ -197,18 +197,20 @@ export function developPlayers(
       ratings.overall = clamp(Math.min(effectivePotential, p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position))));
     } else if (p.age <= 23) {
       // ── Strong Youth Progression ────────────────────────────────────
-      // Young players grow quickly towards their potential
+      // Young players grow quickly towards their potential (3-5 OVR jump possible)
       if (effectivePotential > ratings.overall) {
         const gap = effectivePotential - ratings.overall;
-        const growthAmount = clamp(gaussian(3.5, 2), 1, 7) * progressionMult;
+        // Bigger jumps for young players with room to grow: gap-scaled boost
+        const gapBonus = Math.min(gap / 15, 1.0); // up to +1.0 extra when far from potential
+        const growthAmount = clamp(gaussian(4.5 + gapBonus, 2), 2, 9) * progressionMult;
         for (const key of primaryKeys) {
           const k = key as string;
           (ratings as Record<string, number>)[k] = clamp(
-            (ratings as Record<string, number>)[k] + growthAmount * 0.5,
+            (ratings as Record<string, number>)[k] + growthAmount * 0.6,
           );
         }
         // Awareness always improves with experience for young players
-        ratings.awareness = clamp(ratings.awareness + gaussian(2, 1) * progressionMult);
+        ratings.awareness = clamp(ratings.awareness + gaussian(2.5, 1) * progressionMult);
         ratings.overall = clamp(Math.min(effectivePotential, p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position))));
       } else {
         // Already at potential — mostly stable, slight upward bias
@@ -222,16 +224,18 @@ export function developPlayers(
       }
     } else if (p.age <= 26) {
       // ── Moderate Progression ────────────────────────────────────────
-      // Still improving, but more slowly
+      // Still improving, can jump 2-4 OVR with high potential
       if (effectivePotential > ratings.overall) {
-        const growthAmount = clamp(gaussian(2, 1.5), 0, 5) * progressionMult;
+        const gap = effectivePotential - ratings.overall;
+        const gapBonus = Math.min(gap / 20, 0.8);
+        const growthAmount = clamp(gaussian(2.8 + gapBonus, 1.5), 1, 6) * progressionMult;
         for (const key of primaryKeys) {
           const k = key as string;
           (ratings as Record<string, number>)[k] = clamp(
-            (ratings as Record<string, number>)[k] + growthAmount * 0.4,
+            (ratings as Record<string, number>)[k] + growthAmount * 0.5,
           );
         }
-        ratings.awareness = clamp(ratings.awareness + gaussian(1.5, 1) * progressionMult);
+        ratings.awareness = clamp(ratings.awareness + gaussian(2, 1) * progressionMult);
         ratings.overall = clamp(Math.min(effectivePotential, p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position))));
       } else {
         // At or above potential — awareness can still grow, stable otherwise
@@ -261,40 +265,45 @@ export function developPlayers(
       ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
     } else if (p.age <= aging.peakEnd + 3) {
       // ── Early Decline (position-specific) ─────────────────────────────
+      // More noticeable decline for 31+ players — steeper per-year ramp
       const yearsOverPeak = p.age - aging.peakEnd;
-      const declineAmount = clamp(gaussian(0.8 + yearsOverPeak * 0.3, 0.8), 0, 3) * regressionMult * aging.declineRate;
+      const declineAmount = clamp(gaussian(1.2 + yearsOverPeak * 0.5, 0.8), 0.3, 4) * regressionMult * aging.declineRate;
       for (const key of primaryKeys) {
         const k = key as string;
         if (key === 'awareness') {
           // Mental attributes can still grow (especially for QBs)
-          const awarenessGrowth = p.position === 'QB' ? 0.8 : 0.5;
+          const awarenessGrowth = p.position === 'QB' ? 0.6 : 0.3;
           (ratings as Record<string, number>)[k] = clamp(
             (ratings as Record<string, number>)[k] + gaussian(awarenessGrowth, 0.5),
           );
         } else {
           (ratings as Record<string, number>)[k] = clamp(
-            (ratings as Record<string, number>)[k] - declineAmount * 0.4,
+            (ratings as Record<string, number>)[k] - declineAmount * 0.5,
           );
         }
       }
-      const speedDecline = clamp(gaussian(0.5 + yearsOverPeak * 0.2, 0.5), 0, 2) * regressionMult * aging.declineRate;
+      const speedDecline = clamp(gaussian(0.8 + yearsOverPeak * 0.3, 0.5), 0.2, 3) * regressionMult * aging.declineRate;
       ratings.speed = clamp(ratings.speed - speedDecline);
+      // Stamina starts declining in early decline phase too
+      const earlyStaminaDecline = clamp(gaussian(0.4 + yearsOverPeak * 0.2, 0.4), 0, 2) * regressionMult * aging.declineRate;
+      ratings.stamina = clamp(ratings.stamina - earlyStaminaDecline);
       ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
     } else {
       // ── Late Career Decline (position-specific) ───────────────────────
+      // Steeper drop-off: aging veterans fall off faster
       const yearsOverLate = p.age - (aging.peakEnd + 3);
-      const declineAmount = clamp(gaussian(1.5 + yearsOverLate * 0.5, 1), 0, 4) * regressionMult * aging.declineRate;
+      const declineAmount = clamp(gaussian(2.0 + yearsOverLate * 0.7, 1), 0.5, 6) * regressionMult * aging.declineRate;
       for (const key of primaryKeys) {
         const k = key as string;
         (ratings as Record<string, number>)[k] = clamp(
-          (ratings as Record<string, number>)[k] - declineAmount * 0.5,
+          (ratings as Record<string, number>)[k] - declineAmount * 0.6,
         );
       }
       // Faster speed decline
-      const speedDecline = clamp(gaussian(1 + yearsOverLate * 0.4, 0.6), 0, 3) * regressionMult * aging.declineRate;
+      const speedDecline = clamp(gaussian(1.5 + yearsOverLate * 0.5, 0.6), 0.5, 4) * regressionMult * aging.declineRate;
       ratings.speed = clamp(ratings.speed - speedDecline);
-      // Stamina declines
-      const staminaDecline = clamp(gaussian(1 + yearsOverLate * 0.3, 0.5), 0, 3) * regressionMult * aging.declineRate;
+      // Stamina declines more aggressively
+      const staminaDecline = clamp(gaussian(1.5 + yearsOverLate * 0.4, 0.5), 0.5, 4) * regressionMult * aging.declineRate;
       ratings.stamina = clamp(ratings.stamina - staminaDecline);
       ratings.overall = clamp(p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position)));
     }

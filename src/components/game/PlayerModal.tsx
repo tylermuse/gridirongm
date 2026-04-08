@@ -448,17 +448,47 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                   {stats.tackles > 0 && (
                     <>
                       <StatLine label="Tackles" value={stats.tackles} />
+                      <StatLine label="TFL" value={stats.tacklesForLoss} />
                       <StatLine label="Sacks" value={stats.sacks} />
                       <StatLine label="Def INT" value={stats.defensiveINTs} />
+                      <StatLine label="Pass Defl" value={stats.passDeflections} />
+                      <StatLine label="FF" value={stats.forcedFumbles} />
+                    </>
+                  )}
+                  {player.position === 'OL' && stats.gamesPlayed > 0 && stats.tackles === 0 && (
+                    <>
+                      <StatLine label="Pass Blocks" value={stats.passBlocks} />
+                      <StatLine label="Sacks Allowed" value={stats.sacksAllowed} />
+                      <StatLine label="Sack Rate" value={stats.passBlocks > 0 ? `${(stats.sacksAllowed / stats.passBlocks * 100).toFixed(1)}%` : '0.0%'} />
                     </>
                   )}
                   {/* Career summary */}
                   <div className="border-t border-[var(--border)] pt-1.5 mt-1.5">
                     <div className="text-[10px] font-bold text-[var(--text-sec)] mb-1">CAREER</div>
-                    {career.passAttempts > 0 && <StatLine label="Pass Yds" value={career.passYards} small />}
-                    {career.rushAttempts > 0 && <StatLine label="Rush Yds" value={career.rushYards} small />}
-                    {career.targets > 0 && <StatLine label="Rec Yds" value={career.receivingYards} small />}
-                    {career.tackles > 0 && <StatLine label="Tackles" value={career.tackles} small />}
+                    <StatLine label="Games" value={career.gamesPlayed} small />
+                    {career.passAttempts > 0 && <StatLine label="Pass Yds" value={career.passYards.toLocaleString()} small />}
+                    {career.rushAttempts > 0 && <StatLine label="Rush Yds" value={career.rushYards.toLocaleString()} small />}
+                    {career.targets > 0 && <StatLine label="Rec Yds" value={career.receivingYards.toLocaleString()} small />}
+                    {career.tackles > 0 && (
+                      <>
+                        <StatLine label="Tackles" value={career.tackles} small />
+                        <StatLine label="TFL" value={career.tacklesForLoss} small />
+                        <StatLine label="Sacks" value={career.sacks} small />
+                      </>
+                    )}
+                    {player.position === 'OL' && career.passBlocks > 0 && (
+                      <>
+                        <StatLine label="Pass Blocks" value={career.passBlocks} small />
+                        <StatLine label="Sacks Allowed" value={career.sacksAllowed} small />
+                        <StatLine label="Sack Rate" value={`${(career.sacksAllowed / career.passBlocks * 100).toFixed(1)}%`} small />
+                      </>
+                    )}
+                    {career.fieldGoalAttempts > 0 && (
+                      <StatLine label="FG" value={`${career.fieldGoalsMade}/${career.fieldGoalAttempts} (${Math.round(career.fieldGoalsMade / career.fieldGoalAttempts * 100)}%)`} small />
+                    )}
+                    {career.puntAttempts > 0 && (
+                      <StatLine label="Punt Avg" value={`${(career.puntYards / career.puntAttempts).toFixed(1)}`} small />
+                    )}
                   </div>
                 </>
               ) : (
@@ -575,9 +605,11 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                     {['QB'].includes(player.position) && <><th className="text-center pb-2">YDS</th><th className="text-center pb-2">TD</th><th className="text-center pb-2">INT</th></>}
                     {['RB'].includes(player.position) && <><th className="text-center pb-2">Rush</th><th className="text-center pb-2">YDS</th><th className="text-center pb-2">TD</th></>}
                     {['WR', 'TE'].includes(player.position) && <><th className="text-center pb-2">REC</th><th className="text-center pb-2">YDS</th><th className="text-center pb-2">TD</th></>}
-                    {['DL', 'LB'].includes(player.position) && <><th className="text-center pb-2">TKL</th><th className="text-center pb-2">SCK</th><th className="text-center pb-2">INT</th></>}
-                    {['CB', 'S'].includes(player.position) && <><th className="text-center pb-2">TKL</th><th className="text-center pb-2">INT</th><th className="text-center pb-2">PD</th></>}
+                    {['DL', 'LB'].includes(player.position) && <><th className="text-center pb-2">TKL</th><th className="text-center pb-2">TFL</th><th className="text-center pb-2">SCK</th><th className="text-center pb-2">INT</th></>}
+                    {['CB', 'S'].includes(player.position) && <><th className="text-center pb-2">TKL</th><th className="text-center pb-2">TFL</th><th className="text-center pb-2">INT</th><th className="text-center pb-2">PD</th></>}
+                    {['OL'].includes(player.position) && <><th className="text-center pb-2">PB</th><th className="text-center pb-2">SA</th><th className="text-center pb-2">SK%</th></>}
                     {['K'].includes(player.position) && <><th className="text-center pb-2">FGM</th><th className="text-center pb-2">FGA</th><th className="text-center pb-2">FG%</th></>}
+                    {['P'].includes(player.position) && <><th className="text-center pb-2">Punts</th><th className="text-center pb-2">YDS</th><th className="text-center pb-2">Avg</th></>}
                   </tr>
                 </thead>
                 <tbody>
@@ -592,9 +624,11 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                         {['QB'].includes(player.position) && <><td className="py-1.5 text-center font-mono">{s.passYards.toLocaleString()}</td><td className="py-1.5 text-center">{s.passTDs}</td><td className="py-1.5 text-center">{s.interceptions}</td></>}
                         {['RB'].includes(player.position) && <><td className="py-1.5 text-center">{s.rushAttempts}</td><td className="py-1.5 text-center font-mono">{s.rushYards.toLocaleString()}</td><td className="py-1.5 text-center">{s.rushTDs}</td></>}
                         {['WR', 'TE'].includes(player.position) && <><td className="py-1.5 text-center">{s.receptions}</td><td className="py-1.5 text-center font-mono">{s.receivingYards.toLocaleString()}</td><td className="py-1.5 text-center">{s.receivingTDs}</td></>}
-                        {['DL', 'LB'].includes(player.position) && <><td className="py-1.5 text-center">{s.tackles}</td><td className="py-1.5 text-center">{s.sacks}</td><td className="py-1.5 text-center">{s.defensiveINTs}</td></>}
-                        {['CB', 'S'].includes(player.position) && <><td className="py-1.5 text-center">{s.tackles}</td><td className="py-1.5 text-center">{s.defensiveINTs}</td><td className="py-1.5 text-center">{s.passDeflections}</td></>}
+                        {['DL', 'LB'].includes(player.position) && <><td className="py-1.5 text-center">{s.tackles}</td><td className="py-1.5 text-center">{s.tacklesForLoss}</td><td className="py-1.5 text-center">{s.sacks}</td><td className="py-1.5 text-center">{s.defensiveINTs}</td></>}
+                        {['CB', 'S'].includes(player.position) && <><td className="py-1.5 text-center">{s.tackles}</td><td className="py-1.5 text-center">{s.tacklesForLoss}</td><td className="py-1.5 text-center">{s.defensiveINTs}</td><td className="py-1.5 text-center">{s.passDeflections}</td></>}
+                        {['OL'].includes(player.position) && <><td className="py-1.5 text-center">{s.passBlocks}</td><td className="py-1.5 text-center">{s.sacksAllowed}</td><td className="py-1.5 text-center">{s.passBlocks > 0 ? `${(s.sacksAllowed / s.passBlocks * 100).toFixed(1)}%` : '0.0%'}</td></>}
                         {['K'].includes(player.position) && <><td className="py-1.5 text-center">{s.fieldGoalsMade}</td><td className="py-1.5 text-center">{s.fieldGoalAttempts}</td><td className="py-1.5 text-center">{s.fieldGoalAttempts > 0 ? Math.round(s.fieldGoalsMade / s.fieldGoalAttempts * 100) : 0}%</td></>}
+                        {['P'].includes(player.position) && <><td className="py-1.5 text-center">{s.puntAttempts}</td><td className="py-1.5 text-center font-mono">{s.puntYards.toLocaleString()}</td><td className="py-1.5 text-center">{s.puntAttempts > 0 ? (s.puntYards / s.puntAttempts).toFixed(1) : '0.0'}</td></>}
                       </tr>
                     );
                   })}

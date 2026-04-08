@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { TeamLogo } from '@/components/ui/TeamLogo';
-import { getItem as idbGetItem } from '@/lib/storage';
+import { getItem as idbGetItem, removeItem as idbRemoveItem } from '@/lib/storage';
 import { formatRecord } from '@/types';
 
 const NAV_SECTIONS = [
@@ -69,6 +69,10 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
   const { saveToSlot, loadFromSlot } = useGameStore();
   const [refreshKey, setRefreshKey] = useState(0);
   const [slotMetas, setSlotMetas] = useState<SlotMeta[]>(SAVE_SLOTS.map(() => null));
+  const [slotNames, setSlotNames] = useState<(string | null)[]>(SAVE_SLOTS.map(() => null));
+  const [editingSlot, setEditingSlot] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [confirmDeleteSlot, setConfirmDeleteSlot] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadMetas() {
@@ -91,9 +95,48 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
         })
       );
       setSlotMetas(metas);
+
+      // Load custom slot names
+      const names = await Promise.all(
+        SAVE_SLOTS.map(async (slot) => {
+          try {
+            return await idbGetItem(`gridiron-gm-save-${slot}-name`);
+          } catch {
+            return null;
+          }
+        })
+      );
+      setSlotNames(names);
     }
     loadMetas();
   }, [refreshKey]);
+
+  async function handleDelete(slot: number) {
+    await idbRemoveItem(`gridiron-gm-save-${slot}`);
+    await idbRemoveItem(`gridiron-gm-save-${slot}-name`);
+    setConfirmDeleteSlot(null);
+    setRefreshKey(k => k + 1);
+  }
+
+  async function handleRename(slot: number) {
+    const name = editName.trim();
+    if (name) {
+      const { setItem } = await import('@/lib/storage');
+      await setItem(`gridiron-gm-save-${slot}-name`, name);
+    } else {
+      await idbRemoveItem(`gridiron-gm-save-${slot}-name`);
+    }
+    setEditingSlot(null);
+    setRefreshKey(k => k + 1);
+  }
+
+  function getSlotLabel(slot: number) {
+    const meta = slotMetas[slot - 1];
+    const customName = slotNames[slot - 1];
+    if (!meta) return 'Empty';
+    if (customName) return customName;
+    return `${meta.teamAbbr} S${meta.season} (${meta.wins}-${meta.losses})`;
+  }
 
   return (
     <div className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3 shadow-xl z-50 max-h-[60vh] overflow-y-auto">
@@ -102,23 +145,75 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
         const meta = slotMetas[slot - 1];
         return (
           <div key={slot} className="mb-2">
-            <div className="text-xs text-[var(--text-sec)] mb-1">Slot {slot}: {meta ? `${meta.teamAbbr} S${meta.season} (${meta.wins}-${meta.losses})` : 'Empty'}</div>
-            <div className="flex gap-1">
-              <button
-                onClick={async () => { await saveToSlot(slot); setRefreshKey(k => k + 1); }}
-                className="flex-1 text-xs py-1 rounded bg-blue-600/20 text-blue-600 hover:bg-blue-600/30 transition-colors"
-              >
-                Save
-              </button>
-              {meta && (
-                <button
-                  onClick={() => loadFromSlot(slot)}
-                  className="flex-1 text-xs py-1 rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
-                >
-                  Load
-                </button>
+            <div className="flex items-center gap-1 mb-1">
+              <span className="text-xs text-[var(--text-sec)] font-medium shrink-0">Slot {slot}:</span>
+              {editingSlot === slot ? (
+                <input
+                  autoFocus
+                  className="flex-1 text-xs bg-[var(--surface-2)] border border-[var(--border)] rounded px-1.5 py-0.5 text-[var(--text)] outline-none focus:border-blue-500"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleRename(slot); if (e.key === 'Escape') setEditingSlot(null); }}
+                  onBlur={() => handleRename(slot)}
+                  placeholder={meta ? `${meta.teamAbbr} S${meta.season}` : 'Name...'}
+                />
+              ) : (
+                <>
+                  <span className="text-xs text-[var(--text-sec)] truncate flex-1">{getSlotLabel(slot)}</span>
+                  {meta && (
+                    <button
+                      onClick={() => { setEditingSlot(slot); setEditName(slotNames[slot - 1] ?? ''); }}
+                      className="text-[10px] text-[var(--text-sec)] hover:text-blue-500 transition-colors shrink-0"
+                      title="Rename save"
+                    >
+                      ✏️
+                    </button>
+                  )}
+                </>
               )}
             </div>
+            {confirmDeleteSlot === slot ? (
+              <div className="flex gap-1">
+                <button
+                  onClick={() => handleDelete(slot)}
+                  className="flex-1 text-xs py-1 rounded bg-red-600/20 text-red-600 hover:bg-red-600/30 transition-colors font-medium"
+                >
+                  Confirm Delete
+                </button>
+                <button
+                  onClick={() => setConfirmDeleteSlot(null)}
+                  className="flex-1 text-xs py-1 rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-1">
+                <button
+                  onClick={async () => { await saveToSlot(slot); setRefreshKey(k => k + 1); }}
+                  className="flex-1 text-xs py-1 rounded bg-blue-600/20 text-blue-600 hover:bg-blue-600/30 transition-colors"
+                >
+                  Save
+                </button>
+                {meta && (
+                  <>
+                    <button
+                      onClick={() => loadFromSlot(slot)}
+                      className="flex-1 text-xs py-1 rounded bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
+                    >
+                      Load
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteSlot(slot)}
+                      className="text-xs py-1 px-2 rounded bg-red-600/10 text-red-500 hover:bg-red-600/20 hover:text-red-600 transition-colors"
+                      title="Delete this save"
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         );
       })}
