@@ -44,8 +44,8 @@ function getProspectTag(player: Player, scouted: boolean): { label: string; colo
   if (pot >= 90 && ovr < 70) return { label: 'High Ceiling', color: 'text-blue-700', bg: 'bg-blue-100' };
   if (pot >= 85 && rank > 100) return { label: 'Diamond in the Rough', color: 'text-amber-700', bg: 'bg-amber-100' };
   if (pot >= 80 && ovr < 60) return { label: 'Project', color: 'text-orange-700', bg: 'bg-orange-100' };
-  if (Math.abs(ovr - pot) <= 5) return { label: 'Safe Pick', color: 'text-gray-700', bg: 'bg-gray-100' };
   if (scouted && player.draftProfile === 'bust') return { label: 'Bust Risk', color: 'text-red-700', bg: 'bg-red-100' };
+  if (Math.abs(ovr - pot) <= 5 && player.draftProfile !== 'bust') return { label: 'Safe Pick', color: 'text-gray-700', bg: 'bg-gray-100' };
   return null;
 }
 
