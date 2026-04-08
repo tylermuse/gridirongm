@@ -6871,6 +6871,12 @@ export const useGameStore = create<GameStore>()(
           weeklyRecaps: trimmedRecaps,
         };
       },
+      onRehydrateStorage: () => (state) => {
+        // Auto-set initialized if we have a saved game
+        if (state && state.userTeamId && state.teams && state.teams.length > 0) {
+          useGameStore.setState({ initialized: true });
+        }
+      },
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
         if (version < 3) {
