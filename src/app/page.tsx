@@ -388,10 +388,10 @@ function TeamSpotlightSection({
     return detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, team.id);
   }, [ctx?.phase, week, leagueSettings?.tradeDeadlineWeek, playoffBracket, team.id]);
 
-  // If AI is enabled, trigger fetch for EVERY week (not just special moments).
-  // fetchAiSpotlight handles cache key comparison internally so dupes are harmless.
+  // If AI is enabled and this is a special narrative moment, trigger AI fetch.
+  // Regular weeks use templates only. fetchAiSpotlight handles cache key comparison internally.
   React.useEffect(() => {
-    if (aiCommentary) {
+    if (aiCommentary && currentNarrative !== 'weekly') {
       const phase = ctx?.phase ?? 'regular';
       fetchAiSpotlight({
         team, roster, allTeams, allPlayers, season, week, phase, narrative: currentNarrative,
