@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import Anthropic from '@anthropic-ai/sdk';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
@@ -115,8 +116,8 @@ Generate 4-6 topics.`;
 
 export async function POST(request: Request) {
   try {
-    if (!process.env.GEMINI_API_KEY) {
-      return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 500 });
+    if (!process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+      return NextResponse.json({ error: 'No AI API key configured (GEMINI_API_KEY or ANTHROPIC_API_KEY)' }, { status: 500 });
     }
 
     const { teamData, narrative = 'weekly' } = await request.json();
@@ -167,23 +168,36 @@ Respond with a JSON array. Each element:
 
 Return ONLY the JSON array, no markdown fences, no other text.`;
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-    const models = ['gemini-2.5-flash', 'gemini-2.0-flash-lite', 'gemini-2.0-flash'];
+    // Try Gemini first (much cheaper), fall back to Haiku
+    const userContent = `NARRATIVE CONTEXT:\n${narrativePrompt}\n\nTEAM DATA:\n${JSON.stringify(teamData)}`;
     let raw = '';
-    for (const modelName of models) {
+    if (process.env.GEMINI_API_KEY) {
       try {
-        const model = genAI.getGenerativeModel({ model: modelName });
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
         const result = await model.generateContent({
           systemInstruction: systemPrompt,
-          contents: [{ role: 'user', parts: [{ text: `NARRATIVE CONTEXT:\n${narrativePrompt}\n\nTEAM DATA:\n${JSON.stringify(teamData)}` }] }],
+          contents: [{ role: 'user', parts: [{ text: userContent }] }],
           generationConfig: { maxOutputTokens: 3000 },
         });
         raw = result.response.text();
-        break;
-      } catch (modelErr) {
-        console.warn(`Spotlight: ${modelName} failed, trying next...`, modelErr instanceof Error ? modelErr.message : modelErr);
-        if (modelName === models[models.length - 1]) throw modelErr;
+      } catch (geminiErr) {
+        console.warn('Spotlight: Gemini failed, falling back to Haiku:', geminiErr instanceof Error ? geminiErr.message : geminiErr);
       }
+    }
+    if (!raw) {
+      const anthropic = new Anthropic();
+      const message = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 3000,
+        system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: userContent }],
+      });
+      const contentBlock = message.content[0];
+      if (contentBlock.type !== 'text') {
+        return NextResponse.json({ error: 'Unexpected response type' }, { status: 500 });
+      }
+      raw = contentBlock.text;
     }
     const start = raw.indexOf('[');
     const end = raw.lastIndexOf(']');
