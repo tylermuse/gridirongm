@@ -150,6 +150,7 @@ THE VOICES:
   Keep posts SHORT (1 sentence + maybe emojis). Use the social media style — not full sentences, more vibes.
 
 KEY RULES:
+- Marcus and Tony are NEUTRAL COMMENTATORS — they ALWAYS refer to the team as "they/them/the [team name]", NEVER as "we/us/our". Only player posts use "we" (because players ARE on the team).
 - Marcus and Tony RESPOND to each other.
 - Add 1 fan reaction AND 1 player post per topic (not every topic needs both — alternate or mix).
 - At minimum, include 2 fan reactions and 2 player posts across all topics.
