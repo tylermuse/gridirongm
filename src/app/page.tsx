@@ -404,9 +404,20 @@ function TeamSpotlightSection({
 
   // When AI commentary is on: show AI content or loading state. No templates.
   // When AI commentary is off: always show templates.
-  const aiLoading = aiCommentary && currentNarrative !== 'weekly' && (!aiState.topics || aiState.topics.length === 0);
-  if (aiCommentary && !aiLoading && (!aiState.topics || aiState.topics.length === 0)) return null;
-  const topics = aiCommentary ? (aiState.topics ?? []) : templateTopics;
+  // Timeout: if AI hasn't responded in 8 seconds, fall back to templates
+  const [aiTimeout, setAiTimeout] = React.useState(false);
+  React.useEffect(() => {
+    if (aiCommentary && currentNarrative !== 'weekly') {
+      const timer = setTimeout(() => setAiTimeout(true), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [aiCommentary, currentNarrative]);
+
+  const hasAiTopics = aiState.topics && aiState.topics.length > 0;
+  const aiLoading = aiCommentary && currentNarrative !== 'weekly' && !hasAiTopics && !aiTimeout;
+
+  // Use AI topics if available, otherwise fall back to templates
+  const topics = hasAiTopics ? aiState.topics! : templateTopics;
 
   // During playoffs (or other non-regular phases), show a fallback instead of unmounting
   if (topics.length === 0 && !aiLoading) {
