@@ -513,7 +513,7 @@ export default function RosterPage() {
                     const capSav = calculateCapSavings(p.contract);
                     // Position group separator when sorted by position
                     const prevPlayer = idx > 0 ? sortedRoster[idx - 1] : null;
-                    const showPosSeparator = sortKey === 'pos' && filterPos === 'ALL' && prevPlayer && prevPlayer.position !== p.position;
+                    const showPosSeparator = sortKey === 'pos' && filterPos === 'ALL' && (!prevPlayer || prevPlayer.position !== p.position);
 
                     const posGroupName: Record<string, string> = { QB: 'Quarterbacks', RB: 'Running Backs', WR: 'Wide Receivers', TE: 'Tight Ends', OL: 'Offensive Line', DL: 'Defensive Line', LB: 'Linebackers', CB: 'Cornerbacks', S: 'Safeties', K: 'Kickers', P: 'Punters' };
 
