@@ -515,12 +515,23 @@ export default function RosterPage() {
                     const prevPlayer = idx > 0 ? sortedRoster[idx - 1] : null;
                     const showPosSeparator = sortKey === 'pos' && filterPos === 'ALL' && prevPlayer && prevPlayer.position !== p.position;
 
+                    const posGroupName: Record<string, string> = { QB: 'Quarterbacks', RB: 'Running Backs', WR: 'Wide Receivers', TE: 'Tight Ends', OL: 'Offensive Line', DL: 'Defensive Line', LB: 'Linebackers', CB: 'Cornerbacks', S: 'Safeties', K: 'Kickers', P: 'Punters' };
+
                     return (
+                      <React.Fragment key={p.id}>
+                      {showPosSeparator && (
+                        <tr>
+                          <td colSpan={14} className="pt-3 pb-1 px-3 bg-[var(--surface-2)]/50">
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-sec)]">
+                              {posGroupName[p.position] ?? p.position}
+                            </span>
+                          </td>
+                        </tr>
+                      )}
                       <tr
-                        key={p.id}
                         className={`transition-colors duration-150 hover:bg-[var(--surface-2)] ${
                           isStarter ? '' : 'opacity-80'
-                        } ${showPosSeparator ? 'border-t-2 border-[var(--accent)]/30' : 'border-t border-[var(--border)]'}`}
+                        } border-t border-[var(--border)]`}
                       >
                         {/* Name */}
                         <td className="py-2 px-2 pl-3">
@@ -706,6 +717,7 @@ export default function RosterPage() {
                           ))}
                         </td>
                       </tr>
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
