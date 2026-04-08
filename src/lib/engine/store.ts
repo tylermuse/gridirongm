@@ -5439,7 +5439,7 @@ export const useGameStore = create<GameStore>()(
       scoutPlayer: (playerId: string) => {
         const state = get();
         const ss = migrateScoutingState(state.scoutingState);
-        if (ss.scoutPoints < 1) return false;
+        // if (ss.scoutPoints < 1) return false; // TODO: re-enable when point limits are added
         if (ss.filmReviews[playerId]) return false; // already scouted
         const player = state.players.find(p => p.id === playerId);
         if (!player) return false;
@@ -5524,7 +5524,7 @@ export const useGameStore = create<GameStore>()(
       inPersonEvalPlayer: (playerId: string) => {
         const state = get();
         const ss = migrateScoutingState(state.scoutingState);
-        if (ss.scoutPoints < 3) return false;
+        // if (ss.scoutPoints < 3) return false; // TODO: re-enable when point limits are added
         if (!ss.filmReviews[playerId]) return false; // requires tier 1
         if (ss.inPersonEvals[playerId]) return false;
         const player = state.players.find(p => p.id === playerId);
@@ -5641,7 +5641,7 @@ export const useGameStore = create<GameStore>()(
       fullEvalPlayer: (playerId: string) => {
         const state = get();
         const ss = migrateScoutingState(state.scoutingState);
-        if (ss.scoutPoints < 5) return false;
+        // if (ss.scoutPoints < 5) return false; // TODO: re-enable when point limits are added
         if (!ss.inPersonEvals[playerId]) return false; // requires tier 2
         if (ss.fullEvals[playerId]) return false;
         const player = state.players.find(p => p.id === playerId);
