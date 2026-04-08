@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { SpotlightAudioPlayer } from '@/components/game/SpotlightAudioPlayer';
 
 import { useGameStore } from '@/lib/engine/store';
 import { migrateFromLocalStorage, getItem as idbGetItem } from '@/lib/storage';
@@ -460,6 +461,12 @@ function TeamSpotlightSection({
                 )}
               </p>
             </div>
+            {topics.length > 0 && (
+              <SpotlightAudioPlayer
+                topics={topics}
+                teamName={`${team.city} ${team.name}`}
+              />
+            )}
           </div>
         </CardHeader>
         <div className="px-4 pb-4">
