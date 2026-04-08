@@ -3660,11 +3660,44 @@ export const useGameStore = create<GameStore>()(
           },
         });
 
-        // Add lottery news and results if any
-        if (lotteryNews.length > 0 || lotteryResults.length > 0) {
+        // Draft class preview news
+        const draftClassByPos: Record<string, number> = {};
+        for (const p of draftClass) {
+          draftClassByPos[p.position] = (draftClassByPos[p.position] ?? 0) + 1;
+        }
+        const deepestPos = Object.entries(draftClassByPos).sort((a, b) => b[1] - a[1])[0];
+        const thinnestPos = Object.entries(draftClassByPos).sort((a, b) => a[1] - b[1])[0];
+        const eliteCount = draftClass.filter(p => p.ratings.overall >= 75).length;
+        const topQBs = draftClass.filter(p => p.position === 'QB' && p.ratings.overall >= 65).length;
+
+        const previewHeadline = eliteCount >= 8
+          ? `Loaded draft class features ${eliteCount} first-round caliber prospects`
+          : eliteCount >= 4
+          ? `Solid draft class headlined by ${deepestPos?.[0] ?? 'varied'} depth`
+          : `Thin draft class — teams may look to trade down`;
+
+        const previewBody = [
+          `Deepest position: ${deepestPos?.[0] ?? '?'} (${deepestPos?.[1] ?? 0} prospects).`,
+          `Thinnest position: ${thinnestPos?.[0] ?? '?'} (${thinnestPos?.[1] ?? 0} prospects).`,
+          topQBs >= 3 ? `QB-needy teams rejoice — ${topQBs} quarterbacks project as Day 1 starters.` :
+          topQBs >= 1 ? `Only ${topQBs} QB${topQBs > 1 ? 's' : ''} project as a first-round talent.` :
+          'No elite QBs in this class — expect a run on signal callers in the middle rounds.',
+          `${eliteCount} prospects grade out as first-round caliber talent.`,
+        ].join(' ');
+
+        const draftPreviewNews = makeNews({
+          season: state.season, week: 0, type: 'system',
+          headline: previewHeadline,
+          body: previewBody,
+          isUserTeam: false,
+        });
+
+        // Add lottery news, draft preview, and results
+        {
           const s = get();
+          const extraNews: NewsItem[] = [draftPreviewNews, ...lotteryNews];
           set({
-            ...(lotteryNews.length > 0 ? { newsItems: [...s.newsItems, ...lotteryNews] } : {}),
+            newsItems: [...s.newsItems, ...extraNews],
             ...(lotteryResults.length > 0 ? { draftLotteryResults: lotteryResults } : {}),
           });
         }
@@ -5870,7 +5903,44 @@ export const useGameStore = create<GameStore>()(
           userPlayoffResult,
         };
 
-        const agedPlayers = state.players.map(p => {
+        // ------ Record awards on player objects ------
+        const awardPlayerIds = new Set<string>();
+        const playerAwardMap = new Map<string, { award: string; season: number }[]>();
+        const addAward = (playerId: string, award: string) => {
+          awardPlayerIds.add(playerId);
+          const list = playerAwardMap.get(playerId) ?? [];
+          list.push({ award, season: state.season });
+          playerAwardMap.set(playerId, list);
+        };
+        for (const a of awards) {
+          addAward(a.playerId, a.award);
+        }
+        // Championship MVP
+        if (state.finalsMvpPlayerId) {
+          addAward(state.finalsMvpPlayerId, 'Championship MVP');
+        }
+        // All-League 1st Team
+        for (const entry of allLeagueFirst) {
+          addAward(entry.playerId, 'All-League 1st Team');
+        }
+        // All-League 2nd Team
+        for (const entry of allLeagueSecond) {
+          addAward(entry.playerId, 'All-League 2nd Team');
+        }
+        // All-Rookie Team
+        for (const entry of allRookieTeam) {
+          addAward(entry.playerId, 'All-Rookie Team');
+        }
+
+        const playersWithAwards = awardPlayerIds.size > 0
+          ? state.players.map(p => {
+              const newAwards = playerAwardMap.get(p.id);
+              if (!newAwards) return p;
+              return { ...p, awards: [...(p.awards ?? []), ...newAwards] };
+            })
+          : state.players;
+
+        const agedPlayers = playersWithAwards.map(p => {
           // Clear teamId on previously retired players so they don't re-appear in lists
           if (p.retired) return p.teamId ? { ...p, teamId: null, stats: emptyStats() } : p;
 

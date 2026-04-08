@@ -239,6 +239,8 @@ export interface Player {
   previousSeasonStats?: PlayerStats;
   /** Season-by-season stat history */
   seasonLog?: { season: number; teamId: string; stats: PlayerStats }[];
+  /** Career awards earned */
+  awards?: { award: string; season: number }[];
 }
 
 /** Format a team record as "W-L" or "W-L-T" if ties > 0 */

@@ -53,6 +53,18 @@ const RATING_LABELS: Record<keyof Omit<PlayerRatings, 'overall'>, string> = {
   kicking: 'Kicking',
 };
 
+const AWARD_ICONS: Record<string, string> = {
+  'MVP': '\u{1F3C6}',
+  'Defensive POY': '\u{1F6E1}\uFE0F',
+  'Offensive POY': '\u26A1',
+  'Offensive ROY': '\u{1F31F}',
+  'Defensive ROY': '\u{1F31F}',
+  'All-League 1st Team': '\u2B50',
+  'All-League 2nd Team': '\u2B50',
+  'All-Rookie Team': '\u{1F530}',
+  'Championship MVP': '\u{1F48D}',
+};
+
 interface PlayerModalProps {
   playerId: string | null;
   onClose: () => void;
@@ -487,6 +499,29 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
               </div>
             </div>
           </Card>
+        )}
+
+        {/* Awards */}
+        {player.awards && player.awards.length > 0 && (
+          <div className="mt-4">
+            <h3 className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-2">Awards</h3>
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(
+                player.awards.reduce((acc, a) => {
+                  acc[a.award] = [...(acc[a.award] ?? []), a.season];
+                  return acc;
+                }, {} as Record<string, number[]>)
+              ).map(([award, seasons]) => (
+                <span
+                  key={award}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-50 border border-amber-200 text-amber-700"
+                  title={seasons.map(s => `S${s}`).join(', ')}
+                >
+                  {AWARD_ICONS[award] ?? '\u{1F3C5}'} {seasons.length > 1 ? `${seasons.length}x ` : ''}{award}
+                </span>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Draft Info */}

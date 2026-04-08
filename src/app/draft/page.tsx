@@ -31,6 +31,25 @@ function ratingColor(val: number): string {
 }
 
 // ---------------------------------------------------------------------------
+// Draft Prospect Tags
+// ---------------------------------------------------------------------------
+
+function getProspectTag(player: Player, scouted: boolean): { label: string; color: string; bg: string } | null {
+  const ovr = player.ratings.overall;
+  const pot = player.potential;
+  const rank = player.projectedRank ?? 999;
+
+  if (pot >= 95 && ovr >= 80) return { label: 'Generational', color: 'text-purple-700', bg: 'bg-purple-100' };
+  if (ovr >= 75) return { label: 'Pro-Ready', color: 'text-green-700', bg: 'bg-green-100' };
+  if (pot >= 90 && ovr < 70) return { label: 'High Ceiling', color: 'text-blue-700', bg: 'bg-blue-100' };
+  if (pot >= 85 && rank > 100) return { label: 'Diamond in the Rough', color: 'text-amber-700', bg: 'bg-amber-100' };
+  if (pot >= 80 && ovr < 60) return { label: 'Project', color: 'text-orange-700', bg: 'bg-orange-100' };
+  if (Math.abs(ovr - pot) <= 5) return { label: 'Safe Pick', color: 'text-gray-700', bg: 'bg-gray-100' };
+  if (scouted && player.draftProfile === 'bust') return { label: 'Bust Risk', color: 'text-red-700', bg: 'bg-red-100' };
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // On The Clock card component
 // ---------------------------------------------------------------------------
 
@@ -1133,6 +1152,11 @@ export default function DraftPage() {
                               {myNeeds.slice(0, 5).some(n => n.position === player.position) && (
                                 <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium shrink-0">Fills Need</span>
                               )}
+                              {(() => {
+                                const tag = getProspectTag(player, isScouted);
+                                if (!tag) return null;
+                                return <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${tag.bg} ${tag.color} shrink-0`}>{tag.label}</span>;
+                              })()}
                             </div>
                             <div className="text-[10px] text-[var(--text-sec)] flex items-center gap-1 flex-wrap">
                               {player.college ?? player.scoutingLabel ?? 'Unranked'}
@@ -1187,6 +1211,25 @@ export default function DraftPage() {
                             const evaluation = generateDraftScoutEval(player, userRoster, { lo, hi }, undefined, scoutingLevel);
                             return (
                               <div className="space-y-3">
+                                {/* Prospect Tag in expanded view */}
+                                {(() => {
+                                  const tag = getProspectTag(player, true);
+                                  if (!tag) return null;
+                                  return (
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-xs font-bold px-2 py-1 rounded ${tag.bg} ${tag.color}`}>{tag.label}</span>
+                                      <span className="text-[10px] text-[var(--text-sec)]">
+                                        {tag.label === 'Generational' ? 'Rare, franchise-altering talent.' :
+                                         tag.label === 'Pro-Ready' ? 'Can contribute from Day 1.' :
+                                         tag.label === 'High Ceiling' ? 'Needs development but sky-high upside.' :
+                                         tag.label === 'Diamond in the Rough' ? 'Undervalued — could outperform draft position.' :
+                                         tag.label === 'Project' ? 'Raw prospect who needs time.' :
+                                         tag.label === 'Safe Pick' ? 'What you see is what you get.' :
+                                         tag.label === 'Bust Risk' ? 'Scouts have concerns about long-term viability.' : ''}
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
                                 {/* Full evaluation at top (or film review summary if full eval failed) */}
                                 {fullData ? (
                                   <FullEvalContent evalData={fullData} player={player} fitBadge={evaluation.fitBadge} />
