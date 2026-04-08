@@ -402,21 +402,10 @@ function TeamSpotlightSection({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiCommentary, currentNarrative, team, season, week, ctx?.phase]);
 
-  // When AI commentary is on: show AI content or loading state. No templates.
-  // When AI commentary is off: always show templates.
-  // Timeout: if AI hasn't responded in 8 seconds, fall back to templates
-  const [aiTimeout, setAiTimeout] = React.useState(false);
-  React.useEffect(() => {
-    if (aiCommentary && currentNarrative !== 'weekly') {
-      const timer = setTimeout(() => setAiTimeout(true), 8000);
-      return () => clearTimeout(timer);
-    }
-  }, [aiCommentary, currentNarrative]);
-
+  // Always show templates immediately. If AI topics arrive, they replace templates.
+  // Never show a loading spinner — templates are the instant fallback.
   const hasAiTopics = aiState.topics && aiState.topics.length > 0;
-  const aiLoading = aiCommentary && currentNarrative !== 'weekly' && !hasAiTopics && !aiTimeout;
-
-  // Use AI topics if available, otherwise fall back to templates
+  const aiLoading = false; // never block rendering
   const topics = hasAiTopics ? aiState.topics! : templateTopics;
 
   // During playoffs (or other non-regular phases), show a fallback instead of unmounting
