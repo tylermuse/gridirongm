@@ -373,7 +373,7 @@ function TeamSpotlightSection({
   const templateTopics = React.useMemo(
     () => generateTeamSpotlight(team, roster, allTeams, allPlayers, season, week, ctx),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [team, roster, allTeams, allPlayers, season, week, ctx?.phase, ctx?.faDay, ctx?.draftResults?.length, ctx?.playoffBracket],
+    [team, roster, allTeams, allPlayers, season, week, ctx?.phase, ctx?.faDay, ctx?.draftResults?.length, ctx?.playoffBracket, ctx?.playoffBracket?.filter(m => m.winnerId).length],
   );
 
   // Subscribe to shared AI spotlight cache (pre-fetched by SpotlightPopup)

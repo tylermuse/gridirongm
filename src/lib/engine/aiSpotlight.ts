@@ -79,7 +79,22 @@ export function detectNarrativeMoment(
     return 'seasonOver';
   }
 
-  // Playoffs start: entered playoffs phase (regardless of games played)
+  // Playoffs: check if user team is eliminated or still active
+  if (phase === 'playoffs' && playoffBracket) {
+    // Check if user team lost a game (eliminated)
+    const userLost = playoffBracket.some(m =>
+      m.winnerId &&
+      (m.homeTeamId === userTeamId || m.awayTeamId === userTeamId) &&
+      m.winnerId !== userTeamId
+    );
+    // Check if user won the championship
+    const champGame = playoffBracket.find(m => m.round === 4 && m.winnerId);
+    const userWonChamp = champGame?.winnerId === userTeamId;
+
+    if (userWonChamp) return 'seasonOver';
+    if (userLost) return 'seasonOver';
+    return 'playoffsStart';
+  }
   if (phase === 'playoffs') {
     return 'playoffsStart';
   }
