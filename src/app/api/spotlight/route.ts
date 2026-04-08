@@ -168,15 +168,23 @@ Respond with a JSON array. Each element:
 Return ONLY the JSON array, no markdown fences, no other text.`;
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-    const result = await model.generateContent({
-      systemInstruction: systemPrompt,
-      contents: [{ role: 'user', parts: [{ text: `NARRATIVE CONTEXT:\n${narrativePrompt}\n\nTEAM DATA:\n${JSON.stringify(teamData)}` }] }],
-      generationConfig: { maxOutputTokens: 3000 },
-    });
-
-    const raw = result.response.text();
+    const models = ['gemini-2.5-flash', 'gemini-2.0-flash-lite', 'gemini-2.0-flash'];
+    let raw = '';
+    for (const modelName of models) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent({
+          systemInstruction: systemPrompt,
+          contents: [{ role: 'user', parts: [{ text: `NARRATIVE CONTEXT:\n${narrativePrompt}\n\nTEAM DATA:\n${JSON.stringify(teamData)}` }] }],
+          generationConfig: { maxOutputTokens: 3000 },
+        });
+        raw = result.response.text();
+        break;
+      } catch (modelErr) {
+        console.warn(`Spotlight: ${modelName} failed, trying next...`, modelErr instanceof Error ? modelErr.message : modelErr);
+        if (modelName === models[models.length - 1]) throw modelErr;
+      }
+    }
     const start = raw.indexOf('[');
     const end = raw.lastIndexOf(']');
     if (start === -1 || end === -1) {

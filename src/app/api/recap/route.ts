@@ -83,15 +83,23 @@ JSON array: [{ "headline": "...", "icon": "emoji", "context": "box score", "exch
 Return ONLY the JSON array.`;
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-    const result = await model.generateContent({
-      systemInstruction: systemPrompt,
-      contents: [{ role: 'user', parts: [{ text: `Season ${season}, ${weekContext}\n\nGAME:\n${JSON.stringify(games)}` }] }],
-      generationConfig: { maxOutputTokens: 2000 },
-    });
-
-    const raw = result.response.text();
+    const models = ['gemini-2.5-flash', 'gemini-2.0-flash-lite', 'gemini-2.0-flash'];
+    let raw = '';
+    for (const modelName of models) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent({
+          systemInstruction: systemPrompt,
+          contents: [{ role: 'user', parts: [{ text: `Season ${season}, ${weekContext}\n\nGAME:\n${JSON.stringify(games)}` }] }],
+          generationConfig: { maxOutputTokens: 2000 },
+        });
+        raw = result.response.text();
+        break;
+      } catch (modelErr) {
+        console.warn(`Recap: ${modelName} failed, trying next...`, modelErr instanceof Error ? modelErr.message : modelErr);
+        if (modelName === models[models.length - 1]) throw modelErr;
+      }
+    }
     const start = raw.indexOf('[');
     const end = raw.lastIndexOf(']');
     if (start === -1 || end === -1) {
