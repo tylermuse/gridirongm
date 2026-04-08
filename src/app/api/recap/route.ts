@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import crypto from 'crypto';
-
-const anthropic = new Anthropic();
 
 // ── Persistent cache via Supabase ──────────────────────────────────────────
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -44,8 +42,8 @@ async function setCache(key: string, topics: unknown[]): Promise<void> {
 
 export async function POST(request: Request) {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return NextResponse.json({ error: 'ANTHROPIC_API_KEY not configured' }, { status: 500 });
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 500 });
     }
 
     const { games, season, week, isPlayoffs } = await request.json();
@@ -84,24 +82,16 @@ JSON array: [{ "headline": "...", "icon": "emoji", "context": "box score", "exch
 
 Return ONLY the JSON array.`;
 
-    const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2000,
-      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
-      messages: [
-        {
-          role: 'user',
-          content: `Season ${season}, ${weekContext}\n\nGAME:\n${JSON.stringify(games)}`,
-        },
-      ],
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+    const result = await model.generateContent({
+      systemInstruction: systemPrompt,
+      contents: [{ role: 'user', parts: [{ text: `Season ${season}, ${weekContext}\n\nGAME:\n${JSON.stringify(games)}` }] }],
+      generationConfig: { maxOutputTokens: 2000 },
     });
 
-    const content = message.content[0];
-    if (content.type !== 'text') {
-      return NextResponse.json({ error: 'Unexpected response type' }, { status: 500 });
-    }
-
-    const raw = content.text;
+    const raw = result.response.text();
     const start = raw.indexOf('[');
     const end = raw.lastIndexOf(']');
     if (start === -1 || end === -1) {

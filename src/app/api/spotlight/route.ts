@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import crypto from 'crypto';
-
-const anthropic = new Anthropic();
 
 // ── Persistent cache via Supabase ──────────────────────────────────────────
 // Falls back to in-memory Map if Supabase isn't configured.
@@ -117,8 +115,8 @@ Generate 4-6 topics.`;
 
 export async function POST(request: Request) {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return NextResponse.json({ error: 'ANTHROPIC_API_KEY not configured' }, { status: 500 });
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 500 });
     }
 
     const { teamData, narrative = 'weekly' } = await request.json();
@@ -169,24 +167,16 @@ Respond with a JSON array. Each element:
 
 Return ONLY the JSON array, no markdown fences, no other text.`;
 
-    const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 3000,
-      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
-      messages: [
-        {
-          role: 'user',
-          content: `NARRATIVE CONTEXT:\n${narrativePrompt}\n\nTEAM DATA:\n${JSON.stringify(teamData)}`,
-        },
-      ],
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+    const result = await model.generateContent({
+      systemInstruction: systemPrompt,
+      contents: [{ role: 'user', parts: [{ text: `NARRATIVE CONTEXT:\n${narrativePrompt}\n\nTEAM DATA:\n${JSON.stringify(teamData)}` }] }],
+      generationConfig: { maxOutputTokens: 3000 },
     });
 
-    const content = message.content[0];
-    if (content.type !== 'text') {
-      return NextResponse.json({ error: 'Unexpected response type' }, { status: 500 });
-    }
-
-    const raw = content.text;
+    const raw = result.response.text();
     const start = raw.indexOf('[');
     const end = raw.lastIndexOf(']');
     if (start === -1 || end === -1) {
