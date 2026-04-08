@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 
 interface SpotlightAudioPlayerProps {
   topics: { headline: string; icon: string; exchanges: { speakerId: string; text: string }[] }[];
@@ -13,12 +14,29 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
   const [duration, setDuration] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const blobUrlRef = useRef<string | null>(null);
+  const pathname = usePathname();
 
+  // Stop audio and clean up on unmount
   useEffect(() => {
     return () => {
-      if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
     };
   }, []);
+
+  // Stop audio on route change
+  useEffect(() => {
+    if (audioRef.current && state === 'playing') {
+      audioRef.current.pause();
+      setState('paused');
+    }
+  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handlePlay() {
     if (audioRef.current && blobUrlRef.current) {
@@ -61,6 +79,15 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
     }
   }
 
+  function handleStop() {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setState('idle');
+    setProgress(0);
+  }
+
   function handleSeek(e: React.MouseEvent<HTMLDivElement>) {
     if (!audioRef.current || !duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -75,6 +102,7 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
     return `${m}:${sec.toString().padStart(2, '0')}`;
   }
 
+  // Idle state — just a button
   if (state === 'idle' && !blobUrlRef.current) {
     return (
       <button
@@ -105,26 +133,43 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
     );
   }
 
+  // Playing / Paused — sticky player bar
   return (
-    <div className="flex items-center gap-2.5">
-      <button
-        onClick={handlePlay}
-        className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center hover:bg-purple-700 transition-colors text-sm"
-      >
-        {state === 'playing' ? '⏸' : '▶'}
-      </button>
-      <div className="flex items-center gap-2 flex-1 min-w-[120px]">
-        <span className="text-[10px] text-[var(--text-sec)] tabular-nums w-8">{formatTime(progress)}</span>
-        <div
-          className="flex-1 h-1.5 bg-[var(--surface-2)] rounded-full cursor-pointer relative"
-          onClick={handleSeek}
+    <div className="fixed top-0 left-0 right-0 z-[100] bg-purple-600 text-white shadow-lg">
+      <div className="max-w-4xl mx-auto flex items-center gap-3 px-4 py-2">
+        <button
+          onClick={handlePlay}
+          className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors text-sm shrink-0"
         >
-          <div
-            className="h-full bg-purple-500 rounded-full transition-[width] duration-100"
-            style={{ width: duration ? `${(progress / duration) * 100}%` : '0%' }}
-          />
+          {state === 'playing' ? '⏸' : '▶'}
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] font-medium opacity-80 truncate">
+            🎧 Team Spotlight — {teamName}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-[10px] tabular-nums opacity-70 w-7 shrink-0">{formatTime(progress)}</span>
+            <div
+              className="flex-1 h-1.5 bg-white/20 rounded-full cursor-pointer"
+              onClick={handleSeek}
+            >
+              <div
+                className="h-full bg-white/70 rounded-full transition-[width] duration-100"
+                style={{ width: duration ? `${(progress / duration) * 100}%` : '0%' }}
+              />
+            </div>
+            <span className="text-[10px] tabular-nums opacity-70 w-7 shrink-0">{formatTime(duration)}</span>
+          </div>
         </div>
-        <span className="text-[10px] text-[var(--text-sec)] tabular-nums w-8">{formatTime(duration)}</span>
+
+        <button
+          onClick={handleStop}
+          className="text-[10px] font-medium opacity-70 hover:opacity-100 transition-opacity shrink-0 px-2 py-1"
+          title="Stop"
+        >
+          ✕
+        </button>
       </div>
     </div>
   );
