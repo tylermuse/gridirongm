@@ -178,7 +178,7 @@ Return ONLY the JSON array, no markdown fences, no other text.`;
         const result = await model.generateContent({
           systemInstruction: systemPrompt,
           contents: [{ role: 'user', parts: [{ text: userContent }] }],
-          generationConfig: { maxOutputTokens: 3000 },
+          generationConfig: { maxOutputTokens: 3000, responseMimeType: 'application/json' },
         });
         raw = result.response.text();
       } catch (geminiErr) {

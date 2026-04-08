@@ -93,7 +93,7 @@ Return ONLY the JSON array.`;
         const result = await model.generateContent({
           systemInstruction: systemPrompt,
           contents: [{ role: 'user', parts: [{ text: userContent }] }],
-          generationConfig: { maxOutputTokens: 2000 },
+          generationConfig: { maxOutputTokens: 2000, responseMimeType: 'application/json' },
         });
         raw = result.response.text();
       } catch (geminiErr) {
