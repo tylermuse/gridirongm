@@ -13,6 +13,8 @@ import { calculateDeadCap, calculateCapSavings } from '@/types';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { getOvrColor, getOvrBgColor } from '@/lib/ovrColor';
+import { initNegotiation, processOffer, type NegotiationState } from '@/lib/engine/negotiation';
+import { estimateSalary, capInflationFactor, LEAGUE_MINIMUM_SALARY } from '@/lib/engine/store';
 import type { Position, PlayerRatings } from '@/types';
 
 function ratingColor(val: number) {
@@ -78,6 +80,9 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
   const [editing, setEditing] = useState(false);
   const [showRestructure, setShowRestructure] = useState(false);
   const godMode = leagueSettings?.godMode ?? false;
+  const [extensionNeg, setExtensionNeg] = useState<NegotiationState | null>(null);
+  const [extOfferSalary, setExtOfferSalary] = useState(0);
+  const [extOfferYears, setExtOfferYears] = useState(3);
 
   const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
   const offseasonPhases = ['resigning', 'draft', 'freeAgency', 'offseason', 'preseason'];
@@ -86,6 +91,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
   // Reset confirm state when player changes
   useEffect(() => {
     setConfirmRelease(false);
+    setExtensionNeg(null);
   }, [playerId]);
 
   const player = playerId ? players.find(p => p.id === playerId) : null;
@@ -342,6 +348,97 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                 }}
                 onCancel={() => setShowRestructure(false)}
               />
+            )}
+
+            {/* Extend Contract */}
+            {isOnUserTeam && !player.retired && player.contract.yearsLeft >= 2 && !player.holdout && player.lastRestructuredSeason !== season && !extensionNeg && (() => {
+              const extensionsUsed = (useGameStore.getState() as unknown as Record<string, unknown>).extensionsUsedThisSeason as number | undefined;
+              return (extensionsUsed ?? 0) < 3;
+            })() && (
+              <div className="mt-2">
+                <button
+                  onClick={() => {
+                    const userTeam = teams.find(t => t.id === userTeamId);
+                    const ci = userTeam ? capInflationFactor(userTeam.salaryCap) : 1.0;
+                    const market = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci);
+                    const premium = 1.10;
+                    const askingSalary = Math.round(market * premium * 10) / 10;
+                    const neg = initNegotiation(player, askingSalary, 'extension' as 'resigning');
+                    setExtensionNeg(neg);
+                    setExtOfferSalary(neg.askingSalary);
+                    setExtOfferYears(neg.askingYears);
+                  }}
+                  className="px-3 py-1.5 text-xs font-medium border border-green-200 text-green-600 rounded-lg hover:bg-green-50 transition-colors"
+                >
+                  Extend Contract
+                </button>
+              </div>
+            )}
+
+            {/* Extension Negotiation Panel */}
+            {extensionNeg && (
+              <div className="mt-4 border-t border-[var(--border)] pt-4">
+                <h3 className="text-sm font-bold mb-2">Contract Extension Negotiation</h3>
+
+                {/* Messages */}
+                <div className="space-y-2 mb-3 max-h-32 overflow-y-auto">
+                  {extensionNeg.messages.map((msg, i) => (
+                    <div key={i} className={`text-xs p-2 rounded ${msg.sender === 'player' ? 'bg-[var(--surface-2)]' : 'bg-blue-50'}`}>
+                      <span className="font-bold">{msg.sender === 'player' ? extensionNeg.playerName : 'You'}:</span> {msg.text}
+                    </div>
+                  ))}
+                </div>
+
+                {extensionNeg.outcome === 'pending' && (
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <label className="text-[10px] text-[var(--text-sec)]">Salary</label>
+                      <input type="number" step="0.1" value={extOfferSalary}
+                        onChange={e => setExtOfferSalary(Number(e.target.value))}
+                        className="w-24 px-2 py-1 text-sm border rounded" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-[var(--text-sec)]">Years</label>
+                      <input type="number" min="1" max="6" value={extOfferYears}
+                        onChange={e => setExtOfferYears(Number(e.target.value))}
+                        className="w-16 px-2 py-1 text-sm border rounded" />
+                    </div>
+                    <button
+                      onClick={() => {
+                        const updated = processOffer(extensionNeg, extOfferSalary, extOfferYears);
+                        setExtensionNeg(updated);
+                        if (updated.outcome === 'accepted') {
+                          const { extendPlayer } = useGameStore.getState() as unknown as Record<string, unknown>;
+                          if (typeof extendPlayer === 'function') {
+                            (extendPlayer as (id: string, salary: number, years: number) => void)(player.id, extOfferSalary, extOfferYears);
+                          }
+                        }
+                      }}
+                      className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 rounded-lg hover:bg-green-700"
+                    >
+                      Offer
+                    </button>
+                    <button
+                      onClick={() => setExtensionNeg(null)}
+                      className="px-3 py-1.5 text-xs text-[var(--text-sec)] hover:text-[var(--text)]"
+                    >
+                      Walk Away
+                    </button>
+                  </div>
+                )}
+
+                {extensionNeg.outcome === 'accepted' && (
+                  <div className="text-sm text-green-600 font-bold">
+                    Extension signed! {extensionNeg.playerName} committed for ${extOfferSalary}M/yr, {extOfferYears} years. (+15 mood)
+                  </div>
+                )}
+
+                {extensionNeg.outcome === 'rejected' && (
+                  <div className="text-sm text-red-600 font-bold">
+                    {extensionNeg.playerName} will play out his current deal.
+                  </div>
+                )}
+              </div>
             )}
 
             {/* God Mode: Edit Player */}

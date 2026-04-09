@@ -80,6 +80,7 @@ interface GameStore extends LeagueState {
   aiSignFreeAgents: () => void;
   releasePlayer: (playerId: string) => void;
   restructureContract: (playerId: string, conversionAmount: number, voidYearsToAdd: number) => boolean;
+  extendPlayer: (playerId: string, salary: number, years: number) => boolean;
   placeOnIR: (playerId: string) => void;
   activateFromIR: (playerId: string) => void;
   startNewSeason: () => void;
@@ -1601,6 +1602,39 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
 // Store
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Contract Extension helper
+// ---------------------------------------------------------------------------
+
+export function computeExtensionAskingSalary(player: Player, userTeam: Team, ci: number): { salary: number; years: number; premium: number } {
+  const marketSalary = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci);
+  const mood = player.mood ?? 70;
+  let premium = 1.10;
+
+  const underpaidRatio = marketSalary / Math.max(player.contract.salary, 0.75);
+  if (underpaidRatio >= 2.0) premium += 0.05;
+  else if (underpaidRatio >= 1.5) premium += 0.03;
+
+  if (mood >= 80) premium -= 0.05;
+  else if (mood >= 60) premium -= 0.02;
+  else if (mood < 40) premium += 0.05;
+  else if (mood < 25) premium += 0.08;
+
+  const totalGames = userTeam.record.wins + userTeam.record.losses;
+  const winPct = totalGames > 0 ? userTeam.record.wins / totalGames : 0.5;
+  if (winPct >= 0.65) premium -= 0.03;
+  else if (winPct < 0.35) premium += 0.04;
+
+  if (player.ratings.overall >= 85) premium += 0.03;
+  if (player.age <= 26 && player.potential >= 80) premium += 0.03;
+
+  premium = Math.max(1.05, Math.min(1.20, premium));
+  const salary = Math.round(marketSalary * premium * 10) / 10;
+  const years = player.age >= 32 ? 2 : player.age >= 29 ? 3 : player.age >= 26 ? 4 : 5;
+
+  return { salary, years, premium };
+}
+
 const EMPTY_LEAGUE_STATE: LeagueState = {
   season: 2026,
   week: 1,
@@ -1636,6 +1670,7 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   rivalries: [],
   firedState: null,
   expansionDraft: null,
+  extensionsUsedThisSeason: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -2269,6 +2304,7 @@ export const useGameStore = create<GameStore>()(
             rivalries: [],
             firedState: null,
             expansionDraft: null,
+            extensionsUsedThisSeason: 0,
           });
           return;
         } catch (error) {
@@ -2415,6 +2451,7 @@ export const useGameStore = create<GameStore>()(
           rivalries: [],
           firedState: null,
           expansionDraft: null,
+          extensionsUsedThisSeason: 0,
         });
       },
 
@@ -4901,6 +4938,85 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
+      extendPlayer: (playerId: string, salary: number, years: number) => {
+        const state = get();
+        const player = state.players.find(p => p.id === playerId);
+        if (!player || player.teamId !== state.userTeamId) return false;
+
+        // Eligibility checks
+        if (player.contract.yearsLeft < 2) return false;
+        if (player.holdout) return false;
+        if (player.onIR) return false;
+        if ((state.extensionsUsedThisSeason ?? 0) >= 3) return false;
+        if (player.lastRestructuredSeason === state.season) return false;
+
+        const userTeam = state.teams.find(t => t.id === state.userTeamId);
+        if (!userTeam) return false;
+
+        const oldContract = player.contract;
+        const oldCapHit = getCapHit(oldContract);
+
+        // Calculate unamortized bonus from any prior restructures (becomes dead cap)
+        const unamortizedBonus = getUnamortizedBonus(oldContract);
+        const deadCapAmount = Math.round(unamortizedBonus * 10) / 10;
+
+        // Build new contract
+        const newGuaranteed = generateGuaranteed(salary, years);
+        const newContract: import('@/types').Contract = {
+          salary,
+          yearsLeft: years,
+          guaranteed: newGuaranteed,
+          totalYears: years,
+        };
+
+        // Dead cap entries from unamortized bonus
+        const newDeadCap: DeadCapEntry[] = deadCapAmount > 0
+          ? [{
+              playerName: `${player.firstName} ${player.lastName}`,
+              amount: deadCapAmount,
+              yearsLeft: 1,
+              source: 'extension' as const,
+              season: state.season,
+            }]
+          : [];
+
+        // Update payroll: remove old cap hit, add new salary, add dead cap charge
+        const payrollDelta = salary - oldCapHit + deadCapAmount;
+
+        const extensionsUsed = state.extensionsUsedThisSeason ?? 0;
+
+        set({
+          players: state.players.map(p =>
+            p.id === playerId
+              ? {
+                  ...p,
+                  contract: newContract,
+                  lastRestructuredSeason: state.season,
+                  mood: Math.min(100, (p.mood ?? 70) + 15),
+                }
+              : p,
+          ),
+          teams: state.teams.map(t =>
+            t.id === state.userTeamId
+              ? {
+                  ...t,
+                  totalPayroll: Math.max(0, t.totalPayroll + payrollDelta),
+                  deadCap: [...(t.deadCap ?? []), ...newDeadCap],
+                }
+              : t,
+          ),
+          extensionsUsedThisSeason: extensionsUsed + 1,
+          newsItems: [...state.newsItems, makeNews({
+            season: state.season, week: state.week, type: 'signing',
+            teamId: state.userTeamId, playerIds: [playerId],
+            headline: `${player.firstName} ${player.lastName} signed a ${years}-year, $${salary}M/yr extension with the ${userTeam.city} ${userTeam.name}.${deadCapAmount > 0 ? ` ($${deadCapAmount}M dead cap from prior restructure)` : ''}`,
+            isUserTeam: true,
+          })],
+        });
+
+        return true;
+      },
+
       // PRD-04: Execute a trade
       executeTrade: (
         offeredPlayerIds,
@@ -5549,9 +5665,10 @@ export const useGameStore = create<GameStore>()(
         get().inPersonEvalPlayer(playerId);
         get().fullEvalPlayer(playerId);
 
-        // Set final points (1 point spent from original)
+        // Unlimited scouting — restore original points (no deduction)
+        // TODO: re-enable `savedPoints - 1` when point limits are added
         const finalSs = get().scoutingState!;
-        set({ scoutingState: { ...finalSs, scoutPoints: savedPoints - 1 } });
+        set({ scoutingState: { ...finalSs, scoutPoints: savedPoints } });
 
         // Also mark as deep-scouted in legacy system
         const scoutData = state.draftScoutingData[playerId];
@@ -6917,6 +7034,7 @@ export const useGameStore = create<GameStore>()(
           weeklyRecaps: [],
           tradeRumors: [],
           rivalries: decayRivalries(state.rivalries ?? []),
+          extensionsUsedThisSeason: 0,
           // BS Mode: compute QB tiers at season start
           ...(state.leagueSettings?.bsMode ? {
             qbTiers: computeLeagueQBTiers(grownTeams, allPlayersForNewSeason),
