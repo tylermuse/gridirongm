@@ -246,52 +246,46 @@ function SocialFeed({ posts, season, onPlayerClick }: { posts: SocialPost[]; sea
 }
 
 function SocialPostCard({ post, onPlayerClick }: { post: SocialPost; onPlayerClick?: (id: string) => void }) {
-  const borderColor = post.author.type === 'media' && post.author.personId === 'tony_blaze' ? 'border-l-red-400'
-    : post.author.type === 'media' && post.author.personId === 'marcus_cole' ? 'border-l-blue-400'
-    : post.author.type === 'team' ? 'border-l-green-400'
-    : '';
+  const avatarEmoji = post.author.avatar === 'media_tony' ? '🔥'
+    : post.author.avatar === 'media_marcus' ? '🤓'
+    : post.author.avatar === 'team' ? '🏈'
+    : post.author.avatar === 'fan' ? '📣'
+    : '🏈';
+
+  const fmtNum = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
 
   return (
-    <div className={`bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 ${borderColor ? `border-l-[3px] ${borderColor}` : ''}`}>
+    <div className="bg-[#15202b] rounded-2xl px-4 pt-3 pb-3 text-white shadow-lg max-w-[480px]">
       {/* Header */}
       <div className="flex items-center gap-2.5 mb-2">
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-lg shrink-0 ${
-          post.author.type === 'media' ? 'bg-gray-800 text-white' :
-          post.author.type === 'team' ? 'bg-blue-600 text-white' :
-          post.author.type === 'fan' ? 'bg-amber-100' :
-          'bg-[var(--surface-2)]'
-        }`}>
-          {post.author.avatar === 'media_tony' ? '🔥' :
-           post.author.avatar === 'media_marcus' ? '🤓' :
-           post.author.avatar === 'team' ? '🏈' :
-           post.author.avatar === 'fan' ? '📣' :
-           post.author.type === 'player' ? '🏈' : post.author.avatar}
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-base shrink-0">
+          {avatarEmoji}
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0">
           <div className="flex items-center gap-1">
             {post.author.type === 'player' && post.author.playerId ? (
-              <button onClick={() => onPlayerClick?.(post.author.playerId!)} className="text-sm font-bold hover:text-blue-600 truncate">
+              <button onClick={() => onPlayerClick?.(post.author.playerId!)} className="text-sm font-bold text-white hover:underline truncate">
                 {post.author.name}
               </button>
             ) : (
-              <span className="text-sm font-bold truncate">{post.author.name}</span>
+              <span className="text-sm font-bold text-white truncate">{post.author.name}</span>
             )}
             {post.author.verified && (
-              <svg className="w-4 h-4 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.998-3.818-3.998-.47 0-.92.084-1.336.25C14.818 2.415 13.51 1.5 12 1.5s-2.816.917-3.437 2.25c-.415-.165-.866-.25-1.336-.25-2.11 0-3.818 1.79-3.818 4 0 .494.083.964.237 1.4-1.272.65-2.147 2.018-2.147 3.6 0 1.495.782 2.798 1.942 3.486-.02.17-.032.34-.032.514 0 2.21 1.708 4 3.818 4 .47 0 .92-.086 1.335-.25.62 1.334 1.926 2.25 3.437 2.25 1.512 0 2.818-.916 3.437-2.25.415.163.865.248 1.336.248 2.11 0 3.818-1.79 3.818-4 0-.174-.012-.344-.033-.513 1.158-.687 1.943-1.99 1.943-3.484zm-6.616-3.334l-4.334 6.5c-.145.217-.382.334-.625.334-.143 0-.288-.04-.416-.126l-.115-.094-2.415-2.415c-.293-.293-.293-.768 0-1.06s.768-.294 1.06 0l1.77 1.767 3.825-5.74c.23-.345.696-.436 1.04-.207.346.23.44.696.21 1.04z"/></svg>
+              <svg className="w-4 h-4 text-blue-400 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.998-3.818-3.998-.47 0-.92.084-1.336.25C14.818 2.415 13.51 1.5 12 1.5s-2.816.917-3.437 2.25c-.415-.165-.866-.25-1.336-.25-2.11 0-3.818 1.79-3.818 4 0 .494.083.964.237 1.4-1.272.65-2.147 2.018-2.147 3.6 0 1.495.782 2.798 1.942 3.486-.02.17-.032.34-.032.514 0 2.21 1.708 4 3.818 4 .47 0 .92-.086 1.335-.25.62 1.334 1.926 2.25 3.437 2.25 1.512 0 2.818-.916 3.437-2.25.415.163.865.248 1.336.248 2.11 0 3.818-1.79 3.818-4 0-.174-.012-.344-.033-.513 1.158-.687 1.943-1.99 1.943-3.484zm-6.616-3.334l-4.334 6.5c-.145.217-.382.334-.625.334-.143 0-.288-.04-.416-.126l-.115-.094-2.415-2.415c-.293-.293-.293-.768 0-1.06s.768-.294 1.06 0l1.77 1.767 3.825-5.74c.23-.345.696-.436 1.04-.207.346.23.44.696.21 1.04z"/></svg>
             )}
           </div>
-          <div className="text-[10px] text-[var(--text-sec)]">{post.author.handle} · Week {post.timestamp.week}</div>
+          <div className="text-xs text-gray-500">{post.author.handle} · Week {post.timestamp.week}</div>
         </div>
       </div>
 
       {/* Post text */}
-      <p className="text-sm leading-relaxed text-[var(--text)] mb-2">{post.text}</p>
+      <div className="text-[15px] leading-snug text-white/95 mb-2">{post.text}</div>
 
       {/* Engagement */}
-      <div className="flex items-center gap-4 text-[10px] text-[var(--text-sec)]">
-        <span>♡ {post.likes >= 1000 ? `${(post.likes / 1000).toFixed(1)}K` : post.likes}</span>
-        <span>🔁 {post.reposts >= 1000 ? `${(post.reposts / 1000).toFixed(1)}K` : post.reposts}</span>
-        <span>💬 {post.replies >= 1000 ? `${(post.replies / 1000).toFixed(1)}K` : post.replies}</span>
+      <div className="flex items-center gap-5 text-xs text-gray-500 pt-1.5 border-t border-gray-700/50">
+        <span>💬 {fmtNum(post.replies)}</span>
+        <span>🔁 {fmtNum(post.reposts)}</span>
+        <span>❤️ {fmtNum(post.likes)}</span>
       </div>
 
       {/* Action shortcut */}
@@ -300,7 +294,7 @@ function SocialPostCard({ post, onPlayerClick }: { post: SocialPost; onPlayerCli
           onClick={() => {
             if (post.action!.type === 'viewPlayer' && post.action!.playerId) onPlayerClick?.(post.action!.playerId);
           }}
-          className="text-xs text-blue-600 hover:underline mt-1.5 block"
+          className="text-xs text-blue-400 hover:underline mt-1.5 block"
         >
           {post.action.label} →
         </button>
