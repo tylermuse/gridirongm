@@ -278,7 +278,7 @@ export interface DeadCapEntry {
   amount: number;
   yearsLeft: number;
   /** Source of the dead cap charge */
-  source?: 'release' | 'trade' | 'void';
+  source?: 'release' | 'trade' | 'void' | 'extension';
   /** Season the dead cap was created */
   season?: number;
 }
@@ -777,6 +777,8 @@ export interface LeagueState {
   firedState: { fired: boolean; season: number; reason: string } | null;
   /** Expansion draft state (null when not active) */
   expansionDraft: ExpansionDraftState | null;
+  /** Number of contract extensions used this season (max 3) */
+  extensionsUsedThisSeason?: number;
   /** Free agency intel report pursuit state */
   pursuitState?: {
     pursuitPoints: number;

@@ -50,7 +50,7 @@ function fmtYears(y: number): string {
 export function initNegotiation(
   player: { id: string; firstName: string; lastName: string; position: string; age: number; ratings: { overall: number }; mood?: number; faPriority?: 'money' | 'winning' | 'role' | 'loyalty' },
   estimatedSalary: number,
-  context: 'resigning' | 'freeAgency' = 'freeAgency',
+  context: 'resigning' | 'freeAgency' | 'extension' = 'freeAgency',
   opts?: {
     hasIntelReport?: boolean;
     userTeamContext?: { winPct: number; wouldStart: boolean; wasOnTeam: boolean };
@@ -88,8 +88,14 @@ export function initNegotiation(
   }
 
   // Low mood = less patience, fewer rounds of negotiation
-  const basePat = mood < 30 ? 40 : mood < 50 ? 60 : mood < 70 ? 80 : 100;
-  let baseRounds = mood < 30 ? 2 : mood < 50 ? 2 + (Math.random() > 0.5 ? 1 : 0) : 3 + (Math.random() > 0.5 ? 1 : 0);
+  // Extensions get more patience — player is already under contract
+  const isExtension = context === 'extension';
+  const basePat = isExtension
+    ? (mood >= 60 ? 100 : 80)
+    : (mood < 30 ? 40 : mood < 50 ? 60 : mood < 70 ? 80 : 100);
+  let baseRounds = isExtension
+    ? (mood >= 60 ? 4 : 3)
+    : (mood < 30 ? 2 : mood < 50 ? 2 + (Math.random() > 0.5 ? 1 : 0) : 3 + (Math.random() > 0.5 ? 1 : 0));
 
   // Intel report grants an extra round of patience
   if (hasIntel) {
@@ -99,7 +105,25 @@ export function initNegotiation(
   const isResigning = context === 'resigning';
 
   let openingText: string;
-  if (hasIntel && mood >= 50) {
+  if (isExtension) {
+    // Extension-specific opening messages
+    if (mood >= 70) {
+      openingText = pick([
+        `I love it here. Let's get a deal done — I'm looking for ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}.`,
+        `I love it here and I'd love to stay long-term. ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)} sounds right.`,
+      ]);
+    } else if (mood >= 40) {
+      openingText = pick([
+        `It's about time we talked about this. I'm looking for ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}.`,
+        `It's about time. I think ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)} reflects my value.`,
+      ]);
+    } else {
+      openingText = pick([
+        `I've been frustrated, but let's see what you've got. ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}, minimum.`,
+        `I've been frustrated with how things have gone. If you want me to stay, it's ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}.`,
+      ]);
+    }
+  } else if (hasIntel && mood >= 50) {
     // Warmer opening when intel report is active
     openingText = isResigning
       ? pick([
