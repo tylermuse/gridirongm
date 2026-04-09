@@ -16,16 +16,32 @@ import type { GameResult } from '@/types';
  * Clicking a played game opens a box score modal.
  */
 export function GameTicker() {
-  const { schedule, teams, userTeamId, week, phase } = useGameStore();
+  const { schedule, teams, userTeamId, week, phase, playoffBracket } = useGameStore();
   const { user, tier, isFoundingMember, signOut } = useSubscription();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   // All games involving the user's team, sorted by week
-  const userGames = schedule
-    .filter(g => g.homeTeamId === userTeamId || g.awayTeamId === userTeamId)
-    .sort((a, b) => a.week - b.week);
+  // Include playoff matchups as pseudo-GameResult entries
+  const playoffGames: typeof schedule = (playoffBracket ?? [])
+    .filter(m => m.homeTeamId && m.awayTeamId && (m.homeTeamId === userTeamId || m.awayTeamId === userTeamId))
+    .map(m => ({
+      id: m.id,
+      week: 18 + m.round, // place after regular season (week 19-22)
+      season: 0,
+      homeTeamId: m.homeTeamId!,
+      awayTeamId: m.awayTeamId!,
+      homeScore: m.homeScore ?? 0,
+      awayScore: m.awayScore ?? 0,
+      played: !!m.winnerId,
+      playerStats: {},
+    }));
+
+  const userGames = [
+    ...schedule.filter(g => g.homeTeamId === userTeamId || g.awayTeamId === userTeamId),
+    ...playoffGames,
+  ].sort((a, b) => a.week - b.week);
 
   // Auto-scroll to current/most recent game
   useEffect(() => {
