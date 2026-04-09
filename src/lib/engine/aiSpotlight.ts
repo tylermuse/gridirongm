@@ -20,7 +20,7 @@ export type NarrativeMoment = 'preseason' | 'tradeDeadline' | 'playoffsStart' | 
 export interface AiSpotlightTopic {
   headline: string;
   icon: string;
-  exchanges: { speakerId: 'stats' | 'hottake'; text: string }[];
+  exchanges: { speakerId: 'stats' | 'hottake' | 'fans' | 'player'; text: string; playerName?: string }[];
   teamIds: string[];
   playerIds: string[];
 }
@@ -398,10 +398,10 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
     .then(res => res.ok ? res.json() : Promise.reject(new Error('API error')))
     .then(data => {
       if (cache.key !== key) return;
-      cache.topics = (data.topics as { headline: string; icon: string; exchanges: { speakerId: 'stats' | 'hottake'; text: string }[] }[]).map(t => ({
+      cache.topics = (data.topics as { headline: string; icon: string; exchanges: { speakerId: 'stats' | 'hottake' | 'fans' | 'player'; text: string; playerName?: string }[] }[]).map(t => ({
         headline: t.headline,
         icon: t.icon,
-        exchanges: t.exchanges,
+        exchanges: t.exchanges.map(e => ({ ...e, playerName: e.playerName })),
         teamIds: [team.id],
         playerIds: [] as string[],
       }));
