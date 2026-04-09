@@ -144,7 +144,7 @@ function FAEvaluationPanel({ player, roster, capSpace, marketSalary }: {
 }
 
 export default function FreeAgencyPage() {
-  const { phase, players, freeAgents, signFreeAgent, teams, userTeamId, faDay, faRefusals, advanceFADay, advanceFAWeek } = useGameStore();
+  const { phase, players, freeAgents, signFreeAgent, teams, userTeamId, faDay, faRefusals, advanceFADay, advanceFAWeek, pursuitState, intelReportFA } = useGameStore();
   const [affordableOnly, setAffordableOnly] = useState(false);
   const [filterPos, setFilterPos] = useState<Position | 'ALL'>('ALL');
   const [negotiation, setNegotiation] = useState<NegotiationState | null>(null);
@@ -256,7 +256,17 @@ export default function FreeAgencyPage() {
     if (faRefusals.includes(player.id)) return;
     const baseSal = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci);
     const salary = Math.round(baseSal * decay * 10) / 10;
-    const neg = initNegotiation(player, salary);
+    const hasIntel = !!pursuitState?.intelReports[player.id];
+    const userTeamData = teams.find(t => t.id === userTeamId);
+    const totalGames = userTeamData ? userTeamData.record.wins + userTeamData.record.losses + (userTeamData.record.ties ?? 0) : 0;
+    const winPct = totalGames > 0 ? (userTeamData!.record.wins + (userTeamData!.record.ties ?? 0) * 0.5) / totalGames : 0.5;
+    const rosterAtPos = players.filter(p => p.teamId === userTeamId && p.position === player.position && !p.retired);
+    const wouldStart = rosterAtPos.length === 0 || rosterAtPos.every(p => p.ratings.overall < player.ratings.overall);
+    const wasOnTeam = (player as any).draftTeamId === userTeamId || (player as any).acquiredVia === 'draft';
+    const neg = initNegotiation(player, salary, 'freeAgency', {
+      hasIntelReport: hasIntel,
+      userTeamContext: { winPct, wouldStart, wasOnTeam },
+    });
     setNegotiation(neg);
     // Default offer to asking price (or league minimum if over cap)
     setOfferSalary(overCap ? LEAGUE_MINIMUM_SALARY : neg.askingSalary);
@@ -342,6 +352,12 @@ export default function FreeAgencyPage() {
                 >
                   Skip Week ⏩
                 </Button>
+              </div>
+            )}
+            {phase === 'freeAgency' && pursuitState && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-[var(--text-sec)]">Intel:</span>
+                <span className="text-sm font-bold">{pursuitState.pursuitPoints} pts</span>
               </div>
             )}
             <div className="text-right">
@@ -731,6 +747,11 @@ export default function FreeAgencyPage() {
                               <span className="sm:hidden">{p.firstName[0]}. {p.lastName}</span>
                               <span className="hidden sm:inline">{p.firstName} {p.lastName}</span>
                             </button>
+                            {pursuitState?.intelReports[p.id] && (
+                              <span className="text-[9px] ml-0.5">
+                                {({'money':'💰','winning':'🏆','role':'🎯','loyalty':'🏠'} as Record<string, string>)[pursuitState.intelReports[p.id].priority]}
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="py-2.5 text-center"><Badge>{p.position}</Badge></td>
@@ -780,6 +801,127 @@ export default function FreeAgencyPage() {
                         <tr className="border-t border-[var(--border)]">
                           <td colSpan={8} className="px-4 py-3 bg-[var(--surface-2)]/50">
                             <FAEvaluationPanel player={p} roster={roster} capSpace={capSpace} marketSalary={salary} />
+
+                            {/* Intel Report — no report yet */}
+                            {phase === 'freeAgency' && pursuitState && !pursuitState.intelReports[p.id] && (
+                              <div className="mt-3 border-t border-[var(--border)] pt-3">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">Intel Report</span>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); intelReportFA(p.id); }}
+                                    disabled={pursuitState.pursuitPoints < 1}
+                                    className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                                  >
+                                    Run Intel Report (1 pt)
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Intel Report — full content */}
+                            {phase === 'freeAgency' && pursuitState?.intelReports[p.id] && (() => {
+                              const report = pursuitState.intelReports[p.id];
+                              const priorityIcons: Record<string, string> = { money: '💰', winning: '🏆', role: '🎯', loyalty: '🏠' };
+                              return (
+                                <div className="mt-3 border-t border-[var(--border)] pt-3 space-y-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">Intel Report</span>
+                                    <span className="text-green-600 text-xs">✅</span>
+                                  </div>
+
+                                  {/* Priority */}
+                                  <div>
+                                    <span className="text-sm font-bold">{priorityIcons[report.priority]} {report.priorityLabel}</span>
+                                    <p className="text-xs text-[var(--text-sec)] mt-0.5 italic">{report.priorityDetail}</p>
+                                  </div>
+
+                                  {/* Closing Offer — the golden payoff */}
+                                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                    <div className="text-[10px] font-bold text-amber-700 uppercase mb-1">Closing Offer</div>
+                                    <div className="text-lg font-black">${report.closingOffer.salary}M/yr · {report.closingOffer.years}yr</div>
+                                    <p className="text-xs text-amber-700 italic mt-1">{report.closingOfferDetail}</p>
+                                    <div className="flex gap-2 mt-2">
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); signFreeAgent(p.id, report.closingOffer.salary, report.closingOffer.years); }}
+                                        className="px-4 py-2 text-sm font-bold text-white bg-amber-500 rounded-lg hover:bg-amber-600 active:scale-[0.98]"
+                                      >
+                                        Sign at ${report.closingOffer.salary}M
+                                      </button>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); startNegotiation(p); }}
+                                        className="px-4 py-2 text-sm font-medium text-[var(--text-sec)] border border-[var(--border)] rounded-lg hover:bg-[var(--surface-2)]"
+                                      >
+                                        Negotiate
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Two-column grid: asking price + willingness, market + competing teams */}
+                                  <div className="grid grid-cols-2 gap-3 text-xs">
+                                    <div>
+                                      <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase">True Asking Price</div>
+                                      <div className="font-bold">${report.trueAskingSalary}M/yr, {report.trueAskingYears}yr</div>
+                                    </div>
+                                    <div>
+                                      <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Willingness</div>
+                                      <div className={`font-bold ${report.willingness === 'eager' ? 'text-green-600' : report.willingness === 'open' ? 'text-amber-600' : 'text-red-600'}`}>
+                                        {report.willingness === 'eager' ? '🟢' : report.willingness === 'open' ? '🟡' : report.willingness === 'reluctant' ? '🟠' : '🔴'} {report.willingness.replace('_', ' ')}
+                                      </div>
+                                      <div className="text-[var(--text-sec)] italic mt-0.5">{report.willingnessReason}</div>
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-3 text-xs">
+                                    <div>
+                                      <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Market Heat</div>
+                                      <div className="font-bold">{report.marketHeat === 'bidding_war' ? '⚡ Bidding War' : report.marketHeat === 'hot' ? '🔥 Hot' : report.marketHeat === 'moderate' ? '📊 Moderate' : '❄️ Cold'}</div>
+                                      <div className="text-[var(--text-sec)] italic mt-0.5">{report.marketHeatDetail}</div>
+                                    </div>
+                                    <div>
+                                      <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Also Interested</div>
+                                      <div className="font-bold">{report.competingTeams.length > 0 ? report.competingTeams.join(', ') : 'None identified'}</div>
+                                    </div>
+                                  </div>
+
+                                  {/* Agent profile */}
+                                  <div className="bg-[var(--surface-2)] rounded-lg p-2.5">
+                                    <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Agent: {report.agentStyle.replace('_', ' ')}</div>
+                                    <p className="text-xs text-[var(--text)] mt-0.5">{report.agentStyleDetail}</p>
+                                    <p className="text-xs text-blue-600 mt-1">💡 {report.agentTip}</p>
+                                  </div>
+
+                                  {/* Fit + Deal Path */}
+                                  <div className="grid grid-cols-2 gap-3 text-xs">
+                                    <div>
+                                      <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Fit Assessment</div>
+                                      <p className="text-[var(--text)]">{report.fitAssessment}</p>
+                                    </div>
+                                    <div>
+                                      <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Path to a Deal: {report.dealPath}</div>
+                                      <p className="text-[var(--text)]">{report.dealPathDetail}</p>
+                                    </div>
+                                  </div>
+
+                                  {/* Concerns */}
+                                  {report.concerns.length > 0 && (
+                                    <div>
+                                      <div className="text-[10px] font-bold text-amber-600 uppercase">⚠ Concerns</div>
+                                      {report.concerns.map((c: string, i: number) => <p key={i} className="text-xs text-amber-700 mt-0.5">• {c}</p>)}
+                                    </div>
+                                  )}
+
+                                  {/* Negotiation edge */}
+                                  <div className="text-[10px] text-[var(--text-sec)] space-y-0.5">
+                                    <div>✅ Asking price reduced 12%</div>
+                                    <div>✅ +1 negotiation round</div>
+                                    {report.overridesRefusal && <div>✅ Refusal overridden</div>}
+                                  </div>
+
+                                  {/* Front office blurb */}
+                                  <p className="text-xs italic text-[var(--text)]">&ldquo;{report.intelBlurb}&rdquo; — Front Office</p>
+                                </div>
+                              );
+                            })()}
                           </td>
                         </tr>
                       )}

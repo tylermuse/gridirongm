@@ -48,25 +48,70 @@ function fmtYears(y: number): string {
 /* ── initialisation ──────────────────────────────── */
 
 export function initNegotiation(
-  player: { id: string; firstName: string; lastName: string; position: string; age: number; ratings: { overall: number }; mood?: number },
+  player: { id: string; firstName: string; lastName: string; position: string; age: number; ratings: { overall: number }; mood?: number; faPriority?: 'money' | 'winning' | 'role' | 'loyalty' },
   estimatedSalary: number,
   context: 'resigning' | 'freeAgency' = 'freeAgency',
+  opts?: {
+    hasIntelReport?: boolean;
+    userTeamContext?: { winPct: number; wouldStart: boolean; wasOnTeam: boolean };
+  },
 ): NegotiationState {
   const askingYears = player.age >= 32 ? 1 : player.age >= 28 ? 2 : 3;
   const mood = player.mood ?? 70;
 
   // Angry players demand more, happy players are more flexible
   const moodSalaryMult = mood < 30 ? 1.15 : mood < 50 ? 1.08 : mood < 60 ? 1.03 : mood >= 85 ? 0.95 : 1.0;
-  const adjustedSalary = r1(estimatedSalary * moodSalaryMult);
+  let adjustedSalary = r1(estimatedSalary * moodSalaryMult);
+
+  // ── Priority-based modifiers (always apply, even without intel report) ──
+  const priority = player.faPriority;
+  const ctx = opts?.userTeamContext;
+  if (priority && ctx) {
+    // Winning team discount: contenders get cheaper deals from ring chasers
+    if (priority === 'winning' && ctx.winPct >= 0.55) {
+      adjustedSalary = r1(adjustedSalary * 0.94);
+    }
+    // Role/starter discount: if player would start, they'll take slightly less
+    if (priority === 'role' && ctx.wouldStart) {
+      adjustedSalary = r1(adjustedSalary * 0.95);
+    }
+    // Loyalty discount: returning players give a hometown discount
+    if (priority === 'loyalty' && ctx.wasOnTeam) {
+      adjustedSalary = r1(adjustedSalary * 0.92);
+    }
+  }
+
+  // ── Intel Report bonuses ──
+  const hasIntel = opts?.hasIntelReport ?? false;
+  if (hasIntel) {
+    adjustedSalary = r1(adjustedSalary * 0.88);
+  }
 
   // Low mood = less patience, fewer rounds of negotiation
   const basePat = mood < 30 ? 40 : mood < 50 ? 60 : mood < 70 ? 80 : 100;
-  const baseRounds = mood < 30 ? 2 : mood < 50 ? 2 + (Math.random() > 0.5 ? 1 : 0) : 3 + (Math.random() > 0.5 ? 1 : 0);
+  let baseRounds = mood < 30 ? 2 : mood < 50 ? 2 + (Math.random() > 0.5 ? 1 : 0) : 3 + (Math.random() > 0.5 ? 1 : 0);
+
+  // Intel report grants an extra round of patience
+  if (hasIntel) {
+    baseRounds += 1;
+  }
 
   const isResigning = context === 'resigning';
 
   let openingText: string;
-  if (mood < 30) {
+  if (hasIntel && mood >= 50) {
+    // Warmer opening when intel report is active
+    openingText = isResigning
+      ? pick([
+        `I've heard good things about how you treat your players. I'm looking for ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}. I think we can make this work.`,
+        `My agent says you've done your homework. That's a good sign. ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)} and I'm in.`,
+      ])
+      : pick([
+        `I like what I'm hearing about this team. ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)} and I think we're in business.`,
+        `Word is you've been doing your research on me — I respect that. Let's talk ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}.`,
+        `I'm open to making this work. ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)} would be a great starting point.`,
+      ]);
+  } else if (mood < 30) {
     openingText = isResigning
       ? pick([
         `I'll hear you out, but honestly I'm not sure I want to stay here. ${fmtSalary(adjustedSalary)} for ${fmtYears(askingYears)}, minimum.`,
@@ -104,7 +149,7 @@ export function initNegotiation(
       {
         sender: 'player',
         text: openingText,
-        type: mood < 50 ? 'negative' : 'neutral',
+        type: hasIntel && mood >= 50 ? 'positive' : mood < 50 ? 'negative' : 'neutral',
       },
     ],
     outcome: 'pending',

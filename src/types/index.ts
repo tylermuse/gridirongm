@@ -235,6 +235,8 @@ export interface Player {
   draftRound?: number;
   /** Team ID that originally drafted this player */
   draftTeamId?: string;
+  /** Free agency priority — what matters most to this player in FA */
+  faPriority?: 'money' | 'winning' | 'role' | 'loyalty';
   /** Stats from the previous completed season (for free agency display) */
   previousSeasonStats?: PlayerStats;
   /** Season-by-season stat history */
@@ -775,6 +777,37 @@ export interface LeagueState {
   firedState: { fired: boolean; season: number; reason: string } | null;
   /** Expansion draft state (null when not active) */
   expansionDraft: ExpansionDraftState | null;
+  /** Free agency intel report pursuit state */
+  pursuitState?: {
+    pursuitPoints: number;
+    maxPursuitPoints: number;
+    intelReports: Record<string, {
+      priority: 'money' | 'winning' | 'role' | 'loyalty';
+      priorityLabel: string;
+      priorityDetail: string;
+      trueAskingSalary: number;
+      trueAskingYears: number;
+      closingOffer: { salary: number; years: number };
+      closingOfferDetail: string;
+      willingness: 'eager' | 'open' | 'reluctant' | 'not_interested';
+      willingnessReason: string;
+      competingTeams: string[];
+      marketHeat: 'cold' | 'moderate' | 'hot' | 'bidding_war';
+      marketHeatDetail: string;
+      agentStyle: 'hardball' | 'collaborative' | 'impatient' | 'relationship';
+      agentStyleDetail: string;
+      agentTip: string;
+      priorityAligned: boolean;
+      fitAssessment: string;
+      dealPath: 'strong' | 'possible' | 'uphill' | 'unlikely';
+      dealPathDetail: string;
+      concerns: string[];
+      intelBlurb: string;
+      salaryDiscount: number;
+      patienceBonus: number;
+      overridesRefusal: boolean;
+    }>;
+  };
 }
 
 export interface ExpansionTeamConfig {

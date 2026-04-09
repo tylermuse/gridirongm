@@ -107,6 +107,8 @@ interface GameStore extends LeagueState {
   filmReviewPlayer: (playerId: string) => boolean;
   inPersonEvalPlayer: (playerId: string) => boolean;
   fullEvalPlayer: (playerId: string) => boolean;
+  // Free Agency Intel Report
+  intelReportFA: (playerId: string) => boolean;
   // Coaching
   replaceCoach: (role: import('@/types').CoachRole, specificCoach?: import('@/types').Coach) => void;
   // PRD-13: Depth chart
@@ -878,6 +880,45 @@ export function faPriceDecay(faDay: number): number {
   if (faDay <= 15) return 1.0 - (faDay - 5) * 0.02;   // -2%/day → day 15 = 0.80
   if (faDay <= 25) return 0.80 - (faDay - 15) * 0.03;  // -3%/day → day 25 = 0.50
   return 0.50;                                           // floor at 50%
+}
+
+/** Assign a free-agency priority to a player based on deterministic seed. */
+function assignFAPriority(player: Player): 'money' | 'winning' | 'role' | 'loyalty' {
+  const seed = seedFromId(player.id, 42);
+  // Weight by player attributes
+  const isElite = player.ratings.overall >= 82;
+  const isOld = player.age >= 31;
+  const isYoung = player.age <= 25;
+  const hasLoyalty = (player.experience ?? 0) >= 5;
+
+  // Deterministic bucket from seed
+  const bucket = seed % 100;
+
+  if (isElite && isOld) {
+    // Older elite players want rings
+    if (bucket < 55) return 'winning';
+    if (bucket < 80) return 'money';
+    if (bucket < 95) return 'loyalty';
+    return 'role';
+  }
+  if (isYoung) {
+    // Young players want money or role
+    if (bucket < 45) return 'money';
+    if (bucket < 75) return 'role';
+    if (bucket < 90) return 'winning';
+    return 'loyalty';
+  }
+  if (hasLoyalty) {
+    if (bucket < 30) return 'loyalty';
+    if (bucket < 60) return 'money';
+    if (bucket < 85) return 'winning';
+    return 'role';
+  }
+  // Default distribution
+  if (bucket < 40) return 'money';
+  if (bucket < 65) return 'winning';
+  if (bucket < 85) return 'role';
+  return 'loyalty';
 }
 
 /** Determines which free agents refuse to negotiate with the user's team. */
@@ -4201,11 +4242,19 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
+        // Build free agent ID set for faPriority assignment
+        const faIdSet = new Set([...expiredPlayers.map(p => p.id), ...existingFAIds, ...supplementalPlayers.map(p => p.id)]);
+
         const allPlayers = [
-          ...faState.players.map(p =>
-            p.contract.yearsLeft <= 0 ? { ...p, teamId: null } : p,
-          ),
-          ...supplementalPlayers,
+          ...faState.players.map(p => {
+            const base = p.contract.yearsLeft <= 0 ? { ...p, teamId: null } : p;
+            // Assign faPriority for all free agents that don't already have one
+            if (faIdSet.has(base.id) && !base.faPriority) {
+              return { ...base, faPriority: assignFAPriority(base) };
+            }
+            return base;
+          }),
+          ...supplementalPlayers.map(p => p.faPriority ? p : { ...p, faPriority: assignFAPriority(p) }),
         ];
 
         const faTeams = faState.teams.map(t => {
@@ -4229,6 +4278,11 @@ export const useGameStore = create<GameStore>()(
           freeAgents: [...expiredPlayers.map(p => p.id), ...existingFAIds, ...supplementalPlayers.map(p => p.id)],
           faDay: 1,
           newsItems: [...faState.newsItems, ...releaseNews],
+          pursuitState: {
+            pursuitPoints: 5 + (faState.scoutingLevel || 0) * 3,
+            maxPursuitPoints: 11,
+            intelReports: {},
+          },
         });
 
         // Compute initial refusals
@@ -5707,6 +5761,354 @@ export const useGameStore = create<GameStore>()(
             fullEvalCount: ss.fullEvalCount + 1,
           },
         });
+        return true;
+      },
+
+      // Free Agency Intel Report
+      intelReportFA: (playerId: string) => {
+        const state = get();
+        const ps = state.pursuitState;
+        if (!ps || ps.pursuitPoints < 1) return false;
+        if (ps.intelReports[playerId]) return false; // already scouted
+
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return false;
+
+        const userTeam = state.teams.find(t => t.id === state.userTeamId);
+        if (!userTeam) return false;
+
+        const seed = seedFromId(playerId, 55);
+        const pickBySeed = <T>(arr: T[], s: number): T => arr[s % arr.length];
+
+        // ── Priority ──
+        const priority = player.faPriority ?? assignFAPriority(player);
+        const priorityLabels: Record<string, string> = {
+          money: 'Show Me The Money',
+          winning: 'Ring Chaser',
+          role: 'Starter Or Bust',
+          loyalty: 'Hometown Loyalty',
+        };
+        const priorityDetails: Record<string, string[]> = {
+          money: [
+            'This player is purely motivated by the highest offer on the table.',
+            'His agent has made it clear — top dollar or they walk.',
+            'Financial security is the #1 priority. Pay up or lose him.',
+          ],
+          winning: [
+            'He wants to play for a contender. Winning matters more than money.',
+            'Ring chasing is real — he\'ll take less to compete for a title.',
+            'His inner circle says he\'s focused on championship upside.',
+          ],
+          role: [
+            'He wants a guaranteed starting role. Don\'t pitch a backup spot.',
+            'Playing time is everything. He needs to know he\'ll be THE guy.',
+            'His camp has indicated he\'ll walk if he doesn\'t see a clear path to starting.',
+          ],
+          loyalty: [
+            'He values continuity and relationships with the coaching staff.',
+            'Loyalty runs deep — if he\'s been here before, that matters.',
+            'He\'s the type who values culture and familiarity over flashy offers.',
+          ],
+        };
+        const priorityLabel = priorityLabels[priority];
+        const priorityDetail = pickBySeed(priorityDetails[priority], seed);
+
+        // ── True Asking Salary (same formula as initNegotiation) ──
+        const ci = capInflationFactor(userTeam.salaryCap);
+        const marketSalary = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci);
+        const mood = player.mood ?? 70;
+        const moodSalaryMult = mood < 30 ? 1.15 : mood < 50 ? 1.08 : mood < 60 ? 1.03 : mood >= 85 ? 0.95 : 1.0;
+        const trueAskingSalary = Math.round(marketSalary * moodSalaryMult * 10) / 10;
+        const trueAskingYears = player.age >= 32 ? 1 : player.age >= 28 ? 2 : 3;
+
+        // ── Priority Alignment ──
+        const totalGames = userTeam.record.wins + userTeam.record.losses + userTeam.record.ties;
+        const winPct = totalGames > 0 ? (userTeam.record.wins + userTeam.record.ties * 0.5) / totalGames : 0.5;
+        const userRosterAtPos = state.players.filter(p => p.teamId === state.userTeamId && p.position === player.position && !p.retired);
+        const wouldStart = userRosterAtPos.length === 0 || userRosterAtPos.every(p => p.ratings.overall < player.ratings.overall);
+        const wasOnTeam = player.draftTeamId === state.userTeamId || player.acquiredVia === 'draft';
+        const priorityAligned =
+          (priority === 'winning' && winPct >= 0.55) ||
+          (priority === 'role' && wouldStart) ||
+          (priority === 'loyalty' && wasOnTeam) ||
+          (priority === 'money'); // money is always 'aligned' — you just pay
+
+        // ── Closing Offer ──
+        const closingSalary = Math.round(trueAskingSalary * 0.88 * (priorityAligned ? 0.95 : 1.0) * 10) / 10;
+        const closingYears = trueAskingYears;
+        const closingOfferDetails = [
+          `Offering around $${closingSalary}M/yr for ${closingYears} year${closingYears > 1 ? 's' : ''} should get the deal done.`,
+          `Your sweet spot is $${closingSalary}M/yr, ${closingYears} year${closingYears > 1 ? 's' : ''}. Go in at that and you have a strong shot.`,
+          `Intel suggests $${closingSalary}M/yr over ${closingYears} year${closingYears > 1 ? 's' : ''} closes this deal.`,
+        ];
+        const closingOfferDetail = pickBySeed(closingOfferDetails, seed + 1);
+
+        // ── Willingness ──
+        const faRefusals = state.faRefusals ?? [];
+        const isRefusing = faRefusals.includes(playerId);
+        let willingness: 'eager' | 'open' | 'reluctant' | 'not_interested';
+        if (isRefusing && mood < 30) {
+          willingness = 'not_interested';
+        } else if (isRefusing) {
+          willingness = 'reluctant';
+        } else if (mood >= 75 && (priorityAligned || winPct >= 0.55)) {
+          willingness = 'eager';
+        } else if (mood >= 50) {
+          willingness = 'open';
+        } else {
+          willingness = 'reluctant';
+        }
+        const willingnessReasons: Record<string, string[]> = {
+          eager: [
+            'He\'s genuinely excited about the opportunity here.',
+            'Word is he\'s already telling friends he wants to sign with you.',
+            'His camp reached out first — that\'s a great sign.',
+          ],
+          open: [
+            'He\'s open to hearing your pitch, but won\'t commit without a solid offer.',
+            'No strong feelings either way — a fair deal will swing him.',
+            'He\'s listening, but not desperate. Come correct.',
+          ],
+          reluctant: [
+            'He has reservations about the team direction. You\'ll need to sell him.',
+            'His agent is lukewarm — expects better offers elsewhere.',
+            'Don\'t expect an easy sell. He needs convincing.',
+          ],
+          not_interested: [
+            'He has zero interest in playing here. Intel suggests this is a dead end.',
+            'Multiple sources confirm he won\'t even take the meeting.',
+            'His agent flat-out said "don\'t bother." This is a long shot at best.',
+          ],
+        };
+        const willingnessReason = pickBySeed(willingnessReasons[willingness], seed + 2);
+
+        // ── Competing Teams ──
+        const competingTeams: string[] = [];
+        const aiTeams = state.teams.filter(t => t.id !== state.userTeamId);
+        for (const t of aiTeams) {
+          const capSpace = t.salaryCap - t.totalPayroll;
+          if (capSpace < trueAskingSalary * 0.5) continue;
+          const posCount = state.players.filter(p => p.teamId === t.id && p.position === player.position && !p.retired).length;
+          const posMax = ROSTER_LIMITS[player.position].max;
+          if (posCount >= posMax) continue;
+          const starterOvr = state.players
+            .filter(p => p.teamId === t.id && p.position === player.position && !p.retired)
+            .sort((a, b) => b.ratings.overall - a.ratings.overall)[0]?.ratings.overall ?? 0;
+          if (player.ratings.overall > starterOvr - 5) {
+            // Deterministic selection based on seed + team index
+            const teamSeed = seedFromId(t.id + playerId, 55);
+            if (teamSeed % 3 !== 0) continue; // ~33% of eligible teams
+            competingTeams.push(t.abbreviation);
+          }
+          if (competingTeams.length >= 5) break;
+        }
+
+        // ── Market Heat ──
+        const ovr = player.ratings.overall;
+        let marketHeat: 'cold' | 'moderate' | 'hot' | 'bidding_war';
+        if (competingTeams.length >= 4 && ovr >= 78) {
+          marketHeat = 'bidding_war';
+        } else if (competingTeams.length >= 2 && ovr >= 70) {
+          marketHeat = 'hot';
+        } else if (competingTeams.length >= 1) {
+          marketHeat = 'moderate';
+        } else {
+          marketHeat = 'cold';
+        }
+        const marketHeatDetails: Record<string, string[]> = {
+          cold: [
+            'The phone isn\'t ringing for this player. You\'re the only team in the mix.',
+            'Very little market interest. You have all the leverage.',
+            'No competition — he\'s available at a discount if you want him.',
+          ],
+          moderate: [
+            'A few teams have kicked the tires, but no one is pushing hard.',
+            'There\'s interest, but nothing urgent. You have time to negotiate.',
+            'Moderate market — a couple teams have inquired.',
+          ],
+          hot: [
+            'Multiple teams are in on this player. Move fast or lose him.',
+            'His agent is fielding several strong offers. Don\'t lowball.',
+            'Hot market — expect competition from ' + competingTeams.slice(0, 2).join(' and ') + '.',
+          ],
+          bidding_war: [
+            'This is an all-out bidding war. Every contender wants him.',
+            'His agent is playing teams against each other. Expect to overpay.',
+            'Top-tier market — you\'ll need an aggressive offer to win this.',
+          ],
+        };
+        const marketHeatDetail = pickBySeed(marketHeatDetails[marketHeat], seed + 3);
+
+        // ── Agent Style ──
+        const agentStyles: ('hardball' | 'collaborative' | 'impatient' | 'relationship')[] = ['hardball', 'collaborative', 'impatient', 'relationship'];
+        const agentStyle = agentStyles[seed % 4];
+        const agentStyleDetails: Record<string, string[]> = {
+          hardball: [
+            'His agent plays hardball — expect high initial demands and slow movement.',
+            'Known as a tough negotiator. Don\'t expect quick concessions.',
+            'This agent will push for every dollar. Be patient but firm.',
+          ],
+          collaborative: [
+            'His agent is easy to work with — they\'ll find middle ground quickly.',
+            'A collaborative negotiator. Fair offers get fair responses.',
+            'This agent values good relationships. Come in reasonable and you\'ll get a deal done.',
+          ],
+          impatient: [
+            'His agent wants this done fast. Dragging it out will kill the deal.',
+            'Don\'t waste time with lowballs — this agent has a short fuse.',
+            'Speed matters here. Put your best offer forward early.',
+          ],
+          relationship: [
+            'This agent values the personal connection. Build rapport first.',
+            'Relationship-driven — past dealings with this agent matter.',
+            'A handshake-deal type. Trust and respect go a long way.',
+          ],
+        };
+        const agentStyleDetail = pickBySeed(agentStyleDetails[agentStyle], seed + 4);
+
+        // ── Agent Tip ──
+        const agentTips: Record<string, string[]> = {
+          hardball: [
+            'Tip: Start close to his asking price. This agent won\'t budge much.',
+            'Tip: Add an extra year to show commitment — hardball agents respect security.',
+            'Tip: Don\'t go below 90% of asking. He\'ll walk.',
+          ],
+          collaborative: [
+            'Tip: A fair opening offer will be met with a reasonable counter.',
+            'Tip: Splitting the difference usually works with this agent.',
+            'Tip: Be transparent about your cap situation — honesty works here.',
+          ],
+          impatient: [
+            'Tip: Lead with your best offer. You won\'t get many rounds.',
+            'Tip: Don\'t ask for time to think — this agent moves on fast.',
+            'Tip: One strong offer beats three mediocre ones.',
+          ],
+          relationship: [
+            'Tip: If this player was on your team before, mention it. Loyalty matters.',
+            'Tip: Highlight your coaching staff and culture — this agent cares about fit.',
+            'Tip: A slightly lower offer with the right pitch can beat a higher one elsewhere.',
+          ],
+        };
+        const agentTip = pickBySeed(agentTips[agentStyle], seed + 5);
+
+        // ── Fit Assessment ──
+        const fitAssessments = priorityAligned
+          ? [
+            'Strong scheme fit. Your team checks all his boxes.',
+            'He\'d step into a great situation here. High fit score.',
+            'This is one of the best landing spots for him — and he knows it.',
+          ]
+          : [
+            'Fit is questionable. His priorities don\'t align well with what you offer.',
+            'He\'d be coming here despite the situation, not because of it.',
+            'Not an ideal fit on paper, but the right offer could overcome that.',
+          ];
+        const fitAssessment = pickBySeed(fitAssessments, seed + 6);
+
+        // ── Deal Path ──
+        let dealPath: 'strong' | 'possible' | 'uphill' | 'unlikely';
+        if (willingness === 'eager' && (marketHeat === 'cold' || marketHeat === 'moderate')) {
+          dealPath = 'strong';
+        } else if (willingness === 'eager' || (willingness === 'open' && marketHeat !== 'bidding_war')) {
+          dealPath = 'possible';
+        } else if (willingness === 'not_interested' || (willingness === 'reluctant' && marketHeat === 'bidding_war')) {
+          dealPath = 'unlikely';
+        } else {
+          dealPath = 'uphill';
+        }
+        const dealPathDetails: Record<string, string[]> = {
+          strong: [
+            'All signs point to a deal getting done. Execute cleanly and he\'s yours.',
+            'This is about as good as it gets in free agency. Close it out.',
+            'High confidence this deal gets done if you offer fair value.',
+          ],
+          possible: [
+            'There\'s a real path here, but you\'ll need a competitive offer.',
+            'Doable, but don\'t take it for granted. Bring your A-game.',
+            'Odds are in your favor if you play your cards right.',
+          ],
+          uphill: [
+            'This will be tough. Expect resistance and be ready to overpay.',
+            'An uphill battle — possible, but you\'ll need to exceed market value.',
+            'Don\'t expect a discount here. You\'re swimming upstream.',
+          ],
+          unlikely: [
+            'Realistically, this deal probably doesn\'t happen. But stranger things have occurred.',
+            'A long shot. Don\'t invest too many resources chasing this one.',
+            'Intel suggests you\'re better off looking elsewhere.',
+          ],
+        };
+        const dealPathDetail = pickBySeed(dealPathDetails[dealPath], seed + 7);
+
+        // ── Concerns ──
+        const concerns: string[] = [];
+        if (player.ratings.stamina < 60) concerns.push('Durability concerns — low stamina rating may lead to injuries.');
+        if (player.age >= 32) concerns.push('Age-related decline is a real risk at ' + player.age + ' years old.');
+        if (player.age >= 35) concerns.push('Retirement could come at any time. Short-term investment only.');
+        if (mood < 40) concerns.push('Locker room red flag — low morale could spread to teammates.');
+        if (mood < 25) concerns.push('Serious attitude problems reported. Handle with care.');
+        if (player.scoutingLabel?.toLowerCase().includes('bust')) concerns.push('History of underperforming expectations.');
+        if (player.injury) concerns.push('Currently dealing with an injury (' + player.injury.type + ').');
+        if (player.ratings.overall < 60) concerns.push('Below-average talent level. Depth signing only.');
+        if (concerns.length === 0) concerns.push('No major red flags identified.');
+
+        // ── Intel Blurb ──
+        const pName = `${player.firstName} ${player.lastName}`;
+        const blurbTemplates = [
+          `${pName} is a ${willingness} target with a ${marketHeat.replace('_', ' ')} market. His priority is ${priority}${priorityAligned ? ' (aligned with your team)' : ''}. Best path: offer ~$${closingSalary}M/yr.`,
+          `Intel summary on ${pName}: ${willingness} to sign, ${marketHeat.replace('_', ' ')} demand, ${agentStyle} agent. ${priorityAligned ? 'Your team fits his priorities.' : 'Priority mismatch — may need to overpay.'} Target: $${closingSalary}M.`,
+          `${pName} (${player.position}, ${ovr} OVR): ${dealPath} deal path. ${competingTeams.length > 0 ? 'Competing with ' + competingTeams.join(', ') + '.' : 'No known competition.'} ${priorityAligned ? 'Strong fit.' : 'Fit concerns.'}`,
+        ];
+        const intelBlurb = pickBySeed(blurbTemplates, seed + 8);
+
+        // ── Mechanical Effects ──
+        const salaryDiscount = 0.88;
+        const patienceBonus = 1;
+        // Override refusal if player is at least reluctant-willing (not 'not_interested')
+        const overridesRefusal = willingness !== 'not_interested';
+
+        const report = {
+          priority,
+          priorityLabel,
+          priorityDetail,
+          trueAskingSalary,
+          trueAskingYears,
+          closingOffer: { salary: closingSalary, years: closingYears },
+          closingOfferDetail,
+          willingness,
+          willingnessReason,
+          competingTeams,
+          marketHeat,
+          marketHeatDetail,
+          agentStyle,
+          agentStyleDetail,
+          agentTip,
+          priorityAligned,
+          fitAssessment,
+          dealPath,
+          dealPathDetail,
+          concerns,
+          intelBlurb,
+          salaryDiscount,
+          patienceBonus,
+          overridesRefusal,
+        };
+
+        // Remove from faRefusals if intel overrides
+        let newRefusals = state.faRefusals;
+        if (overridesRefusal && faRefusals.includes(playerId)) {
+          newRefusals = faRefusals.filter(id => id !== playerId);
+        }
+
+        set({
+          pursuitState: {
+            ...ps,
+            pursuitPoints: ps.pursuitPoints - 1,
+            intelReports: { ...ps.intelReports, [playerId]: report },
+          },
+          faRefusals: newRefusals,
+        });
+
         return true;
       },
 
