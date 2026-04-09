@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
@@ -38,8 +38,24 @@ function resolveNewsBadge(type: string, headline: string) {
 type FilterTab = 'all' | 'myteam' | 'transactions' | 'injuries' | 'social';
 
 export default function NewsPage() {
-  const { newsItems, teams, players, userTeamId, season, week, socialPosts } = useGameStore();
+  const { newsItems, teams, players, userTeamId, season, week, socialPosts, schedule } = useGameStore();
   const [filter, setFilter] = useState<FilterTab>('all');
+
+  // Backfill social posts for existing saves that simmed before this feature
+  useEffect(() => {
+    if (filter === 'social' && (!socialPosts || socialPosts.length === 0) && schedule.some(g => g.played)) {
+      import('@/lib/engine/social').then(({ generateSocialPosts }) => {
+        const userTeam = teams.find(t => t.id === userTeamId);
+        const roster = players.filter(p => p.teamId === userTeamId && !p.retired);
+        if (!userTeam) return;
+        const userGames = schedule.filter(g => g.played && (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId));
+        const posts = generateSocialPosts({ team: userTeam, roster, allTeams: teams, players, season, week, games: userGames });
+        if (posts.length > 0) {
+          useGameStore.setState({ socialPosts: posts });
+        }
+      });
+    }
+  }, [filter, socialPosts, schedule, teams, players, userTeamId, season, week]);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   const sorted = [...newsItems].sort((a, b) => {
