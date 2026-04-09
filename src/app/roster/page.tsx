@@ -548,14 +548,6 @@ export default function RosterPage() {
                               <span className="hidden sm:inline">{p.firstName} {p.lastName}</span>
                               {champTeamId === userTeamId && <span className="ml-0.5 text-xs" title="Championship Ring">💍</span>}
                             </button>
-                            {(() => {
-                              const ci = userTeam ? capInflationFactor(userTeam.salaryCap) : 1.0;
-                              const market = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci);
-                              const ratio = market / Math.max(p.contract.salary, 0.75);
-                              if (ratio >= 2.0 && p.contract.yearsLeft >= 2) return <span className="text-[9px] text-amber-600 ml-1">underpaid</span>;
-                              if (ratio >= 1.5 && p.contract.yearsLeft >= 2 && (p.mood ?? 70) < 60) return <span className="text-[9px] text-amber-500 ml-1">ext candidate</span>;
-                              return null;
-                            })()}
                             {p.contract.contractYears?.some(y => y.proratedBonus > 0) && (
                               <span className="ml-1 text-[9px] font-bold bg-amber-100 text-amber-700 px-1 rounded" title="Contract restructured">R</span>
                             )}
