@@ -221,7 +221,7 @@ function OnTheClockSection({
                 {isUserPick ? (
                   <>
                     <span className="text-xl animate-pulse">⏰</span>
-                    <span className="font-black text-xl sm:text-2xl" style={{ color: 'var(--team-text-on-primary)' }}>YOU&apos;RE ON THE CLOCK</span>
+                    <span className="font-black text-xl sm:text-2xl" style={{ color: 'var(--team-text-on-primary)', textShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>YOU&apos;RE ON THE CLOCK</span>
                   </>
                 ) : (
                   <>
@@ -242,7 +242,7 @@ function OnTheClockSection({
           <div className="sm:text-right">
             <div
               className="text-xs sm:text-sm font-bold mb-1 hidden sm:block"
-              style={isUserPick ? { color: 'var(--team-text-on-primary)', opacity: 0.85 } : undefined}
+              style={isUserPick ? { color: 'var(--team-text-on-primary)', textShadow: '0 1px 3px rgba(0,0,0,0.4)' } : undefined}
             >
               Round {currentRound}, Pick {currentPickInRound}
             </div>
