@@ -119,22 +119,7 @@ export default function NewsPage() {
         </div>
 
         {filter === 'social' ? (
-          <div className="space-y-3">
-            {(socialPosts ?? [])
-              .filter(p => p.timestamp.season === season)
-              .sort((a, b) => b.timestamp.week - a.timestamp.week || b.likes - a.likes)
-              .slice(0, 30)
-              .map(post => (
-                <SocialPostCard key={post.id} post={post} onPlayerClick={setSelectedPlayerId} />
-              ))
-            }
-            {(socialPosts ?? []).filter(p => p.timestamp.season === season).length === 0 && (
-              <div className="text-center py-8 text-[var(--text-sec)]">
-                <div className="text-3xl mb-2">📱</div>
-                <p className="text-sm">No social posts yet. Simulate some games to see what your players and fans are saying.</p>
-              </div>
-            )}
-          </div>
+          <SocialFeed posts={socialPosts ?? []} season={season} onPlayerClick={setSelectedPlayerId} />
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-[var(--text-sec)]">
             No news items yet. Simulate games to see league news.
@@ -212,6 +197,51 @@ export default function NewsPage() {
       </div>
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
+  );
+}
+
+function SocialFeed({ posts, season, onPlayerClick }: { posts: SocialPost[]; season: number; onPlayerClick?: (id: string) => void }) {
+  const currentPosts = posts
+    .filter(p => p.timestamp.season === season)
+    .sort((a, b) => b.timestamp.week - a.timestamp.week || b.likes - a.likes);
+  const mediaPosts = currentPosts.filter(p => p.category === 'media' || p.category === 'team');
+  const fanPosts = currentPosts.filter(p => p.category === 'fan');
+  const playerPosts = currentPosts.filter(p => p.category === 'player');
+
+  if (currentPosts.length === 0) return (
+    <div className="text-center py-8 text-[var(--text-sec)]">
+      <div className="text-3xl mb-2">📱</div>
+      <p className="text-sm">No social posts yet. Simulate some games to see what your players and fans are saying.</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      {mediaPosts.length > 0 && (
+        <div>
+          <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-2">🎙️ Media & Team</div>
+          <div className="space-y-3">
+            {mediaPosts.slice(0, 10).map(post => <SocialPostCard key={post.id} post={post} onPlayerClick={onPlayerClick} />)}
+          </div>
+        </div>
+      )}
+      {playerPosts.length > 0 && (
+        <div>
+          <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-2">🏈 Player Posts</div>
+          <div className="space-y-3">
+            {playerPosts.slice(0, 10).map(post => <SocialPostCard key={post.id} post={post} onPlayerClick={onPlayerClick} />)}
+          </div>
+        </div>
+      )}
+      {fanPosts.length > 0 && (
+        <div>
+          <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-2">📣 Fan Reactions</div>
+          <div className="space-y-3">
+            {fanPosts.slice(0, 10).map(post => <SocialPostCard key={post.id} post={post} onPlayerClick={onPlayerClick} />)}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
