@@ -8,7 +8,7 @@ import type {
   LeagueState, Team, Player, GameResult, PlayerStats,
   NewsItem, TradeProposal, ResigningEntry, DraftPick, LeagueSettings,
   HoldoutEntry, TradeRumor, Rivalry, RivalryEvent,
-  ExpansionTeamConfig,
+  ExpansionTeamConfig, SocialPost,
 } from '@/types';
 import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
@@ -29,6 +29,7 @@ import { defaultApproval, updateApprovalAfterGame, updateApprovalEndOfSeason, up
 import { teamSpecialTeamsRating } from './specialTeams';
 import { createExpansionTeamObject, runExpansionDraft, computeProtectionLimit } from './expansionDraft';
 import { generateFilmReviewBlurb } from './scoutingReport';
+import { generateSocialPosts } from './social';
 
 const SAVE_VERSION = 19;
 
@@ -1667,6 +1668,7 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   weeklyRecaps: [],
   achievements: [],
   tradeRumors: [],
+  socialPosts: [],
   rivalries: [],
   firedState: null,
   expansionDraft: null,
@@ -2102,6 +2104,21 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
 
   const weekNews = generateWeekNews(state, updatedGames, newInjuries);
 
+  // Generate social media posts for this week
+  const userTeamForSocial = newTeams.find(t => t.id === state.userTeamId);
+  const socialRoster = injuredPlayers.filter(p => p.teamId === state.userTeamId && !p.retired);
+  const weekSocialPosts: SocialPost[] = userTeamForSocial
+    ? generateSocialPosts({
+        team: userTeamForSocial,
+        roster: socialRoster,
+        allTeams: newTeams,
+        players: injuredPlayers,
+        season: state.season,
+        week: state.week,
+        games: updatedGames,
+      })
+    : [];
+
   const simDl = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).tradeDeadlineWeek;
   const newTradeProposals = state.week <= simDl + 1
     ? generateAITradeProposals({ ...state, teams: newTeams, players: injuredPlayers })
@@ -2156,6 +2173,7 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       tradeProposals: [...state.tradeProposals, ...newTradeProposals],
       tradeRumors: resolvedRumors,
       rivalries: updatedRivalries,
+      socialPosts: [...(state.socialPosts ?? []), ...weekSocialPosts],
     },
     isSeasonOver,
   };
@@ -2301,6 +2319,7 @@ export const useGameStore = create<GameStore>()(
             weeklyRecaps: [],
             achievements: [],
             tradeRumors: [],
+            socialPosts: [],
             rivalries: [],
             firedState: null,
             expansionDraft: null,
@@ -2448,6 +2467,7 @@ export const useGameStore = create<GameStore>()(
           weeklyRecaps: [],
           achievements: [],
           tradeRumors: [],
+          socialPosts: [],
           rivalries: [],
           firedState: null,
           expansionDraft: null,
@@ -7033,6 +7053,7 @@ export const useGameStore = create<GameStore>()(
           finalsMvpPlayerId: null, allStarGame: null,
           weeklyRecaps: [],
           tradeRumors: [],
+          socialPosts: (state.socialPosts ?? []).filter(p => state.season - p.timestamp.season <= 2),
           rivalries: decayRivalries(state.rivalries ?? []),
           extensionsUsedThisSeason: 0,
           // BS Mode: compute QB tiers at season start

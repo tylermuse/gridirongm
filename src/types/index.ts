@@ -556,6 +556,31 @@ export interface GameResult {
   overHit?: boolean;
 }
 
+export interface SocialPost {
+  id: string;
+  author: {
+    type: 'player' | 'fan' | 'media' | 'team';
+    playerId?: string;
+    personId?: 'tony_blaze' | 'marcus_cole';
+    teamId?: string;
+    name: string;
+    handle: string;
+    avatar: string;
+    verified: boolean;
+  };
+  text: string;
+  timestamp: { season: number; week: number };
+  likes: number;
+  reposts: number;
+  replies: number;
+  action?: {
+    label: string;
+    type: 'extend' | 'trade' | 'viewPlayer' | 'viewRoster' | 'negotiate';
+    playerId?: string;
+  };
+  category: 'player' | 'fan' | 'media' | 'team';
+}
+
 export interface NewsItem {
   id: string;
   season: number;
@@ -771,6 +796,8 @@ export interface LeagueState {
   rivalries: Rivalry[];
   /** Trade rumors generated during the season */
   tradeRumors: TradeRumor[];
+  /** Social media feed posts */
+  socialPosts: SocialPost[];
   /** Underpaid stars demanding new deals during re-signing */
   holdoutDemands: HoldoutEntry[];
   /** Game over state when owner fires the GM */

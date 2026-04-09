@@ -5,6 +5,7 @@ import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Badge } from '@/components/ui/Badge';
+import type { SocialPost } from '@/types';
 
 const NEWS_BADGE: Record<string, { label: string; color: string; bg: string; icon: string; border: string }> = {
   injury:      { label: 'Injury',      color: 'text-orange-700', bg: 'bg-orange-50',  icon: '🏥', border: 'border-l-orange-400' },
@@ -34,10 +35,10 @@ function resolveNewsBadge(type: string, headline: string) {
   return NEWS_BADGE[type] ?? NEWS_BADGE.system;
 }
 
-type FilterTab = 'all' | 'myteam' | 'transactions' | 'injuries';
+type FilterTab = 'all' | 'myteam' | 'transactions' | 'injuries' | 'social';
 
 export default function NewsPage() {
-  const { newsItems, teams, players, userTeamId, season, week } = useGameStore();
+  const { newsItems, teams, players, userTeamId, season, week, socialPosts } = useGameStore();
   const [filter, setFilter] = useState<FilterTab>('all');
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
@@ -58,6 +59,7 @@ export default function NewsPage() {
     { key: 'myteam', label: 'My Team' },
     { key: 'transactions', label: 'Transactions' },
     { key: 'injuries', label: 'Injuries' },
+    { key: 'social', label: 'Social' },
   ];
 
   function teamAbbr(teamId?: string) {
@@ -100,7 +102,24 @@ export default function NewsPage() {
           ))}
         </div>
 
-        {filtered.length === 0 ? (
+        {filter === 'social' ? (
+          <div className="space-y-3">
+            {(socialPosts ?? [])
+              .filter(p => p.timestamp.season === season)
+              .sort((a, b) => b.timestamp.week - a.timestamp.week || b.likes - a.likes)
+              .slice(0, 30)
+              .map(post => (
+                <SocialPostCard key={post.id} post={post} onPlayerClick={setSelectedPlayerId} />
+              ))
+            }
+            {(socialPosts ?? []).filter(p => p.timestamp.season === season).length === 0 && (
+              <div className="text-center py-8 text-[var(--text-sec)]">
+                <div className="text-3xl mb-2">📱</div>
+                <p className="text-sm">No social posts yet. Simulate some games to see what your players and fans are saying.</p>
+              </div>
+            )}
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-[var(--text-sec)]">
             No news items yet. Simulate games to see league news.
           </div>
@@ -177,5 +196,60 @@ export default function NewsPage() {
       </div>
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
+  );
+}
+
+function SocialPostCard({ post, onPlayerClick }: { post: SocialPost; onPlayerClick?: (id: string) => void }) {
+  const borderColor = post.author.type === 'media' && post.author.personId === 'tony_blaze' ? 'border-l-red-400'
+    : post.author.type === 'media' && post.author.personId === 'marcus_cole' ? 'border-l-blue-400'
+    : post.author.type === 'team' ? 'border-l-green-400'
+    : '';
+
+  return (
+    <div className={`bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 ${borderColor ? `border-l-[3px] ${borderColor}` : ''}`}>
+      {/* Header */}
+      <div className="flex items-center gap-2.5 mb-2">
+        <div className="w-9 h-9 rounded-full bg-[var(--surface-2)] flex items-center justify-center text-lg shrink-0">
+          {post.author.avatar}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1">
+            {post.author.type === 'player' && post.author.playerId ? (
+              <button onClick={() => onPlayerClick?.(post.author.playerId!)} className="text-sm font-bold hover:text-blue-600 truncate">
+                {post.author.name}
+              </button>
+            ) : (
+              <span className="text-sm font-bold truncate">{post.author.name}</span>
+            )}
+            {post.author.verified && (
+              <svg className="w-4 h-4 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.998-3.818-3.998-.47 0-.92.084-1.336.25C14.818 2.415 13.51 1.5 12 1.5s-2.816.917-3.437 2.25c-.415-.165-.866-.25-1.336-.25-2.11 0-3.818 1.79-3.818 4 0 .494.083.964.237 1.4-1.272.65-2.147 2.018-2.147 3.6 0 1.495.782 2.798 1.942 3.486-.02.17-.032.34-.032.514 0 2.21 1.708 4 3.818 4 .47 0 .92-.086 1.335-.25.62 1.334 1.926 2.25 3.437 2.25 1.512 0 2.818-.916 3.437-2.25.415.163.865.248 1.336.248 2.11 0 3.818-1.79 3.818-4 0-.174-.012-.344-.033-.513 1.158-.687 1.943-1.99 1.943-3.484zm-6.616-3.334l-4.334 6.5c-.145.217-.382.334-.625.334-.143 0-.288-.04-.416-.126l-.115-.094-2.415-2.415c-.293-.293-.293-.768 0-1.06s.768-.294 1.06 0l1.77 1.767 3.825-5.74c.23-.345.696-.436 1.04-.207.346.23.44.696.21 1.04z"/></svg>
+            )}
+          </div>
+          <div className="text-[10px] text-[var(--text-sec)]">{post.author.handle} · Week {post.timestamp.week}</div>
+        </div>
+      </div>
+
+      {/* Post text */}
+      <p className="text-sm leading-relaxed text-[var(--text)] mb-2">{post.text}</p>
+
+      {/* Engagement */}
+      <div className="flex items-center gap-4 text-[10px] text-[var(--text-sec)]">
+        <span>♡ {post.likes >= 1000 ? `${(post.likes / 1000).toFixed(1)}K` : post.likes}</span>
+        <span>🔁 {post.reposts >= 1000 ? `${(post.reposts / 1000).toFixed(1)}K` : post.reposts}</span>
+        <span>💬 {post.replies >= 1000 ? `${(post.replies / 1000).toFixed(1)}K` : post.replies}</span>
+      </div>
+
+      {/* Action shortcut */}
+      {post.action && (
+        <button
+          onClick={() => {
+            if (post.action!.type === 'viewPlayer' && post.action!.playerId) onPlayerClick?.(post.action!.playerId);
+          }}
+          className="text-xs text-blue-600 hover:underline mt-1.5 block"
+        >
+          {post.action.label} →
+        </button>
+      )}
+    </div>
   );
 }
