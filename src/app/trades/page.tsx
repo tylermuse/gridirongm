@@ -1878,7 +1878,7 @@ function TradesPage() {
                                     <Badge size="sm">{p.position}</Badge>
                                     <button onClick={() => setSelectedPlayerId(p.id)} className="hover:underline cursor-pointer">{p.firstName} {p.lastName}</button>
                                     <span className={`text-xs font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
-                                    <span className="text-xs text-[var(--text-sec)]">{p.age}y · ${p.contract.salary}M</span>
+                                    <span className="text-xs text-[var(--text-sec)]">{p.age}y · ${p.contract.salary}M · {p.contract.yearsLeft}yr{p.contract.yearsLeft <= 1 ? ' ⚠️' : ''}</span>
                                   </div>
                                 ))}
                                 {offPicks.map(pk => (
