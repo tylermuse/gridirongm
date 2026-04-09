@@ -147,17 +147,17 @@ export default function FreeAgencyPage() {
   const { phase, players, freeAgents, signFreeAgent, teams, userTeamId, faDay, faRefusals, advanceFADay, advanceFAWeek, pursuitState, intelReportFA, scoutingLevel } = useGameStore();
 
   // Auto-initialize pursuitState for existing saves that entered FA before this feature
-  React.useEffect(() => {
-    if (phase === 'freeAgency' && !pursuitState) {
-      useGameStore.setState({
-        pursuitState: {
-          pursuitPoints: 5 + (scoutingLevel || 0) * 3,
-          maxPursuitPoints: 11,
-          intelReports: {},
-        },
-      });
-    }
-  }, [phase, pursuitState, scoutingLevel]);
+  if (phase === 'freeAgency' && !pursuitState) {
+    useGameStore.setState({
+      pursuitState: {
+        pursuitPoints: 5 + (scoutingLevel || 0) * 3,
+        maxPursuitPoints: 11,
+        intelReports: {},
+      },
+    });
+  }
+  // Also support regular season FA (no pursuit during regular season)
+  const effectivePursuitState = phase === 'freeAgency' ? (pursuitState ?? { pursuitPoints: 5, maxPursuitPoints: 11, intelReports: {} }) : null;
 
   const [affordableOnly, setAffordableOnly] = useState(false);
   const [filterPos, setFilterPos] = useState<Position | 'ALL'>('ALL');
@@ -270,7 +270,7 @@ export default function FreeAgencyPage() {
     if (faRefusals.includes(player.id)) return;
     const baseSal = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci);
     const salary = Math.round(baseSal * decay * 10) / 10;
-    const hasIntel = !!pursuitState?.intelReports[player.id];
+    const hasIntel = !!effectivePursuitState?.intelReports[player.id];
     const userTeamData = teams.find(t => t.id === userTeamId);
     const totalGames = userTeamData ? userTeamData.record.wins + userTeamData.record.losses + (userTeamData.record.ties ?? 0) : 0;
     const winPct = totalGames > 0 ? (userTeamData!.record.wins + (userTeamData!.record.ties ?? 0) * 0.5) / totalGames : 0.5;
@@ -368,10 +368,10 @@ export default function FreeAgencyPage() {
                 </Button>
               </div>
             )}
-            {phase === 'freeAgency' && pursuitState && (
+            {effectivePursuitState && (
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-[var(--text-sec)]">Intel:</span>
-                <span className="text-sm font-bold">{pursuitState.pursuitPoints} pts</span>
+                <span className="text-sm font-bold">{effectivePursuitState.pursuitPoints} pts</span>
               </div>
             )}
             <div className="text-right">
@@ -761,9 +761,9 @@ export default function FreeAgencyPage() {
                               <span className="sm:hidden">{p.firstName[0]}. {p.lastName}</span>
                               <span className="hidden sm:inline">{p.firstName} {p.lastName}</span>
                             </button>
-                            {pursuitState?.intelReports[p.id] && (
+                            {effectivePursuitState?.intelReports[p.id] && (
                               <span className="text-[9px] ml-0.5">
-                                {({'money':'💰','winning':'🏆','role':'🎯','loyalty':'🏠'} as Record<string, string>)[pursuitState.intelReports[p.id].priority]}
+                                {({'money':'💰','winning':'🏆','role':'🎯','loyalty':'🏠'} as Record<string, string>)[effectivePursuitState!.intelReports[p.id].priority]}
                               </span>
                             )}
                           </div>
@@ -817,13 +817,13 @@ export default function FreeAgencyPage() {
                             <FAEvaluationPanel player={p} roster={roster} capSpace={capSpace} marketSalary={salary} />
 
                             {/* Intel Report — no report yet */}
-                            {phase === 'freeAgency' && pursuitState && !pursuitState.intelReports[p.id] && (
+                            {effectivePursuitState && !effectivePursuitState.intelReports[p.id] && (
                               <div className="mt-3 border-t border-[var(--border)] pt-3">
                                 <div className="flex items-center justify-between">
                                   <span className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">Intel Report</span>
                                   <button
                                     onClick={(e) => { e.stopPropagation(); intelReportFA(p.id); }}
-                                    disabled={pursuitState.pursuitPoints < 1}
+                                    disabled={(effectivePursuitState.pursuitPoints ?? 0) < 1}
                                     className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed"
                                   >
                                     Run Intel Report (1 pt)
@@ -833,8 +833,8 @@ export default function FreeAgencyPage() {
                             )}
 
                             {/* Intel Report — full content */}
-                            {phase === 'freeAgency' && pursuitState?.intelReports[p.id] && (() => {
-                              const report = pursuitState.intelReports[p.id];
+                            {effectivePursuitState?.intelReports[p.id] && (() => {
+                              const report = effectivePursuitState.intelReports[p.id];
                               const priorityIcons: Record<string, string> = { money: '💰', winning: '🏆', role: '🎯', loyalty: '🏠' };
                               return (
                                 <div className="mt-3 border-t border-[var(--border)] pt-3 space-y-3">
