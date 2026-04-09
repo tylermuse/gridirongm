@@ -144,7 +144,21 @@ function FAEvaluationPanel({ player, roster, capSpace, marketSalary }: {
 }
 
 export default function FreeAgencyPage() {
-  const { phase, players, freeAgents, signFreeAgent, teams, userTeamId, faDay, faRefusals, advanceFADay, advanceFAWeek, pursuitState, intelReportFA } = useGameStore();
+  const { phase, players, freeAgents, signFreeAgent, teams, userTeamId, faDay, faRefusals, advanceFADay, advanceFAWeek, pursuitState, intelReportFA, scoutingLevel } = useGameStore();
+
+  // Auto-initialize pursuitState for existing saves that entered FA before this feature
+  React.useEffect(() => {
+    if (phase === 'freeAgency' && !pursuitState) {
+      useGameStore.setState({
+        pursuitState: {
+          pursuitPoints: 5 + (scoutingLevel || 0) * 3,
+          maxPursuitPoints: 11,
+          intelReports: {},
+        },
+      });
+    }
+  }, [phase, pursuitState, scoutingLevel]);
+
   const [affordableOnly, setAffordableOnly] = useState(false);
   const [filterPos, setFilterPos] = useState<Position | 'ALL'>('ALL');
   const [negotiation, setNegotiation] = useState<NegotiationState | null>(null);
