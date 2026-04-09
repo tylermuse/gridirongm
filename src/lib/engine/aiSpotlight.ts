@@ -69,39 +69,54 @@ export function detectNarrativeMoment(
   tradeDeadlineWeek: number,
   playoffBracket: PlayoffMatchup[] | null,
   userTeamId: string,
+  playoffSeeds?: { AC: string[]; NC: string[] } | null,
 ): NarrativeMoment {
-  // Preseason: either the literal preseason phase OR when starting a new season (week 1, regular)
+  // 1. START OF SEASON: preseason phase or week 1 of regular season
   if (phase === 'preseason') return 'preseason';
   if (phase === 'regular' && week === 1) return 'preseason';
 
-  // Season over: entering re-signing/draft/FA after playoffs
-  if ((phase === 'resigning' || phase === 'draft' || phase === 'freeAgency') && playoffBracket) {
-    return 'seasonOver';
+  // 2. TRADE DEADLINE: at or just past the deadline week
+  if (phase === 'regular' && week >= tradeDeadlineWeek && week <= tradeDeadlineWeek + 1) {
+    return 'tradeDeadline';
   }
 
-  // Playoffs: check if user team is eliminated or still active
+  // 3. END OF REGULAR SEASON for non-playoff teams:
+  //    If we're past week 18 in regular season, or entering playoffs and user team didn't make it
+  if (phase === 'regular' && week >= 18) {
+    // Check if user missed playoffs (seeds don't include them)
+    if (playoffSeeds) {
+      const allSeeds = [...(playoffSeeds.AC ?? []), ...(playoffSeeds.NC ?? [])];
+      if (!allSeeds.includes(userTeamId)) return 'seasonOver';
+    }
+  }
+
+  // 4. PLAYOFFS START: entered playoffs and user team is still active
   if (phase === 'playoffs' && playoffBracket) {
-    // Check if user team lost a game (eliminated)
     const userLost = playoffBracket.some(m =>
       m.winnerId &&
       (m.homeTeamId === userTeamId || m.awayTeamId === userTeamId) &&
       m.winnerId !== userTeamId
     );
-    // Check if user won the championship
     const champGame = playoffBracket.find(m => m.round === 4 && m.winnerId);
     const userWonChamp = champGame?.winnerId === userTeamId;
 
+    // 5. ELIMINATED or WON CHAMPIONSHIP
     if (userWonChamp) return 'seasonOver';
     if (userLost) return 'seasonOver';
-    return 'playoffsStart';
-  }
-  if (phase === 'playoffs') {
-    return 'playoffsStart';
-  }
 
-  // Trade deadline: at or just past the deadline week (catches sim-past-it)
-  if (phase === 'regular' && week >= tradeDeadlineWeek && week <= tradeDeadlineWeek + 1) {
-    return 'tradeDeadline';
+    // Check if user team didn't make playoffs at all
+    if (playoffSeeds) {
+      const allSeeds = [...(playoffSeeds.AC ?? []), ...(playoffSeeds.NC ?? [])];
+      if (!allSeeds.includes(userTeamId)) return 'seasonOver';
+    }
+
+    return 'playoffsStart';
+  }
+  if (phase === 'playoffs') return 'playoffsStart';
+
+  // 6. OFFSEASON: entering re-signing/draft/FA
+  if (phase === 'resigning' || phase === 'draft' || phase === 'freeAgency') {
+    return 'seasonOver';
   }
 
   return 'weekly';

@@ -309,7 +309,15 @@ export function generateSocialPosts(input: SocialInput): SocialPost[] {
   ];
   const tonyBlazeSeed = seedHash('tony_' + team.id, season * 100 + week);
 
-  if (unhappyPlayers.length >= 2) {
+  if (unhappyPlayers.length >= 2 && week % 3 === 0) {
+    // Only post locker room reports every ~3 weeks to avoid repetition
+    const tonyUnhappyTemplates = [
+      `I'm hearing things out of ${team.city}... and it's NOT good. Multiple players are UNHAPPY. This could get ugly. 👀`,
+      `Somebody in the ${team.name} front office needs to wake up. ${unhappyPlayers.length} players frustrated and nobody's doing anything about it. 🚨`,
+      `The vibes in ${team.city} are OFF. Talked to a source close to the team — morale is at an all-time low. Something's gotta give.`,
+      `You can only ignore unhappy players for so long. The ${team.name} have a LOCKER ROOM problem and everyone knows it except apparently their GM.`,
+      `${unhappyPlayers.length} frustrated players on one roster? That's not bad luck — that's bad MANAGEMENT. Fix it or lose them. Period.`,
+    ];
     raw.push({
       priority: 82,
       category: 'media',
@@ -319,7 +327,7 @@ export function generateSocialPosts(input: SocialInput): SocialPost[] {
       handle: '@TonyBlazeShow',
       avatar: 'media_tony',
       verified: true,
-      text: `I'm hearing things out of ${team.city}... and it's NOT good. Multiple players are UNHAPPY. This could get ugly. 👀`,
+      text: pick(tonyUnhappyTemplates, tonyBlazeSeed),
     });
   } else if (underpaidStar) {
     raw.push({

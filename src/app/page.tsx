@@ -386,7 +386,7 @@ function TeamSpotlightSection({
   const currentNarrative = React.useMemo(() => {
     const phase = ctx?.phase ?? 'regular';
     const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
-    return detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, team.id);
+    return detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, team.id, playoffSeeds);
   }, [ctx?.phase, week, leagueSettings?.tradeDeadlineWeek, playoffBracket, team.id]);
 
   // If AI is enabled and this is a special narrative moment, trigger AI fetch.

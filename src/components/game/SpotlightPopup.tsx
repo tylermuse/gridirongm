@@ -73,7 +73,7 @@ export function SpotlightPopup() {
       if (!lastShownKey) sessionStorage.setItem(STORAGE_KEY, currentKey);
       const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
       const narrative = userTeam
-        ? detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id)
+        ? detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id, playoffSeeds)
         : 'weekly';
       if (narrative === 'weekly') return; // skip on refresh for weekly
       // Fall through for special moments — let them trigger below
@@ -88,7 +88,7 @@ export function SpotlightPopup() {
     if (lastShownKey === currentKey) {
       if (leagueSettings?.aiCommentary && userTeam) {
         const tradeDeadlineWeek = leagueSettings.tradeDeadlineWeek ?? 12;
-        const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id);
+        const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id, playoffSeeds);
         if (narrative !== 'weekly') {
           const rosterForFetch = players.filter(p => p.teamId === userTeam.id);
           fetchAiSpotlight({ team: userTeam, roster: rosterForFetch, allTeams: teams, allPlayers: players, season, week, phase, narrative, newsItems, draftResults, playoffBracket, playoffSeeds, champions, tradeDeadlineWeek });
@@ -109,7 +109,7 @@ export function SpotlightPopup() {
       // Weekly recaps use the template engine to save ~90% of API costs.
       if (leagueSettings?.aiCommentary && userTeam) {
         const tradeDeadlineWeek = leagueSettings.tradeDeadlineWeek ?? 12;
-        const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id);
+        const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id, playoffSeeds);
 
         // Weekly with AI on: no popup (no content to show on dashboard)
         if (narrative === 'weekly') return;

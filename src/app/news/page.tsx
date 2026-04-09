@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
+import type { Player } from '@/types';
 import { GameShell } from '@/components/game/GameShell';
 import { Badge } from '@/components/ui/Badge';
 import type { SocialPost } from '@/types';
@@ -119,7 +121,7 @@ export default function NewsPage() {
         </div>
 
         {filter === 'social' ? (
-          <SocialFeed posts={socialPosts ?? []} season={season} onPlayerClick={setSelectedPlayerId} />
+          <SocialFeed posts={socialPosts ?? []} season={season} onPlayerClick={setSelectedPlayerId} players={players} />
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-[var(--text-sec)]">
             No news items yet. Simulate games to see league news.
@@ -200,7 +202,7 @@ export default function NewsPage() {
   );
 }
 
-function SocialFeed({ posts, season, onPlayerClick }: { posts: SocialPost[]; season: number; onPlayerClick?: (id: string) => void }) {
+function SocialFeed({ posts, season, onPlayerClick, players: allPlayers }: { posts: SocialPost[]; season: number; onPlayerClick?: (id: string) => void; players?: Player[] }) {
   const currentPosts = posts
     .filter(p => p.timestamp.season === season)
     .sort((a, b) => b.timestamp.week - a.timestamp.week || b.likes - a.likes);
@@ -221,7 +223,7 @@ function SocialFeed({ posts, season, onPlayerClick }: { posts: SocialPost[]; sea
         <div>
           <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-2">🎙️ Media & Team</div>
           <div className="space-y-3">
-            {mediaPosts.slice(0, 10).map(post => <SocialPostCard key={post.id} post={post} onPlayerClick={onPlayerClick} />)}
+            {mediaPosts.slice(0, 10).map(post => <SocialPostCard key={post.id} post={post} onPlayerClick={onPlayerClick} players={allPlayers} />)}
           </div>
         </div>
       )}
@@ -229,7 +231,7 @@ function SocialFeed({ posts, season, onPlayerClick }: { posts: SocialPost[]; sea
         <div>
           <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-2">🏈 Player Posts</div>
           <div className="space-y-3">
-            {playerPosts.slice(0, 10).map(post => <SocialPostCard key={post.id} post={post} onPlayerClick={onPlayerClick} />)}
+            {playerPosts.slice(0, 10).map(post => <SocialPostCard key={post.id} post={post} onPlayerClick={onPlayerClick} players={allPlayers} />)}
           </div>
         </div>
       )}
@@ -237,7 +239,7 @@ function SocialFeed({ posts, season, onPlayerClick }: { posts: SocialPost[]; sea
         <div>
           <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-2">📣 Fan Reactions</div>
           <div className="space-y-3">
-            {fanPosts.slice(0, 10).map(post => <SocialPostCard key={post.id} post={post} onPlayerClick={onPlayerClick} />)}
+            {fanPosts.slice(0, 10).map(post => <SocialPostCard key={post.id} post={post} onPlayerClick={onPlayerClick} players={allPlayers} />)}
           </div>
         </div>
       )}
@@ -245,7 +247,7 @@ function SocialFeed({ posts, season, onPlayerClick }: { posts: SocialPost[]; sea
   );
 }
 
-function SocialPostCard({ post, onPlayerClick }: { post: SocialPost; onPlayerClick?: (id: string) => void }) {
+function SocialPostCard({ post, onPlayerClick, players: allPlayers }: { post: SocialPost; onPlayerClick?: (id: string) => void; players?: Player[] }) {
   const avatarEmoji = post.author.avatar === 'media_tony' ? '🔥'
     : post.author.avatar === 'media_marcus' ? '🤓'
     : post.author.avatar === 'team' ? '🏈'
@@ -258,9 +260,17 @@ function SocialPostCard({ post, onPlayerClick }: { post: SocialPost; onPlayerCli
     <div className="bg-[#15202b] rounded-2xl px-4 pt-3 pb-3 text-white shadow-lg max-w-[480px]">
       {/* Header */}
       <div className="flex items-center gap-2.5 mb-2">
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-base shrink-0">
-          {avatarEmoji}
-        </div>
+        {post.author.type === 'player' && post.author.playerId && allPlayers ? (() => {
+          const matchedPlayer = allPlayers.find(p => p.id === post.author.playerId);
+          if (matchedPlayer) {
+            return <PlayerAvatar player={matchedPlayer} size="sm" teamColor="#555" />;
+          }
+          return <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0">{post.author.name.split(' ').map(w => w[0]).join('').slice(0, 2)}</div>;
+        })() : (
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-base shrink-0">
+            {avatarEmoji}
+          </div>
+        )}
         <div className="min-w-0">
           <div className="flex items-center gap-1">
             {post.author.type === 'player' && post.author.playerId ? (
