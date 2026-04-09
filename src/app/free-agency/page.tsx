@@ -814,7 +814,10 @@ export default function FreeAgencyPage() {
                       {isExpanded && (
                         <tr className="border-t border-[var(--border)]">
                           <td colSpan={8} className="px-4 py-3 bg-[var(--surface-2)]/50">
-                            <FAEvaluationPanel player={p} roster={roster} capSpace={capSpace} marketSalary={salary} />
+                            {/* Show FA Evaluation only when NO Intel Report exists */}
+                            {!(effectivePursuitState?.intelReports[p.id]) && (
+                              <FAEvaluationPanel player={p} roster={roster} capSpace={capSpace} marketSalary={salary} />
+                            )}
 
                             {/* Intel Report — no report yet */}
                             {effectivePursuitState && !effectivePursuitState.intelReports[p.id] && (
@@ -933,6 +936,11 @@ export default function FreeAgencyPage() {
 
                                   {/* Front office blurb */}
                                   <p className="text-xs italic text-[var(--text)]">&ldquo;{report.intelBlurb}&rdquo; — Front Office</p>
+
+                                  {/* FA Evaluation integrated into Intel Report */}
+                                  <div className="border-t border-[var(--border)] pt-3 mt-3">
+                                    <FAEvaluationPanel player={p} roster={roster} capSpace={capSpace} marketSalary={salary} />
+                                  </div>
                                 </div>
                               );
                             })()}
