@@ -225,8 +225,17 @@ function SocialPostCard({ post, onPlayerClick }: { post: SocialPost; onPlayerCli
     <div className={`bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 ${borderColor ? `border-l-[3px] ${borderColor}` : ''}`}>
       {/* Header */}
       <div className="flex items-center gap-2.5 mb-2">
-        <div className="w-9 h-9 rounded-full bg-[var(--surface-2)] flex items-center justify-center text-lg shrink-0">
-          {post.author.avatar}
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-lg shrink-0 ${
+          post.author.type === 'media' ? 'bg-gray-800 text-white' :
+          post.author.type === 'team' ? 'bg-blue-600 text-white' :
+          post.author.type === 'fan' ? 'bg-amber-100' :
+          'bg-[var(--surface-2)]'
+        }`}>
+          {post.author.avatar === 'media_tony' ? '🔥' :
+           post.author.avatar === 'media_marcus' ? '🤓' :
+           post.author.avatar === 'team' ? '🏈' :
+           post.author.avatar === 'fan' ? '📣' :
+           post.author.type === 'player' ? '🏈' : post.author.avatar}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1">
