@@ -35,6 +35,7 @@ const NAV_SECTIONS = [
     label: 'Players',
     items: [
       { href: '/re-sign', label: 'Re-signing', icon: '✍️' },
+      { href: '/draft-preview', label: 'Draft Preview', icon: '🔭' },
       { href: '/draft', label: 'Draft', icon: '🎯' },
       { href: '/draft-recap', label: 'Draft Recap', icon: '📋' },
       { href: '/free-agency', label: 'Free Agency', icon: '🖊️' },

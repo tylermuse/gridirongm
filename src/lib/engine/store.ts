@@ -55,6 +55,8 @@ interface GameStore extends LeagueState {
   initialized: boolean;
   newLeague: (teamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular') => Promise<void>;
   resetLeague: () => void;
+  /** Set the game plan for the user team's NEXT regular-season game. Cleared when that week is simmed. */
+  setNextGamePlan: (plan: { passRate: number; aggressiveness: 'conservative' | 'balanced' | 'aggressive' } | null) => void;
   simWeek: () => void;
   simToWeek: (targetWeek: number) => void;
   advanceToPlayoffs: () => void;
@@ -676,6 +678,56 @@ function playerTradeValue(player: Player): number {
   else if (player.contract.yearsLeft === 1) contractMult = 0.50;  // 1 year left — half value
   else if (player.contract.yearsLeft === 2) contractMult = 0.80;  // 2 years — slight discount
   return rawValue * contractMult;
+}
+
+/** Generates a position-by-position preview grade for the upcoming draft class.
+ *  Uses a fresh sample-generated draft class to preview class quality without
+ *  committing to specific players. The actual class is generated at draft time. */
+function generateDraftClassPreview(season: number): { season: number; groups: { position: string; grade: string; depthNote: string }[] } {
+  // Generate a sample class to estimate quality distributions
+  const sample = generateDraftClass(224, { chaosDraft: false });
+  const POSITIONS_TO_RATE: Position[] = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S'];
+
+  function gradeFromOvrs(ovrs: number[]): { grade: string; depthNote: string } {
+    if (ovrs.length === 0) return { grade: 'C', depthNote: 'No prospects available' };
+    const sorted = [...ovrs].sort((a, b) => b - a);
+    const top1 = sorted[0];
+    const top3Avg = sorted.slice(0, 3).reduce((s, v) => s + v, 0) / Math.min(3, sorted.length);
+    const top10Avg = sorted.slice(0, 10).reduce((s, v) => s + v, 0) / Math.min(10, sorted.length);
+    const startersCount = ovrs.filter(o => o >= 70).length;
+
+    // Composite score: top1 weighted more, then top3, then top10
+    const composite = top1 * 0.4 + top3Avg * 0.35 + top10Avg * 0.25;
+
+    let grade: string;
+    if (composite >= 86) grade = 'A+';
+    else if (composite >= 82) grade = 'A';
+    else if (composite >= 79) grade = 'A-';
+    else if (composite >= 76) grade = 'B+';
+    else if (composite >= 73) grade = 'B';
+    else if (composite >= 70) grade = 'B-';
+    else if (composite >= 67) grade = 'C+';
+    else if (composite >= 64) grade = 'C';
+    else grade = 'C-';
+
+    let depthNote: string;
+    if (top1 >= 85 && startersCount >= 8) depthNote = 'Loaded class — elite top, deep pool';
+    else if (top1 >= 85 && startersCount < 5) depthNote = 'Strong top-end talent, limited depth';
+    else if (top1 < 75 && startersCount >= 8) depthNote = 'Thin at the top, good depth';
+    else if (startersCount >= 6) depthNote = 'Deep class with several starters';
+    else if (top1 >= 80) depthNote = 'A few quality prospects, weak depth';
+    else depthNote = 'Weak class overall — developmental prospects';
+
+    return { grade, depthNote };
+  }
+
+  const groups = POSITIONS_TO_RATE.map(pos => {
+    const posOvrs = sample.filter(p => p.position === pos).map(p => p.ratings.overall);
+    const { grade, depthNote } = gradeFromOvrs(posOvrs);
+    return { position: pos, grade, depthNote };
+  });
+
+  return { season, groups };
 }
 
 /** Pick value based on estimated overall pick number.
@@ -1990,7 +2042,16 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     );
     const rivalryIntensity = rivalry?.intensity ?? 0;
 
-    const result = simulateGame(game, homeRoster, awayRoster, homeCoachBonus, awayCoachBonus, rivalryIntensity, bsMode, mcafeeMode);
+    // Apply user's pre-game plan (only for the user's game)
+    let userGamePlan: { plan: { passRate: number; aggressiveness: 'conservative' | 'balanced' | 'aggressive' }; userTeamSide: 'home' | 'away' } | undefined;
+    if (state.nextGamePlan && (game.homeTeamId === state.userTeamId || game.awayTeamId === state.userTeamId)) {
+      userGamePlan = {
+        plan: state.nextGamePlan,
+        userTeamSide: game.homeTeamId === state.userTeamId ? 'home' : 'away',
+      };
+    }
+
+    const result = simulateGame(game, homeRoster, awayRoster, homeCoachBonus, awayCoachBonus, rivalryIntensity, bsMode, mcafeeMode, userGamePlan);
 
     // Compute ATS coverage
     const scoreDiff = result.homeScore - result.awayScore;
@@ -2490,11 +2551,21 @@ export const useGameStore = create<GameStore>()(
         set({ initialized: false, ...EMPTY_LEAGUE_STATE });
       },
 
+      setNextGamePlan: (plan) => {
+        set({ nextGamePlan: plan ?? undefined });
+      },
+
       simWeek: () => {
         const state = get();
         if (state.phase !== 'regular') return;
         const result = simulateOneWeek(state);
         if (!result) return;
+
+        // Generate draft class preview when crossing the trade deadline
+        const tradeDeadline = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).tradeDeadlineWeek;
+        if (state.week === tradeDeadline && (!state.draftClassPreview || state.draftClassPreview.season !== state.season)) {
+          set({ draftClassPreview: generateDraftClassPreview(state.season) });
+        }
 
         // Generate weekly recap from this week's games
         const simmedWeek = state.week;
@@ -2506,9 +2577,9 @@ export const useGameStore = create<GameStore>()(
           const teams = result.patch.teams as Team[];
           const seeds = computePlayoffSeeds(teams);
           const bracket = buildBracket(seeds, teams);
-          set({ ...result.patch, playoffSeeds: seeds, playoffBracket: bracket, weeklyRecaps });
+          set({ ...result.patch, playoffSeeds: seeds, playoffBracket: bracket, weeklyRecaps, nextGamePlan: undefined });
         } else {
-          set({ ...result.patch, weeklyRecaps });
+          set({ ...result.patch, weeklyRecaps, nextGamePlan: undefined });
         }
 
         // Update approval for user team based on this week's game

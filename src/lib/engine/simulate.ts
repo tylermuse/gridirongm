@@ -112,6 +112,17 @@ function weightedPick<T>(items: T[], weights: number[]): T {
   return items[items.length - 1];
 }
 
+// ── Game Plan ────────────────────────────────────────────────────────────────
+// User-controlled tendencies that the engine respects when simulating the
+// user team's offensive plays. AI teams ignore this and use baseline behavior.
+
+export interface GamePlan {
+  /** 0-100 — pass rate. 50 = balanced (current default ~57%). 80 = pass heavy. 30 = run heavy. */
+  passRate: number;
+  /** Risk tolerance: conservative reduces deep shots and 4th-down go-for-its; aggressive increases both. */
+  aggressiveness: 'conservative' | 'balanced' | 'aggressive';
+}
+
 // ── Play types ──────────────────────────────────────────────────────────────
 
 type PlayResult = {
@@ -146,6 +157,7 @@ function simulatePlay(
   yardsToGo: number,
   fieldPosition: number, // yards from own end zone (0-100)
   rivalryIntensity: number = 0,
+  gamePlan?: GamePlan,
 ): PlayResult {
   const qbs = offense.filter(p => p.position === 'QB' && (!p.injury || p.injury.weeksLeft === 0));
   const rbs = offense.filter(p => p.position === 'RB' && (!p.injury || p.injury.weeksLeft === 0));
@@ -171,9 +183,21 @@ function simulatePlay(
     : 50;
 
   // Decide pass vs rush — NFL avg ~58% pass
-  const passChance = down >= 3 && yardsToGo > 5 ? 0.80 :
-                     down >= 3 ? 0.62 :
-                     down === 1 ? 0.52 : 0.57;
+  // If a game plan is provided, use it as the baseline pass rate, but still
+  // respect situational adjustments (3rd & long always passes more, etc.)
+  let passChance: number;
+  if (gamePlan) {
+    const baseFromPlan = gamePlan.passRate / 100;
+    // Apply situational shifts on top of the user's baseline
+    passChance = down >= 3 && yardsToGo > 5 ? clamp(baseFromPlan + 0.23, 0.4, 0.95) :
+                 down >= 3 ? clamp(baseFromPlan + 0.05, 0.3, 0.9) :
+                 down === 1 ? clamp(baseFromPlan - 0.05, 0.1, 0.85) :
+                 baseFromPlan;
+  } else {
+    passChance = down >= 3 && yardsToGo > 5 ? 0.80 :
+                 down >= 3 ? 0.62 :
+                 down === 1 ? 0.52 : 0.57;
+  }
 
   // ── QB designed run check ──
   // Fast QBs (speed >= 70) get designed runs; scales with speed
@@ -328,11 +352,14 @@ function simulatePlay(
     // ── Interception check ──
     // Elite QBs (80+ OVR) = 8-14 INTs/season, Average (65-79) = 14-20, Bad (<65) = 20+.
     // Factor in QB throwing + awareness heavily to differentiate elite from bad.
+    // Aggressive game plan increases INT risk; conservative reduces it.
     const qbIntRating = (qb.ratings.throwing + qb.ratings.awareness) / 2;
     const baseIntRate = 0.022;
+    const intAggressivenessMult = gamePlan?.aggressiveness === 'aggressive' ? 1.4 :
+                                   gamePlan?.aggressiveness === 'conservative' ? 0.75 : 1.0;
     const intChance = clamp(
-      baseIntRate * (1.3 - qbIntRating / 100) + (coverageRating - qb.ratings.throwing) / 900,
-      0.006, 0.035,
+      (baseIntRate * (1.3 - qbIntRating / 100) + (coverageRating - qb.ratings.throwing) / 900) * intAggressivenessMult,
+      0.006, 0.05,
     );
     if (Math.random() < intChance) {
       const interceptor = coverageDefender ?? (cbs[0] || safeties[0] || allDefenders[0]);
@@ -360,7 +387,10 @@ function simulatePlay(
       let yards = Math.round((baseYards + bonusYards * Math.random()) * ((qbRatingMult + recRatingMult) / 2));
 
       // Big play chance (~2% of completions go 20+) — explosive plays
-      const bigPlayChance = 0.008 + (target.ratings.speed / 100) * 0.010;
+      // Aggressiveness: aggressive ×1.5, conservative ×0.6
+      const aggressivenessMult = gamePlan?.aggressiveness === 'aggressive' ? 1.5 :
+                                  gamePlan?.aggressiveness === 'conservative' ? 0.6 : 1.0;
+      const bigPlayChance = (0.008 + (target.ratings.speed / 100) * 0.010) * aggressivenessMult;
       if (Math.random() < bigPlayChance) {
         yards += 8 + Math.floor(Math.random() * 10);
       }
@@ -499,6 +529,7 @@ function simulateDrive(
   defense: Player[],
   mcafeeMode: boolean = false,
   rivalryIntensity: number = 0,
+  gamePlan?: GamePlan,
 ): DriveResult {
   const plays: PlayResult[] = [];
   let fieldPosition = 20 + Math.floor(Math.random() * 12); // NFL avg start ~own 25
@@ -507,7 +538,7 @@ function simulateDrive(
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
 
   for (let playNum = 0; playNum < 10; playNum++) {
-    const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition, rivalryIntensity);
+    const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition, rivalryIntensity, gamePlan);
     plays.push(play);
 
     if (play.touchdown) {
@@ -628,6 +659,8 @@ export function simulateGame(
   rivalryIntensity: number = 0,
   bsMode: boolean = false,
   mcafeeMode: boolean = false,
+  /** Optional game plan applied only to the side specified by `userTeamSide`. */
+  userGamePlan?: { plan: GamePlan; userTeamSide: 'home' | 'away' },
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
@@ -723,7 +756,8 @@ export function simulateGame(
     const quarter = Math.min(4, Math.floor(i / (possessions / 4)) + 1);
 
     // Home offense drives — scoring fatigue: teams with big leads run the clock
-    const homeDrive = simulateDrive(effectiveHomeRoster, effectiveAwayRoster, mcafeeMode, rivalryIntensity);
+    const homePlan = userGamePlan?.userTeamSide === 'home' ? userGamePlan.plan : undefined;
+    const homeDrive = simulateDrive(effectiveHomeRoster, effectiveAwayRoster, mcafeeMode, rivalryIntensity, homePlan);
     const homeStall = homeScore >= 42 ? 0.7 : homeScore >= 35 ? 0.35 : homeScore >= 28 && (homeScore - awayScore) >= 21 ? 0.2 : 0;
     const homePoints = homeStall > 0 && Math.random() < homeStall ? 0 : homeDrive.points;
     homeScore += homePoints;
@@ -733,7 +767,8 @@ export function simulateGame(
     runHome = afterHome.home;
 
     // Away offense drives — same scoring fatigue
-    const awayDrive = simulateDrive(effectiveAwayRoster, effectiveHomeRoster, mcafeeMode, rivalryIntensity);
+    const awayPlan = userGamePlan?.userTeamSide === 'away' ? userGamePlan.plan : undefined;
+    const awayDrive = simulateDrive(effectiveAwayRoster, effectiveHomeRoster, mcafeeMode, rivalryIntensity, awayPlan);
     const awayStall = awayScore >= 42 ? 0.7 : awayScore >= 35 ? 0.35 : awayScore >= 28 && (awayScore - homeScore) >= 21 ? 0.2 : 0;
     const awayPoints = awayStall > 0 && Math.random() < awayStall ? 0 : awayDrive.points;
     awayScore += awayPoints;
