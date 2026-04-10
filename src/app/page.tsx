@@ -1223,7 +1223,7 @@ function DiscordBanner() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-[var(--text)]">Join the BS Football Community</p>
-          <p className="text-xs text-[var(--text-sec)] mt-0.5">Share your dynasty, suggest features, and talk football with other GMs.</p>
+          <p className="text-xs text-[var(--text-sec)] mt-0.5">Tell me what features you want me to build into the game!</p>
         </div>
         <a
           href="https://discord.gg/RMtusS2GKW"
