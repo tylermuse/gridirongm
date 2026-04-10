@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -33,10 +34,18 @@ const POSITION_NAMES: Record<string, string> = {
 };
 
 export default function DraftPreviewPage() {
-  const { draftClassPreview, season, phase, week, leagueSettings } = useGameStore();
+  const { draftClassPreview, season, phase, week, leagueSettings, ensureDraftClassPreview } = useGameStore();
   const tradeDeadline = leagueSettings?.tradeDeadlineWeek ?? 12;
   const isPreviewAvailable = draftClassPreview && draftClassPreview.season === season;
   const beforeDeadline = phase === 'regular' && week < tradeDeadline;
+
+  // Auto-generate the preview when the user visits and they're past the deadline
+  // (covers paths where simWeek wasn't called for week === deadline, e.g. simToWeek)
+  useEffect(() => {
+    if (!isPreviewAvailable && !beforeDeadline) {
+      ensureDraftClassPreview();
+    }
+  }, [isPreviewAvailable, beforeDeadline, ensureDraftClassPreview]);
 
   return (
     <GameShell>

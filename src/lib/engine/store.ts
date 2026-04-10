@@ -58,6 +58,8 @@ interface GameStore extends LeagueState {
   resetLeague: () => void;
   /** Set the game plan for the user team's NEXT regular-season game. Cleared when that week is simmed. */
   setNextGamePlan: (plan: { passRate: number; aggressiveness: 'conservative' | 'balanced' | 'aggressive' } | null) => void;
+  /** Generate the draft class preview if it doesn't already exist for the current season. */
+  ensureDraftClassPreview: () => void;
   simWeek: () => void;
   simToWeek: (targetWeek: number) => void;
   advanceToPlayoffs: () => void;
@@ -2554,6 +2556,12 @@ export const useGameStore = create<GameStore>()(
 
       setNextGamePlan: (plan) => {
         set({ nextGamePlan: plan ?? undefined });
+      },
+
+      ensureDraftClassPreview: () => {
+        const state = get();
+        if (state.draftClassPreview && state.draftClassPreview.season === state.season) return;
+        set({ draftClassPreview: generateDraftClassPreview(state.season) });
       },
 
       simWeek: () => {
