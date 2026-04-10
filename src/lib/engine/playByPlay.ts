@@ -405,6 +405,12 @@ function emptyBucket(): StatBucket {
 // Main simulator
 // ---------------------------------------------------------------------------
 
+export interface LiveGamePlan {
+  passRate: number;
+  aggressiveness: 'conservative' | 'balanced' | 'aggressive';
+  userTeamSide: 'home' | 'away';
+}
+
 export function simulatePlayByPlay(
   homeTeam: Team,
   awayTeam: Team,
@@ -412,6 +418,8 @@ export function simulatePlayByPlay(
   awayPlayers: Player[],
   isPlayoff: boolean = false,
   mcafeeMode: boolean = false,
+  /** Optional user game plan applied only when the user's team is on offense. */
+  userGamePlan?: LiveGamePlan,
 ): LiveGameResult {
   const homeKey = extractKeyPlayers(homePlayers);
   const awayKey = extractKeyPlayers(awayPlayers);
@@ -895,6 +903,16 @@ export function simulatePlayByPlay(
     const isFirstOrSecondShort = (state.down <= 2 && state.yardsToGo <= 4);
     let runChance = isThirdLong ? 0.22 : isFirstOrSecondShort ? 0.50 : 0.40;
 
+    // ── User Game Plan: apply baseline pass rate when user team is on offense ──
+    const isUserOffense = userGamePlan && state.possession === userGamePlan.userTeamSide;
+    if (isUserOffense && userGamePlan) {
+      const userRunChance = 1 - (userGamePlan.passRate / 100);
+      // Blend user baseline with situational adjustments (down/distance still matter)
+      runChance = isThirdLong ? Math.max(0.1, userRunChance - 0.18) :
+                  isFirstOrSecondShort ? Math.min(0.85, userRunChance + 0.10) :
+                  userRunChance;
+    }
+
     // ── Clock-aware modifier (Q4 < 5 min) ──
     const scoreDiffForClock = state.possession === 'home'
       ? state.homeScore - state.awayScore
@@ -1105,8 +1123,12 @@ export function simulatePlayByPlay(
         const bonusYards = (qbThrowing / 100) * 1.5 + (wr1Speed / 100) * 1.0;
         let yardsGained = Math.round(baseYards + bonusYards * Math.random());
 
-        // Big play chance (~2% of completions, higher for fast WRs)
-        if (Math.random() < 0.008 + (wr1Speed / 100) * 0.012) {
+        // Big play chance — aggressive plan boosts, conservative reduces
+        const userAggMult = isUserOffense && userGamePlan
+          ? (userGamePlan.aggressiveness === 'aggressive' ? 1.5 :
+             userGamePlan.aggressiveness === 'conservative' ? 0.6 : 1.0)
+          : 1.0;
+        if (Math.random() < (0.008 + (wr1Speed / 100) * 0.012) * userAggMult) {
           yardsGained += 10 + Math.floor(Math.random() * 12);
         }
         yardsGained = clamp(yardsGained, 1, 55); // completions never lose yards

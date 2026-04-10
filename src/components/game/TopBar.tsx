@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
-import { GamePlanModal } from './GamePlanModal';
 // TradeProposalPopup disabled — user prefers checking trades inline
 
 export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
@@ -41,7 +40,6 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   } = useGameStore();
 
   const [newProposalIds, setNewProposalIds] = useState<string[]>([]);
-  const [showGamePlan, setShowGamePlan] = useState(false);
   const stablePhaseRef = useRef<string | null>(null);
   const superBowlDone = !!playoffBracket?.find(m => m.id === 'championship')?.winnerId;
   const stableSBRef = useRef<boolean | null>(null);
@@ -83,8 +81,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
 
   const pendingTradeCount = tradeProposals.filter(p => p.status === 'pending').length;
 
-  // The actual sim, called after the user confirms (or skips) the game plan modal
-  const runSimWeek = useCallback(async () => {
+  const handleSimWeek = useCallback(async () => {
     const beforeIds = new Set(useGameStore.getState().tradeProposals.filter(p => p.status === 'pending').map(p => p.id));
     simWeek();
     const afterState = useGameStore.getState();
@@ -101,32 +98,6 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
       router.push('/playoffs');
     }
   }, [simWeek, router]);
-
-  // Click handler for the Sim Week button — opens the Game Plan modal first
-  // if the user has a game this week. Bye weeks skip the modal.
-  const handleSimWeek = useCallback(() => {
-    const userHasGame = schedule.some(g =>
-      g.week === week && !g.played &&
-      (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId),
-    );
-    if (userHasGame) {
-      setShowGamePlan(true);
-    } else {
-      // Bye week — skip modal
-      runSimWeek();
-    }
-  }, [schedule, week, userTeamId, runSimWeek]);
-
-  // Compute opponent for the Game Plan modal
-  const userGameThisWeek = schedule.find(g =>
-    g.week === week && !g.played &&
-    (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId),
-  );
-  const opponentId = userGameThisWeek
-    ? (userGameThisWeek.homeTeamId === userTeamId ? userGameThisWeek.awayTeamId : userGameThisWeek.homeTeamId)
-    : null;
-  const opponent = opponentId ? teams.find(t => t.id === opponentId) : null;
-  const opponentName = opponent ? `${opponent.city} ${opponent.name}` : 'Opponent';
 
   const handleSimToDeadline = useCallback(async () => {
     const deadlineWeek = (leagueSettings?.tradeDeadlineWeek ?? 12) + 1;
@@ -220,21 +191,6 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
 
   return (
     <>
-      {showGamePlan && (
-        <GamePlanModal
-          opponentName={opponentName}
-          onConfirm={(plan) => {
-            useGameStore.getState().setNextGamePlan(plan);
-            setShowGamePlan(false);
-            runSimWeek();
-          }}
-          onCancel={() => {
-            // Skip the plan — sim with default behavior
-            useGameStore.getState().setNextGamePlan(null);
-            setShowGamePlan(false);
-          }}
-        />
-      )}
       <header className="border-b border-[var(--border)] bg-[var(--surface)] sticky top-0 z-10">
         <div className="h-14 flex items-center justify-between px-3 md:px-6">
           <div className="flex items-center gap-2 text-sm text-[var(--text-sec)]">

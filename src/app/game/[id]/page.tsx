@@ -6,10 +6,11 @@ import { useGameStore, flushToStorage, flushToStorageSync } from '@/lib/engine/s
 import { GameShell } from '@/components/game/GameShell';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { simulatePlayByPlay, liveGameToGameResult } from '@/lib/engine/playByPlay';
+import { simulatePlayByPlay, liveGameToGameResult, type LiveGamePlan } from '@/lib/engine/playByPlay';
 import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
 import { ScoreBug } from '@/components/game/ScoreBug';
+import { GamePlanModal } from '@/components/game/GamePlanModal';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import type { Player, Position } from '@/types';
 
@@ -471,10 +472,24 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     });
   }, [game, players, awayTeam]);
 
+  // Determine if user is in this game and needs to set a game plan first
+  const userInGame = !!game && (game.homeTeamId === userTeamId || game.awayTeamId === userTeamId);
+  const userTeamSide: 'home' | 'away' | null = !game ? null
+    : game.homeTeamId === userTeamId ? 'home'
+    : game.awayTeamId === userTeamId ? 'away'
+    : null;
+
+  // Game plan modal state — only relevant when the user is in this game
+  const [gamePlanReady, setGamePlanReady] = useState(!userInGame);
+  const [livePlan, setLivePlan] = useState<LiveGamePlan | null>(null);
+
   const simRef = useRef<LiveGameResult | null>(null);
-  if (simRef.current === null && homeTeam && awayTeam && game && !game.played) {
+  if (simRef.current === null && homeTeam && awayTeam && game && !game.played && gamePlanReady) {
     const mcafeeMode = useGameStore.getState().leagueSettings?.mcafeeMode ?? false;
-    simRef.current = simulatePlayByPlay(homeTeam, awayTeam, homePlayers, awayPlayers, isPlayoffGame, mcafeeMode);
+    simRef.current = simulatePlayByPlay(
+      homeTeam, awayTeam, homePlayers, awayPlayers, isPlayoffGame, mcafeeMode,
+      livePlan ?? undefined,
+    );
   }
   const liveResult = simRef.current;
 
@@ -744,6 +759,30 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     { id: 'drives', label: 'Drives' },
     { id: 'stats', label: 'Stats' },
   ];
+
+  // Show the Game Plan modal if user is in this game and hasn't set one yet
+  if (userInGame && !gamePlanReady) {
+    const opponentTeam = userTeamSide === 'home' ? awayTeam : homeTeam;
+    const opponentName = opponentTeam ? `${opponentTeam.city} ${opponentTeam.name}` : 'Opponent';
+    return (
+      <GameShell>
+        <GamePlanModal
+          opponentName={opponentName}
+          onConfirm={(plan) => {
+            if (userTeamSide) {
+              setLivePlan({ ...plan, userTeamSide });
+            }
+            setGamePlanReady(true);
+          }}
+          onCancel={() => {
+            // Skip the plan — sim with default behavior
+            setLivePlan(null);
+            setGamePlanReady(true);
+          }}
+        />
+      </GameShell>
+    );
+  }
 
   return (
     <GameShell>
