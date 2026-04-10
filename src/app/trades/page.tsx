@@ -1123,8 +1123,8 @@ function TradesPage() {
     setCounterResult(result.success ? 'accepted' : 'rejected');
     if (result.success) {
       respondToTradeProposal(proposal.id, false);
-      handleCancelCounter();
-      setTradeResult('accepted');
+      // DON'T immediately cancel — keep the UI open with the success message.
+      // The user dismisses via the "Done" button rendered when counterResult === 'accepted'.
     }
   }
 
@@ -1614,13 +1614,29 @@ function TradesPage() {
                             {counterResult === 'rejected' && (
                               <p className="text-sm text-red-600 mt-1">Counter rejected — offer more value or adjust your asks.</p>
                             )}
+                            {counterResult === 'accepted' && (
+                              <div className="mt-2 bg-green-50 border border-green-300 rounded-lg p-3 flex items-center gap-3">
+                                <span className="text-xl">✅</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-bold text-green-700">Counter Accepted!</p>
+                                  <p className="text-xs text-green-600 mt-0.5">The deal is done. Check your roster for the new additions.</p>
+                                </div>
+                                <button
+                                  onClick={handleCancelCounter}
+                                  className="text-xs font-bold text-green-700 hover:text-green-900 px-3 py-1.5 rounded bg-green-100 hover:bg-green-200 transition-colors"
+                                >
+                                  Done
+                                </button>
+                              </div>
+                            )}
                           </div>
                           <Button
                             size="sm"
                             onClick={() => handleSubmitCounter(false)}
                             disabled={
-                              (counterOfferedPlayerIds.length === 0 && counterOfferedPickIds.length === 0) &&
-                              (counterReceivedPlayerIds.length === 0 && counterReceivedPickIds.length === 0)
+                              counterResult === 'accepted' ||
+                              ((counterOfferedPlayerIds.length === 0 && counterOfferedPickIds.length === 0) &&
+                              (counterReceivedPlayerIds.length === 0 && counterReceivedPickIds.length === 0))
                             }
                           >
                             Submit Counter
