@@ -139,6 +139,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setTier('free');
     setIsAdmin(false);
+    // Redirect to homepage and force a full reload to clear all state
+    window.location.href = '/';
   }, [supabase]);
 
   // Founding member = signed up before cutoff date
