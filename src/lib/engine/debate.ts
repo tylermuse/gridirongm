@@ -1291,7 +1291,8 @@ export function generateTeamSpotlight(
   }
 
   // ─── 8. Draft Capital ───
-  const picks = team.draftPicks?.filter(pk => pk.year >= season) ?? [];
+  // Only count unused future picks (playerId means the pick was already used)
+  const picks = team.draftPicks?.filter(pk => pk.year > season || (pk.year === season && !pk.playerId)) ?? [];
   const firstRounders = picks.filter(pk => pk.round === 1).length;
   const secondRounders = picks.filter(pk => pk.round === 2).length;
   if (picks.length > 0 && (firstRounders >= 2 || picks.length >= 8)) {
