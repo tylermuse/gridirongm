@@ -775,6 +775,9 @@ function Dashboard() {
           </div>
         </div>
 
+        {/* Discord Banner */}
+        <DiscordBanner />
+
         {/* Approval & Objectives */}
         {userTeam.approval && (
           <Card>
@@ -1178,8 +1181,6 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Discord Banner */}
-      <DiscordBanner />
 
       {/* Team Roster Modal */}
       <TeamRosterModal teamId={viewTeamId} onClose={() => setViewTeamId(null)} onPlayerClick={(id) => setSelectedPlayerId(id)} />
