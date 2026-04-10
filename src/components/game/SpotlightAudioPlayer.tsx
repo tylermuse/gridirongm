@@ -4,29 +4,27 @@ import { useState, useRef, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
 const PODCAST_LIMIT = 3;
-const WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const STORAGE_KEY = 'gg-podcast-timestamps';
 
-/** Returns timestamps of podcast generations within the last 30 days */
-function getRecentTimestamps(): number[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const all: number[] = JSON.parse(raw);
-    const cutoff = Date.now() - WINDOW_MS;
-    return all.filter(ts => ts > cutoff);
-  } catch { return []; }
+/** Storage key is namespaced by current year-month, so credits reset
+ *  automatically on the 1st of every month — everyone gets 3 fresh
+ *  podcasts each month with no manual intervention. */
+function currentMonthKey(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `gg-podcast-credits-${year}-${month}`;
 }
 
 function getPodcastCount(): number {
-  return getRecentTimestamps().length;
+  try {
+    const raw = localStorage.getItem(currentMonthKey());
+    return parseInt(raw ?? '0', 10) || 0;
+  } catch { return 0; }
 }
 
 function incrementPodcastCount(): void {
   try {
-    const recent = getRecentTimestamps();
-    recent.push(Date.now());
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(recent));
+    localStorage.setItem(currentMonthKey(), String(getPodcastCount() + 1));
   } catch { /* noop */ }
 }
 
