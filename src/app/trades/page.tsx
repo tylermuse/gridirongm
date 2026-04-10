@@ -1272,14 +1272,30 @@ function TradesPage() {
             >
               {tab === 'incoming' ? (
                 <span>
-                  Incoming Offers
+                  <span className="hidden sm:inline">Incoming Offers</span>
+                  <span className="sm:hidden">Offers</span>
                   {pendingProposals.length > 0 && (
                     <span className="ml-1.5 bg-red-600 text-white rounded-full px-1.5 text-[10px]">
                       {pendingProposals.length}
                     </span>
                   )}
                 </span>
-              ) : tab === 'block' ? 'Trading Block' : tab === 'finder' ? '🔍 Trade Finder' : 'Propose Trade'}
+              ) : tab === 'block' ? (
+                <>
+                  <span className="hidden sm:inline">Trading Block</span>
+                  <span className="sm:hidden">Block</span>
+                </>
+              ) : tab === 'finder' ? (
+                <>
+                  <span className="hidden sm:inline">🔍 Trade Finder</span>
+                  <span className="sm:hidden">🔍 Finder</span>
+                </>
+              ) : (
+                <>
+                  <span className="hidden sm:inline">Propose Trade</span>
+                  <span className="sm:hidden">Propose</span>
+                </>
+              )}
             </button>
           ))}
         </div>

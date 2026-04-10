@@ -143,7 +143,8 @@ export default function PowerRankingsPage() {
             <CardHeader>
               <CardTitle>Your Position Group Rankings</CardTitle>
             </CardHeader>
-            <div className="overflow-x-auto">
+            <div className="relative overflow-x-auto">
+              <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-[var(--surface)] to-transparent sm:hidden z-10" />
               <table className="w-full text-sm min-w-[600px]">
                 <thead>
                   <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">

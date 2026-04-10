@@ -76,20 +76,20 @@ export default function FinancesPage() {
         {/* Cap summary */}
         <Card>
           <CardHeader><CardTitle>Salary Cap</CardTitle></CardHeader>
-          <div className="grid grid-cols-3 gap-6 mb-4">
+          <div className="grid grid-cols-3 gap-2 sm:gap-6 mb-4">
             <div className="text-center">
-              <div className="text-xs text-[var(--text-sec)] mb-1">Salary Cap</div>
-              <div className="text-3xl font-black">${cap}M</div>
+              <div className="text-[10px] sm:text-xs text-[var(--text-sec)] mb-1 uppercase tracking-wide">Salary Cap</div>
+              <div className="text-xl sm:text-3xl font-black tabular-nums">${cap}M</div>
             </div>
             <div className="text-center">
-              <div className="text-xs text-[var(--text-sec)] mb-1">Committed</div>
-              <div className={`text-3xl font-black ${capPct > 0.95 ? 'text-red-600' : capPct > 0.85 ? 'text-amber-600' : 'text-green-600'}`}>
+              <div className="text-[10px] sm:text-xs text-[var(--text-sec)] mb-1 uppercase tracking-wide">Committed</div>
+              <div className={`text-xl sm:text-3xl font-black tabular-nums ${capPct > 0.95 ? 'text-red-600' : capPct > 0.85 ? 'text-amber-600' : 'text-green-600'}`}>
                 ${Math.round(used * 10) / 10}M
               </div>
             </div>
             <div className="text-center">
-              <div className="text-xs text-[var(--text-sec)] mb-1">Available</div>
-              <div className={`text-3xl font-black ${remaining < 10 ? 'text-red-600' : remaining < 25 ? 'text-amber-600' : 'text-green-600'}`}>
+              <div className="text-[10px] sm:text-xs text-[var(--text-sec)] mb-1 uppercase tracking-wide">Available</div>
+              <div className={`text-xl sm:text-3xl font-black tabular-nums ${remaining < 10 ? 'text-red-600' : remaining < 25 ? 'text-amber-600' : 'text-green-600'}`}>
                 ${Math.round(remaining * 10) / 10}M
               </div>
             </div>

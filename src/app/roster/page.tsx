@@ -331,7 +331,7 @@ export default function RosterPage() {
           <div>
             <TeamQuickNav currentPage="roster" />
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-black font-display uppercase tracking-tight">{viewingTeam?.city} {viewingTeam?.name} Roster</h2>
+              <h2 className="text-lg sm:text-2xl font-black font-display uppercase tracking-tight leading-tight">{viewingTeam?.city} {viewingTeam?.name} Roster</h2>
               <select
                 value={activeTeamId}
                 onChange={e => setViewingTeamId(e.target.value === userTeamId ? null : e.target.value)}
@@ -391,7 +391,7 @@ export default function RosterPage() {
             {/* Roster Composition */}
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 mb-4">
               <div className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-3">Roster Composition</div>
-              <div className="grid grid-cols-11 gap-2">
+              <div className="grid grid-cols-6 sm:grid-cols-11 gap-2 gap-y-3">
                 {POSITIONS.map(pos => {
                   const count = roster.filter(p => p.position === pos).length;
                   const limits = ROSTER_LIMITS[pos];

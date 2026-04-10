@@ -200,10 +200,10 @@ export default function ReSignPage() {
   return (
     <GameShell>
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-6">
           <div>
-            <h2 className="text-2xl font-black">Re-signing Window</h2>
-            <p className="text-sm text-[var(--text-sec)] mt-1">
+            <h2 className="text-xl sm:text-2xl font-black">Re-signing Window</h2>
+            <p className="text-xs sm:text-sm text-[var(--text-sec)] mt-1">
               Extend or restructure your expiring contracts before they hit free agency.
             </p>
             {activeEntries.length > 1 && (
@@ -250,7 +250,7 @@ export default function ReSignPage() {
               </div>
             )}
           </div>
-          <div className="text-right">
+          <div className="text-left sm:text-right">
             {(() => {
               // Cap space excluding expiring players' current contracts (they'll come off the books)
               const expiringCurrentSalary = activeEntries.reduce((sum, e) => {
@@ -262,13 +262,13 @@ export default function ReSignPage() {
               const netAfterSigning = Math.round((projectedCapSpace - totalAsking) * 10) / 10;
 
               return (
-                <>
-                  <div className={`text-2xl font-black ${projectedCapSpace > 10 ? 'text-green-600' : projectedCapSpace > 0 ? 'text-amber-600' : 'text-red-600'}`}>
+                <div className="flex flex-row sm:flex-col items-baseline sm:items-end gap-x-3 gap-y-0 flex-wrap">
+                  <div className={`text-xl sm:text-2xl font-black tabular-nums ${projectedCapSpace > 10 ? 'text-green-600' : projectedCapSpace > 0 ? 'text-amber-600' : 'text-red-600'}`}>
                     ${projectedCapSpace}M
                   </div>
-                  <div className="text-xs text-[var(--text-sec)]">Projected Cap Space</div>
+                  <div className="text-[10px] sm:text-xs text-[var(--text-sec)]">Projected Cap Space</div>
                   {activeEntries.length > 0 && (
-                    <div className="text-xs mt-1.5 space-y-0.5">
+                    <div className="w-full text-[11px] sm:text-xs sm:mt-1.5 space-y-0.5">
                       <div className="text-amber-600">Players asking: ${totalAsking}M</div>
                       <div className={netAfterSigning >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
                         {netAfterSigning >= 0 ? `$${netAfterSigning}M remaining if all re-sign` : `$${Math.abs(netAfterSigning)}M over if all re-sign`}
@@ -276,9 +276,9 @@ export default function ReSignPage() {
                     </div>
                   )}
                   {luxuryTax > 0 && (
-                    <div className="text-xs text-red-600 mt-0.5">Luxury Tax: ${luxuryTax}M</div>
+                    <div className="w-full text-[11px] sm:text-xs text-red-600 mt-0.5">Luxury Tax: ${luxuryTax}M</div>
                   )}
-                </>
+                </div>
               );
             })()}
           </div>
@@ -542,7 +542,7 @@ export default function ReSignPage() {
 
               return (
                 <Card key={entry.playerId} className={isActive ? 'ring-1 ring-blue-500' : ''}>
-                  <div className="flex gap-4 items-center">
+                  <div className="flex flex-col sm:flex-row sm:gap-4 sm:items-center gap-3">
                     {/* Player info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -579,7 +579,7 @@ export default function ReSignPage() {
                     </div>
 
                     {/* Action buttons */}
-                    <div className="flex flex-col gap-1.5 shrink-0">
+                    <div className="flex flex-row sm:flex-col gap-1.5 shrink-0 w-full sm:w-auto [&>*]:flex-1 sm:[&>*]:flex-initial">
                       {entry.refusesToResign ? (
                         <>
                           <div className="text-xs text-red-600 font-semibold text-center px-2 py-1 bg-red-50 border border-red-200 rounded-lg">

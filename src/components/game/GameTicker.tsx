@@ -77,7 +77,7 @@ export function GameTicker() {
         <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-[var(--bg)] to-transparent pointer-events-none z-10 sm:hidden" />
         {/* Scrollable game ticker */}
         {/* W/L Legend */}
-        <div className="flex items-center gap-2 text-xs text-[var(--text-sec)] pr-3 border-r border-[var(--border)] shrink-0 pl-3">
+        <div className="hidden sm:flex items-center gap-2 text-xs text-[var(--text-sec)] pr-3 border-r border-[var(--border)] shrink-0 pl-3">
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> W</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> L</span>
         </div>
@@ -188,7 +188,7 @@ export function GameTicker() {
         </div>
 
         {/* Auth: Sign In or user pill — pinned to top-right */}
-        <div className="flex items-center gap-2 px-3 border-l border-[var(--border)] shrink-0">
+        <div className="flex items-center gap-2 px-2 sm:px-3 border-l border-[var(--border)] shrink-0">
           {user ? (
             <>
               <div className="flex items-center gap-1.5">
@@ -196,11 +196,11 @@ export function GameTicker() {
                   {user.email?.[0]?.toUpperCase() ?? '?'}
                 </div>
                 {isFoundingMember ? (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                  <span className="hidden sm:inline text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
                     ⭐ Founder
                   </span>
                 ) : (
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                  <span className={`hidden sm:inline text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
                     tier === 'elite' ? 'bg-amber-100 text-amber-700' :
                     tier === 'pro' ? 'bg-blue-100 text-blue-700' :
                     'bg-gray-100 text-gray-700'
@@ -211,7 +211,7 @@ export function GameTicker() {
               </div>
               <button
                 onClick={signOut}
-                className="text-[9px] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors whitespace-nowrap"
+                className="hidden sm:inline text-[9px] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors whitespace-nowrap"
               >
                 Sign Out
               </button>

@@ -743,32 +743,37 @@ function Dashboard() {
       <div className="max-w-6xl mx-auto space-y-4">
         {/* Team header */}
         <div
-          className="flex items-center gap-4 rounded-xl px-5 py-4"
+          className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl px-4 sm:px-5 py-4"
           style={{ background: `linear-gradient(135deg, var(--team-primary) 0%, ${userTeam.secondaryColor} 100%)` }}
         >
-          <div className="shrink-0">
+          <div className="flex items-center gap-3 sm:block shrink-0">
             <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} logoUrl={userTeam.logoUrl} size="xl" />
+            {/* On mobile, show team name next to logo */}
+            <div className="sm:hidden min-w-0">
+              <h2 className="text-xl font-black leading-tight" style={{ color: 'var(--team-text-on-primary)' }}>{userTeam.city}</h2>
+              <h2 className="text-xl font-black leading-tight" style={{ color: 'var(--team-text-on-primary)' }}>{userTeam.name}</h2>
+            </div>
           </div>
-          <div>
-            <h2 className="text-2xl font-black" style={{ color: 'var(--team-text-on-primary)' }}>{userTeam.city} {userTeam.name}</h2>
-            <div className="flex items-center gap-3 mt-1">
+          <div className="min-w-0 flex-1">
+            <h2 className="hidden sm:block text-2xl font-black" style={{ color: 'var(--team-text-on-primary)' }}>{userTeam.city} {userTeam.name}</h2>
+            <div className="flex items-center gap-2 sm:gap-3 mt-1 flex-wrap">
               <Badge variant={userTeam.record.wins > userTeam.record.losses ? 'green' : userTeam.record.wins < userTeam.record.losses ? 'red' : 'default'} size="md">
                 {formatRecord(userTeam.record)}
               </Badge>
-              <span className="text-sm" style={{ color: 'var(--team-text-on-primary)', opacity: 0.8 }}>
+              <span className="text-xs sm:text-sm whitespace-nowrap" style={{ color: 'var(--team-text-on-primary)', opacity: 0.85 }}>
                 {userTeam.conference} {userTeam.division}
               </span>
-              <span className="text-sm" style={{ color: capPct > 0.95 ? '#dc2626' : 'var(--team-text-on-primary)', opacity: capPct > 0.95 ? 1 : 0.8 }}>
-                Cap: ${Math.round(userTeam.totalPayroll)}M / ${userTeam.salaryCap}M
+              <span className="text-xs sm:text-sm whitespace-nowrap" style={{ color: capPct > 0.95 ? '#fecaca' : 'var(--team-text-on-primary)', opacity: capPct > 0.95 ? 1 : 0.85 }}>
+                ${Math.round(userTeam.totalPayroll)}M / ${userTeam.salaryCap}M
               </span>
               {champions.length > 0 && champions.filter(c => c.teamId === userTeamId).length > 0 && (
-                <span className="text-sm font-bold" style={{ color: 'var(--team-text-on-primary)' }}>
-                  {champions.filter(c => c.teamId === userTeamId).length}x Champion
+                <span className="text-xs sm:text-sm font-bold whitespace-nowrap" style={{ color: 'var(--team-text-on-primary)' }}>
+                  {champions.filter(c => c.teamId === userTeamId).length}× 🏆
                 </span>
               )}
               {isFoundingMember && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-100 border border-amber-400/30">
-                  ⭐ Founding Member
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-100 border border-amber-400/30 whitespace-nowrap">
+                  ⭐ Founder
                 </span>
               )}
             </div>
@@ -841,7 +846,7 @@ function Dashboard() {
               return (
                 <div
                   key={def.id}
-                  className={`flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl text-xs border transition-all ${
+                  className={`flex flex-col items-center gap-0.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl text-xs border transition-all ${
                     unlocked
                       ? 'bg-amber-50 border-amber-200'
                       : 'bg-gray-50 opacity-40'
