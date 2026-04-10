@@ -377,22 +377,22 @@ function simulatePlay(
     const compRate = clamp(compBase - (coverageRating / 100) * 0.12 + redZoneBonus, 0.42, 0.72);
 
     if (Math.random() < compRate) {
-      // Completed pass — tuned for NFL realism (~10.5 yards per completion average)
+      // Completed pass — tuned for NFL realism (~9.5 yards per completion average)
       // Top QBs: ~4,200 yds, ~30 TDs per season
       // Rating multiplier: elite players produce more, bad players less
-      const recRatingMult = 0.7 + (target.ratings.catching / 100) * 0.7; // 50=1.05, 80=1.26
-      const qbRatingMult = 0.7 + (qb.ratings.throwing / 100) * 0.7;
-      const baseYards = 2 + Math.random() * 8; // 2-10 base (avg 6)
-      const bonusYards = (qb.ratings.throwing / 100) * 1.8 + (target.ratings.speed / 100) * 1.2;
+      const recRatingMult = 0.65 + (target.ratings.catching / 100) * 0.7; // 50=1.0, 80=1.21
+      const qbRatingMult = 0.65 + (qb.ratings.throwing / 100) * 0.7;
+      const baseYards = 1 + Math.random() * 8; // 1-9 base (avg 5)
+      const bonusYards = (qb.ratings.throwing / 100) * 1.5 + (target.ratings.speed / 100) * 1.0;
       let yards = Math.round((baseYards + bonusYards * Math.random()) * ((qbRatingMult + recRatingMult) / 2));
 
-      // Big play chance (~2.5% of completions go 20+) — explosive plays
+      // Big play chance (~2% of completions go 20+) — explosive plays
       // Aggressiveness: aggressive ×1.5, conservative ×0.6
       const aggressivenessMult = gamePlan?.aggressiveness === 'aggressive' ? 1.5 :
                                   gamePlan?.aggressiveness === 'conservative' ? 0.6 : 1.0;
-      const bigPlayChance = (0.011 + (target.ratings.speed / 100) * 0.013) * aggressivenessMult;
+      const bigPlayChance = (0.009 + (target.ratings.speed / 100) * 0.011) * aggressivenessMult;
       if (Math.random() < bigPlayChance) {
-        yards += 9 + Math.floor(Math.random() * 12);
+        yards += 8 + Math.floor(Math.random() * 11);
       }
 
       // Red zone TD boost: inside the 20, passes are shorter and more likely to reach the end zone
@@ -448,18 +448,18 @@ function simulatePlay(
     const rushSkill = rusher.ratings.carrying * 0.5 + rusher.ratings.speed * 0.3 + rusher.ratings.agility * 0.2;
     const olBonus = (olPower - 60) / 100 * 2.6; // 1.3x OL bonus multiplier (was 2)
 
-    // Average: ~4.2 yards per carry, top RB ~1,000-1,300 yds/season
+    // Average: ~4.0 yards per carry, top RB ~1,000-1,300 yds/season
     // Rating multiplier: elite rushers produce more, bad rushers less
-    const rushRatingMult = 0.7 + (rusher.ratings.carrying / 100) * 0.7; // 50=1.05, 80=1.26
+    const rushRatingMult = 0.65 + (rusher.ratings.carrying / 100) * 0.7;
     // Red zone boost: goal-line runs benefit from compressed field
-    const rushRedZoneBonus = fieldPosition >= 80 ? 0.6 : 0;
+    const rushRedZoneBonus = fieldPosition >= 80 ? 0.5 : 0;
     let yards = Math.round(
-      ((rushSkill - defRushPower) / 42 + 2.0 + (Math.random() * 2.4 - 0.7) + olBonus + rushRedZoneBonus) * rushRatingMult,
+      ((rushSkill - defRushPower) / 45 + 1.8 + (Math.random() * 2.2 - 0.7) + olBonus + rushRedZoneBonus) * rushRatingMult,
     );
 
-    // Big rush chance (~1.5%) — breakaway runs
-    if (Math.random() < 0.007 + (rusher.ratings.speed / 100) * 0.011) {
-      yards += 8 + Math.floor(Math.random() * 10);
+    // Big rush chance (~1.2%) — breakaway runs
+    if (Math.random() < 0.006 + (rusher.ratings.speed / 100) * 0.009) {
+      yards += 7 + Math.floor(Math.random() * 9);
     }
 
     // Negative play chance (~15% of rushes go for loss)
@@ -537,9 +537,10 @@ function simulateDrive(
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
 
-  // Cap at 18 plays — long enough for an NFL-style sustained drive (~12-15 plays
-  // is the max for real drives) but with a safety valve to prevent infinite loops.
-  for (let playNum = 0; playNum < 18; playNum++) {
+  // Cap at 13 plays — NFL drives average ~5.5 plays, sustained drives ~10-12.
+  // Allows TDs to be reachable from own 25 (~75 yards needed) without
+  // letting drives become unrealistically long.
+  for (let playNum = 0; playNum < 13; playNum++) {
     const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition, rivalryIntensity, gamePlan);
     plays.push(play);
 
