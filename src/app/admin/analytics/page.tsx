@@ -8,6 +8,8 @@ interface AnalyticsData {
   period: string;
   totalUsers: number;
   activeUsers: number;
+  uniqueDevices: number;
+  sessions: number;
   pageViews: number;
   conversionRate: number;
   totalSubscriptions: number;
@@ -132,9 +134,11 @@ export default function AdminAnalyticsPage() {
         ) : (
           <div className="space-y-8">
             {/* Overview cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
               <MetricCard label="Total Users" value={data.totalUsers} />
-              <MetricCard label={`Active Users (${period})`} value={data.activeUsers} />
+              <MetricCard label={`Active Users (${period})`} value={data.activeUsers} sub="logged-in only" />
+              <MetricCard label={`Unique Devices (${period})`} value={data.uniqueDevices || '—'} sub="incl. anonymous" />
+              <MetricCard label={`Sessions (${period})`} value={data.sessions} />
               <MetricCard label={`Page Views (${period})`} value={data.pageViews} />
               <MetricCard
                 label="Conversion Rate"

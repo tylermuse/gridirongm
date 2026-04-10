@@ -13,7 +13,7 @@ function getServiceClient() {
 
 export async function POST(request: Request) {
   try {
-    const { event, properties } = await request.json();
+    const { event, properties, deviceId } = await request.json();
 
     if (!event || typeof event !== 'string') {
       return NextResponse.json({ error: 'Missing event' }, { status: 400 });
@@ -34,10 +34,16 @@ export async function POST(request: Request) {
       // No session — that's ok
     }
 
+    // Store device_id in properties for anonymous user tracking
+    const enrichedProperties = {
+      ...(properties ?? {}),
+      ...(deviceId ? { device_id: deviceId } : {}),
+    };
+
     await service.from('analytics_events').insert({
       user_id: userId,
       event,
-      properties: properties ?? {},
+      properties: enrichedProperties,
     });
 
     return NextResponse.json({ ok: true });

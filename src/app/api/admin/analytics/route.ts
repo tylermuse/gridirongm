@@ -82,6 +82,8 @@ export async function GET(request: NextRequest) {
       topPagesRes,
       recentEventsRes,
       subscriptionCountRes,
+      sessionStartsRes,
+      deviceTrackingRes,
     ] = await Promise.all([
       service.from('analytics_events')
         .select('user_id')
@@ -121,12 +123,31 @@ export async function GET(request: NextRequest) {
       service.from('subscriptions')
         .select('id', { count: 'exact', head: true })
         .in('status', ['active', 'trialing']),
+
+      // Count session_start events in the period
+      service.from('analytics_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('event', 'session_start')
+        .gte('created_at', since),
+
+      // Get all events with device_id for unique device counting
+      service.from('analytics_events')
+        .select('properties')
+        .gte('created_at', since)
+        .limit(10000),
     ]);
 
-    // Compute active users (distinct user_ids)
+    // Compute active users (distinct user_ids — logged-in only)
     const activeUserIds = new Set(
       (activeUsersRes.data ?? []).map((r: { user_id: string }) => r.user_id).filter(Boolean),
     );
+
+    // Compute unique devices (includes anonymous players)
+    const uniqueDeviceIds = new Set<string>();
+    for (const row of deviceTrackingRes.data ?? []) {
+      const did = (row as { properties: { device_id?: string } }).properties?.device_id;
+      if (did) uniqueDeviceIds.add(did);
+    }
 
     // Count total unique signups
     const totalSignupUserIds = new Set(
@@ -160,6 +181,8 @@ export async function GET(request: NextRequest) {
       period,
       totalUsers: totalSignupUserIds.size,
       activeUsers: activeUserIds.size,
+      uniqueDevices: uniqueDeviceIds.size,
+      sessions: sessionStartsRes.count ?? 0,
       pageViews: pageViewsRes.count ?? 0,
       conversionRate,
       totalSubscriptions,
