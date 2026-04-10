@@ -777,7 +777,10 @@ export interface LeagueState {
   /** Game plan for the user team's NEXT regular-season game. Cleared after that game is simulated. */
   nextGamePlan?: { passRate: number; aggressiveness: 'conservative' | 'balanced' | 'aggressive' };
   /** Per-position scouting preview of the upcoming draft class. Generated at trade deadline. */
-  draftClassPreview?: { season: number; groups: { position: string; grade: string; depthNote: string }[] };
+  draftClassPreview?: {
+    season: number;
+    groups: { position: string; grade: string; depthNote: string; ovrLow: number; ovrHigh: number; topOvr: number }[];
+  };
   /** Season number that the awards modal should be shown for. Cleared after the user votes/dismisses. */
   pendingAwardsVote?: number;
   /** BS Mode: QB tier assignments */

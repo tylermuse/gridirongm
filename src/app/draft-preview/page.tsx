@@ -34,7 +34,7 @@ const POSITION_NAMES: Record<string, string> = {
 };
 
 export default function DraftPreviewPage() {
-  const { draftClassPreview, season, phase, week, leagueSettings, ensureDraftClassPreview } = useGameStore();
+  const { draftClassPreview, season, phase, week, leagueSettings, ensureDraftClassPreview, nflMockDraft, teams, userTeamId } = useGameStore();
   const tradeDeadline = leagueSettings?.tradeDeadlineWeek ?? 12;
   const isPreviewAvailable = draftClassPreview && draftClassPreview.season === season;
   const beforeDeadline = phase === 'regular' && week < tradeDeadline;
@@ -104,11 +104,48 @@ export default function DraftPreviewPage() {
                         <span className={`text-2xl font-black tabular-nums ${gradeColor(group.grade)}`}>{group.grade}</span>
                       </div>
                       <p className="text-xs text-[var(--text-sec)] mt-0.5 leading-tight">{group.depthNote}</p>
+                      <div className="text-[10px] text-[var(--text-sec)] mt-1 tabular-nums">
+                        Projected OVR range (top 10): <span className="font-bold text-[var(--text)]">{group.ovrLow}–{group.ovrHigh}</span>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             </Card>
+
+            {nflMockDraft && nflMockDraft.length > 0 && (
+              <Card>
+                <CardHeader><CardTitle>🔮 Round 1 Mock Projection</CardTitle></CardHeader>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider border-b border-[var(--border)]">
+                        <th className="text-left pb-2 pl-2">#</th>
+                        <th className="text-left pb-2">Team</th>
+                        <th className="text-left pb-2">Projected Pick</th>
+                        <th className="text-left pb-2 pr-2">Pos · School</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {nflMockDraft.map((mock) => {
+                        const mockTeam = teams.find(t => t.abbreviation === mock.teamAbbr);
+                        const isUserMock = mockTeam?.id === userTeamId;
+                        return (
+                          <tr key={mock.pickNum} className={`border-t border-[var(--border)] ${isUserMock ? 'bg-blue-50' : ''}`}>
+                            <td className="py-2 pl-2 text-[var(--text-sec)] font-mono">{mock.pickNum}</td>
+                            <td className="py-2 font-bold">{mockTeam?.abbreviation ?? mock.teamAbbr}</td>
+                            <td className="py-2">
+                              <span className="font-medium">{mock.firstName} {mock.lastName}</span>
+                            </td>
+                            <td className="py-2 pr-2 text-xs text-[var(--text-sec)]">{mock.position}{mock.college ? ` · ${mock.college}` : ''}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
 
             <Card>
               <div className="text-xs text-[var(--text-sec)] italic">

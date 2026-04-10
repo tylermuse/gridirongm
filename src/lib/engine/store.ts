@@ -225,32 +225,28 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
   if (round === 1 && state.nflMockDraft && state.nflMockDraft.length > 0) {
     const availableIds = new Set(state.freeAgents);
 
-    // Find the mock pick for this overall pick number
+    // Find the mock pick for this overall pick number — only consider it valid
+    // if both freeAgents has it AND a real player exists for the id.
     const mockForPick = state.nflMockDraft.find(m => m.pickNum === overallPick);
     let mockPickId: string | undefined;
 
-    // First try: use the specific mock pick for this slot
-    if (mockForPick && availableIds.has(mockForPick.playerId)) {
+    if (mockForPick && availableIds.has(mockForPick.playerId) && playerExists(mockForPick.playerId)) {
       mockPickId = mockForPick.playerId;
     }
-    // Second try: find any available mock pick by order
     if (!mockPickId) {
       for (const mock of state.nflMockDraft) {
-        if (availableIds.has(mock.playerId)) { mockPickId = mock.playerId; break; }
+        if (availableIds.has(mock.playerId) && playerExists(mock.playerId)) {
+          mockPickId = mock.playerId;
+          break;
+        }
       }
     }
 
     if (mockPickId) {
       // Pick 1: ALWAYS use mock (guaranteed #1 overall)
       if (overallPick === 1) return mockPickId;
-      // Picks 2-3: 75% follow mock
-      // Picks 4-10: 60% follow mock
-      // Picks 11-20: 50% follow mock
-      // Picks 21-32: 40% follow mock
       const mockChance = overallPick <= 3 ? 0.75 : overallPick <= 10 ? 0.60 : overallPick <= 20 ? 0.50 : 0.40;
       if (Math.random() < mockChance) return mockPickId;
-    } else {
-      // No mock pick found — shouldn't happen but return undefined gracefully
     }
   }
 
@@ -697,17 +693,20 @@ function playerTradeValue(player: Player): number {
 /** Generates a position-by-position preview grade for the upcoming draft class.
  *  Uses a fresh sample-generated draft class to preview class quality without
  *  committing to specific players. The actual class is generated at draft time. */
-function generateDraftClassPreview(season: number): { season: number; groups: { position: string; grade: string; depthNote: string }[] } {
+function generateDraftClassPreview(season: number): { season: number; groups: { position: string; grade: string; depthNote: string; ovrLow: number; ovrHigh: number; topOvr: number }[] } {
   // Generate a sample class to estimate quality distributions
   const sample = generateDraftClass(224, { chaosDraft: false });
   const POSITIONS_TO_RATE: Position[] = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S'];
 
-  function gradeFromOvrs(ovrs: number[]): { grade: string; depthNote: string } {
-    if (ovrs.length === 0) return { grade: 'C', depthNote: 'No prospects available' };
+  function gradeFromOvrs(ovrs: number[]): { grade: string; depthNote: string; ovrLow: number; ovrHigh: number; topOvr: number } {
+    if (ovrs.length === 0) {
+      return { grade: 'C', depthNote: 'No prospects available', ovrLow: 0, ovrHigh: 0, topOvr: 0 };
+    }
     const sorted = [...ovrs].sort((a, b) => b - a);
     const top1 = sorted[0];
     const top3Avg = sorted.slice(0, 3).reduce((s, v) => s + v, 0) / Math.min(3, sorted.length);
-    const top10Avg = sorted.slice(0, 10).reduce((s, v) => s + v, 0) / Math.min(10, sorted.length);
+    const top10 = sorted.slice(0, 10);
+    const top10Avg = top10.reduce((s, v) => s + v, 0) / top10.length;
     const startersCount = ovrs.filter(o => o >= 70).length;
 
     // Composite score: top1 weighted more, then top3, then top10
@@ -732,13 +731,22 @@ function generateDraftClassPreview(season: number): { season: number; groups: { 
     else if (top1 >= 80) depthNote = 'A few quality prospects, weak depth';
     else depthNote = 'Weak class overall — developmental prospects';
 
-    return { grade, depthNote };
+    // OVR range covers the top-10 prospects at this position with a small noise
+    // pad so the range feels like a scouting estimate rather than a hard number.
+    const top10Min = Math.min(...top10);
+    return {
+      grade,
+      depthNote,
+      ovrLow: Math.max(40, top10Min - 1),
+      ovrHigh: Math.min(95, top1 + 1),
+      topOvr: top1,
+    };
   }
 
   const groups = POSITIONS_TO_RATE.map(pos => {
     const posOvrs = sample.filter(p => p.position === pos).map(p => p.ratings.overall);
-    const { grade, depthNote } = gradeFromOvrs(posOvrs);
-    return { position: pos, grade, depthNote };
+    const result = gradeFromOvrs(posOvrs);
+    return { position: pos, ...result };
   });
 
   return { season, groups };
@@ -4132,7 +4140,8 @@ export const useGameStore = create<GameStore>()(
           let player = players.find(p => p.id === pid);
           if (!player) {
             // Player ID returned by autoDraftPlayerId but not in players array
-            // Create from nflMockDraft data if available
+            // Create from nflMockDraft data if available, otherwise generate a
+            // fresh prospect at this draft slot (never leave a ghost result).
             const mock = state.nflMockDraft?.find(m => m.playerId === pid);
             if (mock) {
               const created = generatePlayer(mock.position as Position, 70, { age: 21, experience: 0 });
@@ -4145,8 +4154,12 @@ export const useGameStore = create<GameStore>()(
               players = [...players, created];
               player = created;
             } else {
-              draftOrder = draftOrder.slice(1);
-              continue;
+              // No mock fallback — generate a generic prospect with this id
+              const fresh = generatePlayer('OL', 65, { age: 21, experience: 0 });
+              fresh.id = pid;
+              fresh.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
+              players = [...players, fresh];
+              player = fresh;
             }
           }
 
@@ -4218,7 +4231,8 @@ export const useGameStore = create<GameStore>()(
           let player = players.find(p => p.id === pid);
           if (!player) {
             // Player ID returned by autoDraftPlayerId but not in players array
-            // Create from nflMockDraft data if available
+            // Create from nflMockDraft data if available, otherwise generate a
+            // fresh prospect at this draft slot (never leave a ghost result).
             const mock = state.nflMockDraft?.find(m => m.playerId === pid);
             if (mock) {
               const created = generatePlayer(mock.position as Position, 70, { age: 21, experience: 0 });
@@ -4231,8 +4245,12 @@ export const useGameStore = create<GameStore>()(
               players = [...players, created];
               player = created;
             } else {
-              draftOrder = draftOrder.slice(1);
-              continue;
+              // No mock fallback — generate a generic prospect with this id
+              const fresh = generatePlayer('OL', 65, { age: 21, experience: 0 });
+              fresh.id = pid;
+              fresh.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
+              players = [...players, fresh];
+              player = fresh;
             }
           }
 
