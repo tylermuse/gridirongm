@@ -4053,6 +4053,12 @@ export const useGameStore = create<GameStore>()(
           newsItems: newNewsItems,
         });
 
+        // If this was the last pick of the draft, sync GM stats with draft data
+        if (newDraftOrder.length === 0) {
+          const gmDraftPayload = buildGmSyncPayload(get());
+          if (gmDraftPayload) syncGmStats(gmDraftPayload);
+        }
+
         // Draft complete — no auto-advance; user clicks "Start New Season"
       },
 
@@ -4242,6 +4248,10 @@ export const useGameStore = create<GameStore>()(
         }
 
         set({ players, teams, freeAgents: freeAgentIds, draftOrder, draftResults, newsItems });
+
+        // Sync GM stats with draft data — fire as soon as the draft completes
+        const gmEndDraftPayload = buildGmSyncPayload(get());
+        if (gmEndDraftPayload) syncGmStats(gmEndDraftPayload);
 
         // Draft complete — no auto-advance; user clicks "Start New Season"
       },
