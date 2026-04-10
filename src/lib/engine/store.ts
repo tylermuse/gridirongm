@@ -212,6 +212,14 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
   const overallPick = totalPicks - state.draftOrder.length + 1;
   const round = Math.ceil(overallPick / state.teams.length);
 
+  // Validate any returned pid actually resolves to a real player in state.players.
+  // Without this guard, an orphaned ID in freeAgents leads to "ghost picks" in
+  // the draft results table (team shows but player is "--").
+  const playerExists = (id: string | undefined): boolean => {
+    if (!id) return false;
+    return state.players.some(p => p.id === id);
+  };
+
   // Mock first-round picks: use mock in round 1, with ~40% BPA deviation
   // Real NFL mocks are ~50-60% accurate — top 5 picks more predictable
   if (round === 1 && state.nflMockDraft && state.nflMockDraft.length > 0) {
@@ -316,22 +324,23 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
     })
     .sort((a, b) => b.score - a.score);
 
-  const bpaResult = ranked[0]?.playerId;
-  if (bpaResult) return bpaResult;
+  // Walk down the ranked list — return the first one whose player exists.
+  for (const r of ranked) {
+    if (playerExists(r.playerId)) return r.playerId;
+  }
 
   // Safety net: fall back to mock pick for round 1
   if (round === 1 && state.nflMockDraft && state.nflMockDraft.length > 0) {
     const availableIds = new Set(state.freeAgents);
     for (const mock of state.nflMockDraft) {
-      if (availableIds.has(mock.playerId)) return mock.playerId;
+      if (availableIds.has(mock.playerId) && playerExists(mock.playerId)) return mock.playerId;
     }
-    // Ultra safety: return the mock player ID even if not in freeAgents
-    // draftPlayer will handle creating the player if needed
-    return state.nflMockDraft[0]?.playerId;
   }
 
-  // Last resort for any round: pick the first free agent
-  if (state.freeAgents.length > 0) return state.freeAgents[0];
+  // Last resort for any round: pick the first free agent that exists
+  for (const id of state.freeAgents) {
+    if (playerExists(id)) return id;
+  }
 
   return undefined;
 }
