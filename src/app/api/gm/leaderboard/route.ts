@@ -39,9 +39,7 @@ export async function GET(request: NextRequest) {
     const { data: careerRows, error: careerErr } = await service
       .from('gm_career_stats')
       .select('user_id, display_name, team_id, team_name, team_abbreviation, all_time_wins, all_time_losses, championships, playoff_appearances, draft_score_total, drafts_completed, seasons_played, updated_at')
-      .order('championships', { ascending: false })
-      .order('all_time_wins', { ascending: false })
-      .limit(100);
+      .limit(200);
 
     if (careerErr) {
       return NextResponse.json({ error: careerErr.message }, { status: 500 });
@@ -65,7 +63,15 @@ export async function GET(request: NextRequest) {
         : 0,
       draftsCompleted: r.drafts_completed,
       seasonsPlayed: r.seasons_played,
-    })).filter(r => r.seasonsPlayed >= 1);
+    }))
+      .filter(r => r.seasonsPlayed >= 1)
+      // Primary sort: win % desc. Tiebreakers: championships, then total wins.
+      .sort((a, b) => {
+        if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+        if (b.championships !== a.championships) return b.championships - a.championships;
+        return b.wins - a.wins;
+      })
+      .slice(0, 100);
 
     // ── This-season leaderboard ──
     let thisSeason: Array<{
