@@ -4,17 +4,29 @@ import { useState, useRef, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
 const PODCAST_LIMIT = 3;
-const STORAGE_KEY = 'gg-podcast-count';
+const WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const STORAGE_KEY = 'gg-podcast-timestamps';
+
+/** Returns timestamps of podcast generations within the last 30 days */
+function getRecentTimestamps(): number[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const all: number[] = JSON.parse(raw);
+    const cutoff = Date.now() - WINDOW_MS;
+    return all.filter(ts => ts > cutoff);
+  } catch { return []; }
+}
 
 function getPodcastCount(): number {
-  try {
-    return parseInt(localStorage.getItem(STORAGE_KEY) ?? '0', 10) || 0;
-  } catch { return 0; }
+  return getRecentTimestamps().length;
 }
 
 function incrementPodcastCount(): void {
   try {
-    localStorage.setItem(STORAGE_KEY, String(getPodcastCount() + 1));
+    const recent = getRecentTimestamps();
+    recent.push(Date.now());
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(recent));
   } catch { /* noop */ }
 }
 
