@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
@@ -43,8 +43,8 @@ async function setCache(key: string, topics: unknown[]): Promise<void> {
 
 export async function POST(request: Request) {
   try {
-    if (!process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
-      return NextResponse.json({ error: 'No AI API key configured (GEMINI_API_KEY or ANTHROPIC_API_KEY)' }, { status: 500 });
+    if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
+      return NextResponse.json({ error: 'No AI API key configured (need GEMINI_API_KEY or OPENAI_API_KEY)' }, { status: 500 });
     }
 
     const { games, season, week, isPlayoffs } = await request.json();
@@ -83,10 +83,12 @@ JSON array: [{ "headline": "...", "icon": "emoji", "context": "box score", "exch
 
 Return ONLY the JSON array.`;
 
-    // Try Gemini first (much cheaper), fall back to Haiku
+    // Try Gemini first (cheapest), then GPT-4o-mini (cheap + reliable), then give up (client uses templates)
     const userContent = `Season ${season}, ${weekContext}\n\nGAME:\n${JSON.stringify(games)}`;
     let raw = '';
-    if (process.env.GEMINI_API_KEY) {
+
+    // 1) Gemini 2.5 Flash
+    if (!raw && process.env.GEMINI_API_KEY) {
       try {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
@@ -97,22 +99,41 @@ Return ONLY the JSON array.`;
         });
         raw = result.response.text();
       } catch (geminiErr) {
-        console.warn('Recap: Gemini failed, falling back to Haiku:', geminiErr instanceof Error ? geminiErr.message : geminiErr);
+        console.warn('Recap: Gemini failed, trying GPT-4o-mini:', geminiErr instanceof Error ? geminiErr.message : geminiErr);
       }
     }
-    if (!raw) {
-      const anthropic = new Anthropic();
-      const message = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2000,
-        system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: userContent }],
-      });
-      const contentBlock = message.content[0];
-      if (contentBlock.type !== 'text') {
-        return NextResponse.json({ error: 'Unexpected response type' }, { status: 500 });
+
+    // 2) GPT-4o-mini fallback (very cheap + very reliable)
+    if (!raw && process.env.OPENAI_API_KEY) {
+      try {
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          max_tokens: 2000,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: systemPrompt + '\n\nIMPORTANT: Wrap your JSON array in an object like {"topics": [...]}' },
+            { role: 'user', content: userContent },
+          ],
+        });
+        const content = completion.choices[0]?.message?.content;
+        if (content) {
+          const parsed = JSON.parse(content);
+          if (Array.isArray(parsed)) {
+            raw = JSON.stringify(parsed);
+          } else if (parsed.topics && Array.isArray(parsed.topics)) {
+            raw = JSON.stringify(parsed.topics);
+          } else {
+            raw = content;
+          }
+        }
+      } catch (openaiErr) {
+        console.warn('Recap: GPT-4o-mini also failed:', openaiErr instanceof Error ? openaiErr.message : openaiErr);
       }
-      raw = contentBlock.text;
+    }
+
+    if (!raw) {
+      return NextResponse.json({ error: 'All AI providers unavailable — client will use templates' }, { status: 503 });
     }
     const start = raw.indexOf('[');
     const end = raw.lastIndexOf(']');
