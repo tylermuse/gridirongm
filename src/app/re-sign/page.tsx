@@ -262,13 +262,13 @@ export default function ReSignPage() {
               const netAfterSigning = Math.round((projectedCapSpace - totalAsking) * 10) / 10;
 
               return (
-                <div className="flex flex-row sm:flex-col items-baseline sm:items-end gap-x-3 gap-y-0 flex-wrap">
-                  <div className={`text-xl sm:text-2xl font-black tabular-nums ${projectedCapSpace > 10 ? 'text-green-600' : projectedCapSpace > 0 ? 'text-amber-600' : 'text-red-600'}`}>
+                <div className="flex flex-row sm:flex-col items-baseline sm:items-end gap-x-3 sm:gap-x-0 gap-y-1 flex-wrap">
+                  <div className={`text-xl sm:text-2xl font-black tabular-nums leading-none ${projectedCapSpace > 10 ? 'text-green-600' : projectedCapSpace > 0 ? 'text-amber-600' : 'text-red-600'}`}>
                     ${projectedCapSpace}M
                   </div>
                   <div className="text-[10px] sm:text-xs text-[var(--text-sec)]">Projected Cap Space</div>
                   {activeEntries.length > 0 && (
-                    <div className="w-full text-[11px] sm:text-xs sm:mt-1.5 space-y-0.5">
+                    <div className="w-full text-[11px] sm:text-xs sm:mt-2 space-y-0.5">
                       <div className="text-amber-600">Players asking: ${totalAsking}M</div>
                       <div className={netAfterSigning >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
                         {netAfterSigning >= 0 ? `$${netAfterSigning}M remaining if all re-sign` : `$${Math.abs(netAfterSigning)}M over if all re-sign`}
