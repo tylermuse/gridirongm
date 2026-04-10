@@ -2,11 +2,13 @@
 
 import { use } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
+import { Button } from '@/components/ui/Button';
 import { formatRecord, type Position } from '@/types';
 import { POSITIONS } from '@/types';
 
@@ -25,7 +27,8 @@ const POSITION_GROUPS: { label: string; positions: Position[] }[] = [
 
 export default function TeamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { teams, players, userTeamId } = useGameStore();
+  const { teams, players, userTeamId, switchTeam } = useGameStore();
+  const router = useRouter();
 
   const team = teams.find(t => t.id === id);
 
@@ -66,6 +69,15 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
                 {team.city} {team.name}
               </h2>
               {isUserTeam && <Badge variant="blue">Your Team</Badge>}
+              {!isUserTeam && (
+                <Button
+                  onClick={() => { switchTeam(team.id); router.push('/'); }}
+                  variant="secondary"
+                  size="sm"
+                >
+                  Switch to this Team
+                </Button>
+              )}
             </div>
             <div className="text-sm text-[var(--text-sec)] mt-0.5">
               {team.conference} {team.division} · {formatRecord(team.record)} ({pct})

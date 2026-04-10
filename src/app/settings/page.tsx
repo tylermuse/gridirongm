@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { DEFAULT_LEAGUE_SETTINGS, type LeagueSettings } from '@/types';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface SettingRowProps {
   label: string;
@@ -76,7 +77,8 @@ function AccountCard() {
 }
 
 export default function SettingsPage() {
-  const { leagueSettings, updateLeagueSettings, teams, userTeamId } = useGameStore();
+  const { leagueSettings, updateLeagueSettings, teams, userTeamId, switchTeam } = useGameStore();
+  const router = useRouter();
   const settings = leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
 
   const [draft, setDraft] = useState<LeagueSettings>({ ...settings });
@@ -422,6 +424,45 @@ export default function SettingsPage() {
             <span className={`ml-2 text-sm font-semibold ${draft.aiCommentary ? 'text-purple-600' : 'text-[var(--text-sec)]'}`}>
               {draft.aiCommentary ? 'ON' : 'OFF'}
             </span>
+          </div>
+        </Card>
+
+        {/* Switch Team */}
+        <Card className="mb-4">
+          <CardHeader><CardTitle>Switch Team</CardTitle></CardHeader>
+          <div className="space-y-2">
+            <p className="text-xs text-[var(--text-sec)]">
+              Take control of a different franchise. Your current team will be managed by AI.
+            </p>
+            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+              {[...teams]
+                .sort((a, b) => a.city.localeCompare(b.city))
+                .map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    if (t.id === userTeamId) return;
+                    switchTeam(t.id);
+                    router.push('/');
+                  }}
+                  disabled={t.id === userTeamId}
+                  className={`
+                    flex flex-col items-center gap-1 p-2 rounded-lg border text-xs font-bold transition-all
+                    ${t.id === userTeamId
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 cursor-default'
+                      : 'border-[var(--border)] hover:border-blue-400 hover:bg-blue-50 cursor-pointer'}
+                  `}
+                >
+                  <div
+                    className="w-8 h-8 rounded-md flex items-center justify-center text-[10px] font-black text-white"
+                    style={{ backgroundColor: t.primaryColor }}
+                  >
+                    {t.abbreviation}
+                  </div>
+                  <span className="truncate w-full text-center text-[10px]">{t.abbreviation}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </Card>
 

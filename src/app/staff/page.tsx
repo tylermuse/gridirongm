@@ -263,7 +263,7 @@ export default function StaffPage() {
                         <p className="font-bold">Replace {ROLE_LABELS[coach.role]}: Choose a candidate</p>
                         <button onClick={() => { setConfirmReplace(null); setCandidates([]); }} className="text-xs text-[var(--text-sec)] hover:text-[var(--text)]">Cancel</button>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-3">
                         {candidates.map((c, i) => (
                           <button
                             key={i}
@@ -287,11 +287,34 @@ export default function StaffPage() {
                   </Card>
                 ) :
                 <CoachCard key={coach.id} coach={coach} roster={roster} userTeam={userTeam} onReplace={() => {
-                  setCandidates([generateCoach(coach.role), generateCoach(coach.role), generateCoach(coach.role)]);
+                  const pool: import('@/types').Coach[] = [];
+                  // Generate extra candidates to ensure variety, then pick 6 with spread OVRs
+                  for (let i = 0; i < 18; i++) pool.push(generateCoach(coach.role));
+                  pool.sort((a, b) => b.ovr - a.ovr);
+                  // Pick 6 spread evenly across the pool
+                  const picked: import('@/types').Coach[] = [];
+                  const step = Math.max(1, Math.floor(pool.length / 6));
+                  for (let i = 0; i < 6 && i * step < pool.length; i++) {
+                    picked.push(pool[i * step]);
+                  }
+                  // Fill remaining if needed
+                  for (const c of pool) {
+                    if (picked.length >= 6) break;
+                    if (!picked.includes(c)) picked.push(c);
+                  }
+                  picked.sort((a, b) => b.ovr - a.ovr);
+                  setCandidates(picked);
                   setConfirmReplace(coach.role);
                 }} />
               ))}
             </div>
+
+            {/* Candidate count notice */}
+            {candidates.length > 0 && (
+              <div className="text-xs text-[var(--text-sec)] text-center mt-2">
+                {candidates.length} candidates available — sorted by OVR
+              </div>
+            )}
 
             {/* Scheme Fit Details */}
             <Card>

@@ -82,18 +82,21 @@ export function buildPlayAnimation(
   const movingDots: PlayAnimation['movingDots'] = [];
 
   const type = event.type;
-  const possession = prevState.possession;
+  const possession = nextState.possession;
   const dir = possession === 'home' ? -1 : 1;
 
-  // Find QB and key dots in offense
-  const qbIndex = prevState.offenseDots.findIndex(d => d.label === 'QB');
-  const rbIndex = prevState.offenseDots.findIndex(d => d.label === 'RB');
-  const wrIndices = prevState.offenseDots
+  // Use nextState dots — they are placed at the CURRENT event's pre-snap LOS
+  // (deriveFieldState uses event.fieldPos which is the pre-snap field position).
+  // prevState dots are from the PREVIOUS play's LOS and cause animation mismatch
+  // (e.g. a 10-yard run looks like 80 yards because the dots start far from the actual LOS).
+  const qbIndex = nextState.offenseDots.findIndex(d => d.label === 'QB');
+  const rbIndex = nextState.offenseDots.findIndex(d => d.label === 'RB');
+  const wrIndices = nextState.offenseDots
     .map((d, i) => d.label === 'WR' ? i : -1)
     .filter(i => i >= 0);
 
-  // Pre-play LOS position (ball starts here)
-  const preBallX = prevState.scrimmageYard;
+  // Pre-play LOS position (ball starts here) — use current event's scrimmage
+  const preBallX = nextState.scrimmageYard;
   // Post-play ball position from the next state
   const postBallX = nextState.ballYard;
 
@@ -101,9 +104,9 @@ export function buildPlayAnimation(
     case 'pass_complete': {
       // Ball arc from QB to a WR position, then WR moves to new field pos
       const targetWr = wrIndices[Math.floor(Math.random() * wrIndices.length)] ?? 0;
-      const wrDot = prevState.offenseDots[targetWr];
+      const wrDot = nextState.offenseDots[targetWr];
       if (wrDot && qbIndex >= 0) {
-        const qb = prevState.offenseDots[qbIndex];
+        const qb = nextState.offenseDots[qbIndex];
         ballArc = {
           startX: qb.x,
           startY: qb.y,
@@ -125,9 +128,9 @@ export function buildPlayAnimation(
 
     case 'pass_incomplete': {
       const targetWr = wrIndices[Math.floor(Math.random() * wrIndices.length)] ?? 0;
-      const wrDot = prevState.offenseDots[targetWr];
+      const wrDot = nextState.offenseDots[targetWr];
       if (wrDot && qbIndex >= 0) {
-        const qb = prevState.offenseDots[qbIndex];
+        const qb = nextState.offenseDots[qbIndex];
         const dropX = qb.x + (wrDot.x - qb.x) * 0.7;
         ballArc = {
           startX: qb.x,
@@ -143,7 +146,7 @@ export function buildPlayAnimation(
 
     case 'run': {
       if (rbIndex >= 0) {
-        const rb = prevState.offenseDots[rbIndex];
+        const rb = nextState.offenseDots[rbIndex];
         const lateralShift = (Math.random() - 0.5) * 0.15;
         movingDots.push({
           team: 'offense',
@@ -159,10 +162,10 @@ export function buildPlayAnimation(
 
     case 'sack': {
       // DE rushes QB, QB moves backward (toward own endzone)
-      const deIndex = prevState.defenseDots.findIndex(d => d.label === 'DE');
+      const deIndex = nextState.defenseDots.findIndex(d => d.label === 'DE');
       if (deIndex >= 0 && qbIndex >= 0) {
-        const de = prevState.defenseDots[deIndex];
-        const qb = prevState.offenseDots[qbIndex];
+        const de = nextState.defenseDots[deIndex];
+        const qb = nextState.offenseDots[qbIndex];
         // Sack moves QB backward: yardsGained is negative, so move in -dir
         const sackYard = clampYard(preBallX + event.yardsGained * dir);
         movingDots.push({
@@ -188,14 +191,14 @@ export function buildPlayAnimation(
 
     case 'interception': {
       const targetWr = wrIndices[0] ?? 0;
-      const wrDot = prevState.offenseDots[targetWr];
+      const wrDot = nextState.offenseDots[targetWr];
       // Ball arc from QB, defensive DB catches
-      const dbIndex = prevState.defenseDots.findIndex(d =>
+      const dbIndex = nextState.defenseDots.findIndex(d =>
         d.label === 'CB' || d.label === 'FS' || d.label === 'SS'
       );
       if (qbIndex >= 0 && dbIndex >= 0) {
-        const qb = prevState.offenseDots[qbIndex];
-        const db = prevState.defenseDots[dbIndex];
+        const qb = nextState.offenseDots[qbIndex];
+        const db = nextState.defenseDots[dbIndex];
         ballArc = {
           startX: qb.x,
           startY: qb.y,
@@ -218,7 +221,7 @@ export function buildPlayAnimation(
 
     case 'fumble': {
       if (rbIndex >= 0) {
-        const rb = prevState.offenseDots[rbIndex];
+        const rb = nextState.offenseDots[rbIndex];
         movingDots.push({
           team: 'offense',
           index: rbIndex,
@@ -235,8 +238,8 @@ export function buildPlayAnimation(
     case 'touchdown': {
       // Scoring player enters endzone
       const scorerIndex = rbIndex >= 0 ? rbIndex : (wrIndices[0] ?? 0);
-      if (scorerIndex >= 0 && scorerIndex < prevState.offenseDots.length) {
-        const scorer = prevState.offenseDots[scorerIndex];
+      if (scorerIndex >= 0 && scorerIndex < nextState.offenseDots.length) {
+        const scorer = nextState.offenseDots[scorerIndex];
         const ezYard = possession === 'home' ? 100 : 0;
         movingDots.push({
           team: 'offense',
@@ -252,9 +255,9 @@ export function buildPlayAnimation(
     }
 
     case 'field_goal_good': {
-      const kickerIndex = prevState.offenseDots.findIndex(d => d.label === 'K');
+      const kickerIndex = nextState.offenseDots.findIndex(d => d.label === 'K');
       if (kickerIndex >= 0) {
-        const kicker = prevState.offenseDots[kickerIndex];
+        const kicker = nextState.offenseDots[kickerIndex];
         const targetX = possession === 'home' ? 100 : 0;
         ballArc = {
           startX: kicker.x,
@@ -269,9 +272,9 @@ export function buildPlayAnimation(
     }
 
     case 'field_goal_miss': {
-      const kickerIndex = prevState.offenseDots.findIndex(d => d.label === 'K');
+      const kickerIndex = nextState.offenseDots.findIndex(d => d.label === 'K');
       if (kickerIndex >= 0) {
-        const kicker = prevState.offenseDots[kickerIndex];
+        const kicker = nextState.offenseDots[kickerIndex];
         const targetX = possession === 'home' ? 100 : 0;
         ballArc = {
           startX: kicker.x,
@@ -286,9 +289,9 @@ export function buildPlayAnimation(
     }
 
     case 'punt': {
-      const punterIndex = prevState.offenseDots.findIndex(d => d.label === 'P');
+      const punterIndex = nextState.offenseDots.findIndex(d => d.label === 'P');
       if (punterIndex >= 0) {
-        const punter = prevState.offenseDots[punterIndex];
+        const punter = nextState.offenseDots[punterIndex];
         ballArc = {
           startX: punter.x,
           startY: 0.5,

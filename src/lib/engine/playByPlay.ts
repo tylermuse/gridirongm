@@ -921,13 +921,13 @@ export function simulatePlayByPlay(
       const qbCarrying = rating(ok.qb, 'carrying', 55);
       const lbTackling = rating(dk.lb1, 'tackling', 70);
       const rushSkill = qbSpeed * 0.5 + qbAgility * 0.3 + qbCarrying * 0.2;
-      let yardsGained = Math.round(gaussian(4.0, 3.0) + (rushSkill - lbTackling) / 60 * 2);
+      let yardsGained = Math.round(gaussian(3.5, 3.0) + (rushSkill - lbTackling) / 60 * 2);
       yardsGained = clamp(yardsGained, -4, 25);
 
-      if (state.fieldPos >= 95 && Math.random() < 0.45) {
+      if (state.fieldPos >= 95 && Math.random() < 0.35) {
         yardsGained = 100 - state.fieldPos;
       } else if (state.fieldPos >= 90) {
-        yardsGained = Math.max(yardsGained, Math.round(1 + Math.random() * 4));
+        yardsGained = Math.max(yardsGained, Math.round(1 + Math.random() * 3));
       }
 
       ob.rushAttempts += 1;
@@ -967,14 +967,14 @@ export function simulatePlayByPlay(
       const rbCarrying = rating(ok.rb, 'carrying', 70);
       const rbSpeed = rating(ok.rb, 'speed', 70);
       const lbTackling = rating(dk.lb1, 'tackling', 70);
-      let yardsGained = Math.round(gaussian(4.5, 3.0) + (rbCarrying - lbTackling) / 60 * 2 + (rbSpeed - 70) / 100);
+      let yardsGained = Math.round(gaussian(4.0, 3.0) + (rbCarrying - lbTackling) / 60 * 2 + (rbSpeed - 70) / 100);
       yardsGained = clamp(yardsGained, -5, 25);
 
       // Red zone / goal-line rush boost
-      if (state.fieldPos >= 95 && Math.random() < 0.45) {
+      if (state.fieldPos >= 95 && Math.random() < 0.35) {
         yardsGained = 100 - state.fieldPos; // score!
       } else if (state.fieldPos >= 90) {
-        yardsGained = Math.max(yardsGained, Math.round(1 + Math.random() * 4));
+        yardsGained = Math.max(yardsGained, Math.round(1 + Math.random() * 3));
       }
 
       ob.rushAttempts += 1;
@@ -1100,22 +1100,22 @@ export function simulatePlayByPlay(
         advanceClock(5);
 
       } else if (roll < sackChance + intChance + (1 - sackChance - intChance) * compBase) {
-        // COMPLETION — yards per completion targeting NFL avg ~11.8
-        const baseYards = 5 + Math.random() * 12; // 5-17 base (avg 11)
-        const bonusYards = (qbThrowing / 100) * 3.0 + (wr1Speed / 100) * 2.0;
+        // COMPLETION — yards per completion targeting NFL avg ~11.5
+        const baseYards = 3 + Math.random() * 10; // 3-13 base (avg 8)
+        const bonusYards = (qbThrowing / 100) * 2.0 + (wr1Speed / 100) * 1.5;
         let yardsGained = Math.round(baseYards + bonusYards * Math.random());
 
-        // Big play chance (~5% of completions for average, higher for fast WRs)
-        if (Math.random() < 0.02 + (wr1Speed / 100) * 0.03) {
-          yardsGained += 15 + Math.floor(Math.random() * 20);
+        // Big play chance (~2-3% of completions for average, higher for fast WRs)
+        if (Math.random() < 0.012 + (wr1Speed / 100) * 0.018) {
+          yardsGained += 12 + Math.floor(Math.random() * 15);
         }
-        yardsGained = clamp(yardsGained, 1, 60); // completions never lose yards
+        yardsGained = clamp(yardsGained, 1, 55); // completions never lose yards
 
-        // Red zone pass boost (Missing 1)
+        // Red zone pass boost
         if (state.fieldPos >= 80) {
-          yardsGained = Math.max(yardsGained, Math.round(3 + Math.random() * 8));
+          yardsGained = Math.max(yardsGained, Math.round(2 + Math.random() * 6));
         }
-        if (state.fieldPos >= 95 && Math.random() < 0.55) {
+        if (state.fieldPos >= 95 && Math.random() < 0.40) {
           yardsGained = 100 - state.fieldPos; // score!
         }
 

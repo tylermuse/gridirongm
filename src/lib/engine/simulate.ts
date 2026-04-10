@@ -187,12 +187,12 @@ function simulatePlay(
       : 50;
     const rushSkill = qb.ratings.speed * 0.5 + qb.ratings.agility * 0.3 + qb.ratings.carrying * 0.2;
     const olBonus = (olPower - 60) / 100 * 2.6;
-    const rushRedZoneBonus = fieldPosition >= 80 ? 1.0 : 0;
+    const rushRedZoneBonus = fieldPosition >= 80 ? 0.6 : 0;
     let yards = Math.round(
-      (rushSkill - defRushPower) / 35 + 2.5 + (Math.random() * 2.5 - 0.75) + olBonus + rushRedZoneBonus,
+      (rushSkill - defRushPower) / 40 + 2.2 + (Math.random() * 2.5 - 0.75) + olBonus + rushRedZoneBonus,
     );
-    if (Math.random() < 0.01 + (qb.ratings.speed / 100) * 0.02) {
-      yards += 8 + Math.floor(Math.random() * 12);
+    if (Math.random() < 0.008 + (qb.ratings.speed / 100) * 0.015) {
+      yards += 8 + Math.floor(Math.random() * 10);
     }
     if (Math.random() < 0.12) yards = -(1 + Math.floor(Math.random() * 3));
 
@@ -211,8 +211,8 @@ function simulatePlay(
       };
     }
 
-    if (fieldPosition >= 95 && Math.random() < 0.45) yards = 100 - fieldPosition;
-    if (fieldPosition >= 90 && yards > 0) yards = Math.max(yards, Math.round(1 + Math.random() * 4));
+    if (fieldPosition >= 95 && Math.random() < 0.35) yards = 100 - fieldPosition;
+    if (fieldPosition >= 90 && yards > 0) yards = Math.max(yards, Math.round(1 + Math.random() * 3));
 
     const newPos = fieldPosition + yards;
     const td = newPos >= 100;
@@ -350,27 +350,27 @@ function simulatePlay(
     const compRate = clamp(compBase - (coverageRating / 100) * 0.12 + redZoneBonus, 0.42, 0.72);
 
     if (Math.random() < compRate) {
-      // Completed pass — tuned for NFL realism (~11.8 yards per completion)
-      // Top QBs: ~4,500 yds, ~35 TDs per season
+      // Completed pass — tuned for NFL realism (~11.5 yards per completion)
+      // Top QBs: ~4,200 yds, ~30 TDs per season
       // Rating multiplier: elite players produce more, bad players less
-      const recRatingMult = 0.5 + (target.ratings.catching / 100) * 1.0; // 50-rated=1.0x, 80=1.3x
-      const qbRatingMult = 0.5 + (qb.ratings.throwing / 100) * 1.0;
-      const baseYards = 3 + Math.random() * 10; // 3-13 base (avg 8)
-      const bonusYards = (qb.ratings.throwing / 100) * 2.5 + (target.ratings.speed / 100) * 1.5;
+      const recRatingMult = 0.6 + (target.ratings.catching / 100) * 0.8; // 50-rated=1.0x, 80=1.24x
+      const qbRatingMult = 0.6 + (qb.ratings.throwing / 100) * 0.8;
+      const baseYards = 2 + Math.random() * 9; // 2-11 base (avg 6.5)
+      const bonusYards = (qb.ratings.throwing / 100) * 2.0 + (target.ratings.speed / 100) * 1.2;
       let yards = Math.round((baseYards + bonusYards * Math.random()) * ((qbRatingMult + recRatingMult) / 2));
 
-      // Big play chance (~3-4% of completions go 20+) — explosive plays
-      const bigPlayChance = 0.015 + (target.ratings.speed / 100) * 0.02;
+      // Big play chance (~2-3% of completions go 20+) — explosive plays
+      const bigPlayChance = 0.010 + (target.ratings.speed / 100) * 0.015;
       if (Math.random() < bigPlayChance) {
-        yards += 10 + Math.floor(Math.random() * 15);
+        yards += 10 + Math.floor(Math.random() * 12);
       }
 
       // Red zone TD boost: inside the 20, passes are shorter and more likely to reach the end zone
       if (fieldPosition >= 80) {
-        yards = Math.max(yards, Math.round(3 + Math.random() * 8)); // floor at 3-11 in red zone
+        yards = Math.max(yards, Math.round(2 + Math.random() * 6)); // floor at 2-8 in red zone
       }
-      // Goal line boost: inside the 5, high chance of reaching the end zone
-      if (fieldPosition >= 95 && Math.random() < 0.55) {
+      // Goal line boost: inside the 5, moderate chance of reaching the end zone
+      if (fieldPosition >= 95 && Math.random() < 0.40) {
         yards = 100 - fieldPosition; // score!
       }
 
@@ -420,16 +420,16 @@ function simulatePlay(
 
     // Average: ~4.3 yards per carry, top RB ~1,000-1,400 yds/season
     // Rating multiplier: elite rushers produce more, bad rushers less
-    const rushRatingMult = 0.5 + (rusher.ratings.carrying / 100) * 1.0; // 50-rated=1.0x, 80=1.3x, 40=0.9x
+    const rushRatingMult = 0.6 + (rusher.ratings.carrying / 100) * 0.8; // 50-rated=1.0x, 80=1.24x, 40=0.92x
     // Red zone boost: goal-line runs benefit from compressed field
-    const rushRedZoneBonus = fieldPosition >= 80 ? 1.0 : 0;
+    const rushRedZoneBonus = fieldPosition >= 80 ? 0.6 : 0;
     let yards = Math.round(
-      ((rushSkill - defRushPower) / 35 + 2.5 + (Math.random() * 2.5 - 0.75) + olBonus + rushRedZoneBonus) * rushRatingMult,
+      ((rushSkill - defRushPower) / 40 + 2.2 + (Math.random() * 2.5 - 0.75) + olBonus + rushRedZoneBonus) * rushRatingMult,
     );
 
-    // Big rush chance (~1.5-2.5%) — breakaway runs
-    if (Math.random() < 0.008 + (rusher.ratings.speed / 100) * 0.015) {
-      yards += 8 + Math.floor(Math.random() * 12);
+    // Big rush chance (~1-2%) — breakaway runs
+    if (Math.random() < 0.006 + (rusher.ratings.speed / 100) * 0.012) {
+      yards += 8 + Math.floor(Math.random() * 10);
     }
 
     // Negative play chance (~15% of rushes go for loss)
@@ -455,12 +455,12 @@ function simulatePlay(
     }
 
     // Goal line rush boost: inside the 5, rushing TDs are common
-    if (fieldPosition >= 95 && Math.random() < 0.45) {
+    if (fieldPosition >= 95 && Math.random() < 0.35) {
       yards = 100 - fieldPosition;
     }
     // Inside the 10: short yardage rushing is more effective
     if (fieldPosition >= 90 && yards > 0) {
-      yards = Math.max(yards, Math.round(1 + Math.random() * 4));
+      yards = Math.max(yards, Math.round(1 + Math.random() * 3));
     }
 
     const newPos = fieldPosition + yards;
@@ -501,7 +501,7 @@ function simulateDrive(
   rivalryIntensity: number = 0,
 ): DriveResult {
   const plays: PlayResult[] = [];
-  let fieldPosition = 25 + Math.floor(Math.random() * 15);
+  let fieldPosition = 20 + Math.floor(Math.random() * 12); // NFL avg start ~own 25
   let down = 1;
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));

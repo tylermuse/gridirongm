@@ -134,6 +134,7 @@ interface GameStore extends LeagueState {
   getPlayer: (id: string) => Player | undefined;
   getTeamRoster: (teamId: string) => Player[];
   getWeekGames: (week: number) => GameResult[];
+  switchTeam: (newTeamId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -287,14 +288,17 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
           // No QB at all — big premium
           score += 150;
         } else if (qbOvr < 55) {
-          // Terrible QB — moderate premium
-          score += 80;
-        } else if (qbOvr < 65 && prospect.potential >= 80) {
-          // Below average QB — slight premium only for elite prospects
-          score += 30;
-        } else if (count >= 1) {
-          // Already have a serviceable QB — strong penalty to avoid QB hoarding
-          score *= 0.4;
+          // Terrible QB — strong premium for upgrade
+          score += 100;
+        } else if (qbOvr < 65) {
+          // Below average QB — moderate premium for upgrade potential
+          score += prospect.ratings.overall > qbOvr ? 60 : 20;
+        } else if (qbOvr < 72) {
+          // Average QB — only reach for elite prospects
+          score += prospect.potential >= 85 ? 40 : 0;
+        } else {
+          // Good QB — slight penalty to avoid hoarding
+          score *= 0.6;
         }
       }
 
@@ -2133,9 +2137,16 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     const wp = wpGames > 0 ? (team.record.wins + team.record.ties * 0.5) / wpGames : 0.5;
     if (wp >= 0.6) moodDelta += 1;
     else if (wp <= 0.35) moodDelta -= 2;
+    const starterSlots: Record<string, number> = {
+      QB: 1, RB: 1, WR: 3, TE: 1, OL: 5,
+      DL: 4, LB: 3, CB: 2, S: 2, K: 1, P: 1,
+    };
+    const slots = starterSlots[p.position] ?? 1;
     const depthPos = team.depthChart[p.position]?.indexOf(p.id) ?? -1;
-    if (depthPos === 0) moodDelta += 1;
-    else if (depthPos > 2) moodDelta -= 1;
+    const isStarterRole = depthPos >= 0 && depthPos < slots;
+    if (isStarterRole) moodDelta += 1;
+    else if (depthPos >= 0 && depthPos < slots * 2) { /* backup — no change */ }
+    else if (depthPos >= 0) moodDelta -= 1;
     const marketSalary = estimateSalary(p.ratings.overall, p.position, p.age, p.potential);
     if (p.contract.salary < marketSalary * 0.7) moodDelta -= 1;
     if (team.record.streak >= 3) moodDelta += 1;
@@ -7420,6 +7431,12 @@ export const useGameStore = create<GameStore>()(
       getPlayer: (id: string) => get().players.find(p => p.id === id),
       getTeamRoster: (teamId: string) => get().players.filter(p => p.teamId === teamId),
       getWeekGames: (week: number) => get().schedule.filter(g => g.week === week),
+
+      switchTeam: (newTeamId: string) => {
+        const state = get();
+        if (!state.teams.find(t => t.id === newTeamId)) return;
+        set({ userTeamId: newTeamId });
+      },
     }),
     {
       name: 'gridiron-gm-autosave',
