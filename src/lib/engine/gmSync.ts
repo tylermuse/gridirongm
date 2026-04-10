@@ -22,8 +22,11 @@ export interface GmSyncPayload {
   draftScore?: number;
 }
 
-/** Build a sync payload from the current league state. */
+/** Build a sync payload from the current league state.
+ *  Returns null when God Mode is enabled — God Mode play does NOT count
+ *  toward the GM leaderboard or season awards. */
 export function buildGmSyncPayload(state: LeagueState): GmSyncPayload | null {
+  if (state.leagueSettings?.godMode) return null;
   const userTeam = state.teams.find(t => t.id === state.userTeamId);
   if (!userTeam) return null;
 

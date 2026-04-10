@@ -377,22 +377,22 @@ function simulatePlay(
     const compRate = clamp(compBase - (coverageRating / 100) * 0.12 + redZoneBonus, 0.42, 0.72);
 
     if (Math.random() < compRate) {
-      // Completed pass — tuned for NFL realism (~9.5 yards per completion average)
+      // Completed pass — tuned for NFL realism (~9 yards per completion average)
       // Top QBs: ~4,200 yds, ~30 TDs per season
       // Rating multiplier: elite players produce more, bad players less
-      const recRatingMult = 0.65 + (target.ratings.catching / 100) * 0.7; // 50=1.0, 80=1.21
-      const qbRatingMult = 0.65 + (qb.ratings.throwing / 100) * 0.7;
-      const baseYards = 1 + Math.random() * 8; // 1-9 base (avg 5)
-      const bonusYards = (qb.ratings.throwing / 100) * 1.5 + (target.ratings.speed / 100) * 1.0;
+      const recRatingMult = 0.6 + (target.ratings.catching / 100) * 0.65; // 50=0.93, 80=1.12
+      const qbRatingMult = 0.6 + (qb.ratings.throwing / 100) * 0.65;
+      const baseYards = 1 + Math.random() * 7; // 1-8 base (avg 4.5)
+      const bonusYards = (qb.ratings.throwing / 100) * 1.3 + (target.ratings.speed / 100) * 0.9;
       let yards = Math.round((baseYards + bonusYards * Math.random()) * ((qbRatingMult + recRatingMult) / 2));
 
-      // Big play chance (~2% of completions go 20+) — explosive plays
+      // Big play chance (~1.7% of completions go 20+) — explosive plays
       // Aggressiveness: aggressive ×1.5, conservative ×0.6
       const aggressivenessMult = gamePlan?.aggressiveness === 'aggressive' ? 1.5 :
                                   gamePlan?.aggressiveness === 'conservative' ? 0.6 : 1.0;
-      const bigPlayChance = (0.009 + (target.ratings.speed / 100) * 0.011) * aggressivenessMult;
+      const bigPlayChance = (0.008 + (target.ratings.speed / 100) * 0.010) * aggressivenessMult;
       if (Math.random() < bigPlayChance) {
-        yards += 8 + Math.floor(Math.random() * 11);
+        yards += 7 + Math.floor(Math.random() * 10);
       }
 
       // Red zone TD boost: inside the 20, passes are shorter and more likely to reach the end zone
@@ -537,10 +537,10 @@ function simulateDrive(
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
 
-  // Cap at 13 plays — NFL drives average ~5.5 plays, sustained drives ~10-12.
-  // Allows TDs to be reachable from own 25 (~75 yards needed) without
-  // letting drives become unrealistically long.
-  for (let playNum = 0; playNum < 13; playNum++) {
+  // Cap at 11 plays — NFL drives average ~5.5 plays, sustained drives ~9-11.
+  // Tight enough to keep totals realistic; combined with higher per-play
+  // yardage, drives still reach the end zone often enough.
+  for (let playNum = 0; playNum < 11; playNum++) {
     const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition, rivalryIntensity, gamePlan);
     plays.push(play);
 

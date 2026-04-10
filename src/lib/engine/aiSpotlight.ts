@@ -413,10 +413,29 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
     .then(res => res.ok ? res.json() : Promise.reject(new Error('API error')))
     .then(data => {
       if (cache.key !== key) return;
+      // Build a pool of fallback player names from the user roster.
+      // The AI sometimes forgets to set playerName on player exchanges — we
+      // backfill with a real player from the team so the UI never shows "Player".
+      const rosterPool = roster
+        .filter(p => !p.retired && p.ratings.overall >= 65)
+        .map(p => `${p.firstName} ${p.lastName}`);
+      let fallbackIdx = 0;
+      function pickFallbackName(): string {
+        if (rosterPool.length === 0) return 'Team Captain';
+        const name = rosterPool[fallbackIdx % rosterPool.length];
+        fallbackIdx++;
+        return name;
+      }
+
       cache.topics = (data.topics as { headline: string; icon: string; exchanges: { speakerId: 'stats' | 'hottake' | 'fans' | 'player'; text: string; playerName?: string }[] }[]).map(t => ({
         headline: t.headline,
         icon: t.icon,
-        exchanges: t.exchanges.map(e => ({ ...e, playerName: e.playerName })),
+        exchanges: t.exchanges.map(e => {
+          if (e.speakerId === 'player' && (!e.playerName || e.playerName === 'Player' || e.playerName.trim() === '')) {
+            return { ...e, playerName: pickFallbackName() };
+          }
+          return { ...e, playerName: e.playerName };
+        }),
         teamIds: [team.id],
         playerIds: [] as string[],
       }));

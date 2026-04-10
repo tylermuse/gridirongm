@@ -3260,6 +3260,9 @@ export const useGameStore = create<GameStore>()(
           }));
         }
 
+        // God mode play doesn't count toward awards or rankings
+        const godModeOn = state.leagueSettings?.godMode ?? false;
+
         set({
           phase: 'resigning',
           resigningPlayers,
@@ -3268,8 +3271,8 @@ export const useGameStore = create<GameStore>()(
           players: playersAfterRetirement,
           newsItems: [...state.newsItems, ...retirementNews, ...holdoutNews, ...approvalNews],
           seasonHistory: updatedSeasonHistory,
-          // Trigger awards vote modal for the just-completed season
-          pendingAwardsVote: state.season,
+          // Trigger awards vote modal for the just-completed season (skipped in god mode)
+          ...(godModeOn ? {} : { pendingAwardsVote: state.season }),
           ...(firedState ? { firedState } : {}),
         });
 
