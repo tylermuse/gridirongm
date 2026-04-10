@@ -3,18 +3,41 @@
 import { useState, useRef, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
+const PODCAST_LIMIT = 3;
+const STORAGE_KEY = 'gg-podcast-count';
+
+function getPodcastCount(): number {
+  try {
+    return parseInt(localStorage.getItem(STORAGE_KEY) ?? '0', 10) || 0;
+  } catch { return 0; }
+}
+
+function incrementPodcastCount(): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, String(getPodcastCount() + 1));
+  } catch { /* noop */ }
+}
+
 interface SpotlightAudioPlayerProps {
   topics: { headline: string; icon: string; exchanges: { speakerId: string; text: string }[] }[];
   teamName: string;
 }
 
 export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerProps) {
-  const [state, setState] = useState<'idle' | 'loading' | 'playing' | 'paused' | 'error'>('idle');
+  const [state, setState] = useState<'idle' | 'loading' | 'playing' | 'paused' | 'error' | 'exhausted'>('idle');
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [remaining, setRemaining] = useState(PODCAST_LIMIT);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const blobUrlRef = useRef<string | null>(null);
   const pathname = usePathname();
+
+  // Check remaining on mount
+  useEffect(() => {
+    const used = getPodcastCount();
+    setRemaining(Math.max(0, PODCAST_LIMIT - used));
+    if (used >= PODCAST_LIMIT) setState('exhausted');
+  }, []);
 
   // Stop audio and clean up on unmount
   useEffect(() => {
@@ -50,6 +73,12 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
       return;
     }
 
+    // Check limit before making API call
+    if (getPodcastCount() >= PODCAST_LIMIT) {
+      setState('exhausted');
+      return;
+    }
+
     setState('loading');
     try {
       const res = await fetch('/api/spotlight-audio', {
@@ -58,11 +87,23 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
         body: JSON.stringify({ topics, teamName }),
       });
 
-      if (!res.ok) throw new Error('Failed to generate audio');
+      if (!res.ok) {
+        // Check if it's a credits/quota issue from the API
+        const isCreditsIssue = res.status === 402 || res.status === 429;
+        if (isCreditsIssue) {
+          setState('exhausted');
+          return;
+        }
+        throw new Error('Failed to generate audio');
+      }
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       blobUrlRef.current = url;
+
+      // Count this successful generation
+      incrementPodcastCount();
+      setRemaining(Math.max(0, PODCAST_LIMIT - getPodcastCount()));
 
       const audio = new Audio(url);
       audioRef.current = audio;
@@ -102,6 +143,27 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
     return `${m}:${sec.toString().padStart(2, '0')}`;
   }
 
+  // Exhausted state
+  if (state === 'exhausted') {
+    return (
+      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-500">
+        <span>🎧</span> Podcast credits exhausted
+      </div>
+    );
+  }
+
+  // Error state
+  if (state === 'error') {
+    return (
+      <button
+        onClick={() => { setState('idle'); blobUrlRef.current = null; audioRef.current = null; }}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+      >
+        ⚠️ Retry
+      </button>
+    );
+  }
+
   // Idle state — just a button
   if (state === 'idle' && !blobUrlRef.current) {
     return (
@@ -109,7 +171,7 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
         onClick={handlePlay}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-colors active:scale-[0.98]"
       >
-        <span>🎧</span> Listen to Podcast
+        <span>🎧</span> Listen to Podcast{remaining < PODCAST_LIMIT ? ` (${remaining} left)` : ''}
       </button>
     );
   }
@@ -119,17 +181,6 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700">
         <span className="animate-pulse">🎧</span> Generating audio...
       </div>
-    );
-  }
-
-  if (state === 'error') {
-    return (
-      <button
-        onClick={() => { setState('idle'); blobUrlRef.current = null; audioRef.current = null; }}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
-      >
-        ⚠️ Retry
-      </button>
     );
   }
 

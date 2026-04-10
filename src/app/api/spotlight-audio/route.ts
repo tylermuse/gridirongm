@@ -112,6 +112,12 @@ async function generateSpeech(text: string, voiceId: string): Promise<Buffer> {
 
   if (!res.ok) {
     const err = await res.text();
+    // Propagate quota/auth errors so the client can show "credits exhausted"
+    if (res.status === 401 || res.status === 402 || res.status === 429) {
+      const error = new Error(`ElevenLabs quota exceeded (${res.status}): ${err}`);
+      (error as Error & { status: number }).status = 402;
+      throw error;
+    }
     throw new Error(`ElevenLabs TTS failed (${res.status}): ${err}`);
   }
 
@@ -256,9 +262,10 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error('Spotlight Audio API error:', err);
+    const status = (err as Error & { status?: number }).status ?? 500;
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Unknown error' },
-      { status: 500 }
+      { status }
     );
   }
 }
