@@ -5919,7 +5919,10 @@ export const useGameStore = create<GameStore>()(
         const seed = seedFromId(playerId, 99);
         const noise = ((seed % 7) - 3); // -3 to +3
         const profile = player.draftProfile ?? 'normal';
-        const detected = Math.random() < 0.5;
+        // In-person eval has a 35% chance to detect bust/boom (was 50%).
+        // Even when detected, it's the FULL EVAL that confirms — and full
+        // eval is now imprecise too, so the user always carries some risk.
+        const detected = Math.random() < 0.35;
 
         const PERSONALITIES = ['high_character', 'confident', 'reserved', 'red_flag'] as const;
         const personality = profile === 'bust' && Math.random() < 0.4 ? 'red_flag'
@@ -6034,12 +6037,32 @@ export const useGameStore = create<GameStore>()(
 
         const ovr = player.ratings.overall;
         const seed = seedFromId(playerId, 111);
-        const noise = ((seed % 3) - 1); // -1 to +1
+        // Wider noise: ±3 instead of ±1 — scouting reduces uncertainty but
+        // doesn't make picks risk-free.
+        const noise = ((seed % 7) - 3);
         const profile = player.draftProfile ?? 'normal';
+
+        // Bust/boom reveal is now PROBABILISTIC + IMPRECISE.
+        // 65% chance to reveal correctly, 35% chance to mislabel.
+        // When mislabeled: a real boom may show as 'normal' or 'bust',
+        // a real bust may show as 'normal' or 'boom'. Adds genuine
+        // gambling risk to every pick.
+        const reveal = Math.random();
+        let revealedProfile: 'bust' | 'boom' | 'normal';
+        if (reveal < 0.65) {
+          revealedProfile = profile as 'bust' | 'boom' | 'normal';
+        } else {
+          // Wrong answer — pick a different profile
+          const alts: ('bust' | 'boom' | 'normal')[] =
+            profile === 'bust' ? ['normal', 'boom']
+            : profile === 'boom' ? ['normal', 'bust']
+            : ['bust', 'boom'];
+          revealedProfile = alts[Math.floor(Math.random() * alts.length)];
+        }
 
         const fullResult = {
           exactOvr: Math.max(30, Math.min(99, ovr + noise)),
-          bustBoomResult: profile as 'bust' | 'boom' | 'normal',
+          bustBoomResult: revealedProfile,
         };
 
         set({
