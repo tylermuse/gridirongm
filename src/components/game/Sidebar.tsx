@@ -21,6 +21,7 @@ const NAV_SECTIONS = [
       { href: '/news', label: 'News', icon: '📰' },
       { href: '/recap', label: 'Recap', icon: '🎙️' },
       { href: '/history', label: 'History', icon: '🗃️' },
+      { href: '/gm-rankings', label: 'GM Rankings', icon: '🏅' },
     ],
   },
   {
