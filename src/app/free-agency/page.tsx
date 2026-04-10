@@ -226,7 +226,7 @@ export default function FreeAgencyPage() {
     return sortDir === 'asc' ? ' ↑' : ' ↓';
   }
 
-  const allAgents = freeAgents
+  const allAgents = (freeAgents ?? [])
     .map(id => players.find(p => p.id === id)!)
     .filter(Boolean)
     .sort((a, b) => {
@@ -814,11 +814,6 @@ export default function FreeAgencyPage() {
                       {isExpanded && (
                         <tr className="border-t border-[var(--border)]">
                           <td colSpan={8} className="px-4 py-3 bg-[var(--surface-2)]/50">
-                            {/* Show FA Evaluation only when NO Intel Report exists */}
-                            {!(effectivePursuitState?.intelReports[p.id]) && (
-                              <FAEvaluationPanel player={p} roster={roster} capSpace={capSpace} marketSalary={salary} />
-                            )}
-
                             {/* Intel Report — no report yet */}
                             {effectivePursuitState && !effectivePursuitState.intelReports[p.id] && (
                               <div className="mt-3 border-t border-[var(--border)] pt-3">
@@ -846,8 +841,11 @@ export default function FreeAgencyPage() {
                                     <span className="text-green-600 text-xs">✅</span>
                                   </div>
 
+                                  {/* Front Office Evaluation — top of report */}
+                                  <FAEvaluationPanel player={p} roster={roster} capSpace={capSpace} marketSalary={salary} />
+
                                   {/* Priority */}
-                                  <div>
+                                  <div className="border-t border-[var(--border)] pt-3">
                                     <span className="text-sm font-bold">{priorityIcons[report.priority]} {report.priorityLabel}</span>
                                     <p className="text-xs text-[var(--text-sec)] mt-0.5 italic">{report.priorityDetail}</p>
                                   </div>
@@ -937,10 +935,6 @@ export default function FreeAgencyPage() {
                                   {/* Front office blurb */}
                                   <p className="text-xs italic text-[var(--text)]">&ldquo;{report.intelBlurb}&rdquo; — Front Office</p>
 
-                                  {/* FA Evaluation integrated into Intel Report */}
-                                  <div className="border-t border-[var(--border)] pt-3 mt-3">
-                                    <FAEvaluationPanel player={p} roster={roster} capSpace={capSpace} marketSalary={salary} />
-                                  </div>
                                 </div>
                               );
                             })()}

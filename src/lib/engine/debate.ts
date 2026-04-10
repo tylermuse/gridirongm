@@ -209,7 +209,7 @@ const upsetTemplates: TemplateFunc[] = [
     return [
       { speakerId: 'stats', text: `This is actually a fascinating result. The ${loser?.fullName ?? 'favorites'} were ${loser?.record ?? '?'} coming in, but their point differential suggested they were due for a correction.` },
       { speakerId: 'hottake', text: `"Due for a correction" — listen to yourself! The ${winner?.fullName ?? 'winners'} just beat the brakes off a supposed contender! Sometimes the eye test is more valuable than your precious models!` },
-      { speakerId: 'stats', text: `My models actually had this as a 40% probability game. That's practically a coin flip.` },
+      { speakerId: 'stats', text: `The matchup data actually favored the ${ctx.teams[0]?.name ?? 'winners'} more than people realized. Sometimes "upsets" are only upsets to those who weren't paying attention.` },
       { speakerId: 'hottake', text: `A COIN FLIP?! Tell that to the ${loser?.name ?? 'losers'} fans who just watched their team quit in the fourth quarter!` },
     ];
   },
@@ -223,7 +223,7 @@ const comebackTemplates: TemplateFunc[] = [
     const player = ctx.players[0];
     return [
       { speakerId: 'hottake', text: `THAT was the GREATEST comeback I've seen in YEARS! The ${winner?.fullName ?? 'winners'} were DEAD. Buried. And they came ROARING back!` },
-      { speakerId: 'stats', text: `It was impressive, I'll admit. ${player ? `${player.name} was phenomenal in the second half.` : 'Their second-half adjustments were textbook.'} Historically, teams trailing by that much at the half win less than 5% of the time.` },
+      { speakerId: 'stats', text: `It was impressive, I'll admit. ${player ? `${player.name} was phenomenal in the second half.` : 'Their second-half adjustments were textbook.'} Teams rarely come back from deficits like that — it takes a special kind of resilience.` },
       { speakerId: 'hottake', text: `5%?! That's because most teams don't have HEART like the ${winner?.name ?? 'winners'}! You can't measure heart with analytics, Marcus!` },
       { speakerId: 'stats', text: `Actually, second-half scoring efficiency IS measurable, and theirs was elite today.` },
     ];
@@ -276,8 +276,8 @@ const blowoutTemplates: TemplateFunc[] = [
     return [
       { speakerId: 'stats', text: `This game was effectively over by the second quarter. The ${winner?.fullName ?? 'winners'} controlled every phase of the game from the opening whistle.` },
       { speakerId: 'hottake', text: `I'm actually worried about the ${loser?.fullName ?? 'losers'}. Getting blown out like that does something to a team's SOUL. They might not recover from this for weeks.` },
-      { speakerId: 'stats', text: `Historically, teams that suffer blowout losses actually bounce back at a 54% rate the following week. It's not as devastating as it feels.` },
-      { speakerId: 'hottake', text: `54%?! That means HALF the time they DON'T bounce back! That proves my point!` },
+      { speakerId: 'stats', text: `Blowout losses can go either way. Some teams use them as a wake-up call, others spiral. It depends on the locker room culture and the coaching staff's ability to refocus.` },
+      { speakerId: 'hottake', text: `And based on what I saw out there?! That team does NOT have the culture to bounce back! They QUIT!` },
     ];
   },
   (ctx) => {
@@ -425,8 +425,8 @@ const streakTemplates: TemplateFunc[] = [
     const team = ctx.teams[0];
     const isWinStreak = (team?.streak ?? 0) > 0;
     return isWinStreak ? [
-      { speakerId: 'stats', text: `The ${team?.fullName ?? 'winners'} are ${team?.record ?? '?'} and riding a ${team?.streak ?? '?'}-game win streak. Historically, teams with streaks this long make the playoffs 78% of the time.` },
-      { speakerId: 'hottake', text: `78%?! I'd say it's 100%! This team has IT. The chemistry, the swagger, the belief — you can FEEL it!` },
+      { speakerId: 'stats', text: `The ${team?.fullName ?? 'winners'} are ${team?.record ?? '?'} and riding a ${team?.streak ?? '?'}-game win streak. Long streaks like this strongly correlate with postseason success — they're playing winning football at the right time.` },
+      { speakerId: 'hottake', text: `Correlate?! I'd say it's a GUARANTEE! This team has IT. The chemistry, the swagger, the belief — you can FEEL it!` },
       { speakerId: 'stats', text: `Let's see where they are in three weeks. Streaks end, Tony.` },
       { speakerId: 'hottake', text: `Not THIS one! This team is DIFFERENT!` },
     ] : [

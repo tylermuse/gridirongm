@@ -17,7 +17,9 @@ function playerHandle(p: Player): string {
 const FAN_HANDLES = [
   '@GridironFanatic', '@CapSpaceKing', '@TankNation', '@DraftSzn',
   '@FireTheCoach', '@RingChaser2026', '@NFLCTakes', '@FantasyGuru',
-  '@TradeSeason', '@RookieWatch',
+  '@TradeSeason', '@RookieWatch', '@SundayCouch', '@PlayoffPush',
+  '@Armchair_GM', '@RedZoneJunkie', '@TailgateTom', '@BleacherBum42',
+  '@CoachKiller99', '@SnapCountNerd', '@FranchiseMode', '@PracticeSquadFan',
 ];
 
 function generateEngagement(
@@ -330,6 +332,13 @@ export function generateSocialPosts(input: SocialInput): SocialPost[] {
       text: pick(tonyUnhappyTemplates, tonyBlazeSeed),
     });
   } else if (underpaidStar) {
+    const underpaidTemplates = [
+      `${underpaidStar.firstName} ${underpaidStar.lastName} is playing on a JOKE of a contract. $${underpaidStar.contract.salary.toFixed(1)}M for a ${underpaidStar.ratings.overall} OVR ${underpaidStar.position}?! PAY THAT MAN. 💰`,
+      `How is ${underpaidStar.lastName} still making $${underpaidStar.contract.salary.toFixed(1)}M?! He's a ${underpaidStar.ratings.overall} OVR ${underpaidStar.position}! That contract is CRIMINAL. Front office needs to fix this YESTERDAY.`,
+      `I'm going to keep saying it until they listen — ${underpaidStar.firstName} ${underpaidStar.lastName} at $${underpaidStar.contract.salary.toFixed(1)}M is the biggest steal in the league. But if they don't extend him, someone else WILL. 💰`,
+      `Every week ${underpaidStar.lastName} goes out there and plays like a top ${underpaidStar.position} in the league for pocket change. $${underpaidStar.contract.salary.toFixed(1)}M?! This man deserves a BRINKS truck!`,
+      `Sources tell me ${underpaidStar.firstName} ${underpaidStar.lastName}'s camp is getting restless about that $${underpaidStar.contract.salary.toFixed(1)}M deal. And honestly? Can you BLAME them? He's a ${underpaidStar.ratings.overall} OVR ${underpaidStar.position}!`,
+    ];
     raw.push({
       priority: 80,
       category: 'media',
@@ -339,7 +348,7 @@ export function generateSocialPosts(input: SocialInput): SocialPost[] {
       handle: '@TonyBlazeShow',
       avatar: 'media_tony',
       verified: true,
-      text: `${underpaidStar.firstName} ${underpaidStar.lastName} is playing on a JOKE of a contract. $${underpaidStar.contract.salary.toFixed(1)}M for a ${underpaidStar.ratings.overall} OVR ${underpaidStar.position}?! PAY THAT MAN. 💰`,
+      text: pick(underpaidTemplates, tonyBlazeSeed),
       action: { label: 'Extend', type: 'extend', playerId: underpaidStar.id },
     });
   } else if (userWon && userGame && Math.abs(userGame.homeScore - userGame.awayScore) >= 14) {
@@ -379,6 +388,20 @@ export function generateSocialPosts(input: SocialInput): SocialPost[] {
       abbr: t.abbreviation,
     })).sort((a, b) => b.diff - a.diff);
     const userRank = teamDiffs.findIndex(t => t.id === team.id) + 1;
+    const ordSuffix = userRank === 1 ? 'st' : userRank === 2 ? 'nd' : userRank === 3 ? 'rd' : 'th';
+    const diffSign = team.record.pointsFor - team.record.pointsAgainst >= 0 ? '+' : '';
+    const diff = team.record.pointsFor - team.record.pointsAgainst;
+    const gp = team.record.wins + team.record.losses;
+    const ppg = gp > 0 ? (team.record.pointsFor / gp).toFixed(1) : '0';
+    const oppPpg = gp > 0 ? (team.record.pointsAgainst / gp).toFixed(1) : '0';
+
+    const marcusGameTemplates = [
+      `${team.abbreviation} now ${userRank}${ordSuffix} in point differential (${diffSign}${diff}). ${winPct >= 0.6 ? 'Sustainable winning.' : winPct <= 0.4 ? 'The numbers suggest trouble ahead.' : 'Right in the middle of the pack.'}`,
+      `${team.abbreviation} scoring ${ppg} PPG, allowing ${oppPpg}. Net: ${diffSign}${diff} (${userRank}${ordSuffix} league-wide). ${winPct >= 0.6 ? 'The efficiency metrics are elite.' : winPct <= 0.4 ? 'Regression is inevitable with these margins.' : 'A team in search of an identity.'}`,
+      `Interesting data point: ${team.abbreviation} at ${team.record.wins}-${team.record.losses} with a ${diffSign}${diff} differential. ${diff > 20 ? 'They\'re winning and the margins back it up.' : diff > 0 ? 'Positive differential but not by much — close games could swing either way.' : diff > -20 ? 'Slightly negative — they\'re closer than the record suggests.' : 'The underlying numbers are concerning.'}`,
+      `The ${team.abbreviation} profile: ${ppg} points scored, ${oppPpg} allowed. That's ${userRank}${ordSuffix} in the league by differential. ${winPct >= 0.55 ? 'Process matches results.' : winPct >= 0.45 ? 'Could go either way down the stretch.' : 'Hard to see a path forward without improvement.'}`,
+      `Week ${week} update: ${team.abbreviation} sits at ${diffSign}${diff} in point differential (${userRank}${ordSuffix}). ${diff > 30 ? 'Dominant on both sides of the ball.' : diff > 0 ? 'Outscoring opponents but not by a runaway margin.' : 'Being outscored — the wins have been close, the losses haven\'t.'}`,
+    ];
 
     raw.push({
       priority: 60,
@@ -389,10 +412,17 @@ export function generateSocialPosts(input: SocialInput): SocialPost[] {
       handle: '@MarcusColeNFL',
       avatar: 'media_marcus',
       verified: true,
-      text: `${team.abbreviation} now ${userRank}${userRank === 1 ? 'st' : userRank === 2 ? 'nd' : userRank === 3 ? 'rd' : 'th'} in point differential (${team.record.pointsFor - team.record.pointsAgainst >= 0 ? '+' : ''}${team.record.pointsFor - team.record.pointsAgainst}). ${winPct >= 0.6 ? 'Sustainable winning.' : winPct <= 0.4 ? 'The numbers suggest trouble ahead.' : 'Right in the middle of the pack.'}`,
+      text: pick(marcusGameTemplates, marcusSeed),
     });
   } else if (underpaidStar) {
     const market = estimateMarketSalary(underpaidStar);
+    const valMult = (market / Math.max(underpaidStar.contract.salary, 0.5)).toFixed(1);
+    const marcusUnderpaidTemplates = [
+      `By the numbers: ${underpaidStar.firstName} ${underpaidStar.lastName} is producing at a $${market.toFixed(1)}M level while earning $${underpaidStar.contract.salary.toFixed(1)}M. That's a ${valMult}x value multiplier.`,
+      `${underpaidStar.lastName}'s contract ($${underpaidStar.contract.salary.toFixed(1)}M) vs. market value ($${market.toFixed(1)}M) is one of the biggest discrepancies in the league. A ${valMult}x return on investment.`,
+      `Fun fact: ${underpaidStar.firstName} ${underpaidStar.lastName} is generating $${market.toFixed(1)}M worth of production on a $${underpaidStar.contract.salary.toFixed(1)}M deal. By any metric, that's elite value management — or a ticking clock before he demands more.`,
+      `The ${underpaidStar.lastName} situation in one number: ${valMult}x. That's how much more he's worth ($${market.toFixed(1)}M) than what he's being paid ($${underpaidStar.contract.salary.toFixed(1)}M). Extension talks should be a priority.`,
+    ];
     raw.push({
       priority: 60,
       category: 'media',
@@ -402,7 +432,7 @@ export function generateSocialPosts(input: SocialInput): SocialPost[] {
       handle: '@MarcusColeNFL',
       avatar: 'media_marcus',
       verified: true,
-      text: `By the numbers: ${underpaidStar.firstName} ${underpaidStar.lastName} is producing at a $${market.toFixed(1)}M level while earning $${underpaidStar.contract.salary.toFixed(1)}M. That's a ${(market / Math.max(underpaidStar.contract.salary, 0.5)).toFixed(1)}x value multiplier.`,
+      text: pick(marcusUnderpaidTemplates, marcusSeed),
       action: { label: 'Extend', type: 'extend', playerId: underpaidStar.id },
     });
   }
