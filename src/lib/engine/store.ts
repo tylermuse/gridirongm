@@ -4123,9 +4123,11 @@ export const useGameStore = create<GameStore>()(
               ? { ...p, teamId: pickTeam, draftYear: state.season, draftPick: overallPick, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4, offseasonSigned: true } }
               : p,
           );
+          let pickMarkedSim = false;
           teams = teams.map(t => {
             const updPicks = t.draftPicks.map(pk => {
-              if (pk.year === state.season && pk.ownerTeamId === pickTeam && pk.round === round && !pk.playerId) {
+              if (!pickMarkedSim && pk.ownerTeamId === pickTeam && pk.round === round && !pk.playerId) {
+                pickMarkedSim = true;
                 return { ...pk, playerId: pid, pick: overallPick };
               }
               return pk;
@@ -4207,9 +4209,11 @@ export const useGameStore = create<GameStore>()(
               ? { ...p, teamId: pickTeam, draftYear: state.season, draftPick: overallPick, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4, offseasonSigned: true } }
               : p,
           );
+          let pickMarkedSim = false;
           teams = teams.map(t => {
             const updPicks = t.draftPicks.map(pk => {
-              if (pk.year === state.season && pk.ownerTeamId === pickTeam && pk.round === round && !pk.playerId) {
+              if (!pickMarkedSim && pk.ownerTeamId === pickTeam && pk.round === round && !pk.playerId) {
+                pickMarkedSim = true;
                 return { ...pk, playerId: pid, pick: overallPick };
               }
               return pk;
