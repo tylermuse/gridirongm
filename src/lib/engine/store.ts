@@ -3972,12 +3972,13 @@ export const useGameStore = create<GameStore>()(
         const round = Math.ceil(overallPick / state.teams.length);
 
         // Defensive guard: verify the picking team actually owns an unused pick
-        // for this round. If they don't, draftOrder is stale (e.g. trade not
-        // properly synced) and we should refuse the pick.
+        // at this round (any year — the draft year may differ from state.season
+        // depending on how the league was generated). If they don't, draftOrder
+        // is stale and we should refuse the pick to avoid corrupting state.
         const pickingTeamHasPick = state.teams
           .find(t => t.id === currentPickTeamId)
           ?.draftPicks.some(pk =>
-            pk.year === state.season && pk.round === round && !pk.playerId,
+            pk.round === round && !pk.playerId,
           );
         if (!pickingTeamHasPick) return;
 
