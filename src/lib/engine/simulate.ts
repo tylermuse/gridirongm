@@ -665,10 +665,10 @@ export function simulateGame(
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
-  // 9 possessions per team per game. NFL avg is ~11 possessions but our
-  // drives sustain longer (more plays per drive on average) so this number
-  // keeps total per-game attempts in line with NFL norms (~62 plays/team).
-  const possessions = 9;
+  // 10 possessions per team per game (NFL avg ~11). Tuned together with
+  // drive cap (10 plays) and yards-per-play to land at ~62 plays/team
+  // and ~22-26 PPG.
+  const possessions = 10;
 
   // BS Mode: Irrational Confidence variance
   const applyIC = (roster: Player[]) => {
