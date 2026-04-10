@@ -377,30 +377,30 @@ function simulatePlay(
     const compRate = clamp(compBase - (coverageRating / 100) * 0.12 + redZoneBonus, 0.42, 0.72);
 
     if (Math.random() < compRate) {
-      // Completed pass — tuned for NFL realism (~10 yards per completion average)
+      // Completed pass — tuned for NFL realism (~10.5 yards per completion average)
       // Top QBs: ~4,200 yds, ~30 TDs per season
       // Rating multiplier: elite players produce more, bad players less
-      const recRatingMult = 0.65 + (target.ratings.catching / 100) * 0.65; // 50-rated=0.97x, 80=1.17x
-      const qbRatingMult = 0.65 + (qb.ratings.throwing / 100) * 0.65;
-      const baseYards = 1 + Math.random() * 7; // 1-8 base (avg 4.5)
-      const bonusYards = (qb.ratings.throwing / 100) * 1.5 + (target.ratings.speed / 100) * 1.0;
+      const recRatingMult = 0.7 + (target.ratings.catching / 100) * 0.7; // 50=1.05, 80=1.26
+      const qbRatingMult = 0.7 + (qb.ratings.throwing / 100) * 0.7;
+      const baseYards = 2 + Math.random() * 8; // 2-10 base (avg 6)
+      const bonusYards = (qb.ratings.throwing / 100) * 1.8 + (target.ratings.speed / 100) * 1.2;
       let yards = Math.round((baseYards + bonusYards * Math.random()) * ((qbRatingMult + recRatingMult) / 2));
 
-      // Big play chance (~2% of completions go 20+) — explosive plays
+      // Big play chance (~2.5% of completions go 20+) — explosive plays
       // Aggressiveness: aggressive ×1.5, conservative ×0.6
       const aggressivenessMult = gamePlan?.aggressiveness === 'aggressive' ? 1.5 :
                                   gamePlan?.aggressiveness === 'conservative' ? 0.6 : 1.0;
-      const bigPlayChance = (0.008 + (target.ratings.speed / 100) * 0.010) * aggressivenessMult;
+      const bigPlayChance = (0.011 + (target.ratings.speed / 100) * 0.013) * aggressivenessMult;
       if (Math.random() < bigPlayChance) {
-        yards += 8 + Math.floor(Math.random() * 10);
+        yards += 9 + Math.floor(Math.random() * 12);
       }
 
       // Red zone TD boost: inside the 20, passes are shorter and more likely to reach the end zone
       if (fieldPosition >= 80) {
-        yards = Math.max(yards, Math.round(1 + Math.random() * 5)); // floor at 1-6 in red zone
+        yards = Math.max(yards, Math.round(2 + Math.random() * 6)); // floor at 2-8 in red zone
       }
-      // Goal line boost: inside the 5, moderate chance of reaching the end zone
-      if (fieldPosition >= 95 && Math.random() < 0.32) {
+      // Goal line boost: inside the 5, healthy chance of reaching the end zone
+      if (fieldPosition >= 95 && Math.random() < 0.42) {
         yards = 100 - fieldPosition; // score!
       }
 
@@ -448,18 +448,18 @@ function simulatePlay(
     const rushSkill = rusher.ratings.carrying * 0.5 + rusher.ratings.speed * 0.3 + rusher.ratings.agility * 0.2;
     const olBonus = (olPower - 60) / 100 * 2.6; // 1.3x OL bonus multiplier (was 2)
 
-    // Average: ~4.0 yards per carry, top RB ~1,000-1,300 yds/season
+    // Average: ~4.2 yards per carry, top RB ~1,000-1,300 yds/season
     // Rating multiplier: elite rushers produce more, bad rushers less
-    const rushRatingMult = 0.65 + (rusher.ratings.carrying / 100) * 0.65; // 50-rated=0.97x, 80=1.17x
+    const rushRatingMult = 0.7 + (rusher.ratings.carrying / 100) * 0.7; // 50=1.05, 80=1.26
     // Red zone boost: goal-line runs benefit from compressed field
-    const rushRedZoneBonus = fieldPosition >= 80 ? 0.4 : 0;
+    const rushRedZoneBonus = fieldPosition >= 80 ? 0.6 : 0;
     let yards = Math.round(
-      ((rushSkill - defRushPower) / 45 + 1.8 + (Math.random() * 2.2 - 0.7) + olBonus + rushRedZoneBonus) * rushRatingMult,
+      ((rushSkill - defRushPower) / 42 + 2.0 + (Math.random() * 2.4 - 0.7) + olBonus + rushRedZoneBonus) * rushRatingMult,
     );
 
-    // Big rush chance (~1%) — breakaway runs
-    if (Math.random() < 0.005 + (rusher.ratings.speed / 100) * 0.008) {
-      yards += 7 + Math.floor(Math.random() * 9);
+    // Big rush chance (~1.5%) — breakaway runs
+    if (Math.random() < 0.007 + (rusher.ratings.speed / 100) * 0.011) {
+      yards += 8 + Math.floor(Math.random() * 10);
     }
 
     // Negative play chance (~15% of rushes go for loss)
@@ -485,12 +485,12 @@ function simulatePlay(
     }
 
     // Goal line rush boost: inside the 5, rushing TDs are common
-    if (fieldPosition >= 95 && Math.random() < 0.35) {
+    if (fieldPosition >= 95 && Math.random() < 0.45) {
       yards = 100 - fieldPosition;
     }
     // Inside the 10: short yardage rushing is more effective
     if (fieldPosition >= 90 && yards > 0) {
-      yards = Math.max(yards, Math.round(1 + Math.random() * 3));
+      yards = Math.max(yards, Math.round(2 + Math.random() * 4));
     }
 
     const newPos = fieldPosition + yards;

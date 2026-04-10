@@ -1118,9 +1118,9 @@ export function simulatePlayByPlay(
         advanceClock(5);
 
       } else if (roll < sackChance + intChance + (1 - sackChance - intChance) * compBase) {
-        // COMPLETION — yards per completion targeting NFL avg ~10
-        const baseYards = 2 + Math.random() * 8; // 2-10 base (avg 6)
-        const bonusYards = (qbThrowing / 100) * 1.5 + (wr1Speed / 100) * 1.0;
+        // COMPLETION — yards per completion targeting NFL avg ~10.5
+        const baseYards = 3 + Math.random() * 9; // 3-12 base (avg 7)
+        const bonusYards = (qbThrowing / 100) * 1.8 + (wr1Speed / 100) * 1.3;
         let yardsGained = Math.round(baseYards + bonusYards * Math.random());
 
         // Big play chance — aggressive plan boosts, conservative reduces
@@ -1128,16 +1128,16 @@ export function simulatePlayByPlay(
           ? (userGamePlan.aggressiveness === 'aggressive' ? 1.5 :
              userGamePlan.aggressiveness === 'conservative' ? 0.6 : 1.0)
           : 1.0;
-        if (Math.random() < (0.008 + (wr1Speed / 100) * 0.012) * userAggMult) {
-          yardsGained += 10 + Math.floor(Math.random() * 12);
+        if (Math.random() < (0.011 + (wr1Speed / 100) * 0.014) * userAggMult) {
+          yardsGained += 10 + Math.floor(Math.random() * 14);
         }
         yardsGained = clamp(yardsGained, 1, 55); // completions never lose yards
 
         // Red zone pass boost
         if (state.fieldPos >= 80) {
-          yardsGained = Math.max(yardsGained, Math.round(1 + Math.random() * 5));
+          yardsGained = Math.max(yardsGained, Math.round(2 + Math.random() * 6));
         }
-        if (state.fieldPos >= 95 && Math.random() < 0.32) {
+        if (state.fieldPos >= 95 && Math.random() < 0.42) {
           yardsGained = 100 - state.fieldPos; // score!
         }
 
