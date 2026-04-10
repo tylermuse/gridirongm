@@ -199,7 +199,16 @@ Return ONLY the JSON array, no markdown fences, no other text.`;
           max_tokens: 3000,
           response_format: { type: 'json_object' },
           messages: [
-            { role: 'system', content: systemPrompt + '\n\nIMPORTANT: Wrap your JSON array in an object like {"topics": [...]}' },
+            { role: 'system', content: systemPrompt + `\n\nIMPORTANT: Wrap your JSON array in an object like {"topics": [...]}
+
+DETAIL & LENGTH REQUIREMENTS:
+- Each exchange "text" field MUST be 2-4 sentences long, not just one sentence.
+- Marcus should cite specific stats from the data and draw comparisons or historical parallels.
+- Tony should be dramatic, use CAPS for emphasis, and paint vivid word pictures.
+- Fan reactions should feel raw and emotional — use slang, exclamation marks, ALL CAPS.
+- Player posts should feel like real social media — emojis, hashtags, attitude.
+- Each topic MUST have at least 4 exchanges showing real back-and-forth (Marcus says something → Tony reacts/disagrees → Marcus counters → fan or player chimes in).
+- DO NOT be brief. The user is reading this for entertainment — make it feel like a real debate show with personality and conflict.` },
             { role: 'user', content: userContent },
           ],
         });

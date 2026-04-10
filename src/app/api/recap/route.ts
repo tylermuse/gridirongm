@@ -109,10 +109,18 @@ Return ONLY the JSON array.`;
         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
         const completion = await openai.chat.completions.create({
           model: 'gpt-4o-mini',
-          max_tokens: 2000,
+          max_tokens: 3000,
           response_format: { type: 'json_object' },
           messages: [
-            { role: 'system', content: systemPrompt + '\n\nIMPORTANT: Wrap your JSON array in an object like {"topics": [...]}' },
+            { role: 'system', content: systemPrompt + `\n\nIMPORTANT: Wrap your JSON array in an object like {"topics": [...]}
+
+DETAIL & LENGTH REQUIREMENTS:
+- Each exchange "text" field MUST be 2-4 sentences long, not just one sentence.
+- Marcus should cite specific stats from the game data and break down what they mean.
+- Tony should be dramatic, use CAPS for emphasis, and react with real emotion to big plays and performances.
+- Each topic MUST have at least 3-4 exchanges showing real back-and-forth debate between Marcus and Tony — they should RESPOND to each other, agree, disagree, and build on each other's points.
+- The "context" field should include a detailed box score summary with key stats.
+- DO NOT be brief. The user is reading this for entertainment — make it feel like a real post-game show with personality, banter, and analysis.` },
             { role: 'user', content: userContent },
           ],
         });
