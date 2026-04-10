@@ -3900,6 +3900,16 @@ export const useGameStore = create<GameStore>()(
         const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
         const round = Math.ceil(overallPick / state.teams.length);
 
+        // Defensive guard: verify the picking team actually owns an unused pick
+        // for this round. If they don't, draftOrder is stale (e.g. trade not
+        // properly synced) and we should refuse the pick.
+        const pickingTeamHasPick = state.teams
+          .find(t => t.id === currentPickTeamId)
+          ?.draftPicks.some(pk =>
+            pk.year === state.season && pk.round === round && !pk.playerId,
+          );
+        if (!pickingTeamHasPick) return;
+
         // Rookie salary scale based on draft position (league-style exponential decay)
         // Pick 1: ~$10M, Pick 32: ~$2.8M, Pick 64: ~$1.3M, Pick 128+: ~$0.8M
         const finalSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * 10) / 10);
@@ -5262,40 +5272,35 @@ export const useGameStore = create<GameStore>()(
           isUserTeam: true,
         });
 
-        // During draft phase, update draftOrder to reflect pick ownership changes
+        // During draft phase, rebuild draftOrder from current pick ownership
+        // (rather than trying to surgically patch it — that approach fails when
+        // a team has multiple picks in the same round)
         let updatedDraftOrder = state.draftOrder;
         if (state.phase === 'draft' && (offeredPickIds.length > 0 || receivedPickIds.length > 0)) {
-          // Build a map from pickId → new ownerTeamId for all traded picks
-          const pickOwnerChanges = new Map<string, string>();
-          for (const ut of updatedTeams) {
-            for (const pk of ut.draftPicks) {
-              if (offeredPickIdsSet.has(pk.id) || receivedPickIdsSet.has(pk.id)) {
-                pickOwnerChanges.set(pk.id, pk.ownerTeamId);
-              }
-            }
-          }
-          // For each slot in draftOrder, check if the pick at that slot was traded
+          // Determine where we are in the draft from the OLD draftOrder length
           const totalPicks = state.teams.length * 7;
-          const currentOverall = totalPicks - state.draftOrder.length + 1;
-          // Collect all unused picks from OLD teams to identify which pick is at each slot
-          const oldUnusedPicks = state.teams.flatMap(t =>
-            t.draftPicks.filter(pk => pk.year === state.season && !pk.playerId),
-          );
-          // Match each draftOrder slot to its pick: draftOrder[i] = ownerTeamId at slot i
-          // We need to find the pick for each slot, then check if its owner changed
-          const usedIds = new Set<string>();
-          updatedDraftOrder = state.draftOrder.map((oldOwner, i) => {
-            const overallNum = currentOverall + i;
-            const round = Math.ceil(overallNum / state.teams.length);
-            const pick = oldUnusedPicks.find(
-              pk => pk.ownerTeamId === oldOwner && pk.round === round && !usedIds.has(pk.id),
-            );
-            if (pick) {
-              usedIds.add(pick.id);
-              return pickOwnerChanges.get(pick.id) ?? oldOwner;
-            }
-            return oldOwner;
+          const picksAlreadyMade = totalPicks - state.draftOrder.length;
+
+          // Sort all year picks by (round, original team's draft position) to match
+          // the order they were originally built in advanceToDraft.
+          const sortedTeamsByRecord = [...state.teams].sort((a, b) => {
+            const aWp = a.record.wins + a.record.losses > 0 ? a.record.wins / (a.record.wins + a.record.losses) : 0.5;
+            const bWp = b.record.wins + b.record.losses > 0 ? b.record.wins / (b.record.wins + b.record.losses) : 0.5;
+            return aWp - bWp; // worst first
           });
+          const teamWinPctIndex = new Map(sortedTeamsByRecord.map((t, i) => [t.id, i]));
+
+          const allPicksThisYear = updatedTeams.flatMap(t =>
+            t.draftPicks.filter(pk => pk.year === state.season),
+          );
+          allPicksThisYear.sort((a, b) => {
+            if (a.round !== b.round) return a.round - b.round;
+            return (teamWinPctIndex.get(a.originalTeamId) ?? 16) - (teamWinPctIndex.get(b.originalTeamId) ?? 16);
+          });
+
+          // The full draft order based on current ownership; skip already-made picks
+          const fullOrder = allPicksThisYear.map(pk => pk.ownerTeamId);
+          updatedDraftOrder = fullOrder.slice(picksAlreadyMade);
         }
 
         // Approval impact for trading star players
