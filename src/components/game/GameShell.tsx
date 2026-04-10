@@ -5,6 +5,7 @@ import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { GameTicker } from './GameTicker';
 import { SpotlightPopup } from './SpotlightPopup';
+import { SeasonAwardsModal } from './SeasonAwardsModal';
 import { useGameStore } from '@/lib/engine/store';
 import { getTeamColorVars } from '@/lib/teamColors';
 
@@ -48,6 +49,7 @@ export function GameShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <SpotlightPopup />
+      <SeasonAwardsModal />
     </div>
   );
 }

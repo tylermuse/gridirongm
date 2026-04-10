@@ -60,6 +60,8 @@ interface GameStore extends LeagueState {
   setNextGamePlan: (plan: { passRate: number; aggressiveness: 'conservative' | 'balanced' | 'aggressive' } | null) => void;
   /** Generate the draft class preview if it doesn't already exist for the current season. */
   ensureDraftClassPreview: () => void;
+  /** Clear the pendingAwardsVote flag after the user votes or dismisses. */
+  dismissAwardsVote: () => void;
   simWeek: () => void;
   simToWeek: (targetWeek: number) => void;
   advanceToPlayoffs: () => void;
@@ -2564,6 +2566,10 @@ export const useGameStore = create<GameStore>()(
         set({ draftClassPreview: generateDraftClassPreview(state.season) });
       },
 
+      dismissAwardsVote: () => {
+        set({ pendingAwardsVote: undefined });
+      },
+
       simWeek: () => {
         const state = get();
         if (state.phase !== 'regular') return;
@@ -3253,6 +3259,8 @@ export const useGameStore = create<GameStore>()(
           players: playersAfterRetirement,
           newsItems: [...state.newsItems, ...retirementNews, ...holdoutNews, ...approvalNews],
           seasonHistory: updatedSeasonHistory,
+          // Trigger awards vote modal for the just-completed season
+          pendingAwardsVote: state.season,
           ...(firedState ? { firedState } : {}),
         });
 

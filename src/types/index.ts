@@ -778,6 +778,8 @@ export interface LeagueState {
   nextGamePlan?: { passRate: number; aggressiveness: 'conservative' | 'balanced' | 'aggressive' };
   /** Per-position scouting preview of the upcoming draft class. Generated at trade deadline. */
   draftClassPreview?: { season: number; groups: { position: string; grade: string; depthNote: string }[] };
+  /** Season number that the awards modal should be shown for. Cleared after the user votes/dismisses. */
+  pendingAwardsVote?: number;
   /** BS Mode: QB tier assignments */
   qbTiers?: Record<string, { playerId: string; tier: QBTier }>;
   /** BS Mode: opponent selection for top seeds */
