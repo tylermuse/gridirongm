@@ -908,9 +908,9 @@ function TradesPage() {
 
   // Compute pick number label (e.g., "#21") for current-year picks during/after draft ordering
   const pickNumberMap = useMemo(() => {
-    const map = new Map<string, number>(); // pickId → within-round pick number
-    // Only estimate pick numbers for the NEXT draft — future years are unknown
-    const draftYear = phase === 'draft' ? season : season + 1;
+    const map = new Map<string, number>(); // pickId → overall pick number
+    // Show pick numbers for the CURRENT season's draft — future years' orders are unknown
+    const draftYear = season;
 
     // Include ALL picks for the draft year (even already-drafted ones) so numbering is stable
     const allPicks = teams.flatMap(t =>
@@ -929,25 +929,20 @@ function TradesPage() {
       return aWp - bWp;
     });
 
-    // Assign within-round pick numbers (e.g., Pick #1 through #N for each round)
-    let currentRound = 0;
-    let pickInRound = 0;
+    // Assign overall pick numbers (e.g., #1 through #224 across all rounds)
+    let overallPick = 0;
     allPicks.forEach((pk) => {
-      if (pk.round !== currentRound) {
-        currentRound = pk.round;
-        pickInRound = 0;
-      }
-      pickInRound++;
-      map.set(pk.id, pickInRound);
+      overallPick++;
+      map.set(pk.id, overallPick);
     });
     return map;
   }, [phase, draftOrder, teams, season]);
 
-  // Only show pick numbers for the upcoming draft year — future years' orders are unknown
-  const nextDraftYear = phase === 'draft' ? season : season + 1;
+  // Only show pick numbers for the current season's draft — future years' orders are unknown
+  const currentDraftYear = season;
 
   function pickLabel(pk: { id: string; year: number; round: number; originalTeamId: string; ownerTeamId: string }) {
-    const num = pk.year === nextDraftYear ? pickNumberMap.get(pk.id) : undefined;
+    const num = pk.year === currentDraftYear ? pickNumberMap.get(pk.id) : undefined;
     const origTeam = pk.originalTeamId !== pk.ownerTeamId ? teams.find(t => t.id === pk.originalTeamId) : null;
     const via = origTeam ? ` (via ${origTeam.abbreviation})` : '';
     if (num) return `${pk.year} Round ${pk.round}, Pick #${num}${via}`;
