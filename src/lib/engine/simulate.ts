@@ -537,7 +537,9 @@ function simulateDrive(
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
 
-  for (let playNum = 0; playNum < 10; playNum++) {
+  // Cap at 18 plays — long enough for an NFL-style sustained drive (~12-15 plays
+  // is the max for real drives) but with a safety valve to prevent infinite loops.
+  for (let playNum = 0; playNum < 18; playNum++) {
     const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition, rivalryIntensity, gamePlan);
     plays.push(play);
 
