@@ -28,6 +28,7 @@ import { generateSeasonObjectives, evaluateObjectives } from './objectives';
 import { defaultApproval, updateApprovalAfterGame, updateApprovalEndOfSeason, updateApprovalForMove } from './approval';
 import { teamSpecialTeamsRating } from './specialTeams';
 import { createExpansionTeamObject, runExpansionDraft, computeProtectionLimit } from './expansionDraft';
+import { buildGmSyncPayload, syncGmStats } from './gmSync';
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 
@@ -3246,6 +3247,10 @@ export const useGameStore = create<GameStore>()(
           seasonHistory: updatedSeasonHistory,
           ...(firedState ? { firedState } : {}),
         });
+
+        // Sync GM stats to leaderboard (post-playoffs, no draft data yet)
+        const gmPayload = buildGmSyncPayload(get());
+        if (gmPayload) syncGmStats(gmPayload);
       },
 
       // PRD-03: User re-signs a player (negotiation handled in UI, this just executes)
@@ -4457,6 +4462,10 @@ export const useGameStore = create<GameStore>()(
             newsItems: [...rumorState.newsItems, ...rumorNews],
           });
         }
+
+        // Re-sync GM stats now that the draft is complete (includes draft score)
+        const gmFaPayload = buildGmSyncPayload(get());
+        if (gmFaPayload) syncGmStats(gmFaPayload);
       },
 
       advanceFADay: () => {
