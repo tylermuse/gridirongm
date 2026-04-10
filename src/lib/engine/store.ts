@@ -3971,17 +3971,6 @@ export const useGameStore = create<GameStore>()(
         const pickInRound = ((overallPick - 1) % state.teams.length) + 1;
         const round = Math.ceil(overallPick / state.teams.length);
 
-        // Defensive guard: verify the picking team actually owns an unused pick
-        // at this round (any year — the draft year may differ from state.season
-        // depending on how the league was generated). If they don't, draftOrder
-        // is stale and we should refuse the pick to avoid corrupting state.
-        const pickingTeamHasPick = state.teams
-          .find(t => t.id === currentPickTeamId)
-          ?.draftPicks.some(pk =>
-            pk.round === round && !pk.playerId,
-          );
-        if (!pickingTeamHasPick) return;
-
         // Rookie salary scale based on draft position (league-style exponential decay)
         // Pick 1: ~$10M, Pick 32: ~$2.8M, Pick 64: ~$1.3M, Pick 128+: ~$0.8M
         const finalSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * 10) / 10);
@@ -4008,13 +3997,19 @@ export const useGameStore = create<GameStore>()(
         }
 
         // PRD-13: Update depth chart for drafting team + mark the DraftPick as used
-        // Find which DraftPick this corresponds to (the owner's pick for this round/year)
-        const targetDraftYear = state.season;
-        const pickIndex = state.draftResults.length; // how many picks have been made so far
+        // Find which DraftPick this corresponds to (the owner's pick for this round)
+        // Use the earliest matching unused pick — the year may differ from
+        // state.season depending on how the league was generated.
+        let pickMarked = false;
         const updatedTeams = state.teams.map(t => {
-          // Mark the used pick on whichever team owns it
           const updatedPicks = t.draftPicks.map(pk => {
-            if (pk.year === targetDraftYear && pk.ownerTeamId === currentPickTeamId && pk.round === round && !pk.playerId) {
+            if (
+              !pickMarked &&
+              pk.ownerTeamId === currentPickTeamId &&
+              pk.round === round &&
+              !pk.playerId
+            ) {
+              pickMarked = true;
               return { ...pk, playerId, pick: overallPick };
             }
             return pk;
