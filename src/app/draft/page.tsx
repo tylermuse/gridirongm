@@ -697,7 +697,9 @@ export default function DraftPage() {
     draftLotteryResults,
     leagueSettings,
     scoutingState,
+    nflMockDraft,
   } = useGameStore();
+  const [showMockDraft, setShowMockDraft] = useState(false);
 
   const { maxScoutingLevel: maxLevel } = useSubscription();
 
@@ -1000,6 +1002,56 @@ export default function DraftPage() {
           onDraft={(playerId) => draftPlayer(playerId)}
           onPlayerClick={(playerId) => setExpandedProspectId(playerId)}
         />
+
+        {/* Mock Draft button + dropdown */}
+        {nflMockDraft && nflMockDraft.length > 0 && (
+          <div className="flex items-center justify-between bg-[var(--surface)] border border-[var(--border)] rounded-xl px-4 py-3">
+            <div>
+              <div className="text-sm font-bold">🔮 Pre-Draft Mock Projection</div>
+              <div className="text-xs text-[var(--text-sec)]">Round 1 projections from the BS Football war room</div>
+            </div>
+            <button
+              onClick={() => setShowMockDraft(!showMockDraft)}
+              className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              {showMockDraft ? 'Hide' : 'View'} Mock Draft
+            </button>
+          </div>
+        )}
+
+        {showMockDraft && nflMockDraft && nflMockDraft.length > 0 && (
+          <Card>
+            <CardHeader><CardTitle>Round 1 Mock Projection</CardTitle></CardHeader>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider border-b border-[var(--border)]">
+                    <th className="text-left pb-2 pl-2">#</th>
+                    <th className="text-left pb-2">Team</th>
+                    <th className="text-left pb-2">Projected Pick</th>
+                    <th className="text-left pb-2 pr-2">Pos · School</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {nflMockDraft.map((mock) => {
+                    const mockTeam = teams.find(t => t.abbreviation === mock.teamAbbr);
+                    const isUserMock = mockTeam?.id === userTeamId;
+                    return (
+                      <tr key={mock.pickNum} className={`border-t border-[var(--border)] ${isUserMock ? 'bg-blue-50' : ''}`}>
+                        <td className="py-2 pl-2 text-[var(--text-sec)] font-mono">{mock.pickNum}</td>
+                        <td className="py-2 font-bold">{mockTeam?.abbreviation ?? mock.teamAbbr}</td>
+                        <td className="py-2">
+                          <span className="font-medium">{mock.firstName} {mock.lastName}</span>
+                        </td>
+                        <td className="py-2 pr-2 text-xs text-[var(--text-sec)]">{mock.position}{mock.college ? ` · ${mock.college}` : ''}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
 
         <div className="grid grid-cols-12 gap-4">
           {/* Top Prospects */}
