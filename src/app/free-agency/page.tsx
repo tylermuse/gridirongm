@@ -264,7 +264,9 @@ export default function FreeAgencyPage() {
       filteredAgents = filteredAgents.filter(p => estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci) * decay <= affordCap);
     }
   }
-  const agents = filteredAgents.slice(0, 60);
+  // Show up to 300 — enough to surface low-OVR depth bodies that would
+  // otherwise sit below the top-60 cutoff when sorted by OVR descending.
+  const agents = filteredAgents.slice(0, 300);
 
   function startNegotiation(player: typeof agents[0]) {
     if (faRefusals.includes(player.id)) return;

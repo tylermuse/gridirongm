@@ -7234,17 +7234,24 @@ export const useGameStore = create<GameStore>()(
           .filter(p => !p.teamId && !p.retired && !(p.draftYear != null && p.draftYear >= newSeason && p.experience === 0))
           .map(p => p.id);
 
-        // Generate street free agents so there's always a pool for in-season signings
-        // Real league always has ~100+ unsigned players available on the street
+        // Generate street free agents so there's always a pool for in-season signings.
+        // Always inject at least 50 fresh sub-55 OVR depth bodies regardless of how
+        // many mid-tier vets are already in the pool — otherwise users with lots of
+        // accumulated unsigned vets see ONLY mid-tier and never any cheap depth.
         const streetFATarget = 80;
         const currentFACount = unsignedPlayerIds.length;
-        const streetFACount = Math.max(0, streetFATarget - currentFACount);
+        const lowDepthMin = 50;
+        const streetFACount = Math.max(lowDepthMin, streetFATarget - currentFACount);
         const streetFAs: import('@/types').Player[] = [];
         if (streetFACount > 0) {
           for (let i = 0; i < streetFACount; i++) {
             const pos = POSITIONS[Math.floor(Math.random() * POSITIONS.length)];
-            // Street FAs are lower-end players (40-60 OVR) — practice squad / depth
-            const talentMean = 40 + Math.random() * 20;
+            // Skewed low: 70% camp bodies (38-50 OVR), 30% depth (50-60).
+            // These are the cheap signings users actually need at season start.
+            const tierRoll = Math.random();
+            const talentMean = tierRoll < 0.70
+              ? 38 + Math.random() * 12  // 70% camp body (38-50)
+              : 50 + Math.random() * 10; // 30% depth (50-60)
             const p = generatePlayer(pos, talentMean, {
               age: 23 + Math.floor(Math.random() * 8),
               experience: Math.floor(Math.random() * 5),
