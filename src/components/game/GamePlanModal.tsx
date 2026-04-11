@@ -22,11 +22,14 @@ export function GamePlanModal({ opponentName, onConfirm, onCancel }: GamePlanMod
   }
 
   function getPassRateLabel(rate: number): string {
-    if (rate <= 35) return 'Run Heavy';
-    if (rate <= 45) return 'Run Lean';
-    if (rate <= 55) return 'Balanced';
-    if (rate <= 65) return 'Pass Lean';
-    return 'Pass Heavy';
+    const runPct = 100 - rate;
+    const tier =
+      rate <= 35 ? 'Run Heavy' :
+      rate <= 45 ? 'Run Lean' :
+      rate <= 55 ? 'Balanced' :
+      rate <= 65 ? 'Pass Lean' :
+      'Pass Heavy';
+    return `${runPct}R / ${rate}P · ${tier}`;
   }
 
   return (
@@ -56,9 +59,9 @@ export function GamePlanModal({ opponentName, onConfirm, onCancel }: GamePlanMod
               className="w-full accent-blue-600"
             />
             <div className="flex items-center justify-between text-[10px] text-[var(--text-sec)] mt-1">
-              <span>Run</span>
-              <span className="tabular-nums">{passRate}% pass</span>
-              <span>Pass</span>
+              <span className="tabular-nums font-semibold">{100 - passRate}% Run</span>
+              <span className="text-[var(--text-sec)] italic">drag to adjust</span>
+              <span className="tabular-nums font-semibold">{passRate}% Pass</span>
             </div>
           </div>
 

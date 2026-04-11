@@ -377,6 +377,11 @@ interface StatBucket {
   rushAttempts: number;
   rushYards: number;
   rushTDs: number;
+  // QB-specific rushing — tracked separately so designed runs and scrambles
+  // get credited to the QB instead of being lumped into the RB stat line.
+  qbRushAttempts: number;
+  qbRushYards: number;
+  qbRushTDs: number;
   receivingTargets: number;
   receptions: number;
   receivingYards: number;
@@ -394,6 +399,7 @@ function emptyBucket(): StatBucket {
   return {
     passAttempts: 0, passCompletions: 0, passYards: 0, passTDs: 0, interceptions: 0,
     rushAttempts: 0, rushYards: 0, rushTDs: 0,
+    qbRushAttempts: 0, qbRushYards: 0, qbRushTDs: 0,
     receivingTargets: 0, receptions: 0, receivingYards: 0, receivingTDs: 0,
     sacks: 0, defensiveINTs: 0, tackles: 0,
     fieldGoalAttempts: 0, fieldGoalsMade: 0,
@@ -954,13 +960,14 @@ export function simulatePlayByPlay(
         yardsGained = Math.max(yardsGained, Math.round(1 + Math.random() * 3));
       }
 
-      ob.rushAttempts += 1;
-      ob.rushYards += yardsGained;
+      ob.qbRushAttempts += 1;
+      ob.qbRushYards += yardsGained;
       db.tackles += 1;
 
       const isTD = state.fieldPos + yardsGained >= 100;
       if (isTD) {
         const tdYards = 100 - state.fieldPos;
+        ob.qbRushTDs += 1;
         doTouchdown(true, ok.qb, tdYards);
         advanceClock(Math.floor(Math.random() * 8) + 30);
         return true;
@@ -1051,13 +1058,14 @@ export function simulatePlayByPlay(
           yardsGained = 100 - state.fieldPos;
         }
 
-        ob.rushAttempts += 1;
-        ob.rushYards += yardsGained;
+        ob.qbRushAttempts += 1;
+        ob.qbRushYards += yardsGained;
         db.tackles += 1;
 
         const isTD = state.fieldPos + yardsGained >= 100;
         if (isTD) {
           const tdYards = 100 - state.fieldPos;
+          ob.qbRushTDs += 1;
           doTouchdown(true, ok.qb, tdYards);
           advanceClock(Math.floor(Math.random() * 8) + 25);
           return true;
@@ -1299,7 +1307,7 @@ export function simulatePlayByPlay(
     keyPlayers: KeyPlayers,
     teamPlayers: Player[],
   ) {
-    // QB
+    // QB — passing + scramble/designed-run rushing stats
     if (keyPlayers.qb) {
       playerStats[keyPlayers.qb.id] = {
         gamesPlayed: 1,
@@ -1308,6 +1316,9 @@ export function simulatePlayByPlay(
         passYards: bucket.passYards,
         passTDs: bucket.passTDs,
         interceptions: bucket.interceptions,
+        rushAttempts: bucket.qbRushAttempts,
+        rushYards: bucket.qbRushYards,
+        rushTDs: bucket.qbRushTDs,
       };
     }
 
