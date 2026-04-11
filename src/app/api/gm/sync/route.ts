@@ -66,7 +66,13 @@ export async function POST(request: Request) {
     }
 
     const userId = user.id;
-    const displayName = (user.email?.split('@')[0]) ?? 'GM';
+    // Prefer user-chosen display name from auth metadata; fall back to email prefix.
+    const metadataName = typeof user.user_metadata?.display_name === 'string'
+      ? (user.user_metadata.display_name as string).trim()
+      : '';
+    const displayName = metadataName.length > 0
+      ? metadataName
+      : (user.email?.split('@')[0]) ?? 'GM';
 
     // ── Upsert season row ────────────────────────────────────────
     const { error: histErr } = await service

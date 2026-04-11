@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { DEFAULT_LEAGUE_SETTINGS, type LeagueSettings } from '@/types';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -48,21 +49,98 @@ function SettingRow({ label, description, value, onChange, min, max, step, unit,
 
 function AccountCard() {
   const { user, signOut } = useSubscription();
+  const initialName = (user?.user_metadata?.display_name as string | undefined) ?? '';
+  const [displayName, setDisplayName] = useState(initialName);
+  const [savingName, setSavingName] = useState(false);
+  const [nameStatus, setNameStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDisplayName((user?.user_metadata?.display_name as string | undefined) ?? '');
+  }, [user]);
+
+  const trimmed = displayName.trim();
+  const isValid = trimmed.length >= 3 && trimmed.length <= 30;
+  const currentSaved = (user?.user_metadata?.display_name as string | undefined) ?? '';
+  const isDirty = trimmed !== currentSaved;
+
+  async function handleSaveName() {
+    if (!isValid || savingName) return;
+    setSavingName(true);
+    setNameStatus('idle');
+    setNameError(null);
+    try {
+      const supabase = createClient();
+      if (!supabase) throw new Error('Supabase not available');
+      const { error } = await supabase.auth.updateUser({ data: { display_name: trimmed } });
+      if (error) throw error;
+      // Best-effort backfill of the leaderboard row so the change is visible immediately.
+      // If the user has no synced seasons yet, the endpoint just no-ops.
+      try {
+        await fetch('/api/gm/display-name', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ displayName: trimmed }),
+        });
+      } catch { /* ignore — auth metadata still updated, next sync will pick it up */ }
+      setNameStatus('saved');
+      setTimeout(() => setNameStatus('idle'), 2000);
+    } catch (err) {
+      setNameStatus('error');
+      setNameError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSavingName(false);
+    }
+  }
 
   return (
     <Card className="mb-4">
       <CardHeader><CardTitle>Account</CardTitle></CardHeader>
       {user ? (
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">
-              {user.email?.[0]?.toUpperCase() ?? '?'}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">
+                {(trimmed || user.email || '?')[0]?.toUpperCase()}
+              </div>
+              <div>
+                <div className="text-sm font-medium">{user.email}</div>
+              </div>
             </div>
-            <div>
-              <div className="text-sm font-medium">{user.email}</div>
-            </div>
+            <Button size="sm" variant="ghost" onClick={signOut}>Sign Out</Button>
           </div>
-          <Button size="sm" variant="ghost" onClick={signOut}>Sign Out</Button>
+          <div className="border-t border-[var(--border)] pt-3">
+            <label className="block text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-1">
+              Display Name
+            </label>
+            <p className="text-[11px] text-[var(--text-sec)] mb-2">
+              Shown on the GM Rankings leaderboard. 3-30 characters.
+            </p>
+            <div className="flex gap-2 items-start">
+              <input
+                type="text"
+                value={displayName}
+                onChange={e => setDisplayName(e.target.value)}
+                maxLength={30}
+                placeholder={user.email?.split('@')[0] ?? 'GM'}
+                className="flex-1 px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--surface-2)] outline-none focus:border-blue-500"
+              />
+              <Button size="sm" onClick={handleSaveName} disabled={!isValid || !isDirty || savingName}>
+                {savingName ? 'Saving…' : nameStatus === 'saved' ? '✓ Saved' : 'Save'}
+              </Button>
+            </div>
+            {trimmed.length > 0 && !isValid && (
+              <p className="text-[11px] text-red-600 mt-1">Must be 3-30 characters.</p>
+            )}
+            {nameStatus === 'error' && nameError && (
+              <p className="text-[11px] text-red-600 mt-1">{nameError}</p>
+            )}
+            {nameStatus === 'saved' && (
+              <p className="text-[11px] text-[var(--text-sec)] mt-1">
+                Updated. Your leaderboard entry will refresh after the next stat sync (end of game / end of season).
+              </p>
+            )}
+          </div>
         </div>
       ) : (
         <div className="flex items-center justify-between">
