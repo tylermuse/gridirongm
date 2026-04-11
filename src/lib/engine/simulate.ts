@@ -204,9 +204,9 @@ function simulatePlay(
       else if (gamePlan.redZoneStrategy === 'pass') passChance = clamp(passChance + 0.20, 0.3, 0.95);
     }
   } else {
-    passChance = down >= 3 && yardsToGo > 5 ? 0.80 :
-                 down >= 3 ? 0.62 :
-                 down === 1 ? 0.52 : 0.57;
+    passChance = down >= 3 && yardsToGo > 5 ? 0.78 :
+                 down >= 3 ? 0.55 :
+                 down === 1 ? 0.46 : 0.52;
   }
 
   // ── QB designed run check ──
@@ -547,8 +547,9 @@ function simulateDrive(
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
 
-  // Cap at 10 plays — NFL drives average ~5.5 plays, sustained drives ~9-10.
-  for (let playNum = 0; playNum < 10; playNum++) {
+  // Cap at 8 plays — NFL drives average ~5.5 plays. Cap at 8 still lets
+  // sustained drives finish naturally without inflating total plays/game.
+  for (let playNum = 0; playNum < 8; playNum++) {
     const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition, rivalryIntensity, gamePlan);
     plays.push(play);
 
@@ -675,10 +676,10 @@ export function simulateGame(
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
-  // 10 possessions per team per game (NFL avg ~11). Tuned together with
-  // drive cap (10 plays) and yards-per-play to land at ~62 plays/team
+  // 9 possessions per team per game (NFL avg ~11). Tuned together with
+  // drive cap (8 plays) and yards-per-play to land at ~58-62 plays/team
   // and ~22-26 PPG.
-  const possessions = 10;
+  const possessions = 9;
 
   // BS Mode: Irrational Confidence variance
   const applyIC = (roster: Player[]) => {
