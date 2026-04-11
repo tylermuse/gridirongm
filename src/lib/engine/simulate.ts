@@ -387,22 +387,22 @@ function simulatePlay(
     const compRate = clamp(compBase - (coverageRating / 100) * 0.12 + redZoneBonus, 0.42, 0.72);
 
     if (Math.random() < compRate) {
-      // Completed pass — tuned for NFL realism (~11.5 yards per completion average)
-      // Top QBs: ~4,200-4,500 yds, ~30 TDs per season
+      // Completed pass — tuned for NFL realism (~10-11 yards per completion average)
+      // Top QBs: ~4,200-5,000 yds, ~30-35 TDs per season
       // Rating multiplier: elite players produce more, bad players less
       const recRatingMult = 0.65 + (target.ratings.catching / 100) * 0.7; // 50=1.0, 80=1.21
       const qbRatingMult = 0.65 + (qb.ratings.throwing / 100) * 0.7;
-      const baseYards = 4 + Math.random() * 11; // 4-15 base (avg 9.5)
-      const bonusYards = (qb.ratings.throwing / 100) * 2.2 + (target.ratings.speed / 100) * 1.4;
+      const baseYards = 3 + Math.random() * 9; // 3-12 base (avg 7.5)
+      const bonusYards = (qb.ratings.throwing / 100) * 1.8 + (target.ratings.speed / 100) * 1.1;
       let yards = Math.round((baseYards + bonusYards * Math.random()) * ((qbRatingMult + recRatingMult) / 2));
 
-      // Big play chance (~3-4% of completions go 20+) — explosive plays
+      // Big play chance (~2-3% of completions go 20+) — explosive plays
       // Aggressiveness: aggressive ×1.5, conservative ×0.6
       const aggressivenessMult = gamePlan?.aggressiveness === 'aggressive' ? 1.5 :
                                   gamePlan?.aggressiveness === 'conservative' ? 0.6 : 1.0;
-      const bigPlayChance = (0.018 + (target.ratings.speed / 100) * 0.018) * aggressivenessMult;
+      const bigPlayChance = (0.013 + (target.ratings.speed / 100) * 0.013) * aggressivenessMult;
       if (Math.random() < bigPlayChance) {
-        yards += 11 + Math.floor(Math.random() * 14);
+        yards += 9 + Math.floor(Math.random() * 12);
       }
 
       // Red zone TD boost: inside the 20, passes are shorter and more likely to reach the end zone
