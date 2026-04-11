@@ -1153,7 +1153,7 @@ export default function DraftPage() {
             </details>
 
             <div className="overflow-x-auto">
-            <table className="w-full text-sm sticky-col">
+            <table className="w-full text-sm min-w-[520px] sticky-col sticky-action">
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                   <th className="text-left pb-2 pl-2 w-6"></th>
@@ -1162,7 +1162,7 @@ export default function DraftPage() {
                   <th className="text-center pb-2">Pos</th>
                   <th className="text-center pb-2">OVR</th>
                   <th className="text-center pb-2 hidden sm:table-cell">Scout</th>
-                  <th className="text-right pb-2 pr-2">Draft</th>
+                  <th className="text-right pb-2 pr-2 bg-[var(--surface)]">Draft</th>
                 </tr>
               </thead>
               <tbody>

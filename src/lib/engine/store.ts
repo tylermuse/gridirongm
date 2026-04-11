@@ -2579,8 +2579,12 @@ export const useGameStore = create<GameStore>()(
 
       ensureDraftClassPreview: () => {
         const state = get();
-        if (state.draftClassPreview && state.draftClassPreview.season === state.season) return;
-        set({ draftClassPreview: generateDraftClassPreview(state.season) });
+        // Target the UPCOMING draft year. If the current season's draft has
+        // already happened (draftResults populated), the next draft is for
+        // state.season + 1. Otherwise it's the current state.season.
+        const targetYear = state.draftResults.length > 0 ? state.season + 1 : state.season;
+        if (state.draftClassPreview && state.draftClassPreview.season === targetYear) return;
+        set({ draftClassPreview: generateDraftClassPreview(targetYear) });
       },
 
       dismissAwardsVote: () => {

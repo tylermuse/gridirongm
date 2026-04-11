@@ -482,14 +482,22 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // Game plan modal state — only relevant when the user is in this game
   const [gamePlanReady, setGamePlanReady] = useState(!userInGame);
   const [livePlan, setLivePlan] = useState<LiveGamePlan | null>(null);
+  const [simError, setSimError] = useState<string | null>(null);
+  // Mid-game game-plan adjustment modal (shown via the "Game Plan" button when paused)
+  const [showMidGamePlan, setShowMidGamePlan] = useState(false);
 
   const simRef = useRef<LiveGameResult | null>(null);
-  if (simRef.current === null && homeTeam && awayTeam && game && !game.played && gamePlanReady) {
-    const mcafeeMode = useGameStore.getState().leagueSettings?.mcafeeMode ?? false;
-    simRef.current = simulatePlayByPlay(
-      homeTeam, awayTeam, homePlayers, awayPlayers, isPlayoffGame, mcafeeMode,
-      livePlan ?? undefined,
-    );
+  if (simRef.current === null && homeTeam && awayTeam && game && !game.played && gamePlanReady && !simError) {
+    try {
+      const mcafeeMode = useGameStore.getState().leagueSettings?.mcafeeMode ?? false;
+      simRef.current = simulatePlayByPlay(
+        homeTeam, awayTeam, homePlayers, awayPlayers, isPlayoffGame, mcafeeMode,
+        livePlan ?? undefined,
+      );
+    } catch (err) {
+      console.error('[Watch Live] simulatePlayByPlay error:', err);
+      setSimError(err instanceof Error ? err.message : 'Failed to start simulation');
+    }
   }
   const liveResult = simRef.current;
 
@@ -726,10 +734,42 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     );
   }
   if (!liveResult) {
+    // Surface the actual reason we're stuck so the user can recover.
+    const reason = simError
+      ? simError
+      : !homeTeam || !awayTeam
+        ? 'Team data not loaded.'
+        : game?.played
+          ? 'This game has already been played.'
+          : !gamePlanReady
+            ? 'Waiting for game plan…'
+            : 'Preparing simulation…';
     return (
       <GameShell>
-        <div className="max-w-2xl mx-auto mt-16 text-center">
-          <p className="text-[var(--text-sec)]">Simulating game...</p>
+        <div className="max-w-2xl mx-auto mt-16 text-center space-y-4">
+          {simError ? (
+            <>
+              <div className="text-4xl">⚠️</div>
+              <h2 className="text-lg font-bold">Simulation failed to start</h2>
+              <p className="text-sm text-[var(--text-sec)]">{reason}</p>
+              <div className="flex gap-2 justify-center">
+                <Button onClick={() => { setSimError(null); simRef.current = null; }}>Retry</Button>
+                <Button variant="ghost" onClick={() => router.push('/')}>Back to Dashboard</Button>
+              </div>
+            </>
+          ) : game?.played ? (
+            <>
+              <div className="text-4xl">✅</div>
+              <h2 className="text-lg font-bold">Game already played</h2>
+              <p className="text-sm text-[var(--text-sec)]">This game has been simulated. View the box score from the dashboard or news.</p>
+              <Button onClick={() => router.push('/')}>Back to Dashboard</Button>
+            </>
+          ) : (
+            <>
+              <p className="text-[var(--text-sec)]">{reason}</p>
+              <Button variant="ghost" size="sm" onClick={() => router.push('/')}>Cancel</Button>
+            </>
+          )}
         </div>
       </GameShell>
     );
@@ -786,6 +826,24 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
   return (
     <GameShell>
+      {/* Mid-game game plan adjustment modal */}
+      {showMidGamePlan && userTeamSide && (() => {
+        const opp = userTeamSide === 'home' ? awayTeam : homeTeam;
+        const oppName = opp ? `${opp.city} ${opp.name}` : 'Opponent';
+        return (
+          <GamePlanModal
+            opponentName={oppName}
+            onConfirm={(plan) => {
+              setLivePlan({ ...plan, userTeamSide });
+              // Persist for the next game too
+              useGameStore.getState().setNextGamePlan(plan);
+              setShowMidGamePlan(false);
+            }}
+            onCancel={() => setShowMidGamePlan(false)}
+          />
+        );
+      })()}
+
       <div className="max-w-6xl mx-auto flex gap-4">
       {/* Main game content */}
       <div className="flex-1 min-w-0 space-y-3">
@@ -872,6 +930,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           >
             {isFinished ? '● Complete' : isPlaying ? '⏸ Pause' : '▶ Play'}
           </button>
+          {/* Game Plan — only when user is in this game and game isn't done */}
+          {userInGame && !isFinished && (
+            <button
+              onClick={() => { setIsPlaying(false); setShowMidGamePlan(true); }}
+              className="px-3 py-1 rounded-md text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-all"
+              title="Adjust your game plan (pauses the game)"
+            >
+              📋 Game Plan
+            </button>
+          )}
           <button
             onClick={skipToEnd}
             disabled={isFinished}

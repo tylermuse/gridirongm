@@ -906,19 +906,59 @@ function TradesPage() {
   const aiTeams = teams.filter(t => t.id !== userTeamId).sort((a, b) => a.abbreviation.localeCompare(b.abbreviation));
   const selectedAITeam = teams.find(t => t.id === selectedTeamId);
 
-  // Compute pick number label (e.g., "#21") for current-year picks during/after draft ordering
+  // Compute pick number label (e.g., "#21") for current-year picks.
+  // During draft phase, derive from `draftOrder` (the authoritative source the
+  // draft page uses) so the numbers always match. Outside the draft phase,
+  // fall back to a stable sort by original team record.
   const pickNumberMap = useMemo(() => {
     const map = new Map<string, number>(); // pickId → overall pick number
-    // Show pick numbers for the CURRENT season's draft — future years' orders are unknown
     const draftYear = season;
+    const picksPerRound = teams.length;
+    const totalPicks = picksPerRound * 7;
 
-    // Include ALL picks for the draft year (even already-drafted ones) so numbering is stable
+    // ── Path 1: during draft phase, use draftOrder + draftResults ──
+    if (phase === 'draft') {
+      // First, map the already-completed picks (from draftResults) by their stored overallPick
+      // We need to find each pick id by matching the result's teamId/round to a team's draftPick
+      // that has playerId set (the used picks).
+      const draftResultsList = useGameStore.getState().draftResults;
+      for (const result of draftResultsList) {
+        // Find the team's draftPick that matches this result
+        const team = teams.find(t => t.id === result.teamId);
+        if (!team) continue;
+        const matched = team.draftPicks.find(pk =>
+          pk.year === draftYear && pk.round === result.round && pk.playerId === result.playerId,
+        );
+        if (matched) map.set(matched.id, result.overallPick);
+      }
+
+      // Now map remaining picks via draftOrder. Each draftOrder slot is the owner team id;
+      // match it to that team's first unused pick at the corresponding round.
+      const currentOverall = totalPicks - draftOrder.length + 1;
+      const usedPickIds = new Set<string>();
+      for (let i = 0; i < draftOrder.length; i++) {
+        const overallPickNum = currentOverall + i;
+        const round = Math.ceil(overallPickNum / picksPerRound);
+        const ownerId = draftOrder[i];
+        const team = teams.find(t => t.id === ownerId);
+        if (!team) continue;
+        const pick = team.draftPicks.find(pk =>
+          pk.year === draftYear && pk.round === round && !pk.playerId && !usedPickIds.has(pk.id),
+        );
+        if (pick) {
+          map.set(pick.id, overallPickNum);
+          usedPickIds.add(pick.id);
+        }
+      }
+      return map;
+    }
+
+    // ── Path 2: outside the draft phase — estimate from current records ──
     const allPicks = teams.flatMap(t =>
       t.draftPicks.filter(pk => pk.year === draftYear),
     );
     if (allPicks.length === 0) return map;
 
-    // Sort by round, then by original team record (worst first = highest pick)
     const winPct = (r: { wins: number; losses: number }) => r.wins + r.losses > 0 ? r.wins / (r.wins + r.losses) : 0;
     allPicks.sort((a, b) => {
       if (a.round !== b.round) return a.round - b.round;
@@ -929,7 +969,6 @@ function TradesPage() {
       return aWp - bWp;
     });
 
-    // Assign overall pick numbers (e.g., #1 through #224 across all rounds)
     let overallPick = 0;
     allPicks.forEach((pk) => {
       overallPick++;
