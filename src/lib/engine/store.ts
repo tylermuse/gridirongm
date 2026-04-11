@@ -57,7 +57,7 @@ interface GameStore extends LeagueState {
   newLeague: (teamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular') => Promise<void>;
   resetLeague: () => void;
   /** Set the game plan for the user team's NEXT regular-season game. Cleared when that week is simmed. */
-  setNextGamePlan: (plan: { passRate: number; aggressiveness: 'conservative' | 'balanced' | 'aggressive' } | null) => void;
+  setNextGamePlan: (plan: { passRate: number; aggressiveness: 'conservative' | 'balanced' | 'aggressive'; redZoneStrategy: 'run' | 'balanced' | 'pass' } | null) => void;
   /** Generate the draft class preview if it doesn't already exist for the current season. */
   ensureDraftClassPreview: () => void;
   /** Clear the pendingAwardsVote flag after the user votes or dismisses. */
@@ -2065,7 +2065,7 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     const rivalryIntensity = rivalry?.intensity ?? 0;
 
     // Apply user's pre-game plan (only for the user's game)
-    let userGamePlan: { plan: { passRate: number; aggressiveness: 'conservative' | 'balanced' | 'aggressive' }; userTeamSide: 'home' | 'away' } | undefined;
+    let userGamePlan: { plan: { passRate: number; aggressiveness: 'conservative' | 'balanced' | 'aggressive'; redZoneStrategy: 'run' | 'balanced' | 'pass' }; userTeamSide: 'home' | 'away' } | undefined;
     if (state.nextGamePlan && (game.homeTeamId === state.userTeamId || game.awayTeamId === state.userTeamId)) {
       userGamePlan = {
         plan: state.nextGamePlan,

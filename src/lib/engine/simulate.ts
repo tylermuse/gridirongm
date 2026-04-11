@@ -121,6 +121,11 @@ export interface GamePlan {
   passRate: number;
   /** Risk tolerance: conservative reduces deep shots and 4th-down go-for-its; aggressive increases both. */
   aggressiveness: 'conservative' | 'balanced' | 'aggressive';
+  /** Red zone (inside the 20) play style override.
+   *  'run' = pound it in (favor rushing inside the 20),
+   *  'pass' = go for the throw (favor passing inside the 20),
+   *  'balanced' = no override. */
+  redZoneStrategy: 'run' | 'balanced' | 'pass';
 }
 
 // ── Play types ──────────────────────────────────────────────────────────────
@@ -193,6 +198,11 @@ function simulatePlay(
                  down >= 3 ? clamp(baseFromPlan + 0.05, 0.3, 0.9) :
                  down === 1 ? clamp(baseFromPlan - 0.05, 0.1, 0.85) :
                  baseFromPlan;
+    // Red zone override (inside the 20)
+    if (fieldPosition >= 80) {
+      if (gamePlan.redZoneStrategy === 'run') passChance = clamp(passChance - 0.20, 0.1, 0.7);
+      else if (gamePlan.redZoneStrategy === 'pass') passChance = clamp(passChance + 0.20, 0.3, 0.95);
+    }
   } else {
     passChance = down >= 3 && yardsToGo > 5 ? 0.80 :
                  down >= 3 ? 0.62 :

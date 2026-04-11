@@ -408,6 +408,7 @@ function emptyBucket(): StatBucket {
 export interface LiveGamePlan {
   passRate: number;
   aggressiveness: 'conservative' | 'balanced' | 'aggressive';
+  redZoneStrategy: 'run' | 'balanced' | 'pass';
   userTeamSide: 'home' | 'away';
 }
 
@@ -911,6 +912,11 @@ export function simulatePlayByPlay(
       runChance = isThirdLong ? Math.max(0.1, userRunChance - 0.18) :
                   isFirstOrSecondShort ? Math.min(0.85, userRunChance + 0.10) :
                   userRunChance;
+      // Red zone override
+      if (state.fieldPos >= 80) {
+        if (userGamePlan.redZoneStrategy === 'run') runChance = Math.min(0.9, runChance + 0.20);
+        else if (userGamePlan.redZoneStrategy === 'pass') runChance = Math.max(0.05, runChance - 0.20);
+      }
     }
 
     // ── Clock-aware modifier (Q4 < 5 min) ──

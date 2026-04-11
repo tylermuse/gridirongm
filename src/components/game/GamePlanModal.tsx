@@ -4,19 +4,21 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 
 type Aggressiveness = 'conservative' | 'balanced' | 'aggressive';
+type RedZoneStrategy = 'run' | 'balanced' | 'pass';
 
 interface GamePlanModalProps {
   opponentName: string;
-  onConfirm: (plan: { passRate: number; aggressiveness: Aggressiveness }) => void;
+  onConfirm: (plan: { passRate: number; aggressiveness: Aggressiveness; redZoneStrategy: RedZoneStrategy }) => void;
   onCancel: () => void;
 }
 
 export function GamePlanModal({ opponentName, onConfirm, onCancel }: GamePlanModalProps) {
   const [passRate, setPassRate] = useState(57); // default ~NFL avg
   const [aggressiveness, setAggressiveness] = useState<Aggressiveness>('balanced');
+  const [redZoneStrategy, setRedZoneStrategy] = useState<RedZoneStrategy>('balanced');
 
   function handleConfirm() {
-    onConfirm({ passRate, aggressiveness });
+    onConfirm({ passRate, aggressiveness, redZoneStrategy });
   }
 
   function getPassRateLabel(rate: number): string {
@@ -82,6 +84,35 @@ export function GamePlanModal({ opponentName, onConfirm, onCancel }: GamePlanMod
               {aggressiveness === 'aggressive' && 'More deep shots, more big plays — but more INTs.'}
               {aggressiveness === 'balanced' && 'Standard play calling — no situational bias.'}
               {aggressiveness === 'conservative' && 'Fewer deep shots, fewer big plays, fewer turnovers.'}
+            </p>
+          </div>
+
+          {/* Red Zone Strategy */}
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] block mb-2">Red Zone Strategy</label>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { key: 'run', label: 'Pound It' },
+                { key: 'balanced', label: 'Balanced' },
+                { key: 'pass', label: 'Air It Out' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setRedZoneStrategy(opt.key)}
+                  className={`px-2 py-2 rounded-lg text-xs font-bold transition-colors ${
+                    redZoneStrategy === opt.key
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-[var(--text-sec)] mt-1.5 italic">
+              {redZoneStrategy === 'run' && 'Inside the 20: lean run-heavy. Power running, shorter throws.'}
+              {redZoneStrategy === 'balanced' && 'Inside the 20: no override. Mix it up like the rest of the field.'}
+              {redZoneStrategy === 'pass' && 'Inside the 20: throw it. Fade routes, slants, RPO.'}
             </p>
           </div>
         </div>
