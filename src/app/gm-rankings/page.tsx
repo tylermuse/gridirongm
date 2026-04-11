@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 
 interface AllTimeRow {
@@ -38,7 +39,7 @@ interface LeaderboardData {
   thisSeason: SeasonRow[];
 }
 
-type Tab = 'all-time' | 'this-season' | 'categories';
+type Tab = 'all-time' | 'this-season' | 'categories' | 'awards';
 
 function fmtPct(p: number): string {
   return `${(p * 100).toFixed(1)}%`;
@@ -95,6 +96,7 @@ export default function GmRankingsPage() {
             { key: 'all-time', label: 'All-Time' },
             { key: 'this-season', label: data?.latestSeason ? `Season ${data.latestSeason}` : 'This Season' },
             { key: 'categories', label: 'Categories' },
+            { key: 'awards', label: '🏆 Awards' },
           ] as const).map(t => (
             <button
               key={t.key}
@@ -226,6 +228,11 @@ export default function GmRankingsPage() {
             {tab === 'categories' && (
               <CategoriesTab allTime={data.allTime} userId={user?.id ?? null} />
             )}
+
+            {/* Awards tab */}
+            {tab === 'awards' && (
+              <AwardsTab latestSeason={data.latestSeason} userId={user?.id ?? null} />
+            )}
           </>
         )}
       </div>
@@ -294,6 +301,191 @@ function CategoryCard({
             );
           })}
         </ol>
+      )}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Awards tab — opt-in voting for season awards (GM of the Year, etc.)
+// ---------------------------------------------------------------------------
+
+interface Nominee {
+  userId: string;
+  displayName: string;
+  teamName: string | null;
+  primaryStat: string;
+  secondaryStat?: string;
+}
+
+interface NomineesData {
+  season: number;
+  categories: {
+    gm_of_year: Nominee[];
+    best_draft: Nominee[];
+    best_rebuild: Nominee[];
+  };
+}
+
+const AWARD_META = {
+  gm_of_year: { label: 'GM of the Year', icon: '🏅', desc: 'Best overall season performance' },
+  best_draft: { label: 'Best Draft Class', icon: '🎯', desc: 'Top haul from this offseason' },
+  best_rebuild: { label: 'Best Rebuild', icon: '🔨', desc: 'Most improved team vs. last year' },
+} as const;
+
+type AwardKey = keyof typeof AWARD_META;
+const AWARDS: AwardKey[] = ['gm_of_year', 'best_draft', 'best_rebuild'];
+
+function AwardsTab({ latestSeason, userId }: { latestSeason: number | null; userId: string | null }) {
+  const [nominees, setNominees] = useState<NomineesData | null>(null);
+  const [votes, setVotes] = useState<Partial<Record<AwardKey, string>>>({});
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (latestSeason == null) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setNominees(null);
+    setVotes({});
+    setSubmitted(false);
+    (async () => {
+      try {
+        const res = await fetch(`/api/gm/awards/nominees?season=${latestSeason}`);
+        const json = await res.json();
+        if (!res.ok) {
+          if (!cancelled) setError(json.error ?? 'Failed to load nominees');
+        } else if (!cancelled) {
+          setNominees(json);
+        }
+      } catch {
+        if (!cancelled) setError('Failed to fetch nominees');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [latestSeason]);
+
+  function handleVoteSelect(award: AwardKey, nomineeUserId: string) {
+    setVotes(prev => ({ ...prev, [award]: nomineeUserId }));
+  }
+
+  async function handleSubmit() {
+    if (latestSeason == null || !userId) return;
+    setSubmitting(true);
+    for (const award of AWARDS) {
+      const nomineeId = votes[award];
+      if (!nomineeId) continue;
+      try {
+        await fetch('/api/gm/awards/vote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ season: latestSeason, awardType: award, nomineeUserId: nomineeId }),
+        });
+      } catch { /* ignore individual vote errors */ }
+    }
+    setSubmitting(false);
+    setSubmitted(true);
+  }
+
+  if (latestSeason == null) {
+    return (
+      <Card>
+        <div className="text-center py-8 text-sm text-[var(--text-sec)]">
+          Awards will be available after the first season finishes.
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>🏆 Season {latestSeason} Awards</CardTitle>
+      </CardHeader>
+
+      <p className="text-xs text-[var(--text-sec)] -mt-1 mb-4">
+        Cast your vote in any category. {userId ? 'Voting is optional — pick the categories you care about.' : 'Sign in to make your vote count.'}
+      </p>
+
+      {loading && (
+        <div className="text-center py-8 text-sm text-[var(--text-sec)]">Loading nominees...</div>
+      )}
+      {error && (
+        <div className="text-center py-8 text-sm text-red-600">{error}</div>
+      )}
+
+      {nominees && (
+        <div className="space-y-5">
+          {AWARDS.map(award => {
+            const meta = AWARD_META[award];
+            const catNominees = nominees.categories[award];
+            return (
+              <div key={award}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xl">{meta.icon}</span>
+                  <div className="flex-1">
+                    <div className="text-sm font-bold">{meta.label}</div>
+                    <div className="text-[10px] text-[var(--text-sec)]">{meta.desc}</div>
+                  </div>
+                </div>
+
+                {catNominees.length === 0 ? (
+                  <div className="text-xs text-[var(--text-sec)] italic ml-7">No eligible nominees this season.</div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {catNominees.map(nom => {
+                      const isSelected = votes[award] === nom.userId;
+                      return (
+                        <button
+                          key={nom.userId}
+                          onClick={() => handleVoteSelect(award, nom.userId)}
+                          disabled={!userId}
+                          className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors ${
+                            isSelected
+                              ? 'bg-blue-50 border-blue-300'
+                              : 'bg-[var(--surface-2)] border-[var(--border)] hover:bg-[var(--surface-2)]/70'
+                          } ${!userId ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-bold truncate">
+                                {nom.displayName}
+                                {userId === nom.userId && <span className="ml-1.5 text-[10px] text-blue-600">(You)</span>}
+                              </div>
+                              <div className="text-[10px] text-[var(--text-sec)] truncate">{nom.teamName ?? '—'}</div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <div className="text-xs font-bold tabular-nums">{nom.primaryStat}</div>
+                              {nom.secondaryStat && (
+                                <div className="text-[10px] text-[var(--text-sec)] tabular-nums">{nom.secondaryStat}</div>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border)]">
+            {submitted && <span className="text-xs text-green-600">Votes submitted ✓</span>}
+            <Button
+              size="sm"
+              onClick={handleSubmit}
+              disabled={submitting || !userId || Object.keys(votes).length === 0}
+            >
+              {submitting ? 'Submitting…' : 'Submit Votes'}
+            </Button>
+          </div>
+        </div>
       )}
     </Card>
   );

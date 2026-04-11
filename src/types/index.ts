@@ -710,6 +710,10 @@ export interface LeagueState {
   players: Player[];
   schedule: GameResult[];
   draftOrder: string[];
+  /** Canonical pick-id sequence for the current draft. Stays constant across trades —
+   *  draftOrder is derived from this by looking up each pick's current ownerTeamId.
+   *  Length matches the original draftOrder length. Cleared when draft ends. */
+  draftPickOrder?: string[];
   draftResults: DraftSelection[];
   freeAgents: string[];
   /** Current day within the 30-day free agency window (0 = not in FA) */
@@ -781,8 +785,6 @@ export interface LeagueState {
     season: number;
     groups: { position: string; grade: string; depthNote: string; ovrLow: number; ovrHigh: number; topOvr: number }[];
   };
-  /** Season number that the awards modal should be shown for. Cleared after the user votes/dismisses. */
-  pendingAwardsVote?: number;
   /** BS Mode: QB tier assignments */
   qbTiers?: Record<string, { playerId: string; tier: QBTier }>;
   /** BS Mode: opponent selection for top seeds */

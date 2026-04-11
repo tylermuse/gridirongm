@@ -60,8 +60,6 @@ interface GameStore extends LeagueState {
   setNextGamePlan: (plan: { passRate: number; aggressiveness: 'conservative' | 'balanced' | 'aggressive'; redZoneStrategy: 'run' | 'balanced' | 'pass' } | null) => void;
   /** Generate the draft class preview if it doesn't already exist for the current season. */
   ensureDraftClassPreview: () => void;
-  /** Clear the pendingAwardsVote flag after the user votes or dismisses. */
-  dismissAwardsVote: () => void;
   simWeek: () => void;
   simToWeek: (targetWeek: number) => void;
   advanceToPlayoffs: () => void;
@@ -2587,10 +2585,6 @@ export const useGameStore = create<GameStore>()(
         set({ draftClassPreview: generateDraftClassPreview(targetYear) });
       },
 
-      dismissAwardsVote: () => {
-        set({ pendingAwardsVote: undefined });
-      },
-
       simWeek: () => {
         const state = get();
         if (state.phase !== 'regular') return;
@@ -3273,8 +3267,6 @@ export const useGameStore = create<GameStore>()(
         }
 
         // God mode play doesn't count toward awards or rankings
-        const godModeOn = state.leagueSettings?.godMode ?? false;
-
         set({
           phase: 'resigning',
           resigningPlayers,
@@ -3283,8 +3275,6 @@ export const useGameStore = create<GameStore>()(
           players: playersAfterRetirement,
           newsItems: [...state.newsItems, ...retirementNews, ...holdoutNews, ...approvalNews],
           seasonHistory: updatedSeasonHistory,
-          // Trigger awards vote modal for the just-completed season (skipped in god mode)
-          ...(godModeOn ? {} : { pendingAwardsVote: state.season }),
           ...(firedState ? { firedState } : {}),
         });
 
@@ -3790,31 +3780,35 @@ export const useGameStore = create<GameStore>()(
           if (a.round !== b.round) return a.round - b.round;
           return (teamWinPctMap.get(a.originalTeamId) ?? 16) - (teamWinPctMap.get(b.originalTeamId) ?? 16);
         });
-        // Draft order = the OWNER of each pick drafts
+        // Draft order = the OWNER of each pick drafts. draftPickOrder is the
+        // canonical pick.id sequence — stays constant across trades, used to
+        // re-derive draftOrder when ownership changes.
         let draftOrder = allDraftYearPicks.map(pk => pk.ownerTeamId);
+        let draftPickOrder = allDraftYearPicks.map(pk => pk.id);
 
         // NFL 2026: override first-round order to match the real mock draft,
         // but respect any traded picks (ownerTeamId may differ from originalTeamId)
         if (isNfl && nflMockDraft.length > 0) {
-          // Build a map of originalTeamId → ownerTeamId for round 1 picks
+          // Build a map of originalTeamId → round1 pick for current owner lookup
           const round1Picks = allDraftYearPicks.filter(pk => pk.round === 1);
-          const pickOwnerMap = new Map<string, string>();
+          const pickByOriginalTeam = new Map<string, typeof round1Picks[number]>();
           for (const pk of round1Picks) {
-            pickOwnerMap.set(pk.originalTeamId, pk.ownerTeamId);
+            pickByOriginalTeam.set(pk.originalTeamId, pk);
           }
 
-          const round1Order: string[] = [];
+          const round1OrderTeams: string[] = [];
+          const round1OrderPicks: string[] = [];
           for (const mock of nflMockDraft) {
             const originalTeam = updatedTeams.find(t => t.abbreviation === mock.teamAbbr);
-            if (originalTeam) {
-              // Use the current owner of this pick (respects trades)
-              const ownerId = pickOwnerMap.get(originalTeam.id) ?? originalTeam.id;
-              round1Order.push(ownerId);
-            }
+            if (!originalTeam) continue;
+            const pk = pickByOriginalTeam.get(originalTeam.id);
+            if (!pk) continue;
+            round1OrderTeams.push(pk.ownerTeamId);
+            round1OrderPicks.push(pk.id);
           }
-          if (round1Order.length > 0) {
-            const laterRounds = draftOrder.slice(round1Order.length);
-            draftOrder = [...round1Order, ...laterRounds];
+          if (round1OrderTeams.length > 0) {
+            draftOrder = [...round1OrderTeams, ...draftOrder.slice(round1OrderTeams.length)];
+            draftPickOrder = [...round1OrderPicks, ...draftPickOrder.slice(round1OrderPicks.length)];
           }
         }
 
@@ -3911,6 +3905,7 @@ export const useGameStore = create<GameStore>()(
           teams: recalcTeams,
           freeAgents: draftClass.map(p => p.id),
           draftOrder,
+          draftPickOrder,
           draftResults: [],
           resigningPlayers: [],
           holdoutDemands: [],
@@ -5412,35 +5407,44 @@ export const useGameStore = create<GameStore>()(
           isUserTeam: true,
         });
 
-        // During draft phase, rebuild draftOrder from current pick ownership
-        // (rather than trying to surgically patch it — that approach fails when
-        // a team has multiple picks in the same round)
+        // During draft phase, re-derive draftOrder from the canonical draftPickOrder.
+        // The pick.id sequence stays constant — we just look up each pick's
+        // current owner from updatedTeams. This preserves the original NFL mock
+        // draft order (or any custom slotting) without re-sorting by win-pct.
         let updatedDraftOrder = state.draftOrder;
         if (state.phase === 'draft' && (offeredPickIds.length > 0 || receivedPickIds.length > 0)) {
-          // Determine where we are in the draft from the OLD draftOrder length
-          const totalPicks = state.teams.length * 7;
-          const picksAlreadyMade = totalPicks - state.draftOrder.length;
-
-          // Sort all year picks by (round, original team's draft position) to match
-          // the order they were originally built in advanceToDraft.
-          const sortedTeamsByRecord = [...state.teams].sort((a, b) => {
-            const aWp = a.record.wins + a.record.losses > 0 ? a.record.wins / (a.record.wins + a.record.losses) : 0.5;
-            const bWp = b.record.wins + b.record.losses > 0 ? b.record.wins / (b.record.wins + b.record.losses) : 0.5;
-            return aWp - bWp; // worst first
-          });
-          const teamWinPctIndex = new Map(sortedTeamsByRecord.map((t, i) => [t.id, i]));
-
-          const allPicksThisYear = updatedTeams.flatMap(t =>
-            t.draftPicks.filter(pk => pk.year === state.season),
-          );
-          allPicksThisYear.sort((a, b) => {
-            if (a.round !== b.round) return a.round - b.round;
-            return (teamWinPctIndex.get(a.originalTeamId) ?? 16) - (teamWinPctIndex.get(b.originalTeamId) ?? 16);
-          });
-
-          // The full draft order based on current ownership; skip already-made picks
-          const fullOrder = allPicksThisYear.map(pk => pk.ownerTeamId);
-          updatedDraftOrder = fullOrder.slice(picksAlreadyMade);
+          if (state.draftPickOrder) {
+            const pickOwnerById = new Map<string, string>();
+            for (const t of updatedTeams) {
+              for (const pk of t.draftPicks) {
+                pickOwnerById.set(pk.id, pk.ownerTeamId);
+              }
+            }
+            const picksAlreadyMade = state.draftPickOrder.length - state.draftOrder.length;
+            updatedDraftOrder = state.draftPickOrder
+              .slice(picksAlreadyMade)
+              .map(pid => pickOwnerById.get(pid))
+              .filter((tid): tid is string => !!tid);
+          } else {
+            // Legacy save fallback (pre-draftPickOrder): sort remaining picks
+            // by (round, originalTeamId's win-pct slot). Imperfect for NFL mock
+            // round 1 ordering, but better than letting draftOrder go stale.
+            const sortedTeamsByRecord = [...state.teams].sort((a, b) => {
+              const aWp = a.record.wins + a.record.losses > 0 ? a.record.wins / (a.record.wins + a.record.losses) : 0.5;
+              const bWp = b.record.wins + b.record.losses > 0 ? b.record.wins / (b.record.wins + b.record.losses) : 0.5;
+              return aWp - bWp;
+            });
+            const teamWinPctIndex = new Map(sortedTeamsByRecord.map((t, i) => [t.id, i]));
+            const allPicksThisYear = updatedTeams.flatMap(t =>
+              t.draftPicks.filter(pk => pk.year === state.season),
+            );
+            allPicksThisYear.sort((a, b) => {
+              if (a.round !== b.round) return a.round - b.round;
+              return (teamWinPctIndex.get(a.originalTeamId) ?? 16) - (teamWinPctIndex.get(b.originalTeamId) ?? 16);
+            });
+            const picksAlreadyMade = state.teams.length * 7 - state.draftOrder.length;
+            updatedDraftOrder = allPicksThisYear.map(pk => pk.ownerTeamId).slice(picksAlreadyMade);
+          }
         }
 
         // Approval impact for trading star players
@@ -6709,7 +6713,11 @@ export const useGameStore = create<GameStore>()(
               p.draftYear !== null && p.draftYear >= newSeason && p.experience === 0;
             // Also protect rookies drafted this season who are unsigned (UDFAs etc.)
             const isRecentDraft = p.draftYear !== null && p.draftYear >= state.season && p.experience <= 1;
-            if (!isFutureProspect && !isRecentDraft) {
+            // Only auto-retire unsigned FAs who are clearly washed: old (33+) OR
+            // truly unplayable (sub-58 OVR). Younger productive FAs stay in the
+            // pool so they can be signed mid-season instead of vanishing.
+            const isWashed = p.age >= 33 || p.ratings.overall < 58;
+            if (!isFutureProspect && !isRecentDraft && isWashed) {
               return { ...p, retired: true, stats: emptyStats() };
             }
           }
@@ -7175,6 +7183,7 @@ export const useGameStore = create<GameStore>()(
           teams: teamsAfterCoaches,
           schedule: newSchedule,
           draftResults: [],
+          draftPickOrder: undefined,
           freeAgents: seasonFreeAgents,
           faDay: 0,
           faRefusals: [],

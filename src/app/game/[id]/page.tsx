@@ -733,6 +733,30 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       </GameShell>
     );
   }
+  // Show the Game Plan modal if user is in this game and hasn't set one yet.
+  // Must run BEFORE the !liveResult guard, because gamePlanReady=false intentionally
+  // blocks sim creation until the user submits a plan.
+  if (userInGame && !gamePlanReady) {
+    const opponentTeam = userTeamSide === 'home' ? awayTeam : homeTeam;
+    const opponentName = opponentTeam ? `${opponentTeam.city} ${opponentTeam.name}` : 'Opponent';
+    return (
+      <GameShell>
+        <GamePlanModal
+          opponentName={opponentName}
+          onConfirm={(plan) => {
+            if (userTeamSide) {
+              setLivePlan({ ...plan, userTeamSide });
+            }
+            setGamePlanReady(true);
+          }}
+          onCancel={() => {
+            setLivePlan(null);
+            setGamePlanReady(true);
+          }}
+        />
+      </GameShell>
+    );
+  }
   if (!liveResult) {
     // Surface the actual reason we're stuck so the user can recover.
     const reason = simError
@@ -799,30 +823,6 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     { id: 'drives', label: 'Drives' },
     { id: 'stats', label: 'Stats' },
   ];
-
-  // Show the Game Plan modal if user is in this game and hasn't set one yet
-  if (userInGame && !gamePlanReady) {
-    const opponentTeam = userTeamSide === 'home' ? awayTeam : homeTeam;
-    const opponentName = opponentTeam ? `${opponentTeam.city} ${opponentTeam.name}` : 'Opponent';
-    return (
-      <GameShell>
-        <GamePlanModal
-          opponentName={opponentName}
-          onConfirm={(plan) => {
-            if (userTeamSide) {
-              setLivePlan({ ...plan, userTeamSide });
-            }
-            setGamePlanReady(true);
-          }}
-          onCancel={() => {
-            // Skip the plan — sim with default behavior
-            setLivePlan(null);
-            setGamePlanReady(true);
-          }}
-        />
-      </GameShell>
-    );
-  }
 
   return (
     <GameShell>
