@@ -3909,6 +3909,7 @@ export const useGameStore = create<GameStore>()(
           freeAgents: draftClass.map(p => p.id),
           draftOrder,
           draftPickOrder,
+          currentDraftYear: targetDraftYear,
           draftResults: [],
           resigningPlayers: [],
           holdoutDemands: [],
@@ -4040,14 +4041,17 @@ export const useGameStore = create<GameStore>()(
         }
 
         // PRD-13: Update depth chart for drafting team + mark the DraftPick as used
-        // Find which DraftPick this corresponds to (the owner's pick for this round)
-        // Use the earliest matching unused pick — the year may differ from
-        // state.season depending on how the league was generated.
+        // Critical: filter by year as well as round/owner. Without the year
+        // filter, leftover unused picks from a prior draft (e.g., a 2030 R1
+        // that was silently skipped) would be wrongly consumed by current-year
+        // picks, leaving the current-year pick orphaned in draftResults.
+        const draftYear = state.currentDraftYear ?? state.season;
         let pickMarked = false;
         const updatedTeams = state.teams.map(t => {
           const updatedPicks = t.draftPicks.map(pk => {
             if (
               !pickMarked &&
+              pk.year === draftYear &&
               pk.ownerTeamId === currentPickTeamId &&
               pk.round === round &&
               !pk.playerId
@@ -4127,6 +4131,7 @@ export const useGameStore = create<GameStore>()(
         let draftResults = [...state.draftResults];
         let newsItems = [...state.newsItems];
         const totalPicks = state.teams.length * 7;
+        const draftYear = state.currentDraftYear ?? state.season;
 
         for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
           const pickTeam = draftOrder[0];
@@ -4180,7 +4185,13 @@ export const useGameStore = create<GameStore>()(
           let pickMarkedSim = false;
           teams = teams.map(t => {
             const updPicks = t.draftPicks.map(pk => {
-              if (!pickMarkedSim && pk.ownerTeamId === pickTeam && pk.round === round && !pk.playerId) {
+              if (
+                !pickMarkedSim &&
+                pk.year === draftYear &&
+                pk.ownerTeamId === pickTeam &&
+                pk.round === round &&
+                !pk.playerId
+              ) {
                 pickMarkedSim = true;
                 return { ...pk, playerId: pid, pick: overallPick };
               }
@@ -4219,6 +4230,7 @@ export const useGameStore = create<GameStore>()(
         let draftResults = [...state.draftResults];
         let newsItems = [...state.newsItems];
         const totalPicks = state.teams.length * 7;
+        const draftYear = state.currentDraftYear ?? state.season;
 
         for (let guard = 0; guard < 5000 && draftOrder.length > 0 && freeAgentIds.length > 0; guard++) {
           const pickTeam = draftOrder[0];
@@ -4271,7 +4283,13 @@ export const useGameStore = create<GameStore>()(
           let pickMarkedSim = false;
           teams = teams.map(t => {
             const updPicks = t.draftPicks.map(pk => {
-              if (!pickMarkedSim && pk.ownerTeamId === pickTeam && pk.round === round && !pk.playerId) {
+              if (
+                !pickMarkedSim &&
+                pk.year === draftYear &&
+                pk.ownerTeamId === pickTeam &&
+                pk.round === round &&
+                !pk.playerId
+              ) {
                 pickMarkedSim = true;
                 return { ...pk, playerId: pid, pick: overallPick };
               }
@@ -7257,6 +7275,7 @@ export const useGameStore = create<GameStore>()(
           schedule: newSchedule,
           draftResults: [],
           draftPickOrder: undefined,
+          currentDraftYear: undefined,
           freeAgents: seasonFreeAgents,
           faDay: 0,
           faRefusals: [],

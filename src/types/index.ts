@@ -714,6 +714,11 @@ export interface LeagueState {
    *  draftOrder is derived from this by looking up each pick's current ownerTeamId.
    *  Length matches the original draftOrder length. Cleared when draft ends. */
   draftPickOrder?: string[];
+  /** Year the current draft is for. Set in advanceToDraft, cleared when draft
+   *  ends. Used by draftPlayer/simRound/simToEndDraft to mark the correct
+   *  team.draftPicks slot — without this, leftover unused picks from prior
+   *  drafts can be wrongly consumed by current-draft picks. */
+  currentDraftYear?: number;
   draftResults: DraftSelection[];
   freeAgents: string[];
   /** Current day within the 30-day free agency window (0 = not in FA) */
