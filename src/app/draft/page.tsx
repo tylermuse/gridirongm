@@ -701,13 +701,22 @@ export default function DraftPage() {
     nflMockDraft,
   } = useGameStore();
 
-  // One-shot recovery: if any prior draft results have orphan playerIds (state
-  // corruption from older versions), restore those slots to the front of the
-  // draft order so the user can re-pick them. Idempotent — no-op if clean.
+  // Detect draftResults entries whose player no longer exists. These are
+  // "ghost picks" — they show in the table but with no player and no way to
+  // interact with them. Tracked separately so we can both auto-recover and
+  // surface a manual recovery button if the auto path fails.
+  const orphanCount = (() => {
+    if (phase !== 'draft') return 0;
+    const playerIds = new Set(players.map(p => p.id));
+    return draftResults.filter(r => !playerIds.has(r.playerId)).length;
+  })();
+
+  // Auto-recovery on mount + whenever orphans appear. Idempotent — no-op
+  // when there's nothing to fix.
   useEffect(() => {
-    if (phase === 'draft') recoverOrphanDraftPicks();
+    if (phase === 'draft' && orphanCount > 0) recoverOrphanDraftPicks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [phase, orphanCount]);
   const [showMockDraft, setShowMockDraft] = useState(false);
 
   const { maxScoutingLevel: maxLevel } = useSubscription();
@@ -980,6 +989,28 @@ export default function DraftPage() {
               </div>
             </div>
           </Card>
+        )}
+
+        {/* Orphan pick recovery banner — surfaces ghost picks (state corruption)
+            and lets the user manually trigger a re-recover if the auto path
+            didn't take (e.g., IndexedDB lock contention). */}
+        {orphanCount > 0 && (
+          <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-bold text-amber-800">
+                ⚠️ {orphanCount} ghost pick{orphanCount !== 1 ? 's' : ''} detected
+              </div>
+              <div className="text-xs text-amber-700">
+                Some draft results have no player attached. Click Recover to put those slots back in the draft order.
+              </div>
+            </div>
+            <button
+              onClick={() => recoverOrphanDraftPicks()}
+              className="px-3 py-1.5 text-xs font-bold text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-colors shrink-0"
+            >
+              Recover Picks
+            </button>
+          </div>
         )}
 
         {/* On The Clock */}
