@@ -4505,10 +4505,16 @@ export const useGameStore = create<GameStore>()(
         const supplementalCount = Math.max(0, 150 - baseFACount);
         const supplementalPlayers: Player[] = [];
         if (supplementalCount > 0) {
+          // Mix of camp bodies (38-55 OVR), depth (55-65), and a few mid-tier
+          // (65-72). Skewed toward depth so the user can always find cheap
+          // signings, not just expensive mid-tier vets.
           for (let i = 0; i < supplementalCount; i++) {
             const pos = POSITIONS[Math.floor(Math.random() * POSITIONS.length)];
-            // Generate depth players (45-68 OVR) — journeymen and camp bodies
-            const talentMean = 45 + Math.random() * 23;
+            const tierRoll = Math.random();
+            const talentMean =
+              tierRoll < 0.55 ? 38 + Math.random() * 17 : // 55% camp bodies (38-55)
+              tierRoll < 0.90 ? 55 + Math.random() * 10 : // 35% depth (55-65)
+              65 + Math.random() * 7;                     // 10% mid-tier (65-72)
             const p = generatePlayer(pos, talentMean, {
               age: 24 + Math.floor(Math.random() * 8),
               experience: 1 + Math.floor(Math.random() * 6),
@@ -6780,11 +6786,11 @@ export const useGameStore = create<GameStore>()(
               p.draftYear !== null && p.draftYear >= newSeason && p.experience === 0;
             // Also protect rookies drafted this season who are unsigned (UDFAs etc.)
             const isRecentDraft = p.draftYear !== null && p.draftYear >= state.season && p.experience <= 1;
-            // Only auto-retire unsigned FAs who are clearly washed: old (33+) OR
-            // truly unplayable (sub-58 OVR). Younger productive FAs stay in the
-            // pool so they can be signed mid-season instead of vanishing.
-            const isWashed = p.age >= 33 || p.ratings.overall < 58;
-            if (!isFutureProspect && !isRecentDraft && isWashed) {
+            // Only auto-retire unsigned FAs who are clearly aged out (33+).
+            // Don't filter by OVR — depth bodies (40-55 OVR practice-squad
+            // tier) need to stay in the pool so the user can always find
+            // cheap options at every position.
+            if (!isFutureProspect && !isRecentDraft && p.age >= 33) {
               return { ...p, retired: true, stats: emptyStats() };
             }
           }
