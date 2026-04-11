@@ -61,5 +61,19 @@ export function classScoreToGrade(score: number, picksCount: number): string {
   if (avgPerPick >= 1.5) return 'B-';
   if (avgPerPick >= 0.8) return 'C+';
   if (avgPerPick >= 0.2) return 'C';
-  return 'C-';
+  if (avgPerPick >= -0.3) return 'C-';
+  if (avgPerPick >= -0.8) return 'D+';
+  if (avgPerPick >= -1.4) return 'D';
+  if (avgPerPick >= -2.0) return 'D-';
+  return 'F';
+}
+
+/**
+ * Letter grade for the GM Rankings leaderboard. Takes the average draft
+ * score per class (already aggregated) and converts to a letter grade
+ * assuming a typical class size of 7 picks. Reuses the same scale as
+ * classScoreToGrade so per-draft and career grades stay consistent.
+ */
+export function careerScoreToGrade(avgClassScore: number): string {
+  return classScoreToGrade(avgClassScore, 7);
 }

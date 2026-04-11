@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { careerScoreToGrade } from '@/lib/engine/draftScore';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 
 interface AllTimeRow {
@@ -125,55 +126,61 @@ export default function GmRankingsPage() {
         {!loading && !error && data && (
           <>
             {/* All-Time tab */}
-            {tab === 'all-time' && (
-              <Card>
-                <CardHeader><CardTitle>All-Time Leaderboard</CardTitle></CardHeader>
-                {data.allTime.length === 0 ? (
-                  <div className="text-center py-8 text-[var(--text-sec)] text-sm">
-                    No GMs have completed a season yet. Be the first!
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider border-b border-[var(--border)]">
-                          <th className="text-left py-2 pl-2">#</th>
-                          <th className="text-left py-2">GM</th>
-                          <th className="text-center py-2">Team</th>
-                          <th className="text-center py-2">🏆</th>
-                          <th className="text-right py-2">W-L</th>
-                          <th className="text-right py-2">Win %</th>
-                          <th className="text-center py-2">Playoffs</th>
-                          <th className="text-right py-2 pr-2">Avg Draft</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.allTime.map((row, idx) => {
-                          const isMe = user?.id === row.userId;
-                          return (
-                            <tr key={row.userId} className={`border-t border-[var(--border)] ${isMe ? 'bg-blue-50' : ''} hover:bg-[var(--surface-2)]`}>
-                              <td className="py-2 pl-2 text-[var(--text-sec)] font-mono">{idx + 1}</td>
-                              <td className="py-2 font-semibold">
-                                <Link href={`/gm/${row.userId}`} className="hover:text-blue-600 transition-colors">
-                                  {row.displayName}
-                                  {isMe && <span className="ml-1.5 text-[10px] text-blue-600 font-bold">(You)</span>}
-                                </Link>
-                              </td>
-                              <td className="py-2 text-center text-xs text-[var(--text-sec)]">{row.teamAbbreviation ?? '—'}</td>
-                              <td className="py-2 text-center font-bold">{row.championships > 0 ? row.championships : '—'}</td>
-                              <td className="py-2 text-right tabular-nums">{row.wins}-{row.losses}</td>
-                              <td className="py-2 text-right tabular-nums">{fmtPct(row.winPct)}</td>
-                              <td className="py-2 text-center tabular-nums">{row.playoffAppearances}</td>
-                              <td className="py-2 pr-2 text-right tabular-nums">{row.draftsCompleted > 0 ? row.avgDraftScore.toFixed(1) : '—'}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </Card>
-            )}
+            {tab === 'all-time' && (() => {
+              const qualifiedAllTime = data.allTime.filter(r => r.seasonsPlayed >= 5);
+              return (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>All-Time Leaderboard</CardTitle>
+                    <span className="text-[10px] text-[var(--text-sec)]">Min 5 seasons</span>
+                  </CardHeader>
+                  {qualifiedAllTime.length === 0 ? (
+                    <div className="text-center py-8 text-[var(--text-sec)] text-sm">
+                      No GMs have completed 5 seasons yet. Keep playing.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider border-b border-[var(--border)]">
+                            <th className="text-left py-2 pl-2">#</th>
+                            <th className="text-left py-2">GM</th>
+                            <th className="text-center py-2">Team</th>
+                            <th className="text-center py-2">🏆</th>
+                            <th className="text-right py-2">W-L</th>
+                            <th className="text-right py-2">Win %</th>
+                            <th className="text-center py-2">Playoffs</th>
+                            <th className="text-right py-2 pr-2">Draft</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {qualifiedAllTime.map((row, idx) => {
+                            const isMe = user?.id === row.userId;
+                            return (
+                              <tr key={row.userId} className={`border-t border-[var(--border)] ${isMe ? 'bg-blue-50' : ''} hover:bg-[var(--surface-2)]`}>
+                                <td className="py-2 pl-2 text-[var(--text-sec)] font-mono">{idx + 1}</td>
+                                <td className="py-2 font-semibold">
+                                  <Link href={`/gm/${row.userId}`} className="hover:text-blue-600 transition-colors">
+                                    {row.displayName}
+                                    {isMe && <span className="ml-1.5 text-[10px] text-blue-600 font-bold">(You)</span>}
+                                  </Link>
+                                </td>
+                                <td className="py-2 text-center text-xs text-[var(--text-sec)]">{row.teamAbbreviation ?? '—'}</td>
+                                <td className="py-2 text-center font-bold">{row.championships > 0 ? row.championships : '—'}</td>
+                                <td className="py-2 text-right tabular-nums">{row.wins}-{row.losses}</td>
+                                <td className="py-2 text-right tabular-nums">{fmtPct(row.winPct)}</td>
+                                <td className="py-2 text-center tabular-nums">{row.playoffAppearances}</td>
+                                <td className="py-2 pr-2 text-right font-bold">{row.draftsCompleted > 0 ? careerScoreToGrade(row.avgDraftScore) : '—'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
+              );
+            })()}
 
             {/* This Season tab */}
             {tab === 'this-season' && (
@@ -243,15 +250,15 @@ export default function GmRankingsPage() {
 function CategoriesTab({ allTime, userId }: { allTime: AllTimeRow[]; userId: string | null }) {
   // Compute top-10 lists per category
   const mostChampionships = [...allTime].sort((a, b) => b.championships - a.championships).slice(0, 10);
-  const bestWinPct = [...allTime].filter(r => r.seasonsPlayed >= 2).sort((a, b) => b.winPct - a.winPct).slice(0, 10);
+  const bestWinPct = [...allTime].filter(r => r.seasonsPlayed >= 5).sort((a, b) => b.winPct - a.winPct).slice(0, 10);
   const bestDraftScore = [...allTime].filter(r => r.draftsCompleted >= 2).sort((a, b) => b.avgDraftScore - a.avgDraftScore).slice(0, 10);
   const mostPlayoffs = [...allTime].sort((a, b) => b.playoffAppearances - a.playoffAppearances).slice(0, 10);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <CategoryCard title="🏆 Most Championships" rows={mostChampionships} valueKey="championships" valueLabel="rings" userId={userId} />
-      <CategoryCard title="📈 Best Career Win %" rows={bestWinPct} valueKey="winPct" valueLabel="win%" userId={userId} subtitle="Min 2 seasons" />
-      <CategoryCard title="🎯 Best Avg Draft Score" rows={bestDraftScore} valueKey="avgDraftScore" valueLabel="pts" userId={userId} subtitle="Min 2 drafts" />
+      <CategoryCard title="📈 Best Career Win %" rows={bestWinPct} valueKey="winPct" valueLabel="win%" userId={userId} subtitle="Min 5 seasons" />
+      <CategoryCard title="🎯 Best Avg Draft Score" rows={bestDraftScore} valueKey="avgDraftScore" valueLabel="" userId={userId} subtitle="Min 2 drafts" />
       <CategoryCard title="🏈 Most Playoff Appearances" rows={mostPlayoffs} valueKey="playoffAppearances" valueLabel="appearances" userId={userId} />
     </div>
   );
@@ -270,7 +277,7 @@ function CategoryCard({
   function fmtVal(row: AllTimeRow): string {
     const v = row[valueKey];
     if (valueKey === 'winPct') return `${(v * 100).toFixed(1)}%`;
-    if (valueKey === 'avgDraftScore') return v.toFixed(1);
+    if (valueKey === 'avgDraftScore') return careerScoreToGrade(v);
     return String(v);
   }
   return (
