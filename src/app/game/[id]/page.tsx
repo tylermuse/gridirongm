@@ -11,6 +11,7 @@ import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
 import { ScoreBug } from '@/components/game/ScoreBug';
 import { GamePlanModal } from '@/components/game/GamePlanModal';
+import { PlayCallMenu, type PlayCallType } from '@/components/game/PlayCallMenu';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import type { Player, Position } from '@/types';
 
@@ -507,6 +508,10 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const [speed, setSpeed] = useState<Speed>('1x');
   const [committed, setCommitted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('gamecast');
+  // Live Coach mode — when on, the playback pauses before each user offensive
+  // snap and shows the play call menu. Toggleable at any time during the game.
+  const [liveCoachOn, setLiveCoachOn] = useState(false);
+  const [liveCoachPaused, setLiveCoachPaused] = useState(false);
   // Two-phase reveal: animationComplete tracks whether the current play's
   // field animation has finished. ScoreBug shows previous event's numbers
   // until this becomes true.
@@ -549,10 +554,30 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     setAnimationComplete(true);
   }, []);
 
+  // ── Live Coach: detect if the NEXT event is a user offensive play snap ──
+  // We check after an event reveals and before scheduling the next one.
+  // A "user offensive snap" is the start of a new play (run/pass/sack) on the
+  // user team's possession. We don't pause for kickoffs, FG/punt result events,
+  // quarter ends, or defensive plays.
+  const PLAY_TYPES_THAT_TRIGGER_PAUSE = new Set([
+    'run', 'pass_complete', 'pass_incomplete', 'sack', 'fumble', 'interception', 'penalty',
+  ]);
+  const nextEvent = liveResult?.events[revealedCount] ?? null;
+  const nextEventIsUserSnap =
+    !!nextEvent && userTeamSide !== null &&
+    nextEvent.possession === userTeamSide &&
+    PLAY_TYPES_THAT_TRIGGER_PAUSE.has(nextEvent.type);
+  const shouldPauseForLiveCoach = liveCoachOn && nextEventIsUserSnap && !liveCoachPaused;
+
   // When animation completes and we're playing, schedule the next play reveal
   useEffect(() => {
     clearNextPlayTimer();
     if (!animationComplete || !isPlaying || isFinished || speed === 'max') return;
+    // Live Coach pause: stop here, surface the play call menu instead of advancing
+    if (shouldPauseForLiveCoach) {
+      setLiveCoachPaused(true);
+      return;
+    }
     // Post-animation pause — gives time to read the play description before advancing
     const PAUSE_MS: Record<Speed, number> = { '1x': 1400, '2x': 600, '5x': 80, 'max': 0 };
     const pause = PAUSE_MS[speed];
@@ -567,7 +592,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       setAnimationComplete(false);
     }, pause);
     return clearNextPlayTimer;
-  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer]);
+  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach]);
 
   const skipToEnd = useCallback(() => {
     clearNextPlayTimer();
@@ -844,6 +869,52 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         );
       })()}
 
+      {/* Live Coach play call menu */}
+      {liveCoachPaused && nextEvent && (() => {
+        const homeAbbr2 = homeTeam?.abbreviation ?? 'HOME';
+        const awayAbbr2 = awayTeam?.abbreviation ?? 'AWAY';
+        const fp = nextEvent.fieldPos;
+        // Field position description (e.g. "OPP 35" or "OWN 22")
+        const isHomeOff = nextEvent.possession === 'home';
+        const yardLineFromOwnGoal = fp;
+        const fieldDescription = yardLineFromOwnGoal === 50
+          ? '50'
+          : yardLineFromOwnGoal < 50
+            ? `OWN ${yardLineFromOwnGoal}`
+            : `OPP ${100 - yardLineFromOwnGoal}`;
+        return (
+          <PlayCallMenu
+            state={{
+              quarter: nextEvent.quarter,
+              timeStr: nextEvent.timeStr,
+              homeScore: nextEvent.homeScore,
+              awayScore: nextEvent.awayScore,
+              homeAbbr: homeAbbr2,
+              awayAbbr: awayAbbr2,
+              down: nextEvent.down,
+              yardsToGo: nextEvent.yardsToGo,
+              fieldPos: nextEvent.fieldPos,
+              fieldDescription,
+            }}
+            isFourthDown={nextEvent.down === 4}
+            onPlayCall={() => {
+              // v1: ghost mode — the play call is just a UX prompt; the
+              // pre-computed play still happens. Engine reactivity is the
+              // next iteration. For now, we just resume playback.
+              setLiveCoachPaused(false);
+            }}
+            onAutoSimRest={() => {
+              setLiveCoachOn(false);
+              setLiveCoachPaused(false);
+            }}
+            onToggleOff={() => {
+              setLiveCoachOn(false);
+              setLiveCoachPaused(false);
+            }}
+          />
+        );
+      })()}
+
       <div className="max-w-6xl mx-auto flex gap-4">
       {/* Main game content */}
       <div className="flex-1 min-w-0 space-y-3">
@@ -938,6 +1009,23 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               title="Adjust your game plan (pauses the game)"
             >
               📋 Game Plan
+            </button>
+          )}
+          {/* Live Coach toggle — only when user is in this game */}
+          {userInGame && !isFinished && (
+            <button
+              onClick={() => {
+                setLiveCoachOn(prev => !prev);
+                setLiveCoachPaused(false);
+              }}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                liveCoachOn
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+              }`}
+              title="Pause on every user offensive snap to call the play"
+            >
+              🎯 Live Coach {liveCoachOn ? 'ON' : 'OFF'}
             </button>
           )}
           <button
