@@ -340,9 +340,9 @@ export default function ExpansionPage() {
                           <td className="py-2 text-center">{p.position}</td>
                           <td className="py-2 text-center">{p.age}</td>
                           <td className={`py-2 text-center font-bold ${
-                            p.ratings.overall >= 80 ? 'text-green-600' :
-                            p.ratings.overall >= 65 ? 'text-blue-600' :
-                            p.ratings.overall >= 50 ? 'text-amber-600' : 'text-red-600'
+                            p.ratings.overall >= 75 ? 'text-green-600' :
+                            p.ratings.overall >= 60 ? 'text-blue-600' :
+                            p.ratings.overall >= 45 ? 'text-amber-600' : 'text-red-600'
                           }`}>
                             {p.ratings.overall}
                           </td>

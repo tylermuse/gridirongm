@@ -130,6 +130,14 @@ export function GameTicker() {
                   <div className="font-bold">{tooltipLine1}</div>
                   <div className="text-[var(--text-sec)]">{tooltipLine2}</div>
                 </div>
+                {/* W/L letter overlay — only on user-team played games */}
+                {game.played && isUserGame && result && (
+                  <div className={`absolute top-0 right-0 text-[8px] font-black px-0.5 rounded-bl ${
+                    result === 'W' ? 'text-green-700 bg-green-200' : result === 'L' ? 'text-red-700 bg-red-200' : 'text-amber-700 bg-amber-200'
+                  }`}>
+                    {result}
+                  </div>
+                )}
                 {/* Away team row */}
                 {(() => {
                   const awayWon = game.played && game.awayScore > game.homeScore;
