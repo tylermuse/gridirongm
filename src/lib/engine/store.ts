@@ -79,6 +79,9 @@ interface GameStore extends LeagueState {
   simDraftPick: () => void;
   simToUserDraftPick: () => void;
   simToEndDraft: (options?: { skipAdvance?: boolean }) => void;
+  /** Detect draftResults entries whose player no longer resolves and restore
+   *  the corresponding pick slots to the front of draftOrder. Idempotent. */
+  recoverOrphanDraftPicks: () => void;
   advanceToFreeAgency: () => void;
   advanceFADay: () => void;
   advanceFAWeek: () => void;
@@ -4299,6 +4302,70 @@ export const useGameStore = create<GameStore>()(
         if (gmEndDraftPayload) syncGmStats(gmEndDraftPayload);
 
         // Draft complete — no auto-advance; user clicks "Start New Season"
+      },
+
+      /**
+       * Recover from orphan draftResults — entries whose playerId doesn't resolve
+       * to a real player. This shouldn't happen, but if state corruption sneaks in
+       * (e.g., from a buggy older version), the affected pick slots end up showing
+       * as "—" in the table and the user can never use them.
+       *
+       * Strategy: drop orphan results, also clear the matching team.draftPick.playerId,
+       * and prepend the orphan slots back onto draftOrder so they get re-picked.
+       * Idempotent — safe to call multiple times; no-op if no orphans.
+       */
+      recoverOrphanDraftPicks: () => {
+        const state = get();
+        if (state.phase !== 'draft') return;
+        const playerIds = new Set(state.players.map(p => p.id));
+        const orphans = state.draftResults.filter(r => !playerIds.has(r.playerId));
+        if (orphans.length === 0) return;
+
+        const orphanKey = (r: { teamId: string; round: number }) => `${r.teamId}|${r.round}`;
+        const orphanKeys = new Set(orphans.map(orphanKey));
+        const orphanResultIds = new Set(orphans.map(o => `${o.overallPick}`));
+
+        // Drop orphans from draftResults
+        const cleanResults = state.draftResults.filter(r => !orphanResultIds.has(`${r.overallPick}`));
+
+        // Restore the pick slots to the front of draftOrder, sorted by overallPick
+        const slotsToRestore = orphans
+          .slice()
+          .sort((a, b) => a.overallPick - b.overallPick)
+          .map(r => r.teamId);
+        const restoredDraftOrder = [...slotsToRestore, ...state.draftOrder];
+
+        // Clear the matching team.draftPicks playerId so they're available again.
+        // Match by (ownerTeamId, round) — only the first match per orphan key.
+        const consumedKeys = new Set<string>();
+        const restoredTeams = state.teams.map(t => ({
+          ...t,
+          draftPicks: t.draftPicks.map(pk => {
+            const key = `${pk.ownerTeamId}|${pk.round}`;
+            if (
+              orphanKeys.has(key) &&
+              !consumedKeys.has(`${pk.id}`) &&
+              pk.playerId &&
+              !playerIds.has(pk.playerId)
+            ) {
+              consumedKeys.add(`${pk.id}`);
+              return { ...pk, playerId: undefined, pick: undefined };
+            }
+            return pk;
+          }),
+        }));
+
+        // Note: do NOT touch draftPickOrder — the same pick.ids still correspond
+        // to the same slots; we're just clearing their playerId fields.
+        console.warn(
+          `[recoverOrphanDraftPicks] Restored ${orphans.length} orphan pick(s):`,
+          orphans.map(o => `#${o.overallPick} ${o.teamId}`).join(', '),
+        );
+        set({
+          draftResults: cleanResults,
+          draftOrder: restoredDraftOrder,
+          teams: restoredTeams,
+        });
       },
 
       advanceToFreeAgency: () => {

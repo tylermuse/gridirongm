@@ -693,12 +693,21 @@ export default function DraftPage() {
     simDraftPick,
     simToUserDraftPick,
     simToEndDraft,
+    recoverOrphanDraftPicks,
     season,
     draftLotteryResults,
     leagueSettings,
     scoutingState,
     nflMockDraft,
   } = useGameStore();
+
+  // One-shot recovery: if any prior draft results have orphan playerIds (state
+  // corruption from older versions), restore those slots to the front of the
+  // draft order so the user can re-pick them. Idempotent — no-op if clean.
+  useEffect(() => {
+    if (phase === 'draft') recoverOrphanDraftPicks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
   const [showMockDraft, setShowMockDraft] = useState(false);
 
   const { maxScoutingLevel: maxLevel } = useSubscription();
