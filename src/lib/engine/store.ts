@@ -535,7 +535,7 @@ function generateWeekNews(
       return match?.id;
     }).filter((id): id is string => !!id);
 
-    news.push(makeNews({ season, week, type: 'recap' as any, teamId: userTeamId!, playerIds: recapPlayerIds, headline, body: bodyLines.join('\n'), isUserTeam: true }));
+    news.push(makeNews({ season, week, type: 'recap', teamId: userTeamId!, playerIds: recapPlayerIds, headline, body: bodyLines.join('\n'), isUserTeam: true }));
   }
 
   // Trade rumors (losing teams with high-OVR veterans, weeks 4-14)
