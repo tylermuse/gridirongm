@@ -995,11 +995,10 @@ export default function RosterPage() {
         return (
           <div
             ref={actionMenuRef}
-            className="fixed z-[9999] rounded-lg py-1.5 min-w-[220px]"
+            className="fixed z-[9999] rounded-lg py-1.5 min-w-[220px] max-h-[80vh] overflow-y-auto"
             style={{
-              top: actionMenu.y - 8,
-              left: actionMenu.x - 220,
-              transform: 'translateY(-100%)',
+              top: Math.max(8, actionMenu.y - 8),
+              left: Math.max(8, actionMenu.x - 220),
               background: 'var(--surface)',
               border: '1px solid var(--border)',
               boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05)',
