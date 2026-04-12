@@ -205,8 +205,8 @@ function simulatePlay(
     }
   } else {
     passChance = down >= 3 && yardsToGo > 5 ? 0.78 :
-                 down >= 3 ? 0.55 :
-                 down === 1 ? 0.46 : 0.52;
+                 down >= 3 ? 0.60 :
+                 down === 1 ? 0.52 : 0.57;
   }
 
   // ── QB designed run check ──
@@ -409,8 +409,8 @@ function simulatePlay(
       if (fieldPosition >= 80) {
         yards = Math.max(yards, Math.round(3 + Math.random() * 8)); // floor at 3-11 in red zone
       }
-      // Goal line boost: inside the 5, high chance of reaching the end zone
-      if (fieldPosition >= 95 && Math.random() < 0.55) {
+      // Goal line boost: inside the 5, moderate chance of reaching the end zone
+      if (fieldPosition >= 95 && Math.random() < 0.42) {
         yards = 100 - fieldPosition; // score!
       }
 
@@ -495,7 +495,7 @@ function simulatePlay(
     }
 
     // Goal line rush boost: inside the 5, rushing TDs are common
-    if (fieldPosition >= 95 && Math.random() < 0.55) {
+    if (fieldPosition >= 95 && Math.random() < 0.45) {
       yards = 100 - fieldPosition;
     }
     // Inside the 10: short yardage rushing is more effective
