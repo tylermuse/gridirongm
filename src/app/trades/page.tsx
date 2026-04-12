@@ -1306,7 +1306,7 @@ function TradesPage() {
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-3 py-1.5 text-xs rounded font-medium transition-colors ${
-                activeTab === tab ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)]'
+                activeTab === tab ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'
               }`}
             >
               {tab === 'incoming' ? (

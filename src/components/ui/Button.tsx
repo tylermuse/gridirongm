@@ -32,6 +32,7 @@ export function Button({
       className={`
         inline-flex items-center justify-center gap-2 font-semibold rounded-lg
         transition-all duration-150 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]
         ${variants[variant]} ${sizes[size]} ${className}
       `}
     >

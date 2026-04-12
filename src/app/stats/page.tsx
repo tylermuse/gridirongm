@@ -140,7 +140,7 @@ export default function StatsPage() {
               key={t.key}
               onClick={() => setTab(t.key)}
               className={`px-4 py-1.5 text-xs rounded font-medium transition-colors ${
-                tab === t.key ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)]'
+                tab === t.key ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'
               }`}
             >
               {t.label}

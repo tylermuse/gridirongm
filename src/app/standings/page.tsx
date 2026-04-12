@@ -62,7 +62,7 @@ function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams,
     <div className="overflow-x-auto">
     <table className="w-full text-sm min-w-[500px] sticky-col">
       <thead>
-        <tr className="text-[var(--text-sec)] text-xs">
+        <tr className="text-[var(--text-sec)] text-xs sticky top-0 z-10 bg-[var(--surface)]">
           <th className="text-left pb-1">#</th>
           <th className="text-left pb-1">Team</th>
           <th className="text-center pb-1 whitespace-nowrap min-w-[40px]">W</th>
@@ -216,7 +216,7 @@ export default function StandingsPage() {
             <button
               onClick={() => setTab('standings')}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                tab === 'standings' ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)]'
+                tab === 'standings' ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'
               }`}
             >
               Standings
@@ -224,7 +224,7 @@ export default function StandingsPage() {
             <button
               onClick={() => setTab('schedule')}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                tab === 'schedule' ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)]'
+                tab === 'schedule' ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'
               }`}
             >
               Schedule
@@ -241,7 +241,7 @@ export default function StandingsPage() {
                   key={v}
                   onClick={() => setView(v)}
                   className={`px-3 py-1 rounded-md text-xs font-medium capitalize transition-colors ${
-                    view === v ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-sec)] hover:text-[var(--text)]'
+                    view === v ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'
                   }`}
                 >
                   {v}
@@ -327,8 +327,8 @@ export default function StandingsPage() {
                     key={game.id}
                     className={`flex items-center justify-between py-3 px-5 ${
                       game.played
-                        ? `${won ? 'border-l-2 border-l-green-500' : 'border-l-2 border-l-red-500'} cursor-pointer active:scale-[0.98] transition-transform`
-                        : ''
+                        ? `${won ? 'border-l-2 border-l-green-500' : 'border-l-2 border-l-red-500'} cursor-pointer hover:border-[var(--accent)] hover:shadow-md active:scale-[0.98] transition-all`
+                        : 'cursor-pointer hover:border-[var(--accent)] hover:shadow-md active:scale-[0.98] transition-all'
                     }`}
                     {...(game.played ? { onClick: () => setSelectedGame(game) } : {})}
                   >
