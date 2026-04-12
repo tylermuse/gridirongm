@@ -460,6 +460,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             </button>
           )}
         </div>
+        <div className="text-center text-[9px] text-[var(--text-sec)]/40 py-1">v0.12a</div>
       </div>
     </aside>
   );
