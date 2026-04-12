@@ -677,10 +677,11 @@ export function simulateGame(
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
-  // 10 possessions per team per game (NFL avg ~11). Tuned together with
-  // drive cap (10 plays) and lowered pass rate (~54%) to land at ~60
-  // plays/team and ~22-26 PPG.
-  const possessions = 10;
+  // 9 possessions per team per game. Tuned together with 12-play drive
+  // cap and ~58% pass rate. At ~6.5 plays/drive avg this lands at ~58
+  // plays/team — close to NFL's ~63. Keeping possessions at 10 was
+  // producing ~80 plays/game which inflated every stat category ~27%.
+  const possessions = 9;
 
   // BS Mode: Irrational Confidence variance
   const applyIC = (roster: Player[]) => {
