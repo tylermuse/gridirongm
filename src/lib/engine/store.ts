@@ -7837,12 +7837,12 @@ export const useGameStore = create<GameStore>()(
           if (prospect.college) player.college = prospect.college;
 
           // Overlay detailed ratings if provided, then recalculate OVR
+          const ratingKeys: (keyof Omit<PlayerRatings, 'overall'>)[] = [
+            'speed', 'strength', 'agility', 'awareness', 'stamina',
+            'throwing', 'catching', 'carrying', 'blocking',
+            'tackling', 'coverage', 'passRush', 'kicking',
+          ];
           if (prospect.ratings) {
-            const ratingKeys: (keyof Omit<PlayerRatings, 'overall'>)[] = [
-              'speed', 'strength', 'agility', 'awareness', 'stamina',
-              'throwing', 'catching', 'carrying', 'blocking',
-              'tackling', 'coverage', 'passRush', 'kicking',
-            ];
             for (const key of ratingKeys) {
               const val = prospect.ratings[key];
               if (val !== undefined && typeof val === 'number') {
@@ -7850,6 +7850,19 @@ export const useGameStore = create<GameStore>()(
               }
             }
             player.ratings.overall = recalculateOvr(player.ratings, pos);
+          } else if (prospect.overall !== undefined) {
+            // No detailed ratings but user specified an overall — scale all
+            // generated ratings proportionally so the player's actual OVR
+            // matches what the user requested. Without this, generatePlayer's
+            // random variance can produce an OVR 10-15 points off the target.
+            const currentOvr = player.ratings.overall;
+            if (currentOvr > 0 && Math.abs(currentOvr - ovr) > 1) {
+              const scale = ovr / currentOvr;
+              for (const key of ratingKeys) {
+                player.ratings[key] = Math.max(25, Math.min(99, Math.round(player.ratings[key] * scale)));
+              }
+              player.ratings.overall = recalculateOvr(player.ratings, pos);
+            }
           }
 
           // Clamp potential to [overall, 99] or generate default
