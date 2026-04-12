@@ -46,6 +46,41 @@ export interface LiveGameResult {
   homeScore: number;
   awayScore: number;
   playerStats: Record<string, Partial<PlayerStats>>;
+  /** Per-quarter snapshots captured before each quarter's first play. Used by
+   *  resimulateFromPoint() to rewind the sim to a quarter boundary, swap in a
+   *  new game plan, and re-sim the rest of the game from there. */
+  quarterSnapshots?: LiveGameSnapshot[];
+}
+
+/** Snapshot of game state + cumulative buckets at a quarter boundary. */
+export interface LiveGameSnapshot {
+  /** Quarter number (1-4 regular, 5+ for OT periods). */
+  quarter: number;
+  /** Index into the events[] array marking the first event of this quarter
+   *  (or just after the kickoff for Q1/Q3/OT). All events at index < eventIndex
+   *  are kept verbatim when rewinding to this snapshot. */
+  eventIndex: number;
+  /** Internal sim state at the snapshot point. Opaque to callers. */
+  state: GameStateSnapshot;
+  homeBucket: StatBucket;
+  awayBucket: StatBucket;
+}
+
+/** Plain serializable copy of GameState — interface kept separate so the
+ *  internal mutable GameState can keep its existing definition. */
+export interface GameStateSnapshot {
+  quarter: number;
+  timeSecs: number;
+  momentum: number;
+  possession: 'home' | 'away';
+  fieldPos: number;
+  down: number;
+  yardsToGo: number;
+  homeScore: number;
+  awayScore: number;
+  twoMinWarningQ2Fired: boolean;
+  twoMinWarningQ4Fired: boolean;
+  overtime: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -368,7 +403,7 @@ interface GameState {
 // Stat tracking (accumulated during simulation)
 // ---------------------------------------------------------------------------
 
-interface StatBucket {
+export interface StatBucket {
   passAttempts: number;
   passCompletions: number;
   passYards: number;
@@ -427,6 +462,17 @@ export function simulatePlayByPlay(
   mcafeeMode: boolean = false,
   /** Optional user game plan applied only when the user's team is on offense. */
   userGamePlan?: LiveGamePlan,
+  /** Optional rewind hooks. When provided, the sim starts from the given state
+   *  and bucket totals instead of running from kickoff. Used by
+   *  resimulateFromPoint() to splice a new game plan into a partially-played
+   *  game without losing the events the user has already watched. */
+  resumeFrom?: {
+    state: GameStateSnapshot;
+    homeBucket: StatBucket;
+    awayBucket: StatBucket;
+    /** Existing event id counter to continue from (so re-sim event ids don't collide). */
+    nextEventId: number;
+  },
 ): LiveGameResult {
   const homeKey = extractKeyPlayers(homePlayers);
   const awayKey = extractKeyPlayers(awayPlayers);
@@ -435,26 +481,40 @@ export function simulatePlayByPlay(
   const homeQBTierMod = homeKey.qb ? getQBTierModifier(computeQBTier(homeKey.qb)) : 0;
   const awayQBTierMod = awayKey.qb ? getQBTierModifier(computeQBTier(awayKey.qb)) : 0;
 
-  const homeBucket = emptyBucket();
-  const awayBucket = emptyBucket();
+  const homeBucket = resumeFrom ? { ...resumeFrom.homeBucket } : emptyBucket();
+  const awayBucket = resumeFrom ? { ...resumeFrom.awayBucket } : emptyBucket();
 
   const events: PlayEvent[] = [];
-  let playId = 0;
+  let playId = resumeFrom ? resumeFrom.nextEventId : 0;
 
-  const state: GameState = {
-    quarter: 1,
-    timeSecs: 900,
-    momentum: 0,
-    possession: Math.random() < 0.5 ? 'home' : 'away',
-    fieldPos: 25,
-    down: 1,
-    yardsToGo: 10,
-    homeScore: 0,
-    awayScore: 0,
-    twoMinWarningQ2Fired: false,
-    twoMinWarningQ4Fired: false,
-    overtime: false,
-  };
+  const state: GameState = resumeFrom
+    ? { ...resumeFrom.state }
+    : {
+        quarter: 1,
+        timeSecs: 900,
+        momentum: 0,
+        possession: Math.random() < 0.5 ? 'home' : 'away',
+        fieldPos: 25,
+        down: 1,
+        yardsToGo: 10,
+        homeScore: 0,
+        awayScore: 0,
+        twoMinWarningQ2Fired: false,
+        twoMinWarningQ4Fired: false,
+        overtime: false,
+      };
+
+  // Quarter snapshots — captured before each quarter's first play.
+  const quarterSnapshots: LiveGameSnapshot[] = [];
+  function captureSnapshot() {
+    quarterSnapshots.push({
+      quarter: state.quarter,
+      eventIndex: events.length,
+      state: { ...state },
+      homeBucket: { ...homeBucket },
+      awayBucket: { ...awayBucket },
+    });
+  }
 
   // Helpers to get current offense/defense key players
   function offKey(): KeyPlayers { return state.possession === 'home' ? homeKey : awayKey; }
@@ -1232,8 +1292,11 @@ export function simulatePlayByPlay(
   // Main game loop
   // ---------------------------------------------------------------------------
 
-  // Kickoff to start
-  doKickoff();
+  // Kickoff to start (skipped on resume — caller's snapshot is already mid-game)
+  if (!resumeFrom) {
+    captureSnapshot(); // Q1 start, empty buckets
+    doKickoff();
+  }
 
   while (state.quarter <= 4 || state.overtime) {
     if (events.length >= 400) break;
@@ -1250,6 +1313,7 @@ export function simulatePlayByPlay(
         state.quarter = 3;
         state.timeSecs = 900;
         state.twoMinWarningQ2Fired = false;
+        captureSnapshot(); // Q3 start (post-halftime)
         // Second half kickoff — coin flip winner typically defers, losing team kicks
         doKickoff();
       } else if (state.quarter === 4) {
@@ -1259,6 +1323,7 @@ export function simulatePlayByPlay(
           state.overtime = true;
           state.timeSecs = 600; // 10-min OT
           addEvent('overtime', `Overtime! First score wins. Coin flip — ${Math.random() < 0.5 ? homeTeam.abbreviation : awayTeam.abbreviation} gets possession.`, 0, false);
+          captureSnapshot(); // OT start
           doKickoff();
         } else {
           break;
@@ -1268,6 +1333,7 @@ export function simulatePlayByPlay(
         addEvent('quarter_end', qLabel, 0, false);
         state.quarter += 1;
         state.timeSecs = 900;
+        captureSnapshot(); // Q2 or Q4 start
       }
     }
 
@@ -1280,6 +1346,7 @@ export function simulatePlayByPlay(
         // Playoff OT: reset clock for another OT period until someone scores
         state.timeSecs = 600;
         addEvent('overtime', `Another overtime period! The game continues until someone scores.`, 0, false);
+        captureSnapshot(); // additional OT period
         doKickoff();
       } else {
         // Regular season: game ends as a tie
@@ -1424,6 +1491,74 @@ export function simulatePlayByPlay(
     homeScore: state.homeScore,
     awayScore: state.awayScore,
     playerStats,
+    quarterSnapshots,
+  };
+}
+
+/**
+ * Re-simulate a game from a quarter boundary with a (possibly new) game plan.
+ *
+ * Used when the user opens the mid-game game-plan modal and confirms changes
+ * — we rewind to the most recent quarter snapshot at-or-before the user's
+ * current playback index, swap in the new plan, and re-run the rest of the
+ * game from there. The events the user has already watched (everything before
+ * the snapshot) are preserved verbatim. Stats are merged because we resume
+ * with the bucket totals from the snapshot.
+ *
+ * Returns a new LiveGameResult with the spliced events + merged stats.
+ */
+export function resimulateFromPoint(
+  original: LiveGameResult,
+  currentEventIndex: number,
+  homeTeam: Team,
+  awayTeam: Team,
+  homePlayers: Player[],
+  awayPlayers: Player[],
+  isPlayoff: boolean,
+  mcafeeMode: boolean,
+  newGamePlan: LiveGamePlan,
+): LiveGameResult {
+  const snapshots = original.quarterSnapshots ?? [];
+  if (snapshots.length === 0) {
+    // No snapshots — fall back to running a fresh full game with the new plan.
+    return simulatePlayByPlay(
+      homeTeam, awayTeam, homePlayers, awayPlayers, isPlayoff, mcafeeMode, newGamePlan,
+    );
+  }
+
+  // Find the latest snapshot at or before the current event index.
+  let chosen = snapshots[0];
+  for (const snap of snapshots) {
+    if (snap.eventIndex <= currentEventIndex) chosen = snap;
+    else break;
+  }
+
+  const keptEvents = original.events.slice(0, chosen.eventIndex);
+  const lastKeptEvent = keptEvents[keptEvents.length - 1];
+  const nextEventId = (lastKeptEvent?.id ?? -1) + 1;
+
+  const tail = simulatePlayByPlay(
+    homeTeam,
+    awayTeam,
+    homePlayers,
+    awayPlayers,
+    isPlayoff,
+    mcafeeMode,
+    newGamePlan,
+    {
+      state: chosen.state,
+      homeBucket: chosen.homeBucket,
+      awayBucket: chosen.awayBucket,
+      nextEventId,
+    },
+  );
+
+  return {
+    events: [...keptEvents, ...tail.events],
+    homeScore: tail.homeScore,
+    awayScore: tail.awayScore,
+    playerStats: tail.playerStats,
+    quarterSnapshots: tail.quarterSnapshots,
   };
 }
 

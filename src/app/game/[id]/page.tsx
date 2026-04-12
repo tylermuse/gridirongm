@@ -6,7 +6,7 @@ import { useGameStore, flushToStorage, flushToStorageSync } from '@/lib/engine/s
 import { GameShell } from '@/components/game/GameShell';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { simulatePlayByPlay, liveGameToGameResult, type LiveGamePlan } from '@/lib/engine/playByPlay';
+import { simulatePlayByPlay, resimulateFromPoint, liveGameToGameResult, type LiveGamePlan } from '@/lib/engine/playByPlay';
 import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
 import { ScoreBug } from '@/components/game/ScoreBug';
@@ -834,9 +834,38 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           <GamePlanModal
             opponentName={oppName}
             onConfirm={(plan) => {
-              setLivePlan({ ...plan, userTeamSide });
+              const newPlan: LiveGamePlan = { ...plan, userTeamSide };
+              setLivePlan(newPlan);
               // Persist for the next game too
               useGameStore.getState().setNextGamePlan(plan);
+              // Re-simulate the rest of the game from the most recent quarter
+              // boundary at-or-before the user's current playback index. This
+              // is what makes mid-game adjustments actually take effect — without
+              // this, the original sim's pre-computed events would just keep playing.
+              if (simRef.current && homeTeam && awayTeam && game && !game.played) {
+                try {
+                  const mcafeeMode = useGameStore.getState().leagueSettings?.mcafeeMode ?? false;
+                  const updated = resimulateFromPoint(
+                    simRef.current,
+                    revealedCount,
+                    homeTeam,
+                    awayTeam,
+                    homePlayers,
+                    awayPlayers,
+                    isPlayoffGame,
+                    mcafeeMode,
+                    newPlan,
+                  );
+                  simRef.current = updated;
+                  // The events array got spliced — totalEvents changes. Stop
+                  // playback so the user can confirm the rewind point before
+                  // hitting play again.
+                  setIsPlaying(false);
+                  setAnimationComplete(true);
+                } catch (err) {
+                  console.error('[Watch Live] resimulateFromPoint error:', err);
+                }
+              }
               setShowMidGamePlan(false);
             }}
             onCancel={() => setShowMidGamePlan(false)}
