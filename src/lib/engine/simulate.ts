@@ -205,8 +205,8 @@ function simulatePlay(
     }
   } else {
     passChance = down >= 3 && yardsToGo > 5 ? 0.82 :
-                 down >= 3 ? 0.64 :
-                 down === 1 ? 0.56 : 0.60;
+                 down >= 3 ? 0.65 :
+                 down === 1 ? 0.58 : 0.62;
   }
 
   // ── QB designed run check ──
