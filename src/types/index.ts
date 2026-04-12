@@ -246,6 +246,19 @@ export interface Contract {
   offseasonSigned?: boolean;
 }
 
+/** Shape for user-imported draft prospects (Import Draft Class feature). */
+export interface ImportedProspect {
+  firstName: string;
+  lastName: string;
+  position: Position;
+  college?: string;
+  age?: number;
+  overall?: number;      // 40-99, defaults to random 55-80
+  potential?: number;     // 40-99, defaults to overall + random 5-15
+  /** Optional detailed ratings — if not provided, generated from overall. */
+  ratings?: Partial<PlayerRatings>;
+}
+
 export interface Player {
   id: string;
   firstName: string;

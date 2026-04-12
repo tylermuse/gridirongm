@@ -13,7 +13,7 @@ import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { POSITIONS, ROSTER_LIMITS, formatRecord } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
-import type { Player, Position, Team } from '@/types';
+import type { Player, Position, Team, ImportedProspect } from '@/types';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { SCOUTING_LEVELS } from '@/lib/subscription';
 import { expectedOvrForPick, pickGrade, gradeValue, gradeColor, teamDraftGrade } from '@/lib/engine/draftGrades';
@@ -672,6 +672,208 @@ function ScoutEvaluationPanel({
 }
 
 // ---------------------------------------------------------------------------
+// Import Draft Class Modal
+// ---------------------------------------------------------------------------
+
+const VALID_POSITIONS = new Set(['QB','RB','WR','TE','OL','DL','LB','CB','S','K','P']);
+
+function ImportDraftClassModal({
+  season,
+  onImport,
+  onClose,
+}: {
+  season: number;
+  onImport: (prospects: ImportedProspect[], targetYear: number) => { count: number; skipped: number };
+  onClose: () => void;
+}) {
+  const [jsonText, setJsonText] = useState('');
+  const [targetYear, setTargetYear] = useState(season);
+  const [parsed, setParsed] = useState<ImportedProspect[] | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ count: number; skipped: number } | null>(null);
+
+  function tryParse(text: string) {
+    setJsonText(text);
+    setParsed(null);
+    setParseError(null);
+    setResult(null);
+    if (!text.trim()) return;
+    try {
+      const data = JSON.parse(text);
+      if (!Array.isArray(data)) {
+        setParseError('JSON must be an array of prospect objects.');
+        return;
+      }
+      if (data.length === 0) {
+        setParseError('Array is empty.');
+        return;
+      }
+      // Validate each entry lightly for preview
+      const valid: ImportedProspect[] = [];
+      let invalidCount = 0;
+      for (const item of data) {
+        if (!item.firstName || !item.lastName || !VALID_POSITIONS.has(item.position)) {
+          invalidCount++;
+          continue;
+        }
+        valid.push(item as ImportedProspect);
+      }
+      if (valid.length === 0) {
+        setParseError(`All ${data.length} entries are invalid. Each needs firstName, lastName, and a valid position.`);
+        return;
+      }
+      if (invalidCount > 0) {
+        setParseError(`${invalidCount} invalid entries will be skipped.`);
+      }
+      setParsed(valid);
+    } catch {
+      setParseError('Invalid JSON. Check syntax and try again.');
+    }
+  }
+
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      setJsonText(text);
+      tryParse(text);
+    };
+    reader.readAsText(file);
+  }
+
+  function handleImport() {
+    if (!parsed || parsed.length === 0) return;
+    const res = onImport(parsed, targetYear);
+    setResult(res);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
+          <h3 className="text-lg font-black">Import Draft Class</h3>
+          <button onClick={onClose} className="text-[var(--text-sec)] hover:text-[var(--text)] text-xl leading-none">&times;</button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {result ? (
+            <div className="text-center py-8 space-y-3">
+              <div className="text-4xl">&#9989;</div>
+              <div className="text-lg font-bold">Imported {result.count} prospect{result.count !== 1 ? 's' : ''}</div>
+              {result.skipped > 0 && (
+                <div className="text-sm text-amber-600">{result.skipped} invalid entries skipped.</div>
+              )}
+              <Button onClick={onClose}>Done</Button>
+            </div>
+          ) : (
+            <>
+              {/* Target year */}
+              <div>
+                <label className="block text-xs font-bold text-[var(--text-sec)] mb-1">Draft Year</label>
+                <input
+                  type="number"
+                  value={targetYear}
+                  onChange={(e) => setTargetYear(Number(e.target.value))}
+                  className="w-24 px-2 py-1 text-sm border border-[var(--border)] rounded-lg bg-[var(--bg)]"
+                />
+              </div>
+
+              {/* File upload */}
+              <div>
+                <label className="block text-xs font-bold text-[var(--text-sec)] mb-1">Upload JSON File</label>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleFileUpload}
+                  className="text-sm"
+                />
+              </div>
+
+              {/* Textarea */}
+              <div>
+                <label className="block text-xs font-bold text-[var(--text-sec)] mb-1">Or Paste JSON</label>
+                <textarea
+                  value={jsonText}
+                  onChange={(e) => tryParse(e.target.value)}
+                  placeholder={`[\n  { "firstName": "Cam", "lastName": "Ward", "position": "QB", "college": "Miami", "overall": 78, "potential": 85 },\n  { "firstName": "Travis", "lastName": "Hunter", "position": "CB", "college": "Colorado", "overall": 82, "potential": 90 }\n]`}
+                  rows={8}
+                  className="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-lg bg-[var(--bg)] font-mono resize-y"
+                />
+              </div>
+
+              {/* Parse error */}
+              {parseError && (
+                <div className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{parseError}</div>
+              )}
+
+              {/* Preview table */}
+              {parsed && parsed.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-[var(--text-sec)] mb-2">Preview ({parsed.length} prospect{parsed.length !== 1 ? 's' : ''})</div>
+                  <div className="max-h-48 overflow-y-auto border border-[var(--border)] rounded-lg">
+                    <table className="w-full text-xs">
+                      <thead className="bg-[var(--bg)] sticky top-0">
+                        <tr className="text-left text-[var(--text-sec)]">
+                          <th className="px-3 py-1.5">#</th>
+                          <th className="px-3 py-1.5">Name</th>
+                          <th className="px-3 py-1.5">Pos</th>
+                          <th className="px-3 py-1.5">College</th>
+                          <th className="px-3 py-1.5">OVR</th>
+                          <th className="px-3 py-1.5">POT</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {parsed.slice(0, 50).map((p, i) => (
+                          <tr key={i} className="border-t border-[var(--border)]">
+                            <td className="px-3 py-1 text-[var(--text-sec)]">{i + 1}</td>
+                            <td className="px-3 py-1 font-semibold">{p.firstName} {p.lastName}</td>
+                            <td className="px-3 py-1">{p.position}</td>
+                            <td className="px-3 py-1 text-[var(--text-sec)]">{p.college ?? '--'}</td>
+                            <td className="px-3 py-1">{p.overall ?? 'auto'}</td>
+                            <td className="px-3 py-1">{p.potential ?? 'auto'}</td>
+                          </tr>
+                        ))}
+                        {parsed.length > 50 && (
+                          <tr className="border-t border-[var(--border)]">
+                            <td colSpan={6} className="px-3 py-1 text-center text-[var(--text-sec)]">
+                              ...and {parsed.length - 50} more
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        {!result && (
+          <div className="px-6 py-3 border-t border-[var(--border)] flex items-center justify-end gap-3">
+            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button
+              disabled={!parsed || parsed.length === 0}
+              onClick={handleImport}
+            >
+              Import {parsed ? `${parsed.length} Prospect${parsed.length !== 1 ? 's' : ''}` : ''}
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Draft Page
 // ---------------------------------------------------------------------------
 
@@ -699,6 +901,7 @@ export default function DraftPage() {
     leagueSettings,
     scoutingState,
     nflMockDraft,
+    importDraftClass,
   } = useGameStore();
 
   // Detect draftResults entries whose player no longer exists. These are
@@ -735,6 +938,7 @@ export default function DraftPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedProspectId, setExpandedProspectId] = useState<string | null>(null);
   const [scoutedOnly, setScoutedOnly] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   if (phase !== 'draft') {
     return (
@@ -951,7 +1155,21 @@ export default function DraftPage() {
   return (
     <GameShell>
       <div className="max-w-7xl mx-auto space-y-4">
-        <h2 className="text-2xl font-black">Draft</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-black">Draft</h2>
+          <Button variant="secondary" onClick={() => setShowImportModal(true)}>
+            Import Draft Class
+          </Button>
+        </div>
+
+        {/* Import Draft Class Modal */}
+        {showImportModal && (
+          <ImportDraftClassModal
+            season={season}
+            onImport={(prospects, targetYear) => importDraftClass(prospects, targetYear)}
+            onClose={() => setShowImportModal(false)}
+          />
+        )}
 
         {/* Auto-drafting progress */}
         {autoDrafting && (

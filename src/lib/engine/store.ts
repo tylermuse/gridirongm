@@ -5,10 +5,10 @@ function uuid(): string {
   return crypto.randomUUID();
 }
 import type {
-  LeagueState, Team, Player, GameResult, PlayerStats,
+  LeagueState, Team, Player, GameResult, PlayerStats, PlayerRatings,
   NewsItem, TradeProposal, ResigningEntry, DraftPick, LeagueSettings,
   HoldoutEntry, TradeRumor, Rivalry, RivalryEvent,
-  ExpansionTeamConfig, SocialPost,
+  ExpansionTeamConfig, SocialPost, ImportedProspect,
 } from '@/types';
 import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
@@ -147,6 +147,7 @@ interface GameStore extends LeagueState {
   getTeamRoster: (teamId: string) => Player[];
   getWeekGames: (week: number) => GameResult[];
   switchTeam: (newTeamId: string) => void;
+  importDraftClass: (prospects: import('@/types').ImportedProspect[], targetYear?: number) => { count: number; skipped: number };
 }
 
 // ---------------------------------------------------------------------------
@@ -7803,6 +7804,96 @@ export const useGameStore = create<GameStore>()(
       getPlayer: (id: string) => get().players.find(p => p.id === id),
       getTeamRoster: (teamId: string) => get().players.filter(p => p.teamId === teamId),
       getWeekGames: (week: number) => get().schedule.filter(g => g.week === week),
+
+      importDraftClass: (prospects, targetYear) => {
+        const state = get();
+        const year = targetYear ?? state.season;
+        const validPositions = new Set(POSITIONS as readonly string[]);
+
+        let count = 0;
+        let skipped = 0;
+        const newPlayers: Player[] = [];
+
+        for (const prospect of prospects) {
+          // Validate required fields
+          if (!prospect.firstName || typeof prospect.firstName !== 'string' || !prospect.firstName.trim()) { skipped++; continue; }
+          if (!prospect.lastName || typeof prospect.lastName !== 'string' || !prospect.lastName.trim()) { skipped++; continue; }
+          if (!validPositions.has(prospect.position)) { skipped++; continue; }
+
+          const pos = prospect.position as Position;
+          // Clamp overall to 40-99 or generate random 55-80
+          const rawOvr = prospect.overall ?? (55 + Math.floor(Math.random() * 26));
+          const ovr = Math.max(40, Math.min(99, Math.round(rawOvr)));
+
+          // Generate base player from position and overall
+          const player = generatePlayer(pos, ovr, {
+            age: prospect.age ?? (21 + Math.floor(Math.random() * 2)),
+            experience: 0,
+          });
+
+          // Overlay imported data
+          player.firstName = prospect.firstName.trim();
+          player.lastName = prospect.lastName.trim();
+          if (prospect.college) player.college = prospect.college;
+
+          // Overlay detailed ratings if provided, then recalculate OVR
+          if (prospect.ratings) {
+            const ratingKeys: (keyof Omit<PlayerRatings, 'overall'>)[] = [
+              'speed', 'strength', 'agility', 'awareness', 'stamina',
+              'throwing', 'catching', 'carrying', 'blocking',
+              'tackling', 'coverage', 'passRush', 'kicking',
+            ];
+            for (const key of ratingKeys) {
+              const val = prospect.ratings[key];
+              if (val !== undefined && typeof val === 'number') {
+                player.ratings[key] = Math.max(20, Math.min(99, Math.round(val)));
+              }
+            }
+            player.ratings.overall = recalculateOvr(player.ratings, pos);
+          }
+
+          // Clamp potential to [overall, 99] or generate default
+          if (prospect.potential !== undefined) {
+            player.potential = Math.max(player.ratings.overall, Math.min(99, Math.round(prospect.potential)));
+          } else {
+            player.potential = Math.max(player.ratings.overall, Math.min(99, player.ratings.overall + 5 + Math.floor(Math.random() * 11)));
+          }
+
+          // Set draft prospect fields
+          player.teamId = null;
+          player.contract = { salary: 0, yearsLeft: 0, guaranteed: 0, totalYears: 0 };
+          player.draftYear = year;
+          player.scoutingLabel = ['High motor', 'Raw but explosive', 'Pro-ready', 'Combine standout', 'Sleeper'][Math.floor(Math.random() * 5)];
+          player.scoutingSeed = Math.floor(Math.random() * 10000);
+          player.draftProfile = 'normal';
+          player.combineStats = generateCombineStats(pos, player.ratings, Math.floor(Math.random() * 10000));
+          player.subPosition = deriveSubPosition(player);
+
+          newPlayers.push(player);
+          count++;
+        }
+
+        if (count === 0) return { count: 0, skipped };
+
+        // Assign projected ranks for the imported class
+        const sorted = [...newPlayers].sort((a, b) => {
+          const aOvr = (a.position === 'K' || a.position === 'P') ? a.ratings.overall - 40 : a.ratings.overall;
+          const bOvr = (b.position === 'K' || b.position === 'P') ? b.ratings.overall - 40 : b.ratings.overall;
+          return bOvr - aOvr;
+        });
+        for (let i = 0; i < sorted.length; i++) {
+          sorted[i].projectedRank = i + 1;
+        }
+
+        // Merge into state
+        const updatedPlayers = [...state.players, ...newPlayers];
+        const updatedFreeAgents = state.phase === 'draft'
+          ? [...state.freeAgents, ...newPlayers.map(p => p.id)]
+          : state.freeAgents;
+
+        set({ players: updatedPlayers, freeAgents: updatedFreeAgents });
+        return { count, skipped };
+      },
 
       switchTeam: (newTeamId: string) => {
         const state = get();
