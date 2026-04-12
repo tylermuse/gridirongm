@@ -950,11 +950,24 @@ export default function DraftPage() {
              phase === 'playoffs' ? 'The draft begins after the playoffs conclude. Keep simulating!' :
              "The draft hasn't started yet."}
           </p>
-          <div className="flex gap-3 justify-center">
+          <div className="flex gap-3 justify-center items-center">
             <a href="/" className="text-sm text-blue-600 hover:underline">Go to Dashboard</a>
             <a href="/standings" className="text-sm text-blue-600 hover:underline">View Schedule</a>
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="text-sm font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1"
+            >
+              📥 Import Draft Class
+            </button>
           </div>
         </div>
+        {showImportModal && (
+          <ImportDraftClassModal
+            season={season}
+            onImport={(prospects, targetYear) => importDraftClass(prospects, targetYear)}
+            onClose={() => setShowImportModal(false)}
+          />
+        )}
       </GameShell>
     );
   }
