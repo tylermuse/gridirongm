@@ -23,6 +23,39 @@ interface SettingRowProps {
   formatValue?: (val: number) => string;
 }
 
+function ToggleRow({
+  label, description, value, onChange, disabled, activeColor = 'bg-blue-500',
+}: {
+  label: string;
+  description: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+  activeColor?: string;
+}) {
+  return (
+    <div className={`flex items-start justify-between gap-4 ${disabled ? 'opacity-60' : ''}`}>
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-sm">{label}</div>
+        <div className="text-xs text-[var(--text-sec)] mt-0.5">{description}</div>
+      </div>
+      <button
+        onClick={() => !disabled && onChange(!value)}
+        disabled={disabled}
+        className={`shrink-0 relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+          value ? activeColor : 'bg-gray-300'
+        } ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+      >
+        <span
+          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+            value ? 'translate-x-6' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
 function SettingRow({ label, description, value, onChange, min, max, step, unit, formatValue }: SettingRowProps) {
   const display = formatValue ? formatValue(value) : `${value}${unit ?? ''}`;
   return (
@@ -326,6 +359,34 @@ export default function SettingsPage() {
               max={42}
               step={1}
               formatValue={v => `${v} yrs`}
+            />
+          </div>
+        </Card>
+
+        {/* Roster Management */}
+        <Card className="mb-4">
+          <CardHeader><CardTitle>Roster Management</CardTitle></CardHeader>
+          <div className="space-y-4">
+            <ToggleRow
+              label="53-man roster limit"
+              description="Forces each team to carry exactly 53 active players. Cuts and signings are validated against this cap."
+              value={draft.rosterLimitEnabled !== false}
+              onChange={v => setDraft(d => ({ ...d, rosterLimitEnabled: v }))}
+              activeColor="bg-blue-500"
+            />
+            <ToggleRow
+              label="Practice squad"
+              description="Adds a 16-player practice squad. PS players are developed during the week and can be called up. [Coming soon]"
+              value={false}
+              onChange={() => {}}
+              disabled
+            />
+            <ToggleRow
+              label="Injured reserve"
+              description="Adds IR slots with designated-for-return rules. Injured players can be placed on IR to open a roster spot. [Coming soon]"
+              value={false}
+              onChange={() => {}}
+              disabled
             />
           </div>
         </Card>

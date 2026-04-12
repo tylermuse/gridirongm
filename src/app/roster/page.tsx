@@ -134,6 +134,7 @@ export default function RosterPage() {
     releasePlayer, placeOnIR, activateFromIR,
     reorderDepthChart, restructureContract,
     solicitTradingBlockProposals, createPlayer,
+    autoCutToRosterLimit,
     phase, week, seasonHistory, leagueSettings, resigningPlayers,
   } = useGameStore();
   const godMode = leagueSettings?.godMode ?? false;
@@ -346,8 +347,20 @@ export default function RosterPage() {
                   ))}
               </select>
             </div>
-            <div className="flex items-center gap-4 text-sm text-[var(--text-sec)] mt-1">
-              <span>{roster.length} players</span>
+            <div className="flex items-center gap-4 text-sm text-[var(--text-sec)] mt-1 flex-wrap">
+              <span className={roster.length > 53 ? 'text-red-600 font-bold' : ''}>{roster.length} players</span>
+              {activeTeamId === userTeamId && roster.length > 53 && (leagueSettings?.rosterLimitEnabled !== false) && (
+                <button
+                  onClick={() => {
+                    if (window.confirm(`Auto-cut to 53? This will release the ${roster.length - 53} lowest-OVR players on your roster.`)) {
+                      autoCutToRosterLimit(userTeamId);
+                    }
+                  }}
+                  className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 px-2 py-0.5 rounded border border-red-300 bg-red-50"
+                >
+                  ✂️ Cut to 53
+                </button>
+              )}
               {godMode && activeTeamId === userTeamId && (
                 <button
                   onClick={() => setShowCreatePlayer(true)}

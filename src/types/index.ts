@@ -681,6 +681,11 @@ export interface LeagueSettings {
   godMode: boolean;
   /** Permanently set once God Mode is enabled — disables achievements */
   godModeUsed: boolean;
+  /** Roster management depth (Apr 11 2026) */
+  rosterLimitEnabled: boolean;       // default true — enforces 53-man active
+  practiceSquadEnabled: boolean;     // default false — adds PS slots and logic (Phase 2)
+  irEnabled: boolean;                // default false — IR designated-for-return rules (Phase 2)
+  practiceSquadSize: number;         // default 16 (only meaningful if practiceSquadEnabled)
 }
 
 export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
@@ -699,6 +704,10 @@ export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
   aiCommentary: false,
   godMode: false,
   godModeUsed: false,
+  rosterLimitEnabled: true,
+  practiceSquadEnabled: false,
+  irEnabled: false,
+  practiceSquadSize: 16,
 };
 
 export interface LeagueState {

@@ -88,6 +88,10 @@ interface GameStore extends LeagueState {
   signFreeAgent: (playerId: string, salary: number, years: number) => boolean;
   aiSignFreeAgents: () => void;
   releasePlayer: (playerId: string) => void;
+  /** Cut all teams (or one team if id supplied) down to the 53-man roster
+   *  limit by releasing the lowest-OVR players. No-op if rosterLimitEnabled
+   *  is false. */
+  autoCutToRosterLimit: (teamId?: string) => void;
   restructureContract: (playerId: string, conversionAmount: number, voidYearsToAdd: number) => boolean;
   extendPlayer: (playerId: string, salary: number, years: number) => boolean;
   placeOnIR: (playerId: string) => void;
@@ -4636,11 +4640,12 @@ export const useGameStore = create<GameStore>()(
 
         // Score AI teams by need — check roster needs AND upgrade opportunities
         const teamNeedScores: { teamId: string; score: number; needPositions: Position[]; wantPositions: Position[] }[] = [];
+        const rosterLimitEnabled = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).rosterLimitEnabled !== false;
+        const rosterCap = rosterLimitEnabled ? 53 : 56;
         for (const t of currentTeams) {
           if (t.id === state.userTeamId) continue;
           const rosterPlayers = currentPlayers.filter(p => p.teamId === t.id && !p.retired);
-          // Allow signing up to 56 (cuts happen later) — don't block teams at 53
-          if (rosterPlayers.length >= 56) continue;
+          if (rosterPlayers.length >= rosterCap) continue;
           const capSpace = t.salaryCap - t.totalPayroll;
           if (capSpace < LEAGUE_MINIMUM_SALARY) continue; // Can't afford anyone
           const needPositions: Position[] = [];
@@ -4770,10 +4775,12 @@ export const useGameStore = create<GameStore>()(
             4 + Math.floor(Math.random() * 5);
 
           const teamNeedScores: { teamId: string; score: number; needPositions: Position[]; wantPositions: Position[] }[] = [];
+          const rosterLimitEnabled2 = (initialState.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).rosterLimitEnabled !== false;
+          const rosterCap2 = rosterLimitEnabled2 ? 53 : 56;
           for (const t of currentTeams) {
             if (t.id === initialState.userTeamId) continue;
             const rosterPlayers = currentPlayers.filter(p => p.teamId === t.id && !p.retired);
-            if (rosterPlayers.length >= 56) continue;
+            if (rosterPlayers.length >= rosterCap2) continue;
             const capSpace = t.salaryCap - t.totalPayroll;
             if (capSpace < LEAGUE_MINIMUM_SALARY) continue;
             const needPositions: Position[] = [];
@@ -4874,6 +4881,15 @@ export const useGameStore = create<GameStore>()(
         // Allow minimum salary signings even when over cap
         if (!isMinimumSalary && userTeam && userTeam.totalPayroll + salary > userTeam.salaryCap) {
           return false;
+        }
+        // 53-man roster limit (when enabled — default true)
+        const rosterLimitOn = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).rosterLimitEnabled !== false;
+        if (rosterLimitOn && userTeam) {
+          const userRosterCount = state.players.filter(p => p.teamId === state.userTeamId && !p.retired).length;
+          if (userRosterCount >= 53) {
+            console.warn('[signFreeAgent] Rejected — user team is at 53-man limit. Cut a player first.');
+            return false;
+          }
         }
 
         const player = state.players.find(p => p.id === playerId);
@@ -5087,6 +5103,67 @@ export const useGameStore = create<GameStore>()(
           teams: finalRelTeams,
           freeAgents: [...state.freeAgents, playerId],
           newsItems: [...state.newsItems, releaseNews],
+        });
+      },
+
+      autoCutToRosterLimit: (teamId?: string) => {
+        const state = get();
+        const rosterLimitOn = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).rosterLimitEnabled !== false;
+        if (!rosterLimitOn) return;
+        const ROSTER_CAP = 53;
+
+        const targetTeams = teamId ? state.teams.filter(t => t.id === teamId) : state.teams;
+        const cutsByTeam = new Map<string, string[]>();
+
+        for (const t of targetTeams) {
+          const teamPlayers = state.players.filter(p => p.teamId === t.id && !p.retired);
+          if (teamPlayers.length <= ROSTER_CAP) continue;
+          const sorted = [...teamPlayers].sort((a, b) => a.ratings.overall - b.ratings.overall);
+          const cuts = sorted.slice(0, teamPlayers.length - ROSTER_CAP).map(p => p.id);
+          cutsByTeam.set(t.id, cuts);
+        }
+        if (cutsByTeam.size === 0) return;
+
+        const allCutIds = new Set<string>();
+        for (const ids of cutsByTeam.values()) ids.forEach(id => allCutIds.add(id));
+
+        const updatedPlayers = state.players.map(p => {
+          if (!allCutIds.has(p.id)) return p;
+          return {
+            ...p,
+            teamId: null,
+            onIR: false,
+            contract: {
+              salary: p.contract.salary,
+              yearsLeft: p.contract.yearsLeft,
+              guaranteed: p.contract.guaranteed,
+              totalYears: p.contract.totalYears,
+            },
+          };
+        });
+
+        const updatedTeams = state.teams.map(t => {
+          const cuts = cutsByTeam.get(t.id);
+          if (!cuts || cuts.length === 0) return t;
+          const cutSet = new Set(cuts);
+          const cutPlayers = state.players.filter(p => cutSet.has(p.id));
+          const salaryFreed = cutPlayers.reduce((s, p) => s + (p.contract.salary ?? 0), 0);
+          const chart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
+            acc[pos] = (t.depthChart[pos] ?? []).filter(id => !cutSet.has(id));
+            return acc;
+          }, {} as Record<Position, string[]>);
+          return {
+            ...t,
+            roster: t.roster.filter(id => !cutSet.has(id)),
+            totalPayroll: Math.max(0, t.totalPayroll - salaryFreed),
+            depthChart: chart,
+          };
+        });
+
+        set({
+          players: updatedPlayers,
+          teams: updatedTeams,
+          freeAgents: [...state.freeAgents, ...allCutIds],
         });
       },
 
@@ -7368,6 +7445,11 @@ export const useGameStore = create<GameStore>()(
             })] });
           }
         }
+
+        // Auto-cut every team to the 53-man limit if enabled. Runs after all
+        // FA/draft signings have settled so AI rosters that ballooned over the
+        // cap during the offseason get trimmed before Week 1.
+        get().autoCutToRosterLimit();
       },
 
       updateLeagueSettings: (updates: Partial<LeagueSettings>) => {
