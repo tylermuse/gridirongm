@@ -5118,9 +5118,23 @@ export const useGameStore = create<GameStore>()(
         for (const t of targetTeams) {
           const teamPlayers = state.players.filter(p => p.teamId === t.id && !p.retired);
           if (teamPlayers.length <= ROSTER_CAP) continue;
+          // Sort by OVR ascending but PROTECT position minimums — never cut a
+          // player if their position would drop below ROSTER_LIMITS.min.
+          // Without this, backup RBs get cut and RB1 ends up with 100% of
+          // carries, producing 2k+ rushing yard seasons.
+          const posCount: Record<string, number> = {};
+          for (const p of teamPlayers) posCount[p.position] = (posCount[p.position] ?? 0) + 1;
           const sorted = [...teamPlayers].sort((a, b) => a.ratings.overall - b.ratings.overall);
-          const cuts = sorted.slice(0, teamPlayers.length - ROSTER_CAP).map(p => p.id);
-          cutsByTeam.set(t.id, cuts);
+          const cuts: string[] = [];
+          const needToCut = teamPlayers.length - ROSTER_CAP;
+          for (const p of sorted) {
+            if (cuts.length >= needToCut) break;
+            const posMin = ROSTER_LIMITS[p.position]?.min ?? 1;
+            if ((posCount[p.position] ?? 0) <= posMin) continue; // protect position minimum
+            cuts.push(p.id);
+            posCount[p.position] = (posCount[p.position] ?? 1) - 1;
+          }
+          if (cuts.length > 0) cutsByTeam.set(t.id, cuts);
         }
         if (cutsByTeam.size === 0) return;
 

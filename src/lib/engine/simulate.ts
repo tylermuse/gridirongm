@@ -204,9 +204,9 @@ function simulatePlay(
       else if (gamePlan.redZoneStrategy === 'pass') passChance = clamp(passChance + 0.20, 0.3, 0.95);
     }
   } else {
-    passChance = down >= 3 && yardsToGo > 5 ? 0.80 :
-                 down >= 3 ? 0.62 :
-                 down === 1 ? 0.54 : 0.58;
+    passChance = down >= 3 && yardsToGo > 5 ? 0.82 :
+                 down >= 3 ? 0.64 :
+                 down === 1 ? 0.56 : 0.60;
   }
 
   // ── QB designed run check ──
