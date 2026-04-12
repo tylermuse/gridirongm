@@ -245,7 +245,8 @@ function simulatePlay(
       };
     }
 
-    if (fieldPosition >= 95 && Math.random() < 0.35) yards = 100 - fieldPosition;
+    if (fieldPosition >= 90 && fieldPosition < 95 && Math.random() < 0.25) yards = 100 - fieldPosition;
+    if (fieldPosition >= 95 && Math.random() < 0.50) yards = 100 - fieldPosition;
     if (fieldPosition >= 90 && yards > 0) yards = Math.max(yards, Math.round(1 + Math.random() * 3));
 
     const newPos = fieldPosition + yards;
@@ -285,7 +286,8 @@ function simulatePlay(
         yards += 6 + Math.floor(Math.random() * 10);
       }
       if (Math.random() < 0.20) yards = -(1 + Math.floor(Math.random() * 3));
-      if (fieldPosition >= 95 && Math.random() < 0.35) yards = 100 - fieldPosition;
+      if (fieldPosition >= 90 && fieldPosition < 95 && Math.random() < 0.25) yards = 100 - fieldPosition;
+      if (fieldPosition >= 95 && Math.random() < 0.50) yards = 100 - fieldPosition;
 
       const newPos = fieldPosition + yards;
       const td = newPos >= 100;
@@ -407,10 +409,14 @@ function simulatePlay(
 
       // Red zone TD boost: inside the 20, passes are shorter and more likely to reach the end zone
       if (fieldPosition >= 80) {
-        yards = Math.max(yards, Math.round(3 + Math.random() * 8)); // floor at 3-11 in red zone
+        yards = Math.max(yards, Math.round(4 + Math.random() * 10)); // floor at 4-14 in red zone
       }
-      // Goal line boost: inside the 5, moderate chance of reaching the end zone
-      if (fieldPosition >= 95 && Math.random() < 0.42) {
+      // Inside the 10: strong TD chance on completions
+      if (fieldPosition >= 90 && fieldPosition < 95 && Math.random() < 0.30) {
+        yards = 100 - fieldPosition;
+      }
+      // Goal line boost: inside the 5, high chance of reaching the end zone
+      if (fieldPosition >= 95 && Math.random() < 0.55) {
         yards = 100 - fieldPosition; // score!
       }
 
@@ -491,8 +497,12 @@ function simulatePlay(
       };
     }
 
+    // Inside the 10: decent TD chance on positive runs
+    if (fieldPosition >= 90 && fieldPosition < 95 && yards > 0 && Math.random() < 0.25) {
+      yards = 100 - fieldPosition;
+    }
     // Goal line rush boost: inside the 5, rushing TDs are common
-    if (fieldPosition >= 95 && Math.random() < 0.45) {
+    if (fieldPosition >= 95 && Math.random() < 0.55) {
       yards = 100 - fieldPosition;
     }
     // Inside the 10: short yardage rushing is more effective
