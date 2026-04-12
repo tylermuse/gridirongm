@@ -220,15 +220,15 @@ function simulatePlay(
       ? [...dls, ...lbs].reduce((s, p) => s + p.ratings.tackling + p.ratings.strength * 0.5, 0) / [...dls, ...lbs].length
       : 50;
     const rushSkill = qb.ratings.speed * 0.5 + qb.ratings.agility * 0.3 + qb.ratings.carrying * 0.2;
-    const olBonus = (olPower - 60) / 100 * 1.3;
-    const rushRedZoneBonus = fieldPosition >= 80 ? 0.4 : 0;
+    const olBonus = (olPower - 60) / 100 * 2.2;
+    const rushRedZoneBonus = fieldPosition >= 80 ? 0.5 : 0;
     let yards = Math.round(
-      (rushSkill - defRushPower) / 50 + 1.8 + (Math.random() * 2.0 - 0.5) + olBonus + rushRedZoneBonus,
+      (rushSkill - defRushPower) / 42 + 2.8 + (Math.random() * 2.4 - 0.7) + olBonus + rushRedZoneBonus,
     );
-    if (Math.random() < 0.005 + (qb.ratings.speed / 100) * 0.010) {
-      yards += 6 + Math.floor(Math.random() * 8);
+    if (Math.random() < 0.007 + (qb.ratings.speed / 100) * 0.012) {
+      yards += 7 + Math.floor(Math.random() * 10);
     }
-    if (Math.random() < 0.18) yards = -(1 + Math.floor(Math.random() * 3));
+    if (Math.random() < 0.15) yards = -(1 + Math.floor(Math.random() * 3));
 
     const fumbleChance = clamp(0.018 - (qb.ratings.carrying / 100) * 0.006 + rivalryIntensity / 5000, 0.005, 0.03);
     if (Math.random() < fumbleChance) {
@@ -462,21 +462,24 @@ function simulatePlay(
       ? [...dls, ...lbs].reduce((s, p) => s + p.ratings.tackling + p.ratings.strength * 0.5, 0) / [...dls, ...lbs].length
       : 50;
     const rushSkill = rusher.ratings.carrying * 0.5 + rusher.ratings.speed * 0.3 + rusher.ratings.agility * 0.2;
-    const olBonus = (olPower - 60) / 100 * 1.3;
+    const olBonus = (olPower - 60) / 100 * 2.2;
 
-    // Tuned for NFL realism: avg ~3.8-4.3 yds/carry, top RB ~1,100-1,400 yds
-    const rushRedZoneBonus = fieldPosition >= 80 ? 0.4 : 0;
+    // Tuned for NFL realism: avg ~4.0-4.3 yds/carry, top RB ~1,200-1,400 yds
+    // Compressed rushRatingMult (0.9-1.17) vs original (0.7-1.4) to keep
+    // the gap between elite and average backs reasonable.
+    const rushRatingMult = 0.9 + (rusher.ratings.carrying / 100) * 0.3;
+    const rushRedZoneBonus = fieldPosition >= 80 ? 0.5 : 0;
     let yards = Math.round(
-      (rushSkill - defRushPower) / 55 + 1.6 + (Math.random() * 2.0 - 0.5) + olBonus + rushRedZoneBonus,
+      ((rushSkill - defRushPower) / 42 + 3.0 + (Math.random() * 2.4 - 0.7) + olBonus + rushRedZoneBonus) * rushRatingMult,
     );
 
-    // Big rush chance (~1%) — breakaway runs
-    if (Math.random() < 0.005 + (rusher.ratings.speed / 100) * 0.008) {
-      yards += 6 + Math.floor(Math.random() * 8);
+    // Big rush chance (~1.5%) — breakaway runs
+    if (Math.random() < 0.007 + (rusher.ratings.speed / 100) * 0.010) {
+      yards += 7 + Math.floor(Math.random() * 10);
     }
 
-    // Negative play chance (~20% of rushes go for loss — NFL is ~20-25%)
-    const isNegative = Math.random() < 0.20;
+    // Negative play chance (~17% of rushes go for loss)
+    const isNegative = Math.random() < 0.17;
     if (isNegative) {
       yards = -(1 + Math.floor(Math.random() * 4));
     }
