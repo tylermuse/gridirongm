@@ -204,9 +204,9 @@ function simulatePlay(
       else if (gamePlan.redZoneStrategy === 'pass') passChance = clamp(passChance + 0.20, 0.3, 0.95);
     }
   } else {
-    passChance = down >= 3 && yardsToGo > 5 ? 0.78 :
-                 down >= 3 ? 0.60 :
-                 down === 1 ? 0.52 : 0.57;
+    passChance = down >= 3 && yardsToGo > 5 ? 0.80 :
+                 down >= 3 ? 0.62 :
+                 down === 1 ? 0.54 : 0.58;
   }
 
   // ── QB designed run check ──
@@ -547,10 +547,10 @@ function simulateDrive(
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
 
-  // Cap at 12 plays — NFL drives average ~5.5 plays, sustained TD drives
-  // routinely hit 8-12. Capping at 10 was forcing too many drives to stall
-  // in the red zone and settle for FGs instead of finishing with TDs.
-  for (let playNum = 0; playNum < 12; playNum++) {
+  // Cap at 10 plays — NFL drives average ~5.5 plays, sustained drives ~8-10.
+  // Combined with the 25-37 starting field position, drives that sustain to
+  // play 10 reach the red zone and can score via the goal-line boost.
+  for (let playNum = 0; playNum < 10; playNum++) {
     const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition, rivalryIntensity, gamePlan);
     plays.push(play);
 
