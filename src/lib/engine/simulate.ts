@@ -220,7 +220,7 @@ function simulatePlay(
       ? [...dls, ...lbs].reduce((s, p) => s + p.ratings.tackling + p.ratings.strength * 0.5, 0) / [...dls, ...lbs].length
       : 50;
     const rushSkill = qb.ratings.speed * 0.5 + qb.ratings.agility * 0.3 + qb.ratings.carrying * 0.2;
-    const olBonus = (olPower - 60) / 100 * 2.6;
+    const olBonus = (olPower - 60) / 100 * 2.0;
     const rushRedZoneBonus = fieldPosition >= 80 ? 0.6 : 0;
     let yards = Math.round(
       (rushSkill - defRushPower) / 40 + 2.2 + (Math.random() * 2.5 - 0.75) + olBonus + rushRedZoneBonus,
@@ -284,7 +284,7 @@ function simulatePlay(
       if (Math.random() < 0.01 + (qb.ratings.speed / 100) * 0.02) {
         yards += 6 + Math.floor(Math.random() * 10);
       }
-      if (Math.random() < 0.15) yards = -(1 + Math.floor(Math.random() * 3));
+      if (Math.random() < 0.20) yards = -(1 + Math.floor(Math.random() * 3));
       if (fieldPosition >= 95 && Math.random() < 0.35) yards = 100 - fieldPosition;
 
       const newPos = fieldPosition + yards;
@@ -456,7 +456,7 @@ function simulatePlay(
       ? [...dls, ...lbs].reduce((s, p) => s + p.ratings.tackling + p.ratings.strength * 0.5, 0) / [...dls, ...lbs].length
       : 50;
     const rushSkill = rusher.ratings.carrying * 0.5 + rusher.ratings.speed * 0.3 + rusher.ratings.agility * 0.2;
-    const olBonus = (olPower - 60) / 100 * 2.6; // 1.3x OL bonus multiplier (was 2)
+    const olBonus = (olPower - 60) / 100 * 2.0; // 1.3x OL bonus multiplier (was 2)
 
     // Average: ~4.3 yards per carry, top RB ~1,000-1,400 yds/season
     // Rating multiplier: elite rushers produce more, bad rushers less
@@ -472,8 +472,8 @@ function simulatePlay(
       yards += 8 + Math.floor(Math.random() * 10);
     }
 
-    // Negative play chance (~15% of rushes go for loss)
-    const isNegative = Math.random() < 0.15;
+    // Negative play chance (~20% of rushes go for loss — NFL is ~20-25%)
+    const isNegative = Math.random() < 0.20;
     if (isNegative) {
       yards = -(1 + Math.floor(Math.random() * 4));
     }
