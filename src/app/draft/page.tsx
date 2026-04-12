@@ -22,6 +22,7 @@ import { generateScoutingReport } from '@/lib/engine/scoutingReport';
 import { FilmReviewContent } from '@/components/draft/FilmReviewContent';
 import { InPersonEvalContent } from '@/components/draft/InPersonEvalContent';
 import { FullEvalContent } from '@/components/draft/FullEvalContent';
+import { TradePickModal } from '@/components/draft/TradePickModal';
 
 function ratingColor(val: number): string {
   if (val >= 80) return 'text-green-600';
@@ -158,6 +159,7 @@ function OnTheClockSection({
   onSimAll,
   onDraft,
   onPlayerClick,
+  onTradePick,
 }: {
   currentTeam: Team | undefined;
   currentRound: number;
@@ -181,6 +183,7 @@ function OnTheClockSection({
   onSimAll?: () => void;
   onDraft?: (playerId: string) => void;
   onPlayerClick?: (playerId: string) => void;
+  onTradePick?: () => void;
 }) {
   const canSimulate = !draftComplete;
 
@@ -265,6 +268,12 @@ function OnTheClockSection({
                 <span className="hidden sm:inline">Auto-Draft All</span>
                 <span className="sm:hidden">Auto All</span>
               </Button>
+              {canSimulate && (
+                <Button onClick={() => onTradePick?.()} size="sm" className="flex-1 min-w-[80px] bg-indigo-600 hover:bg-indigo-700 text-white">
+                  <span className="hidden sm:inline">Trade Pick</span>
+                  <span className="sm:hidden">Trade</span>
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -939,6 +948,7 @@ export default function DraftPage() {
   const [expandedProspectId, setExpandedProspectId] = useState<string | null>(null);
   const [scoutedOnly, setScoutedOnly] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showTradeModal, setShowTradeModal] = useState(false);
 
   if (phase !== 'draft') {
     return (
@@ -1272,6 +1282,7 @@ export default function DraftPage() {
           }}
           onDraft={(playerId) => draftPlayer(playerId)}
           onPlayerClick={(playerId) => setExpandedProspectId(playerId)}
+          onTradePick={() => setShowTradeModal(true)}
         />
 
         {/* Mock Draft button + dropdown */}
@@ -1851,6 +1862,15 @@ export default function DraftPage() {
         </div>
       </div>
 
+      {showTradeModal && (
+        <TradePickModal
+          onClose={() => setShowTradeModal(false)}
+          currentPickTeamId={currentPickTeamId}
+          currentOverallPick={currentOverallPick}
+          currentRound={currentRound}
+          currentPickInRound={currentPickInRound}
+        />
+      )}
     </GameShell>
   );
 }

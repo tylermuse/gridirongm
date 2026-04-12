@@ -760,7 +760,7 @@ function generateDraftClassPreview(season: number): { season: number; groups: { 
 
 /** Pick value based on estimated overall pick number.
  *  Uses exponential curve: pick #1 ≈ 3000, #10 ≈ 2200, #20 ≈ 1600, #32 ≈ 1100, #64 ≈ 400. */
-function pickTradeValue(pick: DraftPick, teams?: Team[]): number {
+export function pickTradeValue(pick: DraftPick, teams?: Team[]): number {
   if (teams && teams.length > 0) {
     const overallPick = estimateOverallPick(pick.round, teams, pick.originalTeamId);
     return draftPickPointValue(overallPick);
