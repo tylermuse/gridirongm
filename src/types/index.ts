@@ -3,6 +3,19 @@ export type Position =
   | 'DL' | 'LB' | 'CB' | 'S'
   | 'K' | 'P';
 
+/** Detailed position. Lives alongside the broad Position type so existing
+ *  roster/cap/sim logic keeps working unchanged, but lets the UI and (later)
+ *  scheme/depth-chart logic talk in terms of OT/OG/C, EDGE/DT, FS/SS, etc. */
+export type SubPosition =
+  | 'QB'
+  | 'RB' | 'FB'
+  | 'WR' | 'TE'
+  | 'OT' | 'OG' | 'C'
+  | 'EDGE' | 'DT'
+  | 'MLB' | 'OLB'
+  | 'CB' | 'FS' | 'SS'
+  | 'K' | 'P';
+
 /** BS Mode personality traits */
 export type PersonalityTrait = 'irrational_confidence' | 'steady' | 'pressure_fold' | 'clutch';
 export type QBTier = 'Elite' | 'Franchise' | 'Bridge' | 'Game Manager' | 'Backup' | 'Camp Arm';
@@ -13,22 +26,82 @@ export const POSITIONS: Position[] = [
   'K', 'P',
 ];
 
+/** Derive a player's detailed sub-position from their broad Position +
+ *  ratings. Pure function — used both at generation time (to seed the
+ *  Player.subPosition field) and as a backfill for older saves. */
+export function deriveSubPosition(player: {
+  position: Position;
+  ratings: {
+    passRush: number; speed: number; tackling: number; coverage: number;
+    strength: number; agility: number; blocking: number; carrying: number;
+  };
+}): SubPosition {
+  if (player.position === 'QB') return 'QB';
+  if (player.position === 'WR') return 'WR';
+  if (player.position === 'TE') return 'TE';
+  if (player.position === 'CB') return 'CB';
+  if (player.position === 'K') return 'K';
+  if (player.position === 'P') return 'P';
+
+  // RB vs FB: speed+agility (RB) vs strength+blocking (FB). FBs are rare.
+  if (player.position === 'RB') {
+    const rbScore = player.ratings.speed + player.ratings.agility;
+    const fbScore = player.ratings.strength + player.ratings.blocking;
+    return fbScore > rbScore * 1.05 ? 'FB' : 'RB';
+  }
+
+  // OL: OT/OG/C
+  // OT: agility+speed dominant (pass protectors on the edge)
+  // OG: strength+blocking dominant (interior run blockers)
+  // C: balanced blocking — small carve-out for the smartest interior linemen
+  if (player.position === 'OL') {
+    const tackleScore = player.ratings.agility + player.ratings.speed;
+    const guardScore = player.ratings.strength + player.ratings.blocking;
+    const balancedScore = (player.ratings.blocking + player.ratings.tackling) / 2;
+    if (
+      balancedScore > tackleScore * 0.55
+      && balancedScore > guardScore * 0.55
+      && Math.random() < 0.18
+    ) {
+      return 'C';
+    }
+    if (tackleScore > guardScore * 0.95) return 'OT';
+    return 'OG';
+  }
+
+  // DL: EDGE vs DT
+  if (player.position === 'DL') {
+    const edgeScore = player.ratings.passRush + player.ratings.speed;
+    const interiorScore = player.ratings.strength * 2;
+    return edgeScore > interiorScore ? 'EDGE' : 'DT';
+  }
+
+  // LB: OLB (edge/cover) vs MLB (inside/run defense)
+  if (player.position === 'LB') {
+    const edgeScore = player.ratings.passRush + player.ratings.speed;
+    const insideScore = player.ratings.tackling + player.ratings.coverage;
+    return edgeScore > insideScore ? 'OLB' : 'MLB';
+  }
+
+  // S: FS (cover/speed) vs SS (run support/strength)
+  if (player.position === 'S') {
+    const fsScore = player.ratings.coverage + player.ratings.speed;
+    const ssScore = player.ratings.tackling + player.ratings.strength;
+    return fsScore > ssScore ? 'FS' : 'SS';
+  }
+
+  return player.position as SubPosition;
+}
+
 /**
- * Display sub-position for LB and DL based on ratings.
- * Doesn't change the core Position type — just a UI label.
- * OLB: speed/pass-rush focused (edge rushers)
- * ILB: tackling/coverage focused (off-ball linebackers)
- * EDGE: DL with high pass rush + speed (defensive ends)
- * DT: DL with high strength (interior defensive line)
+ * Legacy display helper — kept for callers that read the old string-typed
+ * sub-position label. New code should use Player.subPosition (typed) directly,
+ * which is set at generation time and backfilled on load.
  */
 export function getSubPosition(player: { position: Position; ratings: { passRush: number; speed: number; tackling: number; coverage: number; strength: number; agility: number; blocking: number } }): string {
   if (player.position === 'OL') {
-    // OT (Tackle): agility + speed dominant — pass protectors on the edge
-    // OG (Guard): strength + blocking dominant — interior run blockers
-    // C (Center): balanced blocking + awareness-like (use agility as proxy)
     const tackleScore = player.ratings.agility + player.ratings.speed;
     const guardScore = player.ratings.strength + player.ratings.blocking;
-    // Top ~40% agility/speed → Tackle, bottom ~60% → Guard/Center
     if (tackleScore > guardScore * 0.95) return 'OT';
     return 'OG';
   }
@@ -178,6 +251,9 @@ export interface Player {
   firstName: string;
   lastName: string;
   position: Position;
+  /** Detailed sub-position derived from ratings (Phase 1 — Apr 11 2026).
+   *  Optional during the rollout to allow lazy backfill on existing saves. */
+  subPosition?: SubPosition;
   age: number;
   experience: number;
   ratings: PlayerRatings;

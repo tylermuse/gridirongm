@@ -10,7 +10,7 @@ import type {
   HoldoutEntry, TradeRumor, Rivalry, RivalryEvent,
   ExpansionTeamConfig, SocialPost,
 } from '@/types';
-import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
+import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { NFL_2026_FIRST_ROUND, isNfl2026Roster, type MockDraftPick } from '@/lib/data/nfl2026Draft';
@@ -32,7 +32,7 @@ import { buildGmSyncPayload, syncGmStats } from './gmSync';
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 
-const SAVE_VERSION = 19;
+const SAVE_VERSION = 20;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
@@ -8065,6 +8065,17 @@ export const useGameStore = create<GameStore>()(
                     ownerTeamId: team.id,
                   });
                 }
+              }
+            }
+          }
+        }
+        if (version < 20) {
+          // Backfill detailed sub-position on every player (Phase 1).
+          const players20 = (state as any).players as Array<Record<string, unknown>> | undefined;
+          if (Array.isArray(players20)) {
+            for (const p of players20) {
+              if (!p.subPosition) {
+                p.subPosition = deriveSubPosition(p as Parameters<typeof deriveSubPosition>[0]);
               }
             }
           }

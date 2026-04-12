@@ -108,7 +108,12 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
             <div className="flex flex-col items-center gap-2 shrink-0">
               <PlayerAvatar player={player} size="lg" teamColor={team?.primaryColor ?? '#374151'} />
               {team && <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="lg" />}
-              <div className="text-xs font-black text-[var(--text-sec)]">{player.position}</div>
+              <div className="text-xs font-black text-[var(--text-sec)]">
+                {player.position}
+                {player.subPosition && player.subPosition !== player.position && (
+                  <span className="ml-1 text-[10px] font-bold text-[var(--text-sec)]/70">({player.subPosition})</span>
+                )}
+              </div>
             </div>
 
             <div className="flex-1">

@@ -2,7 +2,7 @@ function uuid(): string {
   return crypto.randomUUID();
 }
 import type { Player, PlayerRatings, Position } from '@/types';
-import { emptyStats } from '@/types';
+import { emptyStats, deriveSubPosition } from '@/types';
 import { randomName } from '@/lib/data/names';
 import { estimateSalary } from './salary';
 
@@ -225,7 +225,7 @@ export function generatePlayer(
   else if (personalityRoll < 0.30) personality = 'pressure_fold';
   else personality = 'steady';
 
-  return {
+  const player: Player = {
     id: uuid(),
     firstName,
     lastName,
@@ -262,6 +262,8 @@ export function generatePlayer(
     seasonLog: [],
     combineStats: generateCombineStats(position, ratings, Math.floor(Math.random() * 10000)),
   };
+  player.subPosition = deriveSubPosition(player);
+  return player;
 }
 
 /** Generates a full roster of ~53 players for a team. */

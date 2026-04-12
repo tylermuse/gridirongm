@@ -882,7 +882,12 @@ export default function RosterPage() {
                             <span className="hidden sm:inline">{p.firstName} {p.lastName}</span>
                           </button>
                         </td>
-                        <td className="py-2.5 text-center text-xs font-bold text-[var(--text-sec)]">{p.position}</td>
+                        <td className="py-2.5 text-center text-xs font-bold text-[var(--text-sec)]">
+                          {p.position}
+                          {p.subPosition && p.subPosition !== p.position && (
+                            <span className="ml-1 text-[10px] text-[var(--text-sec)]/70">({p.subPosition})</span>
+                          )}
+                        </td>
                         <td className={`py-2.5 text-center font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
                         <td className="py-2.5 text-center">{p.injury?.type}</td>
                         <td className="py-2.5 text-center">
