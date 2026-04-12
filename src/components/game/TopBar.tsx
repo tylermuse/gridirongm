@@ -341,12 +341,16 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                 )}
                 {faDay >= 30 ? (
                   <Button onClick={async () => {
-                    const store = useGameStore.getState();
-                    if (store.phase !== 'draft') {
-                      store.advanceToDraft();
+                    try {
+                      const store = useGameStore.getState();
+                      if (store.phase !== 'draft') {
+                        store.advanceToDraft();
+                      }
+                      await flushToStorage();
+                    } catch (err) {
+                      console.error('[AdvanceToDraft] error:', err);
                     }
-                    await flushToStorage();
-                    router.push('/draft');
+                    window.location.href = '/draft';
                   }} variant="secondary" size="sm">
                     <span className="hidden sm:inline">Advance to Draft</span>
                     <span className="sm:hidden">Draft</span>
@@ -356,10 +360,14 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                   <Button
                     onClick={async () => {
                       if (!window.confirm('End free agency early? AI teams will stop making moves and you\'ll advance to the draft.')) return;
-                      const store = useGameStore.getState();
-                      store.advanceToDraft();
-                      await flushToStorage();
-                      router.push('/draft');
+                      try {
+                        const store = useGameStore.getState();
+                        store.advanceToDraft();
+                        await flushToStorage();
+                      } catch (err) {
+                        console.error('[EndFAEarly] advanceToDraft error:', err);
+                      }
+                      window.location.href = '/draft';
                     }}
                     variant="secondary"
                     size="sm"
