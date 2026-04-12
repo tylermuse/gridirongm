@@ -140,6 +140,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('[signOut] supabase.auth.signOut failed:', err);
     }
+    // Force-clear Supabase auth tokens from localStorage
+    try {
+      const keys = Object.keys(localStorage);
+      for (const key of keys) {
+        if (key.startsWith('sb-') || key.includes('supabase')) {
+          localStorage.removeItem(key);
+        }
+      }
+    } catch { /* ignore — localStorage might be restricted */ }
     setUser(null);
     setTier('free');
     setIsAdmin(false);

@@ -688,7 +688,7 @@ export default function RosterPage() {
                           })()}
                         </td>
 
-                        {/* Mood */}
+                        {/* Mood — click to open player modal with mood breakdown */}
                         <td className="py-2 px-2 text-center">
                           {(() => {
                             const mood = p.mood ?? 70;
@@ -697,12 +697,13 @@ export default function RosterPage() {
                             const depthIdx = getDepthIndex(p);
                             const reason = getMoodReason(p, viewingTeam, depthIdx);
                             return (
-                              <span
-                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded cursor-help ${color}`}
+                              <button
+                                onClick={() => setSelectedPlayerId(p.id)}
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded cursor-pointer hover:ring-1 hover:ring-current transition-all ${color}`}
                                 title={reason}
                               >
                                 {label}
-                              </span>
+                              </button>
                             );
                           })()}
                         </td>
