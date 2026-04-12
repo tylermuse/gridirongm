@@ -132,7 +132,7 @@ export default function RosterPage() {
   const {
     players, teams, userTeamId, season, champions,
     releasePlayer, placeOnIR, activateFromIR,
-    reorderDepthChart, restructureContract,
+    reorderDepthChart, restructureContract, extendPlayer,
     solicitTradingBlockProposals, createPlayer,
     autoCutToRosterLimit,
     phase, week, seasonHistory, leagueSettings, resigningPlayers,
@@ -150,6 +150,9 @@ export default function RosterPage() {
   const [restructurePlayer, setRestructurePlayer] = useState<string | null>(null);
   const [restructureAmount, setRestructureAmount] = useState(1);
   const [restructureVoidYears, setRestructureVoidYears] = useState(0);
+  const [extendPlayerId, setExtendPlayer] = useState<string | null>(null);
+  const [extendSalary, setExtendSalary] = useState(10);
+  const [extendYears, setExtendYears] = useState(3);
   const [viewingTeamId, setViewingTeamId] = useState<string | null>(null);
 
   // Whether we're in an offseason phase where restructuring makes sense
@@ -1031,6 +1034,25 @@ export default function RosterPage() {
                 </button>
               </>
             )}
+            {p.contract.yearsLeft >= 2 && !p.holdout && !p.onIR && p.lastRestructuredSeason !== season && (
+              <>
+                <div className="border-t border-[var(--border)] mx-3 my-0.5" />
+                <button
+                  onClick={() => {
+                    setExtendPlayer(p.id);
+                    setExtendSalary(Math.round(estimateSalary(p.ratings.overall, p.position, p.age, p.potential) * 10) / 10);
+                    setExtendYears(Math.min(5, Math.max(2, p.age >= 30 ? 2 : 4)));
+                    setActionMenu(null);
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-black/5 transition-colors text-green-600 font-medium"
+                >
+                  Extend Contract
+                  <span className="block text-[11px] text-[var(--text-sec)] font-normal mt-0.5">
+                    Lock in a new long-term deal
+                  </span>
+                </button>
+              </>
+            )}
             {isTradeOpen && (
               <>
                 <div className="border-t border-[var(--border)] mx-3 my-0.5" />
@@ -1221,6 +1243,100 @@ export default function RosterPage() {
                   }}
                 >
                   Confirm Restructure
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      {/* Extend Contract Modal */}
+      {extendPlayerId && (() => {
+        const p = roster.find(pl => pl.id === extendPlayerId);
+        if (!p) return null;
+        const userTeam = teams.find(t => t.id === userTeamId);
+        const capSpace = userTeam ? userTeam.salaryCap - userTeam.totalPayroll : 0;
+        const marketSalary = Math.round(estimateSalary(p.ratings.overall, p.position, p.age, p.potential) * 10) / 10;
+        const totalCost = Math.round(extendSalary * extendYears * 10) / 10;
+        const canAfford = extendSalary <= capSpace + p.contract.salary;
+
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setExtendPlayer(null)}>
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-2xl max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-[var(--border)]">
+                <h2 className="text-lg font-bold">Extend Contract</h2>
+                <p className="text-xs text-[var(--text-sec)] mt-0.5">
+                  {p.firstName} {p.lastName} · {p.position} · {p.ratings.overall} OVR
+                </p>
+              </div>
+              <div className="px-5 py-5 space-y-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[var(--text-sec)]">Current deal</span>
+                  <span className="font-bold">${p.contract.salary}M/yr · {p.contract.yearsLeft}yr left</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[var(--text-sec)]">Market value</span>
+                  <span className="font-bold">${marketSalary}M/yr</span>
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] block mb-1">
+                    Annual Salary
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={Math.max(1, Math.round(marketSalary * 0.7))}
+                      max={Math.round(marketSalary * 1.4)}
+                      step={0.5}
+                      value={extendSalary}
+                      onChange={e => setExtendSalary(parseFloat(e.target.value))}
+                      className="flex-1 accent-green-600"
+                    />
+                    <span className="text-sm font-bold tabular-nums w-16 text-right">${extendSalary}M</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] block mb-1">
+                    Years
+                  </label>
+                  <div className="flex gap-2">
+                    {[2, 3, 4, 5].map(yr => (
+                      <button
+                        key={yr}
+                        onClick={() => setExtendYears(yr)}
+                        className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${
+                          extendYears === yr ? 'bg-green-600 text-white' : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+                        }`}
+                      >
+                        {yr}yr
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-[var(--surface-2)] rounded-lg px-3 py-2 text-xs space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-sec)]">Total value</span>
+                    <span className="font-bold">${totalCost}M</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-sec)]">Cap space</span>
+                    <span className={canAfford ? 'text-green-600' : 'text-red-600'}>${Math.round(capSpace * 10) / 10}M</span>
+                  </div>
+                </div>
+              </div>
+              <div className="px-5 py-3 border-t border-[var(--border)] flex items-center justify-end gap-2">
+                <Button size="sm" variant="secondary" onClick={() => setExtendPlayer(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!canAfford}
+                  onClick={() => {
+                    const ok = extendPlayer(extendPlayerId, extendSalary, extendYears);
+                    if (ok) setExtendPlayer(null);
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  Confirm Extension
                 </Button>
               </div>
             </div>
