@@ -135,11 +135,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, [supabase, fetchSubscription]);
 
   const signOut = useCallback(async () => {
-    if (supabase) await supabase.auth.signOut();
+    try {
+      if (supabase) await supabase.auth.signOut();
+    } catch (err) {
+      console.error('[signOut] supabase.auth.signOut failed:', err);
+    }
     setUser(null);
     setTier('free');
     setIsAdmin(false);
-    // Redirect to homepage and force a full reload to clear all state
+    // Always redirect + full reload even if signOut threw (stale token edge case)
     window.location.href = '/';
   }, [supabase]);
 
