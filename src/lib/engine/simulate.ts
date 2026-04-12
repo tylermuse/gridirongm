@@ -407,10 +407,10 @@ function simulatePlay(
 
       // Red zone TD boost: inside the 20, passes are shorter and more likely to reach the end zone
       if (fieldPosition >= 80) {
-        yards = Math.max(yards, Math.round(2 + Math.random() * 6)); // floor at 2-8 in red zone
+        yards = Math.max(yards, Math.round(3 + Math.random() * 8)); // floor at 3-11 in red zone
       }
-      // Goal line boost: inside the 5, healthy chance of reaching the end zone
-      if (fieldPosition >= 95 && Math.random() < 0.42) {
+      // Goal line boost: inside the 5, high chance of reaching the end zone
+      if (fieldPosition >= 95 && Math.random() < 0.55) {
         yards = 100 - fieldPosition; // score!
       }
 
@@ -495,7 +495,7 @@ function simulatePlay(
     }
 
     // Goal line rush boost: inside the 5, rushing TDs are common
-    if (fieldPosition >= 95 && Math.random() < 0.45) {
+    if (fieldPosition >= 95 && Math.random() < 0.55) {
       yards = 100 - fieldPosition;
     }
     // Inside the 10: short yardage rushing is more effective
@@ -542,13 +542,15 @@ function simulateDrive(
   gamePlan?: GamePlan,
 ): DriveResult {
   const plays: PlayResult[] = [];
-  let fieldPosition = 20 + Math.floor(Math.random() * 12); // NFL avg start ~own 25
+  let fieldPosition = 25 + Math.floor(Math.random() * 12); // NFL avg start ~own 27-30
   let down = 1;
   let yardsToGo = 10;
   const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
 
-  // Cap at 10 plays — NFL drives average ~5.5 plays, sustained drives ~8-10.
-  for (let playNum = 0; playNum < 10; playNum++) {
+  // Cap at 12 plays — NFL drives average ~5.5 plays, sustained TD drives
+  // routinely hit 8-12. Capping at 10 was forcing too many drives to stall
+  // in the red zone and settle for FGs instead of finishing with TDs.
+  for (let playNum = 0; playNum < 12; playNum++) {
     const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition, rivalryIntensity, gamePlan);
     plays.push(play);
 
