@@ -260,7 +260,10 @@ export function createLiveCoachEngine(
     } else {
       state.fieldPos = clamp(newPos, 1, 99);
       state.yardsToGo -= finalYards;
-      advanceDown();
+      if (advanceDown() === 'turnover_on_downs') {
+        handleTurnoverOnDowns(events);
+        return;
+      }
       advanceClock(35);
     }
   }
@@ -278,7 +281,10 @@ export function createLiveCoachEngine(
       events.push(makeEvent('sack', `${qbName} is sacked for a loss of ${Math.abs(sackYards)}.`, sackYards, false));
       state.fieldPos = clamp(state.fieldPos + sackYards, 1, 99);
       state.yardsToGo -= sackYards;
-      advanceDown();
+      if (advanceDown() === 'turnover_on_downs') {
+        handleTurnoverOnDowns(events);
+        return;
+      }
       advanceClock(35);
       return;
     }
@@ -328,14 +334,20 @@ export function createLiveCoachEngine(
       } else {
         state.fieldPos = clamp(newPos, 1, 99);
         state.yardsToGo -= finalYards;
-        advanceDown();
+        if (advanceDown() === 'turnover_on_downs') {
+          handleTurnoverOnDowns(events);
+          return;
+        }
         advanceClock(28);
       }
     } else {
       const qbName = nameOrFallback(ok.qb, 'the QB');
       const recName = nameOrFallback(target, 'the receiver');
       events.push(makeEvent('pass_incomplete', `${qbName}'s pass to ${recName} falls incomplete.`, 0, false));
-      advanceDown();
+      if (advanceDown() === 'turnover_on_downs') {
+        handleTurnoverOnDowns(events);
+        return;
+      }
       advanceClock(6); // clock stops on incomplete
     }
   }
@@ -380,13 +392,25 @@ export function createLiveCoachEngine(
     advanceClock(15);
   }
 
-  function advanceDown() {
+  function advanceDown(): 'continue' | 'turnover_on_downs' {
     if (state.yardsToGo <= 0) {
       state.down = 1;
       state.yardsToGo = Math.min(10, 100 - state.fieldPos);
+      return 'continue';
     } else {
       state.down++;
+      if (state.down > 4) {
+        // Turnover on downs — flip possession at the current spot
+        return 'turnover_on_downs';
+      }
+      return 'continue';
     }
+  }
+
+  function handleTurnoverOnDowns(events: PlayEvent[]) {
+    const newFieldPos = Math.max(20, 100 - state.fieldPos);
+    events.push(makeEvent('run', 'Turnover on downs! The defense takes over.', 0, false));
+    switchPossession(newFieldPos);
   }
 
   // ── Main runOnePlay ──
