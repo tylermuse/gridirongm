@@ -948,7 +948,21 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         />
 
         <AnimatedField
-          event={currentEvent}
+          event={engineSnapshot ? {
+            id: -1,
+            type: 'run' as const,
+            description: '',
+            quarter: engineSnapshot.quarter,
+            timeStr: liveTime,
+            possession: engineSnapshot.possession,
+            fieldPos: engineSnapshot.fieldPos,
+            down: engineSnapshot.down,
+            yardsToGo: engineSnapshot.yardsToGo,
+            yardsGained: 0,
+            homeScore: engineSnapshot.homeScore,
+            awayScore: engineSnapshot.awayScore,
+            isScoring: false,
+          } : currentEvent}
           prevEvent={previousEvent}
           homeColor={homeColor}
           awayColor={awayColor}
@@ -958,7 +972,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           animationSpeed={SPEED_MS[speed]}
           onAnimationComplete={handleAnimationComplete}
           driveYards={currentDrive.yards}
-          drivePossession={currentEvent?.possession}
+          drivePossession={engineSnapshot?.possession ?? currentEvent?.possession}
         />
 
         {/* Quarter score table */}
