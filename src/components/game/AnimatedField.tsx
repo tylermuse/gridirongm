@@ -823,6 +823,25 @@ export function AnimatedField({
     // closure over `event`) can always read the latest event data for labels.
     (ref as Record<string, unknown>).currentEvent = event;
 
+    // Live Coach synthetic pause event (id === -1): snap the ball to the
+    // correct position immediately without any animation or reset phase.
+    // This prevents the sprite from lagging behind on large yardage plays.
+    if (event && event.id === -1) {
+      ref.animation = null;
+      ref.progress = 1;
+      ref.isAnimating = false;
+      ref.completeFired = true;
+      ref.resetPhase = false;
+      ref.quarterOverlayActive = false;
+      ref.possessionChangeActive = false;
+      // Force a repaint at the correct position
+      const rCanvas = canvasRef.current;
+      if (rCanvas) {
+        rafRef.current = requestAnimationFrame(render);
+      }
+      return;
+    }
+
     if (event && isSeparator(event.type)) {
       // Quarter transition overlay
       ref.animation = null;
