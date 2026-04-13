@@ -589,6 +589,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     const newEvents = liveEngineRef.current.runOnePlay();
     if (newEvents.length > 0) {
       setLiveExtraEvents(prev => [...prev, ...newEvents]);
+      // Resume playback if it was paused when the pre-computed events ran out
+      setIsPlaying(true);
+      setAnimationComplete(true); // trigger the animation timer to advance
     }
   }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide]);
 
@@ -946,6 +949,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 }
               }
               setLiveCoachPaused(false);
+              setIsPlaying(true);
+              setAnimationComplete(true);
             }}
             onAutoSimRest={() => {
               // Run engine to end (or just turn off Live Coach if no engine yet)
