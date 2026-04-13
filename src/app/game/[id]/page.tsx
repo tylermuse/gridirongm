@@ -911,34 +911,29 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         );
       })()}
 
-      {/* Live Coach play call menu */}
-      {liveCoachPaused && nextEvent && (() => {
+      {/* Live Coach play call menu — uses ENGINE state (not nextEvent) because
+          when the engine pauses for user input, no event exists yet */}
+      {liveCoachPaused && liveEngineRef.current && (() => {
+        const es = liveEngineRef.current!.getState();
         const homeAbbr2 = homeTeam?.abbreviation ?? 'HOME';
         const awayAbbr2 = awayTeam?.abbreviation ?? 'AWAY';
-        const fp = nextEvent.fieldPos;
-        // Field position description (e.g. "OPP 35" or "OWN 22")
-        const isHomeOff = nextEvent.possession === 'home';
-        const yardLineFromOwnGoal = fp;
-        const fieldDescription = yardLineFromOwnGoal === 50
-          ? '50'
-          : yardLineFromOwnGoal < 50
-            ? `OWN ${yardLineFromOwnGoal}`
-            : `OPP ${100 - yardLineFromOwnGoal}`;
+        const fp = es.fieldPos;
+        const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
         return (
           <PlayCallMenu
             state={{
-              quarter: nextEvent.quarter,
-              timeStr: nextEvent.timeStr,
-              homeScore: nextEvent.homeScore,
-              awayScore: nextEvent.awayScore,
+              quarter: es.quarter,
+              timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
+              homeScore: es.homeScore,
+              awayScore: es.awayScore,
               homeAbbr: homeAbbr2,
               awayAbbr: awayAbbr2,
-              down: nextEvent.down,
-              yardsToGo: nextEvent.yardsToGo,
-              fieldPos: nextEvent.fieldPos,
+              down: es.down,
+              yardsToGo: es.yardsToGo,
+              fieldPos: es.fieldPos,
               fieldDescription,
             }}
-            isFourthDown={nextEvent.down === 4}
+            isFourthDown={es.down === 4}
             onPlayCall={(playCall) => {
               // Run the engine with the user's play call. New events are
               // appended to liveExtraEvents and the playback resumes.
