@@ -913,66 +913,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         );
       })()}
 
-      {/* Live Coach play call menu — uses ENGINE state (not nextEvent) because
-          when the engine pauses for user input, no event exists yet */}
-      {liveCoachPaused && liveEngineRef.current && (() => {
-        const es = liveEngineRef.current!.getState();
-        const homeAbbr2 = homeTeam?.abbreviation ?? 'HOME';
-        const awayAbbr2 = awayTeam?.abbreviation ?? 'AWAY';
-        const fp = es.fieldPos;
-        const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
-        return (
-          <PlayCallMenu
-            state={{
-              quarter: es.quarter,
-              timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
-              homeScore: es.homeScore,
-              awayScore: es.awayScore,
-              homeAbbr: homeAbbr2,
-              awayAbbr: awayAbbr2,
-              down: es.down,
-              yardsToGo: es.yardsToGo,
-              fieldPos: es.fieldPos,
-              fieldDescription,
-            }}
-            isFourthDown={es.down === 4}
-            onPlayCall={(playCall) => {
-              // Run the engine with the user's play call. New events are
-              // appended to liveExtraEvents and the playback resumes.
-              if (liveEngineRef.current) {
-                const newEvents = liveEngineRef.current.runOnePlay(playCall);
-                if (newEvents.length > 0) {
-                  setLiveExtraEvents(prev => [...prev, ...newEvents]);
-                }
-              }
-              setLiveCoachPaused(false);
-              setIsPlaying(true);
-              setAnimationComplete(true);
-            }}
-            onAutoSimRest={() => {
-              // Run engine to end (or just turn off Live Coach if no engine yet)
-              if (liveEngineRef.current) {
-                const allRest: PlayEvent[] = [];
-                let safety = 0;
-                while (!liveEngineRef.current.isFinished() && safety < 500) {
-                  const evs = liveEngineRef.current.runOnePlay();
-                  allRest.push(...evs);
-                  safety++;
-                }
-                if (allRest.length > 0) {
-                  setLiveExtraEvents(prev => [...prev, ...allRest]);
-                }
-              }
-              setLiveCoachOn(false);
-              setLiveCoachPaused(false);
-            }}
-            onToggleOff={() => {
-              setLiveCoachOn(false);
-              setLiveCoachPaused(false);
-            }}
-          />
-        );
-      })()}
+      {/* Live Coach play call menu is now rendered inline in the sidebar */}
 
       <div className="max-w-6xl mx-auto flex gap-4">
       {/* Main game content */}
@@ -1515,9 +1456,66 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         })()}
       </div>
 
-      {/* Around the League sidebar */}
+      {/* Right sidebar — play call menu + around the league */}
       <div className="w-72 hidden lg:block shrink-0 space-y-2">
-        <div className="sticky top-20">
+        <div className="sticky top-20 space-y-3">
+          {/* Inline Live Coach play call */}
+          {liveCoachPaused && liveEngineRef.current && (() => {
+            const es = liveEngineRef.current!.getState();
+            const homeAbbr2 = homeTeam?.abbreviation ?? 'HOME';
+            const awayAbbr2 = awayTeam?.abbreviation ?? 'AWAY';
+            const fp = es.fieldPos;
+            const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
+            return (
+              <PlayCallMenu
+                state={{
+                  quarter: es.quarter,
+                  timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
+                  homeScore: es.homeScore,
+                  awayScore: es.awayScore,
+                  homeAbbr: homeAbbr2,
+                  awayAbbr: awayAbbr2,
+                  down: es.down,
+                  yardsToGo: es.yardsToGo,
+                  fieldPos: es.fieldPos,
+                  fieldDescription,
+                }}
+                isFourthDown={es.down === 4}
+                onPlayCall={(playCall) => {
+                  if (liveEngineRef.current) {
+                    const newEvents = liveEngineRef.current.runOnePlay(playCall);
+                    if (newEvents.length > 0) {
+                      setLiveExtraEvents(prev => [...prev, ...newEvents]);
+                    }
+                  }
+                  setLiveCoachPaused(false);
+                  setIsPlaying(true);
+                  setAnimationComplete(true);
+                }}
+                onAutoSimRest={() => {
+                  if (liveEngineRef.current) {
+                    const allRest: PlayEvent[] = [];
+                    let safety = 0;
+                    while (!liveEngineRef.current.isFinished() && safety < 500) {
+                      const evs = liveEngineRef.current.runOnePlay();
+                      allRest.push(...evs);
+                      safety++;
+                    }
+                    if (allRest.length > 0) {
+                      setLiveExtraEvents(prev => [...prev, ...allRest]);
+                    }
+                  }
+                  setLiveCoachOn(false);
+                  setLiveCoachPaused(false);
+                }}
+                onToggleOff={() => {
+                  setLiveCoachOn(false);
+                  setLiveCoachPaused(false);
+                }}
+              />
+            );
+          })()}
+
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Around the League</h3>
           <div className="space-y-1.5 max-h-[calc(100vh-6rem)] overflow-y-auto">
             {schedule

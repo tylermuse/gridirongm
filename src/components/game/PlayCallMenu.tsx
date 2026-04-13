@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 interface PlayCallMenuProps {
   state: {
     quarter: number;
@@ -38,6 +40,8 @@ const PLAY_BUTTONS: { type: PlayCallType; label: string; icon: string; color: st
 ];
 
 export function PlayCallMenu({ state, isFourthDown, onPlayCall, onAutoSimRest, onToggleOff }: PlayCallMenuProps) {
+  const [goingForIt, setGoingForIt] = useState(false);
+
   function downLabel(down: number, yardsToGo: number): string {
     const ordinals = ['1st', '2nd', '3rd', '4th'];
     if (down < 1 || down > 4) return '';
@@ -45,8 +49,8 @@ export function PlayCallMenu({ state, isFourthDown, onPlayCall, onAutoSimRest, o
   }
 
   return (
-    <div className="fixed top-0 right-0 bottom-0 z-50 flex items-start justify-end p-4 pt-20 pointer-events-none" style={{ width: '340px' }}>
-      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-2xl w-full overflow-hidden pointer-events-auto">
+    <div>
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden">
         {/* Header — situational data */}
         <div className="px-3 py-2 border-b border-[var(--border)] bg-purple-600 text-white">
           <div className="flex items-center justify-between">
@@ -73,39 +77,41 @@ export function PlayCallMenu({ state, isFourthDown, onPlayCall, onAutoSimRest, o
 
         {/* Play buttons */}
         <div className="px-3 py-3">
-          {!isFourthDown ? (
+          {isFourthDown && !goingForIt ? (
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={() => onPlayCall('field_goal')}
+                  className="flex items-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs bg-green-600 hover:bg-green-700 transition-colors"
+                >
+                  <span>🥅</span> <span>Field Goal</span>
+                </button>
+                <button
+                  onClick={() => onPlayCall('punt')}
+                  className="flex items-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs bg-gray-600 hover:bg-gray-700 transition-colors"
+                >
+                  <span>🦶</span> <span>Punt</span>
+                </button>
+              </div>
+              <button
+                onClick={() => setGoingForIt(true)}
+                className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs bg-red-600 hover:bg-red-700 transition-colors"
+              >
+                <span>💪</span> <span>Go For It →</span>
+              </button>
+            </div>
+          ) : (
             <div className="grid grid-cols-2 gap-1.5">
               {PLAY_BUTTONS.map(btn => (
                 <button
                   key={btn.type}
-                  onClick={() => onPlayCall(btn.type)}
+                  onClick={() => { onPlayCall(btn.type); setGoingForIt(false); }}
                   className={`flex items-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs transition-colors ${btn.color}`}
                 >
                   <span>{btn.icon}</span>
                   <span>{btn.label}</span>
                 </button>
               ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-1.5">
-              <button
-                onClick={() => onPlayCall('field_goal')}
-                className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg text-white font-bold text-xs bg-green-600 hover:bg-green-700 transition-colors"
-              >
-                <span>🥅</span> <span>FG</span>
-              </button>
-              <button
-                onClick={() => onPlayCall('punt')}
-                className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg text-white font-bold text-xs bg-gray-600 hover:bg-gray-700 transition-colors"
-              >
-                <span>🦶</span> <span>Punt</span>
-              </button>
-              <button
-                onClick={() => onPlayCall('go_for_it')}
-                className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg text-white font-bold text-xs bg-red-600 hover:bg-red-700 transition-colors"
-              >
-                <span>💪</span> <span>Go For It</span>
-              </button>
             </div>
           )}
         </div>
