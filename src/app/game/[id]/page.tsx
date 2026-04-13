@@ -798,17 +798,41 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       </GameShell>
     );
   }
+  // Show the Game Plan modal if user is in this game and hasn't set one yet
+  // This MUST come before the !liveResult check, since gamePlanReady=false
+  // prevents the sim from running (so liveResult is null until the user
+  // confirms or cancels the game plan).
+  if (userInGame && !gamePlanReady) {
+    const opponentTeam = userTeamSide === 'home' ? awayTeam : homeTeam;
+    const opponentName = opponentTeam ? `${opponentTeam.city} ${opponentTeam.name}` : 'Opponent';
+    return (
+      <GameShell>
+        <GamePlanModal
+          opponentName={opponentName}
+          onConfirm={(plan) => {
+            if (userTeamSide) {
+              setLivePlan({ ...plan, userTeamSide });
+            }
+            setGamePlanReady(true);
+          }}
+          onCancel={() => {
+            // Skip the plan — sim with default behavior
+            setLivePlan(null);
+            setGamePlanReady(true);
+          }}
+        />
+      </GameShell>
+    );
+  }
+
   if (!liveResult) {
-    // Surface the actual reason we're stuck so the user can recover.
     const reason = simError
       ? simError
       : !homeTeam || !awayTeam
         ? 'Team data not loaded.'
         : game?.played
           ? 'This game has already been played.'
-          : !gamePlanReady
-            ? 'Waiting for game plan…'
-            : 'Preparing simulation…';
+          : 'Preparing simulation…';
     return (
       <GameShell>
         <div className="max-w-2xl mx-auto mt-16 text-center space-y-4">
@@ -848,7 +872,6 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const homeRecord = homeTeam?.record;
   const awayRecord = awayTeam?.record;
 
-  // ScoreBug shows current event data immediately (synced with play description)
   const liveHomeScore = currentEvent?.homeScore ?? 0;
   const liveAwayScore = currentEvent?.awayScore ?? 0;
   const liveQuarter = currentEvent?.quarter ?? 1;
@@ -864,30 +887,6 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     { id: 'drives', label: 'Drives' },
     { id: 'stats', label: 'Stats' },
   ];
-
-  // Show the Game Plan modal if user is in this game and hasn't set one yet
-  if (userInGame && !gamePlanReady) {
-    const opponentTeam = userTeamSide === 'home' ? awayTeam : homeTeam;
-    const opponentName = opponentTeam ? `${opponentTeam.city} ${opponentTeam.name}` : 'Opponent';
-    return (
-      <GameShell>
-        <GamePlanModal
-          opponentName={opponentName}
-          onConfirm={(plan) => {
-            if (userTeamSide) {
-              setLivePlan({ ...plan, userTeamSide });
-            }
-            setGamePlanReady(true);
-          }}
-          onCancel={() => {
-            // Skip the plan — sim with default behavior
-            setLivePlan(null);
-            setGamePlanReady(true);
-          }}
-        />
-      </GameShell>
-    );
-  }
 
   return (
     <GameShell>
