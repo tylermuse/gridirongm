@@ -877,14 +877,19 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const homeRecord = homeTeam?.record;
   const awayRecord = awayTeam?.record;
 
-  const liveHomeScore = currentEvent?.homeScore ?? 0;
-  const liveAwayScore = currentEvent?.awayScore ?? 0;
-  const liveQuarter = currentEvent?.quarter ?? 1;
-  const liveTime = currentEvent?.timeStr ?? '15:00';
-  const livePoss = currentEvent?.possession ?? 'home';
-  const liveFieldPos = currentEvent?.fieldPos ?? 25;
-  const liveDown = currentEvent?.down ?? 1;
-  const liveYtg = currentEvent?.yardsToGo ?? 10;
+  // When Live Coach is paused for user input, show the ENGINE state on the
+  // field/scorebug (which is ahead of the last revealed pre-computed event).
+  const engineSnapshot = liveCoachPaused && liveEngineRef.current ? liveEngineRef.current.getState() : null;
+  const liveHomeScore = engineSnapshot?.homeScore ?? currentEvent?.homeScore ?? 0;
+  const liveAwayScore = engineSnapshot?.awayScore ?? currentEvent?.awayScore ?? 0;
+  const liveQuarter = engineSnapshot?.quarter ?? currentEvent?.quarter ?? 1;
+  const liveTime = engineSnapshot
+    ? `${Math.floor(engineSnapshot.timeSecs / 60)}:${String(engineSnapshot.timeSecs % 60).padStart(2, '0')}`
+    : currentEvent?.timeStr ?? '15:00';
+  const livePoss = engineSnapshot?.possession ?? currentEvent?.possession ?? 'home';
+  const liveFieldPos = engineSnapshot?.fieldPos ?? currentEvent?.fieldPos ?? 25;
+  const liveDown = engineSnapshot?.down ?? currentEvent?.down ?? 1;
+  const liveYtg = engineSnapshot?.yardsToGo ?? currentEvent?.yardsToGo ?? 10;
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'gamecast', label: 'Gamecast' },
