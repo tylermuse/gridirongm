@@ -6,11 +6,13 @@ import { useGameStore, flushToStorage, flushToStorageSync } from '@/lib/engine/s
 import { GameShell } from '@/components/game/GameShell';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { simulatePlayByPlay, resimulateFromPoint, liveGameToGameResult, type LiveGamePlan } from '@/lib/engine/playByPlay';
+import { simulatePlayByPlay, liveGameToGameResult, type LiveGamePlan } from '@/lib/engine/playByPlay';
+import { createLiveCoachEngine, type LiveCoachEngine } from '@/lib/engine/liveCoachEngine';
 import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
 import { ScoreBug } from '@/components/game/ScoreBug';
 import { GamePlanModal } from '@/components/game/GamePlanModal';
+import { PlayCallMenu, type PlayCallType } from '@/components/game/PlayCallMenu';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import type { Player, Position } from '@/types';
 
@@ -507,19 +509,35 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const [speed, setSpeed] = useState<Speed>('1x');
   const [committed, setCommitted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('gamecast');
+  // Live Coach mode — when on, the playback pauses before each user offensive
+  // snap and shows the play call menu. Toggleable at any time during the game.
+  const [liveCoachOn, setLiveCoachOn] = useState(false);
+  const [liveCoachPaused, setLiveCoachPaused] = useState(false);
+  // Live Coach engine — generates events one-at-a-time after takeover
+  const liveEngineRef = useRef<LiveCoachEngine | null>(null);
+  const [liveExtraEvents, setLiveExtraEvents] = useState<PlayEvent[]>([]);
+  const [liveEnginePivotIdx, setLiveEnginePivotIdx] = useState<number | null>(null);
   // Two-phase reveal: animationComplete tracks whether the current play's
   // field animation has finished. ScoreBug shows previous event's numbers
   // until this becomes true.
   const [animationComplete, setAnimationComplete] = useState(true);
 
-  const totalEvents = liveResult?.events.length ?? 0;
-  const isFinished = revealedCount >= totalEvents;
+  // Combined event stream — use pre-computed events up to the pivot,
+  // then engine-generated events after Live Coach took over.
+  const allEvents: PlayEvent[] = useMemo(() => {
+    const pre = liveResult?.events ?? [];
+    if (liveEnginePivotIdx === null) return pre;
+    return [...pre.slice(0, liveEnginePivotIdx), ...liveExtraEvents];
+  }, [liveResult, liveEnginePivotIdx, liveExtraEvents]);
 
-  const currentEvent = liveResult?.events[revealedCount - 1] ?? null;
-  const previousEvent = revealedCount >= 2
-    ? (liveResult?.events[revealedCount - 2] ?? null)
-    : null;
-  const revealedEvents = liveResult?.events.slice(0, revealedCount) ?? [];
+  const totalEvents = allEvents.length;
+  // The game is "finished" when there are no more events AND the engine (if used) reports done
+  const engineDone = liveEngineRef.current?.isFinished() ?? false;
+  const isFinished = revealedCount >= totalEvents && (liveEnginePivotIdx === null || engineDone);
+
+  const currentEvent = allEvents[revealedCount - 1] ?? null;
+  const previousEvent = revealedCount >= 2 ? (allEvents[revealedCount - 2] ?? null) : null;
+  const revealedEvents = allEvents.slice(0, revealedCount);
   const displayEvents = useMemo(() => [...revealedEvents].reverse(), [revealedEvents]);
   const drives = useMemo(() => parseDrives(revealedEvents), [revealedEvents]);
 
@@ -549,10 +567,68 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     setAnimationComplete(true);
   }, []);
 
+  // ── Live Coach: when engine is active, auto-run AI plays as needed ──
+  // Fires when we run out of events to reveal AND the engine is still going.
+  // Also fires when isPlaying changes — important because the animation timer
+  // sets isPlaying=false when it can't advance, and we need to react to that.
+  useEffect(() => {
+    if (liveEngineRef.current === null) return;
+    if (liveEngineRef.current.isFinished()) return;
+    if (liveCoachPaused) return;
+    if (revealedCount < totalEvents) return; // still events to reveal
+
+    // Check if next play is user offensive — if so, hold for input.
+    // But DON'T pause if the last generated event was a possession change
+    // (punt/kickoff/turnover) — wait one more cycle so the field updates
+    // before the menu appears. This prevents the brief "flash" of the menu
+    // with stale field state after a punt.
+    const engineState = liveEngineRef.current.getState();
+    const isUserOffenseNow = !!userTeamSide && engineState.possession === userTeamSide && !engineState.isGameOver;
+    const lastExtraEvent = liveExtraEvents[liveExtraEvents.length - 1];
+    const lastWasTransition = lastExtraEvent && ['kickoff', 'punt', 'interception', 'fumble'].includes(lastExtraEvent.type);
+    if (liveCoachOn && isUserOffenseNow && !lastWasTransition) {
+      setLiveCoachPaused(true);
+      setIsPlaying(false);
+      return;
+    }
+
+    // Auto-run AI play
+    const newEvents = liveEngineRef.current.runOnePlay();
+    if (newEvents.length > 0) {
+      setLiveExtraEvents(prev => [...prev, ...newEvents]);
+      setIsPlaying(true);
+      setAnimationComplete(true);
+    }
+    // Including isPlaying in deps ensures this re-fires when the animation
+    // timer gives up (sets isPlaying=false at the end of pre-computed events).
+  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying]);
+
+  // ── Live Coach: detect if the NEXT event is a user offensive play snap ──
+  // We check after an event reveals and before scheduling the next one.
+  // A "user offensive snap" is the start of a new play (run/pass/sack) on the
+  // user team's possession. We don't pause for kickoffs, FG/punt result events,
+  // quarter ends, or defensive plays.
+  const PLAY_TYPES_THAT_TRIGGER_PAUSE = new Set([
+    'run', 'pass_complete', 'pass_incomplete', 'sack', 'fumble', 'interception', 'penalty',
+  ]);
+  const nextEvent = allEvents[revealedCount] ?? null;
+  const nextEventIsUserSnap =
+    !!nextEvent && userTeamSide !== null &&
+    nextEvent.possession === userTeamSide &&
+    PLAY_TYPES_THAT_TRIGGER_PAUSE.has(nextEvent.type);
+  // Only pause via this path when the engine is NOT active. Once the engine
+  // has taken over, the auto-run effect manages pausing via engine state.
+  const shouldPauseForLiveCoach = liveCoachOn && nextEventIsUserSnap && !liveCoachPaused && liveEngineRef.current === null;
+
   // When animation completes and we're playing, schedule the next play reveal
   useEffect(() => {
     clearNextPlayTimer();
     if (!animationComplete || !isPlaying || isFinished || speed === 'max') return;
+    // Live Coach pause: stop here, surface the play call menu instead of advancing
+    if (shouldPauseForLiveCoach) {
+      setLiveCoachPaused(true);
+      return;
+    }
     // Post-animation pause — gives time to read the play description before advancing
     const PAUSE_MS: Record<Speed, number> = { '1x': 1400, '2x': 600, '5x': 80, 'max': 0 };
     const pause = PAUSE_MS[speed];
@@ -567,7 +643,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       setAnimationComplete(false);
     }, pause);
     return clearNextPlayTimer;
-  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer]);
+  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach]);
 
   const skipToEnd = useCallback(() => {
     clearNextPlayTimer();
@@ -750,6 +826,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             setGamePlanReady(true);
           }}
           onCancel={() => {
+            // Skip the plan — sim with default behavior
             setLivePlan(null);
             setGamePlanReady(true);
           }}
@@ -757,17 +834,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       </GameShell>
     );
   }
+
   if (!liveResult) {
-    // Surface the actual reason we're stuck so the user can recover.
     const reason = simError
       ? simError
       : !homeTeam || !awayTeam
         ? 'Team data not loaded.'
         : game?.played
           ? 'This game has already been played.'
-          : !gamePlanReady
-            ? 'Waiting for game plan…'
-            : 'Preparing simulation…';
+          : 'Preparing simulation…';
     return (
       <GameShell>
         <div className="max-w-2xl mx-auto mt-16 text-center space-y-4">
@@ -807,15 +882,19 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const homeRecord = homeTeam?.record;
   const awayRecord = awayTeam?.record;
 
-  // ScoreBug shows current event data immediately (synced with play description)
-  const liveHomeScore = currentEvent?.homeScore ?? 0;
-  const liveAwayScore = currentEvent?.awayScore ?? 0;
-  const liveQuarter = currentEvent?.quarter ?? 1;
-  const liveTime = currentEvent?.timeStr ?? '15:00';
-  const livePoss = currentEvent?.possession ?? 'home';
-  const liveFieldPos = currentEvent?.fieldPos ?? 25;
-  const liveDown = currentEvent?.down ?? 1;
-  const liveYtg = currentEvent?.yardsToGo ?? 10;
+  // When Live Coach is paused for user input, show the ENGINE state on the
+  // field/scorebug (which is ahead of the last revealed pre-computed event).
+  const engineSnapshot = liveCoachPaused && liveEngineRef.current ? liveEngineRef.current.getState() : null;
+  const liveHomeScore = engineSnapshot?.homeScore ?? currentEvent?.homeScore ?? 0;
+  const liveAwayScore = engineSnapshot?.awayScore ?? currentEvent?.awayScore ?? 0;
+  const liveQuarter = engineSnapshot?.quarter ?? currentEvent?.quarter ?? 1;
+  const liveTime = engineSnapshot
+    ? `${Math.floor(engineSnapshot.timeSecs / 60)}:${String(engineSnapshot.timeSecs % 60).padStart(2, '0')}`
+    : currentEvent?.timeStr ?? '15:00';
+  const livePoss = engineSnapshot?.possession ?? currentEvent?.possession ?? 'home';
+  const liveFieldPos = engineSnapshot?.fieldPos ?? currentEvent?.fieldPos ?? 25;
+  const liveDown = engineSnapshot?.down ?? currentEvent?.down ?? 1;
+  const liveYtg = engineSnapshot?.yardsToGo ?? currentEvent?.yardsToGo ?? 10;
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'gamecast', label: 'Gamecast' },
@@ -838,40 +917,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               setLivePlan(newPlan);
               // Persist for the next game too
               useGameStore.getState().setNextGamePlan(plan);
-              // Re-simulate the rest of the game from the most recent quarter
-              // boundary at-or-before the user's current playback index. This
-              // is what makes mid-game adjustments actually take effect — without
-              // this, the original sim's pre-computed events would just keep playing.
-              if (simRef.current && homeTeam && awayTeam && game && !game.played) {
-                try {
-                  const mcafeeMode = useGameStore.getState().leagueSettings?.mcafeeMode ?? false;
-                  const updated = resimulateFromPoint(
-                    simRef.current,
-                    revealedCount,
-                    homeTeam,
-                    awayTeam,
-                    homePlayers,
-                    awayPlayers,
-                    isPlayoffGame,
-                    mcafeeMode,
-                    newPlan,
-                  );
-                  simRef.current = updated;
-                  // The events array got spliced — totalEvents changes. Stop
-                  // playback so the user can confirm the rewind point before
-                  // hitting play again.
-                  setIsPlaying(false);
-                  setAnimationComplete(true);
-                } catch (err) {
-                  console.error('[Watch Live] resimulateFromPoint error:', err);
-                }
-              }
+              // Persist for the next game too
+              useGameStore.getState().setNextGamePlan(plan);
               setShowMidGamePlan(false);
             }}
             onCancel={() => setShowMidGamePlan(false)}
           />
         );
       })()}
+
+      {/* Live Coach play call menu is now rendered inline in the sidebar */}
 
       <div className="max-w-6xl mx-auto flex gap-4">
       {/* Main game content */}
@@ -901,7 +956,21 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         />
 
         <AnimatedField
-          event={currentEvent}
+          event={engineSnapshot ? {
+            id: -1,
+            type: 'run' as const,
+            description: '',
+            quarter: engineSnapshot.quarter,
+            timeStr: liveTime,
+            possession: engineSnapshot.possession,
+            fieldPos: engineSnapshot.fieldPos,
+            down: engineSnapshot.down,
+            yardsToGo: engineSnapshot.yardsToGo,
+            yardsGained: 0,
+            homeScore: engineSnapshot.homeScore,
+            awayScore: engineSnapshot.awayScore,
+            isScoring: false,
+          } : currentEvent}
           prevEvent={previousEvent}
           homeColor={homeColor}
           awayColor={awayColor}
@@ -911,7 +980,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           animationSpeed={SPEED_MS[speed]}
           onAnimationComplete={handleAnimationComplete}
           driveYards={currentDrive.yards}
-          drivePossession={currentEvent?.possession}
+          drivePossession={engineSnapshot?.possession ?? currentEvent?.possession}
         />
 
         {/* Quarter score table */}
@@ -967,6 +1036,50 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               title="Adjust your game plan (pauses the game)"
             >
               📋 Game Plan
+            </button>
+          )}
+          {/* Live Coach toggle — only when user is in this game */}
+          {userInGame && !isFinished && (
+            <button
+              onClick={() => {
+                const turningOn = !liveCoachOn;
+                setLiveCoachOn(turningOn);
+                setLiveCoachPaused(false);
+                // First-time activation: seed the live engine from the current state
+                if (turningOn && liveEngineRef.current === null && homeTeam && awayTeam) {
+                  // Use the LAST revealed event as the starting state, or default kickoff state
+                  const seedEvent = allEvents[revealedCount - 1] ?? allEvents[0];
+                  if (seedEvent) {
+                    liveEngineRef.current = createLiveCoachEngine(
+                      homeTeam, awayTeam, homePlayers, awayPlayers,
+                      {
+                        quarter: seedEvent.quarter,
+                        timeSecs: parseInt(seedEvent.timeStr.split(':')[0], 10) * 60 + parseInt(seedEvent.timeStr.split(':')[1] ?? '0', 10),
+                        possession: seedEvent.possession,
+                        fieldPos: seedEvent.fieldPos,
+                        down: Math.max(1, seedEvent.down),
+                        yardsToGo: Math.max(1, seedEvent.yardsToGo),
+                        homeScore: seedEvent.homeScore,
+                        awayScore: seedEvent.awayScore,
+                        isGameOver: false,
+                        twoMinWarningQ2Fired: seedEvent.quarter > 2 || (seedEvent.quarter === 2 && seedEvent.timeStr <= '2:00'),
+                        twoMinWarningQ4Fired: seedEvent.quarter > 4 || (seedEvent.quarter === 4 && seedEvent.timeStr <= '2:00'),
+                        overtime: seedEvent.quarter > 4,
+                      },
+                    );
+                    setLiveEnginePivotIdx(revealedCount);
+                    setLiveExtraEvents([]);
+                  }
+                }
+              }}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                liveCoachOn
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+              }`}
+              title="Take control of every user offensive snap"
+            >
+              🎯 Live Coach {liveCoachOn ? 'ON' : 'OFF'}
             </button>
           )}
           <button
@@ -1370,9 +1483,66 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         })()}
       </div>
 
-      {/* Around the League sidebar */}
+      {/* Right sidebar — play call menu + around the league */}
       <div className="w-72 hidden lg:block shrink-0 space-y-2">
-        <div className="sticky top-20">
+        <div className="sticky top-20 space-y-3">
+          {/* Inline Live Coach play call */}
+          {liveCoachPaused && liveEngineRef.current && (() => {
+            const es = liveEngineRef.current!.getState();
+            const homeAbbr2 = homeTeam?.abbreviation ?? 'HOME';
+            const awayAbbr2 = awayTeam?.abbreviation ?? 'AWAY';
+            const fp = es.fieldPos;
+            const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
+            return (
+              <PlayCallMenu
+                state={{
+                  quarter: es.quarter,
+                  timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
+                  homeScore: es.homeScore,
+                  awayScore: es.awayScore,
+                  homeAbbr: homeAbbr2,
+                  awayAbbr: awayAbbr2,
+                  down: es.down,
+                  yardsToGo: es.yardsToGo,
+                  fieldPos: es.fieldPos,
+                  fieldDescription,
+                }}
+                isFourthDown={es.down === 4}
+                onPlayCall={(playCall) => {
+                  if (liveEngineRef.current) {
+                    const newEvents = liveEngineRef.current.runOnePlay(playCall);
+                    if (newEvents.length > 0) {
+                      setLiveExtraEvents(prev => [...prev, ...newEvents]);
+                    }
+                  }
+                  setLiveCoachPaused(false);
+                  setIsPlaying(true);
+                  setAnimationComplete(true);
+                }}
+                onAutoSimRest={() => {
+                  if (liveEngineRef.current) {
+                    const allRest: PlayEvent[] = [];
+                    let safety = 0;
+                    while (!liveEngineRef.current.isFinished() && safety < 500) {
+                      const evs = liveEngineRef.current.runOnePlay();
+                      allRest.push(...evs);
+                      safety++;
+                    }
+                    if (allRest.length > 0) {
+                      setLiveExtraEvents(prev => [...prev, ...allRest]);
+                    }
+                  }
+                  setLiveCoachOn(false);
+                  setLiveCoachPaused(false);
+                }}
+                onToggleOff={() => {
+                  setLiveCoachOn(false);
+                  setLiveCoachPaused(false);
+                }}
+              />
+            );
+          })()}
+
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Around the League</h3>
           <div className="space-y-1.5 max-h-[calc(100vh-6rem)] overflow-y-auto">
             {schedule

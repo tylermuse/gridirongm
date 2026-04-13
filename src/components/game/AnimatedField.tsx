@@ -819,6 +819,28 @@ export function AnimatedField({
 
     ref.prevState = prevState;
     ref.nextState = nextState;
+    // Store the current event on the ref so the render loop (which has a stale
+    // closure over `event`) can always read the latest event data for labels.
+    (ref as Record<string, unknown>).currentEvent = event;
+
+    // Live Coach synthetic pause event (id === -1): snap the ball to the
+    // correct position immediately without any animation or reset phase.
+    // This prevents the sprite from lagging behind on large yardage plays.
+    if (event && event.id === -1) {
+      ref.animation = null;
+      ref.progress = 1;
+      ref.isAnimating = false;
+      ref.completeFired = true;
+      ref.resetPhase = false;
+      ref.quarterOverlayActive = false;
+      ref.possessionChangeActive = false;
+      // Force a repaint at the correct position
+      const rCanvas = canvasRef.current;
+      if (rCanvas) {
+        rafRef.current = requestAnimationFrame(render);
+      }
+      return;
+    }
 
     if (event && isSeparator(event.type)) {
       // Quarter transition overlay
@@ -1137,13 +1159,17 @@ export function AnimatedField({
     }
 
     // Field position label and down & distance near the ball (only when ball at rest)
-    if (!ref.isAnimating && event && !isSeparator(event.type)) {
-      drawFieldPositionLabel(ctx, ballScreenX, ballScreenY, event, homeAbbr, awayAbbr);
+    // Read from ref.currentEvent (kept in sync by useEffect) instead of the
+    // stale `event` closure variable — the render callback's deps don't include
+    // `event` so the closure captures a stale reference.
+    const currentEvt = (ref as Record<string, unknown>).currentEvent as PlayEvent | null;
+    if (!ref.isAnimating && currentEvt && !isSeparator(currentEvt.type)) {
+      drawFieldPositionLabel(ctx, ballScreenX, ballScreenY, currentEvt, homeAbbr, awayAbbr);
       // Down & distance pill at LOS
       const losX = absYardToCanvasX(state.scrimmageYard, w);
-      if (event.down >= 1 && event.down <= 4) {
+      if (currentEvt.down >= 1 && currentEvt.down <= 4) {
         const ordinals = ['1st', '2nd', '3rd', '4th'];
-        const ddLabel = `${ordinals[event.down - 1]} & ${event.yardsToGo <= 0 ? 'Goal' : event.yardsToGo}`;
+        const ddLabel = `${ordinals[currentEvt.down - 1]} & ${currentEvt.yardsToGo <= 0 ? 'Goal' : currentEvt.yardsToGo}`;
         ctx.save();
         ctx.font = 'bold 9px system-ui, sans-serif';
         const textW = ctx.measureText(ddLabel).width;
