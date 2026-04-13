@@ -568,8 +568,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   }, []);
 
   // ── Live Coach: when engine is active, auto-run AI plays as needed ──
-  // If we've revealed all available events AND the engine isn't done AND
-  // we're NOT waiting for user input, generate the next play.
+  // Fires when we run out of events to reveal AND the engine is still going.
+  // Also fires when isPlaying changes — important because the animation timer
+  // sets isPlaying=false when it can't advance, and we need to react to that.
   useEffect(() => {
     if (liveEngineRef.current === null) return;
     if (liveEngineRef.current.isFinished()) return;
@@ -580,8 +581,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     const engineState = liveEngineRef.current.getState();
     const isUserOffenseNow = !!userTeamSide && engineState.possession === userTeamSide && !engineState.isGameOver;
     if (liveCoachOn && isUserOffenseNow) {
-      // Need user input — set paused state, wait for play call
       setLiveCoachPaused(true);
+      setIsPlaying(false);
       return;
     }
 
@@ -589,11 +590,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     const newEvents = liveEngineRef.current.runOnePlay();
     if (newEvents.length > 0) {
       setLiveExtraEvents(prev => [...prev, ...newEvents]);
-      // Resume playback if it was paused when the pre-computed events ran out
       setIsPlaying(true);
-      setAnimationComplete(true); // trigger the animation timer to advance
+      setAnimationComplete(true);
     }
-  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide]);
+    // Including isPlaying in deps ensures this re-fires when the animation
+    // timer gives up (sets isPlaying=false at the end of pre-computed events).
+  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying]);
 
   // ── Live Coach: detect if the NEXT event is a user offensive play snap ──
   // We check after an event reveals and before scheduling the next one.
