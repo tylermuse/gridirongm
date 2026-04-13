@@ -45,85 +45,82 @@ export function PlayCallMenu({ state, isFourthDown, onPlayCall, onAutoSimRest, o
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">
+    <div className="fixed top-0 right-0 bottom-0 z-50 flex items-start justify-end p-4 pt-20 pointer-events-none" style={{ width: '340px' }}>
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-2xl w-full overflow-hidden pointer-events-auto">
         {/* Header — situational data */}
-        <div className="px-5 py-3 border-b border-[var(--border)] bg-purple-600 text-white">
+        <div className="px-3 py-2 border-b border-[var(--border)] bg-purple-600 text-white">
           <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs uppercase tracking-wider opacity-80">Live Coach</div>
-              <div className="text-lg font-black">Call the Play</div>
-            </div>
-            <div className="text-right text-xs opacity-90">
-              <div>Q{state.quarter} · {state.timeStr}</div>
-              <div className="font-bold">{state.awayAbbr} {state.awayScore} – {state.homeScore} {state.homeAbbr}</div>
+            <div className="text-sm font-black">Call the Play</div>
+            <div className="text-right text-[10px] opacity-90">
+              <span>Q{state.quarter} · {state.timeStr}</span>
+              <span className="ml-2 font-bold">{state.awayAbbr} {state.awayScore} – {state.homeScore} {state.homeAbbr}</span>
             </div>
           </div>
         </div>
 
         {/* Down/distance + field */}
-        <div className="px-5 py-3 bg-[var(--surface-2)] border-b border-[var(--border)] flex items-center justify-between">
+        <div className="px-3 py-2 bg-[var(--surface-2)] border-b border-[var(--border)] flex items-center justify-between">
           <div>
-            <div className="text-2xl font-black tabular-nums">{downLabel(state.down, state.yardsToGo)}</div>
-            <div className="text-xs text-[var(--text-sec)] mt-0.5">at the {state.fieldDescription}</div>
+            <div className="text-lg font-black tabular-nums leading-tight">{downLabel(state.down, state.yardsToGo)}</div>
+            <div className="text-[10px] text-[var(--text-sec)]">at the {state.fieldDescription}</div>
           </div>
           {state.fieldPos >= 80 && (
-            <span className="px-2 py-1 rounded-full bg-red-100 text-red-700 text-[10px] font-bold uppercase">
+            <span className="px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[9px] font-bold uppercase">
               🔥 Red Zone
             </span>
           )}
         </div>
 
         {/* Play buttons */}
-        <div className="px-5 py-4">
+        <div className="px-3 py-3">
           {!isFourthDown ? (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-1.5">
               {PLAY_BUTTONS.map(btn => (
                 <button
                   key={btn.type}
                   onClick={() => onPlayCall(btn.type)}
-                  className={`flex items-center gap-2 px-3 py-3 rounded-lg text-white font-bold text-sm transition-colors ${btn.color}`}
+                  className={`flex items-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs transition-colors ${btn.color}`}
                 >
-                  <span className="text-lg">{btn.icon}</span>
+                  <span>{btn.icon}</span>
                   <span>{btn.label}</span>
                 </button>
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-2">
+            <div className="grid grid-cols-3 gap-1.5">
               <button
                 onClick={() => onPlayCall('field_goal')}
-                className="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-white font-bold text-sm bg-green-600 hover:bg-green-700 transition-colors"
+                className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg text-white font-bold text-xs bg-green-600 hover:bg-green-700 transition-colors"
               >
-                <span className="text-lg">🥅</span> Field Goal
+                <span>🥅</span> <span>FG</span>
               </button>
               <button
                 onClick={() => onPlayCall('punt')}
-                className="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-white font-bold text-sm bg-gray-600 hover:bg-gray-700 transition-colors"
+                className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg text-white font-bold text-xs bg-gray-600 hover:bg-gray-700 transition-colors"
               >
-                <span className="text-lg">🦶</span> Punt
+                <span>🦶</span> <span>Punt</span>
               </button>
               <button
                 onClick={() => onPlayCall('go_for_it')}
-                className="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-white font-bold text-sm bg-red-600 hover:bg-red-700 transition-colors"
+                className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg text-white font-bold text-xs bg-red-600 hover:bg-red-700 transition-colors"
               >
-                <span className="text-lg">💪</span> Go For It
+                <span>💪</span> <span>Go For It</span>
               </button>
             </div>
           )}
         </div>
 
         {/* Footer — escape hatches */}
-        <div className="px-5 py-3 border-t border-[var(--border)] bg-[var(--surface-2)]/30 flex items-center justify-between gap-2">
+        <div className="px-3 py-2 border-t border-[var(--border)] bg-[var(--surface-2)]/30 flex items-center justify-between gap-2">
           <button
             onClick={onToggleOff}
-            className="text-xs text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
+            className="text-[10px] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
           >
-            Turn off Live Coach
+            Turn off
           </button>
           <button
             onClick={onAutoSimRest}
-            className="px-3 py-1.5 text-xs font-bold rounded-lg bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] transition-colors"
+            className="px-2 py-1 text-[10px] font-bold rounded-lg bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] transition-colors"
           >
             Auto-sim to End ⏭
           </button>
