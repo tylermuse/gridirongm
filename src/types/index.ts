@@ -790,7 +790,7 @@ export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
   bsMode: false,
   mcafeeMode: false,
   chaosDraft: false,
-  aiCommentary: false,
+  aiCommentary: true,
   godMode: false,
   godModeUsed: false,
   rosterLimitEnabled: true,
