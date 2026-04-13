@@ -374,7 +374,8 @@ export function createLiveCoachEngine(
   function runPunt(events: PlayEvent[]) {
     const puntYards = clamp(Math.round(gaussian(43, 7)), 25, 65);
     const returnPos = clamp(100 - state.fieldPos - puntYards, 5, 50);
-    events.push(makeEvent('punt', `Punt away — fielded at the ${returnPos}.`, puntYards, false));
+    const receivingAbbr = state.possession === 'home' ? awayTeam.abbreviation : homeTeam.abbreviation;
+    events.push(makeEvent('punt', `Punt away — ${receivingAbbr} fields at their own ${returnPos}, returns to the ${Math.min(returnPos + Math.floor(Math.random() * 8), 50)}.`, puntYards, false));
     switchPossession(returnPos);
     advanceClock(15);
   }

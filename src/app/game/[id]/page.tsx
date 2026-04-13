@@ -577,10 +577,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     if (liveCoachPaused) return;
     if (revealedCount < totalEvents) return; // still events to reveal
 
-    // Check if next play is user offensive — if so, hold for input
+    // Check if next play is user offensive — if so, hold for input.
+    // But DON'T pause if the last generated event was a possession change
+    // (punt/kickoff/turnover) — wait one more cycle so the field updates
+    // before the menu appears. This prevents the brief "flash" of the menu
+    // with stale field state after a punt.
     const engineState = liveEngineRef.current.getState();
     const isUserOffenseNow = !!userTeamSide && engineState.possession === userTeamSide && !engineState.isGameOver;
-    if (liveCoachOn && isUserOffenseNow) {
+    const lastExtraEvent = liveExtraEvents[liveExtraEvents.length - 1];
+    const lastWasTransition = lastExtraEvent && ['kickoff', 'punt', 'interception', 'fumble'].includes(lastExtraEvent.type);
+    if (liveCoachOn && isUserOffenseNow && !lastWasTransition) {
       setLiveCoachPaused(true);
       setIsPlaying(false);
       return;
