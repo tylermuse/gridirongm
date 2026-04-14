@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
@@ -886,6 +886,178 @@ function ImportDraftClassModal({
 // Main Draft Page
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Import Draft Class Panel
+// ---------------------------------------------------------------------------
+
+function ImportDraftClassPanel({ season }: { season: number }) {
+  const [open, setOpen] = useState(false);
+  const [preview, setPreview] = useState<ImportedProspect[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ count: number; skipped: number } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const { importDraftClass, players, freeAgents } = useGameStore();
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setResult(null);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = reader.result as string;
+        let data: unknown[];
+
+        if (file.name.endsWith('.csv')) {
+          // Parse CSV — first row is headers
+          const lines = text.trim().split('\n');
+          if (lines.length < 2) { setError('CSV must have a header row + at least 1 prospect.'); return; }
+          const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+          data = lines.slice(1).map(line => {
+            const vals = line.split(',').map(v => v.trim());
+            const obj: Record<string, unknown> = {};
+            headers.forEach((h, i) => {
+              const v = vals[i];
+              if (h === 'overall' || h === 'potential' || h === 'age') obj[h] = v ? Number(v) : undefined;
+              else obj[h === 'firstname' ? 'firstName' : h === 'lastname' ? 'lastName' : h] = v || undefined;
+            });
+            return obj;
+          });
+        } else {
+          // Parse JSON — expect array of prospects
+          const parsed = JSON.parse(text);
+          if (!Array.isArray(parsed)) { setError('JSON must be an array of prospects.'); return; }
+          data = parsed;
+        }
+
+        setPreview(data as ImportedProspect[]);
+      } catch (err) {
+        setError(`Failed to parse file: ${err instanceof Error ? err.message : 'unknown error'}`);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function handleImport() {
+    if (!preview) return;
+    const res = importDraftClass(preview, season);
+    setResult(res);
+    setPreview(null);
+    if (fileRef.current) fileRef.current.value = '';
+  }
+
+  function handleExport() {
+    const prospects = freeAgents
+      .map(id => players.find(p => p.id === id))
+      .filter((p): p is NonNullable<typeof p> => !!p && p.experience === 0)
+      .sort((a, b) => b.ratings.overall - a.ratings.overall)
+      .map(p => ({
+        firstName: p.firstName,
+        lastName: p.lastName,
+        position: p.position,
+        college: p.college ?? '',
+        age: p.age,
+        overall: p.ratings.overall,
+        potential: p.potential,
+      }));
+    const blob = new Blob([JSON.stringify(prospects, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `draft-class-${season}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  if (!open) {
+    return (
+      <div className="flex items-center gap-2">
+        <button onClick={() => setOpen(true)} className="text-xs text-blue-600 hover:underline">
+          📥 Import Draft Class
+        </button>
+        <button onClick={handleExport} className="text-xs text-blue-600 hover:underline">
+          📤 Export Current Class
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Import Draft Class</CardTitle>
+        <button onClick={() => { setOpen(false); setPreview(null); setError(null); setResult(null); }} className="text-xs text-[var(--text-sec)] hover:text-[var(--text)]">✕ Close</button>
+      </CardHeader>
+
+      <div className="space-y-3">
+        <p className="text-xs text-[var(--text-sec)]">
+          Upload a <code className="px-1 py-0.5 bg-[var(--surface-2)] rounded text-[10px]">.json</code> or
+          {' '}<code className="px-1 py-0.5 bg-[var(--surface-2)] rounded text-[10px]">.csv</code> file with draft prospects.
+          Required fields: <strong>firstName, lastName, position</strong>.
+          Optional: college, age, overall (40-99), potential (40-99).
+        </p>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".json,.csv"
+          onChange={handleFile}
+          className="text-xs file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white file:cursor-pointer"
+        />
+
+        {error && <div className="text-xs text-red-600 bg-red-50 p-2 rounded">{error}</div>}
+
+        {preview && (
+          <div className="space-y-2">
+            <div className="text-xs font-bold">{preview.length} prospects parsed:</div>
+            <div className="max-h-48 overflow-y-auto text-xs border border-[var(--border)] rounded-lg">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-[var(--text-sec)] text-[10px] uppercase">
+                    <th className="text-left py-1 px-2">Name</th>
+                    <th className="text-center py-1">Pos</th>
+                    <th className="text-center py-1">OVR</th>
+                    <th className="text-center py-1">School</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.slice(0, 20).map((p, i) => (
+                    <tr key={i} className="border-t border-[var(--border)]">
+                      <td className="py-1 px-2 font-medium">{p.firstName} {p.lastName}</td>
+                      <td className="py-1 text-center"><Badge size="sm">{p.position}</Badge></td>
+                      <td className="py-1 text-center tabular-nums">{p.overall ?? '?'}</td>
+                      <td className="py-1 text-center text-[var(--text-sec)]">{p.college ?? '—'}</td>
+                    </tr>
+                  ))}
+                  {preview.length > 20 && (
+                    <tr><td colSpan={4} className="text-center py-1 text-[var(--text-sec)]">...and {preview.length - 20} more</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleImport}>Import {preview.length} Prospects</Button>
+              <Button size="sm" variant="ghost" onClick={() => { setPreview(null); if (fileRef.current) fileRef.current.value = ''; }}>Cancel</Button>
+            </div>
+          </div>
+        )}
+
+        {result && (
+          <div className="text-xs bg-green-50 border border-green-200 rounded-lg p-2">
+            ✅ Imported {result.count} prospects.{result.skipped > 0 && ` (${result.skipped} skipped due to invalid data)`}
+          </div>
+        )}
+
+        <button onClick={handleExport} className="text-xs text-blue-600 hover:underline">
+          📤 Export current draft class to JSON
+        </button>
+      </div>
+    </Card>
+  );
+}
+
 export default function DraftPage() {
   const router = useRouter();
   const {
@@ -1334,6 +1506,9 @@ export default function DraftPage() {
             </div>
           </Card>
         )}
+
+        {/* Import Draft Class */}
+        <ImportDraftClassPanel season={season} />
 
         <div className="grid grid-cols-12 gap-4">
           {/* Top Prospects */}
