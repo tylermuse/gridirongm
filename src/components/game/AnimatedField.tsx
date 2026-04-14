@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useLayoutEffect, useCallback, useState } from 'react';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
 import { deriveFieldState, idleFieldState, setUserSide, type GameFieldState } from '@/lib/game/fieldState';
 import { setAnimUserSide } from '@/lib/game/animations';
@@ -823,8 +823,12 @@ export function AnimatedField({
     return () => observer.disconnect();
   }, []);
 
-  // When event changes, derive new state and build animation
-  useEffect(() => {
+  // When event changes, derive new state and build animation.
+  // MUST be useLayoutEffect (not useEffect) so the animation state is updated
+  // BEFORE the browser paints and before any pending rAF fires. With useEffect,
+  // the old animation's rAF fires one frame before the effect runs, causing
+  // the previous play to flash briefly.
+  useLayoutEffect(() => {
     const ref = animRef.current;
     const nextState = event ? deriveFieldState(event) : idleFieldState();
     // For the "from" state: use the current event's scrimmage as the starting
