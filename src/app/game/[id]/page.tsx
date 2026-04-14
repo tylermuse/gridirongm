@@ -1737,6 +1737,34 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             );
           })()}
 
+          {/* Live play-by-play feed — visible alongside the field */}
+          {displayEvents.length > 0 && (
+            <div className="mb-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Live Feed</h3>
+              <div className="space-y-1 max-h-64 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+                {displayEvents.slice(0, 15).map(ev => (
+                  !isSeparator(ev.type) ? (
+                    <div key={ev.id} className={`px-2.5 py-1.5 text-[10px] border-b border-[var(--border)] last:border-0 ${ev.isScoring ? 'bg-amber-50' : isTurnover(ev.type) ? 'bg-red-50' : ''}`}>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[var(--text-sec)] font-mono shrink-0">Q{ev.quarter}</span>
+                        <span className="flex-1 leading-snug truncate">{ev.description}</span>
+                        {ev.yardsGained !== 0 && !isSeparator(ev.type) && ev.type !== 'punt' && (
+                          <span className={`shrink-0 font-bold ${ev.yardsGained > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                            {ev.yardsGained > 0 ? `+${ev.yardsGained}` : ev.yardsGained}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div key={ev.id} className="px-2.5 py-1 text-[9px] text-center text-[var(--text-sec)] bg-[var(--surface-2)] border-b border-[var(--border)]">
+                      {ev.description}
+                    </div>
+                  )
+                ))}
+              </div>
+            </div>
+          )}
+
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Around the League</h3>
           <div className="space-y-1.5 max-h-[calc(100vh-6rem)] overflow-y-auto">
             {schedule

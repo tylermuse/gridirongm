@@ -2596,6 +2596,14 @@ export const useGameStore = create<GameStore>()(
       simWeek: () => {
         const state = get();
         if (state.phase !== 'regular') return;
+        // Guard: if this week's user game is already played, don't re-sim.
+        // Prevents score regeneration when the button is clicked rapidly or
+        // the component re-renders before IndexedDB persistence completes.
+        const userGameThisWeek = state.schedule.find(g =>
+          g.week === state.week && (g.homeTeamId === state.userTeamId || g.awayTeamId === state.userTeamId),
+        );
+        if (userGameThisWeek?.played) return;
+
         const result = simulateOneWeek(state);
         if (!result) return;
 

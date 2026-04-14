@@ -229,7 +229,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     </Link>
                   </span>
                 )}
-                <Button onClick={handleSimWeek} size="sm" className="active:scale-95 transition-transform">
+                <Button onClick={handleSimWeek} size="sm" className="active:scale-95 transition-transform" disabled={!!schedule.find(g => g.week === week && g.played && (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId))}>
                   Sim Week {week}
                 </Button>
                 {week <= (leagueSettings?.tradeDeadlineWeek ?? 12) + 1 && (
