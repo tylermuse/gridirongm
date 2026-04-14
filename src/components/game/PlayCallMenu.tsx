@@ -16,6 +16,10 @@ interface PlayCallMenuProps {
     fieldDescription: string;
   };
   isFourthDown: boolean;
+  /** True when the engine is waiting for XP/2PT choice after a user TD */
+  awaitingXpChoice?: boolean;
+  /** Timeouts remaining for the user's team */
+  timeoutsRemaining?: number;
   onPlayCall: (type: PlayCallType) => void;
   onAutoSimRest: () => void;
   onToggleOff: () => void;
@@ -28,6 +32,9 @@ export type PlayCallType =
   | 'qb_run'
   | 'screen'
   | 'punt'
+  | 'extra_point'
+  | 'two_point'
+  | 'timeout'
   | 'field_goal'
   | 'go_for_it';
 
@@ -39,7 +46,7 @@ const PLAY_BUTTONS: { type: PlayCallType; label: string; icon: string; color: st
   { type: 'screen', label: 'Screen', icon: '🛡️', color: 'bg-teal-600 hover:bg-teal-700' },
 ];
 
-export function PlayCallMenu({ state, isFourthDown, onPlayCall, onAutoSimRest, onToggleOff }: PlayCallMenuProps) {
+export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, timeoutsRemaining, onPlayCall, onAutoSimRest, onToggleOff }: PlayCallMenuProps) {
   const [goingForIt, setGoingForIt] = useState(false);
 
   function downLabel(down: number, yardsToGo: number): string {
@@ -77,7 +84,23 @@ export function PlayCallMenu({ state, isFourthDown, onPlayCall, onAutoSimRest, o
 
         {/* Play buttons */}
         <div className="px-3 py-3">
-          {isFourthDown && !goingForIt ? (
+          {awaitingXpChoice ? (
+            <div className="space-y-1.5">
+              <div className="text-xs font-bold text-amber-600 uppercase tracking-wider mb-2">🏆 Touchdown! Choose:</div>
+              <button
+                onClick={() => onPlayCall('extra_point')}
+                className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs bg-blue-600 hover:bg-blue-700 transition-colors"
+              >
+                🏈 Extra Point (94% success)
+              </button>
+              <button
+                onClick={() => onPlayCall('two_point')}
+                className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs bg-red-600 hover:bg-red-700 transition-colors"
+              >
+                💪 Go for 2 (48% success)
+              </button>
+            </div>
+          ) : isFourthDown && !goingForIt ? (
             <div className="space-y-1.5">
               <div className="grid grid-cols-2 gap-1.5">
                 <button
@@ -116,14 +139,24 @@ export function PlayCallMenu({ state, isFourthDown, onPlayCall, onAutoSimRest, o
           )}
         </div>
 
-        {/* Footer — escape hatches */}
+        {/* Footer — timeout + escape hatches */}
         <div className="px-3 py-2 border-t border-[var(--border)] bg-[var(--surface-2)]/30 flex items-center justify-between gap-2">
-          <button
-            onClick={onToggleOff}
-            className="text-[10px] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
-          >
-            Turn off
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onToggleOff}
+              className="text-[10px] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
+            >
+              Turn off
+            </button>
+            {!awaitingXpChoice && timeoutsRemaining !== undefined && timeoutsRemaining > 0 && (
+              <button
+                onClick={() => onPlayCall('timeout')}
+                className="text-[10px] font-bold text-amber-600 hover:text-amber-800 transition-colors"
+              >
+                ⏱️ Timeout ({timeoutsRemaining})
+              </button>
+            )}
+          </div>
           <button
             onClick={onAutoSimRest}
             className="px-2 py-1 text-[10px] font-bold rounded-lg bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] transition-colors"

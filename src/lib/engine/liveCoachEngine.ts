@@ -29,6 +29,11 @@ export interface LiveEngineState {
   twoMinWarningQ2Fired: boolean;
   twoMinWarningQ4Fired: boolean;
   overtime: boolean;
+  /** When true, the engine is waiting for an XP/2PT choice after a user TD */
+  awaitingXpChoice: boolean;
+  /** Timeouts remaining per team per half */
+  homeTimeouts: number;
+  awayTimeouts: number;
 }
 
 export interface LiveCoachEngine {
@@ -110,13 +115,20 @@ export function createLiveCoachEngine(
   homePlayers: Player[],
   awayPlayers: Player[],
   initialState: LiveEngineState,
+  /** Which side the user controls — needed to determine user TDs for XP choice */
+  userSide: 'home' | 'away' = 'home',
 ): LiveCoachEngine {
   const homeOff = extractOff(homePlayers);
   const awayOff = extractOff(awayPlayers);
   const homeDef = extractDef(homePlayers);
   const awayDef = extractDef(awayPlayers);
 
-  const state: LiveEngineState = { ...initialState };
+  const state: LiveEngineState = {
+    ...initialState,
+    awaitingXpChoice: initialState.awaitingXpChoice ?? false,
+    homeTimeouts: initialState.homeTimeouts ?? 3,
+    awayTimeouts: initialState.awayTimeouts ?? 3,
+  };
   let nextEventId = 100000; // start high to avoid colliding with pre-computed event ids
 
   // ── Event constructor ──
@@ -171,6 +183,9 @@ export function createLiveCoachEngine(
       state.quarter = 3;
       state.timeSecs = 900;
       state.twoMinWarningQ2Fired = false;
+      // Reset timeouts for the second half
+      state.homeTimeouts = 3;
+      state.awayTimeouts = 3;
       // Second-half kickoff
       doKickoffEvents(events);
     } else if (state.quarter === 4) {
@@ -257,7 +272,7 @@ export function createLiveCoachEngine(
     events.push(makeEvent('run', desc, finalYards, isTD));
 
     if (isTD) {
-      handleTouchdown(events);
+      handleTouchdown(events, state.possession === userSide);
     } else {
       state.fieldPos = clamp(newPos, 1, 99);
       state.yardsToGo -= finalYards;
@@ -332,7 +347,7 @@ export function createLiveCoachEngine(
       events.push(makeEvent('pass_complete', desc, finalYards, isTD));
 
       if (isTD) {
-        handleTouchdown(events);
+        handleTouchdown(events, state.possession === userSide);
       } else {
         state.fieldPos = clamp(newPos, 1, 99);
         state.yardsToGo -= finalYards;
@@ -354,15 +369,55 @@ export function createLiveCoachEngine(
     }
   }
 
-  function handleTouchdown(events: PlayEvent[]) {
+  function handleTouchdown(events: PlayEvent[], isUserTd = false) {
     addScore(6);
-    // Extra point
+    if (isUserTd) {
+      // User scored — set flag so the engine pauses for XP/2PT choice
+      state.awaitingXpChoice = true;
+      // Don't do XP or kickoff yet — wait for user's call
+    } else {
+      // Opponent scored — auto-pick XP
+      const k = offKey().k;
+      const epGood = Math.random() < 0.95;
+      if (epGood) addScore(1);
+      events.push(makeEvent('extra_point', epGood ? 'Extra point is GOOD.' : 'Extra point is no good!', 0, false));
+      doKickoffEvents(events);
+    }
+  }
+
+  function runExtraPoint(events: PlayEvent[]) {
     const k = offKey().k;
     const epGood = Math.random() < 0.95;
     if (epGood) addScore(1);
     events.push(makeEvent('extra_point', epGood ? 'Extra point is GOOD.' : 'Extra point is no good!', 0, false));
-    // Kickoff
+    state.awaitingXpChoice = false;
     doKickoffEvents(events);
+  }
+
+  function runTwoPointConversion(events: PlayEvent[]) {
+    const ok = offKey();
+    const success = Math.random() < 0.48; // NFL average ~48%
+    if (success) {
+      addScore(2);
+      const qbName = nameOrFallback(ok.qb, 'the QB');
+      events.push(makeEvent('extra_point', `Two-point conversion is GOOD! ${qbName} finds the end zone!`, 0, false));
+    } else {
+      const qbName = nameOrFallback(ok.qb, 'the QB');
+      events.push(makeEvent('extra_point', `Two-point conversion FAILS. ${qbName} comes up short.`, 0, false));
+    }
+    state.awaitingXpChoice = false;
+    doKickoffEvents(events);
+  }
+
+  function callTimeout(events: PlayEvent[]) {
+    const isUser = state.possession === (initialState as LiveEngineState).possession; // approximate
+    if (state.possession === 'home' && state.homeTimeouts > 0) {
+      state.homeTimeouts--;
+      events.push(makeEvent('run', `⏱️ Timeout called by ${homeTeam.abbreviation}. (${state.homeTimeouts} remaining)`, 0, false));
+    } else if (state.possession === 'away' && state.awayTimeouts > 0) {
+      state.awayTimeouts--;
+      events.push(makeEvent('run', `⏱️ Timeout called by ${awayTeam.abbreviation}. (${state.awayTimeouts} remaining)`, 0, false));
+    }
   }
 
   function runFieldGoal(events: PlayEvent[]) {
@@ -421,6 +476,30 @@ export function createLiveCoachEngine(
   function runOnePlay(userCall?: PlayCallType): PlayEvent[] {
     const events: PlayEvent[] = [];
     if (state.isGameOver) return events;
+
+    // Handle XP/2PT choice first if awaiting
+    if (state.awaitingXpChoice) {
+      if (userCall === 'extra_point' as PlayCallType) {
+        runExtraPoint(events);
+        return events;
+      } else if (userCall === 'two_point' as PlayCallType) {
+        runTwoPointConversion(events);
+        return events;
+      } else if (!userCall) {
+        // AI auto-picks XP
+        runExtraPoint(events);
+        return events;
+      }
+      // If user sent a different call while awaiting XP, default to XP
+      runExtraPoint(events);
+      return events;
+    }
+
+    // Handle timeout call
+    if (userCall === 'timeout' as PlayCallType) {
+      callTimeout(events);
+      return events;
+    }
 
     checkTwoMinWarning(events);
     if (state.timeSecs <= 0) {

@@ -580,10 +580,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     if (liveCoachPaused) return;
     if (revealedCount < totalEvents) return; // still events to reveal
 
-    // Check if next play is user offensive — if so, hold for input.
+    // Check if next play is user offensive OR awaiting XP/2PT choice
     const engineState = liveEngineRef.current.getState();
     const isUserOffenseNow = !!userTeamSide && engineState.possession === userTeamSide && !engineState.isGameOver;
-    if (liveCoachOn && isUserOffenseNow) {
+    const needsUserInput = isUserOffenseNow || engineState.awaitingXpChoice;
+    if (liveCoachOn && needsUserInput) {
       setLiveCoachPaused(true);
       setIsPlaying(false);
       return;
@@ -1212,7 +1213,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                         twoMinWarningQ2Fired: seedEvent.quarter > 2 || (seedEvent.quarter === 2 && seedEvent.timeStr <= '2:00'),
                         twoMinWarningQ4Fired: seedEvent.quarter > 4 || (seedEvent.quarter === 4 && seedEvent.timeStr <= '2:00'),
                         overtime: seedEvent.quarter > 4,
+                        awaitingXpChoice: false,
+                        homeTimeouts: 3,
+                        awayTimeouts: 3,
                       },
+                      userTeamSide ?? 'home',
                     );
                     setLiveEnginePivotIdx(revealedCount);
                     setLiveExtraEvents([]);
@@ -1655,6 +1660,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   fieldDescription,
                 }}
                 isFourthDown={es.down === 4}
+                awaitingXpChoice={es.awaitingXpChoice}
+                timeoutsRemaining={userTeamSide === 'home' ? es.homeTimeouts : es.awayTimeouts}
                 onPlayCall={(playCall) => {
                   // Clear any lingering outcome chip from the previous play
                   setOutcomeChip(null);
