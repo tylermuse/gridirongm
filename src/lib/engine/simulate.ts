@@ -454,10 +454,12 @@ function simulatePlay(
     // ~10% of rush plays are QB scrambles/designed runs (NFL avg ~3-5 QB carries/game)
     const qbScramble = qb && Math.random() < 0.10;
     const rushPool = qbScramble ? [qb, ...rbs] : rbs;
+    // RB rotation: RB1 gets ~45% of carries (was ~57%), RB2 ~35%, RB3+ ~20%.
+    // This naturally caps RB1 seasons at ~1,200 yards instead of 1,500+.
     const rushWeights = rushPool.map((r, i) => {
       if (qbScramble && i === 0) return 3 * (r.ratings.speed / 70); // QB scramble weighted by speed
       const rbIdx = qbScramble ? i - 1 : i;
-      const starterBonus = rbIdx === 0 ? 4 : rbIdx === 1 ? 2 : 1;
+      const starterBonus = rbIdx === 0 ? 2.5 : rbIdx === 1 ? 2 : 1.2;
       return starterBonus * (r.ratings.carrying / 70);
     });
     const rusher = weightedPick(rushPool, rushWeights);

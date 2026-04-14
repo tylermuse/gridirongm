@@ -2737,7 +2737,22 @@ export const useGameStore = create<GameStore>()(
           playerStats: {},
         };
 
-        const result = simulateGame(tempGame, homeRoster, awayRoster);
+        let result = simulateGame(tempGame, homeRoster, awayRoster);
+
+        // Defensive: if the playoff score matches a regular-season game between
+        // the same two teams this season, re-simulate once so users don't see
+        // an identical score and think it's a bug. (Math.random() should make
+        // duplicates near-impossible, but this is cheap insurance.)
+        const sameMatchupRegGame = state.schedule.find(g =>
+          g.played &&
+          ((g.homeTeamId === matchup.homeTeamId && g.awayTeamId === matchup.awayTeamId) ||
+           (g.homeTeamId === matchup.awayTeamId && g.awayTeamId === matchup.homeTeamId)) &&
+          g.homeScore === result.homeScore && g.awayScore === result.awayScore,
+        );
+        if (sameMatchupRegGame) {
+          result = simulateGame(tempGame, homeRoster, awayRoster);
+        }
+
         const winnerId =
           result.homeScore >= result.awayScore ? matchup.homeTeamId : matchup.awayTeamId;
 
@@ -5645,10 +5660,28 @@ export const useGameStore = create<GameStore>()(
           });
         }
 
+        // During the re-signing phase, if we acquired a player with an expiring
+        // contract, add them to the user's re-signing queue so the user gets a
+        // chance to re-sign them before they hit free agency.
+        let updatedResigningPlayers = state.resigningPlayers;
+        if (state.phase === 'resigning') {
+          const newExpiringPlayers = receivedPlayerIds
+            .map(id => updatedPlayers.find(p => p.id === id))
+            .filter((p): p is Player => !!p && p.contract.yearsLeft <= 1 && !p.retired);
+          if (newExpiringPlayers.length > 0) {
+            const userTeamForResign = finalTeams.find(t => t.id === state.userTeamId);
+            const newEntries = newExpiringPlayers
+              .filter(p => !updatedResigningPlayers.some(e => e.playerId === p.id))
+              .map(p => computeResigningEntry(p, userTeamForResign!));
+            updatedResigningPlayers = [...updatedResigningPlayers, ...newEntries];
+          }
+        }
+
         set({
           players: updatedPlayers,
           teams: finalTeams,
           draftOrder: updatedDraftOrder,
+          resigningPlayers: updatedResigningPlayers,
           newsItems: [...state.newsItems, tradeNews],
         });
 
