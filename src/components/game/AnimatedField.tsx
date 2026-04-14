@@ -826,8 +826,20 @@ export function AnimatedField({
   // When event changes, derive new state and build animation
   useEffect(() => {
     const ref = animRef.current;
-    const prevState = prevEvent ? deriveFieldState(prevEvent) : ref.nextState;
     const nextState = event ? deriveFieldState(event) : idleFieldState();
+    // For the "from" state: use the current event's scrimmage as the starting
+    // point (NOT the previous event's result). This prevents the "previous play
+    // replays" bug — e.g., an incomplete pass animation showing before a run.
+    // The animation only needs to show the CURRENT play's movement, not a
+    // transition from the previous play's end state.
+    const prevState = (() => {
+      // If no previous event, use current state as starting point
+      if (!prevEvent) return ref.nextState;
+      // Build a "clean" prev state that starts at the current event's LOS
+      // This is what the field looks like PRE-SNAP for this play
+      const clean = { ...nextState, ballYard: nextState.scrimmageYard };
+      return clean;
+    })();
 
     ref.prevState = prevState;
     ref.nextState = nextState;
