@@ -23,9 +23,9 @@ import type { Player, Position } from '@/types';
 type Speed = '1x' | '2x' | '5x' | 'max';
 
 const SPEED_MS: Record<Speed, number> = {
-  '1x': 4800,
-  '2x': 2000,
-  '5x': 500,
+  '1x': 6000,
+  '2x': 2500,
+  '5x': 600,
   'max': 0,
 };
 
@@ -589,12 +589,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       return;
     }
 
-    // Auto-run AI play
+    // Auto-run AI play — advance revealedCount immediately
     const newEvents = liveEngineRef.current.runOnePlay();
     if (newEvents.length > 0) {
       setLiveExtraEvents(prev => [...prev, ...newEvents]);
+      setRevealedCount(prev => prev + 1);
       setIsPlaying(true);
-      setAnimationComplete(true);
+      setAnimationComplete(false);
     }
     // Including isPlaying in deps ensures this re-fires when the animation
     // timer gives up (sets isPlaying=false at the end of pre-computed events).
@@ -627,7 +628,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       return;
     }
     // Post-animation pause — gives time to read the play description before advancing
-    const PAUSE_MS: Record<Speed, number> = { '1x': 1400, '2x': 600, '5x': 80, 'max': 0 };
+    const PAUSE_MS: Record<Speed, number> = { '1x': 2000, '2x': 800, '5x': 100, 'max': 0 };
     const pause = PAUSE_MS[speed];
     nextPlayTimerRef.current = setTimeout(() => {
       setRevealedCount(prev => {
@@ -1616,11 +1617,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                     const newEvents = liveEngineRef.current.runOnePlay(playCall);
                     if (newEvents.length > 0) {
                       setLiveExtraEvents(prev => [...prev, ...newEvents]);
+                      // Advance revealedCount IMMEDIATELY so the new event is
+                      // shown right away — don't wait for the animation timer's
+                      // pause delay (1400ms at 1x) which would leave the old
+                      // play visible while the user waits.
+                      setRevealedCount(prev => prev + 1);
+                      setAnimationComplete(false); // trigger the new animation
                     }
                   }
                   setLiveCoachPaused(false);
                   setIsPlaying(true);
-                  setAnimationComplete(true);
                 }}
                 onAutoSimRest={() => {
                   if (liveEngineRef.current) {
