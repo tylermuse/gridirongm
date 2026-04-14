@@ -23,9 +23,9 @@ import type { Player, Position } from '@/types';
 type Speed = '1x' | '2x' | '5x' | 'max';
 
 const SPEED_MS: Record<Speed, number> = {
-  '1x': 6000,
-  '2x': 2500,
-  '5x': 600,
+  '1x': 8000,
+  '2x': 3500,
+  '5x': 800,
   'max': 0,
 };
 
@@ -628,7 +628,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       return;
     }
     // Post-animation pause — gives time to read the play description before advancing
-    const PAUSE_MS: Record<Speed, number> = { '1x': 2000, '2x': 800, '5x': 100, 'max': 0 };
+    const PAUSE_MS: Record<Speed, number> = { '1x': 3500, '2x': 1200, '5x': 150, 'max': 0 };
     const pause = PAUSE_MS[speed];
     nextPlayTimerRef.current = setTimeout(() => {
       setRevealedCount(prev => {
