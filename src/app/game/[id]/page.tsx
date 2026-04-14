@@ -589,13 +589,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       return;
     }
 
-    // Auto-run AI play — advance revealedCount immediately
+    // Auto-run AI play — add events and let the normal animation timer
+    // reveal them at the correct speed (don't bypass the timer like we
+    // do for user plays). This way opponent drives play out visually
+    // at 1x/2x/5x speed instead of happening in a split second.
     const newEvents = liveEngineRef.current.runOnePlay();
     if (newEvents.length > 0) {
       setLiveExtraEvents(prev => [...prev, ...newEvents]);
-      setRevealedCount(prev => prev + 1);
       setIsPlaying(true);
-      setAnimationComplete(false);
+      setAnimationComplete(true); // triggers the normal advance timer with pause
     }
     // Including isPlaying in deps ensures this re-fires when the animation
     // timer gives up (sets isPlaying=false at the end of pre-computed events).
