@@ -57,11 +57,13 @@ function clamp(v: number, min: number, max: number): number {
  *  the user. If not set, defaults to 'home'. */
 let _userSide: 'home' | 'away' = 'home';
 export function setUserSide(side: 'home' | 'away') { _userSide = side; }
+export function getUserSide(): 'home' | 'away' { return _userSide; }
 
 function toAbsoluteYard(fieldPos: number, possession: 'home' | 'away'): number {
-  // User on offense: drives left→right. fieldPos = distance from own EZ = left.
+  // User-anchored: user's endzone is on the LEFT (absYard 0).
+  // User on offense: drives left→right. fieldPos maps directly.
   if (possession === _userSide) return fieldPos;
-  // Opponent on offense: drives right→left. Their own-25 starts at absYard 75 (near right).
+  // Opponent on offense: drives right→left. Their own-25 → absYard 75.
   return 100 - fieldPos;
 }
 
