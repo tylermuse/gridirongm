@@ -42,30 +42,35 @@ function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
-/** Convert "yards from possessing team's endzone" to absolute yard (0=away EZ, 100=home EZ) */
-function toAbsoluteYard(fieldPos: number, possession: 'home' | 'away'): number {
-  // Canvas layout: LEFT=away endzone (absYard 0), RIGHT=home endzone (absYard 100)
-  // Away at fieldPos 0 = own goal line = absYard 0 (left). Away attacks left→right.
-  // Home at fieldPos 0 = own goal line = absYard 100 (right). Home attacks right→left.
-  if (possession === 'home') return 100 - fieldPos;
+/** Convert "yards from possessing team's endzone" to absolute yard.
+ *
+ *  CANONICAL ORIENTATION: The possessing team ALWAYS drives left→right.
+ *  - absYard 0 = possessing team's own endzone (left side of canvas)
+ *  - absYard 100 = opponent's endzone (right side, where they're trying to score)
+ *
+ *  This is independent of home/away. When possession flips, the endzone
+ *  labels swap to show who's driving, but the coordinate system stays the
+ *  same: own goal = left, opponent goal = right. */
+function toAbsoluteYard(fieldPos: number, _possession: 'home' | 'away'): number {
   return fieldPos;
 }
 
-/** Place formation dots relative to an absolute scrimmage yard */
+/** Place formation dots relative to an absolute scrimmage yard.
+ *  Canonical orientation: offense drives left→right (increasing absYard).
+ *  Offense lines up BEHIND (to the left of) the LOS; defense in FRONT. */
 function placeDots(
   formation: DotPosition[],
   scrimmageAbsYard: number,
-  possession: 'home' | 'away',
+  _possession: 'home' | 'away',
   role: 'offense' | 'defense',
 ): DotState[] {
-  // Offense behind LOS, defense in front. Direction depends on possession.
-  // Home attacks left (decreasing absYard, -1), Away attacks right (increasing absYard, +1)
-  const dir = possession === 'home' ? -1 : 1;
-  const offenseDir = role === 'offense' ? -1 : 1; // offense is behind LOS, defense in front
+  // Offense is behind LOS (lower absYard), defense in front (higher absYard).
+  // dir = +1 always (canonical left→right). offenseDir flips for defense.
+  const offenseDir = role === 'offense' ? -1 : 1;
 
   return formation.map(dot => {
     const absYard = clamp(
-      scrimmageAbsYard + dot.yardOffset * dir * offenseDir,
+      scrimmageAbsYard + dot.yardOffset * offenseDir,
       0,
       100,
     );
@@ -88,7 +93,8 @@ export function deriveFieldState(
   const { possession, fieldPos, down, yardsToGo, yardsGained, type } = event;
 
   const scrimmageAbsYard = toAbsoluteYard(fieldPos, possession);
-  const dir = possession === 'home' ? -1 : 1;
+  // Canonical: offense always drives left→right (+1 direction)
+  const dir = 1;
   const firstDownAbsYard = clamp(scrimmageAbsYard + yardsToGo * dir, 0, 100);
 
   // Ball position after play result

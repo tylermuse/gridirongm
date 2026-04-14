@@ -287,14 +287,14 @@ function drawFieldPositionLabel(
   ballX: number,
   ballY: number,
   event: PlayEvent | null,
-  homeAbbr: string,
-  awayAbbr: string,
+  _homeAbbr: string,
+  _awayAbbr: string,
 ) {
   if (!event || !event.fieldPos) return;
   const fp = event.fieldPos;
-  const possAbbr = event.possession === 'home' ? homeAbbr : awayAbbr;
-  const oppAbbr = event.possession === 'home' ? awayAbbr : homeAbbr;
-  const label = fp <= 50 ? `${possAbbr} ${fp}` : `${oppAbbr} ${100 - fp}`;
+  // Canonical orientation: left = own endzone, right = opponent endzone.
+  // fieldPos is always "yards from own endzone".
+  const label = fp <= 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
 
   ctx.save();
   ctx.font = 'bold 10px system-ui, sans-serif';
@@ -469,7 +469,8 @@ function drawEffects(
         // End zone pulse
         const endzoneW = w * (10 / 120);
         const tdAlpha = Math.max(0, 0.5 * (1 - progress));
-        const ezX = possession === 'home' ? w - endzoneW : 0;
+        // Canonical: opponent endzone (where TDs happen) is always on the right
+        const ezX = w - endzoneW;
         ctx.fillStyle = `rgba(255, 215, 0, ${tdAlpha})`;
         ctx.fillRect(ezX, 0, endzoneW, h);
 
@@ -664,8 +665,8 @@ function drawScoreFlash(
 ) {
   if (progress >= 1) return;
   const endzoneW = w * (10 / 120);
-  // Scoring team's TARGET endzone (opposite of their own)
-  const ezX = possession === 'home' ? 0 : w - endzoneW;
+  // Canonical: scoring happens in the RIGHT endzone (opponent's)
+  const ezX = w - endzoneW;
 
   // Pulsing alpha — two pulses
   const pulse = Math.sin(progress * Math.PI * 3) * 0.5 + 0.5;
@@ -893,13 +894,10 @@ export function AnimatedField({
         ref.isAnimating = true;
       }
 
-      // Spawn confetti on TD
+      // Spawn confetti on TD — canonical: opponent endzone is at 100 (right)
       if (ref.animation.effects.includes('confetti')) {
-        const possession = event.possession;
-        const ezX = possession === 'home'
-          ? absYardToCanvasX(100, canvasSize.w)
-          : absYardToCanvasX(0, canvasSize.w);
-        const teamColor = possession === 'home' ? homeColor : awayColor;
+        const ezX = absYardToCanvasX(100, canvasSize.w);
+        const teamColor = event.possession === 'home' ? homeColor : awayColor;
         ref.confetti = spawnConfetti(ezX, canvasSize.h / 2, teamColor, 40);
       }
     } else {
@@ -1021,13 +1019,19 @@ export function AnimatedField({
     // Clear
     ctx.clearRect(0, 0, w, h);
 
-    // Draw field background
-    drawField(ctx, w, h, homeColor, awayColor, homeAbbr, awayAbbr);
-
     // Determine current visual state
     const anim = ref.animation;
     const progress = ref.progress;
     const state = ref.nextState;
+
+    // Draw field background — canonical orientation: possessing team's endzone
+    // on the LEFT, opponent's on the RIGHT. Labels + colors swap on possession change.
+    const poss = state.possession;
+    const leftColor = poss === 'home' ? homeColor : awayColor;
+    const rightColor = poss === 'home' ? awayColor : homeColor;
+    const leftAbbr = poss === 'home' ? homeAbbr : awayAbbr;
+    const rightAbbr = poss === 'home' ? awayAbbr : homeAbbr;
+    drawField(ctx, w, h, rightColor, leftColor, rightAbbr, leftAbbr);
 
     // LOS and first-down lines: always show the CURRENT play's pre-snap positions.
     // state = ref.nextState = deriveFieldState(currentEvent), where scrimmageYard

@@ -83,7 +83,8 @@ export function buildPlayAnimation(
 
   const type = event.type;
   const possession = nextState.possession;
-  const dir = possession === 'home' ? -1 : 1;
+  // Canonical orientation: offense always drives left→right (+1).
+  const dir = 1;
 
   // Use nextState dots — they are placed at the CURRENT event's pre-snap LOS
   // (deriveFieldState uses event.fieldPos which is the pre-snap field position).
@@ -240,7 +241,8 @@ export function buildPlayAnimation(
       const scorerIndex = rbIndex >= 0 ? rbIndex : (wrIndices[0] ?? 0);
       if (scorerIndex >= 0 && scorerIndex < nextState.offenseDots.length) {
         const scorer = nextState.offenseDots[scorerIndex];
-        const ezYard = possession === 'home' ? 100 : 0;
+        // Canonical: offense drives left→right, opponent endzone is at 100
+        const ezYard = 100;
         movingDots.push({
           team: 'offense',
           index: scorerIndex,
@@ -258,7 +260,8 @@ export function buildPlayAnimation(
       const kickerIndex = nextState.offenseDots.findIndex(d => d.label === 'K');
       if (kickerIndex >= 0) {
         const kicker = nextState.offenseDots[kickerIndex];
-        const targetX = possession === 'home' ? 100 : 0;
+        // Canonical: opponent endzone always at 100 (right)
+        const targetX = 100;
         ballArc = {
           startX: kicker.x,
           startY: 0.5,
@@ -275,7 +278,8 @@ export function buildPlayAnimation(
       const kickerIndex = nextState.offenseDots.findIndex(d => d.label === 'K');
       if (kickerIndex >= 0) {
         const kicker = nextState.offenseDots[kickerIndex];
-        const targetX = possession === 'home' ? 100 : 0;
+        // Canonical: opponent endzone always at 100 (right)
+        const targetX = 100;
         ballArc = {
           startX: kicker.x,
           startY: 0.5,
@@ -311,7 +315,8 @@ export function buildPlayAnimation(
 
     case 'kickoff': {
       ballArc = {
-        startX: possession === 'home' ? 65 : 35,
+        // Canonical: kickoff from own 35 (left side), ball goes right
+        startX: 35,
         startY: 0.5,
         peakHeight: 65, // higher arc for kickoffs (was 45)
         endX: postBallX,
