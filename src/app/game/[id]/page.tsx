@@ -645,10 +645,32 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
   const skipToEnd = useCallback(() => {
     clearNextPlayTimer();
-    setRevealedCount(totalEvents);
+    // If the live engine is active, run it to completion first
+    if (liveEngineRef.current && !liveEngineRef.current.isFinished()) {
+      const allRest: PlayEvent[] = [];
+      let safety = 0;
+      while (!liveEngineRef.current.isFinished() && safety < 500) {
+        const evs = liveEngineRef.current.runOnePlay();
+        allRest.push(...evs);
+        safety++;
+      }
+      if (allRest.length > 0) {
+        setLiveExtraEvents(prev => {
+          const updated = [...prev, ...allRest];
+          // Set revealedCount to the new total after all events are added
+          const newTotal = (liveEnginePivotIdx ?? 0) + updated.length;
+          setRevealedCount(newTotal);
+          return updated;
+        });
+      }
+      setLiveCoachOn(false);
+      setLiveCoachPaused(false);
+    } else {
+      setRevealedCount(totalEvents);
+    }
     setAnimationComplete(true);
     setIsPlaying(false);
-  }, [totalEvents, clearNextPlayTimer]);
+  }, [totalEvents, clearNextPlayTimer, liveEnginePivotIdx]);
 
   useEffect(() => {
     if (speed === 'max' && isPlaying && !isFinished) {
