@@ -752,9 +752,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
     if (!text) return;
 
+    // Big plays persist longer so the user doesn't miss them
+    const isBigPlay = ['🏆', '✅', '❌', '🔄'].some(icon => text.includes(icon));
+    const chipDuration = isBigPlay ? 4000 : 1500;
+
     if (outcomeTimerRef.current) clearTimeout(outcomeTimerRef.current);
     setOutcomeChip({ text, color });
-    outcomeTimerRef.current = setTimeout(() => setOutcomeChip(null), 1500);
+    outcomeTimerRef.current = setTimeout(() => setOutcomeChip(null), chipDuration);
   }, [revealedCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-start: reveal first play when game starts
@@ -1048,7 +1052,18 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           isPlaying={isPlaying}
           drivePlays={currentDrive.plays}
           driveYards={currentDrive.yards}
-          lastPlayDescription={currentEvent && !isSeparator(currentEvent.type) ? addPlayTypeIcon(currentEvent) : null}
+          lastPlayDescription={(() => {
+            // Show the most recent non-separator play description.
+            // Check currentEvent first, then fall back to the last engine event.
+            if (currentEvent && !isSeparator(currentEvent.type)) return addPlayTypeIcon(currentEvent);
+            // When paused for Live Coach, currentEvent might be a separator/old event.
+            // Search backwards through revealed events for the most recent play.
+            for (let i = revealedCount - 1; i >= 0; i--) {
+              const ev = allEvents[i];
+              if (ev && !isSeparator(ev.type)) return addPlayTypeIcon(ev);
+            }
+            return null;
+          })()}
         />
 
         {/* Animated field + outcome chip overlay */}
