@@ -44,33 +44,43 @@ function clamp(v: number, min: number, max: number): number {
 
 /** Convert "yards from possessing team's endzone" to absolute yard.
  *
- *  CANONICAL ORIENTATION: The possessing team ALWAYS drives left→right.
- *  - absYard 0 = possessing team's own endzone (left side of canvas)
- *  - absYard 100 = opponent's endzone (right side, where they're trying to score)
+ *  USER-ANCHORED ORIENTATION: The user's endzone is ALWAYS on the left.
+ *  - absYard 0 = user's endzone (left)
+ *  - absYard 100 = opponent's endzone (right)
  *
- *  This is independent of home/away. When possession flips, the endzone
- *  labels swap to show who's driving, but the coordinate system stays the
- *  same: own goal = left, opponent goal = right. */
-function toAbsoluteYard(fieldPos: number, _possession: 'home' | 'away'): number {
-  return fieldPos;
+ *  When the user has the ball: they drive left→right (fieldPos maps directly).
+ *  When the opponent has the ball: they drive right→left (fieldPos is flipped
+ *  so their own-25 starts near the right side).
+ *
+ *  The `possession` param tells us who has the ball. The `userSide` param
+ *  (stored in module state, set by AnimatedField) tells us which side is
+ *  the user. If not set, defaults to 'home'. */
+let _userSide: 'home' | 'away' = 'home';
+export function setUserSide(side: 'home' | 'away') { _userSide = side; }
+
+function toAbsoluteYard(fieldPos: number, possession: 'home' | 'away'): number {
+  // User on offense: drives left→right. fieldPos = distance from own EZ = left.
+  if (possession === _userSide) return fieldPos;
+  // Opponent on offense: drives right→left. Their own-25 starts at absYard 75 (near right).
+  return 100 - fieldPos;
 }
 
 /** Place formation dots relative to an absolute scrimmage yard.
- *  Canonical orientation: offense drives left→right (increasing absYard).
- *  Offense lines up BEHIND (to the left of) the LOS; defense in FRONT. */
+ *  User-anchored: user drives left→right, opponent drives right→left. */
 function placeDots(
   formation: DotPosition[],
   scrimmageAbsYard: number,
-  _possession: 'home' | 'away',
+  possession: 'home' | 'away',
   role: 'offense' | 'defense',
 ): DotState[] {
-  // Offense is behind LOS (lower absYard), defense in front (higher absYard).
-  // dir = +1 always (canonical left→right). offenseDir flips for defense.
+  // Direction the offense faces: user team goes right (+1), opponent goes left (-1)
+  const driveDir = possession === _userSide ? 1 : -1;
+  // Offense is behind LOS, defense in front
   const offenseDir = role === 'offense' ? -1 : 1;
 
   return formation.map(dot => {
     const absYard = clamp(
-      scrimmageAbsYard + dot.yardOffset * offenseDir,
+      scrimmageAbsYard + dot.yardOffset * driveDir * offenseDir,
       0,
       100,
     );
@@ -93,8 +103,8 @@ export function deriveFieldState(
   const { possession, fieldPos, down, yardsToGo, yardsGained, type } = event;
 
   const scrimmageAbsYard = toAbsoluteYard(fieldPos, possession);
-  // Canonical: offense always drives left→right (+1 direction)
-  const dir = 1;
+  // User-anchored: user drives left→right (+1), opponent drives right→left (-1)
+  const dir = possession === _userSide ? 1 : -1;
   const firstDownAbsYard = clamp(scrimmageAbsYard + yardsToGo * dir, 0, 100);
 
   // Ball position after play result

@@ -664,6 +664,29 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     }
   }, [speed, isPlaying, isFinished, totalEvents, clearNextPlayTimer]);
 
+  // Add play-type icon to event descriptions that don't already have one
+  // (Live Coach events already have icons; this covers CPU/pre-computed events)
+  function addPlayTypeIcon(evt: PlayEvent): string {
+    const desc = evt.description;
+    // Already has an icon from the Live Coach formatter
+    if (/^[🏃🎯🚀⚡🛡🥾🏹]/.test(desc)) return desc;
+    // Add icon based on event type
+    const ICONS: Partial<Record<string, string>> = {
+      run: '🏃',
+      pass_complete: '🎯',
+      pass_incomplete: '🎯',
+      sack: '💥',
+      interception: '🔄',
+      fumble: '🔄',
+      punt: '🥾',
+      field_goal_good: '🏹',
+      field_goal_miss: '🏹',
+      touchdown: '🏆',
+    };
+    const icon = ICONS[evt.type];
+    return icon ? `${icon} ${desc}` : desc;
+  }
+
   // Post-play outcome chip — fire whenever a new play event is revealed
   useEffect(() => {
     if (!currentEvent || !currentEvent.type) return;
@@ -1000,7 +1023,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           isPlaying={isPlaying}
           drivePlays={currentDrive.plays}
           driveYards={currentDrive.yards}
-          lastPlayDescription={currentEvent && !isSeparator(currentEvent.type) ? currentEvent.description : null}
+          lastPlayDescription={currentEvent && !isSeparator(currentEvent.type) ? addPlayTypeIcon(currentEvent) : null}
         />
 
         {/* Animated field + outcome chip overlay */}
@@ -1031,6 +1054,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             onAnimationComplete={handleAnimationComplete}
             driveYards={currentDrive.yards}
             drivePossession={engineSnapshot?.possession ?? currentEvent?.possession}
+            userSide={userTeamSide ?? 'home'}
           />
 
           {/* Post-play outcome chip */}
@@ -1043,27 +1067,26 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           )}
         </div>
 
-        {/* Drive summary ribbon */}
+        {/* Drive summary ribbon — uses the same live* vars as the scorebug
+            so it always matches (including engine state during Live Coach) */}
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg px-4 py-1.5 text-xs text-[var(--text-sec)] flex items-center justify-between">
           <span>
             <span className="font-bold text-[var(--text)]">Drive:</span>{' '}
             {currentDrive.plays} play{currentDrive.plays !== 1 ? 's' : ''}, {currentDrive.yards >= 0 ? '+' : ''}{currentDrive.yards} yds
           </span>
           <span className="tabular-nums">
-            {currentEvent ? (
-              <>
-                {currentEvent.down >= 1 && currentEvent.down <= 4 && (
-                  <span className="font-medium text-[var(--text)]">
-                    {['1st', '2nd', '3rd', '4th'][currentEvent.down - 1]} & {currentEvent.yardsToGo <= 0 ? 'Goal' : currentEvent.yardsToGo}
-                  </span>
-                )}
-                {' '}at{' '}
-                {currentEvent.fieldPos <= 50
-                  ? `OWN ${currentEvent.fieldPos}`
-                  : `OPP ${100 - currentEvent.fieldPos}`
-                }
-              </>
-            ) : null}
+            {liveDown >= 1 && liveDown <= 4 && (
+              <span className="font-medium text-[var(--text)]">
+                {['1st', '2nd', '3rd', '4th'][liveDown - 1]} & {liveYtg <= 0 ? 'Goal' : liveYtg}
+              </span>
+            )}
+            {' '}at{' '}
+            {(() => {
+              // Use team abbreviations for the ribbon (not OWN/OPP)
+              const possAbbr = livePoss === 'home' ? homeAbbr : awayAbbr;
+              const oppAbbr2 = livePoss === 'home' ? awayAbbr : homeAbbr;
+              return liveFieldPos <= 50 ? `${possAbbr} ${liveFieldPos}` : `${oppAbbr2} ${100 - liveFieldPos}`;
+            })()}
           </span>
         </div>
 

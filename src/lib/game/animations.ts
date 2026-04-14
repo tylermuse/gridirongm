@@ -5,6 +5,10 @@
 import type { PlayEvent } from '@/lib/engine/playByPlay';
 import type { GameFieldState, DotState } from './fieldState';
 
+// Import the user-side setting so animation directions match the user-anchored field
+let _animUserSide: 'home' | 'away' = 'home';
+export function setAnimUserSide(side: 'home' | 'away') { _animUserSide = side; }
+
 // ---------------------------------------------------------------------------
 // Easing functions
 // ---------------------------------------------------------------------------
@@ -83,8 +87,8 @@ export function buildPlayAnimation(
 
   const type = event.type;
   const possession = nextState.possession;
-  // Canonical orientation: offense always drives left→right (+1).
-  const dir = 1;
+  // User-anchored: user drives left→right (+1), opponent right→left (-1)
+  const dir = possession === _animUserSide ? 1 : -1;
 
   // Use nextState dots — they are placed at the CURRENT event's pre-snap LOS
   // (deriveFieldState uses event.fieldPos which is the pre-snap field position).
@@ -241,8 +245,8 @@ export function buildPlayAnimation(
       const scorerIndex = rbIndex >= 0 ? rbIndex : (wrIndices[0] ?? 0);
       if (scorerIndex >= 0 && scorerIndex < nextState.offenseDots.length) {
         const scorer = nextState.offenseDots[scorerIndex];
-        // Canonical: offense drives left→right, opponent endzone is at 100
-        const ezYard = 100;
+        // User-anchored: user scores at 100 (right), opponent scores at 0 (left)
+        const ezYard = possession === _animUserSide ? 100 : 0;
         movingDots.push({
           team: 'offense',
           index: scorerIndex,
@@ -260,8 +264,8 @@ export function buildPlayAnimation(
       const kickerIndex = nextState.offenseDots.findIndex(d => d.label === 'K');
       if (kickerIndex >= 0) {
         const kicker = nextState.offenseDots[kickerIndex];
-        // Canonical: opponent endzone always at 100 (right)
-        const targetX = 100;
+        // User-anchored: user kicks toward 100 (right), opponent toward 0 (left)
+        const targetX = possession === _animUserSide ? 100 : 0;
         ballArc = {
           startX: kicker.x,
           startY: 0.5,
@@ -278,8 +282,8 @@ export function buildPlayAnimation(
       const kickerIndex = nextState.offenseDots.findIndex(d => d.label === 'K');
       if (kickerIndex >= 0) {
         const kicker = nextState.offenseDots[kickerIndex];
-        // Canonical: opponent endzone always at 100 (right)
-        const targetX = 100;
+        // User-anchored: user kicks toward 100 (right), opponent toward 0 (left)
+        const targetX = possession === _animUserSide ? 100 : 0;
         ballArc = {
           startX: kicker.x,
           startY: 0.5,
@@ -315,8 +319,8 @@ export function buildPlayAnimation(
 
     case 'kickoff': {
       ballArc = {
-        // Canonical: kickoff from own 35 (left side), ball goes right
-        startX: 35,
+        // User-anchored: user kickoff from 35 (left→right), opponent from 65 (right→left)
+        startX: possession === _animUserSide ? 35 : 65,
         startY: 0.5,
         peakHeight: 65, // higher arc for kickoffs (was 45)
         endX: postBallX,

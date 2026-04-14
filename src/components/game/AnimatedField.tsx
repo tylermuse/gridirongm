@@ -2,7 +2,8 @@
 
 import { useRef, useEffect, useCallback, useState } from 'react';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
-import { deriveFieldState, idleFieldState, type GameFieldState } from '@/lib/game/fieldState';
+import { deriveFieldState, idleFieldState, setUserSide, type GameFieldState } from '@/lib/game/fieldState';
+import { setAnimUserSide } from '@/lib/game/animations';
 import {
   buildPlayAnimation,
   bezierArcPoint,
@@ -21,6 +22,8 @@ import {
 // ---------------------------------------------------------------------------
 
 const FIELD_ASPECT = 2.8;
+// Module-level user side for standalone draw functions (set by AnimatedField component)
+let _fieldUserSide: 'home' | 'away' = 'home';
 const FIELD_GREEN_DARK = '#1e6b38';
 const FIELD_GREEN_LIGHT = '#238442';
 const YARD_LINE_COLOR = 'rgba(255,255,255,0.35)';
@@ -44,6 +47,8 @@ interface Props {
   /** Current drive info for drive progress indicator */
   driveYards?: number;
   drivePossession?: 'home' | 'away';
+  /** Which side the user controls — anchors their team to the left endzone */
+  userSide?: 'home' | 'away';
 }
 
 // ---------------------------------------------------------------------------
@@ -469,8 +474,8 @@ function drawEffects(
         // End zone pulse
         const endzoneW = w * (10 / 120);
         const tdAlpha = Math.max(0, 0.5 * (1 - progress));
-        // Canonical: opponent endzone (where TDs happen) is always on the right
-        const ezX = w - endzoneW;
+        // User-anchored: user scores on right, opponent scores on left
+        const ezX = possession === _fieldUserSide ? (w - endzoneW) : 0;
         ctx.fillStyle = `rgba(255, 215, 0, ${tdAlpha})`;
         ctx.fillRect(ezX, 0, endzoneW, h);
 
@@ -665,8 +670,8 @@ function drawScoreFlash(
 ) {
   if (progress >= 1) return;
   const endzoneW = w * (10 / 120);
-  // Canonical: scoring happens in the RIGHT endzone (opponent's)
-  const ezX = w - endzoneW;
+  // User-anchored: user scores on right, opponent scores on left
+  const ezX = possession === _fieldUserSide ? (w - endzoneW) : 0;
 
   // Pulsing alpha — two pulses
   const pulse = Math.sin(progress * Math.PI * 3) * 0.5 + 0.5;
@@ -711,7 +716,13 @@ export function AnimatedField({
   onAnimationComplete,
   driveYards = 0,
   drivePossession,
+  userSide = 'home',
 }: Props) {
+  // Set user-anchored orientation in coordinate system modules + local
+  setUserSide(userSide);
+  setAnimUserSide(userSide);
+  _fieldUserSide = userSide;
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const onAnimCompleteRef = useRef(onAnimationComplete);
@@ -894,9 +905,10 @@ export function AnimatedField({
         ref.isAnimating = true;
       }
 
-      // Spawn confetti on TD — canonical: opponent endzone is at 100 (right)
+      // Spawn confetti on TD — user-anchored
       if (ref.animation.effects.includes('confetti')) {
-        const ezX = absYardToCanvasX(100, canvasSize.w);
+        const ezYard = event.possession === _fieldUserSide ? 100 : 0;
+        const ezX = absYardToCanvasX(ezYard, canvasSize.w);
         const teamColor = event.possession === 'home' ? homeColor : awayColor;
         ref.confetti = spawnConfetti(ezX, canvasSize.h / 2, teamColor, 40);
       }
@@ -941,16 +953,9 @@ export function AnimatedField({
       }
     }
 
-    // Bug 5: smooth reset phase — ball and lines glide to new positions before play animation
-    if (ref.resetPhase) {
-      // Longer reset for possession changes so overlay is readable
-      const resetDuration = ref.possessionChangeActive ? 0.6 : 0.25;
-      ref.resetProgress = Math.min(1, ref.resetProgress + dt / resetDuration);
-      if (ref.resetProgress >= 1) {
-        ref.resetPhase = false;
-        // Now start the actual play animation
-      }
-    }
+    // Reset phase removed — ball position is now derived from state.ballYard
+    // on every render. Clear the flag if it was set by the old code path.
+    if (ref.resetPhase) ref.resetPhase = false;
 
     // Update possession change overlay
     if (ref.possessionChangeActive) {
@@ -960,8 +965,8 @@ export function AnimatedField({
       }
     }
 
-    // Update animation progress (only after reset phase completes)
-    if (ref.isAnimating && ref.animation && !ref.quarterOverlayActive && !ref.resetPhase) {
+    // Update animation progress
+    if (ref.isAnimating && ref.animation && !ref.quarterOverlayActive) {
       const duration = ref.animation.durationMs / 1000;
       ref.progress = Math.min(1, ref.progress + dt / duration);
       if (ref.progress >= 1) {
@@ -1024,14 +1029,16 @@ export function AnimatedField({
     const progress = ref.progress;
     const state = ref.nextState;
 
-    // Draw field background — canonical orientation: possessing team's endzone
-    // on the LEFT, opponent's on the RIGHT. Labels + colors swap on possession change.
-    const poss = state.possession;
-    const leftColor = poss === 'home' ? homeColor : awayColor;
-    const rightColor = poss === 'home' ? awayColor : homeColor;
-    const leftAbbr = poss === 'home' ? homeAbbr : awayAbbr;
-    const rightAbbr = poss === 'home' ? awayAbbr : homeAbbr;
-    drawField(ctx, w, h, rightColor, leftColor, rightAbbr, leftAbbr);
+    // Draw field background — USER-ANCHORED orientation: user's endzone
+    // ALWAYS on the left, opponent's ALWAYS on the right. Never flips.
+    const userColor = userSide === 'home' ? homeColor : awayColor;
+    const oppColor = userSide === 'home' ? awayColor : homeColor;
+    const userAbbr = userSide === 'home' ? homeAbbr : awayAbbr;
+    const oppAbbrField = userSide === 'home' ? awayAbbr : homeAbbr;
+    // drawField(ctx, w, h, homeColor, awayColor, homeAbbr, awayAbbr)
+    // → left endzone = awayColor/awayAbbr, right = homeColor/homeAbbr
+    // We want left = user, right = opponent
+    drawField(ctx, w, h, oppColor, userColor, oppAbbrField, userAbbr);
 
     // LOS and first-down lines: always show the CURRENT play's pre-snap positions.
     // state = ref.nextState = deriveFieldState(currentEvent), where scrimmageYard
@@ -1039,11 +1046,8 @@ export function AnimatedField({
     // During reset phase, interpolate from old positions to new.
     let losYard = state.scrimmageYard;
     let fdYard = state.firstDownYard;
-    if (ref.resetPhase) {
-      const t = easeOutCubic(ref.resetProgress);
-      losYard = ref.resetFromLOS + (state.scrimmageYard - ref.resetFromLOS) * t;
-      fdYard = ref.resetFromFD + (state.firstDownYard - ref.resetFromFD) * t;
-    }
+    // LOS and first down marker — always from current state, no interpolation
+    // (reset phase removed; state is truth)
 
     // Draw LOS and first down marker
     drawLines(ctx, w, h, losYard, fdYard);
