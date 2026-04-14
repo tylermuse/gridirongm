@@ -330,6 +330,13 @@ export function buildPlayAnimation(
     }
   }
 
+  // If the event is a scoring play (isScoring=true) but wasn't caught by the
+  // 'touchdown' case above (e.g., live engine generates 'run' or 'pass_complete'
+  // with isScoring=true), add the TD effects so the animation fires.
+  if (event.isScoring && !effects.includes('touchdown') && type !== 'field_goal_good' && type !== 'field_goal_miss') {
+    effects.push('touchdown', 'confetti');
+  }
+
   // Instant transitions for non-play events (extra point, two-minute warning, etc.)
   if (type === 'extra_point' || type === 'two_minute_warning') {
     return {
