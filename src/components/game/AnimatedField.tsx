@@ -1103,63 +1103,53 @@ export function AnimatedField({
       drawDriveZone(ctx, w, h, driveStartYard, currentLOS, drivePossession === 'home' ? homeColor : awayColor);
     }
 
-    // Draw ball — the single focal element on the field
-    let ballScreenX = 0;
-    let ballScreenY = 0;
+    // Draw ball — the single focal element on the field.
+    //
+    // STRUCTURAL RULE: `state.ballYard` is the single source of truth for
+    // the ball's position. Animation is a cosmetic interpolation toward that
+    // target. At ANY sync point (end of play, possession change, score event,
+    // Live Coach pause, quarter boundary) the sprite hard-snaps to state.ballYard.
+    //
+    // The target position is ALWAYS derived from state, never cached in a ref
+    // or owned by the animation system's internal state.
+    const targetBallX = absYardToCanvasX(state.ballYard, w);
+    const targetBallY = lateralToCanvasY(0.5, h);
+    let ballScreenX = targetBallX;
+    let ballScreenY = targetBallY;
+    let ballAirborne = false;
 
-    // Bug 5: during reset phase, smoothly glide ball from old position to new LOS
-    if (ref.resetPhase) {
-      const t = easeOutCubic(ref.resetProgress);
-      const fromX = absYardToCanvasX(ref.resetFromYard, w);
-      const toX = absYardToCanvasX(ref.resetToYard, w);
-      ballScreenX = fromX + (toX - fromX) * t;
-      ballScreenY = lateralToCanvasY(0.5, h);
-      drawBall(ctx, ballScreenX, ballScreenY, false, possColor);
-    } else if (anim && anim.ballArc && progress < 1) {
-      // Airborne ball following arc (passes, punts, kicks)
-      const endzoneW = w * (10 / 120);
-      const ballPos = bezierArcPoint(anim.ballArc, easeInOutQuad(progress), w, h, endzoneW);
-      ballScreenX = ballPos.x;
-      ballScreenY = ballPos.y;
-      drawBall(ctx, ballScreenX, ballScreenY, true, possColor);
-    } else if (anim && anim.type === 'run' && progress < 1) {
-      // Run play: ball follows the rush path
-      const rushDot = anim.movingDots.find(m => m.team === 'offense');
-      if (rushDot) {
+    if (anim && progress < 1) {
+      // During active animation, use cosmetic interpolation for visual smoothness.
+      // But the FINAL position (progress >= 1) always snaps to the target.
+      if (anim.ballArc) {
+        // Airborne ball following arc (passes, punts, kicks)
+        const endzoneW = w * (10 / 120);
+        const ballPos = bezierArcPoint(anim.ballArc, easeInOutQuad(progress), w, h, endzoneW);
+        ballScreenX = ballPos.x;
+        ballScreenY = ballPos.y;
+        ballAirborne = true;
+      } else if (anim.type === 'run' || anim.type === 'sack' || anim.type === 'touchdown') {
+        // Ground play: interpolate from scrimmage toward the target
         const t = easeOutCubic(progress);
-        ballScreenX = absYardToCanvasX(rushDot.fromX + (rushDot.toX - rushDot.fromX) * t, w);
-        ballScreenY = lateralToCanvasY(rushDot.fromY + (rushDot.toY - rushDot.fromY) * t, h);
-        drawBall(ctx, ballScreenX, ballScreenY, false, possColor);
-      } else {
-        const restYard = anim ? anim.ballRestX : state.ballYard;
-        ballScreenX = absYardToCanvasX(restYard, w);
-        ballScreenY = lateralToCanvasY(0.5, h);
-        drawBall(ctx, ballScreenX, ballScreenY, false, possColor);
+        const fromX = absYardToCanvasX(state.scrimmageYard, w);
+        ballScreenX = fromX + (targetBallX - fromX) * t;
+        ballScreenY = targetBallY;
       }
-    } else if (anim && anim.type === 'sack' && progress < 1) {
-      // Sack: ball moves backward with QB
-      const qbMove = anim.movingDots.find(m => m.team === 'offense');
-      if (qbMove) {
-        const t = easeOutCubic(progress);
-        ballScreenX = absYardToCanvasX(qbMove.fromX + (qbMove.toX - qbMove.fromX) * t, w);
-        ballScreenY = lateralToCanvasY(qbMove.fromY + (qbMove.toY - qbMove.fromY) * t, h);
-        drawBall(ctx, ballScreenX, ballScreenY, false, possColor);
+      // For any other animation type, just stay at the target
+    }
+    // At rest (progress >= 1 or no animation): ball is exactly at the target.
+    // This is the "hard snap" rule — no separate rest position, no cached yard.
+
+    drawBall(ctx, ballScreenX, ballScreenY, ballAirborne, possColor);
+
+    // DEV INVARIANT: at any sync point (not animating), the rendered ball
+    // position must match state.ballYard within 1 yard. This catches the
+    // entire family of "sprite disagrees with game state" bugs structurally.
+    if (!ref.isAnimating && process.env.NODE_ENV !== 'production') {
+      const renderedYard = (ballScreenX - w * (10 / 120)) / (w - 2 * w * (10 / 120)) * 100;
+      if (Math.abs(renderedYard - state.ballYard) > 2) {
+        console.warn(`[AnimatedField INVARIANT] Ball at ${renderedYard.toFixed(1)} but state.ballYard is ${state.ballYard}. Delta: ${Math.abs(renderedYard - state.ballYard).toFixed(1)} yards.`);
       }
-    } else if (anim && anim.type === 'touchdown' && progress < 1) {
-      // Touchdown: ball moves into endzone
-      const scorer = anim.movingDots.find(m => m.team === 'offense');
-      if (scorer) {
-        const t = easeOutCubic(progress);
-        ballScreenX = absYardToCanvasX(scorer.fromX + (scorer.toX - scorer.fromX) * t, w);
-        ballScreenY = lateralToCanvasY(scorer.fromY + (scorer.toY - scorer.fromY) * t, h);
-        drawBall(ctx, ballScreenX, ballScreenY, false, possColor);
-      }
-    } else {
-      // Ball at rest position
-      const restYard = anim ? anim.ballRestX : state.ballYard;
-      ballScreenX = absYardToCanvasX(restYard, w);
-      ballScreenY = lateralToCanvasY(0.5, h);
-      drawBall(ctx, ballScreenX, ballScreenY, false, possColor);
     }
 
     // Field position label and down & distance near the ball (only when ball at rest)
