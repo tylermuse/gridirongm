@@ -589,19 +589,25 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       return;
     }
 
-    // Auto-run AI play — add events and let the normal animation timer
-    // reveal them at the correct speed (don't bypass the timer like we
-    // do for user plays). This way opponent drives play out visually
-    // at 1x/2x/5x speed instead of happening in a split second.
+    // Auto-run AI play — generate the event and schedule a delayed reveal
+    // so opponent drives play out at the chosen speed. We use setTimeout
+    // directly instead of the animationComplete-based timer because
+    // setAnimationComplete(true) is a no-op when it's already true.
     const newEvents = liveEngineRef.current.runOnePlay();
     if (newEvents.length > 0) {
       setLiveExtraEvents(prev => [...prev, ...newEvents]);
       setIsPlaying(true);
-      setAnimationComplete(true); // triggers the normal advance timer with pause
+      // Total delay = animation time + pause time. Use the SPEED_MS base
+      // to approximate animation duration + a pause for reading.
+      const animDuration = SPEED_MS[speed] * 0.35; // rough animation time
+      const pauseDuration = speed === '1x' ? 3500 : speed === '2x' ? 1200 : speed === '5x' ? 150 : 0;
+      const totalDelay = Math.max(200, animDuration + pauseDuration);
+      setTimeout(() => {
+        setRevealedCount(prev => prev + 1);
+        setAnimationComplete(false);
+      }, totalDelay);
     }
-    // Including isPlaying in deps ensures this re-fires when the animation
-    // timer gives up (sets isPlaying=false at the end of pre-computed events).
-  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying]);
+  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed]);
 
   // ── Live Coach: detect if the NEXT event is a user offensive play snap ──
   // We check after an event reveals and before scheduling the next one.
