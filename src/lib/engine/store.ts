@@ -29,6 +29,7 @@ import { defaultApproval, updateApprovalAfterGame, updateApprovalEndOfSeason, up
 import { teamSpecialTeamsRating } from './specialTeams';
 import { createExpansionTeamObject, runExpansionDraft, computeProtectionLimit } from './expansionDraft';
 import { buildGmSyncPayload, syncGmStats } from './gmSync';
+import { checkDisciplineEvents, disciplineNewsItems, tickSuspensions } from './discipline';
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 
@@ -2030,8 +2031,9 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
   const updatedGames = weekGames.map(game => {
     const homeTeam = resortedTeams.find(t => t.id === game.homeTeamId);
     const awayTeam = resortedTeams.find(t => t.id === game.awayTeamId);
-    const homeRosterRaw = state.players.filter(p => p.teamId === game.homeTeamId);
-    const awayRosterRaw = state.players.filter(p => p.teamId === game.awayTeamId);
+    // Exclude suspended players from the game roster
+    const homeRosterRaw = state.players.filter(p => p.teamId === game.homeTeamId && !p.suspension);
+    const awayRosterRaw = state.players.filter(p => p.teamId === game.awayTeamId && !p.suspension);
     const homeRoster = homeTeam?.depthChart
       ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart)
       : homeRosterRaw;
@@ -2645,6 +2647,20 @@ export const useGameStore = create<GameStore>()(
               const updated = updateApprovalAfterGame(approval, won, margin, isRivalry);
               set({ teams: st.teams.map(t => t.id === st.userTeamId ? { ...t, approval: updated } : t) });
             }
+          }
+        }
+
+        // Discipline checks — suspensions, fines, incidents
+        {
+          const ds = get();
+          const { events: discEvents, updatedPlayers: discPlayers } = checkDisciplineEvents(
+            ds.players, ds.userTeamId, ds.season, ds.week,
+          );
+          if (discEvents.length > 0) {
+            const discNews = disciplineNewsItems(discEvents, ds.userTeamId, ds.season, ds.week);
+            set({ players: tickSuspensions(discPlayers), newsItems: [...ds.newsItems, ...discNews] });
+          } else {
+            set({ players: tickSuspensions(ds.players) });
           }
         }
 

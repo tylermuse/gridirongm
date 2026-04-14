@@ -332,6 +332,10 @@ export interface Player {
   seasonLog?: { season: number; teamId: string; stats: PlayerStats }[];
   /** Career awards earned */
   awards?: { award: string; season: number }[];
+  /** Discipline rating (0-100). Low = more likely to get suspended. */
+  discipline?: number;
+  /** Active suspension: games remaining, reason, and fine amount */
+  suspension?: { gamesLeft: number; reason: string; fine: number };
 }
 
 /** Format a team record as "W-L" or "W-L-T" if ties > 0 */

@@ -191,6 +191,14 @@ function randomSalary(overall: number, position: Position, age: number, potentia
   return salary;
 }
 
+function generateDisciplineRating(personality?: string): number {
+  let base = 65 + Math.floor(Math.random() * 25); // 65-89
+  if (personality === 'pressure_fold') base -= 8;
+  if (personality === 'irrational_confidence') base -= 5;
+  if (personality === 'clutch') base += 5;
+  return Math.max(30, Math.min(99, base));
+}
+
 export function generatePlayer(
   position: Position,
   talentMean: number,
@@ -256,6 +264,7 @@ export function generatePlayer(
     onIR: false,
     mood: 60 + Math.floor(Math.random() * 30), // 60-90 initial mood
     personality,
+    discipline: generateDisciplineRating(personality),
     height: generateHeight(position),
     weight: generateWeight(position),
     college: randomCollege(),
