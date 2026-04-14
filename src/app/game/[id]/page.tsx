@@ -517,6 +517,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const liveEngineRef = useRef<LiveCoachEngine | null>(null);
   const [liveExtraEvents, setLiveExtraEvents] = useState<PlayEvent[]>([]);
   const [liveEnginePivotIdx, setLiveEnginePivotIdx] = useState<number | null>(null);
+  // Post-play outcome chip — shows result briefly above the field
+  const [outcomeChip, setOutcomeChip] = useState<{ text: string; color: string } | null>(null);
+  const outcomeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Two-phase reveal: animationComplete tracks whether the current play's
   // field animation has finished. ScoreBug shows previous event's numbers
   // until this becomes true.
@@ -660,6 +663,51 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       setIsPlaying(false);
     }
   }, [speed, isPlaying, isFinished, totalEvents, clearNextPlayTimer]);
+
+  // Post-play outcome chip — fire whenever a new play event is revealed
+  useEffect(() => {
+    if (!currentEvent || !currentEvent.type) return;
+    const PLAY_TYPES = new Set(['run', 'pass_complete', 'pass_incomplete', 'sack', 'interception', 'fumble', 'touchdown', 'field_goal_good', 'field_goal_miss', 'punt']);
+    if (!PLAY_TYPES.has(currentEvent.type)) return;
+
+    let text = '';
+    let color = 'bg-gray-700';
+    const yds = currentEvent.yardsGained;
+
+    if (currentEvent.isScoring && currentEvent.type === 'touchdown') {
+      text = '🏆 TOUCHDOWN'; color = 'bg-amber-500';
+    } else if (currentEvent.type === 'field_goal_good') {
+      text = '✅ FIELD GOAL GOOD'; color = 'bg-amber-500';
+    } else if (currentEvent.type === 'field_goal_miss') {
+      text = '❌ NO GOOD'; color = 'bg-red-600';
+    } else if (currentEvent.type === 'interception') {
+      text = '🔄 INTERCEPTED'; color = 'bg-orange-600';
+    } else if (currentEvent.type === 'fumble') {
+      text = '🔄 FUMBLE'; color = 'bg-orange-600';
+    } else if (currentEvent.type === 'punt') {
+      text = `🥾 PUNT ${yds > 0 ? `(${yds} yds)` : ''}`; color = 'bg-gray-600';
+    } else if (currentEvent.type === 'pass_incomplete') {
+      text = 'INCOMPLETE'; color = 'bg-gray-600';
+    } else if (yds > 0) {
+      // Check if first down was achieved
+      const isFirstDown = currentEvent.down >= 1 && yds >= currentEvent.yardsToGo;
+      if (isFirstDown) {
+        text = `📍 1ST DOWN (+${yds})`; color = 'bg-purple-600';
+      } else {
+        text = `+${yds} GAIN`; color = 'bg-blue-600';
+      }
+    } else if (yds < 0) {
+      text = `${yds} LOSS`; color = 'bg-red-600';
+    } else if (yds === 0 && currentEvent.type === 'run') {
+      text = 'NO GAIN'; color = 'bg-gray-600';
+    }
+
+    if (!text) return;
+
+    if (outcomeTimerRef.current) clearTimeout(outcomeTimerRef.current);
+    setOutcomeChip({ text, color });
+    outcomeTimerRef.current = setTimeout(() => setOutcomeChip(null), 1500);
+  }, [revealedCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-start: reveal first play when game starts
   useEffect(() => {
@@ -955,33 +1003,69 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           lastPlayDescription={currentEvent && !isSeparator(currentEvent.type) ? currentEvent.description : null}
         />
 
-        <AnimatedField
-          event={engineSnapshot ? {
-            id: -1,
-            type: 'run' as const,
-            description: '',
-            quarter: engineSnapshot.quarter,
-            timeStr: liveTime,
-            possession: engineSnapshot.possession,
-            fieldPos: engineSnapshot.fieldPos,
-            down: engineSnapshot.down,
-            yardsToGo: engineSnapshot.yardsToGo,
-            yardsGained: 0,
-            homeScore: engineSnapshot.homeScore,
-            awayScore: engineSnapshot.awayScore,
-            isScoring: false,
-          } : currentEvent}
-          prevEvent={previousEvent}
-          homeColor={homeColor}
-          awayColor={awayColor}
-          homeAbbr={homeAbbr}
-          awayAbbr={awayAbbr}
-          isPlaying={isPlaying}
-          animationSpeed={SPEED_MS[speed]}
-          onAnimationComplete={handleAnimationComplete}
-          driveYards={currentDrive.yards}
-          drivePossession={engineSnapshot?.possession ?? currentEvent?.possession}
-        />
+        {/* Animated field + outcome chip overlay */}
+        <div className="relative">
+          <AnimatedField
+            event={engineSnapshot ? {
+              id: -1,
+              type: 'run' as const,
+              description: '',
+              quarter: engineSnapshot.quarter,
+              timeStr: liveTime,
+              possession: engineSnapshot.possession,
+              fieldPos: engineSnapshot.fieldPos,
+              down: engineSnapshot.down,
+              yardsToGo: engineSnapshot.yardsToGo,
+              yardsGained: 0,
+              homeScore: engineSnapshot.homeScore,
+              awayScore: engineSnapshot.awayScore,
+              isScoring: false,
+            } : currentEvent}
+            prevEvent={previousEvent}
+            homeColor={homeColor}
+            awayColor={awayColor}
+            homeAbbr={homeAbbr}
+            awayAbbr={awayAbbr}
+            isPlaying={isPlaying}
+            animationSpeed={SPEED_MS[speed]}
+            onAnimationComplete={handleAnimationComplete}
+            driveYards={currentDrive.yards}
+            drivePossession={engineSnapshot?.possession ?? currentEvent?.possession}
+          />
+
+          {/* Post-play outcome chip */}
+          {outcomeChip && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 animate-bounce-in">
+              <div className={`${outcomeChip.color} text-white font-black text-sm px-4 py-1.5 rounded-full shadow-lg`}>
+                {outcomeChip.text}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Drive summary ribbon */}
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg px-4 py-1.5 text-xs text-[var(--text-sec)] flex items-center justify-between">
+          <span>
+            <span className="font-bold text-[var(--text)]">Drive:</span>{' '}
+            {currentDrive.plays} play{currentDrive.plays !== 1 ? 's' : ''}, {currentDrive.yards >= 0 ? '+' : ''}{currentDrive.yards} yds
+          </span>
+          <span className="tabular-nums">
+            {currentEvent ? (
+              <>
+                {currentEvent.down >= 1 && currentEvent.down <= 4 && (
+                  <span className="font-medium text-[var(--text)]">
+                    {['1st', '2nd', '3rd', '4th'][currentEvent.down - 1]} & {currentEvent.yardsToGo <= 0 ? 'Goal' : currentEvent.yardsToGo}
+                  </span>
+                )}
+                {' '}at{' '}
+                {currentEvent.fieldPos <= 50
+                  ? `OWN ${currentEvent.fieldPos}`
+                  : `OPP ${100 - currentEvent.fieldPos}`
+                }
+              </>
+            ) : null}
+          </span>
+        </div>
 
         {/* Quarter score table */}
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-6 py-2">

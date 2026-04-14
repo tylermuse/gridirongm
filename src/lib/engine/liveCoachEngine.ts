@@ -218,7 +218,7 @@ export function createLiveCoachEngine(
 
   // ── Play execution ──
 
-  function runRunPlay(events: PlayEvent[], rusherOverride?: 'rb' | 'qb') {
+  function runRunPlay(events: PlayEvent[], rusherOverride?: 'rb' | 'qb', callPrefix = '') {
     const ok = offKey();
     const dk = defKey();
     const isQb = rusherOverride === 'qb' || (!rusherOverride && Math.random() < 0.10);
@@ -243,15 +243,16 @@ export function createLiveCoachEngine(
     const finalYards = isTD ? 100 - state.fieldPos : yards;
 
     const name = nameOrFallback(rusher, 'the back');
+    const prefix = callPrefix ? `${callPrefix} — ` : '';
     const desc = isTD
-      ? `${name} runs it in for a ${finalYards}-yard TOUCHDOWN!`
+      ? `${prefix}${name} runs it in for a ${finalYards}-yard TOUCHDOWN!`
       : finalYards > 10
-        ? `${name} breaks free for ${finalYards} yards!`
+        ? `${prefix}${name} breaks free for ${finalYards} yards!`
         : finalYards > 0
-          ? `${name} runs for ${finalYards} yard${finalYards !== 1 ? 's' : ''}.`
+          ? `${prefix}${name} runs for ${finalYards} yard${finalYards !== 1 ? 's' : ''}.`
           : finalYards === 0
-            ? `${name} stuffed at the line for no gain.`
-            : `${name} loses ${Math.abs(finalYards)} on the play.`;
+            ? `${prefix}${name} stuffed at the line for no gain.`
+            : `${prefix}${name} loses ${Math.abs(finalYards)} on the play.`;
 
     events.push(makeEvent('run', desc, finalYards, isTD));
 
@@ -268,17 +269,18 @@ export function createLiveCoachEngine(
     }
   }
 
-  function runPassPlay(events: PlayEvent[], depth: 'short' | 'deep' | 'screen' = 'short') {
+  function runPassPlay(events: PlayEvent[], depth: 'short' | 'deep' | 'screen' = 'short', callPrefix = '') {
     const ok = offKey();
     const dk = defKey();
     const target = depth === 'screen' ? ok.rb : (Math.random() < 0.6 ? ok.wr1 : (ok.wr2 ?? ok.te));
 
     // Sack chance based on depth and pass rush
     const sackChance = depth === 'deep' ? 0.10 : depth === 'short' ? 0.05 : 0.02;
+    const prefix = callPrefix ? `${callPrefix} — ` : '';
     if (Math.random() < sackChance) {
       const sackYards = -(3 + Math.floor(Math.random() * 5));
       const qbName = nameOrFallback(ok.qb, 'the QB');
-      events.push(makeEvent('sack', `${qbName} is sacked for a loss of ${Math.abs(sackYards)}.`, sackYards, false));
+      events.push(makeEvent('sack', `${prefix}${qbName} is sacked for a loss of ${Math.abs(sackYards)}.`, sackYards, false));
       state.fieldPos = clamp(state.fieldPos + sackYards, 1, 99);
       state.yardsToGo -= sackYards;
       if (advanceDown() === 'turnover_on_downs') {
@@ -294,7 +296,7 @@ export function createLiveCoachEngine(
     if (Math.random() < intChance) {
       const qbName = nameOrFallback(ok.qb, 'the QB');
       const cbName = nameOrFallback(dk.cb1, 'the corner');
-      events.push(makeEvent('interception', `INTERCEPTED! ${cbName} picks off ${qbName}.`, 0, false));
+      events.push(makeEvent('interception', `${prefix}INTERCEPTED! ${cbName} picks off ${qbName}.`, 0, false));
       const returnPos = clamp(100 - state.fieldPos + Math.floor(Math.random() * 20) - 10, 10, 60);
       switchPossession(returnPos);
       advanceClock(8);
@@ -322,10 +324,10 @@ export function createLiveCoachEngine(
       const qbName = nameOrFallback(ok.qb, 'the QB');
       const recName = nameOrFallback(target, 'the receiver');
       const desc = isTD
-        ? `${qbName} hits ${recName} for a ${finalYards}-yard TOUCHDOWN!`
+        ? `${prefix}${qbName} hits ${recName} for a ${finalYards}-yard TOUCHDOWN!`
         : finalYards >= 20
-          ? `${qbName} fires deep to ${recName} — ${finalYards} yards!`
-          : `${qbName} completes to ${recName} for ${finalYards} yard${finalYards !== 1 ? 's' : ''}.`;
+          ? `${prefix}${qbName} fires deep to ${recName} — ${finalYards} yards!`
+          : `${prefix}${qbName} completes to ${recName} for ${finalYards} yard${finalYards !== 1 ? 's' : ''}.`;
 
       events.push(makeEvent('pass_complete', desc, finalYards, isTD));
 
@@ -343,7 +345,7 @@ export function createLiveCoachEngine(
     } else {
       const qbName = nameOrFallback(ok.qb, 'the QB');
       const recName = nameOrFallback(target, 'the receiver');
-      events.push(makeEvent('pass_incomplete', `${qbName}'s pass to ${recName} falls incomplete.`, 0, false));
+      events.push(makeEvent('pass_incomplete', `${prefix}${qbName}'s pass to ${recName} falls incomplete.`, 0, false));
       if (advanceDown() === 'turnover_on_downs') {
         handleTurnoverOnDowns(events);
         return;
@@ -372,11 +374,11 @@ export function createLiveCoachEngine(
     const good = Math.random() < successProb;
     const kName = nameOrFallback(k, 'the kicker');
     if (good) {
-      events.push(makeEvent('field_goal_good', `${kName} drills the ${distance}-yard field goal! ✅`, 0, true));
+      events.push(makeEvent('field_goal_good', `🏹 Field Goal — ${kName} drills the ${distance}-yarder! ✅`, 0, true));
       addScore(3);
       doKickoffEvents(events);
     } else {
-      events.push(makeEvent('field_goal_miss', `${kName}'s ${distance}-yard attempt is no good.`, 0, false));
+      events.push(makeEvent('field_goal_miss', `🏹 Field Goal — ${kName}'s ${distance}-yard attempt is no good.`, 0, false));
       const returnPos = Math.max(20, state.fieldPos);
       switchPossession(100 - returnPos);
     }
@@ -387,8 +389,10 @@ export function createLiveCoachEngine(
     const puntYards = clamp(Math.round(gaussian(43, 7)), 25, 65);
     const returnPos = clamp(100 - state.fieldPos - puntYards, 5, 50);
     const receivingAbbr = state.possession === 'home' ? awayTeam.abbreviation : homeTeam.abbreviation;
-    events.push(makeEvent('punt', `Punt away — ${receivingAbbr} fields at their own ${returnPos}, returns to the ${Math.min(returnPos + Math.floor(Math.random() * 8), 50)}.`, puntYards, false));
-    switchPossession(returnPos);
+    const returnYds = Math.floor(Math.random() * 8);
+    const finalPos = Math.min(returnPos + returnYds, 50);
+    events.push(makeEvent('punt', `🥾 Punt — ${puntYards} yards, ${receivingAbbr} fields at their own ${returnPos}${returnYds > 0 ? `, returns to the ${finalPos}` : ', fair catch'}.`, puntYards, false));
+    switchPossession(finalPos);
     advanceClock(15);
   }
 
@@ -473,12 +477,19 @@ export function createLiveCoachEngine(
         : 'run';
     }
 
+    // Play-call-aware icon prefixes for descriptions
+    const CALL_ICONS: Record<string, string> = {
+      run: '🏃 Run', pass_short: '🎯 Short Pass', pass_deep: '🚀 Deep Shot',
+      qb_run: '⚡ QB Scramble', screen: '🛡️ Screen',
+    };
+    const callPrefix = userCall ? (CALL_ICONS[playType] ?? '') : '';
+
     // Execute the play
-    if (playType === 'run') runRunPlay(events);
-    else if (playType === 'qb_run') runRunPlay(events, 'qb');
-    else if (playType === 'pass_short') runPassPlay(events, 'short');
-    else if (playType === 'pass_deep') runPassPlay(events, 'deep');
-    else runPassPlay(events, 'screen');
+    if (playType === 'run') runRunPlay(events, undefined, callPrefix);
+    else if (playType === 'qb_run') runRunPlay(events, 'qb', callPrefix);
+    else if (playType === 'pass_short') runPassPlay(events, 'short', callPrefix);
+    else if (playType === 'pass_deep') runPassPlay(events, 'deep', callPrefix);
+    else runPassPlay(events, 'screen', callPrefix);
 
     checkQuarterEnd(events);
 
