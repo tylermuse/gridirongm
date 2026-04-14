@@ -937,6 +937,11 @@ export function AnimatedField({
         const teamColor = event.possession === 'home' ? homeColor : awayColor;
         ref.confetti = spawnConfetti(ezX, canvasSize.h / 2, teamColor, 40);
       }
+
+      // ALWAYS restart the rAF loop after building a new animation.
+      // The useLayoutEffect cancels the previous rAF, so without this
+      // the loop dies and the animation never plays.
+      rafRef.current = requestAnimationFrame(render);
     } else {
       ref.animation = null;
       ref.progress = 1;

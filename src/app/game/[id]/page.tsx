@@ -517,6 +517,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const liveEngineRef = useRef<LiveCoachEngine | null>(null);
   const [liveExtraEvents, setLiveExtraEvents] = useState<PlayEvent[]>([]);
   const [liveEnginePivotIdx, setLiveEnginePivotIdx] = useState<number | null>(null);
+  // Guard: prevents the auto-run effect from generating multiple events
+  // before the current one has finished animating + pause.
+  const pendingAutoPlayRef = useRef(false);
   // Post-play outcome chip — shows result briefly above the field
   const [outcomeChip, setOutcomeChip] = useState<{ text: string; color: string } | null>(null);
   const outcomeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -590,23 +593,30 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       return;
     }
 
-    // Auto-run AI play — generate the event and schedule a delayed reveal
-    // so opponent drives play out at the chosen speed. We use setTimeout
-    // directly instead of the animationComplete-based timer because
-    // setAnimationComplete(true) is a no-op when it's already true.
+    // Guard: don't generate a new event if one is still animating/pausing
+    if (pendingAutoPlayRef.current) return;
+
+    // Auto-run AI play — generate ONE event and schedule reveal with delay.
+    // The delay gives time for the animation to play and the user to read.
     const newEvents = liveEngineRef.current.runOnePlay();
     if (newEvents.length > 0) {
+      pendingAutoPlayRef.current = true;
       setLiveExtraEvents(prev => [...prev, ...newEvents]);
+
+      // Compute delay: animation + pause time based on speed
+      const animMs = SPEED_MS[speed] * 0.35;
+      const pauseMs = speed === '1x' ? 3500 : speed === '2x' ? 1200 : speed === '5x' ? 150 : 0;
+      const delay = Math.max(300, animMs + pauseMs);
+
+      // Reveal the event immediately (so animation starts)
+      setRevealedCount(prev => prev + 1);
       setIsPlaying(true);
-      // Total delay = animation time + pause time. Use the SPEED_MS base
-      // to approximate animation duration + a pause for reading.
-      const animDuration = SPEED_MS[speed] * 0.35; // rough animation time
-      const pauseDuration = speed === '1x' ? 3500 : speed === '2x' ? 1200 : speed === '5x' ? 150 : 0;
-      const totalDelay = Math.max(200, animDuration + pauseDuration);
+      setAnimationComplete(false);
+
+      // After delay, clear the guard so the NEXT event can be generated
       setTimeout(() => {
-        setRevealedCount(prev => prev + 1);
-        setAnimationComplete(false);
-      }, totalDelay);
+        pendingAutoPlayRef.current = false;
+      }, delay);
     }
   }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed]);
 
