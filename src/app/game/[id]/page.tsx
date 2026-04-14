@@ -14,7 +14,7 @@ import { ScoreBug } from '@/components/game/ScoreBug';
 import { GamePlanModal } from '@/components/game/GamePlanModal';
 import { PlayCallMenu, type PlayCallType } from '@/components/game/PlayCallMenu';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
-import type { Player, Position } from '@/types';
+import type { Player, Position, GameResult } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Speed settings
@@ -781,19 +781,42 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     }
   }, [liveResult, totalEvents, revealedCount]);
 
+  // Build the game result from whichever source has the final score:
+  // the live engine if it was active, otherwise the pre-computed sim.
+  function buildFinalGameResult(): GameResult | null {
+    if (!game) return null;
+    if (liveEngineRef.current) {
+      // Live engine was active — use ITS final state for the score
+      const es = liveEngineRef.current.getState();
+      return {
+        ...game,
+        homeScore: es.homeScore,
+        awayScore: es.awayScore,
+        played: true,
+        playerStats: liveResult?.playerStats ?? {},
+      };
+    }
+    if (liveResult) {
+      return liveGameToGameResult(liveResult, game);
+    }
+    return null;
+  }
+
   const handleCommit = useCallback(async () => {
-    if (!liveResult || !game || committed) return;
-    const gameResult = liveGameToGameResult(liveResult, game);
+    if (!game || committed) return;
+    const gameResult = buildFinalGameResult();
+    if (!gameResult) return;
     commitLiveGame(gameResult, isPlayoffGame ? id : undefined);
     setCommitted(true);
     await flushToStorage();
     router.push(isPlayoffGame ? '/playoffs' : '/');
-  }, [liveResult, game, committed, commitLiveGame, router, isPlayoffGame, id]);
+  }, [game, committed, commitLiveGame, router, isPlayoffGame, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-commit when game finishes — no manual "Save & Continue" needed
   useEffect(() => {
-    if (isFinished && liveResult && game && !committed) {
-      const gameResult = liveGameToGameResult(liveResult, game);
+    if (isFinished && game && !committed) {
+      const gameResult = buildFinalGameResult();
+      if (!gameResult) return;
       commitLiveGame(gameResult, isPlayoffGame ? id : undefined);
       setCommitted(true);
       flushToStorage();
