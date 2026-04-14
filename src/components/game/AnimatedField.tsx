@@ -835,6 +835,15 @@ export function AnimatedField({
     // closure over `event`) can always read the latest event data for labels.
     (ref as Record<string, unknown>).currentEvent = event;
 
+    // Cancel any pending animation frame from the previous play so it doesn't
+    // render one stale frame before the new animation starts. This prevents
+    // the "previous play flashes briefly" bug (e.g., seeing a punt animation
+    // before the user's run play).
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+    }
+
     // Live Coach synthetic pause event (id === -1): snap the ball to the
     // correct position immediately without any animation or reset phase.
     // This prevents the sprite from lagging behind on large yardage plays.
