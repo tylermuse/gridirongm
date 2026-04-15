@@ -251,19 +251,17 @@ export default function FreeAgencyPage() {
     filteredAgents = filteredAgents.filter(p => p.position === filterPos);
   }
   if (affordableOnly) {
-    // Show players the user can realistically sign given their cap situation.
-    // Over the cap → can only offer league minimum, so show players whose
-    // market value is low enough they'll consider it (up to ~5x league min
-    // since desperation + FA day decay can push asking prices down).
+    // Over the cap → only show players whose asking price (market * decay)
+    // is at or near the league minimum, since that's all you can offer.
     // Under the cap → show players whose market fits within actual space.
     const maxAffordable = capSpace <= LEAGUE_MINIMUM_SALARY
-      ? LEAGUE_MINIMUM_SALARY * 5
+      ? LEAGUE_MINIMUM_SALARY * 1.5  // tight: only players asking ~$1.1M or less
       : capSpace;
     filteredAgents = filteredAgents.filter(p => {
       const market = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci) * decay;
       return market <= maxAffordable;
     });
-    // Sort cheapest first so signable players appear at the top
+    // Sort cheapest first so the most signable players are at the top
     filteredAgents.sort((a, b) => {
       const aM = estimateSalary(a.ratings.overall, a.position, a.age, a.potential, ci) * decay;
       const bM = estimateSalary(b.ratings.overall, b.position, b.age, b.potential, ci) * decay;
