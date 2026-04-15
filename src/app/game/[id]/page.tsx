@@ -1761,12 +1761,26 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                     const newEvents = liveEngineRef.current.runOnePlay(playCall);
                     if (newEvents.length > 0) {
                       setLiveExtraEvents(prev => [...prev, ...newEvents]);
-                      // Advance revealedCount IMMEDIATELY so the new event is
-                      // shown right away — don't wait for the animation timer's
-                      // pause delay (1400ms at 1x) which would leave the old
-                      // play visible while the user waits.
                       setRevealedCount(prev => prev + 1);
-                      setAnimationComplete(false); // trigger the new animation
+                      setAnimationComplete(false);
+
+                      // If the play resulted in a turnover, punt, or score,
+                      // block auto-run briefly so the user sees the alert
+                      const lastEv = newEvents[newEvents.length - 1];
+                      const isBig = lastEv && (
+                        lastEv.type === 'interception' || lastEv.type === 'fumble' ||
+                        lastEv.type === 'punt' || lastEv.type === 'touchdown' ||
+                        lastEv.isScoring || lastEv.type === 'field_goal_good' ||
+                        lastEv.type === 'field_goal_miss'
+                      );
+                      if (isBig) {
+                        pendingAutoPlayRef.current = true;
+                        const extraMs = speed === '1x' ? 4000 : speed === '2x' ? 2500 : speed === '5x' ? 1500 : 500;
+                        setTimeout(() => {
+                          pendingAutoPlayRef.current = false;
+                          setAutoRunTick(t => t + 1);
+                        }, extraMs);
+                      }
                     }
                   }
                   setLiveCoachPaused(false);
