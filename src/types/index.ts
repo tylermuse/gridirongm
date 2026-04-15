@@ -845,7 +845,7 @@ export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
   irEnabled: false,
   practiceSquadSize: 16,
   suspensionFrequency: 1.0,
-  preseasonGames: 3,
+  preseasonGames: 0,
 };
 
 export interface LeagueState {
