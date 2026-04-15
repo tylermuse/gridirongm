@@ -1077,6 +1077,53 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       <div className="flex-1 min-w-0 space-y-3">
 
         {/* ================================================================
+            GAME OVER BANNER — pinned to top when finished
+        ================================================================ */}
+        {isFinished && liveResult && (() => {
+          const userIsHome = game.homeTeamId === userTeamId;
+          const userScore = userIsHome ? liveResult.homeScore : liveResult.awayScore;
+          const oppScore = userIsHome ? liveResult.awayScore : liveResult.homeScore;
+          const won = isUserGame && userScore > oppScore;
+          const tied = userScore === oppScore;
+          return (
+            <>
+              {won && <Confetti duration={5000} />}
+              <div className="bg-[var(--surface)] border-2 border-green-300 rounded-xl p-6 text-center space-y-4">
+                <div className="text-sm font-bold uppercase tracking-wider text-green-600">Game Over</div>
+                <div className="flex items-center justify-center gap-6">
+                  <div className="text-center">
+                    <div className="text-xs text-[var(--text-sec)]">{awayAbbr}</div>
+                    <div className="text-3xl font-black" style={{ color: awayColor }}>{liveResult.awayScore}</div>
+                  </div>
+                  <div className="text-[var(--text-sec)] text-xl">–</div>
+                  <div className="text-center">
+                    <div className="text-xs text-[var(--text-sec)]">{homeAbbr}</div>
+                    <div className="text-3xl font-black" style={{ color: homeColor }}>{liveResult.homeScore}</div>
+                  </div>
+                </div>
+                {isUserGame && (
+                  <Badge variant={won ? 'green' : tied ? 'default' : 'red'} size="md">
+                    {won ? 'Victory!' : tied ? 'Tie' : 'Defeat'}
+                  </Badge>
+                )}
+                <div>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    onClick={async () => { await flushToStorage(); router.push(isPlayoffGame ? '/playoffs' : '/'); }}
+                  >
+                    Continue →
+                  </Button>
+                  <p className="text-[10px] text-green-600 mt-2">
+                    Game result saved automatically.
+                  </p>
+                </div>
+              </div>
+            </>
+          );
+        })()}
+
+        {/* ================================================================
             SCORE BUG + ANIMATED FIELD
         ================================================================ */}
         <ScoreBug
@@ -1634,48 +1681,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         {/* ================================================================
             FINAL RESULT + COMMIT
         ================================================================ */}
-        {isFinished && (() => {
-          const userIsHome = game.homeTeamId === userTeamId;
-          const userScore = userIsHome ? liveResult.homeScore : liveResult.awayScore;
-          const oppScore = userIsHome ? liveResult.awayScore : liveResult.homeScore;
-          const won = isUserGame && userScore > oppScore;
-          return (
-          <>
-          {won && <Confetti duration={5000} />}
-          <div className="bg-[var(--surface)] border-2 border-green-300 rounded-xl p-6 text-center space-y-4">
-            <div className="text-sm font-bold uppercase tracking-wider text-green-600">Game Over</div>
-            <div className="flex items-center justify-center gap-6">
-              <div className="text-center">
-                <div className="text-xs text-[var(--text-sec)]">{awayAbbr}</div>
-                <div className="text-3xl font-black" style={{ color: awayColor }}>{liveResult.awayScore}</div>
-              </div>
-              <div className="text-[var(--text-sec)] text-xl">–</div>
-              <div className="text-center">
-                <div className="text-xs text-[var(--text-sec)]">{homeAbbr}</div>
-                <div className="text-3xl font-black" style={{ color: homeColor }}>{liveResult.homeScore}</div>
-              </div>
-            </div>
-            {isUserGame && (
-              <Badge variant={won ? 'green' : 'red'} size="md">
-                {won ? 'Victory!' : 'Defeat'}
-              </Badge>
-            )}
-            <div>
-              <Button
-                variant="primary"
-                size="md"
-                onClick={async () => { await flushToStorage(); router.push(isPlayoffGame ? '/playoffs' : '/'); }}
-              >
-                Continue →
-              </Button>
-              <p className="text-[10px] text-green-600 mt-2">
-                Game result saved automatically.
-              </p>
-            </div>
-          </div>
-          </>
-          );
-        })()}
+        {/* Game Over banner is now pinned to the top of this column */}
       </div>
 
       {/* Right sidebar — play call menu + around the league */}
