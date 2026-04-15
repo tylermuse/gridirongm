@@ -616,7 +616,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       const isBigMoment = lastEvent && (
         lastEvent.type === 'interception' || lastEvent.type === 'fumble' ||
         lastEvent.type === 'touchdown' || lastEvent.isScoring ||
-        lastEvent.type === 'field_goal_good' || lastEvent.type === 'field_goal_miss'
+        lastEvent.type === 'field_goal_good' || lastEvent.type === 'field_goal_miss' ||
+        lastEvent.type === 'punt'
       );
       const bigExtra = isBigMoment
         ? (speed === '1x' ? 3000 : speed === '2x' ? 2000 : speed === '5x' ? 1500 : 0)
@@ -673,6 +674,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       currentEvent?.type === 'touchdown' ||
       currentEvent?.type === 'field_goal_miss' ||
       currentEvent?.type === 'field_goal_good' ||
+      currentEvent?.type === 'punt' ||
       currentEvent?.isScoring === true;
     const pause = PAUSE_MS[speed] + (isBigMoment ? TURNOVER_EXTRA[speed] : 0);
     nextPlayTimerRef.current = setTimeout(() => {
