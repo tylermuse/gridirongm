@@ -130,12 +130,22 @@ export default function DraftPreviewPage() {
                     </thead>
                     <tbody>
                       {nflMockDraft.map((mock) => {
-                        const mockTeam = teams.find(t => t.abbreviation === mock.teamAbbr);
-                        const isUserMock = mockTeam?.id === userTeamId;
+                        const originalTeam = teams.find(t => t.abbreviation === mock.teamAbbr);
+                        // Find the actual current owner of this pick (may have been traded)
+                        const r1Pick = originalTeam?.draftPicks.find(pk =>
+                          pk.round === 1 && pk.originalTeamId === originalTeam.id &&
+                          pk.year === (draftResults.length > 0 ? season + 1 : season),
+                        );
+                        const ownerTeam = r1Pick ? teams.find(t => t.id === r1Pick.ownerTeamId) : originalTeam;
+                        const isUserPick = ownerTeam?.id === userTeamId;
+                        const wasTraded = ownerTeam && originalTeam && ownerTeam.id !== originalTeam.id;
                         return (
-                          <tr key={mock.pickNum} className={`border-t border-[var(--border)] ${isUserMock ? 'bg-blue-50' : ''}`}>
+                          <tr key={mock.pickNum} className={`border-t border-[var(--border)] ${isUserPick ? 'bg-blue-50 font-semibold' : ''}`}>
                             <td className="py-2 pl-2 text-[var(--text-sec)] font-mono">{mock.pickNum}</td>
-                            <td className="py-2 font-bold">{mockTeam?.abbreviation ?? mock.teamAbbr}</td>
+                            <td className="py-2 font-bold">
+                              {ownerTeam?.abbreviation ?? mock.teamAbbr}
+                              {wasTraded && <span className="text-[10px] text-[var(--text-sec)] font-normal ml-1">(via {originalTeam?.abbreviation})</span>}
+                            </td>
                             <td className="py-2">
                               <span className="font-medium">{mock.firstName} {mock.lastName}</span>
                             </td>
