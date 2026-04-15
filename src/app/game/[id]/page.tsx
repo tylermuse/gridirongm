@@ -1571,15 +1571,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
           {/* STATS TAB */}
           {activeTab === 'stats' && (() => {
-            if (!isFinished) {
+            const stats = liveResult.playerStats;
+            if (!stats || Object.keys(stats).length === 0) {
               return (
                 <div className="text-center py-12 text-[var(--text-sec)]">
-                  <p className="font-semibold">Stats available after the game ends.</p>
-                  <p className="text-sm mt-1">Watch the game or click &quot;End Game&quot; to see full stats.</p>
+                  <p className="font-semibold">Stats will appear as the game progresses.</p>
                 </div>
               );
             }
-            const stats = liveResult.playerStats;
 
             // Build stat leaders for each category
             const buildLeaders = (teamPlayers: Player[], teamAbbr: string, teamColor: string) => {
