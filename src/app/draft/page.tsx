@@ -1350,12 +1350,7 @@ export default function DraftPage() {
   return (
     <GameShell>
       <div className="max-w-7xl mx-auto space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-black">Draft</h2>
-          <Button variant="secondary" onClick={() => setShowImportModal(true)}>
-            Import Draft Class
-          </Button>
-        </div>
+        <h2 className="text-2xl font-black">Draft</h2>
 
         {/* Import Draft Class Modal */}
         {showImportModal && (
