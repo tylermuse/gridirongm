@@ -251,15 +251,23 @@ export default function FreeAgencyPage() {
     filteredAgents = filteredAgents.filter(p => p.position === filterPos);
   }
   if (affordableOnly) {
-    // Over the cap: can only sign at league minimum. Show players whose
-    // market value is low enough they might accept a minimum deal (~3x min).
-    // With cap space: show players whose market fits within actual space.
-    const maxAffordable = capSpace <= 0
-      ? LEAGUE_MINIMUM_SALARY * 3
-      : Math.max(LEAGUE_MINIMUM_SALARY * 3, capSpace);
+    // Show players the user can realistically sign given their cap situation.
+    // Over the cap → can only offer league minimum, so show players whose
+    // market value is low enough they'll consider it (up to ~5x league min
+    // since desperation + FA day decay can push asking prices down).
+    // Under the cap → show players whose market fits within actual space.
+    const maxAffordable = capSpace <= LEAGUE_MINIMUM_SALARY
+      ? LEAGUE_MINIMUM_SALARY * 5
+      : capSpace;
     filteredAgents = filteredAgents.filter(p => {
       const market = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci) * decay;
       return market <= maxAffordable;
+    });
+    // Sort cheapest first so signable players appear at the top
+    filteredAgents.sort((a, b) => {
+      const aM = estimateSalary(a.ratings.overall, a.position, a.age, a.potential, ci) * decay;
+      const bM = estimateSalary(b.ratings.overall, b.position, b.age, b.potential, ci) * decay;
+      return aM - bM;
     });
   }
   // Show up to 300 — enough to surface low-OVR depth bodies that would
