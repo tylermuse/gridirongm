@@ -38,7 +38,7 @@ function clamp(val: number, min: number, max: number) {
 }
 
 function isSeparator(type: PlayEvent['type']): boolean {
-  return ['quarter_end', 'halftime', 'two_minute_warning', 'overtime', 'final'].includes(type);
+  return ['quarter_end', 'halftime', 'two_minute_warning', 'overtime', 'final', 'timeout'].includes(type);
 }
 
 function downLabel(down: number, yardsToGo: number): string {
@@ -275,6 +275,7 @@ function playBg(type: PlayEvent['type']): string {
     case 'penalty': return 'bg-amber-50 border-l-3 border-amber-400';
     case 'halftime': case 'quarter_end': case 'two_minute_warning': case 'overtime': case 'final':
       return 'bg-[var(--surface-2)] border-l-3 border-[var(--border)]';
+    case 'timeout': return 'bg-blue-50 border-l-3 border-blue-400';
     case 'extra_point': return 'bg-green-50/30';
     default: return 'hover:bg-[var(--surface-2)]/50';
   }
@@ -293,6 +294,7 @@ function playTextColor(type: PlayEvent['type']): string {
     case 'penalty': return 'text-amber-700';
     case 'halftime': case 'quarter_end': case 'two_minute_warning': case 'overtime': case 'final':
       return 'text-[var(--text-sec)] italic font-semibold';
+    case 'timeout': return 'text-blue-700 font-semibold';
     default: return 'text-[var(--text)]';
   }
 }
@@ -1043,6 +1045,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const liveFieldPos = engineSnapshot?.fieldPos ?? currentEvent?.fieldPos ?? 25;
   const liveDown = engineSnapshot?.down ?? currentEvent?.down ?? 1;
   const liveYtg = engineSnapshot?.yardsToGo ?? currentEvent?.yardsToGo ?? 10;
+  const liveHomeTimeouts = engineSnapshot?.homeTimeouts ?? currentEvent?.homeTimeouts ?? 3;
+  const liveAwayTimeouts = engineSnapshot?.awayTimeouts ?? currentEvent?.awayTimeouts ?? 3;
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'gamecast', label: 'Gamecast' },
@@ -1147,6 +1151,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           isPlaying={isPlaying}
           drivePlays={currentDrive.plays}
           driveYards={currentDrive.yards}
+          homeTimeouts={liveHomeTimeouts}
+          awayTimeouts={liveAwayTimeouts}
           lastPlayDescription={(() => {
             // Show the most recent non-separator play description.
             // Check currentEvent first, then fall back to the last engine event.

@@ -5,6 +5,9 @@ import { computeQBTier, getQBTierModifier } from './qbTierPyramid';
 // Types
 // ---------------------------------------------------------------------------
 
+/** Defensive timeouts auto-called when trailing at end of half/game.
+ *  Emitted as a play event so the UI can display "Defense calls timeout!"
+ *  and so the play-by-play makes sense in context. */
 export type PlayType =
   | 'kickoff'
   | 'run'
@@ -23,11 +26,16 @@ export type PlayType =
   | 'halftime'
   | 'two_minute_warning'
   | 'overtime'
-  | 'final';
+  | 'final'
+  | 'timeout';
 
 export interface PlayEvent {
   id: number;
   type: PlayType;
+  /** Timeouts remaining per team after this event. Optional for backwards
+   *  compatibility with older saved LiveGameResults. */
+  homeTimeouts?: number;
+  awayTimeouts?: number;
   description: string;
   quarter: number;
   timeStr: string;
@@ -81,6 +89,9 @@ export interface GameStateSnapshot {
   twoMinWarningQ2Fired: boolean;
   twoMinWarningQ4Fired: boolean;
   overtime: boolean;
+  /** Timeouts remaining per team (3 per half in the NFL). Reset at halftime. */
+  homeTimeouts: number;
+  awayTimeouts: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -397,6 +408,9 @@ interface GameState {
   twoMinWarningQ2Fired: boolean;
   twoMinWarningQ4Fired: boolean;
   overtime: boolean;
+  /** Timeouts remaining per team (3 per half in the NFL). Reset at halftime. */
+  homeTimeouts: number;
+  awayTimeouts: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -488,7 +502,7 @@ export function simulatePlayByPlay(
   let playId = resumeFrom ? resumeFrom.nextEventId : 0;
 
   const state: GameState = resumeFrom
-    ? { ...resumeFrom.state }
+    ? { ...resumeFrom.state, homeTimeouts: resumeFrom.state.homeTimeouts ?? 3, awayTimeouts: resumeFrom.state.awayTimeouts ?? 3 }
     : {
         quarter: 1,
         timeSecs: 900,
@@ -502,6 +516,8 @@ export function simulatePlayByPlay(
         twoMinWarningQ2Fired: false,
         twoMinWarningQ4Fired: false,
         overtime: false,
+        homeTimeouts: 3,
+        awayTimeouts: 3,
       };
 
   // Quarter snapshots — captured before each quarter's first play.
@@ -543,6 +559,8 @@ export function simulatePlayByPlay(
       homeScore: state.homeScore,
       awayScore: state.awayScore,
       isScoring,
+      homeTimeouts: state.homeTimeouts,
+      awayTimeouts: state.awayTimeouts,
     };
     events.push(ev);
     return ev;
@@ -778,6 +796,39 @@ export function simulatePlayByPlay(
         // Ahead in Q4 < 5 min: burn clock — increase drain
         secs = Math.round(baseSecs * 1.2); // ~38-43s instead of 30-38s
       }
+    }
+
+    // ── Auto defensive timeouts ──
+    // If the defensive team is trailing at end of half or end of game and the
+    // offense is burning the clock, the defense burns a timeout to stop the
+    // clock. Mirrors real NFL coaching decisions automatically.
+    const defSide: 'home' | 'away' = state.possession === 'home' ? 'away' : 'home';
+    const defTimeouts = defSide === 'home' ? state.homeTimeouts : state.awayTimeouts;
+    const defScore = defSide === 'home' ? state.homeScore : state.awayScore;
+    const offScore = state.possession === 'home' ? state.homeScore : state.awayScore;
+    const defTrailing = defScore < offScore;
+    const defTiedLate = defScore === offScore && state.quarter === 4 && state.timeSecs <= 60;
+    const inQ2Minute = state.quarter === 2 && state.timeSecs <= 120 && state.timeSecs > 10;
+    const inQ4Minute = state.quarter === 4 && state.timeSecs <= 150 && state.timeSecs > 10;
+    const shouldCallTimeout =
+      defTimeouts > 0 &&
+      secs > 10 && // only meaningful if clock was actually going to drain
+      (defTrailing || defTiedLate) &&
+      (inQ2Minute || inQ4Minute);
+
+    if (shouldCallTimeout) {
+      if (defSide === 'home') state.homeTimeouts -= 1;
+      else state.awayTimeouts -= 1;
+      const defAbbr = defSide === 'home' ? homeTeam.abbreviation : awayTeam.abbreviation;
+      const remaining = defSide === 'home' ? state.homeTimeouts : state.awayTimeouts;
+      addEvent(
+        'timeout',
+        `${defAbbr} calls timeout. ${remaining} timeout${remaining === 1 ? '' : 's'} remaining.`,
+        0,
+        false,
+      );
+      // Clock gets 2-3 seconds of admin time but doesn't drain the full play clock
+      secs = 3;
     }
 
     state.timeSecs = Math.max(0, state.timeSecs - secs);
@@ -1311,6 +1362,9 @@ export function simulatePlayByPlay(
         addEvent('quarter_end', `End of the second quarter.`, 0, false);
         addEvent('halftime', `Halftime — ${homeTeam.abbreviation} ${state.homeScore}, ${awayTeam.abbreviation} ${state.awayScore}.`, 0, false);
         state.quarter = 3;
+        // NFL rule: timeouts reset to 3 per team at halftime
+        state.homeTimeouts = 3;
+        state.awayTimeouts = 3;
         state.timeSecs = 900;
         state.twoMinWarningQ2Fired = false;
         captureSnapshot(); // Q3 start (post-halftime)

@@ -47,6 +47,8 @@ interface ScoreBugProps {
   drivePlays: number;
   driveYards: number;
   lastPlayDescription: string | null;
+  homeTimeouts?: number;
+  awayTimeouts?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,6 +73,8 @@ export function ScoreBug({
   drivePlays,
   driveYards,
   lastPlayDescription,
+  homeTimeouts,
+  awayTimeouts,
 }: ScoreBugProps) {
   const posLabel = fieldPosLabel(fieldPos, possession, homeAbbr, awayAbbr);
 
@@ -100,6 +104,18 @@ export function ScoreBug({
                 style={{ backgroundColor: awayColor }}
               />
             )}
+            {/* Timeouts — 3 small dots, unlit as used */}
+            {!isFinished && awayTimeouts !== undefined && (
+              <div className="flex items-center gap-0.5 shrink-0" title={`${awayAbbr} timeouts: ${awayTimeouts} remaining`}>
+                {[0, 1, 2].map(i => (
+                  <span
+                    key={i}
+                    className="w-1.5 h-1.5 rounded-sm"
+                    style={{ backgroundColor: i < awayTimeouts ? awayColor : 'var(--border)', opacity: i < awayTimeouts ? 1 : 0.4 }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Center: quarter + clock */}
@@ -126,6 +142,18 @@ export function ScoreBug({
 
           {/* Home team */}
           <div className="flex items-center gap-2.5 px-4 py-2.5 flex-1 min-w-0 justify-end">
+            {/* Timeouts (left of home side) */}
+            {!isFinished && homeTimeouts !== undefined && (
+              <div className="flex items-center gap-0.5 shrink-0" title={`${homeAbbr} timeouts: ${homeTimeouts} remaining`}>
+                {[0, 1, 2].map(i => (
+                  <span
+                    key={i}
+                    className="w-1.5 h-1.5 rounded-sm"
+                    style={{ backgroundColor: i < homeTimeouts ? homeColor : 'var(--border)', opacity: i < homeTimeouts ? 1 : 0.4 }}
+                  />
+                ))}
+              </div>
+            )}
             {possession === 'home' && !isFinished && (
               <span
                 className="w-2 h-2 rounded-full shrink-0"
