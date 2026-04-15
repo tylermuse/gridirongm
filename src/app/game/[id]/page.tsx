@@ -1199,11 +1199,21 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         />
 
         {/* Big-play alert banner — turnovers, TDs, missed FGs shown prominently above the field */}
-        {outcomeChip && (
-          <div className={`${outcomeChip.color} text-white font-black text-center py-2 px-4 rounded-lg text-sm shadow-md animate-pulse`}>
-            {outcomeChip.text}
-          </div>
-        )}
+        {outcomeChip && (() => {
+          const isTurnover = outcomeChip.text.includes('INTERCEPTED') || outcomeChip.text.includes('FUMBLE');
+          const isTD = outcomeChip.text.includes('TOUCHDOWN');
+          const isBig = isTurnover || isTD || outcomeChip.text.includes('NO GOOD') || outcomeChip.text.includes('FIELD GOAL');
+          return (
+            <div className={`${outcomeChip.color} text-white font-black text-center rounded-lg shadow-lg ${
+              isTurnover ? 'py-5 px-6 text-xl border-2 border-white/30' :
+              isBig ? 'py-4 px-5 text-lg' :
+              'py-2 px-4 text-sm'
+            }`}>
+              <div>{outcomeChip.text}</div>
+              {isTurnover && <div className="text-xs font-semibold opacity-80 mt-1">Possession change</div>}
+            </div>
+          );
+        })()}
 
         {/* Animated field + outcome chip overlay */}
         <div className="relative">
