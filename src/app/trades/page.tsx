@@ -211,11 +211,13 @@ function SortableTradeTable({
   selectedIds,
   toggleSelect,
   playerTradeValue: ptv,
+  onPlayerClick,
 }: {
   players: Player[];
   selectedIds: string[];
   toggleSelect: (id: string) => void;
   playerTradeValue: (p: Player) => number;
+  onPlayerClick?: (id: string) => void;
 }) {
   const [sortKey, setSortKey] = useState<TradeSortKey>('ovr');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -269,7 +271,15 @@ function SortableTradeTable({
             >
               <td className="py-1 pl-1"><input type="checkbox" checked={selectedIds.includes(p.id)} readOnly className="accent-blue-500 pointer-events-none" /></td>
               <td className="py-1 px-1"><Badge size="sm">{p.position}</Badge></td>
-              <td className="py-1 px-1 font-medium truncate max-w-[120px]">{p.firstName} {p.lastName}</td>
+              <td className="py-1 px-1 font-medium truncate max-w-[120px]">
+                {onPlayerClick ? (
+                  <button onClick={(e) => { e.stopPropagation(); onPlayerClick(p.id); }} className="hover:text-blue-600 transition-colors text-left">
+                    {p.firstName} {p.lastName}
+                  </button>
+                ) : (
+                  <>{p.firstName} {p.lastName}</>
+                )}
+              </td>
               <td className={`py-1 px-1 font-bold text-center ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
               <td className="py-1 px-1 text-center text-[var(--text-sec)]">{p.age}</td>
               <td className="py-1 px-1 text-right text-[var(--text-sec)]">${p.contract.salary.toFixed(1)}M</td>
@@ -2081,6 +2091,7 @@ function TradesPage() {
                         selectedIds={offeredPlayerIds}
                         toggleSelect={(id) => togglePlayerSelect(id, offeredPlayerIds, setOfferedPlayerIds)}
                         playerTradeValue={playerTradeValue}
+                        onPlayerClick={setSelectedPlayerId}
                       />
                     </div>
                     {userTeam && userTeam.draftPicks.filter(pk => pk.year >= (useGameStore.getState().season) && !pk.playerId).length > 0 && (
