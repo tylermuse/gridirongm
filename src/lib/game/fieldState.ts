@@ -109,8 +109,13 @@ export function deriveFieldState(
   const dir = possession === _userSide ? 1 : -1;
   const firstDownAbsYard = clamp(scrimmageAbsYard + yardsToGo * dir, 0, 100);
 
-  // Ball position after play result
-  const ballAbsYard = clamp(scrimmageAbsYard + yardsGained * dir, 0, 100);
+  // Ball position after play result.
+  // On a touchdown, push the ball 5 yards past the goal line so the animation
+  // carries it INTO the end zone instead of stopping at the pylon.
+  let ballAbsYard = clamp(scrimmageAbsYard + yardsGained * dir, 0, 100);
+  if (type === 'touchdown') {
+    ballAbsYard = dir > 0 ? 105 : -5;
+  }
 
   // Select formation
   const { offense, defense } = selectFormation(type, down, yardsToGo, fieldPos);
