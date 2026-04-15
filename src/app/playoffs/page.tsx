@@ -479,6 +479,65 @@ export default function PlayoffsPage() {
           );
         })()}
 
+        {/* ---- Owner Message — right after champion banner ---- */}
+        {status !== 'active' && (() => {
+          const userTeam = teams.find(t => t.id === userTeamId);
+          if (!userTeam) return null;
+          const record = userTeam.record;
+          const wins = record.wins;
+          const losses = record.losses;
+          let tone: 'ecstatic' | 'pleased' | 'satisfied' | 'disappointed' | 'frustrated';
+          let message: string;
+
+          if (status === 'champion') {
+            tone = 'ecstatic';
+            message = `What a season! A championship in Season ${season} — that's what we hired you for. The city is buzzing, merchandise is flying off the shelves, and the parade route is already mapped out. You've earned every bit of this. Now let's do it again.`;
+          } else if (status === 'eliminated-4' || status === 'won-3') {
+            tone = 'pleased';
+            message = `A ${wins}-${losses} season and a trip to The Championship — that's an incredible run. We came up short in the big game, but this team is clearly headed in the right direction. Make the right moves this offseason and we'll be back.`;
+          } else if (status === 'eliminated-3' || status === 'won-2') {
+            tone = 'satisfied';
+            message = `${wins}-${losses} and a conference championship appearance. That's a strong season by any measure. But we're not building this thing to stop short of the title. Let's figure out what pieces we're missing and go get them.`;
+          } else if (status === 'eliminated-2' || status === 'won-1') {
+            tone = wins >= 10 ? 'satisfied' : 'disappointed';
+            message = wins >= 10
+              ? `A ${wins}-${losses} record and a divisional round exit. We had a good regular season but couldn't get it done when it mattered. I need you to evaluate what went wrong in that game and address it.`
+              : `We squeezed into the playoffs at ${wins}-${losses} and bowed out in the divisional round. The fans expected more. I expect more. This offseason needs to be aggressive.`;
+          } else if (status === 'missed') {
+            tone = wins >= 8 ? 'disappointed' : 'frustrated';
+            message = wins >= 8
+              ? `${wins}-${losses} and no playoff berth. We were right there but couldn't close it out. I'm frustrated, but I still believe in the direction. Make the right moves this offseason.`
+              : wins >= 5
+              ? `${wins}-${losses}. Missing the playoffs is unacceptable for this franchise. The fans deserve better. You've got one more offseason to turn this around, or we'll need to have a harder conversation.`
+              : `${wins}-${losses}. I don't need to tell you how bad that is. The fans are furious. I'm furious. We need a complete overhaul. If I don't see major changes this offseason, we're going in a different direction.`;
+          } else {
+            tone = wins >= 9 ? 'disappointed' : 'frustrated';
+            message = wins >= 9
+              ? `${wins}-${losses} and a first-round exit. That's not why we made the playoffs. I'm giving you another offseason to fix this, but I need to see real improvement in January next year.`
+              : `A wild card berth at ${wins}-${losses} and a quick exit. The fans are restless and frankly so am I. You've got one more offseason to show me this roster is trending up. Don't waste it.`;
+          }
+
+          const toneColors = {
+            ecstatic: 'border-green-500/30 bg-green-50',
+            pleased: 'border-blue-500/30 bg-blue-50',
+            satisfied: 'border-amber-500/30 bg-amber-50',
+            disappointed: 'border-orange-500/30 bg-orange-50',
+            frustrated: 'border-red-500/30 bg-red-50',
+          };
+
+          return (
+            <Card className={`border-2 ${toneColors[tone]}`}>
+              <CardHeader>
+                <CardTitle>📋 Message from the Owner</CardTitle>
+              </CardHeader>
+              <div className="px-1 pb-1">
+                <p className="text-sm text-[var(--text)] leading-relaxed italic">&ldquo;{message}&rdquo;</p>
+                <p className="text-xs text-[var(--text-sec)] mt-2 text-right">— {userTeam.city} {userTeam.name} Ownership</p>
+              </div>
+            </Card>
+          );
+        })()}
+
         {/* ---- Season Awards ---- */}
         {sbDone && (() => {
           const activePlayers = players.filter(p => !p.retired && p.teamId);
@@ -873,66 +932,7 @@ export default function PlayoffsPage() {
             />
           </div>
         </Card>
-        {/* ---- Owner Message ---- */}
-        {status !== 'active' && (() => {
-          const userTeam = teams.find(t => t.id === userTeamId);
-          if (!userTeam) return null;
-          const record = userTeam.record;
-          const wins = record.wins;
-          const losses = record.losses;
-          let tone: 'ecstatic' | 'pleased' | 'satisfied' | 'disappointed' | 'frustrated';
-          let message: string;
-
-          if (status === 'champion') {
-            tone = 'ecstatic';
-            message = `What a season! A championship in Season ${season} — that's what we hired you for. The city is buzzing, merchandise is flying off the shelves, and the parade route is already mapped out. You've earned every bit of this. Now let's do it again.`;
-          } else if (status === 'eliminated-4' || status === 'won-3') {
-            tone = 'pleased';
-            message = `A ${wins}-${losses} season and a trip to The Championship — that's an incredible run. We came up short in the big game, but this team is clearly headed in the right direction. Make the right moves this offseason and we'll be back.`;
-          } else if (status === 'eliminated-3' || status === 'won-2') {
-            tone = 'satisfied';
-            message = `${wins}-${losses} and a conference championship appearance. That's a strong season by any measure. But we're not building this thing to stop short of the title. Let's figure out what pieces we're missing and go get them.`;
-          } else if (status === 'eliminated-2' || status === 'won-1') {
-            tone = wins >= 10 ? 'satisfied' : 'disappointed';
-            message = wins >= 10
-              ? `A ${wins}-${losses} record and a divisional round exit. We had a good regular season but couldn't get it done when it mattered. I need you to evaluate what went wrong in that game and address it.`
-              : `We squeezed into the playoffs at ${wins}-${losses} and bowed out in the divisional round. The fans expected more. I expect more. This offseason needs to be aggressive.`;
-          } else if (status === 'missed') {
-            tone = wins >= 8 ? 'disappointed' : 'frustrated';
-            message = wins >= 8
-              ? `${wins}-${losses} and no playoff berth. We were right there but couldn't close it out. I'm frustrated, but I still believe in the direction. Make the right moves this offseason.`
-              : wins >= 5
-              ? `${wins}-${losses}. Missing the playoffs is unacceptable for this franchise. The fans deserve better. You've got one more offseason to turn this around, or we'll need to have a harder conversation.`
-              : `${wins}-${losses}. I don't need to tell you how bad that is. The fans are furious. I'm furious. We need a complete overhaul. If I don't see major changes this offseason, we're going in a different direction.`;
-          } else {
-            tone = wins >= 9 ? 'disappointed' : 'frustrated';
-            message = wins >= 9
-              ? `${wins}-${losses} and a first-round exit. That's not why we made the playoffs. I'm giving you another offseason to fix this, but I need to see real improvement in January next year.`
-              : `A wild card berth at ${wins}-${losses} and a quick exit. The fans are restless and frankly so am I. You've got one more offseason to show me this roster is trending up. Don't waste it.`;
-          }
-
-          const toneColors = {
-            ecstatic: 'border-green-500/30 bg-green-50',
-            pleased: 'border-blue-500/30 bg-blue-50',
-            satisfied: 'border-amber-500/30 bg-amber-50',
-            disappointed: 'border-orange-500/30 bg-orange-50',
-            frustrated: 'border-red-500/30 bg-red-50',
-          };
-
-          return (
-            <Card className={`border-2 ${toneColors[tone]}`}>
-              <CardHeader>
-                <CardTitle>📋 Message from the Owner</CardTitle>
-              </CardHeader>
-              <div className="px-1 pb-1">
-                <p className="text-sm text-[var(--text)] leading-relaxed italic">&ldquo;{message}&rdquo;</p>
-                <p className="text-xs text-[var(--text-sec)] mt-2 text-right">— {userTeam.city} {userTeam.name} Ownership</p>
-              </div>
-            </Card>
-          );
-        })()}
-
-        {/* Notable Retirements — after owner message, before team status */}
+        {/* Notable Retirements */}
         {sbDone && (() => {
           const lastSummary = seasonHistory.length > 0 ? seasonHistory[seasonHistory.length - 1] : null;
           const retirees = lastSummary?.retiredPlayers ?? [];
