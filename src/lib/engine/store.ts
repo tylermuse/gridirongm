@@ -317,25 +317,24 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
         score *= 0.05; // Nearly eliminate chance of drafting surplus positions
       }
 
-      // QB premium: only teams with NO QB or a truly terrible one draft QBs early
+      // QB premium: QBs are the most valuable position in football.
+      // Teams draft QBs early even with decent starters — the upside
+      // of a franchise QB is worth the investment.
       if (prospect.position === 'QB') {
         const bestQB = roster.filter(p => p.position === 'QB').sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
         const qbOvr = bestQB?.ratings.overall ?? 0;
         if (count === 0) {
-          // No QB at all — big premium
-          score += 150;
-        } else if (qbOvr < 55) {
-          // Terrible QB — strong premium for upgrade
-          score += 100;
-        } else if (qbOvr < 65) {
-          // Below average QB — moderate premium for upgrade potential
-          score += prospect.ratings.overall > qbOvr ? 60 : 20;
-        } else if (qbOvr < 72) {
-          // Average QB — only reach for elite prospects
-          score += prospect.potential >= 85 ? 40 : 0;
+          score += 200; // No QB — must draft one
+        } else if (qbOvr < 60) {
+          score += 150; // Bad QB — strong upgrade motivation
+        } else if (qbOvr < 70) {
+          score += 80; // Below average — still worth upgrading
+        } else if (qbOvr < 78) {
+          // Average-to-good QB — draft if prospect is clearly better
+          score += prospect.ratings.overall > qbOvr ? 50 : 10;
         } else {
-          // Good QB — slight penalty to avoid hoarding
-          score *= 0.6;
+          // Elite QB — only draft if at max roster QB count (handled above)
+          score *= 0.4;
         }
       }
 
