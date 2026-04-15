@@ -620,7 +620,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         lastEvent.type === 'punt'
       );
       const bigExtra = isBigMoment
-        ? (speed === '1x' ? 3000 : speed === '2x' ? 2000 : speed === '5x' ? 1500 : 0)
+        ? (speed === '1x' ? 5000 : speed === '2x' ? 3500 : speed === '5x' ? 2000 : 0)
         : 0;
       const delay = Math.max(300, animMs + pauseMs + bigExtra);
 
@@ -667,7 +667,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     const PAUSE_MS: Record<Speed, number> = { '1x': 3500, '2x': 1200, '5x': 150, 'max': 0 };
     // Big-moment extended pause — turnovers and scoring plays deserve extra
     // dwell time so the user actually sees what happened before possession flips.
-    const TURNOVER_EXTRA: Record<Speed, number> = { '1x': 2500, '2x': 1500, '5x': 1200, 'max': 0 };
+    const TURNOVER_EXTRA: Record<Speed, number> = { '1x': 4500, '2x': 3000, '5x': 2000, 'max': 0 };
     const isBigMoment =
       currentEvent?.type === 'interception' ||
       currentEvent?.type === 'fumble' ||
@@ -799,8 +799,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     // Big plays persist longer so the user doesn't miss them — especially
     // turnovers and scores, which now get extra pause time on the play-advance
     // loop so the chip is still visible when possession flips.
+    const isTurnover = ['🔄'].some(icon => text.includes(icon));
     const isBigPlay = ['🏆', '✅', '❌', '🔄'].some(icon => text.includes(icon));
-    const chipDuration = isBigPlay ? 5500 : 1500;
+    const chipDuration = isTurnover ? 7000 : isBigPlay ? 5500 : 1500;
 
     if (outcomeTimerRef.current) clearTimeout(outcomeTimerRef.current);
     setOutcomeChip({ text, color });
@@ -1778,7 +1779,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                       );
                       if (isBig) {
                         pendingAutoPlayRef.current = true;
-                        const extraMs = speed === '1x' ? 4000 : speed === '2x' ? 2500 : speed === '5x' ? 1500 : 500;
+                        const extraMs = speed === '1x' ? 6000 : speed === '2x' ? 4000 : speed === '5x' ? 2500 : 1000;
                         setTimeout(() => {
                           pendingAutoPlayRef.current = false;
                           setAutoRunTick(t => t + 1);
