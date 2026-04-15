@@ -261,12 +261,15 @@ export default function FreeAgencyPage() {
       const market = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci) * decay;
       return market <= maxAffordable;
     });
-    // Sort cheapest first so the most signable players are at the top
-    filteredAgents.sort((a, b) => {
-      const aM = estimateSalary(a.ratings.overall, a.position, a.age, a.potential, ci) * decay;
-      const bM = estimateSalary(b.ratings.overall, b.position, b.age, b.potential, ci) * decay;
-      return aM - bM;
-    });
+    // When over the cap, sort cheapest first so signable players are at the top.
+    // When under the cap, keep the user's selected sort order (default: OVR desc).
+    if (capSpace <= LEAGUE_MINIMUM_SALARY) {
+      filteredAgents.sort((a, b) => {
+        const aM = estimateSalary(a.ratings.overall, a.position, a.age, a.potential, ci) * decay;
+        const bM = estimateSalary(b.ratings.overall, b.position, b.age, b.potential, ci) * decay;
+        return aM - bM;
+      });
+    }
   }
   // Show up to 300 — enough to surface low-OVR depth bodies that would
   // otherwise sit below the top-60 cutoff when sorted by OVR descending.
