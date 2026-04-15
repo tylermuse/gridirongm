@@ -754,9 +754,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     let color = 'bg-gray-700';
     const yds = currentEvent.yardsGained;
 
-    if (currentEvent.isScoring || currentEvent.type === 'touchdown') {
+    if (currentEvent.type === 'field_goal_good') {
+      text = '✅ FIELD GOAL GOOD'; color = 'bg-amber-500';
+    } else if (currentEvent.isScoring || currentEvent.type === 'touchdown') {
       text = '🏆 TOUCHDOWN'; color = 'bg-amber-500';
-    } else if (currentEvent.type === 'field_goal_good') {
+    } else if (currentEvent.type === 'field_goal_miss') {
       text = '✅ FIELD GOAL GOOD'; color = 'bg-amber-500';
     } else if (currentEvent.type === 'field_goal_miss') {
       text = '❌ NO GOOD'; color = 'bg-red-600';
