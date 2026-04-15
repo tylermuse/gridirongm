@@ -657,12 +657,19 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       currentEvent?.type === 'interception' ||
       currentEvent?.type === 'fumble' ||
       currentEvent?.type === 'touchdown' ||
+      currentEvent?.type === 'field_goal_miss' ||
+      currentEvent?.type === 'field_goal_good' ||
       currentEvent?.isScoring === true;
     const pause = PAUSE_MS[speed] + (isBigMoment ? TURNOVER_EXTRA[speed] : 0);
     nextPlayTimerRef.current = setTimeout(() => {
       setRevealedCount(prev => {
         if (prev >= totalEvents) {
-          setIsPlaying(false);
+          // Only stop playback if the live engine isn't active —
+          // when the engine is running, the auto-run effect will
+          // generate the next event and keep things moving.
+          if (!liveEngineRef.current || liveEngineRef.current.isFinished()) {
+            setIsPlaying(false);
+          }
           return prev;
         }
         return prev + 1;
@@ -743,7 +750,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     let color = 'bg-gray-700';
     const yds = currentEvent.yardsGained;
 
-    if (currentEvent.isScoring && currentEvent.type === 'touchdown') {
+    if (currentEvent.isScoring || currentEvent.type === 'touchdown') {
       text = '🏆 TOUCHDOWN'; color = 'bg-amber-500';
     } else if (currentEvent.type === 'field_goal_good') {
       text = '✅ FIELD GOAL GOOD'; color = 'bg-amber-500';
@@ -1166,6 +1173,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             return null;
           })()}
         />
+
+        {/* Big-play alert banner — turnovers, TDs, missed FGs shown prominently above the field */}
+        {outcomeChip && (
+          <div className={`${outcomeChip.color} text-white font-black text-center py-2 px-4 rounded-lg text-sm shadow-md animate-pulse`}>
+            {outcomeChip.text}
+          </div>
+        )}
 
         {/* Animated field + outcome chip overlay */}
         <div className="relative">
