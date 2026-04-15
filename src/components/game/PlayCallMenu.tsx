@@ -124,17 +124,27 @@ export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, timeoutsRe
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-1.5">
-              {PLAY_BUTTONS.map(btn => (
-                <button
-                  key={btn.type}
-                  onClick={() => { onPlayCall(btn.type); setGoingForIt(false); }}
-                  className={`flex items-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs transition-colors ${btn.color}`}
-                >
-                  <span>{btn.icon}</span>
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
+                {PLAY_BUTTONS.map(btn => (
+                  <button
+                    key={btn.type}
+                    onClick={() => { onPlayCall(btn.type); setGoingForIt(false); }}
+                    className={`flex items-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs transition-colors ${btn.color}`}
+                  >
+                    <span>{btn.icon}</span>
                   <span>{btn.label}</span>
                 </button>
               ))}
+              </div>
+              {isFourthDown && (
+                <button
+                  onClick={() => setGoingForIt(false)}
+                  className="w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-[var(--text-sec)] hover:bg-[var(--surface-2)] transition-colors"
+                >
+                  ← Back to Punt / FG
+                </button>
+              )}
             </div>
           )}
         </div>
