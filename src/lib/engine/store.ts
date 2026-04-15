@@ -286,13 +286,30 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
     return undefined;
   }
 
+  // Position draft value premium — mirrors real NFL draft tendencies.
+  // QBs, OL, DL, and edge rushers are valued higher; RBs are devalued.
+  const POSITION_DRAFT_VALUE: Record<Position, number> = {
+    QB: 35,   // QBs go early — massive positional value
+    OL: 20,   // Protect the QB — OL valued in early rounds
+    DL: 18,   // Pass rushers are premium picks
+    WR: 10,   // WRs go throughout the draft
+    LB: 8,    // Linebackers — solid mid-round value
+    CB: 5,    // CBs — slightly less premium than pass rush
+    TE: 5,    // TEs go mid-rounds unless elite
+    S: 0,     // Safeties — least valued in early rounds
+    RB: -15,  // RBs devalued — "don't draft a RB in round 1" effect
+    K: -50,   // Kickers/punters go very late
+    P: -50,
+  };
+
   const ranked = prospects
     .map((prospect) => {
       const limits = ROSTER_LIMITS[prospect.position];
       const count = countByPosition[prospect.position];
       const minNeed = Math.max(0, limits.min - count);
       const needScore = minNeed * 12;
-      let score = prospect.ratings.overall * 15 + prospect.potential * 0.5 + needScore;
+      const posValue = POSITION_DRAFT_VALUE[prospect.position] ?? 0;
+      let score = prospect.ratings.overall * 15 + prospect.potential * 0.5 + needScore + posValue;
       score += (Math.random() - 0.5) * 8;
 
       // Position max enforcement: heavily penalize positions already at or above max
