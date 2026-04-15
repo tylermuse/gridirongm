@@ -132,19 +132,8 @@ export function buildPlayAnimation(
     }
 
     case 'pass_incomplete': {
-      const targetWr = wrIndices[Math.floor(Math.random() * wrIndices.length)] ?? 0;
-      const wrDot = nextState.offenseDots[targetWr];
-      if (wrDot && qbIndex >= 0) {
-        const qb = nextState.offenseDots[qbIndex];
-        const dropX = qb.x + (wrDot.x - qb.x) * 0.7;
-        ballArc = {
-          startX: qb.x,
-          startY: qb.y,
-          peakHeight: 25,
-          endX: dropX,
-          endY: wrDot.y + 0.05,
-        };
-      }
+      // No ball arc for incompletes — ball stays at LOS, just show the text overlay.
+      ballArc = null;
       effects.push('incomplete');
       break;
     }
