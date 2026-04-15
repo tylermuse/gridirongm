@@ -221,10 +221,10 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
           <div className="flex items-center gap-1 md:gap-2 flex-wrap justify-end">
             {phase === 'preseason' && (
               <>
-                <Button onClick={() => useGameStore.getState().simPreseasonWeek()} size="sm" className="active:scale-95 transition-transform">
+                <Button onClick={() => { useGameStore.getState().simPreseasonWeek(); if (useGameStore.getState().phase === 'regular') router.push('/'); }} size="sm" className="active:scale-95 transition-transform">
                   Sim Preseason Game
                 </Button>
-                <Button onClick={() => useGameStore.getState().skipPreseason()} size="sm" variant="secondary" className="active:scale-95 transition-transform">
+                <Button onClick={() => { useGameStore.getState().skipPreseason(); router.push('/'); }} size="sm" variant="secondary" className="active:scale-95 transition-transform">
                   Skip to Regular Season
                 </Button>
               </>

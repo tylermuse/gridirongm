@@ -251,10 +251,12 @@ export default function FreeAgencyPage() {
     filteredAgents = filteredAgents.filter(p => p.position === filterPos);
   }
   if (affordableOnly) {
-    // Filter to players whose market salary fits within actual cap space.
-    // Over cap or near-zero cap space: only show players whose market value
-    // is at or below the league minimum (the only salary you can offer).
-    const maxAffordable = Math.max(LEAGUE_MINIMUM_SALARY, capSpace);
+    // Over the cap: can only sign at league minimum. Show players whose
+    // market value is low enough they might accept a minimum deal (~3x min).
+    // With cap space: show players whose market fits within actual space.
+    const maxAffordable = capSpace <= 0
+      ? LEAGUE_MINIMUM_SALARY * 3
+      : Math.max(LEAGUE_MINIMUM_SALARY * 3, capSpace);
     filteredAgents = filteredAgents.filter(p => {
       const market = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci) * decay;
       return market <= maxAffordable;
