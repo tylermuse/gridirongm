@@ -251,17 +251,14 @@ export default function FreeAgencyPage() {
     filteredAgents = filteredAgents.filter(p => p.position === filterPos);
   }
   if (affordableOnly) {
-    // Capped out (including exactly at the cap): user can only sign at league
-    // minimum. Show players whose market is close to the minimum (accepters).
-    if (capSpace < LEAGUE_MINIMUM_SALARY * 2) {
-      filteredAgents = filteredAgents.filter(p => {
-        const market = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci) * decay;
-        return market <= LEAGUE_MINIMUM_SALARY * 2;
-      });
-    } else {
-      // Real cap space — filter to players whose market fits
-      filteredAgents = filteredAgents.filter(p => estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci) * decay <= capSpace);
-    }
+    // Filter to players whose market salary fits within actual cap space.
+    // Over cap or near-zero cap space: only show players whose market value
+    // is at or below the league minimum (the only salary you can offer).
+    const maxAffordable = Math.max(LEAGUE_MINIMUM_SALARY, capSpace);
+    filteredAgents = filteredAgents.filter(p => {
+      const market = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci) * decay;
+      return market <= maxAffordable;
+    });
   }
   // Show up to 300 — enough to surface low-OVR depth bodies that would
   // otherwise sit below the top-60 cutoff when sorted by OVR descending.
