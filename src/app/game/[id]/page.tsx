@@ -852,6 +852,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     if (isFinished && game && !committed) {
       const gameResult = buildFinalGameResult();
       if (!gameResult) return;
+      // Safety: if the live engine is active and scores are tied, OT should
+      // have happened. Don't commit a tie if the engine hasn't truly finished.
+      if (liveEngineRef.current && !liveEngineRef.current.isFinished()) return;
       commitLiveGame(gameResult, isPlayoffGame ? id : undefined);
       setCommitted(true);
       // Fire-and-forget flush — Zustand's in-memory state is already updated

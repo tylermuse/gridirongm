@@ -577,7 +577,17 @@ export function createLiveCoachEngine(
       endGame(events);
     }
     if (state.overtime && state.timeSecs <= 0 && state.homeScore === state.awayScore) {
+      // Regular season tie after OT
       endGame(events);
+    }
+
+    // Safety: if Q4 is over with tied score and OT wasn't triggered, force it
+    if (!state.overtime && !state.isGameOver && state.quarter === 4 && state.timeSecs <= 0 && state.homeScore === state.awayScore) {
+      state.overtime = true;
+      state.timeSecs = 600;
+      state.quarter = 5;
+      events.push(makeEvent('overtime', 'Overtime! First score wins.', 0, false));
+      doKickoffEvents(events);
     }
 
     return events;
