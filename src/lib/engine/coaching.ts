@@ -1,4 +1,5 @@
 import type { Coach, CoachRole, CoachHistory, OffensiveScheme, DefensiveScheme, Player, Team } from '@/types';
+import { COACH_ROLE_POSITIONS } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Coach generation
@@ -34,25 +35,54 @@ const HC_SPECS = ['Game Management', 'Player Development', 'Locker Room Culture'
 const OC_SPECS = ['QB Development', 'Play Design', 'Red Zone Offense', 'RPO Schemes', 'Pass Protection', 'Screen Game'];
 const DC_SPECS = ['Pass Rush Schemes', 'Run Stopping', 'Coverage Design', 'Blitz Packages', 'Secondary Development', 'Situational Defense'];
 
+const POSITION_COACH_SPECS: Record<string, string[]> = {
+  QB: ['Arm Mechanics', 'Pre-snap Reads', 'Pocket Presence', 'Film Study', 'Accuracy Drills', 'Footwork'],
+  RB: ['Vision Training', 'Pass Protection', 'Ball Security', 'Route Running', 'Agility Drills', 'Goal Line Rushing'],
+  WR: ['Route Running', 'Contested Catches', 'YAC Technique', 'Press Release', 'Film Study', 'Hand Fighting'],
+  OL: ['Run Blocking', 'Pass Protection', 'Zone Schemes', 'Power Schemes', 'Communication', 'Combo Blocks'],
+  DL: ['Pass Rush Moves', 'Run Fits', 'Hand Technique', 'Gap Discipline', 'Motor Development', 'Bull Rush'],
+  DB: ['Man Coverage', 'Zone Technique', 'Ball Skills', 'Tackling', 'Film Study', 'Press Technique'],
+};
+
+export const COACH_ROLE_LABELS: Record<string, string> = {
+  HC: 'Head Coach',
+  OC: 'Offensive Coordinator',
+  DC: 'Defensive Coordinator',
+  QB: 'QB Coach',
+  RB: 'RB Coach',
+  WR: 'WR/TE Coach',
+  OL: 'OL Coach',
+  DL: 'DL Coach',
+  DB: 'DB Coach',
+};
+
 function randomFrom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
 let _coachId = 0;
 
+const POSITION_ROLES = new Set(['QB', 'RB', 'WR', 'OL', 'DL', 'DB']);
+
 export function generateCoach(role: CoachRole): Coach {
   _coachId++;
-  const age = 38 + Math.floor(Math.random() * 25); // 38-62
-  const ovr = 45 + Math.floor(Math.random() * 45);  // 45-89
-  const yearsExp = Math.max(0, age - 35 - Math.floor(Math.random() * 10));
+  const isPositionCoach = POSITION_ROLES.has(role);
+  const age = (isPositionCoach ? 32 : 38) + Math.floor(Math.random() * 25);
+  const ovr = 40 + Math.floor(Math.random() * 50);  // 40-89
+  const yearsExp = Math.max(0, age - (isPositionCoach ? 30 : 35) - Math.floor(Math.random() * 10));
   const winsPerYear = ovr > 70 ? 9 + Math.random() * 3 : ovr > 55 ? 7 + Math.random() * 3 : 5 + Math.random() * 4;
   const name = `${randomFrom(FIRST_NAMES)} ${randomFrom(LAST_NAMES)}`;
   const trait = randomFrom(COACH_TRAITS);
   const personality = randomFrom(PERSONALITIES);
-  const scheme = role === 'DC' ? undefined : randomFrom(OFF_SCHEMES);
+  const scheme = (role === 'DC' || isPositionCoach) ? undefined : randomFrom(OFF_SCHEMES);
+  const roleLabel = COACH_ROLE_LABELS[role] ?? role;
 
   // Bio generation
-  const BIO_TEMPLATES = [
+  const BIO_TEMPLATES = isPositionCoach ? [
+    `${name} is a ${yearsExp > 0 ? yearsExp + '-year' : 'first-year'} ${roleLabel} known for his ${trait} approach.`,
+    `A ${personality} coach, ${name} has built a reputation for developing ${role} talent.`,
+    `${name} spent ${yearsExp} years as a position coach before taking on his current role.`,
+  ] : [
     `${name} is a ${yearsExp > 0 ? yearsExp + '-year' : 'first-year'} ${role} known for his ${trait} approach to the game.`,
     `A ${personality} leader, ${name} has built his reputation on ${scheme ? scheme + ' scheme mastery' : 'defensive excellence'}.`,
     `${name} spent ${yearsExp} years climbing the coaching ranks before landing his ${role === 'HC' ? 'head coaching' : 'coordinator'} role.`,
@@ -61,18 +91,24 @@ export function generateCoach(role: CoachRole): Coach {
   const bio = BIO_TEMPLATES[Math.floor(Math.random() * BIO_TEMPLATES.length)];
 
   // Specialties (2-3 based on role)
-  const specPool = role === 'HC' ? HC_SPECS : role === 'OC' ? OC_SPECS : DC_SPECS;
+  const specPool = isPositionCoach
+    ? (POSITION_COACH_SPECS[role] ?? HC_SPECS)
+    : role === 'HC' ? HC_SPECS : role === 'OC' ? OC_SPECS : DC_SPECS;
   const specCount = 2 + Math.floor(Math.random() * 2); // 2-3
   const shuffled = [...specPool].sort(() => Math.random() - 0.5);
   const specialties = shuffled.slice(0, specCount);
 
-  // Contract and salary
-  const contractYears = 3 + Math.floor(Math.random() * 3); // 3-5
-  const salary = ovr >= 80
-    ? 8 + Math.round(Math.random() * 4 * 10) / 10
-    : ovr >= 60
-      ? 4 + Math.round(Math.random() * 3 * 10) / 10
-      : 2 + Math.round(Math.random() * 2 * 10) / 10;
+  // Contract and salary — position coaches cost less
+  const contractYears = isPositionCoach
+    ? 1 + Math.floor(Math.random() * 3) // 1-3 years
+    : 3 + Math.floor(Math.random() * 3); // 3-5
+  const salary = isPositionCoach
+    ? (ovr >= 75 ? 1.5 + Math.round(Math.random() * 1.5 * 10) / 10
+      : ovr >= 55 ? 0.8 + Math.round(Math.random() * 1.0 * 10) / 10
+      : 0.5 + Math.round(Math.random() * 0.5 * 10) / 10)
+    : (ovr >= 80 ? 8 + Math.round(Math.random() * 4 * 10) / 10
+      : ovr >= 60 ? 4 + Math.round(Math.random() * 3 * 10) / 10
+      : 2 + Math.round(Math.random() * 2 * 10) / 10);
 
   const firstName = name.split(' ')[0];
   const lastName = name.split(' ').slice(1).join(' ');
@@ -101,7 +137,35 @@ export function generateCoach(role: CoachRole): Coach {
 }
 
 export function generateCoachingStaff(): Coach[] {
-  return [generateCoach('HC'), generateCoach('OC'), generateCoach('DC')];
+  return [
+    generateCoach('HC'), generateCoach('OC'), generateCoach('DC'),
+    generateCoach('QB'), generateCoach('RB'), generateCoach('WR'),
+    generateCoach('OL'), generateCoach('DL'), generateCoach('DB'),
+  ];
+}
+
+/** Generate only the 6 position coaches (for backfilling existing saves) */
+export function generatePositionCoaches(): Coach[] {
+  return [
+    generateCoach('QB'), generateCoach('RB'), generateCoach('WR'),
+    generateCoach('OL'), generateCoach('DL'), generateCoach('DB'),
+  ];
+}
+
+/**
+ * Calculate the development rate multiplier from a team's position coach.
+ * Returns 0.90-1.15 based on coach OVR. Empty slot = 0.90 penalty.
+ */
+export function positionCoachDevMultiplier(coaches: Coach[] | undefined, playerPosition: string): number {
+  if (!coaches) return 0.90;
+  const role = Object.entries(COACH_ROLE_POSITIONS).find(
+    ([, positions]) => positions.includes(playerPosition),
+  )?.[0];
+  if (!role) return 1.0;
+  const coach = coaches.find(c => c.role === role);
+  if (!coach) return 0.90; // empty slot = 10% dev penalty
+  // OVR 40 → 0.90, OVR 65 → 1.0, OVR 90 → 1.15
+  return 0.90 + (coach.ovr - 40) * 0.005;
 }
 
 /** Backfill 1-2 fake coaching history stints for initial league generation */
@@ -367,11 +431,14 @@ export function progressCoaches(teams: Team[], season?: number): { teams: Team[]
       const updatedContractYears = Math.max(0, (c.contractYears ?? 3) - 1);
 
       // Recalculate salary based on updated OVR
-      const updatedSalary = ovr >= 80
-        ? 8 + Math.round(Math.random() * 4 * 10) / 10
-        : ovr >= 60
-          ? 4 + Math.round(Math.random() * 3 * 10) / 10
-          : 2 + Math.round(Math.random() * 2 * 10) / 10;
+      const isPosCoach = POSITION_ROLES.has(c.role);
+      const updatedSalary = isPosCoach
+        ? (ovr >= 75 ? 1.5 + Math.round(Math.random() * 1.5 * 10) / 10
+          : ovr >= 55 ? 0.8 + Math.round(Math.random() * 1.0 * 10) / 10
+          : 0.5 + Math.round(Math.random() * 0.5 * 10) / 10)
+        : (ovr >= 80 ? 8 + Math.round(Math.random() * 4 * 10) / 10
+          : ovr >= 60 ? 4 + Math.round(Math.random() * 3 * 10) / 10
+          : 2 + Math.round(Math.random() * 2 * 10) / 10);
 
       return {
         ...c, ovr, age: newAge, careerWins: newWins, careerLosses: newLosses, yearsWithTeam: newYears,

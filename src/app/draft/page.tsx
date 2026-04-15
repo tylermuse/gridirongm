@@ -460,18 +460,36 @@ function UnscoutedPanel({
     <div className="space-y-3">
       {/* Public blurb */}
       <div>
-        {player.scoutingLabel && (
-          <Badge variant={
-            player.scoutingLabel === 'Injury history' || player.scoutingLabel === 'Character concerns'
-              ? 'amber'
-              : player.scoutingLabel === 'Pro-ready' || player.scoutingLabel === 'Combine standout'
-                ? 'green'
-                : 'default'
-          }>
-            {player.scoutingLabel}
-          </Badge>
-        )}
+        <div className="flex flex-wrap gap-1 items-center">
+          {player.heismanWinner && (
+            <Badge variant="amber">Heisman Winner</Badge>
+          )}
+          {player.scoutingLabel && (
+            <Badge variant={
+              player.scoutingLabel === 'Injury history' || player.scoutingLabel === 'Character concerns'
+                ? 'amber'
+                : player.scoutingLabel === 'Pro-ready' || player.scoutingLabel === 'Combine standout'
+                  ? 'green'
+                  : 'default'
+            }>
+              {player.scoutingLabel}
+            </Badge>
+          )}
+        </div>
         <p className="text-sm text-[var(--text)] mt-1.5 leading-relaxed">{blurb}</p>
+        {/* College Stats */}
+        {player.collegeStats && (
+          <div className="flex flex-wrap gap-2 text-[10px] text-[var(--text-sec)] mt-1">
+            <span>{player.collegeStats.seasons}yr · {player.collegeStats.gamesPlayed}G</span>
+            {player.collegeStats.passYards != null && <span>Pass: {player.collegeStats.passYards.toLocaleString()} yds / {player.collegeStats.passTDs} TD / {player.collegeStats.passINTs} INT</span>}
+            {player.collegeStats.rushYards != null && player.position !== 'QB' && <span>Rush: {player.collegeStats.rushYards.toLocaleString()} yds / {player.collegeStats.rushTDs} TD</span>}
+            {player.collegeStats.receptions != null && <span>Rec: {player.collegeStats.receptions} / {player.collegeStats.recYards?.toLocaleString()} yds / {player.collegeStats.recTDs} TD</span>}
+            {player.collegeStats.tackles != null && <span>TKL: {player.collegeStats.tackles}</span>}
+            {player.collegeStats.sacks != null && <span>SCK: {player.collegeStats.sacks}</span>}
+            {player.collegeStats.interceptions != null && <span>INT: {player.collegeStats.interceptions}</span>}
+            {player.collegeStats.fieldGoalPct != null && <span>FG%: {player.collegeStats.fieldGoalPct}%</span>}
+          </div>
+        )}
       </div>
 
       {/* Grayed-out scout report teaser */}

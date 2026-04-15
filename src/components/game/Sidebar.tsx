@@ -18,6 +18,7 @@ const NAV_SECTIONS = [
       { href: '/playoffs', label: 'Playoffs', icon: '🏆' },
       { href: '/stats', label: 'Stats', icon: '📈' },
       { href: '/power-rankings', label: 'Power Rankings', icon: '💪' },
+      { href: '/players', label: 'Player Search', icon: '🔍' },
       { href: '/news', label: 'News', icon: '📰' },
       { href: '/recap', label: 'Recap', icon: '🎙️' },
       { href: '/history', label: 'History', icon: '🗃️' },

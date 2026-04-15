@@ -105,6 +105,7 @@ export function developPlayers(
   completedSeason: number,
   progressionMult = 1.0,
   regressionMult = 1.0,
+  coachDevMultipliers?: Map<string, number>,
 ): Player[] {
   return players.map(p => {
     // Already retired — nothing to do
@@ -128,6 +129,10 @@ export function developPlayers(
 
     const ratings = { ...p.ratings };
     const primaryKeys = getPrimaryKeys(p.position);
+
+    // Position coach development multiplier (0.90–1.15)
+    const coachMult = coachDevMultipliers?.get(p.id) ?? 1.0;
+    const effectiveProgMult = progressionMult * coachMult;
 
     // ── Boom/Bust effects for young drafted players ──────────────────
     // Applies in years 1-3 after being drafted (experience 1-3).
@@ -180,12 +185,12 @@ export function developPlayers(
       // Year 1: modest growth (2-5), Years 2-3: strong growth (3-9), Year 4: tapering (2-4)
       let growthAmount: number;
       if (p.experience === 1) {
-        growthAmount = clamp(gaussian(3.5, 1.5), 2, 5) * progressionMult;
+        growthAmount = clamp(gaussian(3.5, 1.5), 2, 5) * effectiveProgMult;
       } else if (p.experience <= 3) {
-        growthAmount = clamp(gaussian(5, 2), 3, 9) * progressionMult;
+        growthAmount = clamp(gaussian(5, 2), 3, 9) * effectiveProgMult;
       } else {
         // Year 4: tapering off
-        growthAmount = clamp(gaussian(3, 1), 2, 4) * progressionMult;
+        growthAmount = clamp(gaussian(3, 1), 2, 4) * effectiveProgMult;
       }
       for (const key of primaryKeys) {
         const k = key as string;
@@ -193,7 +198,7 @@ export function developPlayers(
           (ratings as Record<string, number>)[k] + growthAmount * 0.6,
         );
       }
-      ratings.awareness = clamp(ratings.awareness + gaussian(3, 1) * progressionMult);
+      ratings.awareness = clamp(ratings.awareness + gaussian(3, 1) * effectiveProgMult);
       ratings.overall = clamp(Math.min(effectivePotential, p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position))));
     } else if (p.age <= 23) {
       // ── Strong Youth Progression ────────────────────────────────────
@@ -201,7 +206,7 @@ export function developPlayers(
       if (effectivePotential > ratings.overall) {
         const gap = effectivePotential - ratings.overall;
         const gapBonus = Math.min(gap / 10, 1.5); // up to +1.5 extra when far from potential
-        const growthAmount = clamp(gaussian(6 + gapBonus, 2.5), 3, 12) * progressionMult;
+        const growthAmount = clamp(gaussian(6 + gapBonus, 2.5), 3, 12) * effectiveProgMult;
         for (const key of primaryKeys) {
           const k = key as string;
           (ratings as Record<string, number>)[k] = clamp(
@@ -217,7 +222,7 @@ export function developPlayers(
             );
           }
         }
-        ratings.awareness = clamp(ratings.awareness + gaussian(3, 1.5) * progressionMult);
+        ratings.awareness = clamp(ratings.awareness + gaussian(3, 1.5) * effectiveProgMult);
         ratings.overall = clamp(Math.min(effectivePotential, p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position))));
       } else {
         // Already at potential — mostly stable, slight upward bias
@@ -235,7 +240,7 @@ export function developPlayers(
       if (effectivePotential > ratings.overall) {
         const gap = effectivePotential - ratings.overall;
         const gapBonus = Math.min(gap / 12, 1.2);
-        const growthAmount = clamp(gaussian(4.5 + gapBonus, 2), 2, 9) * progressionMult;
+        const growthAmount = clamp(gaussian(4.5 + gapBonus, 2), 2, 9) * effectiveProgMult;
         for (const key of primaryKeys) {
           const k = key as string;
           (ratings as Record<string, number>)[k] = clamp(
@@ -250,7 +255,7 @@ export function developPlayers(
             );
           }
         }
-        ratings.awareness = clamp(ratings.awareness + gaussian(2.5, 1) * progressionMult);
+        ratings.awareness = clamp(ratings.awareness + gaussian(2.5, 1) * effectiveProgMult);
         ratings.overall = clamp(Math.min(effectivePotential, p.ratings.overall + Math.round(computeOvrDelta(p.ratings, ratings as Record<string, number>, p.position))));
       } else {
         // At or above potential — awareness can still grow, stable otherwise

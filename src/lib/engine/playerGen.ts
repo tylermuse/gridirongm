@@ -140,6 +140,88 @@ export function generateCombineStats(
   };
 }
 
+/**
+ * Generate auto-generated college career stats for a draft prospect.
+ * Stats are based on position, OVR, and a random seed for variety.
+ */
+export function generateCollegeStats(
+  position: Position,
+  ovr: number,
+  seed = 0,
+): import('@/types').CollegeStats {
+  const rng = (offset: number) => {
+    const v = ((seed + offset) * 9301 + 49297) % 233280;
+    return v / 233280; // 0-1
+  };
+  const randRange = (min: number, max: number, offset: number) =>
+    Math.round(min + rng(offset) * (max - min));
+
+  // Quality factor: 0 for OVR 40, 1 for OVR 90
+  const q = Math.max(0, Math.min(1, (ovr - 40) / 50));
+  const seasons = randRange(3, 4, 1);
+  const gamesPlayed = seasons * randRange(11, 14, 2);
+
+  const base: import('@/types').CollegeStats = { seasons, gamesPlayed };
+
+  switch (position) {
+    case 'QB':
+      base.passYards = randRange(4000 + q * 6000, 6000 + q * 8000, 3);
+      base.passTDs = randRange(20 + q * 25, 30 + q * 40, 4);
+      base.passINTs = randRange(8, 20 - q * 10, 5);
+      base.rushYards = randRange(100, 800 + q * 600, 6);
+      base.rushTDs = randRange(2, 8 + q * 12, 7);
+      break;
+    case 'RB':
+      base.rushYards = randRange(2000 + q * 2500, 3500 + q * 3000, 3);
+      base.rushTDs = randRange(15 + q * 10, 25 + q * 25, 4);
+      base.receptions = randRange(30 + q * 20, 60 + q * 40, 5);
+      base.recYards = randRange(200 + q * 200, 500 + q * 500, 6);
+      base.recTDs = randRange(1, 5 + q * 5, 7);
+      break;
+    case 'WR':
+      base.receptions = randRange(80 + q * 60, 150 + q * 100, 3);
+      base.recYards = randRange(1500 + q * 1500, 3000 + q * 2500, 4);
+      base.recTDs = randRange(10 + q * 8, 20 + q * 20, 5);
+      break;
+    case 'TE':
+      base.receptions = randRange(40 + q * 30, 80 + q * 60, 3);
+      base.recYards = randRange(500 + q * 500, 1200 + q * 1000, 4);
+      base.recTDs = randRange(5 + q * 5, 12 + q * 12, 5);
+      break;
+    case 'DL':
+      base.tackles = randRange(80 + q * 50, 150 + q * 80, 3);
+      base.sacks = randRange(5 + q * 10, 15 + q * 20, 4);
+      base.forcedFumbles = randRange(1, 5 + q * 5, 5);
+      break;
+    case 'LB':
+      base.tackles = randRange(150 + q * 80, 300 + q * 150, 3);
+      base.sacks = randRange(3 + q * 5, 10 + q * 10, 4);
+      base.interceptions = randRange(0, 4 + q * 4, 5);
+      base.forcedFumbles = randRange(1, 4 + q * 4, 6);
+      break;
+    case 'CB':
+      base.tackles = randRange(60 + q * 30, 120 + q * 60, 3);
+      base.interceptions = randRange(3 + q * 4, 8 + q * 10, 4);
+      base.forcedFumbles = randRange(0, 3 + q * 3, 5);
+      break;
+    case 'S':
+      base.tackles = randRange(100 + q * 50, 200 + q * 100, 3);
+      base.interceptions = randRange(2 + q * 3, 6 + q * 8, 4);
+      base.forcedFumbles = randRange(1, 4 + q * 4, 5);
+      break;
+    case 'K':
+      base.fieldGoalPct = randRange(70 + q * 15, 85 + q * 14, 3);
+      break;
+    case 'OL':
+      // OL don't have traditional stats — leave minimal
+      break;
+    default:
+      break;
+  }
+
+  return base;
+}
+
 /** Generates position-appropriate ratings for a player of a given talent tier. */
 function generateRatings(position: Position, talentMean: number): PlayerRatings {
   const weights = POSITION_WEIGHTS[position];
@@ -360,11 +442,16 @@ export function generateDraftClass(count: number, options?: { chaosDraft?: boole
     player.scoutingLabel = SCOUTING_LABELS[Math.floor(Math.random() * SCOUTING_LABELS.length)];
     player.scoutingSeed = Math.floor(Math.random() * 10000);
     player.draftProfile = 'normal';
+    player.collegeStats = generateCollegeStats(position, player.ratings.overall, player.scoutingSeed ?? i);
     prospects.push(player);
   }
 
   // Sort by OVR so pick order aligns with talent
   prospects.sort((a, b) => b.ratings.overall - a.ratings.overall);
+
+  // ── Heisman Trophy winner: highest-rated offensive player ──
+  const heismanCandidate = prospects.find(p => ['QB', 'RB', 'WR'].includes(p.position));
+  if (heismanCandidate) heismanCandidate.heismanWinner = true;
 
   // ── Boom/Bust assignment ──
   // Position-aware bust rates (QBs/RBs bust most often).

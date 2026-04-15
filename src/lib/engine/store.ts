@@ -22,7 +22,7 @@ import { developPlayers, POSITION_AGING } from './development';
 import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
-import { generateCoachingStaff, generateCoach, backfillCoachHistory, coachingBonus, progressCoaches, processCoachingCarousel } from './coaching';
+import { generateCoachingStaff, generateCoach, generatePositionCoaches, backfillCoachHistory, coachingBonus, progressCoaches, processCoachingCarousel, positionCoachDevMultiplier } from './coaching';
 import { computeLeagueQBTiers, getQBTierModifier } from './qbTierPyramid';
 import { generateSeasonObjectives, evaluateObjectives } from './objectives';
 import { defaultApproval, updateApprovalAfterGame, updateApprovalEndOfSeason, updateApprovalForMove } from './approval';
@@ -33,7 +33,7 @@ import { checkDisciplineEvents, disciplineNewsItems, tickSuspensions } from './d
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 
-const SAVE_VERSION = 20;
+const SAVE_VERSION = 21;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
@@ -63,6 +63,8 @@ interface GameStore extends LeagueState {
   ensureDraftClassPreview: () => void;
   simWeek: () => void;
   simToWeek: (targetWeek: number) => void;
+  simPreseasonWeek: () => void;
+  skipPreseason: () => void;
   advanceToPlayoffs: () => void;
   simPlayoffGame: (matchupId: string) => void;
   simNextPlayoffGame: () => void;
@@ -2002,6 +2004,31 @@ function decayRivalries(rivalries: Rivalry[]): Rivalry[] {
 }
 
 // ---------------------------------------------------------------------------
+// Preseason schedule generation — random matchups, no divisions matter
+// ---------------------------------------------------------------------------
+function generatePreseasonSchedule(teams: Team[], numGames: number, season: number): GameResult[] {
+  const games: GameResult[] = [];
+  for (let week = 1; week <= numGames; week++) {
+    // Shuffle teams and pair them up
+    const shuffled = [...teams].sort(() => Math.random() - 0.5);
+    for (let i = 0; i < shuffled.length - 1; i += 2) {
+      games.push({
+        id: `pre-${season}-${week}-${i}`,
+        week,
+        season,
+        homeTeamId: shuffled[i].id,
+        awayTeamId: shuffled[i + 1].id,
+        homeScore: 0,
+        awayScore: 0,
+        played: false,
+        playerStats: {},
+      });
+    }
+  }
+  return games;
+}
+
+// ---------------------------------------------------------------------------
 // Pure function: simulate one week of games (no store dependency)
 // Returns state patch + whether season is over, or null if nothing to sim
 // ---------------------------------------------------------------------------
@@ -2597,17 +2624,24 @@ export const useGameStore = create<GameStore>()(
 
       simWeek: () => {
         const state = get();
-        if (state.phase !== 'regular') return;
-        // Guard: if this week's user game is already played, don't re-sim.
-        // Prevents score regeneration when the button is clicked rapidly or
-        // the component re-renders before IndexedDB persistence completes.
-        const userGameThisWeek = state.schedule.find(g =>
-          g.week === state.week && (g.homeTeamId === state.userTeamId || g.awayTeamId === state.userTeamId),
-        );
-        if (userGameThisWeek?.played) return;
+        if (state.phase !== 'regular') {
+          console.warn('[simWeek] blocked: phase is', state.phase, '(expected regular)');
+          return;
+        }
+
+        // Guard: if ALL of this week's games are already played, nothing to do.
+        // (Prevents double-sim on rapid button clicks or re-renders.)
+        const weekGamesAll = state.schedule.filter(g => g.week === state.week);
+        if (weekGamesAll.length > 0 && weekGamesAll.every(g => g.played)) {
+          console.warn('[simWeek] blocked: all', weekGamesAll.length, 'games for week', state.week, 'already played');
+          return;
+        }
 
         const result = simulateOneWeek(state);
-        if (!result) return;
+        if (!result) {
+          console.warn('[simWeek] simulateOneWeek returned null. week:', state.week, 'schedule length:', state.schedule.length, 'unplayed this week:', weekGamesAll.filter(g => !g.played).length);
+          return;
+        }
 
         // Generate draft class preview when crossing the trade deadline
         const tradeDeadline = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).tradeDeadlineWeek;
@@ -2653,8 +2687,9 @@ export const useGameStore = create<GameStore>()(
         // Discipline checks — suspensions, fines, incidents
         {
           const ds = get();
+          const suspFreq = (ds.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).suspensionFrequency ?? 1.0;
           const { events: discEvents, updatedPlayers: discPlayers } = checkDisciplineEvents(
-            ds.players, ds.userTeamId, ds.season, ds.week,
+            ds.players, ds.userTeamId, ds.season, ds.week, suspFreq,
           );
           if (discEvents.length > 0) {
             const discNews = disciplineNewsItems(discEvents, ds.userTeamId, ds.season, ds.week);
@@ -2670,6 +2705,102 @@ export const useGameStore = create<GameStore>()(
           const current = get();
           set({ achievements: [...current.achievements, ...newAchievements] });
         }
+      },
+
+      simPreseasonWeek: () => {
+        const state = get();
+        if (state.phase !== 'preseason') return;
+        const preSchedule = state.preseasonSchedule ?? [];
+        const preWeek = state.preseasonWeek ?? 1;
+        const settings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
+        const numPreGames = settings.preseasonGames ?? 3;
+
+        const weekGames = preSchedule.filter(g => g.week === preWeek && !g.played);
+        if (weekGames.length === 0) return;
+
+        // Sim preseason games at ~70% OVR (starters rest, backups play more)
+        const simmedGames = weekGames.map(game => {
+          const homeRoster = state.players.filter(p => p.teamId === game.homeTeamId && !p.retired && !p.suspension);
+          const awayRoster = state.players.filter(p => p.teamId === game.awayTeamId && !p.retired && !p.suspension);
+
+          // Reduce OVR by ~30% for preseason (starters play limited snaps)
+          const preseasonRoster = (roster: Player[]) => roster.map(p => ({
+            ...p,
+            ratings: { ...p.ratings, overall: Math.round(p.ratings.overall * 0.7 + Math.random() * 8) },
+          }));
+
+          const result = simulateGame(
+            game, preseasonRoster(homeRoster), preseasonRoster(awayRoster),
+            0, 0, 0, false, false,
+          );
+          return { ...result, played: true };
+        });
+
+        const newPreSchedule = preSchedule.map(g => {
+          const simmed = simmedGames.find(s => s.id === g.id);
+          return simmed ?? g;
+        });
+
+        // Injuries at 40% of normal rate
+        const playerIdsInPreseason = new Set<string>();
+        for (const g of simmedGames) {
+          for (const pid of Object.keys(g.playerStats)) playerIdsInPreseason.add(pid);
+        }
+        const preInjuries = generateInjuries(state.players, playerIdsInPreseason);
+        // Only apply 40% of injuries
+        const filteredInjuries = new Map<string, { type: string; weeksLeft: number }>();
+        for (const [pid, inj] of preInjuries) {
+          if (Math.random() < 0.4) filteredInjuries.set(pid, inj);
+        }
+        const injuredPlayers = state.players.map(p => {
+          const newInj = filteredInjuries.get(p.id);
+          if (newInj && !p.injury) return { ...p, injury: newInj };
+          return p;
+        });
+
+        const nextPreWeek = preWeek + 1;
+        const preseasonOver = nextPreWeek > numPreGames;
+
+        // Generate news for user's preseason game
+        const userGame = simmedGames.find(g => g.homeTeamId === state.userTeamId || g.awayTeamId === state.userTeamId);
+        let newsItems = state.newsItems;
+        if (userGame) {
+          const isHome = userGame.homeTeamId === state.userTeamId;
+          const userScore = isHome ? userGame.homeScore : userGame.awayScore;
+          const oppScore = isHome ? userGame.awayScore : userGame.homeScore;
+          const oppTeam = state.teams.find(t => t.id === (isHome ? userGame.awayTeamId : userGame.homeTeamId));
+          const won = userScore > oppScore;
+          newsItems = [...newsItems, makeNews({
+            season: state.season, week: 0, type: 'system', teamId: state.userTeamId,
+            headline: `Preseason Game ${preWeek}: ${won ? 'Win' : 'Loss'} vs ${oppTeam?.city ?? 'Opponent'} (${userScore}-${oppScore})`,
+            body: 'Preseason results do not count toward the regular season record.',
+            isUserTeam: true,
+          })];
+        }
+
+        if (preseasonOver) {
+          set({
+            preseasonSchedule: newPreSchedule,
+            preseasonWeek: nextPreWeek,
+            phase: 'regular',
+            week: 1,
+            players: injuredPlayers,
+            newsItems,
+          });
+        } else {
+          set({
+            preseasonSchedule: newPreSchedule,
+            preseasonWeek: nextPreWeek,
+            players: injuredPlayers,
+            newsItems,
+          });
+        }
+      },
+
+      skipPreseason: () => {
+        const state = get();
+        if (state.phase !== 'preseason') return;
+        set({ phase: 'regular', week: 1, preseasonWeek: 0 });
       },
 
       simToWeek: (targetWeek: number) => {
@@ -7029,11 +7160,22 @@ export const useGameStore = create<GameStore>()(
         });
 
         const devSettings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
+
+        // Build per-player coaching development multipliers
+        const coachDevMultipliers = new Map<string, number>();
+        for (const team of state.teams) {
+          const teamPlayers = agedPlayers.filter(p => p.teamId === team.id && !p.retired);
+          for (const tp of teamPlayers) {
+            coachDevMultipliers.set(tp.id, positionCoachDevMultiplier(team.coaches, tp.position));
+          }
+        }
+
         const developedPlayers = developPlayers(
           agedPlayers,
           state.season,
           devSettings.progressionRate / 100,
           devSettings.regressionRate / 100,
+          coachDevMultipliers,
         );
 
         const retirementNews: NewsItem[] = developedPlayers
@@ -7427,10 +7569,16 @@ export const useGameStore = create<GameStore>()(
         );
         const teamsAfterCoaches = coachCarousel.teams;
 
+        const numPreseasonGames = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).preseasonGames ?? 3;
+        const enterPreseason = numPreseasonGames > 0;
+        const preseasonSchedule = enterPreseason ? generatePreseasonSchedule(teamsAfterCoaches, numPreseasonGames, newSeason) : undefined;
+
         set({
           season: newSeason,
-          week: 1,
-          phase: 'regular',
+          week: enterPreseason ? 0 : 1,
+          phase: enterPreseason ? 'preseason' : 'regular',
+          preseasonSchedule,
+          preseasonWeek: enterPreseason ? 1 : 0,
           players: allPlayersForNewSeason,
           teams: teamsAfterCoaches,
           schedule: newSchedule,
@@ -8257,6 +8405,14 @@ export const useGameStore = create<GameStore>()(
               if (!p.subPosition) {
                 p.subPosition = deriveSubPosition(p as Parameters<typeof deriveSubPosition>[0]);
               }
+            }
+          }
+        }
+        if (version < 21) {
+          // Backfill position coaches for existing teams that only have HC/OC/DC
+          for (const team of (state as any).teams ?? []) {
+            if (team.coaches && team.coaches.length > 0 && team.coaches.length <= 3) {
+              team.coaches = [...team.coaches, ...generatePositionCoaches()];
             }
           }
         }

@@ -167,6 +167,30 @@ export interface PlayerRatings {
   kicking: number;
 }
 
+/** Auto-generated college career stats for draft prospect scouting */
+export interface CollegeStats {
+  /** Number of college seasons played */
+  seasons: number;
+  /** Total games played */
+  gamesPlayed: number;
+  // Offense
+  passYards?: number;
+  passTDs?: number;
+  passINTs?: number;
+  rushYards?: number;
+  rushTDs?: number;
+  recYards?: number;
+  recTDs?: number;
+  receptions?: number;
+  // Defense
+  tackles?: number;
+  sacks?: number;
+  interceptions?: number;
+  forcedFumbles?: number;
+  // Special
+  fieldGoalPct?: number;
+}
+
 export interface PlayerStats {
   gamesPlayed: number;
   // Passing
@@ -316,6 +340,10 @@ export interface Player {
   combineStats?: { fortyYard: number; benchPress: number; verticalJump: number };
   /** College / university the player attended (flavor text for draft) */
   college?: string;
+  /** Auto-generated college stats for draft scouting flavor */
+  collegeStats?: CollegeStats;
+  /** Heisman winner flag (top prospect in the class) */
+  heismanWinner?: boolean;
   /** Height string e.g. "6'3\"" */
   height?: string;
   /** Weight in lbs */
@@ -380,14 +408,25 @@ export interface DeadCapEntry {
 // Coaching types
 // ---------------------------------------------------------------------------
 
-export type CoachRole = 'HC' | 'OC' | 'DC';
+export type CoachRole = 'HC' | 'OC' | 'DC' | 'QB' | 'RB' | 'WR' | 'OL' | 'DL' | 'DB';
+/** The 6 position-coach roles added in Phase 1 coaching tree */
+export const POSITION_COACH_ROLES: CoachRole[] = ['QB', 'RB', 'WR', 'OL', 'DL', 'DB'];
+/** Which player positions each coach role develops */
+export const COACH_ROLE_POSITIONS: Record<string, string[]> = {
+  QB: ['QB'],
+  RB: ['RB'],
+  WR: ['WR', 'TE'],
+  OL: ['OL'],
+  DL: ['DL'],
+  DB: ['CB', 'S', 'LB'],
+};
 export type OffensiveScheme = 'spread' | 'west_coast' | 'power_run' | 'air_raid' | 'rpo';
 export type DefensiveScheme = 'cover_3' | 'man_press' | 'tampa_2' | 'blitz_34' | 'zone_blitz';
 
 export interface CoachHistory {
   teamId: string;
   teamName: string;
-  role: 'HC' | 'OC' | 'DC';
+  role: CoachRole;
   seasonStart: number;
   seasonEnd: number;
   wins: number;
@@ -779,6 +818,10 @@ export interface LeagueSettings {
   practiceSquadEnabled: boolean;     // default false — adds PS slots and logic (Phase 2)
   irEnabled: boolean;                // default false — IR designated-for-return rules (Phase 2)
   practiceSquadSize: number;         // default 16 (only meaningful if practiceSquadEnabled)
+  /** Suspension frequency multiplier (0.0–2.0, default 1.0). 0 = off, 2 = double rate */
+  suspensionFrequency: number;
+  /** Number of preseason games (0-4, default 3). 0 = skip preseason. */
+  preseasonGames: number;
 }
 
 export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
@@ -801,6 +844,8 @@ export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
   practiceSquadEnabled: false,
   irEnabled: false,
   practiceSquadSize: 16,
+  suspensionFrequency: 1.0,
+  preseasonGames: 3,
 };
 
 export interface LeagueState {
@@ -811,6 +856,10 @@ export interface LeagueState {
   teams: Team[];
   players: Player[];
   schedule: GameResult[];
+  /** Preseason schedule (separate from regular season) */
+  preseasonSchedule?: GameResult[];
+  /** Current preseason game number (1-based, 0 = not in preseason) */
+  preseasonWeek?: number;
   draftOrder: string[];
   /** Canonical pick-id sequence for the current draft. Stays constant across trades —
    *  draftOrder is derived from this by looking up each pick's current ownerTeamId.

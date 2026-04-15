@@ -12,20 +12,27 @@ import {
   calculateSchemeFit,
   schemeFitDot,
   generateCoach,
+  COACH_ROLE_LABELS,
+  positionCoachDevMultiplier,
   type SchemeFit,
 } from '@/lib/engine/coaching';
 import type { Coach, Player } from '@/types';
+import { COACH_ROLE_POSITIONS, POSITION_COACH_ROLES } from '@/types';
 
 const ROLE_LABELS: Record<string, string> = {
-  HC: 'Head Coach',
-  OC: 'Offensive Coordinator',
-  DC: 'Defensive Coordinator',
+  ...COACH_ROLE_LABELS,
 };
 
 const ROLE_COLORS: Record<string, string> = {
   HC: 'bg-blue-600',
   OC: 'bg-green-600',
   DC: 'bg-red-600',
+  QB: 'bg-purple-600',
+  RB: 'bg-orange-600',
+  WR: 'bg-cyan-600',
+  OL: 'bg-amber-600',
+  DL: 'bg-rose-600',
+  DB: 'bg-teal-600',
 };
 
 function ovrColor(ovr: number): string {
@@ -226,6 +233,10 @@ export default function StaffPage() {
   const oc = coaches.find(c => c.role === 'OC');
   const dc = coaches.find(c => c.role === 'DC');
   const orderedCoaches = [hc, oc, dc].filter(Boolean) as Coach[];
+  const positionCoaches = POSITION_COACH_ROLES
+    .map(role => coaches.find(c => c.role === role))
+    .filter(Boolean) as Coach[];
+  const totalCoachSalary = coaches.reduce((sum, c) => sum + (c.salary ?? 0), 0);
 
   // Player scheme fits for the detailed table
   const playerFits: { player: Player; fit: SchemeFit }[] = roster
@@ -315,6 +326,133 @@ export default function StaffPage() {
                 {candidates.length} candidates available — sorted by OVR
               </div>
             )}
+
+            {/* Position Coaches */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Position Coaches</CardTitle>
+                  <span className="text-xs text-[var(--text-sec)]">
+                    Total staff payroll: ${totalCoachSalary.toFixed(1)}M/yr
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--text-sec)] mt-1">
+                  Position coaches affect player development. Higher-rated coaches accelerate growth for their position group.
+                  Empty slots apply a 10% development penalty.
+                </p>
+              </CardHeader>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
+                {POSITION_COACH_ROLES.map(role => {
+                  const coach = positionCoaches.find(c => c.role === role);
+                  const posPlayers = roster.filter(p =>
+                    (COACH_ROLE_POSITIONS[role] ?? []).includes(p.position),
+                  );
+
+                  if (confirmReplace === role && coach) {
+                    return (
+                      <div key={role} className="sm:col-span-2 lg:col-span-3 border border-[var(--border)] rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="font-bold text-sm">Replace {ROLE_LABELS[role]}: Choose a candidate</p>
+                          <button onClick={() => { setConfirmReplace(null); setCandidates([]); }} className="text-xs text-[var(--text-sec)] hover:text-[var(--text)]">Cancel</button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          {candidates.map((c, i) => (
+                            <button
+                              key={i}
+                              onClick={() => { replaceCoach(role, c); setConfirmReplace(null); setCandidates([]); }}
+                              className="text-left border border-[var(--border)] rounded-lg p-2 hover:border-blue-500 hover:bg-blue-50 transition-all"
+                            >
+                              <div className="flex items-center justify-between mb-0.5">
+                                <span className="font-bold text-sm">{c.firstName} {c.lastName}</span>
+                                <span className={`text-lg font-black ${ovrColor(c.ovr)}`}>{c.ovr}</span>
+                              </div>
+                              <div className="text-[10px] text-[var(--text-sec)]">
+                                Age {c.age} · {c.trait} · ${c.salary?.toFixed(1)}M/yr
+                              </div>
+                              {c.specialties && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {c.specialties.map((s, j) => (
+                                    <span key={j} className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">{s}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={role} className="border border-[var(--border)] rounded-lg p-3">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <span className={`text-[10px] text-white px-1.5 py-0.5 rounded font-bold ${ROLE_COLORS[role]}`}>
+                            {role}
+                          </span>
+                          <span className="text-[10px] text-[var(--text-sec)] ml-1">{ROLE_LABELS[role]}</span>
+                        </div>
+                        {coach && (
+                          <div className={`text-lg font-black ${ovrColor(coach.ovr)}`}>{coach.ovr}</div>
+                        )}
+                      </div>
+                      {coach ? (
+                        <>
+                          <div className="font-bold text-sm mb-1">{coach.firstName} {coach.lastName}</div>
+                          <div className="text-[10px] text-[var(--text-sec)] space-y-0.5 mb-2">
+                            <div>Age {coach.age} · {coach.trait}</div>
+                            <div>{coach.contractYears ?? '?'}yr · ${coach.salary?.toFixed(1)}M/yr</div>
+                          </div>
+                          {coach.specialties && coach.specialties.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {coach.specialties.map((s, i) => (
+                                <span key={i} className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">{s}</span>
+                              ))}
+                            </div>
+                          )}
+                          <div className="text-[10px] text-[var(--text-sec)] mb-2">
+                            Develops: {posPlayers.length} player{posPlayers.length !== 1 ? 's' : ''}
+                            {' · '}
+                            <span className={coach.ovr >= 65 ? 'text-green-600' : coach.ovr >= 50 ? 'text-amber-600' : 'text-red-500'}>
+                              {coach.ovr >= 65 ? '+' : ''}{((positionCoachDevMultiplier([coach], posPlayers[0]?.position ?? 'QB') - 1) * 100).toFixed(0)}% dev rate
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const pool: Coach[] = [];
+                              for (let i = 0; i < 12; i++) pool.push(generateCoach(role));
+                              pool.sort((a, b) => b.ovr - a.ovr);
+                              const picked = pool.slice(0, 6);
+                              setCandidates(picked);
+                              setConfirmReplace(role);
+                            }}
+                            className="text-[10px] px-2 py-0.5 rounded bg-red-50 text-red-600 hover:bg-red-100 font-medium border border-red-200"
+                          >
+                            Replace
+                          </button>
+                        </>
+                      ) : (
+                        <div className="text-xs text-[var(--text-sec)]">
+                          <p className="mb-2">No coach assigned. -10% development for {(COACH_ROLE_POSITIONS[role] ?? []).join(', ')} players.</p>
+                          <button
+                            onClick={() => {
+                              const pool: Coach[] = [];
+                              for (let i = 0; i < 12; i++) pool.push(generateCoach(role));
+                              pool.sort((a, b) => b.ovr - a.ovr);
+                              setCandidates(pool.slice(0, 6));
+                              setConfirmReplace(role);
+                            }}
+                            className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 font-medium border border-blue-200"
+                          >
+                            Hire
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
 
             {/* Scheme Fit Details */}
             <Card>

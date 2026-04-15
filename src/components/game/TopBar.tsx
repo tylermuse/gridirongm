@@ -208,6 +208,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
               </button>
             )}
             <span className="hidden sm:inline">
+              {phase === 'preseason' && `Preseason Game ${(useGameStore.getState().preseasonWeek ?? 1)}`}
               {phase === 'regular' && `Week ${week} · Regular Season`}
               {phase === 'playoffs' && 'Playoffs'}
               {phase === 'resigning' && 'Re-signing Window'}
@@ -218,6 +219,16 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
           </div>
 
           <div className="flex items-center gap-1 md:gap-2 flex-wrap justify-end">
+            {phase === 'preseason' && (
+              <>
+                <Button onClick={() => useGameStore.getState().simPreseasonWeek()} size="sm" className="active:scale-95 transition-transform">
+                  Sim Preseason Game
+                </Button>
+                <Button onClick={() => useGameStore.getState().skipPreseason()} size="sm" variant="secondary" className="active:scale-95 transition-transform">
+                  Skip to Regular Season
+                </Button>
+              </>
+            )}
             {phase === 'regular' && !pathname.startsWith('/game/') && (
               <>
                 {pendingTradeCount > 0 && (
@@ -229,7 +240,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     </Link>
                   </span>
                 )}
-                <Button onClick={handleSimWeek} size="sm" className="active:scale-95 transition-transform" disabled={!!schedule.find(g => g.week === week && g.played && (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId))}>
+                <Button onClick={handleSimWeek} size="sm" className="active:scale-95 transition-transform" disabled={schedule.filter(g => g.week === week).length > 0 && schedule.filter(g => g.week === week).every(g => g.played)}>
                   Sim Week {week}
                 </Button>
                 {week <= (leagueSettings?.tradeDeadlineWeek ?? 12) + 1 && (

@@ -489,6 +489,28 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
           </div>
         )}
 
+        {/* College Stats */}
+        {player.collegeStats && (
+          <div className="px-1">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] uppercase tracking-wider text-[var(--text-sec)] font-bold">College Career</span>
+              {player.heismanWinner && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-bold">Heisman Winner</span>}
+              {player.college && <span className="text-[10px] text-[var(--text-sec)]">{player.college}</span>}
+            </div>
+            <div className="flex flex-wrap gap-3 text-xs text-[var(--text-sec)]">
+              <span>{player.collegeStats.seasons}yr · {player.collegeStats.gamesPlayed}G</span>
+              {player.collegeStats.passYards != null && <span>Pass: <span className="font-bold text-[var(--text)]">{player.collegeStats.passYards.toLocaleString()}</span> yds · <span className="font-bold text-[var(--text)]">{player.collegeStats.passTDs}</span> TD · {player.collegeStats.passINTs} INT</span>}
+              {player.collegeStats.rushYards != null && <span>Rush: <span className="font-bold text-[var(--text)]">{player.collegeStats.rushYards.toLocaleString()}</span> yds · <span className="font-bold text-[var(--text)]">{player.collegeStats.rushTDs}</span> TD</span>}
+              {player.collegeStats.receptions != null && <span>Rec: <span className="font-bold text-[var(--text)]">{player.collegeStats.receptions}</span> · <span className="font-bold text-[var(--text)]">{player.collegeStats.recYards?.toLocaleString()}</span> yds · <span className="font-bold text-[var(--text)]">{player.collegeStats.recTDs}</span> TD</span>}
+              {player.collegeStats.tackles != null && <span>TKL: <span className="font-bold text-[var(--text)]">{player.collegeStats.tackles}</span></span>}
+              {player.collegeStats.sacks != null && <span>SCK: <span className="font-bold text-[var(--text)]">{player.collegeStats.sacks}</span></span>}
+              {player.collegeStats.interceptions != null && <span>INT: <span className="font-bold text-[var(--text)]">{player.collegeStats.interceptions}</span></span>}
+              {player.collegeStats.forcedFumbles != null && <span>FF: <span className="font-bold text-[var(--text)]">{player.collegeStats.forcedFumbles}</span></span>}
+              {player.collegeStats.fieldGoalPct != null && <span>FG%: <span className="font-bold text-[var(--text)]">{player.collegeStats.fieldGoalPct}%</span></span>}
+            </div>
+          </div>
+        )}
+
         {/* Ratings + Stats side by side */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Ratings */}

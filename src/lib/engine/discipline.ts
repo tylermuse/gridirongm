@@ -15,7 +15,7 @@
  * Discipline rating is visible during scouting (draft) and affects mood.
  */
 
-import type { Player, NewsItem } from '@/types';
+import type { Player, NewsItem, LeagueSettings } from '@/types';
 
 interface DisciplineEvent {
   playerId: string;
@@ -85,9 +85,9 @@ const EVENT_CONFIG = {
  * draft profile. Called during player generation.
  */
 export function generateDiscipline(personality?: string, draftProfile?: string): number {
-  let base = 65 + Math.floor(Math.random() * 25); // 65-89
+  let base = 72 + Math.floor(Math.random() * 22); // 72-93
   if (personality === 'red_flag') base -= 20;
-  else if (personality === 'high_character') base += 10;
+  else if (personality === 'high_character') base += 7;
   if (draftProfile === 'bust') base -= 5;
   return Math.max(20, Math.min(99, base));
 }
@@ -95,26 +95,42 @@ export function generateDiscipline(personality?: string, draftProfile?: string):
 /**
  * Run discipline checks for all players on a team after a simmed week.
  * Returns any discipline events that occurred.
+ *
+ * Target rates (at suspensionFrequency=1.0):
+ *   - League-wide: ~50-80 suspensions per 17-week season across 32 teams
+ *   - Per team avg: ~1.5-2.5 per season
+ *   - High discipline (80+): <2% per season
+ *   - Low discipline (≤40): ~15-20% per season
  */
 export function checkDisciplineEvents(
   players: Player[],
   userTeamId: string,
   season: number,
   week: number,
+  suspensionFrequency = 1.0,
 ): { events: DisciplineEvent[]; updatedPlayers: Player[] } {
   const events: DisciplineEvent[] = [];
+  if (suspensionFrequency <= 0) return { events, updatedPlayers: players };
+
   const updatedPlayers = players.map(p => {
     if (p.retired || !p.teamId || p.suspension) return p;
 
     const discipline = p.discipline ?? 70;
 
-    // Base chance per week: 0.5% for discipline=70, up to 3% for discipline=20
-    const baseChance = Math.max(0.001, (100 - discipline) / 2000);
+    // Redesigned probability curve (per player per week):
+    //   discipline 90 → ~0.0003  (~0.5% per season)
+    //   discipline 70 → ~0.002   (~3.4% per season per player)
+    //   discipline 50 → ~0.008   (~13% per season per player)
+    //   discipline 40 → ~0.016   (~24% per season per player)
+    //   discipline 20 → ~0.04    (~50% per season per player)
+    // League-wide with avg discipline ~82: ~40-60 suspensions per 17-week season
+    const rawChance = Math.pow((100 - discipline) / 80, 2.5) * 0.04;
+    const baseChance = Math.max(0.00005, rawChance);
 
-    // Low mood increases risk
-    const moodMultiplier = p.mood < 30 ? 2.0 : p.mood < 50 ? 1.3 : 1.0;
+    // Low mood increases risk slightly
+    const moodMultiplier = p.mood < 30 ? 1.5 : p.mood < 50 ? 1.2 : 1.0;
 
-    if (Math.random() >= baseChance * moodMultiplier) return p;
+    if (Math.random() >= baseChance * moodMultiplier * suspensionFrequency) return p;
 
     // An event occurred — pick the type
     const typeRoll = Math.random();

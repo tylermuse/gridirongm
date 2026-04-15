@@ -351,6 +351,26 @@ export default function SettingsPage() {
               formatValue={v => `${v}%`}
             />
             <SettingRow
+              label="Suspension Frequency"
+              description="How often discipline suspensions occur. 100 = normal, 0 = off"
+              value={Math.round((draft.suspensionFrequency ?? 1.0) * 100)}
+              onChange={v => setDraft(d => ({ ...d, suspensionFrequency: v / 100 }))}
+              min={0}
+              max={200}
+              step={10}
+              formatValue={v => `${v}%`}
+            />
+            <SettingRow
+              label="Preseason Games"
+              description="Number of preseason exhibition games before the regular season. 0 = skip."
+              value={draft.preseasonGames ?? 3}
+              onChange={v => setDraft(d => ({ ...d, preseasonGames: v }))}
+              min={0}
+              max={4}
+              step={1}
+              formatValue={v => v === 0 ? 'Off' : `${v} games`}
+            />
+            <SettingRow
               label="Retirement Age"
               description="Minimum age before players consider retiring"
               value={draft.retirementAge}
