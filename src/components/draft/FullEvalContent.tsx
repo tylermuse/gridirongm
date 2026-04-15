@@ -29,8 +29,14 @@ function RatingBar({ label, value }: { label: string; value: number }) {
   );
 }
 
-function BustBoomBadge({ result }: { result: string }) {
+function BustBoomBadge({ result, player }: { result: string; player: Player }) {
   if (result === 'normal') return null;
+  // Sanity check: the scout's bust/boom read can be wrong (35% mislabel rate),
+  // but the potential number shown alongside is accurate. Don't render a label
+  // that flatly contradicts the visible potential — it confuses users.
+  const potentialDelta = player.potential - player.ratings.overall;
+  if (result === 'boom' && potentialDelta < 5) return null;   // no real upside to see
+  if (result === 'bust' && potentialDelta > 5) return null;   // no real downside
   return <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${result === 'bust' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>{result === 'bust' ? '⚠ High Bust Risk' : '✦ Hidden Upside'}</span>;
 }
 
@@ -48,7 +54,7 @@ export function FullEvalContent({ evalData, player, fitBadge }: {
       <div className="flex items-center gap-4">
         <div className="text-center"><div className="text-[11px] text-[var(--text-sec)]">True OVR</div><div className={`text-2xl font-extrabold ${ovrColor}`}>{evalData.exactOvr}</div></div>
         <div className="text-center"><div className="text-[11px] text-[var(--text-sec)]">Potential</div><span className="text-lg font-extrabold">{player.potential}</span></div>
-        <BustBoomBadge result={evalData.bustBoomResult} />
+        <BustBoomBadge result={evalData.bustBoomResult} player={player} />
         {fitBadge && (
           <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border ${
             fitBadge === 'Strong Target' ? 'bg-green-50 text-green-700 border-green-200' :

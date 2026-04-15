@@ -21,8 +21,13 @@ function PersonalityBadge({ type }: { type: string }) {
   return <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${color}`}>{type.replace('_', ' ')}</span>;
 }
 
-function BustBoomBadge({ result }: { result: string }) {
+function BustBoomBadge({ result, player }: { result: string; player: Player }) {
   if (result === 'normal') return null;
+  // Suppress badges that contradict the visible potential — the scout's
+  // bust/boom opinion can be wrong, but the potential number is accurate.
+  const potentialDelta = player.potential - player.ratings.overall;
+  if (result === 'boom' && potentialDelta < 5) return null;
+  if (result === 'bust' && potentialDelta > 5) return null;
   const isBust = result === 'bust';
   return <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isBust ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>{isBust ? '⚠ Bust Risk' : '✦ Boom Potential'}</span>;
 }
