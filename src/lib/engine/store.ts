@@ -2994,11 +2994,16 @@ export const useGameStore = create<GameStore>()(
         const currentRound = Math.min(...unplayed.map(m => m.round));
         const allRoundGames = unplayed.filter(m => m.round === currentRound);
 
-        // Skip the user's matchup so they can watch it live — unless it's the only game left
+        // Always skip the user's matchup so they can watch it live.
+        // Previously if the user's game was the only one left in the round,
+        // it got auto-simmed and the Watch Live commit would lose to the
+        // pre-sim result in a race. Now we always skip, and the playoffs
+        // page surfaces a dedicated "Watch Live" button for the user's game.
         const userMatchup = allRoundGames.find(m => m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId);
-        const roundGames = allRoundGames.length > 1 && userMatchup
+        const roundGames = userMatchup
           ? allRoundGames.filter(m => m !== userMatchup)
           : allRoundGames;
+        if (roundGames.length === 0) return;
 
         let bracket = [...state.playoffBracket.map(m => ({ ...m }))];
         let champions = state.champions ?? [];

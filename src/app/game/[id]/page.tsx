@@ -829,7 +829,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       if (!gameResult) return;
       commitLiveGame(gameResult, isPlayoffGame ? id : undefined);
       setCommitted(true);
-      flushToStorage();
+      // Fire-and-forget flush — Zustand's in-memory state is already updated
+      // so subsequent navigation will see the new bracket. The flush is only
+      // for durability against tab close; we don't block on it.
+      flushToStorage().catch(err => console.error('[auto-commit] flushToStorage failed:', err));
+      console.log('[auto-commit] committed game', { id, homeScore: gameResult.homeScore, awayScore: gameResult.awayScore, isPlayoffGame });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFinished, committed]);
