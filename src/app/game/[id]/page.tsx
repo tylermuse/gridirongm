@@ -648,7 +648,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     }
     // Post-animation pause — gives time to read the play description before advancing
     const PAUSE_MS: Record<Speed, number> = { '1x': 3500, '2x': 1200, '5x': 150, 'max': 0 };
-    const pause = PAUSE_MS[speed];
+    // Big-moment extended pause — turnovers and scoring plays deserve extra
+    // dwell time so the user actually sees what happened before possession flips.
+    const TURNOVER_EXTRA: Record<Speed, number> = { '1x': 2500, '2x': 1500, '5x': 1200, 'max': 0 };
+    const isBigMoment =
+      currentEvent?.type === 'interception' ||
+      currentEvent?.type === 'fumble' ||
+      currentEvent?.type === 'touchdown' ||
+      currentEvent?.isScoring === true;
+    const pause = PAUSE_MS[speed] + (isBigMoment ? TURNOVER_EXTRA[speed] : 0);
     nextPlayTimerRef.current = setTimeout(() => {
       setRevealedCount(prev => {
         if (prev >= totalEvents) {
@@ -660,7 +668,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       setAnimationComplete(false);
     }, pause);
     return clearNextPlayTimer;
-  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach]);
+  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach, currentEvent]);
 
   const skipToEnd = useCallback(() => {
     clearNextPlayTimer();
@@ -763,9 +771,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
     if (!text) return;
 
-    // Big plays persist longer so the user doesn't miss them
+    // Big plays persist longer so the user doesn't miss them — especially
+    // turnovers and scores, which now get extra pause time on the play-advance
+    // loop so the chip is still visible when possession flips.
     const isBigPlay = ['🏆', '✅', '❌', '🔄'].some(icon => text.includes(icon));
-    const chipDuration = isBigPlay ? 4000 : 1500;
+    const chipDuration = isBigPlay ? 5500 : 1500;
 
     if (outcomeTimerRef.current) clearTimeout(outcomeTimerRef.current);
     setOutcomeChip({ text, color });
