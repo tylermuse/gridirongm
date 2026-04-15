@@ -286,17 +286,17 @@ export function buildPlayAnimation(
     }
 
     case 'punt': {
-      const punterIndex = nextState.offenseDots.findIndex(d => d.label === 'P');
-      if (punterIndex >= 0) {
-        const punter = nextState.offenseDots[punterIndex];
-        ballArc = {
-          startX: punter.x,
-          startY: 0.5,
-          peakHeight: 55, // higher arc for punts (was 40)
-          endX: postBallX,
-          endY: 0.5,
-        };
-      }
+      // Punt: high, dramatic arc from punter to the new LOS.
+      // Start from the scrimmage line (where the punter stands behind the line).
+      const puntStartX = preBallX;
+      const puntDist = Math.abs(postBallX - puntStartX);
+      ballArc = {
+        startX: puntStartX,
+        startY: 0.5,
+        peakHeight: 60 + puntDist * 0.3, // taller arc for longer punts
+        endX: postBallX,
+        endY: 0.5,
+      };
       break;
     }
 
@@ -357,6 +357,10 @@ export function buildPlayAnimation(
     finalDuration = Math.max(finalDuration, Math.round(1000 * speedScale));
   } else if (effects.includes('flag')) {
     finalDuration = Math.max(finalDuration, Math.round(800 * speedScale));
+  }
+  // Punts need enough time for the long arc animation
+  if (type === 'punt') {
+    finalDuration = Math.max(finalDuration, Math.round(1400 * speedScale));
   }
 
   return {

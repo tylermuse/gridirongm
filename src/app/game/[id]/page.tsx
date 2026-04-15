@@ -611,7 +611,17 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       // Compute delay: animation + pause time based on speed
       const animMs = SPEED_MS[speed] * 0.35;
       const pauseMs = speed === '1x' ? 3500 : speed === '2x' ? 1200 : speed === '5x' ? 150 : 0;
-      const delay = Math.max(300, animMs + pauseMs);
+      // Big moments (turnovers, scores, FGs) get extra dwell time
+      const lastEvent = newEvents[newEvents.length - 1];
+      const isBigMoment = lastEvent && (
+        lastEvent.type === 'interception' || lastEvent.type === 'fumble' ||
+        lastEvent.type === 'touchdown' || lastEvent.isScoring ||
+        lastEvent.type === 'field_goal_good' || lastEvent.type === 'field_goal_miss'
+      );
+      const bigExtra = isBigMoment
+        ? (speed === '1x' ? 3000 : speed === '2x' ? 2000 : speed === '5x' ? 1500 : 0)
+        : 0;
+      const delay = Math.max(300, animMs + pauseMs + bigExtra);
 
       // Reveal the event immediately (so animation starts)
       setRevealedCount(prev => prev + 1);
