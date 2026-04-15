@@ -251,17 +251,16 @@ export default function FreeAgencyPage() {
     filteredAgents = filteredAgents.filter(p => p.position === filterPos);
   }
   if (affordableOnly) {
-    if (overCap) {
-      // Over cap: can only sign at league minimum. Only show players whose decayed market rate
-      // is close enough to minimum that they might accept (within 2x league min).
+    // Capped out (including exactly at the cap): user can only sign at league
+    // minimum. Show players whose market is close to the minimum (accepters).
+    if (capSpace < LEAGUE_MINIMUM_SALARY * 2) {
       filteredAgents = filteredAgents.filter(p => {
         const market = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci) * decay;
         return market <= LEAGUE_MINIMUM_SALARY * 2;
       });
     } else {
-      // Under cap: filter to players whose market salary fits within cap space
-      const affordCap = Math.max(capSpace, LEAGUE_MINIMUM_SALARY);
-      filteredAgents = filteredAgents.filter(p => estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci) * decay <= affordCap);
+      // Real cap space — filter to players whose market fits
+      filteredAgents = filteredAgents.filter(p => estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci) * decay <= capSpace);
     }
   }
   // Show up to 300 — enough to surface low-OVR depth bodies that would
@@ -949,7 +948,22 @@ export default function FreeAgencyPage() {
                   {agents.length === 0 && (
                     <tr>
                       <td colSpan={8} className="text-center py-8 text-[var(--text-sec)]">
-                        No free agents match your filters.
+                        {affordableOnly && capSpace < LEAGUE_MINIMUM_SALARY * 2 ? (
+                          <div className="space-y-2">
+                            <div>No cheap FAs match your filters.</div>
+                            <div className="text-xs">
+                              You have ${capSpace}M cap space — you can only sign players at the league minimum (${LEAGUE_MINIMUM_SALARY}M).
+                            </div>
+                            <button
+                              onClick={() => setAffordableOnly(false)}
+                              className="text-xs font-bold text-blue-600 hover:underline"
+                            >
+                              Show all free agents
+                            </button>
+                          </div>
+                        ) : (
+                          'No free agents match your filters.'
+                        )}
                       </td>
                     </tr>
                   )}
