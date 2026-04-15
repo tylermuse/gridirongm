@@ -1101,9 +1101,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             GAME OVER BANNER — pinned to top when finished
         ================================================================ */}
         {isFinished && liveResult && (() => {
+          // Use live engine scores (from events) — NOT the pre-computed sim scores.
+          // liveHomeScore/liveAwayScore track the actual played game score.
+          const finalHome = liveHomeScore;
+          const finalAway = liveAwayScore;
           const userIsHome = game.homeTeamId === userTeamId;
-          const userScore = userIsHome ? liveResult.homeScore : liveResult.awayScore;
-          const oppScore = userIsHome ? liveResult.awayScore : liveResult.homeScore;
+          const userScore = userIsHome ? finalHome : finalAway;
+          const oppScore = userIsHome ? finalAway : finalHome;
           const won = isUserGame && userScore > oppScore;
           const tied = userScore === oppScore;
           return (
@@ -1114,12 +1118,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 <div className="flex items-center justify-center gap-6">
                   <div className="text-center">
                     <div className="text-xs text-[var(--text-sec)]">{awayAbbr}</div>
-                    <div className="text-3xl font-black" style={{ color: awayColor }}>{liveResult.awayScore}</div>
+                    <div className="text-3xl font-black" style={{ color: awayColor }}>{finalAway}</div>
                   </div>
                   <div className="text-[var(--text-sec)] text-xl">–</div>
                   <div className="text-center">
                     <div className="text-xs text-[var(--text-sec)]">{homeAbbr}</div>
-                    <div className="text-3xl font-black" style={{ color: homeColor }}>{liveResult.homeScore}</div>
+                    <div className="text-3xl font-black" style={{ color: homeColor }}>{finalHome}</div>
                   </div>
                 </div>
                 {isUserGame && (
