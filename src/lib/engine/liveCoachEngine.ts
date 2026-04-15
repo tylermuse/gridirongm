@@ -538,6 +538,25 @@ export function createLiveCoachEngine(
     }
     // 'go_for_it' falls through to a normal play (default to pass_short)
 
+    // Kneel — QB takes a knee, loses 1-2 yards, burns ~40 seconds
+    if (userCall === 'kneel') {
+      const qbName = nameOrFallback(offKey().qb, 'the QB');
+      const loss = 1 + Math.floor(Math.random() * 2); // -1 or -2
+      events.push(makeEvent('run', `🧎 ${qbName} takes a knee.`, -loss, false));
+      advanceClock(40);
+      advanceDown(-loss);
+      checkQuarterEnd(events);
+      // OT end checks
+      if (state.overtime && state.homeScore !== state.awayScore) endGame(events);
+      if (state.overtime && state.timeSecs <= 0 && state.homeScore === state.awayScore) endGame(events);
+      if (!state.overtime && !state.isGameOver && state.quarter === 4 && state.timeSecs <= 0 && state.homeScore === state.awayScore) {
+        state.overtime = true; state.timeSecs = 600; state.quarter = 5;
+        events.push(makeEvent('overtime', 'Overtime! First score wins.', 0, false));
+        doKickoffEvents(events);
+      }
+      return events;
+    }
+
     // Determine play type
     let playType: 'run' | 'pass_short' | 'pass_deep' | 'qb_run' | 'screen';
     if (userCall === 'run') playType = 'run';

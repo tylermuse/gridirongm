@@ -36,7 +36,8 @@ export type PlayCallType =
   | 'two_point'
   | 'timeout'
   | 'field_goal'
-  | 'go_for_it';
+  | 'go_for_it'
+  | 'kneel';
 
 const PLAY_BUTTONS: { type: PlayCallType; label: string; icon: string; color: string }[] = [
   { type: 'run', label: 'Run', icon: '🏃', color: 'bg-orange-600 hover:bg-orange-700' },
@@ -145,6 +146,18 @@ export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, timeoutsRe
                   ← Back to Punt / FG
                 </button>
               )}
+              {(() => {
+                const [min] = state.timeStr.split(':').map(Number);
+                const isLate = (state.quarter === 2 || state.quarter === 4 || state.quarter >= 5) && min < 2;
+                return isLate ? (
+                  <button
+                    onClick={() => onPlayCall('kneel')}
+                    className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg text-white font-bold text-xs bg-gray-700 hover:bg-gray-800 transition-colors"
+                  >
+                    <span>🧎</span> <span>Kneel (run clock)</span>
+                  </button>
+                ) : null;
+              })()}
             </div>
           )}
         </div>
