@@ -575,10 +575,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     setAnimationComplete(true);
   }, []);
 
+  // Tick counter — incremented after each auto-run delay completes to
+  // re-trigger the auto-run effect (since revealedCount/totalEvents both
+  // change by +1, netting zero change in the "are we caught up?" check).
+  const [autoRunTick, setAutoRunTick] = useState(0);
+
   // ── Live Coach: when engine is active, auto-run AI plays as needed ──
   // Fires when we run out of events to reveal AND the engine is still going.
-  // Also fires when isPlaying changes — important because the animation timer
-  // sets isPlaying=false when it can't advance, and we need to react to that.
   useEffect(() => {
     if (liveEngineRef.current === null) return;
     if (liveEngineRef.current.isFinished()) return;
@@ -615,12 +618,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       setIsPlaying(true);
       setAnimationComplete(false);
 
-      // After delay, clear the guard so the NEXT event can be generated
+      // After delay, clear the guard and bump tick to re-trigger this effect
       setTimeout(() => {
         pendingAutoPlayRef.current = false;
+        setAutoRunTick(t => t + 1);
       }, delay);
     }
-  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed]);
+  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick]);
 
   // ── Live Coach: detect if the NEXT event is a user offensive play snap ──
   // We check after an event reveals and before scheduling the next one.
