@@ -33,7 +33,7 @@ import { checkDisciplineEvents, disciplineNewsItems, tickSuspensions } from './d
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 
-const SAVE_VERSION = 21;
+const SAVE_VERSION = 22;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
@@ -99,6 +99,7 @@ interface GameStore extends LeagueState {
   extendPlayer: (playerId: string, salary: number, years: number) => boolean;
   placeOnIR: (playerId: string) => void;
   activateFromIR: (playerId: string) => void;
+  togglePlayingThroughInjury: (playerId: string) => void;
   startNewSeason: () => void;
   // PRD-04: Trades
   executeTrade: (
@@ -388,6 +389,77 @@ function rollInjuryType(): { type: string; weeksLeft: number } {
     }
   }
   return { type: 'Sprain', weeksLeft: 1 };
+}
+
+// Severity ordering for re-injury escalation. Picked to be monotonic: each
+// entry is strictly worse than the previous.
+const INJURY_SEVERITY_LADDER: { type: string; minWeeks: number; maxWeeks: number }[] = [
+  { type: 'Sprain', minWeeks: 1, maxWeeks: 2 },
+  { type: 'Strain', minWeeks: 2, maxWeeks: 4 },
+  { type: 'Fracture', minWeeks: 4, maxWeeks: 8 },
+  { type: 'ACL Tear', minWeeks: 10, maxWeeks: 14 },
+];
+
+/** Roll re-injury for each player who played through an injury in this game.
+ *  Returns the updated player list plus a list of news entries describing each
+ *  re-injury. A re-injury replaces the existing injury with one severity tier
+ *  worse, and at least +50% longer than what was remaining. */
+function rollReInjuries(
+  players: Player[],
+  teamRosterIds: Set<string>,
+  gameLabel: string,
+  season: number,
+  week: number,
+  userTeamId: string,
+): { players: Player[]; news: NewsItem[] } {
+  const news: NewsItem[] = [];
+  const newPlayers = players.map(p => {
+    if (!teamRosterIds.has(p.id)) return p;
+    if (!p.playingThroughInjury || !p.injury || p.injury.weeksLeft <= 0) return p;
+    const w = p.injury.weeksLeft;
+    const chance = w >= 3 ? 0.25 : w === 2 ? 0.15 : 0.08;
+    if (Math.random() >= chance) return p;
+    // Escalate severity by one tier (capped at the worst)
+    const currentTierIdx = INJURY_SEVERITY_LADDER.findIndex(t => t.type === p.injury!.type);
+    const nextTier = INJURY_SEVERITY_LADDER[Math.min(
+      (currentTierIdx >= 0 ? currentTierIdx : 0) + 1,
+      INJURY_SEVERITY_LADDER.length - 1,
+    )];
+    // +50% longer than the current weeksLeft, or the tier's minimum — whichever is larger
+    const minWeeks = Math.max(nextTier.minWeeks, Math.ceil(w * 1.5));
+    const maxWeeks = Math.max(minWeeks, nextTier.maxWeeks);
+    const newWeeks = minWeeks + Math.floor(Math.random() * (maxWeeks - minWeeks + 1));
+    news.push(makeNews({
+      season,
+      week,
+      type: 'injury',
+      teamId: p.teamId ?? undefined,
+      playerIds: [p.id],
+      headline: `${p.firstName} ${p.lastName} re-injured playing through — ${nextTier.type}, out ${newWeeks} week${newWeeks > 1 ? 's' : ''}.`,
+      body: `${p.firstName} ${p.lastName} aggravated an existing ${p.injury.type} in ${gameLabel} and now has a ${nextTier.type}. Expected to miss ${newWeeks} week${newWeeks > 1 ? 's' : ''}.`,
+      isUserTeam: p.teamId === userTeamId,
+    }));
+    return {
+      ...p,
+      injury: { type: nextTier.type, weeksLeft: newWeeks },
+      playingThroughInjury: false,
+    };
+  });
+  return { players: newPlayers, news };
+}
+
+/** Decrement each injured player's weeksLeft by `weeks`, clearing the injury
+ *  when it reaches 0. Used during playoffs where the regular-season weekly
+ *  tick doesn't run. Also clears the playingThroughInjury flag when the
+ *  injury finishes healing. */
+function decrementInjuryWeeks(players: Player[], weeks: number): Player[] {
+  if (weeks <= 0) return players;
+  return players.map(p => {
+    if (!p.injury || p.injury.weeksLeft <= 0) return p;
+    const newLeft = p.injury.weeksLeft - weeks;
+    if (newLeft <= 0) return { ...p, injury: null, playingThroughInjury: false };
+    return { ...p, injury: { ...p.injury, weeksLeft: newLeft } };
+  });
 }
 
 function generateInjuries(
@@ -2201,15 +2273,24 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     }
   }
   const newInjuries = generateInjuries(newPlayers, playerIdsWhoPlayed);
-  const injuredPlayers = newPlayers.map(p => {
+  // Roll re-injury BEFORE the weekly decrement, using the pre-tick weeksLeft
+  // values. Affects players who were flagged as playing through an injury.
+  const reInjResult = rollReInjuries(newPlayers, playerIdsWhoPlayed, `Week ${state.week}`, state.season, state.week, state.userTeamId);
+  const postReInjPlayers = reInjResult.players;
+
+  const injuredPlayers = postReInjPlayers.map(p => {
     let injury = p.injury;
+    let playingThroughInjury = p.playingThroughInjury;
     if (injury && injury.weeksLeft > 0) {
       injury = { ...injury, weeksLeft: injury.weeksLeft - 1 };
-      if (injury.weeksLeft <= 0) injury = null;
+      if (injury.weeksLeft <= 0) {
+        injury = null;
+        playingThroughInjury = false;
+      }
     }
     const newInj = newInjuries.get(p.id);
     if (newInj && !injury) injury = newInj;
-    return { ...p, injury };
+    return { ...p, injury, playingThroughInjury };
   });
 
   // BS Mode: Ewing Theory — when a team's best player is injured 3+ weeks, 15% chance to activate
@@ -2314,7 +2395,7 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       players: moodUpdatedPlayers,
       week: isSeasonOver ? state.week : nextWeek,
       phase: isSeasonOver ? 'playoffs' : 'regular',
-      newsItems: [...state.newsItems, ...weekNews, ...ewingNews, ...rumorNews, ...rumorResolutionNews, ...rivalryNews],
+      newsItems: [...state.newsItems, ...weekNews, ...ewingNews, ...rumorNews, ...rumorResolutionNews, ...rivalryNews, ...reInjResult.news],
       tradeProposals: [...state.tradeProposals, ...newTradeProposals],
       tradeRumors: resolvedRumors,
       rivalries: updatedRivalries,
@@ -2875,7 +2956,10 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         const seeds = computePlayoffSeeds(state.teams);
         const bracket = buildBracket(seeds, state.teams);
-        set({ phase: 'playoffs', playoffSeeds: seeds, playoffBracket: bracket });
+        // Decrement injury timers by one week for the bye between the regular
+        // season and the wild card round.
+        const players = decrementInjuryWeeks(state.players, 1);
+        set({ phase: 'playoffs', playoffSeeds: seeds, playoffBracket: bracket, players, playoffInjuryRound: 1 });
       },
 
       simPlayoffGame: (matchupId: string) => {
@@ -2885,10 +2969,17 @@ export const useGameStore = create<GameStore>()(
         const matchup = state.playoffBracket.find(m => m.id === matchupId);
         if (!matchup || matchup.winnerId || !matchup.homeTeamId || !matchup.awayTeamId) return;
 
+        // Decrement injuries once per playoff round. The championship sits a
+        // week after the conference championship in real life, so round 4 ticks
+        // two weeks. We dispatch based on the gap to the last decremented round.
+        const lastRound = state.playoffInjuryRound ?? 1;
+        const weeksToTick = matchup.round === 4 ? (matchup.round + 1) - lastRound : matchup.round - lastRound;
+        const injuryDecPlayers = weeksToTick > 0 ? decrementInjuryWeeks(state.players, weeksToTick) : state.players;
+
         const homeTeam = state.teams.find(t => t.id === matchup.homeTeamId);
         const awayTeam = state.teams.find(t => t.id === matchup.awayTeamId);
-        const homeRosterRaw = state.players.filter(p => p.teamId === matchup.homeTeamId);
-        const awayRosterRaw = state.players.filter(p => p.teamId === matchup.awayTeamId);
+        const homeRosterRaw = injuryDecPlayers.filter(p => p.teamId === matchup.homeTeamId);
+        const awayRosterRaw = injuryDecPlayers.filter(p => p.teamId === matchup.awayTeamId);
         const homeRoster = homeTeam?.depthChart
           ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart)
           : homeRosterRaw;
@@ -2995,7 +3086,16 @@ export const useGameStore = create<GameStore>()(
           : singleGameRecap;
         const updatedRecaps = [...(state.weeklyRecaps ?? []).filter(r => !(r.season === state.season && r.week === playoffWeek)), mergedRecap];
 
-        set({ playoffBracket: updatedBracket, champions: newChampions, newsItems: newNewsItems, finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps });
+        const newInjuryRound = weeksToTick > 0 ? (matchup.round === 4 ? matchup.round + 1 : matchup.round) : lastRound;
+        // Roll re-injury for any player who played through an injury
+        const homeIds = new Set(homeRosterRaw.map(p => p.id));
+        const awayIds = new Set(awayRosterRaw.map(p => p.id));
+        const bothIds = new Set([...homeIds, ...awayIds]);
+        const homeTeamName = homeTeam ? `${homeTeam.city} ${homeTeam.name}` : 'home team';
+        const awayTeamName = awayTeam ? `${awayTeam.city} ${awayTeam.name}` : 'away team';
+        const gameLabel = `${awayTeamName} at ${homeTeamName}`;
+        const reInj = rollReInjuries(injuryDecPlayers, bothIds, gameLabel, state.season, 100 + matchup.round, state.userTeamId);
+        set({ playoffBracket: updatedBracket, champions: newChampions, newsItems: [...newNewsItems, ...reInj.news], finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps, players: reInj.players, playoffInjuryRound: newInjuryRound });
         // Check achievements after each playoff game (catches Champion, etc.)
         const newAch = checkAchievements(get());
         if (newAch.length > 0) {
@@ -3032,6 +3132,8 @@ export const useGameStore = create<GameStore>()(
         let newsItems = state.newsItems;
         let finalsMvpPlayerId = state.finalsMvpPlayerId;
         const playoffResults: GameResult[] = [];
+        let accumulatedPlayers = state.players;
+        let injuryRound = state.playoffInjuryRound ?? 1;
 
         let allStarDone = !!state.allStarGame?.played;
         for (let guard = 0; guard < 200; guard++) {
@@ -3049,8 +3151,17 @@ export const useGameStore = create<GameStore>()(
             break;
           }
 
-          const homeRosterRaw = state.players.filter(p => p.teamId === next.homeTeamId);
-          const awayRosterRaw = state.players.filter(p => p.teamId === next.awayTeamId);
+          // Bump injury timers once per round (championship ticks two weeks
+          // for the bye between conference champ and championship).
+          const nextRoundTarget = next.round === 4 ? next.round + 1 : next.round;
+          const weeksToTick = nextRoundTarget - injuryRound;
+          if (weeksToTick > 0) {
+            accumulatedPlayers = decrementInjuryWeeks(accumulatedPlayers, weeksToTick);
+            injuryRound = nextRoundTarget;
+          }
+
+          const homeRosterRaw = accumulatedPlayers.filter(p => p.teamId === next.homeTeamId);
+          const awayRosterRaw = accumulatedPlayers.filter(p => p.teamId === next.awayTeamId);
           const homeTeam = state.teams.find(t => t.id === next.homeTeamId);
           const awayTeam = state.teams.find(t => t.id === next.awayTeamId);
           const homeRoster = homeTeam?.depthChart ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart) : homeRosterRaw;
@@ -3065,6 +3176,13 @@ export const useGameStore = create<GameStore>()(
           const winnerId = result.homeScore >= result.awayScore ? next.homeTeamId! : next.awayTeamId!;
 
           playoffResults.push({ ...result, id: next.id, played: true });
+
+          // Re-injury rolls for any player who played through an injury
+          const rosterIds = new Set<string>([...homeRosterRaw, ...awayRosterRaw].map(p => p.id));
+          const gameLabel = `${awayTeam?.city ?? 'AWY'} ${awayTeam?.name ?? ''} at ${homeTeam?.city ?? 'HOM'} ${homeTeam?.name ?? ''}`.trim();
+          const reInj = rollReInjuries(accumulatedPlayers, rosterIds, gameLabel, state.season, 100 + next.round, state.userTeamId);
+          accumulatedPlayers = reInj.players;
+          if (reInj.news.length > 0) newsItems = [...newsItems, ...reInj.news];
 
           // Update bracket in local array
           bracket = bracket.map(m =>
@@ -3122,7 +3240,7 @@ export const useGameStore = create<GameStore>()(
           updatedRecaps = [...updatedRecaps.filter(r => !(r.season === state.season && r.week === playoffWeek)), recap];
         }
 
-        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps });
+        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps, players: accumulatedPlayers, playoffInjuryRound: injuryRound });
         // Check achievements after playoffs
         const newAchievementsP = checkAchievements(get());
         if (newAchievementsP.length > 0) {
@@ -3158,12 +3276,19 @@ export const useGameStore = create<GameStore>()(
         let finalsMvpPlayerId = state.finalsMvpPlayerId;
         const playoffResults: GameResult[] = [];
 
+        // Decrement injuries once for this round (championship counts as two
+        // weeks because of the bye between conference champ and championship).
+        const lastRound = state.playoffInjuryRound ?? 1;
+        const weeksToTick = currentRound === 4 ? (currentRound + 1) - lastRound : currentRound - lastRound;
+        const roundPlayers = weeksToTick > 0 ? decrementInjuryWeeks(state.players, weeksToTick) : state.players;
+        const newInjuryRound = weeksToTick > 0 ? (currentRound === 4 ? currentRound + 1 : currentRound) : lastRound;
+
         for (const game of roundGames) {
           const matchup = bracket.find(m => m.id === game.id);
           if (!matchup || !matchup.homeTeamId || !matchup.awayTeamId) continue;
 
-          const homeRosterRaw = state.players.filter(p => p.teamId === matchup.homeTeamId);
-          const awayRosterRaw = state.players.filter(p => p.teamId === matchup.awayTeamId);
+          const homeRosterRaw = roundPlayers.filter(p => p.teamId === matchup.homeTeamId);
+          const awayRosterRaw = roundPlayers.filter(p => p.teamId === matchup.awayTeamId);
           const homeTeam = state.teams.find(t => t.id === matchup.homeTeamId);
           const awayTeam = state.teams.find(t => t.id === matchup.awayTeamId);
           const homeRoster = homeTeam?.depthChart ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart) : homeRosterRaw;
@@ -3224,7 +3349,15 @@ export const useGameStore = create<GameStore>()(
         const playoffRecap = generateWeeklyRecap(playoffResults, state.teams, state.players, state.season, playoffWeek);
         const updatedRecaps = [...(state.weeklyRecaps ?? []).filter(r => !(r.season === state.season && r.week === playoffWeek)), playoffRecap];
 
-        set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps });
+        // Re-injury rolls for any player who played through in this round
+        const playedIds = new Set<string>();
+        for (const g of roundGames) {
+          if (g.homeTeamId) roundPlayers.filter(p => p.teamId === g.homeTeamId).forEach(p => playedIds.add(p.id));
+          if (g.awayTeamId) roundPlayers.filter(p => p.teamId === g.awayTeamId).forEach(p => playedIds.add(p.id));
+        }
+        const reInjAll = rollReInjuries(roundPlayers, playedIds, `Round ${currentRound}`, state.season, playoffWeek, state.userTeamId);
+
+        set({ playoffBracket: bracket, champions, newsItems: [...newsItems, ...reInjAll.news], finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps, players: reInjAll.players, playoffInjuryRound: newInjuryRound });
       },
 
       // PRD-03: Advance from playoffs to re-signing phase
@@ -3991,25 +4124,85 @@ export const useGameStore = create<GameStore>()(
         let draftPickOrder = allDraftYearPicks.map(pk => pk.id);
 
         // NFL 2026: override first-round order to match the real mock draft,
-        // but respect any traded picks (ownerTeamId may differ from originalTeamId)
+        // but respect any traded picks (ownerTeamId may differ from originalTeamId).
+        //
+        // League import generates exactly one round-1 pick per team per year (keyed
+        // by originalTeamId). The NFL mock may list a team in multiple slots because
+        // they acquired a pick via a real-life trade. For each extra slot, we
+        // consume a "donor" pick from a team that's missing from the mock (their
+        // real pick was traded away) — moving it to the acquiring team's
+        // draftPicks so every slot in draftPickOrder has a unique pick.id.
         if (isNfl && nflMockDraft.length > 0) {
-          // Build a map of originalTeamId → round1 pick for current owner lookup
           const round1Picks = allDraftYearPicks.filter(pk => pk.round === 1);
           const pickByOriginalTeam = new Map<string, typeof round1Picks[number]>();
           for (const pk of round1Picks) {
             pickByOriginalTeam.set(pk.originalTeamId, pk);
           }
 
+          // Teams that appear in the mock own at least one round-1 slot; teams that
+          // don't appear are "donors" whose original pick was traded away.
+          const mockTeamIds = new Set<string>();
+          for (const mock of nflMockDraft) {
+            const t = updatedTeams.find(t => t.abbreviation === mock.teamAbbr);
+            if (t) mockTeamIds.add(t.id);
+          }
+          const donorPicks: typeof round1Picks = [];
+          for (const [origId, pk] of pickByOriginalTeam) {
+            if (!mockTeamIds.has(origId)) donorPicks.push(pk);
+          }
+
+          const consumedPickIds = new Set<string>();
+          // Records pick reassignments: pickId → new owning team id (moves the
+          // pick from the donor team's draftPicks to this team's draftPicks).
+          const pickReassignments = new Map<string, string>();
+
           const round1OrderTeams: string[] = [];
           const round1OrderPicks: string[] = [];
           for (const mock of nflMockDraft) {
             const originalTeam = updatedTeams.find(t => t.abbreviation === mock.teamAbbr);
             if (!originalTeam) continue;
-            const pk = pickByOriginalTeam.get(originalTeam.id);
+            const ownPick = pickByOriginalTeam.get(originalTeam.id);
+            let pk: typeof round1Picks[number] | undefined;
+            if (ownPick && !consumedPickIds.has(ownPick.id)) {
+              pk = ownPick;
+            } else {
+              pk = donorPicks.shift();
+              if (pk) pickReassignments.set(pk.id, originalTeam.id);
+            }
             if (!pk) continue;
-            round1OrderTeams.push(pk.ownerTeamId);
+            consumedPickIds.add(pk.id);
+            round1OrderTeams.push(pickReassignments.get(pk.id) ?? pk.ownerTeamId);
             round1OrderPicks.push(pk.id);
           }
+
+          if (pickReassignments.size > 0) {
+            // Move each reassigned pick out of its old team's draftPicks and into
+            // the new owner's, with ownerTeamId updated.
+            const movedPicks = new Map<string, DraftPick>();
+            updatedTeams = updatedTeams.map(t => {
+              const kept: DraftPick[] = [];
+              for (const pk of t.draftPicks) {
+                const newOwner = pickReassignments.get(pk.id);
+                if (newOwner && newOwner !== t.id) {
+                  movedPicks.set(pk.id, { ...pk, ownerTeamId: newOwner });
+                } else {
+                  kept.push(pk);
+                }
+              }
+              return { ...t, draftPicks: kept };
+            });
+            updatedTeams = updatedTeams.map(t => {
+              const incoming: DraftPick[] = [];
+              for (const [pid, newOwner] of pickReassignments) {
+                if (newOwner === t.id) {
+                  const moved = movedPicks.get(pid);
+                  if (moved) incoming.push(moved);
+                }
+              }
+              return incoming.length > 0 ? { ...t, draftPicks: [...t.draftPicks, ...incoming] } : t;
+            });
+          }
+
           if (round1OrderTeams.length > 0) {
             draftOrder = [...round1OrderTeams, ...draftOrder.slice(round1OrderTeams.length)];
             draftPickOrder = [...round1OrderPicks, ...draftPickOrder.slice(round1OrderPicks.length)];
@@ -5489,6 +5682,24 @@ export const useGameStore = create<GameStore>()(
         set({
           players: state.players.map(p =>
             p.id === playerId ? { ...p, onIR: false } : p,
+          ),
+        });
+      },
+
+      togglePlayingThroughInjury: (playerId: string) => {
+        const state = get();
+        const player = state.players.find(p => p.id === playerId);
+        if (!player || player.teamId !== state.userTeamId) return;
+        // Only allowed on user's team, for injured players with ≤3 weeks left,
+        // and not on IR (IR and play-through are mutually exclusive).
+        if (player.onIR) return;
+        const currentlyOn = !!player.playingThroughInjury;
+        if (!currentlyOn) {
+          if (!player.injury || player.injury.weeksLeft <= 0 || player.injury.weeksLeft > 3) return;
+        }
+        set({
+          players: state.players.map(p =>
+            p.id === playerId ? { ...p, playingThroughInjury: !currentlyOn } : p,
           ),
         });
       },
@@ -7611,6 +7822,7 @@ export const useGameStore = create<GameStore>()(
           faRefusals: [],
           playoffBracket: null,
           playoffSeeds: null,
+          playoffInjuryRound: undefined,
           newsItems: [...retirementNews, ...voidNews, ...aiRestructureNews, ...coachNews, ...(() => {
             // Generate preseason news
             const preseasonNews: NewsItem[] = [];
@@ -7784,14 +7996,36 @@ export const useGameStore = create<GameStore>()(
           const playoffRecap = generateWeeklyRecap([playoffResult], state.teams, state.players, state.season, playoffWeek);
           const updatedRecaps = [...(state.weeklyRecaps ?? []).filter(r => !(r.season === state.season && r.week === playoffWeek)), playoffRecap];
 
-          // Update player stats
-          const newPlayers = state.players.map(p => {
+          // Decrement injury timers for this round (championship ticks two
+          // weeks due to the bye). Guarded by playoffInjuryRound so auto-simmed
+          // games in the same round don't decrement again.
+          const matchupForRound = state.playoffBracket.find(m => m.id === matchupId);
+          const playedRound = matchupForRound?.round ?? 1;
+          const lastInjuryRound = state.playoffInjuryRound ?? 1;
+          const targetRound = playedRound === 4 ? playedRound + 1 : playedRound;
+          const injuryWeeksToTick = targetRound - lastInjuryRound;
+          let tickedPlayers = state.players;
+          if (injuryWeeksToTick > 0) {
+            tickedPlayers = decrementInjuryWeeks(tickedPlayers, injuryWeeksToTick);
+          }
+
+          // Update player stats on top of any injury decrements
+          const newPlayers = tickedPlayers.map(p => {
             const playerStats = result.playerStats?.[p.id];
             if (!playerStats) return p;
             return { ...p, stats: addStats(p.stats, playerStats) };
           });
 
-          set({ playoffBracket: bracket, champions, newsItems, finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps, players: newPlayers });
+          // Re-injury rolls for any player who played through their injury
+          const gameTeamIds = new Set([result.homeTeamId, result.awayTeamId]);
+          const playedIds = new Set(newPlayers.filter(p => p.teamId && gameTeamIds.has(p.teamId)).map(p => p.id));
+          const ht = state.teams.find(t => t.id === result.homeTeamId);
+          const at = state.teams.find(t => t.id === result.awayTeamId);
+          const gameLabel = `${at?.city ?? 'AWY'} at ${ht?.city ?? 'HOM'}`;
+          const reInj = rollReInjuries(newPlayers, playedIds, gameLabel, state.season, 100 + playedRound, state.userTeamId);
+
+          const newInjuryRound = injuryWeeksToTick > 0 ? targetRound : lastInjuryRound;
+          set({ playoffBracket: bracket, champions, newsItems: [...newsItems, ...reInj.news], finalsMvpPlayerId, schedule: updatedSchedule, weeklyRecaps: updatedRecaps, players: reInj.players, playoffInjuryRound: newInjuryRound });
         } else {
           // --- Regular season game commit ---
           const newSchedule = state.schedule.map(g => g.id === result.id ? result : g);
@@ -8435,6 +8669,46 @@ export const useGameStore = create<GameStore>()(
             if (team.coaches && team.coaches.length > 0 && team.coaches.length <= 3) {
               team.coaches = [...team.coaches, ...generatePositionCoaches()];
             }
+          }
+        }
+        if (version < 22) {
+          // Retroactively reconcile injury timers for saves currently in the
+          // playoffs. Prior to this version, playoff rounds didn't decrement
+          // injury weeksLeft, so players healing during playoffs stayed stuck.
+          // Infer elapsed weeks from the furthest advanced round in the bracket.
+          const phase = (state as any).phase;
+          if (phase === 'playoffs') {
+            const bracket = ((state as any).playoffBracket as Array<Record<string, unknown>> | null) ?? [];
+            let maxStartedRound = 0;
+            for (const m of bracket) {
+              const round = (m.round as number) ?? 0;
+              if (m.winnerId && round > maxStartedRound) maxStartedRound = round;
+            }
+            // Weeks elapsed since regular-season end:
+            //   advanceToPlayoffs → 1 (bye before wild card)
+            //   round 1 started  → 1  (wild card weekend = the advance week)
+            //   round 2 started  → 2
+            //   round 3 started  → 3
+            //   round 4 started  → 5  (extra bye between conf champ and championship)
+            const weeksElapsed =
+              maxStartedRound >= 4 ? 5 :
+              maxStartedRound >= 1 ? maxStartedRound :
+              1;
+            const players = (state as any).players as Array<Record<string, unknown>> | undefined;
+            if (Array.isArray(players)) {
+              for (const p of players) {
+                const inj = p.injury as { weeksLeft?: number } | null | undefined;
+                if (inj && typeof inj.weeksLeft === 'number' && inj.weeksLeft > 0) {
+                  const newLeft = inj.weeksLeft - weeksElapsed;
+                  if (newLeft <= 0) {
+                    p.injury = null;
+                  } else {
+                    p.injury = { ...inj, weeksLeft: newLeft };
+                  }
+                }
+              }
+            }
+            (state as any).playoffInjuryRound = maxStartedRound >= 4 ? 5 : Math.max(1, maxStartedRound);
           }
         }
         return state;

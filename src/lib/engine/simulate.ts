@@ -1,5 +1,64 @@
 import type { Player, PlayerStats, GameResult, ScoringPlay, BettingLine } from '@/types';
 
+// ---------------------------------------------------------------------------
+// Injury / play-through helpers
+// ---------------------------------------------------------------------------
+
+/** True when a player can take the field: healthy, or injured but opted-in to
+ *  play through their injury. */
+export function playerAvailable(p: Player): boolean {
+  return !p.injury || p.injury.weeksLeft <= 0 || !!p.playingThroughInjury;
+}
+
+/** OVR drop applied to a player who is playing through an active injury.
+ *  Scales by how many weeks remain on the injury timeline. */
+export function injuryOvrPenalty(p: Player): number {
+  if (!p.playingThroughInjury || !p.injury || p.injury.weeksLeft <= 0) return 0;
+  const w = p.injury.weeksLeft;
+  if (w >= 3) return 20;
+  if (w === 2) return 12;
+  return 5;
+}
+
+/** Returns a copy of the player with ratings scaled down for the play-through
+ *  penalty. Leaves the injury object intact so downstream code (re-injury
+ *  rolls, UI, etc.) can still see the underlying injury. */
+function scaleForPlayThrough(p: Player): Player {
+  const penalty = injuryOvrPenalty(p);
+  if (penalty === 0) return p;
+  const r = p.ratings;
+  const clamp = (v: number) => Math.max(30, v - penalty);
+  return {
+    ...p,
+    ratings: {
+      ...r,
+      overall: clamp(r.overall),
+      speed: clamp(r.speed),
+      strength: clamp(r.strength),
+      agility: clamp(r.agility),
+      awareness: clamp(r.awareness),
+      throwing: clamp(r.throwing),
+      catching: clamp(r.catching),
+      carrying: clamp(r.carrying),
+      tackling: clamp(r.tackling),
+      blocking: clamp(r.blocking),
+      coverage: clamp(r.coverage),
+      passRush: clamp(r.passRush),
+      kicking: clamp(r.kicking),
+      stamina: clamp(r.stamina),
+    },
+  };
+}
+
+/** Re-injury chance (per game) for a player playing through an injury. */
+export function reInjuryChance(p: Player): number {
+  if (!p.playingThroughInjury || !p.injury || p.injury.weeksLeft <= 0) return 0;
+  const w = p.injury.weeksLeft;
+  if (w >= 3) return 0.25;
+  if (w === 2) return 0.15;
+  return 0.08;
+}
+
 /**
  * Computes an aggregate offensive and defensive power rating for a roster.
  * Returns a value roughly in 50-100 range for typical pro teams.
@@ -9,7 +68,7 @@ export function teamPower(roster: Player[]): { offense: number; defense: number 
   let defSum = 0, defCount = 0;
 
   for (const p of roster) {
-    if (p.injury && p.injury.weeksLeft > 0) continue;
+    if (!playerAvailable(p)) continue;
     const r = p.ratings;
     switch (p.position) {
       case 'QB':
@@ -164,15 +223,15 @@ function simulatePlay(
   rivalryIntensity: number = 0,
   gamePlan?: GamePlan,
 ): PlayResult {
-  const qbs = offense.filter(p => p.position === 'QB' && (!p.injury || p.injury.weeksLeft === 0));
-  const rbs = offense.filter(p => p.position === 'RB' && (!p.injury || p.injury.weeksLeft === 0));
-  const wrs = offense.filter(p => p.position === 'WR' && (!p.injury || p.injury.weeksLeft === 0));
-  const tes = offense.filter(p => p.position === 'TE' && (!p.injury || p.injury.weeksLeft === 0));
-  const ols = offense.filter(p => p.position === 'OL' && (!p.injury || p.injury.weeksLeft === 0));
-  const dls = defense.filter(p => p.position === 'DL' && (!p.injury || p.injury.weeksLeft === 0));
-  const lbs = defense.filter(p => p.position === 'LB' && (!p.injury || p.injury.weeksLeft === 0));
-  const cbs = defense.filter(p => p.position === 'CB' && (!p.injury || p.injury.weeksLeft === 0));
-  const safeties = defense.filter(p => p.position === 'S' && (!p.injury || p.injury.weeksLeft === 0));
+  const qbs = offense.filter(p => p.position === 'QB' && playerAvailable(p));
+  const rbs = offense.filter(p => p.position === 'RB' && playerAvailable(p));
+  const wrs = offense.filter(p => p.position === 'WR' && playerAvailable(p));
+  const tes = offense.filter(p => p.position === 'TE' && playerAvailable(p));
+  const ols = offense.filter(p => p.position === 'OL' && playerAvailable(p));
+  const dls = defense.filter(p => p.position === 'DL' && playerAvailable(p));
+  const lbs = defense.filter(p => p.position === 'LB' && playerAvailable(p));
+  const cbs = defense.filter(p => p.position === 'CB' && playerAvailable(p));
+  const safeties = defense.filter(p => p.position === 'S' && playerAvailable(p));
   const allDefenders = [...dls, ...lbs, ...cbs, ...safeties];
 
   const qb = qbs[0]; // starter QB
@@ -565,7 +624,7 @@ function simulateDrive(
   let fieldPosition = 25 + Math.floor(Math.random() * 12); // NFL avg start ~own 27-30
   let down = 1;
   let yardsToGo = 10;
-  const kicker = offense.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
+  const kicker = offense.find(p => p.position === 'K' && playerAvailable(p));
 
   // Cap at 10 plays — NFL drives average ~5.5 plays, sustained drives ~8-10.
   // Combined with the 25-37 starting field position, drives that sustain to
@@ -626,7 +685,7 @@ function simulateDrive(
         return { points: made ? 3 : 0, plays };
       }
       // Punt
-      const punter = offense.find(p => p.position === 'P' && (!p.injury || p.injury.weeksLeft === 0));
+      const punter = offense.find(p => p.position === 'P' && playerAvailable(p));
       const pRating = punter?.ratings.kicking ?? 60;
       const puntDist = mcafeeMode && punter
         ? Math.max(25, Math.min(65, Math.round(38 + (pRating - 50) * 0.2 + (Math.random() * 14 - 4))))
@@ -716,8 +775,12 @@ export function simulateGame(
       return { ...p, ratings: { ...p.ratings, overall: Math.max(30, Math.min(99, p.ratings.overall + mod)) } };
     });
   };
-  const effectiveHomeRoster = applyIC(homeRoster);
-  const effectiveAwayRoster = applyIC(awayRoster);
+  // Scale down players who are "playing through" an injury so every rating
+  // read downstream sees the diminished version.
+  const homeScaled = homeRoster.map(scaleForPlayThrough);
+  const awayScaled = awayRoster.map(scaleForPlayThrough);
+  const effectiveHomeRoster = applyIC(homeScaled);
+  const effectiveAwayRoster = applyIC(awayScaled);
 
   const allHomePlays: PlayResult[] = [];
   const allAwayPlays: PlayResult[] = [];
@@ -858,7 +921,7 @@ export function simulateGame(
       const otMinutes = Math.floor(Math.random() * 8) + 1;
       const otSeconds = Math.floor(Math.random() * 60);
       const otWinnerRoster = homeWinsOT ? effectiveHomeRoster : effectiveAwayRoster;
-      const otKicker = otWinnerRoster.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0));
+      const otKicker = otWinnerRoster.find(p => p.position === 'K' && playerAvailable(p));
       const otFgDist = 20 + Math.floor(Math.random() * 30); // 20-49 yard FG
       const otKickerName = otKicker ? `${otKicker.firstName[0]}. ${otKicker.lastName}` : 'Kicker';
       scoringPlays.push({
@@ -893,7 +956,7 @@ export function simulateGame(
           }
           // Track pass blocks for OL
           for (const p of rosterList) {
-            if (p.position === 'OL' && (!p.injury || p.injury.weeksLeft === 0)) {
+            if (p.position === 'OL' && playerAvailable(p)) {
               ensure(playerStats, p.id).passBlocks = (ensure(playerStats, p.id).passBlocks ?? 0) + 1;
             }
           }
@@ -945,7 +1008,7 @@ export function simulateGame(
         // and passBlocks to the starting 5 OL on the passer's team
         if (play.passer && rosterIds.has(play.passer.id)) {
           const olPlayers = rosterList
-            .filter(p => p.position === 'OL' && (!p.injury || p.injury.weeksLeft === 0))
+            .filter(p => p.position === 'OL' && playerAvailable(p))
             .slice(0, 5); // Only the 5 starters
           if (olPlayers.length > 0) {
             // Assign sack to one starting OL (worse blockers more likely to be blamed)
@@ -1001,7 +1064,7 @@ export function simulateGame(
       // OL get a snap for every offensive play
       if (play.type === 'pass' || play.type === 'rush' || play.type === 'sack') {
         for (const p of rosterList) {
-          if (p.position === 'OL' && (!p.injury || p.injury.weeksLeft === 0) && rosterIds.has(p.id)) {
+          if (p.position === 'OL' && playerAvailable(p) && rosterIds.has(p.id)) {
             ensure(playerStats, p.id).snaps = (ensure(playerStats, p.id).snaps ?? 0) + 1;
           }
         }
@@ -1009,7 +1072,7 @@ export function simulateGame(
     }
     // Mark gamesPlayed for all healthy roster players
     for (const p of rosterList) {
-      if (!p.injury || p.injury.weeksLeft === 0) {
+      if (playerAvailable(p)) {
         ensure(playerStats, p.id).gamesPlayed = 1;
       }
     }

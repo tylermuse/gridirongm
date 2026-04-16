@@ -132,6 +132,7 @@ export default function RosterPage() {
   const {
     players, teams, userTeamId, season, champions,
     releasePlayer, placeOnIR, activateFromIR,
+    togglePlayingThroughInjury,
     reorderDepthChart, restructureContract, extendPlayer,
     solicitTradingBlockProposals, createPlayer,
     autoCutToRosterLimit,
@@ -571,8 +572,40 @@ export default function RosterPage() {
                           {p.injury && (
                             <span className="text-[10px] text-red-600 block">
                               {p.injury.type} ({p.injury.weeksLeft}w)
+                              {p.playingThroughInjury && (
+                                <span className="ml-1 text-amber-700 font-bold">· ⚠ Playing through</span>
+                              )}
                             </span>
                           )}
+                          {p.injury && p.injury.weeksLeft > 0 && p.injury.weeksLeft <= 3 && !p.onIR && (() => {
+                            const penalty = p.injury.weeksLeft >= 3 ? 20 : p.injury.weeksLeft === 2 ? 12 : 5;
+                            const reinjPct = p.injury.weeksLeft >= 3 ? 25 : p.injury.weeksLeft === 2 ? 15 : 8;
+                            const on = !!p.playingThroughInjury;
+                            return (
+                              <button
+                                onClick={() => {
+                                  if (on) {
+                                    togglePlayingThroughInjury(p.id);
+                                    return;
+                                  }
+                                  const ok = window.confirm(
+                                    `Start ${p.firstName} ${p.lastName} at ${p.injury!.weeksLeft} week${p.injury!.weeksLeft === 1 ? '' : 's'} remaining?\n\n` +
+                                    `• Plays at ~${Math.max(30, p.ratings.overall - penalty)} OVR (-${penalty})\n` +
+                                    `• ${reinjPct}% chance of re-injury per game (worse & longer)`
+                                  );
+                                  if (ok) togglePlayingThroughInjury(p.id);
+                                }}
+                                className={`mt-1 inline-flex items-center px-1.5 py-0.5 rounded border text-[9px] font-semibold transition-colors ${
+                                  on
+                                    ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                                    : 'bg-[var(--surface-2)] text-[var(--text)] border-[var(--border)] hover:border-amber-400 hover:text-amber-700'
+                                }`}
+                                title={on ? 'Click to disable' : `Start despite injury (-${penalty} OVR, ${reinjPct}% re-injury risk)`}
+                              >
+                                {on ? '✓ Playing through' : 'Play through ➜'}
+                              </button>
+                            );
+                          })()}
                         </td>
 
                         {/* Position */}
@@ -780,6 +813,9 @@ export default function RosterPage() {
                               const isAllPro = allProPlayerIds.has(player.id);
                               const isDragging = dragPosition === pos && dragIndex === idx;
                               const isDragOver = dragPosition === pos && dragOverIndex === idx;
+                              const canPlayThrough = isViewingOwnTeam && player.injury && player.injury.weeksLeft > 0 && player.injury.weeksLeft <= 3 && !player.onIR;
+                              const playingThrough = !!player.playingThroughInjury;
+                              const ptPenalty = player.injury && playingThrough ? (player.injury.weeksLeft >= 3 ? 20 : player.injury.weeksLeft === 2 ? 12 : 5) : 0;
                               return (
                                 <div
                                   key={player.id}
@@ -789,7 +825,9 @@ export default function RosterPage() {
                                   onDragEnd={handleDragEnd}
                                   className={`bg-[var(--surface-2)] rounded-lg p-2 cursor-grab active:cursor-grabbing transition-all ${
                                     isDragging ? 'opacity-40 scale-95' : ''
-                                  } ${isDragOver ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-[var(--bg)]' : ''}`}
+                                  } ${isDragOver ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-[var(--bg)]' : ''} ${
+                                    playingThrough ? 'ring-2 ring-amber-400 ring-offset-1 ring-offset-[var(--bg)]' : ''
+                                  }`}
                                 >
                                   <div className="flex items-center justify-between mb-0.5">
                                     <div className="flex items-center gap-1">
@@ -816,9 +854,46 @@ export default function RosterPage() {
                                           </button>
                                         </div>
                                       )}
+                                      {canPlayThrough && (() => {
+                                        const w = player.injury!.weeksLeft;
+                                        const penalty = w >= 3 ? 20 : w === 2 ? 12 : 5;
+                                        const reinjPct = w >= 3 ? 25 : w === 2 ? 15 : 8;
+                                        return (
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (playingThrough) {
+                                                togglePlayingThroughInjury(player.id);
+                                                return;
+                                              }
+                                              const ok = window.confirm(
+                                                `Start ${player.firstName} ${player.lastName} at ${w} week${w === 1 ? '' : 's'} remaining?\n\n` +
+                                                `• Plays at ~${Math.max(30, player.ratings.overall - penalty)} OVR (-${penalty})\n` +
+                                                `• ${reinjPct}% chance of re-injury per game (worse & longer)`
+                                              );
+                                              if (ok) togglePlayingThroughInjury(player.id);
+                                            }}
+                                            className={`w-4 h-4 flex items-center justify-center rounded text-[9px] border ${
+                                              playingThrough
+                                                ? 'bg-amber-100 text-amber-800 border-amber-400'
+                                                : 'bg-[var(--surface)] text-[var(--text-sec)] hover:text-amber-700 hover:border-amber-400 border-[var(--border)]'
+                                            }`}
+                                            title={playingThrough ? 'Disable play through' : `Play through injury (-${penalty} OVR, ${reinjPct}% re-injury risk)`}
+                                          >
+                                            ✚
+                                          </button>
+                                        );
+                                      })()}
                                     </div>
                                     <span className={`text-xs font-bold ${ratingColor(player.ratings.overall)}`}>
-                                      {player.ratings.overall}
+                                      {playingThrough ? (
+                                        <>
+                                          {Math.max(30, player.ratings.overall - ptPenalty)}
+                                          <span className="ml-0.5 text-[9px] text-red-600">(-{ptPenalty})</span>
+                                        </>
+                                      ) : (
+                                        player.ratings.overall
+                                      )}
                                     </span>
                                   </div>
                                   <button
@@ -832,7 +907,10 @@ export default function RosterPage() {
                                     {getGenericStat(player)}
                                   </div>
                                   {player.injury && (
-                                    <div className="text-[10px] text-red-600">{player.injury.type} ({player.injury.weeksLeft}w)</div>
+                                    <div className="text-[10px] text-red-600">
+                                      {player.injury.type} ({player.injury.weeksLeft}w)
+                                      {playingThrough && <span className="ml-1 text-amber-700 font-bold">· ⚠</span>}
+                                    </div>
                                   )}
                                   {player.onIR && <div className="text-[10px] text-amber-600">IR</div>}
                                 </div>

@@ -310,7 +310,9 @@ function getUserPlayoffStatus(
   const latest = userMatchups[0];
   if (!latest.winnerId) return 'active'; // still playing
   if (latest.winnerId !== userTeamId) return `eliminated-${latest.round}`;
-  return `won-${latest.round}`;
+  // Winning a non-championship round means advancing — still active. The
+  // champion case is handled by the isChampion check above.
+  return 'active';
 }
 
 // ---------------------------------------------------------------------------

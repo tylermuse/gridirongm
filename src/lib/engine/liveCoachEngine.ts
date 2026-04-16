@@ -15,6 +15,7 @@
 import type { Player, Team } from '@/types';
 import type { PlayEvent } from './playByPlay';
 import type { PlayCallType } from '@/components/game/PlayCallMenu';
+import { playerAvailable } from './simulate';
 
 export interface LiveEngineState {
   quarter: number;
@@ -36,6 +37,9 @@ export interface LiveEngineState {
   /** Timeouts remaining per team per half */
   homeTimeouts: number;
   awayTimeouts: number;
+  /** Seconds of post-play runoff owed to the next play. Zeroed out by a timeout
+   *  so the next snap only burns play-time, not the between-plays clock runoff. */
+  pendingRunoff?: number;
 }
 
 export interface LiveCoachEngine {
@@ -79,8 +83,8 @@ interface KeyDef {
 }
 
 function extractOff(players: Player[]): KeyOff {
-  const byPos = (pos: string) => players.find(p => p.position === pos && (!p.injury || p.injury.weeksLeft === 0)) ?? null;
-  const wrs = players.filter(p => p.position === 'WR' && (!p.injury || p.injury.weeksLeft === 0));
+  const byPos = (pos: string) => players.find(p => p.position === pos && playerAvailable(p)) ?? null;
+  const wrs = players.filter(p => p.position === 'WR' && playerAvailable(p));
   return {
     qb: byPos('QB'),
     rb: byPos('RB'),
@@ -92,7 +96,7 @@ function extractOff(players: Player[]): KeyOff {
 }
 
 function extractDef(players: Player[]): KeyDef {
-  const byPos = (pos: string) => players.find(p => p.position === pos && (!p.injury || p.injury.weeksLeft === 0)) ?? null;
+  const byPos = (pos: string) => players.find(p => p.position === pos && playerAvailable(p)) ?? null;
   return {
     dl1: byPos('DL'),
     lb1: byPos('LB'),
@@ -131,6 +135,7 @@ export function createLiveCoachEngine(
     awaitingKickoffChoice: initialState.awaitingKickoffChoice ?? false,
     homeTimeouts: initialState.homeTimeouts ?? 3,
     awayTimeouts: initialState.awayTimeouts ?? 3,
+    pendingRunoff: initialState.pendingRunoff ?? 0,
   };
   let nextEventId = 100000; // start high to avoid colliding with pre-computed event ids
 
@@ -164,6 +169,14 @@ export function createLiveCoachEngine(
 
   function advanceClock(secs: number) {
     state.timeSecs = Math.max(0, state.timeSecs - secs);
+  }
+
+  /** Record time for a play: the play-time portion always ticks; the runoff
+   *  portion is stashed on state and deducted at the start of the next play,
+   *  so a timeout between plays can cancel it. */
+  function advancePlayClock(playSecs: number, runoffSecs: number) {
+    advanceClock(playSecs);
+    state.pendingRunoff = runoffSecs;
   }
 
   function switchPossession(newFieldPos = 25) {
@@ -241,10 +254,14 @@ export function createLiveCoachEngine(
   }
 
   function checkTwoMinWarning(events: PlayEvent[]) {
-    if (state.quarter === 2 && !state.twoMinWarningQ2Fired && state.timeSecs <= 120) {
+    // Project the clock including the runoff owed to the next play — if the
+    // runoff would cross 2:00, the warning belongs to the play that just
+    // ended, not to the snap that follows.
+    const projectedTime = state.timeSecs - (state.pendingRunoff ?? 0);
+    if (state.quarter === 2 && !state.twoMinWarningQ2Fired && projectedTime <= 120) {
       state.twoMinWarningQ2Fired = true;
       events.push(makeEvent('two_minute_warning', 'Two-minute warning.', 0, false));
-    } else if (state.quarter === 4 && !state.twoMinWarningQ4Fired && state.timeSecs <= 120) {
+    } else if (state.quarter === 4 && !state.twoMinWarningQ4Fired && projectedTime <= 120) {
       state.twoMinWarningQ4Fired = true;
       events.push(makeEvent('two_minute_warning', 'Two-minute warning in the fourth quarter!', 0, false));
     }
@@ -299,7 +316,7 @@ export function createLiveCoachEngine(
         handleTurnoverOnDowns(events);
         return;
       }
-      advanceClock(35);
+      advancePlayClock(5, 30);
     }
   }
 
@@ -321,7 +338,7 @@ export function createLiveCoachEngine(
         handleTurnoverOnDowns(events);
         return;
       }
-      advanceClock(35);
+      advancePlayClock(5, 30);
       return;
     }
 
@@ -333,7 +350,7 @@ export function createLiveCoachEngine(
       events.push(makeEvent('interception', `${prefix}INTERCEPTED! ${cbName} picks off ${qbName}.`, 0, false));
       const returnPos = clamp(100 - state.fieldPos + Math.floor(Math.random() * 20) - 10, 10, 60);
       switchPossession(returnPos);
-      advanceClock(8);
+      advancePlayClock(8, 0);
       return;
     }
 
@@ -374,7 +391,7 @@ export function createLiveCoachEngine(
           handleTurnoverOnDowns(events);
           return;
         }
-        advanceClock(28);
+        advancePlayClock(5, 23);
       }
     } else {
       const qbName = nameOrFallback(ok.qb, 'the QB');
@@ -384,7 +401,7 @@ export function createLiveCoachEngine(
         handleTurnoverOnDowns(events);
         return;
       }
-      advanceClock(6); // clock stops on incomplete
+      advancePlayClock(6, 0); // clock stops on incomplete — no runoff
     }
   }
 
@@ -456,7 +473,7 @@ export function createLiveCoachEngine(
       const returnPos = Math.max(20, state.fieldPos);
       switchPossession(100 - returnPos);
     }
-    advanceClock(15);
+    advancePlayClock(15, 0);
   }
 
   function runPunt(events: PlayEvent[]) {
@@ -467,7 +484,7 @@ export function createLiveCoachEngine(
     const finalPos = Math.min(returnPos + returnYds, 50);
     events.push(makeEvent('punt', `🥾 Punt — ${puntYards} yards, ${receivingAbbr} fields at their own ${returnPos}${returnYds > 0 ? `, returns to the ${finalPos}` : ', fair catch'}.`, puntYards, false));
     switchPossession(finalPos);
-    advanceClock(15);
+    advancePlayClock(15, 0);
   }
 
   function advanceDown(): 'continue' | 'turnover_on_downs' {
@@ -539,16 +556,24 @@ export function createLiveCoachEngine(
       return events;
     }
 
-    // Handle timeout call
+    // Handle timeout call — stops the clock: cancels the post-play runoff owed
+    // by the previous play so the next snap doesn't burn 30s of runoff time.
     if (userCall === 'timeout' as PlayCallType) {
       callTimeout(events);
+      state.pendingRunoff = 0;
       return events;
     }
 
-    checkTwoMinWarning(events);
-    if (state.timeSecs <= 0) {
-      checkQuarterEnd(events);
-      return events;
+    // Consume the runoff owed by the previous play before running this one.
+    // A timeout would have zeroed this out.
+    if ((state.pendingRunoff ?? 0) > 0) {
+      advanceClock(state.pendingRunoff!);
+      state.pendingRunoff = 0;
+      checkTwoMinWarning(events);
+      if (state.timeSecs <= 0) {
+        checkQuarterEnd(events);
+        return events;
+      }
     }
 
     // 4th down — handle user override or default decision
@@ -560,10 +585,12 @@ export function createLiveCoachEngine(
         // go for it (fall through to play call)
       } else if (state.fieldPos >= 55 && fgDist <= 55) {
         runFieldGoal(events);
+        checkTwoMinWarning(events);
         checkQuarterEnd(events);
         return events;
       } else {
         runPunt(events);
+        checkTwoMinWarning(events);
         checkQuarterEnd(events);
         return events;
       }
@@ -572,11 +599,13 @@ export function createLiveCoachEngine(
     // User field goal — allowed on any down when user explicitly calls it
     if (userCall === 'field_goal') {
       runFieldGoal(events);
+      checkTwoMinWarning(events);
       checkQuarterEnd(events);
       return events;
     }
     if (state.down === 4 && userCall === 'punt') {
       runPunt(events);
+      checkTwoMinWarning(events);
       checkQuarterEnd(events);
       return events;
     }
@@ -589,8 +618,9 @@ export function createLiveCoachEngine(
       events.push(makeEvent('run', `🧎 ${qbName} takes a knee.`, -loss, false));
       state.fieldPos = Math.max(1, state.fieldPos - loss);
       state.yardsToGo += loss;
-      advanceClock(40);
+      advancePlayClock(40, 0);
       advanceDown();
+      checkTwoMinWarning(events);
       checkQuarterEnd(events);
       // OT end checks
       if (state.overtime && state.homeScore !== state.awayScore) endGame(events);
@@ -635,6 +665,7 @@ export function createLiveCoachEngine(
     else if (playType === 'pass_deep') runPassPlay(events, 'deep', callPrefix);
     else runPassPlay(events, 'screen', callPrefix);
 
+    checkTwoMinWarning(events);
     checkQuarterEnd(events);
 
     // OT end check

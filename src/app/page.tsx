@@ -399,10 +399,22 @@ function TeamSpotlightSection({
   const { leagueSettings, newsItems, draftResults, playoffBracket, playoffSeeds, champions, players: allPlayersFromStore } = useGameStore();
   const aiCommentary = leagueSettings?.aiCommentary ?? false;
 
+  // Filter news to this season's re-injury items so the spotlight can surface
+  // front-office blowback without pulling in the full feed each render.
+  const recentReInjuryNews = React.useMemo(
+    () => newsItems.filter(n =>
+      n.type === 'injury' &&
+      n.season === season &&
+      n.teamId === team.id &&
+      n.headline.includes('re-injured playing through')
+    ).slice(-5),
+    [newsItems, season, team.id],
+  );
+
   const templateTopics = React.useMemo(
-    () => generateTeamSpotlight(team, roster, allTeams, allPlayers, season, week, ctx),
+    () => generateTeamSpotlight(team, roster, allTeams, allPlayers, season, week, { ...(ctx ?? {}), newsItems: recentReInjuryNews }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [team, roster, allTeams, allPlayers, season, week, ctx?.phase, ctx?.faDay, ctx?.draftResults?.length, ctx?.playoffBracket, ctx?.playoffBracket?.filter(m => m.winnerId).length],
+    [team, roster, allTeams, allPlayers, season, week, ctx?.phase, ctx?.faDay, ctx?.draftResults?.length, ctx?.playoffBracket, ctx?.playoffBracket?.filter(m => m.winnerId).length, recentReInjuryNews.length],
   );
 
   // Subscribe to shared AI spotlight cache (pre-fetched by SpotlightPopup)
@@ -1322,7 +1334,9 @@ import { Suspense } from 'react';
 
 function HomeContent() {
   const initialized = useGameStore(s => s.initialized);
-  return initialized ? <Dashboard /> : <TeamPicker />;
+  const searchParams = useSearchParams();
+  const hasRosterParam = searchParams.get('roster') !== null;
+  return initialized && !hasRosterParam ? <Dashboard /> : <TeamPicker />;
 }
 
 export default function Home() {

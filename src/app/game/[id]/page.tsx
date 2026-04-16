@@ -771,7 +771,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     } else if (currentEvent.type === 'field_goal_miss') {
       text = '❌ NO GOOD'; color = 'bg-red-600';
     } else if (currentEvent.type === 'touchdown' || currentEvent.isScoring) {
-      text = '🏆 TOUCHDOWN'; color = 'bg-amber-500';
+      text = '🏆 TOUCHDOWN'; color = 'bg-green-600';
     } else if (currentEvent.type === 'interception') {
       text = '🔄 INTERCEPTED'; color = 'bg-orange-600';
     } else if (currentEvent.type === 'fumble') {
@@ -784,7 +784,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       // Check if first down was achieved
       const isFirstDown = currentEvent.down >= 1 && yds >= currentEvent.yardsToGo;
       if (isFirstDown) {
-        text = `📍 1ST DOWN (+${yds})`; color = 'bg-purple-600';
+        text = `📍 1ST DOWN (+${yds})`; color = 'bg-yellow-500';
       } else {
         text = `+${yds} GAIN`; color = 'bg-blue-600';
       }
@@ -1107,7 +1107,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
       {/* Live Coach play call menu is now rendered inline in the sidebar */}
 
-      <div className="max-w-6xl mx-auto flex gap-4">
+      <div className="max-w-6xl mx-auto flex items-start gap-4">
       {/* Main game content */}
       <div className="flex-1 min-w-0 space-y-3">
 
@@ -1742,90 +1742,98 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         {/* Game Over banner is now pinned to the top of this column */}
       </div>
 
-      {/* Right sidebar — play call menu + around the league */}
+      {/* Play call menu — fixed to the viewport so layout reflows around the
+          field (big-play alerts, etc.) can't nudge it. Rendered outside the
+          flex sidebar for this reason. Lives at the same column width (w-72)
+          and viewport offset (top-20) the sidebar would otherwise place it. */}
+      {liveEngineRef.current && (() => {
+        const es = liveEngineRef.current!.getState();
+        const homeAbbr2 = homeTeam?.abbreviation ?? 'HOME';
+        const awayAbbr2 = awayTeam?.abbreviation ?? 'AWAY';
+        const fp = es.fieldPos;
+        const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
+        return (
+          <div
+            className={`hidden lg:block fixed top-20 w-72 z-30 min-h-[22rem] ${liveCoachPaused ? '' : 'invisible pointer-events-none'}`}
+            style={{ left: 'max(calc(50% + 336px), calc(100vw - 304px))' }}
+          >
+          <PlayCallMenu
+            state={{
+              quarter: es.quarter,
+              timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
+              homeScore: es.homeScore,
+              awayScore: es.awayScore,
+              homeAbbr: homeAbbr2,
+              awayAbbr: awayAbbr2,
+              down: es.down,
+              yardsToGo: es.yardsToGo,
+              fieldPos: es.fieldPos,
+              fieldDescription,
+            }}
+            isFourthDown={es.down === 4}
+            awaitingXpChoice={es.awaitingXpChoice}
+            awaitingKickoffChoice={es.awaitingKickoffChoice}
+            timeoutsRemaining={userTeamSide === 'home' ? es.homeTimeouts : es.awayTimeouts}
+            onPlayCall={(playCall) => {
+              setOutcomeChip(null);
+              if (liveEngineRef.current) {
+                const newEvents = liveEngineRef.current.runOnePlay(playCall);
+                if (newEvents.length > 0) {
+                  setLiveExtraEvents(prev => [...prev, ...newEvents]);
+                  setRevealedCount(prev => prev + 1);
+                  setAnimationComplete(false);
+                  const lastEv = newEvents[newEvents.length - 1];
+                  const isBig = lastEv && (
+                    lastEv.type === 'interception' || lastEv.type === 'fumble' ||
+                    lastEv.type === 'punt' || lastEv.type === 'touchdown' ||
+                    lastEv.isScoring || lastEv.type === 'field_goal_good' ||
+                    lastEv.type === 'field_goal_miss'
+                  );
+                  if (isBig) {
+                    pendingAutoPlayRef.current = true;
+                    const extraMs = speed === '1x' ? 6000 : speed === '2x' ? 4000 : speed === '5x' ? 2500 : 1000;
+                    setTimeout(() => {
+                      pendingAutoPlayRef.current = false;
+                      setAutoRunTick(t => t + 1);
+                    }, extraMs);
+                  }
+                }
+              }
+              setLiveCoachPaused(false);
+              setIsPlaying(true);
+            }}
+            onAutoSimRest={() => {
+              if (liveEngineRef.current) {
+                const allRest: PlayEvent[] = [];
+                let safety = 0;
+                while (!liveEngineRef.current.isFinished() && safety < 500) {
+                  const evs = liveEngineRef.current.runOnePlay();
+                  allRest.push(...evs);
+                  safety++;
+                }
+                if (allRest.length > 0) {
+                  setLiveExtraEvents(prev => [...prev, ...allRest]);
+                }
+              }
+              setLiveCoachOn(false);
+              setLiveCoachPaused(false);
+            }}
+            onToggleOff={() => {
+              setLiveCoachOn(false);
+              setLiveCoachPaused(false);
+            }}
+          />
+          </div>
+        );
+      })()}
+
+      {/* Right sidebar — around-the-league + live feed. Play call menu is
+          rendered separately (fixed-position, above) so it doesn't move. */}
       <div className="w-72 hidden lg:block shrink-0 space-y-2">
         <div className="sticky top-20 space-y-3">
-          {/* Inline Live Coach play call */}
-          {liveCoachPaused && liveEngineRef.current && (() => {
-            const es = liveEngineRef.current!.getState();
-            const homeAbbr2 = homeTeam?.abbreviation ?? 'HOME';
-            const awayAbbr2 = awayTeam?.abbreviation ?? 'AWAY';
-            const fp = es.fieldPos;
-            const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
-            return (
-              <PlayCallMenu
-                state={{
-                  quarter: es.quarter,
-                  timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
-                  homeScore: es.homeScore,
-                  awayScore: es.awayScore,
-                  homeAbbr: homeAbbr2,
-                  awayAbbr: awayAbbr2,
-                  down: es.down,
-                  yardsToGo: es.yardsToGo,
-                  fieldPos: es.fieldPos,
-                  fieldDescription,
-                }}
-                isFourthDown={es.down === 4}
-                awaitingXpChoice={es.awaitingXpChoice}
-                awaitingKickoffChoice={es.awaitingKickoffChoice}
-                timeoutsRemaining={userTeamSide === 'home' ? es.homeTimeouts : es.awayTimeouts}
-                onPlayCall={(playCall) => {
-                  // Clear any lingering outcome chip from the previous play
-                  setOutcomeChip(null);
-                  if (liveEngineRef.current) {
-                    const newEvents = liveEngineRef.current.runOnePlay(playCall);
-                    if (newEvents.length > 0) {
-                      setLiveExtraEvents(prev => [...prev, ...newEvents]);
-                      setRevealedCount(prev => prev + 1);
-                      setAnimationComplete(false);
-
-                      // If the play resulted in a turnover, punt, or score,
-                      // block auto-run briefly so the user sees the alert
-                      const lastEv = newEvents[newEvents.length - 1];
-                      const isBig = lastEv && (
-                        lastEv.type === 'interception' || lastEv.type === 'fumble' ||
-                        lastEv.type === 'punt' || lastEv.type === 'touchdown' ||
-                        lastEv.isScoring || lastEv.type === 'field_goal_good' ||
-                        lastEv.type === 'field_goal_miss'
-                      );
-                      if (isBig) {
-                        pendingAutoPlayRef.current = true;
-                        const extraMs = speed === '1x' ? 6000 : speed === '2x' ? 4000 : speed === '5x' ? 2500 : 1000;
-                        setTimeout(() => {
-                          pendingAutoPlayRef.current = false;
-                          setAutoRunTick(t => t + 1);
-                        }, extraMs);
-                      }
-                    }
-                  }
-                  setLiveCoachPaused(false);
-                  setIsPlaying(true);
-                }}
-                onAutoSimRest={() => {
-                  if (liveEngineRef.current) {
-                    const allRest: PlayEvent[] = [];
-                    let safety = 0;
-                    while (!liveEngineRef.current.isFinished() && safety < 500) {
-                      const evs = liveEngineRef.current.runOnePlay();
-                      allRest.push(...evs);
-                      safety++;
-                    }
-                    if (allRest.length > 0) {
-                      setLiveExtraEvents(prev => [...prev, ...allRest]);
-                    }
-                  }
-                  setLiveCoachOn(false);
-                  setLiveCoachPaused(false);
-                }}
-                onToggleOff={() => {
-                  setLiveCoachOn(false);
-                  setLiveCoachPaused(false);
-                }}
-              />
-            );
-          })()}
-
+          {/* Reserve the same vertical space the fixed play call menu
+              occupies so the sidebar content below doesn't overlap it. */}
+          {liveEngineRef.current && <div className="min-h-[22rem]" aria-hidden />}
           {/* Live play-by-play feed — visible alongside the field */}
           {displayEvents.length > 0 && (
             <div className="mb-3">

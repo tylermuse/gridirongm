@@ -2,10 +2,11 @@
  * McAfee Mode — Special Teams Rating & Labels
  */
 import type { Player } from '@/types';
+import { playerAvailable } from './simulate';
 
 export function getBestReturner(roster: Player[]): Player | null {
   return roster
-    .filter(p => ['WR', 'RB', 'CB'].includes(p.position) && (!p.injury || p.injury.weeksLeft === 0))
+    .filter(p => ['WR', 'RB', 'CB'].includes(p.position) && playerAvailable(p))
     .sort((a, b) => {
       const aScore = (a.ratings.speed * 2 + a.ratings.agility) / 3;
       const bScore = (b.ratings.speed * 2 + b.ratings.agility) / 3;
@@ -19,8 +20,8 @@ export function teamSpecialTeamsRating(roster: Player[]): {
   punter: { player: Player | null; rating: number; label: string };
   returner: { player: Player | null; rating: number };
 } {
-  const kicker = roster.find(p => p.position === 'K' && (!p.injury || p.injury.weeksLeft === 0)) ?? null;
-  const punter = roster.find(p => p.position === 'P' && (!p.injury || p.injury.weeksLeft === 0)) ?? null;
+  const kicker = roster.find(p => p.position === 'K' && playerAvailable(p)) ?? null;
+  const punter = roster.find(p => p.position === 'P' && playerAvailable(p)) ?? null;
   const returner = getBestReturner(roster);
 
   const kRating = kicker?.ratings.kicking ?? 40;

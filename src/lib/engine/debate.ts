@@ -829,6 +829,8 @@ export interface SpotlightContext {
   freeAgents?: string[];
   faDay?: number;
   schedule?: { week: number; homeTeamId: string; awayTeamId: string; played: boolean }[];
+  /** Recent news (used to surface re-injury callouts in commentary). */
+  newsItems?: { type: string; teamId?: string; season: number; headline: string; body?: string; playerIds?: string[] }[];
 }
 
 export function generateTeamSpotlight(
@@ -1287,6 +1289,65 @@ export function generateTeamSpotlight(
       exchanges: pick(injuryTemplates, rng)(),
       teamIds: [team.id],
       playerIds: injuredPlayers.slice(0, 3).map(p => p.id),
+    });
+  }
+
+  // ─── 7b. Playing Through Injury ───
+  // When the user elects to start an injured player, it's a strategic risk
+  // worth debating — the reduced ceiling + elevated re-injury chance.
+  const playThroughPlayers = activeRoster.filter(p => p.playingThroughInjury && p.injury && p.injury.weeksLeft > 0);
+  if (playThroughPlayers.length > 0) {
+    const top = playThroughPlayers.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+    const w = top.injury!.weeksLeft;
+    const penalty = w >= 3 ? 20 : w === 2 ? 12 : 5;
+    const reinjPct = w >= 3 ? 25 : w === 2 ? 15 : 8;
+    const otherCount = playThroughPlayers.length - 1;
+    topics.push({
+      headline: `${top.firstName} ${top.lastName} Playing Through ${top.injury!.type}`,
+      icon: '⚠️',
+      exchanges: pick<() => DebateExchange[]>([
+        () => [
+          { speakerId: 'hottake' as const, text: `Tony's take: this is a GUTSY call. ${top.firstName} ${top.lastName} suiting up with ${w} week${w === 1 ? '' : 's'} left on a ${top.injury!.type} — that's championship mentality RIGHT THERE! Sometimes you've got to send your horse out there!` },
+          { speakerId: 'stats' as const, text: `Gutsy or reckless, Tony. Playing through cuts ${top.lastName}'s effective OVR by ~${penalty} points and carries a ${reinjPct}% re-injury risk per game. If he aggravates that ${top.injury!.type}, you're looking at a severity tier up — potentially ending his playoff run entirely.` },
+          { speakerId: 'hottake' as const, text: `Risk?! That's WHY you hired a GM, Marcus! To make the tough calls! You don't win rings being CAUTIOUS!${otherCount > 0 ? ` And he's not alone — ${otherCount} more player${otherCount > 1 ? 's are' : ' is'} gutting it out!` : ''}` },
+        ],
+        () => [
+          { speakerId: 'stats' as const, text: `${top.firstName} ${top.lastName} is active despite ${w} week${w === 1 ? '' : 's'} remaining on a ${top.injury!.type}. He'll play diminished — expect ~${Math.max(30, top.ratings.overall - penalty)} OVR — and the re-injury math is ugly: ${reinjPct}% per game, with the next injury guaranteed to be worse and longer.` },
+          { speakerId: 'hottake' as const, text: `The NUMBERS don't know what it means to be a WARRIOR, Marcus! ${top.lastName} wants the ball! That's what matters! HEART can't be quantified!` },
+          { speakerId: 'stats' as const, text: `Heart gets him on the field. The ${top.injury!.type} decides whether he stays there. It's a bet on short-term upside against a meaningful long-term downside.` },
+        ],
+      ], rng)(),
+      teamIds: [team.id],
+      playerIds: playThroughPlayers.slice(0, 3).map(p => p.id),
+    });
+  }
+
+  // ─── 7c. Re-injury Fallout ───
+  // When a player recently re-injured while playing through, the news item
+  // surfaces it — but the commentary should treat it as an indictment of the
+  // front-office decision, not just a health update.
+  const recentReInjNews = (ctx.newsItems ?? []).filter(n =>
+    n.type === 'injury' &&
+    n.teamId === team.id &&
+    n.season === season &&
+    n.headline.includes('re-injured playing through')
+  );
+  if (recentReInjNews.length > 0) {
+    const reInj = recentReInjNews[0];
+    const player = reInj.playerIds && reInj.playerIds.length > 0
+      ? allPlayers.find(p => p.id === reInj.playerIds![0])
+      : undefined;
+    const name = player ? `${player.firstName} ${player.lastName}` : 'the player';
+    topics.push({
+      headline: `${name} Re-Injured — Was It the Right Call?`,
+      icon: '🚑',
+      exchanges: [
+        { speakerId: 'hottake' as const, text: `THIS is what I was afraid of! ${name} goes out there banged up and comes back MORE banged up! That's a front-office DISASTER, Marcus! Who signed off on this?!` },
+        { speakerId: 'stats' as const, text: `The math warned us, Tony. Starting a player with 3 or fewer weeks on an injury carries a re-injury probability north of 15%. When it hits, the next injury is categorically worse. ${reInj.body ?? ''}` },
+        { speakerId: 'hottake' as const, text: `You don't get to play the "I told you so" card when a PLAYER gets HURT, Marcus! But yeah — the ${team.city} front office has some SOUL-SEARCHING to do after this one!` },
+      ],
+      teamIds: [team.id],
+      playerIds: player ? [player.id] : [],
     });
   }
 

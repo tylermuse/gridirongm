@@ -307,6 +307,9 @@ export interface Player {
   draftPick: number | null;
   retired: boolean;
   injury: { type: string; weeksLeft: number } | null;
+  /** User opted to start this player despite an active injury. Accepts an OVR
+   *  penalty and an elevated re-injury chance; only settable when weeksLeft ≤ 3. */
+  playingThroughInjury?: boolean;
   /** Currently on Injured Reserve */
   onIR: boolean;
   /** Projected draft rank (noisy media perception, set at draft class creation) */
@@ -881,6 +884,9 @@ export interface LeagueState {
   playoffBracket: PlayoffMatchup[] | null;
   /** Per-conference seed order: index 0 = seed 1, index 6 = seed 7 (array of team IDs) */
   playoffSeeds: { AC: string[]; NC: string[] } | null;
+  /** Last playoff round for which injury timers were decremented. Prevents
+   *  double-decrements when a round has a mix of live-commit + auto-sim games. */
+  playoffInjuryRound?: number;
   /** Championship history across all seasons */
   champions: { season: number; teamId: string }[];
   /** News feed items */

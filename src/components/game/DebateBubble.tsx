@@ -21,6 +21,10 @@ export function DebateBubble({
   const isPlayer = exchange.speakerId === 'player';
   const commentator = (isFans || isPlayer) ? null : COMMENTATORS[exchange.speakerId as 'stats' | 'hottake'];
   const isHotTake = exchange.speakerId === 'hottake';
+  // AI responses occasionally return unexpected speaker ids (e.g. 'gm', 'coach',
+  // 'analyst'). Fall back to Marcus so the page doesn't crash — better a
+  // generic voice than a blank error screen.
+  const safeCommentator = commentator ?? COMMENTATORS.stats;
 
   // Render text with clickable player names
   function renderText(text: string) {
@@ -136,7 +140,7 @@ export function DebateBubble({
             isHotTake ? 'bg-red-100' : 'bg-blue-100'
           }`}
         >
-          {commentator!.avatar}
+          {safeCommentator.avatar}
         </div>
       </div>
 
@@ -145,7 +149,7 @@ export function DebateBubble({
         <div className={`text-[10px] font-bold uppercase tracking-wide mb-0.5 ${
           isHotTake ? 'text-right text-red-600' : 'text-blue-600'
         }`}>
-          {commentator!.name}
+          {safeCommentator.name}
         </div>
         <div
           className={`rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${

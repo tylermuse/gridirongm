@@ -1254,7 +1254,8 @@ export default function DraftPage() {
   const nextPickTeam = teams.find((team) => team.id === draftOrder[1]);
   const currentTeamNeeds = currentPickTeamId ? getTeamNeeds(currentPickTeamId) : [];
   const nextPickNeeds = draftOrder[1] ? getTeamNeeds(draftOrder[1]).slice(0, 3) : [];
-  const myNeeds = getTeamNeeds(userTeamId).slice(0, 5);
+  const allMyNeeds = getTeamNeeds(userTeamId);
+  const myNeeds = allMyNeeds.slice(0, 5);
 
   // BPA = top of the board (highest projected rank among remaining prospects)
   // allProspects is already sorted by projectedRank, so [0] is BPA
@@ -1671,9 +1672,20 @@ export default function DraftPage() {
                                   Scout
                                 </button>
                               )}
-                              {myNeeds.slice(0, 5).some(n => n.position === player.position) && (
-                                <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium shrink-0">Fills Need</span>
-                              )}
+                              {(() => {
+                                // Only show "Fills Need" when there's an actual unfilled need
+                                // at this position — not just one of the 5 relative highest.
+                                // Counts include players drafted earlier in this draft (they
+                                // already have teamId set), so the tag clears as picks land.
+                                const need = allMyNeeds.find(n => n.position === player.position);
+                                if (!need) return null;
+                                const target = Math.ceil((need.limits.min + need.limits.max) / 2);
+                                const hasRealNeed =
+                                  need.count < need.limits.min ||
+                                  (need.count < target && need.starterOvr < 72);
+                                if (!hasRealNeed) return null;
+                                return <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium shrink-0">Fills Need</span>;
+                              })()}
                               {(() => {
                                 const tag = getProspectTag(player, isScouted);
                                 if (!tag) return null;
