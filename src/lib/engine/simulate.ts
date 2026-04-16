@@ -791,9 +791,27 @@ export function simulateGame(
     // Quarter assignment: distribute possessions across 4 quarters
     const quarter = Math.min(4, Math.floor(i / (possessions / 4)) + 1);
 
+    // Blowout auto-rest: in Q4 (last ~2 possessions), if a team leads by 21+,
+    // rest their starters by reducing OVR (simulates backups playing).
+    // This reduces injury risk to key players in garbage time.
+    const isLateGame = quarter === 4;
+    const homeBlowout = isLateGame && (homeScore - awayScore) >= 21;
+    const awayBlowout = isLateGame && (awayScore - homeScore) >= 21;
+    const restStarters = (roster: Player[], isBlowout: boolean) => {
+      if (!isBlowout) return roster;
+      return roster.map(p => {
+        // Top players (OVR 70+) get benched — reduce their effective OVR
+        // This simulates backups playing, which naturally produces fewer stats for starters
+        if (p.ratings.overall >= 70) {
+          return { ...p, ratings: { ...p.ratings, overall: Math.round(p.ratings.overall * 0.65) } };
+        }
+        return p;
+      });
+    };
+
     // Home offense drives — scoring fatigue: teams with big leads run the clock
     const homePlan = userGamePlan?.userTeamSide === 'home' ? userGamePlan.plan : undefined;
-    const homeDrive = simulateDrive(effectiveHomeRoster, effectiveAwayRoster, mcafeeMode, rivalryIntensity, homePlan);
+    const homeDrive = simulateDrive(restStarters(effectiveHomeRoster, homeBlowout), restStarters(effectiveAwayRoster, awayBlowout), mcafeeMode, rivalryIntensity, homePlan);
     const homeStall = homeScore >= 42 ? 0.7 : homeScore >= 35 ? 0.35 : homeScore >= 28 && (homeScore - awayScore) >= 21 ? 0.2 : 0;
     const homePoints = homeStall > 0 && Math.random() < homeStall ? 0 : homeDrive.points;
     homeScore += homePoints;
@@ -804,7 +822,7 @@ export function simulateGame(
 
     // Away offense drives — same scoring fatigue
     const awayPlan = userGamePlan?.userTeamSide === 'away' ? userGamePlan.plan : undefined;
-    const awayDrive = simulateDrive(effectiveAwayRoster, effectiveHomeRoster, mcafeeMode, rivalryIntensity, awayPlan);
+    const awayDrive = simulateDrive(restStarters(effectiveAwayRoster, awayBlowout), restStarters(effectiveHomeRoster, homeBlowout), mcafeeMode, rivalryIntensity, awayPlan);
     const awayStall = awayScore >= 42 ? 0.7 : awayScore >= 35 ? 0.35 : awayScore >= 28 && (awayScore - homeScore) >= 21 ? 0.2 : 0;
     const awayPoints = awayStall > 0 && Math.random() < awayStall ? 0 : awayDrive.points;
     awayScore += awayPoints;
@@ -970,6 +988,23 @@ export function simulateGame(
         const s = ensure(playerStats, play.punter.id);
         s.puntAttempts = (s.puntAttempts ?? 0) + 1;
         s.puntYards = (s.puntYards ?? 0) + (play.puntYards ?? 0);
+      }
+    }
+    // Count snaps: each play credits snaps to the key participants
+    for (const play of plays) {
+      const participants = [play.passer, play.rusher, play.receiver, play.tackler, play.sacker, play.interceptor, play.passDefender, play.kicker, play.punter].filter(Boolean);
+      for (const p of participants) {
+        if (p && rosterIds.has(p.id)) {
+          ensure(playerStats, p.id).snaps = (ensure(playerStats, p.id).snaps ?? 0) + 1;
+        }
+      }
+      // OL get a snap for every offensive play
+      if (play.type === 'pass' || play.type === 'rush' || play.type === 'sack') {
+        for (const p of rosterList) {
+          if (p.position === 'OL' && (!p.injury || p.injury.weeksLeft === 0) && rosterIds.has(p.id)) {
+            ensure(playerStats, p.id).snaps = (ensure(playerStats, p.id).snaps ?? 0) + 1;
+          }
+        }
       }
     }
     // Mark gamesPlayed for all healthy roster players

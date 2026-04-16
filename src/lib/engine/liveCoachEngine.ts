@@ -543,8 +543,10 @@ export function createLiveCoachEngine(
       const qbName = nameOrFallback(offKey().qb, 'the QB');
       const loss = 1 + Math.floor(Math.random() * 2); // -1 or -2
       events.push(makeEvent('run', `🧎 ${qbName} takes a knee.`, -loss, false));
+      state.fieldPos = Math.max(1, state.fieldPos - loss);
+      state.yardsToGo += loss;
       advanceClock(40);
-      advanceDown(-loss);
+      advanceDown();
       checkQuarterEnd(events);
       // OT end checks
       if (state.overtime && state.homeScore !== state.awayScore) endGame(events);

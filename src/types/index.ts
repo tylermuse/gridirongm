@@ -236,6 +236,8 @@ export interface PlayerStats {
   puntReturns: number;
   puntReturnYards: number;
   puntReturnTDs: number;
+  // Snap tracking
+  snaps: number;
 }
 
 /** Per-year contract breakdown used for restructured contracts */
@@ -1123,6 +1125,7 @@ export function emptyStats(): PlayerStats {
     puntAttempts: 0, puntYards: 0, puntsInside20: 0, touchbacks: 0,
     kickReturns: 0, kickReturnYards: 0, kickReturnTDs: 0,
     puntReturns: 0, puntReturnYards: 0, puntReturnTDs: 0,
+    snaps: 0,
   };
 }
 
