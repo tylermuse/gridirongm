@@ -146,6 +146,15 @@ export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, timeoutsRe
                   ← Back to Punt / FG
                 </button>
               )}
+              {/* FG option on any down when in range (fieldPos >= 55 = ~62 yard attempt) */}
+              {!isFourthDown && state.fieldPos >= 55 && (
+                <button
+                  onClick={() => onPlayCall('field_goal')}
+                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg text-white font-bold text-xs bg-green-600 hover:bg-green-700 transition-colors"
+                >
+                  <span>🥅</span> <span>Kick Field Goal ({100 - state.fieldPos + 17} yds)</span>
+                </button>
+              )}
               {(() => {
                 const [min] = state.timeStr.split(':').map(Number);
                 const isLate = (state.quarter === 2 || state.quarter === 4 || state.quarter >= 5) && min < 2;

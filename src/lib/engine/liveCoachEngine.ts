@@ -525,8 +525,8 @@ export function createLiveCoachEngine(
       }
     }
 
-    // User 4th down override
-    if (state.down === 4 && userCall === 'field_goal') {
+    // User field goal — allowed on any down when user explicitly calls it
+    if (userCall === 'field_goal') {
       runFieldGoal(events);
       checkQuarterEnd(events);
       return events;
