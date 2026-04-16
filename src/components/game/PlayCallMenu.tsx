@@ -18,6 +18,8 @@ interface PlayCallMenuProps {
   isFourthDown: boolean;
   /** True when the engine is waiting for XP/2PT choice after a user TD */
   awaitingXpChoice?: boolean;
+  /** True when the engine is waiting for kickoff choice (regular vs onside) */
+  awaitingKickoffChoice?: boolean;
   /** Timeouts remaining for the user's team */
   timeoutsRemaining?: number;
   onPlayCall: (type: PlayCallType) => void;
@@ -37,7 +39,9 @@ export type PlayCallType =
   | 'timeout'
   | 'field_goal'
   | 'go_for_it'
-  | 'kneel';
+  | 'kneel'
+  | 'onside_kick'
+  | 'regular_kick';
 
 const PLAY_BUTTONS: { type: PlayCallType; label: string; icon: string; color: string }[] = [
   { type: 'run', label: 'Run', icon: '🏃', color: 'bg-orange-600 hover:bg-orange-700' },
@@ -47,7 +51,7 @@ const PLAY_BUTTONS: { type: PlayCallType; label: string; icon: string; color: st
   { type: 'screen', label: 'Screen', icon: '🛡️', color: 'bg-teal-600 hover:bg-teal-700' },
 ];
 
-export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, timeoutsRemaining, onPlayCall, onAutoSimRest, onToggleOff }: PlayCallMenuProps) {
+export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingKickoffChoice, timeoutsRemaining, onPlayCall, onAutoSimRest, onToggleOff }: PlayCallMenuProps) {
   const [goingForIt, setGoingForIt] = useState(false);
 
   function downLabel(down: number, yardsToGo: number): string {
@@ -85,7 +89,23 @@ export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, timeoutsRe
 
         {/* Play buttons */}
         <div className="px-3 py-3">
-          {awaitingXpChoice ? (
+          {awaitingKickoffChoice ? (
+            <div className="space-y-1.5">
+              <div className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-2">🏈 Kickoff — Choose:</div>
+              <button
+                onClick={() => onPlayCall('regular_kick')}
+                className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs bg-blue-600 hover:bg-blue-700 transition-colors"
+              >
+                🏈 Regular Kickoff
+              </button>
+              <button
+                onClick={() => onPlayCall('onside_kick')}
+                className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-white font-bold text-xs bg-red-600 hover:bg-red-700 transition-colors"
+              >
+                🎲 Onside Kick (15% recovery)
+              </button>
+            </div>
+          ) : awaitingXpChoice ? (
             <div className="space-y-1.5">
               <div className="text-xs font-bold text-amber-600 uppercase tracking-wider mb-2">🏆 Touchdown! Choose:</div>
               <button

@@ -31,6 +31,8 @@ export interface LiveEngineState {
   overtime: boolean;
   /** When true, the engine is waiting for an XP/2PT choice after a user TD */
   awaitingXpChoice: boolean;
+  /** When true, the engine is waiting for a kickoff choice (regular vs onside) */
+  awaitingKickoffChoice: boolean;
   /** Timeouts remaining per team per half */
   homeTimeouts: number;
   awayTimeouts: number;
@@ -126,6 +128,7 @@ export function createLiveCoachEngine(
   const state: LiveEngineState = {
     ...initialState,
     awaitingXpChoice: initialState.awaitingXpChoice ?? false,
+    awaitingKickoffChoice: initialState.awaitingKickoffChoice ?? false,
     homeTimeouts: initialState.homeTimeouts ?? 3,
     awayTimeouts: initialState.awayTimeouts ?? 3,
   };
@@ -217,6 +220,22 @@ export function createLiveCoachEngine(
   }
 
   function doKickoffEvents(events: PlayEvent[]) {
+    // Check if user should get the onside kick option:
+    // - User's team is kicking (possession is about to switch TO opponent)
+    // - Under 3 minutes in Q4 or OT
+    // - User is trailing or tied
+    const isUserKicking = state.possession === userSide;
+    const isLate = (state.quarter >= 4 || state.overtime) && state.timeSecs <= 180;
+    const userScore = userSide === 'home' ? state.homeScore : state.awayScore;
+    const oppScore = userSide === 'home' ? state.awayScore : state.homeScore;
+    const isTrailingOrTied = userScore <= oppScore;
+
+    if (isUserKicking && isLate && isTrailingOrTied) {
+      state.awaitingKickoffChoice = true;
+      // Don't do the kickoff yet — wait for user's choice
+      return;
+    }
+
     events.push(makeEvent('kickoff', 'Kickoff fielded at the 25.', 0, false, 25));
     switchPossession(25);
   }
@@ -476,6 +495,31 @@ export function createLiveCoachEngine(
   function runOnePlay(userCall?: PlayCallType): PlayEvent[] {
     const events: PlayEvent[] = [];
     if (state.isGameOver) return events;
+
+    // Handle kickoff choice (regular vs onside) if awaiting
+    if (state.awaitingKickoffChoice) {
+      state.awaitingKickoffChoice = false;
+      if (userCall === 'onside_kick') {
+        // Onside kick: ~15% success rate in the NFL
+        const recovered = Math.random() < 0.15;
+        if (recovered) {
+          events.push(makeEvent('kickoff', '🏈 ONSIDE KICK — RECOVERED! The kicking team has the ball!', 0, false, 45));
+          state.fieldPos = 45; // Recovered around midfield
+          state.down = 1;
+          state.yardsToGo = 10;
+          // Don't switch possession — kicking team keeps it
+        } else {
+          events.push(makeEvent('kickoff', '🏈 Onside kick attempt — not recovered. Opponent takes over with great field position.', 0, false, 45));
+          switchPossession(55); // Opponent gets it near midfield
+        }
+        return events;
+      } else {
+        // Regular kickoff (default)
+        events.push(makeEvent('kickoff', 'Kickoff fielded at the 25.', 0, false, 25));
+        switchPossession(25);
+        return events;
+      }
+    }
 
     // Handle XP/2PT choice first if awaiting
     if (state.awaitingXpChoice) {
