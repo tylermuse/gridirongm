@@ -3233,6 +3233,26 @@ export const useGameStore = create<GameStore>()(
         const userTeam = state.teams.find(t => t.id === state.userTeamId);
         if (!userTeam) return;
 
+        // Check if user has been fired BEFORE any offseason moves happen.
+        // GMs get fired at the end of a season, not after they've already
+        // started making offseason decisions.
+        const userApprovalVal = userTeam?.approval?.ownerApproval ?? 50;
+        if (userApprovalVal <= 0) {
+          set({
+            firedState: {
+              fired: true,
+              season: state.season,
+              reason: 'Owner lost patience after repeated underperformance.',
+            },
+            newsItems: [...state.newsItems, makeNews({
+              season: state.season, week: 99, type: 'system',
+              headline: `${userTeam.city} ownership has fired the GM after a disastrous tenure. Your time is up.`,
+              isUserTeam: true,
+            })],
+          });
+          return; // Block offseason — user must choose next steps
+        }
+
         // Process retirements BEFORE re-signing so retired players' cap is freed up
         const retiredIds = new Set<string>();
         const retirementNews: NewsItem[] = [];
@@ -3452,20 +3472,6 @@ export const useGameStore = create<GameStore>()(
           return { ...t, approval: updated };
         });
 
-        // Check if user has been fired (approval dropped to 0)
-        const userFinalTeam = finalTeams.find(t => t.id === state.userTeamId);
-        const userApprovalVal = userFinalTeam?.approval?.ownerApproval ?? 50;
-        let firedState: LeagueState['firedState'] = null;
-        if (userApprovalVal <= 0) {
-          firedState = { fired: true, season: state.season, reason: 'Owner lost patience after repeated underperformance.' };
-          approvalNews.push(makeNews({
-            season: state.season, week: 99, type: 'system',
-            headline: `${userFinalTeam?.city ?? 'Team'} ownership has fired the GM after a disastrous tenure. Your time is up.`,
-            isUserTeam: true,
-          }));
-        }
-
-        // God mode play doesn't count toward awards or rankings
         set({
           phase: 'resigning',
           resigningPlayers,
@@ -3474,7 +3480,6 @@ export const useGameStore = create<GameStore>()(
           players: playersAfterRetirement,
           newsItems: [...state.newsItems, ...retirementNews, ...holdoutNews, ...approvalNews],
           seasonHistory: updatedSeasonHistory,
-          ...(firedState ? { firedState } : {}),
         });
 
         // Sync GM stats to leaderboard (post-playoffs, no draft data yet)
