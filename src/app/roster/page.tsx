@@ -1034,7 +1034,7 @@ export default function RosterPage() {
                 </button>
               </>
             )}
-            {p.contract.yearsLeft >= 2 && !p.holdout && !p.onIR && p.lastRestructuredSeason !== season && (
+            {p.contract.yearsLeft >= 1 && !p.holdout && !p.onIR && p.lastRestructuredSeason !== season && (
               <>
                 <div className="border-t border-[var(--border)] mx-3 my-0.5" />
                 <button

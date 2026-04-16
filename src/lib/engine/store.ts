@@ -5499,7 +5499,7 @@ export const useGameStore = create<GameStore>()(
         if (!player || player.teamId !== state.userTeamId) return false;
 
         // Eligibility checks
-        if (player.contract.yearsLeft < 2) return false;
+        if (player.contract.yearsLeft < 1) return false;
         if (player.holdout) return false;
         if (player.onIR) return false;
         if ((state.extensionsUsedThisSeason ?? 0) >= 3) return false;

@@ -351,7 +351,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
             )}
 
             {/* Extend Contract */}
-            {isOnUserTeam && !player.retired && player.contract.yearsLeft >= 2 && !player.holdout && player.lastRestructuredSeason !== season && !extensionNeg && (() => {
+            {isOnUserTeam && !player.retired && player.contract.yearsLeft >= 1 && !player.holdout && player.lastRestructuredSeason !== season && !extensionNeg && (() => {
               const extensionsUsed = (useGameStore.getState() as unknown as Record<string, unknown>).extensionsUsedThisSeason as number | undefined;
               return (extensionsUsed ?? 0) < 3;
             })() && (
