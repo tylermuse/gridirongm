@@ -316,13 +316,15 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       ...team,
       roster: rosterIds,
       totalPayroll: Math.round((payrollByTeamId.get(team.id) ?? 0) * 10) / 10,
-      draftPicks: [1, 2, 3, 4, 5, 6, 7].map((round) => ({
-        id: uuid(),
-        year: season,
-        round,
-        originalTeamId: team.id,
-        ownerTeamId: team.id,
-      })),
+      draftPicks: [season, season + 1, season + 2].flatMap((yr) =>
+        [1, 2, 3, 4, 5, 6, 7].map((round) => ({
+          id: uuid(),
+          year: yr,
+          round,
+          originalTeamId: team.id,
+          ownerTeamId: team.id,
+        })),
+      ),
       depthChart,
       deadCap: [],
       franchiseTagUsed: false,

@@ -216,8 +216,12 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
               ) : (
                 <span className="text-sm text-[var(--text-sec)]">Expiring contract</span>
               )}
-              <span className={`text-sm ${potentialColor(player.potential, player.experience)}`}>
+              <span
+                className={`text-sm ${potentialColor(player.potential, player.experience)}`}
+                title={player.potential < player.ratings.overall ? `Decline phase — ${player.firstName} has reached his ceiling and his potential will gradually decrease as he ages.` : `Potential ceiling: ${player.potential} OVR`}
+              >
                 POT: {potentialLabel(player.potential, player.experience)}
+                {player.potential < player.ratings.overall && <span className="ml-1 text-orange-500" title="Decline phase">📉</span>}
               </span>
 
               {player.mood !== undefined && (() => {
