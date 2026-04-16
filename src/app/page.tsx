@@ -36,7 +36,7 @@ function TeamPicker() {
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
   const [savedGame, setSavedGame] = useState<{ teamAbbr: string; season: number; wins: number; losses: number; phase: string } | null>(null);
   const [resumeLoading, setResumeLoading] = useState(false);
-  const [startMode] = useState<'offseason' | 'regular'>('offseason');
+  const [startMode, setStartMode] = useState<'offseason' | 'regular'>('offseason');
   const [bsModePreselect, setBsModePreselect] = useState(false);
   const [teamSearch, setTeamSearch] = useState('');
   const autoLoadedRef = useRef(false);
@@ -317,6 +317,35 @@ function TeamPicker() {
         </div>
       ) : (
         <>
+        {/* Start Mode toggle — only relevant when importing real-roster league */}
+        {activeUrl && (
+          <div className="w-full max-w-md mb-4 flex items-center gap-2">
+            <span className="text-xs font-medium text-[var(--text-sec)] mr-2">Start in:</span>
+            <button
+              onClick={() => setStartMode('offseason')}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
+                startMode === 'offseason'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-[var(--surface)] text-[var(--text-sec)] border-[var(--border)] hover:border-blue-400'
+              }`}
+            >
+              Offseason
+              <div className="text-[10px] font-normal opacity-80">Re-sign → Draft → FA</div>
+            </button>
+            <button
+              onClick={() => setStartMode('regular')}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
+                startMode === 'regular'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-[var(--surface)] text-[var(--text-sec)] border-[var(--border)] hover:border-blue-400'
+              }`}
+            >
+              Regular Season
+              <div className="text-[10px] font-normal opacity-80">Skip to Week 1</div>
+            </button>
+          </div>
+        )}
+
         <input
           type="text"
           placeholder="Search teams..."
