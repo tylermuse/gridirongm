@@ -42,6 +42,30 @@ const POSITION_SALARY_CEILING: Partial<Record<Position, number>> = {
   // QB intentionally uncapped — base curve already ceilings at ~$55M
 };
 
+/** Upper bound on what any player can reasonably command given their OVR,
+ *  independent of the league's cap space. Prevents the exploit where a team
+ *  with tons of cap space signs a 30 OVR scrub to $500M/yr (BmoreOriole
+ *  Discord report). Returns the max AAV in $M (pre cap-inflation). */
+export function maxReasonableAAV(overall: number, position?: Position, capInflation = 1.0): number {
+  const ovr = Math.max(30, Math.min(99, overall));
+  let cap: number;
+  if (ovr < 40) cap = 2;        // camp body — never more than 2× minimum
+  else if (ovr < 50) cap = 4;   // deep bench
+  else if (ovr < 55) cap = 8;   // backup
+  else if (ovr < 60) cap = 14;  // low-end starter
+  else if (ovr < 65) cap = 20;  // solid starter
+  else if (ovr < 70) cap = 26;  // good starter
+  else if (ovr < 75) cap = 34;  // above-average — position ceiling starts biting
+  else if (ovr < 80) cap = 42;  // Pro Bowl — position ceiling takes over
+  else cap = 60;                // elite — position ceiling is the real limit
+
+  // Apply the position hard ceiling too (the tighter of the two wins).
+  const posCap = position ? POSITION_SALARY_CEILING[position] : undefined;
+  if (posCap !== undefined) cap = Math.min(cap, posCap);
+
+  return cap * capInflation;
+}
+
 /** Base cap the salary curve was designed for */
 const BASE_CAP = DEFAULT_LEAGUE_SETTINGS.salaryCap; // 300
 

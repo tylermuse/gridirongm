@@ -21,7 +21,7 @@ import { simulateGame, generateBettingLine } from './simulate';
 import { developPlayers, POSITION_AGING } from './development';
 import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
-import { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
+import { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor, maxReasonableAAV } from './salary';
 import { generateCoachingStaff, generateCoach, generatePositionCoaches, backfillCoachHistory, coachingBonus, progressCoaches, processCoachingCarousel, positionCoachDevMultiplier, rollOwnerPersonality } from './coaching';
 import { computeLeagueQBTiers, getQBTierModifier } from './qbTierPyramid';
 import { generateSeasonObjectives, evaluateObjectives } from './objectives';
@@ -5301,6 +5301,18 @@ export const useGameStore = create<GameStore>()(
         // Allow minimum salary signings even when over cap
         if (!isMinimumSalary && userTeam && userTeam.totalPayroll + salary > userTeam.salaryCap) {
           return false;
+        }
+        // Contract-floor guard: cap AAV by OVR so a 30 OVR scrub can't be
+        // signed to $500M. The market wouldn't accept that in reality, and
+        // the cap-space check above doesn't catch it. (BmoreOriole report.)
+        const prospect = state.players.find(p => p.id === playerId);
+        if (prospect && userTeam) {
+          const ci = capInflationFactor(userTeam.salaryCap);
+          const maxForOvr = maxReasonableAAV(prospect.ratings.overall, prospect.position, ci);
+          if (salary > maxForOvr * 1.5) {
+            console.warn(`[signFreeAgent] Rejected — ${Math.round(salary * 10) / 10}M/yr exceeds max ${Math.round(maxForOvr * 1.5 * 10) / 10}M for ${prospect.ratings.overall} OVR ${prospect.position}`);
+            return false;
+          }
         }
         // 53-man roster limit (when enabled — default true)
         const rosterLimitOn = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).rosterLimitEnabled !== false;
