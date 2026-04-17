@@ -5330,9 +5330,12 @@ export const useGameStore = create<GameStore>()(
         const prospect = state.players.find(p => p.id === playerId);
         if (prospect && userTeam) {
           const ci = capInflationFactor(userTeam.salaryCap);
-          const maxForOvr = maxReasonableAAV(prospect.ratings.overall, prospect.position, ci);
+          const maxForOvr = maxReasonableAAV(prospect.ratings.overall, prospect.position, ci, prospect.subPosition);
           if (salary > maxForOvr * 2) {
-            return `Offer $${Math.round(salary * 10) / 10}M/yr is too high for a ${prospect.ratings.overall} OVR ${prospect.position}. Max: ~$${Math.round(maxForOvr * 2 * 10) / 10}M/yr.`;
+            const posLabel = prospect.subPosition && prospect.subPosition !== prospect.position
+              ? `${prospect.subPosition}`
+              : prospect.position;
+            return `Offer $${Math.round(salary * 10) / 10}M/yr is too high for a ${prospect.ratings.overall} OVR ${posLabel}. Max: ~$${Math.round(maxForOvr * 2 * 10) / 10}M/yr.`;
           }
         }
         // 53-man roster limit (when enabled — default true)

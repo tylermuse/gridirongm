@@ -2,7 +2,7 @@
  * Shared salary estimation logic.
  * Extracted to its own module to avoid circular dependencies between store.ts and playerGen.ts.
  */
-import type { Position } from '@/types';
+import type { Position, SubPosition } from '@/types';
 import { DEFAULT_LEAGUE_SETTINGS } from '@/types';
 
 export const LEAGUE_MINIMUM_SALARY = DEFAULT_LEAGUE_SETTINGS.leagueMinSalary;
@@ -27,26 +27,50 @@ const POSITION_SALARY_MULTIPLIER: Partial<Record<Position, number>> = {
   P: 0.12,
 };
 
-/** Hard ceilings (per-year, before cap inflation) by position. Catches the
- *  long-tail elite-OVR + high-cap-inflation case where multiplier alone can
- *  still produce a $60M+ OL contract (BmoreOriole Discord report). */
+/** Hard ceilings (per-year, before cap inflation) by position. Calibrated
+ *  against 2025–26 NFL top-paid AAV per Over The Cap (April 2026 research).
+ *  Expressed in $M at the $300M base cap — capInflation scales them with
+ *  cap growth in later seasons. */
 const POSITION_SALARY_CEILING: Partial<Record<Position, number>> = {
-  OL: 30,    // OT elite cap ~$28M AAV in real NFL; allow a slight cushion
-  CB: 25,    // top CBs ~$22-24M AAV
-  S: 22,
-  LB: 22,
-  TE: 22,
-  DL: 38,    // top edge rushers ~$35M
-  WR: 42,    // top WRs ~$40M
-  RB: 22,
-  // QB intentionally uncapped — base curve already ceilings at ~$55M
+  QB: 60,    // Dak Prescott peaked at $60M AAV
+  WR: 41,    // Ja'Marr Chase $40.25M top
+  DL: 46,    // EDGE top (Parsons $46.5M) — SubPosition override trims DT down
+  CB: 32,    // McDuffie $31M top — was 25M (too tight, Tyler flagged)
+  OL: 30,    // OT top (Slater $28.5M) — SubPosition override trims OG/C down
+  TE: 20,    // Kittle $19.1M top — was 22 (slightly generous)
+  LB: 22,    // Warner $21M off-ball top; real market has a big cliff
+  S: 22,     // Kerby Joseph $21.5M top
+  RB: 21,    // Barkley $20.6M top
+  K: 6,      // K/P handled by their existing explicit caps below
+  P: 6,
 };
+
+/** Sub-position overrides that take priority over the broad position cap.
+ *  Fixes the "all DL = $46M / all OL = $30M" taxonomy problem — interior DL
+ *  tops at $32M, OG at $24M, OC at $18M. */
+const SUB_POSITION_SALARY_CEILING: Partial<Record<SubPosition, number>> = {
+  EDGE: 46,  // Parsons $46.5M
+  DT: 32,    // Chris Jones $31.75M
+  OT: 30,    // Slater $28.5M — slight cushion
+  OG: 24,    // Tyler Smith $24M
+  C: 18,     // Creed Humphrey $18M
+  // LB/DB/RB sub-positions mostly align to parent position market; no override.
+};
+
+/** Resolve the tighter of the broad Position ceiling and the SubPosition
+ *  override. SubPosition wins when set (e.g. an EDGE DL uses $46M, a DT
+ *  uses $32M, an OT uses $30M while a C uses $18M). */
+function resolveCeiling(position?: Position, subPosition?: SubPosition): number | undefined {
+  const subCap = subPosition ? SUB_POSITION_SALARY_CEILING[subPosition] : undefined;
+  if (subCap !== undefined) return subCap;
+  return position ? POSITION_SALARY_CEILING[position] : undefined;
+}
 
 /** Upper bound on what any player can reasonably command given their OVR,
  *  independent of the league's cap space. Prevents the exploit where a team
  *  with tons of cap space signs a 30 OVR scrub to $500M/yr (BmoreOriole
  *  Discord report). Returns the max AAV in $M (pre cap-inflation). */
-export function maxReasonableAAV(overall: number, position?: Position, capInflation = 1.0): number {
+export function maxReasonableAAV(overall: number, position?: Position, capInflation = 1.0, subPosition?: SubPosition): number {
   const ovr = Math.max(30, Math.min(99, overall));
   let cap: number;
   if (ovr < 40) cap = 2;        // camp body — never more than 2× minimum
@@ -60,7 +84,7 @@ export function maxReasonableAAV(overall: number, position?: Position, capInflat
   else cap = 60;                // elite — position ceiling is the real limit
 
   // Apply the position hard ceiling too (the tighter of the two wins).
-  const posCap = position ? POSITION_SALARY_CEILING[position] : undefined;
+  const posCap = resolveCeiling(position, subPosition);
   if (posCap !== undefined) cap = Math.min(cap, posCap);
 
   return cap * capInflation;
@@ -79,8 +103,9 @@ export function capInflationFactor(currentCap: number): number {
  * @param capInflation  Ratio of current salary cap to the base cap (e.g. 420/300 = 1.4).
  *                      Pass `currentCap / 300` to scale salaries with cap growth.
  *                      Defaults to 1.0 (no scaling — backwards compatible).
+ * @param subPosition   Optional — enables EDGE vs DT, OT vs OG vs C ceilings.
  */
-export function estimateSalary(overall: number, position?: Position, age?: number, potential?: number, capInflation = 1.0): number {
+export function estimateSalary(overall: number, position?: Position, age?: number, potential?: number, capInflation = 1.0, subPosition?: SubPosition): number {
   // Piecewise salary curve tuned to pro reality:
   //   40 OVR → league min (~$0.75M)  — practice squad / camp body
   //   50 OVR → ~$2M                  — depth / backup
@@ -169,9 +194,10 @@ export function estimateSalary(overall: number, position?: Position, age?: numbe
 
   // Apply position-specific hard ceiling BEFORE cap inflation, so the cap
   // grows naturally with the league cap rather than locking a fixed dollar
-  // amount across decades.
-  if (position && POSITION_SALARY_CEILING[position] !== undefined) {
-    salary = Math.min(salary, POSITION_SALARY_CEILING[position]!);
+  // amount across decades. SubPosition (EDGE/DT/OT/OG/C) overrides when set.
+  const resolvedCeiling = resolveCeiling(position, subPosition);
+  if (resolvedCeiling !== undefined) {
+    salary = Math.min(salary, resolvedCeiling);
   }
 
   // Scale with cap inflation — salaries grow as the cap grows
