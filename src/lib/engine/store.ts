@@ -33,7 +33,7 @@ import { checkDisciplineEvents, disciplineNewsItems, tickSuspensions } from './d
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 
-const SAVE_VERSION = 23;
+const SAVE_VERSION = 24;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
@@ -8720,6 +8720,50 @@ export const useGameStore = create<GameStore>()(
           for (const team of (state as any).teams ?? []) {
             if (!team.ownerPersonality) {
               team.ownerPersonality = rollOwnerPersonality();
+            }
+          }
+        }
+        if (version < 24) {
+          // Repair SEA/SF player assignments that were baked into saves
+          // before the roster JSON was corrected (tofftanaut Discord report).
+          // Matches by (firstName, lastName) → correct team abbreviation.
+          const ROSTER_CORRECTIONS: Record<string, string> = {
+            'Leonard|Williams': 'SEA',
+            'AJ|Barner': 'SEA',
+            'Tyrice|Knight': 'SEA',
+            'Nehemiah|Pritchett': 'SEA',
+            'Chris|Paul Jr.': 'SEA',
+            'Byron|Murphy II': 'SEA',
+            'Alex|Leatherwood': 'SF',
+            'Yetur|Gross-Matos': 'SF',
+          };
+          const teams24 = ((state as any).teams ?? []) as Array<Record<string, unknown>>;
+          const abbrToId24 = new Map<string, string>();
+          for (const t of teams24) {
+            abbrToId24.set(t.abbreviation as string, t.id as string);
+          }
+          const players24 = ((state as any).players ?? []) as Array<Record<string, unknown>>;
+          for (const p of players24) {
+            const key = `${p.firstName}|${p.lastName}`;
+            const targetAbbr = ROSTER_CORRECTIONS[key];
+            if (!targetAbbr) continue;
+            const targetTeamId = abbrToId24.get(targetAbbr);
+            if (!targetTeamId) continue;
+            const oldTeamId = p.teamId as string | null;
+            if (oldTeamId === targetTeamId) continue;
+            p.teamId = targetTeamId;
+            for (const t of teams24) {
+              const rosterArr = t.roster as string[] | undefined;
+              if (rosterArr && rosterArr.includes(p.id as string) && t.id !== targetTeamId) {
+                t.roster = rosterArr.filter(rid => rid !== (p.id as string));
+              }
+            }
+            const newTeam = teams24.find(t => t.id === targetTeamId);
+            if (newTeam) {
+              const rosterArr = (newTeam.roster as string[] | undefined) ?? [];
+              if (!rosterArr.includes(p.id as string)) {
+                newTeam.roster = [...rosterArr, p.id as string];
+              }
             }
           }
         }

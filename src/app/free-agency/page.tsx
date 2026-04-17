@@ -146,16 +146,6 @@ function FAEvaluationPanel({ player, roster, capSpace, marketSalary }: {
 export default function FreeAgencyPage() {
   const { phase, players, freeAgents, signFreeAgent, teams, userTeamId, faDay, faRefusals, advanceFADay, advanceFAWeek, pursuitState, intelReportFA, scoutingLevel } = useGameStore();
 
-  // Auto-initialize pursuitState for existing saves that entered FA before this feature
-  if (phase === 'freeAgency' && !pursuitState) {
-    useGameStore.setState({
-      pursuitState: {
-        pursuitPoints: 5 + (scoutingLevel || 0) * 3,
-        maxPursuitPoints: 11,
-        intelReports: {},
-      },
-    });
-  }
   // Also support regular season FA (no pursuit during regular season)
   const effectivePursuitState = phase === 'freeAgency' ? (pursuitState ?? { pursuitPoints: 5, maxPursuitPoints: 11, intelReports: {} }) : null;
 
@@ -171,12 +161,41 @@ export default function FreeAgencyPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const msgFeedRef = useRef<HTMLDivElement>(null);
 
+  // Auto-initialize pursuitState for existing saves that entered FA before
+  // this feature was added. Done in an effect (not during render) so React
+  // doesn't see a side-effect mid-render.
+  useEffect(() => {
+    if (phase === 'freeAgency' && !pursuitState) {
+      useGameStore.setState({
+        pursuitState: {
+          pursuitPoints: 5 + (scoutingLevel || 0) * 3,
+          maxPursuitPoints: 11,
+          intelReports: {},
+        },
+      });
+    }
+  }, [phase, pursuitState, scoutingLevel]);
+
   // Auto-scroll message feed to bottom when new messages arrive
   useEffect(() => {
     if (msgFeedRef.current && negotiation?.messages.length) {
       msgFeedRef.current.scrollTop = msgFeedRef.current.scrollHeight;
     }
   }, [negotiation?.messages.length]);
+
+  // Auto-dismiss rejected negotiations after 2 seconds and block re-negotiation.
+  // Declared with all other hooks — the early return below would otherwise
+  // trip React's hook-order rule (#310) when the page mounts while phase
+  // isn't yet 'freeAgency' and then transitions into it.
+  useEffect(() => {
+    if (negotiation?.outcome === 'rejected') {
+      const timer = setTimeout(() => {
+        setWalkedAwayIds(prev => new Set(prev).add(negotiation.playerId));
+        setNegotiation(null);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [negotiation?.outcome, negotiation?.playerId]);
 
   // Allow free agent signings during regular season and freeAgency phase (teams can sign FAs anytime)
   const canSignFreeAgents = phase === 'freeAgency' || phase === 'regular';
@@ -316,17 +335,6 @@ export default function FreeAgencyPage() {
       setTimeout(() => setNegotiation(null), 1500);
     }
   }
-
-  // Auto-dismiss rejected negotiations after 2 seconds and block re-negotiation
-  React.useEffect(() => {
-    if (negotiation?.outcome === 'rejected') {
-      const timer = setTimeout(() => {
-        setWalkedAwayIds(prev => new Set(prev).add(negotiation.playerId));
-        setNegotiation(null);
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [negotiation?.outcome, negotiation?.playerId]);
 
   function walkAway() {
     if (negotiation) {
