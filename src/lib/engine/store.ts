@@ -95,7 +95,9 @@ interface GameStore extends LeagueState {
   advanceToFreeAgency: () => void;
   advanceFADay: () => void;
   advanceFAWeek: () => void;
-  signFreeAgent: (playerId: string, salary: number, years: number) => boolean;
+  /** Returns empty string on success, or a specific error reason. Use `!!result`
+   *  to check for failure; the string contents are suitable for display. */
+  signFreeAgent: (playerId: string, salary: number, years: number) => string;
   aiSignFreeAgents: () => void;
   releasePlayer: (playerId: string) => void;
   /** Cut all teams (or one team if id supplied) down to the 53-man roster
@@ -5316,20 +5318,21 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         const userTeam = state.teams.find(t => t.id === state.userTeamId);
         const isMinimumSalary = salary <= LEAGUE_MINIMUM_SALARY;
+        const capSpace = userTeam ? Math.round((userTeam.salaryCap - userTeam.totalPayroll) * 10) / 10 : 0;
         // Allow minimum salary signings even when over cap
         if (!isMinimumSalary && userTeam && userTeam.totalPayroll + salary > userTeam.salaryCap) {
-          return false;
+          return `Offer $${Math.round(salary * 10) / 10}M/yr exceeds your $${capSpace}M cap space. Drop salary or cut a player.`;
         }
         // Contract-floor guard: cap AAV by OVR so a 30 OVR scrub can't be
-        // signed to $500M. The market wouldn't accept that in reality, and
-        // the cap-space check above doesn't catch it. (BmoreOriole report.)
+        // signed to $500M. (BmoreOriole report.) 2x multiplier so users have
+        // plenty of "overpay headroom" — a 30 OVR scrub maxes at ~$4M, which
+        // is still absurd but kills the $500M exploit.
         const prospect = state.players.find(p => p.id === playerId);
         if (prospect && userTeam) {
           const ci = capInflationFactor(userTeam.salaryCap);
           const maxForOvr = maxReasonableAAV(prospect.ratings.overall, prospect.position, ci);
-          if (salary > maxForOvr * 1.5) {
-            console.warn(`[signFreeAgent] Rejected — ${Math.round(salary * 10) / 10}M/yr exceeds max ${Math.round(maxForOvr * 1.5 * 10) / 10}M for ${prospect.ratings.overall} OVR ${prospect.position}`);
-            return false;
+          if (salary > maxForOvr * 2) {
+            return `Offer $${Math.round(salary * 10) / 10}M/yr is too high for a ${prospect.ratings.overall} OVR ${prospect.position}. Max: ~$${Math.round(maxForOvr * 2 * 10) / 10}M/yr.`;
           }
         }
         // 53-man roster limit (when enabled — default true)
@@ -5337,8 +5340,7 @@ export const useGameStore = create<GameStore>()(
         if (rosterLimitOn && userTeam) {
           const userRosterCount = state.players.filter(p => p.teamId === state.userTeamId && !p.retired).length;
           if (userRosterCount >= 53) {
-            console.warn('[signFreeAgent] Rejected — user team is at 53-man limit. Cut a player first.');
-            return false;
+            return 'Roster is full (53 players). Cut someone before signing.';
           }
         }
 
@@ -5464,7 +5466,7 @@ export const useGameStore = create<GameStore>()(
           get().advanceFADay();
         }
 
-        return true;
+        return ''; // success
       },
 
       /** AI teams sign free agents — standalone version for non-user-triggered signings */

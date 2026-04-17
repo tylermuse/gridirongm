@@ -321,13 +321,14 @@ export default function FreeAgencyPage() {
     setNegotiation(updated);
     // If accepted, sign the player
     if (updated.outcome === 'accepted') {
-      const success = signFreeAgent(updated.playerId, updated.currentOfferSalary, updated.currentOfferYears);
-      if (!success) {
-        // Over cap and salary too high — override outcome to show rejection
+      const error = signFreeAgent(updated.playerId, updated.currentOfferSalary, updated.currentOfferYears);
+      if (error) {
+        // Signing blocked — surface the specific reason so users know
+        // whether it's a cap, roster, or ask-too-high issue.
         setNegotiation({
           ...updated,
           outcome: 'rejected',
-          messages: [...updated.messages, { sender: 'system', text: `Signing blocked — salary $${updated.currentOfferSalary}M exceeds cap space. You can only sign at league minimum ($${LEAGUE_MINIMUM_SALARY}M/yr) while over the cap.`, type: 'negative' }],
+          messages: [...updated.messages, { sender: 'system', text: `Signing blocked — ${error}`, type: 'negative' }],
         });
         return;
       }
