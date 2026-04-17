@@ -447,7 +447,27 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           </button>
           {confirmReset ? (
             <button
-              onClick={async () => { resetLeague(); setConfirmReset(false); await flushToStorage(); router.push('/'); }}
+              onClick={async () => {
+                // Explicit nuke: in-memory reset, persisted-state wipe, then a
+                // hard navigation so the homepage mounts fresh and can't see
+                // any rehydrated remnants of the old league.
+                resetLeague();
+                setConfirmReset(false);
+                try {
+                  await flushToStorage();
+                  // Belt-and-suspenders: also clear the persist middleware's
+                  // own storage record so onRehydrateStorage can't bring back
+                  // the old userTeamId on a future load.
+                  await (useGameStore as unknown as { persist?: { clearStorage?: () => Promise<void> | void } })
+                    .persist?.clearStorage?.();
+                } catch (err) {
+                  console.error('[New League] storage clear failed', err);
+                }
+                // Hard navigate (not router.push) so React/Zustand don't
+                // carry over any in-memory state from the previous mount —
+                // some users were getting routed back to their old team.
+                window.location.href = '/';
+              }}
               className="flex-1 text-xs py-1.5 rounded-lg bg-red-600/20 text-red-600 hover:bg-red-600/30 transition-colors"
             >
               Confirm?

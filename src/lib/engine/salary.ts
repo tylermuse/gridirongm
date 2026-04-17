@@ -17,14 +17,29 @@ const POSITION_SALARY_MULTIPLIER: Partial<Record<Position, number>> = {
   QB: 1.15,
   WR: 0.85,
   DL: 0.75,
-  OL: 0.60,
-  CB: 0.50,
+  OL: 0.55,
+  CB: 0.45,
   TE: 0.45,
   LB: 0.40,
   S: 0.40,
   RB: 0.65,
   K: 0.15,
   P: 0.12,
+};
+
+/** Hard ceilings (per-year, before cap inflation) by position. Catches the
+ *  long-tail elite-OVR + high-cap-inflation case where multiplier alone can
+ *  still produce a $60M+ OL contract (BmoreOriole Discord report). */
+const POSITION_SALARY_CEILING: Partial<Record<Position, number>> = {
+  OL: 30,    // OT elite cap ~$28M AAV in real NFL; allow a slight cushion
+  CB: 25,    // top CBs ~$22-24M AAV
+  S: 22,
+  LB: 22,
+  TE: 22,
+  DL: 38,    // top edge rushers ~$35M
+  WR: 42,    // top WRs ~$40M
+  RB: 22,
+  // QB intentionally uncapped — base curve already ceilings at ~$55M
 };
 
 /** Base cap the salary curve was designed for */
@@ -126,6 +141,13 @@ export function estimateSalary(overall: number, position?: Position, age?: numbe
   if (potential !== undefined && age !== undefined && age <= 27) {
     const potentialBonus = Math.max(0, potential - overall) * 0.15;
     salary += potentialBonus;
+  }
+
+  // Apply position-specific hard ceiling BEFORE cap inflation, so the cap
+  // grows naturally with the league cap rather than locking a fixed dollar
+  // amount across decades.
+  if (position && POSITION_SALARY_CEILING[position] !== undefined) {
+    salary = Math.min(salary, POSITION_SALARY_CEILING[position]!);
   }
 
   // Scale with cap inflation — salaries grow as the cap grows

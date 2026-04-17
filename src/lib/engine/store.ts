@@ -14,7 +14,7 @@ import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTI
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { NFL_2026_FIRST_ROUND, isNfl2026Roster, type MockDraftPick } from '@/lib/data/nfl2026Draft';
-import { generateRoster, generateDraftClass, generatePlayer, generateCombineStats, recalculateOvr } from './playerGen';
+import { generateRoster, generateDraftClass, generatePlayer, generateCombineStats, recalculateOvr, generateCollegeStats } from './playerGen';
 import { resetUsedNames } from '../data/names';
 import { generateSchedule } from './schedule';
 import { simulateGame, generateBettingLine } from './simulate';
@@ -33,7 +33,7 @@ import { checkDisciplineEvents, disciplineNewsItems, tickSuspensions } from './d
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 
-const SAVE_VERSION = 24;
+const SAVE_VERSION = 25;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
@@ -8766,6 +8766,38 @@ export const useGameStore = create<GameStore>()(
               }
             }
           }
+        }
+        if (version < 25) {
+          // Backfill college stats + Heisman flags on draft prospects in
+          // existing saves. Without this, leagues created before the Apr 16
+          // college-stats feature shipped would never see the badges
+          // (305mike Discord report).
+          const players25 = ((state as any).players ?? []) as Array<Record<string, unknown>>;
+          const prospects = players25.filter(p =>
+            (p.experience as number) === 0 &&
+            !p.draftYear &&
+            !p.retired
+          );
+          for (const p of prospects) {
+            if (!p.collegeStats) {
+              const seed = (p.scoutingSeed as number) ?? Math.floor(Math.random() * 10000);
+              p.collegeStats = generateCollegeStats(
+                p.position as Parameters<typeof generateCollegeStats>[0],
+                ((p.ratings as { overall?: number })?.overall) ?? 60,
+                seed,
+              );
+            }
+          }
+          // Heisman: top 3 skill-position prospects flagged as finalists,
+          // top one as winner.
+          const skillCandidates = prospects
+            .filter(p => ['QB', 'RB', 'WR', 'TE'].includes(p.position as string))
+            .sort((a, b) => ((b.ratings as { overall: number })?.overall ?? 0) - ((a.ratings as { overall: number })?.overall ?? 0))
+            .slice(0, 3);
+          for (const p of skillCandidates) {
+            p.heismanFinalist = true;
+          }
+          if (skillCandidates[0]) skillCandidates[0].heismanWinner = true;
         }
         return state;
       },
