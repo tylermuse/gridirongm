@@ -990,7 +990,14 @@ export interface LeagueState {
   /** NFL 2026 hardcoded first-round mock draft (empty if not NFL roster or past first draft) */
   nflMockDraft?: { pickNum: number; teamAbbr: string; playerId: string; firstName: string; lastName: string; position: string; college: string; blurb: string }[];
   /** Game plan for the user team's NEXT regular-season game. Cleared after that game is simulated. */
-  nextGamePlan?: { passRate: number; aggressiveness: 'conservative' | 'balanced' | 'aggressive'; redZoneStrategy: 'run' | 'balanced' | 'pass' };
+  nextGamePlan?: {
+    passRate: number;
+    aggressiveness: 'conservative' | 'balanced' | 'aggressive';
+    redZoneStrategy: 'run' | 'balanced' | 'pass';
+    blitzRate?: number;
+    coverage?: 'man' | 'zone' | 'balanced';
+    tempo?: 'fast' | 'normal' | 'slow';
+  };
   /** Per-position scouting preview of the upcoming draft class. Generated at trade deadline. */
   draftClassPreview?: {
     season: number;

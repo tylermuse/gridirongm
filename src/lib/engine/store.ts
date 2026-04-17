@@ -58,7 +58,14 @@ interface GameStore extends LeagueState {
   newLeague: (teamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular') => Promise<void>;
   resetLeague: () => void;
   /** Set the game plan for the user team's NEXT regular-season game. Cleared when that week is simmed. */
-  setNextGamePlan: (plan: { passRate: number; aggressiveness: 'conservative' | 'balanced' | 'aggressive'; redZoneStrategy: 'run' | 'balanced' | 'pass' } | null) => void;
+  setNextGamePlan: (plan: {
+    passRate: number;
+    aggressiveness: 'conservative' | 'balanced' | 'aggressive';
+    redZoneStrategy: 'run' | 'balanced' | 'pass';
+    blitzRate?: number;
+    coverage?: 'man' | 'zone' | 'balanced';
+    tempo?: 'fast' | 'normal' | 'slow';
+  } | null) => void;
   /** Generate the draft class preview if it doesn't already exist for the current season. */
   ensureDraftClassPreview: () => void;
   simWeek: () => void;
@@ -100,6 +107,7 @@ interface GameStore extends LeagueState {
   placeOnIR: (playerId: string) => void;
   activateFromIR: (playerId: string) => void;
   togglePlayingThroughInjury: (playerId: string) => void;
+  setBaseFormation: (formation: '3-4' | '4-3' | 'Nickel') => void;
   startNewSeason: () => void;
   // PRD-04: Trades
   executeTrade: (
@@ -2188,7 +2196,17 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     const rivalryIntensity = rivalry?.intensity ?? 0;
 
     // Apply user's pre-game plan (only for the user's game)
-    let userGamePlan: { plan: { passRate: number; aggressiveness: 'conservative' | 'balanced' | 'aggressive'; redZoneStrategy: 'run' | 'balanced' | 'pass' }; userTeamSide: 'home' | 'away' } | undefined;
+    let userGamePlan: {
+      plan: {
+        passRate: number;
+        aggressiveness: 'conservative' | 'balanced' | 'aggressive';
+        redZoneStrategy: 'run' | 'balanced' | 'pass';
+        blitzRate?: number;
+        coverage?: 'man' | 'zone' | 'balanced';
+        tempo?: 'fast' | 'normal' | 'slow';
+      };
+      userTeamSide: 'home' | 'away'
+    } | undefined;
     if (state.nextGamePlan && (game.homeTeamId === state.userTeamId || game.awayTeamId === state.userTeamId)) {
       userGamePlan = {
         plan: state.nextGamePlan,
@@ -5724,6 +5742,16 @@ export const useGameStore = create<GameStore>()(
         set({
           players: state.players.map(p =>
             p.id === playerId ? { ...p, onIR: false } : p,
+          ),
+        });
+      },
+
+      setBaseFormation: (formation: '3-4' | '4-3' | 'Nickel') => {
+        const state = get();
+        if (!state.userTeamId) return;
+        set({
+          teams: state.teams.map(t =>
+            t.id === state.userTeamId ? { ...t, baseFormation: formation } : t,
           ),
         });
       },

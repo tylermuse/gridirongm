@@ -245,7 +245,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                   </span>
                 )}
                 <span title={nextGamePlan
-                  ? `Plan: ${100 - nextGamePlan.passRate}R/${nextGamePlan.passRate}P · ${nextGamePlan.aggressiveness} · RZ ${nextGamePlan.redZoneStrategy}`
+                  ? `Plan: ${100 - nextGamePlan.passRate}R/${nextGamePlan.passRate}P · ${nextGamePlan.aggressiveness} · RZ ${nextGamePlan.redZoneStrategy}${nextGamePlan.blitzRate !== undefined ? ` · Blitz ${nextGamePlan.blitzRate}%` : ''}${nextGamePlan.coverage ? ` · ${nextGamePlan.coverage}` : ''}`
                   : 'Set a default game plan that applies to every simmed game'}>
                   <Button
                     onClick={() => setShowGamePlanModal(true)}

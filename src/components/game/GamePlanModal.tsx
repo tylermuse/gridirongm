@@ -5,10 +5,19 @@ import { Button } from '@/components/ui/Button';
 
 type Aggressiveness = 'conservative' | 'balanced' | 'aggressive';
 type RedZoneStrategy = 'run' | 'balanced' | 'pass';
+type Coverage = 'man' | 'zone' | 'balanced';
+type Tempo = 'fast' | 'normal' | 'slow';
 
 interface GamePlanModalProps {
   opponentName: string;
-  onConfirm: (plan: { passRate: number; aggressiveness: Aggressiveness; redZoneStrategy: RedZoneStrategy }) => void;
+  onConfirm: (plan: {
+    passRate: number;
+    aggressiveness: Aggressiveness;
+    redZoneStrategy: RedZoneStrategy;
+    blitzRate: number;
+    coverage: Coverage;
+    tempo: Tempo;
+  }) => void;
   onCancel: () => void;
 }
 
@@ -16,9 +25,12 @@ export function GamePlanModal({ opponentName, onConfirm, onCancel }: GamePlanMod
   const [passRate, setPassRate] = useState(57); // default ~NFL avg
   const [aggressiveness, setAggressiveness] = useState<Aggressiveness>('balanced');
   const [redZoneStrategy, setRedZoneStrategy] = useState<RedZoneStrategy>('balanced');
+  const [blitzRate, setBlitzRate] = useState(50);
+  const [coverage, setCoverage] = useState<Coverage>('balanced');
+  const [tempo, setTempo] = useState<Tempo>('normal');
 
   function handleConfirm() {
-    onConfirm({ passRate, aggressiveness, redZoneStrategy });
+    onConfirm({ passRate, aggressiveness, redZoneStrategy, blitzRate, coverage, tempo });
   }
 
   function getPassRateLabel(rate: number): string {
@@ -117,6 +129,85 @@ export function GamePlanModal({ opponentName, onConfirm, onCancel }: GamePlanMod
               {redZoneStrategy === 'balanced' && 'Inside the 20: no override. Mix it up like the rest of the field.'}
               {redZoneStrategy === 'pass' && 'Inside the 20: throw it. Fade routes, slants, RPO.'}
             </p>
+          </div>
+
+          <div className="border-t border-[var(--border)] pt-4 -mx-5 px-5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-3">Defense</h3>
+
+            {/* Blitz Rate */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-[var(--text)]">Blitz Rate</label>
+                <span className="text-xs font-bold text-red-600">
+                  {blitzRate <= 25 ? 'Rarely' : blitzRate <= 45 ? 'Light' : blitzRate <= 55 ? 'Standard' : blitzRate <= 75 ? 'Heavy' : 'Full-Out'} · {blitzRate}%
+                </span>
+              </div>
+              <input
+                type="range" min="0" max="100" step="5"
+                value={blitzRate}
+                onChange={(e) => setBlitzRate(parseInt(e.target.value, 10))}
+                className="w-full accent-red-600"
+              />
+              <p className="text-[10px] text-[var(--text-sec)] mt-1 italic">Higher = more sacks AND more big plays surrendered.</p>
+            </div>
+
+            {/* Coverage */}
+            <div className="mb-4">
+              <label className="text-xs font-semibold text-[var(--text)] block mb-2">Coverage</label>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { key: 'zone', label: 'Zone' },
+                  { key: 'balanced', label: 'Balanced' },
+                  { key: 'man', label: 'Man' },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setCoverage(opt.key)}
+                    className={`px-2 py-2 rounded-lg text-xs font-bold transition-colors ${
+                      coverage === opt.key
+                        ? 'bg-red-600 text-white'
+                        : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-[var(--text-sec)] mt-1.5 italic">
+                {coverage === 'zone' && 'Fewer INTs, tighter vs big plays, more YAC allowed.'}
+                {coverage === 'balanced' && 'Mix of man and zone concepts.'}
+                {coverage === 'man' && 'More INTs, tighter vs short routes, more big plays allowed.'}
+              </p>
+            </div>
+
+            {/* Tempo */}
+            <div>
+              <label className="text-xs font-semibold text-[var(--text)] block mb-2">Offensive Tempo</label>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { key: 'slow', label: 'Milk Clock' },
+                  { key: 'normal', label: 'Normal' },
+                  { key: 'fast', label: 'Up-Tempo' },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setTempo(opt.key)}
+                    className={`px-2 py-2 rounded-lg text-xs font-bold transition-colors ${
+                      tempo === opt.key
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-[var(--text-sec)] mt-1.5 italic">
+                {tempo === 'slow' && 'Long drives, shortened clock. Suits a strong defense.'}
+                {tempo === 'normal' && 'League-average tempo.'}
+                {tempo === 'fast' && 'More possessions per game. Suits a strong offense.'}
+              </p>
+            </div>
           </div>
         </div>
 

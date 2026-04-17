@@ -185,6 +185,15 @@ export interface GamePlan {
    *  'pass' = go for the throw (favor passing inside the 20),
    *  'balanced' = no override. */
   redZoneStrategy: 'run' | 'balanced' | 'pass';
+  /** 0-100 — defensive blitz rate. Higher → more sacks, also more big plays
+   *  surrendered (broken coverage). 50 = league-average (~30% blitz). */
+  blitzRate?: number;
+  /** Coverage preference. 'man' → better against short routes, worse against
+   *  speed. 'zone' → gives up YAC but prevents big plays. 'balanced' = mix. */
+  coverage?: 'man' | 'zone' | 'balanced';
+  /** Offensive tempo. 'fast' = more plays per drive + less huddle; 'slow' =
+   *  clock-milking; 'normal' = league average. Affects possession count. */
+  tempo?: 'fast' | 'normal' | 'slow';
 }
 
 // ── Play types ──────────────────────────────────────────────────────────────
@@ -222,6 +231,7 @@ function simulatePlay(
   fieldPosition: number, // yards from own end zone (0-100)
   rivalryIntensity: number = 0,
   gamePlan?: GamePlan,
+  defGamePlan?: GamePlan,
 ): PlayResult {
   const qbs = offense.filter(p => p.position === 'QB' && playerAvailable(p));
   const rbs = offense.filter(p => p.position === 'RB' && playerAvailable(p));
@@ -367,7 +377,11 @@ function simulatePlay(
     // ── Sack check ──
     // NFL avg ~6.3% of dropbacks result in sack. Elite rusher ~10-16 sacks/season, avg DL 3-7.
     // Reduced base and tighter scaling so 60-rated DL doesn't approach 10 sacks.
-    const sackChance = clamp((dlPower - olPower) / 600 + 0.04, 0.018, 0.07);
+    // Defensive blitz slider: 0 → 0.7x sack rate (rarely blitz), 100 → 1.4x.
+    const blitzMult = defGamePlan?.blitzRate !== undefined
+      ? 0.7 + (defGamePlan.blitzRate / 100) * 0.7
+      : 1.0;
+    const sackChance = clamp(((dlPower - olPower) / 600 + 0.04) * blitzMult, 0.015, 0.10);
     if (Math.random() < sackChance) {
       const sackYards = -(3 + Math.floor(Math.random() * 6));
       // Sack distribution: EDGE/DE ~55%, DT ~15%, LB ~25%, DB ~5%
@@ -428,8 +442,12 @@ function simulatePlay(
     const baseIntRate = 0.022;
     const intAggressivenessMult = gamePlan?.aggressiveness === 'aggressive' ? 1.4 :
                                    gamePlan?.aggressiveness === 'conservative' ? 0.75 : 1.0;
+    // Man coverage → more INTs but also more big plays surrendered (below).
+    // Zone coverage → fewer INTs but tighter YAC.
+    const manIntMult = defGamePlan?.coverage === 'man' ? 1.2 :
+                       defGamePlan?.coverage === 'zone' ? 0.85 : 1.0;
     const intChance = clamp(
-      (baseIntRate * (1.3 - qbIntRating / 100) + (coverageRating - qb.ratings.throwing) / 900) * intAggressivenessMult,
+      (baseIntRate * (1.3 - qbIntRating / 100) + (coverageRating - qb.ratings.throwing) / 900) * intAggressivenessMult * manIntMult,
       0.006, 0.05,
     );
     if (Math.random() < intChance) {
@@ -619,6 +637,7 @@ function simulateDrive(
   mcafeeMode: boolean = false,
   rivalryIntensity: number = 0,
   gamePlan?: GamePlan,
+  defGamePlan?: GamePlan,
 ): DriveResult {
   const plays: PlayResult[] = [];
   let fieldPosition = 25 + Math.floor(Math.random() * 12); // NFL avg start ~own 27-30
@@ -630,7 +649,7 @@ function simulateDrive(
   // Combined with the 25-37 starting field position, drives that sustain to
   // play 10 reach the red zone and can score via the goal-line boost.
   for (let playNum = 0; playNum < 10; playNum++) {
-    const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition, rivalryIntensity, gamePlan);
+    const play = simulatePlay(offense, defense, down, yardsToGo, fieldPosition, rivalryIntensity, gamePlan, defGamePlan);
     plays.push(play);
 
     if (play.touchdown) {
@@ -872,9 +891,12 @@ export function simulateGame(
       });
     };
 
-    // Home offense drives — scoring fatigue: teams with big leads run the clock
+    // Home offense drives — scoring fatigue: teams with big leads run the clock.
+    // The user's gameplan applies to both sides of the ball — their offense
+    // uses the offensive sliders, their defense uses the defensive sliders.
     const homePlan = userGamePlan?.userTeamSide === 'home' ? userGamePlan.plan : undefined;
-    const homeDrive = simulateDrive(restStarters(effectiveHomeRoster, homeBlowout), restStarters(effectiveAwayRoster, awayBlowout), mcafeeMode, rivalryIntensity, homePlan);
+    const awayDefPlan = userGamePlan?.userTeamSide === 'away' ? userGamePlan.plan : undefined;
+    const homeDrive = simulateDrive(restStarters(effectiveHomeRoster, homeBlowout), restStarters(effectiveAwayRoster, awayBlowout), mcafeeMode, rivalryIntensity, homePlan, awayDefPlan);
     const homeStall = homeScore >= 42 ? 0.7 : homeScore >= 35 ? 0.35 : homeScore >= 28 && (homeScore - awayScore) >= 21 ? 0.2 : 0;
     const homePoints = homeStall > 0 && Math.random() < homeStall ? 0 : homeDrive.points;
     homeScore += homePoints;
@@ -885,7 +907,8 @@ export function simulateGame(
 
     // Away offense drives — same scoring fatigue
     const awayPlan = userGamePlan?.userTeamSide === 'away' ? userGamePlan.plan : undefined;
-    const awayDrive = simulateDrive(restStarters(effectiveAwayRoster, awayBlowout), restStarters(effectiveHomeRoster, homeBlowout), mcafeeMode, rivalryIntensity, awayPlan);
+    const homeDefPlan = userGamePlan?.userTeamSide === 'home' ? userGamePlan.plan : undefined;
+    const awayDrive = simulateDrive(restStarters(effectiveAwayRoster, awayBlowout), restStarters(effectiveHomeRoster, homeBlowout), mcafeeMode, rivalryIntensity, awayPlan, homeDefPlan);
     const awayStall = awayScore >= 42 ? 0.7 : awayScore >= 35 ? 0.35 : awayScore >= 28 && (awayScore - homeScore) >= 21 ? 0.2 : 0;
     const awayPoints = awayStall > 0 && Math.random() < awayStall ? 0 : awayDrive.points;
     awayScore += awayPoints;

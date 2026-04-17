@@ -133,6 +133,7 @@ export default function RosterPage() {
     players, teams, userTeamId, season, champions,
     releasePlayer, placeOnIR, activateFromIR,
     togglePlayingThroughInjury,
+    setBaseFormation,
     reorderDepthChart, restructureContract, extendPlayer,
     solicitTradingBlockProposals, createPlayer,
     autoCutToRosterLimit,
@@ -814,6 +815,127 @@ export default function RosterPage() {
         {/* ── DEPTH CHART VIEW ── */}
         {viewMode === 'depth' && (
           <div className="space-y-4">
+            {/* Base formation picker + starting lineup */}
+            {isViewingOwnTeam && (
+              <Card>
+                <div className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">Starting Lineup</div>
+                      <div className="text-[11px] text-[var(--text-sec)] mt-0.5">Your base formation determines which slots fill from the depth chart below.</div>
+                    </div>
+                    <select
+                      value={userTeam?.baseFormation ?? '4-3'}
+                      onChange={(e) => setBaseFormation(e.target.value as '3-4' | '4-3' | 'Nickel')}
+                      className="text-xs font-bold bg-[var(--surface-2)] border border-[var(--border)] rounded px-2 py-1 focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="4-3">Base: 4-3</option>
+                      <option value="3-4">Base: 3-4</option>
+                      <option value="Nickel">Base: Nickel</option>
+                    </select>
+                  </div>
+                  {(() => {
+                    const formation = userTeam?.baseFormation ?? '4-3';
+                    // Offense: same across formations.
+                    const offenseSlots: { label: string; pos: Position; idx: number }[] = [
+                      { label: 'QB', pos: 'QB', idx: 0 },
+                      { label: 'RB', pos: 'RB', idx: 0 },
+                      { label: 'WR1', pos: 'WR', idx: 0 },
+                      { label: 'WR2', pos: 'WR', idx: 1 },
+                      { label: 'TE', pos: 'TE', idx: 0 },
+                      { label: 'LT', pos: 'OL', idx: 0 },
+                      { label: 'LG', pos: 'OL', idx: 1 },
+                      { label: 'C',  pos: 'OL', idx: 2 },
+                      { label: 'RG', pos: 'OL', idx: 3 },
+                      { label: 'RT', pos: 'OL', idx: 4 },
+                    ];
+                    // Defense: formation-specific slot counts.
+                    const defenseSlots: { label: string; pos: Position; idx: number }[] =
+                      formation === '3-4' ? [
+                        { label: 'LDE', pos: 'DL', idx: 0 },
+                        { label: 'NT',  pos: 'DL', idx: 1 },
+                        { label: 'RDE', pos: 'DL', idx: 2 },
+                        { label: 'LOLB', pos: 'LB', idx: 0 },
+                        { label: 'LILB', pos: 'LB', idx: 1 },
+                        { label: 'RILB', pos: 'LB', idx: 2 },
+                        { label: 'ROLB', pos: 'LB', idx: 3 },
+                        { label: 'LCB', pos: 'CB', idx: 0 },
+                        { label: 'RCB', pos: 'CB', idx: 1 },
+                        { label: 'FS',  pos: 'S',  idx: 0 },
+                        { label: 'SS',  pos: 'S',  idx: 1 },
+                      ] : formation === 'Nickel' ? [
+                        { label: 'LDE', pos: 'DL', idx: 0 },
+                        { label: 'LDT', pos: 'DL', idx: 1 },
+                        { label: 'RDT', pos: 'DL', idx: 2 },
+                        { label: 'RDE', pos: 'DL', idx: 3 },
+                        { label: 'WLB', pos: 'LB', idx: 0 },
+                        { label: 'MLB', pos: 'LB', idx: 1 },
+                        { label: 'LCB', pos: 'CB', idx: 0 },
+                        { label: 'RCB', pos: 'CB', idx: 1 },
+                        { label: 'NCB', pos: 'CB', idx: 2 },
+                        { label: 'FS',  pos: 'S',  idx: 0 },
+                        { label: 'SS',  pos: 'S',  idx: 1 },
+                      ] : [
+                        // 4-3 default
+                        { label: 'LDE', pos: 'DL', idx: 0 },
+                        { label: 'LDT', pos: 'DL', idx: 1 },
+                        { label: 'RDT', pos: 'DL', idx: 2 },
+                        { label: 'RDE', pos: 'DL', idx: 3 },
+                        { label: 'WLB', pos: 'LB', idx: 0 },
+                        { label: 'MLB', pos: 'LB', idx: 1 },
+                        { label: 'SLB', pos: 'LB', idx: 2 },
+                        { label: 'LCB', pos: 'CB', idx: 0 },
+                        { label: 'RCB', pos: 'CB', idx: 1 },
+                        { label: 'FS',  pos: 'S',  idx: 0 },
+                        { label: 'SS',  pos: 'S',  idx: 1 },
+                      ];
+
+                    const renderSlot = (slot: typeof offenseSlots[number]) => {
+                      const depthList = getDepthGroup(slot.pos);
+                      const player = depthList[slot.idx];
+                      return (
+                        <div key={slot.label} className="bg-[var(--surface-2)] rounded-md px-2 py-1.5 min-h-[2.5rem]">
+                          <div className="text-[9px] uppercase tracking-wider text-[var(--text-sec)] font-bold">{slot.label}</div>
+                          {player ? (
+                            <div className="flex items-center justify-between gap-1 mt-0.5">
+                              <button
+                                onClick={() => setSelectedPlayerId(player.id)}
+                                className="text-xs font-semibold hover:text-blue-600 truncate text-left"
+                              >
+                                {player.firstName[0]}. {player.lastName}
+                              </button>
+                              <span className={`text-[10px] font-bold ${ratingColor(player.ratings.overall)} shrink-0`}>
+                                {player.ratings.overall}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-red-600 italic mt-0.5">empty</div>
+                          )}
+                        </div>
+                      );
+                    };
+
+                    return (
+                      <div className="space-y-3">
+                        <div>
+                          <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase mb-1.5">Offense</div>
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                            {offenseSlots.map(renderSlot)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase mb-1.5">Defense ({formation})</div>
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                            {defenseSlots.map(renderSlot)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </Card>
+            )}
+
             <p className="text-xs text-[var(--text-sec)] hidden sm:block">
               Drag players to reorder the depth chart. Use ▲▼ buttons on mobile. ★ = All-League selection.
             </p>
