@@ -1064,7 +1064,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const engineSnapshot = liveCoachPaused && liveEngineRef.current ? liveEngineRef.current.getState() : null;
   const liveHomeScore = engineSnapshot?.homeScore ?? currentEvent?.homeScore ?? 0;
   const liveAwayScore = engineSnapshot?.awayScore ?? currentEvent?.awayScore ?? 0;
-  const liveQuarter = engineSnapshot?.quarter ?? currentEvent?.quarter ?? 1;
+  // Derive effective quarter — if the engine is in overtime but its quarter
+  // field wasn't updated (pre-fix engines set overtime=true but left quarter=4),
+  // bump the displayed quarter to 5 so the scoreboard shows "OT".
+  const rawEngineQuarter = engineSnapshot?.quarter ?? currentEvent?.quarter ?? 1;
+  const liveQuarter = (engineSnapshot?.overtime && rawEngineQuarter < 5) ? 5 : rawEngineQuarter;
   const liveTime = engineSnapshot
     ? `${Math.floor(engineSnapshot.timeSecs / 60)}:${String(engineSnapshot.timeSecs % 60).padStart(2, '0')}`
     : currentEvent?.timeStr ?? '15:00';
@@ -1760,7 +1764,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               <div className={`min-h-[22rem] ${liveCoachPaused ? '' : 'invisible pointer-events-none'}`}>
               <PlayCallMenu
                 state={{
-                  quarter: es.quarter,
+                  quarter: es.overtime && es.quarter < 5 ? 5 : es.quarter,
                   timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
                   homeScore: es.homeScore,
                   awayScore: es.awayScore,

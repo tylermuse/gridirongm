@@ -68,7 +68,7 @@ export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingKi
           <div className="flex items-center justify-between">
             <div className="text-sm font-black">Call the Play</div>
             <div className="text-right text-[10px] opacity-90">
-              <span>Q{state.quarter} · {state.timeStr}</span>
+              <span>{state.quarter >= 5 ? 'OT' : `Q${state.quarter}`} · {state.timeStr}</span>
               <span className="ml-2 font-bold">{state.awayAbbr} {state.awayScore} – {state.homeScore} {state.homeAbbr}</span>
             </div>
           </div>

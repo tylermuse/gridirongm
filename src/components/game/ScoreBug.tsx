@@ -125,7 +125,7 @@ export function ScoreBug({
             ) : (
               <>
                 <span className="text-[10px] font-bold text-[var(--text-sec)] uppercase">
-                  Q{quarter}
+                  {quarter >= 5 ? 'OT' : `Q${quarter}`}
                 </span>
                 <span className="text-sm font-mono font-bold text-[var(--text)] tabular-nums">
                   {timeStr}

@@ -40,6 +40,14 @@ export interface LiveEngineState {
   /** Seconds of post-play runoff owed to the next play. Zeroed out by a timeout
    *  so the next snap only burns play-time, not the between-plays clock runoff. */
   pendingRunoff?: number;
+  /** Number of OT possessions that have completed. Real NFL playoff OT gives
+   *  both teams a possession before sudden death; this counter enables that
+   *  (sudden-death scoring-ends-game only fires once >= 2). */
+  otPossessionsCompleted?: number;
+  /** Whether the team currently with the ball has run at least one play in OT.
+   *  Used to avoid the initial OT kickoff's switchPossession accidentally
+   *  counting as a "completed possession". */
+  otPlayRunThisPossession?: boolean;
 }
 
 export interface LiveCoachEngine {
@@ -136,6 +144,8 @@ export function createLiveCoachEngine(
     homeTimeouts: initialState.homeTimeouts ?? 3,
     awayTimeouts: initialState.awayTimeouts ?? 3,
     pendingRunoff: initialState.pendingRunoff ?? 0,
+    otPossessionsCompleted: initialState.otPossessionsCompleted ?? 0,
+    otPlayRunThisPossession: initialState.otPlayRunThisPossession ?? false,
   };
   let nextEventId = 100000; // start high to avoid colliding with pre-computed event ids
 
@@ -180,10 +190,20 @@ export function createLiveCoachEngine(
   }
 
   function switchPossession(newFieldPos = 25) {
+    // When possession changes during OT AND the leaving team actually ran a
+    // play, they've completed a possession. Real NFL playoff OT requires both
+    // teams to get at least one possession before sudden-death ending. Checking
+    // otPlayRunThisPossession avoids counting the initial OT kickoff itself as
+    // a completed possession — that first kickoff is just the OT start, not a
+    // team finishing their turn.
+    if (state.overtime && state.otPlayRunThisPossession) {
+      state.otPossessionsCompleted = (state.otPossessionsCompleted ?? 0) + 1;
+    }
     state.possession = state.possession === 'home' ? 'away' : 'home';
     state.fieldPos = newFieldPos;
     state.down = 1;
     state.yardsToGo = 10;
+    state.otPlayRunThisPossession = false;
   }
 
   function addScore(points: number) {
@@ -208,8 +228,10 @@ export function createLiveCoachEngine(
       events.push(makeEvent('quarter_end', 'End of the fourth quarter.', 0, false));
       if (state.homeScore === state.awayScore) {
         state.overtime = true;
+        state.quarter = 5; // without this, OT events still label as Q4
         state.timeSecs = 600;
-        events.push(makeEvent('overtime', 'Overtime! First score wins.', 0, false));
+        state.otPossessionsCompleted = 0;
+        events.push(makeEvent('overtime', 'Overtime — both teams get a possession.', 0, false));
         doKickoffEvents(events);
       } else {
         endGame(events);
@@ -585,11 +607,13 @@ export function createLiveCoachEngine(
         // go for it (fall through to play call)
       } else if (state.fieldPos >= 55 && fgDist <= 55) {
         runFieldGoal(events);
+        if (state.overtime) state.otPlayRunThisPossession = true;
         checkTwoMinWarning(events);
         checkQuarterEnd(events);
         return events;
       } else {
         runPunt(events);
+        if (state.overtime) state.otPlayRunThisPossession = true;
         checkTwoMinWarning(events);
         checkQuarterEnd(events);
         return events;
@@ -599,12 +623,14 @@ export function createLiveCoachEngine(
     // User field goal — allowed on any down when user explicitly calls it
     if (userCall === 'field_goal') {
       runFieldGoal(events);
+      if (state.overtime) state.otPlayRunThisPossession = true;
       checkTwoMinWarning(events);
       checkQuarterEnd(events);
       return events;
     }
     if (state.down === 4 && userCall === 'punt') {
       runPunt(events);
+      if (state.overtime) state.otPlayRunThisPossession = true;
       checkTwoMinWarning(events);
       checkQuarterEnd(events);
       return events;
@@ -620,14 +646,17 @@ export function createLiveCoachEngine(
       state.yardsToGo += loss;
       advancePlayClock(40, 0);
       advanceDown();
+      if (state.overtime) state.otPlayRunThisPossession = true;
       checkTwoMinWarning(events);
       checkQuarterEnd(events);
-      // OT end checks
-      if (state.overtime && state.homeScore !== state.awayScore) endGame(events);
+      // OT end checks — sudden-death ending only after both teams completed a
+      // possession (real NFL playoff OT rules).
+      if (state.overtime && state.homeScore !== state.awayScore && (state.otPossessionsCompleted ?? 0) >= 2) endGame(events);
       if (state.overtime && state.timeSecs <= 0 && state.homeScore === state.awayScore) endGame(events);
       if (!state.overtime && !state.isGameOver && state.quarter === 4 && state.timeSecs <= 0 && state.homeScore === state.awayScore) {
         state.overtime = true; state.timeSecs = 600; state.quarter = 5;
-        events.push(makeEvent('overtime', 'Overtime! First score wins.', 0, false));
+        state.otPossessionsCompleted = 0;
+        events.push(makeEvent('overtime', 'Overtime — both teams get a possession.', 0, false));
         doKickoffEvents(events);
       }
       return events;
@@ -664,12 +693,13 @@ export function createLiveCoachEngine(
     else if (playType === 'pass_short') runPassPlay(events, 'short', callPrefix);
     else if (playType === 'pass_deep') runPassPlay(events, 'deep', callPrefix);
     else runPassPlay(events, 'screen', callPrefix);
+    if (state.overtime) state.otPlayRunThisPossession = true;
 
     checkTwoMinWarning(events);
     checkQuarterEnd(events);
 
-    // OT end check
-    if (state.overtime && state.homeScore !== state.awayScore) {
+    // OT end check — only sudden-death-end after both teams had a possession.
+    if (state.overtime && state.homeScore !== state.awayScore && (state.otPossessionsCompleted ?? 0) >= 2) {
       endGame(events);
     }
     if (state.overtime && state.timeSecs <= 0 && state.homeScore === state.awayScore) {
@@ -682,7 +712,8 @@ export function createLiveCoachEngine(
       state.overtime = true;
       state.timeSecs = 600;
       state.quarter = 5;
-      events.push(makeEvent('overtime', 'Overtime! First score wins.', 0, false));
+      state.otPossessionsCompleted = 0;
+      events.push(makeEvent('overtime', 'Overtime — both teams get a possession.', 0, false));
       doKickoffEvents(events);
     }
 
