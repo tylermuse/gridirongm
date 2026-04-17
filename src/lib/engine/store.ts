@@ -328,24 +328,33 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
         score *= 0.05; // Nearly eliminate chance of drafting surplus positions
       }
 
-      // QB premium: QBs are the most valuable position in football.
-      // Teams draft QBs early even with decent starters — the upside
-      // of a franchise QB is worth the investment.
+      // QB premium: QBs are the most valuable position in football. Teams
+      // draft QBs early and often — even with decent starters, they chase
+      // upside (see Jets/Patriots/Steelers picking QBs every year).
+      // Previous curve was too stingy once a team had a 78+ OVR starter;
+      // real NFL teams still draft dev/bridge QBs behind capable starters.
       if (prospect.position === 'QB') {
         const bestQB = roster.filter(p => p.position === 'QB').sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
         const qbOvr = bestQB?.ratings.overall ?? 0;
         if (count === 0) {
-          score += 200; // No QB — must draft one
+          score += 250; // No QB on roster — must draft one
         } else if (qbOvr < 60) {
-          score += 150; // Bad QB — strong upgrade motivation
-        } else if (qbOvr < 70) {
-          score += 80; // Below average — still worth upgrading
-        } else if (qbOvr < 78) {
-          // Average-to-good QB — draft if prospect is clearly better
-          score += prospect.ratings.overall > qbOvr ? 50 : 10;
+          score += 180; // Terrible QB — strong upgrade motivation
+        } else if (qbOvr < 68) {
+          score += 130; // Bad QB — still a priority
+        } else if (qbOvr < 75) {
+          score += 85; // Below average — "bridge QB" territory
+        } else if (qbOvr < 82) {
+          // Capable starter — still draft if the prospect has real upside.
+          // Potential gates this rather than current OVR.
+          const upsideBonus = prospect.potential >= 85 ? 65 :
+                              prospect.potential >= 80 ? 45 :
+                              prospect.ratings.overall > qbOvr ? 30 : 15;
+          score += upsideBonus;
         } else {
-          // Elite QB — only draft if at max roster QB count (handled above)
-          score *= 0.4;
+          // Elite QB (82+) — still draft a high-potential dev QB in later
+          // rounds; don't crush the score entirely.
+          score += prospect.potential >= 85 ? 35 : prospect.potential >= 80 ? 15 : 0;
         }
       }
 
@@ -3966,6 +3975,11 @@ export const useGameStore = create<GameStore>()(
             p.scoutingLabel = pick.blurb;
             p.scoutingSeed = p.scoutingSeed ?? Math.floor(Math.random() * 10000);
             p.combineStats = p.combineStats ?? generateCombineStats(p.position, p.ratings, pick.pick);
+            // Hardcoded NFL mock prospects (the `else` / newly-generated branch
+            // above) don't inherit college stats from generateDraftClass, so
+            // seed them here. Without this, top mock prospects like Bryce
+            // Underwood show no college-stats block on the draft card.
+            p.collegeStats = p.collegeStats ?? generateCollegeStats(p.position, p.ratings.overall, p.scoutingSeed);
             nflProspects.push(p);
 
             nflMockDraft.push({
