@@ -158,16 +158,22 @@ export function calcPasserRating(comp: number, att: number, yds: number, td: num
   return Math.round(((a + b + c + d) / 6) * 1000) / 10;
 }
 
+// Roster position caps aligned to real NFL 53-man construction:
+//   OL typically 9-10, DL 8-10, LB 6-8, WR 5-6. Undersized DL/OL/LB caps
+//   were starving the draft AI — imported rosters entered the draft
+//   already at/above the old max (7 DL, 8 OL, 6 LB), so the draft AI's
+//   "if count >= max, crush score" gate fired on every team and top DL
+//   prospects lingered to late rounds.
 export const ROSTER_LIMITS: Record<Position, { min: number; max: number }> = {
   QB: { min: 1, max: 3 },
   RB: { min: 2, max: 4 },
   WR: { min: 3, max: 6 },
   TE: { min: 1, max: 3 },
-  OL: { min: 5, max: 8 },
-  DL: { min: 4, max: 7 },
-  LB: { min: 3, max: 6 },
-  CB: { min: 3, max: 5 },
-  S: { min: 2, max: 4 },
+  OL: { min: 5, max: 10 },
+  DL: { min: 4, max: 10 },
+  LB: { min: 3, max: 8 },
+  CB: { min: 3, max: 6 },
+  S: { min: 2, max: 5 },
   K: { min: 1, max: 1 },
   P: { min: 1, max: 1 },
 };
