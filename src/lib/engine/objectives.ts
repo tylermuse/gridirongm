@@ -44,6 +44,11 @@ export function generateSeasonObjectives(
   } else {
     winTarget = 4 + Math.floor(Math.random() * 3); // 4-6
   }
+  // Owner personality shifts the win target up or down by one game.
+  //   win-now  → +1 (harder to satisfy)
+  //   frugal   → -1 (easier; owner isn't paying for a superteam)
+  if (team.ownerPersonality === 'win-now') winTarget += 1;
+  else if (team.ownerPersonality === 'frugal') winTarget = Math.max(3, winTarget - 1);
   objectives.push({
     id: uuid(),
     description: `Win ${winTarget} games`,

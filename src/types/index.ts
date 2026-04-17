@@ -349,6 +349,9 @@ export interface Player {
   collegeStats?: CollegeStats;
   /** Heisman winner flag (top prospect in the class) */
   heismanWinner?: boolean;
+  /** Heisman finalist flag (top ~3 offensive prospects in the class). The
+   *  winner is also a finalist — check heismanWinner first when rendering. */
+  heismanFinalist?: boolean;
   /** Height string e.g. "6'3\"" */
   height?: string;
   /** Weight in lbs */
@@ -503,6 +506,11 @@ export interface Team {
   franchiseTagUsed: boolean;
   /** Coaching staff (HC, OC, DC) */
   coaches?: Coach[];
+  /** Owner personality affecting expectations + financial appetite.
+   *    'frugal'   — low payroll tolerance, modest win targets, slow to fire
+   *    'balanced' — median expectations, default behavior
+   *    'win-now'  — aggressive win targets, quicker fire trigger, higher cap tolerance */
+  ownerPersonality?: 'frugal' | 'balanced' | 'win-now';
   /** BS Mode: Ewing Theory active */
   ewingTheory?: { injuredPlayerId: string; teamPowerBoost: number };
   /** Revenue breakdown (computed at start of each season) */

@@ -255,7 +255,28 @@ export default function StaffPage() {
   return (
     <GameShell>
       <div className="max-w-5xl mx-auto space-y-6">
-        <h2 className="text-2xl font-black">Coaching Staff</h2>
+        <div className="flex items-end justify-between gap-4 flex-wrap">
+          <h2 className="text-2xl font-black">Coaching Staff</h2>
+          {userTeam.ownerPersonality && (() => {
+            const op = userTeam.ownerPersonality;
+            const label = op === 'win-now' ? 'Win-Now' : op === 'frugal' ? 'Frugal' : 'Balanced';
+            const desc = op === 'win-now'
+              ? "Expects playoff contention every year — quick to fire if you miss win targets."
+              : op === 'frugal'
+              ? "Keeps payroll in check — patient with rebuilds, lower win expectations."
+              : "Tempered expectations. Win games, stay near the cap, keep the fans happy.";
+            const tone = op === 'win-now' ? 'bg-red-50 border-red-200 text-red-800'
+              : op === 'frugal' ? 'bg-blue-50 border-blue-200 text-blue-800'
+              : 'bg-[var(--surface-2)] border-[var(--border)] text-[var(--text)]';
+            return (
+              <div className={`text-xs px-3 py-2 rounded-lg border ${tone} max-w-sm`} title={desc}>
+                <span className="font-bold uppercase tracking-wider text-[10px] opacity-80">Owner</span>
+                <div className="font-bold">{label}</div>
+                <div className="text-[11px] opacity-90 leading-snug mt-0.5">{desc}</div>
+              </div>
+            );
+          })()}
+        </div>
 
         {coaches.length === 0 ? (
           <Card>

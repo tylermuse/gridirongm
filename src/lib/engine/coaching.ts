@@ -152,6 +152,15 @@ export function generatePositionCoaches(): Coach[] {
   ];
 }
 
+/** Roll an owner personality. Most franchises land in the middle; a third
+ *  skew frugal or win-now, evenly split. */
+export function rollOwnerPersonality(): 'frugal' | 'balanced' | 'win-now' {
+  const r = Math.random();
+  if (r < 0.2) return 'frugal';
+  if (r < 0.4) return 'win-now';
+  return 'balanced';
+}
+
 /**
  * Calculate the development rate multiplier from a team's position coach.
  * Returns 0.90-1.15 based on coach OVR. Empty slot = 0.90 penalty.

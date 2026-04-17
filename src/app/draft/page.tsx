@@ -461,9 +461,11 @@ function UnscoutedPanel({
       {/* Public blurb */}
       <div>
         <div className="flex flex-wrap gap-1 items-center">
-          {player.heismanWinner && (
-            <Badge variant="amber">Heisman Winner</Badge>
-          )}
+          {player.heismanWinner ? (
+            <Badge variant="amber">🏆 Heisman Winner</Badge>
+          ) : player.heismanFinalist ? (
+            <Badge variant="amber">🏆 Heisman Finalist</Badge>
+          ) : null}
           {player.scoutingLabel && (
             <Badge variant={
               player.scoutingLabel === 'Injury history' || player.scoutingLabel === 'Character concerns'
@@ -1691,6 +1693,11 @@ export default function DraftPage() {
                                 if (!tag) return null;
                                 return <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${tag.bg} ${tag.color} shrink-0`}>{tag.label}</span>;
                               })()}
+                              {player.heismanWinner ? (
+                                <span className="text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold shrink-0" title="Heisman Trophy winner">🏆 Heisman</span>
+                              ) : player.heismanFinalist ? (
+                                <span className="text-[9px] bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded font-semibold shrink-0" title="Heisman Finalist">🏆 Finalist</span>
+                              ) : null}
                             </div>
                             <div className="text-[10px] text-[var(--text-sec)] flex items-center gap-1 flex-wrap">
                               {player.college ?? player.scoutingLabel ?? 'Unranked'}

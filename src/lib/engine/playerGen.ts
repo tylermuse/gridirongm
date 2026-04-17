@@ -449,9 +449,11 @@ export function generateDraftClass(count: number, options?: { chaosDraft?: boole
   // Sort by OVR so pick order aligns with talent
   prospects.sort((a, b) => b.ratings.overall - a.ratings.overall);
 
-  // ── Heisman Trophy winner: highest-rated offensive player ──
-  const heismanCandidate = prospects.find(p => ['QB', 'RB', 'WR'].includes(p.position));
-  if (heismanCandidate) heismanCandidate.heismanWinner = true;
+  // ── Heisman finalists + winner: top offensive players ──
+  // Top 3 skill-position prospects are finalists, the top one wins.
+  const heismanCandidates = prospects.filter(p => ['QB', 'RB', 'WR', 'TE'].includes(p.position)).slice(0, 3);
+  heismanCandidates.forEach(p => { p.heismanFinalist = true; });
+  if (heismanCandidates[0]) heismanCandidates[0].heismanWinner = true;
 
   // ── Boom/Bust assignment ──
   // Position-aware bust rates (QBs/RBs bust most often).

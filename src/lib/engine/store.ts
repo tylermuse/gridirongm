@@ -22,7 +22,7 @@ import { developPlayers, POSITION_AGING } from './development';
 import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
-import { generateCoachingStaff, generateCoach, generatePositionCoaches, backfillCoachHistory, coachingBonus, progressCoaches, processCoachingCarousel, positionCoachDevMultiplier } from './coaching';
+import { generateCoachingStaff, generateCoach, generatePositionCoaches, backfillCoachHistory, coachingBonus, progressCoaches, processCoachingCarousel, positionCoachDevMultiplier, rollOwnerPersonality } from './coaching';
 import { computeLeagueQBTiers, getQBTierModifier } from './qbTierPyramid';
 import { generateSeasonObjectives, evaluateObjectives } from './objectives';
 import { defaultApproval, updateApprovalAfterGame, updateApprovalEndOfSeason, updateApprovalForMove } from './approval';
@@ -33,7 +33,7 @@ import { checkDisciplineEvents, disciplineNewsItems, tickSuspensions } from './d
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 
-const SAVE_VERSION = 22;
+const SAVE_VERSION = 23;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
@@ -2460,6 +2460,9 @@ export const useGameStore = create<GameStore>()(
             if (!team.coaches || team.coaches.length === 0) {
               team.coaches = generateCoachingStaff();
             }
+            if (!team.ownerPersonality) {
+              team.ownerPersonality = rollOwnerPersonality();
+            }
           }
           // Backfill coaching history for all coaches
           for (const team of imported.teams) {
@@ -2584,6 +2587,7 @@ export const useGameStore = create<GameStore>()(
             franchiseTagUsed: false,
             revenue: { tickets: 0, merchandise: 0, tvDeal: 0, total: 0 },
             coaches: generateCoachingStaff(),
+            ownerPersonality: rollOwnerPersonality(),
           };
         });
 
@@ -8709,6 +8713,14 @@ export const useGameStore = create<GameStore>()(
               }
             }
             (state as any).playoffInjuryRound = maxStartedRound >= 4 ? 5 : Math.max(1, maxStartedRound);
+          }
+        }
+        if (version < 23) {
+          // Roll an owner personality for any team that doesn't have one.
+          for (const team of (state as any).teams ?? []) {
+            if (!team.ownerPersonality) {
+              team.ownerPersonality = rollOwnerPersonality();
+            }
           }
         }
         return state;

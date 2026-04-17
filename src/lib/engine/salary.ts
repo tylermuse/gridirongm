@@ -7,15 +7,21 @@ import { DEFAULT_LEAGUE_SETTINGS } from '@/types';
 
 export const LEAGUE_MINIMUM_SALARY = DEFAULT_LEAGUE_SETTINGS.leagueMinSalary;
 
+// Position ceiling multipliers — tuned against 2025-26 NFL top-5 APY data:
+//   QB (~$55M) > WR/EDGE (~$40M) > OT/DT (~$28M) > CB (~$22M) >
+//   LB/S/TE/iOL (~$18-20M) > RB (~$18M, custom curve) > K/P (~$4M/$2.5M hard cap).
+// Community feedback (tofftanaut, Apr 16): LBs asking $40M+ was breaking
+// immersion — these multipliers cap that behavior at the top end while
+// preserving the base OVR curve for mid/low tier asks.
 const POSITION_SALARY_MULTIPLIER: Partial<Record<Position, number>> = {
-  QB: 1.45,
-  DL: 1.05,
-  WR: 0.95,
-  CB: 0.95,
-  OL: 0.95,
-  LB: 0.90,
-  S: 0.85,
-  TE: 0.75,
+  QB: 1.15,
+  WR: 0.85,
+  DL: 0.75,
+  OL: 0.60,
+  CB: 0.50,
+  TE: 0.45,
+  LB: 0.40,
+  S: 0.40,
   RB: 0.65,
   K: 0.15,
   P: 0.12,
