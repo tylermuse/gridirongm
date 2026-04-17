@@ -33,7 +33,7 @@ import { checkDisciplineEvents, disciplineNewsItems, tickSuspensions } from './d
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 
-const SAVE_VERSION = 26;
+const SAVE_VERSION = 27;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
@@ -8839,6 +8839,32 @@ export const useGameStore = create<GameStore>()(
             for (const p of teamRoster) {
               const slot = slotMap.get(p.id as string);
               if (slot) p.olSlot = slot;
+            }
+          }
+        }
+        if (version < 27) {
+          // Fix teams whose primaryColor is white (#ffffff or near-white).
+          // FBGM rosters sometimes list white as the primary for Colts/Dolphins,
+          // which renders invisible against the light page bg.
+          const teams27 = ((state as any).teams ?? []) as Array<Record<string, unknown>>;
+          const lum = (hex: string): number => {
+            const m = /^#([0-9a-fA-F]{6})$/.exec(hex);
+            if (!m) return 0.5;
+            const r = parseInt(m[1].slice(0, 2), 16) / 255;
+            const g = parseInt(m[1].slice(2, 4), 16) / 255;
+            const b = parseInt(m[1].slice(4, 6), 16) / 255;
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+          };
+          for (const t of teams27) {
+            const primary = (t.primaryColor as string | undefined) ?? '';
+            const secondary = (t.secondaryColor as string | undefined) ?? '';
+            if (primary && lum(primary) > 0.85) {
+              if (secondary && lum(secondary) < 0.85) {
+                t.primaryColor = secondary;
+                t.secondaryColor = primary;
+              } else {
+                t.primaryColor = '#1E3A8A';
+              }
             }
           }
         }

@@ -1052,10 +1052,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   }
 
   const isUserGame = game.homeTeamId === userTeamId || game.awayTeamId === userTeamId;
-  const homeColor = homeTeam?.primaryColor ?? '#3b82f6';
-  const awayColor = awayTeam?.primaryColor ?? '#ef4444';
-  const homeAbbr = homeTeam?.abbreviation ?? 'HME';
-  const awayAbbr = awayTeam?.abbreviation ?? 'AWY';
+  // Defensive fallbacks — use || instead of ?? so empty strings also fall
+  // through. We've seen teams (particularly post-migration/expansion teams)
+  // end up with empty `primaryColor` or `abbreviation`, which made the home
+  // side of the scorebug render invisibly (empty-text box + light color).
+  const homeColor = homeTeam?.primaryColor || '#3b82f6';
+  const awayColor = awayTeam?.primaryColor || '#ef4444';
+  const homeAbbr = homeTeam?.abbreviation || 'HME';
+  const awayAbbr = awayTeam?.abbreviation || 'AWY';
   const homeRecord = homeTeam?.record;
   const awayRecord = awayTeam?.record;
 
@@ -1756,8 +1760,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               stretch this column and nudge the sticky container. */}
           {liveEngineRef.current && (() => {
             const es = liveEngineRef.current!.getState();
-            const homeAbbr2 = homeTeam?.abbreviation ?? 'HOME';
-            const awayAbbr2 = awayTeam?.abbreviation ?? 'AWAY';
+            const homeAbbr2 = homeTeam?.abbreviation || 'HOME';
+            const awayAbbr2 = awayTeam?.abbreviation || 'AWAY';
             const fp = es.fieldPos;
             const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
             return (

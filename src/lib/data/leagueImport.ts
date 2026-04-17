@@ -84,6 +84,17 @@ function normalizeHexColor(color: string | undefined, fallback: string): string 
   return fallback;
 }
 
+/** Relative luminance (0-1) — used to detect white/near-white team colors
+ *  that render invisible against the light page background. */
+function colorLuminance(hex: string): number {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(hex);
+  if (!m) return 0.5;
+  const r = parseInt(m[1].slice(0, 2), 16) / 255;
+  const g = parseInt(m[1].slice(2, 4), 16) / 255;
+  const b = parseInt(m[1].slice(4, 6), 16) / 255;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
 function mapDivision(name: string | undefined): Team['division'] {
   if (!name) return 'East';
   if (name.endsWith('North')) return 'North';
@@ -170,8 +181,18 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
 
   const teams = league.teams.map((team) => {
     const template = templateByAbbrev.get(team.abbrev);
-    const primaryColor = normalizeHexColor(team.colors?.[0], template?.primaryColor ?? '#1E3A8A');
-    const secondaryColor = normalizeHexColor(team.colors?.[1], template?.secondaryColor ?? '#E5E7EB');
+    let primaryColor = normalizeHexColor(team.colors?.[0], template?.primaryColor ?? '#1E3A8A');
+    let secondaryColor = normalizeHexColor(team.colors?.[1], template?.secondaryColor ?? '#E5E7EB');
+    // Some FBGM rosters list white (#ffffff) as the primary color for teams
+    // like the Colts or Dolphins. White-on-white rendering hides the entire
+    // home side of the scoreboard. If primary is too light (luminance > 0.85),
+    // swap with secondary so both render visibly.
+    if (colorLuminance(primaryColor) > 0.85 && colorLuminance(secondaryColor) < 0.85) {
+      [primaryColor, secondaryColor] = [secondaryColor, primaryColor];
+    } else if (colorLuminance(primaryColor) > 0.85) {
+      // Both colors too light — fall back to the BS Football template.
+      primaryColor = template?.primaryColor ?? '#1E3A8A';
+    }
     return {
       id: `team-${team.tid}`,
       city: team.region,
