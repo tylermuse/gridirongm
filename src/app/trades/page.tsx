@@ -926,14 +926,37 @@ function TradesPage() {
     const picksPerRound = teams.length;
     const totalPicks = picksPerRound * 7;
 
-    // ── Path 1: during draft phase, use draftOrder + draftResults ──
+    // ── Path 1: during draft phase, use draftPickOrder (authoritative) ──
+    // draftPickOrder is the slot → pick.id sequence the engine actually uses.
+    // Matching by team + round instead would mis-assign slot labels when a
+    // team owns multiple picks in the same round (e.g. Dallas at #12 and #20)
+    // because the "find first matching round-1 pick" can pick up the wrong id.
     if (phase === 'draft') {
-      // First, map the already-completed picks (from draftResults) by their stored overallPick
-      // We need to find each pick id by matching the result's teamId/round to a team's draftPick
-      // that has playerId set (the used picks).
-      const draftResultsList = useGameStore.getState().draftResults;
+      const state = useGameStore.getState();
+      const draftPickOrder = state.draftPickOrder;
+      if (draftPickOrder && draftPickOrder.length > 0) {
+        // draftResults has the already-completed overall picks
+        for (const result of state.draftResults) {
+          const team = teams.find(t => t.id === result.teamId);
+          if (!team) continue;
+          const matched = team.draftPicks.find(pk =>
+            pk.year === draftYear && pk.round === result.round && pk.playerId === result.playerId,
+          );
+          if (matched) map.set(matched.id, result.overallPick);
+        }
+        // draftPickOrder covers every pick id in slot order. Use its index
+        // as the overall pick number directly.
+        for (let i = 0; i < draftPickOrder.length; i++) {
+          const pickId = draftPickOrder[i];
+          if (!map.has(pickId)) map.set(pickId, i + 1);
+        }
+        return map;
+      }
+
+      // Legacy fallback: saves without draftPickOrder use the old per-team
+      // round lookup. Less accurate but preserves old-save behavior.
+      const draftResultsList = state.draftResults;
       for (const result of draftResultsList) {
-        // Find the team's draftPick that matches this result
         const team = teams.find(t => t.id === result.teamId);
         if (!team) continue;
         const matched = team.draftPicks.find(pk =>
@@ -941,9 +964,6 @@ function TradesPage() {
         );
         if (matched) map.set(matched.id, result.overallPick);
       }
-
-      // Now map remaining picks via draftOrder. Each draftOrder slot is the owner team id;
-      // match it to that team's first unused pick at the corresponding round.
       const currentOverall = totalPicks - draftOrder.length + 1;
       const usedPickIds = new Set<string>();
       for (let i = 0; i < draftOrder.length; i++) {
