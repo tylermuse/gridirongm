@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { GameTicker } from './GameTicker';
 import { SpotlightPopup } from './SpotlightPopup';
-import { useGameStore } from '@/lib/engine/store';
+import { useGameStore, flushToStorageSync } from '@/lib/engine/store';
 import { getTeamColorVars } from '@/lib/teamColors';
 
 export function GameShell({ children }: { children: React.ReactNode }) {
@@ -14,6 +14,24 @@ export function GameShell({ children }: { children: React.ReactNode }) {
   const teams = useGameStore(s => s.teams);
   const userTeamId = useGameStore(s => s.userTeamId);
   const userTeam = teams.find(t => t.id === userTeamId);
+
+  // Global last-chance save on tab close. Zustand persist writes async, so
+  // closing a tab mid-write can lose the last couple seconds of state. This
+  // sync-flush lives in GameShell so it covers every in-game page, not just
+  // the live-sim route.
+  useEffect(() => {
+    const handler = () => {
+      try {
+        flushToStorageSync();
+      } catch { /* best-effort */ }
+    };
+    window.addEventListener('beforeunload', handler);
+    window.addEventListener('pagehide', handler);
+    return () => {
+      window.removeEventListener('beforeunload', handler);
+      window.removeEventListener('pagehide', handler);
+    };
+  }, []);
 
   return (
     <div className="flex min-h-screen" style={userTeam ? getTeamColorVars(userTeam) as React.CSSProperties : undefined}>
