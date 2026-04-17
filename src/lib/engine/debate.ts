@@ -1352,18 +1352,24 @@ export function generateTeamSpotlight(
   }
 
   // ─── 8. Draft Capital ───
-  // Only count unused future picks (playerId means the pick was already used)
-  const picks = team.draftPicks?.filter(pk => pk.year > season || (pk.year === season && !pk.playerId)) ?? [];
+  // Only count picks for the NEXT upcoming draft — future-year picks are
+  // their own story (not "I have 2 first-rounders" this year).
+  const hasThisYearsPicks = team.draftPicks?.some(pk => pk.year === season && !pk.playerId) ?? false;
+  const nextDraftYear = hasThisYearsPicks ? season : season + 1;
+  const picks = team.draftPicks?.filter(pk => pk.year === nextDraftYear && !pk.playerId) ?? [];
+  const futurePicks = team.draftPicks?.filter(pk => pk.year > nextDraftYear && !pk.playerId) ?? [];
   const firstRounders = picks.filter(pk => pk.round === 1).length;
   const secondRounders = picks.filter(pk => pk.round === 2).length;
+  const futureFirsts = futurePicks.filter(pk => pk.round === 1).length;
   if (picks.length > 0 && (firstRounders >= 2 || picks.length >= 8)) {
     const needArea = defRank > totalTeams / 2 ? 'defense' : ppgRank > totalTeams / 2 ? 'offense' : 'depth';
+    const futureNote = futureFirsts > 0 ? ` Also sitting on ${futureFirsts} future first${futureFirsts > 1 ? 's' : ''} beyond ${nextDraftYear}.` : '';
     topics.push({
       headline: 'Draft Capital',
       icon: '📋',
       exchanges: [
-        { speakerId: 'stats', text: `Draft assets: ${picks.length} total picks, including ${firstRounders} first-rounder${firstRounders !== 1 ? 's' : ''} and ${secondRounders} second-rounder${secondRounders !== 1 ? 's' : ''}. Given the ${ordinal(defRank)}-ranked defense and ${ordinal(ppgRank)}-ranked offense, ${needArea} should be the priority.` },
-        { speakerId: 'hottake', text: `${firstRounders >= 2 ? `Multiple first rounders?! Package them for a BLOCKBUSTER trade or draft a GAME-CHANGER for that ${needArea}!` : "Use those picks WISELY! Every pick matters when you need to improve!"}` },
+        { speakerId: 'stats', text: `For the ${nextDraftYear} draft: ${picks.length} picks — ${firstRounders} first-rounder${firstRounders !== 1 ? 's' : ''} and ${secondRounders} second-rounder${secondRounders !== 1 ? 's' : ''}.${futureNote} Given the ${ordinal(defRank)}-ranked defense and ${ordinal(ppgRank)}-ranked offense, ${needArea} should be the priority.` },
+        { speakerId: 'hottake', text: `${firstRounders >= 2 ? `Two firsts in ${nextDraftYear}?! Package them for a BLOCKBUSTER trade or draft a GAME-CHANGER for that ${needArea}!` : "Use those picks WISELY! Every pick matters when you need to improve!"}` },
         { speakerId: 'stats', text: `Best player available, then address ${needArea} needs in free agency. That's how sustainable winners are built.` },
       ],
       teamIds: [team.id],
