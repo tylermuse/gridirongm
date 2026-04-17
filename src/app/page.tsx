@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { SpotlightAudioPlayer } from '@/components/game/SpotlightAudioPlayer';
 
@@ -27,6 +27,7 @@ import { ProgressRing } from '@/components/shared/ProgressRing';
 function TeamPicker() {
   const { newLeague } = useGameStore();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
@@ -135,6 +136,12 @@ function TeamPicker() {
       // Enable BS Mode if preselected from the banner
       if (bsModePreselect) {
         useGameStore.getState().updateLeagueSettings({ bsMode: true });
+      }
+      // Clear ?roster= from the URL so HomeContent stops forcing TeamPicker.
+      // Without this, users who arrived via /rosters "Play in BS Football"
+      // would stay stuck on the picker even after initializing a new league.
+      if (searchParams.get('roster') !== null) {
+        router.replace('/');
       }
       // Store is now initialized — Dashboard renders automatically on this page
     } catch {
