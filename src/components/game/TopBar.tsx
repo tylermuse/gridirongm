@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
+import { GamePlanModal } from './GamePlanModal';
 // TradeProposalPopup disabled — user prefers checking trades inline
 
 export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
@@ -40,6 +41,9 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   } = useGameStore();
 
   const [newProposalIds, setNewProposalIds] = useState<string[]>([]);
+  const [showGamePlanModal, setShowGamePlanModal] = useState(false);
+  const nextGamePlan = useGameStore(s => s.nextGamePlan);
+  const setNextGamePlan = useGameStore(s => s.setNextGamePlan);
   const stablePhaseRef = useRef<string | null>(null);
   const superBowlDone = !!playoffBracket?.find(m => m.id === 'championship')?.winnerId;
   const stableSBRef = useRef<boolean | null>(null);
@@ -240,6 +244,18 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     </Link>
                   </span>
                 )}
+                <span title={nextGamePlan
+                  ? `Plan: ${100 - nextGamePlan.passRate}R/${nextGamePlan.passRate}P · ${nextGamePlan.aggressiveness} · RZ ${nextGamePlan.redZoneStrategy}`
+                  : 'Set a default game plan that applies to every simmed game'}>
+                  <Button
+                    onClick={() => setShowGamePlanModal(true)}
+                    variant="secondary"
+                    size="sm"
+                    className="active:scale-95 transition-transform"
+                  >
+                    📋 Plan{nextGamePlan ? ' ✓' : ''}
+                  </Button>
+                </span>
                 <Button onClick={handleSimWeek} size="sm" className="active:scale-95 transition-transform" disabled={schedule.filter(g => g.week === week).length > 0 && schedule.filter(g => g.week === week).every(g => g.played)}>
                   Sim Week {week}
                 </Button>
@@ -469,6 +485,26 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
       )}
 
       {/* Trade proposal popup — disabled, user prefers inline notifications */}
+
+      {/* Game Plan modal — set the persistent default that simmed games use */}
+      {showGamePlanModal && (
+        <GamePlanModal
+          opponentName={(() => {
+            // Show next opponent if there is one, otherwise just "Default"
+            const userTeam = teams.find(t => t.id === userTeamId);
+            const next = schedule.find(g => !g.played && g.week >= week && (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId));
+            if (!next || !userTeam) return 'Default';
+            const oppId = next.homeTeamId === userTeamId ? next.awayTeamId : next.homeTeamId;
+            const opp = teams.find(t => t.id === oppId);
+            return opp ? `${opp.city} ${opp.name}` : 'Default';
+          })()}
+          onConfirm={(plan) => {
+            setNextGamePlan(plan);
+            setShowGamePlanModal(false);
+          }}
+          onCancel={() => setShowGamePlanModal(false)}
+        />
+      )}
     </>
   );
 }

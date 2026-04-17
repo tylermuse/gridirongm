@@ -93,6 +93,31 @@ export function deriveSubPosition(player: {
   return player.position as SubPosition;
 }
 
+/** Auto-assign OL slot positions (LT/LG/C/RG/RT) to a team's offensive
+ *  linemen by their derived sub-position + ratings. Centers go to C; the two
+ *  best OTs split between LT (highest pass-protection — agility+blocking) and
+ *  RT (next-best); the two best OGs split between LG and RG by strength.
+ *  Returns a Map<playerId, olSlot> rather than mutating; callers apply it. */
+export function assignOlSlots(rosterPlayers: {
+  id: string;
+  position: Position;
+  subPosition?: SubPosition;
+  ratings: { agility: number; blocking: number; strength: number; awareness: number };
+}[]): Map<string, 'LT' | 'LG' | 'C' | 'RG' | 'RT'> {
+  const result = new Map<string, 'LT' | 'LG' | 'C' | 'RG' | 'RT'>();
+  const ol = rosterPlayers.filter(p => p.position === 'OL');
+  const centers = ol.filter(p => p.subPosition === 'C').sort((a, b) => (b.ratings.awareness + b.ratings.blocking) - (a.ratings.awareness + a.ratings.blocking));
+  const tackles = ol.filter(p => p.subPosition === 'OT').sort((a, b) => (b.ratings.agility + b.ratings.blocking) - (a.ratings.agility + a.ratings.blocking));
+  const guards = ol.filter(p => p.subPosition === 'OG').sort((a, b) => (b.ratings.strength + b.ratings.blocking) - (a.ratings.strength + a.ratings.blocking));
+
+  if (centers[0]) result.set(centers[0].id, 'C');
+  if (tackles[0]) result.set(tackles[0].id, 'LT');
+  if (tackles[1]) result.set(tackles[1].id, 'RT');
+  if (guards[0]) result.set(guards[0].id, 'LG');
+  if (guards[1]) result.set(guards[1].id, 'RG');
+  return result;
+}
+
 /**
  * Legacy display helper — kept for callers that read the old string-typed
  * sub-position label. New code should use Player.subPosition (typed) directly,
@@ -293,6 +318,10 @@ export interface Player {
   /** Detailed sub-position derived from ratings (Phase 1 — Apr 11 2026).
    *  Optional during the rollout to allow lazy backfill on existing saves. */
   subPosition?: SubPosition;
+  /** OL-specific slot assignment (LT/LG/C/RG/RT). Phase 2 of the depth-chart
+   *  work — lets users assign a specific tackle to the LT slot vs the RT slot
+   *  rather than treating all OTs as interchangeable. */
+  olSlot?: 'LT' | 'LG' | 'C' | 'RG' | 'RT';
   age: number;
   experience: number;
   ratings: PlayerRatings;
@@ -506,6 +535,10 @@ export interface Team {
   franchiseTagUsed: boolean;
   /** Coaching staff (HC, OC, DC) */
   coaches?: Coach[];
+  /** Defensive base formation. Used by the depth chart to render position
+   *  group slots (4-3 has 4 DL/3 LB; 3-4 has 3 DL/4 LB; Nickel adds a 5th DB).
+   *  Default '4-3' for existing teams via migration. */
+  baseFormation?: '3-4' | '4-3' | 'Nickel';
   /** Owner personality affecting expectations + financial appetite.
    *    'frugal'   — low payroll tolerance, modest win targets, slow to fire
    *    'balanced' — median expectations, default behavior

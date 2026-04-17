@@ -277,7 +277,33 @@ export default function RosterPage() {
       for (const p of posPlayers) {
         if (!ordered.includes(p)) ordered.push(p);
       }
+      // OL: enforce line order (LT → LG → C → RG → RT) for the first 5
+      // slots so the depth chart reads left-to-right like an actual O-line.
+      // Backups beyond slot 5 keep the user's manual ordering.
+      if (position === 'OL') {
+        const slotOrder: Array<'LT' | 'LG' | 'C' | 'RG' | 'RT'> = ['LT', 'LG', 'C', 'RG', 'RT'];
+        const starters: Player[] = [];
+        for (const slot of slotOrder) {
+          const p = ordered.find(pl => pl.olSlot === slot);
+          if (p) starters.push(p);
+        }
+        const backups = ordered.filter(p => !starters.includes(p));
+        return [...starters, ...backups];
+      }
       return ordered;
+    }
+    if (position === 'OL') {
+      // No saved depth — slot by olSlot first, then OVR for backups
+      const slotOrder: Array<'LT' | 'LG' | 'C' | 'RG' | 'RT'> = ['LT', 'LG', 'C', 'RG', 'RT'];
+      const starters: Player[] = [];
+      for (const slot of slotOrder) {
+        const p = posPlayers.find(pl => pl.olSlot === slot);
+        if (p) starters.push(p);
+      }
+      const backups = posPlayers
+        .filter(p => !starters.includes(p))
+        .sort((a, b) => b.ratings.overall - a.ratings.overall);
+      return [...starters, ...backups];
     }
     return posPlayers.sort((a, b) => b.ratings.overall - a.ratings.overall);
   }
@@ -832,7 +858,9 @@ export default function RosterPage() {
                                   <div className="flex items-center justify-between mb-0.5">
                                     <div className="flex items-center gap-1">
                                       <span className="text-[10px] text-[var(--text-sec)]">
-                                        {DEPTH_LABELS[idx] ?? `${idx + 1}th`}
+                                        {pos === 'OL' && idx < 5 && player.olSlot
+                                          ? player.olSlot
+                                          : (DEPTH_LABELS[idx] ?? `${idx + 1}th`)}
                                       </span>
                                       {isViewingOwnTeam && depthGroup.length > 1 && (
                                         <div className="flex gap-0.5">

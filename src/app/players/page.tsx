@@ -35,6 +35,8 @@ export default function PlayersPage() {
   const [ovrMax, setOvrMax] = useState(99);
   const [ageMin, setAgeMin] = useState(18);
   const [ageMax, setAgeMax] = useState(45);
+  const [potMin, setPotMin] = useState(40);
+  const [potMax, setPotMax] = useState(99);
   const [contractFilter, setContractFilter] = useState<ContractFilter>('any');
   const [teamFilter, setTeamFilter] = useState<string>('all');
 
@@ -84,6 +86,7 @@ export default function PlayersPage() {
       const ovr = p.ratings.overall;
       if (ovr < ovrMin || ovr > ovrMax) return false;
       if (p.age < ageMin || p.age > ageMax) return false;
+      if (p.potential < potMin || p.potential > potMax) return false;
       if (posFilter.size > 0 && !posFilter.has(p.position)) return false;
       if (searchLower && !(`${p.firstName} ${p.lastName}`).toLowerCase().includes(searchLower)) return false;
 
@@ -98,7 +101,7 @@ export default function PlayersPage() {
       }
       return true;
     });
-  }, [players, search, posFilter, ovrMin, ovrMax, ageMin, ageMax, contractFilter, teamFilter, faSet]);
+  }, [players, search, posFilter, ovrMin, ovrMax, ageMin, ageMax, potMin, potMax, contractFilter, teamFilter, faSet]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -236,6 +239,18 @@ export default function PlayersPage() {
                 <span className="text-xs text-gray-400">—</span>
                 <input type="number" min={18} max={50} value={ageMax}
                   onChange={e => { setAgeMax(+e.target.value); setPage(0); }}
+                  className="w-14 px-1 py-0.5 text-xs border rounded text-center"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-medium text-gray-500 whitespace-nowrap">POT</label>
+                <input type="number" min={0} max={99} value={potMin}
+                  onChange={e => { setPotMin(+e.target.value); setPage(0); }}
+                  className="w-14 px-1 py-0.5 text-xs border rounded text-center"
+                />
+                <span className="text-xs text-gray-400">—</span>
+                <input type="number" min={0} max={99} value={potMax}
+                  onChange={e => { setPotMax(+e.target.value); setPage(0); }}
                   className="w-14 px-1 py-0.5 text-xs border rounded text-center"
                 />
               </div>

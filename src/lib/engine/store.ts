@@ -10,7 +10,7 @@ import type {
   HoldoutEntry, TradeRumor, Rivalry, RivalryEvent,
   ExpansionTeamConfig, SocialPost, ImportedProspect,
 } from '@/types';
-import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
+import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, assignOlSlots, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { NFL_2026_FIRST_ROUND, isNfl2026Roster, type MockDraftPick } from '@/lib/data/nfl2026Draft';
@@ -33,7 +33,7 @@ import { checkDisciplineEvents, disciplineNewsItems, tickSuspensions } from './d
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 
-const SAVE_VERSION = 25;
+const SAVE_VERSION = 26;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
@@ -2463,6 +2463,19 @@ export const useGameStore = create<GameStore>()(
             if (!team.ownerPersonality) {
               team.ownerPersonality = rollOwnerPersonality();
             }
+            if (!team.baseFormation) {
+              team.baseFormation = '4-3';
+            }
+          }
+          // Auto-assign OL slots — done from imported.players (allImportedPlayers
+          // is defined later, but only adds street FAs which aren't on a team).
+          for (const team of imported.teams) {
+            const teamOL = imported.players.filter(p => p.teamId === team.id && p.position === 'OL');
+            const slotMap = assignOlSlots(teamOL);
+            for (const p of teamOL) {
+              const slot = slotMap.get(p.id);
+              if (slot) (p as { olSlot?: 'LT' | 'LG' | 'C' | 'RG' | 'RT' }).olSlot = slot;
+            }
           }
           // Backfill coaching history for all coaches
           for (const team of imported.teams) {
@@ -2588,8 +2601,18 @@ export const useGameStore = create<GameStore>()(
             revenue: { tickets: 0, merchandise: 0, tvDeal: 0, total: 0 },
             coaches: generateCoachingStaff(),
             ownerPersonality: rollOwnerPersonality(),
+            baseFormation: '4-3' as const,
           };
         });
+        // Auto-assign OL slots for synthetic rosters
+        for (const team of teams) {
+          const teamOL = allPlayers.filter(p => p.teamId === team.id && p.position === 'OL');
+          const slotMap = assignOlSlots(teamOL);
+          for (const p of teamOL) {
+            const slot = slotMap.get(p.id);
+            if (slot) (p as { olSlot?: 'LT' | 'LG' | 'C' | 'RG' | 'RT' }).olSlot = slot;
+          }
+        }
 
         // Real 2026 NFL draft order — original team by record (worst to best)
         // Uses BS Football abbreviations: NYS (not NYJ), LAA (not LAR for Rams equiv)
@@ -2760,9 +2783,12 @@ export const useGameStore = create<GameStore>()(
           const teams = result.patch.teams as Team[];
           const seeds = computePlayoffSeeds(teams);
           const bracket = buildBracket(seeds, teams);
-          set({ ...result.patch, playoffSeeds: seeds, playoffBracket: bracket, weeklyRecaps, nextGamePlan: undefined });
+          // Game plan persists across weeks — community ask (TimNation, others)
+          // wanted their slider settings to apply to simmed games too, not just
+          // Watch Live. Keep nextGamePlan set so the next sim picks it up.
+          set({ ...result.patch, playoffSeeds: seeds, playoffBracket: bracket, weeklyRecaps });
         } else {
-          set({ ...result.patch, weeklyRecaps, nextGamePlan: undefined });
+          set({ ...result.patch, weeklyRecaps });
         }
 
         // Update approval for user team based on this week's game
@@ -8798,6 +8824,23 @@ export const useGameStore = create<GameStore>()(
             p.heismanFinalist = true;
           }
           if (skillCandidates[0]) skillCandidates[0].heismanWinner = true;
+        }
+        if (version < 26) {
+          // Phase 2 depth chart: assign per-team OL slots (LT/LG/C/RG/RT) and
+          // a default base formation. TimNation/Kidcoffeyblack feature requests.
+          const teams26 = ((state as any).teams ?? []) as Array<Record<string, unknown>>;
+          const players26 = ((state as any).players ?? []) as Array<Record<string, unknown>>;
+          for (const team of teams26) {
+            if (!team.baseFormation) team.baseFormation = '4-3';
+            const teamRoster = players26.filter(p =>
+              p.teamId === team.id && !p.retired && p.position === 'OL',
+            );
+            const slotMap = assignOlSlots(teamRoster as Parameters<typeof assignOlSlots>[0]);
+            for (const p of teamRoster) {
+              const slot = slotMap.get(p.id as string);
+              if (slot) p.olSlot = slot;
+            }
+          }
         }
         return state;
       },
