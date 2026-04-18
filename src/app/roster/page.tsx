@@ -11,7 +11,7 @@ import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { calculateSchemeFit, schemeFitDot, schemeFitColor, OFFENSIVE_SCHEME_LABELS, DEFENSIVE_SCHEME_LABELS } from '@/lib/engine/coaching';
 import { calculateDeadCap, calculateCapSavings, getCapHit, getUnamortizedBonus, materializeContractYears } from '@/types';
 import { getSubPosition } from '@/types';
-import type { Player, Position, ContractYear } from '@/types';
+import type { Player, Position, SubPosition, ContractYear } from '@/types';
 import { POSITIONS, ROSTER_LIMITS } from '@/types';
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
 import { LEAGUE_MINIMUM_SALARY, estimateSalary, capInflationFactor } from '@/lib/engine/store';
@@ -849,49 +849,60 @@ export default function RosterPage() {
                       { label: 'RG', pos: 'OL', idx: 3 },
                       { label: 'RT', pos: 'OL', idx: 4 },
                     ];
-                    // Defense: formation-specific slot counts.
-                    const defenseSlots: { label: string; pos: Position; idx: number }[] =
+                    // Defense: formation-specific slot counts plus a preferred
+                    // sub-position per slot. renderSlot uses the sub-pos to
+                    // route the RIGHT player to each slot (e.g. an OLB into
+                    // LOLB even if his raw OVR is lower than a stacked MLB).
+                    type DefSlot = { label: string; pos: Position; idx: number; subPos?: SubPosition };
+                    const defenseSlots: DefSlot[] =
                       formation === '3-4' ? [
-                        { label: 'LDE', pos: 'DL', idx: 0 },
-                        { label: 'NT',  pos: 'DL', idx: 1 },
-                        { label: 'RDE', pos: 'DL', idx: 2 },
-                        { label: 'LOLB', pos: 'LB', idx: 0 },
-                        { label: 'LILB', pos: 'LB', idx: 1 },
-                        { label: 'RILB', pos: 'LB', idx: 2 },
-                        { label: 'ROLB', pos: 'LB', idx: 3 },
-                        { label: 'LCB', pos: 'CB', idx: 0 },
-                        { label: 'RCB', pos: 'CB', idx: 1 },
-                        { label: 'FS',  pos: 'S',  idx: 0 },
-                        { label: 'SS',  pos: 'S',  idx: 1 },
+                        { label: 'LDE', pos: 'DL', idx: 0, subPos: 'EDGE' },
+                        { label: 'NT',  pos: 'DL', idx: 0, subPos: 'DT' },
+                        { label: 'RDE', pos: 'DL', idx: 1, subPos: 'EDGE' },
+                        { label: 'LOLB', pos: 'LB', idx: 0, subPos: 'OLB' },
+                        { label: 'LILB', pos: 'LB', idx: 0, subPos: 'MLB' },
+                        { label: 'RILB', pos: 'LB', idx: 1, subPos: 'MLB' },
+                        { label: 'ROLB', pos: 'LB', idx: 1, subPos: 'OLB' },
+                        { label: 'LCB', pos: 'CB', idx: 0, subPos: 'CB' },
+                        { label: 'RCB', pos: 'CB', idx: 1, subPos: 'CB' },
+                        { label: 'FS',  pos: 'S',  idx: 0, subPos: 'FS' },
+                        { label: 'SS',  pos: 'S',  idx: 0, subPos: 'SS' },
                       ] : formation === 'Nickel' ? [
-                        { label: 'LDE', pos: 'DL', idx: 0 },
-                        { label: 'LDT', pos: 'DL', idx: 1 },
-                        { label: 'RDT', pos: 'DL', idx: 2 },
-                        { label: 'RDE', pos: 'DL', idx: 3 },
-                        { label: 'WLB', pos: 'LB', idx: 0 },
-                        { label: 'MLB', pos: 'LB', idx: 1 },
-                        { label: 'LCB', pos: 'CB', idx: 0 },
-                        { label: 'RCB', pos: 'CB', idx: 1 },
-                        { label: 'NCB', pos: 'CB', idx: 2 },
-                        { label: 'FS',  pos: 'S',  idx: 0 },
-                        { label: 'SS',  pos: 'S',  idx: 1 },
+                        { label: 'LDE', pos: 'DL', idx: 0, subPos: 'EDGE' },
+                        { label: 'LDT', pos: 'DL', idx: 0, subPos: 'DT' },
+                        { label: 'RDT', pos: 'DL', idx: 1, subPos: 'DT' },
+                        { label: 'RDE', pos: 'DL', idx: 1, subPos: 'EDGE' },
+                        { label: 'WLB', pos: 'LB', idx: 0, subPos: 'OLB' },
+                        { label: 'MLB', pos: 'LB', idx: 0, subPos: 'MLB' },
+                        { label: 'LCB', pos: 'CB', idx: 0, subPos: 'CB' },
+                        { label: 'RCB', pos: 'CB', idx: 1, subPos: 'CB' },
+                        { label: 'NCB', pos: 'CB', idx: 2, subPos: 'CB' },
+                        { label: 'FS',  pos: 'S',  idx: 0, subPos: 'FS' },
+                        { label: 'SS',  pos: 'S',  idx: 0, subPos: 'SS' },
                       ] : [
                         // 4-3 default
-                        { label: 'LDE', pos: 'DL', idx: 0 },
-                        { label: 'LDT', pos: 'DL', idx: 1 },
-                        { label: 'RDT', pos: 'DL', idx: 2 },
-                        { label: 'RDE', pos: 'DL', idx: 3 },
-                        { label: 'WLB', pos: 'LB', idx: 0 },
-                        { label: 'MLB', pos: 'LB', idx: 1 },
-                        { label: 'SLB', pos: 'LB', idx: 2 },
-                        { label: 'LCB', pos: 'CB', idx: 0 },
-                        { label: 'RCB', pos: 'CB', idx: 1 },
-                        { label: 'FS',  pos: 'S',  idx: 0 },
-                        { label: 'SS',  pos: 'S',  idx: 1 },
+                        { label: 'LDE', pos: 'DL', idx: 0, subPos: 'EDGE' },
+                        { label: 'LDT', pos: 'DL', idx: 0, subPos: 'DT' },
+                        { label: 'RDT', pos: 'DL', idx: 1, subPos: 'DT' },
+                        { label: 'RDE', pos: 'DL', idx: 1, subPos: 'EDGE' },
+                        { label: 'WLB', pos: 'LB', idx: 0, subPos: 'OLB' },
+                        { label: 'MLB', pos: 'LB', idx: 0, subPos: 'MLB' },
+                        { label: 'SLB', pos: 'LB', idx: 1, subPos: 'OLB' },
+                        { label: 'LCB', pos: 'CB', idx: 0, subPos: 'CB' },
+                        { label: 'RCB', pos: 'CB', idx: 1, subPos: 'CB' },
+                        { label: 'FS',  pos: 'S',  idx: 0, subPos: 'FS' },
+                        { label: 'SS',  pos: 'S',  idx: 0, subPos: 'SS' },
                       ];
 
-                    const renderSlot = (slot: typeof offenseSlots[number]) => {
-                      const depthList = getDepthGroup(slot.pos);
+                    const renderSlot = (slot: { label: string; pos: Position; idx: number; subPos?: SubPosition }) => {
+                      // When a sub-position is specified (defensive slots),
+                      // filter the depth list to players whose subPosition
+                      // matches. Otherwise fall back to the full position
+                      // group (offense, OL slots handled separately).
+                      const baseList = getDepthGroup(slot.pos);
+                      const depthList = slot.subPos
+                        ? baseList.filter(p => p.subPosition === slot.subPos)
+                        : baseList;
                       const player = depthList[slot.idx];
                       return (
                         <div key={slot.label} className="bg-[var(--surface-2)] rounded-md px-2 py-1.5 min-h-[2.5rem]">

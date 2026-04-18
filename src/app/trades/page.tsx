@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
-import { useGameStore, flushToStorage } from '@/lib/engine/store';
+import { useGameStore, flushToStorage, pickTradeValue } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -63,27 +63,10 @@ function playerTradeValue(player: Player): number {
   return Math.round((rawValue - contractCost) * contractMult);
 }
 
-// Draft pick value: exponential decay by estimated overall pick number
-function draftPickPointValue(overallPick: number): number {
-  return Math.round(3000 * Math.exp(-0.032 * (overallPick - 1)));
-}
-let _tradesTeams: { id: string; record: { wins: number; losses: number } }[] = [];
-function setTradesTeams(teams: { id: string; record: { wins: number; losses: number } }[]) { _tradesTeams = teams; }
-function pickTradeValue(pick: DraftPick): number {
-  if (_tradesTeams.length > 0) {
-    const sorted = [..._tradesTeams].sort((a, b) => {
-      const aWp = a.record.wins / Math.max(1, a.record.wins + a.record.losses);
-      const bWp = b.record.wins / Math.max(1, b.record.wins + b.record.losses);
-      return aWp - bWp;
-    });
-    const pos = sorted.findIndex(t => t.id === pick.originalTeamId);
-    const slot = pos >= 0 ? pos : Math.floor(sorted.length / 2);
-    const overallPick = (pick.round - 1) * sorted.length + slot + 1;
-    return draftPickPointValue(overallPick);
-  }
-  const midPick = (pick.round - 1) * 32 + 16;
-  return draftPickPointValue(midPick);
-}
+// pickTradeValue is imported from the store — single source of truth. The
+// previous local copy relied on a mutable module-level cache that was often
+// stale or empty at render time, producing fallback mid-round values for
+// every pick and undervaluing top-of-round picks. (Claude sanity check 4/17.)
 
 function getTeamStrategy(team: { record: { wins: number; losses: number }; totalPayroll: number; salaryCap: number }, roster: { age: number }[]): string {
   const total = team.record.wins + team.record.losses;
@@ -834,8 +817,10 @@ function TradesPage() {
   } = useGameStore();
   const godMode = leagueSettings?.godMode ?? false;
 
-  // Keep pick value calculator in sync with current team records
-  setTradesTeams(teams);
+  // Helper that binds the current teams list to pickTradeValue. The engine's
+  // exported function takes optional teams; bind once so every call site sees
+  // the same record-aware value (previously stale cache caused wild swings).
+  const pickValue = (pk: DraftPick) => pickTradeValue(pk, teams);
 
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [offeredPlayerIds, setOfferedPlayerIds] = useState<string[]>([]);
@@ -1087,7 +1072,7 @@ function TradesPage() {
     return sum + (p ? playerTradeValue(p) : 0);
   }, 0) + offeredPickIds.reduce((sum, id) => {
     const pick = userTeam?.draftPicks.find(pk => pk.id === id);
-    return sum + (pick ? pickTradeValue(pick) : 0);
+    return sum + (pick ? pickValue(pick) : 0);
   }, 0);
 
   const receivedValue = receivedPlayerIds.reduce((sum, id) => {
@@ -1095,7 +1080,7 @@ function TradesPage() {
     return sum + (p ? playerTradeValue(p) : 0);
   }, 0) + receivedPickIds.reduce((sum, id) => {
     const pick = selectedAITeam?.draftPicks.find(pk => pk.id === id);
-    return sum + (pick ? pickTradeValue(pick) : 0);
+    return sum + (pick ? pickValue(pick) : 0);
   }, 0);
 
   const valueDiff = receivedValue - offeredValue;
@@ -1209,7 +1194,7 @@ function TradesPage() {
     return sum + (p ? playerTradeValue(p) : 0);
   }, 0) + counterOfferedPickIds.reduce((sum, id) => {
     const pick = userTeam?.draftPicks.find(pk => pk.id === id);
-    return sum + (pick ? pickTradeValue(pick) : 0);
+    return sum + (pick ? pickValue(pick) : 0);
   }, 0);
 
   const counterReceivedValue = counterReceivedPlayerIds.reduce((sum, id) => {
@@ -1217,7 +1202,7 @@ function TradesPage() {
     return sum + (p ? playerTradeValue(p) : 0);
   }, 0) + counterReceivedPickIds.reduce((sum, id) => {
     const pick = counterTeam?.draftPicks.find(pk => pk.id === id);
-    return sum + (pick ? pickTradeValue(pick) : 0);
+    return sum + (pick ? pickValue(pick) : 0);
   }, 0);
 
   const counterValueDiff = counterReceivedValue - counterOfferedValue;
@@ -1445,9 +1430,9 @@ function TradesPage() {
 
                 // Trade value + grade
                 const proposalReceiveValue = offPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
-                  + offPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
+                  + offPicks.reduce((s, pk) => s + pickValue(pk), 0);
                 const proposalSendValue = reqPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
-                  + reqPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
+                  + reqPicks.reduce((s, pk) => s + pickValue(pk), 0);
                 const proposalGrade = computeTradeGrade(proposalReceiveValue, proposalSendValue);
                 const proposalCardExtra = tradeGradeCardStyle(proposalGrade);
 
@@ -1625,7 +1610,7 @@ function TradesPage() {
                                       className="accent-blue-500"
                                     />
                                     <span className="text-xs flex-1">{pickLabel(pk)}</span>
-                                    <span className="text-[10px] text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
+                                    <span className="text-[10px] text-[var(--text-sec)]">~{Math.round(pickValue(pk))}</span>
                                   </label>
                                 ))}
                               </>
@@ -1660,7 +1645,7 @@ function TradesPage() {
                                       className="accent-blue-500"
                                     />
                                     <span className="text-xs flex-1">{pickLabel(pk)}</span>
-                                    <span className="text-[10px] text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
+                                    <span className="text-[10px] text-[var(--text-sec)]">~{Math.round(pickValue(pk))}</span>
                                   </label>
                                 ))}
                               </>
@@ -1847,7 +1832,7 @@ function TradesPage() {
                               className="accent-blue-500"
                             />
                             <span className="text-sm flex-1">{pickLabel(pk)}</span>
-                            <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))} pts</span>
+                            <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickValue(pk))} pts</span>
                           </label>
                         ))}
                       </div>
@@ -1939,9 +1924,9 @@ function TradesPage() {
                         userTeam?.draftPicks.find(pk => pk.id === id),
                       ).filter(Boolean) as DraftPick[];
                       const blockReceiveValue = offPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
-                        + offPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
+                        + offPicks.reduce((s, pk) => s + pickValue(pk), 0);
                       const blockSendValue = reqPlayers.reduce((s, p) => s + playerTradeValue(p), 0)
-                        + reqPicks.reduce((s, pk) => s + pickTradeValue(pk), 0);
+                        + reqPicks.reduce((s, pk) => s + pickValue(pk), 0);
                       const blockGrade = computeTradeGrade(blockReceiveValue, blockSendValue);
                       const blockCardExtra = tradeGradeCardStyle(blockGrade);
 
@@ -2129,7 +2114,7 @@ function TradesPage() {
                               className="accent-blue-500"
                             />
                             <span className="text-sm flex-1">{pickLabel(pk)}</span>
-                            <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
+                            <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickValue(pk))}</span>
                           </label>
                         ))}
                       </div>
@@ -2170,7 +2155,7 @@ function TradesPage() {
                                   className="accent-blue-500"
                                 />
                                 <span className="text-sm flex-1">{pickLabel(pk)}</span>
-                                <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickTradeValue(pk))}</span>
+                                <span className="text-xs text-[var(--text-sec)]">~{Math.round(pickValue(pk))}</span>
                               </label>
                             ))}
                           </div>

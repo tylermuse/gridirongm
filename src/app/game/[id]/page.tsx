@@ -1208,22 +1208,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           })()}
         />
 
-        {/* Big-play alert banner — turnovers, TDs, missed FGs shown prominently above the field */}
-        {outcomeChip && (() => {
-          const isTurnover = outcomeChip.text.includes('INTERCEPTED') || outcomeChip.text.includes('FUMBLE');
-          const isTD = outcomeChip.text.includes('TOUCHDOWN');
-          const isBig = isTurnover || isTD || outcomeChip.text.includes('NO GOOD') || outcomeChip.text.includes('FIELD GOAL');
-          return (
-            <div className={`${outcomeChip.color} text-white font-black text-center rounded-lg shadow-lg ${
-              isTurnover ? 'py-5 px-6 text-xl border-2 border-white/30' :
-              isBig ? 'py-4 px-5 text-lg' :
-              'py-2 px-4 text-sm'
-            }`}>
-              <div>{outcomeChip.text}</div>
-              {isTurnover && <div className="text-xs font-semibold opacity-80 mt-1">Possession change</div>}
-            </div>
-          );
-        })()}
+        {/* Big-play alert banner removed — the overlay chip on the field is
+            enough. Having a second banner above the field was pushing the
+            Call the Play panel down each play. */}
 
         {/* Animated field + outcome chip overlay */}
         <div className="relative">
@@ -1306,44 +1293,75 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         {/* ================================================================
             CONTROLS BAR (speed + play/pause)
         ================================================================ */}
-        <div className="flex items-center gap-1.5 sm:gap-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl px-2 sm:px-4 py-2 sm:py-2.5 flex-wrap">
-          {/* Speed */}
-          <div className="flex items-center gap-1">
-            <span className="hidden sm:inline text-[10px] font-semibold text-[var(--text-sec)] uppercase mr-1">Speed</span>
-            {(['1x', '2x', '5x', 'max'] as Speed[]).map(s => (
-              <button
-                key={s}
-                onClick={() => setSpeed(s)}
-                className={`px-2 sm:px-3 py-1 rounded-md text-xs font-semibold transition-all ${
-                  speed === s
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
-                }`}
-              >
-                {s}
-              </button>
-            ))}
+        <div className="flex flex-col sm:flex-row sm:items-center bg-[var(--surface)] border border-[var(--border)] rounded-xl px-2 sm:px-4 py-2 sm:py-2.5 gap-2 sm:gap-3">
+          {/* Row 1 (mobile) / left group (desktop): speed + play/pause + end */}
+          <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap">
+            <div className="flex items-center gap-1">
+              <span className="hidden sm:inline text-[10px] font-semibold text-[var(--text-sec)] uppercase mr-1">Speed</span>
+              {(['1x', '2x', '5x', 'max'] as Speed[]).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setSpeed(s)}
+                  className={`px-2 sm:px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                    speed === s
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+
+            <div className="hidden sm:block w-px h-6 bg-[var(--border)]" />
+
+            {/* Play/Pause */}
+            <button
+              onClick={() => { if (!isFinished) setIsPlaying(p => !p); }}
+              disabled={isFinished}
+              className="px-2 sm:px-4 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] disabled:opacity-40 transition-all"
+            >
+              {isFinished ? '● Complete' : isPlaying ? '⏸' : '▶'}
+              <span className="hidden sm:inline ml-1">{isFinished ? '' : isPlaying ? 'Pause' : 'Play'}</span>
+            </button>
+            {/* End Game (always paired with row 1 on mobile) */}
+            <button
+              onClick={skipToEnd}
+              disabled={isFinished}
+              className="px-2 sm:px-3 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all sm:order-last"
+            >
+              ⏭<span className="hidden sm:inline ml-1">End Game</span>
+            </button>
+
+            {/* Playback progress — hidden during Live Coach (meaningless once
+                engine is generating new plays). */}
+            {!liveCoachOn && (
+              <div className="flex-1 flex items-center gap-2 sm:ml-2 min-w-[80px]">
+                <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-blue-500 transition-all duration-150"
+                    style={{ width: `${totalEvents > 0 ? (revealedCount / totalEvents) * 100 : 0}%` }}
+                  />
+                </div>
+                <span className="text-[10px] text-[var(--text-sec)] tabular-nums whitespace-nowrap">
+                  {revealedCount}/{totalEvents}
+                </span>
+              </div>
+            )}
           </div>
 
-          <div className="hidden sm:block w-px h-6 bg-[var(--border)]" />
-
-          {/* Play/Pause */}
-          <button
-            onClick={() => { if (!isFinished) setIsPlaying(p => !p); }}
-            disabled={isFinished}
-            className="px-2 sm:px-4 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] disabled:opacity-40 transition-all"
-          >
-            {isFinished ? '● Complete' : isPlaying ? '⏸' : '▶'}
-            <span className="hidden sm:inline ml-1">{isFinished ? '' : isPlaying ? 'Pause' : 'Play'}</span>
-          </button>
+          {/* Row 2 (mobile) / inline-right (desktop): Game Plan + Live Coach.
+              Text labels visible on both viewports — two-row layout gives
+              enough width on phones to show them instead of bare icons. */}
+          <div className="flex items-center gap-2 sm:contents">
           {/* Game Plan — only when user is in this game and game isn't done */}
           {userInGame && !isFinished && (
             <button
               onClick={() => { setIsPlaying(false); setShowMidGamePlan(true); }}
-              className="px-2 sm:px-3 py-1 rounded-md text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-all"
+              className="flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-all"
               title="Adjust your game plan (pauses the game)"
             >
-              📋<span className="hidden sm:inline ml-1">Game Plan</span>
+              📋 Game Plan
             </button>
           )}
           {/* Live Coach toggle — only when user is in this game */}
@@ -1385,41 +1403,17 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   }
                 }
               }}
-              className={`px-2 sm:px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+              className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold transition-all ${
                 liveCoachOn
                   ? 'bg-green-600 text-white hover:bg-green-700'
                   : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
               }`}
               title="Take control of every user offensive snap"
             >
-              🎯<span className="hidden sm:inline ml-1">Live Coach</span> {liveCoachOn ? 'ON' : 'OFF'}
+              🎯 Live Coach {liveCoachOn ? 'ON' : 'OFF'}
             </button>
           )}
-          <button
-            onClick={skipToEnd}
-            disabled={isFinished}
-            className="px-2 sm:px-3 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all"
-          >
-            ⏭<span className="hidden sm:inline ml-1">End Game</span>
-          </button>
-
-          {/* Playback progress — meaningful in watch mode (shows how many of
-              the pre-simulated events have been revealed), but meaningless once
-              Live Coach takes over and the engine is generating new plays.
-              Hidden during Live Coach to avoid the confusing 57/57 cap. */}
-          {!liveCoachOn && (
-            <div className="flex-1 flex items-center gap-2 ml-2">
-              <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-blue-500 transition-all duration-150"
-                  style={{ width: `${totalEvents > 0 ? (revealedCount / totalEvents) * 100 : 0}%` }}
-                />
-              </div>
-              <span className="text-[10px] text-[var(--text-sec)] tabular-nums whitespace-nowrap">
-                {revealedCount}/{totalEvents}
-              </span>
-            </div>
-          )}
+          </div>
         </div>
 
         {/* ================================================================
