@@ -15,7 +15,7 @@ import type { GameResult } from '@/types';
  * with scores, colored green for wins, red for losses, neutral for unplayed.
  * Clicking a played game opens a box score modal.
  */
-export function GameTicker() {
+export function GameTicker({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const { schedule, teams, userTeamId, week, phase, playoffBracket } = useGameStore();
   const { user, tier, isFoundingMember, signOut } = useSubscription();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -75,6 +75,21 @@ export function GameTicker() {
       <div className="border-b border-[var(--border)] bg-[var(--bg)] flex items-stretch relative">
         {/* Right edge fade to hint more content */}
         <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-[var(--bg)] to-transparent pointer-events-none z-10 sm:hidden" />
+        {/* Mobile menu toggle — replaces the leftmost ticker slot so the
+            dedicated TopBar hamburger row can collapse. */}
+        {onMenuToggle && (
+          <button
+            onClick={onMenuToggle}
+            aria-label="Toggle menu"
+            className="md:hidden shrink-0 px-3 flex items-center justify-center border-r border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)] transition-colors"
+          >
+            <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="3" y1="5" x2="17" y2="5" />
+              <line x1="3" y1="10" x2="17" y2="10" />
+              <line x1="3" y1="15" x2="17" y2="15" />
+            </svg>
+          </button>
+        )}
         {/* Scrollable game ticker */}
         {/* W/L Legend */}
         <div className="hidden sm:flex items-center gap-2 text-xs text-[var(--text-sec)] pr-3 border-r border-[var(--border)] shrink-0 pl-3">

@@ -195,22 +195,13 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
 
   return (
     <>
-      <header className="border-b border-[var(--border)] bg-[var(--surface)] sticky top-0 z-10">
+      {/* On the live game page, the TopBar row is empty on mobile (all phase
+          sim buttons are hidden). The hamburger moved into the GameTicker to
+          free that vertical space — hide the header on mobile only when the
+          user is inside a game, so phone screens don't waste 56px. */}
+      <header className={`${pathname.startsWith('/game/') ? 'hidden md:block' : ''} border-b border-[var(--border)] bg-[var(--surface)] sticky top-0 z-10`}>
         <div className="h-14 flex items-center justify-between px-3 md:px-6">
           <div className="flex items-center gap-2 text-sm text-[var(--text-sec)]">
-            {onMenuToggle && (
-              <button
-                onClick={onMenuToggle}
-                className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--surface-2)] hover:bg-[var(--border)] transition-colors"
-                aria-label="Toggle menu"
-              >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="3" y1="5" x2="17" y2="5" />
-                  <line x1="3" y1="10" x2="17" y2="10" />
-                  <line x1="3" y1="15" x2="17" y2="15" />
-                </svg>
-              </button>
-            )}
             <span className="hidden sm:inline">
               {phase === 'preseason' && `Preseason Game ${(useGameStore.getState().preseasonWeek ?? 1)}`}
               {phase === 'regular' && `Week ${week} · Regular Season`}

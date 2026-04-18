@@ -1115,7 +1115,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
       {/* Live Coach play call menu is now rendered inline in the sidebar */}
 
-      <div className="max-w-6xl mx-auto flex items-start gap-4">
+      <div className="max-w-6xl mx-auto flex flex-col lg:flex-row items-start gap-4">
       {/* Main game content */}
       <div className="flex-1 min-w-0 space-y-3">
 
@@ -1287,8 +1287,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           </span>
         </div>
 
-        {/* Quarter score table */}
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-6 py-2">
+        {/* Quarter score table — desktop only. Mobile version renders below
+            the tabs so the field/controls stay above the fold on small screens. */}
+        <div className="hidden sm:block bg-[var(--surface)] border border-[var(--border)] rounded-xl px-6 py-2">
           <QuarterScoreTable
             events={revealedEvents}
             homeAbbr={homeAbbr}
@@ -1303,15 +1304,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         {/* ================================================================
             CONTROLS BAR (speed + play/pause)
         ================================================================ */}
-        <div className="flex items-center gap-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl px-4 py-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl px-2 sm:px-4 py-2 sm:py-2.5 flex-wrap">
           {/* Speed */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-semibold text-[var(--text-sec)] uppercase mr-1">Speed</span>
+          <div className="flex items-center gap-1">
+            <span className="hidden sm:inline text-[10px] font-semibold text-[var(--text-sec)] uppercase mr-1">Speed</span>
             {(['1x', '2x', '5x', 'max'] as Speed[]).map(s => (
               <button
                 key={s}
                 onClick={() => setSpeed(s)}
-                className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                className={`px-2 sm:px-3 py-1 rounded-md text-xs font-semibold transition-all ${
                   speed === s
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
@@ -1322,24 +1323,25 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             ))}
           </div>
 
-          <div className="w-px h-6 bg-[var(--border)]" />
+          <div className="hidden sm:block w-px h-6 bg-[var(--border)]" />
 
           {/* Play/Pause */}
           <button
             onClick={() => { if (!isFinished) setIsPlaying(p => !p); }}
             disabled={isFinished}
-            className="px-4 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] disabled:opacity-40 transition-all"
+            className="px-2 sm:px-4 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] disabled:opacity-40 transition-all"
           >
-            {isFinished ? '● Complete' : isPlaying ? '⏸ Pause' : '▶ Play'}
+            {isFinished ? '● Complete' : isPlaying ? '⏸' : '▶'}
+            <span className="hidden sm:inline ml-1">{isFinished ? '' : isPlaying ? 'Pause' : 'Play'}</span>
           </button>
           {/* Game Plan — only when user is in this game and game isn't done */}
           {userInGame && !isFinished && (
             <button
               onClick={() => { setIsPlaying(false); setShowMidGamePlan(true); }}
-              className="px-3 py-1 rounded-md text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-all"
+              className="px-2 sm:px-3 py-1 rounded-md text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-all"
               title="Adjust your game plan (pauses the game)"
             >
-              📋 Game Plan
+              📋<span className="hidden sm:inline ml-1">Game Plan</span>
             </button>
           )}
           {/* Live Coach toggle — only when user is in this game */}
@@ -1381,22 +1383,22 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   }
                 }
               }}
-              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+              className={`px-2 sm:px-3 py-1 rounded-md text-xs font-semibold transition-all ${
                 liveCoachOn
                   ? 'bg-green-600 text-white hover:bg-green-700'
                   : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
               }`}
               title="Take control of every user offensive snap"
             >
-              🎯 Live Coach {liveCoachOn ? 'ON' : 'OFF'}
+              🎯<span className="hidden sm:inline ml-1">Live Coach</span> {liveCoachOn ? 'ON' : 'OFF'}
             </button>
           )}
           <button
             onClick={skipToEnd}
             disabled={isFinished}
-            className="px-3 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all"
+            className="px-2 sm:px-3 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all"
           >
-            End Game ⏭
+            ⏭<span className="hidden sm:inline ml-1">End Game</span>
           </button>
 
           {/* Progress bar */}
@@ -1414,17 +1416,19 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         </div>
 
         {/* ================================================================
-            WIN PROBABILITY
+            WIN PROBABILITY — desktop only. Mobile copy lives after tabs.
         ================================================================ */}
-        <WinProbabilityChart
-          events={revealedEvents}
-          totalEvents={totalEvents}
-          homeColor={homeColor}
-          awayColor={awayColor}
-          homeAbbr={homeAbbr}
-          awayAbbr={awayAbbr}
-          userIsHome={game?.homeTeamId === userTeamId}
-        />
+        <div className="hidden sm:block">
+          <WinProbabilityChart
+            events={revealedEvents}
+            totalEvents={totalEvents}
+            homeColor={homeColor}
+            awayColor={awayColor}
+            homeAbbr={homeAbbr}
+            awayAbbr={awayAbbr}
+            userIsHome={game?.homeTeamId === userTeamId}
+          />
+        </div>
 
         {/* ================================================================
             TABS
@@ -1744,15 +1748,43 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           })()}
         </div>
 
+        {/* Mobile: QxQ score + win probability rendered below the tab
+            content (desktop shows them above the tabs). Keeps the scorebug,
+            field, and controls above the fold on small screens. */}
+        <div className="sm:hidden bg-[var(--surface)] border border-[var(--border)] rounded-xl px-4 py-2">
+          <QuarterScoreTable
+            events={revealedEvents}
+            homeAbbr={homeAbbr}
+            awayAbbr={awayAbbr}
+            homeColor={homeColor}
+            awayColor={awayColor}
+            homeTotal={liveHomeScore}
+            awayTotal={liveAwayScore}
+          />
+        </div>
+        <div className="sm:hidden">
+          <WinProbabilityChart
+            events={revealedEvents}
+            totalEvents={totalEvents}
+            homeColor={homeColor}
+            awayColor={awayColor}
+            homeAbbr={homeAbbr}
+            awayAbbr={awayAbbr}
+            userIsHome={game?.homeTeamId === userTeamId}
+          />
+        </div>
+
         {/* ================================================================
             FINAL RESULT + COMMIT
         ================================================================ */}
         {/* Game Over banner is now pinned to the top of this column */}
       </div>
 
-      {/* Right sidebar — play call menu (sticky at top) + around the league. */}
-      <div className="w-72 hidden lg:block shrink-0 space-y-2">
-        <div className="sticky top-20 space-y-3">
+      {/* Right sidebar — play call menu + around the league. On mobile it
+          stacks below the main content (Live Coach needs to be accessible
+          on phones). On desktop it's a sticky 288px column on the right. */}
+      <div className="w-full lg:w-72 shrink-0 space-y-2">
+        <div className="lg:sticky lg:top-20 space-y-3">
           {/* Inline Live Coach play call. Reserving min-height so the
               conditional buttons (Kick FG, Kneel, Go For It) don't change
               the box's height play-to-play. The flex container already uses

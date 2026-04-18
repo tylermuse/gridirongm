@@ -55,8 +55,8 @@ export function GameShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <GameTicker />
-        <TopBar onMenuToggle={() => setSidebarOpen(v => !v)} />
+        <GameTicker onMenuToggle={() => setSidebarOpen(v => !v)} />
+        <TopBar />
         {godMode && (
           <div className="bg-yellow-500/10 border-b border-yellow-400/30 px-4 py-1 text-center">
             <span className="text-xs font-bold text-yellow-600">God Mode Active</span>
