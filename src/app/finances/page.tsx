@@ -41,6 +41,13 @@ export default function FinancesPage() {
   const remaining = cap - used;
   const capPct = used / cap;
 
+  // Staff spend — coaches only for now. Separate from the player cap (which
+  // is what totalPayroll tracks); surfaced as a visibility item so users can
+  // see how much is going to coaching. 305mike request.
+  const coaches = userTeam.coaches ?? [];
+  const staffSpend = coaches.reduce((sum, c) => sum + (c.salary ?? 0), 0);
+  const coachCount = coaches.length;
+
   // Salary by position
   const salaryByPosition = POSITIONS.reduce<Record<Position, number>>((acc, pos) => {
     acc[pos] = roster.filter(p => p.position === pos).reduce((s, p) => s + p.contract.salary, 0);
@@ -102,6 +109,26 @@ export default function FinancesPage() {
             />
           </div>
           <div className="text-xs text-[var(--text-sec)] mt-1 text-right">{(capPct * 100).toFixed(1)}% of cap used</div>
+
+          {/* Staff spend — separate from the player cap, shown for visibility.
+              Coaching salaries don't currently count against the salary cap. */}
+          {staffSpend > 0 && (
+            <div className="mt-3 pt-3 border-t border-[var(--border)] flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-[var(--text-sec)] uppercase tracking-wide font-semibold">Staff Spend</span>
+                <span className="text-[var(--text-sec)]">· {coachCount} coach{coachCount === 1 ? '' : 'es'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-[var(--text-sec)]"
+                  title={`Coaching salaries are tracked separately from the player cap. Average per coach: $${(staffSpend / Math.max(1, coachCount)).toFixed(2)}M`}
+                >
+                  not against the cap
+                </span>
+                <span className="font-bold tabular-nums">${Math.round(staffSpend * 10) / 10}M</span>
+              </div>
+            </div>
+          )}
           {remaining < 0 && (
             <div className="mt-2 space-y-1">
               <div className="text-sm text-red-600 font-semibold">
