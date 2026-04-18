@@ -1297,7 +1297,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           {/* Row 1 (mobile) / left group (desktop): speed + play/pause + end */}
           <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap">
             <div className="flex items-center gap-1">
-              <span className="hidden sm:inline text-[10px] font-semibold text-[var(--text-sec)] uppercase mr-1">Speed</span>
+              <span className="text-[10px] font-semibold text-[var(--text-sec)] uppercase mr-1">Speed</span>
               {(['1x', '2x', '5x', 'max'] as Speed[]).map(s => (
                 <button
                   key={s}
