@@ -1113,7 +1113,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         );
       })()}
 
-      {/* Live Coach play call menu is now rendered inline in the sidebar */}
+      {/* Live Coach play call menu — rendered inline in the main column on
+          mobile (between controls and tabs) and in the sticky sidebar on
+          desktop. See renderPlayCallPanel below. */}
 
       <div className="max-w-6xl mx-auto flex flex-col lg:flex-row items-start gap-4">
       {/* Main game content */}
@@ -1401,19 +1403,106 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             ⏭<span className="hidden sm:inline ml-1">End Game</span>
           </button>
 
-          {/* Progress bar */}
-          <div className="flex-1 flex items-center gap-2 ml-2">
-            <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-              <div
-                className="h-full rounded-full bg-blue-500 transition-all duration-150"
-                style={{ width: `${totalEvents > 0 ? (revealedCount / totalEvents) * 100 : 0}%` }}
+          {/* Playback progress — meaningful in watch mode (shows how many of
+              the pre-simulated events have been revealed), but meaningless once
+              Live Coach takes over and the engine is generating new plays.
+              Hidden during Live Coach to avoid the confusing 57/57 cap. */}
+          {!liveCoachOn && (
+            <div className="flex-1 flex items-center gap-2 ml-2">
+              <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-blue-500 transition-all duration-150"
+                  style={{ width: `${totalEvents > 0 ? (revealedCount / totalEvents) * 100 : 0}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-[var(--text-sec)] tabular-nums whitespace-nowrap">
+                {revealedCount}/{totalEvents}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* ================================================================
+            CALL THE PLAY — mobile only, between controls and tabs.
+            Desktop shows it in the sticky sidebar on the right (below).
+        ================================================================ */}
+        {liveEngineRef.current && liveCoachPaused && (() => {
+          const es = liveEngineRef.current!.getState();
+          const homeAbbr2 = homeTeam?.abbreviation || 'HOME';
+          const awayAbbr2 = awayTeam?.abbreviation || 'AWAY';
+          const fp = es.fieldPos;
+          const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
+          return (
+            <div className="lg:hidden">
+              <PlayCallMenu
+                state={{
+                  quarter: es.overtime && es.quarter < 5 ? 5 : es.quarter,
+                  timeStr: `${Math.floor(es.timeSecs / 60)}:${String(es.timeSecs % 60).padStart(2, '0')}`,
+                  homeScore: es.homeScore,
+                  awayScore: es.awayScore,
+                  homeAbbr: homeAbbr2,
+                  awayAbbr: awayAbbr2,
+                  down: es.down,
+                  yardsToGo: es.yardsToGo,
+                  fieldPos: es.fieldPos,
+                  fieldDescription,
+                }}
+                isFourthDown={es.down === 4}
+                awaitingXpChoice={es.awaitingXpChoice}
+                awaitingKickoffChoice={es.awaitingKickoffChoice}
+                timeoutsRemaining={userTeamSide === 'home' ? es.homeTimeouts : es.awayTimeouts}
+                onPlayCall={(playCall) => {
+                  setOutcomeChip(null);
+                  if (liveEngineRef.current) {
+                    const newEvents = liveEngineRef.current.runOnePlay(playCall);
+                    if (newEvents.length > 0) {
+                      setLiveExtraEvents(prev => [...prev, ...newEvents]);
+                      setRevealedCount(prev => prev + 1);
+                      setAnimationComplete(false);
+                      const lastEv = newEvents[newEvents.length - 1];
+                      const isBig = lastEv && (
+                        lastEv.type === 'interception' || lastEv.type === 'fumble' ||
+                        lastEv.type === 'punt' || lastEv.type === 'touchdown' ||
+                        lastEv.isScoring || lastEv.type === 'field_goal_good' ||
+                        lastEv.type === 'field_goal_miss'
+                      );
+                      if (isBig) {
+                        pendingAutoPlayRef.current = true;
+                        const extraMs = speed === '1x' ? 6000 : speed === '2x' ? 4000 : speed === '5x' ? 2500 : 1000;
+                        setTimeout(() => {
+                          pendingAutoPlayRef.current = false;
+                          setAutoRunTick(t => t + 1);
+                        }, extraMs);
+                      }
+                    }
+                  }
+                  setLiveCoachPaused(false);
+                  setIsPlaying(true);
+                }}
+                onAutoSimRest={() => {
+                  if (liveEngineRef.current) {
+                    const allRest: PlayEvent[] = [];
+                    let safety = 0;
+                    while (!liveEngineRef.current.isFinished() && safety < 500) {
+                      const evs = liveEngineRef.current.runOnePlay();
+                      allRest.push(...evs);
+                      safety++;
+                    }
+                    if (allRest.length > 0) {
+                      setLiveExtraEvents(prev => [...prev, ...allRest]);
+                    }
+                  }
+                  setLiveCoachOn(false);
+                  setLiveCoachPaused(false);
+                }}
+                onToggleOff={() => {
+                  setLiveCoachOn(false);
+                  setLiveCoachPaused(false);
+                }}
               />
             </div>
-            <span className="text-[10px] text-[var(--text-sec)] tabular-nums whitespace-nowrap">
-              {revealedCount}/{totalEvents}
-            </span>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* ================================================================
             WIN PROBABILITY — desktop only. Mobile copy lives after tabs.
@@ -1780,16 +1869,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         {/* Game Over banner is now pinned to the top of this column */}
       </div>
 
-      {/* Right sidebar — play call menu + around the league. On mobile it
-          stacks below the main content (Live Coach needs to be accessible
-          on phones). On desktop it's a sticky 288px column on the right. */}
+      {/* Right sidebar — play call menu (desktop) + live feed + around the
+          league. On mobile, the play call menu renders inline in the main
+          column above; this sidebar still shows the feed + around-the-league. */}
       <div className="w-full lg:w-72 shrink-0 space-y-2">
         <div className="lg:sticky lg:top-20 space-y-3">
-          {/* Inline Live Coach play call. Reserving min-height so the
-              conditional buttons (Kick FG, Kneel, Go For It) don't change
-              the box's height play-to-play. The flex container already uses
-              items-start so the big-play alert in the left column can't
-              stretch this column and nudge the sticky container. */}
+          {/* Desktop-only Live Coach play call. Min-height reservation
+              prevents content below from shifting between plays. */}
+          <div className="hidden lg:block">
           {liveEngineRef.current && (() => {
             const es = liveEngineRef.current!.getState();
             const homeAbbr2 = homeTeam?.abbreviation || 'HOME';
@@ -1867,6 +1954,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               </div>
             );
           })()}
+          </div>
           {/* Live play-by-play feed — visible alongside the field */}
           {displayEvents.length > 0 && (
             <div className="mb-3">
