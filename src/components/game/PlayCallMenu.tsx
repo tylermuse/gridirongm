@@ -22,6 +22,10 @@ interface PlayCallMenuProps {
   awaitingKickoffChoice?: boolean;
   /** Timeouts remaining for the user's team */
   timeoutsRemaining?: number;
+  /** Seconds of runoff the previous play staged — the amount a timeout would
+   *  preserve. 0 means the previous play stopped the clock on its own (e.g.
+   *  incomplete pass) so a timeout wouldn't save anything. */
+  pendingRunoff?: number;
   onPlayCall: (type: PlayCallType) => void;
   onAutoSimRest: () => void;
   onToggleOff: () => void;
@@ -51,7 +55,7 @@ const PLAY_BUTTONS: { type: PlayCallType; label: string; icon: string; color: st
   { type: 'screen', label: 'Screen', icon: '🛡️', color: 'bg-teal-600 hover:bg-teal-700' },
 ];
 
-export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingKickoffChoice, timeoutsRemaining, onPlayCall, onAutoSimRest, onToggleOff }: PlayCallMenuProps) {
+export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingKickoffChoice, timeoutsRemaining, pendingRunoff, onPlayCall, onAutoSimRest, onToggleOff }: PlayCallMenuProps) {
   const [goingForIt, setGoingForIt] = useState(false);
 
   function downLabel(down: number, yardsToGo: number): string {
@@ -200,14 +204,35 @@ export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingKi
             >
               Turn off
             </button>
-            {!awaitingXpChoice && timeoutsRemaining !== undefined && timeoutsRemaining > 0 && (
-              <button
-                onClick={() => onPlayCall('timeout')}
-                className="text-[10px] font-bold text-amber-600 hover:text-amber-800 transition-colors"
-              >
-                ⏱️ Timeout ({timeoutsRemaining})
-              </button>
-            )}
+            {!awaitingXpChoice && timeoutsRemaining !== undefined && timeoutsRemaining > 0 && (() => {
+              // Surface the runoff a timeout would preserve. Helps the user
+              // understand the mechanic: a timeout only saves time if the
+              // previous play was in-bounds with the clock running. After an
+              // incomplete pass / turnover / FG, there's nothing to save.
+              const runoff = pendingRunoff ?? 0;
+              const canSaveTime = runoff > 0;
+              return (
+                <button
+                  onClick={() => onPlayCall('timeout')}
+                  disabled={!canSaveTime}
+                  className={`text-[10px] font-bold transition-colors ${
+                    canSaveTime
+                      ? 'text-amber-600 hover:text-amber-800'
+                      : 'text-[var(--text-sec)]/50 cursor-not-allowed'
+                  }`}
+                  title={canSaveTime
+                    ? `Stops the clock and saves ~${runoff}s that would otherwise tick off before the next snap.`
+                    : 'Clock already stopped — timeout would have no effect.'}
+                >
+                  ⏱️ Timeout ({timeoutsRemaining})
+                  {canSaveTime ? (
+                    <span className="ml-1 text-green-600">· saves ~{runoff}s</span>
+                  ) : (
+                    <span className="ml-1 text-[var(--text-sec)]/70">· clock stopped</span>
+                  )}
+                </button>
+              );
+            })()}
           </div>
           <button
             onClick={onAutoSimRest}

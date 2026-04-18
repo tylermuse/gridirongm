@@ -1444,7 +1444,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 isFourthDown={es.down === 4}
                 awaitingXpChoice={es.awaitingXpChoice}
                 awaitingKickoffChoice={es.awaitingKickoffChoice}
-                timeoutsRemaining={userTeamSide === 'home' ? es.homeTimeouts : es.awayTimeouts}
+                timeoutsRemaining={userTeamSide === "home" ? es.homeTimeouts : es.awayTimeouts}
+                pendingRunoff={es.pendingRunoff ?? 0}
                 onPlayCall={(playCall) => {
                   setOutcomeChip(null);
                   if (liveEngineRef.current) {
@@ -1895,7 +1896,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 isFourthDown={es.down === 4}
                 awaitingXpChoice={es.awaitingXpChoice}
                 awaitingKickoffChoice={es.awaitingKickoffChoice}
-                timeoutsRemaining={userTeamSide === 'home' ? es.homeTimeouts : es.awayTimeouts}
+                timeoutsRemaining={userTeamSide === "home" ? es.homeTimeouts : es.awayTimeouts}
+                pendingRunoff={es.pendingRunoff ?? 0}
                 onPlayCall={(playCall) => {
                   setOutcomeChip(null);
                   if (liveEngineRef.current) {
