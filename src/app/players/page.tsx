@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
@@ -26,11 +26,21 @@ const PAGE_SIZE = 50;
 
 export default function PlayersPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { players, teams, userTeamId, freeAgents } = useGameStore();
 
-  // Filters
+  // Filters — seed posFilter from ?position= so deep links from PositionLink
+  // land already filtered. Ignore unknown tokens defensively.
+  const initialPosParam = searchParams?.get('position');
+  const initialPosFilter = useMemo<Set<Position>>(() => {
+    if (!initialPosParam) return new Set();
+    const valid = POSITIONS.find(p => p === initialPosParam.toUpperCase()) as Position | undefined;
+    return valid ? new Set<Position>([valid]) : new Set();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // one-shot on mount; subsequent filter edits are user-driven
+
   const [search, setSearch] = useState('');
-  const [posFilter, setPosFilter] = useState<Set<Position>>(new Set());
+  const [posFilter, setPosFilter] = useState<Set<Position>>(initialPosFilter);
   const [ovrMin, setOvrMin] = useState(40);
   const [ovrMax, setOvrMax] = useState(99);
   const [ageMin, setAgeMin] = useState(18);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { Modal } from '@/components/ui/Modal';
@@ -174,7 +175,9 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                   </div>
                 )}
                 <div className="flex flex-wrap items-center gap-2 mt-1">
-                  <Badge>{player.position}</Badge>
+                  <Link href={`/players?position=${player.position}`} className="hover:opacity-75 transition-opacity">
+                    <Badge>{player.position}</Badge>
+                  </Link>
                   {player.height && player.weight && (
                     <span className="text-sm text-[var(--text-sec)]">{player.height} · {player.weight} lbs</span>
                   )}

@@ -14,6 +14,7 @@ import { getSubPosition } from '@/types';
 import type { Player, Position, SubPosition, ContractYear } from '@/types';
 import { POSITIONS, ROSTER_LIMITS } from '@/types';
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
+import { PositionLink } from '@/components/ui/PositionLink';
 import { LEAGUE_MINIMUM_SALARY, estimateSalary, capInflationFactor } from '@/lib/engine/store';
 
 function ratingColor(val: number): string {
@@ -1126,10 +1127,7 @@ export default function RosterPage() {
                           </button>
                         </td>
                         <td className="py-2.5 text-center text-xs font-bold text-[var(--text-sec)]">
-                          {p.position}
-                          {p.subPosition && p.subPosition !== p.position && (
-                            <span className="ml-1 text-[10px] text-[var(--text-sec)]/70">({p.subPosition})</span>
-                          )}
+                          <PositionLink position={p.position} subPosition={p.subPosition} />
                         </td>
                         <td className={`py-2.5 text-center font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
                         <td className="py-2.5 text-center">{p.injury?.type}</td>

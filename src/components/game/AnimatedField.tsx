@@ -354,26 +354,45 @@ function drawQuarterOverlay(
   h: number,
   label: string,
   progress: number,
+  eventType: string,
 ) {
-  // Fade in for first 30%, hold, fade out for last 30%
+  // Fade in for first 20%, hold, fade out for last 30%
   let alpha: number;
-  if (progress < 0.3) alpha = progress / 0.3;
+  if (progress < 0.2) alpha = progress / 0.2;
   else if (progress > 0.7) alpha = (1 - progress) / 0.3;
   else alpha = 1;
 
-  // Dark overlay
+  const isTwoMin = eventType === 'two_minute_warning';
+  // 2-min warning gets a red-tinted backdrop + larger type to read as a
+  // distinct moment (not just "end of quarter").
+  const bgR = isTwoMin ? 80 : 0;
+  const bgG = 0;
+  const bgB = 0;
   ctx.save();
-  ctx.fillStyle = `rgba(0, 0, 0, ${0.6 * alpha})`;
+  ctx.fillStyle = `rgba(${bgR}, ${bgG}, ${bgB}, ${(isTwoMin ? 0.72 : 0.6) * alpha})`;
   ctx.fillRect(0, 0, w, h);
 
-  // Centered text
-  ctx.font = 'bold 22px system-ui, sans-serif';
+  if (isTwoMin) {
+    // Pulsing accent bar across the middle — draws the eye before the text reads.
+    const pulse = 0.5 + 0.5 * Math.sin(progress * Math.PI * 6);
+    ctx.fillStyle = `rgba(220, 38, 38, ${0.85 * alpha * (0.6 + 0.4 * pulse)})`;
+    ctx.fillRect(0, h / 2 - 34, w, 68);
+  }
+
+  ctx.font = isTwoMin ? 'bold 30px system-ui, sans-serif' : 'bold 22px system-ui, sans-serif';
   ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.shadowColor = 'rgba(0,0,0,0.5)';
-  ctx.shadowBlur = 4;
+  ctx.shadowColor = 'rgba(0,0,0,0.7)';
+  ctx.shadowBlur = isTwoMin ? 8 : 4;
   ctx.fillText(label, w / 2, h / 2);
+
+  if (isTwoMin) {
+    ctx.font = 'bold 11px system-ui, sans-serif';
+    ctx.fillStyle = `rgba(255, 255, 255, ${0.85 * alpha})`;
+    ctx.shadowBlur = 2;
+    ctx.fillText('CLOCK STOPPED', w / 2, h / 2 + 26);
+  }
   ctx.restore();
 }
 
@@ -750,6 +769,7 @@ export function AnimatedField({
     quarterOverlayProgress: number;
     quarterOverlayLabel: string;
     quarterOverlayActive: boolean;
+    quarterOverlayType: string;
     // Bug 5: smooth reset between plays
     resetPhase: boolean;
     resetProgress: number;
@@ -783,6 +803,7 @@ export function AnimatedField({
     quarterOverlayProgress: 1,
     quarterOverlayLabel: '',
     quarterOverlayActive: false,
+    quarterOverlayType: '',
     resetPhase: false,
     resetProgress: 0,
     resetFromYard: 50,
@@ -888,6 +909,7 @@ export function AnimatedField({
       ref.quarterOverlayProgress = 0;
       ref.quarterOverlayLabel = separatorLabel(event.type);
       ref.quarterOverlayActive = true;
+      ref.quarterOverlayType = event.type;
     } else if (event) {
       // Bug 5: start with a brief reset phase if the ball needs to move to new LOS
       const prevBallYard = ref.animation ? ref.animation.ballRestX : ref.prevState.ballYard;
@@ -969,9 +991,11 @@ export function AnimatedField({
     const dt = ref.lastTimestamp > 0 ? Math.min((timestamp - ref.lastTimestamp) / 1000, 0.05) : 0.016;
     ref.lastTimestamp = timestamp;
 
-    // Update quarter overlay
+    // Update quarter overlay. 2-min warning holds longer so the user has
+    // time to register the situation (spec asked for ~2.5s vs the 1.2s
+    // default for quarter_end / halftime / overtime / final separators).
     if (ref.quarterOverlayActive) {
-      const overlayDuration = 1.2; // seconds
+      const overlayDuration = ref.quarterOverlayType === 'two_minute_warning' ? 2.5 : 1.2;
       ref.quarterOverlayProgress = Math.min(1, ref.quarterOverlayProgress + dt / overlayDuration);
       if (ref.quarterOverlayProgress >= 1) {
         ref.quarterOverlayActive = false;
@@ -1230,7 +1254,7 @@ export function AnimatedField({
 
     // Draw quarter transition overlay
     if (ref.quarterOverlayActive) {
-      drawQuarterOverlay(ctx, w, h, ref.quarterOverlayLabel, ref.quarterOverlayProgress);
+      drawQuarterOverlay(ctx, w, h, ref.quarterOverlayLabel, ref.quarterOverlayProgress, ref.quarterOverlayType);
     }
 
     // Enhancement 3: score confirmed end zone pulse
