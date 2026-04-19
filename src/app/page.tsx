@@ -889,73 +889,74 @@ function Dashboard() {
                   <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded animate-pulse">🔥 Hot Seat</span>
                 )}
               </div>
-              {/* Objectives */}
-              <div className="flex-1 min-w-0">
-                <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider mb-1">Owner Objectives</div>
-                <div className="flex flex-col gap-0.5">
-                  {userTeam.approval.objectives.filter(o => o.season === season).map(obj => (
-                    <div key={obj.id} className="flex items-center gap-2 text-xs">
-                      <span>{obj.status === 'completed' ? '✅' : obj.status === 'failed' ? '❌' : '⏳'}</span>
-                      <span className={obj.status === 'failed' ? 'text-red-600 line-through' : obj.status === 'completed' ? 'text-green-600' : ''}>{obj.description}</span>
+              {/* Objectives + (optionally) season outcome. The outcome replaces
+                  the objectives slot when the season is over, since season-
+                  specific objectives become noise at that point and the user
+                  wants a clear "what just happened" signal next to the gauges. */}
+              {(() => {
+                const userMatchups = (playoffBracket ?? [])
+                  .filter(m => m.homeTeamId === userTeamId || m.awayTeamId === userTeamId)
+                  .sort((a, b) => b.round - a.round);
+                const latest = userMatchups[0];
+                const isChampion = (champions ?? []).some(c => c.season === season && c.teamId === userTeamId);
+                const playoffTeamIds = playoffSeeds ? new Set([...(playoffSeeds.AC ?? []), ...(playoffSeeds.NC ?? [])]) : new Set();
+                const madePlayoffs = playoffTeamIds.has(userTeamId);
+
+                const ROUND_LABELS = ['', 'Wild Card', 'Divisional', 'Conference Championship', 'Championship'];
+                let headline: string | null = null;
+                let subline: string | null = null;
+                let tone: 'win' | 'lose' | 'neutral' = 'neutral';
+
+                if (isChampion) {
+                  headline = '🏆 Champions!';
+                  subline = `You won the ${season} championship.`;
+                  tone = 'win';
+                } else if (latest && latest.winnerId && latest.winnerId !== userTeamId) {
+                  const userIsHome = latest.homeTeamId === userTeamId;
+                  const oppId = userIsHome ? latest.awayTeamId : latest.homeTeamId;
+                  const opp = teams.find(t => t.id === oppId);
+                  const userScore = userIsHome ? latest.homeScore : latest.awayScore;
+                  const oppScore = userIsHome ? latest.awayScore : latest.homeScore;
+                  headline = `Eliminated — ${ROUND_LABELS[latest.round] ?? `Round ${latest.round}`}`;
+                  subline = opp && userScore !== undefined && oppScore !== undefined
+                    ? `Lost to ${opp.abbreviation} ${oppScore}–${userScore}. Focus shifts to the offseason.`
+                    : 'Season over. Focus shifts to the offseason.';
+                  tone = 'lose';
+                } else if (phase === 'playoffs' && !madePlayoffs) {
+                  headline = 'Missed the Playoffs';
+                  subline = `${userTeam.record.wins}-${userTeam.record.losses} wasn't enough this year.`;
+                  tone = 'lose';
+                }
+
+                if (headline) {
+                  const toneClasses = tone === 'win'
+                    ? 'bg-green-50 border-green-300 text-green-800'
+                    : tone === 'lose'
+                    ? 'bg-red-50 border-red-300 text-red-800'
+                    : 'bg-[var(--surface-2)] border-[var(--border)] text-[var(--text)]';
+                  return (
+                    <div className={`flex-1 min-w-0 rounded-lg border px-4 py-3 ${toneClasses}`}>
+                      <div className="font-black text-sm">{headline}</div>
+                      <div className="text-xs mt-1 opacity-90 leading-snug">{subline}</div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  );
+                }
+
+                return (
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] text-[var(--text-sec)] uppercase tracking-wider mb-1">Owner Objectives</div>
+                    <div className="flex flex-col gap-0.5">
+                      {userTeam.approval.objectives.filter(o => o.season === season).map(obj => (
+                        <div key={obj.id} className="flex items-center gap-2 text-xs">
+                          <span>{obj.status === 'completed' ? '✅' : obj.status === 'failed' ? '❌' : '⏳'}</span>
+                          <span className={obj.status === 'failed' ? 'text-red-600 line-through' : obj.status === 'completed' ? 'text-green-600' : ''}>{obj.description}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
-
-            {/* Season outcome card — surfaces elimination / championship / missed
-                playoffs directly on the dashboard so the user isn't left wondering
-                what just happened if they lost and landed on the dashboard. */}
-            {(() => {
-              // Find the user's most recent playoff matchup (if any)
-              const userMatchups = (playoffBracket ?? [])
-                .filter(m => m.homeTeamId === userTeamId || m.awayTeamId === userTeamId)
-                .sort((a, b) => b.round - a.round);
-              const latest = userMatchups[0];
-              const isChampion = (champions ?? []).some(c => c.season === season && c.teamId === userTeamId);
-              const playoffTeamIds = playoffSeeds ? new Set([...(playoffSeeds.AC ?? []), ...(playoffSeeds.NC ?? [])]) : new Set();
-              const madePlayoffs = playoffTeamIds.has(userTeamId);
-
-              const ROUND_LABELS = ['', 'Wild Card', 'Divisional', 'Conference Championship', 'Championship'];
-              let headline: string | null = null;
-              let subline: string | null = null;
-              let tone: 'win' | 'lose' | 'neutral' = 'neutral';
-
-              if (isChampion) {
-                headline = '🏆 Champions!';
-                subline = `You won the ${season} championship.`;
-                tone = 'win';
-              } else if (latest && latest.winnerId && latest.winnerId !== userTeamId) {
-                // Eliminated — surface opponent + score
-                const userIsHome = latest.homeTeamId === userTeamId;
-                const oppId = userIsHome ? latest.awayTeamId : latest.homeTeamId;
-                const opp = teams.find(t => t.id === oppId);
-                const userScore = userIsHome ? latest.homeScore : latest.awayScore;
-                const oppScore = userIsHome ? latest.awayScore : latest.homeScore;
-                headline = `Eliminated — ${ROUND_LABELS[latest.round] ?? `Round ${latest.round}`}`;
-                subline = opp && userScore !== undefined && oppScore !== undefined
-                  ? `Lost to ${opp.abbreviation} ${oppScore}–${userScore}. Focus shifts to the offseason.`
-                  : 'Season over. Focus shifts to the offseason.';
-                tone = 'lose';
-              } else if (phase === 'playoffs' && !madePlayoffs) {
-                headline = 'Missed the Playoffs';
-                subline = `${userTeam.record.wins}-${userTeam.record.losses} wasn't enough this year.`;
-                tone = 'lose';
-              }
-
-              if (!headline) return null;
-              const toneClasses = tone === 'win'
-                ? 'bg-green-50 border-green-300 text-green-800'
-                : tone === 'lose'
-                ? 'bg-red-50 border-red-300 text-red-800'
-                : 'bg-[var(--surface-2)] border-[var(--border)] text-[var(--text)]';
-              return (
-                <div className={`mt-4 rounded-lg border px-4 py-3 ${toneClasses}`}>
-                  <div className="font-black text-sm">{headline}</div>
-                  <div className="text-xs mt-1 opacity-90 leading-snug">{subline}</div>
-                </div>
-              );
-            })()}
           </Card>
         )}
 
