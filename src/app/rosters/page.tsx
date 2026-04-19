@@ -17,7 +17,7 @@ const ROSTERS: RosterEntry[] = [
     id: 'nfl-2026-updated',
     title: 'NFL 2026 Roster — Updated April 19, 2026',
     description:
-      'Complete NFL roster with all free agency moves and verified contract data. Every active player contract (AAV and expiration year) has been cross-checked against Spotrac for accuracy across all 32 teams. Now includes a refreshed 2026 draft class that matches the latest consensus from PFF, NFL.com, ESPN, WalterFootball, and Sharp Football — Mendoza locked at 1.1, Bain/Reese/Bailey/Mauigoa/Love up top, and 50+ prospects rebalanced so the draft AI picks them in the right order. April 19 update: Dexter Lawrence traded to CIN — Giants now hold picks #5 and #10, plus recent NYG signings (Faalele, Patrick, Allen) and roster cuts applied.',
+      'Complete NFL roster with all free agency moves and verified contract data. Every active player contract (AAV and expiration year) has been cross-checked against Spotrac for accuracy across all 32 teams. Now includes a refreshed 2026 draft class that matches the latest consensus from PFF, NFL.com, ESPN, WalterFootball, and Sharp Football — Mendoza locked at 1.1, Bain/Reese/Bailey/Mauigoa/Love up top, and 50+ prospects rebalanced so the draft AI picks them in the right order. April 19 update: full league-wide pass — Dexter Lawrence to CIN (NYG now holds #5 and #10), Maason Smith/Orhorhoro swap (JAX↔ATL), Wicks to PHI, Mapu to HOU, plus 10+ signings and cuts across all 32 teams.',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
     lastUpdated: 'April 19, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
