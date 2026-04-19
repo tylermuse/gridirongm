@@ -615,9 +615,6 @@ export default function RosterPage() {
                               onClick={() => setSelectedPlayerId(p.id)}
                               className="font-semibold hover:text-blue-600 transition-colors truncate"
                             >
-                              {p.jerseyNumber != null && (
-                                <span className="text-[var(--text-sec)] mr-1.5 font-normal">#{p.jerseyNumber}</span>
-                              )}
                               <span className="sm:hidden">{p.firstName[0]}. {p.lastName}</span>
                               <span className="hidden sm:inline">{p.firstName} {p.lastName}</span>
                               {champTeamId === userTeamId && <span className="ml-0.5 text-xs" title="Championship Ring">💍</span>}
@@ -1279,7 +1276,6 @@ export default function RosterPage() {
                           <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)]">
                             <td className="py-2 pl-2">
                               <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-600">
-                                {p.jerseyNumber != null && <span className="text-[var(--text-sec)] mr-1.5 font-normal">#{p.jerseyNumber}</span>}
                                 {p.firstName} {p.lastName}
                               </button>
                             </td>
@@ -1332,7 +1328,6 @@ export default function RosterPage() {
                           <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)]">
                             <td className="py-2 pl-2">
                               <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-600">
-                                {p.jerseyNumber != null && <span className="text-[var(--text-sec)] mr-1.5 font-normal">#{p.jerseyNumber}</span>}
                                 {p.firstName} {p.lastName}
                               </button>
                             </td>
