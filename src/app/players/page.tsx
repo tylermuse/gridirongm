@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { Suspense, useState, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
@@ -25,6 +25,17 @@ type ContractFilter = 'any' | 'expiring' | 'under_contract' | 'free_agent';
 const PAGE_SIZE = 50;
 
 export default function PlayersPage() {
+  // useSearchParams() forces client-side bailout, so wrap in Suspense to
+  // satisfy Next.js's static-generation requirement (the prod build fails
+  // without this).
+  return (
+    <Suspense fallback={null}>
+      <PlayersPageInner />
+    </Suspense>
+  );
+}
+
+function PlayersPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { players, teams, userTeamId, freeAgents } = useGameStore();
