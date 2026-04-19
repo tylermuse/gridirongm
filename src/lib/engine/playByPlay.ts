@@ -417,6 +417,13 @@ interface GameState {
 // Stat tracking (accumulated during simulation)
 // ---------------------------------------------------------------------------
 
+export interface PerReceiverStat {
+  targets: number;
+  receptions: number;
+  yards: number;
+  tds: number;
+}
+
 export interface StatBucket {
   passAttempts: number;
   passCompletions: number;
@@ -442,6 +449,10 @@ export interface StatBucket {
   fieldGoalsMade: number;
   extraPointAttempts: number;
   extraPointsMade: number;
+  // Per-receiver accumulator, keyed by player id. Credited as each pass event
+  // fires so the sum across all receivers matches QB passing totals exactly
+  // (no share-based distribution drift, no ghost TDs).
+  perReceiver: Record<string, PerReceiverStat>;
 }
 
 function emptyBucket(): StatBucket {
@@ -453,6 +464,28 @@ function emptyBucket(): StatBucket {
     sacks: 0, defensiveINTs: 0, tackles: 0,
     fieldGoalAttempts: 0, fieldGoalsMade: 0,
     extraPointAttempts: 0, extraPointsMade: 0,
+    perReceiver: {},
+  };
+}
+
+/** Deep-clone a bucket so snapshot/resume spreads don't alias the perReceiver map. */
+function cloneBucket(b: StatBucket): StatBucket {
+  const perReceiver: Record<string, PerReceiverStat> = {};
+  for (const [id, rec] of Object.entries(b.perReceiver)) perReceiver[id] = { ...rec };
+  return { ...b, perReceiver };
+}
+
+function creditReceiver(
+  bucket: StatBucket,
+  receiverId: string,
+  patch: Partial<PerReceiverStat>,
+): void {
+  const cur = bucket.perReceiver[receiverId] ?? { targets: 0, receptions: 0, yards: 0, tds: 0 };
+  bucket.perReceiver[receiverId] = {
+    targets: cur.targets + (patch.targets ?? 0),
+    receptions: cur.receptions + (patch.receptions ?? 0),
+    yards: cur.yards + (patch.yards ?? 0),
+    tds: cur.tds + (patch.tds ?? 0),
   };
 }
 
@@ -495,8 +528,8 @@ export function simulatePlayByPlay(
   const homeQBTierMod = homeKey.qb ? getQBTierModifier(computeQBTier(homeKey.qb)) : 0;
   const awayQBTierMod = awayKey.qb ? getQBTierModifier(computeQBTier(awayKey.qb)) : 0;
 
-  const homeBucket = resumeFrom ? { ...resumeFrom.homeBucket } : emptyBucket();
-  const awayBucket = resumeFrom ? { ...resumeFrom.awayBucket } : emptyBucket();
+  const homeBucket = resumeFrom ? cloneBucket(resumeFrom.homeBucket) : emptyBucket();
+  const awayBucket = resumeFrom ? cloneBucket(resumeFrom.awayBucket) : emptyBucket();
 
   const events: PlayEvent[] = [];
   let playId = resumeFrom ? resumeFrom.nextEventId : 0;
@@ -527,8 +560,8 @@ export function simulatePlayByPlay(
       quarter: state.quarter,
       eventIndex: events.length,
       state: { ...state },
-      homeBucket: { ...homeBucket },
-      awayBucket: { ...awayBucket },
+      homeBucket: cloneBucket(homeBucket),
+      awayBucket: cloneBucket(awayBucket),
     });
   }
 
@@ -634,18 +667,17 @@ export function simulatePlayByPlay(
     const desc = descTouchdown(isRush, scorer, ok.qb, yards);
     addEvent('touchdown', desc, yards, true);
     shiftMomentum(25); // big momentum swing
-    if (state.possession === 'home') {
-      state.homeScore += 6;
-      homeBucket.passTDs += isRush ? 0 : 1;
-      homeBucket.rushTDs += isRush ? 1 : 0;
-      if (scorer && !isRush) {
-        const recBucket = state.possession === 'home' ? homeBucket : awayBucket;
-        recBucket.receivingTDs += 1;
-      }
-    } else {
-      state.awayScore += 6;
-      awayBucket.passTDs += isRush ? 0 : 1;
-      awayBucket.rushTDs += isRush ? 1 : 0;
+    const scoringBucket = state.possession === 'home' ? homeBucket : awayBucket;
+    if (state.possession === 'home') state.homeScore += 6;
+    else state.awayScore += 6;
+    scoringBucket.passTDs += isRush ? 0 : 1;
+    scoringBucket.rushTDs += isRush ? 1 : 0;
+    // Credit the receiving TD directly to the pass catcher's per-receiver
+    // bucket (no share-based distribution). The aggregate receivingTDs field
+    // on the bucket mirrors this for debugging; perReceiver is authoritative.
+    if (scorer && !isRush) {
+      scoringBucket.receivingTDs += 1;
+      creditReceiver(scoringBucket, scorer.id, { tds: 1 });
     }
 
     // Extra point or 2-point conversion decision
@@ -1283,6 +1315,9 @@ export function simulatePlayByPlay(
         ob.receivingTargets += 1;
         ob.receptions += 1;
         ob.receivingYards += yardsGained;
+        if (receiver) {
+          creditReceiver(ob, receiver.id, { targets: 1, receptions: 1, yards: yardsGained });
+        }
         db.tackles += 1;
 
         const isTD = state.fieldPos + yardsGained >= 100;
@@ -1314,6 +1349,7 @@ export function simulatePlayByPlay(
         else receiver = ok.rb;
 
         ob.receivingTargets += 1;
+        if (receiver) creditReceiver(ob, receiver.id, { targets: 1 });
 
         const desc = descPassIncomplete(ok.qb, receiver);
         addEvent('pass_incomplete', desc, 0, false);
@@ -1453,32 +1489,18 @@ export function simulatePlayByPlay(
       };
     }
 
-    // Receivers — distribute by target share matching play selection
-    const totalRecYards = bucket.receivingYards;
-    const totalRec = bucket.receptions;
-    const totalTgts = bucket.receivingTargets;
-    const passTDs = bucket.passTDs;
-
-    const recShares: { player: Player | null; share: number }[] = [
-      { player: keyPlayers.wr1, share: 0.28 },
-      { player: keyPlayers.wr2, share: 0.21 },
-      { player: keyPlayers.wr3, share: 0.14 },
-      { player: keyPlayers.te, share: 0.18 },
-      { player: keyPlayers.rb, share: 0.12 },
-    ];
-    let assignedTDs = 0;
-    for (const { player, share } of recShares) {
-      if (!player) continue;
-      const tds = assignedTDs < passTDs && share >= 0.14 ? Math.round(passTDs * share) : 0;
-      assignedTDs += tds;
-      const existing = playerStats[player.id];
-      playerStats[player.id] = {
+    // Receivers — read exact per-player totals accumulated during the sim.
+    // No share-based distribution: sum(targets/receptions/yards/tds) across
+    // receivers matches the QB's totals exactly (invariant asserted below).
+    for (const [pid, rec] of Object.entries(bucket.perReceiver)) {
+      const existing = playerStats[pid];
+      playerStats[pid] = {
         ...existing,
         gamesPlayed: 1,
-        targets: (existing?.targets ?? 0) + Math.round(totalTgts * share),
-        receptions: (existing?.receptions ?? 0) + Math.round(totalRec * share),
-        receivingYards: (existing?.receivingYards ?? 0) + Math.round(totalRecYards * share),
-        receivingTDs: (existing?.receivingTDs ?? 0) + tds,
+        targets: (existing?.targets ?? 0) + rec.targets,
+        receptions: (existing?.receptions ?? 0) + rec.receptions,
+        receivingYards: (existing?.receivingYards ?? 0) + rec.yards,
+        receivingTDs: (existing?.receivingTDs ?? 0) + rec.tds,
       };
     }
 
@@ -1540,6 +1562,13 @@ export function simulatePlayByPlay(
   applyBucketToStats(homeBucket, homeKey, homePlayers);
   applyBucketToStats(awayBucket, awayKey, awayPlayers);
 
+  // Invariant: per-team passing totals must equal the sum of per-receiver
+  // totals. If this trips we've silently dropped credit somewhere (ghost TDs,
+  // drifting yards) — fail loud in dev, log+continue in prod so saves don't
+  // break for end users.
+  assertReceivingInvariants('home', homeBucket);
+  assertReceivingInvariants('away', awayBucket);
+
   return {
     events,
     homeScore: state.homeScore,
@@ -1547,6 +1576,30 @@ export function simulatePlayByPlay(
     playerStats,
     quarterSnapshots,
   };
+}
+
+function assertReceivingInvariants(side: 'home' | 'away', bucket: StatBucket): void {
+  let tgts = 0, recs = 0, yds = 0, tds = 0;
+  for (const rec of Object.values(bucket.perReceiver)) {
+    tgts += rec.targets; recs += rec.receptions; yds += rec.yards; tds += rec.tds;
+  }
+  const mismatch =
+    tgts !== bucket.receivingTargets ||
+    recs !== bucket.receptions ||
+    yds !== bucket.receivingYards ||
+    tds !== bucket.receivingTDs ||
+    yds !== bucket.passYards ||
+    tds !== bucket.passTDs;
+  if (!mismatch) return;
+  const msg =
+    `[stat-invariant] ${side} boxscore drift: ` +
+    `QB pass=${bucket.passYards}yd/${bucket.passTDs}td vs ` +
+    `Σrecv=${yds}yd/${tds}td ` +
+    `(tgts qb=${bucket.receivingTargets}/Σ=${tgts}, rec qb=${bucket.receptions}/Σ=${recs})`;
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
+    throw new Error(msg);
+  }
+  console.warn(msg);
 }
 
 /**
