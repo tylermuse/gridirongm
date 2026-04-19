@@ -902,6 +902,60 @@ function Dashboard() {
                 </div>
               </div>
             </div>
+
+            {/* Season outcome card — surfaces elimination / championship / missed
+                playoffs directly on the dashboard so the user isn't left wondering
+                what just happened if they lost and landed on the dashboard. */}
+            {(() => {
+              // Find the user's most recent playoff matchup (if any)
+              const userMatchups = (playoffBracket ?? [])
+                .filter(m => m.homeTeamId === userTeamId || m.awayTeamId === userTeamId)
+                .sort((a, b) => b.round - a.round);
+              const latest = userMatchups[0];
+              const isChampion = (champions ?? []).some(c => c.season === season && c.teamId === userTeamId);
+              const playoffTeamIds = playoffSeeds ? new Set([...(playoffSeeds.AC ?? []), ...(playoffSeeds.NC ?? [])]) : new Set();
+              const madePlayoffs = playoffTeamIds.has(userTeamId);
+
+              const ROUND_LABELS = ['', 'Wild Card', 'Divisional', 'Conference Championship', 'Championship'];
+              let headline: string | null = null;
+              let subline: string | null = null;
+              let tone: 'win' | 'lose' | 'neutral' = 'neutral';
+
+              if (isChampion) {
+                headline = '🏆 Champions!';
+                subline = `You won the ${season} championship.`;
+                tone = 'win';
+              } else if (latest && latest.winnerId && latest.winnerId !== userTeamId) {
+                // Eliminated — surface opponent + score
+                const userIsHome = latest.homeTeamId === userTeamId;
+                const oppId = userIsHome ? latest.awayTeamId : latest.homeTeamId;
+                const opp = teams.find(t => t.id === oppId);
+                const userScore = userIsHome ? latest.homeScore : latest.awayScore;
+                const oppScore = userIsHome ? latest.awayScore : latest.homeScore;
+                headline = `Eliminated — ${ROUND_LABELS[latest.round] ?? `Round ${latest.round}`}`;
+                subline = opp && userScore !== undefined && oppScore !== undefined
+                  ? `Lost to ${opp.abbreviation} ${oppScore}–${userScore}. Focus shifts to the offseason.`
+                  : 'Season over. Focus shifts to the offseason.';
+                tone = 'lose';
+              } else if (phase === 'playoffs' && !madePlayoffs) {
+                headline = 'Missed the Playoffs';
+                subline = `${userTeam.record.wins}-${userTeam.record.losses} wasn't enough this year.`;
+                tone = 'lose';
+              }
+
+              if (!headline) return null;
+              const toneClasses = tone === 'win'
+                ? 'bg-green-50 border-green-300 text-green-800'
+                : tone === 'lose'
+                ? 'bg-red-50 border-red-300 text-red-800'
+                : 'bg-[var(--surface-2)] border-[var(--border)] text-[var(--text)]';
+              return (
+                <div className={`mt-4 rounded-lg border px-4 py-3 ${toneClasses}`}>
+                  <div className="font-black text-sm">{headline}</div>
+                  <div className="text-xs mt-1 opacity-90 leading-snug">{subline}</div>
+                </div>
+              );
+            })()}
           </Card>
         )}
 
