@@ -454,6 +454,46 @@ export function assignJerseyNumber(
   return 0;
 }
 
+/** Walk every team and ensure each player has a unique valid jersey number.
+ *  Preserves existing valid numbers; reassigns duplicates or retired-number
+ *  conflicts; fills in any that are missing. Pure — returns a new players
+ *  array; call whenever state is loaded or rosters are generated to cover
+ *  edge cases that slipped past the per-acquisition assigners. */
+export function reconcileJerseys(players: Player[], teams: Team[]): Player[] {
+  const patches = new Map<string, number>();
+  const byTeam = new Map<string, Player[]>();
+  for (const p of players) {
+    if (!p.teamId) continue;
+    if (!byTeam.has(p.teamId)) byTeam.set(p.teamId, []);
+    byTeam.get(p.teamId)!.push(p);
+  }
+  for (const [tid, teamPlayers] of byTeam) {
+    const team = teams.find(t => t.id === tid);
+    const retired = new Set<number>((team?.retiredNumbers ?? []).map(r => r.number));
+    const taken = new Set<number>();
+    // Stable order so a rerun produces the same assignment.
+    const sorted = [...teamPlayers].sort((a, b) => {
+      const ap = a.draftPick ?? 9999;
+      const bp = b.draftPick ?? 9999;
+      if (ap !== bp) return ap - bp;
+      return a.lastName.localeCompare(b.lastName);
+    });
+    for (const p of sorted) {
+      const num = p.jerseyNumber;
+      if (typeof num === 'number' && !taken.has(num) && !retired.has(num)) {
+        // Existing number is still unique + not retired — keep it.
+        taken.add(num);
+        continue;
+      }
+      const n = assignJerseyNumber(p.position, taken, retired);
+      patches.set(p.id, n);
+      taken.add(n);
+    }
+  }
+  if (patches.size === 0) return players;
+  return players.map(p => patches.has(p.id) ? { ...p, jerseyNumber: patches.get(p.id) } : p);
+}
+
 /** Format a team record as "W-L" or "W-L-T" if ties > 0 */
 export function formatRecord(r: { wins: number; losses: number; ties?: number }): string {
   return r.ties ? `${r.wins}-${r.losses}-${r.ties}` : `${r.wins}-${r.losses}`;

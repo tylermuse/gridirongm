@@ -10,7 +10,7 @@ import type {
   HoldoutEntry, TradeRumor, Rivalry, RivalryEvent,
   ExpansionTeamConfig, SocialPost, ImportedProspect,
 } from '@/types';
-import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, assignOlSlots, assignJerseyNumber, isPracticeSquadEligible, PRACTICE_SQUAD_LIMIT, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
+import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, assignOlSlots, assignJerseyNumber, reconcileJerseys, isPracticeSquadEligible, PRACTICE_SQUAD_LIMIT, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { NFL_2026_FIRST_ROUND, isNfl2026Roster, type MockDraftPick } from '@/lib/data/nfl2026Draft';
@@ -33,7 +33,7 @@ import { checkDisciplineEvents, disciplineNewsItems, tickSuspensions } from './d
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 
-const SAVE_VERSION = 28;
+const SAVE_VERSION = 29;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
@@ -2589,7 +2589,7 @@ export const useGameStore = create<GameStore>()(
             phase: isRegularStart ? 'regular' : 'resigning',
             userTeamId: userTeam.id,
             teams: teamsWithApproval,
-            players: allImportedPlayers,
+            players: reconcileJerseys(allImportedPlayers, teamsWithApproval),
             schedule,
             draftOrder: [],
             draftResults: [],
@@ -2748,7 +2748,7 @@ export const useGameStore = create<GameStore>()(
           phase: 'resigning',
           userTeamId: userTeam.id,
           teams: genTeamsWithApproval,
-          players: allPlayers,
+          players: reconcileJerseys(allPlayers, genTeamsWithApproval),
           schedule,
           draftOrder: [],
           draftResults: [],
@@ -8092,7 +8092,7 @@ export const useGameStore = create<GameStore>()(
           phase: enterPreseason ? 'preseason' : 'regular',
           preseasonSchedule,
           preseasonWeek: enterPreseason ? 1 : 0,
-          players: allPlayersForNewSeason,
+          players: reconcileJerseys(allPlayersForNewSeason, teamsAfterCoaches),
           teams: teamsAfterCoaches,
           schedule: newSchedule,
           draftResults: [],
@@ -9120,34 +9120,39 @@ export const useGameStore = create<GameStore>()(
           }
         }
         if (version < 28) {
-          // Seed jersey numbers + retiredNumbers + practiceSquad for existing
-          // rosters. Walk each team, collect positions, and assign the lowest
-          // valid number for each player (stable order so the same save
-          // migrated twice produces the same numbers).
+          // Initialize retiredNumbers + practiceSquad structures on teams.
+          // Jersey assignment itself runs through the v29 reconcile below so
+          // both freshly-upgraded saves and imports with partial data land in
+          // a fully-numbered state.
           const teams28 = ((state as any).teams ?? []) as Array<Record<string, unknown>>;
-          const players28 = ((state as any).players ?? []) as Array<Record<string, unknown>>;
           for (const t of teams28) {
             if (!t.retiredNumbers) t.retiredNumbers = [];
             if (!t.practiceSquad) t.practiceSquad = [];
           }
-          // Group players by team for efficient assignment
-          const byTeam: Record<string, Array<Record<string, unknown>>> = {};
-          for (const p of players28) {
+        }
+        if (version < 29) {
+          // Defensive re-pass over jersey numbers. v28 only handled players
+          // present at migration time — saves created between v28 and v29 can
+          // have fresh rookies / UDFAs / generated roster players with no
+          // jersey set, plus duplicate numbers across traded players.
+          // reconcileJerseys preserves valid existing numbers and fills the
+          // gaps.
+          const stateObj = state as Record<string, unknown>;
+          const players29 = (stateObj.players ?? []) as Array<Record<string, unknown>>;
+          const teams29 = (stateObj.teams ?? []) as Array<Record<string, unknown>>;
+          const byTeam = new Map<string, Array<Record<string, unknown>>>();
+          for (const p of players29) {
             const tid = p.teamId as string | null;
             if (!tid) continue;
-            (byTeam[tid] ??= []).push(p);
+            if (!byTeam.has(tid)) byTeam.set(tid, []);
+            byTeam.get(tid)!.push(p);
           }
-          for (const [tid, teamPlayers] of Object.entries(byTeam)) {
-            const team = teams28.find(t => t.id === tid);
+          for (const [tid, teamPlayers] of byTeam) {
+            const team = teams29.find(t => t.id === tid);
             const retired = new Set<number>(
               ((team?.retiredNumbers as Array<{ number: number }> | undefined) ?? []).map(r => r.number),
             );
             const taken = new Set<number>();
-            // First pass: respect any already-set numbers (defensive for reruns)
-            for (const p of teamPlayers) {
-              if (typeof p.jerseyNumber === 'number') taken.add(p.jerseyNumber);
-            }
-            // Stable ordering by draft pick then name for deterministic assignment
             const sorted = [...teamPlayers].sort((a, b) => {
               const ap = (a.draftPick as number | null) ?? 9999;
               const bp = (b.draftPick as number | null) ?? 9999;
@@ -9155,7 +9160,11 @@ export const useGameStore = create<GameStore>()(
               return String(a.lastName).localeCompare(String(b.lastName));
             });
             for (const p of sorted) {
-              if (typeof p.jerseyNumber === 'number') continue;
+              const num = p.jerseyNumber as number | undefined;
+              if (typeof num === 'number' && !taken.has(num) && !retired.has(num)) {
+                taken.add(num);
+                continue;
+              }
               const n = assignJerseyNumber(p.position as Position, taken, retired);
               p.jerseyNumber = n;
               taken.add(n);
