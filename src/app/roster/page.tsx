@@ -159,6 +159,21 @@ export default function RosterPage() {
   const [extendYears, setExtendYears] = useState(3);
   const [viewingTeamId, setViewingTeamId] = useState<string | null>(null);
 
+  // Sort state for the Practice Squad view. Separate from the main roster
+  // sort so navigating between tabs keeps each view's sort intact.
+  type PsSortKey = 'name' | 'pos' | 'ovr' | 'age' | 'yrs' | 'salary';
+  const [psSortKey, setPsSortKey] = useState<PsSortKey>('ovr');
+  const [psSortDir, setPsSortDir] = useState<'asc' | 'desc'>('desc');
+  const handlePsSort = (key: PsSortKey) => {
+    if (psSortKey === key) {
+      setPsSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setPsSortKey(key);
+      // Numeric columns default to desc (show best first); text defaults to asc.
+      setPsSortDir(key === 'name' || key === 'pos' ? 'asc' : 'desc');
+    }
+  };
+
   // Whether we're in an offseason phase where restructuring makes sense
   const isOffseason = phase !== 'regular';
 
@@ -207,8 +222,11 @@ export default function RosterPage() {
   const pendingResignIds = phase === 'resigning' && isViewingOwnTeam
     ? new Set((resigningPlayers ?? []).map(r => r.playerId))
     : new Set<string>();
+  // `roster` is the active 53 — PS players are explicitly excluded so they
+  // don't leak into depth charts, composition counts, or cap calculations.
+  const activePsIds = new Set(viewingTeam?.practiceSquad ?? []);
   const roster = players
-    .filter(p => p.teamId === activeTeamId && !p.retired && !pendingResignIds.has(p.id));
+    .filter(p => p.teamId === activeTeamId && !p.retired && !pendingResignIds.has(p.id) && !activePsIds.has(p.id));
 
   // Depth position for each player
   function getDepthLabel(player: Player): string {
@@ -1180,18 +1198,54 @@ export default function RosterPage() {
 
         {/* ── PRACTICE SQUAD VIEW ── */}
         {viewMode === 'practice' && (() => {
-          const psIds = new Set(viewingTeam?.practiceSquad ?? []);
-          const psPlayers = roster.filter(p => psIds.has(p.id) || (viewingTeam?.practiceSquad ?? []).includes(p.id));
-          // roster includes only active-53, so pull PS players directly from the global list
           const psPlayersFull = (viewingTeam?.practiceSquad ?? [])
             .map(id => players.find(p => p.id === id))
             .filter((p): p is NonNullable<typeof p> => !!p);
           const PS_CAP = 16;
           const slotsLeft = PS_CAP - psPlayersFull.length;
-          const eligibleActive = roster
-            .filter(p => p.ratings.overall <= 80 && p.experience <= 2 && !p.onIR)
-            .sort((a, b) => a.ratings.overall - b.ratings.overall)
-            .slice(0, 10);
+          // `roster` already excludes PS members, so the eligibility filter
+          // only has to gate on rating / experience / IR.
+          const eligibleActive = roster.filter(p =>
+            p.ratings.overall <= 80 && p.experience <= 2 && !p.onIR,
+          );
+
+          // Shared sort — same keys work for both tables, so headers behave
+          // consistently between the PS and the eligible-to-demote list.
+          const sortPsPlayers = (arr: typeof psPlayersFull) => {
+            const dir = psSortDir === 'asc' ? 1 : -1;
+            return [...arr].sort((a, b) => {
+              switch (psSortKey) {
+                case 'name': return dir * `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`);
+                case 'pos': return dir * a.position.localeCompare(b.position);
+                case 'ovr': return dir * (a.ratings.overall - b.ratings.overall);
+                case 'age': return dir * (a.age - b.age);
+                case 'yrs': return dir * (a.experience - b.experience);
+                case 'salary': return dir * (a.contract.salary - b.contract.salary);
+                default: return 0;
+              }
+            });
+          };
+          const sortedPs = sortPsPlayers(psPlayersFull);
+          const sortedEligible = sortPsPlayers(eligibleActive).slice(0, 10);
+
+          const SortHeader = ({ label, colKey, align = 'center', className = '' }: {
+            label: string;
+            colKey: PsSortKey;
+            align?: 'left' | 'center';
+            className?: string;
+          }) => {
+            const active = psSortKey === colKey;
+            const arrow = !active ? '' : psSortDir === 'asc' ? ' ▲' : ' ▼';
+            return (
+              <th
+                className={`py-2 ${align === 'left' ? 'pl-2 text-left' : 'text-center'} cursor-pointer select-none hover:text-[var(--text)] transition-colors ${active ? 'text-blue-600' : ''} ${className}`}
+                onClick={() => handlePsSort(colKey)}
+              >
+                {label}{arrow}
+              </th>
+            );
+          };
+
           return (
             <div className="space-y-4">
               <Card>
@@ -1211,17 +1265,17 @@ export default function RosterPage() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="text-left text-xs text-[var(--text-sec)] uppercase">
-                          <th className="py-2 pl-2">Player</th>
-                          <th className="py-2 text-center">Pos</th>
-                          <th className="py-2 text-center">OVR</th>
-                          <th className="py-2 text-center">Age</th>
-                          <th className="py-2 text-center">Yrs</th>
+                        <tr className="text-xs text-[var(--text-sec)] uppercase">
+                          <SortHeader label="Player" colKey="name" align="left" />
+                          <SortHeader label="Pos" colKey="pos" />
+                          <SortHeader label="OVR" colKey="ovr" />
+                          <SortHeader label="Age" colKey="age" />
+                          <SortHeader label="Yrs" colKey="yrs" />
                           <th className="py-2 text-center">Action</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {psPlayersFull.map(p => (
+                        {sortedPs.map(p => (
                           <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)]">
                             <td className="py-2 pl-2">
                               <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-600">
@@ -1257,24 +1311,24 @@ export default function RosterPage() {
                     <CardTitle>Eligible to Demote ({eligibleActive.length})</CardTitle>
                   </CardHeader>
                   <p className="text-xs text-[var(--text-sec)] mb-3">
-                    Lowest-rated young players on your active roster. Demoting clears a 53 slot and
-                    removes their salary from your cap ledger.
+                    Young players on your active roster eligible for the practice squad.
+                    Demoting clears a 53 slot and removes their salary from your cap ledger.
                   </p>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="text-left text-xs text-[var(--text-sec)] uppercase">
-                          <th className="py-2 pl-2">Player</th>
-                          <th className="py-2 text-center">Pos</th>
-                          <th className="py-2 text-center">OVR</th>
-                          <th className="py-2 text-center">Age</th>
-                          <th className="py-2 text-center">Yrs</th>
-                          <th className="py-2 text-center">Salary</th>
+                        <tr className="text-xs text-[var(--text-sec)] uppercase">
+                          <SortHeader label="Player" colKey="name" align="left" />
+                          <SortHeader label="Pos" colKey="pos" />
+                          <SortHeader label="OVR" colKey="ovr" />
+                          <SortHeader label="Age" colKey="age" />
+                          <SortHeader label="Yrs" colKey="yrs" />
+                          <SortHeader label="Salary" colKey="salary" />
                           <th className="py-2 text-center">Action</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {eligibleActive.map(p => (
+                        {sortedEligible.map(p => (
                           <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)]">
                             <td className="py-2 pl-2">
                               <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-600">

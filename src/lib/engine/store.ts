@@ -7564,6 +7564,16 @@ export const useGameStore = create<GameStore>()(
             })
           : state.players;
 
+        // Roll PS contracts over automatically. Without this, every
+        // practice-squad player's 1-year league-min deal would expire at
+        // season's end and the entire PS would empty out — defeating the
+        // purpose of stashing developmental players. Build a set of all
+        // team PS ids once so the per-player loop can check in O(1).
+        const psPlayerIds = new Set<string>();
+        for (const t of state.teams) {
+          for (const pid of (t.practiceSquad ?? [])) psPlayerIds.add(pid);
+        }
+
         const agedPlayers = playersWithAwards.map(p => {
           // Clear teamId on previously retired players so they don't re-appear in lists
           if (p.retired) return p.teamId ? { ...p, teamId: null, stats: emptyStats() } : p;
@@ -7588,10 +7598,23 @@ export const useGameStore = create<GameStore>()(
             p.draftYear !== null &&
             p.draftYear >= newSeason;
 
+          const isOnPracticeSquad = p.teamId !== null && psPlayerIds.has(p.id);
+
           // Advance contractYears: pop index 0, shift everything forward
           // Skip decrement for contracts signed this offseason (offseasonSigned flag)
           let advancedContract = p.contract;
-          if (!isUnsignedFutureProspect) {
+          if (isOnPracticeSquad) {
+            // PS auto-renew: reset to a fresh 1-year league-minimum deal
+            // instead of ticking down toward expiration. Keeps the player
+            // on the team through the rollover so the user doesn't lose
+            // their entire developmental stash every spring.
+            advancedContract = {
+              salary: LEAGUE_MINIMUM_SALARY,
+              yearsLeft: 1,
+              guaranteed: 0,
+              totalYears: 1,
+            };
+          } else if (!isUnsignedFutureProspect) {
             if (p.contract.offseasonSigned) {
               // Just clear the flag — don't decrement. This contract hasn't had a season played yet.
               advancedContract = { ...p.contract, offseasonSigned: undefined };
@@ -7750,6 +7773,11 @@ export const useGameStore = create<GameStore>()(
 
           const removedIds = new Set([...newlyRetiredOnTeamIds, ...voidPlayerIds, ...expiredContractIds]);
           const newRoster = t.roster.filter(pid => !removedIds.has(pid));
+          // Mirror the same prune on the practice squad so it can't hold
+          // ghost ids pointing at retired / voided / expired players.
+          // (Auto-roll above keeps PS contracts from expiring, but aging
+          // retirements can still land on a PS player.)
+          const newPracticeSquad = (t.practiceSquad ?? []).filter(pid => !removedIds.has(pid));
           // Remove retired + voided from depth chart, then re-sort all positions by OVR
           const newDepthChart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
             const active = (t.depthChart[pos] ?? []).filter(pid => !removedIds.has(pid));
@@ -7783,6 +7811,7 @@ export const useGameStore = create<GameStore>()(
             ...t,
             record: emptyRecord(),
             roster: newRoster,
+            practiceSquad: newPracticeSquad,
             deadCap: updatedDeadCap,
           };
           // For user team: freeze payroll so cap space stays consistent from end of FA
