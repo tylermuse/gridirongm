@@ -138,6 +138,7 @@ export default function RosterPage() {
     reorderDepthChart, restructureContract, extendPlayer,
     solicitTradingBlockProposals, createPlayer,
     autoCutToRosterLimit,
+    demoteToPracticeSquad, promoteFromPracticeSquad,
     phase, week, seasonHistory, leagueSettings, resigningPlayers,
   } = useGameStore();
   const godMode = leagueSettings?.godMode ?? false;
@@ -147,7 +148,7 @@ export default function RosterPage() {
   const [filterPos, setFilterPos] = useState<Position | 'ALL'>('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('pos');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [viewMode, setViewMode] = useState<'roster' | 'depth' | 'injuries'>('roster');
+  const [viewMode, setViewMode] = useState<'roster' | 'depth' | 'injuries' | 'practice'>('roster');
   const [confirmRelease, setConfirmRelease] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [restructurePlayer, setRestructurePlayer] = useState<string | null>(null);
@@ -415,17 +416,24 @@ export default function RosterPage() {
 
           <div className="flex items-center gap-2">
             <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1">
-              {(['roster', 'depth', 'injuries'] as const).map(mode => (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  className={`px-3 py-1 text-xs rounded font-medium transition-colors capitalize ${viewMode === mode ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'}`}
-                >
-                  {mode === 'injuries'
-                    ? `Injuries${injuredPlayers.length > 0 ? ` (${injuredPlayers.length})` : ''}`
-                    : mode === 'depth' ? 'Depth Chart' : 'Roster'}
-                </button>
-              ))}
+              {(['roster', 'depth', 'injuries', 'practice'] as const).map(mode => {
+                const psCount = (viewingTeam?.practiceSquad ?? []).length;
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    className={`px-3 py-1 text-xs rounded font-medium transition-colors capitalize ${viewMode === mode ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'}`}
+                  >
+                    {mode === 'injuries'
+                      ? `Injuries${injuredPlayers.length > 0 ? ` (${injuredPlayers.length})` : ''}`
+                      : mode === 'depth'
+                      ? 'Depth Chart'
+                      : mode === 'practice'
+                      ? `Practice Squad${psCount > 0 ? ` (${psCount})` : ''}`
+                      : 'Roster'}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -589,6 +597,9 @@ export default function RosterPage() {
                               onClick={() => setSelectedPlayerId(p.id)}
                               className="font-semibold hover:text-blue-600 transition-colors truncate"
                             >
+                              {p.jerseyNumber != null && (
+                                <span className="text-[var(--text-sec)] mr-1.5 font-normal">#{p.jerseyNumber}</span>
+                              )}
                               <span className="sm:hidden">{p.firstName[0]}. {p.lastName}</span>
                               <span className="hidden sm:inline">{p.firstName} {p.lastName}</span>
                               {champTeamId === userTeamId && <span className="ml-0.5 text-xs" title="Championship Ring">💍</span>}
@@ -1166,6 +1177,134 @@ export default function RosterPage() {
             )}
           </div>
         )}
+
+        {/* ── PRACTICE SQUAD VIEW ── */}
+        {viewMode === 'practice' && (() => {
+          const psIds = new Set(viewingTeam?.practiceSquad ?? []);
+          const psPlayers = roster.filter(p => psIds.has(p.id) || (viewingTeam?.practiceSquad ?? []).includes(p.id));
+          // roster includes only active-53, so pull PS players directly from the global list
+          const psPlayersFull = (viewingTeam?.practiceSquad ?? [])
+            .map(id => players.find(p => p.id === id))
+            .filter((p): p is NonNullable<typeof p> => !!p);
+          const PS_CAP = 16;
+          const slotsLeft = PS_CAP - psPlayersFull.length;
+          const eligibleActive = roster
+            .filter(p => p.ratings.overall <= 80 && p.experience <= 2 && !p.onIR)
+            .sort((a, b) => a.ratings.overall - b.ratings.overall)
+            .slice(0, 10);
+          return (
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Practice Squad — {psPlayersFull.length} / {PS_CAP}</CardTitle>
+                </CardHeader>
+                <p className="text-xs text-[var(--text-sec)] mb-3">
+                  Developmental tier below the active 53. PS contracts are a flat league-minimum
+                  (${LEAGUE_MINIMUM_SALARY}M) and do not count against your main cap.
+                  Eligible: players ≤80 OVR with 2 or fewer accrued seasons (plus up to 4 veteran slots).
+                </p>
+                {psPlayersFull.length === 0 ? (
+                  <div className="text-sm text-[var(--text-sec)] italic">
+                    Your practice squad is empty. Demote a young depth player below or sign one off the street.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-[var(--text-sec)] uppercase">
+                          <th className="py-2 pl-2">Player</th>
+                          <th className="py-2 text-center">Pos</th>
+                          <th className="py-2 text-center">OVR</th>
+                          <th className="py-2 text-center">Age</th>
+                          <th className="py-2 text-center">Yrs</th>
+                          <th className="py-2 text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {psPlayersFull.map(p => (
+                          <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)]">
+                            <td className="py-2 pl-2">
+                              <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-600">
+                                {p.jerseyNumber != null && <span className="text-[var(--text-sec)] mr-1.5 font-normal">#{p.jerseyNumber}</span>}
+                                {p.firstName} {p.lastName}
+                              </button>
+                            </td>
+                            <td className="py-2 text-center text-xs font-bold text-[var(--text-sec)]">{p.position}</td>
+                            <td className={`py-2 text-center font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
+                            <td className="py-2 text-center">{p.age}</td>
+                            <td className="py-2 text-center">{p.experience}</td>
+                            <td className="py-2 text-center">
+                              {activeTeamId === userTeamId && (
+                                <Button size="sm" variant="secondary" onClick={() => {
+                                  const err = promoteFromPracticeSquad(p.id);
+                                  if (err) alert(err);
+                                }}>
+                                  Promote
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Card>
+
+              {activeTeamId === userTeamId && slotsLeft > 0 && eligibleActive.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Eligible to Demote ({eligibleActive.length})</CardTitle>
+                  </CardHeader>
+                  <p className="text-xs text-[var(--text-sec)] mb-3">
+                    Lowest-rated young players on your active roster. Demoting clears a 53 slot and
+                    removes their salary from your cap ledger.
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-[var(--text-sec)] uppercase">
+                          <th className="py-2 pl-2">Player</th>
+                          <th className="py-2 text-center">Pos</th>
+                          <th className="py-2 text-center">OVR</th>
+                          <th className="py-2 text-center">Age</th>
+                          <th className="py-2 text-center">Yrs</th>
+                          <th className="py-2 text-center">Salary</th>
+                          <th className="py-2 text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {eligibleActive.map(p => (
+                          <tr key={p.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)]">
+                            <td className="py-2 pl-2">
+                              <button onClick={() => setSelectedPlayerId(p.id)} className="font-semibold hover:text-blue-600">
+                                {p.jerseyNumber != null && <span className="text-[var(--text-sec)] mr-1.5 font-normal">#{p.jerseyNumber}</span>}
+                                {p.firstName} {p.lastName}
+                              </button>
+                            </td>
+                            <td className="py-2 text-center text-xs font-bold text-[var(--text-sec)]">{p.position}</td>
+                            <td className={`py-2 text-center font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
+                            <td className="py-2 text-center">{p.age}</td>
+                            <td className="py-2 text-center">{p.experience}</td>
+                            <td className="py-2 text-center">${p.contract.salary}M</td>
+                            <td className="py-2 text-center">
+                              <Button size="sm" variant="secondary" onClick={() => {
+                                const err = demoteToPracticeSquad(p.id);
+                                if (err) alert(err);
+                              }}>
+                                Demote to PS
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
+            </div>
+          );
+        })()}
       </div>
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
 

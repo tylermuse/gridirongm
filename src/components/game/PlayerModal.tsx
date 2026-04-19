@@ -164,6 +164,9 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-black">
+                  {player.jerseyNumber != null && (
+                    <span className="text-[var(--text-sec)] mr-2">#{player.jerseyNumber}</span>
+                  )}
                   {player.firstName} {player.lastName}
                   {isChampionPlayer && <span className="ml-1.5 text-lg" title="Championship Ring">💍</span>}
                 </h2>
@@ -484,6 +487,45 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                 </Button>
               </div>
             )}
+
+            {/* Retire Jersey Number — only for franchise legends: retired
+                player OR active career player ≥85 OVR who played for user's
+                team. Hidden once the number is already retired. */}
+            {(() => {
+              const userTeam = teams.find(t => t.id === userTeamId);
+              if (!userTeam) return null;
+              if (player.jerseyNumber == null) return null;
+              const playedForUs = player.teamId === userTeamId || player.draftTeamId === userTeamId;
+              if (!playedForUs) return null;
+              const qualifies = player.retired || player.ratings.overall >= 85;
+              if (!qualifies) return null;
+              const alreadyRetired = (userTeam.retiredNumbers ?? []).some(
+                r => r.number === player.jerseyNumber,
+              );
+              if (alreadyRetired) {
+                return (
+                  <div className="mt-3 text-xs px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 font-bold">
+                    🎖️ #{player.jerseyNumber} retired by the {userTeam.city} {userTeam.name}.
+                  </div>
+                );
+              }
+              return (
+                <div className="mt-3">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      const err = (useGameStore.getState() as unknown as {
+                        retireJerseyNumber: (id: string) => string;
+                      }).retireJerseyNumber(player.id);
+                      if (err) alert(err);
+                    }}
+                    className="bg-amber-600 hover:bg-amber-700 text-white"
+                  >
+                    🎖️ Retire #{player.jerseyNumber}
+                  </Button>
+                </div>
+              );
+            })()}
           </div>
         </div>
 

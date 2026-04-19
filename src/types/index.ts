@@ -407,6 +407,51 @@ export interface Player {
   discipline?: number;
   /** Active suspension: games remaining, reason, and fine amount */
   suspension?: { gamesLeft: number; reason: string; fine: number };
+  /** Jersey number on the player's current team. Auto-assigned from the
+   *  position's valid range on team join; kept across seasons unless the
+   *  player changes teams or the new team has already retired that number. */
+  jerseyNumber?: number;
+}
+
+/** Valid jersey-number ranges per position, traditional NFL rules. Each range
+ *  is an inclusive pair [lo, hi]. The assigner walks the union in order,
+ *  picking the lowest unused number not in the team's retiredNumbers list. */
+export const JERSEY_RANGES: Record<Position, [number, number][]> = {
+  QB: [[1, 19]],
+  RB: [[20, 49]],
+  WR: [[10, 19], [80, 89]],
+  TE: [[40, 49], [80, 89]],
+  OL: [[50, 79]],
+  DL: [[50, 79], [90, 99]],
+  LB: [[40, 59], [90, 99]],
+  CB: [[20, 49]],
+  S: [[20, 49]],
+  K: [[1, 19]],
+  P: [[1, 19]],
+};
+
+/** Assign a jersey number to a player joining `takenNumbers` on a team with
+ *  the given retired-number set. Returns the lowest valid unused number for
+ *  the player's position, or 0 as a last-resort fallback if everything in
+ *  the allowed ranges is taken (practically shouldn't happen — 30+ numbers
+ *  per position vs 53-man roster). */
+export function assignJerseyNumber(
+  position: Position,
+  takenNumbers: Set<number>,
+  retiredNumbers: Set<number>,
+): number {
+  const ranges = JERSEY_RANGES[position] ?? [[0, 99]];
+  for (const [lo, hi] of ranges) {
+    for (let n = lo; n <= hi; n++) {
+      if (takenNumbers.has(n) || retiredNumbers.has(n)) continue;
+      return n;
+    }
+  }
+  // Fallback: any unused 0-99 not retired
+  for (let n = 0; n <= 99; n++) {
+    if (!takenNumbers.has(n) && !retiredNumbers.has(n)) return n;
+  }
+  return 0;
 }
 
 /** Format a team record as "W-L" or "W-L-T" if ties > 0 */
@@ -561,6 +606,49 @@ export interface Team {
   };
   /** Fan and owner approval + seasonal objectives */
   approval?: ApprovalState;
+  /** Jersey numbers the franchise has retired. Blocks future auto-assigns
+   *  and rendered on the team honors page. Only retirable via an explicit
+   *  owner action on a retired or HoF-track player. */
+  retiredNumbers?: { number: number; playerId: string; playerName: string; season: number }[];
+  /** Practice squad roster — player ids held on a developmental tier beneath
+   *  the active 53. Cap of PRACTICE_SQUAD_LIMIT; contracts are flat league
+   *  minimum and don't count against the team's main salary cap. */
+  practiceSquad?: string[];
+}
+
+/** Practice squad cap — standard 16 slots. */
+export const PRACTICE_SQUAD_LIMIT = 16;
+
+/** Maximum OVR allowed on the PS. Keeps it a developmental tier rather than
+ *  a cap-dodging stash for active starters. Anyone above this must be on the
+ *  active 53 or be a free agent. */
+export const PRACTICE_SQUAD_MAX_OVR = 80;
+
+/** Max accrued seasons (experience) before a player becomes veteran-eligible
+ *  only. Players with experience > this can still be PS-eligible but only in
+ *  a limited number of "vet" slots. */
+export const PRACTICE_SQUAD_VET_THRESHOLD = 2;
+
+/** A player is eligible for the practice squad if they're not starter-grade
+ *  and either a young player or slotted into a vet-eligible slot. The caller
+ *  passes the current PS so we can check the vet-slot cap dynamically. */
+export function isPracticeSquadEligible(
+  player: Player,
+  currentPsPlayers: Player[],
+  vetSlotCap = 4,
+): { eligible: boolean; reason: string } {
+  if (player.retired) return { eligible: false, reason: 'Retired player.' };
+  if (player.onIR) return { eligible: false, reason: 'On IR.' };
+  if (player.ratings.overall > PRACTICE_SQUAD_MAX_OVR) {
+    return { eligible: false, reason: `Too good for PS (${player.ratings.overall} OVR > ${PRACTICE_SQUAD_MAX_OVR}).` };
+  }
+  if (player.experience > PRACTICE_SQUAD_VET_THRESHOLD) {
+    const vetCount = currentPsPlayers.filter(p => p.experience > PRACTICE_SQUAD_VET_THRESHOLD).length;
+    if (vetCount >= vetSlotCap) {
+      return { eligible: false, reason: `Veteran PS slots full (${vetCount}/${vetSlotCap}).` };
+    }
+  }
+  return { eligible: true, reason: '' };
 }
 
 /**

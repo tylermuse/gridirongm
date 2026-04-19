@@ -10,7 +10,7 @@ import type {
   HoldoutEntry, TradeRumor, Rivalry, RivalryEvent,
   ExpansionTeamConfig, SocialPost, ImportedProspect,
 } from '@/types';
-import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, assignOlSlots, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
+import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, assignOlSlots, assignJerseyNumber, isPracticeSquadEligible, PRACTICE_SQUAD_LIMIT, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { NFL_2026_FIRST_ROUND, isNfl2026Roster, type MockDraftPick } from '@/lib/data/nfl2026Draft';
@@ -33,11 +33,29 @@ import { checkDisciplineEvents, disciplineNewsItems, tickSuspensions } from './d
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 
-const SAVE_VERSION = 27;
+const SAVE_VERSION = 28;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
 export const LUXURY_TAX_RATE = DEFAULT_LEAGUE_SETTINGS.luxuryTaxRate;
+
+/** Pick the lowest valid jersey number for a player joining a team. Skips
+ *  numbers already worn by other players on that team plus any numbers the
+ *  franchise has retired. */
+export function pickJerseyFor(
+  position: Position,
+  teamId: string,
+  players: Player[],
+  teams: Team[],
+): number {
+  const taken = new Set<number>();
+  for (const p of players) {
+    if (p.teamId === teamId && p.jerseyNumber != null) taken.add(p.jerseyNumber);
+  }
+  const team = teams.find(t => t.id === teamId);
+  const retired = new Set<number>((team?.retiredNumbers ?? []).map(r => r.number));
+  return assignJerseyNumber(position, taken, retired);
+}
 
 /** Market size multipliers by team abbreviation (1.0 = average) */
 const MARKET_SIZES: Record<string, number> = {
@@ -110,6 +128,13 @@ interface GameStore extends LeagueState {
   activateFromIR: (playerId: string) => void;
   togglePlayingThroughInjury: (playerId: string) => void;
   setBaseFormation: (formation: '3-4' | '4-3' | 'Nickel') => void;
+  retireJerseyNumber: (playerId: string) => string;
+  /** Move an active-53 player down to the practice squad. Returns error msg. */
+  demoteToPracticeSquad: (playerId: string) => string;
+  /** Promote a PS player to the active 53. Returns error msg. */
+  promoteFromPracticeSquad: (playerId: string) => string;
+  /** Sign a free-agent to the PS directly (minimum contract). Returns error msg. */
+  signToPracticeSquad: (playerId: string) => string;
   startNewSeason: () => void;
   // PRD-04: Trades
   executeTrade: (
@@ -4536,6 +4561,7 @@ export const useGameStore = create<GameStore>()(
           draftPick: overallPick,
           acquiredVia: 'draft' as const, acquiredSeason: state.season,
           contract: { salary: finalSalary, yearsLeft: 4, guaranteed: generateGuaranteed(finalSalary, 4), totalYears: 4, offseasonSigned: true },
+          jerseyNumber: pickJerseyFor(player.position, currentPickTeamId, state.players, state.teams),
         };
         const updatedPlayers2 = playerInArray
           ? state.players.map(p => p.id === playerId ? draftedPlayer : p)
@@ -5166,7 +5192,7 @@ export const useGameStore = create<GameStore>()(
 
           currentPlayers = currentPlayers.map(p =>
             p.id === target.id
-              ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears, offseasonSigned: true } }
+              ? { ...p, teamId: aiTeamId, contract: { salary: aiSalary, yearsLeft: aiYears, guaranteed: generateGuaranteed(aiSalary, aiYears), totalYears: aiYears, offseasonSigned: true }, jerseyNumber: pickJerseyFor(p.position, aiTeamId, currentPlayers, currentTeams) }
               : p,
           );
           currentFreeAgents = currentFreeAgents.filter(id => id !== target.id);
@@ -5367,7 +5393,7 @@ export const useGameStore = create<GameStore>()(
         const isOffseason = state.phase === 'freeAgency' || state.phase === 'resigning' || state.phase === 'draft';
         let currentPlayers = state.players.map(p =>
           p.id === playerId
-            ? { ...p, teamId: state.userTeamId, acquiredVia: 'free-agency' as const, acquiredSeason: state.season, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, ...(isOffseason ? { offseasonSigned: true } : {}) } }
+            ? { ...p, teamId: state.userTeamId, acquiredVia: 'free-agency' as const, acquiredSeason: state.season, contract: { salary, yearsLeft: years, guaranteed: generateGuaranteed(salary, years), totalYears: years, ...(isOffseason ? { offseasonSigned: true } : {}) }, jerseyNumber: pickJerseyFor(p.position, state.userTeamId, state.players, state.teams) }
             : p,
         );
         let currentTeams = state.teams.map(t => {
@@ -5775,6 +5801,143 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
+      demoteToPracticeSquad: (playerId: string): string => {
+        const state = get();
+        if (!state.userTeamId) return 'No user team.';
+        const player = state.players.find(p => p.id === playerId);
+        if (!player || player.teamId !== state.userTeamId) return 'Player not on your team.';
+        const team = state.teams.find(t => t.id === state.userTeamId);
+        if (!team) return 'Team not found.';
+        const currentPs = (team.practiceSquad ?? []);
+        if (currentPs.includes(playerId)) return 'Already on the practice squad.';
+        if (currentPs.length >= PRACTICE_SQUAD_LIMIT) {
+          return `Practice squad is full (${PRACTICE_SQUAD_LIMIT} max).`;
+        }
+        const psPlayers = state.players.filter(p => currentPs.includes(p.id));
+        const { eligible, reason } = isPracticeSquadEligible(player, psPlayers);
+        if (!eligible) return reason;
+        set({
+          teams: state.teams.map(t => {
+            if (t.id !== state.userTeamId) return t;
+            // Remove from active roster + depth chart, add to PS.
+            const chart = { ...t.depthChart };
+            chart[player.position] = (chart[player.position] ?? []).filter(id => id !== playerId);
+            return {
+              ...t,
+              roster: t.roster.filter(id => id !== playerId),
+              depthChart: chart,
+              practiceSquad: [...currentPs, playerId],
+              totalPayroll: Math.max(0, t.totalPayroll - player.contract.salary),
+            };
+          }),
+        });
+        return '';
+      },
+
+      promoteFromPracticeSquad: (playerId: string): string => {
+        const state = get();
+        if (!state.userTeamId) return 'No user team.';
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return 'Player not found.';
+        const team = state.teams.find(t => t.id === state.userTeamId);
+        if (!team) return 'Team not found.';
+        const currentPs = (team.practiceSquad ?? []);
+        if (!currentPs.includes(playerId)) return 'Player is not on your practice squad.';
+        if (team.roster.length >= 53) {
+          return 'Active roster is full (53). Cut a player first.';
+        }
+        set({
+          teams: state.teams.map(t => {
+            if (t.id !== state.userTeamId) return t;
+            const chart = insertIntoDepthChart(t.depthChart, player.position, playerId, state.players);
+            return {
+              ...t,
+              roster: [...t.roster, playerId],
+              depthChart: chart,
+              practiceSquad: currentPs.filter(id => id !== playerId),
+              totalPayroll: t.totalPayroll + player.contract.salary,
+            };
+          }),
+        });
+        return '';
+      },
+
+      signToPracticeSquad: (playerId: string): string => {
+        const state = get();
+        if (!state.userTeamId) return 'No user team.';
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return 'Player not found.';
+        if (player.teamId) return 'Player is under contract elsewhere.';
+        const team = state.teams.find(t => t.id === state.userTeamId);
+        if (!team) return 'Team not found.';
+        const currentPs = (team.practiceSquad ?? []);
+        if (currentPs.length >= PRACTICE_SQUAD_LIMIT) {
+          return `Practice squad is full (${PRACTICE_SQUAD_LIMIT} max).`;
+        }
+        const psPlayers = state.players.filter(p => currentPs.includes(p.id));
+        const { eligible, reason } = isPracticeSquadEligible(player, psPlayers);
+        if (!eligible) return reason;
+
+        const psSalary = LEAGUE_MINIMUM_SALARY;
+        set({
+          players: state.players.map(p =>
+            p.id === playerId
+              ? {
+                  ...p,
+                  teamId: state.userTeamId,
+                  acquiredVia: 'free-agency' as const,
+                  acquiredSeason: state.season,
+                  contract: {
+                    salary: psSalary,
+                    yearsLeft: 1,
+                    guaranteed: 0,
+                    totalYears: 1,
+                  },
+                  jerseyNumber: pickJerseyFor(p.position, state.userTeamId!, state.players, state.teams),
+                }
+              : p,
+          ),
+          teams: state.teams.map(t =>
+            t.id === state.userTeamId
+              ? { ...t, practiceSquad: [...currentPs, playerId] }
+              : t,
+          ),
+          freeAgents: state.freeAgents.filter(id => id !== playerId),
+        });
+        return '';
+      },
+
+      retireJerseyNumber: (playerId: string): string => {
+        const state = get();
+        if (!state.userTeamId) return 'No user team.';
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return 'Player not found.';
+        if (player.jerseyNumber == null) return 'Player has no jersey number to retire.';
+        // Guardrail: retire only for a player who actually played for this team,
+        // either currently or historically (captured by acquiredVia / retired).
+        const currentlyOnTeam = player.teamId === state.userTeamId;
+        const drafted = player.draftTeamId === state.userTeamId;
+        if (!currentlyOnTeam && !drafted) return 'Only players who played for your team can be honored.';
+        const team = state.teams.find(t => t.id === state.userTeamId);
+        if (!team) return 'Team not found.';
+        const already = (team.retiredNumbers ?? []).some(r => r.number === player.jerseyNumber);
+        if (already) return `#${player.jerseyNumber} is already retired.`;
+        const entry = {
+          number: player.jerseyNumber,
+          playerId: player.id,
+          playerName: `${player.firstName} ${player.lastName}`,
+          season: state.season,
+        };
+        set({
+          teams: state.teams.map(t =>
+            t.id === state.userTeamId
+              ? { ...t, retiredNumbers: [...(t.retiredNumbers ?? []), entry] }
+              : t,
+          ),
+        });
+        return '';
+      },
+
       togglePlayingThroughInjury: (playerId: string) => {
         const state = get();
         const player = state.players.find(p => p.id === playerId);
@@ -5998,7 +6161,7 @@ export const useGameStore = create<GameStore>()(
                   restructureHistory: undefined,
                 }
               : p.contract;
-            return { ...p, teamId: counterpartTeamId, acquiredVia: 'trade' as const, acquiredSeason: state.season, contract: cleanContract };
+            return { ...p, teamId: counterpartTeamId, acquiredVia: 'trade' as const, acquiredSeason: state.season, contract: cleanContract, jerseyNumber: pickJerseyFor(p.position, counterpartTeamId, state.players, state.teams) };
           }
           if (receivedPlayerIdsSet.has(p.id)) {
             const cleanContract = p.contract.contractYears
@@ -6013,7 +6176,7 @@ export const useGameStore = create<GameStore>()(
                   restructureHistory: undefined,
                 }
               : p.contract;
-            return { ...p, teamId: state.userTeamId, acquiredVia: 'trade' as const, acquiredSeason: state.season, contract: cleanContract };
+            return { ...p, teamId: state.userTeamId, acquiredVia: 'trade' as const, acquiredSeason: state.season, contract: cleanContract, jerseyNumber: pickJerseyFor(p.position, state.userTeamId, state.players, state.teams) };
           }
           return p;
         });
@@ -8924,6 +9087,49 @@ export const useGameStore = create<GameStore>()(
               } else {
                 t.primaryColor = '#1E3A8A';
               }
+            }
+          }
+        }
+        if (version < 28) {
+          // Seed jersey numbers + retiredNumbers + practiceSquad for existing
+          // rosters. Walk each team, collect positions, and assign the lowest
+          // valid number for each player (stable order so the same save
+          // migrated twice produces the same numbers).
+          const teams28 = ((state as any).teams ?? []) as Array<Record<string, unknown>>;
+          const players28 = ((state as any).players ?? []) as Array<Record<string, unknown>>;
+          for (const t of teams28) {
+            if (!t.retiredNumbers) t.retiredNumbers = [];
+            if (!t.practiceSquad) t.practiceSquad = [];
+          }
+          // Group players by team for efficient assignment
+          const byTeam: Record<string, Array<Record<string, unknown>>> = {};
+          for (const p of players28) {
+            const tid = p.teamId as string | null;
+            if (!tid) continue;
+            (byTeam[tid] ??= []).push(p);
+          }
+          for (const [tid, teamPlayers] of Object.entries(byTeam)) {
+            const team = teams28.find(t => t.id === tid);
+            const retired = new Set<number>(
+              ((team?.retiredNumbers as Array<{ number: number }> | undefined) ?? []).map(r => r.number),
+            );
+            const taken = new Set<number>();
+            // First pass: respect any already-set numbers (defensive for reruns)
+            for (const p of teamPlayers) {
+              if (typeof p.jerseyNumber === 'number') taken.add(p.jerseyNumber);
+            }
+            // Stable ordering by draft pick then name for deterministic assignment
+            const sorted = [...teamPlayers].sort((a, b) => {
+              const ap = (a.draftPick as number | null) ?? 9999;
+              const bp = (b.draftPick as number | null) ?? 9999;
+              if (ap !== bp) return ap - bp;
+              return String(a.lastName).localeCompare(String(b.lastName));
+            });
+            for (const p of sorted) {
+              if (typeof p.jerseyNumber === 'number') continue;
+              const n = assignJerseyNumber(p.position as Position, taken, retired);
+              p.jerseyNumber = n;
+              taken.add(n);
             }
           }
         }
