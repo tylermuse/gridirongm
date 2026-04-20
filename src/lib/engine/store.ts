@@ -5378,11 +5378,13 @@ export const useGameStore = create<GameStore>()(
             return `Offer $${Math.round(salary * 10) / 10}M/yr is too high for a ${prospect.ratings.overall} OVR ${posLabel}. Max: ~$${Math.round(maxForOvr * 2 * 10) / 10}M/yr.`;
           }
         }
-        // 53-man roster limit (when enabled — default true)
+        // 53-man roster limit (when enabled — default true). Count the
+        // ACTIVE roster only: players demoted to the practice squad still
+        // have teamId set but live on team.practiceSquad, not team.roster.
+        // Using team.roster.length is the only source-of-truth for the 53.
         const rosterLimitOn = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).rosterLimitEnabled !== false;
         if (rosterLimitOn && userTeam) {
-          const userRosterCount = state.players.filter(p => p.teamId === state.userTeamId && !p.retired).length;
-          if (userRosterCount >= 53) {
+          if (userTeam.roster.length >= 53) {
             return 'Roster is full (53 players). Cut someone before signing.';
           }
         }
@@ -5611,7 +5613,10 @@ export const useGameStore = create<GameStore>()(
         const cutsByTeam = new Map<string, string[]>();
 
         for (const t of targetTeams) {
-          const teamPlayers = state.players.filter(p => p.teamId === t.id && !p.retired);
+          // Only the active 53 counts toward the cap. PS players live on
+          // team.practiceSquad and must not be cut by auto-cut.
+          const activeIds = new Set(t.roster);
+          const teamPlayers = state.players.filter(p => activeIds.has(p.id) && !p.retired);
           if (teamPlayers.length <= ROSTER_CAP) continue;
           // Sort by OVR ascending but PROTECT position minimums — never cut a
           // player if their position would drop below ROSTER_LIMITS.min.
