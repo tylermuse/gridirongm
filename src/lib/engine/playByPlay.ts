@@ -152,6 +152,14 @@ interface KeyPlayers {
   cb2: Player | null;
   s1: Player | null;
   k: Player | null;
+  // Position pools — used by the play loop to rotate carries / sacks / INTs
+  // across the depth chart instead of piling everything on the first starter
+  // (and making RB2/CB2/DL2/etc. invisible in the boxscore).
+  rbs: Player[];
+  dls: Player[];
+  lbs: Player[];
+  cbs: Player[];
+  safeties: Player[];
 }
 
 function extractKeyPlayers(players: Player[]): KeyPlayers {
@@ -159,21 +167,75 @@ function extractKeyPlayers(players: Player[]): KeyPlayers {
   const wrs = byPos('WR');
   const cbs = byPos('CB');
   const safeties = byPos('S');
+  const rbs = byPos('RB');
+  const dls = byPos('DL');
+  const lbs = byPos('LB');
   return {
     qb: byPos('QB')[0] ?? null,
-    rb: byPos('RB')[0] ?? null,
+    rb: rbs[0] ?? null,
     wr1: wrs[0] ?? null,
     wr2: wrs[1] ?? null,
     wr3: wrs[2] ?? null,
     te: byPos('TE')[0] ?? null,
     ols: byPos('OL'),
-    dl1: byPos('DL')[0] ?? null,
-    lb1: byPos('LB')[0] ?? null,
+    dl1: dls[0] ?? null,
+    lb1: lbs[0] ?? null,
     cb1: cbs[0] ?? safeties[0] ?? null,
     cb2: cbs[1] ?? safeties[0] ?? null,
     s1: safeties[0] ?? null,
     k: byPos('K')[0] ?? null,
+    rbs,
+    dls,
+    lbs,
+    cbs,
+    safeties,
   };
+}
+
+/** Pick a player from the pool weighted by a caller-provided score. Higher
+ *  score → higher probability. All-zero weights degrade to uniform. */
+function pickWeighted<T>(pool: T[], weight: (p: T) => number): T | null {
+  if (pool.length === 0) return null;
+  if (pool.length === 1) return pool[0];
+  const weights = pool.map(p => Math.max(0.01, weight(p)));
+  const total = weights.reduce((s, w) => s + w, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < pool.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return pool[i];
+  }
+  return pool[pool.length - 1];
+}
+
+/** Pick the rusher for a carry. RB1 still gets the lion's share (workhorse
+ *  back logic) but RB2/RB3 see real touches. OVR-biased so better backs get
+ *  more carries even within the pool. */
+function pickRusher(rbs: Player[]): Player | null {
+  return pickWeighted(rbs, (p, i = rbs.indexOf(p)) => {
+    const depthWeight = i === 0 ? 1.0 : i === 1 ? 0.35 : i === 2 ? 0.12 : 0.05;
+    const ovrScale = 0.5 + p.ratings.overall / 100;
+    return depthWeight * ovrScale;
+  });
+}
+
+/** Pick the sacker. DL disproportionately get pressure, LBs contribute too. */
+function pickSacker(dls: Player[], lbs: Player[]): Player | null {
+  const pool = [...dls, ...lbs];
+  return pickWeighted(pool, p => {
+    const base = p.position === 'DL' ? 2.5 : 1.0;
+    const skill = (p.ratings.passRush ?? 60) + (p.ratings.strength ?? 60) * 0.4;
+    return base * skill;
+  });
+}
+
+/** Pick the interceptor. CBs most likely, safeties second, LBs rare. */
+function pickInterceptor(cbs: Player[], safeties: Player[], lbs: Player[]): Player | null {
+  const pool = [...cbs, ...safeties, ...lbs];
+  return pickWeighted(pool, p => {
+    const base = p.position === 'CB' ? 3.0 : p.position === 'S' ? 1.5 : 0.3;
+    const skill = (p.ratings.coverage ?? 60) + (p.ratings.awareness ?? 60) * 0.5;
+    return base * skill;
+  });
 }
 
 function playerTag(p: Player | null, fallback: string): string {
@@ -424,6 +486,13 @@ export interface PerReceiverStat {
   tds: number;
 }
 
+export interface PerRusherStat {
+  attempts: number;
+  yards: number;
+  tds: number;
+  fumbles: number;
+}
+
 export interface StatBucket {
   passAttempts: number;
   passCompletions: number;
@@ -453,6 +522,14 @@ export interface StatBucket {
   // fires so the sum across all receivers matches QB passing totals exactly
   // (no share-based distribution drift, no ghost TDs).
   perReceiver: Record<string, PerReceiverStat>;
+  // Per-rusher accumulator — each run play picks an RB from the pool and
+  // credits here, so RB2/RB3 see carries proportional to depth weighting.
+  perRusher: Record<string, PerRusherStat>;
+  // Defensive per-player accumulators: the sim picks the sacker / interceptor
+  // from the position pool when the play fires, so the live feed and the
+  // boxscore both reflect real rotation instead of piling onto DL1/CB1.
+  perSacker: Record<string, number>;
+  perInterceptor: Record<string, number>;
 }
 
 function emptyBucket(): StatBucket {
@@ -465,14 +542,25 @@ function emptyBucket(): StatBucket {
     fieldGoalAttempts: 0, fieldGoalsMade: 0,
     extraPointAttempts: 0, extraPointsMade: 0,
     perReceiver: {},
+    perRusher: {},
+    perSacker: {},
+    perInterceptor: {},
   };
 }
 
-/** Deep-clone a bucket so snapshot/resume spreads don't alias the perReceiver map. */
+/** Deep-clone a bucket so snapshot/resume spreads don't alias the per-player maps. */
 function cloneBucket(b: StatBucket): StatBucket {
   const perReceiver: Record<string, PerReceiverStat> = {};
   for (const [id, rec] of Object.entries(b.perReceiver)) perReceiver[id] = { ...rec };
-  return { ...b, perReceiver };
+  const perRusher: Record<string, PerRusherStat> = {};
+  for (const [id, rec] of Object.entries(b.perRusher)) perRusher[id] = { ...rec };
+  return {
+    ...b,
+    perReceiver,
+    perRusher,
+    perSacker: { ...b.perSacker },
+    perInterceptor: { ...b.perInterceptor },
+  };
 }
 
 function creditReceiver(
@@ -486,6 +574,20 @@ function creditReceiver(
     receptions: cur.receptions + (patch.receptions ?? 0),
     yards: cur.yards + (patch.yards ?? 0),
     tds: cur.tds + (patch.tds ?? 0),
+  };
+}
+
+function creditRusher(
+  bucket: StatBucket,
+  rusherId: string,
+  patch: Partial<PerRusherStat>,
+): void {
+  const cur = bucket.perRusher[rusherId] ?? { attempts: 0, yards: 0, tds: 0, fumbles: 0 };
+  bucket.perRusher[rusherId] = {
+    attempts: cur.attempts + (patch.attempts ?? 0),
+    yards: cur.yards + (patch.yards ?? 0),
+    tds: cur.tds + (patch.tds ?? 0),
+    fumbles: cur.fumbles + (patch.fumbles ?? 0),
   };
 }
 
@@ -678,6 +780,13 @@ export function simulatePlayByPlay(
     if (scorer && !isRush) {
       scoringBucket.receivingTDs += 1;
       creditReceiver(scoringBucket, scorer.id, { tds: 1 });
+    }
+    // Rush TDs credited to the scorer's per-rusher bucket when it's an RB.
+    // QB scrambles/designed runs go through qbRushTDs (already bumped above)
+    // and aren't tracked in perRusher — the boxscore reads QB rush stats from
+    // the QB bucket.
+    if (scorer && isRush && scorer.position === 'RB') {
+      creditRusher(scoringBucket, scorer.id, { tds: 1 });
     }
 
     // Extra point or 2-point conversion decision
@@ -1137,9 +1246,10 @@ export function simulatePlayByPlay(
     const isRun = Math.random() < runChance;
 
     if (isRun) {
-      // RUN play
-      const rbCarrying = rating(ok.rb, 'carrying', 70);
-      const rbSpeed = rating(ok.rb, 'speed', 70);
+      // RUN play — rotate the rusher from the RB pool so RB2/RB3 see touches.
+      const rusher = pickRusher(ok.rbs) ?? ok.rb;
+      const rbCarrying = rating(rusher, 'carrying', 70);
+      const rbSpeed = rating(rusher, 'speed', 70);
       const lbTackling = rating(dk.lb1, 'tackling', 70);
       let yardsGained = Math.round(gaussian(4.0, 3.0) + (rbCarrying - lbTackling) / 60 * 2 + (rbSpeed - 70) / 100);
       yardsGained = clamp(yardsGained, -5, 25);
@@ -1153,17 +1263,18 @@ export function simulatePlayByPlay(
 
       ob.rushAttempts += 1;
       ob.rushYards += yardsGained;
+      if (rusher) creditRusher(ob, rusher.id, { attempts: 1, yards: yardsGained });
       db.tackles += 1;
 
       const isTD = state.fieldPos + yardsGained >= 100;
       if (isTD) {
         const tdYards = 100 - state.fieldPos;
-        doTouchdown(true, ok.rb, tdYards);
+        doTouchdown(true, rusher, tdYards);
         advanceClock(Math.floor(Math.random() * 8) + 30);
         return true;
       }
 
-      const desc = descRun(ok.rb, yardsGained, fieldPosLabel(state.fieldPos, state.possession));
+      const desc = descRun(rusher, yardsGained, fieldPosLabel(state.fieldPos, state.possession));
       addEvent('run', desc, yardsGained, false);
 
       state.fieldPos = clamp(state.fieldPos + yardsGained, 1, 99);
@@ -1173,8 +1284,9 @@ export function simulatePlayByPlay(
       // Skill-based fumble rate (Bug 3 fix)
       const fumbleChance = clamp(0.015 - (rbCarrying / 100) * 0.008, 0.003, 0.02);
       if (Math.random() < fumbleChance) {
-        const desc2 = descFumble(ok.rb, dk.lb1);
+        const desc2 = descFumble(rusher, dk.lb1);
         addEvent('fumble', desc2, 0, false);
+        if (rusher) creditRusher(ob, rusher.id, { fumbles: 1 });
         shiftMomentum(-20); // turnover momentum
         const newPos = clamp(100 - state.fieldPos, 15, 75);
         switchPossession(newPos);
@@ -1247,12 +1359,15 @@ export function simulatePlayByPlay(
       const roll = Math.random();
 
       if (roll < sackChance) {
-        // SACK
+        // SACK — pick the sacker from the DL/LB pool so the same DL1 doesn't
+        // rack up every sack in the game.
+        const sacker = pickSacker(dk.dls, dk.lbs) ?? dk.dl1;
         const sackYards = clamp(Math.round(gaussian(-7, 2.5)), -15, -2);
         ob.passAttempts += 1;
         db.sacks += 1;
+        if (sacker) db.perSacker[sacker.id] = (db.perSacker[sacker.id] ?? 0) + 1;
 
-        const desc = descSack(ok.qb, dk.dl1, sackYards);
+        const desc = descSack(ok.qb, sacker, sackYards);
         addEvent('sack', desc, sackYards, false);
         shiftMomentum(-8); // momentum shifts to defense
 
@@ -1261,12 +1376,15 @@ export function simulatePlayByPlay(
         advanceClock(8);
 
       } else if (roll < sackChance + intChance) {
-        // INTERCEPTION
+        // INTERCEPTION — pick interceptor from CB/S/LB pool; CBs still far
+        // more likely but safeties and rare LB picks show up.
+        const interceptor = pickInterceptor(dk.cbs, dk.safeties, dk.lbs) ?? dk.cb1;
         ob.passAttempts += 1;
         ob.interceptions += 1;
         db.defensiveINTs += 1;
+        if (interceptor) db.perInterceptor[interceptor.id] = (db.perInterceptor[interceptor.id] ?? 0) + 1;
 
-        const desc = descInterception(ok.qb, dk.cb1);
+        const desc = descInterception(ok.qb, interceptor);
         addEvent('interception', desc, 0, false);
         shiftMomentum(-20); // big momentum shift to defense
 
@@ -1479,13 +1597,17 @@ export function simulatePlayByPlay(
       };
     }
 
-    // RB
-    if (keyPlayers.rb) {
-      playerStats[keyPlayers.rb.id] = {
+    // Rushers — read exact per-player totals. Every carry was credited to a
+    // specific rusher's bucket at play time, so RB2/RB3 show real stats.
+    for (const [pid, run] of Object.entries(bucket.perRusher)) {
+      const existing = playerStats[pid];
+      playerStats[pid] = {
+        ...existing,
         gamesPlayed: 1,
-        rushAttempts: bucket.rushAttempts,
-        rushYards: bucket.rushYards,
-        rushTDs: bucket.rushTDs,
+        rushAttempts: (existing?.rushAttempts ?? 0) + run.attempts,
+        rushYards: (existing?.rushYards ?? 0) + run.yards,
+        rushTDs: (existing?.rushTDs ?? 0) + run.tds,
+        fumbles: (existing?.fumbles ?? 0) + run.fumbles,
       };
     }
 
@@ -1504,39 +1626,29 @@ export function simulatePlayByPlay(
       };
     }
 
-    // Defenders — position-based tackle/sack/INT distribution
+    // Defenders — tackles distributed by position/rating weight (no per-play
+    // tackler tracking yet); sacks + INTs use the exact per-player maps the
+    // play loop credited so the live feed matches the final boxscore.
     const defenders = teamPlayers.filter(p =>
       ['DL', 'LB', 'CB', 'S'].includes(p.position) && (!p.injury || p.injury.weeksLeft === 0),
     );
     const totalTackles = Math.max(bucket.tackles, 30 + Math.floor(Math.random() * 20));
-    // Position weights: LB ~57%, DB ~28%, DL ~15%
     const defWeights = defenders.map(d => {
       const posW = d.position === 'LB' ? 3.5 : (d.position === 'CB' || d.position === 'S') ? 1.8 : 0.8;
       return posW * (d.ratings.tackling / 70);
     });
     const totalWeight = defWeights.reduce((s, w) => s + w, 0) || 1;
-    let remainingSacks = bucket.sacks;
-    let remainingINTs = bucket.defensiveINTs;
     for (let i = 0; i < defenders.length; i++) {
       const share = defWeights[i] / totalWeight;
       const tackles = Math.round(totalTackles * share * (0.85 + Math.random() * 0.3));
-      // Sacks: DL ~70%, LB ~25%, DB ~5%
-      let sacks = 0;
-      if (remainingSacks > 0) {
-        const sackChance = defenders[i].position === 'DL' ? 0.35 : defenders[i].position === 'LB' ? 0.15 : 0.03;
-        if (Math.random() < sackChance) { sacks = 1; remainingSacks--; }
-      }
-      // INTs: CB ~65%, S ~25%, LB ~10%
-      let ints = 0;
-      if (remainingINTs > 0) {
-        const intChance = defenders[i].position === 'CB' ? 0.20 : defenders[i].position === 'S' ? 0.10 : 0.03;
-        if (Math.random() < intChance) { ints = 1; remainingINTs--; }
-      }
-      playerStats[defenders[i].id] = {
+      const did = defenders[i].id;
+      const existing = playerStats[did];
+      playerStats[did] = {
+        ...existing,
         gamesPlayed: 1,
-        tackles,
-        sacks,
-        defensiveINTs: ints,
+        tackles: (existing?.tackles ?? 0) + tackles,
+        sacks: (existing?.sacks ?? 0) + (bucket.perSacker[did] ?? 0),
+        defensiveINTs: (existing?.defensiveINTs ?? 0) + (bucket.perInterceptor[did] ?? 0),
       };
     }
 
@@ -1583,19 +1695,31 @@ function assertReceivingInvariants(side: 'home' | 'away', bucket: StatBucket): v
   for (const rec of Object.values(bucket.perReceiver)) {
     tgts += rec.targets; recs += rec.receptions; yds += rec.yards; tds += rec.tds;
   }
-  const mismatch =
-    tgts !== bucket.receivingTargets ||
-    recs !== bucket.receptions ||
-    yds !== bucket.receivingYards ||
-    tds !== bucket.receivingTDs ||
-    yds !== bucket.passYards ||
-    tds !== bucket.passTDs;
-  if (!mismatch) return;
-  const msg =
-    `[stat-invariant] ${side} boxscore drift: ` +
-    `QB pass=${bucket.passYards}yd/${bucket.passTDs}td vs ` +
-    `Σrecv=${yds}yd/${tds}td ` +
-    `(tgts qb=${bucket.receivingTargets}/Σ=${tgts}, rec qb=${bucket.receptions}/Σ=${recs})`;
+  let rushAtt = 0, rushYds = 0, rushTds = 0;
+  for (const run of Object.values(bucket.perRusher)) {
+    rushAtt += run.attempts; rushYds += run.yards; rushTds += run.tds;
+  }
+  let sacks = 0;
+  for (const n of Object.values(bucket.perSacker)) sacks += n;
+  let ints = 0;
+  for (const n of Object.values(bucket.perInterceptor)) ints += n;
+
+  const mismatches: string[] = [];
+  if (tgts !== bucket.receivingTargets) mismatches.push(`tgts qb=${bucket.receivingTargets}/Σ=${tgts}`);
+  if (recs !== bucket.receptions) mismatches.push(`rec qb=${bucket.receptions}/Σ=${recs}`);
+  if (yds !== bucket.receivingYards) mismatches.push(`rec-yd qb=${bucket.receivingYards}/Σ=${yds}`);
+  if (yds !== bucket.passYards) mismatches.push(`pass-yd=${bucket.passYards}/Σrec=${yds}`);
+  if (tds !== bucket.receivingTDs || tds !== bucket.passTDs) {
+    mismatches.push(`TD pass=${bucket.passTDs}/rec=${bucket.receivingTDs}/Σ=${tds}`);
+  }
+  if (rushAtt !== bucket.rushAttempts) mismatches.push(`rush-att=${bucket.rushAttempts}/Σ=${rushAtt}`);
+  if (rushYds !== bucket.rushYards) mismatches.push(`rush-yd=${bucket.rushYards}/Σ=${rushYds}`);
+  if (rushTds !== bucket.rushTDs) mismatches.push(`rush-td=${bucket.rushTDs}/Σ=${rushTds}`);
+  if (sacks !== bucket.sacks) mismatches.push(`sacks bucket=${bucket.sacks}/Σ=${sacks}`);
+  if (ints !== bucket.defensiveINTs) mismatches.push(`ints bucket=${bucket.defensiveINTs}/Σ=${ints}`);
+
+  if (mismatches.length === 0) return;
+  const msg = `[stat-invariant] ${side} boxscore drift: ${mismatches.join(', ')}`;
   if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
     throw new Error(msg);
   }
