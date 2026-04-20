@@ -199,7 +199,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
           sim buttons are hidden). The hamburger moved into the GameTicker to
           free that vertical space — hide the header on mobile only when the
           user is inside a game, so phone screens don't waste 56px. */}
-      <header className={`${pathname.startsWith('/game/') ? 'hidden md:block' : ''} border-b border-[var(--border)] bg-[var(--surface)] sticky top-0 z-10`}>
+      <header className={`${pathname.startsWith('/game/') ? 'hidden md:block' : ''} border-b border-[var(--border)] bg-[var(--surface)]`}>
         <div className="h-14 flex items-center justify-between px-3 md:px-6">
           <div className="flex items-center gap-2 text-sm text-[var(--text-sec)]">
             <span className="hidden sm:inline">

@@ -55,8 +55,13 @@ export function GameShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <GameTicker onMenuToggle={() => setSidebarOpen(v => !v)} />
-        <TopBar />
+        {/* Sticky header stack — pins the ticker (with the mobile hamburger)
+            and the phase TopBar to the viewport top together so the menu
+            button stays reachable as the user scrolls down any page. */}
+        <div className="sticky top-0 z-20">
+          <GameTicker onMenuToggle={() => setSidebarOpen(v => !v)} />
+          <TopBar />
+        </div>
         {godMode && (
           <div className="bg-yellow-500/10 border-b border-yellow-400/30 px-4 py-1 text-center">
             <span className="text-xs font-bold text-yellow-600">God Mode Active</span>
