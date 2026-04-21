@@ -444,12 +444,15 @@ export function processOffer(
   /* ── Force resolution at max rounds ────────── */
   if (next.outcome === 'pending' && next.round >= next.maxRounds) {
     if (satisfaction >= 0.85 && !isAngry) {
+      // Player concedes and accepts the user's offer as-is. Previously this
+      // path overwrote currentOfferSalary with askingSalary, so users would
+      // negotiate down to (say) $16M, see the chat say "let's do it", and
+      // then have a $17.3M contract written to the save. Keep the negotiated
+      // values intact — the user's last offer is the deal.
       next.outcome = 'accepted';
-      next.currentOfferSalary = next.askingSalary;
-      next.currentOfferYears = next.askingYears;
       next.messages.push({
         sender: 'player',
-        text: `Look, we've been going back and forth. Let's just do ${fmtSalary(next.askingSalary)} for ${fmtYears(next.askingYears)} and call it a day.`,
+        text: `Look, we've been going back and forth. ${fmtSalary(next.currentOfferSalary)} for ${fmtYears(next.currentOfferYears)} works — let's get it done.`,
         type: 'result',
       });
     } else {
