@@ -23,6 +23,7 @@ import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
 import { formatRecord } from '@/types';
 import { ProgressRing } from '@/components/shared/ProgressRing';
+import { CustomHCModal, type CustomHCInput } from '@/components/game/CustomHCModal';
 
 function TeamPicker() {
   const { newLeague } = useGameStore();
@@ -41,6 +42,9 @@ function TeamPicker() {
   const [bsModePreselect, setBsModePreselect] = useState(false);
   const [teamSearch, setTeamSearch] = useState('');
   const autoLoadedRef = useRef(false);
+  // When set, the user has clicked a team — show the Custom HC modal before
+  // committing to newLeague so they can name and configure their coach.
+  const [pendingTeamPick, setPendingTeamPick] = useState<{ abbr: string; label: string } | null>(null);
 
   // Auto-load roster from ?roster= query param (e.g. from /rosters page)
   useEffect(() => {
@@ -104,7 +108,7 @@ function TeamPicker() {
     useGameStore.setState({ initialized: true });
   }
 
-  async function handlePick(abbr: string) {
+  async function handlePick(abbr: string, customHC?: CustomHCInput) {
     // Auto-save current league to next available slot before starting new one
     if (savedGame) {
       const { saveToSlot } = useGameStore.getState();
@@ -132,7 +136,7 @@ function TeamPicker() {
     setLoading(true);
     setError(null);
     try {
-      await newLeague(abbr, activeUrl ?? undefined, activeUrl ? startMode : undefined);
+      await newLeague(abbr, activeUrl ?? undefined, activeUrl ? startMode : undefined, customHC);
       // Enable BS Mode if preselected from the banner
       if (bsModePreselect) {
         useGameStore.getState().updateLeagueSettings({ bsMode: true });
@@ -371,7 +375,7 @@ function TeamPicker() {
             .sort((a, b) => a.city.localeCompare(b.city)).map(team => (
             <button
               key={team.abbreviation}
-              onClick={() => handlePick(team.abbreviation)}
+              onClick={() => setPendingTeamPick({ abbr: team.abbreviation, label: `${team.city} ${team.name}` })}
               className="group flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--surface)]
                          hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/10 transition-all text-left"
             >
@@ -385,6 +389,16 @@ function TeamPicker() {
         </div>
         </>
       )}
+
+      <CustomHCModal
+        teamLabel={pendingTeamPick?.label ?? null}
+        onCancel={() => setPendingTeamPick(null)}
+        onConfirm={(hc) => {
+          const pending = pendingTeamPick;
+          setPendingTeamPick(null);
+          if (pending) handlePick(pending.abbr, hc ?? undefined);
+        }}
+      />
     </div>
   );
 }

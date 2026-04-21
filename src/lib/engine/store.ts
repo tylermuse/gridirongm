@@ -73,7 +73,19 @@ export function computeLuxuryTax(payroll: number, cap: number): number {
 
 interface GameStore extends LeagueState {
   initialized: boolean;
-  newLeague: (teamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular') => Promise<void>;
+  newLeague: (
+    teamId: string,
+    leagueFileUrl?: string,
+    startMode?: 'offseason' | 'regular',
+    customHC?: {
+      firstName: string;
+      lastName: string;
+      age: number;
+      offensiveScheme: import('@/types').OffensiveScheme;
+      defensiveScheme: import('@/types').DefensiveScheme;
+      ovr: number;
+    },
+  ) => Promise<void>;
   resetLeague: () => void;
   /** Set the game plan for the user team's NEXT regular-season game. Cleared when that week is simmed. */
   setNextGamePlan: (plan: {
@@ -2465,7 +2477,19 @@ export const useGameStore = create<GameStore>()(
       initialized: false,
       ...EMPTY_LEAGUE_STATE,
 
-      newLeague: async (userTeamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular') => {
+      newLeague: async (
+        userTeamId: string,
+        leagueFileUrl?: string,
+        startMode?: 'offseason' | 'regular',
+        customHC?: {
+          firstName: string;
+          lastName: string;
+          age: number;
+          offensiveScheme: import('@/types').OffensiveScheme;
+          defensiveScheme: import('@/types').DefensiveScheme;
+          ovr: number;
+        },
+      ) => {
         try {
           resetUsedNames();
           if (!leagueFileUrl) throw new Error('No league file URL provided');
@@ -2519,6 +2543,30 @@ export const useGameStore = create<GameStore>()(
             }
             if (!team.baseFormation) {
               team.baseFormation = '4-3';
+            }
+            // Replace the user team's HC with their custom-created coach.
+            // Keeps the rest of the staff (OC/DC/position) intact and uses
+            // the same Coach shape so existing UI / payroll logic just works.
+            if (customHC && team.abbreviation === userTeamId && team.coaches) {
+              team.coaches = team.coaches.map(c =>
+                c.role === 'HC'
+                  ? {
+                      ...c,
+                      firstName: customHC.firstName,
+                      lastName: customHC.lastName,
+                      age: customHC.age,
+                      ovr: customHC.ovr,
+                      offensiveScheme: customHC.offensiveScheme,
+                      defensiveScheme: customHC.defensiveScheme,
+                      bio: `${customHC.firstName} ${customHC.lastName} is your custom-created head coach.`,
+                      yearsWithTeam: 0,
+                      careerWins: 0,
+                      careerLosses: 0,
+                      history: [],
+                      ratingHistory: [{ season: 0, ovr: customHC.ovr }],
+                    }
+                  : c,
+              );
             }
           }
           // Auto-assign OL slots — done from imported.players (allImportedPlayers
@@ -2665,6 +2713,33 @@ export const useGameStore = create<GameStore>()(
           for (const p of teamOL) {
             const slot = slotMap.get(p.id);
             if (slot) (p as { olSlot?: 'LT' | 'LG' | 'C' | 'RG' | 'RT' }).olSlot = slot;
+          }
+        }
+
+        // Apply custom HC override to the user team for synthetic leagues.
+        if (customHC) {
+          for (const team of teams) {
+            if (team.abbreviation !== userTeamId) continue;
+            if (!team.coaches) continue;
+            team.coaches = team.coaches.map(c =>
+              c.role === 'HC'
+                ? {
+                    ...c,
+                    firstName: customHC.firstName,
+                    lastName: customHC.lastName,
+                    age: customHC.age,
+                    ovr: customHC.ovr,
+                    offensiveScheme: customHC.offensiveScheme,
+                    defensiveScheme: customHC.defensiveScheme,
+                    bio: `${customHC.firstName} ${customHC.lastName} is your custom-created head coach.`,
+                    yearsWithTeam: 0,
+                    careerWins: 0,
+                    careerLosses: 0,
+                    history: [],
+                    ratingHistory: [{ season: 0, ovr: customHC.ovr }],
+                  }
+                : c,
+            );
           }
         }
 
