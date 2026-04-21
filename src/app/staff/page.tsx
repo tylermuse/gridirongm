@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
+import { CustomHCModal } from '@/components/game/CustomHCModal';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -221,8 +222,10 @@ function generateRecommendations(
 
 export default function StaffPage() {
   const { teams, userTeamId, players, replaceCoach } = useGameStore();
+  const customizeHeadCoach = useGameStore(s => s.customizeHeadCoach);
   const [confirmReplace, setConfirmReplace] = useState<import('@/types').CoachRole | null>(null);
   const [candidates, setCandidates] = useState<import('@/types').Coach[]>([]);
+  const [customizingHC, setCustomizingHC] = useState(false);
   const userTeam = teams.find(t => t.id === userTeamId);
   const coaches = userTeam?.coaches ?? [];
   const roster = players.filter(p => p.teamId === userTeamId && !p.retired);
@@ -256,7 +259,17 @@ export default function StaffPage() {
     <GameShell>
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-end justify-between gap-4 flex-wrap">
-          <h2 className="text-2xl font-black">Coaching Staff</h2>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h2 className="text-2xl font-black">Coaching Staff</h2>
+            {hc && (
+              <button
+                onClick={() => setCustomizingHC(true)}
+                className="text-xs font-bold px-2.5 py-1 rounded-lg border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+              >
+                ✏️ Customize My HC
+              </button>
+            )}
+          </div>
           {userTeam.ownerPersonality && (() => {
             const op = userTeam.ownerPersonality;
             const label = op === 'win-now' ? 'Win-Now' : op === 'frugal' ? 'Frugal' : 'Balanced';
@@ -585,6 +598,26 @@ export default function StaffPage() {
           </>
         )}
       </div>
+      {hc && (
+        <CustomHCModal
+          open={customizingHC}
+          teamLabel={`${userTeam.city} ${userTeam.name}`}
+          initial={{
+            firstName: hc.firstName,
+            lastName: hc.lastName,
+            age: hc.age,
+            offensiveScheme: hc.offensiveScheme ?? 'west_coast',
+            defensiveScheme: hc.defensiveScheme ?? 'cover_3',
+            ovr: hc.ovr,
+          }}
+          onCancel={() => setCustomizingHC(false)}
+          onConfirm={(input) => {
+            const err = customizeHeadCoach(input);
+            if (err) alert(err);
+            setCustomizingHC(false);
+          }}
+        />
+      )}
     </GameShell>
   );
 }

@@ -16,26 +16,31 @@ export interface CustomHCInput {
 }
 
 interface Props {
-  /** When non-null, the user has picked a team and we're collecting their HC. */
-  teamLabel: string | null;
-  onConfirm: (hc: CustomHCInput | null) => void;
+  /** When true, the modal is open. */
+  open: boolean;
+  /** Team label shown in the header (e.g. "Dallas Wranglers"). */
+  teamLabel: string;
+  /** Optional initial values to prefill when editing an existing HC. */
+  initial?: Partial<CustomHCInput>;
+  onConfirm: (hc: CustomHCInput) => void;
   onCancel: () => void;
 }
 
 const OFF_OPTIONS = Object.keys(OFFENSIVE_SCHEME_LABELS) as OffensiveScheme[];
 const DEF_OPTIONS = Object.keys(DEFENSIVE_SCHEME_LABELS) as DefensiveScheme[];
 
-export function CustomHCModal({ teamLabel, onConfirm, onCancel }: Props) {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [age, setAge] = useState(45);
-  const [offensiveScheme, setOffensiveScheme] = useState<OffensiveScheme>('west_coast');
-  const [defensiveScheme, setDefensiveScheme] = useState<DefensiveScheme>('cover_3');
-  // Three sliders share a 200-point budget. Each slider 40-99. Default
-  // distribution lands at 67/67/66, well inside the budget.
-  const [passRun, setPassRun] = useState(50);     // 0 = pure run, 100 = pure pass
-  const [aggression, setAggression] = useState(50);
-  const [devBias, setDevBias] = useState(50);
+export function CustomHCModal({ open, teamLabel, initial, onConfirm, onCancel }: Props) {
+  const [firstName, setFirstName] = useState(initial?.firstName ?? '');
+  const [lastName, setLastName] = useState(initial?.lastName ?? '');
+  const [age, setAge] = useState(initial?.age ?? 45);
+  const [offensiveScheme, setOffensiveScheme] = useState<OffensiveScheme>(initial?.offensiveScheme ?? 'west_coast');
+  const [defensiveScheme, setDefensiveScheme] = useState<DefensiveScheme>(initial?.defensiveScheme ?? 'cover_3');
+  // Derive slider seeds from the initial ovr if provided so re-opening the
+  // modal shows the coach's current quality distribution.
+  const seedOvr = initial?.ovr ?? 70;
+  const [passRun, setPassRun] = useState(Math.max(20, Math.min(99, seedOvr - 25)));
+  const [aggression, setAggression] = useState(Math.max(20, Math.min(99, seedOvr - 25)));
+  const [devBias, setDevBias] = useState(Math.max(20, Math.min(99, seedOvr - 25)));
 
   const total = passRun + aggression + devBias;
   const overBudget = total > 200;
@@ -56,17 +61,13 @@ export function CustomHCModal({ teamLabel, onConfirm, onCancel }: Props) {
     });
   }
 
-  function handleSkip() {
-    onConfirm(null);
-  }
-
   return (
-    <Modal isOpen={!!teamLabel} onClose={onCancel} maxWidth="md">
+    <Modal isOpen={open} onClose={onCancel} maxWidth="md">
       <div className="p-6 space-y-4">
         <div>
-          <h2 className="text-xl font-black">Create Your Head Coach</h2>
+          <h2 className="text-xl font-black">{initial ? 'Edit Head Coach' : 'Create Head Coach'}</h2>
           <p className="text-sm text-[var(--text-sec)] mt-1">
-            Customize the HC for the {teamLabel}, or skip to use an auto-generated coach.
+            {initial ? `Update the HC for the ${teamLabel}.` : `Create a custom HC for the ${teamLabel}.`}
           </p>
         </div>
 
@@ -144,16 +145,11 @@ export function CustomHCModal({ teamLabel, onConfirm, onCancel }: Props) {
           <SliderRow label="Development Bias" value={devBias} setValue={setDevBias} loLabel="Vets" hiLabel="Rookies" />
         </div>
 
-        <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
-          <Button size="sm" variant="ghost" onClick={handleSkip}>
-            Skip — auto-generate
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border)]">
+          <Button size="sm" variant="secondary" onClick={onCancel}>Cancel</Button>
+          <Button size="sm" onClick={handleConfirm} disabled={!canSubmit}>
+            {initial ? 'Save Changes' : 'Create Coach'}
           </Button>
-          <div className="flex gap-2">
-            <Button size="sm" variant="secondary" onClick={onCancel}>Cancel</Button>
-            <Button size="sm" onClick={handleConfirm} disabled={!canSubmit}>
-              Create Coach
-            </Button>
-          </div>
         </div>
       </div>
     </Modal>

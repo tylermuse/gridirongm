@@ -73,19 +73,7 @@ export function computeLuxuryTax(payroll: number, cap: number): number {
 
 interface GameStore extends LeagueState {
   initialized: boolean;
-  newLeague: (
-    teamId: string,
-    leagueFileUrl?: string,
-    startMode?: 'offseason' | 'regular',
-    customHC?: {
-      firstName: string;
-      lastName: string;
-      age: number;
-      offensiveScheme: import('@/types').OffensiveScheme;
-      defensiveScheme: import('@/types').DefensiveScheme;
-      ovr: number;
-    },
-  ) => Promise<void>;
+  newLeague: (teamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular') => Promise<void>;
   resetLeague: () => void;
   /** Set the game plan for the user team's NEXT regular-season game. Cleared when that week is simmed. */
   setNextGamePlan: (plan: {
@@ -141,6 +129,17 @@ interface GameStore extends LeagueState {
   togglePlayingThroughInjury: (playerId: string) => void;
   setBaseFormation: (formation: '3-4' | '4-3' | 'Nickel') => void;
   retireJerseyNumber: (playerId: string) => string;
+  /** Replace the user team's head coach with a user-supplied profile. Name,
+   *  age, schemes, and ovr are overwritten; career record + history reset.
+   *  Callable from the Staff page at any time. */
+  customizeHeadCoach: (input: {
+    firstName: string;
+    lastName: string;
+    age: number;
+    offensiveScheme: import('@/types').OffensiveScheme;
+    defensiveScheme: import('@/types').DefensiveScheme;
+    ovr: number;
+  }) => string;
   /** Move an active-53 player down to the practice squad. Returns error msg. */
   demoteToPracticeSquad: (playerId: string) => string;
   /** Promote a PS player to the active 53. Returns error msg. */
@@ -2477,19 +2476,7 @@ export const useGameStore = create<GameStore>()(
       initialized: false,
       ...EMPTY_LEAGUE_STATE,
 
-      newLeague: async (
-        userTeamId: string,
-        leagueFileUrl?: string,
-        startMode?: 'offseason' | 'regular',
-        customHC?: {
-          firstName: string;
-          lastName: string;
-          age: number;
-          offensiveScheme: import('@/types').OffensiveScheme;
-          defensiveScheme: import('@/types').DefensiveScheme;
-          ovr: number;
-        },
-      ) => {
+      newLeague: async (userTeamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular') => {
         try {
           resetUsedNames();
           if (!leagueFileUrl) throw new Error('No league file URL provided');
@@ -2543,30 +2530,6 @@ export const useGameStore = create<GameStore>()(
             }
             if (!team.baseFormation) {
               team.baseFormation = '4-3';
-            }
-            // Replace the user team's HC with their custom-created coach.
-            // Keeps the rest of the staff (OC/DC/position) intact and uses
-            // the same Coach shape so existing UI / payroll logic just works.
-            if (customHC && team.abbreviation === userTeamId && team.coaches) {
-              team.coaches = team.coaches.map(c =>
-                c.role === 'HC'
-                  ? {
-                      ...c,
-                      firstName: customHC.firstName,
-                      lastName: customHC.lastName,
-                      age: customHC.age,
-                      ovr: customHC.ovr,
-                      offensiveScheme: customHC.offensiveScheme,
-                      defensiveScheme: customHC.defensiveScheme,
-                      bio: `${customHC.firstName} ${customHC.lastName} is your custom-created head coach.`,
-                      yearsWithTeam: 0,
-                      careerWins: 0,
-                      careerLosses: 0,
-                      history: [],
-                      ratingHistory: [{ season: 0, ovr: customHC.ovr }],
-                    }
-                  : c,
-              );
             }
           }
           // Auto-assign OL slots — done from imported.players (allImportedPlayers
@@ -2713,33 +2676,6 @@ export const useGameStore = create<GameStore>()(
           for (const p of teamOL) {
             const slot = slotMap.get(p.id);
             if (slot) (p as { olSlot?: 'LT' | 'LG' | 'C' | 'RG' | 'RT' }).olSlot = slot;
-          }
-        }
-
-        // Apply custom HC override to the user team for synthetic leagues.
-        if (customHC) {
-          for (const team of teams) {
-            if (team.abbreviation !== userTeamId) continue;
-            if (!team.coaches) continue;
-            team.coaches = team.coaches.map(c =>
-              c.role === 'HC'
-                ? {
-                    ...c,
-                    firstName: customHC.firstName,
-                    lastName: customHC.lastName,
-                    age: customHC.age,
-                    ovr: customHC.ovr,
-                    offensiveScheme: customHC.offensiveScheme,
-                    defensiveScheme: customHC.defensiveScheme,
-                    bio: `${customHC.firstName} ${customHC.lastName} is your custom-created head coach.`,
-                    yearsWithTeam: 0,
-                    careerWins: 0,
-                    careerLosses: 0,
-                    history: [],
-                    ratingHistory: [{ season: 0, ovr: customHC.ovr }],
-                  }
-                : c,
-            );
           }
         }
 
@@ -5983,6 +5919,47 @@ export const useGameStore = create<GameStore>()(
               : t,
           ),
           freeAgents: state.freeAgents.filter(id => id !== playerId),
+        });
+        return '';
+      },
+
+      customizeHeadCoach: (input): string => {
+        const state = get();
+        if (!state.userTeamId) return 'No user team.';
+        const team = state.teams.find(t => t.id === state.userTeamId);
+        if (!team || !team.coaches) return 'Team not found.';
+        const hasHC = team.coaches.some(c => c.role === 'HC');
+        if (!hasHC) return 'Head coach slot is empty.';
+        const fn = input.firstName.trim();
+        const ln = input.lastName.trim();
+        if (!fn || !ln) return 'First and last name are required.';
+        set({
+          teams: state.teams.map(t =>
+            t.id === state.userTeamId && t.coaches
+              ? {
+                  ...t,
+                  coaches: t.coaches.map(c =>
+                    c.role === 'HC'
+                      ? {
+                          ...c,
+                          firstName: fn,
+                          lastName: ln,
+                          age: input.age,
+                          ovr: input.ovr,
+                          offensiveScheme: input.offensiveScheme,
+                          defensiveScheme: input.defensiveScheme,
+                          bio: `${fn} ${ln} is your custom-created head coach.`,
+                          yearsWithTeam: 0,
+                          careerWins: 0,
+                          careerLosses: 0,
+                          history: [],
+                          ratingHistory: [{ season: state.season, ovr: input.ovr }],
+                        }
+                      : c,
+                  ),
+                }
+              : t,
+          ),
         });
         return '';
       },
