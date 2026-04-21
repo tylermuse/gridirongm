@@ -69,7 +69,7 @@ function GradeCircle({ grade, size = 'md' }: { grade: string; size?: 'sm' | 'md'
 
 export default function DraftRecapPage() {
   const router = useRouter();
-  const { draftResults, players, teams, userTeamId, season, phase, advanceToFreeAgency, nflMockDraft } = useGameStore();
+  const { draftResults, players, teams, userTeamId, season, phase, startNewSeason, nflMockDraft } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
 
@@ -442,18 +442,22 @@ export default function DraftRecapPage() {
           </div>
         </Section>
 
-        {/* Advance to Free Agency CTA — shown when draft phase hasn't advanced yet */}
+        {/* Start New Season CTA — draft is the last offseason phase, so the
+            next step is startNewSeason (preseason/regular). The previous
+            wiring called advanceToFreeAgency, which pushed phase backwards
+            and re-ran FA setup; users ended up looping back into a fresh
+            draft class. */}
         {phase === 'draft' && (
           <div className="text-center pt-2 pb-4">
             <Button
               onClick={async () => {
-                advanceToFreeAgency();
+                startNewSeason();
                 await flushToStorage();
-                router.push('/free-agency');
+                router.push('/roster');
               }}
               size="lg"
             >
-              Advance to Free Agency →
+              Start New Season →
             </Button>
           </div>
         )}
