@@ -281,7 +281,16 @@ export default function RosterPage() {
     for (const entry of currentAllLeague.second) allProPlayerIds.add(entry.playerId);
   }
 
-  const injuredPlayers = roster.filter(p => p.injury && p.injury.weeksLeft > 0);
+  // Include both active-injured players AND anyone parked on IR (who lives
+  // on team.injuredReserve, outside the active `roster` array now). The
+  // injuries view surfaces both so the user can manage activations.
+  const irPlayers: Player[] = (viewingTeam?.injuredReserve ?? [])
+    .map(id => players.find(p => p.id === id))
+    .filter((p): p is Player => !!p);
+  const injuredPlayers = [
+    ...roster.filter(p => p.injury && p.injury.weeksLeft > 0),
+    ...irPlayers.filter(p => !roster.includes(p)),
+  ];
   const capSpace = viewingTeam ? Math.round((viewingTeam.salaryCap - viewingTeam.totalPayroll) * 10) / 10 : 0;
   const deadCapTotal = (userTeam?.deadCap ?? []).reduce((sum, dc) => sum + dc.amount, 0);
 

@@ -411,6 +411,9 @@ export interface Player {
    *  position's valid range on team join; kept across seasons unless the
    *  player changes teams or the new team has already retired that number. */
   jerseyNumber?: number;
+  /** Season-week number (e.g., 7) when the player was placed on IR. Used to
+   *  enforce the 3-week designated-to-return rule. */
+  irPlacedWeek?: number;
 }
 
 /** Valid jersey-number ranges per position, traditional NFL rules. Each range
@@ -654,10 +657,21 @@ export interface Team {
    *  the active 53. Cap of PRACTICE_SQUAD_LIMIT; contracts are flat league
    *  minimum and don't count against the team's main salary cap. */
   practiceSquad?: string[];
+  /** Injured reserve — player ids parked off the active 53 so their roster
+   *  slot can be filled by another signing. Placing a player on IR requires
+   *  an injury with weeks-left >= 4; activation requires at least 3 weeks
+   *  elapsed since placement (NFL designated-to-return rule). */
+  injuredReserve?: string[];
 }
 
 /** Practice squad cap — standard 16 slots. */
 export const PRACTICE_SQUAD_LIMIT = 16;
+
+/** Minimum weeks remaining on the injury clock to qualify for IR. */
+export const IR_MIN_WEEKS_OUT = 4;
+
+/** Minimum weeks a player must spend on IR before activation. */
+export const IR_RETURN_CLOCK_WEEKS = 3;
 
 /** Maximum OVR allowed on the PS. Keeps it a developmental tier rather than
  *  a cap-dodging stash for active starters. Anyone above this must be on the

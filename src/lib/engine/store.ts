@@ -33,7 +33,7 @@ import { checkDisciplineEvents, disciplineNewsItems, tickSuspensions } from './d
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 
-const SAVE_VERSION = 29;
+const SAVE_VERSION = 30;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
@@ -5805,10 +5805,29 @@ export const useGameStore = create<GameStore>()(
         const player = state.players.find(p => p.id === playerId);
         if (!player || player.teamId !== state.userTeamId) return;
         if (!player.injury || player.injury.weeksLeft < 4) return;
+        // Move out of the active 53 into team.injuredReserve so the roster
+        // slot frees up for a signing. Strip the player from the depth chart
+        // in the same update so they don't fill a starter slot.
         set({
           players: state.players.map(p =>
-            p.id === playerId ? { ...p, onIR: true } : p,
+            p.id === playerId
+              ? { ...p, onIR: true, irPlacedWeek: state.week }
+              : p,
           ),
+          teams: state.teams.map(t => {
+            if (t.id !== state.userTeamId) return t;
+            const chart: typeof t.depthChart = { ...t.depthChart };
+            for (const pos of POSITIONS) {
+              chart[pos] = (chart[pos] ?? []).filter(id => id !== playerId);
+            }
+            return {
+              ...t,
+              roster: t.roster.filter(id => id !== playerId),
+              injuredReserve: [...(t.injuredReserve ?? []), playerId],
+              depthChart: chart,
+              totalPayroll: Math.max(0, t.totalPayroll - player.contract.salary),
+            };
+          }),
         });
       },
 
@@ -5817,9 +5836,35 @@ export const useGameStore = create<GameStore>()(
         const player = state.players.find(p => p.id === playerId);
         if (!player || !player.onIR) return;
         if (player.injury && player.injury.weeksLeft > 2) return;
+        const team = state.teams.find(t => t.id === state.userTeamId);
+        if (!team) return;
+        // 3-week designated-to-return rule — gate activation on weeks elapsed
+        // rather than on the injury clock alone, so a miracle recovery still
+        // needs the stash time before returning.
+        const placedWeek = player.irPlacedWeek ?? 0;
+        const weeksOnIR = state.week - placedWeek;
+        if (weeksOnIR < 3) {
+          alert(`${player.firstName} ${player.lastName} must spend at least 3 weeks on IR before activation (${weeksOnIR} so far).`);
+          return;
+        }
+        if (team.roster.length >= 53) {
+          alert('Active roster is full (53). Cut or demote someone before activating.');
+          return;
+        }
         set({
           players: state.players.map(p =>
-            p.id === playerId ? { ...p, onIR: false } : p,
+            p.id === playerId ? { ...p, onIR: false, irPlacedWeek: undefined } : p,
+          ),
+          teams: state.teams.map(t =>
+            t.id === state.userTeamId
+              ? {
+                  ...t,
+                  roster: [...t.roster, playerId],
+                  injuredReserve: (t.injuredReserve ?? []).filter(id => id !== playerId),
+                  depthChart: insertIntoDepthChart(t.depthChart, player.position, playerId, state.players),
+                  totalPayroll: t.totalPayroll + player.contract.salary,
+                }
+              : t,
           ),
         });
       },
@@ -9272,6 +9317,37 @@ export const useGameStore = create<GameStore>()(
               const n = assignJerseyNumber(p.position as Position, taken, retired);
               p.jerseyNumber = n;
               taken.add(n);
+            }
+          }
+        }
+        if (version < 30) {
+          // Introduce injuredReserve on every team. Existing saves that have
+          // onIR=true players keep them on team.roster (legacy behavior —
+          // they were double-counted against 53). Move them out into
+          // team.injuredReserve so the slot frees up. Depth chart is pruned
+          // in the same pass.
+          const teams30 = ((state as any).teams ?? []) as Array<Record<string, unknown>>;
+          const players30 = ((state as any).players ?? []) as Array<Record<string, unknown>>;
+          const irByTeam = new Map<string, string[]>();
+          for (const p of players30) {
+            if (p.onIR && p.teamId) {
+              const tid = p.teamId as string;
+              if (!irByTeam.has(tid)) irByTeam.set(tid, []);
+              irByTeam.get(tid)!.push(p.id as string);
+            }
+          }
+          for (const t of teams30) {
+            if (!t.injuredReserve) t.injuredReserve = [];
+            const irIds = irByTeam.get(t.id as string) ?? [];
+            if (irIds.length > 0) {
+              const existingIR = new Set((t.injuredReserve as string[]) ?? []);
+              for (const id of irIds) existingIR.add(id);
+              t.injuredReserve = [...existingIR];
+              t.roster = ((t.roster as string[]) ?? []).filter(id => !existingIR.has(id));
+              const chart = (t.depthChart ?? {}) as Record<string, string[]>;
+              for (const pos of Object.keys(chart)) {
+                chart[pos] = (chart[pos] ?? []).filter(id => !existingIR.has(id));
+              }
             }
           }
         }
