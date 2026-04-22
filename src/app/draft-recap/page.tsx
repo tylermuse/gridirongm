@@ -443,24 +443,37 @@ export default function DraftRecapPage() {
         </Section>
 
         {/* Start New Season CTA — draft is the last offseason phase, so the
-            next step is startNewSeason (preseason/regular). The previous
-            wiring called advanceToFreeAgency, which pushed phase backwards
-            and re-ran FA setup; users ended up looping back into a fresh
-            draft class. */}
-        {phase === 'draft' && (
-          <div className="text-center pt-2 pb-4">
-            <Button
-              onClick={async () => {
-                startNewSeason();
-                await flushToStorage();
-                router.push('/roster');
-              }}
-              size="lg"
-            >
-              Start New Season →
-            </Button>
-          </div>
-        )}
+            next step is startNewSeason (preseason/regular). If the user is
+            over the 53-man limit, route through /post-draft-cuts first so
+            they can choose who to cut vs demote to PS, instead of
+            silently auto-deleting their lowest-OVR signings. */}
+        {phase === 'draft' && (() => {
+          const userTeam = teams.find(t => t.id === userTeamId);
+          const overCap = (userTeam?.roster.length ?? 0) > 53;
+          return (
+            <div className="text-center pt-2 pb-4">
+              {overCap && (
+                <p className="text-sm text-red-600 font-bold mb-2">
+                  Roster is over 53 ({userTeam?.roster.length}). Choose cuts before starting the season.
+                </p>
+              )}
+              <Button
+                onClick={async () => {
+                  if (overCap) {
+                    router.push('/post-draft-cuts');
+                    return;
+                  }
+                  startNewSeason();
+                  await flushToStorage();
+                  router.push('/roster');
+                }}
+                size="lg"
+              >
+                {overCap ? 'Manage Roster Cuts →' : 'Start New Season →'}
+              </Button>
+            </div>
+          );
+        })()}
       </div>
 
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />

@@ -8334,10 +8334,15 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
-        // Auto-cut every team to the 53-man limit if enabled. Runs after all
-        // FA/draft signings have settled so AI rosters that ballooned over the
-        // cap during the offseason get trimmed before Week 1.
-        get().autoCutToRosterLimit();
+        // Auto-cut every AI team to the 53-man limit. The USER's team is
+        // deliberately skipped so the user can manage their own cuts via the
+        // /post-draft-cuts flow (or the roster page) and optionally demote
+        // to PS instead of outright releasing — previous behavior silently
+        // deleted the lowest-OVR signings which was tofftanaut's 4/19 report.
+        const userId = get().userTeamId;
+        for (const t of get().teams) {
+          if (t.id !== userId) get().autoCutToRosterLimit(t.id);
+        }
       },
 
       updateLeagueSettings: (updates: Partial<LeagueSettings>) => {
