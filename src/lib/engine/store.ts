@@ -4539,7 +4539,21 @@ export const useGameStore = create<GameStore>()(
         // filter, leftover unused picks from a prior draft (e.g., a 2030 R1
         // that was silently skipped) would be wrongly consumed by current-year
         // picks, leaving the current-year pick orphaned in draftResults.
+        //
+        // Also critical: when a team has MULTIPLE picks in the same round
+        // (their original + a traded-in pick), we must mark the SPECIFIC pick
+        // that's on the clock right now — not the first one in the array.
+        // Otherwise drafting at pick #1 could accidentally consume the #7
+        // pick, making #7 disappear from the team's tradeable list.
+        //
+        // Resolution: count how many picks this team has already made in this
+        // round this year (from draftResults), then among the team's unused
+        // matching picks, mark the next one in array order.
         const draftYear = state.currentDraftYear ?? state.season;
+        const priorPicksByThisTeamInRound = state.draftResults.filter(r =>
+          r.teamId === currentPickTeamId && r.round === round,
+        ).length;
+        let matchesSeen = 0;
         let pickMarked = false;
         const updatedTeams = state.teams.map(t => {
           const updatedPicks = t.draftPicks.map(pk => {
@@ -4550,8 +4564,11 @@ export const useGameStore = create<GameStore>()(
               pk.round === round &&
               !pk.playerId
             ) {
-              pickMarked = true;
-              return { ...pk, playerId, pick: overallPick };
+              if (matchesSeen === priorPicksByThisTeamInRound) {
+                pickMarked = true;
+                return { ...pk, playerId, pick: overallPick };
+              }
+              matchesSeen++;
             }
             return pk;
           });
