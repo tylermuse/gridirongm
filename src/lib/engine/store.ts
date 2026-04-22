@@ -6035,13 +6035,39 @@ export const useGameStore = create<GameStore>()(
         const unamortizedBonus = getUnamortizedBonus(oldContract);
         const deadCapAmount = Math.round(unamortizedBonus * 10) / 10;
 
-        // Build new contract
-        const newGuaranteed = generateGuaranteed(salary, years);
+        // Splice the extension onto the tail of the existing contract instead
+        // of overwriting it. A player with 2 yrs / $10M left who extends for
+        // 3 yrs / $15M should end up at 5 yrs (2 at $10M, then 3 at $15M),
+        // not be rewound to a fresh 3-year deal.
+        const oldYearsLeft = oldContract.yearsLeft;
+        const totalYears = oldYearsLeft + years;
+        const extensionGuaranteed = generateGuaranteed(salary, years);
+        const combinedGuaranteed = Math.round(((oldContract.guaranteed ?? 0) + extensionGuaranteed) * 10) / 10;
+
+        // Build per-year breakdown. If the existing contract already has a
+        // contractYears array (restructured before), preserve those exact
+        // years; otherwise materialize them from oldContract.salary.
+        const existingYears: import('@/types').ContractYear[] = (oldContract.contractYears ?? [])
+          .filter(y => !y.isVoidYear)
+          .slice(0, oldYearsLeft);
+        const materializedOldYears: import('@/types').ContractYear[] = existingYears.length === oldYearsLeft
+          ? existingYears
+          : Array.from({ length: oldYearsLeft }, () => ({
+              baseSalary: oldContract.salary,
+              proratedBonus: 0,
+              isVoidYear: false,
+            }));
+        const extensionYears: import('@/types').ContractYear[] = Array.from({ length: years }, () => ({
+          baseSalary: salary,
+          proratedBonus: 0,
+          isVoidYear: false,
+        }));
         const newContract: import('@/types').Contract = {
-          salary,
-          yearsLeft: years,
-          guaranteed: newGuaranteed,
-          totalYears: years,
+          salary: oldContract.salary, // current-year cap hit stays the same
+          yearsLeft: totalYears,
+          guaranteed: combinedGuaranteed,
+          totalYears,
+          contractYears: [...materializedOldYears, ...extensionYears],
         };
 
         // Dead cap entries from unamortized bonus
@@ -6055,8 +6081,12 @@ export const useGameStore = create<GameStore>()(
             }]
           : [];
 
-        // Update payroll: remove old cap hit, add new salary, add dead cap charge
-        const payrollDelta = salary - oldCapHit + deadCapAmount;
+        // Current-year cap hit is unchanged (same year-1 salary), so only
+        // dead cap adds to today's payroll. Future-year cap hits are captured
+        // in contractYears and will surface on season rollover.
+        const payrollDelta = deadCapAmount;
+        // oldCapHit kept for audit clarity but not subtracted — old hit is year 1 of the new contract too.
+        void oldCapHit;
 
         const extensionsUsed = state.extensionsUsedThisSeason ?? 0;
 
@@ -6084,7 +6114,7 @@ export const useGameStore = create<GameStore>()(
           newsItems: [...state.newsItems, makeNews({
             season: state.season, week: state.week, type: 'signing',
             teamId: state.userTeamId, playerIds: [playerId],
-            headline: `${player.firstName} ${player.lastName} signed a ${years}-year, $${salary}M/yr extension with the ${userTeam.city} ${userTeam.name}.${deadCapAmount > 0 ? ` ($${deadCapAmount}M dead cap from prior restructure)` : ''}`,
+            headline: `${player.firstName} ${player.lastName} added a ${years}-year, $${salary}M/yr extension on top of ${oldYearsLeft} remaining year${oldYearsLeft !== 1 ? 's' : ''} with the ${userTeam.city} ${userTeam.name}.${deadCapAmount > 0 ? ` ($${deadCapAmount}M dead cap from prior restructure)` : ''}`,
             isUserTeam: true,
           })],
         });

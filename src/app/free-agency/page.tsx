@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
+import { getActiveRoster } from '@/lib/engine/roster';
 import { initNegotiation, processOffer, type NegotiationState } from '@/lib/engine/negotiation';
 import { generateFAEvaluation, type FAEvaluation } from '@/lib/engine/personnelReport';
 import { POSITIONS, ROSTER_LIMITS, type Position, type Player } from '@/types';
@@ -226,8 +227,9 @@ export default function FreeAgencyPage() {
   const overCap = capSpace < 0;
   const luxuryTax = userTeam ? computeLuxuryTax(userTeam.totalPayroll, userTeam.salaryCap) : 0;
 
-  // Roster composition
-  const roster = players.filter(p => p.teamId === userTeamId && !p.retired);
+  // Roster composition — intersect with team.roster so PS (and later IR)
+  // don't inflate the active-53 count that gates signings.
+  const roster = userTeam ? getActiveRoster(userTeam, players) : [];
   const positionCounts: Record<Position, number> = {} as Record<Position, number>;
   for (const pos of POSITIONS) {
     positionCounts[pos] = roster.filter(p => p.position === pos).length;

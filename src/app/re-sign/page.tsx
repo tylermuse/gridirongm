@@ -44,7 +44,10 @@ type NegMode = 'extend' | 'restructure';
 export default function ReSignPage() {
   const router = useRouter();
   const { phase, players, teams, userTeamId, resigningPlayers, resignPlayer, passOnResigning, passOnResigningBatch, franchiseTagPlayer, advanceToFreeAgency } = useGameStore();
-  const roster = players.filter(p => p.teamId === userTeamId && !p.retired);
+  const userTeamForRoster = teams.find(t => t.id === userTeamId);
+  const roster = userTeamForRoster
+    ? players.filter(p => userTeamForRoster.roster.includes(p.id) && !p.retired)
+    : [];
 
   const [results, setResults] = useState<Record<string, ReSignResult>>({});
   const [negotiation, setNegotiation] = useState<NegotiationState | null>(null);
