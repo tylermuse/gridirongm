@@ -772,19 +772,18 @@ export function simulatePlayByPlay(
     const scoringBucket = state.possession === 'home' ? homeBucket : awayBucket;
     if (state.possession === 'home') state.homeScore += 6;
     else state.awayScore += 6;
+    // Rush TD credit split by position: QB scrambles/designed runs live in
+    // qbRushTDs (already bumped by the caller), RBs land on rushTDs +
+    // perRusher. Without this split the same TD would count in both
+    // qbRushTDs and rushTDs, tripping the Σ-per-rusher invariant.
     scoringBucket.passTDs += isRush ? 0 : 1;
-    scoringBucket.rushTDs += isRush ? 1 : 0;
-    // Credit the receiving TD directly to the pass catcher's per-receiver
-    // bucket (no share-based distribution). The aggregate receivingTDs field
-    // on the bucket mirrors this for debugging; perReceiver is authoritative.
+    if (isRush && scorer?.position !== 'QB') {
+      scoringBucket.rushTDs += 1;
+    }
     if (scorer && !isRush) {
       scoringBucket.receivingTDs += 1;
       creditReceiver(scoringBucket, scorer.id, { tds: 1 });
     }
-    // Rush TDs credited to the scorer's per-rusher bucket when it's an RB.
-    // QB scrambles/designed runs go through qbRushTDs (already bumped above)
-    // and aren't tracked in perRusher — the boxscore reads QB rush stats from
-    // the QB bucket.
     if (scorer && isRush && scorer.position === 'RB') {
       creditRusher(scoringBucket, scorer.id, { tds: 1 });
     }
