@@ -1,4 +1,5 @@
 import type { Player, PlayerStats, GameResult, ScoringPlay, BettingLine } from '@/types';
+import { pushSimTelemetryRecord, meanStarterOvr } from './simTelemetry';
 
 // ---------------------------------------------------------------------------
 // Injury / play-through helpers
@@ -1107,6 +1108,30 @@ export function simulateGame(
   // Away team: offensive stats from away plays + defensive stats from home plays
   addPlayStats(allAwayPlays, awayIds, awayRoster);
   addPlayStats(allHomePlays, awayIds, awayRoster);
+
+  // Telemetry sink: no-op unless the store has set it up (devPanels on).
+  const homeOvr = meanStarterOvr(homeRoster);
+  const awayOvr = meanStarterOvr(awayRoster);
+  const ovrDelta = homeOvr - awayOvr;
+  const scoreDelta = homeScore - awayScore;
+  const homeWon = scoreDelta > 0;
+  const upset = Math.abs(ovrDelta) >= 4 && ((ovrDelta > 0) !== homeWon);
+  pushSimTelemetryRecord({
+    gameId: game.id,
+    week: game.week,
+    season: game.season,
+    homeTeam: game.homeTeamId,
+    awayTeam: game.awayTeamId,
+    homeOvr,
+    awayOvr,
+    ovrDelta,
+    homeScore,
+    awayScore,
+    scoreDelta,
+    simMode: 'fast',
+    upset,
+    createdAt: Date.now(),
+  });
 
   return {
     ...game,

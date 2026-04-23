@@ -7,6 +7,7 @@ import { GameShell } from '@/components/game/GameShell';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { simulatePlayByPlay, liveGameToGameResult, type LiveGamePlan } from '@/lib/engine/playByPlay';
+import { pushSimTelemetryRecord, meanStarterOvr } from '@/lib/engine/simTelemetry';
 import { createLiveCoachEngine, type LiveCoachEngine } from '@/lib/engine/liveCoachEngine';
 import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
@@ -498,6 +499,32 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         homeTeam, awayTeam, homePlayers, awayPlayers, isPlayoffGame, mcafeeMode,
         livePlan ?? undefined,
       );
+      // Sim-balance telemetry (dev-only, gated on features.devPanels in the
+      // store sink). Live-sim path is a separate branch from fast-sim, so
+      // append the same record shape here at result time.
+      if (simRef.current) {
+        const homeOvr = meanStarterOvr(homePlayers);
+        const awayOvr = meanStarterOvr(awayPlayers);
+        const ovrDelta = homeOvr - awayOvr;
+        const scoreDelta = simRef.current.homeScore - simRef.current.awayScore;
+        const homeWon = scoreDelta > 0;
+        pushSimTelemetryRecord({
+          gameId: game.id,
+          week: game.week,
+          season: game.season,
+          homeTeam: game.homeTeamId,
+          awayTeam: game.awayTeamId,
+          homeOvr,
+          awayOvr,
+          ovrDelta,
+          homeScore: simRef.current.homeScore,
+          awayScore: simRef.current.awayScore,
+          scoreDelta,
+          simMode: 'live',
+          upset: Math.abs(ovrDelta) >= 4 && ((ovrDelta > 0) !== homeWon),
+          createdAt: Date.now(),
+        });
+      }
     } catch (err) {
       console.error('[Watch Live] simulatePlayByPlay error:', err);
       setSimError(err instanceof Error ? err.message : 'Failed to start simulation');

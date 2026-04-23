@@ -1016,6 +1016,10 @@ export interface LeagueSettings {
   suspensionFrequency: number;
   /** Number of preseason games (0-4, default 3). 0 = skip preseason. */
   preseasonGames: number;
+  /** Enables dev-only diagnostic panels + sim-balance telemetry recording.
+   *  Off by default; no user-facing panels today, but turning this on starts
+   *  capturing per-game OVR-delta vs score-delta records into store.simTelemetry. */
+  devPanels: boolean;
 }
 
 export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
@@ -1040,6 +1044,7 @@ export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
   practiceSquadSize: 16,
   suspensionFrequency: 1.0,
   preseasonGames: 0,
+  devPanels: false,
 };
 
 export interface LeagueState {

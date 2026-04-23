@@ -32,6 +32,7 @@ import { buildGmSyncPayload, syncGmStats } from './gmSync';
 import { checkDisciplineEvents, disciplineNewsItems, tickSuspensions } from './discipline';
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
+import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from './simTelemetry';
 
 const SAVE_VERSION = 30;
 
@@ -73,6 +74,10 @@ export function computeLuxuryTax(payroll: number, cap: number): number {
 
 interface GameStore extends LeagueState {
   initialized: boolean;
+  /** Dev-only sim-balance telemetry — capped at SIM_TELEMETRY_CAP rows.
+   *  Populated only when leagueSettings.devPanels is on. Not persisted to
+   *  save storage (runtime only). */
+  simTelemetry?: SimTelemetryRecord[];
   newLeague: (teamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular') => Promise<void>;
   resetLeague: () => void;
   /** Set the game plan for the user team's NEXT regular-season game. Cleared when that week is simmed. */
@@ -8838,8 +8843,10 @@ export const useGameStore = create<GameStore>()(
           (r: { season: number }) => r.season === state.season
         );
 
+        // Drop sim telemetry from the persisted payload — it's runtime-only
+        // dev data, not save state, and we don't want it eating IndexedDB.
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { initialized, ...rest } = state;
+        const { initialized, simTelemetry: _simTelemetry, ...rest } = state;
         return {
           ...rest,
           schedule: slimSchedule,
@@ -8852,6 +8859,18 @@ export const useGameStore = create<GameStore>()(
         if (state && state.userTeamId && state.teams && state.teams.length > 0) {
           useGameStore.setState({ initialized: true });
         }
+        // Wire the sim-balance telemetry sink. Pushed records go into
+        // state.simTelemetry (capped) only when features.devPanels is on;
+        // otherwise the sink is a no-op.
+        setSimTelemetrySink((rec) => {
+          const s = useGameStore.getState();
+          if (!s.leagueSettings?.devPanels) return;
+          const prev = s.simTelemetry ?? [];
+          const next = prev.length >= SIM_TELEMETRY_CAP - 1
+            ? [...prev.slice(-(SIM_TELEMETRY_CAP - 1)), rec]
+            : [...prev, rec];
+          useGameStore.setState({ simTelemetry: next });
+        });
       },
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
