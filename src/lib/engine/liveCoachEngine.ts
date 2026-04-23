@@ -586,6 +586,29 @@ export function createLiveCoachEngine(
       return events;
     }
 
+    // Explicit user calls fire FIRST, before the pending-runoff drain. A user
+    // who clicks "Field Goal" with 4 seconds left expects the kick to happen
+    // regardless of the between-plays runoff the engine tracked — previously
+    // the runoff consumed the clock to 0 and the quarter ended without the
+    // kick ever firing, which tofftanaut reported as "nothing happens, the
+    // quarter just ends" (4/21). Zero the runoff since the play supersedes it.
+    if (userCall === 'field_goal') {
+      state.pendingRunoff = 0;
+      runFieldGoal(events);
+      if (state.overtime) state.otPlayRunThisPossession = true;
+      checkTwoMinWarning(events);
+      checkQuarterEnd(events);
+      return events;
+    }
+    if (state.down === 4 && userCall === 'punt') {
+      state.pendingRunoff = 0;
+      runPunt(events);
+      if (state.overtime) state.otPlayRunThisPossession = true;
+      checkTwoMinWarning(events);
+      checkQuarterEnd(events);
+      return events;
+    }
+
     // Consume the runoff owed by the previous play before running this one.
     // A timeout would have zeroed this out.
     if ((state.pendingRunoff ?? 0) > 0) {
@@ -620,21 +643,6 @@ export function createLiveCoachEngine(
       }
     }
 
-    // User field goal — allowed on any down when user explicitly calls it
-    if (userCall === 'field_goal') {
-      runFieldGoal(events);
-      if (state.overtime) state.otPlayRunThisPossession = true;
-      checkTwoMinWarning(events);
-      checkQuarterEnd(events);
-      return events;
-    }
-    if (state.down === 4 && userCall === 'punt') {
-      runPunt(events);
-      if (state.overtime) state.otPlayRunThisPossession = true;
-      checkTwoMinWarning(events);
-      checkQuarterEnd(events);
-      return events;
-    }
     // 'go_for_it' falls through to a normal play (default to pass_short)
 
     // Kneel — QB takes a knee, loses 1-2 yards, burns ~40 seconds
