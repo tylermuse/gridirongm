@@ -12,7 +12,7 @@ import { calculateSchemeFit, schemeFitDot, schemeFitColor, OFFENSIVE_SCHEME_LABE
 import { calculateDeadCap, calculateCapSavings, getCapHit, getUnamortizedBonus, materializeContractYears } from '@/types';
 import { getSubPosition } from '@/types';
 import type { Player, Position, SubPosition, ContractYear } from '@/types';
-import { POSITIONS, ROSTER_LIMITS } from '@/types';
+import { POSITIONS, ROSTER_LIMITS, PRACTICE_SQUAD_LIMIT, isPracticeSquadEligible } from '@/types';
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
 import { PositionLink } from '@/components/ui/PositionLink';
 import { LEAGUE_MINIMUM_SALARY, estimateSalary, capInflationFactor } from '@/lib/engine/store';
@@ -1487,6 +1487,40 @@ export default function RosterPage() {
                 </button>
               </>
             )}
+            {(() => {
+              // "Demote to PS" is hidden (not show-disabled) when the player
+              // can't be demoted — keeps the menu short for vets and lets the
+              // dropdown express the same eligibility rules the post-draft
+              // cut flow uses. Reuses isPracticeSquadEligible so the two
+              // surfaces never disagree.
+              if (!isViewingOwnTeam) return null;
+              if (p.onIR) return null;
+              const ps = viewingTeam?.practiceSquad ?? [];
+              if (ps.length >= PRACTICE_SQUAD_LIMIT) return null;
+              const psPlayers = ps
+                .map(id => players.find(pl => pl.id === id))
+                .filter((pl): pl is Player => !!pl);
+              const { eligible } = isPracticeSquadEligible(p, psPlayers);
+              if (!eligible) return null;
+              return (
+                <>
+                  <div className="border-t border-[var(--border)] mx-3 my-0.5" />
+                  <button
+                    onClick={() => {
+                      const err = demoteToPracticeSquad(p.id);
+                      if (err) alert(err);
+                      setActionMenu(null);
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-black/5 transition-colors text-indigo-600 font-medium"
+                  >
+                    Demote to Practice Squad
+                    <span className="block text-[11px] text-[var(--text-sec)] font-normal mt-0.5">
+                      Frees an active-53 slot · league-minimum contract
+                    </span>
+                  </button>
+                </>
+              );
+            })()}
             {isTradeOpen && (
               <>
                 <div className="border-t border-[var(--border)] mx-3 my-0.5" />
