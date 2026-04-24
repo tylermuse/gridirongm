@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { calculateSchemeFit, schemeFitDot, schemeFitColor, OFFENSIVE_SCHEME_LABELS, DEFENSIVE_SCHEME_LABELS } from '@/lib/engine/coaching';
 import { calculateDeadCap, calculateCapSavings, getCapHit, getUnamortizedBonus, materializeContractYears } from '@/types';
-import { getSubPosition } from '@/types';
+import { getSubPosition, deriveSubPosition } from '@/types';
 import type { Player, Position, SubPosition, ContractYear } from '@/types';
 import { POSITIONS, ROSTER_LIMITS, PRACTICE_SQUAD_LIMIT, isPracticeSquadEligible } from '@/types';
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
@@ -931,13 +931,18 @@ export default function RosterPage() {
                       ];
 
                     const renderSlot = (slot: { label: string; pos: Position; idx: number; subPos?: SubPosition }) => {
-                      // When a sub-position is specified (defensive slots),
-                      // filter the depth list to players whose subPosition
-                      // matches. Otherwise fall back to the full position
-                      // group (offense, OL slots handled separately).
+                      // When a sub-position is specified (defensive + OL
+                      // slots), filter the depth list to players whose
+                      // subPosition matches. Imported-league players (FBGM)
+                      // and older saves that never went through migration
+                      // v20 may have p.subPosition === undefined — derive
+                      // from ratings on the fly so the slot still fills.
+                      // This was tofftanaut's recurring "defensive depth
+                      // chart empty" report.
                       const baseList = getDepthGroup(slot.pos);
+                      const effectiveSubPos = (p: Player) => p.subPosition ?? deriveSubPosition(p);
                       const depthList = slot.subPos
-                        ? baseList.filter(p => p.subPosition === slot.subPos)
+                        ? baseList.filter(p => effectiveSubPos(p) === slot.subPos)
                         : baseList;
                       const player = depthList[slot.idx];
                       return (
