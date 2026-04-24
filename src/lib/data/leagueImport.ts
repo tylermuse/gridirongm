@@ -57,6 +57,15 @@ interface FbgmPlayer {
   ratings?: FbgmRating[];
 }
 
+interface FbgmDraftPick {
+  tid: number;            // current owner (may differ from originalTid for traded picks)
+  originalTid: number;    // original owner
+  round: number;
+  pick?: number;          // 0 if order not yet determined
+  season: number;
+  dpid?: number;          // FBGM internal id
+}
+
 interface FbgmLeagueFile {
   teams: FbgmTeam[];
   players: FbgmPlayer[];
@@ -65,6 +74,7 @@ interface FbgmLeagueFile {
     confs?: Array<{ cid: number; name: string }>;
     divs?: Array<{ did: number; cid: number; name: string }>;
   };
+  draftPicks?: FbgmDraftPick[];
 }
 
 function clamp(value: number, min = 20, max = 99): number {
@@ -323,6 +333,40 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
     payrollByTeamId.set(player.teamId, (payrollByTeamId.get(player.teamId) ?? 0) + player.contract.salary);
   }
 
+  // Pre-compute draft picks from the source JSON. The file encodes real
+  // ownership including trades (e.g. Dexter Lawrence's pick to CIN, Mauigoa
+  // to NYG at 10) — previously the import ignored raw.draftPicks entirely
+  // and hardcoded `rounds 1-7 × season / +1 / +2` for every team, so traded
+  // picks reverted and already-consumed picks reappeared.
+  //
+  // Convention: group by current owner. For a given (year, round, ownerTid)
+  // we use the source record and carry originalTid over. Any (team, year)
+  // combo the source file DOESN'T cover falls back to the old synthesized
+  // default — important for years beyond the file's horizon (e.g. 2029+
+  // once a user plays past the file's range).
+  const sourcePicks = league.draftPicks ?? [];
+  const picksByOwner = new Map<string, Array<{ id: string; year: number; round: number; originalTeamId: string; ownerTeamId: string }>>();
+  const yearsCoveredPerOwner = new Map<string, Set<number>>();
+  for (const sp of sourcePicks) {
+    const ownerId = teamByTid.get(sp.tid);
+    if (!ownerId) continue; // unknown tid — skip defensively
+    const originalId = teamByTid.get(sp.originalTid) ?? ownerId;
+    const list = picksByOwner.get(ownerId) ?? [];
+    list.push({
+      id: uuid(),
+      year: sp.season,
+      round: sp.round,
+      originalTeamId: originalId,
+      ownerTeamId: ownerId,
+    });
+    picksByOwner.set(ownerId, list);
+    // Track which (team, year) combos the source file provided so we don't
+    // double-up by also synthesizing defaults for those years.
+    const yrs = yearsCoveredPerOwner.get(ownerId) ?? new Set<number>();
+    yrs.add(sp.season);
+    yearsCoveredPerOwner.set(ownerId, yrs);
+  }
+
   const finalizedTeams = teams.map((team) => {
     const rosterIds = rosterByTeamId.get(team.id) ?? [];
     const teamPlayers = players.filter(p => p.teamId === team.id);
@@ -333,11 +377,13 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
         .map(p => p.id);
       return acc;
     }, {} as Record<Position, string[]>);
-    return {
-      ...team,
-      roster: rosterIds,
-      totalPayroll: Math.round((payrollByTeamId.get(team.id) ?? 0) * 10) / 10,
-      draftPicks: [season, season + 1, season + 2].flatMap((yr) =>
+
+    // Merge source picks with synthesized defaults for uncovered years only.
+    const sourceOwned = picksByOwner.get(team.id) ?? [];
+    const covered = yearsCoveredPerOwner.get(team.id) ?? new Set<number>();
+    const synthesized = [season, season + 1, season + 2]
+      .filter(yr => !covered.has(yr))
+      .flatMap((yr) =>
         [1, 2, 3, 4, 5, 6, 7].map((round) => ({
           id: uuid(),
           year: yr,
@@ -345,7 +391,13 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
           originalTeamId: team.id,
           ownerTeamId: team.id,
         })),
-      ),
+      );
+
+    return {
+      ...team,
+      roster: rosterIds,
+      totalPayroll: Math.round((payrollByTeamId.get(team.id) ?? 0) * 10) / 10,
+      draftPicks: [...sourceOwned, ...synthesized],
       depthChart,
       deadCap: [],
       franchiseTagUsed: false,

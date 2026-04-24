@@ -3975,22 +3975,25 @@ export const useGameStore = create<GameStore>()(
         }
 
         let rawDraftClass: Player[];
-        // Skip first-round mock prospects whose real-life counterparts have
-        // already been drafted onto a team in the source roster. Without
-        // this guard, the `existing` lookup below fails (the player is on
-        // tid>=0 now, not in baseDraftClass which only has tid=-2 rookies),
-        // and the `else` branch generates a brand-new doppelganger with the
-        // same name that shows up as a draftable rookie.
-        const alreadyDraftedNames = new Set(
+        // Skip first-round mock prospects whose real-life counterparts
+        // already exist in the source roster — whether drafted onto a team
+        // (post-draft variant) or parked in the rookie pool (pre-draft
+        // variant). The hardcoded NFL_2026_FIRST_ROUND mock has stale team
+        // assignments (e.g. Reese to ARI at 3, Love to TEN at 4) that don't
+        // match actual 2026 R1 any more, and without this guard it either
+        // fabricates doppelgangers (post-draft) or overwrites the imported
+        // player with mock OVR/scouting data keyed to the wrong pick order
+        // (pre-draft).
+        const existingMockNames = new Set(
           updatedPlayers
-            .filter(p => p.draftYear === targetDraftYear && p.draftPick != null && !!p.teamId)
+            .filter(p => p.draftYear === targetDraftYear)
             .map(p => `${p.firstName.toLowerCase()}|${p.lastName.toLowerCase()}`),
         );
         if (isNfl) {
           // Create hardcoded first-round prospects — reuse existing imported players if same name exists
           const nflProspects: Player[] = [];
           for (const pick of NFL_2026_FIRST_ROUND) {
-            if (alreadyDraftedNames.has(`${pick.firstName.toLowerCase()}|${pick.lastName.toLowerCase()}`)) continue;
+            if (existingMockNames.has(`${pick.firstName.toLowerCase()}|${pick.lastName.toLowerCase()}`)) continue;
             // Check if this player already exists in the base draft class (from FBGM import)
             const existing = baseDraftClass.find(
               bp => bp.firstName === pick.firstName && bp.lastName === pick.lastName
