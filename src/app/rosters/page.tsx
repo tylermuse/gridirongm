@@ -15,10 +15,19 @@ interface RosterEntry {
 const ROSTERS: RosterEntry[] = [
   {
     id: 'nfl-2026-updated',
-    title: 'NFL 2026 Roster — Updated April 24, 2026',
+    title: 'NFL 2026 Roster — Updated April 24, 2026 (Post-Draft)',
     description:
       'Complete NFL roster with all free agency moves and verified contract data. Every active player contract (AAV and expiration year) has been cross-checked against Spotrac for accuracy across all 32 teams. Now includes a refreshed 2026 draft class that matches the latest consensus from PFF, NFL.com, ESPN, WalterFootball, and Sharp Football — Mendoza locked at 1.1, Bain/Reese/Bailey/Mauigoa/Love up top, and 50+ prospects rebalanced so the draft AI picks them in the right order. April 24 update: all 32 Round 1 picks applied — Mendoza to LV at 1.1, Bailey to NYJ, Love to ARI, every first-rounder is on their drafted team. In-game draft starts at Round 2. Also includes the full league-wide April pass (Lawrence trade, Smith/Orhorhoro swap, Wicks to PHI, 10+ FA signings).',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
+    lastUpdated: 'April 24, 2026',
+    compatibility: ['Football GM (FBGM)', 'BS Football'],
+  },
+  {
+    id: 'nfl-2026-predraft',
+    title: 'NFL 2026 Roster — Pre-Draft (Play the Draft Yourself)',
+    description:
+      'Same league state as the April 24 post-draft roster — same free-agency moves, same contracts, same refreshed 2026 class — but Round 1 has been rolled back. All 32 first-rounders (Mendoza, Bain, Reese, Bailey, Mauigoa, Love, etc.) are back in the draft pool, and every team has its Round 1 pick restored. Start a franchise and play the draft yourself: draft with the actual team you picked, trade up or down, see how your roster stacks against the consensus board. Rounds 2-7 pick as normal after. Everything else is identical to the post-draft file.',
+    fileName: 'FBGM_NFL_Roster_2026_PreDraft.json',
     lastUpdated: 'April 24, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
   },
