@@ -3975,10 +3975,22 @@ export const useGameStore = create<GameStore>()(
         }
 
         let rawDraftClass: Player[];
+        // Skip first-round mock prospects whose real-life counterparts have
+        // already been drafted onto a team in the source roster. Without
+        // this guard, the `existing` lookup below fails (the player is on
+        // tid>=0 now, not in baseDraftClass which only has tid=-2 rookies),
+        // and the `else` branch generates a brand-new doppelganger with the
+        // same name that shows up as a draftable rookie.
+        const alreadyDraftedNames = new Set(
+          updatedPlayers
+            .filter(p => p.draftYear === targetDraftYear && p.draftPick != null && !!p.teamId)
+            .map(p => `${p.firstName.toLowerCase()}|${p.lastName.toLowerCase()}`),
+        );
         if (isNfl) {
           // Create hardcoded first-round prospects — reuse existing imported players if same name exists
           const nflProspects: Player[] = [];
           for (const pick of NFL_2026_FIRST_ROUND) {
+            if (alreadyDraftedNames.has(`${pick.firstName.toLowerCase()}|${pick.lastName.toLowerCase()}`)) continue;
             // Check if this player already exists in the base draft class (from FBGM import)
             const existing = baseDraftClass.find(
               bp => bp.firstName === pick.firstName && bp.lastName === pick.lastName
