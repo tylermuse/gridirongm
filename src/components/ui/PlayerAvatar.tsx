@@ -2,16 +2,20 @@
 
 import { useState } from 'react';
 
-// Short hair only + boosted mustache probability → masculine-presenting avatars
+// Switched from DiceBear's "adventurer" style to "avataaars". The adventurer
+// style has intentionally oversized heads + small features that read as
+// "baby-faced" on adult NFL players (new-user gillespie3 called it out 4/23;
+// BmoreOriole: "that guy looks like a baby lol"). avataaars has adult-
+// proportioned heads and masculine-leaning hair / facial-hair options.
 const DICEBEAR_PARAMS = [
   'backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf',
-  'hair=short01,short02,short03,short04,short05,short06,short07,short08,short09,short10,short11,short12,short13,short14,short15,short16,short17,short18,short19',
-  'earringsProbability=0',
-  'featuresProbability=30',
+  'top=shortHairShortFlat,shortHairShortCurly,shortHairShortRound,shortHairShortWaved,shortHairSides,shortHairTheCaesar,shortHairFrizzle,shortHairDreads01,shortHairDreads02',
+  'facialHairProbability=40',
+  'accessoriesProbability=0',
 ].join('&');
 
 function getDiceBearUrl(seed: string): string {
-  return `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(seed)}&${DICEBEAR_PARAMS}`;
+  return `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(seed)}&${DICEBEAR_PARAMS}`;
 }
 
 interface PlayerAvatarProps {
