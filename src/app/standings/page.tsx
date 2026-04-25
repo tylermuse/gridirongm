@@ -168,6 +168,33 @@ export default function StandingsPage() {
       return (b.record.pointsFor - b.record.pointsAgainst) - (a.record.pointsFor - a.record.pointsAgainst);
     });
 
+  // NFL playoff seeding: 4 division winners get the top 4 seeds (sorted
+  // among themselves by record), then 3 wild cards take seeds 5-7.
+  // The conference standings table needs to mirror this so users don't
+  // see "ARI is 5th in conference by record" while the playoff bracket
+  // (correctly) seeds them 7th behind a 10-7 division winner.
+  const seededConferenceTeams = (confTeams: Team[]): Team[] => {
+    const byDiv = new Map<string, Team[]>();
+    for (const t of confTeams) {
+      const list = byDiv.get(t.division) ?? [];
+      list.push(t);
+      byDiv.set(t.division, list);
+    }
+    const divWinners: Team[] = [];
+    for (const [, list] of byDiv) {
+      const top = [...list].sort((a, b) => {
+        const wp = winPct(b) - winPct(a);
+        if (wp !== 0) return wp;
+        return (b.record.pointsFor - b.record.pointsAgainst) - (a.record.pointsFor - a.record.pointsAgainst);
+      })[0];
+      if (top) divWinners.push(top);
+    }
+    const winnerIds = new Set(divWinners.map(t => t.id));
+    const sortedDivWinners = sortedTeams(divWinners);
+    const others = sortedTeams(confTeams.filter(t => !winnerIds.has(t.id)));
+    return [...sortedDivWinners, ...others];
+  };
+
   // Schedule data
   const teamGames = schedule
     .filter(g => g.homeTeamId === userTeamId || g.awayTeamId === userTeamId)
@@ -273,11 +300,12 @@ export default function StandingsPage() {
             {view === 'conference' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {conferences.map(conf => {
-                  const confTeams = sortedTeams(teams.filter(t => t.conference === conf));
+                  const confTeams = seededConferenceTeams(teams.filter(t => t.conference === conf));
                   return (
                     <Card key={conf}>
                       <CardHeader className="mb-2">
                         <CardTitle>{conf}</CardTitle>
+                        <p className="text-[10px] text-[var(--text-sec)] mt-0.5">Ordered by playoff seed (4 division winners, then 3 wild cards).</p>
                       </CardHeader>
                       <StandingsTable teamList={confTeams} userTeamId={userTeamId} onTeamClick={(id) => setViewTeamId(id)} allTeams={teams} schedule={schedule} maxWeek={maxWeek} currentWeek={week} expanded />
                     </Card>
