@@ -2823,6 +2823,22 @@ export const useGameStore = create<GameStore>()(
           return;
         }
 
+        // Week-1 roster gate: free agency lets users sign over 53, but the
+        // active roster has to be back at 53 before the regular season
+        // starts. Block sims until the user trims down via /roster cuts
+        // or PS demotions.
+        if (state.week === 1 && state.userTeamId) {
+          const userTeam = state.teams.find(t => t.id === state.userTeamId);
+          if (userTeam && userTeam.roster.length > 53) {
+            const over = userTeam.roster.length - 53;
+            if (typeof window !== 'undefined') {
+              alert(`Your active roster is at ${userTeam.roster.length} — cut or demote ${over} more before starting Week 1. Use /roster to manage cuts.`);
+            }
+            console.warn('[simWeek] blocked: user roster over 53 going into Week 1', userTeam.roster.length);
+            return;
+          }
+        }
+
         // Guard: if ALL of this week's games are already played, nothing to do.
         // (Prevents double-sim on rapid button clicks or re-renders.)
         const weekGamesAll = state.schedule.filter(g => g.week === state.week);
@@ -5426,16 +5442,13 @@ export const useGameStore = create<GameStore>()(
             return `Offer $${Math.round(salary * 10) / 10}M/yr is too high for a ${prospect.ratings.overall} OVR ${posLabel}. Max: ~$${Math.round(maxForOvr * 2 * 10) / 10}M/yr.`;
           }
         }
-        // 53-man roster limit (when enabled — default true). Count the
-        // ACTIVE roster only: players demoted to the practice squad still
-        // have teamId set but live on team.practiceSquad, not team.roster.
-        // Using team.roster.length is the only source-of-truth for the 53.
-        const rosterLimitOn = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).rosterLimitEnabled !== false;
-        if (rosterLimitOn && userTeam) {
-          if (userTeam.roster.length >= 53) {
-            return 'Roster is full (53 players). Cut someone before signing.';
-          }
-        }
+        // No hard 53-man cap during free agency / draft. Previously this
+        // path rejected the signing AND the negotiation UI moved the player
+        // to the user's "walked away" set, so a FA who said YES disappeared
+        // from the pool entirely. NFL teams routinely carry 80+ players
+        // through the offseason and trim down for the regular season — we
+        // mirror that. The Week-1 sim guard below blocks regular-season
+        // play until the user is back at 53.
 
         const player = state.players.find(p => p.id === playerId);
 
