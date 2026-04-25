@@ -51,7 +51,7 @@ interface FbgmPlayer {
   lastName: string;
   imgURL?: string;
   born?: { year?: number };
-  draft?: { year?: number; pick?: number; round?: number };
+  draft?: { year?: number; pick?: number; round?: number; tid?: number; originalTid?: number };
   contract?: { amount?: number; exp?: number };
   injury?: { type?: string; gamesRemaining?: number };
   ratings?: FbgmRating[];
@@ -254,6 +254,12 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       teamId: teamByTid.get(player.tid) ?? null,
       draftYear,
       draftPick: player.draft?.pick ?? null,
+      // Persist round + drafting team so the Draft Results panel can find
+      // historic picks (R1-R3 typically pre-applied in the source roster)
+      // when the in-game draftResults array doesn't have an entry for that
+      // overall pick.
+      draftRound: player.draft?.round,
+      draftTeamId: player.draft?.tid != null ? teamByTid.get(player.draft.tid) : undefined,
       retired: false,
       injury: player.injury?.type && player.injury.type !== 'Healthy'
         ? { type: player.injury.type, weeksLeft: Math.max(1, player.injury.gamesRemaining ?? 1) }

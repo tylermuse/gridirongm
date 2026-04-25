@@ -1353,10 +1353,30 @@ export default function DraftPage() {
   const roundStart = (selectedRound - 1) * picksPerRound;
   const roundRows = Array.from({ length: picksPerRound }, (_, index) => {
     const overallPick = roundStart + index + 1;
-    const team = teams.find((item) => item.id === orderedTeamIds[overallPick - 1]);
+    const pickInRound = index + 1;
+    let team = teams.find((item) => item.id === orderedTeamIds[overallPick - 1]);
     const result = draftResults.find((item) => item.overallPick === overallPick);
-    const player = result ? players.find((item) => item.id === result.playerId) : null;
-    return { overallPick, pickInRound: index + 1, team, player };
+    let player = result ? players.find((item) => item.id === result.playerId) : null;
+    // Render-time fallback for imported leagues where Rounds 1-3 (etc.)
+    // were already drafted in the source roster before the in-game draft
+    // started — those picks aren't in draftResults but the players carry
+    // draftYear/draftRound/draftPick. Match by (year, round, pick-in-round)
+    // so the panel shows historic picks instead of empty rows.
+    if (!player) {
+      const historic = players.find(p =>
+        p.draftYear === season
+        && p.draftRound === selectedRound
+        && p.draftPick === pickInRound,
+      );
+      if (historic) {
+        player = historic;
+        const draftedBy = historic.draftTeamId
+          ? teams.find(t => t.id === historic.draftTeamId)
+          : null;
+        if (draftedBy) team = draftedBy;
+      }
+    }
+    return { overallPick, pickInRound, team, player };
   });
 
   const recentPicks = [...draftResults]
@@ -1888,17 +1908,38 @@ export default function DraftPage() {
               <tbody>
                 {(() => {
                   // When filtering by team, show all that team's picks across all rounds
-                  const rows = draftResultsTeamFilter !== 'ALL'
-                    ? draftResults
-                        .filter(r => r.teamId === draftResultsTeamFilter)
-                        .sort((a, b) => a.overallPick - b.overallPick)
-                        .map(r => ({
-                          overallPick: r.overallPick,
-                          pickInRound: r.pickInRound,
-                          team: teams.find(t => t.id === r.teamId),
-                          player: players.find(p => p.id === r.playerId) ?? null,
-                        }))
-                    : roundRows;
+                  // — both in-game (draftResults) and historic (player.draftTeamId
+                  // from imported rosters where R1-R3 were already drafted).
+                  let rows;
+                  if (draftResultsTeamFilter !== 'ALL') {
+                    const ingame = draftResults
+                      .filter(r => r.teamId === draftResultsTeamFilter)
+                      .map(r => ({
+                        overallPick: r.overallPick,
+                        pickInRound: r.pickInRound,
+                        team: teams.find(t => t.id === r.teamId),
+                        player: players.find(p => p.id === r.playerId) ?? null,
+                      }));
+                    const ingameKeys = new Set(ingame.map(r => r.overallPick));
+                    const historic = players
+                      .filter(p => p.draftYear === season
+                        && p.draftRound != null
+                        && p.draftPick != null
+                        && p.draftTeamId === draftResultsTeamFilter)
+                      .map(p => {
+                        const overallPick = (p.draftRound! - 1) * picksPerRound + p.draftPick!;
+                        return {
+                          overallPick,
+                          pickInRound: p.draftPick!,
+                          team: teams.find(t => t.id === p.draftTeamId),
+                          player: p,
+                        };
+                      })
+                      .filter(r => !ingameKeys.has(r.overallPick));
+                    rows = [...ingame, ...historic].sort((a, b) => a.overallPick - b.overallPick);
+                  } else {
+                    rows = roundRows;
+                  }
 
                   return rows.map((row) => (
                     <tr key={row.overallPick} className={`border-t border-[var(--border)] ${row.team?.id === userTeamId ? 'bg-blue-500/5' : ''}`}>
