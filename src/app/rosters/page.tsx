@@ -17,7 +17,7 @@ const ROSTERS: RosterEntry[] = [
     id: 'nfl-2026-updated',
     title: 'NFL 2026 Roster — Updated April 25, 2026 (Post-Draft)',
     description:
-      'Complete NFL roster with all free agency moves and verified contract data. Every active player contract (AAV and expiration year) has been cross-checked against Spotrac for accuracy across all 32 teams. Now includes a refreshed 2026 draft class that matches the latest consensus from PFF, NFL.com, ESPN, WalterFootball, and Sharp Football — Mendoza locked at 1.1, Bain/Reese/Bailey/Mauigoa/Love up top, and 50+ prospects rebalanced so the draft AI picks them in the right order. April 24 update: all 32 Round 1 picks applied — Mendoza to LV at 1.1, Bailey to NYJ, Love to ARI, every first-rounder is on their drafted team. In-game draft starts at Round 2. Also includes the full league-wide April pass (Lawrence trade, Smith/Orhorhoro swap, Wicks to PHI, 10+ FA signings). April 25 update: Day 2 picks applied — Carson Beck to ARI at 3.1, Drew Allar to PIT, Stribling kicks off Round 2 with SF, plus 55 more Round 2 and 3 selections now show up on their drafted teams.',
+      'Complete NFL roster with verified contracts and the 2026 draft class. Includes all 2026 NFL Draft picks from Rounds 1, 2, and 3 on their actual drafted teams. In-game draft starts at Round 4.',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
     lastUpdated: 'April 25, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
