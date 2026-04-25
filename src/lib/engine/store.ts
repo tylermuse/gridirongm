@@ -1764,6 +1764,26 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
     // Don't offer the same position back (not interesting)
     if (aiOffer.position === targetPlayer.position && Math.random() > 0.3) continue;
 
+    // Contender guard: a winning team (>= .550) doesn't propose to trade
+    // away their top-OVR starter at a position unless they have a backup
+    // within 10 OVR. Reported example: 9-2 Detroit offered Goff (QB1) for
+    // a 71 OVR DL. QB has a stricter version — winning teams never deal
+    // their starting QB regardless of backup, since QB1 carries the team.
+    const aiTotalGames = aiTeam.record.wins + aiTeam.record.losses;
+    const aiWinPct2 = aiTotalGames > 0 ? aiTeam.record.wins / aiTotalGames : 0.5;
+    const isContender = aiWinPct2 >= 0.55;
+    if (isContender) {
+      const samePosRoster = aiRoster.filter(p => p.position === aiOffer.position);
+      const isTopAtPosition = samePosRoster.length > 0
+        && samePosRoster.every(p => p.id === aiOffer.id || p.ratings.overall <= aiOffer.ratings.overall);
+      if (isTopAtPosition && aiOffer.position === 'QB') continue;
+      if (isTopAtPosition) {
+        const backups = samePosRoster.filter(p => p.id !== aiOffer.id);
+        const bestBackup = backups.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+        if (!bestBackup || aiOffer.ratings.overall - bestBackup.ratings.overall > 10) continue;
+      }
+    }
+
     let offeredValue = playerTradeValue(aiOffer);
     const offeredPickIds: string[] = [];
 
