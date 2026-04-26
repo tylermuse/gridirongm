@@ -7,6 +7,39 @@ function uuid(): string {
   return crypto.randomUUID();
 }
 
+/**
+ * Convert a (year, round, pick-in-round) imported draft pick into the
+ * overall pick number used everywhere else in the engine. The in-engine
+ * draft path already stores overall in player.draftPick, so we normalize
+ * imports to match — otherwise R3 pick 18 would display as "Draft #18"
+ * alongside another R1 pick 18.
+ *
+ * Round sizes are hardcoded for years where we have authoritative data
+ * (e.g. the 2026 NFL roster file with its full draft applied). For other
+ * years we fall back to the standard 32-per-round approximation, which is
+ * off for comp picks but matches the convention used by FBGM displays.
+ */
+const DRAFT_ROUND_SIZES: Record<number, number[]> = {
+  // [R1, R2, R3, R4, R5, R6, R7] sizes for 2026 (matches Sharp Football's tracker)
+  2026: [32, 32, 36, 40, 40, 33, 41],
+};
+
+function computeOverallPick(
+  year: number | null | undefined,
+  round: number | null | undefined,
+  pickInRound: number | null | undefined,
+): number | null {
+  if (round == null || pickInRound == null || round < 1) return pickInRound ?? null;
+  const sizes = year != null ? DRAFT_ROUND_SIZES[year] : undefined;
+  if (sizes && sizes.length >= round) {
+    let overall = pickInRound;
+    for (let i = 0; i < round - 1; i++) overall += sizes[i];
+    return overall;
+  }
+  // Fallback: standard 32-per-round (ignores comp picks for older years)
+  return (round - 1) * 32 + pickInRound;
+}
+
 interface FbgmRating {
   pos?: string;
   ovr?: number;
@@ -253,7 +286,11 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       contract,
       teamId: teamByTid.get(player.tid) ?? null,
       draftYear,
-      draftPick: player.draft?.pick ?? null,
+      // FBGM source rosters store draft.pick as pick-in-round (e.g. 18 for the
+      // 18th pick of the 3rd round). The in-engine draft path stores overall.
+      // Normalize imports to overall so the Roster page's "Draft #N" display
+      // doesn't show two players from different rounds with the same number.
+      draftPick: computeOverallPick(draftYear, player.draft?.round, player.draft?.pick),
       // Persist round + drafting team so the Draft Results panel can find
       // historic picks (R1-R3 typically pre-applied in the source roster)
       // when the in-game draftResults array doesn't have an entry for that
