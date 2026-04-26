@@ -15,11 +15,11 @@ interface RosterEntry {
 const ROSTERS: RosterEntry[] = [
   {
     id: 'nfl-2026-updated',
-    title: 'NFL 2026 Roster — Updated April 25, 2026 (Post-Draft)',
+    title: 'NFL 2026 Roster — Updated April 26, 2026 (Post-Draft)',
     description:
-      'Complete NFL roster with verified contracts and the 2026 draft class. Includes all 2026 NFL Draft picks from Rounds 1, 2, and 3 on their actual drafted teams. In-game draft starts at Round 4.',
+      'Complete NFL roster with verified contracts and the 2026 draft class. Includes the full 2026 NFL Draft, Rounds 1 through 7, on their actual drafted teams. Updated April 26 with the Day 3 picks that matched the existing prospect pool — Jermod McCoy to the Raiders at 4.1, Cade Klubnik to the Jets in the 4th, Garrett Nussmeier sliding to the Chiefs in the 7th, and the rest of the late-round class landed where they actually went.',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
-    lastUpdated: 'April 25, 2026',
+    lastUpdated: 'April 26, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
   },
   {
