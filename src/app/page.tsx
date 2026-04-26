@@ -37,7 +37,10 @@ function TeamPicker() {
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
   const [savedGame, setSavedGame] = useState<{ teamAbbr: string; season: number; wins: number; losses: number; phase: string } | null>(null);
   const [resumeLoading, setResumeLoading] = useState(false);
-  const [startMode, setStartMode] = useState<'offseason' | 'regular'>('offseason');
+  const [startMode, setStartMode] = useState<'offseason' | 'regular'>(() => {
+    const param = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('startMode') : null;
+    return param === 'regular' ? 'regular' : 'offseason';
+  });
   const [bsModePreselect, setBsModePreselect] = useState(false);
   const [teamSearch, setTeamSearch] = useState('');
   const autoLoadedRef = useRef(false);

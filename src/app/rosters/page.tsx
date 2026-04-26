@@ -10,6 +10,7 @@ interface RosterEntry {
   fileName: string;
   lastUpdated: string;
   compatibility: string[];
+  startMode: 'offseason' | 'regular';
 }
 
 const ROSTERS: RosterEntry[] = [
@@ -21,6 +22,7 @@ const ROSTERS: RosterEntry[] = [
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
     lastUpdated: 'April 26, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
+    startMode: 'regular',
   },
   {
     id: 'nfl-2026-predraft',
@@ -30,6 +32,7 @@ const ROSTERS: RosterEntry[] = [
     fileName: 'FBGM_NFL_Roster_2026_PreDraft.json',
     lastUpdated: 'April 24, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
+    startMode: 'offseason',
   },
 ];
 
@@ -134,7 +137,7 @@ export default function RostersPage() {
 
               <div className="shrink-0 flex flex-col gap-2">
                 <Link
-                  href={`/?roster=/rosters/${roster.fileName}`}
+                  href={`/?roster=/rosters/${roster.fileName}&startMode=${roster.startMode}`}
                   className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-sm rounded-lg transition-colors shadow-sm"
                 >
                   Play in BS Football →
