@@ -773,6 +773,11 @@ export function simulateGame(
   mcafeeMode: boolean = false,
   /** Optional game plan applied only to the side specified by `userTeamSide`. */
   userGamePlan?: { plan: GamePlan; userTeamSide: 'home' | 'away' },
+  /** Optional depth charts so simulatePlay's per-position filters return the
+   *  user's intended starter at index 0 instead of whoever was created
+   *  first. Without this RB1 vs RB2 carries depend on creation order. */
+  homeDepthChart?: Record<string, string[]>,
+  awayDepthChart?: Record<string, string[]>,
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
@@ -799,8 +804,25 @@ export function simulateGame(
   // read downstream sees the diminished version.
   const homeScaled = homeRoster.map(scaleForPlayThrough);
   const awayScaled = awayRoster.map(scaleForPlayThrough);
-  const effectiveHomeRoster = applyIC(homeScaled);
-  const effectiveAwayRoster = applyIC(awayScaled);
+  // Sort the roster arrays by depth chart per position before any internal
+  // filter() runs — that way `filter(p => p.position === 'RB')[0]` returns
+  // the user's RB1 rather than whoever happened to be created first. Players
+  // not present in the depth chart are appended at the end.
+  const orderByDepth = (roster: Player[], dc?: Record<string, string[]>): Player[] => {
+    if (!dc) return roster;
+    const orderIndex = (p: Player): number => {
+      const list = dc[p.position];
+      if (!list) return Number.MAX_SAFE_INTEGER;
+      const idx = list.indexOf(p.id);
+      return idx >= 0 ? idx : Number.MAX_SAFE_INTEGER;
+    };
+    return [...roster].sort((a, b) => {
+      if (a.position !== b.position) return 0; // preserve original cross-position order
+      return orderIndex(a) - orderIndex(b);
+    });
+  };
+  const effectiveHomeRoster = orderByDepth(applyIC(homeScaled), homeDepthChart);
+  const effectiveAwayRoster = orderByDepth(applyIC(awayScaled), awayDepthChart);
 
   const allHomePlays: PlayResult[] = [];
   const allAwayPlays: PlayResult[] = [];

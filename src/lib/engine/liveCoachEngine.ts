@@ -90,25 +90,47 @@ interface KeyDef {
   cb1: Player | null;
 }
 
-function extractOff(players: Player[]): KeyOff {
-  const byPos = (pos: string) => players.find(p => p.position === pos && playerAvailable(p)) ?? null;
-  const wrs = players.filter(p => p.position === 'WR' && playerAvailable(p));
+// Order players at a position by the team's depth chart (the user's
+// intended starter ordering) instead of creation order, then fall back
+// to creation order for anyone not in the depth chart. Without this,
+// the live-coach play descriptions and the key-player lookups credit
+// whichever player happened to be created first — which on imported
+// rosters is usually NOT the actual RB1.
+function orderedAtPos(players: Player[], pos: string, depthChart?: Record<string, string[]>): Player[] {
+  const available = players.filter(p => p.position === pos && playerAvailable(p));
+  const order = depthChart?.[pos];
+  if (!order || order.length === 0) return available;
+  const idMap = new Map(available.map(p => [p.id, p]));
+  const ordered: Player[] = [];
+  const seen = new Set<string>();
+  for (const id of order) {
+    const p = idMap.get(id);
+    if (p) { ordered.push(p); seen.add(id); }
+  }
+  for (const p of available) {
+    if (!seen.has(p.id)) ordered.push(p);
+  }
+  return ordered;
+}
+
+function extractOff(players: Player[], depthChart?: Record<string, string[]>): KeyOff {
+  const wrs = orderedAtPos(players, 'WR', depthChart);
+  const rbs = orderedAtPos(players, 'RB', depthChart);
   return {
-    qb: byPos('QB'),
-    rb: byPos('RB'),
+    qb: orderedAtPos(players, 'QB', depthChart)[0] ?? null,
+    rb: rbs[0] ?? null,
     wr1: wrs[0] ?? null,
     wr2: wrs[1] ?? null,
-    te: byPos('TE'),
-    k: byPos('K'),
+    te: orderedAtPos(players, 'TE', depthChart)[0] ?? null,
+    k: orderedAtPos(players, 'K', depthChart)[0] ?? null,
   };
 }
 
-function extractDef(players: Player[]): KeyDef {
-  const byPos = (pos: string) => players.find(p => p.position === pos && playerAvailable(p)) ?? null;
+function extractDef(players: Player[], depthChart?: Record<string, string[]>): KeyDef {
   return {
-    dl1: byPos('DL'),
-    lb1: byPos('LB'),
-    cb1: byPos('CB'),
+    dl1: orderedAtPos(players, 'DL', depthChart)[0] ?? null,
+    lb1: orderedAtPos(players, 'LB', depthChart)[0] ?? null,
+    cb1: orderedAtPos(players, 'CB', depthChart)[0] ?? null,
   };
 }
 
@@ -132,10 +154,10 @@ export function createLiveCoachEngine(
   /** Which side the user controls — needed to determine user TDs for XP choice */
   userSide: 'home' | 'away' = 'home',
 ): LiveCoachEngine {
-  const homeOff = extractOff(homePlayers);
-  const awayOff = extractOff(awayPlayers);
-  const homeDef = extractDef(homePlayers);
-  const awayDef = extractDef(awayPlayers);
+  const homeOff = extractOff(homePlayers, homeTeam.depthChart);
+  const awayOff = extractOff(awayPlayers, awayTeam.depthChart);
+  const homeDef = extractDef(homePlayers, homeTeam.depthChart);
+  const awayDef = extractDef(awayPlayers, awayTeam.depthChart);
 
   const state: LiveEngineState = {
     ...initialState,

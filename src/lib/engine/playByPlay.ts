@@ -162,8 +162,32 @@ interface KeyPlayers {
   safeties: Player[];
 }
 
-function extractKeyPlayers(players: Player[]): KeyPlayers {
-  const byPos = (pos: string) => players.filter(p => p.position === pos && (!p.injury || p.injury.weeksLeft === 0));
+function extractKeyPlayers(players: Player[], depthChart?: Record<string, string[]>): KeyPlayers {
+  // Order each position pool by the team's depth chart (the user's
+  // intended starter ordering) instead of by creation order. Without
+  // this, rbs[0] / wrs[0] / etc. is whichever player happened to be
+  // generated first — which on imported rosters often puts the WRONG
+  // player at index 0. Tofftanaut + Tyler confirmed RB2 was getting
+  // ~2x RB1 carries (4/24); pickRusher weights index-0 at 1.0 and
+  // index-1 at 0.35, so flipping the order flips the carry split.
+  const byPos = (pos: string): Player[] => {
+    const available = players.filter(p => p.position === pos && (!p.injury || p.injury.weeksLeft === 0));
+    const order = depthChart?.[pos];
+    if (!order || order.length === 0) return available;
+    const idMap = new Map(available.map(p => [p.id, p]));
+    const ordered: Player[] = [];
+    const seen = new Set<string>();
+    for (const id of order) {
+      const p = idMap.get(id);
+      if (p) { ordered.push(p); seen.add(id); }
+    }
+    // Append any available players not in the depth chart at the end (e.g.,
+    // newly-signed FAs the user hasn't slotted yet).
+    for (const p of available) {
+      if (!seen.has(p.id)) ordered.push(p);
+    }
+    return ordered;
+  };
   const wrs = byPos('WR');
   const cbs = byPos('CB');
   const safeties = byPos('S');
@@ -623,8 +647,8 @@ export function simulatePlayByPlay(
     nextEventId: number;
   },
 ): LiveGameResult {
-  const homeKey = extractKeyPlayers(homePlayers);
-  const awayKey = extractKeyPlayers(awayPlayers);
+  const homeKey = extractKeyPlayers(homePlayers, homeTeam.depthChart);
+  const awayKey = extractKeyPlayers(awayPlayers, awayTeam.depthChart);
 
   // QB tier modifiers: ±3% on completion probability
   const homeQBTierMod = homeKey.qb ? getQBTierModifier(computeQBTier(homeKey.qb)) : 0;

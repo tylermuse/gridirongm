@@ -2286,7 +2286,7 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       };
     }
 
-    const result = simulateGame(game, homeRoster, awayRoster, homeCoachBonus, awayCoachBonus, rivalryIntensity, bsMode, mcafeeMode, userGamePlan);
+    const result = simulateGame(game, homeRoster, awayRoster, homeCoachBonus, awayCoachBonus, rivalryIntensity, bsMode, mcafeeMode, userGamePlan, homeTeam?.depthChart, awayTeam?.depthChart);
 
     // Compute ATS coverage
     const scoreDiff = result.homeScore - result.awayScore;
