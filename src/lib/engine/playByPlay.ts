@@ -941,6 +941,16 @@ export function simulatePlayByPlay(
       }
     }
 
+    // 4th-down loop guard: an offensive penalty on 4th down used to replay
+    // the down (pen.replay=true) — letting the offense keep snapping until
+    // they got a first down. NFL: defense almost always declines and takes
+    // the turnover. Force a turnover on downs in that case.
+    if (state.down === 4 && pen.side === 'offense' && pen.replay) {
+      const newPos = clamp(100 - state.fieldPos, 1, 99);
+      switchPossession(newPos);
+      return false;
+    }
+
     return pen.replay;
   }
 
