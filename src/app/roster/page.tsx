@@ -931,20 +931,37 @@ export default function RosterPage() {
                       ];
 
                     const renderSlot = (slot: { label: string; pos: Position; idx: number; subPos?: SubPosition }) => {
-                      // When a sub-position is specified (defensive + OL
-                      // slots), filter the depth list to players whose
-                      // subPosition matches. Imported-league players (FBGM)
-                      // and older saves that never went through migration
-                      // v20 may have p.subPosition === undefined — derive
-                      // from ratings on the fly so the slot still fills.
-                      // This was tofftanaut's recurring "defensive depth
-                      // chart empty" report.
+                      // Defensive + OL slots filter by sub-position; imported
+                      // FBGM rosters or older saves may have p.subPosition
+                      // undefined, so derive from ratings as a fallback (4/23
+                      // fix). Tofftanaut + bryangrove flagged 4/24 that
+                      // some defensive slots STILL render empty on fresh
+                      // saves — root cause is roster imbalance: a team
+                      // with 4 EDGEs and 0 DT-rated DLs would empty the
+                      // DT slots even though every DL has a valid sub-pos.
+                      // Layer-2 fallback: when the sub-pos filter yields
+                      // no match for this slot index, take the next best
+                      // player from the parent-position pool. Slot labels
+                      // stay accurate (LDE / LDT) but the slot is filled
+                      // with whoever the team actually has at the position.
                       const baseList = getDepthGroup(slot.pos);
                       const effectiveSubPos = (p: Player) => p.subPosition ?? deriveSubPosition(p);
-                      const depthList = slot.subPos
+                      const subPosList = slot.subPos
                         ? baseList.filter(p => effectiveSubPos(p) === slot.subPos)
                         : baseList;
-                      const player = depthList[slot.idx];
+                      let player: Player | undefined = subPosList[slot.idx];
+                      if (!player && slot.subPos) {
+                        // Find the highest-OVR parent-position player not
+                        // already rendered in an earlier slot of the same
+                        // formation. We can't see other slots from here, so
+                        // the simple stand-in: pick by OVR from baseList,
+                        // skipping anyone the sub-pos filter has already
+                        // claimed at indexes 0..idx-1 across all sub-pos
+                        // slots for this position.
+                        const claimedIds = new Set(subPosList.slice(0, slot.idx).map(p => p.id));
+                        const fallback = baseList.find(p => !claimedIds.has(p.id) && effectiveSubPos(p) !== slot.subPos);
+                        player = fallback;
+                      }
                       return (
                         <div key={slot.label} className="bg-[var(--surface-2)] rounded-md px-2 py-1.5 min-h-[2.5rem]">
                           <div className="text-[9px] uppercase tracking-wider text-[var(--text-sec)] font-bold">{slot.label}</div>
