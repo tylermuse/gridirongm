@@ -24,9 +24,9 @@ day 3 highlights:
 
 7.33 chiefs ended the draft for the ages by taking garrett nussmeier (qb, lsu) at pick 249. the top-50 prospect at the start of the cycle slid all the way to mr. irrelevant territory -- mahomes' new backup study buddy
 
-a heads up on the misses: 63 of the day 3 picks didn't have a matching prospect in the existing 2026 class (mostly small-school guys, late-bloomers, and post-combine risers that weren't on the original 388-prospect board). teams like arizona, las vegas, jacksonville, and seattle had multiple late picks land "missing" in-engine. the pool only had so many bodies to draw from for rounds 5-7 and the real draft went deeper than the class roster
+on top of that: i went back and generated stub prospects for the 74 picks (63 from day 3 + 11 from day 2) that weren't in the original class. so the file now has 254 of 257 real picks landed -- guys like garrett nussmeier, cade klubnik, lt overton, taylen green, chase bisontis, markell bell, will kacmarek, and 67 others that didn't exist in the prospect pool now have a body on their actual drafted team. ratings on those generated guys are templated by position + round (mid-50s ovr for round-2 misses, mid-30s for round-7 misses) since i don't have real attribute data for them -- so a generated 7th-round nussmeier won't play like real-life heisman-finalist nussmeier, but at least there's a body in the right helmet
 
-two picks went to ambiguities and got skipped: joe royer (te) -- sharp had him to cleveland, nbc had him to denver, couldn't reconcile so he stays in the pool. trey smack (k) -- sharp had him to seattle, nbc had him to green bay, same deal
+three picks got skipped entirely because sources disagreed and i couldn't reconcile: joe royer (te) -- sharp had him to cleveland, nbc had him to denver. trey smack (k) -- sharp had him to seattle, nbc had him to green bay. demond claiborne (rb) to minnesota -- only sharp had it, nbc didn't list him at all
 
 as always: **only brand new leagues will pull the updated class.** mid-save users keep whatever they had when the league was created. start fresh from bs-football.com/rosters to see the full draft land
 
