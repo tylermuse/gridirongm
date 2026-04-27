@@ -487,6 +487,7 @@ function TradeFinderContent({
   phase,
   week,
   season,
+  upcomingDraftYear,
   tradeDeadlineWeek,
   onPlayerClick,
   onTeamClick,
@@ -499,6 +500,7 @@ function TradeFinderContent({
   phase: string;
   week: number;
   season: number;
+  upcomingDraftYear: number;
   tradeDeadlineWeek: number;
   onPlayerClick: (id: string) => void;
   onTeamClick: (id: string) => void;
@@ -570,7 +572,7 @@ function TradeFinderContent({
 
   // Cap space
   const capSpace = userTeam ? userTeam.salaryCap - userTeam.totalPayroll : 0;
-  const userPicks = userTeam?.draftPicks.filter(pk => pk.year === season && !pk.playerId) ?? [];
+  const userPicks = userTeam?.draftPicks.filter(pk => pk.year === upcomingDraftYear && !pk.playerId) ?? [];
 
   return (
     <div className="space-y-6">
@@ -815,9 +817,21 @@ function TradesPage() {
   const {
     phase, week, season, players, teams, userTeamId,
     draftOrder, tradeProposals, executeTrade, generateCounterOffer, respondToTradeProposal, rejectAllTradeProposals,
-    solicitTradingBlockProposals, leagueSettings, tradeRumors,
+    solicitTradingBlockProposals, leagueSettings, tradeRumors, currentDraftYear: storeDraftYear, champions,
   } = useGameStore();
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
+  // The "next" draft year for trade context. During the draft phase, the store
+  // holds it explicitly. Otherwise, the post-this-season draft is state.season+1
+  // unless we're in the very first offseason of a pre-draft variant (no
+  // champions yet AND year=season picks still unconsumed).
+  const upcomingDraftYear = (() => {
+    if (storeDraftYear) return storeDraftYear;
+    const hasUnconsumedSeasonPicks = teams.some(t =>
+      t.draftPicks.some(pk => pk.year === season && !pk.playerId),
+    );
+    if (hasUnconsumedSeasonPicks && champions.length === 0) return season;
+    return season + 1;
+  })();
   const godMode = leagueSettings?.godMode ?? false;
   if (isSpectator) {
     return (
@@ -926,7 +940,7 @@ function TradesPage() {
   // fall back to a stable sort by original team record.
   const pickNumberMap = useMemo(() => {
     const map = new Map<string, number>(); // pickId → overall pick number
-    const draftYear = season;
+    const draftYear = upcomingDraftYear;
     const picksPerRound = teams.length;
     const totalPicks = picksPerRound * 7;
 
@@ -1009,10 +1023,10 @@ function TradesPage() {
       map.set(pk.id, overallPick);
     });
     return map;
-  }, [phase, draftOrder, teams, season]);
+  }, [phase, draftOrder, teams, upcomingDraftYear]);
 
-  // Only show pick numbers for the current season's draft — future years' orders are unknown
-  const currentDraftYear = season;
+  // Only show pick numbers for the upcoming draft — future years' orders are unknown
+  const currentDraftYear = upcomingDraftYear;
 
   function pickLabel(pk: { id: string; year: number; round: number; originalTeamId: string; ownerTeamId: string }) {
     const num = pk.year === currentDraftYear ? pickNumberMap.get(pk.id) : undefined;
@@ -2341,6 +2355,7 @@ function TradesPage() {
             phase={phase}
             week={week}
             season={season}
+            upcomingDraftYear={upcomingDraftYear}
             tradeDeadlineWeek={tradeDeadlineWeek}
             onPlayerClick={setSelectedPlayerId}
             onTeamClick={setViewTeamId}

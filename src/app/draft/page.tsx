@@ -1104,8 +1104,10 @@ export default function DraftPage() {
     scoutingState,
     nflMockDraft,
     importDraftClass,
+    currentDraftYear,
   } = useGameStore();
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
+  const draftYear = currentDraftYear ?? season;
 
   if (isSpectator) {
     return (
@@ -1351,7 +1353,7 @@ export default function DraftPage() {
   // Map overall pick number → DraftPick object for undrafted slots
   // draftOrder[i] = ownerTeamId for that slot; match each slot to its DraftPick
   const allCurrentYearPicks = teams.flatMap(t =>
-    t.draftPicks.filter(pk => pk.year === season && !pk.playerId),
+    t.draftPicks.filter(pk => pk.year === draftYear && !pk.playerId),
   );
   const pickBySlot = new Map<number, typeof allCurrentYearPicks[0]>();
   const usedPickIds = new Set<string>();
@@ -1383,7 +1385,7 @@ export default function DraftPage() {
     // so the panel shows historic picks instead of empty rows.
     if (!player) {
       const historic = players.find(p =>
-        p.draftYear === season
+        p.draftYear === draftYear
         && p.draftRound === selectedRound
         && p.draftPick === pickInRound,
       );
@@ -1941,7 +1943,7 @@ export default function DraftPage() {
                       }));
                     const ingameKeys = new Set(ingame.map(r => r.overallPick));
                     const historic = players
-                      .filter(p => p.draftYear === season
+                      .filter(p => p.draftYear === draftYear
                         && p.draftRound != null
                         && p.draftPick != null
                         && p.draftTeamId === draftResultsTeamFilter)

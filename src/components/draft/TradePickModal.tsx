@@ -65,7 +65,9 @@ export function TradePickModal({
     season,
     draftOrder,
     executeTrade,
+    currentDraftYear,
   } = useGameStore();
+  const draftYear = currentDraftYear ?? season;
 
   const [partnerTeamId, setPartnerTeamId] = useState<string>('');
   const [selectedMyPicks, setSelectedMyPicks] = useState<Set<string>>(new Set());
@@ -80,17 +82,17 @@ export function TradePickModal({
   const myAvailablePicks = useMemo(() => {
     if (!userTeam) return [];
     return userTeam.draftPicks
-      .filter(pk => pk.year === season && !pk.playerId)
+      .filter(pk => pk.year === draftYear && !pk.playerId)
       .sort((a, b) => a.round - b.round || estimatePickOverall(a, teams) - estimatePickOverall(b, teams));
-  }, [userTeam, season, teams]);
+  }, [userTeam, draftYear, teams]);
 
   // Current year picks owned by partner that haven't been used yet
   const theirAvailablePicks = useMemo(() => {
     if (!partnerTeam) return [];
     return partnerTeam.draftPicks
-      .filter(pk => pk.year === season && !pk.playerId)
+      .filter(pk => pk.year === draftYear && !pk.playerId)
       .sort((a, b) => a.round - b.round || estimatePickOverall(a, teams) - estimatePickOverall(b, teams));
-  }, [partnerTeam, season, teams]);
+  }, [partnerTeam, draftYear, teams]);
 
   // Trade value calculations
   const myValue = useMemo(() => {

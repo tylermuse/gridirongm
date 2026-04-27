@@ -38,6 +38,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
     simToUserDraftPick,
     simToEndDraft,
     startNewSeason,
+    currentDraftYear,
   } = useGameStore();
 
   const [newProposalIds, setNewProposalIds] = useState<string[]>([]);
@@ -208,7 +209,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
               {phase === 'regular' && `Week ${week} · Regular Season`}
               {phase === 'playoffs' && 'Playoffs'}
               {phase === 'resigning' && 'Re-signing Window'}
-              {phase === 'draft' && `Draft · Season ${season}`}
+              {phase === 'draft' && `Draft · Season ${currentDraftYear ?? season}`}
               {phase === 'freeAgency' && 'Free Agency'}
               {phase === 'offseason' && 'Offseason'}
             </span>

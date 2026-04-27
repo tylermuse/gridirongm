@@ -2602,12 +2602,35 @@ export const useGameStore = create<GameStore>()(
           }
 
           const isRegularStart = startMode === 'regular';
-          const allImportedPlayers = [...imported.players, ...fbgmFAs];
+          // For post-draft variants (e.g. NFL 2026 Updated), the current
+          // season's draft has already happened in real life. Strip leftover
+          // year=season picks (rounds 2-7 with no playerId) and convert
+          // leftover year=season prospects (UDFAs) into ordinary free agents
+          // so the next offseason draft cleanly uses year=season+1 picks.
+          const cleanedTeams = isRegularStart
+            ? imported.teams.map(t => ({
+                ...t,
+                draftPicks: t.draftPicks.filter(pk => pk.year > imported.season),
+              }))
+            : imported.teams;
+          const cleanedPlayers = isRegularStart
+            ? imported.players.map(p =>
+                p.teamId === null && p.experience === 0 && p.draftYear === imported.season
+                  ? { ...p, draftYear: null }
+                  : p,
+              )
+            : imported.players;
+          const leftoverProspectIds = isRegularStart
+            ? imported.players
+                .filter(p => p.teamId === null && p.experience === 0 && p.draftYear === imported.season)
+                .map(p => p.id)
+            : [];
+          const allImportedPlayers = [...cleanedPlayers, ...fbgmFAs];
 
           // For regular season start, reset all records to 0-0
           const startTeams = isRegularStart
-            ? imported.teams.map(t => ({ ...t, record: emptyRecord() }))
-            : imported.teams;
+            ? cleanedTeams.map(t => ({ ...t, record: emptyRecord() }))
+            : cleanedTeams;
 
           // Only compute re-signing entries for offseason start
           const resigningEntries = isRegularStart ? [] : (() => {
@@ -2641,8 +2664,9 @@ export const useGameStore = create<GameStore>()(
             // Merge generated street FAs with snapshot ghost-FAs (veterans
             // whose contract expired before the import season — they were
             // listed on their old team in the source JSON but belong in the
-            // FA pool).
-            freeAgents: [...fbgmFAs.map(p => p.id), ...imported.freeAgentIds],
+            // FA pool) plus leftover year=season prospects when starting in
+            // post-draft mode.
+            freeAgents: [...fbgmFAs.map(p => p.id), ...imported.freeAgentIds, ...leftoverProspectIds],
             faDay: 0,
             faRefusals: [],
             playoffBracket: null,
@@ -3956,27 +3980,53 @@ export const useGameStore = create<GameStore>()(
         let updatedPlayers = [...state.players];
         let updatedTeams = [...state.teams];
 
-        // Find/generate draft class
+        // The draft happening now feeds the upcoming season. If the regular
+        // season for state.season was already simulated (champions recorded),
+        // this is the post-season draft → state.season + 1. Otherwise (first
+        // run of pre-draft variant, before any regular season), the draft is
+        // for state.season itself.
+        const seasonAlreadyPlayed = state.champions.some(c => c.season === state.season);
+        const targetDraftYear = seasonAlreadyPlayed ? state.season + 1 : state.season;
+
+        // Clear draftYear on leftover prospects from already-completed draft
+        // years so they no longer surface as "draftable." startNewSeason will
+        // sweep them into the regular FA pool.
+        const leftoverProspectIds = new Set(
+          updatedPlayers
+            .filter(
+              p =>
+                p.teamId === null &&
+                p.experience === 0 &&
+                p.draftYear !== null &&
+                p.draftYear < targetDraftYear &&
+                p.contract.yearsLeft === 0,
+            )
+            .map(p => p.id),
+        );
+        if (leftoverProspectIds.size > 0) {
+          updatedPlayers = updatedPlayers.map(p =>
+            leftoverProspectIds.has(p.id) ? { ...p, draftYear: null } : p,
+          );
+        }
+
+        // Strip orphan picks from years prior to the target draft year
+        // (e.g. leftover R2-R7 from imported NFL post-draft variant).
+        updatedTeams = updatedTeams.map(t => {
+          const filtered = t.draftPicks.filter(pk => pk.year >= targetDraftYear);
+          return filtered.length === t.draftPicks.length ? t : { ...t, draftPicks: filtered };
+        });
+
+        // Find/generate draft class for the target year
         const allImportedProspects = updatedPlayers
           .filter(
             (p) =>
               p.teamId === null &&
               p.experience === 0 &&
-              p.draftYear !== null &&
-              p.contract.yearsLeft === 0 &&
-              p.draftYear >= state.season,
+              p.draftYear === targetDraftYear &&
+              p.contract.yearsLeft === 0,
           )
           .sort((a, b) => b.ratings.overall - a.ratings.overall);
-        const targetDraftYear = allImportedProspects.reduce<number | null>(
-          (minYear, prospect) =>
-            minYear === null || (prospect.draftYear as number) < minYear
-              ? (prospect.draftYear as number)
-              : minYear,
-          null,
-        ) ?? state.season;
-        const importedDraftClass = allImportedProspects.filter(
-          (prospect) => prospect.draftYear === targetDraftYear,
-        );
+        const importedDraftClass = allImportedProspects;
 
         // Detect NFL 2026 roster for hardcoded first-round picks
         const isNfl = state.seasonHistory.length === 0 && isNfl2026Roster(updatedTeams, updatedPlayers);
@@ -9452,6 +9502,76 @@ export const useGameStore = create<GameStore>()(
               for (const pos of Object.keys(chart)) {
                 chart[pos] = (chart[pos] ?? []).filter(id => !existingIR.has(id));
               }
+            }
+          }
+        }
+        if (version < 31) {
+          // Realign draft year to NFL convention: the post-season offseason
+          // draft is for the upcoming year (2026 season → 2027 draft), not
+          // the just-completed year. Cleans up:
+          //  • leftover R2-R7 picks from imported NFL post-draft variants
+          //    (year=season, no playerId, no R1 → orphan artifacts)
+          //  • UDFA prospects with draftYear=season that linger as
+          //    "draftable" but aren't part of any upcoming class
+          //  • broken draft state where currentDraftYear=season but the
+          //    season is already in champions (mid-2026-draft after sim).
+          const season31 = (state as any).season as number | undefined;
+          const teams31 = ((state as any).teams ?? []) as Array<Record<string, unknown>>;
+          const players31 = ((state as any).players ?? []) as Array<Record<string, unknown>>;
+          const champions31 = ((state as any).champions ?? []) as Array<{ season: number }>;
+          if (typeof season31 === 'number') {
+            const seasonAlreadyPlayed31 = champions31.some(c => c.season === season31);
+            // Detect post-draft import leftover: any team has year=season picks
+            // but no R1 pick for that year (R1 was applied in the source).
+            const isPostDraftLeftover = teams31.some(t => {
+              const picks = (t.draftPicks as Array<{ year: number; round: number; playerId?: string }>) ?? [];
+              const seasonPicks = picks.filter(pk => pk.year === season31 && !pk.playerId);
+              if (seasonPicks.length === 0) return false;
+              return !seasonPicks.some(pk => pk.round === 1);
+            });
+            if (isPostDraftLeftover || seasonAlreadyPlayed31) {
+              // Strip orphan year=season picks
+              for (const t of teams31) {
+                const picks = (t.draftPicks as Array<{ year: number; playerId?: string }>) ?? [];
+                t.draftPicks = picks.filter(pk => !(pk.year === season31 && !pk.playerId));
+              }
+              // Demote leftover year=season prospects to FA pool by clearing draftYear
+              const leftoverIds31 = new Set<string>();
+              for (const p of players31) {
+                if (
+                  p.teamId === null &&
+                  p.experience === 0 &&
+                  p.draftYear === season31 &&
+                  ((p.contract as { yearsLeft?: number })?.yearsLeft ?? 0) === 0
+                ) {
+                  p.draftYear = null;
+                  leftoverIds31.add(p.id as string);
+                }
+              }
+              const fa31 = (((state as any).freeAgents ?? []) as string[]).slice();
+              const faSet = new Set(fa31);
+              for (const id of leftoverIds31) {
+                if (!faSet.has(id)) fa31.push(id);
+              }
+              (state as any).freeAgents = fa31;
+            }
+            // If we're stuck in a broken draft (phase=draft AND
+            // currentDraftYear matches a season that's already been played),
+            // bounce back to freeAgency so the user can re-enter the draft
+            // with the corrected target year.
+            if (
+              (state as any).phase === 'draft' &&
+              (state as any).currentDraftYear === season31 &&
+              seasonAlreadyPlayed31
+            ) {
+              (state as any).phase = 'freeAgency';
+              (state as any).draftOrder = [];
+              (state as any).draftPickOrder = undefined;
+              (state as any).draftResults = [];
+              (state as any).currentDraftYear = undefined;
+              (state as any).draftScoutingData = {};
+              (state as any).nflMockDraft = undefined;
+              (state as any).draftLotteryResults = undefined;
             }
           }
         }
