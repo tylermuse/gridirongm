@@ -45,16 +45,34 @@ export function GamePlanModal({ opponentName, onConfirm, onCancel }: GamePlanMod
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-[var(--border)]">
-          <h2 className="text-lg font-black">Game Plan</h2>
-          <p className="text-xs text-[var(--text-sec)] mt-0.5">vs {opponentName}</p>
+    // Backdrop click closes; stopPropagation on the inner card. Lepromisedprince
+    // (4/26) flagged "hard to open/close the gameplan screen on mobile" — there
+    // was no way to dismiss except finding the Cancel button at the bottom.
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onCancel}>
+      <div
+        className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-2xl max-w-md w-full max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header — explicit close button at top-right for thumb reach */}
+        <div className="px-5 py-4 border-b border-[var(--border)] flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-black">Game Plan</h2>
+            <p className="text-xs text-[var(--text-sec)] mt-0.5">vs {opponentName}</p>
+          </div>
+          <button
+            onClick={onCancel}
+            aria-label="Close game plan"
+            className="shrink-0 -mr-2 -mt-1 w-9 h-9 flex items-center justify-center rounded-lg text-[var(--text-sec)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition-colors"
+          >
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="5" y1="5" x2="15" y2="15" />
+              <line x1="15" y1="5" x2="5" y2="15" />
+            </svg>
+          </button>
         </div>
 
-        {/* Body */}
-        <div className="px-5 py-5 space-y-5">
+        {/* Body — scrolls when content exceeds viewport so users see all options */}
+        <div className="px-5 py-5 space-y-5 overflow-y-auto flex-1">
           {/* Run/Pass Ratio slider */}
           <div>
             <div className="flex items-center justify-between mb-2">
