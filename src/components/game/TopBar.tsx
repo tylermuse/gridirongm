@@ -44,6 +44,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const [showGamePlanModal, setShowGamePlanModal] = useState(false);
   const nextGamePlan = useGameStore(s => s.nextGamePlan);
   const setNextGamePlan = useGameStore(s => s.setNextGamePlan);
+  const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const stablePhaseRef = useRef<string | null>(null);
   const superBowlDone = !!playoffBracket?.find(m => m.id === 'championship')?.winnerId;
   const stableSBRef = useRef<boolean | null>(null);
@@ -226,7 +227,7 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
             )}
             {phase === 'regular' && !pathname.startsWith('/game/') && (
               <>
-                {pendingTradeCount > 0 && (
+                {!isSpectator && pendingTradeCount > 0 && (
                   <span className="hidden sm:inline">
                     <Link href="/trades">
                       <Button size="sm" variant="secondary">
@@ -235,18 +236,20 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     </Link>
                   </span>
                 )}
-                <span title={nextGamePlan
-                  ? `Plan: ${100 - nextGamePlan.passRate}R/${nextGamePlan.passRate}P · ${nextGamePlan.aggressiveness} · RZ ${nextGamePlan.redZoneStrategy}${nextGamePlan.blitzRate !== undefined ? ` · Blitz ${nextGamePlan.blitzRate}%` : ''}${nextGamePlan.coverage ? ` · ${nextGamePlan.coverage}` : ''}`
-                  : 'Set a default game plan that applies to every simmed game'}>
-                  <Button
-                    onClick={() => setShowGamePlanModal(true)}
-                    variant="secondary"
-                    size="sm"
-                    className="active:scale-95 transition-transform"
-                  >
-                    📋 Plan{nextGamePlan ? ' ✓' : ''}
-                  </Button>
-                </span>
+                {!isSpectator && (
+                  <span title={nextGamePlan
+                    ? `Plan: ${100 - nextGamePlan.passRate}R/${nextGamePlan.passRate}P · ${nextGamePlan.aggressiveness} · RZ ${nextGamePlan.redZoneStrategy}${nextGamePlan.blitzRate !== undefined ? ` · Blitz ${nextGamePlan.blitzRate}%` : ''}${nextGamePlan.coverage ? ` · ${nextGamePlan.coverage}` : ''}`
+                    : 'Set a default game plan that applies to every simmed game'}>
+                    <Button
+                      onClick={() => setShowGamePlanModal(true)}
+                      variant="secondary"
+                      size="sm"
+                      className="active:scale-95 transition-transform"
+                    >
+                      📋 Plan{nextGamePlan ? ' ✓' : ''}
+                    </Button>
+                  </span>
+                )}
                 <Button onClick={handleSimWeek} size="sm" className="active:scale-95 transition-transform" disabled={schedule.filter(g => g.week === week).length > 0 && schedule.filter(g => g.week === week).every(g => g.played)}>
                   Sim Week {week}
                 </Button>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
+import { SpectatorBanner } from '@/components/game/SpectatorBanner';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -1104,6 +1105,24 @@ export default function DraftPage() {
     nflMockDraft,
     importDraftClass,
   } = useGameStore();
+  const isSpectator = useGameStore(s => s.isSpectator ?? false);
+
+  if (isSpectator) {
+    return (
+      <GameShell>
+        <div className="max-w-4xl mx-auto">
+          <SpectatorBanner />
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
+            <div className="text-3xl mb-3">🎯</div>
+            <h2 className="text-xl font-black mb-1">Draft — Read-only</h2>
+            <p className="text-sm text-[var(--text-sec)] max-w-md mx-auto">
+              Spectator leagues let the AI run the entire draft. Check the Draft Recap after the picks complete.
+            </p>
+          </div>
+        </div>
+      </GameShell>
+    );
+  }
 
   // Detect draftResults entries whose player no longer exists. These are
   // "ghost picks" — they show in the table but with no player and no way to

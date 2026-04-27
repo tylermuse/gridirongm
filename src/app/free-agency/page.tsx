@@ -5,6 +5,7 @@ import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { LEAGUE_MINIMUM_SALARY, LUXURY_TAX_RATE, computeLuxuryTax, faPriceDecay, estimateSalary, capInflationFactor } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
+import { SpectatorBanner } from '@/components/game/SpectatorBanner';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -146,6 +147,7 @@ function FAEvaluationPanel({ player, roster, capSpace, marketSalary }: {
 
 export default function FreeAgencyPage() {
   const { phase, players, freeAgents, signFreeAgent, teams, userTeamId, faDay, faRefusals, advanceFADay, advanceFAWeek, pursuitState, intelReportFA, scoutingLevel } = useGameStore();
+  const isSpectator = useGameStore(s => s.isSpectator ?? false);
 
   // Also support regular season FA (no pursuit during regular season)
   const effectivePursuitState = phase === 'freeAgency' ? (pursuitState ?? { pursuitPoints: 5, maxPursuitPoints: 11, intelReports: {} }) : null;
@@ -197,6 +199,23 @@ export default function FreeAgencyPage() {
       return () => clearTimeout(timer);
     }
   }, [negotiation?.outcome, negotiation?.playerId]);
+
+  if (isSpectator) {
+    return (
+      <GameShell>
+        <div className="max-w-4xl mx-auto">
+          <SpectatorBanner />
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
+            <div className="text-3xl mb-3">✍️</div>
+            <h2 className="text-xl font-black mb-1">Free Agency — Read-only</h2>
+            <p className="text-sm text-[var(--text-sec)] max-w-md mx-auto">
+              AI teams handle all FA signings in spectator mode. Watch the news feed for moves.
+            </p>
+          </div>
+        </div>
+      </GameShell>
+    );
+  }
 
   // Allow free agent signings during regular season and freeAgency phase (teams can sign FAs anytime)
   const canSignFreeAgents = phase === 'freeAgency' || phase === 'regular';

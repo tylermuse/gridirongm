@@ -34,7 +34,7 @@ import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from './simTelemetry';
 
-const SAVE_VERSION = 30;
+const SAVE_VERSION = 31;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
@@ -78,7 +78,7 @@ interface GameStore extends LeagueState {
    *  Populated only when leagueSettings.devPanels is on. Not persisted to
    *  save storage (runtime only). */
   simTelemetry?: SimTelemetryRecord[];
-  newLeague: (teamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular') => Promise<void>;
+  newLeague: (teamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular', isSpectator?: boolean) => Promise<void>;
   resetLeague: () => void;
   /** Set the game plan for the user team's NEXT regular-season game. Cleared when that week is simmed. */
   setNextGamePlan: (plan: {
@@ -2505,7 +2505,7 @@ export const useGameStore = create<GameStore>()(
       initialized: false,
       ...EMPTY_LEAGUE_STATE,
 
-      newLeague: async (userTeamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular') => {
+      newLeague: async (userTeamId: string, leagueFileUrl?: string, startMode?: 'offseason' | 'regular', isSpectator?: boolean) => {
         try {
           resetUsedNames();
           if (!leagueFileUrl) throw new Error('No league file URL provided');
@@ -2626,8 +2626,11 @@ export const useGameStore = create<GameStore>()(
             initialized: true,
             season: imported.season,
             week: 1,
-            phase: isRegularStart ? 'regular' : 'resigning',
+            // Spectator leagues skip the re-signing window — there's no user
+            // team to manage, jump straight to regular season.
+            phase: isSpectator || isRegularStart ? 'regular' : 'resigning',
             userTeamId: userTeam.id,
+            isSpectator: !!isSpectator,
             teams: teamsWithApproval,
             players: reconcileJerseys(allImportedPlayers, teamsWithApproval),
             schedule,
@@ -2789,8 +2792,9 @@ export const useGameStore = create<GameStore>()(
           initialized: true,
           season: 2026,
           week: 1,
-          phase: 'resigning',
+          phase: isSpectator ? 'regular' : 'resigning',
           userTeamId: userTeam.id,
+          isSpectator: !!isSpectator,
           teams: genTeamsWithApproval,
           players: reconcileJerseys(allPlayers, genTeamsWithApproval),
           schedule,
@@ -9398,6 +9402,12 @@ export const useGameStore = create<GameStore>()(
               p.jerseyNumber = n;
               taken.add(n);
             }
+          }
+        }
+        if (version < 31) {
+          // Default isSpectator to false for any pre-spectator-mode save.
+          if ((state as Record<string, unknown>).isSpectator === undefined) {
+            (state as Record<string, unknown>).isSpectator = false;
           }
         }
         if (version < 30) {

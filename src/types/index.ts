@@ -1052,6 +1052,9 @@ export interface LeagueState {
   week: number;
   phase: 'preseason' | 'regular' | 'playoffs' | 'resigning' | 'draft' | 'freeAgency' | 'offseason';
   userTeamId: string;
+  /** Spectator-only league: user has no team, all 32 teams are AI-controlled,
+   *  league sims forward autonomously while user observes. */
+  isSpectator?: boolean;
   teams: Team[];
   players: Player[];
   schedule: GameResult[];

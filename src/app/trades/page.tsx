@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useGameStore, flushToStorage, pickTradeValue } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
+import { SpectatorBanner } from '@/components/game/SpectatorBanner';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -816,7 +817,24 @@ function TradesPage() {
     draftOrder, tradeProposals, executeTrade, generateCounterOffer, respondToTradeProposal, rejectAllTradeProposals,
     solicitTradingBlockProposals, leagueSettings, tradeRumors,
   } = useGameStore();
+  const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const godMode = leagueSettings?.godMode ?? false;
+  if (isSpectator) {
+    return (
+      <GameShell>
+        <div className="max-w-6xl mx-auto">
+          <SpectatorBanner />
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
+            <div className="text-3xl mb-3">🤝</div>
+            <h2 className="text-xl font-black mb-1">Trades — Read-only</h2>
+            <p className="text-sm text-[var(--text-sec)] max-w-md mx-auto">
+              Spectator leagues run AI-only. Watch trade rumors and league moves develop in the news feed instead.
+            </p>
+          </div>
+        </div>
+      </GameShell>
+    );
+  }
 
   // Helper that binds the current teams list to pickTradeValue. The engine's
   // exported function takes optional teams; bind once so every call site sees

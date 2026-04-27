@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { LEAGUE_TEAMS, type TeamTemplate } from '@/lib/data/teams';
 import { type ImportedLeagueData, loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { SpectatorBanner, useIsSpectator } from '@/components/game/SpectatorBanner';
 import { generateTeamSpotlight, COMMENTATORS, type SpotlightContext } from '@/lib/engine/debate';
 import { getAiSpotlightState, subscribeAiSpotlight, fetchAiSpotlight, detectNarrativeMoment } from '@/lib/engine/aiSpotlight';
 import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
@@ -106,7 +107,7 @@ function TeamPicker() {
     useGameStore.setState({ initialized: true });
   }
 
-  async function handlePick(abbr: string) {
+  async function handlePick(abbr: string, spectator: boolean = false) {
     // Auto-save current league to next available slot before starting new one
     if (savedGame) {
       const { saveToSlot } = useGameStore.getState();
@@ -134,7 +135,7 @@ function TeamPicker() {
     setLoading(true);
     setError(null);
     try {
-      await newLeague(abbr, activeUrl ?? undefined, activeUrl ? startMode : undefined);
+      await newLeague(abbr, activeUrl ?? undefined, activeUrl ? startMode : undefined, spectator);
       // Enable BS Mode if preselected from the banner
       if (bsModePreselect) {
         useGameStore.getState().updateLeagueSettings({ bsMode: true });
@@ -362,6 +363,24 @@ function TeamPicker() {
           onChange={e => setTeamSearch(e.target.value)}
           className="w-full max-w-md mb-4 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm"
         />
+        {/* Spectator card — observe-only league with no user team. */}
+        <button
+          onClick={() => {
+            const firstAbbr = ([...displayTeams].sort((a, b) => a.city.localeCompare(b.city))[0])?.abbreviation;
+            if (firstAbbr) handlePick(firstAbbr, true);
+          }}
+          className="w-full max-w-4xl mb-3 group flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface)]
+                     hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/10 transition-all text-left"
+        >
+          <div className="w-12 h-12 rounded-lg bg-[var(--surface-2)] flex items-center justify-center text-2xl shrink-0">
+            👁️
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold">Spectator (no team)</div>
+            <div className="text-xs text-[var(--text-sec)]">Watch all 32 AI-controlled teams play out the season. No managing.</div>
+          </div>
+          <div className="text-blue-600 text-xl group-hover:translate-x-1 transition-transform shrink-0">→</div>
+        </button>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-w-4xl">
           {[...displayTeams]
             .filter(t =>
@@ -676,6 +695,7 @@ function DraftCapitalCard({ team, season, phase, teams }: { team: { draftPicks: 
 
 function Dashboard() {
   const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements, leagueSettings, firedState } = useGameStore();
+  const isSpectator = useIsSpectator();
   const { isFoundingMember } = useSubscription();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
@@ -837,6 +857,7 @@ function Dashboard() {
   return (
     <GameShell>
       <div className="max-w-6xl mx-auto space-y-4">
+        <SpectatorBanner />
         {/* Team header */}
         <div
           className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl px-4 sm:px-5 py-4"
@@ -879,8 +900,8 @@ function Dashboard() {
         {/* Discord Banner */}
         <DiscordBanner />
 
-        {/* Approval & Objectives */}
-        {userTeam.approval && (
+        {/* Approval & Objectives — hidden in spectator mode (no user team to evaluate) */}
+        {!isSpectator && userTeam.approval && (
           <Card>
             <div className="flex items-center gap-6 flex-wrap">
               {/* Approval gauges */}

@@ -76,6 +76,7 @@ interface PlayerModalProps {
 
 export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
   const { players, teams, userTeamId, releasePlayer, editPlayer, restructureContract, champions, season, phase, week, leagueSettings } = useGameStore();
+  const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const router = useRouter();
   const [confirmRelease, setConfirmRelease] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -108,7 +109,9 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
   }
 
   const team = player.teamId ? teams.find(t => t.id === player.teamId) : null;
-  const isOnUserTeam = player.teamId === userTeamId;
+  // Spectator mode hides every action — no "user team" exists in observe-only
+  // leagues, so isOnUserTeam folds away the manage rail entirely.
+  const isOnUserTeam = !isSpectator && player.teamId === userTeamId;
   const relevantRatings = POSITION_RELEVANT_RATINGS[player.position] ?? [];
 
   const archetypeMap: Record<string, { label: string; emoji: string }> = {

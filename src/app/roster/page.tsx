@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useGameStore, computeAllLeagueTeams } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
+import { SpectatorBanner } from '@/components/game/SpectatorBanner';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
@@ -213,8 +214,11 @@ export default function RosterPage() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
+  const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const activeTeamId = viewingTeamId ?? userTeamId;
-  const isViewingOwnTeam = activeTeamId === userTeamId;
+  // In spectator mode there is no "own team" — every team renders read-only,
+  // which uses the existing isViewingOwnTeam gates to hide all action UI.
+  const isViewingOwnTeam = !isSpectator && activeTeamId === userTeamId;
   const userTeam = teams.find(t => t.id === userTeamId);
   const viewingTeam = teams.find(t => t.id === activeTeamId);
   // During re-signing phase, hide players pending re-signing (expiring contracts not yet re-signed)
@@ -387,6 +391,7 @@ export default function RosterPage() {
   return (
     <GameShell>
       <div className="max-w-7xl mx-auto">
+        <SpectatorBanner />
         {/* Header bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
