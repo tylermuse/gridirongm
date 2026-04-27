@@ -224,6 +224,10 @@ export interface ImportedLeagueData {
   season: number;
   teams: Team[];
   players: Player[];
+  /** IDs of imported players whose contracts already expired before the import
+   *  season — these are real veterans who should populate the FA pool, not
+   *  ghost-attach to whichever team they last played for. */
+  freeAgentIds: string[];
 }
 
 export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
@@ -274,6 +278,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
   const teamByTid = new Map(league.teams.map((team) => [team.tid, `team-${team.tid}`]));
 
   const players: Player[] = [];
+  const expiredFreeAgentIds: string[] = [];
   for (const player of league.players) {
     if (player.tid < 0 || !teamByTid.has(player.tid)) {
       continue;
@@ -287,10 +292,23 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
     const age = Math.max(20, season - (player.born?.year ?? season - 24));
     const draftYear = player.draft?.year ?? null;
     const experience = draftYear ? Math.max(0, season - draftYear) : Math.max(0, age - 22);
-    const contract = mapContract(player.contract, season, player.draft);
+
+    // Snapshot ghost-FA guard: roster files generated mid-offseason
+    // sometimes serialize unsigned veterans (Jadeveon Clowney case from
+    // tofftanaut, 4/27) on their previous team's roster with an
+    // already-expired contract. Detect via raw contract.exp < season,
+    // strip the team binding, and surface them in the FA pool.
+    const rawExp = player.contract?.exp;
+    const isExpiredFA = rawExp != null && rawExp < season;
+    const contract = isExpiredFA
+      ? { salary: LEAGUE_MINIMUM_SALARY, yearsLeft: 0, guaranteed: 0, totalYears: 0 }
+      : mapContract(player.contract, season, player.draft);
+
+    const playerId = `player-${player.pid}`;
+    if (isExpiredFA) expiredFreeAgentIds.push(playerId);
 
     players.push({
-      id: `player-${player.pid}`,
+      id: playerId,
       firstName: player.firstName,
       lastName: player.lastName,
       position,
@@ -301,7 +319,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       stats: emptyStats(),
       careerStats: emptyStats(),
       contract,
-      teamId: teamByTid.get(player.tid) ?? null,
+      teamId: isExpiredFA ? null : (teamByTid.get(player.tid) ?? null),
       draftYear,
       // FBGM source rosters store draft.pick as pick-in-round (e.g. 18 for the
       // 18th pick of the 3rd round). The in-engine draft path stores overall.
@@ -473,7 +491,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
   // picks on expiring deals, etc.
   validateImportedLeague(season, finalizedTeams, players);
 
-  return { season, teams: finalizedTeams, players };
+  return { season, teams: finalizedTeams, players, freeAgentIds: expiredFreeAgentIds };
 }
 
 function validateImportedLeague(season: number, teams: Team[], players: Player[]): void {

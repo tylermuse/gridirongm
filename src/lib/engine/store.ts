@@ -2633,7 +2633,11 @@ export const useGameStore = create<GameStore>()(
             schedule,
             draftOrder: [],
             draftResults: [],
-            freeAgents: fbgmFAs.map(p => p.id),
+            // Merge generated street FAs with snapshot ghost-FAs (veterans
+            // whose contract expired before the import season — they were
+            // listed on their old team in the source JSON but belong in the
+            // FA pool).
+            freeAgents: [...fbgmFAs.map(p => p.id), ...imported.freeAgentIds],
             faDay: 0,
             faRefusals: [],
             playoffBracket: null,
