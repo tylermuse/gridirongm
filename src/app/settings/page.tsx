@@ -425,6 +425,10 @@ export default function SettingsPage() {
             <p className="text-xs text-[var(--text-sec)]">
               Full control over your league. Edit players, force trades, and modify any team. Enabling God Mode permanently marks this league as modified.
             </p>
+            {/* Tap target wraps the switch + label for a single ~44px-tall
+                hit zone on touch devices. Lepromisedprince (4/26) flagged
+                "had a hard time activating God mode on mobile" — the bare
+                28×48px switch was undersized for thumb taps. */}
             <button
               onClick={() => {
                 if (!draft.godMode && !draft.godModeUsed) {
@@ -432,21 +436,25 @@ export default function SettingsPage() {
                 }
                 setDraft(d => ({ ...d, godMode: !d.godMode, godModeUsed: true }));
               }}
-              className={`
-                relative inline-flex h-7 w-12 items-center rounded-full transition-colors
-                ${draft.godMode ? 'bg-yellow-500' : 'bg-gray-300'}
-              `}
+              className="-ml-2 flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-[var(--surface-2)] transition-colors min-h-[44px]"
             >
               <span
                 className={`
-                  inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform
-                  ${draft.godMode ? 'translate-x-6' : 'translate-x-1'}
+                  relative inline-flex h-7 w-12 items-center rounded-full transition-colors shrink-0
+                  ${draft.godMode ? 'bg-yellow-500' : 'bg-gray-300'}
                 `}
-              />
+              >
+                <span
+                  className={`
+                    inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform
+                    ${draft.godMode ? 'translate-x-6' : 'translate-x-1'}
+                  `}
+                />
+              </span>
+              <span className={`text-sm font-semibold ${draft.godMode ? 'text-yellow-600' : 'text-[var(--text-sec)]'}`}>
+                {draft.godMode ? 'ON' : 'OFF'}
+              </span>
             </button>
-            <span className={`ml-2 text-sm font-semibold ${draft.godMode ? 'text-yellow-600' : 'text-[var(--text-sec)]'}`}>
-              {draft.godMode ? 'ON' : 'OFF'}
-            </span>
           </div>
         </Card>
 
