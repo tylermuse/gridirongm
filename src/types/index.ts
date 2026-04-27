@@ -1024,6 +1024,10 @@ export interface LeagueSettings {
    *  Off by default; no user-facing panels today, but turning this on starts
    *  capturing per-game OVR-delta vs score-delta records into store.simTelemetry. */
   devPanels: boolean;
+  /** Show predicted-favorite indicator (win % badge) on schedule + matchup
+   *  cards for upcoming games. Default true; off for testers who prefer a
+   *  blind viewing experience. */
+  showPredictedFavorite?: boolean;
 }
 
 export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
@@ -1049,6 +1053,7 @@ export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
   suspensionFrequency: 1.0,
   preseasonGames: 0,
   devPanels: false,
+  showPredictedFavorite: true,
 };
 
 export interface LeagueState {

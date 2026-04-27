@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
-import { teamPower } from '@/lib/engine/simulate';
+import { teamPower, getMatchupWinProbability } from '@/lib/engine/simulate';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -150,7 +150,8 @@ function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams,
 
 export default function StandingsPage() {
   const router = useRouter();
-  const { teams, schedule, userTeamId, players, week, phase, rivalries } = useGameStore();
+  const { teams, schedule, userTeamId, players, week, phase, rivalries, leagueSettings } = useGameStore();
+  const showWinProb = leagueSettings?.showPredictedFavorite !== false;
   const [view, setView] = useState<StandingsView>('division');
   const [tab, setTab] = useState<'standings' | 'schedule'>('standings');
   const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
@@ -449,6 +450,28 @@ export default function StandingsPage() {
                               }`}>
                                 {spreadText}
                               </span>
+                              {showWinProb && (() => {
+                                // Win-probability indicator (305mike 4/27 §1.3).
+                                // teamPower-driven logistic; pulls coach bonus
+                                // out of scope for v1 — pure roster strength.
+                                const wp = getMatchupWinProbability(
+                                  isHome ? userRoster : oppRoster,
+                                  isHome ? oppRoster : userRoster,
+                                );
+                                const userWP = isHome ? wp.home : wp.away;
+                                const userPct = Math.round(userWP * 100);
+                                const oppPct = 100 - userPct;
+                                const showUser = userPct >= 50;
+                                const label = showUser
+                                  ? `YOU ${userPct}%`
+                                  : `${teamAbbr(isHome ? game.awayTeamId : game.homeTeamId)} ${oppPct}%`;
+                                const cls = showUser ? 'text-green-700 bg-green-50 border-green-200' : 'text-red-700 bg-red-50 border-red-200';
+                                return (
+                                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${cls}`} title="Predicted win probability based on team power ratings">
+                                    {label}
+                                  </span>
+                                );
+                              })()}
                               <span className="text-[10px] text-[var(--text-sec)] font-mono">O/U {ou}</span>
                             </div>
                           );

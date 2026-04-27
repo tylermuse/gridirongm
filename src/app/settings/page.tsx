@@ -560,6 +560,31 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        {/* Predicted Favorite (win % indicator) */}
+        <Card className="mb-4">
+          <CardHeader><CardTitle>Predicted Favorite</CardTitle></CardHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-[var(--text-sec)]">
+              Show a win-probability badge on upcoming schedule games. Turn off for a blind viewing experience.
+            </p>
+            <button
+              onClick={() => setDraft(d => ({ ...d, showPredictedFavorite: !(d.showPredictedFavorite !== false) }))}
+              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                draft.showPredictedFavorite !== false ? 'bg-blue-500' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                  draft.showPredictedFavorite !== false ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <span className={`ml-2 text-sm font-semibold ${draft.showPredictedFavorite !== false ? 'text-blue-600' : 'text-[var(--text-sec)]'}`}>
+              {draft.showPredictedFavorite !== false ? 'ON' : 'OFF'}
+            </span>
+          </div>
+        </Card>
+
         {/* AI Commentary */}
         <Card className="mb-4">
           <CardHeader>

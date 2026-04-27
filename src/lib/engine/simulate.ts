@@ -118,6 +118,27 @@ export function teamPower(roster: Player[]): { offense: number; defense: number 
 }
 
 /**
+ * Returns predicted home/away win probabilities for an upcoming matchup.
+ * Uses teamPower diff + 3-point home advantage fed through a logistic
+ * curve calibrated against NFL spread→WP norms (~5.5 points = 75% WP).
+ * Probabilities sum to 1; ties are folded into the larger side.
+ */
+export function getMatchupWinProbability(
+  homeRoster: Player[],
+  awayRoster: Player[],
+  homeCoachBonus: number = 0,
+  awayCoachBonus: number = 0,
+): { home: number; away: number } {
+  const homePow = teamPower(homeRoster);
+  const awayPow = teamPower(awayRoster);
+  const homeTotal = homePow.offense + homePow.defense + homeCoachBonus;
+  const awayTotal = awayPow.offense + awayPow.defense + awayCoachBonus;
+  const spread = (awayTotal - homeTotal) * 0.35 - 3;
+  const homeWP = 1 / (1 + Math.exp(spread / 5.5));
+  return { home: homeWP, away: 1 - homeWP };
+}
+
+/**
  * Generates a betting line (spread, O/U, moneylines) for a matchup.
  * spread < 0 means home team is favored.
  */
