@@ -999,7 +999,7 @@ function PlayerEditor({
       </div>
 
       {/* OVR, POT, Contract */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <div>
           <label className="text-[10px] text-[var(--text-sec)] uppercase">OVR</label>
           <input type="number" className="w-full text-sm border rounded px-2 py-1 font-bold" value={displayOvr} min={30} max={99} onChange={e => setOvrOverride(parseInt(e.target.value) || 50)} />
@@ -1021,18 +1021,21 @@ function PlayerEditor({
       {/* Ratings — all 13, with primary ones highlighted */}
       <div>
         <label className="text-[10px] text-[var(--text-sec)] uppercase mb-1 block">Ratings</label>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+        {/* Single column on mobile so the slider has room to grab; two
+            columns once we hit `sm` (640px). Min-width:0 on the row lets
+            the flex children shrink properly inside the grid track. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
           {([...relevantRatings, ...ALL_RATING_KEYS.filter(k => !relevantRatings.includes(k))] as (keyof Omit<PlayerRatings, 'overall'>)[]).map(key => (
-            <div key={key} className={`flex items-center gap-2 ${relevantRatings.includes(key) ? '' : 'opacity-50'}`}>
+            <div key={key} className={`flex items-center gap-2 min-w-0 ${relevantRatings.includes(key) ? '' : 'opacity-50'}`}>
               <span className="text-xs text-[var(--text-sec)] w-16 shrink-0">{RATING_LABELS[key]}</span>
               <input
                 type="range"
                 min={20} max={99}
                 value={ratings[key]}
                 onChange={e => { setRatings(r => ({ ...r, [key]: parseInt(e.target.value) })); setOvrOverride(null); }}
-                className="flex-1 accent-yellow-500 h-1.5"
+                className="flex-1 min-w-0 accent-yellow-500 h-2"
               />
-              <span className="text-xs font-mono w-6 text-right">{ratings[key]}</span>
+              <span className="text-xs font-mono w-6 text-right shrink-0">{ratings[key]}</span>
             </div>
           ))}
         </div>
