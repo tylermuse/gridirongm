@@ -188,6 +188,8 @@ interface GameStore extends LeagueState {
   updateLeagueSettings: (settings: Partial<LeagueSettings>) => void;
   /** God Mode: edit any player's attributes */
   editPlayer: (playerId: string, updates: Partial<Player>) => void;
+  /** God Mode: re-roll the auto-generated avatar portrait for a player */
+  rerollPortrait: (playerId: string) => void;
   /** God Mode: create a new player and add to the user's team */
   createPlayer: (data: { firstName: string; lastName: string; position: Position; age: number; overall: number; potential: number }) => string | null;
   setSuppressTradePopups: (val: boolean) => void;
@@ -8616,6 +8618,18 @@ export const useGameStore = create<GameStore>()(
         }
 
         set({ players: updatedPlayers, teams: updatedTeams });
+      },
+
+      rerollPortrait: (playerId: string) => {
+        const state = get();
+        const settings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
+        if (!settings.godMode) return;
+        const seed = `${playerId}-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+        set({
+          players: state.players.map(p =>
+            p.id === playerId ? { ...p, portraitSeedOverride: seed } : p,
+          ),
+        });
       },
 
       createPlayer: (data) => {

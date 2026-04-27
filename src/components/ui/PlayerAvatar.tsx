@@ -19,7 +19,7 @@ function getDiceBearUrl(seed: string): string {
 }
 
 interface PlayerAvatarProps {
-  player: { id?: string; firstName: string; lastName: string; photoUrl?: string; position: string };
+  player: { id?: string; firstName: string; lastName: string; photoUrl?: string; portraitSeedOverride?: string; position: string };
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   teamColor?: string;
   className?: string;
@@ -38,12 +38,13 @@ const sizePx: Record<string, number> = { xs: 16, sm: 24, md: 40, lg: 64, xl: 96 
 export function PlayerAvatar({ player, size = 'md', teamColor = '#555', className = '' }: PlayerAvatarProps) {
   const [imgError, setImgError] = useState(false);
 
-  const imgSrc = player.photoUrl || (player.id ? getDiceBearUrl(player.id) : null);
+  const seed = player.portraitSeedOverride ?? player.id;
+  const imgSrc = player.photoUrl || (seed ? getDiceBearUrl(seed) : null);
 
   if (imgSrc && !imgError) {
     return (
       <img
-        key={player.id ?? imgSrc}
+        key={seed ?? imgSrc}
         src={imgSrc}
         alt={`${player.firstName} ${player.lastName}`}
         width={sizePx[size]}

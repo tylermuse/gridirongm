@@ -158,7 +158,26 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
         {/* Header */}
         <div className="flex items-start gap-5">
           <div className="flex flex-col items-center gap-1.5 shrink-0">
-            <PlayerAvatar player={player} size="lg" teamColor={team?.primaryColor ?? '#374151'} />
+            <div className="relative">
+              <PlayerAvatar player={player} size="lg" teamColor={team?.primaryColor ?? '#374151'} />
+              {godMode && !player.photoUrl && (
+                <button
+                  onClick={() => {
+                    const reroll = (useGameStore.getState() as unknown as { rerollPortrait?: (id: string) => void }).rerollPortrait;
+                    reroll?.(player.id);
+                  }}
+                  title="Re-roll portrait (God Mode)"
+                  aria-label="Re-roll portrait"
+                  className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md hover:bg-blue-700 active:scale-95 transition-all"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="23 4 23 10 17 10" />
+                    <polyline points="1 20 1 14 7 14" />
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                  </svg>
+                </button>
+              )}
+            </div>
             {team && <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="sm" />}
             <div className="text-[10px] font-black text-[var(--text-sec)]">{player.position}</div>
           </div>

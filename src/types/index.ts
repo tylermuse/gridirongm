@@ -376,6 +376,10 @@ export interface Player {
   lastRestructuredSeason?: number;
   /** Optional photo URL (populated from imported league files) */
   photoUrl?: string;
+  /** God Mode override: forces a custom seed for the auto-generated avatar.
+   *  When set, PlayerAvatar uses this in place of `id` so users can re-roll
+   *  a portrait they don't like. */
+  portraitSeedOverride?: string;
   /** Combine measurables (40-yard dash, bench press, vertical jump) */
   combineStats?: { fortyYard: number; benchPress: number; verticalJump: number };
   /** College / university the player attended (flavor text for draft) */
