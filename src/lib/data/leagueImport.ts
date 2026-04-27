@@ -197,9 +197,26 @@ function mapRatings(ratings: FbgmRating): { ratings: PlayerRatings; potential: n
 function mapContract(
   contract: FbgmPlayer['contract'],
   season: number,
+  draft?: FbgmPlayer['draft'],
 ): { salary: number; yearsLeft: number; guaranteed: number; totalYears: number } {
   const salary = Math.max(0.5, Math.round(((contract?.amount ?? 500) / 1000) * 10) / 10);
   const yearsLeft = Math.max(1, (contract?.exp ?? season) - season + 1);
+
+  // Snapshot-bug guard: when a roster file is generated mid-offseason, the
+  // freshly-drafted rookies sometimes serialize with the previous season's
+  // expiry (or no contract at all). Without this fix every Day 3 rookie
+  // showed up on a 1-year expiring deal — see tofftanaut 4/27 §4.1 reports.
+  // If the player was drafted this season and the contract claims to expire
+  // this season or earlier, assume the snapshot is wrong and stamp a
+  // standard 4-year rookie deal at league minimum.
+  if (draft?.year === season && yearsLeft <= 1) {
+    return {
+      salary: LEAGUE_MINIMUM_SALARY,
+      yearsLeft: 4,
+      guaranteed: generateGuaranteed(LEAGUE_MINIMUM_SALARY, 4),
+      totalYears: 4,
+    };
+  }
   return { salary, yearsLeft, guaranteed: generateGuaranteed(salary, yearsLeft), totalYears: yearsLeft };
 }
 
@@ -270,7 +287,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
     const age = Math.max(20, season - (player.born?.year ?? season - 24));
     const draftYear = player.draft?.year ?? null;
     const experience = draftYear ? Math.max(0, season - draftYear) : Math.max(0, age - 22);
-    const contract = mapContract(player.contract, season);
+    const contract = mapContract(player.contract, season, player.draft);
 
     players.push({
       id: `player-${player.pid}`,
@@ -448,7 +465,52 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
     };
   });
 
+  // Integrity validator — runs after the import is fully assembled. Catches
+  // snapshot-generation bugs where the source roster file was serialized
+  // mid-offseason or with stale team assignments. Logs everything as a
+  // grouped console.warn (no throws — we don't want one bad pick to break
+  // a 50MB import). Tofftanaut 4/27 §4.1: 49ers showing up on SEA, Day 3
+  // picks on expiring deals, etc.
+  validateImportedLeague(season, finalizedTeams, players);
+
   return { season, teams: finalizedTeams, players };
+}
+
+function validateImportedLeague(season: number, teams: Team[], players: Player[]): void {
+  const issues: string[] = [];
+
+  // 1. No duplicate player IDs across the league
+  const seen = new Set<string>();
+  let dupCount = 0;
+  for (const p of players) {
+    if (seen.has(p.id)) dupCount++;
+    seen.add(p.id);
+  }
+  if (dupCount > 0) issues.push(`${dupCount} duplicate player id(s)`);
+
+  // 2. Every player's teamId references a real team
+  const teamIds = new Set(teams.map(t => t.id));
+  let orphans = 0;
+  for (const p of players) {
+    if (p.teamId && !teamIds.has(p.teamId)) orphans++;
+  }
+  if (orphans > 0) issues.push(`${orphans} players with unknown teamId`);
+
+  // 3. Day 3 picks (rounds 4-7) shouldn't be on contracts that already
+  //    expired — the mapContract guard should have caught these but log
+  //    anything that slipped past so the snapshot bug stays visible.
+  let badRookieDeals = 0;
+  for (const p of players) {
+    if (p.draftYear === season && (p.draftRound ?? 0) >= 4 && p.contract.yearsLeft <= 1) {
+      badRookieDeals++;
+    }
+  }
+  if (badRookieDeals > 0) issues.push(`${badRookieDeals} current-season Day 3 picks on 1-year contracts`);
+
+  if (issues.length > 0) {
+    // eslint-disable-next-line no-console
+    console.warn('[leagueImport] integrity warnings:', issues.join(' · '));
+  }
 }
 
 export async function loadLeagueFromUrl(url: string): Promise<ImportedLeagueData> {
