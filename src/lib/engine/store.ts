@@ -824,7 +824,7 @@ const POSITION_VALUE_MULT: Record<string, number> = {
   DL: 1.05, LB: 1.0, CB: 1.1, S: 0.95, K: 0.4, P: 0.35,
 };
 
-function playerTradeValue(player: Player): number {
+export function playerTradeValue(player: Player): number {
   const ageMultiplier =
     player.age <= 25 ? 1.3 :
     player.age <= 27 ? 1.1 :
@@ -832,18 +832,20 @@ function playerTradeValue(player: Player): number {
     player.age <= 31 ? 0.7 :
     player.age <= 33 ? 0.45 : 0.2;
   const posMultiplier = POSITION_VALUE_MULT[player.position] ?? 1.0;
-  // Exponential curve scaled to match draft pick values.
-  // 56 OVR → ~80, 65 OVR → ~350, 70 OVR → ~600, 80 OVR → ~1500, 90 OVR → ~3500
-  // A 90 OVR player should be worth roughly a top-3 pick.
-  const normalized = Math.max(0, (player.ratings.overall - 40) / 55);
-  const base = Math.pow(normalized, 2.5) * 3500;
-  const potBonus = Math.max(0, player.potential - player.ratings.overall) * 8;
+  // Cubic curve floored at 45 OVR — anything below 45 has zero baseline
+  // value and only earns from the potential bonus. Scrubs (50-58 OVR) used
+  // to clear ~150-200 base which let pick-only AI proposals fire for them
+  // (4/27 §1.2 reports of 56-OVR-for-2nd-round acceptances).
+  // Targets: 56 → ~50, 65 → ~320, 70 → ~625, 80 → ~1700, 90 → ~3650, 95 → 5000.
+  const normalized = Math.max(0, (player.ratings.overall - 45) / 50);
+  const base = Math.pow(normalized, 3) * 5000;
+  const potBonus = Math.max(0, player.potential - player.ratings.overall) * 5;
   const rawValue = (base + potBonus) * ageMultiplier * posMultiplier;
   // Contract multiplier — expiring players are nearly worthless in trades
   let contractMult = 1.0;
-  if (player.contract.yearsLeft <= 0) contractMult = 0.15;       // expiring / FA — almost no value
-  else if (player.contract.yearsLeft === 1) contractMult = 0.50;  // 1 year left — half value
-  else if (player.contract.yearsLeft === 2) contractMult = 0.80;  // 2 years — slight discount
+  if (player.contract.yearsLeft <= 0) contractMult = 0.10;        // expiring / FA — almost no value
+  else if (player.contract.yearsLeft === 1) contractMult = 0.40;  // 1 year left — heavy discount
+  else if (player.contract.yearsLeft === 2) contractMult = 0.70;  // 2 years — moderate discount
   return rawValue * contractMult;
 }
 
@@ -1811,7 +1813,9 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
     // ~20% chance: offer ONLY a draft pick (no player) for a mid-tier player
     // Pick must be proportional to player value — don't offer Rd 1 for a scrub
     // Rebuilding teams skip this — they don't trade picks for players
-    const pickOnlyTrade = !isRebuilding && Math.random() < 0.20 && targetValue >= 80 && targetValue < 400;
+    // Floor at 200 (≈ 65 OVR starter) prevents 56-OVR-scrub-for-2nd-round
+    // proposals reported in 4/27 §1.2.
+    const pickOnlyTrade = !isRebuilding && Math.random() < 0.20 && targetValue >= 200 && targetValue < 400;
     let offeredPlayerIds = [aiOffer.id];
     if (pickOnlyTrade) {
       // Find the best-fit pick that doesn't massively overshoot
