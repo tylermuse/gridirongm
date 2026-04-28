@@ -88,6 +88,10 @@ interface FbgmPlayer {
   contract?: { amount?: number; exp?: number };
   injury?: { type?: string; gamesRemaining?: number };
   ratings?: FbgmRating[];
+  /** Set of every team-id the player has accumulated stats for (career history). */
+  statsTids?: number[];
+  /** Move history: drafts, trades, signings, godMode edits. */
+  transactions?: Array<{ season?: number; phase?: number; tid?: number; type?: string; fromTid?: number }>;
 }
 
 interface FbgmDraftPick {
@@ -317,6 +321,54 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       rawAmount > 0 &&
       rawAmount <= 1000 &&
       !draftedThisSeason;
+
+    // Cross-team ghost-tid guard (tofftanaut 4/27 23:21 — Brian Robinson Jr.,
+    // Jauan Jennings, Spencer Buford all tagged on SEA but their statsTids
+    // and transaction history say SF/WAS). When a player's current tid
+    // doesn't match any team they've actually played for or been moved to,
+    // treat the assignment as corrupt. Re-route to the most-recent legitimate
+    // tid (latest transaction → latest stats team → draft team) so the
+    // player ends up on their real team rather than disappearing into FA.
+    const draftTid = player.draft?.tid;
+    const legitTids = new Set<number>();
+    if (Array.isArray(player.statsTids)) {
+      for (const t of player.statsTids) if (typeof t === 'number' && t >= 0) legitTids.add(t);
+    }
+    if (Array.isArray(player.transactions)) {
+      for (const tx of player.transactions) {
+        if (typeof tx?.tid === 'number' && tx.tid >= 0) legitTids.add(tx.tid);
+      }
+    }
+    if (typeof draftTid === 'number' && draftTid >= 0) legitTids.add(draftTid);
+    const hasHistorySignal = legitTids.size > 0;
+    const isGhostTid = hasHistorySignal && !legitTids.has(player.tid);
+
+    let correctedTid: number | null = null;
+    if (isGhostTid) {
+      // Walk transactions newest-to-oldest and pick the first valid team-set move.
+      const txs = Array.isArray(player.transactions) ? player.transactions : [];
+      for (let i = txs.length - 1; i >= 0; i--) {
+        const t = txs[i]?.tid;
+        if (typeof t === 'number' && t >= 0 && teamByTid.has(t)) {
+          correctedTid = t;
+          break;
+        }
+      }
+      if (correctedTid == null) {
+        const stids = Array.isArray(player.statsTids) ? player.statsTids : [];
+        for (let i = stids.length - 1; i >= 0; i--) {
+          const t = stids[i];
+          if (typeof t === 'number' && t >= 0 && teamByTid.has(t)) {
+            correctedTid = t;
+            break;
+          }
+        }
+      }
+      if (correctedTid == null && typeof draftTid === 'number' && draftTid >= 0 && teamByTid.has(draftTid)) {
+        correctedTid = draftTid;
+      }
+    }
+
     const isExpiredFA = isAlreadyExpired || isPlaceholderUfa;
     const contract = isExpiredFA
       ? { salary: LEAGUE_MINIMUM_SALARY, yearsLeft: 0, guaranteed: 0, totalYears: 0 }
@@ -337,7 +389,11 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       stats: emptyStats(),
       careerStats: emptyStats(),
       contract,
-      teamId: isExpiredFA ? null : (teamByTid.get(player.tid) ?? null),
+      teamId: isExpiredFA
+        ? null
+        : (correctedTid != null
+            ? (teamByTid.get(correctedTid) ?? null)
+            : (teamByTid.get(player.tid) ?? null)),
       draftYear,
       // FBGM source rosters store draft.pick as pick-in-round (e.g. 18 for the
       // 18th pick of the 3rd round). The in-engine draft path stores overall.
