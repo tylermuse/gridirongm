@@ -1490,100 +1490,12 @@ function propagateWinner(
 // Season awards (PRD-10 prep)
 // ---------------------------------------------------------------------------
 
-function computeSeasonAwards(state: LeagueState): { award: string; playerId: string; teamId: string }[] {
-  const awards: { award: string; playerId: string; teamId: string }[] = [];
-  const activePlayers = state.players.filter(p => !p.retired && p.teamId);
-
-  // OVR threshold — major awards require minimum talent level
-  const majorEligible = activePlayers.filter(p => p.ratings.overall >= 70);
-  const rookieEligible = activePlayers.filter(p => p.ratings.overall >= 60);
-
-  const withGames = (pos: string[], pool: typeof activePlayers = majorEligible) =>
-    pool.filter(p => pos.includes(p.position) && p.stats.gamesPlayed >= 10);
-
-  // MVP — QBs should win ~70-80% of the time (matching real NFL patterns).
-  // Team wins are a near-prerequisite, passing stats dominate for QBs.
-  const mvpCandidates = withGames(['QB', 'RB', 'WR', 'TE']);
-  const mvpScore = (p: typeof mvpCandidates[0]) => {
-    // Team win bonus — winning record is critical for MVP candidacy
-    const team = state.teams.find(t => t.id === p.teamId);
-    const gp = team ? team.record.wins + team.record.losses : 1;
-    const winPct = team ? team.record.wins / Math.max(1, gp) : 0.5;
-    const wins = team?.record.wins ?? 0;
-    // Strong bonus for winning: 10+ wins gets significant boost, sub-.500 gets penalty
-    const winBonus = wins * 8 + (winPct >= 0.65 ? 50 : winPct >= 0.5 ? 20 : -40);
-
-    if (p.position === 'QB') {
-      // QBs: passing production is king. Elite stat line + wins = MVP.
-      return p.stats.passYards * 0.05 + p.stats.passTDs * 8 - p.stats.interceptions * 6
-        + p.stats.rushTDs * 4 + p.stats.rushYards * 0.02
-        + winBonus * 1.2; // QBs get extra win credit (they drive wins)
-    }
-    if (p.position === 'RB')
-      return p.stats.rushYards * 0.06 + p.stats.rushTDs * 6 + p.stats.receivingYards * 0.02 + winBonus;
-    if (p.position === 'TE')
-      return p.stats.receivingYards * 0.08 + p.stats.receivingTDs * 8 + winBonus;
-    // WR
-    return p.stats.receivingYards * 0.06 + p.stats.receivingTDs * 6 + winBonus;
-  };
-  if (mvpCandidates.length > 0) {
-    const mvp = mvpCandidates.sort((a, b) => mvpScore(b) - mvpScore(a))[0];
-    awards.push({ award: 'MVP', playerId: mvp.id, teamId: mvp.teamId! });
-  }
-
-  // DPOY — weighted defensive stats, edge rushers and playmakers favored
-  const defensivePlayers = withGames(['DL', 'LB', 'CB', 'S']);
-  if (defensivePlayers.length > 0) {
-    const dpoyScore = (p: Player) => {
-      const team = state.teams.find(t => t.id === p.teamId);
-      const winBonus = team ? team.record.wins * 3 : 0;
-      return p.stats.tackles * 0.5 + p.stats.sacks * 8 + p.stats.defensiveINTs * 7
-        + (p.stats.tacklesForLoss ?? 0) * 2 + (p.stats.passDeflections ?? 0) * 2
-        + (p.stats.forcedFumbles ?? 0) * 4 + winBonus;
-    };
-    const dpoy = defensivePlayers.sort((a, b) => dpoyScore(b) - dpoyScore(a))[0];
-    awards.push({ award: 'Defensive POY', playerId: dpoy.id, teamId: dpoy.teamId! });
-  }
-
-  // OPOY — yards + TDs based, QBs must be 20% better to win (since they accumulate way more yards)
-  const opoyCandidates = withGames(['QB', 'RB', 'WR', 'TE']);
-  if (opoyCandidates.length > 0) {
-    const opoyScore = (p: Player) => {
-      const yards = p.stats.passYards + p.stats.rushYards + p.stats.receivingYards;
-      const tds = p.stats.passTDs + p.stats.rushTDs + p.stats.receivingTDs;
-      return yards + tds * 30; // 30 bonus pts per TD
-    };
-    const sorted = opoyCandidates.sort((a, b) => opoyScore(b) - opoyScore(a));
-    const top = sorted[0];
-    const second = sorted[1];
-    // QBs must outscore the next candidate by 20% to win OPOY
-    if (top.position === 'QB' && second && opoyScore(top) < opoyScore(second) * 1.20) {
-      // QB didn't clear the 20% threshold — give it to the best non-QB
-      const nonQB = sorted.find(p => p.position !== 'QB');
-      if (nonQB) {
-        awards.push({ award: 'Offensive POY', playerId: nonQB.id, teamId: nonQB.teamId! });
-      } else {
-        awards.push({ award: 'Offensive POY', playerId: top.id, teamId: top.teamId! });
-      }
-    } else {
-      awards.push({ award: 'Offensive POY', playerId: top.id, teamId: top.teamId! });
-    }
-  }
-
-  const rookies = rookieEligible.filter(p => p.experience === 1 && p.stats.gamesPlayed >= 10);
-  const offensiveRookies = rookies.filter(p => ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position));
-  if (offensiveRookies.length > 0) {
-    const oroy = offensiveRookies.sort((a, b) => allLeagueScore(b) - allLeagueScore(a))[0];
-    awards.push({ award: 'Offensive ROY', playerId: oroy.id, teamId: oroy.teamId! });
-  }
-  const defensiveRookies = rookies.filter(p => ['DL', 'LB', 'CB', 'S'].includes(p.position));
-  if (defensiveRookies.length > 0) {
-    const droy = defensiveRookies.sort((a, b) => allLeagueScore(b) - allLeagueScore(a))[0];
-    awards.push({ award: 'Defensive ROY', playerId: droy.id, teamId: droy.teamId! });
-  }
-
-  return awards;
-}
+// Award scoring + season-end winner determination + in-season race tracker
+// all live in src/lib/engine/awards.ts (305mike 4/27 — needed exports for the
+// Award Race page). This block intentionally re-exports so older imports
+// resolve unchanged.
+import { computeSeasonAwards as computeSeasonAwardsImpl, allLeagueScore as allLeagueScoreImpl } from './awards';
+function computeSeasonAwards(state: LeagueState) { return computeSeasonAwardsImpl(state); }
 
 // ---------------------------------------------------------------------------
 // All-League / All-Rookie team selection
@@ -1604,44 +1516,9 @@ const ALL_LEAGUE_SLOTS: { position: Position; count: number }[] = [
   { position: 'P', count: 1 },
 ];
 
-/** Performance score: 80% season stats (totals, not per-game), 20% OVR.
- *  A player who plays 17 games with big numbers should beat a higher-OVR
- *  player who missed time or underperformed. Total stats reward availability. */
-function allLeagueScore(p: Player): number {
-  const s = p.stats;
-  let statPts = 0;
-  switch (p.position) {
-    case 'QB':
-      statPts = s.passTDs * 6 + s.passYards / 20 - s.interceptions * 8 + s.rushTDs * 6 + s.rushYards / 25;
-      break;
-    case 'RB':
-      statPts = s.rushYards / 8 + s.rushTDs * 8 + s.receptions * 1.0 + s.receivingYards / 15 + s.receivingTDs * 6;
-      break;
-    case 'WR':
-    case 'TE':
-      statPts = s.receptions * 1.5 + s.receivingYards / 8 + s.receivingTDs * 8;
-      break;
-    case 'DL':
-    case 'LB':
-      statPts = s.tackles * 1.5 + s.sacks * 6 + s.defensiveINTs * 10 + s.forcedFumbles * 5;
-      break;
-    case 'CB':
-    case 'S':
-      statPts = s.tackles * 1.2 + s.defensiveINTs * 10 + s.passDeflections * 4 + s.forcedFumbles * 5;
-      break;
-    case 'K':
-      statPts = s.fieldGoalsMade * 4 + (s.fieldGoalsMade / Math.max(1, s.fieldGoalAttempts)) * 25;
-      break;
-    case 'P':
-      statPts = p.ratings.overall * 0.6 + s.gamesPlayed * 2;
-      break;
-    default: // OL — no box score stats, so score conservatively to avoid dominating OROY
-      statPts = (p.ratings.overall - 55) * 0.25 + s.gamesPlayed * 0.5 + (s.sacksAllowed != null ? Math.max(0, 20 - s.sacksAllowed) * 0.5 : 0);
-      break;
-  }
-  // 80% stats, 20% OVR
-  return p.ratings.overall * 0.2 + statPts * 0.8;
-}
+// allLeagueScore moved to src/lib/engine/awards.ts; re-export shim retained
+// so computeAllLeagueTeams below keeps its existing call site.
+const allLeagueScore = allLeagueScoreImpl;
 
 export function computeAllLeagueTeams(state: LeagueState): {
   first: { position: Position; playerId: string; teamId: string }[];
