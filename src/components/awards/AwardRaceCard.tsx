@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { AwardWinnerBadge } from './AwardWinnerBadge';
 import type { AwardRaceEntry, CoachAwardRaceEntry } from '@/lib/engine/awards';
 import type { Team, Player, Coach } from '@/types';
@@ -59,11 +60,12 @@ export function AwardRaceCard({ emoji, title, subtitle, entries, teams, players,
           let label = '';
           let positionLabel = '';
           let href: string | null = null;
+          let player: Player | undefined;
           if (isPlayer) {
-            const p = players.find(pl => pl.id === e.playerId);
-            label = p ? `${p.firstName} ${p.lastName}` : 'Unknown';
+            player = players.find(pl => pl.id === e.playerId);
+            label = player ? `${player.firstName} ${player.lastName}` : 'Unknown';
             positionLabel = e.position;
-            href = p ? `/player/${p.id}` : null;
+            href = player ? `/player/${player.id}` : null;
           } else {
             const ce = e as CoachAwardRaceEntry;
             const coach: Coach | undefined = team?.coaches?.find(c => c.id === ce.coachId);
@@ -79,9 +81,11 @@ export function AwardRaceCard({ emoji, title, subtitle, entries, teams, players,
               <div className="w-5 shrink-0 text-xs font-bold text-[var(--text-sec)] tabular-nums text-right">
                 {i + 1}
               </div>
-              {team && (
-                <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="sm" />
-              )}
+              {isPlayer && player ? (
+                <PlayerAvatar player={player} size="md" teamColor={team?.primaryColor ?? '#374151'} />
+              ) : team ? (
+                <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="md" />
+              ) : null}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 min-w-0">
                   {href ? (
