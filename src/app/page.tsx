@@ -1018,8 +1018,8 @@ function Dashboard() {
           </div>
         )}
 
-        {/* Achievements row */}
-        {ALL_ACHIEVEMENTS.length > 0 && (() => {
+        {/* Achievements row — hidden in spectator (achievements are user-team only) */}
+        {!isSpectator && ALL_ACHIEVEMENTS.length > 0 && (() => {
           const achievementEmojiMap: Record<string, string> = {
             'Champion': '🏆', 'Dynasty Builder': '👑', 'Perfect Season': '💎',
             'Cap Wizard': '🧙', 'Rebuilder': '🔨', 'Stat Stacker': '📊',
@@ -1054,8 +1054,9 @@ function Dashboard() {
           );
         })()}
 
-        {/* Next Game: Watch Live + Injury Report */}
-        {(() => {
+        {/* Next Game + Injury Report — both user-team only. Spectator
+            leagues skip; watch-live for any game is reachable via /standings. */}
+        {!isSpectator && (() => {
           let nextGame = phase === 'regular'
             ? schedule.find(g => g.week === week && !g.played && (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId))
             : null;
@@ -1115,7 +1116,11 @@ function Dashboard() {
           ) : null;
         })()}
 
-        {/* Row 1: Standings, Finances, Team Stats */}
+        {/* Row 1: Standings, Finances, Team Stats — all framed around the
+            user's team (filtered to their conference, their cap, their stats).
+            Spectator leagues route the user to /standings for the
+            unfiltered league view. */}
+        {!isSpectator && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Conference standings with GB */}
           <Card>
@@ -1227,6 +1232,7 @@ function Dashboard() {
             })()}
           </Card>
         </div>
+        )}
 
         {/* Row 2: League Leaders, Team Leaders, News */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1271,7 +1277,8 @@ function Dashboard() {
             )}
           </Card>
 
-          {/* Team Leaders */}
+          {/* Team Leaders — user-team only; spectator skips */}
+          {!isSpectator && (
           <Card>
             <CardHeader><CardTitle>Team Leaders</CardTitle></CardHeader>
             {gamesPlayed === 0 ? (
@@ -1309,6 +1316,7 @@ function Dashboard() {
             </div>
             )}
           </Card>
+          )}
 
           {/* News */}
           <Card>
@@ -1360,19 +1368,23 @@ function Dashboard() {
           </Card>
         </div>
 
-        {/* Team Spotlight */}
-        <div ref={spotlightRef}>
-          <TeamSpotlightSection
-            team={userTeam}
-            roster={roster}
-            allTeams={teams}
-            allPlayers={players}
-            season={season}
-            week={week}
-            ctx={{ phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay }}
-            onPlayerClick={setSelectedPlayerId}
-          />
-        </div>
+        {/* Team Spotlight — generates dialogue framed around the user's
+            team. Spectator leagues skip; the news feed already covers
+            league-wide narrative. */}
+        {!isSpectator && (
+          <div ref={spotlightRef}>
+            <TeamSpotlightSection
+              team={userTeam}
+              roster={roster}
+              allTeams={teams}
+              allPlayers={players}
+              season={season}
+              week={week}
+              ctx={{ phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay }}
+              onPlayerClick={setSelectedPlayerId}
+            />
+          </div>
+        )}
       </div>
 
 
