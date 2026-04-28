@@ -22,7 +22,7 @@ import { developPlayers, POSITION_AGING } from './development';
 import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor, maxReasonableAAV } from './salary';
-import { generateCoachingStaff, generateCoach, generatePositionCoaches, backfillCoachHistory, coachingBonus, progressCoaches, processCoachingCarousel, positionCoachDevMultiplier, rollOwnerPersonality } from './coaching';
+import { generateCoachingStaff, generateCoach, generatePositionCoaches, backfillCoachHistory, coachingBonus, progressCoaches, processCoachingCarousel, positionCoachDevMultiplier, rollOwnerPersonality, coachDeadCapOnFire } from './coaching';
 import { computeLeagueQBTiers, getQBTierModifier } from './qbTierPyramid';
 import { generateSeasonObjectives, evaluateObjectives } from './objectives';
 import { defaultApproval, updateApprovalAfterGame, updateApprovalEndOfSeason, updateApprovalForMove } from './approval';
@@ -34,7 +34,7 @@ import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from './simTelemetry';
 
-const SAVE_VERSION = 31;
+const SAVE_VERSION = 32;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
@@ -7464,21 +7464,39 @@ export const useGameStore = create<GameStore>()(
       replaceCoach: (role: import('@/types').CoachRole, specificCoach?: import('@/types').Coach) => {
         const state = get();
         const newCoach = specificCoach ?? generateCoach(role);
+        const oldCoach = state.teams.find(t => t.id === state.userTeamId)?.coaches?.find(c => c.role === role);
+        // Tyler 4/27: firing a coach mid-contract creates a coaching dead-cap
+        // hit equal to their remaining guaranteed money. Sits on team.deadCap
+        // with isCoaching=true so it eats the ownership budget instead of the
+        // salary cap.
+        const deadHit = oldCoach ? coachDeadCapOnFire(oldCoach) : 0;
         const updatedTeams = state.teams.map(t => {
           if (t.id !== state.userTeamId) return t;
           const coaches = (t.coaches ?? []).map(c => c.role === role ? newCoach : c);
-          // If role didn't exist, add it
           if (!coaches.some(c => c.role === role)) coaches.push(newCoach);
-          return { ...t, coaches };
+          let nextDeadCap = t.deadCap ?? [];
+          if (oldCoach && deadHit > 0) {
+            nextDeadCap = [...nextDeadCap, {
+              playerName: `${oldCoach.firstName} ${oldCoach.lastName} (${oldCoach.role})`,
+              amount: deadHit,
+              yearsLeft: Math.max(1, oldCoach.contractYears ?? 1),
+              source: 'coach-fire',
+              season: state.season,
+              isCoaching: true,
+            }];
+          }
+          return { ...t, coaches, deadCap: nextDeadCap };
         });
-        const oldCoach = state.teams.find(t => t.id === state.userTeamId)?.coaches?.find(c => c.role === role);
         const roleLabel = role === 'HC' ? 'Head Coach' : role === 'OC' ? 'Offensive Coordinator' : 'Defensive Coordinator';
+        const newsExtras = oldCoach && deadHit > 0
+          ? ` ${oldCoach.firstName} ${oldCoach.lastName}'s buyout: $${deadHit}M coaching dead cap.`
+          : '';
         set({
           teams: updatedTeams,
           newsItems: [...state.newsItems, makeNews({
             season: state.season, week: state.week, type: 'signing',
             teamId: state.userTeamId,
-            headline: `${roleLabel} change: ${oldCoach ? `${oldCoach.firstName} ${oldCoach.lastName} fired` : 'Vacancy filled'}. ${newCoach.firstName} ${newCoach.lastName} hired.`,
+            headline: `${roleLabel} change: ${oldCoach ? `${oldCoach.firstName} ${oldCoach.lastName} fired` : 'Vacancy filled'}. ${newCoach.firstName} ${newCoach.lastName} hired.${newsExtras}`,
             isUserTeam: true,
           })],
         });
@@ -9374,6 +9392,24 @@ export const useGameStore = create<GameStore>()(
           // Default isSpectator to false for any pre-spectator-mode save.
           if ((state as Record<string, unknown>).isSpectator === undefined) {
             (state as Record<string, unknown>).isSpectator = false;
+          }
+        }
+        if (version < 32) {
+          // Backfill coach.guaranteed for every coach on every team. Existing
+          // coaches generated before the contract-economics change have only
+          // salary + contractYears; without guaranteed, coachDeadCapOnFire
+          // falls back to ~60% of remaining contract value, but it's cleaner
+          // to materialize the field so the Finances card reads cleanly.
+          const teams32 = ((state as Record<string, unknown>).teams ?? []) as Array<Record<string, unknown>>;
+          for (const t of teams32) {
+            const coaches = (t.coaches ?? []) as Array<Record<string, unknown>>;
+            for (const c of coaches) {
+              if (c.guaranteed === undefined) {
+                const sal = (c.salary as number) ?? 0;
+                const yrs = (c.contractYears as number) ?? 1;
+                c.guaranteed = Math.round(sal * yrs * 0.6 * 10) / 10;
+              }
+            }
           }
         }
         if (version < 30) {

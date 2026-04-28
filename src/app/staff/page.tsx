@@ -375,6 +375,9 @@ export default function StaffPage() {
                               {c.offensiveScheme && <div>Offense: <span className="font-medium text-[var(--text)]">{OFFENSIVE_SCHEME_LABELS[c.offensiveScheme]}</span></div>}
                               {c.defensiveScheme && <div>Defense: <span className="font-medium text-[var(--text)]">{DEFENSIVE_SCHEME_LABELS[c.defensiveScheme]}</span></div>}
                               <div className="text-[10px]">{c.careerWins}-{c.careerLosses} career</div>
+                              <div className="text-[10px] text-amber-700 font-semibold mt-1 pt-1 border-t border-[var(--border)]">
+                                ${(c.salary ?? 0).toFixed(1)}M/yr · {c.contractYears ?? 0}yr · ${(c.guaranteed ?? 0).toFixed(1)}M guar
+                              </div>
                             </div>
                           </button>
                           );

@@ -534,9 +534,11 @@ export interface DeadCapEntry {
   amount: number;
   yearsLeft: number;
   /** Source of the dead cap charge */
-  source?: 'release' | 'trade' | 'void' | 'extension';
+  source?: 'release' | 'trade' | 'void' | 'extension' | 'coach-fire';
   /** Season the dead cap was created */
   season?: number;
+  /** True when the entry sits on the coaching budget instead of the salary cap. */
+  isCoaching?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -590,6 +592,10 @@ export interface Coach {
   specialties?: string[];
   contractYears?: number;
   salary?: number;
+  /** Guaranteed money owed if the coach is fired before contract expires.
+   *  Drives dead-cap math on the coaching budget. Defaults to ~60% of
+   *  total remaining contract value when generated. */
+  guaranteed?: number;
 }
 
 export interface OwnerObjective {

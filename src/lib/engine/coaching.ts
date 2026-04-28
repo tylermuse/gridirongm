@@ -133,7 +133,23 @@ export function generateCoach(role: CoachRole): Coach {
     specialties,
     contractYears,
     salary,
+    // Guaranteed = ~60% of remaining contract value (NFL coach norm).
+    // Drives dead-cap math when the coach is fired before contract end.
+    guaranteed: Math.round(salary * contractYears * 0.6 * 10) / 10,
   };
+}
+
+/**
+ * Compute the dead-cap hit if a coach were fired right now: the remaining
+ * guaranteed money owed for their unfilled contract years. Returns a flat
+ * total (NFL coaching contracts typically pay this out as a lump sum).
+ */
+export function coachDeadCapOnFire(coach: Coach): number {
+  const yearsLeft = Math.max(0, coach.contractYears ?? 0);
+  const guaranteed = coach.guaranteed ?? 0;
+  if (guaranteed > 0) return Math.round(guaranteed * 10) / 10;
+  // Fallback for legacy coaches without an explicit guaranteed field.
+  return Math.round((coach.salary ?? 0) * yearsLeft * 0.6 * 10) / 10;
 }
 
 export function generateCoachingStaff(): Coach[] {

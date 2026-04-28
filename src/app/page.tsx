@@ -843,7 +843,10 @@ function Dashboard() {
   const gameDayRevenue = gamesPlayed * (3.5 + userTeam.record.wins * 0.15); // Tickets, concessions, parking
   const merchAndSponsors = 40 + userTeam.record.wins * 1.5; // Merch, naming rights, sponsors
   const totalRevenue = Math.round((nationalTV + localRevenue + gameDayRevenue + merchAndSponsors) * 10) / 10;
-  const expenses = Math.round(userTeam.totalPayroll * 10) / 10;
+  const playerPayroll = Math.round(userTeam.totalPayroll * 10) / 10;
+  const coachingPayroll = Math.round((userTeam.coaches ?? []).reduce((s, c) => s + (c.salary ?? 0), 0) * 10) / 10;
+  const coachingDeadCap = Math.round((userTeam.deadCap ?? []).filter(d => d.isCoaching).reduce((s, d) => s + d.amount, 0) * 10) / 10;
+  const expenses = Math.round((playerPayroll + coachingPayroll + coachingDeadCap) * 10) / 10;
   const profit = Math.round((totalRevenue - expenses) * 10) / 10;
 
   // Recent news (latest 5 items)
@@ -1163,16 +1166,18 @@ function Dashboard() {
             <CardHeader><CardTitle>Finances</CardTitle></CardHeader>
             {(() => {
               const capSpace = Math.round((userTeam.salaryCap - userTeam.totalPayroll) * 10) / 10;
-              const deadCapTotal = (userTeam.deadCap ?? []).reduce((sum: number, dc: { amount: number }) => sum + dc.amount, 0);
+              const playerDeadCap = Math.round((userTeam.deadCap ?? []).filter(d => !d.isCoaching).reduce((s, d) => s + d.amount, 0) * 10) / 10;
               return (
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between"><span className="text-[var(--text-sec)]">Revenue</span><span className="font-bold text-green-600">${totalRevenue}M</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Payroll</span><span className="font-bold">${expenses}M</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Player Payroll</span><span className="font-bold">${playerPayroll}M</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Coaching Payroll</span><span className="font-bold">${coachingPayroll}M{coachingDeadCap > 0 ? ` + $${coachingDeadCap}M dead` : ''}</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Total Expenses</span><span className="font-bold">${expenses}M</span></div>
                   <div className="flex justify-between"><span className="text-[var(--text-sec)]">Profit</span><span className={`font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{profit >= 0 ? '+' : ''}${profit}M</span></div>
                   <div className="border-t border-[var(--border)] my-1" />
                   <div className="flex justify-between"><span className="text-[var(--text-sec)]">Salary Cap</span><span className="font-bold">${userTeam.salaryCap}M</span></div>
                   <div className="flex justify-between"><span className="text-[var(--text-sec)]">Cap Space</span><span className={`font-bold ${capSpace < 10 ? 'text-red-600' : 'text-green-600'}`}>${capSpace}M</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Dead Cap</span><span className="font-bold text-amber-600">${Math.round(deadCapTotal * 10) / 10}M</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-sec)]">Player Dead Cap</span><span className="font-bold text-amber-600">${playerDeadCap}M</span></div>
                   <div className="flex justify-between"><span className="text-[var(--text-sec)]">Roster</span><span className="font-bold">{roster.length} / 53</span></div>
                 </div>
               );
