@@ -3642,7 +3642,21 @@ export const useGameStore = create<GameStore>()(
           if (t.id !== state.userTeamId) return t;
           const approval = t.approval ?? defaultApproval();
           const evaluated = evaluateObjectives(approval.objectives, t, userPR, playersAfterRetirement, state.season);
-          const updated = updateApprovalEndOfSeason({ ...approval, objectives: evaluated }, userPR, evaluated);
+          // Compute season profit so the owner reacts to financial mismanagement
+          // (Tyler 4/27). Same revenue/expense model as the Finances cards.
+          const gp = t.record.wins + t.record.losses;
+          const seasonsP = state.champions.length;
+          const tvRev = 330 + seasonsP * 8;
+          const localRev = 80 + t.record.wins * 3;
+          const gameDayRev = gp * (3.5 + t.record.wins * 0.15);
+          const merchRev = 40 + t.record.wins * 1.5;
+          const revenue = tvRev + localRev + gameDayRev + merchRev;
+          const coachPay = (t.coaches ?? []).reduce((s, c) => s + (c.salary ?? 0), 0);
+          const coachDeadCap = (t.deadCap ?? []).filter(d => d.isCoaching).reduce((s, d) => s + d.amount, 0);
+          const luxTax = computeLuxuryTax(t.totalPayroll, t.salaryCap);
+          const expenses = t.totalPayroll + coachPay + coachDeadCap + luxTax;
+          const seasonProfit = Math.round((revenue - expenses) * 10) / 10;
+          const updated = updateApprovalEndOfSeason({ ...approval, objectives: evaluated }, userPR, evaluated, seasonProfit);
           // Generate new objectives for next season
           updated.objectives = generateSeasonObjectives(t, playersAfterRetirement, state.season + 1, userPR);
           // Warning news

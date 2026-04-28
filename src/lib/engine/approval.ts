@@ -50,12 +50,16 @@ export function updateApprovalAfterGame(
 }
 
 /**
- * Update approval at end of season based on objectives and playoff result.
+ * Update approval at end of season based on objectives, playoff result,
+ * and franchise profit (Tyler 4/27: bad financial management should also
+ * cost approval). Profit is in millions; pass undefined to skip the
+ * financial check (back-compat with older save migration paths).
  */
 export function updateApprovalEndOfSeason(
   approval: ApprovalState,
   playoffResult: string,
   evaluatedObjectives: OwnerObjective[],
+  profit?: number,
 ): ApprovalState {
   let { fanApproval, ownerApproval, tenureSeasons, warningIssued } = approval;
 
@@ -90,6 +94,18 @@ export function updateApprovalEndOfSeason(
       ownerApproval -= 5;
       fanApproval -= 5;
       break;
+  }
+
+  // Financial impact — winning still trumps finances (max swing here is
+  // smaller than the championship/playoff bonuses), but a money-losing
+  // franchise erodes owner trust season over season. Catastrophic deficits
+  // can push a struggling-record GM over the firing threshold faster.
+  if (typeof profit === 'number') {
+    if (profit > 50) ownerApproval += 3;          // healthy profit, owner pleased
+    else if (profit < -150) ownerApproval -= 20;  // disaster — Urban Meyer-grade buyout damage
+    else if (profit < -75) ownerApproval -= 10;
+    else if (profit < -25) ownerApproval -= 5;
+    // Profit between -$25M and +$50M is neutral.
   }
 
   // Regress toward 50 by 10%
