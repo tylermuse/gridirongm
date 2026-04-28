@@ -99,16 +99,11 @@ export function AwardRaceCard({ emoji, title, subtitle, entries, teams, players,
                   <span className="text-[10px] text-[var(--text-sec)] shrink-0">{positionLabel}</span>
                   {team && <span className="text-[10px] text-[var(--text-sec)] shrink-0 hidden sm:inline">{team.abbreviation}</span>}
                 </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <div className="flex-1 h-1.5 bg-[var(--surface-2)] rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${i === 0 ? 'bg-amber-500' : 'bg-blue-500/60'}`}
-                      style={{ width: `${barPct}%` }}
-                    />
-                  </div>
-                  <div className="text-[10px] text-[var(--text-sec)] tabular-nums shrink-0 w-10 text-right">
-                    {Math.round(e.score)}
-                  </div>
+                <div className="mt-0.5 h-1.5 bg-[var(--surface-2)] rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${i === 0 ? 'bg-amber-500' : 'bg-blue-500/60'}`}
+                    style={{ width: `${barPct}%` }}
+                  />
                 </div>
                 <div className="text-[10px] text-[var(--text-sec)] truncate mt-0.5">
                   {e.keyStatLine}
