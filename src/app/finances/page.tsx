@@ -20,7 +20,7 @@ function ratingColor(val: number) {
 }
 
 export default function FinancesPage() {
-  const { teams, players, userTeamId, releasePlayer } = useGameStore();
+  const { teams, players, userTeamId, releasePlayer, champions } = useGameStore();
   const userTeam = teams.find(t => t.id === userTeamId);
   const [confirmRelease, setConfirmRelease] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -47,6 +47,22 @@ export default function FinancesPage() {
   const coaches = userTeam.coaches ?? [];
   const staffSpend = coaches.reduce((sum, c) => sum + (c.salary ?? 0), 0);
   const coachCount = coaches.length;
+
+  // Finances summary — same model as the Dashboard Finances card so the
+  // revenue/expenses/profit numbers agree across surfaces.
+  const gamesPlayed = userTeam.record.wins + userTeam.record.losses;
+  const seasonsPlayed = champions.length;
+  const nationalTV = 330 + seasonsPlayed * 8;
+  const localRevenue = 80 + userTeam.record.wins * 3;
+  const gameDayRevenue = gamesPlayed * (3.5 + userTeam.record.wins * 0.15);
+  const merchAndSponsors = 40 + userTeam.record.wins * 1.5;
+  const totalRevenue = Math.round((nationalTV + localRevenue + gameDayRevenue + merchAndSponsors) * 10) / 10;
+  const playerPayroll = Math.round(used * 10) / 10;
+  const coachingPayroll = Math.round(staffSpend * 10) / 10;
+  const coachingDeadCap = Math.round((userTeam.deadCap ?? []).filter(d => d.isCoaching).reduce((s, d) => s + d.amount, 0) * 10) / 10;
+  const playerDeadCapTotal = Math.round((userTeam.deadCap ?? []).filter(d => !d.isCoaching).reduce((s, d) => s + d.amount, 0) * 10) / 10;
+  const totalExpenses = Math.round((playerPayroll + coachingPayroll + coachingDeadCap) * 10) / 10;
+  const profit = Math.round((totalRevenue - totalExpenses) * 10) / 10;
 
   // Salary by position
   const salaryByPosition = POSITIONS.reduce<Record<Position, number>>((acc, pos) => {
@@ -79,6 +95,24 @@ export default function FinancesPage() {
       <div className="max-w-5xl mx-auto space-y-6">
         <TeamQuickNav currentPage="finances" />
         <h2 className="text-2xl font-black mb-6">Finances & Cap Management</h2>
+
+        {/* Top-line P&L — matches the Dashboard Finances card so users see
+            the same rollup whether they land here or on the home screen. */}
+        <Card>
+          <CardHeader><CardTitle>Finances</CardTitle></CardHeader>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-[var(--text-sec)]">Revenue</span><span className="font-bold text-green-600">${totalRevenue}M</span></div>
+            <div className="flex justify-between"><span className="text-[var(--text-sec)]">Player Payroll</span><span className="font-bold">${playerPayroll}M</span></div>
+            <div className="flex justify-between"><span className="text-[var(--text-sec)]">Coaching Payroll</span><span className="font-bold">${coachingPayroll}M{coachingDeadCap > 0 ? ` + $${coachingDeadCap}M dead` : ''}</span></div>
+            <div className="flex justify-between"><span className="text-[var(--text-sec)]">Total Expenses</span><span className="font-bold">${totalExpenses}M</span></div>
+            <div className="flex justify-between"><span className="text-[var(--text-sec)]">Profit</span><span className={`font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{profit >= 0 ? '+' : ''}${profit}M</span></div>
+            <div className="border-t border-[var(--border)] my-1" />
+            <div className="flex justify-between"><span className="text-[var(--text-sec)]">Salary Cap</span><span className="font-bold">${cap}M</span></div>
+            <div className="flex justify-between"><span className="text-[var(--text-sec)]">Cap Space</span><span className={`font-bold ${remaining < 10 ? 'text-red-600' : 'text-green-600'}`}>${Math.round(remaining * 10) / 10}M</span></div>
+            <div className="flex justify-between"><span className="text-[var(--text-sec)]">Player Dead Cap</span><span className="font-bold text-amber-600">${playerDeadCapTotal}M</span></div>
+            <div className="flex justify-between"><span className="text-[var(--text-sec)]">Roster</span><span className="font-bold">{roster.length} / 53</span></div>
+          </div>
+        </Card>
 
         {/* Cap summary */}
         <Card>
