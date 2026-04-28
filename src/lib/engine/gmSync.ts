@@ -23,10 +23,17 @@ export interface GmSyncPayload {
 }
 
 /** Build a sync payload from the current league state.
- *  Returns null when God Mode is enabled — God Mode play does NOT count
- *  toward the GM leaderboard or season awards. */
+ *  Returns null when God Mode is enabled OR has ever been enabled in this
+ *  save — God Mode play does NOT count toward the GM leaderboard or
+ *  season awards. The durable godModeUsed flag closes the loophole where
+ *  someone could enable God Mode briefly, edit ratings to be invincible,
+ *  flip God Mode off, and then sync clean wins (Tyler 4/27 — investigating
+ *  a talionrayon 170-0 record on the All-Time Leaderboard).
+ *  Spectator mode is also excluded. */
 export function buildGmSyncPayload(state: LeagueState): GmSyncPayload | null {
   if (state.leagueSettings?.godMode) return null;
+  if (state.leagueSettings?.godModeUsed) return null;
+  if (state.isSpectator) return null;
   const userTeam = state.teams.find(t => t.id === state.userTeamId);
   if (!userTeam) return null;
 

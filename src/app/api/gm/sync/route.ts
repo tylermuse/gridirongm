@@ -52,6 +52,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    // Sanity bounds — a regular season has 17 games per team. Reject
+    // impossible wins/losses payloads so a forged client request can't
+    // post a 170-0 single-season record. Tyler 4/27.
+    if (wins < 0 || wins > 17 || losses < 0 || losses > 17 || wins + losses > 17) {
+      return NextResponse.json({ error: 'Invalid wins/losses for a single season' }, { status: 400 });
+    }
+    if (typeof draftScore === 'number' && (!Number.isFinite(draftScore) || draftScore < -1000 || draftScore > 1000)) {
+      return NextResponse.json({ error: 'Invalid draftScore' }, { status: 400 });
+    }
+
     // Verify auth
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
