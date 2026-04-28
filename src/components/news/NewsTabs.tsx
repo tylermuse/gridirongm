@@ -4,15 +4,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const TABS = [
-  { href: '/power-rankings', label: 'Power Rankings', icon: '💪' },
-  { href: '/awards', label: 'Award Race', icon: '🎖️' },
-  { href: '/gm-rankings', label: 'GM Rankings', icon: '🏅' },
+  { href: '/news', label: 'News', icon: '📰' },
+  { href: '/recap', label: 'Recap', icon: '🎙️' },
 ] as const;
 
-/** Shared tab bar at the top of /power-rankings and /awards. Lets users
- *  flip between team-strength and player-award views without going back
- *  through the sidebar. (Tyler 4/27 PM consolidation.) */
-export function RankingsTabs() {
+/** Shared tab bar at the top of /news and /recap. Lets users flip between
+ *  the league news feed and the weekly recap without going back through
+ *  the sidebar. */
+export function NewsTabs() {
   const pathname = usePathname();
   return (
     <div className="flex bg-[var(--surface-2)] rounded-lg p-0.5 mb-4 w-fit">

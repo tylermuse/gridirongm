@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useGameStore } from '@/lib/engine/store';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
+import { NewsTabs } from '@/components/news/NewsTabs';
 import { generateDebateTranscript, COMMENTATORS } from '@/lib/engine/debate';
 import type { DebateTopic } from '@/lib/engine/debate';
 import { generateWeeklyRecap } from '@/lib/engine/recap';
@@ -250,6 +251,7 @@ export default function RecapPage() {
   return (
     <GameShell>
       <div className="max-w-4xl mx-auto">
+        <NewsTabs />
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { GameShell } from '@/components/game/GameShell';
+import { RankingsTabs } from '@/components/awards/RankingsTabs';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { careerScoreToGrade } from '@/lib/engine/draftScore';
@@ -84,6 +85,7 @@ export default function GmRankingsPage() {
   return (
     <GameShell>
       <div className="max-w-5xl mx-auto space-y-4">
+        <RankingsTabs />
         <div>
           <h2 className="text-2xl font-black">🏆 GM Rankings</h2>
           <p className="text-sm text-[var(--text-sec)] mt-1">

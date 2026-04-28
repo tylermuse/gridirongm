@@ -6,6 +6,7 @@ import { PlayerModal } from '@/components/game/PlayerModal';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import type { Player } from '@/types';
 import { GameShell } from '@/components/game/GameShell';
+import { NewsTabs } from '@/components/news/NewsTabs';
 import { Badge } from '@/components/ui/Badge';
 import type { SocialPost } from '@/types';
 
@@ -93,6 +94,7 @@ export default function NewsPage() {
   return (
     <GameShell>
       <div className="max-w-3xl mx-auto">
+        <NewsTabs />
         <h2 className="text-2xl font-black mb-6">League News</h2>
 
         {/* Filter tabs */}
