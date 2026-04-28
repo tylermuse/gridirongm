@@ -8,7 +8,7 @@ import type {
   LeagueState, Team, Player, GameResult, PlayerStats, PlayerRatings,
   NewsItem, TradeProposal, ResigningEntry, DraftPick, LeagueSettings,
   HoldoutEntry, TradeRumor, Rivalry, RivalryEvent,
-  ExpansionTeamConfig, SocialPost, ImportedProspect,
+  ExpansionTeamConfig, SocialPost, ImportedProspect, ApprovalState,
 } from '@/types';
 import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, assignOlSlots, assignJerseyNumber, reconcileJerseys, isPracticeSquadEligible, PRACTICE_SQUAD_LIMIT, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
@@ -3760,6 +3760,7 @@ export const useGameStore = create<GameStore>()(
           if (divGames.some(m => m.homeTeamId === state.userTeamId || m.awayTeamId === state.userTeamId)) return 'divisional';
           return 'wildcard';
         })();
+        let postUpdateFiredApproval: ApprovalState | null = null;
         const finalTeams = recalcTeams.map(t => {
           if (t.id !== state.userTeamId) return t;
           const approval = t.approval ?? defaultApproval();
@@ -3775,8 +3776,33 @@ export const useGameStore = create<GameStore>()(
               isUserTeam: true,
             }));
           }
+          // Capture the post-update approval so we can trigger firing in
+          // the SAME season the threshold is crossed (vampkiller 4/27 PM:
+          // "I don't get fired even when on the hot seat" — was triggering
+          // one season late because the early-return check at the top of
+          // this action read pre-update approval).
+          if (updated.ownerApproval <= 0) postUpdateFiredApproval = updated;
           return { ...t, approval: updated };
         });
+
+        if (postUpdateFiredApproval) {
+          set({
+            firedState: {
+              fired: true,
+              season: state.season,
+              reason: 'Owner lost patience after repeated underperformance.',
+            },
+            teams: finalTeams,
+            players: playersAfterRetirement,
+            newsItems: [...state.newsItems, ...retirementNews, ...holdoutNews, ...approvalNews, makeNews({
+              season: state.season, week: 99, type: 'system',
+              headline: `${state.teams.find(t => t.id === state.userTeamId)?.city ?? 'The franchise'} ownership has fired the GM after a disastrous season. Your time is up.`,
+              isUserTeam: true,
+            })],
+            seasonHistory: updatedSeasonHistory,
+          });
+          return;
+        }
 
         set({
           phase: 'resigning',
