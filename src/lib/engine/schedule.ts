@@ -35,6 +35,7 @@ export function generateSchedule(teams: Team[], season: number): GameResult[] {
 interface Matchup {
   homeTeamId: string;
   awayTeamId: string;
+  isDivision?: boolean;
 }
 
 function tryGenerateNFLSchedule(teams: Team[], season: number): GameResult[] | null {
@@ -80,8 +81,8 @@ function tryGenerateNFLSchedule(teams: Team[], season: number): GameResult[] | n
       // 1. Division games: home-and-away vs each of 3 division rivals (6 games)
       for (let i = 0; i < div.teams.length; i++) {
         for (let j = i + 1; j < div.teams.length; j++) {
-          allMatchups.push({ homeTeamId: div.teams[i].id, awayTeamId: div.teams[j].id });
-          allMatchups.push({ homeTeamId: div.teams[j].id, awayTeamId: div.teams[i].id });
+          allMatchups.push({ homeTeamId: div.teams[i].id, awayTeamId: div.teams[j].id, isDivision: true });
+          allMatchups.push({ homeTeamId: div.teams[j].id, awayTeamId: div.teams[i].id, isDivision: true });
         }
       }
 
@@ -186,14 +187,21 @@ function tryGenerateNFLSchedule(teams: Team[], season: number): GameResult[] | n
     }
   }
 
-  // Deduplicate matchups (division games were added from both sides)
+  // Deduplicate matchups. Non-division pairs get added from both sides
+  // (e.g. div0's rotating-div loop pushes div0↔div3, then di=3's loop also
+  // pushes div3↔div0) — collapse those via reverse-key match. Division
+  // pairs are home-and-away by design (6 division games per team), so they
+  // bypass dedup entirely.
   const uniqueMatchups: Matchup[] = [];
-  const seen = new Set<string>();
+  const seenPair = new Set<string>(); // unordered-pair key for non-division dedup
   for (const m of allMatchups) {
-    const key = `${m.homeTeamId}|${m.awayTeamId}`;
-    const reverseKey = `${m.awayTeamId}|${m.homeTeamId}`;
-    if (!seen.has(key) && !seen.has(reverseKey)) {
-      seen.add(key);
+    if (m.isDivision) {
+      uniqueMatchups.push(m);
+      continue;
+    }
+    const pairKey = [m.homeTeamId, m.awayTeamId].sort().join('|');
+    if (!seenPair.has(pairKey)) {
+      seenPair.add(pairKey);
       uniqueMatchups.push(m);
     }
   }
@@ -312,7 +320,7 @@ function generateScheduleFallback(teams: Team[], season: number): GameResult[] {
         teams.filter((team) => byeWeekByTeamId.get(team.id) !== week),
       );
       const weeklyGames = buildWeekGames(
-        available, week, season, gamesPlayedByTeamId, homeGamesByTeamId, pairCounts,
+        available, week, season, gamesPlayedByTeamId, homeGamesByTeamId, pairCounts, teams,
       );
 
       if (!weeklyGames) { failed = true; break; }
@@ -331,18 +339,41 @@ function generateScheduleFallback(teams: Team[], season: number): GameResult[] {
   throw new Error('Unable to generate schedule after multiple attempts');
 }
 
+function divGamesPlayed(teamId: string, team: Team, allTeams: Team[], pairCounts: Map<string, number>): number {
+  let played = 0;
+  for (const other of allTeams) {
+    if (other.id === teamId) continue;
+    if (other.conference !== team.conference || other.division !== team.division) continue;
+    played += pairCounts.get(makePairKey(teamId, other.id)) ?? 0;
+  }
+  return played;
+}
+
 function buildWeekGames(
   availableTeams: Team[], week: number, season: number,
   gamesPlayedByTeamId: Map<string, number>,
   homeGamesByTeamId: Map<string, number>,
   pairCounts: Map<string, number>,
+  allTeams: Team[],
 ): GameResult[] | null {
   const games: GameResult[] = [];
   const available = [...availableTeams];
+  // Weeks remaining (including this one) determines how aggressive to be
+  // about forcing division-only matchups for teams that still need them.
+  const weeksLeft = 19 - week;
 
   while (available.length > 0) {
     const team = available.pop();
     if (!team) break;
+
+    // wildbadger5 4/27 + milkytoad 4/20: teams were getting 3 division games
+    // instead of 6 because the greedy slotter never enforced the quota.
+    // When the games-left budget is exactly the div-games-still-needed, the
+    // team must play a div opponent this week or the quota becomes unfillable.
+    const teamDivPlayed = divGamesPlayed(team.id, team, allTeams, pairCounts);
+    const teamDivNeeded = Math.max(0, 6 - teamDivPlayed);
+    const teamGamesLeft = 17 - (gamesPlayedByTeamId.get(team.id) ?? 0);
+    const forceDiv = teamDivNeeded > 0 && teamDivNeeded >= teamGamesLeft - 1;
 
     const candidates = available
       .map((candidate, index) => ({ candidate, index }))
@@ -356,10 +387,23 @@ function buildWeekGames(
         if (teamGames >= 17 || candidateGames >= 17) return null;
 
         const sameDivision = team.conference === candidate.conference && team.division === candidate.division;
+
+        // Division pairs MUST play home-and-away (6 games per team).
         let score = 0;
-        if (pairCount === 0) score += 100;
-        if (pairCount === 1) score += 20;
-        if (sameDivision) score += 8;
+        if (sameDivision && pairCount === 0) score += 300;
+        else if (sameDivision && pairCount === 1) score += 250;
+        else if (!sameDivision && pairCount === 0) score += 100;
+        else if (!sameDivision && pairCount === 1) score += 5;
+
+        // Extra urgency: candidate's own div quota also pressures the score.
+        const candidateDivPlayed = divGamesPlayed(candidate.id, candidate, allTeams, pairCounts);
+        const candidateDivNeeded = Math.max(0, 6 - candidateDivPlayed);
+        if (sameDivision) score += teamDivNeeded * 10 + candidateDivNeeded * 10;
+        // Heavy penalty for non-div opponents when team is at div-quota
+        // pressure — they CAN still be picked if no div opponent is
+        // available this week (avoids unschedulable weeks), just last resort.
+        if (forceDiv && !sameDivision) score -= 500;
+        void weeksLeft;
         const teamHome = homeGamesByTeamId.get(team.id) ?? 0;
         const candidateHome = homeGamesByTeamId.get(candidate.id) ?? 0;
         score += Math.max(0, 9 - Math.abs(teamHome - candidateHome));
@@ -370,7 +414,11 @@ function buildWeekGames(
 
     if (candidates.length === 0) return null;
 
-    const top = candidates.slice(0, Math.min(4, candidates.length));
+    // Only randomize among candidates within 50 points of the leader, so
+    // a div pair (300+) is never passed over for a non-div pair (100).
+    const leaderScore = candidates[0].score;
+    const within = candidates.filter(c => leaderScore - c.score <= 50);
+    const top = within.slice(0, Math.min(4, within.length));
     const selected = top[Math.floor(Math.random() * top.length)];
     const opponent = selected.candidate;
     available.splice(selected.index, 1);
