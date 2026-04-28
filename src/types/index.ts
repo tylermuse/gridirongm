@@ -1028,6 +1028,10 @@ export interface LeagueSettings {
    *  cards for upcoming games. Default true; off for testers who prefer a
    *  blind viewing experience. */
   showPredictedFavorite?: boolean;
+  /** Reveal the raw coach OVR number on the hiring market. Default false —
+   *  hiring shows a tier label + scheme-fit chip instead. tofftanaut 4/27
+   *  ask: hiring should require evaluation, not just a number to chase. */
+  showCoachOVR?: boolean;
 }
 
 export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
@@ -1054,6 +1058,7 @@ export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = {
   preseasonGames: 0,
   devPanels: false,
   showPredictedFavorite: true,
+  showCoachOVR: false,
 };
 
 export interface LeagueState {

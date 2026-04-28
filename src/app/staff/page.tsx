@@ -43,6 +43,42 @@ function ovrColor(ovr: number): string {
   return 'text-red-600';
 }
 
+/** Tier label that hides the exact OVR number on the hiring market. */
+function coachOvrTier(ovr: number): { label: string; cls: string } {
+  if (ovr >= 80) return { label: 'Elite', cls: 'bg-green-100 text-green-700 border-green-300' };
+  if (ovr >= 70) return { label: 'Above Average', cls: 'bg-blue-100 text-blue-700 border-blue-300' };
+  if (ovr >= 60) return { label: 'Average', cls: 'bg-[var(--surface-2)] text-[var(--text-sec)] border-[var(--border)]' };
+  if (ovr >= 50) return { label: 'Below Average', cls: 'bg-amber-100 text-amber-700 border-amber-300' };
+  return { label: 'Poor', cls: 'bg-red-100 text-red-700 border-red-300' };
+}
+
+/** Scheme-fit chip for a hiring candidate vs the team's existing HC scheme.
+ *  HC candidates compare against the current HC (which they'd replace) so
+ *  the user can see whether a swap would mean a scheme change. OC/DC
+ *  candidates compare against the HC's scheme on their side of the ball. */
+function coachSchemeFit(
+  candidate: Coach,
+  currentHc: Coach | undefined,
+): { icon: string; label: string; cls: string } {
+  if (!currentHc) return { icon: '·', label: 'No baseline', cls: 'bg-[var(--surface-2)] text-[var(--text-sec)] border-[var(--border)]' };
+  const sameOff = candidate.offensiveScheme && currentHc.offensiveScheme && candidate.offensiveScheme === currentHc.offensiveScheme;
+  const sameDef = candidate.defensiveScheme && currentHc.defensiveScheme && candidate.defensiveScheme === currentHc.defensiveScheme;
+  if (candidate.role === 'OC') {
+    return sameOff
+      ? { icon: '✅', label: 'Scheme match', cls: 'bg-green-50 text-green-700 border-green-200' }
+      : { icon: '⚠️', label: 'Scheme change', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+  }
+  if (candidate.role === 'DC') {
+    return sameDef
+      ? { icon: '✅', label: 'Scheme match', cls: 'bg-green-50 text-green-700 border-green-200' }
+      : { icon: '⚠️', label: 'Scheme change', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+  }
+  // HC: both sides
+  if (sameOff && sameDef) return { icon: '✅', label: 'Same scheme', cls: 'bg-green-50 text-green-700 border-green-200' };
+  if (sameOff || sameDef) return { icon: '⚠️', label: 'Partial match', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+  return { icon: '❌', label: 'New scheme', cls: 'bg-red-50 text-red-700 border-red-200' };
+}
+
 function CoachCard({ coach, roster, userTeam, onReplace }: { coach: Coach; roster: Player[]; userTeam: import('@/types').Team; onReplace?: () => void }) {
   const offSchemeLabel = coach.offensiveScheme ? OFFENSIVE_SCHEME_LABELS[coach.offensiveScheme] : null;
   const defSchemeLabel = coach.defensiveScheme ? DEFENSIVE_SCHEME_LABELS[coach.defensiveScheme] : null;
@@ -221,8 +257,9 @@ function generateRecommendations(
 }
 
 export default function StaffPage() {
-  const { teams, userTeamId, players, replaceCoach } = useGameStore();
+  const { teams, userTeamId, players, replaceCoach, leagueSettings } = useGameStore();
   const customizeHeadCoach = useGameStore(s => s.customizeHeadCoach);
+  const showCoachOVR = leagueSettings?.showCoachOVR === true;
   const [confirmReplace, setConfirmReplace] = useState<import('@/types').CoachRole | null>(null);
   const [candidates, setCandidates] = useState<import('@/types').Coach[]>([]);
   const [customizingHC, setCustomizingHC] = useState(false);
@@ -309,15 +346,29 @@ export default function StaffPage() {
                         <button onClick={() => { setConfirmReplace(null); setCandidates([]); }} className="text-xs text-[var(--text-sec)] hover:text-[var(--text)]">Cancel</button>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-3">
-                        {candidates.map((c, i) => (
+                        {candidates.map((c, i) => {
+                          const tier = coachOvrTier(c.ovr);
+                          const fit = coachSchemeFit(c, hc);
+                          return (
                           <button
                             key={i}
                             onClick={() => { replaceCoach(coach.role, c); setConfirmReplace(null); setCandidates([]); }}
                             className="text-left border border-[var(--border)] rounded-lg p-3 hover:border-blue-500 hover:bg-blue-50 transition-all"
                           >
-                            <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center justify-between mb-1.5">
                               <span className="font-bold text-sm">{c.firstName} {c.lastName}</span>
-                              <span className={`text-lg font-black ${ovrColor(c.ovr)}`}>{c.ovr}</span>
+                              {showCoachOVR ? (
+                                <span className={`text-lg font-black ${ovrColor(c.ovr)}`}>{c.ovr}</span>
+                              ) : (
+                                <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${tier.cls}`}>
+                                  {tier.label}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 mb-1.5">
+                              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${fit.cls}`}>
+                                {fit.icon} {fit.label}
+                              </span>
                             </div>
                             <div className="text-xs text-[var(--text-sec)] space-y-0.5">
                               <div>Age {c.age} · {c.trait}</div>
@@ -326,7 +377,8 @@ export default function StaffPage() {
                               <div className="text-[10px]">{c.careerWins}-{c.careerLosses} career</div>
                             </div>
                           </button>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </Card>
@@ -357,7 +409,7 @@ export default function StaffPage() {
             {/* Candidate count notice */}
             {candidates.length > 0 && (
               <div className="text-xs text-[var(--text-sec)] text-center mt-2">
-                {candidates.length} candidates available — sorted by OVR
+                {candidates.length} candidates available — {showCoachOVR ? 'sorted by OVR' : 'evaluate by tier + scheme fit'}
               </div>
             )}
 
@@ -391,26 +443,37 @@ export default function StaffPage() {
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           {candidates.map((c, i) => (
-                            <button
-                              key={i}
-                              onClick={() => { replaceCoach(role, c); setConfirmReplace(null); setCandidates([]); }}
-                              className="text-left border border-[var(--border)] rounded-lg p-2 hover:border-blue-500 hover:bg-blue-50 transition-all"
-                            >
-                              <div className="flex items-center justify-between mb-0.5">
-                                <span className="font-bold text-sm">{c.firstName} {c.lastName}</span>
-                                <span className={`text-lg font-black ${ovrColor(c.ovr)}`}>{c.ovr}</span>
-                              </div>
-                              <div className="text-[10px] text-[var(--text-sec)]">
-                                Age {c.age} · {c.trait} · ${c.salary?.toFixed(1)}M/yr
-                              </div>
-                              {c.specialties && (
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                  {c.specialties.map((s, j) => (
-                                    <span key={j} className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">{s}</span>
-                                  ))}
+                            (() => {
+                              const tier = coachOvrTier(c.ovr);
+                              return (
+                              <button
+                                key={i}
+                                onClick={() => { replaceCoach(role, c); setConfirmReplace(null); setCandidates([]); }}
+                                className="text-left border border-[var(--border)] rounded-lg p-2 hover:border-blue-500 hover:bg-blue-50 transition-all"
+                              >
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className="font-bold text-sm">{c.firstName} {c.lastName}</span>
+                                  {showCoachOVR ? (
+                                    <span className={`text-lg font-black ${ovrColor(c.ovr)}`}>{c.ovr}</span>
+                                  ) : (
+                                    <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${tier.cls}`}>
+                                      {tier.label}
+                                    </span>
+                                  )}
                                 </div>
-                              )}
-                            </button>
+                                <div className="text-[10px] text-[var(--text-sec)]">
+                                  Age {c.age} · {c.trait} · ${c.salary?.toFixed(1)}M/yr
+                                </div>
+                                {c.specialties && (
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {c.specialties.map((s, j) => (
+                                      <span key={j} className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">{s}</span>
+                                    ))}
+                                  </div>
+                                )}
+                              </button>
+                              );
+                            })()
                           ))}
                         </div>
                       </div>

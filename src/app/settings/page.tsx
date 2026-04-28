@@ -585,6 +585,31 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        {/* Coach OVR on hiring market */}
+        <Card className="mb-4">
+          <CardHeader><CardTitle>Show Coach OVR on Hiring Market</CardTitle></CardHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-[var(--text-sec)]">
+              When OFF, hiring candidates show a tier label (Elite / Above Average / Average / Below Average / Poor) plus a scheme-fit chip — but no exact OVR number. Already-hired coaches always show full OVR. Default OFF (tofftanaut ask: hiring should require evaluation).
+            </p>
+            <button
+              onClick={() => setDraft(d => ({ ...d, showCoachOVR: !d.showCoachOVR }))}
+              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                draft.showCoachOVR ? 'bg-blue-500' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                  draft.showCoachOVR ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <span className={`ml-2 text-sm font-semibold ${draft.showCoachOVR ? 'text-blue-600' : 'text-[var(--text-sec)]'}`}>
+              {draft.showCoachOVR ? 'ON' : 'OFF'}
+            </span>
+          </div>
+        </Card>
+
         {/* AI Commentary */}
         <Card className="mb-4">
           <CardHeader>
