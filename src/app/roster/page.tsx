@@ -407,7 +407,7 @@ export default function RosterPage() {
                   .sort((a, b) => a.city.localeCompare(b.city))
                   .map(t => (
                     <option key={t.id} value={t.id}>
-                      {t.abbreviation} — {t.city} {t.name}{t.id === userTeamId ? ' (You)' : ''}
+                      {t.abbreviation} — {t.city} {t.name}{!isSpectator && t.id === userTeamId ? ' (You)' : ''}
                     </option>
                   ))}
               </select>

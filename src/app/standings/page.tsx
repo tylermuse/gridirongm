@@ -151,6 +151,7 @@ function StandingsTable({ teamList, userTeamId, onTeamClick, expanded, allTeams,
 export default function StandingsPage() {
   const router = useRouter();
   const { teams, schedule, userTeamId, players, week, phase, rivalries, leagueSettings } = useGameStore();
+  const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const showWinProb = leagueSettings?.showPredictedFavorite !== false;
   const [view, setView] = useState<StandingsView>('division');
   const [tab, setTab] = useState<'standings' | 'schedule'>('standings');
@@ -418,8 +419,9 @@ export default function StandingsPage() {
                       ) : (
                         (() => {
                           const { spread, favored } = computeSpread(game);
+                          const userAbbr = teamAbbr(userTeamId);
                           const spreadText = spread === 0 ? 'PK' :
-                            favored === 'user' ? `YOU ${spread > 0 ? '+' : ''}${spread}` :
+                            favored === 'user' ? `${isSpectator ? userAbbr : 'YOU'} ${spread > 0 ? '+' : ''}${spread}` :
                             `${teamAbbr(isHome ? game.awayTeamId : game.homeTeamId)} ${spread < 0 ? '+' : '-'}${Math.abs(spread)}`;
                           const isCurrentWeek = phase === 'regular' && game.week === week;
                           // O/U from computeSpread — estimate from team power
@@ -462,8 +464,9 @@ export default function StandingsPage() {
                                 const userPct = Math.round(userWP * 100);
                                 const oppPct = 100 - userPct;
                                 const showUser = userPct >= 50;
+                                const userAbbr2 = teamAbbr(userTeamId);
                                 const label = showUser
-                                  ? `YOU ${userPct}%`
+                                  ? `${isSpectator ? userAbbr2 : 'YOU'} ${userPct}%`
                                   : `${teamAbbr(isHome ? game.awayTeamId : game.homeTeamId)} ${oppPct}%`;
                                 const cls = showUser ? 'text-green-700 bg-green-50 border-green-200' : 'text-red-700 bg-red-50 border-red-200';
                                 return (

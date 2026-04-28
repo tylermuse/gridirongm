@@ -858,44 +858,61 @@ function Dashboard() {
     <GameShell>
       <div className="max-w-6xl mx-auto space-y-4">
         <SpectatorBanner />
-        {/* Team header */}
-        <div
-          className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl px-4 sm:px-5 py-4"
-          style={{ background: `linear-gradient(135deg, var(--team-primary) 0%, ${userTeam.secondaryColor} 100%)` }}
-        >
-          <div className="flex items-center gap-3 sm:block shrink-0">
-            <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} logoUrl={userTeam.logoUrl} size="xl" />
-            {/* On mobile, show team name next to logo */}
-            <div className="sm:hidden min-w-0">
-              <h2 className="text-xl font-black leading-tight" style={{ color: 'var(--team-text-on-primary)' }}>{userTeam.city}</h2>
-              <h2 className="text-xl font-black leading-tight" style={{ color: 'var(--team-text-on-primary)' }}>{userTeam.name}</h2>
+        {isSpectator ? (
+          // Neutral League Overview header for spectator leagues — the user
+          // doesn't own a team, so the team-color banner reads as ownership
+          // even when actions are gated. Keep it generic.
+          <div className="rounded-xl px-4 sm:px-5 py-4 border border-[var(--border)] bg-[var(--surface)]">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-lg bg-[var(--surface-2)] flex items-center justify-center text-2xl shrink-0">👁️</div>
+              <div className="min-w-0">
+                <div className="text-lg font-black">League Overview</div>
+                <div className="text-xs text-[var(--text-sec)]">
+                  Season {season} · Week {week} · Spectator mode — observing all 32 AI teams
+                </div>
+              </div>
             </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="hidden sm:block text-2xl font-black" style={{ color: 'var(--team-text-on-primary)' }}>{userTeam.city} {userTeam.name}</h2>
-            <div className="flex items-center gap-2 sm:gap-3 mt-1 flex-wrap">
-              <Badge variant={userTeam.record.wins > userTeam.record.losses ? 'green' : userTeam.record.wins < userTeam.record.losses ? 'red' : 'default'} size="md">
-                {formatRecord(userTeam.record)}
-              </Badge>
-              <span className="text-xs sm:text-sm whitespace-nowrap" style={{ color: 'var(--team-text-on-primary)', opacity: 0.85 }}>
-                {userTeam.conference} {userTeam.division}
-              </span>
-              <span className="text-xs sm:text-sm whitespace-nowrap" style={{ color: capPct > 0.95 ? '#fecaca' : 'var(--team-text-on-primary)', opacity: capPct > 0.95 ? 1 : 0.85 }}>
-                ${Math.round(userTeam.totalPayroll)}M / ${userTeam.salaryCap}M
-              </span>
-              {champions.length > 0 && champions.filter(c => c.teamId === userTeamId).length > 0 && (
-                <span className="text-xs sm:text-sm font-bold whitespace-nowrap" style={{ color: 'var(--team-text-on-primary)' }}>
-                  {champions.filter(c => c.teamId === userTeamId).length}× 🏆
+        ) : (
+          /* Team header */
+          <div
+            className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl px-4 sm:px-5 py-4"
+            style={{ background: `linear-gradient(135deg, var(--team-primary) 0%, ${userTeam.secondaryColor} 100%)` }}
+          >
+            <div className="flex items-center gap-3 sm:block shrink-0">
+              <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} logoUrl={userTeam.logoUrl} size="xl" />
+              {/* On mobile, show team name next to logo */}
+              <div className="sm:hidden min-w-0">
+                <h2 className="text-xl font-black leading-tight" style={{ color: 'var(--team-text-on-primary)' }}>{userTeam.city}</h2>
+                <h2 className="text-xl font-black leading-tight" style={{ color: 'var(--team-text-on-primary)' }}>{userTeam.name}</h2>
+              </div>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="hidden sm:block text-2xl font-black" style={{ color: 'var(--team-text-on-primary)' }}>{userTeam.city} {userTeam.name}</h2>
+              <div className="flex items-center gap-2 sm:gap-3 mt-1 flex-wrap">
+                <Badge variant={userTeam.record.wins > userTeam.record.losses ? 'green' : userTeam.record.wins < userTeam.record.losses ? 'red' : 'default'} size="md">
+                  {formatRecord(userTeam.record)}
+                </Badge>
+                <span className="text-xs sm:text-sm whitespace-nowrap" style={{ color: 'var(--team-text-on-primary)', opacity: 0.85 }}>
+                  {userTeam.conference} {userTeam.division}
                 </span>
-              )}
-              {isFoundingMember && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-100 border border-amber-400/30 whitespace-nowrap">
-                  ⭐ Founder
+                <span className="text-xs sm:text-sm whitespace-nowrap" style={{ color: capPct > 0.95 ? '#fecaca' : 'var(--team-text-on-primary)', opacity: capPct > 0.95 ? 1 : 0.85 }}>
+                  ${Math.round(userTeam.totalPayroll)}M / ${userTeam.salaryCap}M
                 </span>
-              )}
+                {champions.length > 0 && champions.filter(c => c.teamId === userTeamId).length > 0 && (
+                  <span className="text-xs sm:text-sm font-bold whitespace-nowrap" style={{ color: 'var(--team-text-on-primary)' }}>
+                    {champions.filter(c => c.teamId === userTeamId).length}× 🏆
+                  </span>
+                )}
+                {isFoundingMember && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-100 border border-amber-400/30 whitespace-nowrap">
+                    ⭐ Founder
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Discord Banner */}
         <DiscordBanner />
