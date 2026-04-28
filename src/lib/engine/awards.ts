@@ -122,7 +122,11 @@ export function computeSeasonAwards(state: LeagueState): { award: string; player
     }
   }
 
-  const rookies = rookieEligible.filter(p => p.experience === 1 && p.stats.gamesPlayed >= 10);
+  // Rookies = drafted in the current season, i.e. experience === 0.
+  // Experience is incremented at the season-rollover step (startNewSeason),
+  // so during the season-end winner pass these players are still on year 0.
+  // Tyler 4/27 PM caught Year-2 players showing up as ROY candidates.
+  const rookies = rookieEligible.filter(p => p.experience === 0 && p.stats.gamesPlayed >= 10);
   const offensiveRookies = rookies.filter(p => ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position));
   if (offensiveRookies.length > 0) {
     const oroy = [...offensiveRookies].sort((a, b) => allLeagueScore(b) - allLeagueScore(a))[0];
@@ -258,7 +262,9 @@ export function computeAwardRaces(
     .sort((a, b) => b.score - a.score)
     .slice(0, topN);
 
-  const rookies = active.filter(p => p.experience === 1);
+  // Same rookie definition as computeSeasonAwards — players drafted in the
+  // current season have experience === 0 until rollover increments it.
+  const rookies = active.filter(p => p.experience === 0);
   const oroy = rookies
     .filter(p => ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position))
     .map(p => buildEntry(p, allLeagueScore(p)))
