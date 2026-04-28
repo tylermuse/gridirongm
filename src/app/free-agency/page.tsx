@@ -243,7 +243,13 @@ export default function FreeAgencyPage() {
   const userTeam = teams.find(t => t.id === userTeamId);
   const ci = userTeam ? capInflationFactor(userTeam.salaryCap) : 1.0;
   const capSpace = userTeam ? Math.round((userTeam.salaryCap - userTeam.totalPayroll) * 10) / 10 : 0;
-  const overCap = capSpace < 0;
+  // "overCap" used to mean strictly negative cap space. The engine already
+  // exempts league-minimum signings from the cap check, but with $0.5M of
+  // cap space the slider was defaulting to the player's full asking salary
+  // and the cap check rejected anything above $0.75M (Tyler 4/28 report).
+  // Treat capSpace < league min as the same locked-at-minimum experience
+  // that strictly-over-cap teams get.
+  const overCap = capSpace < LEAGUE_MINIMUM_SALARY;
   const luxuryTax = userTeam ? computeLuxuryTax(userTeam.totalPayroll, userTeam.salaryCap) : 0;
 
   // Roster composition — intersect with team.roster so PS (and later IR)
@@ -439,12 +445,19 @@ export default function FreeAgencyPage() {
           </div>
         )}
 
-        {/* Over-cap warning */}
+        {/* Cap-strapped warning — fires for both strictly-over-cap and
+            cap-space-below-league-min cases. Both reduce signings to the
+            league-minimum exemption. */}
         {overCap && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <div className="text-sm font-bold text-red-600">Over the Salary Cap</div>
+            <div className="text-sm font-bold text-red-600">
+              {capSpace < 0 ? 'Over the Salary Cap' : 'Cap-Strapped'}
+            </div>
             <div className="text-xs text-red-600/80 mt-1">
-              ${Math.abs(capSpace).toFixed(1)}M over the cap · Luxury tax: ${luxuryTax}M ({LUXURY_TAX_RATE}x penalty) · Can only sign at league minimum (${LEAGUE_MINIMUM_SALARY}M/yr)
+              {capSpace < 0
+                ? `$${Math.abs(capSpace).toFixed(1)}M over the cap · Luxury tax: $${luxuryTax}M (${LUXURY_TAX_RATE}x penalty) · `
+                : `Only $${capSpace.toFixed(1)}M cap space — `}
+              Can only sign at league minimum (${LEAGUE_MINIMUM_SALARY}M/yr)
             </div>
             <div className="text-xs text-red-600/60 mt-1">
               You can still negotiate — offer league minimum (${LEAGUE_MINIMUM_SALARY}M/yr). As FA progresses, more players will accept lower offers.
