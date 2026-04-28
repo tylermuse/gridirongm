@@ -340,9 +340,14 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       const tx = txs[i];
       const txTid = tx?.tid;
       const txSeason = tx?.season;
+      const txType = tx?.type;
       if (typeof txTid !== 'number' || txTid < 0) continue;
-      // Only trust transactions from this season or last season. Older
-      // transactions (e.g. the 2022 draft for a 2026 import) are stale.
+      // Only consider real in-game trades. godMode-type entries are manual
+      // edits by the data author and may be stale; draft is too old; signing
+      // is rarely emitted by the source. Kirk Cousins regression (4/27 PM):
+      // 2025 godMode tx put him on ATL, but the JSON had moved him to LV
+      // since — trusting the godMode tx routed him back to ATL incorrectly.
+      if (txType !== 'trade') continue;
       if (typeof txSeason !== 'number' || txSeason < season - 1) break;
       if (txTid !== player.tid && teamByTid.has(txTid)) {
         correctedTid = txTid;
