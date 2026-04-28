@@ -6,7 +6,7 @@ import { useGameStore, flushToStorage, flushToStorageSync } from '@/lib/engine/s
 import { GameShell } from '@/components/game/GameShell';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { simulatePlayByPlay, liveGameToGameResult, type LiveGamePlan } from '@/lib/engine/playByPlay';
+import { simulatePlayByPlay, liveGameToGameResult, livePlayerStatsAtEvent, type LiveGamePlan } from '@/lib/engine/playByPlay';
 import { pushSimTelemetryRecord, meanStarterOvr } from '@/lib/engine/simTelemetry';
 import { createLiveCoachEngine, type LiveCoachEngine } from '@/lib/engine/liveCoachEngine';
 import { Confetti } from '@/components/ui/Confetti';
@@ -1729,22 +1729,22 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
           {/* STATS TAB */}
           {activeTab === 'stats' && (() => {
-            const stats = liveResult.playerStats;
-            // Don't surface the pre-sim's final totals before plays have
-            // revealed — users would see populated stats before any play
-            // fires, which is the bug two testers reported. Partial mid-game
-            // stats aren't yet available per-event, so show a placeholder
-            // until the game has finished revealing all plays.
+            // tofftanaut + woahitsholly 4/27: stats should refresh as plays
+            // tick in. While the game is still revealing, derive running
+            // stats from the snapshot on the most recently revealed event.
+            // Once revealed all the way through, fall back to the
+            // simulator's final playerStats (which includes the randomized
+            // tackle distribution that the per-event snapshots can't
+            // deterministically produce).
             const isGameFinishedReveal = revealedCount >= totalEvents && totalEvents > 0;
-            if (!stats || Object.keys(stats).length === 0 || !isGameFinishedReveal) {
+            const lastRevealedEvent = revealedCount > 0 ? liveResult.events[revealedCount - 1] : undefined;
+            const stats = isGameFinishedReveal
+              ? liveResult.playerStats
+              : livePlayerStatsAtEvent(lastRevealedEvent, homePlayers, awayPlayers);
+            if (!stats || Object.keys(stats).length === 0) {
               return (
                 <div className="text-center py-12 text-[var(--text-sec)]">
-                  <p className="font-semibold">
-                    {isGameFinishedReveal ? 'Stats will appear as the game progresses.' : 'Full box score posts when the game ends.'}
-                  </p>
-                  {!isGameFinishedReveal && revealedCount > 0 && (
-                    <p className="text-xs mt-2">Watch the play-by-play tab for live plays.</p>
-                  )}
+                  <p className="font-semibold">Stats will appear as plays tick in.</p>
                 </div>
               );
             }

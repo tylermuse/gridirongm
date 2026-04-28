@@ -47,6 +47,12 @@ export interface PlayEvent {
   homeScore: number;
   awayScore: number;
   isScoring: boolean;
+  /** Cumulative bucket snapshots taken when this event was pushed. Used by
+   *  the live-game UI to render running per-play box-score stats (tofftanaut
+   *  + woahitsholly 4/27 — stats should refresh as plays go in, not just at
+   *  end of game). Optional for backwards compatibility with older saves. */
+  homeBucketSnap?: StatBucket;
+  awayBucketSnap?: StatBucket;
 }
 
 export interface LiveGameResult {
@@ -721,6 +727,12 @@ export function simulatePlayByPlay(
       homeTimeouts: state.homeTimeouts,
       awayTimeouts: state.awayTimeouts,
     };
+    // Snapshot the cumulative buckets onto this event so the live-game UI
+    // can render running per-play box-score stats. cloneBucket is shallow
+    // on the simple counters but copies the per-player maps so later plays
+    // don't mutate this snapshot.
+    ev.homeBucketSnap = cloneBucket(homeBucket);
+    ev.awayBucketSnap = cloneBucket(awayBucket);
     events.push(ev);
     return ev;
   }
@@ -1840,4 +1852,82 @@ export function liveGameToGameResult(
     played: true,
     playerStats: live.playerStats,
   };
+}
+
+/**
+ * Derive a partial per-player stats map from a single bucket snapshot.
+ * Used by the live-game UI to render running box-score numbers as plays
+ * tick in. Tackles are skipped because the final tackle distribution is
+ * randomized at end-of-game in applyBucketToStats — running tackle counts
+ * pop in once the game finishes. Everything else (passing, rushing,
+ * receiving, sacks, INTs) accumulates deterministically per play.
+ */
+export function livePlayerStatsAtEvent(
+  event: PlayEvent | undefined,
+  homePlayers: Player[],
+  awayPlayers: Player[],
+): Record<string, Partial<PlayerStats>> {
+  const out: Record<string, Partial<PlayerStats>> = {};
+  if (!event || !event.homeBucketSnap || !event.awayBucketSnap) return out;
+
+  function applySide(bucket: StatBucket, sidePlayers: Player[]) {
+    const qb = sidePlayers.find(p => p.position === 'QB' && (!p.injury || p.injury.weeksLeft === 0))
+      ?? sidePlayers.find(p => p.position === 'QB');
+    if (qb && (bucket.passAttempts > 0 || bucket.qbRushAttempts > 0)) {
+      out[qb.id] = {
+        gamesPlayed: 1,
+        passAttempts: bucket.passAttempts,
+        passCompletions: bucket.passCompletions,
+        passYards: bucket.passYards,
+        passTDs: bucket.passTDs,
+        interceptions: bucket.interceptions,
+        rushAttempts: bucket.qbRushAttempts,
+        rushYards: bucket.qbRushYards,
+        rushTDs: bucket.qbRushTDs,
+      };
+    }
+    for (const [pid, run] of Object.entries(bucket.perRusher)) {
+      const existing = out[pid];
+      out[pid] = {
+        ...existing,
+        gamesPlayed: 1,
+        rushAttempts: (existing?.rushAttempts ?? 0) + run.attempts,
+        rushYards: (existing?.rushYards ?? 0) + run.yards,
+        rushTDs: (existing?.rushTDs ?? 0) + run.tds,
+        fumbles: (existing?.fumbles ?? 0) + run.fumbles,
+      };
+    }
+    for (const [pid, rec] of Object.entries(bucket.perReceiver)) {
+      const existing = out[pid];
+      out[pid] = {
+        ...existing,
+        gamesPlayed: 1,
+        targets: (existing?.targets ?? 0) + rec.targets,
+        receptions: (existing?.receptions ?? 0) + rec.receptions,
+        receivingYards: (existing?.receivingYards ?? 0) + rec.yards,
+        receivingTDs: (existing?.receivingTDs ?? 0) + rec.tds,
+      };
+    }
+    for (const [pid, sacks] of Object.entries(bucket.perSacker)) {
+      const existing = out[pid];
+      out[pid] = { ...existing, gamesPlayed: 1, sacks: (existing?.sacks ?? 0) + sacks };
+    }
+    for (const [pid, ints] of Object.entries(bucket.perInterceptor)) {
+      const existing = out[pid];
+      out[pid] = { ...existing, gamesPlayed: 1, defensiveINTs: (existing?.defensiveINTs ?? 0) + ints };
+    }
+    const k = sidePlayers.find(p => p.position === 'K');
+    if (k && (bucket.fieldGoalAttempts > 0 || bucket.extraPointAttempts > 0)) {
+      out[k.id] = {
+        gamesPlayed: 1,
+        fieldGoalAttempts: bucket.fieldGoalAttempts,
+        fieldGoalsMade: bucket.fieldGoalsMade,
+        extraPointAttempts: bucket.extraPointAttempts,
+        extraPointsMade: bucket.extraPointsMade,
+      };
+    }
+  }
+  applySide(event.homeBucketSnap, homePlayers);
+  applySide(event.awayBucketSnap, awayPlayers);
+  return out;
 }
