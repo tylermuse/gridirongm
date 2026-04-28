@@ -295,11 +295,29 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
 
     // Snapshot ghost-FA guard: roster files generated mid-offseason
     // sometimes serialize unsigned veterans (Jadeveon Clowney case from
-    // tofftanaut, 4/27) on their previous team's roster with an
-    // already-expired contract. Detect via raw contract.exp < season,
-    // strip the team binding, and surface them in the FA pool.
+    // tofftanaut, 4/27) on their previous team's roster. Two flavors:
+    //   1. Already-expired contracts (raw exp < season). These are Greg
+    //      Gaines / Brandon Parker types — clearly off the books.
+    //   2. Final-year-of-deal players sitting on a placeholder near-min
+    //      salary. FBGM serializes unsigned UFAs this way — they show on
+    //      their last team's roster with a $0.5-$1M placeholder so the
+    //      file reflects a snapshot. Tyler 4/28: "all players that were
+    //      in the re-signing phase for 2026" should be moved to FA.
+    // Real veterans on legit 1-year deals (Bobby Wagner $9M, Hopkins $5M)
+    // have amount > 1000 and stay on their team. Current-season rookies
+    // are excluded — their rookie-deal contracts get fixed up in
+    // mapContract's separate guard.
     const rawExp = player.contract?.exp;
-    const isExpiredFA = rawExp != null && rawExp < season;
+    const rawAmount = player.contract?.amount ?? 0;
+    const draftedThisSeason = player.draft?.year === season;
+    const isAlreadyExpired = rawExp != null && rawExp < season;
+    const isPlaceholderUfa =
+      rawExp != null &&
+      rawExp === season &&
+      rawAmount > 0 &&
+      rawAmount <= 1000 &&
+      !draftedThisSeason;
+    const isExpiredFA = isAlreadyExpired || isPlaceholderUfa;
     const contract = isExpiredFA
       ? { salary: LEAGUE_MINIMUM_SALARY, yearsLeft: 0, guaranteed: 0, totalYears: 0 }
       : mapContract(player.contract, season, player.draft);
