@@ -322,51 +322,32 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       rawAmount <= 1000 &&
       !draftedThisSeason;
 
-    // Cross-team ghost-tid guard (tofftanaut 4/27 23:21 — Brian Robinson Jr.,
-    // Jauan Jennings, Spencer Buford all tagged on SEA but their statsTids
-    // and transaction history say SF/WAS). When a player's current tid
-    // doesn't match any team they've actually played for or been moved to,
-    // treat the assignment as corrupt. Re-route to the most-recent legitimate
-    // tid (latest transaction → latest stats team → draft team) so the
-    // player ends up on their real team rather than disappearing into FA.
-    const draftTid = player.draft?.tid;
-    const legitTids = new Set<number>();
-    if (Array.isArray(player.statsTids)) {
-      for (const t of player.statsTids) if (typeof t === 'number' && t >= 0) legitTids.add(t);
-    }
-    if (Array.isArray(player.transactions)) {
-      for (const tx of player.transactions) {
-        if (typeof tx?.tid === 'number' && tx.tid >= 0) legitTids.add(tx.tid);
-      }
-    }
-    if (typeof draftTid === 'number' && draftTid >= 0) legitTids.add(draftTid);
-    const hasHistorySignal = legitTids.size > 0;
-    const isGhostTid = hasHistorySignal && !legitTids.has(player.tid);
-
+    // Cross-team ghost-tid guard. Earlier version (ddb20ca) over-routed
+    // because legitimate offseason FA signings have a current tid that
+    // doesn't appear in statsTids yet (no games played) and don't always
+    // serialize as a transaction. tofftanaut 4/27 PM: "kenneth walker was
+    // back on the seahawks" — Walker's JSON tid was correctly KC but the
+    // heuristic routed him back to SEA (his draft team).
+    //
+    // Tighter rule: only consider the tid corrupt when there's POSITIVE
+    // evidence — a current-season trade/godMode transaction that explicitly
+    // moves the player to a team OTHER than their current tid. That
+    // matches the original Brian Robinson Jr case (2026 trade to tid=27,
+    // JSON had tid=28) without false-positiving on legit FA signings.
     let correctedTid: number | null = null;
-    if (isGhostTid) {
-      // Walk transactions newest-to-oldest and pick the first valid team-set move.
-      const txs = Array.isArray(player.transactions) ? player.transactions : [];
-      for (let i = txs.length - 1; i >= 0; i--) {
-        const t = txs[i]?.tid;
-        if (typeof t === 'number' && t >= 0 && teamByTid.has(t)) {
-          correctedTid = t;
-          break;
-        }
+    const txs = Array.isArray(player.transactions) ? player.transactions : [];
+    for (let i = txs.length - 1; i >= 0; i--) {
+      const tx = txs[i];
+      const txTid = tx?.tid;
+      const txSeason = tx?.season;
+      if (typeof txTid !== 'number' || txTid < 0) continue;
+      // Only trust transactions from this season or last season. Older
+      // transactions (e.g. the 2022 draft for a 2026 import) are stale.
+      if (typeof txSeason !== 'number' || txSeason < season - 1) break;
+      if (txTid !== player.tid && teamByTid.has(txTid)) {
+        correctedTid = txTid;
       }
-      if (correctedTid == null) {
-        const stids = Array.isArray(player.statsTids) ? player.statsTids : [];
-        for (let i = stids.length - 1; i >= 0; i--) {
-          const t = stids[i];
-          if (typeof t === 'number' && t >= 0 && teamByTid.has(t)) {
-            correctedTid = t;
-            break;
-          }
-        }
-      }
-      if (correctedTid == null && typeof draftTid === 'number' && draftTid >= 0 && teamByTid.has(draftTid)) {
-        correctedTid = draftTid;
-      }
+      break;
     }
 
     const isExpiredFA = isAlreadyExpired || isPlaceholderUfa;
