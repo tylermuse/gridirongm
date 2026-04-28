@@ -17,8 +17,7 @@ const NAV_SECTIONS = [
       { href: '/standings', label: 'Standings', icon: '📊' },
       { href: '/playoffs', label: 'Playoffs', icon: '🏆' },
       { href: '/stats', label: 'Stats', icon: '📈' },
-      { href: '/awards', label: 'Award Race', icon: '🎖️' },
-      { href: '/power-rankings', label: 'Power Rankings', icon: '💪' },
+      { href: '/power-rankings', label: 'Rankings', icon: '🏆' },
       { href: '/players', label: 'Player Search', icon: '🔍' },
       { href: '/news', label: 'News', icon: '📰' },
       { href: '/recap', label: 'Recap', icon: '🎙️' },
@@ -383,7 +382,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <div key={section.label} className="mb-2">
               <div className="text-[9px] font-bold uppercase tracking-widest text-[var(--text-sec)]/50 px-3 pt-2 pb-1">{section.label}</div>
               {visibleItems.map(item => {
-          const active = pathname === item.href;
+          // Rankings nav entry covers both /power-rankings and /awards (the
+          // two views share a tab bar), so highlight either one.
+          const sharedRankings = item.href === '/power-rankings' && pathname === '/awards';
+          const active = pathname === item.href || sharedRankings;
           const badge = getBadge(item.href);
           return (
             <Link

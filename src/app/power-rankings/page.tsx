@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useGameStore } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
+import { RankingsTabs } from '@/components/awards/RankingsTabs';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -101,6 +102,7 @@ export default function PowerRankingsPage() {
   return (
     <GameShell>
       <div className="max-w-5xl mx-auto">
+        <RankingsTabs />
         <h2 className="text-2xl font-black mb-2 font-display uppercase tracking-tight">
           Position Group Power Rankings
         </h2>

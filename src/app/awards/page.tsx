@@ -6,6 +6,7 @@ import { computeAwardRaces } from '@/lib/engine/awards';
 import { GameShell } from '@/components/game/GameShell';
 import { SpectatorBanner } from '@/components/game/SpectatorBanner';
 import { AwardRaceCard } from '@/components/awards/AwardRaceCard';
+import { RankingsTabs } from '@/components/awards/RankingsTabs';
 
 export default function AwardsPage() {
   const { teams, players, season, week, phase, schedule } = useGameStore();
@@ -26,6 +27,7 @@ export default function AwardsPage() {
     <GameShell>
       <div className="max-w-6xl mx-auto">
         <SpectatorBanner />
+        <RankingsTabs />
         <div className="mb-5">
           <h2 className="text-2xl font-black font-display uppercase tracking-tight">Award Race</h2>
           <p className="text-xs text-[var(--text-sec)] mt-1">
