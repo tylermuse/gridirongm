@@ -834,13 +834,12 @@ export function playerTradeValue(player: Player): number {
     player.age <= 31 ? 0.7 :
     player.age <= 33 ? 0.45 : 0.2;
   const posMultiplier = POSITION_VALUE_MULT[player.position] ?? 1.0;
-  // Cubic curve floored at 45 OVR — anything below 45 has zero baseline
-  // value and only earns from the potential bonus. Scrubs (50-58 OVR) used
-  // to clear ~150-200 base which let pick-only AI proposals fire for them
-  // (4/27 §1.2 reports of 56-OVR-for-2nd-round acceptances).
-  // Targets: 56 → ~50, 65 → ~320, 70 → ~625, 80 → ~1700, 90 → ~3650, 95 → 5000.
-  const normalized = Math.max(0, (player.ratings.overall - 45) / 50);
-  const base = Math.pow(normalized, 3) * 5000;
+  // Cubic curve floored at 50 OVR. Calibration follow-up from 305mike +
+  // milkytoad (4/27 PM): "50s should max at 5th-rd, 60s should max at 3rd-rd."
+  // Anchored to pick-chart values (5th rd ≈ 50, 3rd rd ≈ 250-400).
+  // Targets: 59 → ~36, 65 → ~167, 69 → ~339, 75 → ~772, 80 → ~1333, 90 → ~3160.
+  const normalized = Math.max(0, (player.ratings.overall - 50) / 45);
+  const base = Math.pow(normalized, 3) * 4500;
   const potBonus = Math.max(0, player.potential - player.ratings.overall) * 5;
   const rawValue = (base + potBonus) * ageMultiplier * posMultiplier;
   // Contract multiplier — expiring players are nearly worthless in trades

@@ -51,10 +51,10 @@ function playerTradeValue(player: Player): number {
     player.age <= 31 ? 0.7 :
     player.age <= 33 ? 0.45 : 0.2;
   const posMultiplier = POSITION_VALUE_MULT[player.position] ?? 1.0;
-  // Mirror the engine-side curve in store.ts (cubic, 45 OVR floor) so the
+  // Mirror the engine-side curve in store.ts (cubic, 50 OVR floor) so the
   // displayed trade value matches what AI evaluators decide on.
-  const normalized = Math.max(0, (player.ratings.overall - 45) / 50);
-  const base = Math.pow(normalized, 3) * 5000;
+  const normalized = Math.max(0, (player.ratings.overall - 50) / 45);
+  const base = Math.pow(normalized, 3) * 4500;
   const potBonus = Math.max(0, player.potential - player.ratings.overall) * 5;
   const rawValue = (base + potBonus) * ageMultiplier * posMultiplier;
   const contractCost = Math.max(0, player.contract.salary - 8) * player.contract.yearsLeft * 0.8;
