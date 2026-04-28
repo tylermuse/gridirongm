@@ -61,7 +61,8 @@ export default function FinancesPage() {
   const coachingPayroll = Math.round(staffSpend * 10) / 10;
   const coachingDeadCap = Math.round((userTeam.deadCap ?? []).filter(d => d.isCoaching).reduce((s, d) => s + d.amount, 0) * 10) / 10;
   const playerDeadCapTotal = Math.round((userTeam.deadCap ?? []).filter(d => !d.isCoaching).reduce((s, d) => s + d.amount, 0) * 10) / 10;
-  const totalExpenses = Math.round((playerPayroll + coachingPayroll + coachingDeadCap) * 10) / 10;
+  const luxuryTaxAmount = computeLuxuryTax(used, cap);
+  const totalExpenses = Math.round((playerPayroll + coachingPayroll + coachingDeadCap + luxuryTaxAmount) * 10) / 10;
   const profit = Math.round((totalRevenue - totalExpenses) * 10) / 10;
 
   // Salary by position
@@ -96,16 +97,28 @@ export default function FinancesPage() {
         <TeamQuickNav currentPage="finances" />
         <h2 className="text-2xl font-black mb-6">Finances & Cap Management</h2>
 
-        {/* Top-line P&L — matches the Dashboard Finances card so users see
-            the same rollup whether they land here or on the home screen. */}
+        {/* Top-line P&L — matches the Dashboard Finances card with an
+            expanded revenue breakdown so users can see where the money
+            comes from (national TV, local, game day, merch). */}
         <Card>
           <CardHeader><CardTitle>Finances</CardTitle></CardHeader>
           <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-[var(--text-sec)]">Revenue</span><span className="font-bold text-green-600">${totalRevenue}M</span></div>
-            <div className="flex justify-between"><span className="text-[var(--text-sec)]">Player Payroll</span><span className="font-bold">${playerPayroll}M</span></div>
-            <div className="flex justify-between"><span className="text-[var(--text-sec)]">Coaching Payroll</span><span className="font-bold">${coachingPayroll}M{coachingDeadCap > 0 ? ` + $${coachingDeadCap}M dead` : ''}</span></div>
-            <div className="flex justify-between"><span className="text-[var(--text-sec)]">Total Expenses</span><span className="font-bold">${totalExpenses}M</span></div>
-            <div className="flex justify-between"><span className="text-[var(--text-sec)]">Profit</span><span className={`font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{profit >= 0 ? '+' : ''}${profit}M</span></div>
+            <div className="flex justify-between font-bold"><span>Revenue</span><span className="text-green-600">${totalRevenue}M</span></div>
+            <div className="flex justify-between text-xs pl-4"><span className="text-[var(--text-sec)]">National TV deal</span><span className="tabular-nums">${Math.round(nationalTV * 10) / 10}M</span></div>
+            <div className="flex justify-between text-xs pl-4"><span className="text-[var(--text-sec)]">Local revenue</span><span className="tabular-nums">${Math.round(localRevenue * 10) / 10}M</span></div>
+            <div className="flex justify-between text-xs pl-4"><span className="text-[var(--text-sec)]">Game day (tickets, concessions)</span><span className="tabular-nums">${Math.round(gameDayRevenue * 10) / 10}M</span></div>
+            <div className="flex justify-between text-xs pl-4"><span className="text-[var(--text-sec)]">Merch &amp; sponsorships</span><span className="tabular-nums">${Math.round(merchAndSponsors * 10) / 10}M</span></div>
+            <div className="border-t border-[var(--border)] my-1" />
+            <div className="flex justify-between font-bold"><span>Expenses</span><span>${totalExpenses}M</span></div>
+            <div className="flex justify-between text-xs pl-4"><span className="text-[var(--text-sec)]">Player payroll</span><span className="tabular-nums">${playerPayroll}M</span></div>
+            <div className="flex justify-between text-xs pl-4"><span className="text-[var(--text-sec)]">Coaching payroll</span><span className="tabular-nums">${coachingPayroll}M</span></div>
+            {coachingDeadCap > 0 && (
+              <div className="flex justify-between text-xs pl-4"><span className="text-[var(--text-sec)]">Coaching dead cap</span><span className="tabular-nums text-amber-700">${coachingDeadCap}M</span></div>
+            )}
+            {luxuryTaxAmount > 0 && (
+              <div className="flex justify-between text-xs pl-4"><span className="text-[var(--text-sec)]">Luxury tax ({LUXURY_TAX_RATE}× over cap)</span><span className="tabular-nums text-red-600">${luxuryTaxAmount}M</span></div>
+            )}
+            <div className="flex justify-between font-bold"><span>Profit</span><span className={profit >= 0 ? 'text-green-600' : 'text-red-600'}>{profit >= 0 ? '+' : ''}${profit}M</span></div>
             <div className="border-t border-[var(--border)] my-1" />
             <div className="flex justify-between"><span className="text-[var(--text-sec)]">Salary Cap</span><span className="font-bold">${cap}M</span></div>
             <div className="flex justify-between"><span className="text-[var(--text-sec)]">Cap Space</span><span className={`font-bold ${remaining < 10 ? 'text-red-600' : 'text-green-600'}`}>${Math.round(remaining * 10) / 10}M</span></div>

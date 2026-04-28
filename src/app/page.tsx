@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { SpotlightAudioPlayer } from '@/components/game/SpotlightAudioPlayer';
 
-import { useGameStore } from '@/lib/engine/store';
+import { useGameStore, computeLuxuryTax } from '@/lib/engine/store';
 import { migrateFromLocalStorage, getItem as idbGetItem } from '@/lib/storage';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
@@ -846,7 +846,8 @@ function Dashboard() {
   const playerPayroll = Math.round(userTeam.totalPayroll * 10) / 10;
   const coachingPayroll = Math.round((userTeam.coaches ?? []).reduce((s, c) => s + (c.salary ?? 0), 0) * 10) / 10;
   const coachingDeadCap = Math.round((userTeam.deadCap ?? []).filter(d => d.isCoaching).reduce((s, d) => s + d.amount, 0) * 10) / 10;
-  const expenses = Math.round((playerPayroll + coachingPayroll + coachingDeadCap) * 10) / 10;
+  const luxuryTax = computeLuxuryTax(userTeam.totalPayroll, userTeam.salaryCap);
+  const expenses = Math.round((playerPayroll + coachingPayroll + coachingDeadCap + luxuryTax) * 10) / 10;
   const profit = Math.round((totalRevenue - expenses) * 10) / 10;
 
   // Recent news (latest 5 items)
@@ -1172,6 +1173,9 @@ function Dashboard() {
                   <div className="flex justify-between"><span className="text-[var(--text-sec)]">Revenue</span><span className="font-bold text-green-600">${totalRevenue}M</span></div>
                   <div className="flex justify-between"><span className="text-[var(--text-sec)]">Player Payroll</span><span className="font-bold">${playerPayroll}M</span></div>
                   <div className="flex justify-between"><span className="text-[var(--text-sec)]">Coaching Payroll</span><span className="font-bold">${coachingPayroll}M{coachingDeadCap > 0 ? ` + $${coachingDeadCap}M dead` : ''}</span></div>
+                  {luxuryTax > 0 && (
+                    <div className="flex justify-between"><span className="text-[var(--text-sec)]">Luxury Tax</span><span className="font-bold text-red-600">${luxuryTax}M</span></div>
+                  )}
                   <div className="flex justify-between"><span className="text-[var(--text-sec)]">Total Expenses</span><span className="font-bold">${expenses}M</span></div>
                   <div className="flex justify-between"><span className="text-[var(--text-sec)]">Profit</span><span className={`font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{profit >= 0 ? '+' : ''}${profit}M</span></div>
                   <div className="border-t border-[var(--border)] my-1" />
