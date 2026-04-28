@@ -1109,23 +1109,6 @@ export default function DraftPage() {
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const draftYear = currentDraftYear ?? season;
 
-  if (isSpectator) {
-    return (
-      <GameShell>
-        <div className="max-w-4xl mx-auto">
-          <SpectatorBanner />
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
-            <div className="text-3xl mb-3">🎯</div>
-            <h2 className="text-xl font-black mb-1">Draft — Read-only</h2>
-            <p className="text-sm text-[var(--text-sec)] max-w-md mx-auto">
-              Spectator leagues let the AI run the entire draft. Check the Draft Recap after the picks complete.
-            </p>
-          </div>
-        </div>
-      </GameShell>
-    );
-  }
-
   // Detect draftResults entries whose player no longer exists. These are
   // "ghost picks" — they show in the table but with no player and no way to
   // interact with them. Tracked separately so we can both auto-recover and
@@ -1162,6 +1145,26 @@ export default function DraftPage() {
   const [scoutedOnly, setScoutedOnly] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showTradeModal, setShowTradeModal] = useState(false);
+
+  // Spectator early-return placed AFTER all hooks. Same hooks-rule fix as
+  // /trades — was crashing the GameShell error boundary on /draft when an
+  // observe-only league hit the draft phase.
+  if (isSpectator) {
+    return (
+      <GameShell>
+        <div className="max-w-4xl mx-auto">
+          <SpectatorBanner />
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
+            <div className="text-3xl mb-3">🎯</div>
+            <h2 className="text-xl font-black mb-1">Draft — Read-only</h2>
+            <p className="text-sm text-[var(--text-sec)] max-w-md mx-auto">
+              Spectator leagues let the AI run the entire draft. Check the Draft Recap after the picks complete.
+            </p>
+          </div>
+        </div>
+      </GameShell>
+    );
+  }
 
   if (phase !== 'draft') {
     return (

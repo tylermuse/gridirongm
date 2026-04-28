@@ -833,22 +833,6 @@ function TradesPage() {
     return season + 1;
   })();
   const godMode = leagueSettings?.godMode ?? false;
-  if (isSpectator) {
-    return (
-      <GameShell>
-        <div className="max-w-6xl mx-auto">
-          <SpectatorBanner />
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
-            <div className="text-3xl mb-3">🤝</div>
-            <h2 className="text-xl font-black mb-1">Trades — Read-only</h2>
-            <p className="text-sm text-[var(--text-sec)] max-w-md mx-auto">
-              Spectator leagues run AI-only. Watch trade rumors and league moves develop in the news feed instead.
-            </p>
-          </div>
-        </div>
-      </GameShell>
-    );
-  }
 
   // Helper that binds the current teams list to pickTradeValue. The engine's
   // exported function takes optional teams; bind once so every call site sees
@@ -1024,6 +1008,26 @@ function TradesPage() {
     });
     return map;
   }, [phase, draftOrder, teams, upcomingDraftYear]);
+
+  // Spectator early-return placed AFTER all hooks to keep React's hooks
+  // contract (same hook count every render). Tofftanaut report 4/27 PM:
+  // /trades was crashing the GameShell error boundary in spectator leagues.
+  if (isSpectator) {
+    return (
+      <GameShell>
+        <div className="max-w-6xl mx-auto">
+          <SpectatorBanner />
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
+            <div className="text-3xl mb-3">🤝</div>
+            <h2 className="text-xl font-black mb-1">Trades — Read-only</h2>
+            <p className="text-sm text-[var(--text-sec)] max-w-md mx-auto">
+              Spectator leagues run AI-only. Watch trade rumors and league moves develop in the news feed instead.
+            </p>
+          </div>
+        </div>
+      </GameShell>
+    );
+  }
 
   // Only show pick numbers for the upcoming draft — future years' orders are unknown
   const currentDraftYear = upcomingDraftYear;
