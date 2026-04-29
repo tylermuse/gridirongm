@@ -1093,6 +1093,7 @@ export default function DraftPage() {
     scoutingLevel,
     draftPlayer,
     scoutPlayer,
+    toggleStarProspect,
     setScoutingLevel,
     simDraftPick,
     simToUserDraftPick,
@@ -1142,7 +1143,7 @@ export default function DraftPage() {
   const [positionFilter, setPositionFilter] = useState<Position | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedProspectId, setExpandedProspectId] = useState<string | null>(null);
-  const [scoutedOnly, setScoutedOnly] = useState(false);
+  const [prospectFilter, setProspectFilter] = useState<'all' | 'starred' | 'scouted'>('all');
   const [showImportModal, setShowImportModal] = useState(false);
   const [showTradeModal, setShowTradeModal] = useState(false);
 
@@ -1269,7 +1270,8 @@ export default function DraftPage() {
   const prospects = allProspects
     .filter((player) => positionFilter === 'ALL' || player.position === positionFilter)
     .filter((player) => {
-      if (scoutedOnly && !isPlayerScouted(player.id)) return false;
+      if (prospectFilter === 'starred' && !player.isStarred) return false;
+      if (prospectFilter === 'scouted' && !isPlayerScouted(player.id)) return false;
       const query = searchQuery.trim().toLowerCase();
       if (!query) return true;
       return `${player.firstName} ${player.lastName}`.toLowerCase().includes(query);
@@ -1626,16 +1628,24 @@ export default function DraftPage() {
                 </div>
                 <span className="text-xs font-bold">{scoutPointsLeft}/{ss?.maxScoutPoints ?? 15}</span>
               </div>
-              <button
-                onClick={() => setScoutedOnly(!scoutedOnly)}
-                className={`px-3 py-1 text-xs rounded-lg font-medium border transition-colors ${
-                  scoutedOnly
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-[var(--surface)] text-[var(--text-sec)] border-[var(--border)] hover:text-[var(--text)]'
-                }`}
-              >
-                {scoutedOnly ? 'Scouted only' : 'Show all'}
-              </button>
+              {/* milkytoad 4/27: 3-state filter so you can flip between
+                  the whole board, your starred shortlist, and what you've
+                  paid scout points on. */}
+              <div className="flex bg-[var(--surface-2)] rounded-lg p-0.5">
+                {(['all', 'starred', 'scouted'] as const).map(opt => (
+                  <button
+                    key={opt}
+                    onClick={() => setProspectFilter(opt)}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${
+                      prospectFilter === opt
+                        ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm'
+                        : 'text-[var(--text-sec)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    {opt === 'all' ? 'All' : opt === 'starred' ? '⭐ Starred' : 'Scouted'}
+                  </button>
+                ))}
+              </div>
             </div>
             {/* Roster Needs Snapshot */}
             <details className="mb-3" open>
@@ -1707,6 +1717,16 @@ export default function DraftPage() {
                       <td className="py-2.5 text-center text-xs text-[var(--text-sec)] font-mono">{projRank}</td>
                       <td className="py-2.5">
                         <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleStarProspect(player.id); }}
+                            className="shrink-0 w-5 h-5 flex items-center justify-center transition-transform hover:scale-110"
+                            title={player.isStarred ? 'Unstar prospect' : 'Star prospect'}
+                            aria-label={player.isStarred ? 'Unstar prospect' : 'Star prospect'}
+                          >
+                            <span className={`text-base leading-none ${player.isStarred ? 'text-amber-500' : 'text-[var(--text-sec)]/30 hover:text-amber-400'}`}>
+                              {player.isStarred ? '★' : '☆'}
+                            </span>
+                          </button>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
                               <span className="font-semibold truncate">{player.firstName} {player.lastName}</span>

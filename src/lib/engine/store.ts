@@ -196,6 +196,8 @@ interface GameStore extends LeagueState {
   editPlayer: (playerId: string, updates: Partial<Player>) => void;
   /** God Mode: re-roll the auto-generated avatar portrait for a player */
   rerollPortrait: (playerId: string) => void;
+  /** Toggle the "starred" flag on a draft prospect. milkytoad 4/27. */
+  toggleStarProspect: (playerId: string) => void;
   /** God Mode: create a new player and add to the user's team */
   createPlayer: (data: { firstName: string; lastName: string; position: Position; age: number; overall: number; potential: number }) => string | null;
   setSuppressTradePopups: (val: boolean) => void;
@@ -8674,6 +8676,15 @@ export const useGameStore = create<GameStore>()(
         set({
           players: state.players.map(p =>
             p.id === playerId ? { ...p, portraitSeedOverride: seed } : p,
+          ),
+        });
+      },
+
+      toggleStarProspect: (playerId: string) => {
+        const state = get();
+        set({
+          players: state.players.map(p =>
+            p.id === playerId ? { ...p, isStarred: !p.isStarred } : p,
           ),
         });
       },

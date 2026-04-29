@@ -380,6 +380,10 @@ export interface Player {
    *  When set, PlayerAvatar uses this in place of `id` so users can re-roll
    *  a portrait they don't like. */
   portraitSeedOverride?: string;
+  /** User-flagged "starred" draft prospect — keep tabs across the scouting
+   *  window. Cleared when the player gets drafted (no longer a prospect).
+   *  milkytoad 4/27 ask. */
+  isStarred?: boolean;
   /** Combine measurables (40-yard dash, bench press, vertical jump) */
   combineStats?: { fortyYard: number; benchPress: number; verticalJump: number };
   /** College / university the player attended (flavor text for draft) */
