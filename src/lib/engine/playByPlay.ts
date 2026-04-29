@@ -162,6 +162,8 @@ interface KeyPlayers {
   // across the depth chart instead of piling everything on the first starter
   // (and making RB2/CB2/DL2/etc. invisible in the boxscore).
   rbs: Player[];
+  wrs: Player[];
+  tes: Player[];
   dls: Player[];
   lbs: Player[];
   cbs: Player[];
@@ -200,13 +202,14 @@ function extractKeyPlayers(players: Player[], depthChart?: Record<string, string
   const rbs = byPos('RB');
   const dls = byPos('DL');
   const lbs = byPos('LB');
+  const tes = byPos('TE');
   return {
     qb: byPos('QB')[0] ?? null,
     rb: rbs[0] ?? null,
     wr1: wrs[0] ?? null,
     wr2: wrs[1] ?? null,
     wr3: wrs[2] ?? null,
-    te: byPos('TE')[0] ?? null,
+    te: tes[0] ?? null,
     ols: byPos('OL'),
     dl1: dls[0] ?? null,
     lb1: lbs[0] ?? null,
@@ -215,6 +218,8 @@ function extractKeyPlayers(players: Player[], depthChart?: Record<string, string
     s1: safeties[0] ?? null,
     k: byPos('K')[0] ?? null,
     rbs,
+    wrs,
+    tes,
     dls,
     lbs,
     cbs,
@@ -266,6 +271,25 @@ function pickInterceptor(cbs: Player[], safeties: Player[], lbs: Player[]): Play
     const skill = (p.ratings.coverage ?? 60) + (p.ratings.awareness ?? 60) * 0.5;
     return base * skill;
   });
+}
+
+/** Pick a pass target. WRs are weighted by depth-chart slot, TEs and the
+ *  receiving back get a fixed share. Mirrors the slot-percentage logic that
+ *  existed before but uses pickWeighted so the exact same player isn't
+ *  targeted every single play — variety within the WR pool is now real. */
+function pickReceiver(wrs: Player[], tes: Player[], rbs: Player[]): Player | null {
+  const entries: { p: Player; w: number }[] = [];
+  const depthWeights = [1.0, 0.75, 0.50, 0.15];
+  wrs.slice(0, 4).forEach((p, i) => {
+    entries.push({ p, w: depthWeights[i] * (0.5 + (p.ratings.catching ?? 60) / 100) });
+  });
+  if (tes[0]) entries.push({ p: tes[0], w: 0.65 });
+  if (rbs[0]) entries.push({ p: rbs[0], w: 0.43 });
+  if (entries.length === 0) return null;
+  const total = entries.reduce((s, e) => s + e.w, 0);
+  let r = Math.random() * total;
+  for (const e of entries) { r -= e.w; if (r <= 0) return e.p; }
+  return entries[entries.length - 1].p;
 }
 
 function playerTag(p: Player | null, fallback: string): string {
@@ -1463,14 +1487,7 @@ export function simulatePlayByPlay(
 
         const isLong = yardsGained >= 20;
 
-        // Expanded receiver targeting: WR1 28%, WR2 21%, WR3 14%, TE 18%, RB 12%, other 7%
-        const recRoll = Math.random();
-        let receiver: Player | null;
-        if (recRoll < 0.28) receiver = ok.wr1;
-        else if (recRoll < 0.49) receiver = ok.wr2;
-        else if (recRoll < 0.63) receiver = ok.wr3 ?? ok.wr2;
-        else if (recRoll < 0.81) receiver = ok.te;
-        else receiver = ok.rb; // RB catches (screens, check-downs)
+        const receiver = pickReceiver(ok.wrs, ok.tes, ok.rbs);
 
         ob.passAttempts += 1;
         ob.passCompletions += 1;
@@ -1503,13 +1520,7 @@ export function simulatePlayByPlay(
         // INCOMPLETE
         ob.passAttempts += 1;
 
-        const recRoll2 = Math.random();
-        let receiver: Player | null;
-        if (recRoll2 < 0.28) receiver = ok.wr1;
-        else if (recRoll2 < 0.49) receiver = ok.wr2;
-        else if (recRoll2 < 0.63) receiver = ok.wr3 ?? ok.wr2;
-        else if (recRoll2 < 0.81) receiver = ok.te;
-        else receiver = ok.rb;
+        const receiver = pickReceiver(ok.wrs, ok.tes, ok.rbs);
 
         ob.receivingTargets += 1;
         if (receiver) creditReceiver(ob, receiver.id, { targets: 1 });

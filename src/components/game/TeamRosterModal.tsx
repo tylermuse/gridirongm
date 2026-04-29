@@ -211,7 +211,8 @@ export function TeamRosterModal({ teamId, onClose, onPlayerClick }: TeamRosterMo
 
         {/* Roster table */}
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[580px]">
             <thead>
               <tr className="border-b border-[var(--border)]">
                 <SortHeader k="name" className="text-left pl-3 w-44">Name</SortHeader>
@@ -343,6 +344,7 @@ export function TeamRosterModal({ teamId, onClose, onPlayerClick }: TeamRosterMo
               })}
             </tbody>
           </table>
+          </div>{/* overflow-x-auto */}
 
           {sortedRoster.length === 0 && (
             <div className="text-center py-8 text-[var(--text-sec)] text-sm">
