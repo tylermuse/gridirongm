@@ -152,6 +152,36 @@ export function coachDeadCapOnFire(coach: Coach): number {
   return Math.round((coach.salary ?? 0) * yearsLeft * 0.6 * 10) / 10;
 }
 
+/** Average salary anchor for a role in this league — used to scale
+ *  promotion contracts to the new role's market. */
+function roleSalaryAnchor(role: CoachRole): number {
+  // Rough midpoints from generateCoach's per-role salary curves.
+  if (role === 'HC') return 8;
+  if (role === 'OC' || role === 'DC') return 4.5;
+  return 1.0; // position coaches
+}
+
+/**
+ * Promote a coach from their current role to a new role at a salary
+ * anchored midway between their current AAV and the new role's market
+ * average. Year length carries over from current contract. Returns the
+ * promoted coach (caller mutates the team.coaches array).
+ */
+export function promoteCoach(coach: Coach, newRole: CoachRole): Coach {
+  const currentSalary = coach.salary ?? roleSalaryAnchor(coach.role);
+  const targetAnchor = roleSalaryAnchor(newRole);
+  const newSalary = Math.round(((currentSalary + targetAnchor) / 2) * 10) / 10;
+  const years = Math.max(2, coach.contractYears ?? 3);
+  return {
+    ...coach,
+    role: newRole,
+    salary: newSalary,
+    contractYears: years,
+    guaranteed: Math.round(newSalary * years * 0.6 * 10) / 10,
+    yearsWithTeam: 0, // fresh role
+  };
+}
+
 export function generateCoachingStaff(): Coach[] {
   return [
     generateCoach('HC'), generateCoach('OC'), generateCoach('DC'),

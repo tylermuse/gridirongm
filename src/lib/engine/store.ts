@@ -22,7 +22,7 @@ import { developPlayers, POSITION_AGING } from './development';
 import { generateWeeklyRecap } from './recap';
 import { checkAchievements } from './achievements';
 import { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor, maxReasonableAAV } from './salary';
-import { generateCoachingStaff, generateCoach, generatePositionCoaches, backfillCoachHistory, coachingBonus, progressCoaches, processCoachingCarousel, positionCoachDevMultiplier, rollOwnerPersonality, coachDeadCapOnFire } from './coaching';
+import { generateCoachingStaff, generateCoach, generatePositionCoaches, backfillCoachHistory, coachingBonus, progressCoaches, processCoachingCarousel, positionCoachDevMultiplier, rollOwnerPersonality, coachDeadCapOnFire, promoteCoach } from './coaching';
 import { computeLeagueQBTiers, getQBTierModifier } from './qbTierPyramid';
 import { generateSeasonObjectives, evaluateObjectives } from './objectives';
 import { defaultApproval, updateApprovalAfterGame, updateApprovalEndOfSeason, updateApprovalForMove } from './approval';
@@ -180,6 +180,9 @@ interface GameStore extends LeagueState {
   intelReportFA: (playerId: string) => boolean;
   // Coaching
   replaceCoach: (role: import('@/types').CoachRole, specificCoach?: import('@/types').Coach) => void;
+  /** Promote an existing coach to a new (higher) role. Validates that the
+   *  target slot is open. Tofftanaut 4/27 ask. */
+  promoteCoachToRole: (coachId: string, newRole: import('@/types').CoachRole) => void;
   // PRD-13: Depth chart
   reorderDepthChart: (position: Position, playerIds: string[]) => void;
   resetDepthChart: (position: Position) => void;
@@ -7511,6 +7514,35 @@ export const useGameStore = create<GameStore>()(
             season: state.season, week: state.week, type: 'signing',
             teamId: state.userTeamId,
             headline: `${roleLabel} change: ${oldCoach ? `${oldCoach.firstName} ${oldCoach.lastName} fired` : 'Vacancy filled'}. ${newCoach.firstName} ${newCoach.lastName} hired.${newsExtras}`,
+            isUserTeam: true,
+          })],
+        });
+      },
+
+      promoteCoachToRole: (coachId: string, newRole: import('@/types').CoachRole) => {
+        const state = get();
+        const userTeam = state.teams.find(t => t.id === state.userTeamId);
+        if (!userTeam) return;
+        const coach = userTeam.coaches?.find(c => c.id === coachId);
+        if (!coach) return;
+        // Validate target slot is open — don't silently overwrite an existing
+        // coach in the new role; user has to fire them first.
+        const slotFilled = userTeam.coaches?.some(c => c.role === newRole);
+        if (slotFilled) return;
+        const promoted = promoteCoach(coach, newRole);
+        const oldRoleLabel = coach.role === 'HC' ? 'Head Coach' : coach.role === 'OC' ? 'OC' : coach.role === 'DC' ? 'DC' : `${coach.role} Coach`;
+        const newRoleLabel = newRole === 'HC' ? 'Head Coach' : newRole === 'OC' ? 'Offensive Coordinator' : newRole === 'DC' ? 'Defensive Coordinator' : `${newRole} Coach`;
+        const updatedTeams = state.teams.map(t => {
+          if (t.id !== state.userTeamId) return t;
+          const coaches = (t.coaches ?? []).map(c => c.id === coachId ? promoted : c);
+          return { ...t, coaches };
+        });
+        set({
+          teams: updatedTeams,
+          newsItems: [...state.newsItems, makeNews({
+            season: state.season, week: state.week, type: 'signing',
+            teamId: state.userTeamId,
+            headline: `${userTeam.city} promote ${coach.firstName} ${coach.lastName} from ${oldRoleLabel} to ${newRoleLabel} — $${promoted.salary?.toFixed(1)}M/yr × ${promoted.contractYears}yr.`,
             isUserTeam: true,
           })],
         });

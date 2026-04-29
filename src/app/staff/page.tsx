@@ -79,7 +79,7 @@ function coachSchemeFit(
   return { icon: '❌', label: 'New scheme', cls: 'bg-red-50 text-red-700 border-red-200' };
 }
 
-function CoachCard({ coach, roster, userTeam, onReplace }: { coach: Coach; roster: Player[]; userTeam: import('@/types').Team; onReplace?: () => void }) {
+function CoachCard({ coach, roster, userTeam, onReplace, eligiblePromotions, onPromote }: { coach: Coach; roster: Player[]; userTeam: import('@/types').Team; onReplace?: () => void; eligiblePromotions?: import('@/types').CoachRole[]; onPromote?: (newRole: import('@/types').CoachRole) => void }) {
   const offSchemeLabel = coach.offensiveScheme ? OFFENSIVE_SCHEME_LABELS[coach.offensiveScheme] : null;
   const defSchemeLabel = coach.defensiveScheme ? DEFENSIVE_SCHEME_LABELS[coach.defensiveScheme] : null;
   const winPct = coach.careerWins + coach.careerLosses > 0
@@ -127,6 +127,19 @@ function CoachCard({ coach, roster, userTeam, onReplace }: { coach: Coach; roste
                 Replace
               </button>
             )}
+            {eligiblePromotions && eligiblePromotions.length > 0 && onPromote && eligiblePromotions.map(target => {
+              const targetLabel = target === 'HC' ? 'HC' : target === 'OC' ? 'OC' : target === 'DC' ? 'DC' : target;
+              return (
+                <button
+                  key={target}
+                  onClick={() => onPromote(target)}
+                  className="mt-1 ml-1 text-[10px] px-2.5 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 font-medium transition-colors border border-blue-200"
+                  title={`Promote ${coach.firstName} ${coach.lastName} to ${targetLabel}`}
+                >
+                  Promote → {targetLabel}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -386,26 +399,38 @@ export default function StaffPage() {
                     </div>
                   </Card>
                 ) :
-                <CoachCard key={coach.id} coach={coach} roster={roster} userTeam={userTeam} onReplace={() => {
-                  const pool: import('@/types').Coach[] = [];
-                  // Generate extra candidates to ensure variety, then pick 6 with spread OVRs
-                  for (let i = 0; i < 18; i++) pool.push(generateCoach(coach.role));
-                  pool.sort((a, b) => b.ovr - a.ovr);
-                  // Pick 6 spread evenly across the pool
-                  const picked: import('@/types').Coach[] = [];
-                  const step = Math.max(1, Math.floor(pool.length / 6));
-                  for (let i = 0; i < 6 && i * step < pool.length; i++) {
-                    picked.push(pool[i * step]);
+                <CoachCard
+                  key={coach.id}
+                  coach={coach}
+                  roster={roster}
+                  userTeam={userTeam}
+                  onReplace={() => {
+                    const pool: import('@/types').Coach[] = [];
+                    // Generate extra candidates to ensure variety, then pick 6 with spread OVRs
+                    for (let i = 0; i < 18; i++) pool.push(generateCoach(coach.role));
+                    pool.sort((a, b) => b.ovr - a.ovr);
+                    const picked: import('@/types').Coach[] = [];
+                    const step = Math.max(1, Math.floor(pool.length / 6));
+                    for (let i = 0; i < 6 && i * step < pool.length; i++) {
+                      picked.push(pool[i * step]);
+                    }
+                    for (const c of pool) {
+                      if (picked.length >= 6) break;
+                      if (!picked.includes(c)) picked.push(c);
+                    }
+                    picked.sort((a, b) => b.ovr - a.ovr);
+                    setCandidates(picked);
+                    setConfirmReplace(coach.role);
+                  }}
+                  // OC/DC can be promoted to HC when the HC slot is open.
+                  // (HC has no upward role — empty list.)
+                  eligiblePromotions={
+                    (coach.role === 'OC' || coach.role === 'DC') && !hc
+                      ? ['HC']
+                      : []
                   }
-                  // Fill remaining if needed
-                  for (const c of pool) {
-                    if (picked.length >= 6) break;
-                    if (!picked.includes(c)) picked.push(c);
-                  }
-                  picked.sort((a, b) => b.ovr - a.ovr);
-                  setCandidates(picked);
-                  setConfirmReplace(coach.role);
-                }} />
+                  onPromote={(target) => useGameStore.getState().promoteCoachToRole(coach.id, target)}
+                />
               ))}
             </div>
 
@@ -517,19 +542,41 @@ export default function StaffPage() {
                               {coach.ovr >= 65 ? '+' : ''}{((positionCoachDevMultiplier([coach], posPlayers[0]?.position ?? 'QB') - 1) * 100).toFixed(0)}% dev rate
                             </span>
                           </div>
-                          <button
-                            onClick={() => {
-                              const pool: Coach[] = [];
-                              for (let i = 0; i < 12; i++) pool.push(generateCoach(role));
-                              pool.sort((a, b) => b.ovr - a.ovr);
-                              const picked = pool.slice(0, 6);
-                              setCandidates(picked);
-                              setConfirmReplace(role);
-                            }}
-                            className="text-[10px] px-2 py-0.5 rounded bg-red-50 text-red-600 hover:bg-red-100 font-medium border border-red-200"
-                          >
-                            Replace
-                          </button>
+                          <div className="flex flex-wrap gap-1">
+                            <button
+                              onClick={() => {
+                                const pool: Coach[] = [];
+                                for (let i = 0; i < 12; i++) pool.push(generateCoach(role));
+                                pool.sort((a, b) => b.ovr - a.ovr);
+                                const picked = pool.slice(0, 6);
+                                setCandidates(picked);
+                                setConfirmReplace(role);
+                              }}
+                              className="text-[10px] px-2 py-0.5 rounded bg-red-50 text-red-600 hover:bg-red-100 font-medium border border-red-200"
+                            >
+                              Replace
+                            </button>
+                            {/* Position coaches can be promoted to OC (offensive units)
+                                or DC (defensive units) when those slots are open. */}
+                            {(['QB', 'RB', 'WR', 'OL'].includes(role) && !oc) && (
+                              <button
+                                onClick={() => coach && useGameStore.getState().promoteCoachToRole(coach.id, 'OC')}
+                                className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 font-medium border border-blue-200"
+                                title={`Promote ${coach.firstName} ${coach.lastName} to Offensive Coordinator`}
+                              >
+                                Promote → OC
+                              </button>
+                            )}
+                            {(['DL', 'DB'].includes(role) && !dc) && (
+                              <button
+                                onClick={() => coach && useGameStore.getState().promoteCoachToRole(coach.id, 'DC')}
+                                className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 font-medium border border-blue-200"
+                                title={`Promote ${coach.firstName} ${coach.lastName} to Defensive Coordinator`}
+                              >
+                                Promote → DC
+                              </button>
+                            )}
+                          </div>
                         </>
                       ) : (
                         <div className="text-xs text-[var(--text-sec)]">
