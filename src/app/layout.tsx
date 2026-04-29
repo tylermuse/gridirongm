@@ -24,8 +24,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={barlowCondensed.variable}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {/* Theme bootstrap — runs before paint so the dark theme doesn't
+            flash light. Reads the persisted preference (or OS default) and
+            stamps data-theme on <html>. The matching ThemeToggle component
+            keeps this in sync at runtime. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('bsfootball-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();`,
+          }}
+        />
       </head>
-      <body className="antialiased min-h-screen" style={{ backgroundColor: '#f0f4f8' }}>
+      <body className="antialiased min-h-screen">
         <Providers>
           {children}
           <FeedbackWidget />

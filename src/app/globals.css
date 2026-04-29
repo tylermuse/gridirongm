@@ -15,6 +15,27 @@
   --amber: #d97706;
 }
 
+/* Dark mode (TimNation 4/16, atxym 4/28, sparks00 4/29). Toggled via
+ * data-theme="dark" on the <html> element. Existing components use
+ * --bg / --surface / --surface-2 / --border / --text / --text-sec
+ * tokens, so flipping these custom properties carries the whole UI.
+ * Status-badge color combos (bg-green-50, bg-red-100, etc.) read as
+ * muted pastels on dark backgrounds and don't need explicit overrides. */
+html[data-theme="dark"] {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-2: #334155;
+  --border: #475569;
+  --text: #f1f5f9;
+  --text-sec: #94a3b8;
+  --accent: #60a5fa;
+  --accent-glow: rgba(96, 165, 250, 0.18);
+  --green: #4ade80;
+  --red: #f87171;
+  --amber: #fbbf24;
+  color-scheme: dark;
+}
+
 html, body {
   background-color: var(--bg) !important;
   color: var(--text) !important;
