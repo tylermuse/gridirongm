@@ -152,6 +152,14 @@ export function coachDeadCapOnFire(coach: Coach): number {
   return Math.round((coach.salary ?? 0) * yearsLeft * 0.6 * 10) / 10;
 }
 
+/** Coaches whose contracts expire at the end of the given season.
+ *  Used by the re-signing surface and the Dashboard expiry card.
+ *  Coach contractYears reflects "years remaining"; <= 1 means this is
+ *  their final season under contract. */
+export function getExpiringCoaches(team: Team): Coach[] {
+  return (team.coaches ?? []).filter(c => (c.contractYears ?? 0) <= 1);
+}
+
 /** Average salary anchor for a role in this league — used to scale
  *  promotion contracts to the new role's market. */
 function roleSalaryAnchor(role: CoachRole): number {

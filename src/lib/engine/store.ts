@@ -183,6 +183,9 @@ interface GameStore extends LeagueState {
   /** Promote an existing coach to a new (higher) role. Validates that the
    *  target slot is open. Tofftanaut 4/27 ask. */
   promoteCoachToRole: (coachId: string, newRole: import('@/types').CoachRole) => void;
+  /** Extend a coach's contract by N years at the same AAV (or a new
+   *  AAV if provided). Atxym + tofftanaut 4/28 expiry-reminders ask. */
+  extendCoachContract: (coachId: string, years: number, salary?: number) => void;
   // PRD-13: Depth chart
   reorderDepthChart: (position: Position, playerIds: string[]) => void;
   resetDepthChart: (position: Position) => void;
@@ -7543,6 +7546,33 @@ export const useGameStore = create<GameStore>()(
             season: state.season, week: state.week, type: 'signing',
             teamId: state.userTeamId,
             headline: `${userTeam.city} promote ${coach.firstName} ${coach.lastName} from ${oldRoleLabel} to ${newRoleLabel} — $${promoted.salary?.toFixed(1)}M/yr × ${promoted.contractYears}yr.`,
+            isUserTeam: true,
+          })],
+        });
+      },
+
+      extendCoachContract: (coachId: string, years: number, salary?: number) => {
+        const state = get();
+        const userTeam = state.teams.find(t => t.id === state.userTeamId);
+        if (!userTeam) return;
+        const coach = userTeam.coaches?.find(c => c.id === coachId);
+        if (!coach) return;
+        const newSalary = salary ?? coach.salary ?? 1;
+        const newYears = Math.max(1, years);
+        const newGuaranteed = Math.round(newSalary * newYears * 0.6 * 10) / 10;
+        const updatedTeams = state.teams.map(t => {
+          if (t.id !== state.userTeamId) return t;
+          const coaches = (t.coaches ?? []).map(c =>
+            c.id === coachId ? { ...c, salary: newSalary, contractYears: newYears, guaranteed: newGuaranteed } : c,
+          );
+          return { ...t, coaches };
+        });
+        set({
+          teams: updatedTeams,
+          newsItems: [...state.newsItems, makeNews({
+            season: state.season, week: state.week, type: 'signing',
+            teamId: state.userTeamId,
+            headline: `${userTeam.city} extend ${coach.firstName} ${coach.lastName} (${coach.role}) — $${newSalary.toFixed(1)}M/yr × ${newYears}yr.`,
             isUserTeam: true,
           })],
         });

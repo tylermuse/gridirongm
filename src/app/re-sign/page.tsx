@@ -43,7 +43,7 @@ type NegMode = 'extend' | 'restructure';
 
 export default function ReSignPage() {
   const router = useRouter();
-  const { phase, players, teams, userTeamId, resigningPlayers, resignPlayer, passOnResigning, passOnResigningBatch, franchiseTagPlayer, advanceToFreeAgency } = useGameStore();
+  const { phase, players, teams, userTeamId, resigningPlayers, resignPlayer, passOnResigning, passOnResigningBatch, franchiseTagPlayer, advanceToFreeAgency, extendCoachContract } = useGameStore();
   const userTeamForRoster = teams.find(t => t.id === userTeamId);
   const roster = userTeamForRoster
     ? players.filter(p => userTeamForRoster.roster.includes(p.id) && !p.retired)
@@ -200,6 +200,11 @@ export default function ReSignPage() {
       return (pB?.ratings.overall ?? 0) - (pA?.ratings.overall ?? 0);
     });
 
+  // Coaching contracts expiring (atxym + tofftanaut 4/28). Surfaced
+  // above the player section so it's not buried.
+  const userTeamCoaches = teams.find(t => t.id === userTeamId)?.coaches ?? [];
+  const expiringCoaches = userTeamCoaches.filter(c => (c.contractYears ?? 0) <= 1);
+
   return (
     <GameShell>
       <div className="max-w-6xl mx-auto">
@@ -286,6 +291,56 @@ export default function ReSignPage() {
             })()}
           </div>
         </div>
+
+        {/* Coaching contracts expiring — paired with the new finances ship,
+            so users don't accidentally lose their DC because the deadline
+            snuck up. atxym + tofftanaut 4/28. */}
+        {expiringCoaches.length > 0 && (
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle>
+                <span className="flex items-center gap-2"><span>🧑‍🏫</span> Coaching Contracts Expiring ({expiringCoaches.length})</span>
+              </CardTitle>
+            </CardHeader>
+            <div className="px-4 pb-4 space-y-2">
+              {expiringCoaches.map(c => {
+                const aav = c.salary ?? 1;
+                return (
+                  <div key={c.id} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[var(--surface-2)]">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-sm truncate">
+                        {c.firstName} {c.lastName}
+                        <span className="ml-2 text-[10px] uppercase tracking-wider text-[var(--text-sec)]">{c.role}</span>
+                      </div>
+                      <div className="text-[10px] text-[var(--text-sec)]">
+                        Current: ${aav.toFixed(1)}M/yr · {c.trait}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => extendCoachContract(c.id, 2)}
+                        className="text-[11px] px-2.5 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold border border-blue-200"
+                        title={`Extend 2 years at $${aav.toFixed(1)}M/yr`}
+                      >
+                        Extend 2yr
+                      </button>
+                      <button
+                        onClick={() => extendCoachContract(c.id, 4)}
+                        className="text-[11px] px-2.5 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold border border-blue-200"
+                        title={`Extend 4 years at $${aav.toFixed(1)}M/yr`}
+                      >
+                        Extend 4yr
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              <p className="text-[10px] text-[var(--text-sec)] italic mt-2">
+                Coaches at <strong>1 year remaining</strong> hit free agency at season end. Extend now to keep them.
+              </p>
+            </div>
+          </Card>
+        )}
 
         {/* Negotiation panel */}
         {negotiation && (
