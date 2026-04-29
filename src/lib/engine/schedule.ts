@@ -317,6 +317,11 @@ function generateScheduleFallback(teams: Team[], season: number): GameResult[] {
     const gamesPlayedByTeamId = new Map<string, number>(teams.map((team) => [team.id, 0]));
     const homeGamesByTeamId = new Map<string, number>(teams.map((team) => [team.id, 0]));
     const pairCounts = new Map<string, number>();
+    // wildbadger5 4/29: division pairs were sometimes scheduled HH/AA when
+    // the running home-count balance + random tiebreaker happened to pick
+    // the same host both times. Track first-meeting host so the second
+    // meeting can be forced to the opposite venue.
+    const firstHomeByPair = new Map<string, string>();
     const schedule: GameResult[] = [];
     let failed = false;
 
@@ -325,7 +330,7 @@ function generateScheduleFallback(teams: Team[], season: number): GameResult[] {
         teams.filter((team) => byeWeekByTeamId.get(team.id) !== week),
       );
       const weeklyGames = buildWeekGames(
-        available, week, season, gamesPlayedByTeamId, homeGamesByTeamId, pairCounts, teams,
+        available, week, season, gamesPlayedByTeamId, homeGamesByTeamId, pairCounts, firstHomeByPair, teams,
       );
 
       if (!weeklyGames) { failed = true; break; }
@@ -359,6 +364,7 @@ function buildWeekGames(
   gamesPlayedByTeamId: Map<string, number>,
   homeGamesByTeamId: Map<string, number>,
   pairCounts: Map<string, number>,
+  firstHomeByPair: Map<string, string>,
   allTeams: Team[],
 ): GameResult[] | null {
   const games: GameResult[] = [];
@@ -428,18 +434,32 @@ function buildWeekGames(
     const opponent = selected.candidate;
     available.splice(selected.index, 1);
 
-    const teamHome = homeGamesByTeamId.get(team.id) ?? 0;
-    const opponentHome = homeGamesByTeamId.get(opponent.id) ?? 0;
-    const shouldTeamBeHome = teamHome < opponentHome || (teamHome === opponentHome && Math.random() < 0.5);
-    const homeTeamId = shouldTeamBeHome ? team.id : opponent.id;
-    const awayTeamId = shouldTeamBeHome ? opponent.id : team.id;
+    // H/A direction. Second meetings between the same pair MUST flip
+    // venues — otherwise division pairs can end up HH or AA, which the
+    // NFL rotation forbids and which testers (wildbadger5) have flagged.
+    // First meetings still use the home-count balance heuristic.
+    const pairKey = makePairKey(team.id, opponent.id);
+    const prevPairCount = pairCounts.get(pairKey) ?? 0;
+    let homeTeamId: string;
+    let awayTeamId: string;
+    if (prevPairCount >= 1 && firstHomeByPair.has(pairKey)) {
+      const firstHome = firstHomeByPair.get(pairKey)!;
+      homeTeamId = firstHome === team.id ? opponent.id : team.id;
+      awayTeamId = firstHome === team.id ? team.id : opponent.id;
+    } else {
+      const teamHome = homeGamesByTeamId.get(team.id) ?? 0;
+      const opponentHome = homeGamesByTeamId.get(opponent.id) ?? 0;
+      const shouldTeamBeHome = teamHome < opponentHome || (teamHome === opponentHome && Math.random() < 0.5);
+      homeTeamId = shouldTeamBeHome ? team.id : opponent.id;
+      awayTeamId = shouldTeamBeHome ? opponent.id : team.id;
+      firstHomeByPair.set(pairKey, homeTeamId);
+    }
 
     games.push(makeGame(homeTeamId, awayTeamId, week, season));
     gamesPlayedByTeamId.set(team.id, (gamesPlayedByTeamId.get(team.id) ?? 0) + 1);
     gamesPlayedByTeamId.set(opponent.id, (gamesPlayedByTeamId.get(opponent.id) ?? 0) + 1);
     homeGamesByTeamId.set(homeTeamId, (homeGamesByTeamId.get(homeTeamId) ?? 0) + 1);
-    const key = makePairKey(team.id, opponent.id);
-    pairCounts.set(key, (pairCounts.get(key) ?? 0) + 1);
+    pairCounts.set(pairKey, prevPairCount + 1);
   }
 
   return games;
