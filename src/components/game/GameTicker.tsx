@@ -224,11 +224,10 @@ export function GameTicker({ onMenuToggle }: { onMenuToggle?: () => void } = {})
                   </span>
                 ) : (
                   <span className={`hidden sm:inline text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                    tier === 'elite' ? 'bg-amber-100 text-amber-700' :
-                    tier === 'pro' ? 'bg-blue-100 text-blue-700' :
+                    tier === 'premium' ? 'bg-blue-100 text-blue-700' :
                     'bg-gray-100 text-gray-700'
                   }`}>
-                    {tier === 'elite' ? 'Elite' : tier === 'pro' ? 'Pro' : 'Free'}
+                    {tier === 'premium' ? 'Premium' : 'Free'}
                   </span>
                 )}
               </div>
