@@ -7,24 +7,30 @@ import { DEFAULT_LEAGUE_SETTINGS } from '@/types';
 
 export const LEAGUE_MINIMUM_SALARY = DEFAULT_LEAGUE_SETTINGS.leagueMinSalary;
 
-// Position ceiling multipliers — tuned against 2025-26 NFL top-5 APY data:
-//   QB (~$55M) > WR/EDGE (~$40M) > OT/DT (~$28M) > CB (~$22M) >
-//   LB/S/TE/iOL (~$18-20M) > RB (~$18M, custom curve) > K/P (~$4M/$2.5M hard cap).
-// Community feedback (tofftanaut, Apr 16): LBs asking $40M+ was breaking
-// immersion — these multipliers cap that behavior at the top end while
-// preserving the base OVR curve for mid/low tier asks.
+// Position multipliers — tuned against 2025-26 NFL market. Sub-position
+// overrides (EDGE/DT/OT/OG/C) take priority when available; these values
+// serve as fallbacks for players without a resolved sub-position.
+//   QB (~$55M) > EDGE (~$42M) > WR/DT (~$32-38M) > OT/CB (~$26-30M) >
+//   TE/LB/S/iOL (~$18-22M) > RB (custom curve) > K/P (~$4M/$2.5M hard cap).
 const POSITION_SALARY_MULTIPLIER: Partial<Record<Position, number>> = {
   QB: 1.15,
-  WR: 0.85,
-  DL: 0.75,
-  OL: 0.55,
-  CB: 0.45,
-  TE: 0.45,
-  LB: 0.40,
-  S: 0.40,
+  WR: 0.84,
+  DL: 0.78,   // fallback; EDGE/DT sub-position overrides kick in when set
+  OL: 0.62,   // fallback; OT/OG/C sub-position overrides kick in when set
+  CB: 0.60,   // was 0.45 — McDuffie $31M, top CBs market ~$25-32M
+  TE: 0.52,   // was 0.45 — Andrews/Kittle market ~$18-20M
+  LB: 0.50,   // was 0.40 — Warner $21M, top LBs ~$18-22M
+  S:  0.50,   // was 0.40 — Kerby Joseph $21.5M, top Ss ~$18-22M
   RB: 0.65,
-  K: 0.15,
-  P: 0.12,
+  K:  0.15,
+  P:  0.12,
+};
+
+/** Sub-position multipliers for interior OL — used by the general curve for OG/C.
+ *  EDGE, DT, and OT have their own custom curves and don't use this table. */
+const SUB_POSITION_SALARY_MULTIPLIER: Partial<Record<SubPosition, number>> = {
+  OG:   0.58,  // guards — T. Smith $24M top; starters $10-18M
+  C:    0.55,  // centers — Humphrey $18M top; starters $8-14M
 };
 
 /** Hard ceilings (per-year, before cap inflation) by position. Calibrated
@@ -56,6 +62,14 @@ const SUB_POSITION_SALARY_CEILING: Partial<Record<SubPosition, number>> = {
   C: 18,     // Creed Humphrey $18M
   // LB/DB/RB sub-positions mostly align to parent position market; no override.
 };
+
+/** Resolve the salary multiplier: sub-position wins over broad position when
+ *  available (e.g. EDGE uses 0.93, DT uses 0.60, OT uses 0.68). */
+function resolveMultiplier(position?: Position, subPosition?: SubPosition): number {
+  const subMult = subPosition ? SUB_POSITION_SALARY_MULTIPLIER[subPosition] : undefined;
+  if (subMult !== undefined) return subMult;
+  return position ? (POSITION_SALARY_MULTIPLIER[position] ?? 1.0) : 1.0;
+}
 
 /** Resolve the tighter of the broad Position ceiling and the SubPosition
  *  override. SubPosition wins when set (e.g. an EDGE DL uses $46M, a DT
@@ -119,6 +133,53 @@ export function estimateSalary(overall: number, position?: Position, age?: numbe
   const ovr = Math.max(40, Math.min(99, overall));
   let baseSalary: number;
 
+  // QBs have the most top-heavy market in the NFL — steep custom curve.
+  // Backups make $1-5M while franchise QBs make $40-55M.
+  // Real comps: backup ~$1-3M, bridge $8-15M, solid starter $22-32M,
+  // franchise $40-50M (Hurts $51M, Burrow $55M), elite $48-55M.
+  if (position === 'QB') {
+    if (ovr <= 55) {
+      // Camp arm / emergency backup — near league minimum
+      const t = (ovr - 40) / 15;
+      baseSalary = LEAGUE_MINIMUM_SALARY + t * (2.0 - LEAGUE_MINIMUM_SALARY); // $0.75M → $2M
+    } else if (ovr <= 65) {
+      // Solid backup / game manager
+      const t = (ovr - 55) / 10;
+      baseSalary = 2.0 + t * 6.0; // $2M → $8M
+    } else if (ovr <= 75) {
+      // Bridge QB / low-end starter
+      const t = (ovr - 65) / 10;
+      baseSalary = 8.0 + t * 14.0; // $8M → $22M
+    } else if (ovr <= 85) {
+      // Franchise QB
+      const t = (ovr - 75) / 10;
+      baseSalary = 22.0 + t * 18.0; // $22M → $40M
+    } else {
+      // Elite / generational
+      const t = (ovr - 85) / 14;
+      baseSalary = 40.0 + t * 15.0; // $40M → $55M
+    }
+
+    let salary = baseSalary;
+
+    // Age factor — QBs age more gracefully than skill positions
+    if (age !== undefined) {
+      if (age <= 25) salary *= 1.10;       // Young franchise QB premium
+      else if (age >= 38) salary *= 0.70;  // Very late career
+      else if (age >= 35) salary *= 0.85;  // Late career
+    }
+
+    // Teams pay a ceiling premium for high-upside young QBs
+    if (potential !== undefined && age !== undefined && age <= 27) {
+      salary += Math.max(0, potential - overall) * 0.20;
+    }
+
+    // Apply $60M ceiling then cap inflation
+    salary = Math.min(salary, POSITION_SALARY_CEILING['QB'] ?? 60);
+    salary *= capInflation;
+    return Math.round(Math.max(LEAGUE_MINIMUM_SALARY, salary) * 10) / 10;
+  }
+
   // RBs have a uniquely depressed market — custom curve
   // Real pro comps: Barkley $20.6M (elite), Henry $15M, Cook $12M,
   // Javonte Williams $8M (good starter), backup ~$1-2M
@@ -154,6 +215,278 @@ export function estimateSalary(overall: number, position?: Position, age?: numbe
     return Math.round(Math.max(LEAGUE_MINIMUM_SALARY, salary) * 10) / 10;
   }
 
+  // WRs: very top-heavy. Depth $1-3M, WR3s $4-8M, WR2s $12-18M, WR1s $25-38M.
+  if (position === 'WR') {
+    if (ovr <= 55) {
+      const t = (ovr - 40) / 15;
+      baseSalary = LEAGUE_MINIMUM_SALARY + t * (2.0 - LEAGUE_MINIMUM_SALARY);
+    } else if (ovr <= 65) {
+      const t = (ovr - 55) / 10;
+      baseSalary = 2.0 + t * 4.0;   // $2M → $6M
+    } else if (ovr <= 75) {
+      const t = (ovr - 65) / 10;
+      baseSalary = 6.0 + t * 9.0;   // $6M → $15M
+    } else if (ovr <= 85) {
+      const t = (ovr - 75) / 10;
+      baseSalary = 15.0 + t * 15.0; // $15M → $30M
+    } else {
+      const t = (ovr - 85) / 14;
+      baseSalary = 30.0 + t * 11.0; // $30M → $41M
+    }
+    let salary = baseSalary;
+    if (age !== undefined) {
+      if (age <= 25) salary *= 1.15;
+      else if (age <= 27) salary *= 1.05;
+      else if (age >= 33) salary *= 0.65;
+      else if (age >= 31) salary *= 0.80;
+      else if (age >= 29) salary *= 0.90;
+    }
+    if (potential !== undefined && age !== undefined && age <= 27) {
+      salary += Math.max(0, potential - overall) * 0.15;
+    }
+    salary = Math.min(salary, POSITION_SALARY_CEILING['WR'] ?? 41);
+    salary *= capInflation;
+    return Math.round(Math.max(LEAGUE_MINIMUM_SALARY, salary) * 10) / 10;
+  }
+
+  // CBs: top-heavy. Depth $1-3M, backups $3-6M, starters $10-14M, CB1s $22-30M.
+  if (position === 'CB') {
+    if (ovr <= 55) {
+      const t = (ovr - 40) / 15;
+      baseSalary = LEAGUE_MINIMUM_SALARY + t * (2.0 - LEAGUE_MINIMUM_SALARY);
+    } else if (ovr <= 65) {
+      const t = (ovr - 55) / 10;
+      baseSalary = 2.0 + t * 3.0;   // $2M → $5M
+    } else if (ovr <= 75) {
+      const t = (ovr - 65) / 10;
+      baseSalary = 5.0 + t * 7.0;   // $5M → $12M
+    } else if (ovr <= 85) {
+      const t = (ovr - 75) / 10;
+      baseSalary = 12.0 + t * 12.0; // $12M → $24M
+    } else {
+      const t = (ovr - 85) / 14;
+      baseSalary = 24.0 + t * 8.0;  // $24M → $32M
+    }
+    let salary = baseSalary;
+    if (age !== undefined) {
+      if (age <= 25) salary *= 1.15;
+      else if (age <= 27) salary *= 1.05;
+      else if (age >= 33) salary *= 0.65;
+      else if (age >= 31) salary *= 0.80;
+      else if (age >= 29) salary *= 0.90;
+    }
+    if (potential !== undefined && age !== undefined && age <= 27) {
+      salary += Math.max(0, potential - overall) * 0.15;
+    }
+    salary = Math.min(salary, POSITION_SALARY_CEILING['CB'] ?? 32);
+    salary *= capInflation;
+    return Math.round(Math.max(LEAGUE_MINIMUM_SALARY, salary) * 10) / 10;
+  }
+
+  // LBs: moderate market. Depth $1-3M, starters $5-9M, top LBs $18-22M.
+  if (position === 'LB') {
+    if (ovr <= 55) {
+      const t = (ovr - 40) / 15;
+      baseSalary = LEAGUE_MINIMUM_SALARY + t * (1.5 - LEAGUE_MINIMUM_SALARY);
+    } else if (ovr <= 65) {
+      const t = (ovr - 55) / 10;
+      baseSalary = 1.5 + t * 4.0;   // $1.5M → $5.5M
+    } else if (ovr <= 75) {
+      const t = (ovr - 65) / 10;
+      baseSalary = 5.5 + t * 5.5;   // $5.5M → $11M
+    } else if (ovr <= 85) {
+      const t = (ovr - 75) / 10;
+      baseSalary = 11.0 + t * 9.5;  // $11M → $20.5M
+    } else {
+      const t = (ovr - 85) / 14;
+      baseSalary = 20.5 + t * 1.5;  // $20.5M → $22M (ceiling)
+    }
+    let salary = baseSalary;
+    if (age !== undefined) {
+      if (age <= 25) salary *= 1.15;
+      else if (age <= 27) salary *= 1.05;
+      else if (age >= 33) salary *= 0.65;
+      else if (age >= 31) salary *= 0.80;
+      else if (age >= 29) salary *= 0.90;
+    }
+    if (potential !== undefined && age !== undefined && age <= 27) {
+      salary += Math.max(0, potential - overall) * 0.15;
+    }
+    salary = Math.min(salary, POSITION_SALARY_CEILING['LB'] ?? 22);
+    salary *= capInflation;
+    return Math.round(Math.max(LEAGUE_MINIMUM_SALARY, salary) * 10) / 10;
+  }
+
+  // Safeties: same market shape as LBs. Depth $1-3M, starters $5-9M, elite $18-22M.
+  if (position === 'S') {
+    if (ovr <= 55) {
+      const t = (ovr - 40) / 15;
+      baseSalary = LEAGUE_MINIMUM_SALARY + t * (1.5 - LEAGUE_MINIMUM_SALARY);
+    } else if (ovr <= 65) {
+      const t = (ovr - 55) / 10;
+      baseSalary = 1.5 + t * 4.0;   // $1.5M → $5.5M
+    } else if (ovr <= 75) {
+      const t = (ovr - 65) / 10;
+      baseSalary = 5.5 + t * 5.5;   // $5.5M → $11M
+    } else if (ovr <= 85) {
+      const t = (ovr - 75) / 10;
+      baseSalary = 11.0 + t * 9.5;  // $11M → $20.5M
+    } else {
+      const t = (ovr - 85) / 14;
+      baseSalary = 20.5 + t * 1.5;  // $20.5M → $22M (ceiling)
+    }
+    let salary = baseSalary;
+    if (age !== undefined) {
+      if (age <= 25) salary *= 1.15;
+      else if (age <= 27) salary *= 1.05;
+      else if (age >= 33) salary *= 0.65;
+      else if (age >= 31) salary *= 0.80;
+      else if (age >= 29) salary *= 0.90;
+    }
+    if (potential !== undefined && age !== undefined && age <= 27) {
+      salary += Math.max(0, potential - overall) * 0.15;
+    }
+    salary = Math.min(salary, POSITION_SALARY_CEILING['S'] ?? 22);
+    salary *= capInflation;
+    return Math.round(Math.max(LEAGUE_MINIMUM_SALARY, salary) * 10) / 10;
+  }
+
+  // TEs: moderate market. Backup $1-3M, starters $5-10M, elite $17-19M.
+  if (position === 'TE') {
+    if (ovr <= 55) {
+      const t = (ovr - 40) / 15;
+      baseSalary = LEAGUE_MINIMUM_SALARY + t * (1.5 - LEAGUE_MINIMUM_SALARY);
+    } else if (ovr <= 65) {
+      const t = (ovr - 55) / 10;
+      baseSalary = 1.5 + t * 3.5;   // $1.5M → $5M
+    } else if (ovr <= 75) {
+      const t = (ovr - 65) / 10;
+      baseSalary = 5.0 + t * 6.0;   // $5M → $11M
+    } else if (ovr <= 85) {
+      const t = (ovr - 75) / 10;
+      baseSalary = 11.0 + t * 8.0;  // $11M → $19M
+    } else {
+      const t = (ovr - 85) / 14;
+      baseSalary = 19.0 + t * 2.0;  // $19M → $21M (ceiling $20M applies)
+    }
+    let salary = baseSalary;
+    if (age !== undefined) {
+      if (age <= 25) salary *= 1.15;
+      else if (age <= 27) salary *= 1.05;
+      else if (age >= 33) salary *= 0.65;
+      else if (age >= 31) salary *= 0.80;
+      else if (age >= 29) salary *= 0.90;
+    }
+    if (potential !== undefined && age !== undefined && age <= 27) {
+      salary += Math.max(0, potential - overall) * 0.15;
+    }
+    salary = Math.min(salary, POSITION_SALARY_CEILING['TE'] ?? 20);
+    salary *= capInflation;
+    return Math.round(Math.max(LEAGUE_MINIMUM_SALARY, salary) * 10) / 10;
+  }
+
+  // EDGE rushers: most top-heavy defensive market. Rotational $3-6M, starters $14-22M, elite $34-44M.
+  if (subPosition === 'EDGE') {
+    if (ovr <= 55) {
+      const t = (ovr - 40) / 15;
+      baseSalary = LEAGUE_MINIMUM_SALARY + t * (2.5 - LEAGUE_MINIMUM_SALARY);
+    } else if (ovr <= 65) {
+      const t = (ovr - 55) / 10;
+      baseSalary = 2.5 + t * 3.0;   // $2.5M → $5.5M
+    } else if (ovr <= 75) {
+      const t = (ovr - 65) / 10;
+      baseSalary = 5.5 + t * 8.5;   // $5.5M → $14M
+    } else if (ovr <= 85) {
+      const t = (ovr - 75) / 10;
+      baseSalary = 14.0 + t * 16.0; // $14M → $30M
+    } else {
+      const t = (ovr - 85) / 14;
+      baseSalary = 30.0 + t * 16.0; // $30M → $46M
+    }
+    let salary = baseSalary;
+    if (age !== undefined) {
+      if (age <= 25) salary *= 1.15;
+      else if (age <= 27) salary *= 1.05;
+      else if (age >= 33) salary *= 0.65;
+      else if (age >= 31) salary *= 0.80;
+      else if (age >= 29) salary *= 0.90;
+    }
+    if (potential !== undefined && age !== undefined && age <= 27) {
+      salary += Math.max(0, potential - overall) * 0.15;
+    }
+    salary = Math.min(salary, SUB_POSITION_SALARY_CEILING['EDGE'] ?? 46);
+    salary *= capInflation;
+    return Math.round(Math.max(LEAGUE_MINIMUM_SALARY, salary) * 10) / 10;
+  }
+
+  // Interior DL (DT): significantly below EDGE market. Rotational $2-4M, starters $9-16M, elite $22-30M.
+  if (subPosition === 'DT') {
+    if (ovr <= 55) {
+      const t = (ovr - 40) / 15;
+      baseSalary = LEAGUE_MINIMUM_SALARY + t * (1.5 - LEAGUE_MINIMUM_SALARY);
+    } else if (ovr <= 65) {
+      const t = (ovr - 55) / 10;
+      baseSalary = 1.5 + t * 2.5;   // $1.5M → $4M
+    } else if (ovr <= 75) {
+      const t = (ovr - 65) / 10;
+      baseSalary = 4.0 + t * 6.0;   // $4M → $10M
+    } else if (ovr <= 85) {
+      const t = (ovr - 75) / 10;
+      baseSalary = 10.0 + t * 12.0; // $10M → $22M
+    } else {
+      const t = (ovr - 85) / 14;
+      baseSalary = 22.0 + t * 10.0; // $22M → $32M
+    }
+    let salary = baseSalary;
+    if (age !== undefined) {
+      if (age <= 25) salary *= 1.15;
+      else if (age <= 27) salary *= 1.05;
+      else if (age >= 33) salary *= 0.65;
+      else if (age >= 31) salary *= 0.80;
+      else if (age >= 29) salary *= 0.90;
+    }
+    if (potential !== undefined && age !== undefined && age <= 27) {
+      salary += Math.max(0, potential - overall) * 0.15;
+    }
+    salary = Math.min(salary, SUB_POSITION_SALARY_CEILING['DT'] ?? 32);
+    salary *= capInflation;
+    return Math.round(Math.max(LEAGUE_MINIMUM_SALARY, salary) * 10) / 10;
+  }
+
+  // Offensive tackles: premium OL. Backup $2-5M, starters $7-16M, elite $27-28M.
+  if (subPosition === 'OT') {
+    if (ovr <= 55) {
+      const t = (ovr - 40) / 15;
+      baseSalary = LEAGUE_MINIMUM_SALARY + t * (2.0 - LEAGUE_MINIMUM_SALARY);
+    } else if (ovr <= 65) {
+      const t = (ovr - 55) / 10;
+      baseSalary = 2.0 + t * 5.0;   // $2M → $7M
+    } else if (ovr <= 75) {
+      const t = (ovr - 65) / 10;
+      baseSalary = 7.0 + t * 9.0;   // $7M → $16M
+    } else if (ovr <= 85) {
+      const t = (ovr - 75) / 10;
+      baseSalary = 16.0 + t * 12.0; // $16M → $28M
+    } else {
+      const t = (ovr - 85) / 14;
+      baseSalary = 28.0 + t * 3.0;  // $28M → $31M (ceiling $30M applies)
+    }
+    let salary = baseSalary;
+    if (age !== undefined) {
+      if (age <= 25) salary *= 1.15;
+      else if (age <= 27) salary *= 1.05;
+      else if (age >= 33) salary *= 0.65;
+      else if (age >= 31) salary *= 0.80;
+      else if (age >= 29) salary *= 0.90;
+    }
+    if (potential !== undefined && age !== undefined && age <= 27) {
+      salary += Math.max(0, potential - overall) * 0.15;
+    }
+    salary = Math.min(salary, SUB_POSITION_SALARY_CEILING['OT'] ?? 30);
+    salary *= capInflation;
+    return Math.round(Math.max(LEAGUE_MINIMUM_SALARY, salary) * 10) / 10;
+  }
+
   if (ovr <= 50) {
     // Linear ramp from min to $2M
     const t = (ovr - 40) / 10;
@@ -172,8 +505,8 @@ export function estimateSalary(overall: number, position?: Position, age?: numbe
     baseSalary = 32.0 + t * 23.0;
   }
 
-  // Position multiplier — QBs command the most, K/P the least
-  const posMult = position ? (POSITION_SALARY_MULTIPLIER[position] ?? 1.0) : 1.0;
+  // Position multiplier — sub-position wins when set (EDGE > DT, OT > OG/C)
+  const posMult = resolveMultiplier(position, subPosition);
   let salary = baseSalary * posMult;
 
   // Age factor: younger players with upside command a premium
