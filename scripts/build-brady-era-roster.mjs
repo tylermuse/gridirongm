@@ -577,7 +577,11 @@ function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 let fallbackCount = 0;
 for (const player of data.players) {
-  if (player.tid < -1) continue; // skip retired (-2) and prospects (-3)
+  // Skip retired (-3) only. tid=-1 (FA pool) and tid=-2 (draft class) both
+  // get filler names so we don't ship the 2026 draft class shifted to
+  // 2008 with their real 2026 names (its.camare + 50_sm + agarre3552
+  // 4/29: "Mendoza in 07", "real 2026 picks in FA / draft").
+  if (player.tid <= -3) continue;
   if (overlaidPids.has(player.pid)) continue;
   player.firstName = pick(FILLER_FIRST_NAMES);
   player.lastName = pick(FILLER_LAST_NAMES);
@@ -587,12 +591,34 @@ for (const player of data.players) {
 console.log(`Randomized ${fallbackCount} unmatched names from filler pool.`);
 
 // --- 4. Per-team: clear depth chart + scale ticket prices to era. ---------
+//
+// Era-correct team identity: 4 franchises had different cities/abbrevs/
+// names in 2007. The FBGM 2026 file uses 2026 abbrevs (LAR / LAC / LV /
+// WSH) which mapped 2007 stars correctly via TEAM_CODE_TO_FBGM_ABBREV at
+// load time, but the rendered city/abbrev in the UI was still 2026.
+// Override here so the league reads as 2007. (somedude4759 + its.camare
+// 4/29.) Logos cleared so the engine falls back to text-based team
+// chrome with the existing colors — wrong 2026 logos are worse than no
+// logo. Real era logos are v2.
+const TEAM_ERA_OVERRIDES = {
+  LAR: { region: 'St. Louis', name: 'Rams', abbrev: 'STL' },
+  LAC: { region: 'San Diego', name: 'Chargers', abbrev: 'SD' },
+  LV:  { region: 'Oakland', name: 'Raiders', abbrev: 'OAK' },
+  WSH: { region: 'Washington', name: 'Redskins', abbrev: 'WAS' },
+};
 for (const team of data.teams) {
   team.depth = undefined;
   if (team.budget) {
     if (typeof team.budget.ticketPrice === 'number') {
       team.budget.ticketPrice = Math.round(team.budget.ticketPrice * CAP_SCALE * 100) / 100;
     }
+  }
+  const override = TEAM_ERA_OVERRIDES[team.abbrev];
+  if (override) {
+    team.region = override.region;
+    team.name = override.name;
+    team.abbrev = override.abbrev;
+    team.imgURL = '';
   }
 }
 
@@ -623,7 +649,8 @@ console.log('  active-roster player count:', data.players.filter((p) => p.tid >=
 
 const NE_TID = data.teams.find((t) => t.abbrev === 'NE').tid;
 const IND_TID = data.teams.find((t) => t.abbrev === 'IND').tid;
-const SD_TID = data.teams.find((t) => t.abbrev === 'LAC').tid;
+// Era-renamed teams: LAC → SD, LAR → STL, LV → OAK, WSH → WAS.
+const SD_TID = data.teams.find((t) => t.abbrev === 'SD').tid;
 const sampleNE = data.players.find(
   (p) => p.firstName === 'Tom' && p.lastName === 'Brady' && p.tid === NE_TID,
 );
@@ -642,5 +669,5 @@ const sampleSD = data.players.find(
   (p) => p.firstName === 'LaDainian' && p.lastName === 'Tomlinson' && p.tid === SD_TID,
 );
 if (sampleSD) {
-  console.log('  LaDainian Tomlinson on LAC: born', sampleSD.born?.year);
+  console.log('  LaDainian Tomlinson on SD: born', sampleSD.born?.year);
 }

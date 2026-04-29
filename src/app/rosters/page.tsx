@@ -47,12 +47,12 @@ const ROSTERS: RosterEntry[] = [
     description:
       'Travel back to 2007 — Brady’s 16-0 regular season with Moss + Welker, Manning still in his Colts prime, LT chasing the rushing record in San Diego, the Mannings vs Brady storyline at full volume. Every team’s 2007 roster is stamped onto their real-life slots: Brady, Moss, Welker, Brady‑era Patriots; Manning, Wayne, Harrison, Addai, Freeney Colts; LT, Rivers, Gates, Merriman Chargers; Adrian Peterson rookie year on the Vikings, Patrick Willis rookie year on SF; Romo + T.O. + Witten in Dallas, Brees + Reggie Bush in NO, Favre + Greg Jennings in GB, Ed Reed + Ray Lewis Ravens, Polamalu + Big Ben + Hines Ward Steelers, Larry Fitzgerald + Anquan Boldin + Kurt Warner Cardinals — across all 32 teams. Salary cap set to 2007 ($109M), contracts scaled to era dollars, league boots clean as a fresh 2007 season.',
     fileName: 'FBGM_NFL_Roster_BradyEra_2007.json',
-    lastUpdated: 'April 28, 2026',
+    lastUpdated: 'April 29, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
     era: 'Era',
     caveat:
-      'Powered by nflverse historical NFL roster data: ~1,700 real 2007 NFL players are stamped onto their actual 2007 teams. Ratings inherit from the 2026 base so OVRs are a rough fit (not historically tuned) — Adrian Peterson’s rookie OVR will reflect his 2026 namesake’s slot, not his 2007 form. Depth chart slot ordering is OVR-driven, so a real 2007 starter may show up as a backup on a team where the 2026 lineup happened to bury that position. Some long-tail roster spots (deepest backups) fall back to filler names where the 2007 active roster had fewer players than 2026.',
+      'V1 update (Apr 29): Rams play in St. Louis, Chargers in San Diego, Raiders in Oakland, Washington Redskins. The 2008 draft class no longer leaks 2026 NCAA names (Mendoza, Sanders, etc.) — generic filler names until v2 ships real 2007-era prospects. Powered by nflverse historical NFL roster data: ~1,700 real 2007 NFL players stamped onto their 2007 teams. Ratings inherit from the 2026 base so OVRs are a rough fit, not historically tuned. Depth-chart slot ordering is OVR-driven, so a real 2007 starter may show up as a backup if the 2026 lineup happened to bury that position. Real 2007 photos + real 2007 draft class are v2.',
   },
 ];
 
