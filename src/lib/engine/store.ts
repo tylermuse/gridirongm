@@ -1526,7 +1526,7 @@ export function computeAllLeagueTeams(state: LeagueState): {
   allRookie: { position: Position; playerId: string; teamId: string }[];
 } {
   const activePlayers = state.players.filter(p => !p.retired && p.teamId && p.stats.gamesPlayed >= 10);
-  const rookies = activePlayers.filter(p => p.experience === 1);
+  const rookies = activePlayers.filter(p => p.draftYear === state.season);
 
   const first: { position: Position; playerId: string; teamId: string }[] = [];
   const second: { position: Position; playerId: string; teamId: string }[] = [];
@@ -4621,9 +4621,9 @@ export const useGameStore = create<GameStore>()(
         const draftedPlayer = {
           ...player,
           teamId: currentPickTeamId,
-          draftYear: state.season,
+          draftYear: state.currentDraftYear ?? state.season,
           draftPick: overallPick,
-          acquiredVia: 'draft' as const, acquiredSeason: state.season,
+          acquiredVia: 'draft' as const, acquiredSeason: state.currentDraftYear ?? state.season,
           contract: { salary: finalSalary, yearsLeft: 4, guaranteed: generateGuaranteed(finalSalary, 4), totalYears: 4, offseasonSigned: true },
           jerseyNumber: pickJerseyFor(player.position, currentPickTeamId, state.players, state.teams),
         };
@@ -4727,7 +4727,7 @@ export const useGameStore = create<GameStore>()(
 
           players = players.map(p =>
             p.id === pid
-              ? { ...p, teamId: pickTeam, draftYear: state.season, draftPick: overallPick, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4, offseasonSigned: true } }
+              ? { ...p, teamId: pickTeam, draftYear: draftYear, draftPick: overallPick, acquiredVia: 'draft' as const, acquiredSeason: draftYear, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4, offseasonSigned: true } }
               : p,
           );
           let pickMarkedSim = false;
@@ -4825,7 +4825,7 @@ export const useGameStore = create<GameStore>()(
 
           players = players.map(p =>
             p.id === pid
-              ? { ...p, teamId: pickTeam, draftYear: state.season, draftPick: overallPick, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4, offseasonSigned: true } }
+              ? { ...p, teamId: pickTeam, draftYear: draftYear, draftPick: overallPick, acquiredVia: 'draft' as const, acquiredSeason: draftYear, contract: { salary: rookieSalary, yearsLeft: 4, guaranteed: generateGuaranteed(rookieSalary, 4), totalYears: 4, offseasonSigned: true } }
               : p,
           );
           let pickMarkedSim = false;

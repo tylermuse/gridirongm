@@ -596,7 +596,7 @@ export default function PlayoffsPage() {
           }
 
           // OROY / DROY
-          const rookies = activePlayers.filter(p => p.experience === 1 && p.stats.gamesPlayed >= 10);
+          const rookies = activePlayers.filter(p => p.draftYear === season && p.stats.gamesPlayed >= 10);
           const offRookies = rookies.filter(p => ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position));
           if (offRookies.length > 0) {
             const oroy = offRookies.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
