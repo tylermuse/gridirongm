@@ -4413,8 +4413,10 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
-        // PRD-07: Compute scouting data for draft prospects
-        const scoutingData = computeScoutingData(draftClass, state.scoutingLevel);
+        // PRD-07: Compute scouting data for draft prospects. scoutingLevel
+        // is deprecated post-binary-tier refactor; pass the legacy field
+        // when present, default to 2 (Elite — premium-equivalent) otherwise.
+        const scoutingData = computeScoutingData(draftClass, state.scoutingLevel ?? 2);
 
         // Verify all draft class and mock draft players are in finalPlayers
         if (nflMockDraft.length > 0) {
@@ -4453,8 +4455,10 @@ export const useGameStore = create<GameStore>()(
           holdoutDemands: [],
           draftScoutingData: scoutingData,
           nflMockDraft: nflMockDraft.length > 0 ? nflMockDraft : undefined,
+          // Scout-points seeding kept for legacy save compatibility; UI no
+          // longer reads these fields after the binary-tier refactor.
           scoutingState: {
-            scoutPoints: 10 + (state.scoutingLevel || 0) * 5,
+            scoutPoints: 20,
             maxScoutPoints: 20,
             filmReviews: {},
             inPersonEvals: {},
@@ -6919,7 +6923,8 @@ export const useGameStore = create<GameStore>()(
       filmReviewPlayer: (playerId: string) => {
         const state = get();
         const ss = migrateScoutingState(state.scoutingState);
-        if (ss.scoutPoints < 1) return false;
+        // Scout-points gate removed in the binary-tier refactor — premium
+        // entitlement is now enforced at the UI layer via hasScouting.
         if (ss.filmReviews[playerId]) return false;
         const player = state.players.find(p => p.id === playerId);
         if (!player) return false;

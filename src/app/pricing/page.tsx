@@ -3,92 +3,63 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import { PRICE_IDS, SCOUTING_LEVELS } from '@/lib/subscription';
+import { PREMIUM_PRICE_ID } from '@/lib/subscription';
 
-const tiers = [
-  {
-    name: 'Free',
-    tier: 'free' as const,
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    description: 'Full game, all features',
-    features: [
-      'Full season simulation',
-      'Draft, free agency, trades',
-      'All stats, standings, history',
-      'Custom league settings',
-      'Multiple leagues & unlimited saves',
-      'Entry-level draft scouting',
-    ],
-    limitations: ['Banner ads', 'Entry scouting only'],
-    priceIdMonthly: null,
-    priceIdYearly: null,
-  },
-  {
-    name: 'Pro',
-    tier: 'pro' as const,
-    monthlyPrice: 4.99,
-    yearlyPrice: 39.99,
-    description: 'Ad-free + better scouting',
-    features: [
-      'Everything in Free',
-      'Ad-free experience',
-      'Pro scouting level',
-      'Tighter OVR ranges (±5)',
-      'Position breakdowns, strengths & weaknesses',
-      'Player comparisons & trait hints',
-    ],
-    limitations: [],
-    priceIdMonthly: PRICE_IDS.pro_monthly,
-    priceIdYearly: PRICE_IDS.pro_yearly,
-    popular: true,
-  },
-  {
-    name: 'Elite',
-    tier: 'elite' as const,
-    monthlyPrice: 9.99,
-    yearlyPrice: 79.99,
-    description: 'Maximum intel + exclusive features',
-    features: [
-      'Everything in Pro',
-      'Elite scouting level',
-      'Near-exact ratings (±2)',
-      'Full projections & scout\'s take',
-      'AI Coach Advisor (coming soon)',
-      'Custom Team Creator (coming soon)',
-      'Coaching Staff (coming soon)',
-      'Advanced Analytics (coming soon)',
-      'Historical Draft Classes (coming soon)',
-      'League Export/Import (coming soon)',
-    ],
-    limitations: [],
-    priceIdMonthly: PRICE_IDS.elite_monthly,
-    priceIdYearly: PRICE_IDS.elite_yearly,
-  },
+const PREMIUM_FEATURES = [
+  'Ad-free experience',
+  'AI commentary on every game',
+  '3 audio podcast credits per month',
+  'Full prospect scouting (exact ratings, projections, scout reports)',
+  'Full free-agent intel',
+  'Cancel anytime — Stripe Customer Portal',
+];
+
+const FREE_FEATURES = [
+  'Full season simulation',
+  'Draft, free agency, trades',
+  'All stats, standings, history',
+  'Custom league settings',
+  'Multiple leagues & unlimited saves',
+];
+
+const FREE_LIMITATIONS = [
+  'Banner ads',
+  'Draft and sign free agents blind — only basic info (name, position, age, college, coarse tier)',
+  'No AI commentary',
+  'No podcast generation',
 ];
 
 export default function PricingPage() {
   const router = useRouter();
-  const { user, tier: currentTier } = useSubscription();
-  const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly');
-  const [loading, setLoading] = useState<string | null>(null);
+  const {
+    user,
+    tier: currentTier,
+    isAdmin,
+    isFoundingMember,
+  } = useSubscription();
+  const [loading, setLoading] = useState<'checkout' | 'portal' | null>(null);
 
-  const handleSubscribe = async (priceId: string) => {
+  const handleSubscribe = async () => {
     if (!user) {
       router.push('/login');
       return;
     }
-
-    setLoading(priceId);
+    if (!PREMIUM_PRICE_ID) {
+      alert('Premium plan is not yet configured. Please try again later.');
+      return;
+    }
+    setLoading('checkout');
     try {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceId }),
+        body: JSON.stringify({ priceId: PREMIUM_PRICE_ID }),
       });
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
+      } else {
+        alert(data.error || 'Failed to start checkout. Please try again.');
       }
     } catch {
       alert('Failed to start checkout. Please try again.');
@@ -97,53 +68,38 @@ export default function PricingPage() {
     }
   };
 
-  const [showPromo, setShowPromo] = useState(false);
+  const handleManage = async () => {
+    setLoading('portal');
+    try {
+      const res = await fetch('/api/stripe/portal', { method: 'POST' });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || 'Failed to open subscription portal.');
+      }
+    } catch {
+      alert('Failed to open subscription portal.');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const isPremium = currentTier === 'premium';
+  // Founders are grandfathered into Premium for free — show that explicitly
+  // so they know they don't need to subscribe.
+  const isComplimentaryPremium = (isFoundingMember || isAdmin) && !user?.email?.endsWith('@noemail.test');
 
   return (
     <div className="min-h-screen py-16 px-4" style={{ backgroundColor: '#f0f4f8' }}>
-      <div className="max-w-5xl mx-auto">
-        {/* 🎉 Promo Banner */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl p-8 mb-8 text-center">
-          <div className="text-3xl mb-2">🎉</div>
-          <h2 className="text-2xl font-black mb-2">All Features Are Free!</h2>
-          <p className="text-blue-100 max-w-lg mx-auto">
-            For a limited time, every BS Football player gets full access to all Elite features — no account required. Enjoy elite scouting, ad-free gameplay, and everything else. Just play!
-          </p>
-          <button
-            onClick={() => router.push('/')}
-            className="mt-4 px-6 py-2 bg-white text-blue-600 font-bold rounded-lg hover:bg-blue-50 transition-colors"
-          >
-            ← Back to Game
-          </button>
-        </div>
-
-        {/* Promo modal */}
-        {showPromo && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowPromo(false)}>
-            <div className="bg-white rounded-2xl p-8 max-w-md mx-4 text-center shadow-2xl" onClick={e => e.stopPropagation()}>
-              <div className="text-5xl mb-3">🎉</div>
-              <h3 className="text-2xl font-black mb-2">Congrats!</h3>
-              <p className="text-[var(--text-sec)] mb-4">
-                You&apos;re getting a free upgrade for a limited time. Enjoy!
-              </p>
-              <p className="text-sm text-green-600 font-bold mb-6">All Elite features are now unlocked.</p>
-              <button
-                onClick={() => { setShowPromo(false); router.push('/'); }}
-                className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Start Playing →
-              </button>
-            </div>
-          </div>
-        )}
-
+      <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-black mb-2">
-            <span className="text-blue-600">BS</span> Football Pro
+            <span className="text-blue-600">BS</span> Football Premium
           </h1>
           <p className="text-lg text-[var(--text-sec)]">
-            Upgrade your scouting department. Unlock elite intel.
+            One simple plan. Unlock the full experience.
           </p>
           <button
             onClick={() => router.push('/')}
@@ -153,138 +109,122 @@ export default function PricingPage() {
           </button>
         </div>
 
-        {/* Billing toggle */}
-        <div className="flex justify-center mb-10">
-          <div className="inline-flex bg-white rounded-xl border border-[var(--border)] p-1">
-            <button
-              onClick={() => setBilling('monthly')}
-              className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${
-                billing === 'monthly' ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)]'
-              }`}
-            >
-              Monthly
-            </button>
-            <button
-              onClick={() => setBilling('yearly')}
-              className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${
-                billing === 'yearly' ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)]'
-              }`}
-            >
-              Yearly <span className="text-green-600 font-bold">Save 33%</span>
-            </button>
+        {/* Founder callout */}
+        {isComplimentaryPremium && (
+          <div className="bg-gradient-to-r from-amber-100 to-yellow-50 border border-amber-300 rounded-2xl p-6 mb-8 text-center">
+            <div className="text-2xl mb-1">⭐</div>
+            <h2 className="text-lg font-black text-amber-900 mb-1">
+              You&apos;re a Founding Member
+            </h2>
+            <p className="text-sm text-amber-800">
+              All Premium features are unlocked on your account, free forever.
+              No subscription needed.
+            </p>
           </div>
-        </div>
+        )}
 
         {/* Tier cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
-          {tiers.map(t => {
-            const isCurrent = currentTier === t.tier;
-            const price = billing === 'monthly' ? t.monthlyPrice : t.yearlyPrice;
-            const priceId = billing === 'monthly' ? t.priceIdMonthly : t.priceIdYearly;
-
-            return (
-              <div
-                key={t.name}
-                className={`relative rounded-2xl border-2 bg-white p-8 flex flex-col ${
-                  t.popular ? 'border-blue-600 shadow-lg' : 'border-[var(--border)]'
-                }`}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+          {/* Free tier */}
+          <div className="rounded-2xl border-2 border-[var(--border)] bg-white p-8 flex flex-col">
+            <div className="mb-6">
+              <h3 className="text-xl font-black">Free</h3>
+              <p className="text-sm text-[var(--text-sec)] mt-1">
+                Full game, with ads
+              </p>
+            </div>
+            <div className="mb-6">
+              <div className="text-4xl font-black">Free</div>
+            </div>
+            <ul className="flex-1 space-y-3 mb-8">
+              {FREE_FEATURES.map(f => (
+                <li key={f} className="flex items-start gap-2 text-sm">
+                  <span className="text-green-500 mt-0.5">✓</span>
+                  <span>{f}</span>
+                </li>
+              ))}
+              {FREE_LIMITATIONS.map(l => (
+                <li
+                  key={l}
+                  className="flex items-start gap-2 text-sm text-[var(--text-sec)]"
+                >
+                  <span className="mt-0.5">—</span>
+                  <span>{l}</span>
+                </li>
+              ))}
+            </ul>
+            {currentTier === 'free' && !isComplimentaryPremium ? (
+              <button
+                disabled
+                className="w-full py-3 rounded-xl bg-gray-100 text-[var(--text-sec)] text-sm font-bold"
               >
-                {t.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-bold px-4 py-1 rounded-full">
-                    Most Popular
-                  </div>
-                )}
-                <div className="mb-6">
-                  <h3 className="text-xl font-black">{t.name}</h3>
-                  <p className="text-sm text-[var(--text-sec)] mt-1">{t.description}</p>
-                </div>
-                <div className="mb-6">
-                  {price === 0 ? (
-                    <div className="text-4xl font-black">Free</div>
-                  ) : (
-                    <div>
-                      <span className="text-4xl font-black">${price}</span>
-                      <span className="text-[var(--text-sec)]">/{billing === 'monthly' ? 'mo' : 'yr'}</span>
-                    </div>
-                  )}
-                </div>
-                <ul className="flex-1 space-y-3 mb-8">
-                  {t.features.map(f => (
-                    <li key={f} className="flex items-start gap-2 text-sm">
-                      <span className="text-green-500 mt-0.5">✓</span>
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                  {t.limitations.map(l => (
-                    <li key={l} className="flex items-start gap-2 text-sm text-[var(--text-sec)]">
-                      <span className="mt-0.5">—</span>
-                      <span>{l}</span>
-                    </li>
-                  ))}
-                </ul>
-                {isCurrent ? (
-                  <button
-                    disabled
-                    className="w-full py-3 rounded-xl bg-gray-100 text-[var(--text-sec)] text-sm font-bold"
-                  >
-                    Current Plan
-                  </button>
-                ) : priceId ? (
-                  <button
-                    onClick={() => setShowPromo(true)}
-                    className={`w-full py-3 rounded-xl text-sm font-bold transition-colors ${
-                      t.popular
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-gray-900 text-white hover:bg-gray-800'
-                    }`}
-                  >
-                    Upgrade to {t.name}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => router.push('/')}
-                    className="w-full py-3 rounded-xl border border-[var(--border)] text-sm font-bold hover:bg-gray-50 transition-colors"
-                  >
-                    Play Free
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                Current Plan
+              </button>
+            ) : (
+              <button
+                onClick={() => router.push('/')}
+                className="w-full py-3 rounded-xl border border-[var(--border)] text-sm font-bold hover:bg-gray-50 transition-colors"
+              >
+                Play Free
+              </button>
+            )}
+          </div>
 
-        {/* Scouting comparison table */}
-        <div className="bg-white rounded-2xl border border-[var(--border)] p-8">
-          <h2 className="text-2xl font-black mb-6 text-center">Scouting Level Comparison</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)]">
-                  <th className="text-left py-3 pr-4 font-bold">Level</th>
-                  <th className="text-left py-3 px-4 font-bold">Tier</th>
-                  <th className="text-left py-3 px-4 font-bold">Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {SCOUTING_LEVELS.map((level, i) => (
-                  <tr key={i} className="border-b border-[var(--border)] last:border-0">
-                    <td className="py-3 pr-4 font-bold">{level.name}</td>
-                    <td className="py-3 px-4">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${
-                        level.tier === 'free' ? 'bg-gray-100 text-gray-700' :
-                        level.tier === 'pro' ? 'bg-blue-100 text-blue-700' :
-                        'bg-amber-100 text-amber-700'
-                      }`}>
-                        {level.tier === 'free' ? 'Free' : level.tier === 'pro' ? 'Pro' : 'Elite'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-[var(--text-sec)]">{level.tooltip}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* Premium tier */}
+          <div className="relative rounded-2xl border-2 border-blue-600 bg-white p-8 flex flex-col shadow-lg">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-bold px-4 py-1 rounded-full">
+              Recommended
+            </div>
+            <div className="mb-6">
+              <h3 className="text-xl font-black">Premium</h3>
+              <p className="text-sm text-[var(--text-sec)] mt-1">
+                Everything unlocked. No ads.
+              </p>
+            </div>
+            <div className="mb-6">
+              <span className="text-4xl font-black">$4.99</span>
+              <span className="text-[var(--text-sec)]">/mo</span>
+            </div>
+            <ul className="flex-1 space-y-3 mb-8">
+              {PREMIUM_FEATURES.map(f => (
+                <li key={f} className="flex items-start gap-2 text-sm">
+                  <span className="text-green-500 mt-0.5">✓</span>
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+            {isComplimentaryPremium ? (
+              <button
+                disabled
+                className="w-full py-3 rounded-xl bg-amber-100 text-amber-900 text-sm font-bold"
+              >
+                Unlocked (Founding Member)
+              </button>
+            ) : isPremium ? (
+              <button
+                onClick={handleManage}
+                disabled={loading === 'portal'}
+                className="w-full py-3 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors disabled:opacity-60"
+              >
+                {loading === 'portal' ? 'Opening…' : 'Manage subscription'}
+              </button>
+            ) : (
+              <button
+                onClick={handleSubscribe}
+                disabled={loading === 'checkout'}
+                className="w-full py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-colors disabled:opacity-60"
+              >
+                {loading === 'checkout' ? 'Starting…' : 'Upgrade to Premium'}
+              </button>
+            )}
           </div>
         </div>
+
+        <p className="text-center text-xs text-[var(--text-sec)]">
+          Subscriptions are billed monthly via Stripe. Cancel anytime from the
+          customer portal — your premium access continues until the end of the
+          current billing period.
+        </p>
       </div>
     </div>
   );

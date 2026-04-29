@@ -1124,11 +1124,15 @@ export interface LeagueState {
   resigningPlayers: ResigningEntry[];
   /** Incoming AI trade proposals */
   tradeProposals: TradeProposal[];
-  /** Scouting level (0=Entry, 1=Pro, 2=Elite) */
-  scoutingLevel: 0 | 1 | 2;
+  /** DEPRECATED: scouting is now binary via hasScouting in
+   *  SubscriptionProvider. Field kept for save compatibility, no longer
+   *  read by UI. */
+  scoutingLevel?: 0 | 1 | 2;
   /** Scouting data keyed by prospect player ID */
   draftScoutingData: Record<string, { scoutedOvr: number; error: number; deepScouted: boolean }>;
-  /** Multi-layer scouting state */
+  /** DEPRECATED: scouting is now binary via hasScouting in
+   *  SubscriptionProvider. Field kept for save compatibility, no longer
+   *  read by UI. */
   scoutingState?: {
     scoutPoints: number;
     maxScoutPoints: number;

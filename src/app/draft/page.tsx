@@ -16,7 +16,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import type { Player, Position, Team, ImportedProspect } from '@/types';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import { SCOUTING_LEVELS } from '@/lib/subscription';
+import { coarseOvrBucket } from '@/lib/subscription';
 import { expectedOvrForPick, pickGrade, gradeValue, gradeColor, teamDraftGrade } from '@/lib/engine/draftGrades';
 import { generateDraftScoutEval, publicConsensusBlurb, type DraftScoutEvaluation } from '@/lib/engine/draftScoutEval';
 import { generateScoutingReport } from '@/lib/engine/scoutingReport';
@@ -523,7 +523,6 @@ function ScoutEvaluationPanel({
   publicOvrRange,
   isUserPick,
   onDraft,
-  scoutingLevel: scoutLvl,
   scoutTier = 3,
 }: {
   player: Player;
@@ -531,10 +530,9 @@ function ScoutEvaluationPanel({
   publicOvrRange: { lo: number; hi: number };
   isUserPick: boolean;
   onDraft: () => void;
-  scoutingLevel: number;
   scoutTier?: number;
 }) {
-  const evaluation = generateDraftScoutEval(player, userRoster, publicOvrRange, undefined, scoutLvl);
+  const evaluation = generateDraftScoutEval(player, userRoster, publicOvrRange, undefined, 2);
 
   return (
     <div className="space-y-3">
@@ -1090,11 +1088,8 @@ export default function DraftPage() {
     userTeamId,
     teams,
     draftScoutingData,
-    scoutingLevel,
     draftPlayer,
-    scoutPlayer,
     toggleStarProspect,
-    setScoutingLevel,
     simDraftPick,
     simToUserDraftPick,
     simToEndDraft,
@@ -1128,10 +1123,9 @@ export default function DraftPage() {
   }, [phase, orphanCount]);
   const [showMockDraft, setShowMockDraft] = useState(false);
 
-  const { maxScoutingLevel: maxLevel } = useSubscription();
+  const { hasScouting } = useSubscription();
 
   const ss = scoutingState;
-  const scoutPointsLeft = ss?.scoutPoints ?? 15;
 
   function isPlayerScouted(playerId: string): boolean {
     return !!ss?.filmReviews?.[playerId];
@@ -1264,7 +1258,6 @@ export default function DraftPage() {
     return aRank - bRank;
   });
 
-  const scoutsRemaining = scoutPointsLeft;
   const userRoster = players.filter(p => p.teamId === userTeamId && !p.retired);
 
   const prospects = allProspects
@@ -1324,7 +1317,7 @@ export default function DraftPage() {
         const err = scout ? Math.min(scout.error, 6) : 5;
         const lo = Math.max(20, ovr - err);
         const hi = Math.min(99, ovr + err);
-        const eval_ = generateDraftScoutEval(p, userRoster, { lo, hi }, undefined, scoutingLevel);
+        const eval_ = generateDraftScoutEval(p, userRoster, { lo, hi }, undefined, 2);
         const needBonus = needPositions.has(p.position) ? 8 : 0;
         const scoutedBonus = scout?.deepScouted ? 5 : 0;
         const score = ovr + needBonus + scoutedBonus;
@@ -1598,39 +1591,12 @@ export default function DraftPage() {
                 </select>
               </div>
             </CardHeader>
-            {/* Scouting level + scout points + toggle */}
+            {/* milkytoad 4/27: 3-state filter so you can flip between
+                the whole board, your starred shortlist, and what you've
+                already opened a scouting report on. Scouting tier
+                selector + scout-points UI removed in the binary-tier
+                refactor — Premium users get full reports automatically. */}
             <div className="mb-3 flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-[var(--text-sec)]">Level:</span>
-                <select
-                  value={scoutingLevel}
-                  onChange={e => {
-                    const val = Number(e.target.value) as 0|1|2;
-                    if (val <= maxLevel) setScoutingLevel(val);
-                  }}
-                  className="h-6 px-1.5 text-xs rounded border border-[var(--border)] bg-[var(--surface-2)]"
-                  title={SCOUTING_LEVELS[scoutingLevel]?.tooltip}
-                >
-                  {SCOUTING_LEVELS.map((level, i) => (
-                    <option key={i} value={i}>
-                      {level.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-[var(--text-sec)]">Scout Pts:</span>
-                <div className="w-20 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${scoutPointsLeft > 5 ? 'bg-blue-500' : scoutPointsLeft > 2 ? 'bg-amber-500' : 'bg-red-500'}`}
-                    style={{ width: `${(scoutPointsLeft / (ss?.maxScoutPoints ?? 15)) * 100}%` }}
-                  />
-                </div>
-                <span className="text-xs font-bold">{scoutPointsLeft}/{ss?.maxScoutPoints ?? 15}</span>
-              </div>
-              {/* milkytoad 4/27: 3-state filter so you can flip between
-                  the whole board, your starred shortlist, and what you've
-                  paid scout points on. */}
               <div className="flex bg-[var(--surface-2)] rounded-lg p-0.5">
                 {(['all', 'starred', 'scouted'] as const).map(opt => (
                   <button
@@ -1646,6 +1612,11 @@ export default function DraftPage() {
                   </button>
                 ))}
               </div>
+              {!hasScouting && (
+                <Link href="/pricing" className="text-xs font-bold text-blue-600 hover:underline">
+                  🔒 Detailed scouting is a Premium feature →
+                </Link>
+              )}
             </div>
             {/* Roster Needs Snapshot */}
             <details className="mb-3" open>
@@ -1684,11 +1655,11 @@ export default function DraftPage() {
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                   <th className="text-left pb-2 pl-2 w-6"></th>
-                  <th className="text-center pb-2 w-12">Proj</th>
+                  {hasScouting && <th className="text-center pb-2 w-12">Proj</th>}
                   <th className="text-left pb-2">Player</th>
                   <th className="text-center pb-2">Pos</th>
                   <th className="text-center pb-2">OVR</th>
-                  <th className="text-center pb-2 hidden sm:table-cell">Scout</th>
+                  {hasScouting && <th className="text-center pb-2 hidden sm:table-cell">Scout</th>}
                   <th className="text-right pb-2 pr-2 bg-[var(--surface)]">Draft</th>
                 </tr>
               </thead>
@@ -1714,7 +1685,7 @@ export default function DraftPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                         </svg>
                       </td>
-                      <td className="py-2.5 text-center text-xs text-[var(--text-sec)] font-mono">{projRank}</td>
+                      {hasScouting && <td className="py-2.5 text-center text-xs text-[var(--text-sec)] font-mono">{projRank}</td>}
                       <td className="py-2.5">
                         <div className="flex items-center gap-2">
                           <button
@@ -1730,14 +1701,6 @@ export default function DraftPage() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
                               <span className="font-semibold truncate">{player.firstName} {player.lastName}</span>
-                              {!isPlayerScouted(player.id) && scoutPointsLeft > 0 && (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); scoutPlayer(player.id); setExpandedProspectId(player.id); }}
-                                  className="shrink-0 px-1.5 py-0.5 text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
-                                >
-                                  Scout
-                                </button>
-                              )}
                               {(() => {
                                 // Only show "Fills Need" when there's an actual unfilled need
                                 // at this position — not just one of the 5 relative highest.
@@ -1765,8 +1728,8 @@ export default function DraftPage() {
                             </div>
                             <div className="text-[10px] text-[var(--text-sec)] flex items-center gap-1 flex-wrap">
                               {player.college ?? player.scoutingLabel ?? 'Unranked'}
-                              {isScouted && (() => {
-                                const eval_ = generateDraftScoutEval(player, userRoster, { lo, hi }, undefined, scoutingLevel);
+                              {hasScouting && isScouted && (() => {
+                                const eval_ = generateDraftScoutEval(player, userRoster, { lo, hi }, undefined, 2);
                                 return (
                                   <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded border ${fitBadgeColor(eval_.fitBadge)}`}>
                                     {fitBadgeEmoji(eval_.fitBadge)} {eval_.fitBadge}
@@ -1778,21 +1741,26 @@ export default function DraftPage() {
                         </div>
                       </td>
                       <td className="py-2.5 text-center"><Badge>{player.position}</Badge></td>
-                      <td className={`py-2.5 text-center font-bold ${ratingColor(ovrForColor)}`}>
-                        <span className="hidden sm:inline">{lo}–{hi}</span>
-                        <span className="sm:hidden">{scout ? scout.scoutedOvr : player.ratings.overall}</span>
+                      <td className={`py-2.5 text-center font-bold ${hasScouting ? ratingColor(player.ratings.overall) : 'text-[var(--text-sec)]'}`}>
+                        {hasScouting ? (
+                          <span>{player.ratings.overall}</span>
+                        ) : (
+                          <span className="text-[10px] uppercase tracking-wide">{coarseOvrBucket(player.ratings.overall)}</span>
+                        )}
                       </td>
-                      <td className="py-2.5 text-center hidden sm:table-cell">
-                        {(() => {
-                          const fullD = ss?.fullEvals?.[player.id];
-                          const inPersonD = ss?.inPersonEvals?.[player.id];
-                          const filmD = ss?.filmReviews?.[player.id];
-                          if (fullD) return <span className={`text-xs font-black ${ratingColor(fullD.exactOvr)}`}>{fullD.exactOvr}</span>;
-                          if (inPersonD) return <span className={`text-xs font-bold ${ratingColor((inPersonD.ovrRange.low + inPersonD.ovrRange.high) / 2)}`}>{inPersonD.ovrRange.low}–{inPersonD.ovrRange.high}</span>;
-                          if (filmD) return <span className={`text-xs font-bold ${ratingColor((filmD.ovrRange.low + filmD.ovrRange.high) / 2)}`}>{filmD.ovrRange.low}–{filmD.ovrRange.high}</span>;
-                          return <span className="text-xs text-[var(--text-sec)]">?</span>;
-                        })()}
-                      </td>
+                      {hasScouting && (
+                        <td className="py-2.5 text-center hidden sm:table-cell">
+                          {(() => {
+                            const fullD = ss?.fullEvals?.[player.id];
+                            const inPersonD = ss?.inPersonEvals?.[player.id];
+                            const filmD = ss?.filmReviews?.[player.id];
+                            if (fullD) return <span className={`text-xs font-black ${ratingColor(fullD.exactOvr)}`}>{fullD.exactOvr}</span>;
+                            if (inPersonD) return <span className={`text-xs font-bold ${ratingColor((inPersonD.ovrRange.low + inPersonD.ovrRange.high) / 2)}`}>{inPersonD.ovrRange.low}–{inPersonD.ovrRange.high}</span>;
+                            if (filmD) return <span className={`text-xs font-bold ${ratingColor((filmD.ovrRange.low + filmD.ovrRange.high) / 2)}`}>{filmD.ovrRange.low}–{filmD.ovrRange.high}</span>;
+                            return <span className="text-xs text-[var(--text-sec)]">?</span>;
+                          })()}
+                        </td>
+                      )}
                       <td className="py-2.5 pr-2 text-right" onClick={e => e.stopPropagation()}>
                         {isUserPick ? (
                           <button
@@ -1808,12 +1776,28 @@ export default function DraftPage() {
                     </tr>
                     {isExpanded && (
                       <tr className="border-t border-[var(--border)]">
-                        <td colSpan={7} className="px-4 py-3 bg-[var(--surface-2)]/50">
-                          {isPlayerScouted(player.id) ? (() => {
+                        <td colSpan={hasScouting ? 7 : 5} className="px-4 py-3 bg-[var(--surface-2)]/50">
+                          {!hasScouting ? (
+                            <div className="flex items-center justify-between gap-3 text-sm">
+                              <div className="text-[var(--text-sec)]">
+                                <strong className="text-[var(--text)]">{player.firstName} {player.lastName}</strong>
+                                {' · '}{player.position}{' · '}Age {player.age}{player.college ? ` · ${player.college}` : ''}
+                                <div className="text-xs mt-1">Detailed scouting (exact OVR, ratings, film review, in-person observations) is a Premium feature.</div>
+                              </div>
+                              <Link href="/pricing" className="text-xs font-bold text-blue-600 hover:underline whitespace-nowrap">
+                                Unlock Premium →
+                              </Link>
+                            </div>
+                          ) : (() => {
+                            // Premium users always see the full evaluation —
+                            // no scout-points gate. filmData/inPersonData/
+                            // fullData fall back to the always-generated
+                            // evaluation if the user hasn't manually opened
+                            // those modals yet.
                             const filmData = ss?.filmReviews?.[player.id];
                             const inPersonData = ss?.inPersonEvals?.[player.id];
                             const fullData = ss?.fullEvals?.[player.id];
-                            const evaluation = generateDraftScoutEval(player, userRoster, { lo, hi }, undefined, scoutingLevel);
+                            const evaluation = generateDraftScoutEval(player, userRoster, { lo, hi }, undefined, 2);
                             return (
                               <div className="space-y-3">
                                 {/* Prospect Tag in expanded view */}
@@ -1879,13 +1863,7 @@ export default function DraftPage() {
                                 )}
                               </div>
                             );
-                          })() : (
-                            <UnscoutedPanel
-                              player={player}
-                              scoutsRemaining={scoutPointsLeft}
-                              onScout={() => scoutPlayer(player.id)}
-                            />
-                          )}
+                          })()}
                         </td>
                       </tr>
                     )}

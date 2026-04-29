@@ -1,7 +1,10 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
 import { useGameStore } from '@/lib/engine/store';
+import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { coarseOvrBucket } from '@/lib/subscription';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { LEAGUE_MINIMUM_SALARY, LUXURY_TAX_RATE, computeLuxuryTax, faPriceDecay, estimateSalary, capInflationFactor } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
@@ -146,8 +149,9 @@ function FAEvaluationPanel({ player, roster, capSpace, marketSalary }: {
 }
 
 export default function FreeAgencyPage() {
-  const { phase, players, freeAgents, signFreeAgent, teams, userTeamId, faDay, faRefusals, advanceFADay, advanceFAWeek, pursuitState, intelReportFA, scoutingLevel } = useGameStore();
+  const { phase, players, freeAgents, signFreeAgent, teams, userTeamId, faDay, faRefusals, advanceFADay, advanceFAWeek, pursuitState, intelReportFA } = useGameStore();
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
+  const { hasScouting } = useSubscription();
 
   // Also support regular season FA (no pursuit during regular season)
   const effectivePursuitState = phase === 'freeAgency' ? (pursuitState ?? { pursuitPoints: 5, maxPursuitPoints: 11, intelReports: {} }) : null;
@@ -169,15 +173,18 @@ export default function FreeAgencyPage() {
   // doesn't see a side-effect mid-render.
   useEffect(() => {
     if (phase === 'freeAgency' && !pursuitState) {
+      // Pursuit-points seed used to scale with scoutingLevel (0-2). Now
+      // binary: premium users get the high-end bucket (11 pts), free users
+      // the low-end (5 pts).
       useGameStore.setState({
         pursuitState: {
-          pursuitPoints: 5 + (scoutingLevel || 0) * 3,
+          pursuitPoints: hasScouting ? 11 : 5,
           maxPursuitPoints: 11,
           intelReports: {},
         },
       });
     }
-  }, [phase, pursuitState, scoutingLevel]);
+  }, [phase, pursuitState, hasScouting]);
 
   // Auto-scroll message feed to bottom when new messages arrive
   useEffect(() => {
@@ -378,6 +385,16 @@ export default function FreeAgencyPage() {
   return (
     <GameShell>
       <div className="max-w-7xl mx-auto">
+        {!hasScouting && (
+          <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-between gap-3">
+            <div className="text-xs text-blue-800">
+              🔒 <strong>Premium</strong> reveals exact OVR, potential, contract estimates, and pursuit intel for every free agent. Free shows name, position, age, and a coarse OVR bucket.
+            </div>
+            <Link href="/pricing" className="text-xs font-bold text-blue-700 hover:underline whitespace-nowrap">
+              Upgrade →
+            </Link>
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h2 className="text-2xl font-black">{phase === 'regular' ? 'Sign Free Agents' : 'Free Agency'}</h2>
@@ -822,20 +839,28 @@ export default function FreeAgencyPage() {
                         </td>
                         <td className="py-2.5 text-center"><Badge>{p.position}</Badge></td>
                         <td className="py-2.5 text-center">{p.age}</td>
-                        <td className={`py-2.5 text-center font-bold ${ratingColor(p.ratings.overall)}`}>
-                          {p.ratings.overall}
+                        <td className={`py-2.5 text-center font-bold ${hasScouting ? ratingColor(p.ratings.overall) : 'text-[var(--text-sec)]'}`}>
+                          {hasScouting ? p.ratings.overall : (
+                            <span className="text-[10px] uppercase tracking-wide">{coarseOvrBucket(p.ratings.overall)}</span>
+                          )}
                         </td>
-                        <td className={`py-2.5 text-center text-xs hidden sm:table-cell ${potentialColor(p.potential, p.experience)}`}>
-                          {potentialLabel(p.potential, p.experience)}
+                        <td className={`py-2.5 text-center text-xs hidden sm:table-cell ${hasScouting ? potentialColor(p.potential, p.experience) : 'text-[var(--text-sec)]'}`}>
+                          {hasScouting ? potentialLabel(p.potential, p.experience) : '—'}
                         </td>
                         <td className="py-2.5 text-left text-xs text-[var(--text-sec)] hidden md:table-cell">
-                          {positionStats({ position: p.position, stats: p.previousSeasonStats ?? p.stats })}
+                          {hasScouting ? positionStats({ position: p.position, stats: p.previousSeasonStats ?? p.stats }) : (p.college ?? '—')}
                         </td>
                         <td className="py-2.5 text-right font-mono text-xs sm:text-sm">
-                          <span className="hidden sm:inline">${salary}M/yr</span>
-                          <span className="sm:hidden">${Math.round(salary)}M</span>
-                          {decay < 1.0 && (
-                            <span className="text-[10px] text-amber-600 ml-1">↓</span>
+                          {hasScouting ? (
+                            <>
+                              <span className="hidden sm:inline">${salary}M/yr</span>
+                              <span className="sm:hidden">${Math.round(salary)}M</span>
+                              {decay < 1.0 && (
+                                <span className="text-[10px] text-amber-600 ml-1">↓</span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-[var(--text-sec)] text-xs">🔒</span>
                           )}
                         </td>
                         <td className="py-2.5 text-right pr-2" onClick={e => e.stopPropagation()}>
