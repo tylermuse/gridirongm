@@ -62,7 +62,7 @@ const ROSTERS: RosterEntry[] = [
     // Mauigoa in FA pool). Bump again when the era JSON is regenerated.
     cacheBust: 2,
     caveat:
-      'V1 update (Apr 29): Rams play in St. Louis, Chargers in San Diego, Raiders in Oakland, Washington Redskins. The 2008 draft class no longer leaks 2026 NCAA names (Mendoza, Sanders, etc.) — generic filler names until v2 ships real 2007-era prospects. Powered by nflverse historical NFL roster data: ~1,700 real 2007 NFL players stamped onto their 2007 teams. Ratings inherit from the 2026 base so OVRs are a rough fit, not historically tuned. Depth-chart slot ordering is OVR-driven, so a real 2007 starter may show up as a backup if the 2026 lineup happened to bury that position. Real 2007 photos + real 2007 draft class are v2.',
+      'V1.1 update (Apr 30): Head coaches are real 2007 HCs (Belichick on NE, Holmgren on SEA, Coughlin on NYG, Petrino on ATL, etc.). Coordinators and position coaches are still auto-generated until v2 sources that data. V1 update (Apr 29): Rams play in St. Louis, Chargers in San Diego, Raiders in Oakland, Washington Redskins. The 2008 draft class no longer leaks 2026 NCAA names (Mendoza, Sanders, etc.) — generic filler names until v2 ships real 2007-era prospects. Powered by nflverse historical NFL roster data: ~1,700 real 2007 NFL players stamped onto their 2007 teams. Ratings inherit from the 2026 base so OVRs are a rough fit, not historically tuned. Depth-chart slot ordering is OVR-driven, so a real 2007 starter may show up as a backup if the 2026 lineup happened to bury that position. Real 2007 photos + real 2007 draft class are v2.',
   },
 ];
 
