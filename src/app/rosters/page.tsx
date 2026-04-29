@@ -43,16 +43,16 @@ const ROSTERS: RosterEntry[] = [
   },
   {
     id: 'nfl-2007-brady-era',
-    title: 'Tom Brady Era — 2007 NFL Season (Beta)',
+    title: 'Tom Brady Era — 2007 NFL Season',
     description:
-      'Travel back to 2007 — Brady’s 16-0 regular season with Moss + Welker, Manning still in his Colts prime, LT chasing the rushing record in San Diego, the Mannings vs Brady storyline at full volume. Sixty-plus iconic players are stamped onto their real-life 2007 teams (Brady on NE, Manning on IND, Tomlinson on the Chargers, Adrian Peterson rookie year on the Vikings, Romo + T.O. + Witten in Dallas, Brees in NO, Favre in GB, Ed Reed + Ray Lewis on Baltimore, Patrick Willis rookie year on SF, Polamalu + Big Ben in Pittsburgh, Larry Fitzgerald + Anquan Boldin in Arizona, and more). The salary cap is set to 2007 era ($109M), all contracts scaled to era-appropriate dollars, and the league boots clean as a fresh 2007 season.',
+      'Travel back to 2007 — Brady’s 16-0 regular season with Moss + Welker, Manning still in his Colts prime, LT chasing the rushing record in San Diego, the Mannings vs Brady storyline at full volume. Every team’s 2007 roster is stamped onto their real-life slots: Brady, Moss, Welker, Brady‑era Patriots; Manning, Wayne, Harrison, Addai, Freeney Colts; LT, Rivers, Gates, Merriman Chargers; Adrian Peterson rookie year on the Vikings, Patrick Willis rookie year on SF; Romo + T.O. + Witten in Dallas, Brees + Reggie Bush in NO, Favre + Greg Jennings in GB, Ed Reed + Ray Lewis Ravens, Polamalu + Big Ben + Hines Ward Steelers, Larry Fitzgerald + Anquan Boldin + Kurt Warner Cardinals — across all 32 teams. Salary cap set to 2007 ($109M), contracts scaled to era dollars, league boots clean as a fresh 2007 season.',
     fileName: 'FBGM_NFL_Roster_BradyEra_2007.json',
     lastUpdated: 'April 28, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
-    era: 'Beta',
+    era: 'Era',
     caveat:
-      'Beta v0: the 60-ish iconic stars are accurate to their real-life 2007 teams, but supporting cast (depth players, late-round picks) keep their generated names from the 2026 base file — so the roster feels right at the top and synthetic deeper down. Ratings inherit from the 2026 base, so OVRs are a rough fit, not historically tuned. Real Tom Brady Era curation is a content project we’re iterating on; if you’ve got era-roster knowledge and want to help, hop in our Discord.',
+      'Powered by nflverse historical NFL roster data: ~1,700 real 2007 NFL players are stamped onto their actual 2007 teams. Ratings inherit from the 2026 base so OVRs are a rough fit (not historically tuned) — Adrian Peterson’s rookie OVR will reflect his 2026 namesake’s slot, not his 2007 form. Depth chart slot ordering is OVR-driven, so a real 2007 starter may show up as a backup on a team where the 2026 lineup happened to bury that position. Some long-tail roster spots (deepest backups) fall back to filler names where the 2007 active roster had fewer players than 2026.',
   },
 ];
 
