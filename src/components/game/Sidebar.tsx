@@ -17,7 +17,7 @@ const NAV_SECTIONS = [
       { href: '/standings', label: 'Standings', icon: '📊' },
       { href: '/playoffs', label: 'Playoffs', icon: '🏆' },
       { href: '/stats', label: 'Stats', icon: '📈' },
-      { href: '/power-rankings', label: 'Rankings', icon: '🏆' },
+      { href: '/gm-rankings', label: 'Rankings', icon: '🏆' },
       { href: '/players', label: 'Player Search', icon: '🔍' },
       { href: '/news', label: 'News', icon: '📰' },
       { href: '/history', label: 'History', icon: '🗃️' },
@@ -382,7 +382,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
               {visibleItems.map(item => {
           // Some entries cover multiple URLs via shared tab bars — highlight
           // the parent nav entry whichever sibling URL the user is on.
-          const sharedRankings = item.href === '/power-rankings' && (pathname === '/awards' || pathname === '/gm-rankings');
+          const sharedRankings = item.href === '/gm-rankings' && (pathname === '/awards' || pathname === '/power-rankings');
           const sharedNews = item.href === '/news' && pathname === '/recap';
           const active = pathname === item.href || sharedRankings || sharedNews;
           const badge = getBadge(item.href);
