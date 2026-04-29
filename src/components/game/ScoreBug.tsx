@@ -92,7 +92,7 @@ export function ScoreBug({
               {awayAbbr}
             </div>
             <span
-              className="text-2xl font-black tabular-nums"
+              className="text-2xl font-black tabular-nums team-color-text"
               style={{ color: awayColor }}
             >
               {awayScore}
@@ -161,7 +161,7 @@ export function ScoreBug({
               />
             )}
             <span
-              className="text-2xl font-black tabular-nums"
+              className="text-2xl font-black tabular-nums team-color-text"
               style={{ color: homeColor }}
             >
               {homeScore}

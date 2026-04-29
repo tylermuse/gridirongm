@@ -112,13 +112,13 @@ export function GameTicker({ onMenuToggle }: { onMenuToggle?: () => void } = {})
             let result = '';
             if (game.played) {
               if (userScore > oppScore) {
-                bgClass = 'bg-green-100';
+                bgClass = 'bg-green-100 ticker-win';
                 result = 'W';
               } else if (userScore < oppScore) {
-                bgClass = 'bg-red-100';
+                bgClass = 'bg-red-100 ticker-loss';
                 result = 'L';
               } else {
-                bgClass = 'bg-amber-50';
+                bgClass = 'bg-amber-50 ticker-tie';
                 result = 'T';
               }
             }

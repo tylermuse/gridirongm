@@ -115,14 +115,14 @@ function QuarterScoreTable({
       </thead>
       <tbody>
         <tr>
-          <td className="py-1 font-bold" style={{ color: awayColor }}>{awayAbbr}</td>
+          <td className="py-1 font-bold team-color-text" style={{ color: awayColor }}>{awayAbbr}</td>
           {awayByQ.map((pts, i) => (
             <td key={i} className="py-1 text-center text-[var(--text)]">{pts}</td>
           ))}
           <td className="py-1 text-center font-black text-[var(--text)]">{awayTotal}</td>
         </tr>
         <tr>
-          <td className="py-1 font-bold" style={{ color: homeColor }}>{homeAbbr}</td>
+          <td className="py-1 font-bold team-color-text" style={{ color: homeColor }}>{homeAbbr}</td>
           {homeByQ.map((pts, i) => (
             <td key={i} className="py-1 text-center text-[var(--text)]">{pts}</td>
           ))}
@@ -1169,12 +1169,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 <div className="flex items-center justify-center gap-6">
                   <div className="text-center">
                     <div className="text-xs text-[var(--text-sec)]">{awayAbbr}</div>
-                    <div className="text-3xl font-black" style={{ color: awayColor }}>{finalAway}</div>
+                    <div className="text-3xl font-black team-color-text" style={{ color: awayColor }}>{finalAway}</div>
                   </div>
                   <div className="text-[var(--text-sec)] text-xl">–</div>
                   <div className="text-center">
                     <div className="text-xs text-[var(--text-sec)]">{homeAbbr}</div>
-                    <div className="text-3xl font-black" style={{ color: homeColor }}>{finalHome}</div>
+                    <div className="text-3xl font-black team-color-text" style={{ color: homeColor }}>{finalHome}</div>
                   </div>
                 </div>
                 {isUserGame && (
@@ -1627,9 +1627,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                             )}
                             {ev.isScoring && (
                               <span className="text-[10px] font-mono font-bold shrink-0">
-                                <span style={{ color: awayColor }}>{ev.awayScore}</span>
+                                <span className="team-color-text" style={{ color: awayColor }}>{ev.awayScore}</span>
                                 <span className="text-[var(--text-sec)] mx-0.5">-</span>
-                                <span style={{ color: homeColor }}>{ev.homeScore}</span>
+                                <span className="team-color-text" style={{ color: homeColor }}>{ev.homeScore}</span>
                               </span>
                             )}
                           </div>
@@ -1699,9 +1699,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                           {ev.isScoring && (
                             <div className="shrink-0 text-right">
                               <div className="text-xs font-mono font-bold">
-                                <span style={{ color: awayColor }}>{ev.awayScore}</span>
+                                <span className="team-color-text" style={{ color: awayColor }}>{ev.awayScore}</span>
                                 <span className="text-[var(--text-sec)] mx-1">–</span>
-                                <span style={{ color: homeColor }}>{ev.homeScore}</span>
+                                <span className="team-color-text" style={{ color: homeColor }}>{ev.homeScore}</span>
                               </div>
                             </div>
                           )}
