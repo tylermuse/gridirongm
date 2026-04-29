@@ -48,6 +48,226 @@ const TEAM_CODE_TO_FBGM_ABBREV = {
   SL:  'LAR',  TB:  'TB',   TEN: 'TEN',  WAS: 'WSH',
 };
 
+// nflverse CSV is sorted alphabetically by last name, so backups whose
+// last names start with earlier letters (Brad Johnson) end up before
+// starters whose last names start later (Tony Romo). Since we pair
+// CSV-order against 2026-OVR-descending, the alphabetically-first CSV
+// player gets the top-OVR slot — burying real 2007 starters behind their
+// alphabetically-luckier backups (Tyler 4/29: "Tony Romo and DeMarcus
+// Ware are backups to other players I've never heard of").
+//
+// Fix: explicitly name the actual 2007 starters at each team-position
+// using full_name. Before the OVR-pairing loop, we look up these names
+// in the CSV list and promote them to the front in declared order.
+// First name in each list gets the highest-OVR slot, second gets the
+// second-highest, etc.
+//
+// Coverage: QB1 for all 32 teams (highest visibility), plus the most
+// iconic skill + defender stars per team where the alphabetic accident
+// would otherwise bury them.
+const STARTER_OVERRIDES = {
+  'NE/QB': ['Tom Brady'],
+  'NE/WR': ['Randy Moss', 'Wes Welker'],
+  'NE/CB': ['Asante Samuel'],
+  'NE/S':  ['Rodney Harrison'],
+  'NE/LB': ['Tedy Bruschi', 'Mike Vrabel', 'Adalius Thomas', 'Junior Seau'],
+  'NE/DL': ['Vince Wilfork', 'Ty Warren', 'Richard Seymour'],
+
+  'IND/QB': ['Peyton Manning'],
+  'IND/WR': ['Reggie Wayne', 'Marvin Harrison'],
+  'IND/RB': ['Joseph Addai'],
+  'IND/TE': ['Dallas Clark'],
+  'IND/DL': ['Dwight Freeney', 'Robert Mathis'],
+  'IND/S':  ['Bob Sanders'],
+
+  'NYG/QB': ['Eli Manning'],
+  'NYG/WR': ['Plaxico Burress', 'Amani Toomer'],
+  'NYG/RB': ['Brandon Jacobs'],
+  'NYG/TE': ['Jeremy Shockey'],
+  'NYG/DL': ['Michael Strahan', 'Justin Tuck', 'Osi Umenyiora'],
+
+  'DAL/QB': ['Tony Romo'],
+  'DAL/WR': ['Terrell Owens'],
+  'DAL/TE': ['Jason Witten'],
+  'DAL/RB': ['Marion Barber', 'Julius Jones'],
+  'DAL/LB': ['DeMarcus Ware', 'Bradie James'],
+  'DAL/CB': ['Terence Newman'],
+
+  'GB/QB': ['Brett Favre'],
+  'GB/WR': ['Donald Driver', 'Greg Jennings'],
+  'GB/RB': ['Ryan Grant'],
+  'GB/CB': ['Charles Woodson', 'Al Harris'],
+  'GB/DL': ['Aaron Kampman'],
+
+  'NO/QB': ['Drew Brees'],
+  'NO/RB': ['Reggie Bush', 'Deuce McAllister'],
+  'NO/WR': ['Marques Colston'],
+
+  'PIT/QB': ['Ben Roethlisberger'],
+  'PIT/RB': ['Willie Parker'],
+  'PIT/WR': ['Hines Ward'],
+  'PIT/TE': ['Heath Miller'],
+  'PIT/S':  ['Troy Polamalu'],
+  'PIT/LB': ['James Harrison', 'James Farrior', 'Larry Foote'],
+  'PIT/DL': ['Aaron Smith', 'Casey Hampton', 'Brett Keisel'],
+  'PIT/CB': ['Ike Taylor'],
+
+  'CIN/QB': ['Carson Palmer'],
+  'CIN/WR': ['Chad Johnson', 'T.J. Houshmandzadeh'],
+  'CIN/RB': ['Rudi Johnson'],
+  'CIN/DL': ['Justin Smith'],
+
+  'PHI/QB': ['Donovan McNabb'],
+  'PHI/RB': ['Brian Westbrook'],
+  'PHI/S':  ['Brian Dawkins'],
+  'PHI/CB': ['Lito Sheppard'],
+  'PHI/DL': ['Trent Cole'],
+
+  'WSH/QB': ['Jason Campbell'],
+  'WSH/RB': ['Clinton Portis'],
+  'WSH/WR': ['Santana Moss'],
+  'WSH/TE': ['Chris Cooley'],
+  'WSH/S':  ['Sean Taylor', 'LaRon Landry'],
+  'WSH/LB': ['London Fletcher'],
+
+  'CHI/QB': ['Rex Grossman'],
+  'CHI/RB': ['Cedric Benson'],
+  'CHI/LB': ['Brian Urlacher', 'Lance Briggs'],
+  'CHI/DL': ['Tommie Harris', 'Adewale Ogunleye'],
+  'CHI/CB': ['Charles Tillman'],
+
+  'DET/QB': ['Jon Kitna'],
+  'DET/WR': ['Roy Williams', 'Calvin Johnson'],
+
+  'MIN/QB': ['Tarvaris Jackson'],
+  'MIN/RB': ['Adrian Peterson', 'Chester Taylor'],
+  'MIN/DL': ['Kevin Williams', 'Pat Williams'],
+  'MIN/CB': ['Antoine Winfield'],
+  'MIN/S':  ['Darren Sharper'],
+  'MIN/OL': ['Steve Hutchinson', 'Bryant McKinnie'],
+
+  'BAL/QB': ['Steve McNair'],
+  'BAL/RB': ['Willis McGahee'],
+  'BAL/WR': ['Derrick Mason'],
+  'BAL/TE': ['Todd Heap'],
+  'BAL/OL': ['Jonathan Ogden'],
+  'BAL/LB': ['Ray Lewis', 'Terrell Suggs', 'Bart Scott'],
+  'BAL/DL': ['Haloti Ngata'],
+  'BAL/S':  ['Ed Reed'],
+  'BAL/CB': ['Chris McAlister'],
+
+  'CLE/QB': ['Derek Anderson'],
+  'CLE/RB': ['Jamal Lewis'],
+  'CLE/WR': ['Braylon Edwards'],
+  'CLE/TE': ['Kellen Winslow'],
+  'CLE/OL': ['Joe Thomas', 'Eric Steinbach'],
+
+  'BUF/QB': ['Trent Edwards'],
+  'BUF/RB': ['Marshawn Lynch'],
+  'BUF/WR': ['Lee Evans'],
+  'BUF/OL': ['Jason Peters'],
+  'BUF/DL': ['Aaron Schobel'],
+
+  'MIA/QB': ['Cleo Lemon'],
+  'MIA/RB': ['Ronnie Brown', 'Ricky Williams'],
+  'MIA/LB': ['Jason Taylor', 'Joey Porter'],
+
+  'NYJ/QB': ['Chad Pennington'],
+  'NYJ/RB': ['Thomas Jones'],
+  'NYJ/WR': ['Laveranues Coles', 'Jerricho Cotchery'],
+  'NYJ/OL': ["D'Brickashaw Ferguson", 'Nick Mangold'],
+  'NYJ/CB': ['Darrelle Revis'],
+  'NYJ/S':  ['Kerry Rhodes'],
+
+  'JAX/QB': ['David Garrard'],
+  'JAX/RB': ['Maurice Jones-Drew', 'Fred Taylor'],
+  'JAX/DL': ['Marcus Stroud', 'John Henderson'],
+  'JAX/CB': ['Rashean Mathis'],
+
+  'TEN/QB': ['Vince Young'],
+  'TEN/RB': ['LenDale White'],
+  'TEN/DL': ['Albert Haynesworth'],
+  'TEN/LB': ['Keith Bulluck'],
+  'TEN/CB': ['Cortland Finnegan'],
+
+  'HOU/QB': ['Matt Schaub'],
+  'HOU/WR': ['Andre Johnson'],
+  'HOU/RB': ['Ahman Green'],
+  'HOU/DL': ['Mario Williams'],
+  'HOU/LB': ['DeMeco Ryans'],
+
+  'DEN/QB': ['Jay Cutler'],
+  'DEN/RB': ['Travis Henry'],
+  'DEN/WR': ['Brandon Marshall', 'Rod Smith'],
+  'DEN/DL': ['Elvis Dumervil'],
+  'DEN/CB': ['Champ Bailey'],
+  'DEN/S':  ['John Lynch'],
+
+  'KC/QB': ['Damon Huard', 'Brodie Croyle'],
+  'KC/RB': ['Larry Johnson'],
+  'KC/WR': ['Dwayne Bowe', 'Eddie Kennison'],
+  'KC/TE': ['Tony Gonzalez'],
+  'KC/DL': ['Jared Allen'],
+  'KC/LB': ['Derrick Johnson'],
+
+  'LV/QB': ['Daunte Culpepper', 'JaMarcus Russell'],
+  'LV/WR': ['Jerry Porter'],
+  'LV/RB': ['LaMont Jordan', 'Justin Fargas'],
+  'LV/CB': ['Nnamdi Asomugha'],
+  'LV/DL': ['Warren Sapp'],
+
+  'LAC/QB': ['Philip Rivers'],
+  'LAC/RB': ['LaDainian Tomlinson'],
+  'LAC/WR': ['Vincent Jackson', 'Chris Chambers'],
+  'LAC/TE': ['Antonio Gates'],
+  'LAC/LB': ['Shawne Merriman', 'Stephen Cooper'],
+  'LAC/DL': ['Jamal Williams', 'Igor Olshansky'],
+  'LAC/CB': ['Quentin Jammer'],
+
+  'LAR/QB': ['Marc Bulger'],
+  'LAR/RB': ['Steven Jackson'],
+  'LAR/WR': ['Torry Holt', 'Isaac Bruce'],
+  'LAR/OL': ['Orlando Pace'],
+  'LAR/DL': ['Leonard Little'],
+
+  'ARI/QB': ['Kurt Warner'],
+  'ARI/WR': ['Larry Fitzgerald', 'Anquan Boldin'],
+  'ARI/RB': ['Edgerrin James'],
+  'ARI/LB': ['Karlos Dansby'],
+  'ARI/S':  ['Adrian Wilson'],
+
+  'SEA/QB': ['Matt Hasselbeck'],
+  'SEA/RB': ['Shaun Alexander'],
+  'SEA/WR': ['Bobby Engram', 'Deion Branch'],
+  'SEA/OL': ['Walter Jones'],
+  'SEA/LB': ['Lofa Tatupu'],
+  'SEA/CB': ['Marcus Trufant'],
+
+  'SF/QB': ['Alex Smith'],
+  'SF/RB': ['Frank Gore'],
+  'SF/TE': ['Vernon Davis'],
+  'SF/LB': ['Patrick Willis'],
+  'SF/CB': ['Nate Clements'],
+
+  'TB/QB': ['Jeff Garcia'],
+  'TB/RB': ['Earnest Graham', 'Cadillac Williams'],
+  'TB/WR': ['Joey Galloway'],
+  'TB/LB': ['Derrick Brooks', 'Cato June', 'Barrett Ruud'],
+  'TB/CB': ['Ronde Barber'],
+
+  'CAR/QB': ['David Carr', 'Vinny Testaverde'],
+  'CAR/RB': ['DeAngelo Williams'],
+  'CAR/WR': ['Steve Smith'],
+  'CAR/DL': ['Julius Peppers'],
+  'CAR/LB': ['Jon Beason', 'Thomas Davis'],
+
+  'ATL/QB': ['Joey Harrington', 'Byron Leftwich'],
+  'ATL/RB': ['Warrick Dunn'],
+  'ATL/WR': ['Roddy White'],
+  'ATL/TE': ['Alge Crumpler'],
+  'ATL/CB': ['DeAngelo Hall'],
+};
+
 /** Map an FBGM-format position (DT/DE/T/G/etc.) to one of our coarse
  *  position buckets used by mapPosition() in src/lib/data/leagueImport.ts.
  *  Same bucketing rules apply to the nflverse CSV positions, so we use this
@@ -251,15 +471,50 @@ for (const [teamAbbrev, team] of teamByAbbrev) {
   for (const [bucket, fbgmList] of fbgmByPos) {
     const csvList = csvTeamMap.get(bucket);
     if (!csvList || csvList.length === 0) continue;
-    // Sort 2026 by OVR desc; CSV stays in file order (roughly depth-aligned).
+    // Sort 2026 by OVR desc.
     fbgmList.sort((a, b) => (b.r.ovr ?? 0) - (a.r.ovr ?? 0));
+
+    // Apply STARTER_OVERRIDES: promote known 2007 starters to the front
+    // of the CSV list so they get the highest-OVR slots in the pairing
+    // below. Iterate the override list in REVERSE so the first-named
+    // starter ends up at index 0, second at index 1, etc.
+    const overrideKey = `${teamAbbrev}/${bucket}`;
+    const overrideNames = STARTER_OVERRIDES[overrideKey];
+    if (overrideNames && overrideNames.length > 0) {
+      for (let oi = overrideNames.length - 1; oi >= 0; oi--) {
+        const wantedName = overrideNames[oi];
+        const idx = csvList.findIndex((row) => row[colIdx.full_name] === wantedName);
+        if (idx > 0) {
+          const [starter] = csvList.splice(idx, 1);
+          csvList.unshift(starter);
+        }
+      }
+    }
+
     const pairs = Math.min(fbgmList.length, csvList.length);
     for (let i = 0; i < pairs; i++) {
       const target = fbgmList[i].p;
       const csv = csvList[i];
       const wasName = `${target.firstName} ${target.lastName}`;
-      target.firstName = csv[colIdx.first_name] || target.firstName;
-      target.lastName = csv[colIdx.last_name] || target.lastName;
+      // Prefer football_name (jersey/displayed name like "Brad" for Brad
+      // Johnson), fall back to first_name (legal first like "James"),
+      // fall back to splitting full_name on the first space, fall back
+      // to keeping existing 2026 firstName.
+      const footballName = csv[colIdx.football_name];
+      const fullName = csv[colIdx.full_name];
+      let newFirst = footballName && footballName.trim() !== ''
+        ? footballName.trim()
+        : (csv[colIdx.first_name] || '').trim();
+      const newLast = (csv[colIdx.last_name] || '').trim();
+      // If first_name and football_name are both empty but full_name is
+      // populated (e.g. "T.J. Houshmandzadeh"), parse full_name as the
+      // last fallback.
+      if (!newFirst && fullName) {
+        const parts = fullName.split(' ');
+        newFirst = parts.slice(0, -1).join(' ') || parts[0];
+      }
+      target.firstName = newFirst || target.firstName;
+      target.lastName = newLast || target.lastName;
       const college = csv[colIdx.college];
       if (college && college.trim() !== '') target.college = college;
       const birthDate = csv[colIdx.birth_date];
