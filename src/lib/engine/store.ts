@@ -540,7 +540,14 @@ function generateInjuries(
   for (const p of players) {
     if (!playerIdsWhoPlayed.has(p.id)) continue;
     if (p.injury && p.injury.weeksLeft > 0) continue;
-    let chance = 0.012;
+    // Tuned 0.012 → 0.0085 on 4/29 (its.camare report). The 4/28 evening
+    // play-distribution rewrite now credits stats to more players per
+    // game (RB2/RB3 carries, WR3/4 targets, CB rotations), which expands
+    // playerIdsWhoPlayed by ~30-40% and proportionally inflated weekly
+    // injuries even though the per-player chance was unchanged. Scaling
+    // back to land roughly on the 4/26 baseline of ~3-7 IR placements
+    // per team per season.
+    let chance = 0.0085;
     if (p.age >= 30) chance *= 1.3;
     if (p.ratings.stamina < 60) chance *= 1.2;
     // PRD-07: injury history label → 20% higher first-year chance

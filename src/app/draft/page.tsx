@@ -1861,6 +1861,30 @@ export default function DraftPage() {
                                     </div>
                                   </details>
                                 )}
+
+                                {/* College stats — 305mike 4/29: panel was
+                                    disappearing once the prospect was scouted
+                                    because the post-scout view replaced the
+                                    pre-scout panel entirely. Now stacked
+                                    below the eval surfaces and visible in
+                                    both states. */}
+                                {player.collegeStats && (
+                                  <details className="border border-[var(--border)] rounded-lg overflow-hidden" open>
+                                    <summary className="px-3 py-2 bg-amber-50 text-amber-700 text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-amber-100 transition-colors">
+                                      🏫 College Stats {player.heismanWinner ? '· 🏆 Heisman Winner' : player.heismanFinalist ? '· 🏆 Heisman Finalist' : ''}
+                                    </summary>
+                                    <div className="px-3 py-2.5 border-t border-[var(--border)] flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--text)]">
+                                      <span className="text-[var(--text-sec)]">{player.college ?? 'Unknown'} · {player.collegeStats.seasons}yr · {player.collegeStats.gamesPlayed}G</span>
+                                      {player.collegeStats.passYards != null && <span>Pass: {player.collegeStats.passYards.toLocaleString()} yds / {player.collegeStats.passTDs} TD / {player.collegeStats.passINTs} INT</span>}
+                                      {player.collegeStats.rushYards != null && player.position !== 'QB' && <span>Rush: {player.collegeStats.rushYards.toLocaleString()} yds / {player.collegeStats.rushTDs} TD</span>}
+                                      {player.collegeStats.receptions != null && <span>Rec: {player.collegeStats.receptions} / {player.collegeStats.recYards?.toLocaleString()} yds / {player.collegeStats.recTDs} TD</span>}
+                                      {player.collegeStats.tackles != null && <span>TKL: {player.collegeStats.tackles}</span>}
+                                      {player.collegeStats.sacks != null && <span>SCK: {player.collegeStats.sacks}</span>}
+                                      {player.collegeStats.interceptions != null && <span>INT: {player.collegeStats.interceptions}</span>}
+                                      {player.collegeStats.fieldGoalPct != null && <span>FG%: {player.collegeStats.fieldGoalPct}%</span>}
+                                    </div>
+                                  </details>
+                                )}
                               </div>
                             );
                           })()}
