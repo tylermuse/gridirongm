@@ -57,8 +57,13 @@ function tryGenerateNFLSchedule(teams: Team[], season: number): GameResult[] | n
   const divNames = ['North', 'South', 'East', 'West'] as const;
 
   // Determine rotating division matchups using season number
-  // Each division plays one other in-conference division and one cross-conference division
-  const rotationIndex = (season - 2026) % 3; // cycles every 3 years
+  // Each division plays one other in-conference division and one cross-conference division.
+  // Normalize to always be non-negative: JS `%` returns negative for negative
+  // dividends (e.g. (2007 - 2026) % 3 === -1), and a negative rotationIndex
+  // would make `(di + rotationIndex) % 4` negative for di=0, indexing
+  // otherConfDivs[-1] = undefined and throwing on `.teams`. Hits any era
+  // roster with season < 2026 (e.g. Brady Era 2007).
+  const rotationIndex = (((season - 2026) % 3) + 3) % 3; // cycles every 3 years, always 0-2
 
   // Build all 17 matchups per team
   const allMatchups: Matchup[] = [];
