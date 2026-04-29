@@ -16,6 +16,11 @@ interface RosterEntry {
   /** Optional caveat shown in muted text under the description — used to set
    *  expectations for v0 era rosters that aren’t fully hand-curated yet. */
   caveat?: string;
+  /** Append `?v=X` to the JSON URL to bust browser + Vercel edge caches when
+   *  the file is regenerated under the same filename. Bump the integer when a
+   *  new build of the same era roster ships. (somedude4759 4/29: post-v1 ship
+   *  was still serving the v0 JSON because the URL hadn't changed.) */
+  cacheBust?: number;
 }
 
 const ROSTERS: RosterEntry[] = [
@@ -51,6 +56,11 @@ const ROSTERS: RosterEntry[] = [
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
     era: 'Era',
+    // v1.1 — bumped after somedude4759's 20:45 "not fixed" report. Same JSON
+    // filename was being served stale (browser + edge cache) so post-v1
+    // leagues were still booting with v0 contamination (Mendoza, Bain,
+    // Mauigoa in FA pool). Bump again when the era JSON is regenerated.
+    cacheBust: 2,
     caveat:
       'V1 update (Apr 29): Rams play in St. Louis, Chargers in San Diego, Raiders in Oakland, Washington Redskins. The 2008 draft class no longer leaks 2026 NCAA names (Mendoza, Sanders, etc.) — generic filler names until v2 ships real 2007-era prospects. Powered by nflverse historical NFL roster data: ~1,700 real 2007 NFL players stamped onto their 2007 teams. Ratings inherit from the 2026 base so OVRs are a rough fit, not historically tuned. Depth-chart slot ordering is OVR-driven, so a real 2007 starter may show up as a backup if the 2026 lineup happened to bury that position. Real 2007 photos + real 2007 draft class are v2.',
   },
@@ -175,13 +185,13 @@ export default function RostersPage() {
 
               <div className="shrink-0 flex flex-col gap-2">
                 <Link
-                  href={`/?roster=/rosters/${roster.fileName}&startMode=${roster.startMode}`}
+                  href={`/?roster=/rosters/${roster.fileName}${roster.cacheBust ? `?v=${roster.cacheBust}` : ''}&startMode=${roster.startMode}`}
                   className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-sm rounded-lg transition-colors shadow-sm"
                 >
                   Play in BS Football →
                 </Link>
                 <a
-                  href={`/rosters/${roster.fileName}`}
+                  href={`/rosters/${roster.fileName}${roster.cacheBust ? `?v=${roster.cacheBust}` : ''}`}
                   download={roster.fileName}
                   className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[var(--surface-2)] hover:bg-[var(--border)] text-[var(--text)] font-medium text-xs rounded-lg transition-colors border border-[var(--border)]"
                 >

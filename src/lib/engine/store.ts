@@ -13,6 +13,7 @@ import type {
 import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, assignOlSlots, assignJerseyNumber, reconcileJerseys, isPracticeSquadEligible, PRACTICE_SQUAD_LIMIT, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
+import { applyEraHeadCoach } from '@/lib/data/eraCoachingStaff';
 import { NFL_2026_FIRST_ROUND, isNfl2026Roster, type MockDraftPick } from '@/lib/data/nfl2026Draft';
 import { generateRoster, generateDraftClass, generatePlayer, generateCombineStats, recalculateOvr, generateCollegeStats } from './playerGen';
 import { resetUsedNames } from '../data/names';
@@ -2442,11 +2443,16 @@ export const useGameStore = create<GameStore>()(
             }
           }
 
-          // Generate coaching staff for all teams if not already present
+          // Generate coaching staff for all teams if not already present.
+          // For era leagues (season === 2007), overlay the real 2007 NFL head
+          // coaches from camare's 4/29 #feature-requests data dump on top of
+          // the auto-generated staff. Coordinators + position coaches stay
+          // autogen — only HCs are real for v1.
           for (const team of imported.teams) {
             if (!team.coaches || team.coaches.length === 0) {
               team.coaches = generateCoachingStaff();
             }
+            applyEraHeadCoach(team.coaches, team.abbreviation, imported.season);
             if (!team.ownerPersonality) {
               team.ownerPersonality = rollOwnerPersonality();
             }
@@ -2776,7 +2782,13 @@ export const useGameStore = create<GameStore>()(
         // active roster has to be back at 53 before the regular season
         // starts. Block sims until the user trims down via /roster cuts
         // or PS demotions.
-        if (state.week === 1 && state.userTeamId) {
+        //
+        // Skip the gate in spectator mode — there's no "user team" to manage,
+        // and AI teams handle their own cuts. (somedude4759 4/29: spectator
+        // start on Brady Era 2007 hit "active roster is at 61 — cut or
+        // demote 8 more" because the gate keyed on userTeamId without
+        // checking isSpectator.)
+        if (state.week === 1 && state.userTeamId && !state.isSpectator) {
           const userTeam = state.teams.find(t => t.id === state.userTeamId);
           if (userTeam && userTeam.roster.length > 53) {
             const over = userTeam.roster.length - 53;
