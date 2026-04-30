@@ -1,12 +1,43 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 
+// Whitelist of relative paths the login flow may redirect to after a
+// successful sign-in. Prevents open-redirect attacks via ?next= URLs.
+function safeNextPath(raw: string | null): string {
+  if (!raw) return '/';
+  // Must be a relative path on this origin. Reject schemes, // prefixes,
+  // and anything that doesn't start with a single slash.
+  if (!raw.startsWith('/')) return '/';
+  if (raw.startsWith('//')) return '/';
+  // Strip any whitespace / control chars defensively.
+  return raw.length < 2048 ? raw : '/';
+}
+
 export default function LoginPage() {
+  // Suspense wrapper is required by Next.js when the inner component calls
+  // useSearchParams(), so that the page can statically prerender without
+  // bailing out on the search-params dependency.
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#f0f4f8' }}>
+          <div className="text-sm text-[var(--text-sec)]">Loading…</div>
+        </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = safeNextPath(searchParams.get('next'));
   const { user } = useSubscription();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,9 +48,9 @@ export default function LoginPage() {
 
   const supabase = createClient();
 
-  // Already logged in — redirect
+  // Already logged in — redirect to the next destination (or home).
   if (user) {
-    router.push('/');
+    router.push(next);
     return null;
   }
 
@@ -57,7 +88,7 @@ export default function LoginPage() {
           password,
         });
         if (signInError) throw signInError;
-        router.push('/');
+        router.push(next);
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -68,9 +99,12 @@ export default function LoginPage() {
 
   const handleOAuth = async (provider: 'google' | 'discord') => {
     setError(null);
+    // Pass `next` through to the OAuth callback so it can forward to the
+    // correct landing page after the code exchange.
+    const callback = `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(next)}`;
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: `${window.location.origin}/api/auth/callback` },
+      options: { redirectTo: callback },
     });
     if (oauthError) setError(oauthError.message);
   };

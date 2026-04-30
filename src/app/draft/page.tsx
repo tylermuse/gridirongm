@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { AdSlot } from '@/components/AdSlot';
 import { useRouter } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
@@ -37,6 +38,11 @@ function ratingColor(val: number): string {
 // ---------------------------------------------------------------------------
 
 function getProspectTag(player: Player, scouted: boolean): { label: string; color: string; bg: string } | null {
+  // Every prospect tag reveals scout-derived info (potential, draft profile,
+  // projected ranges) and should not be visible until the user has actually
+  // scouted the prospect. Pre-scout, the prospect row shows only basic
+  // info (name, position, college, OVR estimate).
+  if (!scouted) return null;
   const ovr = player.ratings.overall;
   const pot = player.potential;
   const rank = player.projectedRank ?? 999;
@@ -45,8 +51,9 @@ function getProspectTag(player: Player, scouted: boolean): { label: string; colo
   if (pot >= 90 && ovr < 70) return { label: 'High Ceiling', color: 'text-blue-700', bg: 'bg-blue-100' };
   if (pot >= 85 && rank > 100) return { label: 'Diamond in the Rough', color: 'text-amber-700', bg: 'bg-amber-100' };
   if (pot >= 80 && ovr < 60) return { label: 'Project', color: 'text-orange-700', bg: 'bg-orange-100' };
-  if (scouted && player.draftProfile === 'bust') return { label: 'Bust Risk', color: 'text-red-700', bg: 'bg-red-100' };
-  if (Math.abs(ovr - pot) <= 5 && player.draftProfile !== 'bust') return { label: 'Safe Pick', color: 'text-gray-700', bg: 'bg-gray-100' };
+  if (player.draftProfile === 'bust') return { label: 'Bust Risk', color: 'text-red-700', bg: 'bg-red-100' };
+  // 'bust' was returned above; no need to re-check here.
+  if (Math.abs(ovr - pot) <= 5) return { label: 'Safe Pick', color: 'text-gray-700', bg: 'bg-gray-100' };
   return null;
 }
 
@@ -1122,7 +1129,7 @@ export default function DraftPage() {
   }, [phase, orphanCount]);
   const [showMockDraft, setShowMockDraft] = useState(false);
 
-  const { hasScouting } = useSubscription();
+  const { hasScouting, scoutingAllocations, tier } = useSubscription();
   const scoutPlayer = useGameStore(s => s.scoutPlayer);
 
   const ss = scoutingState;
@@ -1565,6 +1572,9 @@ export default function DraftPage() {
         {/* Import Draft Class */}
         <ImportDraftClassPanel season={season} />
 
+        {/* Free-tier ad slot above the draft board. Hidden for premium. */}
+        <AdSlot size="leaderboard" slotId="draft-top" />
+
         <div className="grid grid-cols-12 gap-4">
           {/* Top Prospects */}
           <Card className="col-span-12 lg:col-span-6">
@@ -1612,32 +1622,37 @@ export default function DraftPage() {
                   </button>
                 ))}
               </div>
-              {hasScouting && (ss?.fullEvals && Object.keys(ss.fullEvals).length > 0) && (
-                <button
-                  onClick={() => {
-                    if (!confirm('Clear all scouting reports for this draft? Each prospect will need to be scouted again.')) return;
-                    useGameStore.setState({
-                      scoutingState: {
-                        scoutPoints: 100,
-                        maxScoutPoints: 100,
-                        filmReviews: {},
-                        inPersonEvals: {},
-                        inPersonEvalCount: 0,
-                        fullEvals: {},
-                        fullEvalCount: 0,
-                      },
-                    });
-                  }}
-                  className="text-xs font-bold text-red-600 hover:underline"
-                  title="Clear all scouting reports for this draft"
-                >
-                  ↻ Reset scouting
-                </button>
-              )}
-              {!hasScouting && (
-                <Link href="/pricing" className="text-xs font-bold text-blue-600 hover:underline">
-                  🔒 Detailed scouting is a Premium feature →
-                </Link>
+              {/* Scout points indicator */}
+              {ss && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-[var(--text-sec)]">Scout Pts:</span>
+                  {scoutingAllocations.isUnlimited ? (
+                    <span className="text-xs font-bold text-purple-700">∞</span>
+                  ) : (
+                    <>
+                      <div className="w-20 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            (ss.scoutPoints ?? 0) > Math.max(2, (ss.maxScoutPoints ?? 0) / 3)
+                              ? 'bg-blue-500'
+                              : (ss.scoutPoints ?? 0) > 0
+                              ? 'bg-amber-500'
+                              : 'bg-red-500'
+                          }`}
+                          style={{
+                            width: `${Math.min(100, ((ss.scoutPoints ?? 0) / Math.max(1, ss.maxScoutPoints ?? 1)) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                      <span className="text-xs font-bold">{ss.scoutPoints ?? 0}/{ss.maxScoutPoints ?? 0}</span>
+                      {(ss.scoutPoints ?? 0) === 0 && tier === 'free' && (
+                        <Link href="/pricing" className="ml-1 text-[10px] font-bold text-blue-600 hover:underline">
+                          Need more? →
+                        </Link>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
             </div>
             {/* Roster Needs Snapshot */}
@@ -1790,22 +1805,32 @@ export default function DraftPage() {
                         )}
                       </td>
                       <td className="py-2.5 text-center hidden sm:table-cell">
-                        {!hasScouting ? (
-                          <Link href="/pricing" onClick={e => e.stopPropagation()} className="inline-flex items-center px-2 py-1 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors" title="Scouting is a Premium feature">
-                            🔒 Scout
-                          </Link>
-                        ) : (() => {
-                            const fullD = ss?.fullEvals?.[player.id];
-                            if (fullD) return <span className={`text-xs font-black ${ratingColor(fullD.exactOvr)}`}>{fullD.exactOvr}</span>;
-                            return (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); scoutPlayer(player.id); }}
-                                className="px-2 py-1 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
-                              >
-                                Scout
-                              </button>
-                            );
-                          })()}
+                        {(() => {
+                          const fullD = ss?.fullEvals?.[player.id];
+                          if (fullD) {
+                            return <span className={`text-xs font-black ${ratingColor(fullD.exactOvr)}`}>{fullD.exactOvr}</span>;
+                          }
+                          const points = ss?.scoutPoints ?? 0;
+                          const outOfPoints = points <= 0;
+                          return (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (outOfPoints) { router.push('/pricing'); return; }
+                                const ok = scoutPlayer(player.id);
+                                if (ok) setExpandedProspectId(player.id);
+                              }}
+                              className={`px-2 py-1 text-[10px] font-bold rounded border transition-colors ${
+                                outOfPoints
+                                  ? 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100'
+                                  : 'text-blue-600 bg-blue-50 border-blue-200 hover:bg-blue-100'
+                              }`}
+                              title={outOfPoints ? 'Out of scout points — upgrade to Premium for more' : 'Scout this prospect (1 pt)'}
+                            >
+                              {outOfPoints ? '🔒 Scout' : 'Scout'}
+                            </button>
+                          );
+                        })()}
                       </td>
                       <td className="py-2.5 pr-2 text-right" onClick={e => e.stopPropagation()}>
                         {isUserPick ? (

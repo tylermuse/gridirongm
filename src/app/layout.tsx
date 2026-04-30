@@ -1,8 +1,11 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import { Barlow_Condensed } from 'next/font/google';
 import { Providers } from '@/components/providers/Providers';
 import { FeedbackWidget } from '@/components/game/FeedbackWidget';
 import './globals.css';
+
+const ADSENSE_CLIENT_ID = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID;
 
 const barlowCondensed = Barlow_Condensed({
   subsets: ['latin'],
@@ -39,6 +42,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <FeedbackWidget />
         </Providers>
+        {/* Google AdSense loader — only injected when an AdSense client ID is
+            configured. Free-tier users see ads via <AdSlot />; paying tiers
+            never render the slots so this script effectively no-ops for them. */}
+        {ADSENSE_CLIENT_ID && (
+          <Script
+            id="adsense-loader"
+            async
+            strategy="afterInteractive"
+            crossOrigin="anonymous"
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT_ID}`}
+          />
+        )}
       </body>
     </html>
   );

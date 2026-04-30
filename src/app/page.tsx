@@ -24,6 +24,7 @@ import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
 import { formatRecord } from '@/types';
 import { ProgressRing } from '@/components/shared/ProgressRing';
+import { AdSlot } from '@/components/AdSlot';
 
 function TeamPicker() {
   const { newLeague } = useGameStore();
@@ -920,6 +921,9 @@ function Dashboard() {
 
         {/* Discord Banner */}
         <DiscordBanner />
+
+        {/* Free-tier ad slot. Hidden for Premium / Founder / Admin users. */}
+        <AdSlot size="leaderboard" slotId="home-top" />
 
         {/* Coaches with expiring contracts — surfaces a single-click path
             to the re-signings page so the user doesn't accidentally lose

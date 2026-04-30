@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { AdSlot } from '@/components/AdSlot';
 import { useGameStore } from '@/lib/engine/store';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { coarseOvrBucket } from '@/lib/subscription';
@@ -151,10 +152,12 @@ function FAEvaluationPanel({ player, roster, capSpace, marketSalary }: {
 export default function FreeAgencyPage() {
   const { phase, players, freeAgents, signFreeAgent, teams, userTeamId, faDay, faRefusals, advanceFADay, advanceFAWeek, pursuitState, intelReportFA } = useGameStore();
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
-  const { hasScouting } = useSubscription();
+  const { hasScouting, scoutingAllocations, tier } = useSubscription();
 
   // Also support regular season FA (no pursuit during regular season)
-  const effectivePursuitState = phase === 'freeAgency' ? (pursuitState ?? { pursuitPoints: 5, maxPursuitPoints: 11, intelReports: {} }) : null;
+  const effectivePursuitState = phase === 'freeAgency'
+    ? (pursuitState ?? { pursuitPoints: scoutingAllocations.intelReports, maxPursuitPoints: scoutingAllocations.intelReports, intelReports: {} })
+    : null;
 
   const [affordableOnly, setAffordableOnly] = useState(false);
   const [filterPos, setFilterPos] = useState<Position | 'ALL'>('ALL');
@@ -169,22 +172,19 @@ export default function FreeAgencyPage() {
   const msgFeedRef = useRef<HTMLDivElement>(null);
 
   // Auto-initialize pursuitState for existing saves that entered FA before
-  // this feature was added. Done in an effect (not during render) so React
-  // doesn't see a side-effect mid-render.
+  // this feature was added. Per-tier allocation: free=3, premium=9,
+  // founder/admin=unlimited (sentinel value, see subscription.ts).
   useEffect(() => {
     if (phase === 'freeAgency' && !pursuitState) {
-      // Pursuit-points seed used to scale with scoutingLevel (0-2). Now
-      // binary: premium users get the high-end bucket (11 pts), free users
-      // the low-end (5 pts).
       useGameStore.setState({
         pursuitState: {
-          pursuitPoints: hasScouting ? 11 : 5,
-          maxPursuitPoints: 11,
+          pursuitPoints: scoutingAllocations.intelReports,
+          maxPursuitPoints: scoutingAllocations.intelReports,
           intelReports: {},
         },
       });
     }
-  }, [phase, pursuitState, hasScouting]);
+  }, [phase, pursuitState, scoutingAllocations.intelReports]);
 
   // Auto-scroll message feed to bottom when new messages arrive
   useEffect(() => {
@@ -433,7 +433,18 @@ export default function FreeAgencyPage() {
             {effectivePursuitState && (
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-[var(--text-sec)]">Intel:</span>
-                <span className="text-sm font-bold">{effectivePursuitState.pursuitPoints} pts</span>
+                {scoutingAllocations.isUnlimited ? (
+                  <span className="text-sm font-bold text-purple-700">∞</span>
+                ) : (
+                  <>
+                    <span className="text-sm font-bold">{effectivePursuitState.pursuitPoints}/{effectivePursuitState.maxPursuitPoints}</span>
+                    {(effectivePursuitState.pursuitPoints ?? 0) === 0 && tier === 'free' && (
+                      <Link href="/pricing" className="ml-1 text-[10px] font-bold text-blue-600 hover:underline">
+                        Need more? →
+                      </Link>
+                    )}
+                  </>
+                )}
               </div>
             )}
             <div className="text-right">
@@ -444,6 +455,9 @@ export default function FreeAgencyPage() {
             </div>
           </div>
         </div>
+
+        {/* Free-tier ad slot. Hidden for premium. */}
+        <AdSlot size="leaderboard" slotId="fa-top" />
 
         {/* FA Day progress bar */}
         {phase === 'freeAgency' && (
@@ -891,23 +905,43 @@ export default function FreeAgencyPage() {
                       {isExpanded && (
                         <tr className="border-t border-[var(--border)]">
                           <td colSpan={8} className="px-4 py-3 bg-[var(--surface-2)]/50">
-                            {/* Intel Report — no report yet */}
-                            {effectivePursuitState && !effectivePursuitState.intelReports[p.id] && (
-                              <div className="mt-3 border-t border-[var(--border)] pt-3">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">Intel Report</span>
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); intelReportFA(p.id); }}
-                                    disabled={(effectivePursuitState.pursuitPoints ?? 0) < 1}
-                                    className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                                  >
-                                    Run Intel Report (1 pt)
-                                  </button>
+                            {/* Intel Report — no report yet. */}
+                            {effectivePursuitState && !effectivePursuitState.intelReports[p.id] && (() => {
+                              const points = effectivePursuitState.pursuitPoints ?? 0;
+                              const outOfPoints = points < 1;
+                              const isFreeTier = tier === 'free';
+                              return (
+                                <div className="mt-3 border-t border-[var(--border)] pt-3">
+                                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                                    <span className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">Intel Report</span>
+                                    {!outOfPoints ? (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); intelReportFA(p.id); }}
+                                        className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700"
+                                      >
+                                        Run Intel Report (1 pt)
+                                      </button>
+                                    ) : isFreeTier ? (
+                                      <Link
+                                        href="/pricing"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700 inline-flex items-center gap-1"
+                                        title="You've used all 3 free intel reports. Upgrade to get 9 per period."
+                                      >
+                                        Upgrade for 9 intel reports →
+                                      </Link>
+                                    ) : (
+                                      <span className="px-3 py-1.5 text-xs font-bold text-[var(--text-sec)] bg-[var(--surface-2)] rounded-lg cursor-not-allowed">
+                                        Out of intel reports
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              );
+                            })()}
 
-                            {/* Intel Report — full content */}
+                            {/* Intel Report — full content. Only renders for premium since
+                                free users can never trigger intelReportFA. */}
                             {effectivePursuitState?.intelReports[p.id] && (() => {
                               const report = effectivePursuitState.intelReports[p.id];
                               const priorityIcons: Record<string, string> = { money: '💰', winning: '🏆', role: '🎯', loyalty: '🏠' };

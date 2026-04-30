@@ -23,9 +23,41 @@ export function hasFeature(tier: Tier, feature: Feature): boolean {
   return false;
 }
 
-/** Binary scouting access — Premium sees full prospect info, Free sees a coarse bucket. */
-export function hasScouting(tier: Tier): boolean {
-  return tier === 'premium';
+/**
+ * @deprecated kept for back-compat — every tier now has scouting access,
+ * just with different point allotments. Returns true so callers don't
+ * accidentally hide the UI for free users.
+ */
+export function hasScouting(_tier: Tier): boolean {
+  return true;
+}
+
+/** Per-draft scouting + per-FA-period intel report allotments by tier. */
+export interface ScoutingAllocations {
+  /** Total scout points granted at draft entry. Sentinel value for unlimited. */
+  scoutPoints: number;
+  /** Total intel reports granted at FA entry. Sentinel value for unlimited. */
+  intelReports: number;
+  /** True when the tier is uncapped — UI should render "∞" instead of a count. */
+  isUnlimited: boolean;
+}
+
+/** Sentinel value used for unlimited tiers. Chosen large enough that it
+ *  never realistically depletes during a draft / FA period. */
+export const UNLIMITED_ALLOCATION = 999_999;
+
+/**
+ * Resolve scouting allocations for a tier + founder flag.
+ * Founders + admins get unlimited regardless of paid tier.
+ */
+export function getScoutingAllocations(tier: Tier, isFounder: boolean): ScoutingAllocations {
+  if (isFounder) {
+    return { scoutPoints: UNLIMITED_ALLOCATION, intelReports: UNLIMITED_ALLOCATION, isUnlimited: true };
+  }
+  if (tier === 'premium') {
+    return { scoutPoints: 30, intelReports: 9, isUnlimited: false };
+  }
+  return { scoutPoints: 10, intelReports: 3, isUnlimited: false };
 }
 
 /** How many monthly Spotlight podcast credits the tier gets. */

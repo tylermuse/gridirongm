@@ -9,18 +9,33 @@
 // flag is only used to seed initial state and as a hint for cap checks; it
 // can never grant entitlement that the server doesn't also enforce.
 
-import type { Tier } from './subscription';
+import type { Tier, ScoutingAllocations } from './subscription';
 
 let currentTier: Tier = 'free';
+let currentAllocations: ScoutingAllocations = {
+  scoutPoints: 10,
+  intelReports: 3,
+  isUnlimited: false,
+};
 
 /** Set by SubscriptionProvider whenever the resolved tier changes. */
 export function setCurrentSubscriptionTier(tier: Tier): void {
   currentTier = tier;
 }
 
+/** Set by SubscriptionProvider whenever the resolved allocations change. */
+export function setCurrentSubscriptionAllocations(allocations: ScoutingAllocations): void {
+  currentAllocations = allocations;
+}
+
 /** Read the last-known resolved tier. Defaults to 'free' before auth resolves. */
 export function getCurrentSubscriptionTier(): Tier {
   return currentTier;
+}
+
+/** Read the last-known resolved scouting allocations. Defaults to free-tier values. */
+export function getCurrentSubscriptionAllocations(): ScoutingAllocations {
+  return currentAllocations;
 }
 
 /** Convenience predicate for engine code that just wants a yes/no. */
