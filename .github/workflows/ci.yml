@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Lint and build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint changed TypeScript files
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="origin/${{ github.base_ref }}"
+            git fetch origin "${{ github.base_ref }}" --depth=1
+          else
+            BASE="origin/main"
+            git fetch origin main --depth=1 || true
+          fi
+
+          CHANGED=$(git diff --name-only "$BASE"...HEAD -- '*.ts' '*.tsx' || true)
+
+          if [ -z "$CHANGED" ]; then
+            echo "No TypeScript files changed; skipping scoped lint."
+            exit 0
+          fi
+
+          echo "Linting changed files:"
+          echo "$CHANGED"
+          echo "$CHANGED" | xargs npx eslint
+
+      - name: Build
+        run: npm run build
+        env:
+          # Provide empty placeholders so Next.js can complete the build
+          # without secret values; runtime config still comes from Vercel.
+          NEXT_TELEMETRY_DISABLED: "1"
