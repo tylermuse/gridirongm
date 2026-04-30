@@ -42,7 +42,6 @@ function getProspectTag(player: Player, scouted: boolean): { label: string; colo
   const rank = player.projectedRank ?? 999;
 
   if (pot >= 95 && ovr >= 80) return { label: 'Generational', color: 'text-purple-700', bg: 'bg-purple-100' };
-  if (ovr >= 75) return { label: 'Pro-Ready', color: 'text-green-700', bg: 'bg-green-100' };
   if (pot >= 90 && ovr < 70) return { label: 'High Ceiling', color: 'text-blue-700', bg: 'bg-blue-100' };
   if (pot >= 85 && rank > 100) return { label: 'Diamond in the Rough', color: 'text-amber-700', bg: 'bg-amber-100' };
   if (pot >= 80 && ovr < 60) return { label: 'Project', color: 'text-orange-700', bg: 'bg-orange-100' };
@@ -1124,6 +1123,7 @@ export default function DraftPage() {
   const [showMockDraft, setShowMockDraft] = useState(false);
 
   const { hasScouting } = useSubscription();
+  const scoutPlayer = useGameStore(s => s.scoutPlayer);
 
   const ss = scoutingState;
 
@@ -1612,6 +1612,28 @@ export default function DraftPage() {
                   </button>
                 ))}
               </div>
+              {hasScouting && (ss?.fullEvals && Object.keys(ss.fullEvals).length > 0) && (
+                <button
+                  onClick={() => {
+                    if (!confirm('Clear all scouting reports for this draft? Each prospect will need to be scouted again.')) return;
+                    useGameStore.setState({
+                      scoutingState: {
+                        scoutPoints: 100,
+                        maxScoutPoints: 100,
+                        filmReviews: {},
+                        inPersonEvals: {},
+                        inPersonEvalCount: 0,
+                        fullEvals: {},
+                        fullEvalCount: 0,
+                      },
+                    });
+                  }}
+                  className="text-xs font-bold text-red-600 hover:underline"
+                  title="Clear all scouting reports for this draft"
+                >
+                  ↻ Reset scouting
+                </button>
+              )}
               {!hasScouting && (
                 <Link href="/pricing" className="text-xs font-bold text-blue-600 hover:underline">
                   🔒 Detailed scouting is a Premium feature →
@@ -1655,11 +1677,11 @@ export default function DraftPage() {
               <thead>
                 <tr className="text-[var(--text-sec)] text-xs uppercase tracking-wider">
                   <th className="text-left pb-2 pl-2 w-6"></th>
-                  {hasScouting && <th className="text-center pb-2 w-12">Proj</th>}
+                  <th className="text-center pb-2 w-12">Proj</th>
                   <th className="text-left pb-2">Player</th>
                   <th className="text-center pb-2">Pos</th>
                   <th className="text-center pb-2">OVR</th>
-                  {hasScouting && <th className="text-center pb-2 hidden sm:table-cell">Scout</th>}
+                  <th className="text-center pb-2 hidden sm:table-cell">Scout</th>
                   <th className="text-right pb-2 pr-2 bg-[var(--surface)]">Draft</th>
                 </tr>
               </thead>
@@ -1685,7 +1707,11 @@ export default function DraftPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                         </svg>
                       </td>
-                      {hasScouting && <td className="py-2.5 text-center text-xs text-[var(--text-sec)] font-mono">{projRank}</td>}
+                      <td className="py-2.5 text-center text-xs text-[var(--text-sec)] font-mono">
+                        {hasScouting ? projRank : (
+                          <Link href="/pricing" onClick={e => e.stopPropagation()} className="text-blue-600 hover:underline" title="Premium">🔒</Link>
+                        )}
+                      </td>
                       <td className="py-2.5">
                         <div className="flex items-center gap-2">
                           <button
@@ -1699,44 +1725,59 @@ export default function DraftPage() {
                             </span>
                           </button>
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-semibold truncate">{player.firstName} {player.lastName}</span>
-                              {(() => {
-                                // Only show "Fills Need" when there's an actual unfilled need
-                                // at this position — not just one of the 5 relative highest.
-                                // Counts include players drafted earlier in this draft (they
-                                // already have teamId set), so the tag clears as picks land.
-                                const need = allMyNeeds.find(n => n.position === player.position);
-                                if (!need) return null;
-                                const target = Math.ceil((need.limits.min + need.limits.max) / 2);
-                                const hasRealNeed =
-                                  need.count < need.limits.min ||
-                                  (need.count < target && need.starterOvr < 72);
-                                if (!hasRealNeed) return null;
-                                return <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium shrink-0">Fills Need</span>;
-                              })()}
-                              {(() => {
-                                const tag = getProspectTag(player, isScouted);
-                                if (!tag) return null;
-                                return <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${tag.bg} ${tag.color} shrink-0`}>{tag.label}</span>;
-                              })()}
-                              {player.heismanWinner ? (
-                                <span className="text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold shrink-0" title="Heisman Trophy winner">🏆 Heisman</span>
-                              ) : player.heismanFinalist ? (
-                                <span className="text-[9px] bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded font-semibold shrink-0" title="Heisman Finalist">🏆 Finalist</span>
-                              ) : null}
-                            </div>
-                            <div className="text-[10px] text-[var(--text-sec)] flex items-center gap-1 flex-wrap">
-                              {player.college ?? player.scoutingLabel ?? 'Unranked'}
-                              {hasScouting && isScouted && (() => {
-                                const eval_ = generateDraftScoutEval(player, userRoster, { lo, hi }, undefined, 2);
-                                return (
-                                  <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded border ${fitBadgeColor(eval_.fitBadge)}`}>
-                                    {fitBadgeEmoji(eval_.fitBadge)} {eval_.fitBadge}
-                                  </span>
-                                );
-                              })()}
-                            </div>
+                            {(() => {
+                              // Single source of truth for the row's need state. Used to
+                              // both gate the green "Fills Need" badge AND override the
+                              // scout-eval badge below — the eval module has its own
+                              // (different) needs heuristic and would otherwise stamp
+                              // "Roster Redundancy" alongside "Fills Need" on the same
+                              // player. (Discord 4/30 — Tyler.) Dashboard model wins.
+                              const need = allMyNeeds.find(n => n.position === player.position);
+                              const target = need ? Math.ceil((need.limits.min + need.limits.max) / 2) : 0;
+                              const hasRealNeed = !!need && (
+                                need.count < need.limits.min ||
+                                (need.count < target && need.starterOvr < 72)
+                              );
+                              return (
+                                <>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-semibold truncate">{player.firstName} {player.lastName}</span>
+                                    {hasRealNeed && (
+                                      <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium shrink-0">Fills Need</span>
+                                    )}
+                                    {(() => {
+                                      const tag = getProspectTag(player, isScouted);
+                                      if (!tag) return null;
+                                      return <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${tag.bg} ${tag.color} shrink-0`}>{tag.label}</span>;
+                                    })()}
+                                    {player.heismanWinner ? (
+                                      <span className="text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold shrink-0" title="Heisman Trophy winner">🏆 Heisman</span>
+                                    ) : player.heismanFinalist ? (
+                                      <span className="text-[9px] bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded font-semibold shrink-0" title="Heisman Finalist">🏆 Finalist</span>
+                                    ) : null}
+                                  </div>
+                                  <div className="text-[10px] text-[var(--text-sec)] flex items-center gap-1 flex-wrap">
+                                    {player.college ?? player.scoutingLabel ?? 'Unranked'}
+                                    {hasScouting && isScouted && (() => {
+                                      const eval_ = generateDraftScoutEval(player, userRoster, { lo, hi }, undefined, 2);
+                                      // Reconcile: when the dashboard says it's a real
+                                      // need, the eval's "Roster Redundancy" verdict is
+                                      // wrong by definition. Downgrade to "Worth a Look"
+                                      // so the row reads "Fills Need · Worth a Look"
+                                      // instead of "Fills Need · Roster Redundancy".
+                                      const badge = (hasRealNeed && eval_.fitBadge === 'Roster Redundancy')
+                                        ? 'Worth a Look'
+                                        : eval_.fitBadge;
+                                      return (
+                                        <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded border ${fitBadgeColor(badge)}`}>
+                                          {fitBadgeEmoji(badge)} {badge}
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
                       </td>
@@ -1748,19 +1789,24 @@ export default function DraftPage() {
                           <span className="text-[10px] uppercase tracking-wide">{coarseOvrBucket(player.ratings.overall)}</span>
                         )}
                       </td>
-                      {hasScouting && (
-                        <td className="py-2.5 text-center hidden sm:table-cell">
-                          {(() => {
+                      <td className="py-2.5 text-center hidden sm:table-cell">
+                        {!hasScouting ? (
+                          <Link href="/pricing" onClick={e => e.stopPropagation()} className="inline-flex items-center px-2 py-1 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors" title="Scouting is a Premium feature">
+                            🔒 Scout
+                          </Link>
+                        ) : (() => {
                             const fullD = ss?.fullEvals?.[player.id];
-                            const inPersonD = ss?.inPersonEvals?.[player.id];
-                            const filmD = ss?.filmReviews?.[player.id];
                             if (fullD) return <span className={`text-xs font-black ${ratingColor(fullD.exactOvr)}`}>{fullD.exactOvr}</span>;
-                            if (inPersonD) return <span className={`text-xs font-bold ${ratingColor((inPersonD.ovrRange.low + inPersonD.ovrRange.high) / 2)}`}>{inPersonD.ovrRange.low}–{inPersonD.ovrRange.high}</span>;
-                            if (filmD) return <span className={`text-xs font-bold ${ratingColor((filmD.ovrRange.low + filmD.ovrRange.high) / 2)}`}>{filmD.ovrRange.low}–{filmD.ovrRange.high}</span>;
-                            return <span className="text-xs text-[var(--text-sec)]">?</span>;
+                            return (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); scoutPlayer(player.id); }}
+                                className="px-2 py-1 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
+                              >
+                                Scout
+                              </button>
+                            );
                           })()}
-                        </td>
-                      )}
+                      </td>
                       <td className="py-2.5 pr-2 text-right" onClick={e => e.stopPropagation()}>
                         {isUserPick ? (
                           <button
@@ -1776,7 +1822,7 @@ export default function DraftPage() {
                     </tr>
                     {isExpanded && (
                       <tr className="border-t border-[var(--border)]">
-                        <td colSpan={hasScouting ? 7 : 5} className="px-4 py-3 bg-[var(--surface-2)]/50">
+                        <td colSpan={7} className="px-4 py-3 bg-[var(--surface-2)]/50">
                           {!hasScouting ? (
                             <div className="flex items-center justify-between gap-3 text-sm">
                               <div className="text-[var(--text-sec)]">
