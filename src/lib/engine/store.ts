@@ -36,7 +36,7 @@ import { generateSocialPosts } from './social';
 import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from './simTelemetry';
 import { getCurrentSubscriptionAllocations } from '../subscriptionState';
 
-const SAVE_VERSION = 32;
+const SAVE_VERSION = 33;
 
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
@@ -8229,6 +8229,22 @@ export const useGameStore = create<GameStore>()(
         );
         const expiredContractIds = new Set(expiredContractPlayers.map(p => p.id));
 
+        // Build a global registry of (originalTeamId, year, round) for picks
+        // that exist ANYWHERE in the league. The per-team regen below uses
+        // this to avoid duplicating a pick that was traded away.
+        // Tyler 4/30: previously the regen check looked only at the current
+        // team's draftPicks array, so a pick traded to another team would
+        // be regenerated and the trade undone. Repro: ARI traded their
+        // 2028 R1 to NYG in the 2027 draft; after the rollover, ARI showed
+        // back up at pick 10 of the 2028 R1 (their original slot) and NYG
+        // also held the pick — duplicate slots, broken draft order.
+        const existingPickKeys = new Set<string>();
+        for (const team of state.teams) {
+          for (const pk of team.draftPicks) {
+            existingPickKeys.add(`${pk.originalTeamId}|${pk.year}|${pk.round}`);
+          }
+        }
+
         const newTeams = state.teams.map(t => {
           const retiredFromTeam = newlyRetiredOnTeam.filter(p => t.roster.includes(p.id));
           const salaryReduction = retiredFromTeam.reduce((sum, p) => sum + p.contract.salary, 0);
@@ -8305,18 +8321,23 @@ export const useGameStore = create<GameStore>()(
             depthChart: newDepthChart,
             franchiseTagUsed: false,
             revenue: { tickets, merchandise, tvDeal, total: totalRevenue },
-            // Add picks for new season + next year (ensure 2 future years always exist)
+            // Add picks for new season + next year (ensure 2 future years always exist).
+            // Per-round granularity against a league-wide registry: only generate
+            // (originalTeamId=t.id, year, round) entries that don't exist anywhere.
+            // This preserves picks the team traded away — they live in the new
+            // owner's array but still exist in the league, so we skip regen.
             draftPicks: [
               ...t.draftPicks,
               ...[newSeason, newSeason + 1].flatMap(yr =>
-                t.draftPicks.some(pk => pk.year === yr && pk.originalTeamId === t.id) ? [] :
-                [1, 2, 3, 4, 5, 6, 7].map(round => ({
-                  id: uuid(),
-                  year: yr,
-                  round,
-                  originalTeamId: t.id,
-                  ownerTeamId: t.id,
-                })),
+                [1, 2, 3, 4, 5, 6, 7]
+                  .filter(round => !existingPickKeys.has(`${t.id}|${yr}|${round}`))
+                  .map(round => ({
+                    id: uuid(),
+                    year: yr,
+                    round,
+                    originalTeamId: t.id,
+                    ownerTeamId: t.id,
+                  })),
               ),
             ],
           };
@@ -9811,6 +9832,51 @@ export const useGameStore = create<GameStore>()(
               (state as any).draftScoutingData = {};
               (state as any).nflMockDraft = undefined;
               (state as any).draftLotteryResults = undefined;
+            }
+          }
+        }
+        if (version < 33) {
+          // Repair duplicate draft picks. The pre-v33 startNewSeason regen
+          // checked only the originating team's own draftPicks array for a
+          // year, so a pick traded to another team could be regenerated and
+          // the trade undone — leaving TWO picks with the same
+          // (originalTeamId, year, round) but different ownerTeamIds.
+          // Tyler 4/30: ARI's 2028 R1 was traded to NYG in the 2027 draft,
+          // then duplicated by the rollover. Dedupe: if multiple picks
+          // share an (originalTeamId, year, round) key, keep the one that
+          // is NOT held by the original team (the traded copy is the real
+          // one). If none differs, keep the first.
+          const teams33 = (state as any).teams as Array<{
+            id: string;
+            draftPicks: Array<{ id: string; year: number; round: number; originalTeamId: string; ownerTeamId: string; playerId?: string }>;
+          }> | undefined;
+          if (Array.isArray(teams33)) {
+            const groups = new Map<string, Array<{ teamId: string; pick: { id: string; year: number; round: number; originalTeamId: string; ownerTeamId: string; playerId?: string } }>>();
+            for (const t of teams33) {
+              const picks = t.draftPicks ?? [];
+              for (const pk of picks) {
+                if (pk.playerId) continue;
+                const key = `${pk.originalTeamId}|${pk.year}|${pk.round}`;
+                const list = groups.get(key) ?? [];
+                list.push({ teamId: t.id, pick: pk });
+                groups.set(key, list);
+              }
+            }
+            const idsToDrop = new Set<string>();
+            for (const [, entries] of groups) {
+              if (entries.length <= 1) continue;
+              // Prefer the pick whose ownerTeamId differs from originalTeamId
+              // (the traded copy). If all match, keep the first.
+              const traded = entries.find(e => e.pick.ownerTeamId !== e.pick.originalTeamId);
+              const keep = traded ?? entries[0];
+              for (const e of entries) {
+                if (e.pick.id !== keep.pick.id) idsToDrop.add(e.pick.id);
+              }
+            }
+            if (idsToDrop.size > 0) {
+              for (const t of teams33) {
+                t.draftPicks = (t.draftPicks ?? []).filter(pk => !idsToDrop.has(pk.id));
+              }
             }
           }
         }
