@@ -405,52 +405,146 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
     teamData.tradesThisSeason = seasonTrades;
   }
 
-  const p = fetch('/api/spotlight', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ teamData, narrative }),
-  })
-    .then(res => res.ok ? res.json() : Promise.reject(new Error('API error')))
-    .then(data => {
-      if (cache.key !== key) return;
-      // Build a pool of fallback player names from the user roster.
-      // The AI sometimes forgets to set playerName on player exchanges — we
-      // backfill with a real player from the team so the UI never shows "Player".
-      const rosterPool = roster
-        .filter(p => !p.retired && p.ratings.overall >= 65)
-        .map(p => `${p.firstName} ${p.lastName}`);
-      let fallbackIdx = 0;
-      function pickFallbackName(): string {
-        if (rosterPool.length === 0) return 'Team Captain';
-        const name = rosterPool[fallbackIdx % rosterPool.length];
-        fallbackIdx++;
-        return name;
+  // Build a pool of fallback player names from the user roster.
+  // The AI sometimes forgets to set playerName on player exchanges — we
+  // backfill with a real player from the team so the UI never shows "Player".
+  const rosterPool = roster
+    .filter(p => !p.retired && p.ratings.overall >= 65)
+    .map(p => `${p.firstName} ${p.lastName}`);
+  let fallbackIdx = 0;
+  function pickFallbackName(): string {
+    if (rosterPool.length === 0) return 'Team Captain';
+    const name = rosterPool[fallbackIdx % rosterPool.length];
+    fallbackIdx++;
+    return name;
+  }
+
+  type RawTopic = {
+    headline: string;
+    icon: string;
+    exchanges: { speakerId: 'stats' | 'hottake' | 'fans' | 'player'; text: string; playerName?: string }[];
+  };
+
+  function adaptTopic(t: RawTopic): AiSpotlightTopic {
+    return {
+      headline: t.headline,
+      icon: t.icon,
+      exchanges: t.exchanges.map(e => {
+        if (e.speakerId === 'player' && (!e.playerName || e.playerName === 'Player' || e.playerName.trim() === '')) {
+          return { ...e, playerName: pickFallbackName() };
+        }
+        return { ...e, playerName: e.playerName };
+      }),
+      teamIds: [team.id],
+      playerIds: [] as string[],
+    };
+  }
+
+  // Streaming pipeline. Topics arrive one at a time via NDJSON; each one is
+  // pushed into cache.topics and broadcast to subscribers immediately. The
+  // promise we return resolves on the FIRST topic so SpotlightPopup's gate
+  // flips early — perceived load drops from "wait for full output" to
+  // "wait for one topic".
+  const accumulated: AiSpotlightTopic[] = [];
+  let firstSignal: (() => void) | null = null;
+  const firstSignalPromise = new Promise<void>((resolve) => {
+    firstSignal = resolve;
+  });
+  const triggerFirstSignal = () => {
+    if (firstSignal) {
+      firstSignal();
+      firstSignal = null;
+    }
+  };
+
+  const streamPromise = (async () => {
+    try {
+      const res = await fetch('/api/spotlight?stream=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamData, narrative }),
+      });
+      if (!res.ok || !res.body) {
+        throw new Error('API error');
       }
 
-      cache.topics = (data.topics as { headline: string; icon: string; exchanges: { speakerId: 'stats' | 'hottake' | 'fans' | 'player'; text: string; playerName?: string }[] }[]).map(t => ({
-        headline: t.headline,
-        icon: t.icon,
-        exchanges: t.exchanges.map(e => {
-          if (e.speakerId === 'player' && (!e.playerName || e.playerName === 'Player' || e.playerName.trim() === '')) {
-            return { ...e, playerName: pickFallbackName() };
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let sawError = false;
+
+      // Read the response as NDJSON. Each line is a {type, ...} event. We
+      // bail out if the cache key changed mid-stream — a newer fetch has
+      // taken over and any further updates would clobber it.
+      let streamDone = false;
+      while (!streamDone) {
+        const { value, done } = await reader.read();
+        if (done) {
+          streamDone = true;
+          break;
+        }
+        buf += decoder.decode(value, { stream: true });
+
+        let nl = buf.indexOf('\n');
+        while (nl !== -1) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          nl = buf.indexOf('\n');
+          if (!line) continue;
+
+          if (cache.key !== key) {
+            try { await reader.cancel(); } catch { /* ignore */ }
+            return;
           }
-          return { ...e, playerName: e.playerName };
-        }),
-        teamIds: [team.id],
-        playerIds: [] as string[],
-      }));
-      cache.loading = false;
-      cache.error = false;
-      notify();
-    })
-    .catch(() => {
+
+          let evt: { type?: string; data?: unknown; message?: string };
+          try {
+            evt = JSON.parse(line);
+          } catch {
+            continue;
+          }
+
+          if (evt.type === 'topic' && evt.data) {
+            const adapted = adaptTopic(evt.data as RawTopic);
+            accumulated.push(adapted);
+            cache.topics = [...accumulated];
+            cache.loading = accumulated.length === 0; // false now
+            notify();
+            triggerFirstSignal();
+          } else if (evt.type === 'error') {
+            sawError = true;
+          }
+          // 'done' is implicit at stream end; nothing to do here.
+        }
+      }
+
+      if (cache.key !== key) return;
+
+      if (accumulated.length === 0) {
+        cache.loading = false;
+        cache.error = true;
+        cache.key = '';
+        notify();
+      } else {
+        cache.loading = false;
+        cache.error = sawError;
+        notify();
+      }
+    } catch {
       if (cache.key !== key) return;
       cache.loading = false;
       cache.error = true;
       cache.key = '';
       notify();
-    });
+    } finally {
+      // Belt-and-suspenders: if no topic ever arrived, still flip the popup
+      // gate so it doesn't hang. Home page templates will fill in the gap.
+      triggerFirstSignal();
+    }
+  })();
 
-  cache.promise = p;
-  return p;
+  // Settle on first topic or full completion — whichever lands first.
+  // Subscribers continue to get notified for later topics via notify().
+  cache.promise = Promise.race([firstSignalPromise, streamPromise]);
+  return cache.promise;
 }

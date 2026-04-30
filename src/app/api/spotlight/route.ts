@@ -46,6 +46,124 @@ async function setCache(key: string, topics: unknown[]): Promise<void> {
   }
 }
 
+// ── Streaming helpers ──────────────────────────────────────────────────────
+type StreamEvent =
+  | { type: 'topic'; data: unknown }
+  | { type: 'done' }
+  | { type: 'error'; message: string };
+
+function ndjsonStreamResponse(
+  producer: (emit: (event: StreamEvent) => void) => Promise<void>,
+): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let closed = false;
+      const emit = (event: StreamEvent) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
+        } catch {
+          // controller already closed
+        }
+      };
+      try {
+        await producer(emit);
+      } catch (err) {
+        emit({ type: 'error', message: err instanceof Error ? err.message : 'Unknown error' });
+      } finally {
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          // already closed
+        }
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no',
+    },
+  });
+}
+
+/**
+ * Streaming JSON parser that emits each top-level object as it completes.
+ * Tolerant of both bare arrays ([{...},{...}]) and wrapper objects
+ * ({"topics":[{...},{...}]}). Tracks string state so braces inside string
+ * values don't confuse the depth counter.
+ */
+class TopicStreamParser {
+  private inArray = false;
+  private depth = 0;
+  private inString = false;
+  private escape = false;
+  private cur = '';
+
+  *feed(text: string): Generator<unknown> {
+    for (let i = 0; i < text.length; i++) {
+      const out = this.processChar(text[i]);
+      if (out !== undefined) yield out;
+    }
+  }
+
+  private processChar(c: string): unknown | undefined {
+    if (this.escape) {
+      this.escape = false;
+      if (this.depth > 0) this.cur += c;
+      return undefined;
+    }
+    if (this.inString) {
+      if (this.depth > 0) this.cur += c;
+      if (c === '\\') this.escape = true;
+      else if (c === '"') this.inString = false;
+      return undefined;
+    }
+    if (!this.inArray) {
+      // Skip past wrapper-object key strings until the array opens.
+      if (c === '"') this.inString = true;
+      else if (c === '[') this.inArray = true;
+      return undefined;
+    }
+    if (this.depth === 0) {
+      if (c === '"') this.inString = true;
+      else if (c === '{') {
+        this.depth = 1;
+        this.cur = '{';
+      }
+      // Otherwise ignore (whitespace, commas, ])
+      return undefined;
+    }
+    // Inside an object: every char is part of cur.
+    this.cur += c;
+    if (c === '"') {
+      this.inString = true;
+    } else if (c === '{') {
+      this.depth++;
+    } else if (c === '}') {
+      this.depth--;
+      if (this.depth === 0) {
+        const obj = this.cur;
+        this.cur = '';
+        try {
+          return JSON.parse(obj);
+        } catch (e) {
+          console.warn(
+            'Spotlight stream: failed to parse topic object:',
+            obj.slice(0, 200),
+            e instanceof Error ? e.message : e,
+          );
+          return undefined;
+        }
+      }
+    }
+    return undefined;
+  }
+}
+
 type NarrativeMoment = 'preseason' | 'tradeDeadline' | 'playoffsStart' | 'seasonOver' | 'weekly';
 
 function buildNarrativePrompt(narrative: NarrativeMoment): string {
@@ -114,28 +232,8 @@ Generate 4-6 topics.`;
   }
 }
 
-export async function POST(request: Request) {
-  try {
-    if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
-      return NextResponse.json({ error: 'No AI API key configured (need GEMINI_API_KEY or OPENAI_API_KEY)' }, { status: 500 });
-    }
-
-    const { teamData, narrative = 'weekly' } = await request.json();
-    if (!teamData) {
-      return NextResponse.json({ error: 'teamData required' }, { status: 400 });
-    }
-
-    // Check persistent cache (Supabase → in-memory fallback)
-    const key = cacheKey({ teamData, narrative });
-    const cached = await getCache(key);
-    if (cached) {
-      return NextResponse.json({ topics: cached });
-    }
-
-    const narrativePrompt = buildNarrativePrompt(narrative as NarrativeMoment);
-
-    // System prompt is static → use prompt caching to reduce input token costs ~90%
-    const systemPrompt = `You write the dialogue for a football GM simulation game's "Team Spotlight" — a debate show with commentators AND fan reactions.
+// Shared between streaming and non-streaming paths so prompt content stays in lockstep.
+const SPOTLIGHT_SYSTEM_PROMPT = `You write the dialogue for a football GM simulation game's "Team Spotlight" — a debate show with commentators AND fan reactions.
 
 THE VOICES:
 - **Marcus Cole** (speakerId: "stats") — Analytics guy. Nate Silver meets Tony Romo. Dry wit, historical parallels, uses real stats.
@@ -170,8 +268,119 @@ Respond with a JSON array. Each element:
 
 Return ONLY the JSON array, no markdown fences, no other text.`;
 
-    // Try Gemini first (cheapest), then GPT-4o-mini (cheap + reliable), then give up (client uses templates)
+// Suffix appended only when calling GPT-4o-mini, which gets a json_object response_format.
+const GPT_FALLBACK_SUFFIX = `\n\nIMPORTANT: Wrap your JSON array in an object like {"topics": [...]}
+
+DETAIL & LENGTH REQUIREMENTS:
+- Each exchange "text" field MUST be 2-4 sentences long, not just one sentence.
+- Marcus should cite specific stats from the data and draw comparisons or historical parallels.
+- Tony should be dramatic, use CAPS for emphasis, and paint vivid word pictures.
+- Fan reactions should feel raw and emotional — use slang, exclamation marks, ALL CAPS.
+- Player posts should feel like real social media — emojis, hashtags, attitude.
+- Each topic MUST have at least 4 exchanges showing real back-and-forth (Marcus says something → Tony reacts/disagrees → Marcus counters → fan or player chimes in).
+- DO NOT be brief. The user is reading this for entertainment — make it feel like a real debate show with personality and conflict.`;
+
+export async function POST(request: Request) {
+  try {
+    if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
+      return NextResponse.json({ error: 'No AI API key configured (need GEMINI_API_KEY or OPENAI_API_KEY)' }, { status: 500 });
+    }
+
+    const url = new URL(request.url);
+    const wantStream = url.searchParams.get('stream') === '1';
+    const { teamData, narrative = 'weekly' } = await request.json();
+    if (!teamData) {
+      return NextResponse.json({ error: 'teamData required' }, { status: 400 });
+    }
+
+    // Check persistent cache (Supabase → in-memory fallback)
+    const key = cacheKey({ teamData, narrative });
+    const cached = await getCache(key);
+    if (cached) {
+      if (wantStream) {
+        return ndjsonStreamResponse(async (emit) => {
+          for (const topic of cached) emit({ type: 'topic', data: topic });
+          emit({ type: 'done' });
+        });
+      }
+      return NextResponse.json({ topics: cached });
+    }
+
+    const narrativePrompt = buildNarrativePrompt(narrative as NarrativeMoment);
+    const systemPrompt = SPOTLIGHT_SYSTEM_PROMPT;
     const userContent = `NARRATIVE CONTEXT:\n${narrativePrompt}\n\nTEAM DATA:\n${JSON.stringify(teamData)}`;
+
+    if (wantStream) {
+      return ndjsonStreamResponse(async (emit) => {
+        const collected: unknown[] = [];
+
+        // 1) Gemini 2.5 Flash streaming
+        if (process.env.GEMINI_API_KEY) {
+          try {
+            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+            const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+            const result = await model.generateContentStream({
+              systemInstruction: systemPrompt,
+              contents: [{ role: 'user', parts: [{ text: userContent }] }],
+              generationConfig: { maxOutputTokens: 3000, responseMimeType: 'application/json' },
+            });
+            const parser = new TopicStreamParser();
+            for await (const chunk of result.stream) {
+              const text = chunk.text();
+              if (!text) continue;
+              for (const topic of parser.feed(text)) {
+                collected.push(topic);
+                emit({ type: 'topic', data: topic });
+              }
+            }
+          } catch (geminiErr) {
+            console.warn('Spotlight stream: Gemini failed, trying GPT-4o-mini:', geminiErr instanceof Error ? geminiErr.message : geminiErr);
+          }
+        }
+
+        // 2) GPT-4o-mini streaming fallback (only if Gemini emitted nothing)
+        if (collected.length === 0 && process.env.OPENAI_API_KEY) {
+          try {
+            const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+            const stream = await openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              max_tokens: 3000,
+              stream: true,
+              response_format: { type: 'json_object' },
+              messages: [
+                { role: 'system', content: systemPrompt + GPT_FALLBACK_SUFFIX },
+                { role: 'user', content: userContent },
+              ],
+            });
+            const parser = new TopicStreamParser();
+            for await (const chunk of stream) {
+              const text = chunk.choices[0]?.delta?.content ?? '';
+              if (!text) continue;
+              for (const topic of parser.feed(text)) {
+                collected.push(topic);
+                emit({ type: 'topic', data: topic });
+              }
+            }
+          } catch (openaiErr) {
+            console.warn('Spotlight stream: GPT-4o-mini also failed:', openaiErr instanceof Error ? openaiErr.message : openaiErr);
+          }
+        }
+
+        if (collected.length === 0) {
+          emit({ type: 'error', message: 'All AI providers unavailable — client will use templates' });
+          return;
+        }
+        emit({ type: 'done' });
+        // Cache the full result so subsequent (streaming or not) calls return instantly.
+        try {
+          await setCache(key, collected);
+        } catch (cacheErr) {
+          console.warn('Spotlight stream: cache write failed:', cacheErr instanceof Error ? cacheErr.message : cacheErr);
+        }
+      });
+    }
+
+    // ── Non-streaming path (preserved as fallback) ─────────────────────────
     let raw = '';
 
     // 1) Gemini 2.5 Flash
@@ -199,16 +408,7 @@ Return ONLY the JSON array, no markdown fences, no other text.`;
           max_tokens: 3000,
           response_format: { type: 'json_object' },
           messages: [
-            { role: 'system', content: systemPrompt + `\n\nIMPORTANT: Wrap your JSON array in an object like {"topics": [...]}
-
-DETAIL & LENGTH REQUIREMENTS:
-- Each exchange "text" field MUST be 2-4 sentences long, not just one sentence.
-- Marcus should cite specific stats from the data and draw comparisons or historical parallels.
-- Tony should be dramatic, use CAPS for emphasis, and paint vivid word pictures.
-- Fan reactions should feel raw and emotional — use slang, exclamation marks, ALL CAPS.
-- Player posts should feel like real social media — emojis, hashtags, attitude.
-- Each topic MUST have at least 4 exchanges showing real back-and-forth (Marcus says something → Tony reacts/disagrees → Marcus counters → fan or player chimes in).
-- DO NOT be brief. The user is reading this for entertainment — make it feel like a real debate show with personality and conflict.` },
+            { role: 'system', content: systemPrompt + GPT_FALLBACK_SUFFIX },
             { role: 'user', content: userContent },
           ],
         });
@@ -248,7 +448,7 @@ DETAIL & LENGTH REQUIREMENTS:
           .replace(/[\x00-\x1f]/g, (c) => c === '\n' ? '\\n' : c === '\r' ? '\\r' : c === '\t' ? '\\t' : '');
         topics = JSON.parse(cleaned);
       } catch (parseErr2) {
-        console.error('Spotlight API JSON parse failed. Raw (first 500):', raw.slice(0, 500));
+        console.error('Spotlight API JSON parse failed. Raw (first 500):', raw.slice(0, 500), parseErr2 instanceof Error ? parseErr2.message : parseErr2);
         return NextResponse.json({ error: 'JSON parse error' }, { status: 500 });
       }
     }
