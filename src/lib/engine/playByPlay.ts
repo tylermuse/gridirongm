@@ -1852,6 +1852,53 @@ export function resimulateFromPoint(
 /**
  * Convert a LiveGameResult into a full GameResult for committing to the store.
  */
+/** Walk PlayEvents in order, scoring-flagged events get rolled up as
+ *  ScoringPlay entries. Points are derived from the score delta vs. the
+ *  previous event, and teamId from which side's score increased — that
+ *  handles defensive scores (pick-six, fumble-six, safety) correctly even
+ *  though the offensive `possession` field is the team that turned it over.
+ *  Used by liveGameToGameResult AND the live-game commit path so the Box
+ *  Score modal's Scoring tab shows real data after a live-played game. */
+export function deriveScoringPlaysFromEvents(
+  events: PlayEvent[],
+  homeTeamId: string,
+  awayTeamId: string,
+): import('@/types').ScoringPlay[] {
+  const out: import('@/types').ScoringPlay[] = [];
+  let prevHome = 0;
+  let prevAway = 0;
+  for (const ev of events) {
+    if (!ev.isScoring) {
+      // Score still tracks even if event isn't flagged scoring — so the next
+      // scoring event gets the correct delta even if there are skipped flags.
+      prevHome = ev.homeScore;
+      prevAway = ev.awayScore;
+      continue;
+    }
+    const homeDelta = ev.homeScore - prevHome;
+    const awayDelta = ev.awayScore - prevAway;
+    const points = homeDelta + awayDelta;
+    if (points <= 0) {
+      // Defensive guard against duplicate-flagged or zero-delta events.
+      prevHome = ev.homeScore;
+      prevAway = ev.awayScore;
+      continue;
+    }
+    const teamId = homeDelta > 0 ? homeTeamId : awayTeamId;
+    out.push({
+      quarter: ev.quarter,
+      timeLeft: ev.timeStr,
+      teamId,
+      points,
+      description: ev.description,
+      score: [ev.awayScore, ev.homeScore],
+    });
+    prevHome = ev.homeScore;
+    prevAway = ev.awayScore;
+  }
+  return out;
+}
+
 export function liveGameToGameResult(
   live: LiveGameResult,
   baseGame: GameResult,
@@ -1862,6 +1909,7 @@ export function liveGameToGameResult(
     awayScore: live.awayScore,
     played: true,
     playerStats: live.playerStats,
+    scoringPlays: deriveScoringPlaysFromEvents(live.events, baseGame.homeTeamId, baseGame.awayTeamId),
   };
 }
 
