@@ -50,7 +50,7 @@ async function setCache(key: string, topics: unknown[]): Promise<void> {
 type StreamEvent =
   | { type: 'topic'; data: unknown }
   | { type: 'done' }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string; details?: { gemini?: string; openai?: string; fallback?: string } };
 
 function ndjsonStreamResponse(
   producer: (emit: (event: StreamEvent) => void) => Promise<void>,
@@ -280,6 +280,97 @@ DETAIL & LENGTH REQUIREMENTS:
 - Each topic MUST have at least 4 exchanges showing real back-and-forth (Marcus says something → Tony reacts/disagrees → Marcus counters → fan or player chimes in).
 - DO NOT be brief. The user is reading this for entertainment — make it feel like a real debate show with personality and conflict.`;
 
+interface NonStreamingResult {
+  topics: unknown[] | null;
+  errors: { gemini?: string; openai?: string };
+}
+
+/**
+ * Non-streaming topic generation. Used directly by the legacy code path AND
+ * as a fallback inside the streaming path when streaming returns nothing —
+ * because some hosting environments / SDK versions don't deliver streamed
+ * chunks reliably even when the same providers work fine for buffered calls.
+ */
+async function generateTopicsNonStreaming(
+  systemPrompt: string,
+  userContent: string,
+): Promise<NonStreamingResult> {
+  const errors: NonStreamingResult['errors'] = {};
+  let raw = '';
+
+  // 1) Gemini 2.5 Flash
+  if (!raw && process.env.GEMINI_API_KEY) {
+    try {
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      const result = await model.generateContent({
+        systemInstruction: systemPrompt,
+        contents: [{ role: 'user', parts: [{ text: userContent }] }],
+        generationConfig: { maxOutputTokens: 3000, responseMimeType: 'application/json' },
+      });
+      raw = result.response.text();
+    } catch (geminiErr) {
+      const msg = geminiErr instanceof Error ? geminiErr.message : String(geminiErr);
+      errors.gemini = msg;
+      console.warn('Spotlight: Gemini failed, trying GPT-4o-mini:', msg);
+    }
+  }
+
+  // 2) GPT-4o-mini fallback (very cheap + very reliable)
+  if (!raw && process.env.OPENAI_API_KEY) {
+    try {
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        max_tokens: 3000,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt + GPT_FALLBACK_SUFFIX },
+          { role: 'user', content: userContent },
+        ],
+      });
+      const content = completion.choices[0]?.message?.content;
+      if (content) {
+        // GPT-4o-mini with json_object mode returns an object, extract the array
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) {
+          raw = JSON.stringify(parsed);
+        } else if (parsed.topics && Array.isArray(parsed.topics)) {
+          raw = JSON.stringify(parsed.topics);
+        } else {
+          raw = content;
+        }
+      }
+    } catch (openaiErr) {
+      const msg = openaiErr instanceof Error ? openaiErr.message : String(openaiErr);
+      errors.openai = msg;
+      console.warn('Spotlight: GPT-4o-mini also failed:', msg);
+    }
+  }
+
+  if (!raw) return { topics: null, errors };
+
+  const start = raw.indexOf('[');
+  const end = raw.lastIndexOf(']');
+  if (start === -1 || end === -1) {
+    console.error('Spotlight: no JSON array found in response:', raw.slice(0, 200));
+    return { topics: null, errors };
+  }
+  try {
+    return { topics: JSON.parse(raw.slice(start, end + 1)) as unknown[], errors };
+  } catch {
+    // JSON was malformed — try to fix common issues (unescaped newlines in strings)
+    try {
+      const cleaned = raw.slice(start, end + 1)
+        .replace(/[\x00-\x1f]/g, (c) => c === '\n' ? '\\n' : c === '\r' ? '\\r' : c === '\t' ? '\\t' : '');
+      return { topics: JSON.parse(cleaned) as unknown[], errors };
+    } catch (parseErr2) {
+      console.error('Spotlight JSON parse failed. Raw (first 500):', raw.slice(0, 500), parseErr2 instanceof Error ? parseErr2.message : parseErr2);
+      return { topics: null, errors };
+    }
+  }
+}
+
 export async function POST(request: Request) {
   try {
     if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
@@ -313,6 +404,7 @@ export async function POST(request: Request) {
     if (wantStream) {
       return ndjsonStreamResponse(async (emit) => {
         const collected: unknown[] = [];
+        const streamErrors: { gemini?: string; openai?: string } = {};
 
         // 1) Gemini 2.5 Flash streaming
         if (process.env.GEMINI_API_KEY) {
@@ -334,7 +426,9 @@ export async function POST(request: Request) {
               }
             }
           } catch (geminiErr) {
-            console.warn('Spotlight stream: Gemini failed, trying GPT-4o-mini:', geminiErr instanceof Error ? geminiErr.message : geminiErr);
+            const msg = geminiErr instanceof Error ? geminiErr.message : String(geminiErr);
+            streamErrors.gemini = msg;
+            console.warn('Spotlight stream: Gemini failed, trying GPT-4o-mini:', msg);
           }
         }
 
@@ -362,12 +456,40 @@ export async function POST(request: Request) {
               }
             }
           } catch (openaiErr) {
-            console.warn('Spotlight stream: GPT-4o-mini also failed:', openaiErr instanceof Error ? openaiErr.message : openaiErr);
+            const msg = openaiErr instanceof Error ? openaiErr.message : String(openaiErr);
+            streamErrors.openai = msg;
+            console.warn('Spotlight stream: GPT-4o-mini also failed:', msg);
+          }
+        }
+
+        // 3) Non-streaming fallback. Some environments (Vercel/Turbopack edge
+        // cases, SDK quirks) refuse to deliver streamed chunks even when the
+        // same providers work fine for buffered calls. If we got zero topics
+        // from streaming, run the non-streaming path and emit the whole batch
+        // at once. The user loses the progressive-render UX but gets working
+        // AI commentary instead of falling back to templates.
+        let usedFallback = false;
+        let fallbackErr: string | undefined;
+        if (collected.length === 0) {
+          console.warn('Spotlight stream: zero topics from streaming, falling back to non-streaming');
+          const fb = await generateTopicsNonStreaming(systemPrompt, userContent);
+          if (fb.topics && fb.topics.length > 0) {
+            usedFallback = true;
+            for (const topic of fb.topics) {
+              collected.push(topic);
+              emit({ type: 'topic', data: topic });
+            }
+          } else {
+            fallbackErr = `non-streaming also empty (gemini: ${fb.errors.gemini ?? 'ok'}, openai: ${fb.errors.openai ?? 'ok'})`;
           }
         }
 
         if (collected.length === 0) {
-          emit({ type: 'error', message: 'All AI providers unavailable — client will use templates' });
+          emit({
+            type: 'error',
+            message: 'All AI providers unavailable — client will use templates',
+            details: { gemini: streamErrors.gemini, openai: streamErrors.openai, fallback: fallbackErr },
+          });
           return;
         }
         emit({ type: 'done' });
@@ -377,80 +499,19 @@ export async function POST(request: Request) {
         } catch (cacheErr) {
           console.warn('Spotlight stream: cache write failed:', cacheErr instanceof Error ? cacheErr.message : cacheErr);
         }
+        if (usedFallback) {
+          console.warn('Spotlight stream: served from non-streaming fallback', { streamErrors });
+        }
       });
     }
 
-    // ── Non-streaming path (preserved as fallback) ─────────────────────────
-    let raw = '';
-
-    // 1) Gemini 2.5 Flash
-    if (!raw && process.env.GEMINI_API_KEY) {
-      try {
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        const result = await model.generateContent({
-          systemInstruction: systemPrompt,
-          contents: [{ role: 'user', parts: [{ text: userContent }] }],
-          generationConfig: { maxOutputTokens: 3000, responseMimeType: 'application/json' },
-        });
-        raw = result.response.text();
-      } catch (geminiErr) {
-        console.warn('Spotlight: Gemini failed, trying GPT-4o-mini:', geminiErr instanceof Error ? geminiErr.message : geminiErr);
-      }
-    }
-
-    // 2) GPT-4o-mini fallback (very cheap + very reliable)
-    if (!raw && process.env.OPENAI_API_KEY) {
-      try {
-        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-        const completion = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
-          max_tokens: 3000,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: systemPrompt + GPT_FALLBACK_SUFFIX },
-            { role: 'user', content: userContent },
-          ],
-        });
-        const content = completion.choices[0]?.message?.content;
-        if (content) {
-          // GPT-4o-mini with json_object mode returns an object, extract the array
-          const parsed = JSON.parse(content);
-          if (Array.isArray(parsed)) {
-            raw = JSON.stringify(parsed);
-          } else if (parsed.topics && Array.isArray(parsed.topics)) {
-            raw = JSON.stringify(parsed.topics);
-          } else {
-            raw = content;
-          }
-        }
-      } catch (openaiErr) {
-        console.warn('Spotlight: GPT-4o-mini also failed:', openaiErr instanceof Error ? openaiErr.message : openaiErr);
-      }
-    }
-
-    if (!raw) {
-      return NextResponse.json({ error: 'All AI providers unavailable — client will use templates' }, { status: 503 });
-    }
-    const start = raw.indexOf('[');
-    const end = raw.lastIndexOf(']');
-    if (start === -1 || end === -1) {
-      console.error('Spotlight API: no JSON array found in response:', raw.slice(0, 200));
-      return NextResponse.json({ error: 'Invalid response format' }, { status: 500 });
-    }
-    let topics;
-    try {
-      topics = JSON.parse(raw.slice(start, end + 1));
-    } catch {
-      // JSON was malformed — try to fix common issues (unescaped newlines in strings)
-      try {
-        const cleaned = raw.slice(start, end + 1)
-          .replace(/[\x00-\x1f]/g, (c) => c === '\n' ? '\\n' : c === '\r' ? '\\r' : c === '\t' ? '\\t' : '');
-        topics = JSON.parse(cleaned);
-      } catch (parseErr2) {
-        console.error('Spotlight API JSON parse failed. Raw (first 500):', raw.slice(0, 500), parseErr2 instanceof Error ? parseErr2.message : parseErr2);
-        return NextResponse.json({ error: 'JSON parse error' }, { status: 500 });
-      }
+    // ── Non-streaming path (preserved as fallback for callers that don't request stream) ──
+    const { topics, errors } = await generateTopicsNonStreaming(systemPrompt, userContent);
+    if (!topics || topics.length === 0) {
+      return NextResponse.json(
+        { error: 'All AI providers unavailable — client will use templates', details: errors },
+        { status: 503 },
+      );
     }
 
     // Cache the result persistently

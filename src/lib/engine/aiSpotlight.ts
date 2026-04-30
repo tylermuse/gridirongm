@@ -513,6 +513,13 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
             triggerFirstSignal();
           } else if (evt.type === 'error') {
             sawError = true;
+            // Surface server-side failures to the browser console so they're
+            // diagnosable without Vercel log access.
+            console.warn(
+              '[AI Spotlight] stream error:',
+              (evt as { message?: string }).message,
+              (evt as { details?: unknown }).details,
+            );
           }
           // 'done' is implicit at stream end; nothing to do here.
         }
