@@ -28,6 +28,10 @@ Add to `.env.local`:
 
 ```
 NEXT_PUBLIC_STRIPE_PREMIUM_PRICE_ID=price_xxxxxxxxxxxxxx   # from step 1.2
+
+# Optional — set when AdSense approval comes through. Without this, free-tier
+# users see a placeholder ad slot with an upgrade CTA instead of real ads.
+NEXT_PUBLIC_ADSENSE_CLIENT_ID=ca-pub-XXXXXXXXXXXXXXXX
 ```
 
 These should already be set; confirm they exist:
@@ -53,7 +57,39 @@ your Supabase project. It's idempotent. It:
 - Promotes any existing `tier IN ('pro','elite')` rows to `'premium'` so
   legacy subscribers are not downgraded
 
-## 4. Founder grandfathering (already wired)
+## 4. AdSense (optional, when approved)
+
+Free-tier users see ads via the `<AdSlot />` component, currently placed at
+the top of the home dashboard, the draft page, and the free-agency page. The
+component renders a placeholder until AdSense is wired up.
+
+To activate real ads:
+
+1. Create a Google AdSense account, add `bs-football.com` as a site, complete
+   verification (this step takes anywhere from a few hours to a few weeks
+   depending on AdSense's review queue).
+2. Once approved, find your **publisher ID** in AdSense (looks like
+   `ca-pub-1234567890123456`).
+3. Add `NEXT_PUBLIC_ADSENSE_CLIENT_ID=ca-pub-…` to `.env.local` and to your
+   Vercel env vars (production target).
+4. In AdSense, create three **ad units** matching the three placements in
+   the codebase:
+   - `home-top` (Leaderboard, 728×90 responsive)
+   - `draft-top` (Leaderboard, 728×90 responsive)
+   - `fa-top` (Leaderboard, 728×90 responsive)
+   Each ad unit gives you a slot ID — you'd update the `slotId` props in
+   `src/app/page.tsx`, `src/app/draft/page.tsx`, and
+   `src/app/free-agency/page.tsx` to use those AdSense slot IDs instead of
+   the current human-readable strings.
+5. Redeploy. Free users will start seeing live ads; premium users continue
+   to see no ads (the AdSlot component returns null when
+   `hasFeature('ad_free')` is true).
+
+The script tag for AdSense is already wired in `src/app/layout.tsx` —
+it only loads when `NEXT_PUBLIC_ADSENSE_CLIENT_ID` is set, so there's no
+performance hit during the placeholder phase.
+
+## 5. Founder grandfathering (already wired)
 
 Anyone whose `auth.users.created_at` is **before 2026-07-01 UTC** is
 automatically treated as a Premium subscriber for free, with the same
@@ -61,7 +97,7 @@ automatically treated as a Premium subscriber for free, with the same
 `src/components/providers/SubscriptionProvider.tsx` and
 `src/lib/podcastCredits.ts`. To change it, update both files.
 
-## 5. Surfaces to know about
+## 6. Surfaces to know about
 
 - `useSubscription()` — React hook returning `{ user, tier, isAdmin,
   isFoundingMember, hasFeature, hasScouting, podcastCredits,
@@ -79,7 +115,7 @@ automatically treated as a Premium subscriber for free, with the same
   state. The Spotlight audio route also calls the same helper internally
   so cache hits are free but fresh generations cost a credit.
 
-## 6. Tester / production rollback
+## 7. Tester / production rollback
 
 If the Premium price needs to be temporarily disabled, unset
 `NEXT_PUBLIC_STRIPE_PREMIUM_PRICE_ID`. The pricing page will show "Premium

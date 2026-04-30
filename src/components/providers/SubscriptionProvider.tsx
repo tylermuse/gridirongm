@@ -13,11 +13,13 @@ import { createClient } from '@/lib/supabase/client';
 import {
   type Tier,
   type Feature,
+  type ScoutingAllocations,
   hasFeature as checkFeature,
   hasScouting as checkScouting,
+  getScoutingAllocations,
   PODCAST_CREDITS_PER_MONTH,
 } from '@/lib/subscription';
-import { setCurrentSubscriptionTier } from '@/lib/subscriptionState';
+import { setCurrentSubscriptionAllocations, setCurrentSubscriptionTier } from '@/lib/subscriptionState';
 import { trackEvent } from '@/lib/analytics';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -42,8 +44,10 @@ interface SubscriptionContextValue {
   isFoundingMember: boolean;
   loading: boolean;
   hasFeature: (feature: Feature) => boolean;
-  /** True when the user gets full prospect scouting info; false = coarse-bucket-only view. */
+  /** Always true now — every tier has scouting access (with different allotments). Kept for back-compat. */
   hasScouting: boolean;
+  /** Per-draft scout points and per-FA intel report allocations. */
+  scoutingAllocations: ScoutingAllocations;
   podcastCredits: PodcastCredits;
   refreshPodcastCredits: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -58,7 +62,8 @@ const SubscriptionContext = createContext<SubscriptionContextValue>({
   isFoundingMember: false,
   loading: true,
   hasFeature: () => false,
-  hasScouting: false,
+  hasScouting: true,
+  scoutingAllocations: { scoutPoints: 10, intelReports: 3, isUnlimited: false },
   podcastCredits: DEFAULT_CREDITS,
   refreshPodcastCredits: async () => {},
   signOut: async () => {},
@@ -91,6 +96,34 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   // If Supabase isn't configured, there's no auth to wait for — start loaded.
   // This avoids a synchronous setState inside the effect below.
   const [loading, setLoading] = useState<boolean>(() => supabase != null);
+
+  // Dev-only tier override — flip the active view via URL param without
+  // editing files or restarting. Persisted in sessionStorage so it survives
+  // navigation. Only honored in development; ignored in production builds.
+  //   ?devTier=free     → render as a Free user (suppresses founder + admin)
+  //   ?devTier=premium  → render as a Premium subscriber
+  //   ?devTier=clear    → remove the override and restore real account state
+  const [devTierOverride, setDevTierOverride] = useState<Tier | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (process.env.NODE_ENV !== 'development') return;
+    const params = new URLSearchParams(window.location.search);
+    const queryTier = params.get('devTier');
+    if (queryTier === 'clear') {
+      sessionStorage.removeItem('devTier');
+      setDevTierOverride(null);
+      return;
+    }
+    if (queryTier === 'free' || queryTier === 'premium') {
+      sessionStorage.setItem('devTier', queryTier);
+      setDevTierOverride(queryTier);
+      return;
+    }
+    const stored = sessionStorage.getItem('devTier');
+    if (stored === 'free' || stored === 'premium') {
+      setDevTierOverride(stored);
+    }
+  }, []);
 
   const computeCredits = useCallback(
     (effectiveTier: Tier, admin: boolean, profile: ProfileRow | null): PodcastCredits => {
@@ -159,6 +192,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
       setTier(resolvedTier);
       setCurrentSubscriptionTier(resolvedTier);
+      setCurrentSubscriptionAllocations(getScoutingAllocations(resolvedTier, admin || isFounder));
       setPodcastCredits(computeCredits(resolvedTier, admin, profile));
     },
     [supabase, computeCredits],
@@ -257,20 +291,37 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, [supabase]);
 
   // Founding member = signed up before cutoff date.
-  const isFoundingMember =
+  const realIsFoundingMember =
     !!user?.created_at && new Date(user.created_at) < new Date(FOUNDING_MEMBER_CUTOFF);
+
+  // Apply dev-tier override (suppresses founder + admin so the override
+  // actually changes what the UI sees). In production this is always null.
+  const effectiveTier = devTierOverride ?? tier;
+  const effectiveIsAdmin = devTierOverride ? false : isAdmin;
+  const effectiveIsFoundingMember = devTierOverride ? false : realIsFoundingMember;
+
+  // Sync the override back into the engine's subscriptionState module so
+  // store actions (draft init, FA init, etc.) read the same allocation the
+  // UI does.
+  useEffect(() => {
+    setCurrentSubscriptionTier(effectiveTier);
+    setCurrentSubscriptionAllocations(
+      getScoutingAllocations(effectiveTier, effectiveIsAdmin || effectiveIsFoundingMember),
+    );
+  }, [effectiveTier, effectiveIsAdmin, effectiveIsFoundingMember]);
 
   const value: SubscriptionContextValue = {
     user,
-    tier,
-    isAdmin,
-    isFoundingMember,
+    tier: effectiveTier,
+    isAdmin: effectiveIsAdmin,
+    isFoundingMember: effectiveIsFoundingMember,
     loading,
     // Founders + admins always get premium features even if their tier resolved
     // to 'free' for any reason (e.g. profiles row missing on a brand-new account).
     hasFeature: (feature: Feature) =>
-      isAdmin || isFoundingMember || checkFeature(tier, feature),
-    hasScouting: isAdmin || isFoundingMember || checkScouting(tier),
+      effectiveIsAdmin || effectiveIsFoundingMember || checkFeature(effectiveTier, feature),
+    hasScouting: effectiveIsAdmin || effectiveIsFoundingMember || checkScouting(effectiveTier),
+    scoutingAllocations: getScoutingAllocations(effectiveTier, effectiveIsAdmin || effectiveIsFoundingMember),
     podcastCredits,
     refreshPodcastCredits,
     signOut,

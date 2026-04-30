@@ -34,6 +34,7 @@ import { checkDisciplineEvents, disciplineNewsItems, tickSuspensions } from './d
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from './simTelemetry';
+import { getCurrentSubscriptionAllocations } from '../subscriptionState';
 
 const SAVE_VERSION = 32;
 
@@ -177,6 +178,13 @@ interface GameStore extends LeagueState {
   filmReviewPlayer: (playerId: string) => boolean;
   inPersonEvalPlayer: (playerId: string) => boolean;
   fullEvalPlayer: (playerId: string) => boolean;
+  /**
+   * Premium-only: walks every draft prospect and ensures film review,
+   * in-person eval, and full eval data are all populated. Idempotent —
+   * safe to call repeatedly. The binary tier model gives premium users
+   * the full scouting profile without spending points.
+   */
+  autoPopulateAllScoutingForPremium: () => void;
   // Free Agency Intel Report
   intelReportFA: (playerId: string) => boolean;
   // Coaching
@@ -4474,17 +4482,21 @@ export const useGameStore = create<GameStore>()(
           holdoutDemands: [],
           draftScoutingData: scoutingData,
           nflMockDraft: nflMockDraft.length > 0 ? nflMockDraft : undefined,
-          // Scout-points seeding kept for legacy save compatibility; UI no
-          // longer reads these fields after the binary-tier refactor.
-          scoutingState: {
-            scoutPoints: 20,
-            maxScoutPoints: 20,
-            filmReviews: {},
-            inPersonEvals: {},
-            inPersonEvalCount: 0,
-            fullEvals: {},
-            fullEvalCount: 0,
-          },
+          // Per-tier allocation: free=10, premium=30, founder/admin=unlimited.
+          // Pulled from the subscriptionState module since the engine is
+          // decoupled from the React provider.
+          scoutingState: (() => {
+            const alloc = getCurrentSubscriptionAllocations();
+            return {
+              scoutPoints: alloc.scoutPoints,
+              maxScoutPoints: alloc.scoutPoints,
+              filmReviews: {},
+              inPersonEvals: {},
+              inPersonEvalCount: 0,
+              fullEvals: {},
+              fullEvalCount: 0,
+            };
+          })(),
         });
 
         // Draft class preview news
@@ -5157,11 +5169,14 @@ export const useGameStore = create<GameStore>()(
           freeAgents: [...expiredPlayers.map(p => p.id), ...existingFAIds, ...supplementalPlayers.map(p => p.id)],
           faDay: 1,
           newsItems: [...faState.newsItems, ...releaseNews],
-          pursuitState: {
-            pursuitPoints: 5 + (faState.scoutingLevel || 0) * 3,
-            maxPursuitPoints: 11,
-            intelReports: {},
-          },
+          pursuitState: (() => {
+            const alloc = getCurrentSubscriptionAllocations();
+            return {
+              pursuitPoints: alloc.intelReports,
+              maxPursuitPoints: alloc.intelReports,
+              intelReports: {},
+            };
+          })(),
         });
 
         // Compute initial refusals
@@ -6900,16 +6915,20 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
-      // Full scout — generates all tier data in one action for 1 scout point
+      // Full scout — generates all tier data in one action for 1 scout point.
+      // Returns false if the prospect is already scouted OR if the user is
+      // out of points (UI should disable the button when scoutPoints === 0).
       scoutPlayer: (playerId: string) => {
         const state = get();
         const ss = migrateScoutingState(state.scoutingState);
-        // if (ss.scoutPoints < 1) return false; // TODO: re-enable when point limits are added
+        if (ss.scoutPoints < 1) return false;
         if (ss.filmReviews[playerId]) return false; // already scouted
         const player = state.players.find(p => p.id === playerId);
         if (!player) return false;
 
-        // Temporarily give enough points for all tiers
+        // Temporarily inflate points so the per-tier sub-actions don't
+        // each try to deduct (they'd 4x-deduct otherwise — 1 + 3 + 5 = 9).
+        // We restore to (savedPoints - 1) at the end so the net cost is 1.
         const savedPoints = ss.scoutPoints;
         set({ scoutingState: { ...ss, scoutPoints: 100 } });
 
@@ -6918,10 +6937,9 @@ export const useGameStore = create<GameStore>()(
         get().inPersonEvalPlayer(playerId);
         get().fullEvalPlayer(playerId);
 
-        // Unlimited scouting — restore original points (no deduction)
-        // TODO: re-enable `savedPoints - 1` when point limits are added
+        // Net cost: 1 scout point.
         const finalSs = get().scoutingState!;
-        set({ scoutingState: { ...finalSs, scoutPoints: savedPoints } });
+        set({ scoutingState: { ...finalSs, scoutPoints: Math.max(0, savedPoints - 1) } });
 
         // Also mark as deep-scouted in legacy system
         const scoutData = state.draftScoutingData[playerId];
@@ -7156,6 +7174,178 @@ export const useGameStore = create<GameStore>()(
           },
         });
         return true;
+      },
+
+      // Auto-populate film/in-person/full eval data for every draft prospect
+      // in one batched set() call. Premium users get the full scouting profile
+      // without spending points (the binary tier model gives them everything).
+      // Idempotent — safe to call repeatedly. Skips prospects already populated.
+      //
+      // Single set() is critical here: calling the per-tier actions in a loop
+      // would fire 600+ separate Zustand updates, each triggering a persist
+      // write to IndexedDB and a React re-render cascade. That's an OOM crash
+      // waiting to happen with a 200-prospect draft class. Inline generation
+      // here is duplicated from filmReviewPlayer / inPersonEvalPlayer /
+      // fullEvalPlayer; if those change, mirror the changes here.
+      autoPopulateAllScoutingForPremium: () => {
+        const state = get();
+        if (state.phase !== 'draft') return;
+        const ids = state.freeAgents;
+        if (!ids || ids.length === 0) return;
+
+        const baseSs = migrateScoutingState(state.scoutingState);
+        const filmReviews = { ...baseSs.filmReviews };
+        const inPersonEvals = { ...baseSs.inPersonEvals };
+        const fullEvals = { ...baseSs.fullEvals };
+        let inPersonEvalCount = baseSs.inPersonEvalCount;
+        let fullEvalCount = baseSs.fullEvalCount;
+
+        const POS_KEYS: Record<string, string[]> = {
+          QB: ['throwing', 'carrying', 'blocking'], RB: ['carrying', 'catching', 'blocking'],
+          WR: ['catching', 'carrying', 'blocking'], TE: ['catching', 'blocking', 'carrying'],
+          OL: ['blocking', 'tackling', 'carrying'], DL: ['passRush', 'tackling', 'blocking'],
+          LB: ['tackling', 'coverage', 'passRush'], CB: ['coverage', 'tackling', 'catching'],
+          S: ['coverage', 'tackling', 'catching'], K: ['kicking', 'blocking'], P: ['kicking', 'blocking'],
+        };
+        const STRENGTH_NOTES: Record<string, string> = { throwing: 'Elite arm talent', carrying: 'Natural ball carrier', catching: 'Sure hands', coverage: 'Lockdown coverage skills', passRush: 'Explosive first step', blocking: 'Mauler in the trenches', tackling: 'Sure tackler', kicking: 'Big leg' };
+        const WEAKNESS_NOTES: Record<string, string> = { throwing: 'Accuracy concerns', carrying: 'Ball security issues', catching: 'Inconsistent hands', coverage: 'Struggles in man coverage', passRush: 'Disappears against good tackles', blocking: 'Gets overpowered', tackling: 'Missed tackles', kicking: 'Inconsistent under pressure' };
+        const PERSONALITIES = ['high_character', 'confident', 'reserved', 'red_flag'] as const;
+        const CHARACTER_NOTES: Record<string, string> = {
+          high_character: 'Coaches rave about his work ethic and leadership.',
+          confident: 'Carries himself like a pro. Confident presence.',
+          reserved: 'Quiet demeanor. Hard to read but focused.',
+          red_flag: 'Some maturity concerns flagged by our staff.',
+        };
+        const MOTIVATION_NOTES = [
+          'Comes from a football family. Father played college ball. This isn\'t just a job — it\'s identity.',
+          'First-generation college student. Football was his way out. The drive is real and deeply personal.',
+          'Stable background, supportive family. Mature beyond his years. Low-maintenance personality.',
+          'Lost a parent young. Coaches say it gave him a perspective and seriousness beyond his age.',
+          'Grew up in a tough neighborhood. Football is his lifeline — expect maximum effort every snap.',
+          'Well-rounded kid. Interests outside football. Some scouts love the maturity, others worry about commitment.',
+        ];
+
+        let added = 0;
+        for (const id of ids) {
+          if (fullEvals[id]) continue; // already populated
+          const player = state.players.find(p => p.id === id);
+          if (!player) continue;
+
+          const ovr = player.ratings.overall;
+          const pot = player.potential;
+          const profile = (player.draftProfile ?? 'normal') as 'bust' | 'boom' | 'normal';
+          const keys = POS_KEYS[player.position] ?? ['tackling', 'coverage', 'blocking'];
+          const ratings = player.ratings as unknown as Record<string, number>;
+          const bestKey = keys.reduce((best, k) => (ratings[k] ?? 0) > (ratings[best] ?? 0) ? k : best, keys[0]);
+          const worstKey = keys.reduce((worst, k) => (ratings[k] ?? 0) < (ratings[worst] ?? 0) ? k : worst, keys[0]);
+
+          // Tier 1 — film review
+          if (!filmReviews[id]) {
+            const seed1 = seedFromId(id, 77);
+            const noise1 = ((seed1 % 13) - 6);
+            const projTier = ovr >= 80 ? 'Starter' : ovr >= 70 ? 'Rotational' : ovr >= 60 ? 'Backup' : 'Project';
+            filmReviews[id] = {
+              ovrRange: { low: Math.max(30, ovr + noise1 - 6), high: Math.min(99, ovr + noise1 + 6) },
+              strength: STRENGTH_NOTES[bestKey] ?? 'Solid all-around',
+              weakness: WEAKNESS_NOTES[worstKey] ?? 'Limited upside',
+              projectionTier: projTier as 'Starter' | 'Rotational' | 'Backup' | 'Project',
+              potentialHint: (pot >= 80 ? 'high' : pot >= 65 ? 'medium' : 'low') as 'high' | 'medium' | 'low',
+              blurb: generateFilmReviewBlurb(player),
+            };
+          }
+
+          // Tier 2 — in-person eval
+          if (!inPersonEvals[id]) {
+            const seed2 = seedFromId(id, 99);
+            const noise2 = ((seed2 % 7) - 3);
+            const detected = Math.random() < 0.35;
+            const personality = profile === 'bust' && Math.random() < 0.4 ? 'red_flag'
+              : profile === 'boom' && Math.random() < 0.4 ? 'high_character'
+              : PERSONALITIES[Math.floor(Math.random() * PERSONALITIES.length)];
+            const revealedKeys = (POS_KEYS[player.position] ?? ['throwing']).slice(0, 2);
+            const spd = player.ratings.speed ?? 50;
+            const str = player.ratings.strength ?? 50;
+            const agi = player.ratings.agility ?? 50;
+            const bodyTypes: Record<string, string[]> = {
+              QB: [spd >= 70 ? 'Lean, athletic build.' : 'Sturdy frame, built to absorb hits.'],
+              RB: [spd >= 75 ? 'Compact, explosive build.' : 'Thick between-the-tackles frame.'],
+              WR: [spd >= 80 ? 'Long strider with track speed.' : 'Wins with technique.'],
+              OL: [str >= 75 ? 'Massive frame, moves well for his size.' : 'Adequate size, needs to convert weight to muscle.'],
+              DL: [spd >= 70 ? 'Explosive first step. Long arms, great leverage.' : 'Thick, powerful build. Hard to move.'],
+              LB: [spd >= 70 ? 'Sideline-to-sideline athlete.' : 'Downhill thumper.'],
+              CB: [agi >= 75 ? 'Fluid hips, smooth transitions.' : 'Stiff in transition.'],
+              S: [spd >= 70 ? 'Rangey athlete.' : 'Compact, physical safety.'],
+              TE: [str >= 70 ? 'Y-tight end frame, in-line blocker.' : 'Move tight end build.'],
+              K: ['Smooth delivery, consistent mechanics.'], P: ['Good leg speed and follow-through.'],
+            };
+            const bodyPool = bodyTypes[player.position] ?? ['Adequate build for the position.'];
+            const bodyType = bodyPool[seed2 % bodyPool.length];
+            const awareness = player.ratings.awareness ?? 50;
+            const footballIQ = awareness >= 80 ? 'Exceptional football IQ. Articulated his reads with the detail of a coach.'
+              : awareness >= 65 ? 'Solid understanding of concepts.'
+              : 'Processing speed is a concern. Production may have been scheme-dependent.';
+            const competitiveness = personality === 'high_character' ? 'Welcomed every challenge during the workout.'
+              : personality === 'red_flag' ? 'Body language flagged during competitive drills.'
+              : personality === 'confident' ? 'Carries himself with alpha energy.'
+              : 'Reserved during group activities but competed hard individually.';
+            const medSeed = (seed2 * 7) % 100;
+            const medicalFlag = medSeed < 12
+              ? (player.age >= 22 ? 'Team doctors flagged a range-of-motion concern. Needs follow-up imaging.' : 'Mild lateral knee laxity noted. Worth monitoring.')
+              : medSeed < 20 ? 'Minor ankle sprain history. No structural concerns.'
+              : null;
+            const motivation = MOTIVATION_NOTES[seed2 % MOTIVATION_NOTES.length];
+
+            inPersonEvals[id] = {
+              ovrRange: { low: Math.max(30, ovr + noise2 - 3), high: Math.min(99, ovr + noise2 + 3) },
+              personality,
+              characterNotes: CHARACTER_NOTES[personality],
+              revealedBustBoom: detected,
+              bustBoomResult: detected ? profile : undefined,
+              revealedRatingKeys: revealedKeys,
+              bodyType,
+              footballIQ,
+              competitiveness,
+              medicalFlag,
+              motivation,
+            };
+            inPersonEvalCount++;
+          }
+
+          // Tier 3 — full eval
+          if (!fullEvals[id]) {
+            const seed3 = seedFromId(id, 111);
+            const noise3 = ((seed3 % 7) - 3);
+            const reveal = Math.random();
+            let revealedProfile: 'bust' | 'boom' | 'normal';
+            if (reveal < 0.65) {
+              revealedProfile = profile;
+            } else {
+              const alts: ('bust' | 'boom' | 'normal')[] =
+                profile === 'bust' ? ['normal', 'boom']
+                : profile === 'boom' ? ['normal', 'bust']
+                : ['bust', 'boom'];
+              revealedProfile = alts[Math.floor(Math.random() * alts.length)];
+            }
+            fullEvals[id] = {
+              exactOvr: Math.max(30, Math.min(99, ovr + noise3)),
+              bustBoomResult: revealedProfile,
+            };
+            fullEvalCount++;
+          }
+          added++;
+        }
+
+        if (added === 0) return;
+        set({
+          scoutingState: {
+            ...baseSs,
+            filmReviews,
+            inPersonEvals,
+            fullEvals,
+            inPersonEvalCount,
+            fullEvalCount,
+          },
+        });
       },
 
       // Free Agency Intel Report

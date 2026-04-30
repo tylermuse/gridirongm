@@ -42,3 +42,9 @@ next-env.d.ts
 
 # Local roster backups (not deployed)
 /.roster-backups/
+
+# Sandboxed-build detritus (can be deleted manually from a macOS terminal)
+/tmp/
+/sessions/
+/.discord-mcp-setup/
+.env*.local

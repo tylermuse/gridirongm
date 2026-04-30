@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
+import { createClient as createSupabaseServer } from '@/lib/supabase/server';
+import { consumePodcastCredit, getServiceClient } from '@/lib/podcastCredits';
 
 // ── Voice Config ──────────────────────────────────────────────────────
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
@@ -209,7 +211,18 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check cache
+    // Authenticate the request — podcast generation is a Premium feature.
+    // Cache hits are served regardless (no ElevenLabs cost), but we still
+    // need to know the user to gate fresh generations on credit availability.
+    const authClient = await createSupabaseServer();
+    const {
+      data: { user },
+    } = await authClient.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    // Check cache (free for everyone, including Free tier — no API cost)
     const hash = contentHash({ topics, teamName });
     const sb = supabaseAdmin();
     if (sb) {
@@ -226,6 +239,17 @@ export async function POST(request: Request) {
           },
         });
       }
+    }
+
+    // Cache miss → fresh generation. Consume one podcast credit.
+    // Returns 402 when exhausted, 403 for Free tier.
+    const service = getServiceClient();
+    const consumeResult = await consumePodcastCredit(service, user.id, user.created_at);
+    if (!consumeResult.ok) {
+      return NextResponse.json(
+        { error: consumeResult.error, state: consumeResult.state },
+        { status: consumeResult.status },
+      );
     }
 
     // Build script

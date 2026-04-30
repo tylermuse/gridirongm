@@ -2,12 +2,29 @@ import { NextResponse } from 'next/server';
 import { getStripe } from '@/lib/stripe';
 import { createClient } from '@/lib/supabase/server';
 import { createServerClient } from '@supabase/ssr';
+import { PREMIUM_PRICE_ID, LEGACY_PAID_PRICE_IDS } from '@/lib/subscription';
+
+// Only the configured Premium price is allowed at checkout. Legacy prices
+// remain valid for existing subscribers (the webhook still maps them up to
+// 'premium') but new sign-ups always go through the current Premium price.
+const ALLOWED_PRICE_IDS = new Set<string>(
+  [PREMIUM_PRICE_ID, ...LEGACY_PAID_PRICE_IDS].filter((p): p is string => !!p),
+);
 
 export async function POST(request: Request) {
   try {
     const { priceId } = await request.json();
-    if (!priceId) {
+    if (!priceId || typeof priceId !== 'string') {
       return NextResponse.json({ error: 'Price ID is required' }, { status: 400 });
+    }
+    if (!PREMIUM_PRICE_ID) {
+      return NextResponse.json(
+        { error: 'Premium plan is not configured. Set NEXT_PUBLIC_STRIPE_PREMIUM_PRICE_ID.' },
+        { status: 503 },
+      );
+    }
+    if (!ALLOWED_PRICE_IDS.has(priceId)) {
+      return NextResponse.json({ error: 'Invalid price ID' }, { status: 400 });
     }
 
     // Get current user

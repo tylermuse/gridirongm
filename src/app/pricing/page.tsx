@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { PREMIUM_PRICE_ID } from '@/lib/subscription';
@@ -9,8 +9,8 @@ const PREMIUM_FEATURES = [
   'Ad-free experience',
   'AI commentary on every game',
   '3 audio podcast credits per month',
-  'Full prospect scouting (exact ratings, projections, scout reports)',
-  'Full free-agent intel',
+  '30 scout points per draft (3× the free allotment)',
+  '9 free-agent intel reports (3× the free allotment)',
   'Cancel anytime — Stripe Customer Portal',
 ];
 
@@ -20,11 +20,12 @@ const FREE_FEATURES = [
   'All stats, standings, history',
   'Custom league settings',
   'Multiple leagues & unlimited saves',
+  '10 scout points per draft',
+  '3 free-agent intel reports',
 ];
 
 const FREE_LIMITATIONS = [
   'Banner ads',
-  'Draft and sign free agents blind — only basic info (name, position, age, college, coarse tier)',
   'No AI commentary',
   'No podcast generation',
 ];
@@ -39,9 +40,13 @@ export default function PricingPage() {
   } = useSubscription();
   const [loading, setLoading] = useState<'checkout' | 'portal' | null>(null);
 
-  const handleSubscribe = async () => {
+  const handleSubscribe = useCallback(async () => {
     if (!user) {
-      router.push('/login');
+      // Preserve the upgrade intent through the login flow. After login the
+      // user lands back here with ?intent=checkout, and the auto-fire effect
+      // below picks up the action without losing their place in the game.
+      const next = encodeURIComponent('/pricing?intent=checkout');
+      router.push(`/login?next=${next}`);
       return;
     }
     if (!PREMIUM_PRICE_ID) {
@@ -66,7 +71,23 @@ export default function PricingPage() {
     } finally {
       setLoading(null);
     }
-  };
+  }, [router, user]);
+
+  // Auto-fire checkout when arriving back from login with ?intent=checkout.
+  // Single-shot: ref guard prevents the effect re-firing if the user navigates
+  // away and comes back to /pricing without the intent param.
+  const autoFiredRef = useRef(false);
+  useEffect(() => {
+    if (autoFiredRef.current) return;
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('intent') !== 'checkout') return;
+    if (!user) return; // wait for auth to resolve
+    autoFiredRef.current = true;
+    // Strip the param so a refresh doesn't re-fire the checkout.
+    window.history.replaceState({}, '', '/pricing');
+    handleSubscribe();
+  }, [user, handleSubscribe]);
 
   const handleManage = async () => {
     setLoading('portal');
