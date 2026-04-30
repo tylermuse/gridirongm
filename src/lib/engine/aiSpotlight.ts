@@ -425,11 +425,33 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
     exchanges: { speakerId: 'stats' | 'hottake' | 'fans' | 'player'; text: string; playerName?: string }[];
   };
 
+  // Player-voice signals. The AI occasionally returns a hashtag-laden,
+  // emoji-heavy social post tagged as Marcus/Tony — Tyler caught one
+  // attributed to Marcus saying "Gonna rise and grind this offseason!
+  // #RedBirds #NextLevel". Hashtags + hype emojis are PLAYER signals,
+  // not commentator voice. Reroute mis-tagged exchanges before render
+  // so the misclassification can't slip through even if the prompt drifts.
+  const HASHTAG_RE = /#[A-Za-z][A-Za-z0-9]+/;
+  const HYPE_EMOJI_RE = /[💯🔥💪🙏👀😤😈🦅🐻🦁🦌🐯🐅⚡️]/u;
+  function looksLikePlayerVoice(text: string): boolean {
+    return HASHTAG_RE.test(text) || HYPE_EMOJI_RE.test(text);
+  }
+
   function adaptTopic(t: RawTopic): AiSpotlightTopic {
     return {
       headline: t.headline,
       icon: t.icon,
       exchanges: t.exchanges.map(e => {
+        // Reroute commentator exchanges that read like player social posts.
+        if ((e.speakerId === 'stats' || e.speakerId === 'hottake') && looksLikePlayerVoice(e.text)) {
+          return {
+            ...e,
+            speakerId: 'player' as const,
+            playerName: e.playerName && e.playerName.trim() !== '' && e.playerName !== 'Player'
+              ? e.playerName
+              : pickFallbackName(),
+          };
+        }
         if (e.speakerId === 'player' && (!e.playerName || e.playerName === 'Player' || e.playerName.trim() === '')) {
           return { ...e, playerName: pickFallbackName() };
         }
