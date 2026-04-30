@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
-import { ThemeToggle } from '@/components/game/ThemeToggle';
 import { GamePlanModal } from './GamePlanModal';
 // TradeProposalPopup disabled — user prefers checking trades inline
 
@@ -217,7 +216,6 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
           </div>
 
           <div className="flex items-center gap-1 md:gap-2 flex-wrap justify-end">
-            <ThemeToggle compact />
             {phase === 'preseason' && (
               <>
                 <Button onClick={() => { useGameStore.getState().simPreseasonWeek(); if (useGameStore.getState().phase === 'regular') router.push('/'); }} size="sm" className="active:scale-95 transition-transform">

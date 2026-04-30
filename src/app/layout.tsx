@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         {/* Theme bootstrap — runs before paint so the dark theme doesn't
             flash light. Reads the persisted preference (or OS default) and
-            stamps data-theme on <html>. The matching ThemeToggle component
+            stamps data-theme on <html>. The Settings → Appearance toggle
             keeps this in sync at runtime. */}
         <script
           dangerouslySetInnerHTML={{

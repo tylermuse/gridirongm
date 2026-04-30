@@ -11,6 +11,56 @@ import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
+const THEME_STORAGE_KEY = 'bsfootball-theme';
+
+function AppearanceCard() {
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const current = typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark'
+      ? 'dark' : 'light';
+    setTheme(current);
+    setMounted(true);
+  }, []);
+
+  function setNext(next: 'light' | 'dark') {
+    setTheme(next);
+    try {
+      if (next === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+      else document.documentElement.removeAttribute('data-theme');
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch { /* SSR / private mode — ignore */ }
+  }
+
+  return (
+    <Card className="mb-4">
+      <CardHeader><CardTitle>Appearance</CardTitle></CardHeader>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-sm">Dark Mode</div>
+          <div className="text-xs text-[var(--text-sec)] mt-0.5">
+            Slate palette across the whole app. Defaults to your OS preference on first load.
+          </div>
+        </div>
+        <button
+          onClick={() => mounted && setNext(theme === 'dark' ? 'light' : 'dark')}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          className={`shrink-0 relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+            theme === 'dark' ? 'bg-blue-500' : 'bg-gray-300'
+          } cursor-pointer`}
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+              theme === 'dark' ? 'translate-x-6' : 'translate-x-1'
+            }`}
+          />
+        </button>
+      </div>
+    </Card>
+  );
+}
+
 interface SettingRowProps {
   label: string;
   description: string;
@@ -251,6 +301,9 @@ export default function SettingsPage() {
 
         {/* Account */}
         <AccountCard />
+
+        {/* Appearance */}
+        <AppearanceCard />
 
         {/* Finance Settings */}
         <Card className="mb-4">
