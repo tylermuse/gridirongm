@@ -146,7 +146,21 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
   // Allow preseason (gp=0) and seasonOver
   if (gp === 0 && narrative !== 'preseason' && narrative !== 'seasonOver') return Promise.resolve();
 
-  const key = buildCacheKey(team.id, season, week, team.record.wins, team.record.losses, `${phase}-${narrative}`);
+  // During playoffs, both `narrative` (playoffsStart) and `week` (frozen at
+  // 18) are static across rounds, so without a round-aware suffix the cache
+  // would serve the wild-card preview after a divisional win. Tag the key
+  // with the user's completed playoff games so each round refetches.
+  let cacheNarrative: string = narrative;
+  let userPlayoffWins = 0;
+  let userPlayoffLosses = 0;
+  if (phase === 'playoffs' && opts.playoffBracket) {
+    const userGames = opts.playoffBracket.filter(m => m.winnerId && (m.homeTeamId === team.id || m.awayTeamId === team.id));
+    userPlayoffWins = userGames.filter(m => m.winnerId === team.id).length;
+    userPlayoffLosses = userGames.filter(m => m.winnerId && m.winnerId !== team.id).length;
+    cacheNarrative = `${narrative}-pw${userPlayoffWins}-pl${userPlayoffLosses}`;
+  }
+
+  const key = buildCacheKey(team.id, season, week, team.record.wins, team.record.losses, `${phase}-${cacheNarrative}`);
   if (key === cache.key && (cache.topics || cache.loading)) return cache.promise ?? Promise.resolve();
 
   cache.key = key;
@@ -354,6 +368,39 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
               star: oppStar ? `${oppStar.firstName} ${oppStar.lastName} (${oppStar.position}, ${oppStar.ratings.overall} OVR)` : null,
             };
           }
+        }
+      }
+    }
+
+    // Playoff stage tag — keeps the spotlight content aligned with where the
+    // user actually is in the bracket. Without this the AI re-uses the
+    // pre-playoffs preview after every win.
+    if (opts.playoffBracket) {
+      const ROUND_LABELS = ['', 'Wild Card', 'Divisional', 'Conference Championship', 'Championship'];
+      const currentRoundIndex = userPlayoffWins + 1;
+      const stageLabel = ROUND_LABELS[Math.min(currentRoundIndex, 4)] ?? 'Playoffs';
+      teamData.playoffStage = {
+        roundJustWon: ROUND_LABELS[userPlayoffWins] || null,
+        nextRound: stageLabel,
+        winsSoFar: userPlayoffWins,
+      };
+
+      // Surface the upcoming opponent so the AI talks about THIS matchup,
+      // not the wild-card opener anymore.
+      const nextGame = opts.playoffBracket.find(m =>
+        !m.winnerId && (m.homeTeamId === team.id || m.awayTeamId === team.id));
+      if (nextGame) {
+        const oppId = nextGame.homeTeamId === team.id ? nextGame.awayTeamId : nextGame.homeTeamId;
+        const opp = oppId ? allTeams.find(t => t.id === oppId) : null;
+        if (opp) {
+          const oppRoster = allPlayers.filter(p => p.teamId === opp.id && !p.retired);
+          const oppStar = [...oppRoster].sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+          teamData.nextPlayoffOpponent = {
+            round: ROUND_LABELS[nextGame.round] ?? `Round ${nextGame.round}`,
+            name: `${opp.city} ${opp.name}`,
+            record: `${opp.record.wins}-${opp.record.losses}`,
+            star: oppStar ? `${oppStar.firstName} ${oppStar.lastName} (${oppStar.position}, ${oppStar.ratings.overall} OVR)` : null,
+          };
         }
       }
     }

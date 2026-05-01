@@ -192,22 +192,24 @@ Reference how existing players were acquired where relevant, e.g. "The trade for
 Generate 4-5 topics.`;
 
     case 'playoffsStart':
-      return `This is the END OF REGULAR SEASON episode. Check the "madePlayoffs" field in the data.
+      return `Check the "playoffStage" and "nextPlayoffOpponent" fields FIRST — they tell you exactly where in the playoffs the team is.
 
-IF madePlayoffs is TRUE:
-- This is a PLAYOFFS PREVIEW. They're in! Discuss their seed and what it means.
-- Break down the first-round matchup: their strengths vs the opponent's weaknesses and vice versa
-- Which players need to step up in the postseason? Reference their stats.
-- X-factor: one player or unit that will determine how far they go
-- Bold prediction: how deep do they go?
+IF playoffStage.winsSoFar >= 1 (the team JUST WON A PLAYOFF GAME):
+- This is a POST-WIN, NEXT-ROUND PREVIEW. Lead with celebrating the win they just got (playoffStage.roundJustWon).
+- Pivot to the next matchup: use nextPlayoffOpponent.name, .record, .star. Their strengths vs the opponent's weaknesses.
+- Do NOT pretend it's still the wild-card preview. They've moved on.
+- Which players from this team rose to the moment? Who needs to keep producing?
+- Bold prediction: do they win the next round?
+
+IF playoffStage.winsSoFar === 0 AND madePlayoffs is TRUE:
+- This is a PLAYOFFS PREVIEW. They're in for the wild-card round. Discuss their seed.
+- Break down firstRoundOpponent: their strengths vs the opponent's weaknesses.
+- Which players need to step up? X-factor. Bold prediction on how deep they go.
 
 IF madePlayoffs is FALSE or null:
-- They MISSED THE PLAYOFFS. This is a season autopsy, NOT a playoff preview.
+- They MISSED THE PLAYOFFS. Season autopsy, NOT a playoff preview.
 - Do NOT mention playoff matchups, seeds, or "round one" — they're not in it.
-- What went wrong? Was it the QB? The defense? Injuries? Be specific with stats.
-- Was this a rebuilding year or a disappointment? Grade the season.
-- What are the biggest offseason priorities? QB upgrade? Draft focus? Cap moves?
-- Is the coaching staff on the hot seat?
+- What went wrong? Specific with stats. Rebuilding year or disappointment? Offseason priorities? Coaching staff hot seat?
 
 Generate 4-5 topics.`;
 
