@@ -65,7 +65,7 @@ function recColor(rec: FAEvaluation['recommendation']): string {
     case 'Must Sign': return 'text-green-700 bg-green-50 border-green-200';
     case 'Strong Target': return 'text-blue-700 bg-blue-50 border-blue-200';
     case 'Worth Considering': return 'text-amber-700 bg-amber-50 border-amber-200';
-    case 'Depth Only': return 'text-gray-600 bg-gray-50 border-gray-200';
+    case 'Depth Only': return 'text-[var(--text-sec)] bg-[var(--surface-2)] border-[var(--border)]';
     case 'Pass': return 'text-red-600 bg-red-50 border-red-200';
   }
 }
@@ -208,17 +208,53 @@ export default function FreeAgencyPage() {
   }, [negotiation?.outcome, negotiation?.playerId]);
 
   if (isSpectator) {
+    // Spectator: read-only FA view, but still let the user advance days/weeks
+    // so the offseason actually progresses. Without these buttons the league
+    // gets stuck in FA forever (.akrav 4/30 03:18, somedude4759 4/30 08:02).
+    const inFa = phase === 'freeAgency';
+    const recentSignings = useGameStore.getState().newsItems
+      .filter(n => n.type === 'signing')
+      .slice(-12)
+      .reverse();
     return (
       <GameShell>
         <div className="max-w-4xl mx-auto">
           <SpectatorBanner />
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-8 text-center">
             <div className="text-3xl mb-3">✍️</div>
             <h2 className="text-xl font-black mb-1">Free Agency — Read-only</h2>
-            <p className="text-sm text-[var(--text-sec)] max-w-md mx-auto">
-              AI teams handle all FA signings in spectator mode. Watch the news feed for moves.
+            <p className="text-sm text-[var(--text-sec)] max-w-md mx-auto mb-4">
+              AI teams handle all FA signings in spectator mode. Advance days or weeks to watch the league move.
             </p>
+            {inFa ? (
+              <div className="flex flex-wrap gap-2 justify-center mb-2">
+                <Button onClick={advanceFADay} disabled={faDay >= 30}>
+                  Advance Day {faDay >= 30 ? '(FA closed)' : `(${faDay}/30)`}
+                </Button>
+                <Button onClick={advanceFAWeek} disabled={faDay >= 30} variant="secondary">
+                  Advance Week
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs text-[var(--text-sec)]">
+                Free agency opens after the Draft phase ends.
+              </p>
+            )}
           </div>
+          {recentSignings.length > 0 && (
+            <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-[var(--text-sec)] mb-2">
+                Recent Signings
+              </div>
+              <ul className="space-y-1.5 text-sm">
+                {recentSignings.map(n => (
+                  <li key={n.id} className="text-[var(--text)]">
+                    {n.headline}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </GameShell>
     );

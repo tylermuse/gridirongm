@@ -540,7 +540,7 @@ function TeamSpotlightSection({
     if (headline.includes('QB')) return { label: 'QB Watch', color: 'bg-red-100 text-red-700 border-red-200' };
     if (headline.includes('Free Agenc') || headline.includes('Free Agent')) return { label: 'Free Agency', color: 'bg-green-100 text-green-700 border-green-200' };
     if (headline.includes('Cap')) return { label: 'Cap', color: 'bg-yellow-100 text-yellow-700 border-yellow-200' };
-    if (headline.includes('Overview') || headline.includes('State of')) return { label: 'Overview', color: 'bg-gray-100 text-gray-700 border-gray-200' };
+    if (headline.includes('Overview') || headline.includes('State of')) return { label: 'Overview', color: 'bg-[var(--surface-2)] text-[var(--text)] border-[var(--border)]' };
     return null;
   };
 

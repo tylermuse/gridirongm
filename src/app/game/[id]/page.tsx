@@ -227,7 +227,7 @@ function DriveChart({ drives, homeColor, awayColor, homeAbbr, awayAbbr }: {
 
         return (
           <div key={idx} className="flex items-center gap-2">
-            <span className="text-[10px] font-bold w-8 text-right shrink-0" style={{ color: teamColor }}>
+            <span className="text-[10px] font-bold w-8 text-right shrink-0 team-color-text" style={{ color: teamColor }}>
               {teamAbbr}
             </span>
             <div className="flex-1 relative h-5 bg-[var(--surface-2)] rounded overflow-hidden">
@@ -375,8 +375,8 @@ function WinProbabilityChart({
       <div className="flex items-center justify-between mb-1">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-sec)]">Win Probability</span>
         <div className="flex items-center gap-3 text-xs font-bold">
-          <span style={{ color: topColor }}>{topAbbr} {topPct}%</span>
-          <span style={{ color: botColor }}>{botAbbr} {botPct}%</span>
+          <span className="team-color-text" style={{ color: topColor }}>{topAbbr} {topPct}%</span>
+          <span className="team-color-text" style={{ color: botColor }}>{botAbbr} {botPct}%</span>
         </div>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 100 }} preserveAspectRatio="none">

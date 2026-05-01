@@ -150,7 +150,7 @@ export default function NewsPage() {
                         </span>
                         {item.teamId && (
                           <span
-                            className="text-xs font-bold px-1.5 py-0.5 rounded"
+                            className="text-xs font-bold px-1.5 py-0.5 rounded team-color-text"
                             style={{ backgroundColor: teamColor(item.teamId) + '33', color: teamColor(item.teamId) }}
                           >
                             {teamAbbr(item.teamId)}

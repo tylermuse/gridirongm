@@ -1688,7 +1688,7 @@ export default function RosterPage() {
                             <tr
                               key={i}
                               className={`border-t border-[var(--border)] ${
-                                yr.isVoidYear ? 'bg-gray-50 text-gray-400' :
+                                yr.isVoidYear ? 'bg-[var(--surface-2)] text-[var(--text-sec)]' :
                                 isCurrentYear ? 'bg-green-50' : delta > 0 ? 'bg-amber-50/50' : ''
                               }`}
                             >
