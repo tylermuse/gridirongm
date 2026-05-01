@@ -359,7 +359,7 @@ export default function RecapPage() {
                               {topic.teamIds.slice(0, 3).map(tid => (
                                 <span
                                   key={tid}
-                                  className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                                  className="text-[10px] font-bold px-1.5 py-0.5 rounded team-color-text"
                                   style={{ backgroundColor: teamColor(tid) + '33', color: teamColor(tid) }}
                                 >
                                   {teamAbbr(tid)}
@@ -430,7 +430,7 @@ export default function RecapPage() {
                           {segment.teamIds.slice(0, 3).map(tid => (
                             <span
                               key={tid}
-                              className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                              className="text-[10px] font-bold px-1.5 py-0.5 rounded team-color-text"
                               style={{ backgroundColor: teamColor(tid) + '33', color: teamColor(tid) }}
                             >
                               {teamAbbr(tid)}
