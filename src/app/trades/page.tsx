@@ -176,7 +176,7 @@ function TradeValueBar({ userReceiveValue, userSendValue }: { userReceiveValue: 
   const labelColor = diff > 5 ? 'text-green-600' : diff > -5 ? 'text-[var(--text-sec)]' : diff > -15 ? 'text-amber-600' : 'text-red-600';
   return (
     <div>
-      <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-100 mt-2">
+      <div className="flex h-2.5 rounded-full overflow-hidden bg-[var(--surface-2)] mt-2">
         <div className={`${favorsYou ? 'bg-green-500' : 'bg-red-400'}`} style={{ width: `${yourPct}%` }} />
         <div className={`${favorsYou ? 'bg-green-200' : 'bg-red-200'}`} style={{ width: `${100 - yourPct}%` }} />
       </div>
@@ -1308,7 +1308,7 @@ function TradesPage() {
                             </div>
                             {rumor.type === 'deadline_buzz' && !rumor.resolved && <span className="text-[10px] font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">HOT</span>}
                             {rumor.resolved && rumor.outcome === 'accurate' && <span className="text-[10px] font-bold text-green-600 bg-green-100 px-1.5 py-0.5 rounded">CONFIRMED</span>}
-                            {rumor.resolved && rumor.outcome === 'false_alarm' && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">COLD</span>}
+                            {rumor.resolved && rumor.outcome === 'false_alarm' && <span className="text-[10px] font-bold text-[var(--text-sec)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded">COLD</span>}
                           </div>
                           <div className="text-sm font-semibold leading-tight">{rumor.headline}</div>
                           <div className="text-xs text-[var(--text-sec)] mt-1 leading-snug">{rumor.detail}</div>

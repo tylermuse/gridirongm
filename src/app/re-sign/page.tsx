@@ -7,6 +7,7 @@ import { useGameStore, computeFranchiseTagSalary, flushToStorage } from '@/lib/e
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { LEAGUE_MINIMUM_SALARY, computeLuxuryTax, LUXURY_TAX_RATE } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
+import { SpectatorBanner, useIsSpectator } from '@/components/game/SpectatorBanner';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -44,6 +45,7 @@ type NegMode = 'extend' | 'restructure';
 export default function ReSignPage() {
   const router = useRouter();
   const { phase, players, teams, userTeamId, resigningPlayers, resignPlayer, passOnResigning, passOnResigningBatch, franchiseTagPlayer, advanceToFreeAgency, extendCoachContract } = useGameStore();
+  const isSpectator = useIsSpectator();
   const userTeamForRoster = teams.find(t => t.id === userTeamId);
   const roster = userTeamForRoster
     ? players.filter(p => userTeamForRoster.roster.includes(p.id) && !p.retired)
@@ -76,6 +78,31 @@ export default function ReSignPage() {
     const timer = setTimeout(closeNegotiation, 1000);
     return () => clearTimeout(timer);
   }, [negotiation, closeNegotiation]);
+
+  // Spectator mode: read-only banner with a button to skip the re-sign window.
+  // somedude4759 4/30 08:02 — "why am i being asked to do resigns for a team
+  // when i am in spectator mode?" In spectator leagues userTeamId is set to
+  // an arbitrary team for compatibility, so the prior page would render that
+  // team's expiring roster. Guard on isSpectator instead.
+  if (isSpectator && phase === 'resigning') {
+    return (
+      <GameShell>
+        <div className="max-w-4xl mx-auto">
+          <SpectatorBanner />
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
+            <div className="text-3xl mb-3">✍️</div>
+            <h2 className="text-xl font-black mb-1">Re-signing Window — Read-only</h2>
+            <p className="text-sm text-[var(--text-sec)] max-w-md mx-auto mb-5">
+              AI teams handle their own re-signings in spectator mode. Skip ahead to free agency when you're ready.
+            </p>
+            <Button onClick={() => { advanceToFreeAgency(); router.push('/free-agency'); }}>
+              Advance to Free Agency
+            </Button>
+          </div>
+        </div>
+      </GameShell>
+    );
+  }
 
   if (phase !== 'resigning') {
     return (

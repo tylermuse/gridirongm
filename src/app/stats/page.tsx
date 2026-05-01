@@ -204,7 +204,7 @@ export default function StatsPage() {
                         {t && (
                           <button
                             onClick={() => setViewTeamId(t.id)}
-                            className="text-xs font-bold px-1.5 py-0.5 rounded cursor-pointer hover:opacity-80 transition-opacity"
+                            className="text-xs font-bold px-1.5 py-0.5 rounded cursor-pointer hover:opacity-80 transition-opacity team-color-text"
                             style={{ backgroundColor: t.primaryColor + '33', color: t.primaryColor }}
                           >
                             {t.abbreviation}
