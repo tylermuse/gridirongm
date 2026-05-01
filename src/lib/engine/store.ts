@@ -7962,7 +7962,20 @@ export const useGameStore = create<GameStore>()(
         const bestNc = ncTeams.sort((a, b) => b.record.wins - a.record.wins || a.record.losses - b.record.losses)[0];
 
         // All-League teams
-        const { first: allLeagueFirst, second: allLeagueSecond, allRookie: allRookieTeam } = computeAllLeagueTeams(state);
+        const { first: allLeagueFirst, second: allLeagueSecond, allRookie: allRookieFromCompute } = computeAllLeagueTeams(state);
+        // Prefer the All-Rookie team already written by advanceToResigning
+        // for this same season — that snapshot is canonical, computed from
+        // the post-playoffs / pre-offseason player state. Recomputing here
+        // can drift when offseason mutations (FA / draft / development) shift
+        // player rosters or stats and a rookie no longer matches the current
+        // filter (gamesPlayed >= 10 + active teamId), causing the season's
+        // All-Rookie surface to render with the prior season's data.
+        // (seifyasinn 4/30 03:41 UTC — "the rookie team after I'm done
+        // with the 26-27 year gives me the 25-26 all rookie team")
+        const priorSummaryForSeason = state.seasonHistory.find(s => s.season === state.season);
+        const allRookieTeam = (priorSummaryForSeason?.allRookieTeam && priorSummaryForSeason.allRookieTeam.length > 0)
+          ? priorSummaryForSeason.allRookieTeam
+          : allRookieFromCompute;
 
         const newSummary: import('@/types').SeasonSummary = {
           season: state.season,
