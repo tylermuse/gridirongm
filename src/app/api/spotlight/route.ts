@@ -261,6 +261,7 @@ KEY RULES:
 - Each player has a "howAcquired" field. Only mention acquisition for trades/recent FA signings.
 - Vary openings. Each topic: 3-4 exchanges from Marcus/Tony + fan/player reactions.
 - Keep it entertaining but grounded in actual data.
+- **TOPIC #1 IS A FAST OPENER** — exactly 2 short exchanges (1 from Marcus, 1 from Tony), each 1 sentence. The headline should be a punchy hook. This topic ships quickly so the user sees content immediately; later topics carry the depth and the back-and-forth.
 
 Respond with a JSON array. Each element:
 {
@@ -275,13 +276,14 @@ Return ONLY the JSON array, no markdown fences, no other text.`;
 const GPT_FALLBACK_SUFFIX = `\n\nIMPORTANT: Wrap your JSON array in an object like {"topics": [...]}
 
 DETAIL & LENGTH REQUIREMENTS:
-- Each exchange "text" field MUST be 2-4 sentences long, not just one sentence.
+- TOPIC #1 IS THE FAST OPENER — exactly 2 short exchanges (Marcus 1 sentence, Tony 1 sentence). Skip the depth requirement here so it streams quickly.
+- Topics #2 onward: each exchange "text" field MUST be 2-4 sentences long, not just one sentence.
 - Marcus should cite specific stats from the data and draw comparisons or historical parallels.
 - Tony should be dramatic, use CAPS for emphasis, and paint vivid word pictures.
 - Fan reactions should feel raw and emotional — use slang, exclamation marks, ALL CAPS.
 - Player posts should feel like real social media — emojis, hashtags, attitude.
-- Each topic MUST have at least 4 exchanges showing real back-and-forth (Marcus says something → Tony reacts/disagrees → Marcus counters → fan or player chimes in).
-- DO NOT be brief. The user is reading this for entertainment — make it feel like a real debate show with personality and conflict.`;
+- Topics #2 onward MUST have at least 4 exchanges showing real back-and-forth (Marcus says something → Tony reacts/disagrees → Marcus counters → fan or player chimes in).
+- For topics #2 onward DO NOT be brief — make it feel like a real debate show with personality and conflict.`;
 
 interface NonStreamingResult {
   topics: unknown[] | null;
