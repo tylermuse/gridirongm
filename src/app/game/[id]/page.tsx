@@ -6,7 +6,7 @@ import { useGameStore, flushToStorage, flushToStorageSync } from '@/lib/engine/s
 import { GameShell } from '@/components/game/GameShell';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { simulatePlayByPlay, liveGameToGameResult, livePlayerStatsAtEvent, type LiveGamePlan } from '@/lib/engine/playByPlay';
+import { simulatePlayByPlay, liveGameToGameResult, livePlayerStatsAtEvent, deriveScoringPlaysFromEvents, type LiveGamePlan } from '@/lib/engine/playByPlay';
 import { pushSimTelemetryRecord, meanStarterOvr } from '@/lib/engine/simTelemetry';
 import { createLiveCoachEngine, type LiveCoachEngine } from '@/lib/engine/liveCoachEngine';
 import { Confetti } from '@/components/ui/Confetti';
@@ -851,12 +851,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     if (liveEngineRef.current) {
       // Live engine was active — use ITS final state for the score
       const es = liveEngineRef.current.getState();
+      const events = liveResult?.events ?? [];
       return {
         ...game,
         homeScore: es.homeScore,
         awayScore: es.awayScore,
         played: true,
         playerStats: liveResult?.playerStats ?? {},
+        scoringPlays: deriveScoringPlaysFromEvents(events, game.homeTeamId, game.awayTeamId),
       };
     }
     if (liveResult) {

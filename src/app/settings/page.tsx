@@ -40,7 +40,7 @@ function AppearanceCard() {
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-sm">Dark Mode</div>
           <div className="text-xs text-[var(--text-sec)] mt-0.5">
-            Slate palette across the whole app. Defaults to your OS preference on first load.
+            Slate palette across the whole app. Off by default — your choice persists per browser.
           </div>
         </div>
         <button

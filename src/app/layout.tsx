@@ -27,13 +27,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={barlowCondensed.variable}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {/* Theme bootstrap — runs before paint so the dark theme doesn't
-            flash light. Reads the persisted preference (or OS default) and
-            stamps data-theme on <html>. The Settings → Appearance toggle
-            keeps this in sync at runtime. */}
+        {/* Theme bootstrap — runs before paint so dark-mode users don't
+            get a flash of light. Default is light; dark only stamps when
+            the user has explicitly opted in via Settings → Appearance.
+            (OS prefers-color-scheme is intentionally ignored — testers
+            were getting dark mode without ever asking for it.) */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('bsfootball-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();`,
+            __html: `(function(){try{if(localStorage.getItem('bsfootball-theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();`,
           }}
         />
       </head>

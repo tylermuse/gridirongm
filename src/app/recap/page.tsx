@@ -9,7 +9,7 @@ import { generateDebateTranscript, COMMENTATORS } from '@/lib/engine/debate';
 import type { DebateTopic } from '@/lib/engine/debate';
 import { generateWeeklyRecap } from '@/lib/engine/recap';
 import { DebateBubble } from '@/components/game/DebateBubble';
-import { formatRecord, type RecapSegmentData, type Player, type Team } from '@/types';
+import { formatRecord, type RecapSegmentData, type Player, type Team, type PlayoffMatchup } from '@/types';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -75,6 +75,7 @@ function useAiRecap(
   schedule: import('@/types').GameResult[],
   allPlayers: Player[],
   userTeamId: string,
+  playoffBracket: PlayoffMatchup[] | null,
 ) {
   const [state, setState] = useState<AiRecapCache>({ key: '', topics: null, loading: false, error: false });
   const cacheRef = useRef<Map<string, DebateTopic[]>>(new Map());
@@ -97,9 +98,26 @@ function useAiRecap(
 
     setState({ key, topics: null, loading: true, error: false });
 
+    // Playoff games are written into the schedule with week=99 (their week
+    // field is reused for sim plumbing), so we can't match them by week. The
+    // weeklyRecap for a playoff round is keyed at week=100+round, and the
+    // games belonging to that round are exactly the matchups in playoffBracket
+    // with that round number. Match by matchup id instead.
+    const playoffRound = weekNum - 100;
+    const playoffGameIdsForRound = playoffBracket
+      ? new Set(playoffBracket.filter(m => m.round === playoffRound).map(m => m.id))
+      : null;
+
     // Only send the user's team game to minimize API token usage
     const weekGames = schedule
-      .filter(g => g.played && g.week === weekNum && (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId))
+      .filter(g => {
+        if (!g.played) return false;
+        if (g.homeTeamId !== userTeamId && g.awayTeamId !== userTeamId) return false;
+        if (playoffGameIdsForRound) {
+          return playoffGameIdsForRound.has(g.id);
+        }
+        return g.week === weekNum;
+      })
       .map(g => {
         const home = teams.find(t => t.id === g.homeTeamId);
         const away = teams.find(t => t.id === g.awayTeamId);
@@ -230,6 +248,7 @@ export default function RecapPage() {
     schedule,
     players,
     userTeamId,
+    playoffBracket,
   );
 
   // Use AI topics if available, otherwise fall back to template

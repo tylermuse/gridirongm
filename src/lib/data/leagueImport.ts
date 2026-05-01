@@ -221,7 +221,14 @@ function mapContract(
       totalYears: 4,
     };
   }
-  return { salary, yearsLeft, guaranteed: generateGuaranteed(salary, yearsLeft), totalYears: yearsLeft };
+  // Tyler 4/30: imported final-year-of-deal players had a synthesized
+  // `guaranteed` value that turned cuts into surprise dead-cap hits. The
+  // source FBGM file doesn't carry actual guaranteed money, so synthesizing
+  // it as ~40% of salary was making fictitious obligations. For yearsLeft=1
+  // there's no "future" year to anchor a guarantee against — keep it at 0
+  // so a final-year veteran can be released without penalty.
+  const guaranteed = yearsLeft === 1 ? 0 : generateGuaranteed(salary, yearsLeft);
+  return { salary, yearsLeft, guaranteed, totalYears: yearsLeft };
 }
 
 export interface ImportedLeagueData {
@@ -299,18 +306,22 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
 
     // Snapshot ghost-FA guard: roster files generated mid-offseason
     // sometimes serialize unsigned veterans (Jadeveon Clowney case from
-    // tofftanaut, 4/27) on their previous team's roster. Two flavors:
+    // tofftanaut, 4/27, recurred 5/1 with Tyler/Cowboys) on their previous
+    // team's roster. Two flavors:
     //   1. Already-expired contracts (raw exp < season). These are Greg
     //      Gaines / Brandon Parker types — clearly off the books.
-    //   2. Final-year-of-deal players sitting on a placeholder near-min
-    //      salary. FBGM serializes unsigned UFAs this way — they show on
-    //      their last team's roster with a $0.5-$1M placeholder so the
-    //      file reflects a snapshot. Tyler 4/28: "all players that were
-    //      in the re-signing phase for 2026" should be moved to FA.
-    // Real veterans on legit 1-year deals (Bobby Wagner $9M, Hopkins $5M)
-    // have amount > 1000 and stay on their team. Current-season rookies
-    // are excluded — their rookie-deal contracts get fixed up in
-    // mapContract's separate guard.
+    //   2. Final-year-of-deal players sitting on a placeholder veteran-
+    //      depth salary. FBGM serializes unsigned UFAs this way — they show
+    //      on their last team's roster with a $0.5-$4M placeholder so the
+    //      file reflects a snapshot. Tyler 4/28 + 5/1: "the re-signing
+    //      phase has already passed" for the Post-Draft variant, so
+    //      lingering placeholders should land in FA instead of forcing
+    //      the user to cut + eat dead cap.
+    // Threshold raised from $1M → $4M (5/1) — Clowney specifically came
+    // through at $3.5M and slipped past the original cutoff. Real
+    // bell-cow veterans (Bobby Wagner $9M, Hopkins $5M+) clear $4M and
+    // stay on their team. Current-season rookies are excluded —
+    // their rookie-deal contracts get fixed up in mapContract.
     const rawExp = player.contract?.exp;
     const rawAmount = player.contract?.amount ?? 0;
     const draftedThisSeason = player.draft?.year === season;
@@ -319,7 +330,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       rawExp != null &&
       rawExp === season &&
       rawAmount > 0 &&
-      rawAmount <= 1000 &&
+      rawAmount <= 4000 &&
       !draftedThisSeason;
 
     // Cross-team ghost-tid guard. Earlier version (ddb20ca) over-routed

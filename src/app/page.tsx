@@ -925,29 +925,6 @@ function Dashboard() {
         {/* Free-tier ad slot. Hidden for Premium / Founder / Admin users. */}
         <AdSlot size="leaderboard" slotId="home-top" />
 
-        {/* Coaches with expiring contracts — surfaces a single-click path
-            to the re-signings page so the user doesn't accidentally lose
-            their DC because the deadline snuck up (atxym + tofftanaut 4/28).
-            Hidden in spectator mode (no user-team coaches to manage). */}
-        {!isSpectator && (() => {
-          const expiringCoaches = (userTeam.coaches ?? []).filter(c => (c.contractYears ?? 0) <= 1);
-          if (expiringCoaches.length === 0) return null;
-          return (
-            <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex items-center justify-between gap-3">
-              <div className="text-sm">
-                <span className="font-bold text-amber-800">⏳ {expiringCoaches.length} coaching contract{expiringCoaches.length === 1 ? '' : 's'} expiring</span>
-                <span className="text-xs text-amber-700/80 ml-2">
-                  {expiringCoaches.slice(0, 3).map(c => `${c.firstName.charAt(0)}. ${c.lastName} (${c.role})`).join(' · ')}
-                  {expiringCoaches.length > 3 ? ` +${expiringCoaches.length - 3}` : ''}
-                </span>
-              </div>
-              <Link href="/re-sign" className="text-xs font-bold text-amber-700 hover:text-amber-900 whitespace-nowrap">
-                Manage →
-              </Link>
-            </div>
-          );
-        })()}
-
         {/* Approval & Objectives — hidden in spectator mode (no user team to evaluate) */}
         {!isSpectator && userTeam.approval && (
           <Card>

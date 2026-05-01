@@ -105,8 +105,8 @@ export function SpotlightPopup() {
     if (isRegularSeasonSim || isPlayoffUpdate || isPhaseTransition) {
       sessionStorage.setItem(STORAGE_KEY, currentKey);
 
-      // If AI commentary is on, generate it for SPECIAL narrative moments only.
-      // Weekly recaps use the template engine to save ~90% of API costs.
+      // If AI commentary is on, kick off generation for special narrative
+      // moments only. Weekly recaps use the template engine.
       if (leagueSettings?.aiCommentary && userTeam) {
         const tradeDeadlineWeek = leagueSettings.tradeDeadlineWeek ?? 12;
         const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id, playoffSeeds);
@@ -114,9 +114,14 @@ export function SpotlightPopup() {
         // Weekly with AI on: no popup (no content to show on dashboard)
         if (narrative === 'weekly') return;
 
-        // Special moments: fetch AI, then show popup when ready
+        // Fire the fetch in the background — the dashboard subscribes to the
+        // shared cache and renders topics as they stream in. Don't await
+        // the first-topic gate before showing the popup; first-topic latency
+        // is 15-30s for verbose multi-exchange topics, which makes the
+        // popup feel broken. Showing the invite immediately is fine — by
+        // the time the user taps through and the dashboard mounts, the
+        // first topic is usually already cached.
         const roster = players.filter(p => p.teamId === userTeam.id);
-
         fetchAiSpotlight({
           team: userTeam,
           roster,
@@ -129,14 +134,11 @@ export function SpotlightPopup() {
           playoffSeeds,
           champions,
           tradeDeadlineWeek,
-        }).then(() => {
-          setShouldShow(true);
-          setDismissed(false);
-        });
-      } else {
-        setShouldShow(true);
-        setDismissed(false);
+        }).catch(() => { /* errors handled via cache.error subscribers */ });
       }
+
+      setShouldShow(true);
+      setDismissed(false);
     }
   }, [currentKey, userTeamId, gamesPlayed, phase, playoffGamesPlayed]);
 

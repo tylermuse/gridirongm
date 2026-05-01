@@ -46,6 +46,124 @@ async function setCache(key: string, topics: unknown[]): Promise<void> {
   }
 }
 
+// ── Streaming helpers ──────────────────────────────────────────────────────
+type StreamEvent =
+  | { type: 'topic'; data: unknown }
+  | { type: 'done' }
+  | { type: 'error'; message: string; details?: { gemini?: string; openai?: string; fallback?: string } };
+
+function ndjsonStreamResponse(
+  producer: (emit: (event: StreamEvent) => void) => Promise<void>,
+): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let closed = false;
+      const emit = (event: StreamEvent) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
+        } catch {
+          // controller already closed
+        }
+      };
+      try {
+        await producer(emit);
+      } catch (err) {
+        emit({ type: 'error', message: err instanceof Error ? err.message : 'Unknown error' });
+      } finally {
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          // already closed
+        }
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no',
+    },
+  });
+}
+
+/**
+ * Streaming JSON parser that emits each top-level object as it completes.
+ * Tolerant of both bare arrays ([{...},{...}]) and wrapper objects
+ * ({"topics":[{...},{...}]}). Tracks string state so braces inside string
+ * values don't confuse the depth counter.
+ */
+class TopicStreamParser {
+  private inArray = false;
+  private depth = 0;
+  private inString = false;
+  private escape = false;
+  private cur = '';
+
+  *feed(text: string): Generator<unknown> {
+    for (let i = 0; i < text.length; i++) {
+      const out = this.processChar(text[i]);
+      if (out !== undefined) yield out;
+    }
+  }
+
+  private processChar(c: string): unknown | undefined {
+    if (this.escape) {
+      this.escape = false;
+      if (this.depth > 0) this.cur += c;
+      return undefined;
+    }
+    if (this.inString) {
+      if (this.depth > 0) this.cur += c;
+      if (c === '\\') this.escape = true;
+      else if (c === '"') this.inString = false;
+      return undefined;
+    }
+    if (!this.inArray) {
+      // Skip past wrapper-object key strings until the array opens.
+      if (c === '"') this.inString = true;
+      else if (c === '[') this.inArray = true;
+      return undefined;
+    }
+    if (this.depth === 0) {
+      if (c === '"') this.inString = true;
+      else if (c === '{') {
+        this.depth = 1;
+        this.cur = '{';
+      }
+      // Otherwise ignore (whitespace, commas, ])
+      return undefined;
+    }
+    // Inside an object: every char is part of cur.
+    this.cur += c;
+    if (c === '"') {
+      this.inString = true;
+    } else if (c === '{') {
+      this.depth++;
+    } else if (c === '}') {
+      this.depth--;
+      if (this.depth === 0) {
+        const obj = this.cur;
+        this.cur = '';
+        try {
+          return JSON.parse(obj);
+        } catch (e) {
+          console.warn(
+            'Spotlight stream: failed to parse topic object:',
+            obj.slice(0, 200),
+            e instanceof Error ? e.message : e,
+          );
+          return undefined;
+        }
+      }
+    }
+    return undefined;
+  }
+}
+
 type NarrativeMoment = 'preseason' | 'tradeDeadline' | 'playoffsStart' | 'seasonOver' | 'weekly';
 
 function buildNarrativePrompt(narrative: NarrativeMoment): string {
@@ -74,22 +192,24 @@ Reference how existing players were acquired where relevant, e.g. "The trade for
 Generate 4-5 topics.`;
 
     case 'playoffsStart':
-      return `This is the END OF REGULAR SEASON episode. Check the "madePlayoffs" field in the data.
+      return `Check the "playoffStage" and "nextPlayoffOpponent" fields FIRST — they tell you exactly where in the playoffs the team is.
 
-IF madePlayoffs is TRUE:
-- This is a PLAYOFFS PREVIEW. They're in! Discuss their seed and what it means.
-- Break down the first-round matchup: their strengths vs the opponent's weaknesses and vice versa
-- Which players need to step up in the postseason? Reference their stats.
-- X-factor: one player or unit that will determine how far they go
-- Bold prediction: how deep do they go?
+IF playoffStage.winsSoFar >= 1 (the team JUST WON A PLAYOFF GAME):
+- This is a POST-WIN, NEXT-ROUND PREVIEW. Lead with celebrating the win they just got (playoffStage.roundJustWon).
+- Pivot to the next matchup: use nextPlayoffOpponent.name, .record, .star. Their strengths vs the opponent's weaknesses.
+- Do NOT pretend it's still the wild-card preview. They've moved on.
+- Which players from this team rose to the moment? Who needs to keep producing?
+- Bold prediction: do they win the next round?
+
+IF playoffStage.winsSoFar === 0 AND madePlayoffs is TRUE:
+- This is a PLAYOFFS PREVIEW. They're in for the wild-card round. Discuss their seed.
+- Break down firstRoundOpponent: their strengths vs the opponent's weaknesses.
+- Which players need to step up? X-factor. Bold prediction on how deep they go.
 
 IF madePlayoffs is FALSE or null:
-- They MISSED THE PLAYOFFS. This is a season autopsy, NOT a playoff preview.
+- They MISSED THE PLAYOFFS. Season autopsy, NOT a playoff preview.
 - Do NOT mention playoff matchups, seeds, or "round one" — they're not in it.
-- What went wrong? Was it the QB? The defense? Injuries? Be specific with stats.
-- Was this a rebuilding year or a disappointment? Grade the season.
-- What are the biggest offseason priorities? QB upgrade? Draft focus? Cap moves?
-- Is the coaching staff on the hot seat?
+- What went wrong? Specific with stats. Rebuilding year or disappointment? Offseason priorities? Coaching staff hot seat?
 
 Generate 4-5 topics.`;
 
@@ -114,28 +234,8 @@ Generate 4-6 topics.`;
   }
 }
 
-export async function POST(request: Request) {
-  try {
-    if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
-      return NextResponse.json({ error: 'No AI API key configured (need GEMINI_API_KEY or OPENAI_API_KEY)' }, { status: 500 });
-    }
-
-    const { teamData, narrative = 'weekly' } = await request.json();
-    if (!teamData) {
-      return NextResponse.json({ error: 'teamData required' }, { status: 400 });
-    }
-
-    // Check persistent cache (Supabase → in-memory fallback)
-    const key = cacheKey({ teamData, narrative });
-    const cached = await getCache(key);
-    if (cached) {
-      return NextResponse.json({ topics: cached });
-    }
-
-    const narrativePrompt = buildNarrativePrompt(narrative as NarrativeMoment);
-
-    // System prompt is static → use prompt caching to reduce input token costs ~90%
-    const systemPrompt = `You write the dialogue for a football GM simulation game's "Team Spotlight" — a debate show with commentators AND fan reactions.
+// Shared between streaming and non-streaming paths so prompt content stays in lockstep.
+const SPOTLIGHT_SYSTEM_PROMPT = `You write the dialogue for a football GM simulation game's "Team Spotlight" — a debate show with commentators AND fan reactions.
 
 THE VOICES:
 - **Marcus Cole** (speakerId: "stats") — Analytics guy. Nate Silver meets Tony Romo. Dry wit, historical parallels, uses real stats.
@@ -151,6 +251,7 @@ THE VOICES:
 
 KEY RULES:
 - Marcus and Tony are NEUTRAL COMMENTATORS — they ALWAYS refer to the team as "they/them/the [team name]", NEVER as "we/us/our". Only player posts use "we" (because players ARE on the team).
+- Marcus and Tony NEVER use hashtags (#GoTeam, #NextLevel) or player-style hype emojis (💯, 🔥, 💪, 🦅 etc). Those are PLAYER signals — if a line ends in a hashtag or hype emoji it MUST be speakerId "player", not "stats" or "hottake". Tony's emphasis is CAPS in regular sentences, not hashtags.
 - Marcus and Tony RESPOND to each other.
 - Add 1 fan reaction AND 1 player post per topic (not every topic needs both — alternate or mix).
 - At minimum, include 2 fan reactions and 2 player posts across all topics.
@@ -160,6 +261,7 @@ KEY RULES:
 - Each player has a "howAcquired" field. Only mention acquisition for trades/recent FA signings.
 - Vary openings. Each topic: 3-4 exchanges from Marcus/Tony + fan/player reactions.
 - Keep it entertaining but grounded in actual data.
+- **TOPIC #1 IS A FAST OPENER** — exactly 2 short exchanges (1 from Marcus, 1 from Tony), each 1 sentence. The headline should be a punchy hook. This topic ships quickly so the user sees content immediately; later topics carry the depth and the back-and-forth.
 
 Respond with a JSON array. Each element:
 {
@@ -170,87 +272,251 @@ Respond with a JSON array. Each element:
 
 Return ONLY the JSON array, no markdown fences, no other text.`;
 
-    // Try Gemini first (cheapest), then GPT-4o-mini (cheap + reliable), then give up (client uses templates)
-    const userContent = `NARRATIVE CONTEXT:\n${narrativePrompt}\n\nTEAM DATA:\n${JSON.stringify(teamData)}`;
-    let raw = '';
-
-    // 1) Gemini 2.5 Flash
-    if (!raw && process.env.GEMINI_API_KEY) {
-      try {
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        const result = await model.generateContent({
-          systemInstruction: systemPrompt,
-          contents: [{ role: 'user', parts: [{ text: userContent }] }],
-          generationConfig: { maxOutputTokens: 3000, responseMimeType: 'application/json' },
-        });
-        raw = result.response.text();
-      } catch (geminiErr) {
-        console.warn('Spotlight: Gemini failed, trying GPT-4o-mini:', geminiErr instanceof Error ? geminiErr.message : geminiErr);
-      }
-    }
-
-    // 2) GPT-4o-mini fallback (very cheap + very reliable)
-    if (!raw && process.env.OPENAI_API_KEY) {
-      try {
-        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-        const completion = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
-          max_tokens: 3000,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: systemPrompt + `\n\nIMPORTANT: Wrap your JSON array in an object like {"topics": [...]}
+// Suffix appended only when calling GPT-4o-mini, which gets a json_object response_format.
+const GPT_FALLBACK_SUFFIX = `\n\nIMPORTANT: Wrap your JSON array in an object like {"topics": [...]}
 
 DETAIL & LENGTH REQUIREMENTS:
-- Each exchange "text" field MUST be 2-4 sentences long, not just one sentence.
+- TOPIC #1 IS THE FAST OPENER — exactly 2 short exchanges (Marcus 1 sentence, Tony 1 sentence). Skip the depth requirement here so it streams quickly.
+- Topics #2 onward: each exchange "text" field MUST be 2-4 sentences long, not just one sentence.
 - Marcus should cite specific stats from the data and draw comparisons or historical parallels.
 - Tony should be dramatic, use CAPS for emphasis, and paint vivid word pictures.
 - Fan reactions should feel raw and emotional — use slang, exclamation marks, ALL CAPS.
 - Player posts should feel like real social media — emojis, hashtags, attitude.
-- Each topic MUST have at least 4 exchanges showing real back-and-forth (Marcus says something → Tony reacts/disagrees → Marcus counters → fan or player chimes in).
-- DO NOT be brief. The user is reading this for entertainment — make it feel like a real debate show with personality and conflict.` },
-            { role: 'user', content: userContent },
-          ],
-        });
-        const content = completion.choices[0]?.message?.content;
-        if (content) {
-          // GPT-4o-mini with json_object mode returns an object, extract the array
-          const parsed = JSON.parse(content);
-          if (Array.isArray(parsed)) {
-            raw = JSON.stringify(parsed);
-          } else if (parsed.topics && Array.isArray(parsed.topics)) {
-            raw = JSON.stringify(parsed.topics);
-          } else {
-            raw = content;
-          }
+- Topics #2 onward MUST have at least 4 exchanges showing real back-and-forth (Marcus says something → Tony reacts/disagrees → Marcus counters → fan or player chimes in).
+- For topics #2 onward DO NOT be brief — make it feel like a real debate show with personality and conflict.`;
+
+interface NonStreamingResult {
+  topics: unknown[] | null;
+  errors: { gemini?: string; openai?: string };
+}
+
+/**
+ * Non-streaming topic generation. Used directly by the legacy code path AND
+ * as a fallback inside the streaming path when streaming returns nothing —
+ * because some hosting environments / SDK versions don't deliver streamed
+ * chunks reliably even when the same providers work fine for buffered calls.
+ */
+async function generateTopicsNonStreaming(
+  systemPrompt: string,
+  userContent: string,
+): Promise<NonStreamingResult> {
+  const errors: NonStreamingResult['errors'] = {};
+  let raw = '';
+
+  // 1) Gemini 2.5 Flash
+  if (!raw && process.env.GEMINI_API_KEY) {
+    try {
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      const result = await model.generateContent({
+        systemInstruction: systemPrompt,
+        contents: [{ role: 'user', parts: [{ text: userContent }] }],
+        generationConfig: { maxOutputTokens: 3000, responseMimeType: 'application/json' },
+      });
+      raw = result.response.text();
+    } catch (geminiErr) {
+      const msg = geminiErr instanceof Error ? geminiErr.message : String(geminiErr);
+      errors.gemini = msg;
+      console.warn('Spotlight: Gemini failed, trying GPT-4o-mini:', msg);
+    }
+  }
+
+  // 2) GPT-4o-mini fallback (very cheap + very reliable)
+  if (!raw && process.env.OPENAI_API_KEY) {
+    try {
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        max_tokens: 3000,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt + GPT_FALLBACK_SUFFIX },
+          { role: 'user', content: userContent },
+        ],
+      });
+      const content = completion.choices[0]?.message?.content;
+      if (content) {
+        // GPT-4o-mini with json_object mode returns an object, extract the array
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) {
+          raw = JSON.stringify(parsed);
+        } else if (parsed.topics && Array.isArray(parsed.topics)) {
+          raw = JSON.stringify(parsed.topics);
+        } else {
+          raw = content;
         }
-      } catch (openaiErr) {
-        console.warn('Spotlight: GPT-4o-mini also failed:', openaiErr instanceof Error ? openaiErr.message : openaiErr);
       }
+    } catch (openaiErr) {
+      const msg = openaiErr instanceof Error ? openaiErr.message : String(openaiErr);
+      errors.openai = msg;
+      console.warn('Spotlight: GPT-4o-mini also failed:', msg);
+    }
+  }
+
+  if (!raw) return { topics: null, errors };
+
+  const start = raw.indexOf('[');
+  const end = raw.lastIndexOf(']');
+  if (start === -1 || end === -1) {
+    console.error('Spotlight: no JSON array found in response:', raw.slice(0, 200));
+    return { topics: null, errors };
+  }
+  try {
+    return { topics: JSON.parse(raw.slice(start, end + 1)) as unknown[], errors };
+  } catch {
+    // JSON was malformed — try to fix common issues (unescaped newlines in strings)
+    try {
+      const cleaned = raw.slice(start, end + 1)
+        .replace(/[\x00-\x1f]/g, (c) => c === '\n' ? '\\n' : c === '\r' ? '\\r' : c === '\t' ? '\\t' : '');
+      return { topics: JSON.parse(cleaned) as unknown[], errors };
+    } catch (parseErr2) {
+      console.error('Spotlight JSON parse failed. Raw (first 500):', raw.slice(0, 500), parseErr2 instanceof Error ? parseErr2.message : parseErr2);
+      return { topics: null, errors };
+    }
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
+      return NextResponse.json({ error: 'No AI API key configured (need GEMINI_API_KEY or OPENAI_API_KEY)' }, { status: 500 });
     }
 
-    if (!raw) {
-      return NextResponse.json({ error: 'All AI providers unavailable — client will use templates' }, { status: 503 });
+    const url = new URL(request.url);
+    const wantStream = url.searchParams.get('stream') === '1';
+    const { teamData, narrative = 'weekly' } = await request.json();
+    if (!teamData) {
+      return NextResponse.json({ error: 'teamData required' }, { status: 400 });
     }
-    const start = raw.indexOf('[');
-    const end = raw.lastIndexOf(']');
-    if (start === -1 || end === -1) {
-      console.error('Spotlight API: no JSON array found in response:', raw.slice(0, 200));
-      return NextResponse.json({ error: 'Invalid response format' }, { status: 500 });
-    }
-    let topics;
-    try {
-      topics = JSON.parse(raw.slice(start, end + 1));
-    } catch {
-      // JSON was malformed — try to fix common issues (unescaped newlines in strings)
-      try {
-        const cleaned = raw.slice(start, end + 1)
-          .replace(/[\x00-\x1f]/g, (c) => c === '\n' ? '\\n' : c === '\r' ? '\\r' : c === '\t' ? '\\t' : '');
-        topics = JSON.parse(cleaned);
-      } catch (parseErr2) {
-        console.error('Spotlight API JSON parse failed. Raw (first 500):', raw.slice(0, 500));
-        return NextResponse.json({ error: 'JSON parse error' }, { status: 500 });
+
+    // Check persistent cache (Supabase → in-memory fallback)
+    const key = cacheKey({ teamData, narrative });
+    const cached = await getCache(key);
+    if (cached) {
+      if (wantStream) {
+        return ndjsonStreamResponse(async (emit) => {
+          for (const topic of cached) emit({ type: 'topic', data: topic });
+          emit({ type: 'done' });
+        });
       }
+      return NextResponse.json({ topics: cached });
+    }
+
+    const narrativePrompt = buildNarrativePrompt(narrative as NarrativeMoment);
+    const systemPrompt = SPOTLIGHT_SYSTEM_PROMPT;
+    const userContent = `NARRATIVE CONTEXT:\n${narrativePrompt}\n\nTEAM DATA:\n${JSON.stringify(teamData)}`;
+
+    if (wantStream) {
+      return ndjsonStreamResponse(async (emit) => {
+        const collected: unknown[] = [];
+        const streamErrors: { gemini?: string; openai?: string } = {};
+
+        // 1) Gemini 2.5 Flash streaming
+        if (process.env.GEMINI_API_KEY) {
+          try {
+            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+            const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+            const result = await model.generateContentStream({
+              systemInstruction: systemPrompt,
+              contents: [{ role: 'user', parts: [{ text: userContent }] }],
+              generationConfig: { maxOutputTokens: 3000, responseMimeType: 'application/json' },
+            });
+            const parser = new TopicStreamParser();
+            for await (const chunk of result.stream) {
+              const text = chunk.text();
+              if (!text) continue;
+              for (const topic of parser.feed(text)) {
+                collected.push(topic);
+                emit({ type: 'topic', data: topic });
+              }
+            }
+          } catch (geminiErr) {
+            const msg = geminiErr instanceof Error ? geminiErr.message : String(geminiErr);
+            streamErrors.gemini = msg;
+            console.warn('Spotlight stream: Gemini failed, trying GPT-4o-mini:', msg);
+          }
+        }
+
+        // 2) GPT-4o-mini streaming fallback (only if Gemini emitted nothing)
+        if (collected.length === 0 && process.env.OPENAI_API_KEY) {
+          try {
+            const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+            const stream = await openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              max_tokens: 3000,
+              stream: true,
+              response_format: { type: 'json_object' },
+              messages: [
+                { role: 'system', content: systemPrompt + GPT_FALLBACK_SUFFIX },
+                { role: 'user', content: userContent },
+              ],
+            });
+            const parser = new TopicStreamParser();
+            for await (const chunk of stream) {
+              const text = chunk.choices[0]?.delta?.content ?? '';
+              if (!text) continue;
+              for (const topic of parser.feed(text)) {
+                collected.push(topic);
+                emit({ type: 'topic', data: topic });
+              }
+            }
+          } catch (openaiErr) {
+            const msg = openaiErr instanceof Error ? openaiErr.message : String(openaiErr);
+            streamErrors.openai = msg;
+            console.warn('Spotlight stream: GPT-4o-mini also failed:', msg);
+          }
+        }
+
+        // 3) Non-streaming fallback. Some environments (Vercel/Turbopack edge
+        // cases, SDK quirks) refuse to deliver streamed chunks even when the
+        // same providers work fine for buffered calls. If we got zero topics
+        // from streaming, run the non-streaming path and emit the whole batch
+        // at once. The user loses the progressive-render UX but gets working
+        // AI commentary instead of falling back to templates.
+        let usedFallback = false;
+        let fallbackErr: string | undefined;
+        if (collected.length === 0) {
+          console.warn('Spotlight stream: zero topics from streaming, falling back to non-streaming');
+          const fb = await generateTopicsNonStreaming(systemPrompt, userContent);
+          if (fb.topics && fb.topics.length > 0) {
+            usedFallback = true;
+            for (const topic of fb.topics) {
+              collected.push(topic);
+              emit({ type: 'topic', data: topic });
+            }
+          } else {
+            fallbackErr = `non-streaming also empty (gemini: ${fb.errors.gemini ?? 'ok'}, openai: ${fb.errors.openai ?? 'ok'})`;
+          }
+        }
+
+        if (collected.length === 0) {
+          emit({
+            type: 'error',
+            message: 'All AI providers unavailable — client will use templates',
+            details: { gemini: streamErrors.gemini, openai: streamErrors.openai, fallback: fallbackErr },
+          });
+          return;
+        }
+        emit({ type: 'done' });
+        // Cache the full result so subsequent (streaming or not) calls return instantly.
+        try {
+          await setCache(key, collected);
+        } catch (cacheErr) {
+          console.warn('Spotlight stream: cache write failed:', cacheErr instanceof Error ? cacheErr.message : cacheErr);
+        }
+        if (usedFallback) {
+          console.warn('Spotlight stream: served from non-streaming fallback', { streamErrors });
+        }
+      });
+    }
+
+    // ── Non-streaming path (preserved as fallback for callers that don't request stream) ──
+    const { topics, errors } = await generateTopicsNonStreaming(systemPrompt, userContent);
+    if (!topics || topics.length === 0) {
+      return NextResponse.json(
+        { error: 'All AI providers unavailable — client will use templates', details: errors },
+        { status: 503 },
+      );
     }
 
     // Cache the result persistently

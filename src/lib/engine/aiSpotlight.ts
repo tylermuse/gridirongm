@@ -146,7 +146,21 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
   // Allow preseason (gp=0) and seasonOver
   if (gp === 0 && narrative !== 'preseason' && narrative !== 'seasonOver') return Promise.resolve();
 
-  const key = buildCacheKey(team.id, season, week, team.record.wins, team.record.losses, `${phase}-${narrative}`);
+  // During playoffs, both `narrative` (playoffsStart) and `week` (frozen at
+  // 18) are static across rounds, so without a round-aware suffix the cache
+  // would serve the wild-card preview after a divisional win. Tag the key
+  // with the user's completed playoff games so each round refetches.
+  let cacheNarrative: string = narrative;
+  let userPlayoffWins = 0;
+  let userPlayoffLosses = 0;
+  if (phase === 'playoffs' && opts.playoffBracket) {
+    const userGames = opts.playoffBracket.filter(m => m.winnerId && (m.homeTeamId === team.id || m.awayTeamId === team.id));
+    userPlayoffWins = userGames.filter(m => m.winnerId === team.id).length;
+    userPlayoffLosses = userGames.filter(m => m.winnerId && m.winnerId !== team.id).length;
+    cacheNarrative = `${narrative}-pw${userPlayoffWins}-pl${userPlayoffLosses}`;
+  }
+
+  const key = buildCacheKey(team.id, season, week, team.record.wins, team.record.losses, `${phase}-${cacheNarrative}`);
   if (key === cache.key && (cache.topics || cache.loading)) return cache.promise ?? Promise.resolve();
 
   cache.key = key;
@@ -357,6 +371,39 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
         }
       }
     }
+
+    // Playoff stage tag — keeps the spotlight content aligned with where the
+    // user actually is in the bracket. Without this the AI re-uses the
+    // pre-playoffs preview after every win.
+    if (opts.playoffBracket) {
+      const ROUND_LABELS = ['', 'Wild Card', 'Divisional', 'Conference Championship', 'Championship'];
+      const currentRoundIndex = userPlayoffWins + 1;
+      const stageLabel = ROUND_LABELS[Math.min(currentRoundIndex, 4)] ?? 'Playoffs';
+      teamData.playoffStage = {
+        roundJustWon: ROUND_LABELS[userPlayoffWins] || null,
+        nextRound: stageLabel,
+        winsSoFar: userPlayoffWins,
+      };
+
+      // Surface the upcoming opponent so the AI talks about THIS matchup,
+      // not the wild-card opener anymore.
+      const nextGame = opts.playoffBracket.find(m =>
+        !m.winnerId && (m.homeTeamId === team.id || m.awayTeamId === team.id));
+      if (nextGame) {
+        const oppId = nextGame.homeTeamId === team.id ? nextGame.awayTeamId : nextGame.homeTeamId;
+        const opp = oppId ? allTeams.find(t => t.id === oppId) : null;
+        if (opp) {
+          const oppRoster = allPlayers.filter(p => p.teamId === opp.id && !p.retired);
+          const oppStar = [...oppRoster].sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+          teamData.nextPlayoffOpponent = {
+            round: ROUND_LABELS[nextGame.round] ?? `Round ${nextGame.round}`,
+            name: `${opp.city} ${opp.name}`,
+            record: `${opp.record.wins}-${opp.record.losses}`,
+            star: oppStar ? `${oppStar.firstName} ${oppStar.lastName} (${oppStar.position}, ${oppStar.ratings.overall} OVR)` : null,
+          };
+        }
+      }
+    }
   }
 
   if (narrative === 'seasonOver') {
@@ -405,52 +452,175 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
     teamData.tradesThisSeason = seasonTrades;
   }
 
-  const p = fetch('/api/spotlight', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ teamData, narrative }),
-  })
-    .then(res => res.ok ? res.json() : Promise.reject(new Error('API error')))
-    .then(data => {
-      if (cache.key !== key) return;
-      // Build a pool of fallback player names from the user roster.
-      // The AI sometimes forgets to set playerName on player exchanges — we
-      // backfill with a real player from the team so the UI never shows "Player".
-      const rosterPool = roster
-        .filter(p => !p.retired && p.ratings.overall >= 65)
-        .map(p => `${p.firstName} ${p.lastName}`);
-      let fallbackIdx = 0;
-      function pickFallbackName(): string {
-        if (rosterPool.length === 0) return 'Team Captain';
-        const name = rosterPool[fallbackIdx % rosterPool.length];
-        fallbackIdx++;
-        return name;
+  // Build a pool of fallback player names from the user roster.
+  // The AI sometimes forgets to set playerName on player exchanges — we
+  // backfill with a real player from the team so the UI never shows "Player".
+  const rosterPool = roster
+    .filter(p => !p.retired && p.ratings.overall >= 65)
+    .map(p => `${p.firstName} ${p.lastName}`);
+  let fallbackIdx = 0;
+  function pickFallbackName(): string {
+    if (rosterPool.length === 0) return 'Team Captain';
+    const name = rosterPool[fallbackIdx % rosterPool.length];
+    fallbackIdx++;
+    return name;
+  }
+
+  type RawTopic = {
+    headline: string;
+    icon: string;
+    exchanges: { speakerId: 'stats' | 'hottake' | 'fans' | 'player'; text: string; playerName?: string }[];
+  };
+
+  // Player-voice signals. The AI occasionally returns a hashtag-laden,
+  // emoji-heavy social post tagged as Marcus/Tony — Tyler caught one
+  // attributed to Marcus saying "Gonna rise and grind this offseason!
+  // #RedBirds #NextLevel". Hashtags + hype emojis are PLAYER signals,
+  // not commentator voice. Reroute mis-tagged exchanges before render
+  // so the misclassification can't slip through even if the prompt drifts.
+  const HASHTAG_RE = /#[A-Za-z][A-Za-z0-9]+/;
+  const HYPE_EMOJI_RE = /[💯🔥💪🙏👀😤😈🦅🐻🦁🦌🐯🐅⚡️]/u;
+  function looksLikePlayerVoice(text: string): boolean {
+    return HASHTAG_RE.test(text) || HYPE_EMOJI_RE.test(text);
+  }
+
+  function adaptTopic(t: RawTopic): AiSpotlightTopic {
+    return {
+      headline: t.headline,
+      icon: t.icon,
+      exchanges: t.exchanges.map(e => {
+        // Reroute commentator exchanges that read like player social posts.
+        if ((e.speakerId === 'stats' || e.speakerId === 'hottake') && looksLikePlayerVoice(e.text)) {
+          return {
+            ...e,
+            speakerId: 'player' as const,
+            playerName: e.playerName && e.playerName.trim() !== '' && e.playerName !== 'Player'
+              ? e.playerName
+              : pickFallbackName(),
+          };
+        }
+        if (e.speakerId === 'player' && (!e.playerName || e.playerName === 'Player' || e.playerName.trim() === '')) {
+          return { ...e, playerName: pickFallbackName() };
+        }
+        return { ...e, playerName: e.playerName };
+      }),
+      teamIds: [team.id],
+      playerIds: [] as string[],
+    };
+  }
+
+  // Streaming pipeline. Topics arrive one at a time via NDJSON; each one is
+  // pushed into cache.topics and broadcast to subscribers immediately. The
+  // promise we return resolves on the FIRST topic so SpotlightPopup's gate
+  // flips early — perceived load drops from "wait for full output" to
+  // "wait for one topic".
+  const accumulated: AiSpotlightTopic[] = [];
+  let firstSignal: (() => void) | null = null;
+  const firstSignalPromise = new Promise<void>((resolve) => {
+    firstSignal = resolve;
+  });
+  const triggerFirstSignal = () => {
+    if (firstSignal) {
+      firstSignal();
+      firstSignal = null;
+    }
+  };
+
+  const streamPromise = (async () => {
+    try {
+      const res = await fetch('/api/spotlight?stream=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamData, narrative }),
+      });
+      if (!res.ok || !res.body) {
+        throw new Error('API error');
       }
 
-      cache.topics = (data.topics as { headline: string; icon: string; exchanges: { speakerId: 'stats' | 'hottake' | 'fans' | 'player'; text: string; playerName?: string }[] }[]).map(t => ({
-        headline: t.headline,
-        icon: t.icon,
-        exchanges: t.exchanges.map(e => {
-          if (e.speakerId === 'player' && (!e.playerName || e.playerName === 'Player' || e.playerName.trim() === '')) {
-            return { ...e, playerName: pickFallbackName() };
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let sawError = false;
+
+      // Read the response as NDJSON. Each line is a {type, ...} event. We
+      // bail out if the cache key changed mid-stream — a newer fetch has
+      // taken over and any further updates would clobber it.
+      let streamDone = false;
+      while (!streamDone) {
+        const { value, done } = await reader.read();
+        if (done) {
+          streamDone = true;
+          break;
+        }
+        buf += decoder.decode(value, { stream: true });
+
+        let nl = buf.indexOf('\n');
+        while (nl !== -1) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          nl = buf.indexOf('\n');
+          if (!line) continue;
+
+          if (cache.key !== key) {
+            try { await reader.cancel(); } catch { /* ignore */ }
+            return;
           }
-          return { ...e, playerName: e.playerName };
-        }),
-        teamIds: [team.id],
-        playerIds: [] as string[],
-      }));
-      cache.loading = false;
-      cache.error = false;
-      notify();
-    })
-    .catch(() => {
+
+          let evt: { type?: string; data?: unknown; message?: string };
+          try {
+            evt = JSON.parse(line);
+          } catch {
+            continue;
+          }
+
+          if (evt.type === 'topic' && evt.data) {
+            const adapted = adaptTopic(evt.data as RawTopic);
+            accumulated.push(adapted);
+            cache.topics = [...accumulated];
+            cache.loading = accumulated.length === 0; // false now
+            notify();
+            triggerFirstSignal();
+          } else if (evt.type === 'error') {
+            sawError = true;
+            // Surface server-side failures to the browser console so they're
+            // diagnosable without Vercel log access.
+            console.warn(
+              '[AI Spotlight] stream error:',
+              (evt as { message?: string }).message,
+              (evt as { details?: unknown }).details,
+            );
+          }
+          // 'done' is implicit at stream end; nothing to do here.
+        }
+      }
+
+      if (cache.key !== key) return;
+
+      if (accumulated.length === 0) {
+        cache.loading = false;
+        cache.error = true;
+        cache.key = '';
+        notify();
+      } else {
+        cache.loading = false;
+        cache.error = sawError;
+        notify();
+      }
+    } catch {
       if (cache.key !== key) return;
       cache.loading = false;
       cache.error = true;
       cache.key = '';
       notify();
-    });
+    } finally {
+      // Belt-and-suspenders: if no topic ever arrived, still flip the popup
+      // gate so it doesn't hang. Home page templates will fill in the gap.
+      triggerFirstSignal();
+    }
+  })();
 
-  cache.promise = p;
-  return p;
+  // Settle on first topic or full completion — whichever lands first.
+  // Subscribers continue to get notified for later topics via notify().
+  cache.promise = Promise.race([firstSignalPromise, streamPromise]);
+  return cache.promise;
 }
