@@ -204,7 +204,15 @@ function mapContract(
   draft?: FbgmPlayer['draft'],
 ): { salary: number; yearsLeft: number; guaranteed: number; totalYears: number } {
   const salary = Math.max(0.5, Math.round(((contract?.amount ?? 500) / 1000) * 10) / 10);
-  const yearsLeft = Math.max(1, (contract?.exp ?? season) - season + 1);
+  // FBGM convention: `contract.exp` is the YEAR OF FREE AGENCY — the season
+  // the player becomes a UFA (i.e., the year AFTER their final paid season).
+  // So a 4-year rookie deal signed in 2024 has exp=2028 and the player plays
+  // 2024-2027. yearsLeft at season=2026 = 2 (they play 2026 and 2027). Tyler
+  // 5/1: previous +1 was incorrect — every contract was rendering one year
+  // longer than reality. Pickens with exp=2027 should be 1yr left (final
+  // year), not 2. Anyone with exp <= season is already a UFA going into
+  // the offseason and is routed to the FA pool by the caller.
+  const yearsLeft = Math.max(1, (contract?.exp ?? season + 1) - season);
 
   // Snapshot-bug guard: when a roster file is generated mid-offseason, the
   // freshly-drafted rookies sometimes serialize with the previous season's
@@ -304,34 +312,19 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
     const draftYear = player.draft?.year ?? null;
     const experience = draftYear ? Math.max(0, season - draftYear) : Math.max(0, age - 22);
 
-    // Snapshot ghost-FA guard: roster files generated mid-offseason
-    // sometimes serialize unsigned veterans (Jadeveon Clowney case from
-    // tofftanaut, 4/27, recurred 5/1 with Tyler/Cowboys) on their previous
-    // team's roster. Two flavors:
-    //   1. Already-expired contracts (raw exp < season). These are Greg
-    //      Gaines / Brandon Parker types — clearly off the books.
-    //   2. Final-year-of-deal players sitting on a placeholder veteran-
-    //      depth salary. FBGM serializes unsigned UFAs this way — they show
-    //      on their last team's roster with a $0.5-$4M placeholder so the
-    //      file reflects a snapshot. Tyler 4/28 + 5/1: "the re-signing
-    //      phase has already passed" for the Post-Draft variant, so
-    //      lingering placeholders should land in FA instead of forcing
-    //      the user to cut + eat dead cap.
-    // Threshold raised from $1M → $4M (5/1) — Clowney specifically came
-    // through at $3.5M and slipped past the original cutoff. Real
-    // bell-cow veterans (Bobby Wagner $9M, Hopkins $5M+) clear $4M and
-    // stay on their team. Current-season rookies are excluded —
-    // their rookie-deal contracts get fixed up in mapContract.
+    // FA-routing guard: any player whose contract's `exp` (year of free
+    // agency under FBGM convention) is at or before the import season
+    // already became a UFA in this offseason — they should NOT show up
+    // on a team's roster going into the regular season. Routes them to
+    // the FA pool instead of leaving them dangling on their last team.
+    // Tyler 5/1: previously the cutoff was `< season` plus a placeholder-
+    // amount carve-out at exp === season. Under the corrected exp
+    // convention the carve-out is unnecessary — exp <= season is always
+    // already-FA. Donovan Wilson (exp=2026, on Cowboys roster in the
+    // 2026 source file) lands in FA correctly under this rule.
     const rawExp = player.contract?.exp;
-    const rawAmount = player.contract?.amount ?? 0;
     const draftedThisSeason = player.draft?.year === season;
-    const isAlreadyExpired = rawExp != null && rawExp < season;
-    const isPlaceholderUfa =
-      rawExp != null &&
-      rawExp === season &&
-      rawAmount > 0 &&
-      rawAmount <= 4000 &&
-      !draftedThisSeason;
+    const isExpiredFA = rawExp != null && rawExp <= season && !draftedThisSeason;
 
     // Cross-team ghost-tid guard. Earlier version (ddb20ca) over-routed
     // because legitimate offseason FA signings have a current tid that
@@ -366,7 +359,6 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       break;
     }
 
-    const isExpiredFA = isAlreadyExpired || isPlaceholderUfa;
     const contract = isExpiredFA
       ? { salary: LEAGUE_MINIMUM_SALARY, yearsLeft: 0, guaranteed: 0, totalYears: 0 }
       : mapContract(player.contract, season, player.draft);
