@@ -1241,7 +1241,7 @@ function computeFARefusals(
   });
 }
 
-function computeResigningEntry(player: Player, team: Team): ResigningEntry {
+function computeResigningEntry(player: Player, team: Team, teamRoster?: Player[]): ResigningEntry {
   const ci = capInflationFactor(team.salaryCap);
   // Very unhappy players (mood < 20) refuse to re-sign entirely
   if (player.mood < 20) {
@@ -1261,6 +1261,33 @@ function computeResigningEntry(player: Player, team: Team): ResigningEntry {
   else if (player.mood < 40) mult *= 1.08;
   // Older players accept slight discounts but not massive ones
   if (player.age >= 32) mult *= 0.90;
+
+  // Depth-chart role + potential dampener for low-tier vets.
+  // Tyler-direct via Cowork chat 5/3: depth players at 56 OVR / Low POT were
+  // pricing at $3-7M/yr (well above the real NFL vet-min ~$1.2M). The salary
+  // curve in estimateSalary is OVR-anchored and doesn't see depth-chart role
+  // or remaining upside, so 56-OVR backups priced like 56-OVR starters.
+  // Two new factors:
+  //   - depthRank: 1 = top OVR at this position on the team, 2 = next, 3+ = depth.
+  //   - lowPotential: potential <= overall (no upside left, ceiling ~= snapshot).
+  // Both are multiplicative dampeners applied only to the 3rd+ string + low-OVR
+  // band so 1st-string starters and high-POT players are untouched.
+  if (teamRoster && player.ratings.overall <= 65) {
+    const sameSlot = teamRoster
+      .filter(p => p.position === player.position && !p.retired)
+      .sort((a, b) => b.ratings.overall - a.ratings.overall);
+    const depthRank = sameSlot.findIndex(p => p.id === player.id) + 1;
+    const potentialUpside = (player.potential ?? player.ratings.overall) - player.ratings.overall;
+    const lowPotential = potentialUpside <= 2;
+    if (depthRank >= 3 && lowPotential) {
+      mult *= 0.40; // capped depth: 56 OVR depth/Low POT lands ~$1.5-2M
+    } else if (depthRank >= 3) {
+      mult *= 0.60; // depth-only (some upside): 56 OVR depth lands ~$3M
+    } else if (lowPotential && depthRank >= 2) {
+      mult *= 0.75; // backup with no upside: gentler dampener
+    }
+  }
+
   let askingSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, base * mult) * 10) / 10;
   // K/P salary caps — scale with cap inflation
   if (player.position === 'K') askingSalary = Math.min(askingSalary, 4.0 * ci);
@@ -2576,7 +2603,8 @@ export const useGameStore = create<GameStore>()(
             const expiringPlayers = allImportedPlayers.filter(
               p => p.teamId === userTeam.id && p.contract.yearsLeft === 1 && !p.retired,
             );
-            return expiringPlayers.map(p => computeResigningEntry(p, userTeam));
+            const userTeamRoster = allImportedPlayers.filter(p => p.teamId === userTeam.id && !p.retired);
+            return expiringPlayers.map(p => computeResigningEntry(p, userTeam, userTeamRoster));
           })();
 
           // Initialize approval for user team
@@ -2744,7 +2772,8 @@ export const useGameStore = create<GameStore>()(
         const genExpiring = allPlayers.filter(
           p => p.teamId === userTeam.id && p.contract.yearsLeft === 1 && !p.retired,
         );
-        const genResigningEntries = genExpiring.map(p => computeResigningEntry(p, userTeam));
+        const genUserRoster = allPlayers.filter(p => p.teamId === userTeam.id && !p.retired);
+        const genResigningEntries = genExpiring.map(p => computeResigningEntry(p, userTeam, genUserRoster));
 
         // Initialize approval
         const genApproval = defaultApproval();
@@ -3580,7 +3609,8 @@ export const useGameStore = create<GameStore>()(
         });
 
         const currentUserTeam = teamsAfterRetirement.find(t => t.id === state.userTeamId) ?? userTeam;
-        const resigningPlayers = expiringPlayers.map(p => computeResigningEntry(p, currentUserTeam));
+        const currentUserRoster = state.players.filter(p => p.teamId === currentUserTeam.id && !p.retired);
+        const resigningPlayers = expiringPlayers.map(p => computeResigningEntry(p, currentUserTeam, currentUserRoster));
 
         // Compute holdout demands for under-contract stars
         const holdoutDemands = computeHoldoutDemands(playersAfterRetirement, state.userTeamId, state.season);
@@ -6595,7 +6625,10 @@ export const useGameStore = create<GameStore>()(
             const userTeamForResign = finalTeams.find(t => t.id === state.userTeamId);
             const newEntries = newExpiringPlayers
               .filter(p => !updatedResigningPlayers.some(e => e.playerId === p.id))
-              .map(p => computeResigningEntry(p, userTeamForResign!));
+              .map(p => {
+                const roster = state.players.filter(rp => rp.teamId === userTeamForResign!.id && !rp.retired);
+                return computeResigningEntry(p, userTeamForResign!, roster);
+              });
             updatedResigningPlayers = [...updatedResigningPlayers, ...newEntries];
           }
         }
