@@ -8784,7 +8784,25 @@ export const useGameStore = create<GameStore>()(
 
         if (isPlayoff && state.playoffBracket && state.playoffSeeds) {
           // --- Playoff game commit ---
-          const winnerId = result.homeScore >= result.awayScore ? result.homeTeamId : result.awayTeamId;
+          // Use strict `>` — on a tied result (degenerate state in playoffs;
+          // OT should always produce a winner now via the playByPlay
+          // events-cap bailout), don't silently default to the home team.
+          // Anonymous tester 5/2 ~20:10 UTC: 21-21 final with the away team
+          // (Jets) named SB champion when the user actually won the OT walk-
+          // off — the previous `>=` defaulted ties to home, but the SB had
+          // Jets as home in that league, surfacing as the wrong champion.
+          let winnerId: string;
+          if (result.homeScore > result.awayScore) {
+            winnerId = result.homeTeamId;
+          } else if (result.awayScore > result.homeScore) {
+            winnerId = result.awayTeamId;
+          } else {
+            // Tied playoff result — log loudly and pick deterministically by
+            // home so the bracket can advance, but the warn surfaces the
+            // upstream engine bug if it ever fires.
+            console.error('[commitLiveGame] tied playoff result — should not happen post-OT', { matchupId, homeScore: result.homeScore, awayScore: result.awayScore });
+            winnerId = result.homeTeamId;
+          }
           let bracket = state.playoffBracket.map(m =>
             m.id === matchupId ? { ...m, homeScore: result.homeScore, awayScore: result.awayScore, winnerId } : { ...m },
           );

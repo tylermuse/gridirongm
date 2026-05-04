@@ -1560,7 +1560,26 @@ export function simulatePlayByPlay(
   }
 
   while (state.quarter <= 4 || state.overtime) {
-    if (events.length >= 400) break;
+    if (events.length >= 400) {
+      // Bailout to stop runaway games. If we hit the cap mid-OT in a playoff
+      // tie, the loop would otherwise exit with state.homeScore === state.awayScore,
+      // and downstream commit paths would silently default the winnerId to home
+      // (store.ts:8787 used `>=` historically — even after the fix, a tied
+      // playoff result is a degenerate state). Force a deterministic walk-off
+      // FG to whichever team currently has possession so the bracket gets a
+      // clean winner. Reporter: anonymous tester via Tyler-shared 5/2 ~20:10
+      // UTC screenshot ("Won the Super Bowl in OT as the bears (jets ran
+      // out of time) but it says jets won" — final shown 21-21 with the
+      // away team named champion).
+      if (state.overtime && state.homeScore === state.awayScore && isPlayoff) {
+        const fgWinner = state.possession ?? (Math.random() < 0.5 ? 'home' : 'away');
+        if (fgWinner === 'home') state.homeScore += 3;
+        else state.awayScore += 3;
+        addEvent('field_goal_good', `Walk-off field goal — game over.`, 3, true);
+        console.warn('[playByPlay] OT events-cap bailout — synthesized walk-off FG for', fgWinner);
+      }
+      break;
+    }
 
     // Run a play
     const continueGame = runPlay();
