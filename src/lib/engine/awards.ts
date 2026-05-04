@@ -42,6 +42,43 @@ export function opoyScore(p: Player): number {
   return yards + tds * 30;
 }
 
+export function droyScore(p: Player): number {
+  // DROY-specific scoring — re-weights vs allLeagueScore to prioritize disruption
+  // (sacks, FF, TFL, INT) over tackle compilation. Tyler-direct via Cowork chat
+  // 5/3: a 17-sack rookie DL with 56 TKL must beat a 6-sack rookie DL with 51 TKL
+  // — generational-tier rookie sack production (Will Anderson Jr. / Aldon Smith /
+  // Kearse territory) was previously losing to compilers on the prior allLeagueScore
+  // weights (1.5x TKL, 6x SCK) which under-credited sack-rich seasons. New weights
+  // shift the ratio so disruption dominates compilers without flattening secondary
+  // contributions. Used by both computeSeasonAwards (winner) and computeAwardRaces
+  // (in-season tracker) so the race standings and final winner can never disagree.
+  const s = p.stats;
+  let statPts = 0;
+  switch (p.position) {
+    case 'DL':
+    case 'LB':
+      statPts = s.tackles * 0.8
+        + s.sacks * 12
+        + s.defensiveINTs * 12
+        + (s.tacklesForLoss ?? 0) * 3
+        + (s.forcedFumbles ?? 0) * 8
+        + (s.passDeflections ?? 0) * 2;
+      break;
+    case 'CB':
+    case 'S':
+      statPts = s.tackles * 0.8
+        + s.defensiveINTs * 14
+        + (s.passDeflections ?? 0) * 5
+        + (s.forcedFumbles ?? 0) * 8
+        + s.sacks * 8;
+      break;
+    default:
+      statPts = (p.ratings.overall - 55) * 0.25 + s.gamesPlayed * 0.5;
+      break;
+  }
+  return p.ratings.overall * 0.15 + statPts * 0.85;
+}
+
 /** Performance score used by All-League / All-Rookie + ROY awards.
  *  80% season totals (rewards availability), 20% OVR. */
 export function allLeagueScore(p: Player): number {
@@ -127,7 +164,7 @@ export function computeSeasonAwards(state: LeagueState): { award: string; player
   }
   const defensiveRookies = rookies.filter(p => ['DL', 'LB', 'CB', 'S'].includes(p.position));
   if (defensiveRookies.length > 0) {
-    const droy = [...defensiveRookies].sort((a, b) => allLeagueScore(b) - allLeagueScore(a))[0];
+    const droy = [...defensiveRookies].sort((a, b) => droyScore(b) - droyScore(a))[0];
     awards.push({ award: 'Defensive ROY', playerId: droy.id, teamId: droy.teamId! });
   }
 
@@ -269,7 +306,7 @@ export function computeAwardRaces(
 
   const droy = rookies
     .filter(p => defensiveSlots.includes(p.position))
-    .map(p => buildEntry(p, allLeagueScore(p)))
+    .map(p => buildEntry(p, droyScore(p)))
     .sort((a, b) => b.score - a.score)
     .slice(0, topN);
 

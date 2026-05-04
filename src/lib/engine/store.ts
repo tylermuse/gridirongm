@@ -1241,7 +1241,7 @@ function computeFARefusals(
   });
 }
 
-function computeResigningEntry(player: Player, team: Team): ResigningEntry {
+function computeResigningEntry(player: Player, team: Team, teamRoster?: Player[]): ResigningEntry {
   const ci = capInflationFactor(team.salaryCap);
   // Very unhappy players (mood < 20) refuse to re-sign entirely
   if (player.mood < 20) {
@@ -1261,6 +1261,33 @@ function computeResigningEntry(player: Player, team: Team): ResigningEntry {
   else if (player.mood < 40) mult *= 1.08;
   // Older players accept slight discounts but not massive ones
   if (player.age >= 32) mult *= 0.90;
+
+  // Depth-chart role + potential dampener for low-tier vets.
+  // Tyler-direct via Cowork chat 5/3: depth players at 56 OVR / Low POT were
+  // pricing at $3-7M/yr (well above the real NFL vet-min ~$1.2M). The salary
+  // curve in estimateSalary is OVR-anchored and doesn't see depth-chart role
+  // or remaining upside, so 56-OVR backups priced like 56-OVR starters.
+  // Two new factors:
+  //   - depthRank: 1 = top OVR at this position on the team, 2 = next, 3+ = depth.
+  //   - lowPotential: potential <= overall (no upside left, ceiling ~= snapshot).
+  // Both are multiplicative dampeners applied only to the 3rd+ string + low-OVR
+  // band so 1st-string starters and high-POT players are untouched.
+  if (teamRoster && player.ratings.overall <= 65) {
+    const sameSlot = teamRoster
+      .filter(p => p.position === player.position && !p.retired)
+      .sort((a, b) => b.ratings.overall - a.ratings.overall);
+    const depthRank = sameSlot.findIndex(p => p.id === player.id) + 1;
+    const potentialUpside = (player.potential ?? player.ratings.overall) - player.ratings.overall;
+    const lowPotential = potentialUpside <= 2;
+    if (depthRank >= 3 && lowPotential) {
+      mult *= 0.40; // capped depth: 56 OVR depth/Low POT lands ~$1.5-2M
+    } else if (depthRank >= 3) {
+      mult *= 0.60; // depth-only (some upside): 56 OVR depth lands ~$3M
+    } else if (lowPotential && depthRank >= 2) {
+      mult *= 0.75; // backup with no upside: gentler dampener
+    }
+  }
+
   let askingSalary = Math.round(Math.max(LEAGUE_MINIMUM_SALARY, base * mult) * 10) / 10;
   // K/P salary caps — scale with cap inflation
   if (player.position === 'K') askingSalary = Math.min(askingSalary, 4.0 * ci);
@@ -1552,7 +1579,10 @@ const ALL_LEAGUE_SLOTS: { position: Position; count: number }[] = [
 // so computeAllLeagueTeams below keeps its existing call site.
 const allLeagueScore = allLeagueScoreImpl;
 
-export function computeAllLeagueTeams(state: LeagueState): {
+export function computeAllLeagueTeams(
+  state: LeagueState,
+  seasonAwards?: { award: string; playerId: string; teamId: string }[],
+): {
   first: { position: Position; playerId: string; teamId: string }[];
   second: { position: Position; playerId: string; teamId: string }[];
   allRookie: { position: Position; playerId: string; teamId: string }[];
@@ -1566,6 +1596,26 @@ export function computeAllLeagueTeams(state: LeagueState): {
 
   // Build conference lookup
   const teamConf = new Map(state.teams.map(t => [t.id, t.conference]));
+
+  // Pre-seed DROY + OROY winners into All-Rookie when season awards are available.
+  // Tyler-direct (Cowork chat 5/3): the All-Rookie team must always honor the
+  // awards-winner outputs as authoritative — otherwise an awards-formula tweak
+  // can leave the named DROY/OROY winner missing from the all-rookie team at his
+  // own position group, which is structurally incoherent.
+  const allRookieSeededIds = new Set<string>();
+  if (seasonAwards && seasonAwards.length > 0) {
+    for (const awardName of ['Offensive ROY', 'Defensive ROY']) {
+      const a = seasonAwards.find(x => x.award === awardName);
+      if (!a) continue;
+      const player = state.players.find(p => p.id === a.playerId);
+      if (!player) continue;
+      // Only pre-seed if the position has an All-Rookie slot to fill.
+      const slot = ALL_LEAGUE_SLOTS.find(s => s.position === player.position);
+      if (!slot) continue;
+      allRookie.push({ position: player.position, playerId: player.id, teamId: a.teamId });
+      allRookieSeededIds.add(player.id);
+    }
+  }
 
   for (const { position, count } of ALL_LEAGUE_SLOTS) {
     // Select per conference so both AC and NC are represented
@@ -1582,9 +1632,12 @@ export function computeAllLeagueTeams(state: LeagueState): {
       }
     }
 
-    // All-Rookie: 1 per position
+    // All-Rookie: 1 per position. Skip positions already filled by an
+    // awards-winner pre-seed pass above.
+    const seededAtPosition = allRookie.filter(r => r.position === position).length;
+    if (seededAtPosition >= 1) continue;
     const posRookies = rookies
-      .filter(p => p.position === position)
+      .filter(p => p.position === position && !allRookieSeededIds.has(p.id))
       .sort((a, b) => allLeagueScore(b) - allLeagueScore(a));
     if (posRookies.length > 0) {
       allRookie.push({ position, playerId: posRookies[0].id, teamId: posRookies[0].teamId! });
@@ -2550,7 +2603,8 @@ export const useGameStore = create<GameStore>()(
             const expiringPlayers = allImportedPlayers.filter(
               p => p.teamId === userTeam.id && p.contract.yearsLeft === 1 && !p.retired,
             );
-            return expiringPlayers.map(p => computeResigningEntry(p, userTeam));
+            const userTeamRoster = allImportedPlayers.filter(p => p.teamId === userTeam.id && !p.retired);
+            return expiringPlayers.map(p => computeResigningEntry(p, userTeam, userTeamRoster));
           })();
 
           // Initialize approval for user team
@@ -2718,7 +2772,8 @@ export const useGameStore = create<GameStore>()(
         const genExpiring = allPlayers.filter(
           p => p.teamId === userTeam.id && p.contract.yearsLeft === 1 && !p.retired,
         );
-        const genResigningEntries = genExpiring.map(p => computeResigningEntry(p, userTeam));
+        const genUserRoster = allPlayers.filter(p => p.teamId === userTeam.id && !p.retired);
+        const genResigningEntries = genExpiring.map(p => computeResigningEntry(p, userTeam, genUserRoster));
 
         // Initialize approval
         const genApproval = defaultApproval();
@@ -3012,7 +3067,7 @@ export const useGameStore = create<GameStore>()(
 
       simToWeek: (targetWeek: number) => {
         // Compute all weeks in a single pass to avoid stale get() issues
-        let current = get();
+        const current = get();
         if (current.phase !== 'regular') return;
 
         let schedule = [...current.schedule];
@@ -3554,7 +3609,8 @@ export const useGameStore = create<GameStore>()(
         });
 
         const currentUserTeam = teamsAfterRetirement.find(t => t.id === state.userTeamId) ?? userTeam;
-        const resigningPlayers = expiringPlayers.map(p => computeResigningEntry(p, currentUserTeam));
+        const currentUserRoster = state.players.filter(p => p.teamId === currentUserTeam.id && !p.retired);
+        const resigningPlayers = expiringPlayers.map(p => computeResigningEntry(p, currentUserTeam, currentUserRoster));
 
         // Compute holdout demands for under-contract stars
         const holdoutDemands = computeHoldoutDemands(playersAfterRetirement, state.userTeamId, state.season);
@@ -3625,7 +3681,7 @@ export const useGameStore = create<GameStore>()(
           const bestAc = [...acTeams].sort((a, b) => b.record.wins - a.record.wins || a.record.losses - b.record.losses)[0];
           const bestNc = [...ncTeams].sort((a, b) => b.record.wins - a.record.wins || a.record.losses - b.record.losses)[0];
 
-          const { first: allLeagueFirst, second: allLeagueSecond, allRookie: allRookieTeam } = computeAllLeagueTeams(state);
+          const { first: allLeagueFirst, second: allLeagueSecond, allRookie: allRookieTeam } = computeAllLeagueTeams(state, awards);
 
           const seasonSummary: import('@/types').SeasonSummary = {
             season: state.season,
@@ -4006,7 +4062,7 @@ export const useGameStore = create<GameStore>()(
 
         // Detect NFL 2026 roster for hardcoded first-round picks
         const isNfl = state.seasonHistory.length === 0 && isNfl2026Roster(updatedTeams, updatedPlayers);
-        let nflMockDraft: { pickNum: number; teamAbbr: string; playerId: string; firstName: string; lastName: string; position: Position; college: string; blurb: string }[] = [];
+        const nflMockDraft: { pickNum: number; teamAbbr: string; playerId: string; firstName: string; lastName: string; position: Position; college: string; blurb: string }[] = [];
 
         // Base draft class: imported or generated
         let baseDraftClass: Player[];
@@ -4250,7 +4306,7 @@ export const useGameStore = create<GameStore>()(
 
         // BS Mode: Anti-Tanking Draft Lottery for bottom 6 non-playoff teams
         const bsMode = state.leagueSettings?.bsMode ?? false;
-        let lotteryNews: NewsItem[] = [];
+        const lotteryNews: NewsItem[] = [];
         let lotteryResults: { teamId: string; abbr: string; originalRank: number; lotteryPick: number }[] = [];
         if (bsMode) {
           // If no playoffs happened yet (first season), treat all teams as non-playoff
@@ -4410,7 +4466,7 @@ export const useGameStore = create<GameStore>()(
         const draftClassById = new Map(draftClass.map(p => [p.id, p]));
         const existingIds = new Set(updatedPlayers.map(p => p.id));
         const missingFromPlayers = draftClass.filter(p => !existingIds.has(p.id));
-        let finalPlayers = [
+        const finalPlayers = [
           ...updatedPlayers.map(p => draftClassById.get(p.id) ?? p), // overlay modified draft prospects
           ...missingFromPlayers,
         ];
@@ -4419,7 +4475,7 @@ export const useGameStore = create<GameStore>()(
         if (nflMockDraft.length === 0) {
           const teamsPerRound = updatedTeams.length;
           const r1Order = draftOrder.slice(0, teamsPerRound);
-          let mockFreeAgents = new Set(draftClass.map(p => p.id));
+          const mockFreeAgents = new Set(draftClass.map(p => p.id));
           for (let pi = 0; pi < Math.min(r1Order.length, 32); pi++) {
             const pickTeamId = r1Order[pi];
             const pickTeam = updatedTeams.find(t => t.id === pickTeamId);
@@ -5834,7 +5890,7 @@ export const useGameStore = create<GameStore>()(
         if (existingVoidYears + voidYearsToAdd > 3) return false;
 
         // Materialize contractYears from flat model if needed
-        let years: ContractYear[] = contract.contractYears
+        const years: ContractYear[] = contract.contractYears
           ? contract.contractYears.map(y => ({ ...y }))
           : materializeContractYears(contract);
 
@@ -6569,7 +6625,10 @@ export const useGameStore = create<GameStore>()(
             const userTeamForResign = finalTeams.find(t => t.id === state.userTeamId);
             const newEntries = newExpiringPlayers
               .filter(p => !updatedResigningPlayers.some(e => e.playerId === p.id))
-              .map(p => computeResigningEntry(p, userTeamForResign!));
+              .map(p => {
+                const roster = updatedPlayers.filter(rp => rp.teamId === userTeamForResign!.id && !rp.retired);
+                return computeResigningEntry(p, userTeamForResign!, roster);
+              });
             updatedResigningPlayers = [...updatedResigningPlayers, ...newEntries];
           }
         }
@@ -8002,7 +8061,7 @@ export const useGameStore = create<GameStore>()(
         const bestNc = ncTeams.sort((a, b) => b.record.wins - a.record.wins || a.record.losses - b.record.losses)[0];
 
         // All-League teams
-        const { first: allLeagueFirst, second: allLeagueSecond, allRookie: allRookieFromCompute } = computeAllLeagueTeams(state);
+        const { first: allLeagueFirst, second: allLeagueSecond, allRookie: allRookieFromCompute } = computeAllLeagueTeams(state, awards);
         // Prefer the All-Rookie team already written by advanceToResigning
         // for this same season — that snapshot is canonical, computed from
         // the post-playoffs / pre-offseason player state. Recomputing here
@@ -8421,7 +8480,7 @@ export const useGameStore = create<GameStore>()(
         let grownTeams = newTeams;
 
         // Ensure no team starts short-handed: fill roster gaps with minimum-salary players
-        let allPlayersForNewSeason = [...finalPlayers];
+        const allPlayersForNewSeason = [...finalPlayers];
         for (let ti = 0; ti < grownTeams.length; ti++) {
           const team = grownTeams[ti];
           const teamRoster = allPlayersForNewSeason.filter(p => p.teamId === team.id && !p.retired);
@@ -9114,7 +9173,7 @@ export const useGameStore = create<GameStore>()(
         });
 
         // Use the updated players and teams from the result, rebuild depth charts
-        let updatedTeams = result.updatedTeams.map(t => {
+        const updatedTeams = result.updatedTeams.map(t => {
           const teamPlayers = result.updatedPlayers.filter(p => p.teamId === t.id && !p.retired);
           return { ...t, depthChart: buildDefaultDepthChart(teamPlayers), totalPayroll: recalculateTeamPayroll(t, result.updatedPlayers) };
         });
