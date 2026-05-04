@@ -169,9 +169,17 @@ export function estimateSalary(overall: number, position?: Position, age?: numbe
       else if (age >= 35) salary *= 0.85;  // Late career
     }
 
-    // Teams pay a ceiling premium for high-upside young QBs
+    // Teams pay a ceiling premium for high-upside young QBs. The QB market
+    // is the most upside-sensitive in the league — teams routinely extend
+    // 70-OVR-but-high-POT rookies (Lawrence, Burrow, Herbert) at $40M+/yr
+    // because they're paying for the ceiling, not the snapshot. The previous
+    // 0.20 coefficient priced a 71/83 rookie at ~$20M; bumping to 1.20
+    // surfaces the upside premium so a 71 OVR / 83 POT rookie QB lands
+    // around $30M (still below true franchise extensions, but in the right
+    // postal code). Reporter: Tyler 5/4 ~01:40 UTC playtest screenshot —
+    // Julian Sayin (QB, 71 OVR, POT 83) market value $20M felt super low.
     if (potential !== undefined && age !== undefined && age <= 27) {
-      salary += Math.max(0, potential - overall) * 0.20;
+      salary += Math.max(0, potential - overall) * 1.20;
     }
 
     // Apply $60M ceiling then cap inflation

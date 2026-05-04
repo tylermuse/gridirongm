@@ -1696,7 +1696,7 @@ export default function DraftPage() {
                   <th className="text-left pb-2">Player</th>
                   <th className="text-center pb-2">Pos</th>
                   <th className="text-center pb-2">OVR</th>
-                  <th className="text-center pb-2 hidden sm:table-cell">Scout</th>
+                  <th className="text-center pb-2">Scout</th>
                   <th className="text-right pb-2 pr-2 bg-[var(--surface)]">Draft</th>
                 </tr>
               </thead>
@@ -1804,7 +1804,7 @@ export default function DraftPage() {
                           <span className="text-[10px] uppercase tracking-wide">{coarseOvrBucket(player.ratings.overall)}</span>
                         )}
                       </td>
-                      <td className="py-2.5 text-center hidden sm:table-cell">
+                      <td className="py-2.5 text-center">
                         {(() => {
                           const fullD = ss?.fullEvals?.[player.id];
                           if (fullD) {
