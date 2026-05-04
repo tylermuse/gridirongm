@@ -49,7 +49,7 @@ export default function AwardsPage() {
               entries={races.mvp} teams={teams} players={players} showWinnerCrown={isPostRegularSeason} />
             <AwardRaceCard emoji="🎩" title="Coach of the Year" subtitle="Head Coach award"
               entries={races.coachOfTheYear} teams={teams} players={players} showWinnerCrown={isPostRegularSeason} />
-            <AwardRaceCard emoji="🏅" title="Offensive Player of the Year" subtitle="Yards + TDs leader"
+            <AwardRaceCard emoji="🏅" title="Offensive Player of the Year" subtitle="Top non-QB skill player"
               entries={races.opoy} teams={teams} players={players} showWinnerCrown={isPostRegularSeason} />
             <AwardRaceCard emoji="🛡️" title="Defensive Player of the Year" subtitle="Defensive playmakers"
               entries={races.dpoy} teams={teams} players={players} showWinnerCrown={isPostRegularSeason} />
