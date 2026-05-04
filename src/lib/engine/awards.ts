@@ -105,21 +105,14 @@ export function computeSeasonAwards(state: LeagueState): { award: string; player
     awards.push({ award: 'Defensive POY', playerId: dpoy.id, teamId: dpoy.teamId! });
   }
 
-  const opoyCandidates = withGames(['QB', 'RB', 'WR', 'TE']);
+  // OPOY excludes QBs by design — real-world OPOY recognizes the most outstanding
+  // non-QB offensive player (QBs win MVP). .akrav 5/2 02:36 UTC: "Typically in
+  // real life it is best non QB, not yards and TD leader". Replaces the prior
+  // soft 20% buffer that still let dominant QBs win OPOY.
+  const opoyCandidates = withGames(['RB', 'WR', 'TE']);
   if (opoyCandidates.length > 0) {
-    const sorted = [...opoyCandidates].sort((a, b) => opoyScore(b) - opoyScore(a));
-    const top = sorted[0];
-    const second = sorted[1];
-    if (top.position === 'QB' && second && opoyScore(top) < opoyScore(second) * 1.20) {
-      const nonQB = sorted.find(p => p.position !== 'QB');
-      if (nonQB) {
-        awards.push({ award: 'Offensive POY', playerId: nonQB.id, teamId: nonQB.teamId! });
-      } else {
-        awards.push({ award: 'Offensive POY', playerId: top.id, teamId: top.teamId! });
-      }
-    } else {
-      awards.push({ award: 'Offensive POY', playerId: top.id, teamId: top.teamId! });
-    }
+    const opoy = [...opoyCandidates].sort((a, b) => opoyScore(b) - opoyScore(a))[0];
+    awards.push({ award: 'Offensive POY', playerId: opoy.id, teamId: opoy.teamId! });
   }
 
   // Rookies = drafted in the current season, i.e. experience === 0.
@@ -242,6 +235,9 @@ export function computeAwardRaces(
   const active = state.players.filter(p => !p.retired && p.teamId && p.stats.gamesPlayed >= minGames);
 
   const offensiveSlots = ['QB', 'RB', 'WR', 'TE'];
+  // OPOY is non-QB only — kept in sync with computeSeasonAwards so the in-season
+  // race tracker can never include a player who is ineligible to win the award.
+  const opoyOffensiveSlots = ['RB', 'WR', 'TE'];
   const defensiveSlots = ['DL', 'LB', 'CB', 'S'];
 
   const mvp = active
@@ -251,7 +247,7 @@ export function computeAwardRaces(
     .slice(0, topN);
 
   const opoy = active
-    .filter(p => offensiveSlots.includes(p.position))
+    .filter(p => opoyOffensiveSlots.includes(p.position))
     .map(p => buildEntry(p, opoyScore(p)))
     .sort((a, b) => b.score - a.score)
     .slice(0, topN);
