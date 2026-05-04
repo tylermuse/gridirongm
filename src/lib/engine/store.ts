@@ -3067,7 +3067,7 @@ export const useGameStore = create<GameStore>()(
 
       simToWeek: (targetWeek: number) => {
         // Compute all weeks in a single pass to avoid stale get() issues
-        let current = get();
+        const current = get();
         if (current.phase !== 'regular') return;
 
         let schedule = [...current.schedule];
@@ -4062,7 +4062,7 @@ export const useGameStore = create<GameStore>()(
 
         // Detect NFL 2026 roster for hardcoded first-round picks
         const isNfl = state.seasonHistory.length === 0 && isNfl2026Roster(updatedTeams, updatedPlayers);
-        let nflMockDraft: { pickNum: number; teamAbbr: string; playerId: string; firstName: string; lastName: string; position: Position; college: string; blurb: string }[] = [];
+        const nflMockDraft: { pickNum: number; teamAbbr: string; playerId: string; firstName: string; lastName: string; position: Position; college: string; blurb: string }[] = [];
 
         // Base draft class: imported or generated
         let baseDraftClass: Player[];
@@ -4306,7 +4306,7 @@ export const useGameStore = create<GameStore>()(
 
         // BS Mode: Anti-Tanking Draft Lottery for bottom 6 non-playoff teams
         const bsMode = state.leagueSettings?.bsMode ?? false;
-        let lotteryNews: NewsItem[] = [];
+        const lotteryNews: NewsItem[] = [];
         let lotteryResults: { teamId: string; abbr: string; originalRank: number; lotteryPick: number }[] = [];
         if (bsMode) {
           // If no playoffs happened yet (first season), treat all teams as non-playoff
@@ -4466,7 +4466,7 @@ export const useGameStore = create<GameStore>()(
         const draftClassById = new Map(draftClass.map(p => [p.id, p]));
         const existingIds = new Set(updatedPlayers.map(p => p.id));
         const missingFromPlayers = draftClass.filter(p => !existingIds.has(p.id));
-        let finalPlayers = [
+        const finalPlayers = [
           ...updatedPlayers.map(p => draftClassById.get(p.id) ?? p), // overlay modified draft prospects
           ...missingFromPlayers,
         ];
@@ -4475,7 +4475,7 @@ export const useGameStore = create<GameStore>()(
         if (nflMockDraft.length === 0) {
           const teamsPerRound = updatedTeams.length;
           const r1Order = draftOrder.slice(0, teamsPerRound);
-          let mockFreeAgents = new Set(draftClass.map(p => p.id));
+          const mockFreeAgents = new Set(draftClass.map(p => p.id));
           for (let pi = 0; pi < Math.min(r1Order.length, 32); pi++) {
             const pickTeamId = r1Order[pi];
             const pickTeam = updatedTeams.find(t => t.id === pickTeamId);
@@ -5890,7 +5890,7 @@ export const useGameStore = create<GameStore>()(
         if (existingVoidYears + voidYearsToAdd > 3) return false;
 
         // Materialize contractYears from flat model if needed
-        let years: ContractYear[] = contract.contractYears
+        const years: ContractYear[] = contract.contractYears
           ? contract.contractYears.map(y => ({ ...y }))
           : materializeContractYears(contract);
 
@@ -8480,7 +8480,7 @@ export const useGameStore = create<GameStore>()(
         let grownTeams = newTeams;
 
         // Ensure no team starts short-handed: fill roster gaps with minimum-salary players
-        let allPlayersForNewSeason = [...finalPlayers];
+        const allPlayersForNewSeason = [...finalPlayers];
         for (let ti = 0; ti < grownTeams.length; ti++) {
           const team = grownTeams[ti];
           const teamRoster = allPlayersForNewSeason.filter(p => p.teamId === team.id && !p.retired);
@@ -9173,7 +9173,7 @@ export const useGameStore = create<GameStore>()(
         });
 
         // Use the updated players and teams from the result, rebuild depth charts
-        let updatedTeams = result.updatedTeams.map(t => {
+        const updatedTeams = result.updatedTeams.map(t => {
           const teamPlayers = result.updatedPlayers.filter(p => p.teamId === t.id && !p.retired);
           return { ...t, depthChart: buildDefaultDepthChart(teamPlayers), totalPayroll: recalculateTeamPayroll(t, result.updatedPlayers) };
         });

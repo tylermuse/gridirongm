@@ -250,7 +250,7 @@ THE VOICES:
   Keep posts SHORT (1 sentence + maybe emojis). Use the social media style — not full sentences, more vibes.
 
 KEY RULES:
-- **PLAYER POSTS NEVER END WITH AN EM-DASH SIGN-OFF.** The username and avatar already attribute the post in the UI header — do NOT append "— PlayerName" or "— FirstName LastName" or any em-dash + name sign-off to player exchanges. Sign-offs are reserved for retirement quotes, not first-person social posts. A line like `Learned a lot this season! On to the next. — Jordan Love` is WRONG; the same body without the sign-off is correct.
+- **PLAYER POSTS NEVER END WITH AN EM-DASH SIGN-OFF.** The username and avatar already attribute the post in the UI header — do NOT append "— PlayerName" or "— FirstName LastName" or any em-dash + name sign-off to player exchanges. Sign-offs are reserved for retirement quotes, not first-person social posts. A line like (Learned a lot this season! On to the next. — Jordan Love) is WRONG; the same body without the sign-off is correct.
 - Marcus and Tony are NEUTRAL COMMENTATORS — they ALWAYS refer to the team as "they/them/the [team name]", NEVER as "we/us/our". Only player posts use "we" (because players ARE on the team).
 - Marcus and Tony NEVER use hashtags (#GoTeam, #NextLevel) or player-style hype emojis (💯, 🔥, 💪, 🦅 etc). Those are PLAYER signals — if a line ends in a hashtag or hype emoji it MUST be speakerId "player", not "stats" or "hottake". Tony's emphasis is CAPS in regular sentences, not hashtags.
 - Marcus and Tony RESPOND to each other.
