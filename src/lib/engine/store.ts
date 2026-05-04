@@ -6626,7 +6626,7 @@ export const useGameStore = create<GameStore>()(
             const newEntries = newExpiringPlayers
               .filter(p => !updatedResigningPlayers.some(e => e.playerId === p.id))
               .map(p => {
-                const roster = state.players.filter(rp => rp.teamId === userTeamForResign!.id && !rp.retired);
+                const roster = updatedPlayers.filter(rp => rp.teamId === userTeamForResign!.id && !rp.retired);
                 return computeResigningEntry(p, userTeamForResign!, roster);
               });
             updatedResigningPlayers = [...updatedResigningPlayers, ...newEntries];
