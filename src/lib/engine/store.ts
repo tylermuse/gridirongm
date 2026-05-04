@@ -38,6 +38,14 @@ import { getCurrentSubscriptionAllocations } from '../subscriptionState';
 
 const SAVE_VERSION = 33;
 
+// Module-local dedup so the Week-1 roster-overflow alert can't infinite-loop
+// when simWeek() is invoked repeatedly from a caller (e.g. handleSimSeason
+// looping s.simWeek() up to 30 times — each call would re-fire the native
+// alert, trapping the user in an OK → alert → OK cycle on the FA → Week 1
+// transition). Tracks the last-fired timestamp + the (week, length) it fired
+// for; only re-shows after the user changes the roster or 5s passes.
+let __week1RosterGateLastShown: { week: number; length: number; at: number } | null = null;
+
 // Re-export for UI consumers
 export { estimateSalary, LEAGUE_MINIMUM_SALARY, capInflationFactor } from './salary';
 export const LUXURY_TAX_RATE = DEFAULT_LEAGUE_SETTINGS.luxuryTaxRate;
@@ -2800,8 +2808,25 @@ export const useGameStore = create<GameStore>()(
           const userTeam = state.teams.find(t => t.id === state.userTeamId);
           if (userTeam && userTeam.roster.length > 53) {
             const over = userTeam.roster.length - 53;
+            // Dedup so callers that loop simWeek() (handleSimSeason → 30x,
+            // accidental double-clicks, useEffect re-fires) don't trap the
+            // user in an alert → OK → alert cycle. Re-show only after the
+            // roster length changes OR 5 seconds elapse — both signal a
+            // genuine new attempt by the user. (Tyler 5/4 ~01:30 UTC: "I
+            // keep clicking OK and it keeps popping back up" while in Sign
+            // Free Agents at start of regular season.)
             if (typeof window !== 'undefined') {
-              alert(`Your active roster is at ${userTeam.roster.length} — cut or demote ${over} more before starting Week 1. Use /roster to manage cuts.`);
+              const now = Date.now();
+              const last = __week1RosterGateLastShown;
+              const shouldShow =
+                !last ||
+                last.week !== state.week ||
+                last.length !== userTeam.roster.length ||
+                now - last.at > 5000;
+              if (shouldShow) {
+                __week1RosterGateLastShown = { week: state.week, length: userTeam.roster.length, at: now };
+                alert(`Your active roster is at ${userTeam.roster.length} — cut or demote ${over} more before starting Week 1. Use /roster to manage cuts.`);
+              }
             }
             console.warn('[simWeek] blocked: user roster over 53 going into Week 1', userTeam.roster.length);
             return;
@@ -7934,7 +7959,22 @@ export const useGameStore = create<GameStore>()(
         const newSeason = state.season + 1;
         const previouslyRetiredIds = new Set(state.players.filter(p => p.retired).map(p => p.id));
 
-        const awards = computeSeasonAwards(state);
+        // Prefer the awards already written by advanceToResigning for this
+        // same season — that snapshot is canonical, computed from the
+        // post-playoffs / pre-offseason player state. Recomputing here can
+        // drift when offseason mutations (FA / draft / retirements) shift
+        // player rosters or stats and a different player wins under the
+        // current filter, leaving the season's DPOY / OROY / DROY surface
+        // out of sync with the actual award-winner stamp on player profiles.
+        // (.akrav 5/2 02:34 UTC — "the winner in awards race just doesn't
+        // line up with the winner in actual awards (this typically happens
+        // with DPOY, OROY, and DROY)") — same canonical-vs-rollover write
+        // drift pattern fixed for All-Rookie Team in 6deb64b.
+        const priorSummaryForAwards = state.seasonHistory.find(s => s.season === state.season);
+        const awardsFromCompute = computeSeasonAwards(state);
+        const awards = (priorSummaryForAwards?.awards && priorSummaryForAwards.awards.length > 0)
+          ? priorSummaryForAwards.awards
+          : awardsFromCompute;
         const userTeamObj = state.teams.find(t => t.id === state.userTeamId);
 
         let userPlayoffResult: import('@/types').SeasonSummary['userPlayoffResult'] = 'missed';

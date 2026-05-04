@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { COMMENTATORS } from '@/lib/engine/debate';
 import { fetchAiSpotlight, detectNarrativeMoment } from '@/lib/engine/aiSpotlight';
+import { useSubscription } from '@/components/providers/SubscriptionProvider';
 
 /**
  * Floating corner popup that nudges the user to check the Team Spotlight.
@@ -41,6 +42,8 @@ export function SpotlightPopup() {
     teams, userTeamId, season, week, phase, playoffBracket, playoffSeeds,
     players, leagueSettings, newsItems, draftResults, champions,
   } = useGameStore();
+  const { hasFeature } = useSubscription();
+  const aiCommentaryEntitled = hasFeature('ai_commentary');
 
   const [dismissed, setDismissed] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -86,7 +89,7 @@ export function SpotlightPopup() {
     // Already shown for this state — but still allow AI fetch for special moments
     // (the popup won't show again but the content will be in the cache for the dashboard)
     if (lastShownKey === currentKey) {
-      if (leagueSettings?.aiCommentary && userTeam) {
+      if (leagueSettings?.aiCommentary && aiCommentaryEntitled && userTeam) {
         const tradeDeadlineWeek = leagueSettings.tradeDeadlineWeek ?? 12;
         const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id, playoffSeeds);
         if (narrative !== 'weekly') {
@@ -107,7 +110,7 @@ export function SpotlightPopup() {
 
       // If AI commentary is on, kick off generation for special narrative
       // moments only. Weekly recaps use the template engine.
-      if (leagueSettings?.aiCommentary && userTeam) {
+      if (leagueSettings?.aiCommentary && aiCommentaryEntitled && userTeam) {
         const tradeDeadlineWeek = leagueSettings.tradeDeadlineWeek ?? 12;
         const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id, playoffSeeds);
 
