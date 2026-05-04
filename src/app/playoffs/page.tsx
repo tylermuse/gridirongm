@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGameStore, computeAllLeagueTeams } from '@/lib/engine/store';
+import { droyScore, allLeagueScore } from '@/lib/engine/awards';
 import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -599,12 +600,12 @@ export default function PlayoffsPage() {
           const rookies = activePlayers.filter(p => p.draftYear === season && p.stats.gamesPlayed >= 10);
           const offRookies = rookies.filter(p => ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.position));
           if (offRookies.length > 0) {
-            const oroy = offRookies.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+            const oroy = offRookies.sort((a, b) => allLeagueScore(b) - allLeagueScore(a))[0];
             awards.push({ award: 'Offensive Rookie of the Year', icon: '🌟', player: oroy });
           }
           const defRookies = rookies.filter(p => ['DL', 'LB', 'CB', 'S'].includes(p.position));
           if (defRookies.length > 0) {
-            const droy = defRookies.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+            const droy = defRookies.sort((a, b) => droyScore(b) - droyScore(a))[0];
             awards.push({ award: 'Defensive Rookie of the Year', icon: '🌟', player: droy });
           }
 
@@ -762,11 +763,29 @@ export default function PlayoffsPage() {
                 { pos: 'K', positions: ['K'], count: 1, sortFn: (a, b) => b.ratings.overall - a.ratings.overall },
               ];
               const allRookiePlayers: { player: typeof activePlayers[0]; pos: string }[] = [];
+              // Pre-seed DROY + OROY winners into their position-group slots so the
+              // All-Rookie team always honors the awards-winner outputs as authoritative.
+              // Tyler-direct (Cowork chat 5/3): a DROY winner missing from the All-Rookie
+              // team is structurally incoherent — the player named the best defensive
+              // rookie in the league must crack the all-rookie team at his own position.
+              const seededIds = new Set<string>();
+              const oroyWinner = offRookies.length > 0 ? offRookies[0] : null;
+              const droyWinner = defRookies.length > 0 ? defRookies[0] : null;
+              for (const winner of [oroyWinner, droyWinner]) {
+                if (!winner) continue;
+                const slot = allRookieSlots.find(s => s.positions.includes(winner.position));
+                if (!slot) continue;
+                allRookiePlayers.push({ player: winner, pos: slot.pos });
+                seededIds.add(winner.id);
+              }
               for (const slot of allRookieSlots) {
+                const seededInSlot = allRookiePlayers.filter(ar => ar.pos === slot.pos).length;
+                if (seededInSlot >= slot.count) continue;
                 const eligible = rookies
-                  .filter(p => slot.positions.includes(p.position))
+                  .filter(p => slot.positions.includes(p.position) && !seededIds.has(p.id))
                   .sort(slot.sortFn);
-                for (let i = 0; i < slot.count && i < eligible.length; i++) {
+                const remaining = slot.count - seededInSlot;
+                for (let i = 0; i < remaining && i < eligible.length; i++) {
                   allRookiePlayers.push({ player: eligible[i], pos: slot.pos });
                 }
               }

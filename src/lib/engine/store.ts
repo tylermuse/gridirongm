@@ -1552,7 +1552,10 @@ const ALL_LEAGUE_SLOTS: { position: Position; count: number }[] = [
 // so computeAllLeagueTeams below keeps its existing call site.
 const allLeagueScore = allLeagueScoreImpl;
 
-export function computeAllLeagueTeams(state: LeagueState): {
+export function computeAllLeagueTeams(
+  state: LeagueState,
+  seasonAwards?: { award: string; playerId: string; teamId: string }[],
+): {
   first: { position: Position; playerId: string; teamId: string }[];
   second: { position: Position; playerId: string; teamId: string }[];
   allRookie: { position: Position; playerId: string; teamId: string }[];
@@ -1566,6 +1569,26 @@ export function computeAllLeagueTeams(state: LeagueState): {
 
   // Build conference lookup
   const teamConf = new Map(state.teams.map(t => [t.id, t.conference]));
+
+  // Pre-seed DROY + OROY winners into All-Rookie when season awards are available.
+  // Tyler-direct (Cowork chat 5/3): the All-Rookie team must always honor the
+  // awards-winner outputs as authoritative — otherwise an awards-formula tweak
+  // can leave the named DROY/OROY winner missing from the all-rookie team at his
+  // own position group, which is structurally incoherent.
+  const allRookieSeededIds = new Set<string>();
+  if (seasonAwards && seasonAwards.length > 0) {
+    for (const awardName of ['Offensive ROY', 'Defensive ROY']) {
+      const a = seasonAwards.find(x => x.award === awardName);
+      if (!a) continue;
+      const player = state.players.find(p => p.id === a.playerId);
+      if (!player) continue;
+      // Only pre-seed if the position has an All-Rookie slot to fill.
+      const slot = ALL_LEAGUE_SLOTS.find(s => s.position === player.position);
+      if (!slot) continue;
+      allRookie.push({ position: player.position, playerId: player.id, teamId: a.teamId });
+      allRookieSeededIds.add(player.id);
+    }
+  }
 
   for (const { position, count } of ALL_LEAGUE_SLOTS) {
     // Select per conference so both AC and NC are represented
@@ -1582,9 +1605,12 @@ export function computeAllLeagueTeams(state: LeagueState): {
       }
     }
 
-    // All-Rookie: 1 per position
+    // All-Rookie: 1 per position. Skip positions already filled by an
+    // awards-winner pre-seed pass above.
+    const seededAtPosition = allRookie.filter(r => r.position === position).length;
+    if (seededAtPosition >= 1) continue;
     const posRookies = rookies
-      .filter(p => p.position === position)
+      .filter(p => p.position === position && !allRookieSeededIds.has(p.id))
       .sort((a, b) => allLeagueScore(b) - allLeagueScore(a));
     if (posRookies.length > 0) {
       allRookie.push({ position, playerId: posRookies[0].id, teamId: posRookies[0].teamId! });
@@ -3625,7 +3651,7 @@ export const useGameStore = create<GameStore>()(
           const bestAc = [...acTeams].sort((a, b) => b.record.wins - a.record.wins || a.record.losses - b.record.losses)[0];
           const bestNc = [...ncTeams].sort((a, b) => b.record.wins - a.record.wins || a.record.losses - b.record.losses)[0];
 
-          const { first: allLeagueFirst, second: allLeagueSecond, allRookie: allRookieTeam } = computeAllLeagueTeams(state);
+          const { first: allLeagueFirst, second: allLeagueSecond, allRookie: allRookieTeam } = computeAllLeagueTeams(state, awards);
 
           const seasonSummary: import('@/types').SeasonSummary = {
             season: state.season,
@@ -8002,7 +8028,7 @@ export const useGameStore = create<GameStore>()(
         const bestNc = ncTeams.sort((a, b) => b.record.wins - a.record.wins || a.record.losses - b.record.losses)[0];
 
         // All-League teams
-        const { first: allLeagueFirst, second: allLeagueSecond, allRookie: allRookieFromCompute } = computeAllLeagueTeams(state);
+        const { first: allLeagueFirst, second: allLeagueSecond, allRookie: allRookieFromCompute } = computeAllLeagueTeams(state, awards);
         // Prefer the All-Rookie team already written by advanceToResigning
         // for this same season — that snapshot is canonical, computed from
         // the post-playoffs / pre-offseason player state. Recomputing here
