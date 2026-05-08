@@ -38,10 +38,26 @@ export function GameTicker({ onMenuToggle }: { onMenuToggle?: () => void } = {})
       playerStats: {},
     }));
 
-  const userGames = [
+  // Dedupe on (homeTeamId, awayTeamId, week, season). A playoff matchup can
+  // surface in both the regular-season schedule feed (when the game result was
+  // written there with an inflated week index) and the playoffBracket-derived
+  // playoffGames list, producing two consecutive identical tiles in the ticker.
+  // Tyler-direct (Cowork chat 5/3): postseason summary screenshot showed two
+  // adjacent ATL 34 / DAL 28 tiles. Last-write-wins on the (home, away, week,
+  // season) key keeps the ticker tile-per-game.
+  const mergedUserGames = [
     ...schedule.filter(g => g.homeTeamId === userTeamId || g.awayTeamId === userTeamId),
     ...playoffGames,
-  ].sort((a, b) => a.week - b.week);
+  ];
+  const seen = new Set<string>();
+  const userGames = mergedUserGames
+    .filter(g => {
+      const key = `${g.season}|${g.week}|${g.homeTeamId}|${g.awayTeamId}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => a.week - b.week);
 
   // Auto-scroll to current/most recent game
   useEffect(() => {
