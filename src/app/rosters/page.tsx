@@ -28,13 +28,13 @@ const ROSTERS: RosterEntry[] = [
     id: 'nfl-2026-updated',
     title: 'NFL 2026 Roster — Updated May 8, 2026',
     description:
-      'Complete NFL roster with verified contracts, the full 2026 NFL Draft (all 7 rounds on their real teams), and a full league-wide reconciliation pass. May 8 update: 75 player moves (trades + FA signings), 300+ releases, 260+ retirements synced against community data, plus post-draft signings (Jennings to MIN, Reader to NYG, Campbell to BAL, and more). Starts at the 2026 regular season.',
+      'Complete NFL roster with verified contracts, the full 2026 NFL Draft (all 7 rounds on their real teams), and a full league-wide reconciliation pass. May 8 update: cross-referenced against NFL.com transactions (signings, trades, terminations) for March-May 2026 -- 11 additional verified moves applied (Adam Thielen to MIN, Feleipe Franks to CAR, Ronnie Harrison to MIA, Lloyd Cushenberry III + Trent Sherfield to BUF, Tyler Johnson to DAL, and more). All 30 confirmed 2026 trades verified correct. 75 prior FA moves, 300+ releases, 260+ retirements, 160+ duplicate players removed. Starts at the 2026 regular season.',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
     lastUpdated: 'May 8, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
     era: 'Modern',
-    cacheBust: 3,
+    cacheBust: 6,
   },
   {
     id: 'nfl-2007-brady-era',
