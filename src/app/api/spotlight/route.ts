@@ -250,6 +250,7 @@ THE VOICES:
   Keep posts SHORT (1 sentence + maybe emojis). Use the social media style — not full sentences, more vibes.
 
 KEY RULES:
+- **PLAYER POSTS NEVER END WITH AN EM-DASH SIGN-OFF.** The username and avatar already attribute the post in the UI header — do NOT append "— PlayerName" or "— FirstName LastName" or any em-dash + name sign-off to player exchanges. Sign-offs are reserved for retirement quotes, not first-person social posts. A line like (Learned a lot this season! On to the next. — Jordan Love) is WRONG; the same body without the sign-off is correct.
 - Marcus and Tony are NEUTRAL COMMENTATORS — they ALWAYS refer to the team as "they/them/the [team name]", NEVER as "we/us/our". Only player posts use "we" (because players ARE on the team).
 - Marcus and Tony NEVER use hashtags (#GoTeam, #NextLevel) or player-style hype emojis (💯, 🔥, 💪, 🦅 etc). Those are PLAYER signals — if a line ends in a hashtag or hype emoji it MUST be speakerId "player", not "stats" or "hottake". Tony's emphasis is CAPS in regular sentences, not hashtags.
 - Marcus and Tony RESPOND to each other.
@@ -284,6 +285,55 @@ DETAIL & LENGTH REQUIREMENTS:
 - Player posts should feel like real social media — emojis, hashtags, attitude.
 - Topics #2 onward MUST have at least 4 exchanges showing real back-and-forth (Marcus says something → Tony reacts/disagrees → Marcus counters → fan or player chimes in).
 - For topics #2 onward DO NOT be brief — make it feel like a real debate show with personality and conflict.`;
+
+/**
+ * Defensive cleanup pass — even with the prompt rule, LLMs occasionally still
+ * append "— PlayerName" sign-offs to player posts (esp. when the model has
+ * been fine-tuned on press-release-style attributed quotes). This scrubber
+ * walks each topic's exchanges and strips any trailing em-dash + name pattern
+ * from speakerId === 'player' lines. Tyler-direct (Cowork chat 5/3): caught
+ * a Jordyn Brooks post signed `— Jordan Love` (em-dash AND wrong-name leak).
+ *
+ * The regex is intentionally tight — only strips when the sign-off is an
+ * em-dash (or double hyphen) followed by a capitalized 2-3 token name at the
+ * very end of the post. Mid-sentence em-dashes (which are valid English) are
+ * left untouched.
+ */
+function stripPlayerSignoff(text: string): string {
+  if (!text) return text;
+  // Trailing pattern: optional whitespace, em-dash or "--", whitespace, then a
+  // capitalized name (1-3 tokens), with optional trailing emojis/whitespace.
+  // Examples matched:
+  //   "...next grind! — Jordan Love"        -> "...next grind!"
+  //   "Built different. -- Mike Smith 🔥"  -> "Built different. 🔥"
+  // Examples NOT matched (mid-sentence dashes):
+  //   "Tough night — but we'll bounce back" (no name follows the dash at end)
+  const trailingEmojis = '(?:[\s\p{Extended_Pictographic}\p{Emoji_Presentation}]*)';
+  const re = new RegExp(`\s*[—-]{1,2}\s+[A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){0,2}${trailingEmojis}\s*$`, 'u');
+  return text.replace(re, '').trim();
+}
+
+interface SpotlightExchange {
+  speakerId?: string;
+  text?: string;
+  playerName?: string;
+}
+
+interface SpotlightTopic {
+  exchanges?: SpotlightExchange[];
+}
+
+function scrubTopicSignoffs(topic: unknown): unknown {
+  if (!topic || typeof topic !== 'object') return topic;
+  const t = topic as SpotlightTopic;
+  if (!Array.isArray(t.exchanges)) return topic;
+  for (const ex of t.exchanges) {
+    if (ex && ex.speakerId === 'player' && typeof ex.text === 'string') {
+      ex.text = stripPlayerSignoff(ex.text);
+    }
+  }
+  return topic;
+}
 
 interface NonStreamingResult {
   topics: unknown[] | null;
@@ -426,8 +476,9 @@ export async function POST(request: Request) {
               const text = chunk.text();
               if (!text) continue;
               for (const topic of parser.feed(text)) {
-                collected.push(topic);
-                emit({ type: 'topic', data: topic });
+                const scrubbed = scrubTopicSignoffs(topic);
+                collected.push(scrubbed);
+                emit({ type: 'topic', data: scrubbed });
               }
             }
           } catch (geminiErr) {
@@ -456,8 +507,9 @@ export async function POST(request: Request) {
               const text = chunk.choices[0]?.delta?.content ?? '';
               if (!text) continue;
               for (const topic of parser.feed(text)) {
-                collected.push(topic);
-                emit({ type: 'topic', data: topic });
+                const scrubbed = scrubTopicSignoffs(topic);
+                collected.push(scrubbed);
+                emit({ type: 'topic', data: scrubbed });
               }
             }
           } catch (openaiErr) {
@@ -481,8 +533,9 @@ export async function POST(request: Request) {
           if (fb.topics && fb.topics.length > 0) {
             usedFallback = true;
             for (const topic of fb.topics) {
-              collected.push(topic);
-              emit({ type: 'topic', data: topic });
+              const scrubbed = scrubTopicSignoffs(topic);
+              collected.push(scrubbed);
+              emit({ type: 'topic', data: scrubbed });
             }
           } else {
             fallbackErr = `non-streaming also empty (gemini: ${fb.errors.gemini ?? 'ok'}, openai: ${fb.errors.openai ?? 'ok'})`;
@@ -520,9 +573,10 @@ export async function POST(request: Request) {
     }
 
     // Cache the result persistently
-    await setCache(key, topics);
+    const scrubbedTopics = topics.map(scrubTopicSignoffs);
+    await setCache(key, scrubbedTopics);
 
-    return NextResponse.json({ topics });
+    return NextResponse.json({ topics: scrubbedTopics });
   } catch (err) {
     console.error('Spotlight API error:', err);
     return NextResponse.json(
