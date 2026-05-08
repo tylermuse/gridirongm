@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 
 interface TeamLogoProps {
   abbreviation: string;
@@ -654,9 +654,14 @@ const ICONS: Record<string, IconFn> = {
 
 export function TeamLogo({ abbreviation, primaryColor, secondaryColor, size = 'md', className = '', logoUrl }: TeamLogoProps) {
   const sizeClass = SIZE_CLASSES[size] ?? SIZE_CLASSES.md;
+  const [imgFailed, setImgFailed] = useState(false);
 
-  // If an external logo URL is provided, render it as an image
-  if (logoUrl) {
+  // If an external logo URL is provided AND it loads cleanly, render the image.
+  // External hosts (Imgur etc.) 404 sometimes — when they do, fall through to
+  // the bundled icon / text fallback so the user doesn't see an empty colored
+  // box. Tyler 5/8: NYJ's source imgURL pFWZVFL.png went dead and the box
+  // rendered with no abbreviation visible.
+  if (logoUrl && !imgFailed) {
     return (
       <div
         className={`${sizeClass} shrink-0 overflow-hidden box-border relative ${className}`}
@@ -672,7 +677,7 @@ export function TeamLogo({ abbreviation, primaryColor, secondaryColor, size = 'm
           alt={abbreviation}
           className="w-full h-full object-contain relative z-10"
           style={{ padding: PADDING[size] ?? PADDING.md }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          onError={() => setImgFailed(true)}
         />
       </div>
     );
