@@ -319,52 +319,27 @@ export default function ReSignPage() {
           </div>
         </div>
 
-        {/* Coaching contracts expiring — paired with the new finances ship,
-            so users don't accidentally lose their DC because the deadline
-            snuck up. atxym + tofftanaut 4/28. */}
+        {/* Coaching contracts moved to /coach-contracts (Tyler-direct 5/3) so
+            the player and coach decisions live on separate screens and the
+            player cap math here is no longer muddied by coach AAV. atxym +
+            tofftanaut 4/28 originated the panel; this CTA preserves the
+            "don't accidentally lose your DC" reminder by linking out instead
+            of rendering the panel inline. */}
         {expiringCoaches.length > 0 && (
           <Card className="mb-4">
-            <CardHeader>
-              <CardTitle>
-                <span className="flex items-center gap-2"><span>🧑‍🏫</span> Coaching Contracts Expiring ({expiringCoaches.length})</span>
-              </CardTitle>
-            </CardHeader>
-            <div className="px-4 pb-4 space-y-2">
-              {expiringCoaches.map(c => {
-                const aav = c.salary ?? 1;
-                return (
-                  <div key={c.id} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[var(--surface-2)]">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-bold text-sm truncate">
-                        {c.firstName} {c.lastName}
-                        <span className="ml-2 text-[10px] uppercase tracking-wider text-[var(--text-sec)]">{c.role}</span>
-                      </div>
-                      <div className="text-[10px] text-[var(--text-sec)]">
-                        Current: ${aav.toFixed(1)}M/yr · {c.trait}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        onClick={() => extendCoachContract(c.id, 2)}
-                        className="text-[11px] px-2.5 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold border border-blue-200"
-                        title={`Extend 2 years at $${aav.toFixed(1)}M/yr`}
-                      >
-                        Extend 2yr
-                      </button>
-                      <button
-                        onClick={() => extendCoachContract(c.id, 4)}
-                        className="text-[11px] px-2.5 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold border border-blue-200"
-                        title={`Extend 4 years at $${aav.toFixed(1)}M/yr`}
-                      >
-                        Extend 4yr
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-              <p className="text-[10px] text-[var(--text-sec)] italic mt-2">
-                Coaches at <strong>1 year remaining</strong> hit free agency at season end. Extend now to keep them.
-              </p>
+            <div className="px-4 py-3 flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="font-bold text-sm">
+                  <span className="mr-1">🧑‍🏫</span>
+                  {expiringCoaches.length} coach{expiringCoaches.length === 1 ? '' : 'es'} with expiring contracts
+                </div>
+                <div className="text-[11px] text-[var(--text-sec)] mt-0.5">
+                  Coach extensions live on a separate screen now. They&apos;re available throughout the offseason.
+                </div>
+              </div>
+              <Link href="/coach-contracts">
+                <Button size="sm">Manage coaches</Button>
+              </Link>
             </div>
           </Card>
         )}
