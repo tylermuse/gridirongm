@@ -26,25 +26,15 @@ interface RosterEntry {
 const ROSTERS: RosterEntry[] = [
   {
     id: 'nfl-2026-updated',
-    title: 'NFL 2026 Roster — Updated April 26, 2026 (Post-Draft)',
+    title: 'NFL 2026 Roster — Updated May 8, 2026',
     description:
-      'Complete NFL roster with verified contracts and the full 2026 NFL Draft — all 257 picks across all 7 rounds landed on their actual drafted teams. Updated April 26 with Day 3 (Jermod McCoy 4.1 to the Raiders, Cade Klubnik to the Jets in the 4th, Garrett Nussmeier sliding to the Chiefs in the 7th, etc.) plus 74 small-school and post-combine-riser prospects that weren’t in the original class — they’ve been generated and slotted on their real teams so every late-round pick lands somewhere. Also includes the latest April trades: Greenard to the Eagles, Tyree Wilson to the Saints, Dee Winters to the Cowboys.',
+      'Complete NFL roster with verified contracts, the full 2026 NFL Draft (all 7 rounds on their real teams), and a full league-wide reconciliation pass. May 8 update: 75 player moves (trades + FA signings), 300+ releases, 260+ retirements synced against community data, plus post-draft signings (Jennings to MIN, Reader to NYG, Campbell to BAL, and more). Starts at the 2026 regular season.',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
-    lastUpdated: 'April 26, 2026',
+    lastUpdated: 'May 8, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
     era: 'Modern',
-  },
-  {
-    id: 'nfl-2026-predraft',
-    title: 'NFL 2026 Roster — Pre-Draft (Play the Draft Yourself)',
-    description:
-      'Same league state as the April 24 post-draft roster — same free-agency moves, same contracts, same refreshed 2026 class — but Round 1 has been rolled back. All 32 first-rounders (Mendoza, Bain, Reese, Bailey, Mauigoa, Love, etc.) are back in the draft pool, and every team has its Round 1 pick restored. Start a franchise and play the draft yourself: draft with the actual team you picked, trade up or down, see how your roster stacks against the consensus board. Rounds 2-7 pick as normal after. Everything else is identical to the post-draft file.',
-    fileName: 'FBGM_NFL_Roster_2026_PreDraft.json',
-    lastUpdated: 'April 24, 2026',
-    compatibility: ['Football GM (FBGM)', 'BS Football'],
-    startMode: 'offseason',
-    era: 'Modern',
+    cacheBust: 3,
   },
   {
     id: 'nfl-2007-brady-era',
