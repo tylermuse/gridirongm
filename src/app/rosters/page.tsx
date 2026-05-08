@@ -28,24 +28,13 @@ const ROSTERS: RosterEntry[] = [
     id: 'nfl-2026-updated',
     title: 'NFL 2026 Roster — Updated May 8, 2026',
     description:
-      'Complete NFL roster with verified contracts, all 32 Round 1 picks on their drafted teams, and a full league-wide reconciliation pass. May 8 update: 75 player moves (trades + FA signings), 300+ releases, 260+ retirements synced against community data. Bobby Wagner, Stefon Diggs, Brandon Aiyuk, Joe Mixon, Lavonte David, Darius Slay and many more moved to correct current status. In-game draft starts at Round 2 with 900+ prospects in the pool.',
+      'Complete NFL roster with verified contracts, the full 2026 NFL Draft (all 7 rounds on their real teams), and a full league-wide reconciliation pass. May 8 update: 75 player moves (trades + FA signings), 300+ releases, 260+ retirements synced against community data, plus post-draft signings (Jennings to MIN, Reader to NYG, Campbell to BAL, and more). Starts at the 2026 regular season.',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
     lastUpdated: 'May 8, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
     era: 'Modern',
     cacheBust: 3,
-  },
-  {
-    id: 'nfl-2026-predraft',
-    title: 'NFL 2026 Roster — Pre-Draft (Play the Draft Yourself)',
-    description:
-      'Same league state as the April 24 post-draft roster — same free-agency moves, same contracts, same refreshed 2026 class — but Round 1 has been rolled back. All 32 first-rounders (Mendoza, Bain, Reese, Bailey, Mauigoa, Love, etc.) are back in the draft pool, and every team has its Round 1 pick restored. Start a franchise and play the draft yourself: draft with the actual team you picked, trade up or down, see how your roster stacks against the consensus board. Rounds 2-7 pick as normal after. Everything else is identical to the post-draft file.',
-    fileName: 'FBGM_NFL_Roster_2026_PreDraft.json',
-    lastUpdated: 'April 24, 2026',
-    compatibility: ['Football GM (FBGM)', 'BS Football'],
-    startMode: 'offseason',
-    era: 'Modern',
   },
   {
     id: 'nfl-2007-brady-era',
