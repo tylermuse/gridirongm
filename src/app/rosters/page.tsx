@@ -26,14 +26,15 @@ interface RosterEntry {
 const ROSTERS: RosterEntry[] = [
   {
     id: 'nfl-2026-updated',
-    title: 'NFL 2026 Roster — Updated April 26, 2026 (Post-Draft)',
+    title: 'NFL 2026 Roster — Updated May 8, 2026',
     description:
-      'Complete NFL roster with verified contracts and the full 2026 NFL Draft — all 257 picks across all 7 rounds landed on their actual drafted teams. Updated April 26 with Day 3 (Jermod McCoy 4.1 to the Raiders, Cade Klubnik to the Jets in the 4th, Garrett Nussmeier sliding to the Chiefs in the 7th, etc.) plus 74 small-school and post-combine-riser prospects that weren’t in the original class — they’ve been generated and slotted on their real teams so every late-round pick lands somewhere. Also includes the latest April trades: Greenard to the Eagles, Tyree Wilson to the Saints, Dee Winters to the Cowboys.',
+      'Complete NFL roster with verified contracts, all 32 Round 1 picks on their drafted teams, and a full league-wide reconciliation pass. May 8 update: 75 player moves (trades + FA signings), 300+ releases, 260+ retirements synced against community data. Bobby Wagner, Stefon Diggs, Brandon Aiyuk, Joe Mixon, Lavonte David, Darius Slay and many more moved to correct current status. In-game draft starts at Round 2 with 900+ prospects in the pool.',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
-    lastUpdated: 'April 26, 2026',
+    lastUpdated: 'May 8, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
     era: 'Modern',
+    cacheBust: 3,
   },
   {
     id: 'nfl-2026-predraft',
