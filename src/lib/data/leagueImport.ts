@@ -595,7 +595,7 @@ function validateImportedLeague(season: number, teams: Team[], players: Player[]
 }
 
 export async function loadLeagueFromUrl(url: string): Promise<ImportedLeagueData> {
-  const data = await fetch(url)
+  const data = await fetch(url, { cache: 'no-store' })
     .then((response) => {
       if (!response.ok) {
         throw new Error(`Failed to load league data: ${response.status}`);

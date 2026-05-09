@@ -200,8 +200,8 @@ function TeamPicker() {
               setImportUrl('/rosters/FBGM_NFL_Roster_2026_Updated.json');
               setShowImport(true);
               setImportLoading(true);
-              loadLeagueFromUrl(`${window.location.origin}/rosters/FBGM_NFL_Roster_2026_Updated.json`)
-                .then((data) => { setImportedTeams(data); setActiveUrl(`/rosters/FBGM_NFL_Roster_2026_Updated.json`); })
+              loadLeagueFromUrl(`${window.location.origin}/rosters/FBGM_NFL_Roster_2026_Updated.json?v=8`)
+                .then((data) => { setImportedTeams(data); setActiveUrl(`/rosters/FBGM_NFL_Roster_2026_Updated.json?v=8`); })
                 .catch(() => {})
                 .finally(() => setImportLoading(false));
             }
