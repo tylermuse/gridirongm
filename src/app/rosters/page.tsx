@@ -26,15 +26,15 @@ interface RosterEntry {
 const ROSTERS: RosterEntry[] = [
   {
     id: 'nfl-2026-updated',
-    title: 'NFL 2026 Roster — Updated May 8, 2026',
+    title: 'NFL 2026 Roster — Updated May 9, 2026',
     description:
-      'Complete NFL roster with verified contracts, the full 2026 NFL Draft (all 7 rounds on their real teams), and a comprehensive league-wide reconciliation. May 8 v2: every team individually cross-referenced against ESPN.com active rosters with 99%+ match rate. 723 missing roster players added, 65 phantom draft picks removed, 12 wrong-team corrections, nickname/suffix mismatches resolved. Breece Hall 3yr/$45.75M extension applied. All 30 confirmed 2026 trades verified. Starts at the 2026 regular season.',
+      'Complete NFL roster with real contract data from Spotrac, the full 2026 NFL Draft (all 7 rounds on their real teams), and a comprehensive league-wide reconciliation. May 9 v3: 2,636 player contracts updated with real AAV and expiration data from Spotrac.com. May 8 v2: every team individually cross-referenced against ESPN.com active rosters with 99%+ match rate. 723 missing roster players added, 65 phantom draft picks removed, 12 wrong-team corrections. All 30 confirmed 2026 trades verified. Starts at the 2026 regular season.',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
-    lastUpdated: 'May 8, 2026',
+    lastUpdated: 'May 9, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
     era: 'Modern',
-    cacheBust: 8,
+    cacheBust: 9,
   },
   {
     id: 'nfl-2007-brady-era',
