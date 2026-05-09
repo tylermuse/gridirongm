@@ -34,7 +34,7 @@ const ROSTERS: RosterEntry[] = [
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
     era: 'Modern',
-    cacheBust: 9,
+    cacheBust: 10,
   },
   {
     id: 'nfl-2007-brady-era',
