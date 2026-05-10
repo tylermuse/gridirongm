@@ -348,15 +348,22 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
     //
     // The player's tid IS the source of truth. Trust it unconditionally.
 
-    // Free agents (tid=-1) and expired-contract players both go to the
-    // FA pool with a league-minimum placeholder contract.
-    const isFA = isFreeAgent || isExpiredFA;
+    // Future draft prospects (tid=-1 with draft year beyond current season)
+    // go into the players array but NOT the FA pool — the draft engine
+    // discovers them by scanning all players for draftYear === targetYear.
+    // Putting them in freeAgentIds would surface them on the FA page.
+    const isFutureDraftProspect = isFreeAgent && draftYear != null && draftYear > season;
 
-    const contract = isFA
+    // Current free agents (tid=-1, not future prospects) and expired-
+    // contract players both go to the FA pool with league-min contracts.
+    const isFA = (isFreeAgent && !isFutureDraftProspect) || isExpiredFA;
+
+    const contract = (isFA || isFutureDraftProspect)
       ? { salary: LEAGUE_MINIMUM_SALARY, yearsLeft: 0, guaranteed: 0, totalYears: 0 }
       : mapContract(player.contract, season, player.draft);
 
     const playerId = `player-${player.pid}`;
+    // Only add current FAs to the freeAgentIds list — NOT future prospects
     if (isFA) expiredFreeAgentIds.push(playerId);
 
     players.push({
@@ -371,7 +378,7 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       stats: emptyStats(),
       careerStats: emptyStats(),
       contract,
-      teamId: isFA
+      teamId: (isFA || isFutureDraftProspect)
         ? null
         : (teamByTid.get(player.tid) ?? null),
       draftYear,
