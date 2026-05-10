@@ -553,12 +553,18 @@ function simulatePlay(
     // ~10% of rush plays are QB scrambles/designed runs (NFL avg ~3-5 QB carries/game)
     const qbScramble = qb && Math.random() < 0.10;
     const rushPool = qbScramble ? [qb, ...rbs] : rbs;
-    // RB rotation tuned to NFL distribution: RB1 ~55%, RB2 ~28%, RB3 ~12%, RB4+ ~5%.
-    // Workhorse backs still lead the team in carries but backups see real volume.
+    // RB rotation tuned to NFL workhorse distribution: RB1 ~62%, RB2 ~22%,
+    // RB3 ~11%, RB4+ ~5%. The old weights (3.5/2.0/1.0/0.5) capped even an
+    // elite back at ~50% of his team's carries, compressing the league-wide
+    // rushing leaderboard ~40% below NFL reality. Bumped RB1 weight to 5.5
+    // so true workhorses (Henry, CMC, Saquon, Taylor) can lead a team in
+    // carries at NFL volume. QB scramble pool weight dropped from 3 to 1.5
+    // — the old weight was over-representing QB scrambles vs the intended
+    // ~10% scramble rate, double-counting against RB volume.
     const rushWeights = rushPool.map((r, i) => {
-      if (qbScramble && i === 0) return 3 * (r.ratings.speed / 70);
+      if (qbScramble && i === 0) return 1.5 * (r.ratings.speed / 70);
       const rbIdx = qbScramble ? i - 1 : i;
-      const starterBonus = rbIdx === 0 ? 3.5 : rbIdx === 1 ? 2.0 : rbIdx === 2 ? 1.0 : 0.5;
+      const starterBonus = rbIdx === 0 ? 5.5 : rbIdx === 1 ? 2.0 : rbIdx === 2 ? 1.0 : 0.5;
       return starterBonus * (r.ratings.carrying / 70);
     });
     const rusher = weightedPick(rushPool, rushWeights);
@@ -802,11 +808,13 @@ export function simulateGame(
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
-  // 9 possessions per team per game. Tuned together with 12-play drive
-  // cap and ~58% pass rate. At ~6.5 plays/drive avg this lands at ~58
-  // plays/team — close to NFL's ~63. Keeping possessions at 10 was
-  // producing ~80 plays/game which inflated every stat category ~27%.
-  const possessions = 9;
+  // 10 possessions per team per game. Tuned together with the 10-play
+  // drive cap and ~58% pass rate. At ~6.3 plays/drive avg this lands at
+  // ~63 plays/team — matches NFL average. We previously dropped this to
+  // 9 to fight stat inflation, but the inflation was downstream of an
+  // unbalanced RB rotation + over-weighted QB scrambles. Those are fixed
+  // in simulatePlay above, so we can restore NFL play volume here.
+  const possessions = 10;
 
   // BS Mode: Irrational Confidence variance
   const applyIC = (roster: Player[]) => {
