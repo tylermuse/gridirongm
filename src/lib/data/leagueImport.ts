@@ -299,7 +299,13 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
   const players: Player[] = [];
   const expiredFreeAgentIds: string[] = [];
   for (const player of league.players) {
-    if (player.tid < 0 || !teamByTid.has(player.tid)) {
+    // tid=-1 → free agent (or future draft prospect), tid=-3 → retired.
+    // Include all tid=-1 players: current FAs go into the free-agent pool,
+    // and future prospects (draft year > season) are picked up by the
+    // draft engine when their year arrives. Skip retired and other
+    // negative tids.
+    const isFreeAgent = player.tid === -1;
+    if (!isFreeAgent && (player.tid < 0 || !teamByTid.has(player.tid))) {
       continue;
     }
 
@@ -326,45 +332,39 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
     const draftedThisSeason = player.draft?.year === season;
     const isExpiredFA = rawExp != null && rawExp <= season && !draftedThisSeason;
 
-    // Cross-team ghost-tid guard. Earlier version (ddb20ca) over-routed
-    // because legitimate offseason FA signings have a current tid that
-    // doesn't appear in statsTids yet (no games played) and don't always
-    // serialize as a transaction. tofftanaut 4/27 PM: "kenneth walker was
-    // back on the seahawks" — Walker's JSON tid was correctly KC but the
-    // heuristic routed him back to SEA (his draft team).
+    // Cross-team ghost-tid guard — REMOVED (May 9 2026).
     //
-    // Tighter rule: only consider the tid corrupt when there's POSITIVE
-    // evidence — a current-season trade/godMode transaction that explicitly
-    // moves the player to a team OTHER than their current tid. That
-    // matches the original Brian Robinson Jr case (2026 trade to tid=27,
-    // JSON had tid=28) without false-positiving on legit FA signings.
-    let correctedTid: number | null = null;
-    const txs = Array.isArray(player.transactions) ? player.transactions : [];
-    for (let i = txs.length - 1; i >= 0; i--) {
-      const tx = txs[i];
-      const txTid = tx?.tid;
-      const txSeason = tx?.season;
-      const txType = tx?.type;
-      if (typeof txTid !== 'number' || txTid < 0) continue;
-      // Only consider real in-game trades. godMode-type entries are manual
-      // edits by the data author and may be stale; draft is too old; signing
-      // is rarely emitted by the source. Kirk Cousins regression (4/27 PM):
-      // 2025 godMode tx put him on ATL, but the JSON had moved him to LV
-      // since — trusting the godMode tx routed him back to ATL incorrectly.
-      if (txType !== 'trade') continue;
-      if (typeof txSeason !== 'number' || txSeason < season - 1) break;
-      if (txTid !== player.tid && teamByTid.has(txTid)) {
-        correctedTid = txTid;
-      }
-      break;
-    }
+    // The old correctedTid heuristic scanned a player's transactions array
+    // for recent trade entries and overrode the player's tid when they
+    // disagreed. This was added for Brian Robinson Jr (tid=28 in the source
+    // JSON, but a 2026 trade tx showed tid=27/SF). However, after the
+    // roster was reconciled against live sources (ESPN, Spotrac), every
+    // player's tid is now manually maintained and authoritative. The
+    // transactions array is NOT maintained and contains stale entries from
+    // the original FBGM export. The override was misrouting 28 players
+    // (Kaiir Elam to DAL, DeAndre Hopkins to KC, Trey Hendrickson to CIN,
+    // Davante Adams to NYJ, etc.) — every one of them WRONG because the
+    // tid was already correct and the transaction was outdated.
+    //
+    // The player's tid IS the source of truth. Trust it unconditionally.
 
-    const contract = isExpiredFA
+    // Future draft prospects (tid=-1 with draft year beyond current season)
+    // go into the players array but NOT the FA pool — the draft engine
+    // discovers them by scanning all players for draftYear === targetYear.
+    // Putting them in freeAgentIds would surface them on the FA page.
+    const isFutureDraftProspect = isFreeAgent && draftYear != null && draftYear > season;
+
+    // Current free agents (tid=-1, not future prospects) and expired-
+    // contract players both go to the FA pool with league-min contracts.
+    const isFA = (isFreeAgent && !isFutureDraftProspect) || isExpiredFA;
+
+    const contract = (isFA || isFutureDraftProspect)
       ? { salary: LEAGUE_MINIMUM_SALARY, yearsLeft: 0, guaranteed: 0, totalYears: 0 }
       : mapContract(player.contract, season, player.draft);
 
     const playerId = `player-${player.pid}`;
-    if (isExpiredFA) expiredFreeAgentIds.push(playerId);
+    // Only add current FAs to the freeAgentIds list — NOT future prospects
+    if (isFA) expiredFreeAgentIds.push(playerId);
 
     players.push({
       id: playerId,
@@ -378,11 +378,9 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       stats: emptyStats(),
       careerStats: emptyStats(),
       contract,
-      teamId: isExpiredFA
+      teamId: (isFA || isFutureDraftProspect)
         ? null
-        : (correctedTid != null
-            ? (teamByTid.get(correctedTid) ?? null)
-            : (teamByTid.get(player.tid) ?? null)),
+        : (teamByTid.get(player.tid) ?? null),
       draftYear,
       // FBGM source rosters store draft.pick as pick-in-round (e.g. 18 for the
       // 18th pick of the 3rd round). The in-engine draft path stores overall.
