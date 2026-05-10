@@ -7959,6 +7959,13 @@ export const useGameStore = create<GameStore>()(
       },
 
       startNewSeason: () => {
+        // §1.7-followup (bige08676 5/8 retest): the prior 5/7 ship
+        // claimed a defensive try/catch around offseason rollover but
+        // never actually landed on main. Re-shipping it for real.
+        // Console-log on entry so testers retesting with devtools open
+        // get a clear breadcrumb.
+        console.log("[startNewSeason] entering season-rollover", { season: get().season, phase: get().phase });
+        try {
         // Auto-fill K and P for user's team if missing — sign best available from FA
         {
           const preState = get();
@@ -8804,6 +8811,38 @@ export const useGameStore = create<GameStore>()(
         const userId = get().userTeamId;
         for (const t of get().teams) {
           if (t.id !== userId) get().autoCutToRosterLimit(t.id);
+        }
+        } catch (error) {
+          // Surface the underlying offseason exception in two places so
+          // we can diagnose seed-specific failures (bige08676 2032 case):
+          //   (a) browser console — for testers retesting with devtools open
+          //   (b) news feed — for testers without devtools; persisted across reloads
+          // Force phase to "regular" so the user is no longer visually
+          // trapped on /draft-recap. The season counter still advances
+          // to keep playable-state coherent. Imperfect but unblocks the
+          // retest loop until the underlying root cause is fixed.
+          console.error("[startNewSeason] offseason rollover failed", error);
+          const errMsg = error instanceof Error ? error.message : String(error);
+          const errStack = error instanceof Error && error.stack
+            ? error.stack.split("\n").slice(0, 6).join("\n")
+            : undefined;
+          const errState = get();
+          set({
+            phase: "regular",
+            week: 1,
+            season: errState.season + 1,
+            newsItems: [
+              ...errState.newsItems,
+              makeNews({
+                season: errState.season + 1,
+                week: 0,
+                type: "system",
+                headline: "Season rollover hit an error — diagnostic info attached",
+                body: errStack ? errMsg + "\n\nStack (first 6 frames):\n" + errStack : errMsg,
+                isUserTeam: false,
+              }),
+            ],
+          });
         }
       },
 
