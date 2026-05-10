@@ -299,15 +299,13 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
   const players: Player[] = [];
   const expiredFreeAgentIds: string[] = [];
   for (const player of league.players) {
-    // tid=-1 → free agent, tid=-3 → retired. Include FAs (they go into
-    // the free-agent pool), skip retired players and unknown negative tids.
-    // Also skip future draft prospects (draft year beyond current season)
-    // so auto-generated 2027+ classes don't leak into the FA pool.
+    // tid=-1 → free agent (or future draft prospect), tid=-3 → retired.
+    // Include all tid=-1 players: current FAs go into the free-agent pool,
+    // and future prospects (draft year > season) are picked up by the
+    // draft engine when their year arrives. Skip retired and other
+    // negative tids.
     const isFreeAgent = player.tid === -1;
-    if (isFreeAgent) {
-      const futureDraft = player.draft?.year != null && player.draft.year > season;
-      if (futureDraft) continue; // future draft prospect, not a real FA
-    } else if (player.tid < 0 || !teamByTid.has(player.tid)) {
+    if (!isFreeAgent && (player.tid < 0 || !teamByTid.has(player.tid))) {
       continue;
     }
 
