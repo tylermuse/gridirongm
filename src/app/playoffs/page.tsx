@@ -585,13 +585,18 @@ export default function PlayoffsPage() {
             awards.push({ award: 'Defensive Player of the Year', icon: '🛡️', player: dpoy });
           }
 
-          // OPOY
-          const opoyPlayers = withGames(['QB', 'RB', 'WR', 'TE']);
+          // OPOY — non-QB skill positions only. QBs win MVP; OPOY recognizes
+          // the most outstanding non-QB offensive player (RB / WR / TE). Mirrors
+          // computeSeasonAwards in src/lib/engine/awards.ts so the playoffs
+          // recap and the canonical season awards always agree.
+          const opoyPlayers = withGames(['RB', 'WR', 'TE']);
           if (opoyPlayers.length > 0) {
             const opoy = opoyPlayers.sort((a, b) => {
-              const aYds = a.stats.passYards + a.stats.rushYards + a.stats.receivingYards;
-              const bYds = b.stats.passYards + b.stats.rushYards + b.stats.receivingYards;
-              return bYds - aYds;
+              const aYds = a.stats.rushYards + a.stats.receivingYards;
+              const bYds = b.stats.rushYards + b.stats.receivingYards;
+              const aTds = a.stats.rushTDs + a.stats.receivingTDs;
+              const bTds = b.stats.rushTDs + b.stats.receivingTDs;
+              return (bYds + bTds * 30) - (aYds + aTds * 30);
             })[0];
             awards.push({ award: 'Offensive Player of the Year', icon: '🏈', player: opoy });
           }
