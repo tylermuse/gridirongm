@@ -8106,6 +8106,21 @@ export const useGameStore = create<GameStore>()(
       },
 
       startNewSeason: () => {
+        // §1.7-followup (bige08676 5/8 retest): the prior 5/7 ship
+        // claimed a defensive try/catch around offseason rollover but
+        // never actually landed on main. Re-shipping it for real.
+        // Console-log on entry so testers retesting with devtools open
+        // get a clear breadcrumb.
+        console.log("[startNewSeason] entering season-rollover", { season: get().season, phase: get().phase });
+        // §1.0 per-step instrumentation (bige08676 5/10 partial-fail). The
+        // outer try/catch was swallowing WHICH step throws — testers like
+        // bige08676 hit the soft-lock but their news feed only said "rollover
+        // failed", with no signal about whether retirements, draft-class gen,
+        // schedule build, etc. was the culprit. currentStep is updated at
+        // every step boundary below; the outer catch surfaces it in the news
+        // headline so the next retest tells us exactly where to look.
+        let currentStep = "kp-autofill";
+        try {
         // Auto-fill K and P for user's team if missing — sign best available from FA
         {
           const preState = get();
@@ -8165,6 +8180,7 @@ export const useGameStore = create<GameStore>()(
         const newSeason = state.season + 1;
         const previouslyRetiredIds = new Set(state.players.filter(p => p.retired).map(p => p.id));
 
+        currentStep = "awards-stamping";
         // Prefer the awards already written by advanceToResigning for this
         // same season — that snapshot is canonical, computed from the
         // post-playoffs / pre-offseason player state. Recomputing here can
@@ -8301,6 +8317,7 @@ export const useGameStore = create<GameStore>()(
             })
           : state.players;
 
+        currentStep = "retirements-and-contracts";
         // Roll PS contracts over automatically. Without this, every
         // practice-squad player's 1-year league-min deal would expire at
         // season's end and the entire PS would empty out — defeating the
@@ -8405,6 +8422,7 @@ export const useGameStore = create<GameStore>()(
 
         const devSettings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
 
+        currentStep = "player-development";
         // Build per-player coaching development multipliers
         const coachDevMultipliers = new Map<string, number>();
         for (const team of state.teams) {
@@ -8439,6 +8457,7 @@ export const useGameStore = create<GameStore>()(
         );
         const newlyRetiredOnTeamIds = new Set(newlyRetiredOnTeam.map(p => p.id));
 
+        currentStep = "void-year-processing";
         // Process void years: players whose new year-0 is a void year have their contracts voided
         const voidYearPlayers: { player: typeof developedPlayers[0]; deadCapAmount: number }[] = [];
         for (const p of developedPlayers) {
@@ -8481,6 +8500,7 @@ export const useGameStore = create<GameStore>()(
           return p;
         });
 
+        currentStep = "roster-pruning";
         // Identify players whose contracts expired (yearsLeft hit 0 after decrement)
         // These should be properly released from their teams
         const expiredContractPlayers = afterVoidPlayers.filter(
@@ -8739,6 +8759,7 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
+        currentStep = "schedule-generation";
         const newSchedule = generateSchedule(grownTeams, newSeason);
 
         // Final AI signing sweep: any unsigned player OVR >= 50 gets picked up
@@ -8830,6 +8851,7 @@ export const useGameStore = create<GameStore>()(
           allPlayersForNewSeason.push(...streetFAs);
         }
 
+        currentStep = "fa-pool-finalization";
         const seasonFreeAgents = [...unsignedPlayerIds, ...streetFAs.map(p => p.id)];
 
         // Coach progression and AI coaching carousel
@@ -8838,11 +8860,14 @@ export const useGameStore = create<GameStore>()(
         const coachNews: import('@/types').NewsItem[] = [...coachProgress.news, ...coachCarousel.news].map(headline =>
           makeNews({ season: newSeason, week: 0, type: 'signing', headline, isUserTeam: false }),
         );
+        currentStep = "coach-carousel";
         const teamsAfterCoaches = coachCarousel.teams;
 
         const numPreseasonGames = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).preseasonGames ?? 3;
         const enterPreseason = numPreseasonGames > 0;
+        currentStep = "preseason-setup";
         const preseasonSchedule = enterPreseason ? generatePreseasonSchedule(teamsAfterCoaches, numPreseasonGames, newSeason) : undefined;
+        currentStep = "final-state-commit";
 
         set({
           season: newSeason,
@@ -8951,6 +8976,38 @@ export const useGameStore = create<GameStore>()(
         const userId = get().userTeamId;
         for (const t of get().teams) {
           if (t.id !== userId) get().autoCutToRosterLimit(t.id);
+        }
+        } catch (error) {
+          // Surface the underlying offseason exception in two places so
+          // we can diagnose seed-specific failures (bige08676 2032 case):
+          //   (a) browser console — for testers retesting with devtools open
+          //   (b) news feed — for testers without devtools; persisted across reloads
+          // Force phase to "regular" so the user is no longer visually
+          // trapped on /draft-recap. The season counter still advances
+          // to keep playable-state coherent. Imperfect but unblocks the
+          // retest loop until the underlying root cause is fixed.
+          console.error(`[startNewSeason] offseason rollover failed at step: ${currentStep}`, error);
+          const errMsg = error instanceof Error ? error.message : String(error);
+          const errStack = error instanceof Error && error.stack
+            ? error.stack.split("\n").slice(0, 6).join("\n")
+            : undefined;
+          const errState = get();
+          set({
+            phase: "regular",
+            week: 1,
+            season: errState.season + 1,
+            newsItems: [
+              ...errState.newsItems,
+              makeNews({
+                season: errState.season + 1,
+                week: 0,
+                type: "system",
+                headline: `Season rollover hit an error at step: ${currentStep}`,
+                body: `Failed step: ${currentStep}\n\nError: ${errMsg}` + (errStack ? "\n\nStack (first 6 frames):\n" + errStack : ""),
+                isUserTeam: false,
+              }),
+            ],
+          });
         }
       },
 
