@@ -137,6 +137,16 @@ interface GameStore extends LeagueState {
    *  limit by releasing the lowest-OVR players. No-op if rosterLimitEnabled
    *  is false. */
   autoCutToRosterLimit: (teamId?: string) => void;
+  /** Trim every AI team to <=53 and enforce salary-cap compliance on a
+   *  freshly-imported / freshly-generated league. Called once at the end of
+   *  the league-init paths so AI teams don't land in Week 1 with 90-player
+   *  rosters or $50M over cap (.akrav 5/10 reported "AI teams still had 90
+   *  players ... 8 RBs in one game" because the season-rollover
+   *  autoCutToRosterLimit only runs inside startNewSeason and fresh imports
+   *  bypass it). In spectator mode trims every team since there's no human
+   *  managing the "user team" slot. Idempotent — re-running no-ops on
+   *  already-trimmed teams. */
+  initializeFreshLeagueRosters: () => void;
   restructureContract: (playerId: string, conversionAmount: number, voidYearsToAdd: number) => boolean;
   extendPlayer: (playerId: string, salary: number, years: number) => boolean;
   placeOnIR: (playerId: string) => void;
@@ -2661,6 +2671,11 @@ export const useGameStore = create<GameStore>()(
             expansionDraft: null,
             extensionsUsedThisSeason: 0,
           });
+          // Retrofit cut + cap-compliance for imported FBGM rosters. The
+          // raw JSON snapshots ship with ~90-player rosters and team
+          // payrolls well above cap; without this call every AI team
+          // would carry that overage into Week 1 (.akrav 5/10).
+          get().initializeFreshLeagueRosters();
           return;
         } catch (error) {
           console.warn('Failed to import league data, falling back to generated league.', error);
@@ -2822,6 +2837,11 @@ export const useGameStore = create<GameStore>()(
           expansionDraft: null,
           extensionsUsedThisSeason: 0,
         });
+        // Trim AI teams to 53 + enforce cap-compliance for synthetic
+        // generation too. generateRoster intentionally over-builds so
+        // teams have draft-class flex; without this call AI teams would
+        // hit Week 1 still padded.
+        get().initializeFreshLeagueRosters();
       },
 
       resetLeague: () => {
@@ -2880,7 +2900,7 @@ export const useGameStore = create<GameStore>()(
                 now - last.at > 5000;
               if (shouldShow) {
                 __week1RosterGateLastShown = { week: state.week, length: userTeam.roster.length, at: now };
-                alert(`Your active roster is at ${userTeam.roster.length} — cut or demote ${over} more before starting Week 1. Use /roster to manage cuts.`);
+                alert(`You can't start the regular season until your active roster is at 53.\n\nCurrent: ${userTeam.roster.length} players (cut or demote ${over} more).\n\nGo to /roster — there's an "Auto-cut to 53" button next to the roster count that will release the ${over} lowest-OVR players for you, or use the Demote-to-PS / Release actions to choose yourself.`);
               }
             }
             console.warn('[simWeek] blocked: user roster over 53 going into Week 1', userTeam.roster.length);
@@ -5866,6 +5886,133 @@ export const useGameStore = create<GameStore>()(
           players: updatedPlayers,
           teams: updatedTeams,
           freeAgents: [...state.freeAgents, ...allCutIds],
+        });
+      },
+
+      initializeFreshLeagueRosters: () => {
+        // .akrav 5/10 22:27 UTC: Spectator + Play mode fresh leagues had every
+        // AI team carrying ~90 players and ~$50M over cap, with the live-sim
+        // play-caller rotating through 8 RBs in a single game. Root cause:
+        // the season-rollover autoCutToRosterLimit (called inside
+        // startNewSeason) is the ONLY place where AI teams get trimmed to 53,
+        // but fresh-league imports land users directly in Week 1 of phase
+        // 'regular' without ever passing through startNewSeason. Spectator
+        // mode is the worst case since phase is always 'regular' on import
+        // and there's no human-side cut workflow. This action is called once
+        // at the tail of both fresh-league-init paths (imported FBGM JSON +
+        // synthetic generation) to retrofit the cut + cap-compliance passes.
+        //
+        // Phase 1: trim every AI team to <=53. User team is preserved in
+        // play mode (managed via /roster page or post-draft-cuts flow). In
+        // spectator mode trim every team since there's no human in the loop.
+        const initialState = get();
+        const isSpectator = !!initialState.isSpectator;
+        const userTid = initialState.userTeamId;
+
+        const rosterLimitOn =
+          (initialState.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).rosterLimitEnabled !== false;
+        if (rosterLimitOn) {
+          for (const t of initialState.teams) {
+            if (!isSpectator && t.id === userTid) continue;
+            get().autoCutToRosterLimit(t.id);
+          }
+        }
+
+        // Phase 2: cap-compliance pass. autoCutToRosterLimit freed some
+        // payroll but FBGM imports often leave teams $20-50M over cap even
+        // after the 90->53 trim. Release lowest-OVR players in OVR-ascending
+        // order until each team's totalPayroll <= salaryCap. Floors:
+        //   1) ROSTER_LIMITS[pos].min — never drop a position below its
+        //      minimum (avoids 0-RB rosters that pin RB1 to 100% carries).
+        //   2) 53-man floor — never drop below the active roster limit.
+        // User team is skipped in play mode for the same reason as Phase 1.
+        // Spectator mode trims every team.
+        const stateAfterCuts = get();
+        const releasedPlayerIds = new Set<string>();
+        const teamPayrollUpdates = new Map<string, number>();
+        const teamRosterUpdates = new Map<string, string[]>();
+        const teamDepthChartUpdates = new Map<string, Record<Position, string[]>>();
+
+        for (const team of stateAfterCuts.teams) {
+          if (!isSpectator && team.id === userTid) continue;
+          if (team.totalPayroll <= team.salaryCap) continue;
+
+          const activeIds = new Set(team.roster);
+          const teamPlayers = stateAfterCuts.players
+            .filter(p => activeIds.has(p.id) && !p.retired)
+            .sort((a, b) => a.ratings.overall - b.ratings.overall);
+
+          if (teamPlayers.length === 0) continue;
+
+          const posCount: Record<string, number> = {};
+          for (const p of teamPlayers) {
+            posCount[p.position] = (posCount[p.position] ?? 0) + 1;
+          }
+
+          let currentPayroll = team.totalPayroll;
+          const cap = team.salaryCap;
+          const localCuts: string[] = [];
+
+          for (const p of teamPlayers) {
+            if (currentPayroll <= cap) break;
+            // 53-man floor: never drop below the active roster limit. If
+            // we hit this we'll log and move on — team is structurally
+            // over cap on its cheapest 53 and there's nothing salary-cap
+            // ev to release. Realistic for the FBGM data so guard it.
+            if (teamPlayers.length - localCuts.length <= 53) break;
+            const posMin = ROSTER_LIMITS[p.position]?.min ?? 1;
+            if ((posCount[p.position] ?? 0) <= posMin) continue;
+            localCuts.push(p.id);
+            currentPayroll -= p.contract.salary ?? 0;
+            posCount[p.position] = (posCount[p.position] ?? 1) - 1;
+          }
+
+          if (localCuts.length === 0) {
+            // Team is structurally over cap on its cheapest 53. Log so we
+            // can find this in the news feed / console if it ever happens
+            // post-fix on fresh imports; the cap restructure pass that fires
+            // later in the season should pull payroll back into line.
+            console.warn(
+              '[initializeFreshLeagueRosters] team',
+              team.abbreviation,
+              'over cap with no releasable players above the position-min / 53-floor — leaving as-is for in-season restructure pass to handle',
+            );
+            continue;
+          }
+
+          const cutSet = new Set(localCuts);
+          for (const id of localCuts) releasedPlayerIds.add(id);
+          teamPayrollUpdates.set(team.id, Math.max(0, currentPayroll));
+          teamRosterUpdates.set(team.id, team.roster.filter(id => !cutSet.has(id)));
+          const newDepthChart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
+            acc[pos] = (team.depthChart[pos] ?? []).filter(id => !cutSet.has(id));
+            return acc;
+          }, {} as Record<Position, string[]>);
+          teamDepthChartUpdates.set(team.id, newDepthChart);
+        }
+
+        if (releasedPlayerIds.size === 0) return;
+
+        const finalState = get();
+        set({
+          players: finalState.players.map(p => {
+            if (!releasedPlayerIds.has(p.id)) return p;
+            return {
+              ...p,
+              teamId: null,
+              onIR: false,
+            };
+          }),
+          teams: finalState.teams.map(t => {
+            if (!teamRosterUpdates.has(t.id)) return t;
+            return {
+              ...t,
+              roster: teamRosterUpdates.get(t.id) ?? t.roster,
+              totalPayroll: teamPayrollUpdates.get(t.id) ?? t.totalPayroll,
+              depthChart: teamDepthChartUpdates.get(t.id) ?? t.depthChart,
+            };
+          }),
+          freeAgents: [...finalState.freeAgents, ...Array.from(releasedPlayerIds)],
         });
       },
 
