@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/engine/store';
 import { BoxScoreModal } from './BoxScoreModal';
 import { PlayerModal } from './PlayerModal';
@@ -18,6 +19,7 @@ import type { GameResult } from '@/types';
 export function GameTicker({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
   const { schedule, teams, userTeamId, week, phase, playoffBracket } = useGameStore();
   const { user, tier, isFoundingMember, signOut } = useSubscription();
+  const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -141,6 +143,14 @@ export function GameTicker({ onMenuToggle }: { onMenuToggle?: () => void } = {})
 
             const isCurrentWeek = phase === 'regular' && game.week === week && !game.played;
             const isUserGame = game.homeTeamId === userTeamId || game.awayTeamId === userTeamId;
+            // §1.7 5/12 evening (tofftanaut): Watch-Live affordance on the
+            // current-week unplayed user tile + on any upcoming unplayed
+            // user playoff matchup. Tap navigates into the existing live-sim
+            // surface at /game/[id] — no engine change, just an entry point.
+            const isWatchableNext = isUserGame && !game.played && (
+              isCurrentWeek
+              || (phase === 'playoffs' && !!playoffBracket?.find(m => m.id === game.id && !m.winnerId))
+            );
 
             // Tooltip content
             const tooltipLine1 = `Week ${game.week}`;
@@ -151,10 +161,16 @@ export function GameTicker({ onMenuToggle }: { onMenuToggle?: () => void } = {})
             return (
               <div
                 key={game.id}
-                onClick={() => game.played && setSelectedGame(game)}
-                className={`group relative flex-shrink-0 flex flex-col items-center px-2 py-1 border-r border-[var(--border)] last:border-r-0 snap-center ${isUserGame ? `${bgClass} font-bold` : `${bgClass} opacity-60`} ${isCurrentWeek ? 'ring-2 ring-[var(--accent)] bg-[var(--accent)]/5' : ''} ${game.played ? 'cursor-pointer hover:brightness-95 transition-all' : ''}`}
+                onClick={() => {
+                  if (game.played) {
+                    setSelectedGame(game);
+                  } else if (isWatchableNext) {
+                    router.push(`/game/${game.id}`);
+                  }
+                }}
+                className={`group relative flex-shrink-0 flex flex-col items-center px-2 py-1 border-r border-[var(--border)] last:border-r-0 snap-center ${isUserGame ? `${bgClass} font-bold` : `${bgClass} opacity-60`} ${isCurrentWeek ? 'ring-2 ring-[var(--accent)] bg-[var(--accent)]/5' : ''} ${(game.played || isWatchableNext) ? 'cursor-pointer hover:brightness-95 transition-all' : ''}`}
                 style={{ minWidth: '72px' }}
-                title={game.played ? `${result} ${userScore}-${oppScore} ${isHome ? 'vs' : '@'} ${getTeamAbbr(oppId)}` : `Week ${game.week} ${isHome ? 'vs' : '@'} ${getTeamAbbr(oppId)}`}
+                title={game.played ? `${result} ${userScore}-${oppScore} ${isHome ? 'vs' : '@'} ${getTeamAbbr(oppId)}` : `${isWatchableNext ? 'Watch live: ' : ''}Week ${game.week} ${isHome ? 'vs' : '@'} ${getTeamAbbr(oppId)}`}
               >
                 {/* Hover tooltip */}
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 rounded bg-[var(--surface)] border border-[var(--border)] shadow-lg text-[10px] text-[var(--text)] whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">
@@ -167,6 +183,14 @@ export function GameTicker({ onMenuToggle }: { onMenuToggle?: () => void } = {})
                     result === 'W' ? 'text-green-700 bg-green-200' : result === 'L' ? 'text-red-700 bg-red-200' : 'text-amber-700 bg-amber-200'
                   }`}>
                     {result}
+                  </div>
+                )}
+                {/* §1.7 5/12 evening: Watch-Live ▶ overlay on the user's next
+                    unplayed game tile. Click-through is handled by the tile's
+                    onClick above (navigates to /game/[id]). */}
+                {isWatchableNext && (
+                  <div className="absolute top-0 right-0 text-[8px] font-black px-0.5 rounded-bl text-blue-700 bg-blue-200">
+                    ▶
                   </div>
                 )}
                 {/* Away team row */}

@@ -141,6 +141,7 @@ export default function RosterPage() {
     autoCutToRosterLimit,
     demoteToPracticeSquad, promoteFromPracticeSquad,
     phase, week, seasonHistory, leagueSettings, resigningPlayers,
+    schedule, playoffBracket,
   } = useGameStore();
   const godMode = leagueSettings?.godMode ?? false;
   const [showCreatePlayer, setShowCreatePlayer] = useState(false);
@@ -447,6 +448,50 @@ export default function RosterPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* §1.7 5/12 evening (tofftanaut 5/8): Watch-Live CTA from /roster
+                surfaces a fast entry into live-sim for the next upcoming game
+                without forcing the user through schedule -> week. Only shown
+                when (a) viewing your own roster, (b) phase is regular or
+                playoffs, and (c) an unplayed user-team game exists. */}
+            {(() => {
+              if (activeTeamId !== userTeamId) return null;
+              if (phase !== 'regular' && phase !== 'playoffs') return null;
+              let nextGame: { id: string; oppAbbr: string; isHome: boolean } | null = null;
+              if (phase === 'regular') {
+                const upcoming = schedule
+                  .filter(g => !g.played && (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId))
+                  .sort((a, b) => a.week - b.week)[0];
+                if (upcoming) {
+                  const isHome = upcoming.homeTeamId === userTeamId;
+                  const oppId = isHome ? upcoming.awayTeamId : upcoming.homeTeamId;
+                  const oppAbbr = teams.find(t => t.id === oppId)?.abbreviation ?? '???';
+                  nextGame = { id: upcoming.id, oppAbbr, isHome };
+                }
+              } else if (phase === 'playoffs' && playoffBracket) {
+                const matchup = playoffBracket.find(
+                  m => !m.winnerId && m.homeTeamId && m.awayTeamId
+                    && (m.homeTeamId === userTeamId || m.awayTeamId === userTeamId),
+                );
+                if (matchup) {
+                  const isHome = matchup.homeTeamId === userTeamId;
+                  const oppId = isHome ? matchup.awayTeamId! : matchup.homeTeamId!;
+                  const oppAbbr = teams.find(t => t.id === oppId)?.abbreviation ?? '???';
+                  nextGame = { id: matchup.id, oppAbbr, isHome };
+                }
+              }
+              if (!nextGame) return null;
+              return (
+                <button
+                  type="button"
+                  onClick={() => router.push(`/game/${nextGame!.id}`)}
+                  className="touch-manipulation px-3 py-1.5 text-xs font-bold rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-1.5 shrink-0"
+                  title={`Watch live: ${nextGame.isHome ? 'vs' : '@'} ${nextGame.oppAbbr}`}
+                >
+                  <span aria-hidden="true">▶</span>
+                  <span>Watch Live: {nextGame.isHome ? 'vs' : '@'} {nextGame.oppAbbr}</span>
+                </button>
+              );
+            })()}
             <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1">
               {(['roster', 'depth', 'injuries', 'practice'] as const).map(mode => {
                 const psCount = (viewingTeam?.practiceSquad ?? []).length;
