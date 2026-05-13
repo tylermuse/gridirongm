@@ -554,8 +554,9 @@ export default function FreeAgencyPage() {
                 return (
                   <button
                     key={pos}
+                    type="button"
                     onClick={() => setFilterPos(filterPos === pos ? 'ALL' : pos)}
-                    className={`flex items-center justify-between px-2 py-1.5 rounded border text-xs transition-colors ${
+                    className={`touch-manipulation flex items-center justify-between px-2 py-1.5 rounded border text-xs transition-colors ${
                       filterPos === pos ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-400' : bgColor
                     }`}
                   >
@@ -649,18 +650,28 @@ export default function FreeAgencyPage() {
           <div className="space-y-4">
             {/* Filters */}
             <div className="flex items-center gap-3 flex-wrap">
+              {/* §1.3 5/12 evening (agarre3552 mobile FA filter): iOS Safari
+                  can swallow inner button taps inside `overflow-x-auto`
+                  horizontal-scroll containers, manifesting as "the FA pool
+                  isn't adjusting when I tap a position". Add explicit
+                  type="button" + touch-action: manipulation to every pill so
+                  the tap registers instantly even on touch (no 300ms delay)
+                  and doesn't get re-interpreted as a horizontal-scroll
+                  gesture. Same fix on the cap-summary 4-col grid above. */}
               <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 overflow-x-auto no-scrollbar">
                 <button
+                  type="button"
                   onClick={() => setFilterPos('ALL')}
-                  className={`px-2 py-1 text-xs rounded font-medium transition-colors ${filterPos === 'ALL' ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)]'}`}
+                  className={`touch-manipulation px-2 py-1 text-xs rounded font-medium transition-colors ${filterPos === 'ALL' ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)]'}`}
                 >
                   ALL
                 </button>
                 {POSITIONS.map(pos => (
                   <button
                     key={pos}
+                    type="button"
                     onClick={() => setFilterPos(filterPos === pos ? 'ALL' : pos)}
-                    className={`px-2 py-1 text-xs rounded font-medium transition-colors ${filterPos === pos ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)]'}`}
+                    className={`touch-manipulation px-2 py-1 text-xs rounded font-medium transition-colors ${filterPos === pos ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)]'}`}
                   >
                     {pos}
                   </button>
