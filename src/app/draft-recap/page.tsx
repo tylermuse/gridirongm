@@ -459,13 +459,39 @@ export default function DraftRecapPage() {
               )}
               <Button
                 onClick={async () => {
-                  if (overCap) {
-                    router.push('/post-draft-cuts');
-                    return;
+                  // §1.1 widened diagnostic net (bige08676 5/12 00:10 retest).
+                  // The 5/10 in-startNewSeason try/catch ships a news headline
+                  // on offseason-step throws, but bige's retest produced no
+                  // headline at all — strongly suggests the throw is happening
+                  // in THIS click-handler frame (post-rollover flushToStorage
+                  // or router.push) rather than inside startNewSeason. Wrap
+                  // every step of the click flow here so any throw surfaces
+                  // in console + visible alert, and the user is bounced off
+                  // /draft-recap even on failure.
+                  try {
+                    if (overCap) {
+                      router.push('/post-draft-cuts');
+                      return;
+                    }
+                    startNewSeason();
+                    await flushToStorage();
+                    router.push('/roster');
+                  } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    const stack = err instanceof Error ? err.stack : undefined;
+                    console.error('[draft-recap] Start New Season flow failed:', err);
+                    if (stack) console.error('[draft-recap] stack:', stack);
+                    alert(
+                      `Season rollover failed. Please screenshot this + the browser console (Cmd+Option+I on Mac / F12 on Windows) and share in #bug-reports:\n\n${msg}`,
+                    );
+                    // Bounce off /draft-recap so the user isn't visually
+                    // trapped, even though state may be partially corrupt.
+                    try {
+                      router.push('/roster');
+                    } catch {
+                      /* swallow nav-time errors */
+                    }
                   }
-                  startNewSeason();
-                  await flushToStorage();
-                  router.push('/roster');
                 }}
                 size="lg"
               >

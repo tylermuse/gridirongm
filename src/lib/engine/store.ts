@@ -8111,7 +8111,23 @@ export const useGameStore = create<GameStore>()(
         // never actually landed on main. Re-shipping it for real.
         // Console-log on entry so testers retesting with devtools open
         // get a clear breadcrumb.
-        console.log("[startNewSeason] entering season-rollover", { season: get().season, phase: get().phase });
+        const entryState = get();
+        console.error("[startNewSeason] entering season-rollover", { season: entryState.season, phase: entryState.phase });
+        // §1.1 5/12 evening — bige08676 retest #4 reproduced the soft-lock
+        // but produced NO news headline at all under the 5/10 instrumentation.
+        // Two hypotheses survive: (a) the throw happens before any step
+        // boundary executes inside the try, or (b) the news-feed write at
+        // catch-time is itself failing (e.g. newsItems shape corrupted).
+        // Write an entry-level news headline BEFORE the try so tester can
+        // confirm at minimum that startNewSeason was entered.
+        const entryNews = makeNews({
+          season: entryState.season + 1,
+          week: 0,
+          type: "system",
+          headline: `Season rollover started: ${entryState.season} → ${entryState.season + 1}`,
+          isUserTeam: false,
+        });
+        set({ newsItems: [...(Array.isArray(entryState.newsItems) ? entryState.newsItems : []), entryNews] });
         // §1.0 per-step instrumentation (bige08676 5/10 partial-fail). The
         // outer try/catch was swallowing WHICH step throws — testers like
         // bige08676 hit the soft-lock but their news feed only said "rollover
@@ -8992,12 +9008,18 @@ export const useGameStore = create<GameStore>()(
             ? error.stack.split("\n").slice(0, 6).join("\n")
             : undefined;
           const errState = get();
+          // §1.1 5/12 evening: defensive guard for the news-feed write itself.
+          // If a prior step mutated newsItems into a non-array shape, the spread
+          // below would throw and swallow the catch entirely — exactly the
+          // failure mode that would produce bige08676's "no news headline at
+          // all" symptom.
+          const safePriorNews = Array.isArray(errState.newsItems) ? errState.newsItems : [];
           set({
             phase: "regular",
             week: 1,
             season: errState.season + 1,
             newsItems: [
-              ...errState.newsItems,
+              ...safePriorNews,
               makeNews({
                 season: errState.season + 1,
                 week: 0,
@@ -9105,9 +9127,30 @@ export const useGameStore = create<GameStore>()(
             }
           }
 
-          // Add result to schedule for box score access
+          // Add result to schedule for box score access. §1.2 5/12 evening
+          // (lakerfan21_32127 report): live-coached playoff games were showing
+          // a duplicate tile + pre-sim stat lines next to the actual outcome.
+          // Most likely root cause is a stale schedule entry keyed by the
+          // upstream `result.id` (which usually equals matchupId but, on the
+          // playoff path that builds `game` from a bracket matchup without a
+          // pre-existing schedule entry, can drift). Filter on BOTH ids so
+          // any stale entry under either key is removed before the canonical
+          // playoff result is appended. Loudly log if such a duplicate was
+          // actually present, so we get a smoking gun on the next retest.
           const playoffResult = { ...result, id: matchupId, played: true };
-          const updatedSchedule = [...state.schedule.filter(g => g.id !== matchupId), playoffResult];
+          const dupResultId = result.id && result.id !== matchupId
+            ? state.schedule.find(g => g.id === result.id)
+            : undefined;
+          if (dupResultId) {
+            console.error('[commitLiveGame] stale playoff schedule entry under result.id detected; deduping', {
+              matchupId,
+              resultId: result.id,
+            });
+          }
+          const updatedSchedule = [
+            ...state.schedule.filter(g => g.id !== matchupId && g.id !== result.id),
+            playoffResult,
+          ];
 
           // Generate playoff recap
           const matchup = state.playoffBracket.find(m => m.id === matchupId);
