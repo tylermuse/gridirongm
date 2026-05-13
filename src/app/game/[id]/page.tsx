@@ -557,6 +557,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // until this becomes true.
   const [animationComplete, setAnimationComplete] = useState(true);
 
+  // §1.9 5/12 evening (icantletugoo): smooth-ticking live clock state.
+  // Declared up here (above any early returns below) so React hook order
+  // is stable. The displayed clock value is interpolated by a useEffect
+  // farther down once targetTimeSecs + liveQuarter are known.
+  const [displayedTimeSecs, setDisplayedTimeSecs] = useState<number>(900);
+  const lastSeenQuarterRef = useRef<number>(1);
+
   // Combined event stream — use pre-computed events up to the pivot,
   // then engine-generated events after Live Coach took over.
   const allEvents: PlayEvent[] = useMemo(() => {
@@ -905,6 +912,37 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
+  // §1.9 5/12 evening (icantletugoo): tick the displayed game clock down 1
+  // real second per real second while the game is playing, capped at the
+  // engine's actual current time. Recompute target inline so this hook
+  // doesn't depend on any value derived after the early-return guards
+  // below — keeps hook order stable across return branches.
+  useEffect(() => {
+    const snapshot = liveCoachPaused && liveEngineRef.current ? liveEngineRef.current.getState() : null;
+    const curEv = allEvents[revealedCount - 1] ?? null;
+    const target = snapshot?.timeSecs
+      ?? (curEv?.timeStr
+          ? parseInt(curEv.timeStr.split(':')[0] ?? '0', 10) * 60
+            + parseInt(curEv.timeStr.split(':')[1] ?? '0', 10)
+          : 900);
+    const rawQ = snapshot?.quarter ?? curEv?.quarter ?? 1;
+    const targetQ = (snapshot?.overtime && rawQ < 5) ? 5 : rawQ;
+    if (lastSeenQuarterRef.current !== targetQ) {
+      lastSeenQuarterRef.current = targetQ;
+      setDisplayedTimeSecs(target);
+      return;
+    }
+    if (displayedTimeSecs <= target) {
+      if (displayedTimeSecs !== target) setDisplayedTimeSecs(target);
+      return;
+    }
+    if (!isPlaying) return;
+    const handle = setTimeout(() => {
+      setDisplayedTimeSecs(prev => Math.max(target, prev - 1));
+    }, 1000);
+    return () => clearTimeout(handle);
+  }, [displayedTimeSecs, isPlaying, liveCoachPaused, revealedCount, allEvents]);
+
   // Guard conditions
   if (phase !== 'regular' && phase !== 'playoffs') {
     return (
@@ -1102,9 +1140,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // bump the displayed quarter to 5 so the scoreboard shows "OT".
   const rawEngineQuarter = engineSnapshot?.quarter ?? currentEvent?.quarter ?? 1;
   const liveQuarter = (engineSnapshot?.overtime && rawEngineQuarter < 5) ? 5 : rawEngineQuarter;
-  const liveTime = engineSnapshot
-    ? `${Math.floor(engineSnapshot.timeSecs / 60)}:${String(engineSnapshot.timeSecs % 60).padStart(2, '0')}`
-    : currentEvent?.timeStr ?? '15:00';
+  // §1.9 5/12 evening (icantletugoo 5/10 02:46 UTC): live clock smoothly
+  // ticks down 1 second every real second. State + tick effect are declared
+  // at the top of the component (above any early-return branches) so React
+  // hook order stays stable; the visible string is just derived here.
+  const liveTime = `${Math.floor(displayedTimeSecs / 60)}:${String(displayedTimeSecs % 60).padStart(2, '0')}`;
   const livePoss = engineSnapshot?.possession ?? currentEvent?.possession ?? 'home';
   const liveFieldPos = engineSnapshot?.fieldPos ?? currentEvent?.fieldPos ?? 25;
   const liveDown = engineSnapshot?.down ?? currentEvent?.down ?? 1;
