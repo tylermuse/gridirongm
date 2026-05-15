@@ -30,7 +30,7 @@ import { defaultApproval, updateApprovalAfterGame, updateApprovalEndOfSeason, up
 import { teamSpecialTeamsRating } from './specialTeams';
 import { createExpansionTeamObject, runExpansionDraft, computeProtectionLimit } from './expansionDraft';
 import { buildGmSyncPayload, syncGmStats } from './gmSync';
-import { checkDisciplineEvents, disciplineNewsItems, tickSuspensions } from './discipline';
+import { checkDisciplineEvents, disciplineNewsItems, isPlayerSuspended, tickSuspensions } from './discipline';
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from './simTelemetry';
@@ -2203,9 +2203,10 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
   const updatedGames = weekGames.map(game => {
     const homeTeam = resortedTeams.find(t => t.id === game.homeTeamId);
     const awayTeam = resortedTeams.find(t => t.id === game.awayTeamId);
-    // Exclude suspended players from the game roster
-    const homeRosterRaw = state.players.filter(p => p.teamId === game.homeTeamId && !p.suspension);
-    const awayRosterRaw = state.players.filter(p => p.teamId === game.awayTeamId && !p.suspension);
+    // Exclude suspended players from the game roster (shared helper keeps
+    // every lineup-construction site in lockstep — see discipline.ts).
+    const homeRosterRaw = state.players.filter(p => p.teamId === game.homeTeamId && !isPlayerSuspended(p));
+    const awayRosterRaw = state.players.filter(p => p.teamId === game.awayTeamId && !isPlayerSuspended(p));
     const homeRoster = homeTeam?.depthChart
       ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart)
       : homeRosterRaw;
@@ -3002,8 +3003,8 @@ export const useGameStore = create<GameStore>()(
 
         // Sim preseason games at ~70% OVR (starters rest, backups play more)
         const simmedGames = weekGames.map(game => {
-          const homeRoster = state.players.filter(p => p.teamId === game.homeTeamId && !p.retired && !p.suspension);
-          const awayRoster = state.players.filter(p => p.teamId === game.awayTeamId && !p.retired && !p.suspension);
+          const homeRoster = state.players.filter(p => p.teamId === game.homeTeamId && !p.retired && !isPlayerSuspended(p));
+          const awayRoster = state.players.filter(p => p.teamId === game.awayTeamId && !p.retired && !isPlayerSuspended(p));
 
           // Reduce OVR by ~30% for preseason (starters play limited snaps)
           const preseasonRoster = (roster: Player[]) => roster.map(p => ({
@@ -3163,8 +3164,8 @@ export const useGameStore = create<GameStore>()(
 
         const homeTeam = state.teams.find(t => t.id === matchup.homeTeamId);
         const awayTeam = state.teams.find(t => t.id === matchup.awayTeamId);
-        const homeRosterRaw = injuryDecPlayers.filter(p => p.teamId === matchup.homeTeamId);
-        const awayRosterRaw = injuryDecPlayers.filter(p => p.teamId === matchup.awayTeamId);
+        const homeRosterRaw = injuryDecPlayers.filter(p => p.teamId === matchup.homeTeamId && !isPlayerSuspended(p));
+        const awayRosterRaw = injuryDecPlayers.filter(p => p.teamId === matchup.awayTeamId && !isPlayerSuspended(p));
         const homeRoster = homeTeam?.depthChart
           ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart)
           : homeRosterRaw;
@@ -3345,8 +3346,8 @@ export const useGameStore = create<GameStore>()(
             injuryRound = nextRoundTarget;
           }
 
-          const homeRosterRaw = accumulatedPlayers.filter(p => p.teamId === next.homeTeamId);
-          const awayRosterRaw = accumulatedPlayers.filter(p => p.teamId === next.awayTeamId);
+          const homeRosterRaw = accumulatedPlayers.filter(p => p.teamId === next.homeTeamId && !isPlayerSuspended(p));
+          const awayRosterRaw = accumulatedPlayers.filter(p => p.teamId === next.awayTeamId && !isPlayerSuspended(p));
           const homeTeam = state.teams.find(t => t.id === next.homeTeamId);
           const awayTeam = state.teams.find(t => t.id === next.awayTeamId);
           const homeRoster = homeTeam?.depthChart ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart) : homeRosterRaw;
@@ -3472,8 +3473,8 @@ export const useGameStore = create<GameStore>()(
           const matchup = bracket.find(m => m.id === game.id);
           if (!matchup || !matchup.homeTeamId || !matchup.awayTeamId) continue;
 
-          const homeRosterRaw = roundPlayers.filter(p => p.teamId === matchup.homeTeamId);
-          const awayRosterRaw = roundPlayers.filter(p => p.teamId === matchup.awayTeamId);
+          const homeRosterRaw = roundPlayers.filter(p => p.teamId === matchup.homeTeamId && !isPlayerSuspended(p));
+          const awayRosterRaw = roundPlayers.filter(p => p.teamId === matchup.awayTeamId && !isPlayerSuspended(p));
           const homeTeam = state.teams.find(t => t.id === matchup.homeTeamId);
           const awayTeam = state.teams.find(t => t.id === matchup.awayTeamId);
           const homeRoster = homeTeam?.depthChart ? sortRosterByDepthChart(homeRosterRaw, homeTeam.depthChart) : homeRosterRaw;
@@ -8063,7 +8064,7 @@ export const useGameStore = create<GameStore>()(
         // Build All-Star rosters: top 25 healthy players per conference
         const acTeamIds = new Set(state.teams.filter(t => t.conference === 'AC').map(t => t.id));
         const ncTeamIds = new Set(state.teams.filter(t => t.conference === 'NC').map(t => t.id));
-        const healthy = (p: Player) => !p.retired && p.teamId && (!p.injury || p.injury.weeksLeft === 0);
+        const healthy = (p: Player) => !p.retired && p.teamId && (!p.injury || p.injury.weeksLeft === 0) && !isPlayerSuspended(p);
         const acAllStars = state.players.filter(p => healthy(p) && acTeamIds.has(p.teamId!))
           .sort((a, b) => b.ratings.overall - a.ratings.overall).slice(0, 25);
         const ncAllStars = state.players.filter(p => healthy(p) && ncTeamIds.has(p.teamId!))

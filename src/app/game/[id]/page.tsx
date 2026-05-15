@@ -7,6 +7,7 @@ import { GameShell } from '@/components/game/GameShell';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { simulatePlayByPlay, liveGameToGameResult, livePlayerStatsAtEvent, deriveScoringPlaysFromEvents, type LiveGamePlan } from '@/lib/engine/playByPlay';
+import { isPlayerSuspended } from '@/lib/engine/discipline';
 import { pushSimTelemetryRecord, meanStarterOvr } from '@/lib/engine/simTelemetry';
 import { createLiveCoachEngine, type LiveCoachEngine } from '@/lib/engine/liveCoachEngine';
 import { Confetti } from '@/components/ui/Confetti';
@@ -456,7 +457,10 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const awayTeam = game ? teams.find(t => t.id === game.awayTeamId) ?? null : null;
   const homePlayers = useMemo(() => {
     if (!game) return [];
-    const roster = players.filter(p => p.teamId === game.homeTeamId);
+    // Suspended players are ineligible — keep the live-coach path in lockstep
+    // with the auto-sim filter at store.ts so a suspended starter doesn't
+    // appear in the Watch Live box score after a discipline event fires.
+    const roster = players.filter(p => p.teamId === game.homeTeamId && !isPlayerSuspended(p));
     const dc = homeTeam?.depthChart;
     if (!dc) return roster.sort((a, b) => b.ratings.overall - a.ratings.overall);
     return [...roster].sort((a, b) => {
@@ -467,7 +471,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   }, [game, players, homeTeam]);
   const awayPlayers = useMemo(() => {
     if (!game) return [];
-    const roster = players.filter(p => p.teamId === game.awayTeamId);
+    const roster = players.filter(p => p.teamId === game.awayTeamId && !isPlayerSuspended(p));
     const dc = awayTeam?.depthChart;
     if (!dc) return roster.sort((a, b) => b.ratings.overall - a.ratings.overall);
     return [...roster].sort((a, b) => {
