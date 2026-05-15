@@ -7,6 +7,7 @@ import { GameShell } from '@/components/game/GameShell';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { simulatePlayByPlay, liveGameToGameResult, livePlayerStatsAtEvent, deriveScoringPlaysFromEvents, type LiveGamePlan } from '@/lib/engine/playByPlay';
+import { isPlayerSuspended } from '@/lib/engine/discipline';
 import { pushSimTelemetryRecord, meanStarterOvr } from '@/lib/engine/simTelemetry';
 import { createLiveCoachEngine, type LiveCoachEngine } from '@/lib/engine/liveCoachEngine';
 import { Confetti } from '@/components/ui/Confetti';
@@ -456,7 +457,10 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const awayTeam = game ? teams.find(t => t.id === game.awayTeamId) ?? null : null;
   const homePlayers = useMemo(() => {
     if (!game) return [];
-    const roster = players.filter(p => p.teamId === game.homeTeamId);
+    // Suspended players are ineligible — keep the live-coach path in lockstep
+    // with the auto-sim filter at store.ts so a suspended starter doesn't
+    // appear in the Watch Live box score after a discipline event fires.
+    const roster = players.filter(p => p.teamId === game.homeTeamId && !isPlayerSuspended(p));
     const dc = homeTeam?.depthChart;
     if (!dc) return roster.sort((a, b) => b.ratings.overall - a.ratings.overall);
     return [...roster].sort((a, b) => {
@@ -467,7 +471,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   }, [game, players, homeTeam]);
   const awayPlayers = useMemo(() => {
     if (!game) return [];
-    const roster = players.filter(p => p.teamId === game.awayTeamId);
+    const roster = players.filter(p => p.teamId === game.awayTeamId && !isPlayerSuspended(p));
     const dc = awayTeam?.depthChart;
     if (!dc) return roster.sort((a, b) => b.ratings.overall - a.ratings.overall);
     return [...roster].sort((a, b) => {
@@ -849,15 +853,35 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   function buildFinalGameResult(): GameResult | null {
     if (!game) return null;
     if (liveEngineRef.current) {
-      // Live engine was active — use ITS final state for the score
+      // Live engine was active. Score comes from ITS final state (user's
+      // play-calls actually moved it). PlayerStats and scoringPlays read
+      // from the combined event stream (pre-sim up to pivot + live engine
+      // events after) — using the pre-sim's full playerStats was
+      // surfacing as the box-score-shows-pre-sim-result symptom that
+      // lakerfan21_32127 reported on 5/12: live-coached playoff games
+      // saved a stat line for plays the user had overridden.
       const es = liveEngineRef.current.getState();
-      const events = liveResult?.events ?? [];
+      const pivotIdx = liveEnginePivotIdx;
+      const events: PlayEvent[] = pivotIdx !== null
+        ? [...(liveResult?.events ?? []).slice(0, pivotIdx), ...liveExtraEvents]
+        : (liveResult?.events ?? []);
+      // Per-player stats come from the bucket snapshot on the LAST pre-sim
+      // event before pivot (the playByPlay engine accumulates them there).
+      // Live engine events don't carry bucket snapshots, so plays after
+      // pivot won't appear in the box score — but that's strictly better
+      // than carrying pre-sim ghost plays the user replaced.
+      const lastBucketEvent = pivotIdx !== null && pivotIdx > 0
+        ? (liveResult?.events ?? [])[pivotIdx - 1]
+        : (liveResult?.events ?? []).slice(-1)[0];
+      const stats = lastBucketEvent
+        ? livePlayerStatsAtEvent(lastBucketEvent, homePlayers, awayPlayers)
+        : (liveResult?.playerStats ?? {});
       return {
         ...game,
         homeScore: es.homeScore,
         awayScore: es.awayScore,
         played: true,
-        playerStats: liveResult?.playerStats ?? {},
+        playerStats: stats,
         scoringPlays: deriveScoringPlaysFromEvents(events, game.homeTeamId, game.awayTeamId),
       };
     }

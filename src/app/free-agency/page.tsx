@@ -554,13 +554,14 @@ export default function FreeAgencyPage() {
                 return (
                   <button
                     key={pos}
+                    type="button"
                     onClick={() => setFilterPos(filterPos === pos ? 'ALL' : pos)}
                     className={`flex items-center justify-between px-2 py-1.5 rounded border text-xs transition-colors ${
-                      filterPos === pos ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-400' : bgColor
+                      filterPos === pos ? 'bg-blue-600 border-blue-600 text-white' : bgColor
                     }`}
                   >
                     <span className="font-bold">{pos}</span>
-                    <span className={`tabular-nums ${filterPos === pos ? 'text-blue-600 font-bold' : textColor}`}>
+                    <span className={`tabular-nums ${filterPos === pos ? 'text-white font-bold' : textColor}`}>
                       {count}<span className="text-[10px] opacity-60">/{limits.max}</span>
                     </span>
                   </button>
@@ -597,6 +598,7 @@ export default function FreeAgencyPage() {
                   return (
                     <button
                       key={pos}
+                      type="button"
                       onClick={() => setFilterPos(filterPos === pos ? 'ALL' : pos)}
                       className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors ${
                         filterPos === pos ? 'bg-blue-600/20 border border-blue-500/40' : 'hover:bg-[var(--surface-2)] border border-transparent'
@@ -651,6 +653,7 @@ export default function FreeAgencyPage() {
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 overflow-x-auto no-scrollbar">
                 <button
+                  type="button"
                   onClick={() => setFilterPos('ALL')}
                   className={`px-2 py-1 text-xs rounded font-medium transition-colors ${filterPos === 'ALL' ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)]'}`}
                 >
@@ -659,6 +662,7 @@ export default function FreeAgencyPage() {
                 {POSITIONS.map(pos => (
                   <button
                     key={pos}
+                    type="button"
                     onClick={() => setFilterPos(filterPos === pos ? 'ALL' : pos)}
                     className={`px-2 py-1 text-xs rounded font-medium transition-colors ${filterPos === pos ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)]'}`}
                   >

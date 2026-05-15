@@ -182,6 +182,22 @@ export function checkDisciplineEvents(
 }
 
 /**
+ * Pure eligibility check: is this player suspended this game?
+ * Used by every lineup-construction site so the discipline state flag set
+ * by checkDisciplineEvents actually keeps the player out of the box score.
+ *
+ * agarre3552 (5/14): the discipline event headlines were firing but
+ * suspended players still played the next game. Root cause was that the
+ * live-coach (Watch Live) path and the playoff sim paths in store.ts
+ * filtered by teamId only — the auto-sim regular-season path was the only
+ * place that checked p.suspension. Centralizing the check here so all
+ * paths stay in lockstep.
+ */
+export function isPlayerSuspended(player: Pick<Player, 'suspension'>): boolean {
+  return !!player.suspension && (player.suspension.gamesLeft ?? 0) > 0;
+}
+
+/**
  * Decrement suspension counters after a simmed week.
  * Players whose suspension reaches 0 are cleared.
  */
