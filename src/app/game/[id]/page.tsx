@@ -853,15 +853,35 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   function buildFinalGameResult(): GameResult | null {
     if (!game) return null;
     if (liveEngineRef.current) {
-      // Live engine was active — use ITS final state for the score
+      // Live engine was active. Score comes from ITS final state (user's
+      // play-calls actually moved it). PlayerStats and scoringPlays read
+      // from the combined event stream (pre-sim up to pivot + live engine
+      // events after) — using the pre-sim's full playerStats was
+      // surfacing as the box-score-shows-pre-sim-result symptom that
+      // lakerfan21_32127 reported on 5/12: live-coached playoff games
+      // saved a stat line for plays the user had overridden.
       const es = liveEngineRef.current.getState();
-      const events = liveResult?.events ?? [];
+      const pivotIdx = liveEnginePivotIdx;
+      const events: PlayEvent[] = pivotIdx !== null
+        ? [...(liveResult?.events ?? []).slice(0, pivotIdx), ...liveExtraEvents]
+        : (liveResult?.events ?? []);
+      // Per-player stats come from the bucket snapshot on the LAST pre-sim
+      // event before pivot (the playByPlay engine accumulates them there).
+      // Live engine events don't carry bucket snapshots, so plays after
+      // pivot won't appear in the box score — but that's strictly better
+      // than carrying pre-sim ghost plays the user replaced.
+      const lastBucketEvent = pivotIdx !== null && pivotIdx > 0
+        ? (liveResult?.events ?? [])[pivotIdx - 1]
+        : (liveResult?.events ?? []).slice(-1)[0];
+      const stats = lastBucketEvent
+        ? livePlayerStatsAtEvent(lastBucketEvent, homePlayers, awayPlayers)
+        : (liveResult?.playerStats ?? {});
       return {
         ...game,
         homeScore: es.homeScore,
         awayScore: es.awayScore,
         played: true,
-        playerStats: liveResult?.playerStats ?? {},
+        playerStats: stats,
         scoringPlays: deriveScoringPlaysFromEvents(events, game.homeTeamId, game.awayTeamId),
       };
     }

@@ -9106,9 +9106,33 @@ export const useGameStore = create<GameStore>()(
             }
           }
 
-          // Add result to schedule for box score access
+          // Add result to schedule for box score access.
+          // lakerfan21_32127 (5/12) reported a duplicate playoff tile in
+          // /schedule and a stale box score. Primary dedupe is by id
+          // (matchupId is deterministic — 'ac-wc-0', 'championship', etc.)
+          // which catches any prior pre-sim or auto-sim that wrote with the
+          // same id. Belt-and-suspenders: also drop any prior schedule
+          // entry that matches this exact playoff-week + home/away pairing
+          // even if its id differs, in case a degenerate code path wrote
+          // with a non-bracket id. Regular-season games (week < 99) are
+          // untouched — only playoff-week entries (week >= 99 OR id
+          // matching the bracket-id pattern) are eligible for the
+          // secondary dedupe.
           const playoffResult = { ...result, id: matchupId, played: true };
-          const updatedSchedule = [...state.schedule.filter(g => g.id !== matchupId), playoffResult];
+          const isPlayoffEntry = (g: GameResult) =>
+            g.week >= 99 || /^(ac|nc)-(wc|div|conf)-\d+$|^championship$/.test(g.id);
+          const updatedSchedule = [
+            ...state.schedule.filter(g =>
+              g.id !== matchupId &&
+              !(
+                isPlayoffEntry(g) &&
+                g.season === playoffResult.season &&
+                g.homeTeamId === playoffResult.homeTeamId &&
+                g.awayTeamId === playoffResult.awayTeamId
+              ),
+            ),
+            playoffResult,
+          ];
 
           // Generate playoff recap
           const matchup = state.playoffBracket.find(m => m.id === matchupId);
