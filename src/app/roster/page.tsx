@@ -158,6 +158,9 @@ export default function RosterPage() {
   const [extendPlayerId, setExtendPlayer] = useState<string | null>(null);
   const [extendSalary, setExtendSalary] = useState(10);
   const [extendYears, setExtendYears] = useState(3);
+  // milkytoad 5/15: surface the reason when extendPlayer rejects so the
+  // user doesn't see a no-op button on the 4th extension attempt.
+  const [extendError, setExtendError] = useState<string | null>(null);
   const [viewingTeamId, setViewingTeamId] = useState<string | null>(null);
 
   // Sort state for the Practice Squad view. Separate from the main roster
@@ -1818,16 +1821,28 @@ export default function RosterPage() {
                   </div>
                 </div>
               </div>
+              {extendError && (
+                <div className="px-5 pb-2">
+                  <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+                    {extendError}
+                  </div>
+                </div>
+              )}
               <div className="px-5 py-3 border-t border-[var(--border)] flex items-center justify-end gap-2">
-                <Button size="sm" variant="secondary" onClick={() => setExtendPlayer(null)}>
+                <Button size="sm" variant="secondary" onClick={() => { setExtendError(null); setExtendPlayer(null); }}>
                   Cancel
                 </Button>
                 <Button
                   size="sm"
                   disabled={!canAfford}
                   onClick={() => {
-                    const ok = extendPlayer(extendPlayerId, extendSalary, extendYears);
-                    if (ok) setExtendPlayer(null);
+                    const result = extendPlayer(extendPlayerId, extendSalary, extendYears);
+                    if (result.success) {
+                      setExtendError(null);
+                      setExtendPlayer(null);
+                    } else {
+                      setExtendError(result.reason ?? 'Extension was rejected.');
+                    }
                   }}
                   className="bg-green-600 hover:bg-green-700 text-white"
                 >
