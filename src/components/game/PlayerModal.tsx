@@ -442,7 +442,12 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                         if (updated.outcome === 'accepted') {
                           const { extendPlayer } = useGameStore.getState() as unknown as Record<string, unknown>;
                           if (typeof extendPlayer === 'function') {
-                            (extendPlayer as (id: string, salary: number, years: number) => void)(player.id, extOfferSalary, extOfferYears);
+                            // extendPlayer returns {success, reason} as of 5/15 — the
+                            // render gate above (extensionsUsed < 3) keeps the user
+                            // out of this path when capped, so we don't need to
+                            // surface the reason here. Type signature matches the
+                            // store interface so any future refactor stays honest.
+                            (extendPlayer as (id: string, salary: number, years: number) => { success: boolean; reason?: string })(player.id, extOfferSalary, extOfferYears);
                           }
                         }
                       }}

@@ -148,7 +148,7 @@ interface GameStore extends LeagueState {
    *  already-trimmed teams. */
   initializeFreshLeagueRosters: () => void;
   restructureContract: (playerId: string, conversionAmount: number, voidYearsToAdd: number) => boolean;
-  extendPlayer: (playerId: string, salary: number, years: number) => boolean;
+  extendPlayer: (playerId: string, salary: number, years: number) => { success: boolean; reason?: string };
   placeOnIR: (playerId: string) => void;
   activateFromIR: (playerId: string) => void;
   togglePlayingThroughInjury: (playerId: string) => void;
@@ -6386,17 +6386,23 @@ export const useGameStore = create<GameStore>()(
       extendPlayer: (playerId: string, salary: number, years: number) => {
         const state = get();
         const player = state.players.find(p => p.id === playerId);
-        if (!player || player.teamId !== state.userTeamId) return false;
+        // milkytoad 5/15: each early-return now carries a reason string so
+        // the UI can surface why the Extend button "did nothing". The 3-per-
+        // season cap (CONTRACT_EXTENSIONS.md §Limits) is intentional —
+        // prevents extending the entire roster in one offseason — but the
+        // prior silent-false return left the user staring at a no-op button.
+        if (!player) return { success: false, reason: 'Player not found.' };
+        if (player.teamId !== state.userTeamId) return { success: false, reason: 'Cannot extend players on other teams.' };
 
         // Eligibility checks
-        if (player.contract.yearsLeft < 1) return false;
-        if (player.holdout) return false;
-        if (player.onIR) return false;
-        if ((state.extensionsUsedThisSeason ?? 0) >= 3) return false;
-        if (player.lastRestructuredSeason === state.season) return false;
+        if (player.contract.yearsLeft < 1) return { success: false, reason: 'Contract expires this season — use the re-signing window instead.' };
+        if (player.holdout) return { success: false, reason: 'Player is holding out. Resolve the holdout before extending.' };
+        if (player.onIR) return { success: false, reason: 'Player is on IR. Activate from IR before extending.' };
+        if ((state.extensionsUsedThisSeason ?? 0) >= 3) return { success: false, reason: 'You have used all 3 extensions this offseason. Cap resets next offseason.' };
+        if (player.lastRestructuredSeason === state.season) return { success: false, reason: 'Player was already extended or restructured this season.' };
 
         const userTeam = state.teams.find(t => t.id === state.userTeamId);
-        if (!userTeam) return false;
+        if (!userTeam) return { success: false, reason: 'User team not found.' };
 
         const oldContract = player.contract;
         const oldCapHit = getCapHit(oldContract);
@@ -6489,7 +6495,7 @@ export const useGameStore = create<GameStore>()(
           })],
         });
 
-        return true;
+        return { success: true };
       },
 
       // PRD-04: Execute a trade
