@@ -463,8 +463,24 @@ export default function DraftRecapPage() {
                     router.push('/post-draft-cuts');
                     return;
                   }
-                  startNewSeason();
-                  await flushToStorage();
+                  // 5/16 instrumentation widening (bige08676 + marioalsosa).
+                  // See post-draft-cuts/page.tsx for the rationale — outer
+                  // try/catch + router.push guarantee even on startNewSeason
+                  // crash so the user isn't stranded on /draft-recap.
+                  try {
+                    startNewSeason();
+                  } catch (err) {
+                    console.error('[draft-recap] startNewSeason escaped its own catch:', err);
+                    try {
+                      localStorage.setItem('gg-rollover-outer-error', JSON.stringify({
+                        ts: new Date().toISOString(),
+                        source: 'draft-recap',
+                        error: err instanceof Error ? err.message : String(err),
+                        stack: err instanceof Error ? err.stack?.split('\n').slice(0, 6).join('\n') : undefined,
+                      }));
+                    } catch { /* best-effort */ }
+                  }
+                  try { await flushToStorage(); } catch (err) { console.error('[draft-recap] flushToStorage failed', err); }
                   router.push('/roster');
                 }}
                 size="lg"
