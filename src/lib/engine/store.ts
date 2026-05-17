@@ -8174,6 +8174,45 @@ export const useGameStore = create<GameStore>()(
         // Console-log on entry so testers retesting with devtools open
         // get a clear breadcrumb.
         console.log("[startNewSeason] entering season-rollover", { season: get().season, phase: get().phase });
+        // 5/16 instrumentation widening (bige08676 + marioalsosa cross-tester
+        // confirm): the existing per-step news-feed instrumentation hasn't
+        // surfaced a step name in either tester's news feed after 5+ retests,
+        // which means either (a) the throw escapes startNewSeason entirely
+        // before any step boundary is reached, or (b) the recovery catch's
+        // set() is itself throwing so the news entry never lands. Belt-and-
+        // suspenders: write a localStorage breadcrumb on every entry +
+        // exit-path so the next retest produces a diagnosable signal even
+        // if Zustand state is unrecoverable.
+        const entrySeason = get().season;
+        const entryPhase = get().phase;
+        try {
+          localStorage.setItem('gg-rollover-entry', JSON.stringify({
+            ts: new Date().toISOString(), season: entrySeason, phase: entryPhase,
+          }));
+        } catch { /* localStorage may be disabled — best-effort breadcrumb */ }
+
+        // Pre-flight shape validation. If any of the iterables startNewSeason
+        // consumes downstream are in an unexpected shape, capture WHICH one
+        // and surface it as a news headline. Doesn't bail — the rollover
+        // still runs and may succeed; this just gives us a name on the next
+        // retest if a downstream consumer throws.
+        const preflightWarnings: string[] = [];
+        const preflight = get();
+        if (!Array.isArray(preflight.players)) preflightWarnings.push("players is not an array");
+        if (!Array.isArray(preflight.teams)) preflightWarnings.push("teams is not an array");
+        if (!Array.isArray(preflight.seasonHistory)) preflightWarnings.push("seasonHistory is not an array");
+        for (let i = 0; i < (preflight.players?.length ?? 0); i++) {
+          const p = preflight.players[i];
+          if (!p) { preflightWarnings.push(`players[${i}] is null/undefined`); break; }
+          if (p.contract && !Array.isArray(p.contract.contractYears) && p.contract.contractYears !== undefined) {
+            preflightWarnings.push(`players[${i}] (${p.firstName} ${p.lastName}) has contractYears that is neither array nor undefined`);
+            break;
+          }
+        }
+        if (preflightWarnings.length > 0) {
+          console.warn('[startNewSeason] pre-flight warnings:', preflightWarnings);
+        }
+
         // §1.0 per-step instrumentation (bige08676 5/10 partial-fail). The
         // outer try/catch was swallowing WHICH step throws — testers like
         // bige08676 hit the soft-lock but their news feed only said "rollover
@@ -9040,37 +9079,69 @@ export const useGameStore = create<GameStore>()(
           if (t.id !== userId) get().autoCutToRosterLimit(t.id);
         }
         } catch (error) {
-          // Surface the underlying offseason exception in two places so
-          // we can diagnose seed-specific failures (bige08676 2032 case):
-          //   (a) browser console — for testers retesting with devtools open
-          //   (b) news feed — for testers without devtools; persisted across reloads
+          // Surface the underlying offseason exception in three places so
+          // we can diagnose seed-specific failures (bige08676 + marioalsosa
+          // 5/17 cross-tester):
+          //   (a) browser console
+          //   (b) news feed (persisted across reloads)
+          //   (c) localStorage breadcrumb (survives even if Zustand state is
+          //       unrecoverable — testers without devtools can paste this)
           // Force phase to "regular" so the user is no longer visually
           // trapped on /draft-recap. The season counter still advances
-          // to keep playable-state coherent. Imperfect but unblocks the
-          // retest loop until the underlying root cause is fixed.
+          // to keep playable-state coherent.
           console.error(`[startNewSeason] offseason rollover failed at step: ${currentStep}`, error);
           const errMsg = error instanceof Error ? error.message : String(error);
           const errStack = error instanceof Error && error.stack
             ? error.stack.split("\n").slice(0, 6).join("\n")
             : undefined;
+          try {
+            localStorage.setItem('gg-rollover-error', JSON.stringify({
+              ts: new Date().toISOString(),
+              step: currentStep,
+              error: errMsg,
+              stack: errStack,
+              entrySeason,
+              entryPhase,
+              preflightWarnings,
+            }));
+          } catch { /* localStorage best-effort */ }
           const errState = get();
-          set({
-            phase: "regular",
-            week: 1,
-            season: errState.season + 1,
-            newsItems: [
-              ...errState.newsItems,
-              makeNews({
-                season: errState.season + 1,
-                week: 0,
-                type: "system",
-                headline: `Season rollover hit an error at step: ${currentStep}`,
-                body: `Failed step: ${currentStep}\n\nError: ${errMsg}` + (errStack ? "\n\nStack (first 6 frames):\n" + errStack : ""),
-                isUserTeam: false,
-              }),
-            ],
-          });
+          // Split the recovery set() into two passes: (1) advance phase +
+          // season FIRST so the user is navigable even if (2) below throws,
+          // (2) append the diagnostic news entry. If (2) fails on a future
+          // regression, at least the user can navigate to /roster.
+          try {
+            set({ phase: "regular", week: 1, season: errState.season + 1 });
+          } catch (phaseErr) {
+            console.error('[startNewSeason] recovery phase-advance also failed', phaseErr);
+          }
+          try {
+            const after = get();
+            set({
+              newsItems: [
+                ...after.newsItems,
+                makeNews({
+                  season: after.season,
+                  week: 0,
+                  type: "system",
+                  headline: `Season rollover hit an error at step: ${currentStep}`,
+                  body: `Failed step: ${currentStep}\n\nError: ${errMsg}` + (errStack ? "\n\nStack (first 6 frames):\n" + errStack : "") + (preflightWarnings.length > 0 ? "\n\nPre-flight warnings:\n" + preflightWarnings.join("\n") : ""),
+                  isUserTeam: false,
+                }),
+              ],
+            });
+          } catch (newsErr) {
+            console.error('[startNewSeason] recovery news-append also failed', newsErr);
+          }
         }
+        // Successful exit breadcrumb — easy diagnostic for testers retesting:
+        // if rollover entry localStorage is set but exit isn't, recovery
+        // failed silently.
+        try {
+          localStorage.setItem('gg-rollover-exit', JSON.stringify({
+            ts: new Date().toISOString(), season: get().season, phase: get().phase,
+          }));
+        } catch { /* best-effort */ }
       },
 
       updateLeagueSettings: (updates: Partial<LeagueSettings>) => {

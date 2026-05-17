@@ -53,8 +53,26 @@ export default function PostDraftCutsPage() {
   );
 
   async function finish() {
-    startNewSeason();
-    await flushToStorage();
+    // 5/16 instrumentation widening (bige08676 + marioalsosa). The inner
+    // try/catch in startNewSeason may itself throw on recovery (Zustand
+    // set fails, etc.). Outer catch here ensures (a) we get a console
+    // error + localStorage breadcrumb the testers can paste, and
+    // (b) router.push runs even if startNewSeason crashes — the user
+    // ends up on /roster instead of stranded on /post-draft-cuts.
+    try {
+      startNewSeason();
+    } catch (err) {
+      console.error('[post-draft-cuts] startNewSeason escaped its own catch:', err);
+      try {
+        localStorage.setItem('gg-rollover-outer-error', JSON.stringify({
+          ts: new Date().toISOString(),
+          source: 'post-draft-cuts',
+          error: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack?.split('\n').slice(0, 6).join('\n') : undefined,
+        }));
+      } catch { /* best-effort */ }
+    }
+    try { await flushToStorage(); } catch (err) { console.error('[post-draft-cuts] flushToStorage failed', err); }
     router.push('/roster');
   }
 

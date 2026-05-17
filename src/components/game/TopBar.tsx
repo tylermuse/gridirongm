@@ -439,7 +439,26 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                         Draft Recap
                       </Button>
                     </Link>
-                    <Button size="sm" onClick={async () => { startNewSeason(); await flushToStorage(); router.push('/roster'); }}>
+                    <Button size="sm" onClick={async () => {
+                      // 5/16 instrumentation widening (bige08676 + marioalsosa
+                      // cross-tester). Outer try/catch + router.push guarantee
+                      // even on startNewSeason crash.
+                      try {
+                        startNewSeason();
+                      } catch (err) {
+                        console.error('[TopBar] startNewSeason escaped its own catch:', err);
+                        try {
+                          localStorage.setItem('gg-rollover-outer-error', JSON.stringify({
+                            ts: new Date().toISOString(),
+                            source: 'TopBar',
+                            error: err instanceof Error ? err.message : String(err),
+                            stack: err instanceof Error ? err.stack?.split('\n').slice(0, 6).join('\n') : undefined,
+                          }));
+                        } catch { /* best-effort */ }
+                      }
+                      try { await flushToStorage(); } catch (err) { console.error('[TopBar] flushToStorage failed', err); }
+                      router.push('/roster');
+                    }}>
                       <span className="hidden sm:inline">Start New Season</span>
                       <span className="sm:hidden">New Season</span>
                       {' '}→
