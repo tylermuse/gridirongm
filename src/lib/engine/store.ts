@@ -3859,6 +3859,17 @@ export const useGameStore = create<GameStore>()(
         const player = state.players.find(p => p.id === playerId);
         if (!player) return false;
 
+        // bitter__pill 5/16: a stale re-sign entry for a traded-away player
+        // was letting the offer write a new contract on someone who no longer
+        // played for the user, AND debit the user's cap by the offer amount.
+        // The executeTrade prune (above) is the primary fix, but guard here
+        // belt-and-suspenders so any future mutation path that leaves a
+        // stale entry can't leak the cap. Also drop the dangling queue entry.
+        if (player.teamId !== state.userTeamId) {
+          set({ resigningPlayers: state.resigningPlayers.filter(e => e.playerId !== playerId) });
+          return false;
+        }
+
         // During re-signing phase, expiring salaries were already removed from payroll
         // so we just add the new salary (no delta needed)
         const capSpaceNeeded = salary;
@@ -3894,6 +3905,17 @@ export const useGameStore = create<GameStore>()(
         const player = state.players.find(p => p.id === playerId);
         const salary = player?.contract.salary ?? 0;
 
+        // bitter__pill 5/16 guard: if the player is no longer on the user's
+        // team (traded away while still on the queue), just prune the dangling
+        // entry — don't double-subtract their salary from totalPayroll
+        // (executeTrade already did that delta).
+        if (player && player.teamId !== state.userTeamId) {
+          set({
+            resigningPlayers: state.resigningPlayers.filter(e => e.playerId !== playerId),
+          });
+          return;
+        }
+
         set({
           players: state.players.map(p =>
             p.id === playerId ? { ...p, teamId: null, contract: { ...p.contract, yearsLeft: 0 } } : p,
@@ -3914,30 +3936,43 @@ export const useGameStore = create<GameStore>()(
 
       passOnResigningBatch: (playerIds: string[]) => {
         const state = get();
-        const idSet = new Set(playerIds);
-        const salaryMap = new Map<string, number>();
+        // bitter__pill 5/16 guard: split into "still on user team" (real
+        // releases) and "no longer on user team" (stale queue entries to
+        // prune only). Salary delta only applies to the still-on-team set
+        // so a traded-away player doesn't double-subtract.
+        const onUserTeam = new Set<string>();
+        const offTeam = new Set<string>();
         for (const id of playerIds) {
+          const p = state.players.find(pl => pl.id === id);
+          if (p && p.teamId === state.userTeamId) onUserTeam.add(id);
+          else offTeam.add(id);
+        }
+        const allIds = new Set(playerIds);
+        const salaryMap = new Map<string, number>();
+        for (const id of onUserTeam) {
           const p = state.players.find(pl => pl.id === id);
           salaryMap.set(id, p?.contract.salary ?? 0);
         }
         set({
           players: state.players.map(p =>
-            idSet.has(p.id) ? { ...p, teamId: null, contract: { ...p.contract, yearsLeft: 0 } } : p,
+            onUserTeam.has(p.id) ? { ...p, teamId: null, contract: { ...p.contract, yearsLeft: 0 } } : p,
           ),
           teams: state.teams.map(t => {
             if (t.id !== state.userTeamId) return t;
-            const newRoster = t.roster.filter(id => !idSet.has(id));
+            const newRoster = t.roster.filter(id => !onUserTeam.has(id));
             const newDepthChart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
-              acc[pos] = (t.depthChart[pos] ?? []).filter(id => !idSet.has(id));
+              acc[pos] = (t.depthChart[pos] ?? []).filter(id => !onUserTeam.has(id));
               return acc;
             }, {} as Record<Position, string[]>);
             let payrollDrop = 0;
-            for (const id of playerIds) payrollDrop += salaryMap.get(id) ?? 0;
+            for (const id of onUserTeam) payrollDrop += salaryMap.get(id) ?? 0;
             return { ...t, roster: newRoster, depthChart: newDepthChart, totalPayroll: Math.max(0, t.totalPayroll - payrollDrop) };
           }),
-          freeAgents: [...state.freeAgents, ...playerIds],
-          resigningPlayers: state.resigningPlayers.filter(e => !idSet.has(e.playerId)),
+          freeAgents: [...state.freeAgents, ...Array.from(onUserTeam)],
+          // Off-team entries get pruned from the queue too — they're stale.
+          resigningPlayers: state.resigningPlayers.filter(e => !allIds.has(e.playerId)),
         });
+        void offTeam; // intentionally unused; resigningPlayers filter covers prune
       },
 
       franchiseTagPlayer: (playerId: string) => {
@@ -3947,6 +3982,15 @@ export const useGameStore = create<GameStore>()(
         if (!player || !userTeam) return false;
         if (userTeam.franchiseTagUsed) return false;
         if (!state.resigningPlayers.some(e => e.playerId === playerId)) return false;
+        // bitter__pill 5/16 guard: refuse to tag a player who's already on
+        // another team via trade; the executeTrade prune should have removed
+        // them from the queue, but this defends against any future path
+        // that leaves a stale entry and would otherwise tag-and-cap-charge
+        // a player the user no longer owns.
+        if (player.teamId !== state.userTeamId) {
+          set({ resigningPlayers: state.resigningPlayers.filter(e => e.playerId !== playerId) });
+          return false;
+        }
 
         const tagSalary = computeFranchiseTagSalary(player.position, state.players, player);
         const oldSalary = player.contract.salary;
@@ -6767,11 +6811,22 @@ export const useGameStore = create<GameStore>()(
           });
         }
 
-        // During the re-signing phase, if we acquired a player with an expiring
-        // contract, add them to the user's re-signing queue so the user gets a
-        // chance to re-sign them before they hit free agency.
+        // During the re-signing phase, keep the queue in lockstep with the
+        // post-trade roster. Two updates:
+        //
+        //   (1) Prune any offered (now-traded-away) player from the queue.
+        //       bitter__pill 5/16 reported that a player traded mid-resigning
+        //       still appeared in /re-sign, the offer button no-opped (silently
+        //       fails the teamId guard added below), and the cap was debited
+        //       optimistically. Pruning here is the primary fix.
+        //
+        //   (2) Add newly-acquired expiring players so the user gets a chance
+        //       to re-sign them before FA — original behavior, unchanged.
         let updatedResigningPlayers = state.resigningPlayers;
         if (state.phase === 'resigning') {
+          updatedResigningPlayers = updatedResigningPlayers.filter(
+            e => !offeredPlayerIdsSet.has(e.playerId),
+          );
           const newExpiringPlayers = receivedPlayerIds
             .map(id => updatedPlayers.find(p => p.id === id))
             .filter((p): p is Player => !!p && p.contract.yearsLeft <= 1 && !p.retired);
