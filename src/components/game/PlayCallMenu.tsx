@@ -65,13 +65,17 @@ export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingKi
   }
 
   return (
-    <div>
-      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden">
-        {/* Header — situational data */}
+    <div className="w-full min-w-0">
+      <div className="w-full max-w-full bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden">
+        {/* Header — situational data. Tyler 5/19: on 375px iPhone viewport
+            the right-side score text was clipping ("DAL 6 — 0 PH..." with PHI
+            cut off). Switched to flex-wrap + gap-y-1 so the score wraps to a
+            second line when there's no horizontal room, instead of pushing
+            the card beyond its container. */}
         <div className="px-3 py-2 border-b border-[var(--border)] bg-purple-600 text-white">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-1">
             <div className="text-sm font-black">Call the Play</div>
-            <div className="text-right text-[10px] opacity-90">
+            <div className="text-right text-[10px] opacity-90 min-w-0">
               <span>{state.quarter >= 5 ? 'OT' : `Q${state.quarter}`} · {state.timeStr}</span>
               <span className="ml-2 font-bold">{state.awayAbbr} {state.awayScore} – {state.homeScore} {state.homeAbbr}</span>
             </div>
@@ -195,9 +199,10 @@ export function PlayCallMenu({ state, isFourthDown, awaitingXpChoice, awaitingKi
           )}
         </div>
 
-        {/* Footer — timeout + escape hatches */}
-        <div className="px-3 py-2 border-t border-[var(--border)] bg-[var(--surface-2)]/30 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+        {/* Footer — timeout + escape hatches. Same wrapping treatment as the
+            header so "Auto-sim to End" doesn't clip on 375px iPhone. */}
+        <div className="px-3 py-2 border-t border-[var(--border)] bg-[var(--surface-2)]/30 flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <button
               onClick={onToggleOff}
               className="text-[10px] text-[var(--text-sec)] hover:text-[var(--text)] transition-colors"
