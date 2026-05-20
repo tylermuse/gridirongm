@@ -5312,7 +5312,12 @@ export const useGameStore = create<GameStore>()(
           phase: 'freeAgency',
           players: allPlayers,
           teams: faTeams,
-          freeAgents: [...expiredPlayers.map(p => p.id), ...existingFAIds, ...supplementalPlayers.map(p => p.id)],
+          // Use the deduped Set built above (line 5283) for the persisted
+          // freeAgents list. Spreading the raw arrays here let a player ID
+          // appear multiple times when sources overlapped — testers saw
+          // Dumas-Johnson ×5, Swinson ×2, Pryor ×2, Bangura ×2 in season-2
+          // FA pool. Set.values guarantees each ID appears exactly once.
+          freeAgents: Array.from(faIdSet),
           faDay: 1,
           newsItems: [...faState.newsItems, ...releaseNews],
           pursuitState: (() => {
@@ -8953,7 +8958,13 @@ export const useGameStore = create<GameStore>()(
         }
 
         currentStep = "fa-pool-finalization";
-        const seasonFreeAgents = [...unsignedPlayerIds, ...streetFAs.map(p => p.id)];
+        // Set-dedup defensively. unsignedPlayerIds + streetFAs IDs are disjoint
+        // by construction today (street FAs are pushed to allPlayersForNewSeason
+        // AFTER unsignedPlayerIds is computed), but if allPlayersForNewSeason
+        // ever carries duplicate player entries from upstream — which is the
+        // only remaining way the season-2 FA pool could show the same player
+        // multiple times — the Set guarantees one ID per player.
+        const seasonFreeAgents = Array.from(new Set([...unsignedPlayerIds, ...streetFAs.map(p => p.id)]));
 
         // Coach progression and AI coaching carousel
         const coachProgress = progressCoaches(grownTeams, newSeason);
