@@ -34,7 +34,7 @@ import { checkDisciplineEvents, disciplineNewsItems, isPlayerSuspended, tickSusp
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from './simTelemetry';
-import { getCurrentSubscriptionAllocations } from '../subscriptionState';
+import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
 
 const SAVE_VERSION = 33;
 

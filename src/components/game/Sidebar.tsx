@@ -122,7 +122,7 @@ function SaveSlotPanel({ onClose }: { onClose: () => void }) {
   async function handleRename(slot: number) {
     const name = editName.trim();
     if (name) {
-      const { setItem } = await import('@/lib/storage');
+      const { setItem } = await import('@bs/core/storage');
       await setItem(`gridiron-gm-save-${slot}-name`, name);
     } else {
       await idbRemoveItem(`gridiron-gm-save-${slot}-name`);
