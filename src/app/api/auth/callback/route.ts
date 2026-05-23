@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@bs/core/supabase/server';
 
 /**
  * OAuth callback. Supabase redirects users here after they authenticate with

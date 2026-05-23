@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '@bs/core/supabase/client';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 
 // Whitelist of relative paths the login flow may redirect to after a

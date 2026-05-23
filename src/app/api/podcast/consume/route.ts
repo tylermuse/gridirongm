@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { consumePodcastCredit, getServiceClient, readCredits } from '@/lib/podcastCredits';
+import { createClient } from '@bs/core/supabase/server';
+import { consumePodcastCredit, getServiceClient, readCredits } from '@bs/core/podcast';
 
 /**
  * POST /api/podcast/consume

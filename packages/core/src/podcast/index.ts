@@ -1,11 +1,19 @@
-// Server-side podcast credit accounting.
-// The Spotlight podcast is a Premium feature with a monthly cap; this module
-// is the single source of truth for that cap so the consume API and the
-// spotlight-audio route apply identical logic.
+/**
+ * @bs/core/podcast — server-side podcast credit accounting.
+ *
+ * Promoted from apps/web/src/lib/podcastCredits.ts during Sub-phase 1D.
+ *
+ * The Spotlight podcast is a Premium feature with a monthly cap; this module
+ * is the single source of truth for that cap so the consume API and the
+ * spotlight-audio route apply identical logic.
+ *
+ * Server-only. Uses Supabase service role to bypass RLS for the cap-update
+ * write inside authenticated routes.
+ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
-import { PODCAST_CREDITS_PER_MONTH, type Tier } from './subscription';
+import { PODCAST_CREDITS_PER_MONTH, type Tier } from '../billing/subscription';
 
 const FOUNDING_MEMBER_CUTOFF = '2026-05-01T00:00:00Z';
 

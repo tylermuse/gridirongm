@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { TeamLogo } from '@/components/ui/TeamLogo';
-import { getItem as idbGetItem, removeItem as idbRemoveItem } from '@/lib/storage';
+import { getItem as idbGetItem, removeItem as idbRemoveItem } from '@bs/core/storage';
 import { formatRecord } from '@/types';
 
 const NAV_SECTIONS = [

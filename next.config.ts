@@ -13,6 +13,10 @@ const withSerwist = withSerwistInit({
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // Workspace packages live as TS source files (no build step). Next.js
+  // needs to compile them at consumer build time. Added during Sub-phase 1D
+  // when @bs/core/analytics became the first cross-package import.
+  transpilePackages: ['@bs/core', '@bs/sport-football'],
   ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   async headers() {
     return [

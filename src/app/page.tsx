@@ -7,7 +7,7 @@ import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { SpotlightAudioPlayer } from '@/components/game/SpotlightAudioPlayer';
 
 import { useGameStore, computeLuxuryTax } from '@/lib/engine/store';
-import { migrateFromLocalStorage, getItem as idbGetItem } from '@/lib/storage';
+import { migrateFromLocalStorage, getItem as idbGetItem } from '@bs/core/storage';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import { GameShell } from '@/components/game/GameShell';

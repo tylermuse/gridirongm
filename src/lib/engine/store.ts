@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { idbStorage, getItem as idbGetItem, setItem as idbSetItem, flushPersist, flushPersistSync } from '@/lib/storage';
+import { idbStorage, getItem as idbGetItem, setItem as idbSetItem, flushPersist, flushPersistSync } from '@bs/core/storage';
 function uuid(): string {
   return crypto.randomUUID();
 }

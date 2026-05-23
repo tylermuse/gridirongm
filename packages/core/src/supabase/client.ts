@@ -1,3 +1,15 @@
+/**
+ * @bs/core/supabase/client — browser-side Supabase auth client.
+ *
+ * Promoted from apps/web/src/lib/supabase/client.ts during Sub-phase 1D.
+ *
+ * Returns null if Supabase env vars are missing — callers must handle this
+ * (e.g., feature-flag premium / GM sync off when Supabase is unconfigured).
+ *
+ * The client is memoized at module scope so repeated calls don't reinstantiate
+ * the WebSocket connection.
+ */
+
 import { createBrowserClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
 

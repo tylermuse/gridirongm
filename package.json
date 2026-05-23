@@ -2,11 +2,17 @@
   "name": "bs-football",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -33,9 +39,13 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
+    "@vitest/ui": "^2.1.8",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "fake-indexeddb": "^6.0.0",
+    "happy-dom": "^15.11.7",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.1.8"
   }
 }

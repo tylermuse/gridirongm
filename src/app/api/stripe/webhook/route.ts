@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getStripe, tierFromPriceId } from '@/lib/stripe';
+import { getStripe, tierFromPriceId } from '@bs/core/billing';
 import { createServerClient } from '@supabase/ssr';
 import Stripe from 'stripe';
 

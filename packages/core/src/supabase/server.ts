@@ -1,3 +1,13 @@
+/**
+ * @bs/core/supabase/server — server-side Supabase auth client.
+ *
+ * Promoted from apps/web/src/lib/supabase/server.ts during Sub-phase 1D.
+ *
+ * Server-only — uses `next/headers` cookies. Must be called from Server
+ * Components, Route Handlers, or Server Actions. Calling from a Client
+ * Component will throw.
+ */
+
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import type { Feature } from '@/lib/subscription';
+import type { Feature } from '@bs/core/billing';
 
 interface PremiumGateProps {
   /** What the user is trying to access — drives the upsell copy. */
