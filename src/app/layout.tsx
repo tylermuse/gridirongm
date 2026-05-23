@@ -4,6 +4,7 @@ import { Barlow_Condensed } from 'next/font/google';
 import { Providers } from '@/components/providers/Providers';
 import { FeedbackWidget } from '@/components/game/FeedbackWidget';
 import { ServiceWorkerRegister } from '@/components/providers/ServiceWorkerRegister';
+import { RolloverErrorBeacon } from '@/components/providers/RolloverErrorBeacon';
 import './globals.css';
 
 const ADSENSE_CLIENT_ID = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID;
@@ -55,6 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <FeedbackWidget />
           <ServiceWorkerRegister />
+          <RolloverErrorBeacon />
         </Providers>
         {/* Google AdSense loader — only injected when an AdSense client ID is
             configured. Free-tier users see ads via <AdSlot />; paying tiers
