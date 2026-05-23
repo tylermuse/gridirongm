@@ -30,7 +30,7 @@ import type {
   UiMetadata,
   LineupModelDescriptor,
   CoachingSystem,
-} from './SportAdapter';
+} from '../SportAdapter';
 import type {
   BasePlayer,
   BaseTeam,
@@ -38,7 +38,7 @@ import type {
   BaseLeagueState,
   PlayerId,
   TeamId,
-} from './BaseTypes';
+} from '../BaseTypes';
 
 // ============================================================================
 // Concrete types — narrowed from BaseTypes generics

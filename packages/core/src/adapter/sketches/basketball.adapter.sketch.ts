@@ -33,8 +33,8 @@ import type {
   UiMetadata,
   LineupModelDescriptor,
   CoachingSystem,
-} from './SportAdapter';
-import type { PlayerId } from './BaseTypes';
+} from '../SportAdapter';
+import type { PlayerId } from '../BaseTypes';
 
 // ============================================================================
 // Concrete types

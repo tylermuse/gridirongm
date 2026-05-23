@@ -24,14 +24,17 @@ import { vi, beforeEach } from 'vitest';
 if (typeof crypto !== 'undefined' && !crypto.randomUUID) {
   // Fall back to a deterministic stub for older environments. Real Node 19+
   // and happy-dom should have the native impl available.
-  (crypto as Crypto & { randomUUID: () => string }).randomUUID = () => {
+  // The cast to Crypto['randomUUID'] is needed because TS narrows the return
+  // type to a template literal `${string}-${string}-...`; our fallback
+  // produces strings of that shape but TS can't prove it statically.
+  const fallback = (): string =>
     // RFC 4122 v4 shape, not cryptographically secure — fine for test IDs.
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
       const r = (Math.random() * 16) | 0;
       const v = c === 'x' ? r : (r & 0x3) | 0x8;
       return v.toString(16);
     });
-  };
+  (crypto as Crypto).randomUUID = fallback as Crypto['randomUUID'];
 }
 
 // Stub window.location.reload so error-recovery paths don't blow up the
