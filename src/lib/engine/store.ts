@@ -8190,6 +8190,19 @@ export const useGameStore = create<GameStore>()(
         // if Zustand state is unrecoverable.
         const entrySeason = get().season;
         const entryPhase = get().phase;
+        // 5/22 instrumentation widening (bige08676 follow-up): clear stale
+        // breadcrumbs from prior rollovers BEFORE writing the new entry, so
+        // every attempt starts with a clean slate. Without this, an exit
+        // breadcrumb from a previous successful rollover can sit in
+        // localStorage and confuse the read on the next /diagnostics paste
+        // (this is exactly what tripped us up on bige08676's 5/20 data drop).
+        try {
+          localStorage.removeItem('gg-rollover-exit');
+          localStorage.removeItem('gg-rollover-error');
+          localStorage.removeItem('gg-rollover-outer-error');
+          localStorage.removeItem('gg-rollover-async-error');
+          localStorage.removeItem('gg-rollover-step');
+        } catch { /* best-effort */ }
         try {
           localStorage.setItem('gg-rollover-entry', JSON.stringify({
             ts: new Date().toISOString(), season: entrySeason, phase: entryPhase,
@@ -8226,6 +8239,18 @@ export const useGameStore = create<GameStore>()(
         // every step boundary below; the outer catch surfaces it in the news
         // headline so the next retest tells us exactly where to look.
         let currentStep = "kp-autofill";
+        // 5/22 silent-failure catcher: mirror every per-step boundary to
+        // localStorage so a silent hang (no thrown exception, just an
+        // unresolved promise or pegged main thread) still leaves a
+        // breadcrumb naming the last step that ran. The local `currentStep`
+        // variable stays as the source of truth for the catch-block error
+        // message; this helper just shadows every assignment with a write
+        // that /diagnostics can read back.
+        const setStep = (s: string) => {
+          currentStep = s;
+          try { localStorage.setItem('gg-rollover-step', s); } catch { /* best-effort */ }
+        };
+        setStep(currentStep);
         try {
         // Auto-fill K and P for user's team if missing — sign best available from FA
         {
@@ -8286,7 +8311,7 @@ export const useGameStore = create<GameStore>()(
         const newSeason = state.season + 1;
         const previouslyRetiredIds = new Set(state.players.filter(p => p.retired).map(p => p.id));
 
-        currentStep = "awards-stamping";
+        setStep("awards-stamping");
         // Prefer the awards already written by advanceToResigning for this
         // same season — that snapshot is canonical, computed from the
         // post-playoffs / pre-offseason player state. Recomputing here can
@@ -8423,7 +8448,7 @@ export const useGameStore = create<GameStore>()(
             })
           : state.players;
 
-        currentStep = "retirements-and-contracts";
+        setStep("retirements-and-contracts");
         // Roll PS contracts over automatically. Without this, every
         // practice-squad player's 1-year league-min deal would expire at
         // season's end and the entire PS would empty out — defeating the
@@ -8528,7 +8553,7 @@ export const useGameStore = create<GameStore>()(
 
         const devSettings = state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS;
 
-        currentStep = "player-development";
+        setStep("player-development");
         // Build per-player coaching development multipliers
         const coachDevMultipliers = new Map<string, number>();
         for (const team of state.teams) {
@@ -8563,7 +8588,7 @@ export const useGameStore = create<GameStore>()(
         );
         const newlyRetiredOnTeamIds = new Set(newlyRetiredOnTeam.map(p => p.id));
 
-        currentStep = "void-year-processing";
+        setStep("void-year-processing");
         // Process void years: players whose new year-0 is a void year have their contracts voided
         const voidYearPlayers: { player: typeof developedPlayers[0]; deadCapAmount: number }[] = [];
         for (const p of developedPlayers) {
@@ -8606,7 +8631,7 @@ export const useGameStore = create<GameStore>()(
           return p;
         });
 
-        currentStep = "roster-pruning";
+        setStep("roster-pruning");
         // Identify players whose contracts expired (yearsLeft hit 0 after decrement)
         // These should be properly released from their teams
         const expiredContractPlayers = afterVoidPlayers.filter(
@@ -8865,7 +8890,7 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
-        currentStep = "schedule-generation";
+        setStep("schedule-generation");
         const newSchedule = generateSchedule(grownTeams, newSeason);
 
         // Final AI signing sweep: any unsigned player OVR >= 50 gets picked up
@@ -8957,7 +8982,7 @@ export const useGameStore = create<GameStore>()(
           allPlayersForNewSeason.push(...streetFAs);
         }
 
-        currentStep = "fa-pool-finalization";
+        setStep("fa-pool-finalization");
         // Set-dedup defensively. unsignedPlayerIds + streetFAs IDs are disjoint
         // by construction today (street FAs are pushed to allPlayersForNewSeason
         // AFTER unsignedPlayerIds is computed), but if allPlayersForNewSeason
@@ -8972,14 +8997,14 @@ export const useGameStore = create<GameStore>()(
         const coachNews: import('@/types').NewsItem[] = [...coachProgress.news, ...coachCarousel.news].map(headline =>
           makeNews({ season: newSeason, week: 0, type: 'signing', headline, isUserTeam: false }),
         );
-        currentStep = "coach-carousel";
+        setStep("coach-carousel");
         const teamsAfterCoaches = coachCarousel.teams;
 
         const numPreseasonGames = (state.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).preseasonGames ?? 3;
         const enterPreseason = numPreseasonGames > 0;
-        currentStep = "preseason-setup";
+        setStep("preseason-setup");
         const preseasonSchedule = enterPreseason ? generatePreseasonSchedule(teamsAfterCoaches, numPreseasonGames, newSeason) : undefined;
-        currentStep = "final-state-commit";
+        setStep("final-state-commit");
 
         set({
           season: newSeason,

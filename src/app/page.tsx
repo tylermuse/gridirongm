@@ -459,19 +459,66 @@ function TeamSpotlightSection({
     return detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, team.id, playoffSeeds);
   }, [ctx?.phase, week, leagueSettings?.tradeDeadlineWeek, playoffBracket, team.id]);
 
+  // 5/22 stale-opponent fix (Marcus Cole / Tony Blaze hallucinating PHI when
+  // next opponent was actually NE). Compute three pieces of bracket state
+  // here at the render site — this is the only layer that knows whether the
+  // bracket transition has stabilized for the user's team:
+  //   nextOpponentId : the team the user plays next (or null when eliminated
+  //                    / champion / no next matchup yet committed)
+  //   playoffsEliminated : user lost a playoff game
+  //   playoffsBracketReady : safe to render spotlight — either user is out
+  //                          of the tournament (eliminated / SB done) or the
+  //                          next matchup has both teams populated. Mid-
+  //                          transition (user won round N but round N+1
+  //                          matchup not yet populated) returns false so
+  //                          we render a placeholder rather than fire a
+  //                          fetch with stale prompt context.
+  const playoffsState = React.useMemo(() => {
+    if ((ctx?.phase ?? 'regular') !== 'playoffs' || !playoffBracket) {
+      return { nextOpponentId: null as string | null, eliminated: false, bracketReady: true, championshipDone: false };
+    }
+    const userGames = playoffBracket.filter(m =>
+      m.winnerId && (m.homeTeamId === team.id || m.awayTeamId === team.id));
+    const eliminated = userGames.some(m => m.winnerId && m.winnerId !== team.id);
+    const championship = playoffBracket.find(m => m.id === 'championship');
+    const championshipDone = !!championship?.winnerId;
+    const nextGame = playoffBracket.find(m =>
+      !m.winnerId &&
+      m.homeTeamId && m.awayTeamId &&
+      (m.homeTeamId === team.id || m.awayTeamId === team.id));
+    const nextOpponentId = nextGame
+      ? (nextGame.homeTeamId === team.id ? nextGame.awayTeamId! : nextGame.homeTeamId!)
+      : null;
+    // Bracket is "ready" to spotlight when there's no further matchup to
+    // wait on (user is out / SB done) OR the next matchup is fully
+    // populated. The unstable window is: user won round N, round N+1 row
+    // exists in the bracket but home/away aren't filled in yet.
+    const bracketReady = eliminated || championshipDone || nextOpponentId !== null;
+    return { nextOpponentId, eliminated, bracketReady, championshipDone };
+  }, [ctx?.phase, playoffBracket, team.id]);
+
   // If AI is enabled and this is a special narrative moment, trigger AI fetch.
   // Regular weeks use templates only. fetchAiSpotlight handles cache key comparison internally.
+  // During playoffs, skip the fetch entirely while the bracket transition is
+  // still unstable — otherwise the prompt would reach the AI with stale
+  // round-1 opponent data and no next-matchup data, and the AI would
+  // confidently name the just-defeated opponent (5/22 bug).
   React.useEffect(() => {
-    if (aiCommentary && currentNarrative !== 'weekly') {
-      const phase = ctx?.phase ?? 'regular';
-      fetchAiSpotlight({
-        team, roster, allTeams, allPlayers, season, week, phase, narrative: currentNarrative,
-        newsItems, draftResults, playoffBracket, playoffSeeds, champions,
-        tradeDeadlineWeek: leagueSettings?.tradeDeadlineWeek ?? 12,
-      });
-    }
+    if (!aiCommentary || currentNarrative === 'weekly') return;
+    const phase = ctx?.phase ?? 'regular';
+    if (phase === 'playoffs' && !playoffsState.bracketReady) return;
+    fetchAiSpotlight({
+      team, roster, allTeams, allPlayers, season, week, phase, narrative: currentNarrative,
+      newsItems, draftResults, playoffBracket, playoffSeeds, champions,
+      tradeDeadlineWeek: leagueSettings?.tradeDeadlineWeek ?? 12,
+      nextOpponentId: phase === 'playoffs'
+        ? (playoffsState.eliminated || playoffsState.championshipDone
+            ? null
+            : playoffsState.nextOpponentId)
+        : undefined,
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiCommentary, currentNarrative, team, season, week, ctx?.phase]);
+  }, [aiCommentary, currentNarrative, team, season, week, ctx?.phase, playoffsState.bracketReady, playoffsState.nextOpponentId]);
 
   // Always show templates immediately. If AI topics arrive, they replace templates.
   // Never show a loading spinner — templates are the instant fallback.
@@ -496,9 +543,33 @@ function TeamSpotlightSection({
     });
   };
 
+  // During the playoff bracket-transition window (user won round N, round
+  // N+1 matchup not yet populated), suppress the AI-generated spotlight to
+  // prevent the 5/22 stale-opponent regression. AI topics generated for the
+  // prior round still live in cache.topics until cache key advances; render
+  // a transition placeholder instead.
+  const phase = ctx?.phase ?? 'regular';
+  if (phase === 'playoffs' && !playoffsState.bracketReady) {
+    return (
+      <div className="mt-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <span className="flex items-center gap-2"><span>🏆</span> Playoff Spotlight</span>
+            </CardTitle>
+          </CardHeader>
+          <div className="px-4 pb-4">
+            <p className="text-sm text-[var(--text-sec)]">
+              Awaiting next-round matchup. Spotlight will update once the bracket advances.
+            </p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   // During playoffs (or other non-regular phases), show a fallback instead of unmounting
   if (topics.length === 0 && !aiLoading) {
-    const phase = ctx?.phase ?? 'regular';
     if (phase === 'playoffs') {
       return (
         <div className="mt-6">

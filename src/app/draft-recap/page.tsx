@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGameStore, flushToStorage } from '@/lib/engine/store';
 import { Button } from '@/components/ui/Button';
@@ -93,6 +93,18 @@ export default function DraftRecapPage() {
     if (!userReport) return [];
     return generatePressQuotes(userReport.picks, players, teams, season);
   }, [userReport, players, teams, season]);
+
+  // Defensive: if user lands here outside the draft phase with no results
+  // (back button after rollover, stale tab, bookmark, prefetched route),
+  // bounce to /roster instead of stranding on the unhelpful empty state.
+  // Diagnosed 5/20 from bs_gm /diagnostics paste — engine rollover succeeded
+  // (entry+exit set, no errors) but user ended up here anyway. Targets the
+  // symptom; root nav path needs a live repro we don't have yet.
+  useEffect(() => {
+    if (phase !== 'draft' && draftResults.length === 0) {
+      router.replace('/roster');
+    }
+  }, [phase, draftResults.length, router]);
 
   const userTeam = teamMap.get(userTeamId ?? '');
 
