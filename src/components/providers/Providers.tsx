@@ -2,7 +2,7 @@
 
 import { type ReactNode } from 'react';
 import { SubscriptionProvider } from './SubscriptionProvider';
-import { usePageView } from '@/lib/analytics';
+import { usePageView } from '@bs/core/analytics';
 
 function PageViewTracker() {
   usePageView();

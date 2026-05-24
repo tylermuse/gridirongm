@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getStripe } from '@/lib/stripe';
-import { createClient } from '@/lib/supabase/server';
+import { getStripe } from '@bs/core/billing';
+import { createClient } from '@bs/core/supabase/server';
 import { createServerClient } from '@supabase/ssr';
-import { PREMIUM_PRICE_ID, LEGACY_PAID_PRICE_IDS } from '@/lib/subscription';
+import { PREMIUM_PRICE_ID, LEGACY_PAID_PRICE_IDS } from '@bs/core/billing';
 
 // Only the configured Premium price is allowed at checkout. Legacy prices
 // remain valid for existing subscribers (the webhook still maps them up to

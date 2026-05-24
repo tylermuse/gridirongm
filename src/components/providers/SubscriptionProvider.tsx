@@ -9,7 +9,7 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '@bs/core/supabase/client';
 import {
   type Tier,
   type Feature,
@@ -18,9 +18,9 @@ import {
   hasScouting as checkScouting,
   getScoutingAllocations,
   PODCAST_CREDITS_PER_MONTH,
-} from '@/lib/subscription';
-import { setCurrentSubscriptionAllocations, setCurrentSubscriptionTier } from '@/lib/subscriptionState';
-import { trackEvent } from '@/lib/analytics';
+} from '@bs/core/billing';
+import { setCurrentSubscriptionAllocations, setCurrentSubscriptionTier } from '@bs/core/billing';
+import { trackEvent } from '@bs/core/analytics';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 // Anyone who signed up before this date is a Founding Member forever.

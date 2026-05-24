@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { AdSlot } from '@/components/AdSlot';
 import { useGameStore } from '@/lib/engine/store';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import { coarseOvrBucket } from '@/lib/subscription';
+import { coarseOvrBucket } from '@bs/core/billing';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { LEAGUE_MINIMUM_SALARY, LUXURY_TAX_RATE, computeLuxuryTax, faPriceDecay, estimateSalary, capInflationFactor } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';

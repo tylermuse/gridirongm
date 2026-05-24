@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
-import { createClient as createSupabaseServer } from '@/lib/supabase/server';
-import { consumePodcastCredit, getServiceClient } from '@/lib/podcastCredits';
+import { createClient as createSupabaseServer } from '@bs/core/supabase/server';
+import { consumePodcastCredit, getServiceClient } from '@bs/core/podcast';
 
 // ── Voice Config ──────────────────────────────────────────────────────
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;

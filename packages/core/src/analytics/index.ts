@@ -1,5 +1,18 @@
 'use client';
 
+/**
+ * @bs/core/analytics — anonymous event tracking + page-view hook.
+ *
+ * Promoted from apps/web/src/lib/analytics.ts during Sub-phase 1D.
+ *
+ * Consumers must provide:
+ *   - A React-compatible context (this is a 'use client' module)
+ *   - A POST handler at /api/analytics/track that accepts the beacon payload
+ *
+ * The hook + function are sport-agnostic, which is why they live here rather
+ * than in @bs/sport-football.
+ */
+
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 

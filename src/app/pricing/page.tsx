@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import { PREMIUM_PRICE_ID } from '@/lib/subscription';
+import { PREMIUM_PRICE_ID } from '@bs/core/billing';
 
 const PREMIUM_FEATURES = [
   'Ad-free experience',

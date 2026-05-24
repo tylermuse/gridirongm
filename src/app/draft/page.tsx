@@ -17,7 +17,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import type { Player, Position, Team, ImportedProspect } from '@/types';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import { coarseOvrBucket } from '@/lib/subscription';
+import { coarseOvrBucket } from '@bs/core/billing';
 import { expectedOvrForPick, pickGrade, gradeValue, gradeColor, teamDraftGrade } from '@/lib/engine/draftGrades';
 import { generateDraftScoutEval, publicConsensusBlurb, type DraftScoutEvaluation } from '@/lib/engine/draftScoutEval';
 import { generateScoutingReport } from '@/lib/engine/scoutingReport';

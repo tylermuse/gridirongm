@@ -1,13 +1,16 @@
 /**
- * IndexedDB storage layer for BS Football save data.
+ * @bs/core/storage — IndexedDB persistence layer.
  *
- * Replaces localStorage (5MB cap) with IndexedDB (hundreds of MB+).
- * Uses the `idb` library for a clean Promise-based API.
+ * Promoted from apps/web/src/lib/storage.ts during Sub-phase 1D.
  *
- * Keys mirror the old localStorage keys:
- *   - 'gridiron-gm-autosave'
- *   - 'gridiron-gm-save-1'
- *   - 'gridiron-gm-save-2'
+ * Replaces localStorage (5MB cap) with IndexedDB (hundreds of MB+) for game
+ * save data. Uses the `idb` library for a clean Promise-based API.
+ *
+ * Exports a Zustand-persist-compatible `idbStorage` adapter that the
+ * apps/web store uses to back its persist middleware.
+ *
+ * Browser-only — calling these from a Node/server context will throw or
+ * be no-ops behind the `typeof window` guards.
  */
 
 import { openDB, type IDBPDatabase } from 'idb';

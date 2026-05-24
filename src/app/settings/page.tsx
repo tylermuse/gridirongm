@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { DEFAULT_LEAGUE_SETTINGS, type LeagueSettings } from '@/types';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '@bs/core/supabase/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 

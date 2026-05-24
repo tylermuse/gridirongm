@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@bs/core/supabase/server';
 
 /**
  * POST /api/gm/display-name

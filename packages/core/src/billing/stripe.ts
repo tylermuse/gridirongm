@@ -1,3 +1,13 @@
+/**
+ * Server-side Stripe SDK factory.
+ *
+ * Reads STRIPE_SECRET_KEY from env. Memoizes the client so repeated
+ * imports don't reinstantiate.
+ *
+ * Server-only — do not import from client components. The secret key
+ * must never reach the browser.
+ */
+
 import Stripe from 'stripe';
 import { PRICE_IDS, tierFromPriceId } from './subscription';
 
