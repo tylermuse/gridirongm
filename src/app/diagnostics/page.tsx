@@ -3,9 +3,19 @@
 import { useEffect, useState } from 'react';
 
 /**
- * Rollover diagnostics surface. Reads the four localStorage breadcrumb keys
+ * Rollover diagnostics surface. Reads the six localStorage breadcrumb keys
  * that startNewSeason + the three call-site outer catches (post-draft-cuts,
- * draft-recap, TopBar) write whenever the offseason rollover runs.
+ * draft-recap, TopBar) + the window-level error/rejection beacon write
+ * whenever the offseason rollover runs.
+ *
+ * Breadcrumb keys:
+ *   gg-rollover-entry        — written at the top of startNewSeason
+ *   gg-rollover-exit         — written at the bottom of a successful rollover
+ *   gg-rollover-error        — inner-catch in startNewSeason
+ *   gg-rollover-outer-error  — call-site outer catches (TopBar / draft-recap / cuts)
+ *   gg-rollover-step         — 5/22 silent-failure catcher; last setStep() name
+ *   gg-rollover-async-error  — 5/22 silent-failure catcher; window-level
+ *                              error / unhandledrejection captured mid-rollover
  *
  * bige08676 (5/18) spent 3 messages trying to retrieve these via browser
  * devtools and got blocked — bookmark URLs, address-bar code injection,
@@ -22,6 +32,8 @@ const ROLLOVER_KEYS = [
   'gg-rollover-exit',
   'gg-rollover-error',
   'gg-rollover-outer-error',
+  'gg-rollover-step',
+  'gg-rollover-async-error',
 ] as const;
 
 type RolloverKey = (typeof ROLLOVER_KEYS)[number];
@@ -90,6 +102,8 @@ export default function DiagnosticsPage() {
       'gg-rollover-exit': null,
       'gg-rollover-error': null,
       'gg-rollover-outer-error': null,
+      'gg-rollover-step': null,
+      'gg-rollover-async-error': null,
     }),
   );
   const [copyStatus, setCopyStatus] = useState<'idle' | 'ok' | 'fail'>('idle');
@@ -103,6 +117,8 @@ export default function DiagnosticsPage() {
       'gg-rollover-exit': readBreadcrumb('gg-rollover-exit'),
       'gg-rollover-error': readBreadcrumb('gg-rollover-error'),
       'gg-rollover-outer-error': readBreadcrumb('gg-rollover-outer-error'),
+      'gg-rollover-step': readBreadcrumb('gg-rollover-step'),
+      'gg-rollover-async-error': readBreadcrumb('gg-rollover-async-error'),
     };
     setValues(next);
     setHydrated(true);

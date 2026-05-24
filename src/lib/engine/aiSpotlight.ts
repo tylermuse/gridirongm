@@ -137,6 +137,15 @@ interface FetchOptions {
   playoffSeeds?: { AC: string[]; NC: string[] } | null;
   champions?: { season: number; teamId: string }[];
   tradeDeadlineWeek?: number;
+  // Resolved next-round opponent for the user team, when the render site has
+  // gated on a stable bracket transition. Belt-and-suspenders against the
+  // 5/22 Marcus Cole / Tony Blaze stale-opponent bug — the AI was naming
+  // the just-eliminated opponent because firstRoundOpponent was still in
+  // the prompt and the bracket derivation here ran during a transition
+  // window where the next matchup hadn't been committed yet. The render
+  // site is the only place that knows the bracket is stable; require it to
+  // tell us so explicitly.
+  nextOpponentId?: string | null;
 }
 
 export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
@@ -150,6 +159,9 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
   // 18) are static across rounds, so without a round-aware suffix the cache
   // would serve the wild-card preview after a divisional win. Tag the key
   // with the user's completed playoff games so each round refetches.
+  // Also tag with the resolved next-opponent id (when supplied) so a stale
+  // prior-round cache entry can't re-render with the wrong team even if the
+  // win count happens to match — 5/22 stale-opponent guard.
   let cacheNarrative: string = narrative;
   let userPlayoffWins = 0;
   let userPlayoffLosses = 0;
@@ -157,7 +169,8 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
     const userGames = opts.playoffBracket.filter(m => m.winnerId && (m.homeTeamId === team.id || m.awayTeamId === team.id));
     userPlayoffWins = userGames.filter(m => m.winnerId === team.id).length;
     userPlayoffLosses = userGames.filter(m => m.winnerId && m.winnerId !== team.id).length;
-    cacheNarrative = `${narrative}-pw${userPlayoffWins}-pl${userPlayoffLosses}`;
+    const oppKey = opts.nextOpponentId ? `-no${opts.nextOpponentId}` : '';
+    cacheNarrative = `${narrative}-pw${userPlayoffWins}-pl${userPlayoffLosses}${oppKey}`;
   }
 
   const key = buildCacheKey(team.id, season, week, team.record.wins, team.record.losses, `${phase}-${cacheNarrative}`);
@@ -353,8 +366,13 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
       teamData.madePlayoffs = madePlayoffs;
       teamData.userSeed = madePlayoffs ? userSeed : null;
 
-      // First round opponent
-      if (userSeed > 0 && userSeed <= 7 && opts.playoffBracket) {
+      // First round opponent — ONLY surface in the pre-Wild-Card preview.
+      // After the user wins round 1, this entry would still resolve to the
+      // (now-defeated) wild-card opponent and the AI would confidently name
+      // it as the next showdown. 5/22 stale-opponent bug — gate on
+      // userPlayoffWins === 0 so the field disappears the moment the user
+      // advances.
+      if (userSeed > 0 && userSeed <= 7 && opts.playoffBracket && userPlayoffWins === 0) {
         const firstGame = opts.playoffBracket.find(m =>
           m.round === 1 && (m.homeTeamId === team.id || m.awayTeamId === team.id));
         if (firstGame) {
@@ -386,17 +404,39 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
       };
 
       // Surface the upcoming opponent so the AI talks about THIS matchup,
-      // not the wild-card opener anymore.
-      const nextGame = opts.playoffBracket.find(m =>
-        !m.winnerId && (m.homeTeamId === team.id || m.awayTeamId === team.id));
-      if (nextGame) {
-        const oppId = nextGame.homeTeamId === team.id ? nextGame.awayTeamId : nextGame.homeTeamId;
-        const opp = oppId ? allTeams.find(t => t.id === oppId) : null;
+      // not the wild-card opener anymore. Prefer the explicit nextOpponentId
+      // when the render site supplied it — that's the authoritative answer
+      // from a gated bracket-stable state. Fall back to bracket derivation
+      // only when nextOpponentId is undefined (e.g., callers that haven't
+      // been migrated). 5/22 stale-opponent fix.
+      let nextOppId: string | null = null;
+      let nextOppRoundIdx = 0;
+      if (typeof opts.nextOpponentId === 'string' && opts.nextOpponentId) {
+        nextOppId = opts.nextOpponentId;
+        const nextGame = opts.playoffBracket.find(m =>
+          !m.winnerId &&
+          ((m.homeTeamId === team.id && m.awayTeamId === nextOppId) ||
+            (m.awayTeamId === team.id && m.homeTeamId === nextOppId)));
+        nextOppRoundIdx = nextGame?.round ?? Math.min(userPlayoffWins + 1, 4);
+      } else if (opts.nextOpponentId === null) {
+        // Render site explicitly told us there's no next matchup (eliminated
+        // or championship done) — skip nextPlayoffOpponent entirely.
+        nextOppId = null;
+      } else {
+        const nextGame = opts.playoffBracket.find(m =>
+          !m.winnerId && (m.homeTeamId === team.id || m.awayTeamId === team.id));
+        if (nextGame) {
+          nextOppId = nextGame.homeTeamId === team.id ? nextGame.awayTeamId : nextGame.homeTeamId;
+          nextOppRoundIdx = nextGame.round;
+        }
+      }
+      if (nextOppId) {
+        const opp = allTeams.find(t => t.id === nextOppId);
         if (opp) {
           const oppRoster = allPlayers.filter(p => p.teamId === opp.id && !p.retired);
           const oppStar = [...oppRoster].sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
           teamData.nextPlayoffOpponent = {
-            round: ROUND_LABELS[nextGame.round] ?? `Round ${nextGame.round}`,
+            round: ROUND_LABELS[nextOppRoundIdx] ?? `Round ${nextOppRoundIdx}`,
             name: `${opp.city} ${opp.name}`,
             record: `${opp.record.wins}-${opp.record.losses}`,
             star: oppStar ? `${oppStar.firstName} ${oppStar.lastName} (${oppStar.position}, ${oppStar.ratings.overall} OVR)` : null,

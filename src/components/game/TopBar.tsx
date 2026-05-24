@@ -218,10 +218,22 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
           <div className="flex items-center gap-1 md:gap-2 flex-wrap justify-end">
             {phase === 'preseason' && (
               <>
-                <Button onClick={() => { useGameStore.getState().simPreseasonWeek(); if (useGameStore.getState().phase === 'regular') router.push('/'); }} size="sm" className="active:scale-95 transition-transform">
+                <Button onClick={() => {
+                  const before = useGameStore.getState().phase;
+                  useGameStore.getState().simPreseasonWeek();
+                  const after = useGameStore.getState().phase;
+                  console.log('[TopBar.sim-preseason]', { before, after });
+                  if (after === 'regular') router.push('/roster');
+                }} size="sm" className="active:scale-95 transition-transform">
                   Sim Preseason Game
                 </Button>
-                <Button onClick={() => { useGameStore.getState().skipPreseason(); router.push('/'); }} size="sm" variant="secondary" className="active:scale-95 transition-transform">
+                <Button onClick={() => {
+                  const before = useGameStore.getState().phase;
+                  useGameStore.getState().skipPreseason();
+                  const after = useGameStore.getState().phase;
+                  console.log('[TopBar.skip-preseason]', { before, after });
+                  router.push('/roster');
+                }} size="sm" variant="secondary" className="active:scale-95 transition-transform">
                   Skip to Regular Season
                 </Button>
               </>
