@@ -10,7 +10,8 @@
     "./types": "./src/types/index.ts",
     "./sim": "./src/sim/index.ts",
     "./playerGen": "./src/playerGen/index.ts",
-    "./scheduleGenerator": "./src/scheduleGenerator/index.ts"
+    "./scheduleGenerator": "./src/scheduleGenerator/index.ts",
+    "./draftSystem": "./src/draftSystem/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

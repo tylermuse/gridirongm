@@ -104,16 +104,19 @@ describe('basketball player generator', () => {
   });
 
   it('derives starTier from overall', () => {
-    const superstar = generateBasketballPlayer({ targetOverall: 96 });
+    // Targets are bumped a few points above the tier threshold to absorb
+    // the ±3 OVR drift the generator allows (e.g. target 99 reliably
+    // lands at 95+ which is the superstar threshold).
+    const superstar = generateBasketballPlayer({ targetOverall: 99 });
     expect(superstar.sportData.starTier).toBe('superstar');
 
-    const star = generateBasketballPlayer({ targetOverall: 90 });
+    const star = generateBasketballPlayer({ targetOverall: 91 });
     expect(star.sportData.starTier).toBe('star');
 
-    const starter = generateBasketballPlayer({ targetOverall: 82 });
+    const starter = generateBasketballPlayer({ targetOverall: 83 });
     expect(starter.sportData.starTier).toBe('starter');
 
-    const role = generateBasketballPlayer({ targetOverall: 75 });
+    const role = generateBasketballPlayer({ targetOverall: 76 });
     expect(role.sportData.starTier).toBe('role');
 
     const bench = generateBasketballPlayer({ targetOverall: 68 });
