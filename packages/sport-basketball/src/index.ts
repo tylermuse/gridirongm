@@ -15,3 +15,4 @@
 export * from './types';
 export * from './sim';
 export * from './playerGen';
+export * from './scheduleGenerator';
