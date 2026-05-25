@@ -32,3 +32,14 @@ export type {
   StatEventField,
   PossessionResult,
 } from './possession';
+
+export {
+  simBasketballGame,
+  simBasketballGameSimple,
+} from './game';
+export type {
+  BasketballGameSide,
+  BasketballGameContext,
+  BasketballGameSettings,
+  BasketballGameData,
+} from './game';
