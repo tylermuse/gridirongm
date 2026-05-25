@@ -11,7 +11,8 @@
     "./sim": "./src/sim/index.ts",
     "./playerGen": "./src/playerGen/index.ts",
     "./scheduleGenerator": "./src/scheduleGenerator/index.ts",
-    "./draftSystem": "./src/draftSystem/index.ts"
+    "./draftSystem": "./src/draftSystem/index.ts",
+    "./awards": "./src/awards/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

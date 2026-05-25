@@ -17,3 +17,4 @@ export * from './sim';
 export * from './playerGen';
 export * from './scheduleGenerator';
 export * from './draftSystem';
+export * from './awards';
