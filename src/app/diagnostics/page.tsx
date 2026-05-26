@@ -32,8 +32,10 @@ const ROLLOVER_KEYS = [
   'gg-rollover-exit',
   'gg-rollover-error',
   'gg-rollover-outer-error',
+  'gg-rollover-outer-throw',
   'gg-rollover-step',
   'gg-rollover-async-error',
+  'gg-rollover-recoverable-error',
 ] as const;
 
 type RolloverKey = (typeof ROLLOVER_KEYS)[number];
@@ -102,8 +104,10 @@ export default function DiagnosticsPage() {
       'gg-rollover-exit': null,
       'gg-rollover-error': null,
       'gg-rollover-outer-error': null,
+      'gg-rollover-outer-throw': null,
       'gg-rollover-step': null,
       'gg-rollover-async-error': null,
+      'gg-rollover-recoverable-error': null,
     }),
   );
   const [copyStatus, setCopyStatus] = useState<'idle' | 'ok' | 'fail'>('idle');
@@ -117,8 +121,10 @@ export default function DiagnosticsPage() {
       'gg-rollover-exit': readBreadcrumb('gg-rollover-exit'),
       'gg-rollover-error': readBreadcrumb('gg-rollover-error'),
       'gg-rollover-outer-error': readBreadcrumb('gg-rollover-outer-error'),
+      'gg-rollover-outer-throw': readBreadcrumb('gg-rollover-outer-throw'),
       'gg-rollover-step': readBreadcrumb('gg-rollover-step'),
       'gg-rollover-async-error': readBreadcrumb('gg-rollover-async-error'),
+      'gg-rollover-recoverable-error': readBreadcrumb('gg-rollover-recoverable-error'),
     };
     setValues(next);
     setHydrated(true);
