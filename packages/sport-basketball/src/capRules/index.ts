@@ -28,3 +28,21 @@ export type {
   TeamCapStatus,
   RosterValidationResult,
 } from './capRules';
+
+export {
+  basketballDeadCapForRelease,
+  basketballStretchPreview,
+} from './deadCap';
+export type {
+  ReleaseMode,
+  DeadCapEntry,
+  DeadCapForReleaseOptions,
+} from './deadCap';
+
+export {
+  basketballMarketSalary,
+  basketballMarketContractYears,
+} from './marketSalary';
+export type {
+  MarketSalaryOptions,
+} from './marketSalary';
