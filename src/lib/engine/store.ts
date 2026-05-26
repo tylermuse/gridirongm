@@ -901,8 +901,15 @@ export function playerTradeValue(player: Player): number {
 
 /** Generates a position-by-position preview grade for the upcoming draft class.
  *  Uses a fresh sample-generated draft class to preview class quality without
- *  committing to specific players. The actual class is generated at draft time. */
-function generateDraftClassPreview(season: number): { season: number; groups: { position: string; grade: string; depthNote: string; ovrLow: number; ovrHigh: number; topOvr: number }[] } {
+ *  committing to specific players. The actual class is generated at draft time.
+ *
+ *  Exported 5/25 (its_camare07 5/16 msg 1505029205602205797): the
+ *  draft-preview page renders multiple future years (+0/+1/+2) using this
+ *  generator on-demand. Calls are cheap (single generateDraftClass +
+ *  small math) but the function is pure relative to its season arg, so
+ *  the page memoizes results.
+ */
+export function generateDraftClassPreview(season: number): { season: number; groups: { position: string; grade: string; depthNote: string; ovrLow: number; ovrHigh: number; topOvr: number }[] } {
   // Generate a sample class to estimate quality distributions
   const sample = generateDraftClass(224, { chaosDraft: false });
   const POSITIONS_TO_RATE: Position[] = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S'];
