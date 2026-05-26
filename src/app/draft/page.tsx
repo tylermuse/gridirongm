@@ -1652,6 +1652,41 @@ export default function DraftPage() {
                       )}
                     </>
                   )}
+                  {/* 5/25 (agarre3552 / bmoreoriolegm 5/14 msg
+                      1504561159116951743): one-click auto-scout. Iterates
+                      the board in projectedRank order (starred first, then
+                      rank) and spends 1 point per unscouted prospect until
+                      points are 0 or the board is exhausted. Pure UI orchestration
+                      over the existing scoutPlayer action. Idempotent
+                      at scoutPoints === 0. */}
+                  {(scoutingAllocations.isUnlimited || (ss.scoutPoints ?? 0) > 0) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Starred-first, then by projected rank
+                        const queue = [...allProspects].sort((a, b) => {
+                          const aS = a.isStarred ? 0 : 1;
+                          const bS = b.isStarred ? 0 : 1;
+                          if (aS !== bS) return aS - bS;
+                          return (a.projectedRank ?? 999) - (b.projectedRank ?? 999);
+                        });
+                        let spent = 0;
+                        for (const p of queue) {
+                          // Honor unlimited-tier vs explicit point check via the action's own gating
+                          if (isPlayerScouted(p.id)) continue;
+                          const ok = scoutPlayer(p.id);
+                          if (!ok) break;
+                          spent++;
+                          // Safety cap so even an unlimited tier can't run away
+                          if (spent >= 500) break;
+                        }
+                      }}
+                      className="ml-2 px-2 py-1 text-[11px] font-bold rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                      title="Auto-scout remaining board by board priority (starred first, then projected rank)"
+                    >
+                      Auto-scout
+                    </button>
+                  )}
                 </div>
               )}
             </div>
