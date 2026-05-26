@@ -180,16 +180,33 @@ export default function RostersPage() {
                 >
                   Play in BS Football →
                 </Link>
-                <a
-                  href={`/rosters/${roster.fileName}${roster.cacheBust ? `?v=${roster.cacheBust}` : ''}`}
-                  download={roster.fileName}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[var(--surface-2)] hover:bg-[var(--border)] text-[var(--text)] font-medium text-xs rounded-lg transition-colors border border-[var(--border)]"
+                {/* 5/25 (bitter__pill 5/16 msg 1505022252809195590 carry-forward):
+                    convert plain anchor with `download` to a button-styled
+                    download with ≥44px tap target + JS-triggered click. Some
+                    Android browsers don't reliably fire the save dialog from
+                    a single tap on a plain anchor with the download attribute. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = `/rosters/${roster.fileName}${roster.cacheBust ? `?v=${roster.cacheBust}` : ''}`;
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = roster.fileName;
+                    a.rel = 'noopener noreferrer';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }}
+                  className="inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-3 bg-[var(--surface-2)] hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--text)] font-medium text-sm rounded-lg transition-colors border border-[var(--border)]"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
                   Download JSON
-                </a>
+                </button>
+                <p className="text-[10px] text-[var(--text-sec)] leading-snug max-w-[200px] text-center sm:text-left">
+                  On Android: if the download doesn&rsquo;t start, tap-and-hold the button and choose &ldquo;Download link.&rdquo;
+                </p>
               </div>
             </div>
 
