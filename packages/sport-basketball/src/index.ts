@@ -18,3 +18,4 @@ export * from './playerGen';
 export * from './scheduleGenerator';
 export * from './draftSystem';
 export * from './awards';
+export * from './developmentSystem';
