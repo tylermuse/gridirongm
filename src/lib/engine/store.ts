@@ -8246,7 +8246,9 @@ export const useGameStore = create<GameStore>()(
           localStorage.removeItem('gg-rollover-exit');
           localStorage.removeItem('gg-rollover-error');
           localStorage.removeItem('gg-rollover-outer-error');
+          localStorage.removeItem('gg-rollover-outer-throw');
           localStorage.removeItem('gg-rollover-async-error');
+          localStorage.removeItem('gg-rollover-recoverable-error');
           localStorage.removeItem('gg-rollover-step');
         } catch { /* best-effort */ }
         try {
@@ -8297,6 +8299,16 @@ export const useGameStore = create<GameStore>()(
           try { localStorage.setItem('gg-rollover-step', s); } catch { /* best-effort */ }
         };
         setStep(currentStep);
+        // 5/25 (bige08676 fresh recapture): the original exit-breadcrumb write
+        // sat OUTSIDE the inner try/catch. If anything between entry and the
+        // try block threw synchronously, or if the recovery catch block itself
+        // threw, exit never landed and we couldn't tell "did the function
+        // complete?" Wrap the whole body in try/finally so exit ALWAYS writes,
+        // even on a throw escape. Diagnostic guarantee: if entry is set and
+        // exit is not, the JS engine never reached the bottom of this function
+        // — which is a stronger signal than the previous ambiguous state.
+        let outerThrow: unknown = undefined;
+        try {
         try {
         // Auto-fill K and P for user's team if missing — sign best available from FA
         {
@@ -9216,14 +9228,37 @@ export const useGameStore = create<GameStore>()(
             console.error('[startNewSeason] recovery news-append also failed', newsErr);
           }
         }
-        // Successful exit breadcrumb — easy diagnostic for testers retesting:
-        // if rollover entry localStorage is set but exit isn't, recovery
-        // failed silently.
-        try {
-          localStorage.setItem('gg-rollover-exit', JSON.stringify({
-            ts: new Date().toISOString(), season: get().season, phase: get().phase,
-          }));
-        } catch { /* best-effort */ }
+        } catch (outerErr) {
+          // 5/25: outer-throw catcher — anything that escapes the inner
+          // recovery catch lands here. Surface as a distinct breadcrumb so
+          // we can tell apart "rollover recovery worked" vs "recovery itself
+          // threw" on a future paste.
+          outerThrow = outerErr;
+          console.error('[startNewSeason] outer throw escaped recovery:', outerErr);
+          try {
+            localStorage.setItem('gg-rollover-outer-throw', JSON.stringify({
+              ts: new Date().toISOString(),
+              step: currentStep,
+              error: outerErr instanceof Error ? outerErr.message : String(outerErr),
+              stack: outerErr instanceof Error ? outerErr.stack?.split('\n').slice(0, 6).join('\n') : undefined,
+            }));
+          } catch { /* best-effort */ }
+        } finally {
+          // Successful exit breadcrumb — easy diagnostic for testers retesting:
+          // if rollover entry localStorage is set but exit isn't, the JS
+          // engine never reached the bottom of this function (the finally
+          // wrapper added 5/25 closes the prior gap where a throw outside
+          // the inner try/catch left exit absent ambiguously).
+          try {
+            localStorage.setItem('gg-rollover-exit', JSON.stringify({
+              ts: new Date().toISOString(),
+              season: get().season,
+              phase: get().phase,
+              lastStep: currentStep,
+              outerThrew: outerThrow !== undefined,
+            }));
+          } catch { /* best-effort */ }
+        }
       },
 
       updateLeagueSettings: (updates: Partial<LeagueSettings>) => {
