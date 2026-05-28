@@ -53,8 +53,14 @@ const RATING_LABELS: Record<keyof Omit<PlayerRatings, 'overall'>, string> = {
 
 export default function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { players, teams, userTeamId, releasePlayer, seasonHistory, restructureContract, phase } = useGameStore();
+  const { players, teams, userTeamId, releasePlayer, seasonHistory, restructureContract, phase, setPlayerJerseyNumber } = useGameStore();
   const [confirmRelease, setConfirmRelease] = useState(false);
+  // 5/25 (its_camare07 msg 1508330204924215357): inline jersey-number edit.
+  // Only owners of the user's team can edit (consistent with releasePlayer,
+  // restructureContract gating below).
+  const [jerseyEditing, setJerseyEditing] = useState(false);
+  const [jerseyDraft, setJerseyDraft] = useState('');
+  const [jerseyMessage, setJerseyMessage] = useState<{ kind: 'error' | 'warn'; text: string } | null>(null);
 
   const player = players.find(p => p.id === id);
 
@@ -122,6 +128,72 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                   <h1 className="text-3xl font-black">{player.firstName} {player.lastName}</h1>
                   <div className="flex items-center gap-3 mt-2">
                     <Badge>{getSubPosition(player)}</Badge>
+                    {/* Jersey number — editable for players on the user's
+                        team. Click to swap to an inline numeric input.
+                        its_camare07 5/25 ask. */}
+                    {player.teamId === userTeamId && !player.retired ? (
+                      jerseyEditing ? (
+                        <span className="inline-flex items-center gap-1">
+                          <span className="text-sm text-[var(--text-sec)]">#</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={99}
+                            value={jerseyDraft}
+                            onChange={e => setJerseyDraft(e.target.value)}
+                            className="w-14 px-1.5 py-0.5 text-sm border border-[var(--border)] rounded bg-[var(--surface)] text-[var(--text)]"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const n = Number(jerseyDraft);
+                              const result = setPlayerJerseyNumber(player.id, n);
+                              if (!result) {
+                                setJerseyMessage(null);
+                                setJerseyEditing(false);
+                              } else if (result.startsWith('warn:')) {
+                                setJerseyMessage({ kind: 'warn', text: result.slice(5) });
+                                setJerseyEditing(false);
+                              } else {
+                                setJerseyMessage({ kind: 'error', text: result });
+                              }
+                            }}
+                            className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-600 text-white hover:bg-blue-700"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setJerseyEditing(false);
+                              setJerseyMessage(null);
+                            }}
+                            className="text-xs text-[var(--text-sec)] hover:text-[var(--text)]"
+                          >
+                            Cancel
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setJerseyDraft(player.jerseyNumber != null ? String(player.jerseyNumber) : '');
+                            setJerseyMessage(null);
+                            setJerseyEditing(true);
+                          }}
+                          className="text-sm text-[var(--text-sec)] hover:text-blue-600 transition-colors"
+                          title="Click to edit jersey number"
+                        >
+                          {player.jerseyNumber != null ? `#${player.jerseyNumber}` : 'Set #'}
+                          <span className="ml-1 text-xs">✎</span>
+                        </button>
+                      )
+                    ) : (
+                      player.jerseyNumber != null && (
+                        <span className="text-sm text-[var(--text-sec)]">#{player.jerseyNumber}</span>
+                      )
+                    )}
                     <span className="text-sm text-[var(--text-sec)]">Age {player.age}</span>
                     <span className="text-sm text-[var(--text-sec)]">
                       {player.experience === 0 ? 'Rookie' : `${player.experience}${player.experience === 1 ? 'st' : player.experience === 2 ? 'nd' : player.experience === 3 ? 'rd' : 'th'} Year`}
@@ -138,6 +210,13 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                     )}
                     {player.retired && <Badge variant="red">Retired</Badge>}
                   </div>
+                  {jerseyMessage && (
+                    <p
+                      className={`mt-1 text-xs ${jerseyMessage.kind === 'error' ? 'text-red-600' : 'text-amber-600'}`}
+                    >
+                      {jerseyMessage.text}
+                    </p>
+                  )}
                 </div>
 
                 {/* Overall rating */}

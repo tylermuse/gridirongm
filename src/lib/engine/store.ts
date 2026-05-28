@@ -154,6 +154,13 @@ interface GameStore extends LeagueState {
   togglePlayingThroughInjury: (playerId: string) => void;
   setBaseFormation: (formation: '3-4' | '4-3' | 'Nickel') => void;
   retireJerseyNumber: (playerId: string) => string;
+  /** Edit a player's jersey number. Validates 0-99. Returns '' on success
+   *  or a non-empty reason string on rejection. A same-team collision is
+   *  reported as a non-empty warning prefix "warn:..." but the write still
+   *  completes — jersey collisions are real-world rare events handled by
+   *  the league office, not a hard block. Net-new feature for its_camare07
+   *  (msg 1508330204924215357, 2026-05-25). */
+  setPlayerJerseyNumber: (playerId: string, jerseyNumber: number) => string;
   /** Replace the user team's head coach with a user-supplied profile. Name,
    *  age, schemes, and ovr are overwritten; career record + history reset.
    *  Callable from the Staff page at any time. */
@@ -894,8 +901,15 @@ export function playerTradeValue(player: Player): number {
 
 /** Generates a position-by-position preview grade for the upcoming draft class.
  *  Uses a fresh sample-generated draft class to preview class quality without
- *  committing to specific players. The actual class is generated at draft time. */
-function generateDraftClassPreview(season: number): { season: number; groups: { position: string; grade: string; depthNote: string; ovrLow: number; ovrHigh: number; topOvr: number }[] } {
+ *  committing to specific players. The actual class is generated at draft time.
+ *
+ *  Exported 5/25 (its_camare07 5/16 msg 1505029205602205797): the
+ *  draft-preview page renders multiple future years (+0/+1/+2) using this
+ *  generator on-demand. Calls are cheap (single generateDraftClass +
+ *  small math) but the function is pure relative to its season arg, so
+ *  the page memoizes results.
+ */
+export function generateDraftClassPreview(season: number): { season: number; groups: { position: string; grade: string; depthNote: string; ovrLow: number; ovrHigh: number; topOvr: number }[] } {
   // Generate a sample class to estimate quality distributions
   const sample = generateDraftClass(224, { chaosDraft: false });
   const POSITIONS_TO_RATE: Position[] = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S'];
@@ -6412,6 +6426,38 @@ export const useGameStore = create<GameStore>()(
           ),
         });
         return '';
+      },
+
+      setPlayerJerseyNumber: (playerId: string, jerseyNumber: number): string => {
+        if (!Number.isInteger(jerseyNumber) || jerseyNumber < 0 || jerseyNumber > 99) {
+          return 'Jersey number must be a whole number between 0 and 99.';
+        }
+        const state = get();
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return 'Player not found.';
+        // Honor team-level jersey retirements when present — block if the
+        // number is retired on the player's current team.
+        if (player.teamId) {
+          const team = state.teams.find(t => t.id === player.teamId);
+          const retired = (team?.retiredNumbers ?? []).some(r => r.number === jerseyNumber);
+          if (retired) return `#${jerseyNumber} is retired by the ${team?.city ?? ''} ${team?.name ?? ''}.`;
+        }
+        // Collision check (same team, different player). Warn but allow:
+        // jersey collisions are real-world rare events; this surface lets
+        // the user override consciously. UI surfaces the warning text.
+        let warn = '';
+        if (player.teamId) {
+          const collision = state.players.find(p =>
+            p.id !== playerId && p.teamId === player.teamId && p.jerseyNumber === jerseyNumber);
+          if (collision) {
+            warn = `warn:#${jerseyNumber} is also worn by ${collision.firstName} ${collision.lastName}.`;
+          }
+        }
+        set({
+          players: state.players.map(p =>
+            p.id === playerId ? { ...p, jerseyNumber } : p),
+        });
+        return warn;
       },
 
       togglePlayingThroughInjury: (playerId: string) => {

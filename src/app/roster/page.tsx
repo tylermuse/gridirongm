@@ -141,6 +141,7 @@ export default function RosterPage() {
     autoCutToRosterLimit,
     demoteToPracticeSquad, promoteFromPracticeSquad,
     phase, week, seasonHistory, leagueSettings, resigningPlayers,
+    schedule,
   } = useGameStore();
   const godMode = leagueSettings?.godMode ?? false;
   const [showCreatePlayer, setShowCreatePlayer] = useState(false);
@@ -440,6 +441,29 @@ export default function RosterPage() {
               <span className={capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}>
                 ${capSpace}M cap space
               </span>
+              {/* 5/25 (tofftanaut 5/8 msg 1502199098504253492): "watch live"
+                  button when the user's team has an active game this week.
+                  Only renders during the regular season for the user's own
+                  team and only when an unplayed game exists for the current
+                  week — hidden during preseason/playoffs/offseason and when
+                  viewing another team's roster. */}
+              {!isSpectator && phase === 'regular' && activeTeamId === userTeamId && (() => {
+                const userGameThisWeek = schedule.find(g =>
+                  g.week === week && !g.played &&
+                  (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId));
+                if (!userGameThisWeek) return null;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/game/${userGameThisWeek.id}`)}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-bold rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
+                    title="Open the live broadcast for this week's game"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                    Watch Live
+                  </button>
+                );
+              })()}
               {deadCapTotal > 0 && (
                 <span className="text-red-600">${Math.round(deadCapTotal * 10) / 10}M dead cap</span>
               )}
