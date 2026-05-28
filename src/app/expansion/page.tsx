@@ -98,6 +98,78 @@ export default function ExpansionPage() {
     });
   }
 
+  // 5/27 silent-failure catcher for the "take over expansion team" flow.
+  // bitter__pill (msg 1508516553270759667) reported an unbypassable fatal
+  // error after picking "Play as [expansion team]"; original screenshot
+  // is unread by the bug-triage MCP. Instrument the handler the same way
+  // we instrumented the rollover — entry/step/exit breadcrumbs in
+  // localStorage, with a finally-guaranteed exit write — so the next
+  // repro auto-captures the failing step. /diagnostics surfaces all keys.
+  function handleTakeOverExpansionTeam(
+    newExpansionTeamId: string,
+    newTeamCity: string | undefined,
+    newTeamName: string | undefined,
+  ) {
+    let currentStep = 'entry';
+    let outerThrew = false;
+
+    // Stale-clear so a previous failed attempt doesn't confuse the next /diagnostics paste.
+    try {
+      localStorage.removeItem('gg-expansion-takeover-entry');
+      localStorage.removeItem('gg-expansion-takeover-step');
+      localStorage.removeItem('gg-expansion-takeover-exit');
+      localStorage.removeItem('gg-expansion-takeover-outer-error');
+      localStorage.removeItem('gg-expansion-takeover-async-error');
+    } catch { /* best-effort */ }
+
+    const setStep = (s: string) => {
+      currentStep = s;
+      try { localStorage.setItem('gg-expansion-takeover-step', s); } catch { /* best-effort */ }
+    };
+
+    try {
+      try { localStorage.setItem('gg-expansion-takeover-entry', JSON.stringify({
+        ts: new Date().toISOString(),
+        season,
+        phase,
+        currentUserTeamId: userTeamId,
+        newExpansionTeamId,
+        newTeamLabel: `${newTeamCity ?? '?'} ${newTeamName ?? '?'}`.trim(),
+      })); } catch { /* best-effort */ }
+
+      setStep('set-user-team');
+      useGameStore.setState({ userTeamId: newExpansionTeamId });
+
+      setStep('cancel-draft');
+      cancelExpansionDraft();
+
+      setStep('redirect');
+      window.location.href = '/';
+    } catch (outerErr) {
+      outerThrew = true;
+      console.error('[expansion-takeover] outer throw escaped handler:', outerErr);
+      try {
+        localStorage.setItem('gg-expansion-takeover-outer-error', JSON.stringify({
+          ts: new Date().toISOString(),
+          step: currentStep,
+          error: outerErr instanceof Error ? outerErr.message : String(outerErr),
+          stack: outerErr instanceof Error ? outerErr.stack?.split('\n').slice(0, 6).join('\n') : undefined,
+        }));
+      } catch { /* best-effort */ }
+      // Re-throw so the user still sees the fatal — instrumentation should
+      // be transparent, not swallow real failures.
+      throw outerErr;
+    } finally {
+      try {
+        localStorage.setItem('gg-expansion-takeover-exit', JSON.stringify({
+          ts: new Date().toISOString(),
+          lastStep: currentStep,
+          outerThrew,
+        }));
+      } catch { /* best-effort */ }
+    }
+  }
+
   // Roster for protection step
   const userRoster = players
     .filter(p => p.teamId === userTeamId && !p.retired)
@@ -444,11 +516,7 @@ export default function ExpansionPage() {
                   return (
                     <button
                       key={expId}
-                      onClick={() => {
-                        useGameStore.setState({ userTeamId: expId });
-                        cancelExpansionDraft();
-                        window.location.href = '/';
-                      }}
+                      onClick={() => handleTakeOverExpansionTeam(expId, expTeam?.city, expTeam?.name)}
                       className="text-sm font-medium text-blue-600 border border-blue-200 rounded-lg px-4 py-2 hover:bg-blue-50 transition-colors"
                     >
                       Play as {expTeam?.city} {expTeam?.name}
