@@ -3,26 +3,20 @@
 import { useEffect, useState } from 'react';
 
 /**
- * Rollover diagnostics surface. Reads the six localStorage breadcrumb keys
- * that startNewSeason + the three call-site outer catches (post-draft-cuts,
- * draft-recap, TopBar) + the window-level error/rejection beacon write
- * whenever the offseason rollover runs.
+ * Diagnostics surface. Reads localStorage breadcrumb keys written by
+ * instrumented flows so testers can paste a full failure picture into
+ * #bug-reports without needing browser devtools.
  *
- * Breadcrumb keys:
- *   gg-rollover-entry        — written at the top of startNewSeason
- *   gg-rollover-exit         — written at the bottom of a successful rollover
- *   gg-rollover-error        — inner-catch in startNewSeason
- *   gg-rollover-outer-error  — call-site outer catches (TopBar / draft-recap / cuts)
- *   gg-rollover-step         — 5/22 silent-failure catcher; last setStep() name
- *   gg-rollover-async-error  — 5/22 silent-failure catcher; window-level
- *                              error / unhandledrejection captured mid-rollover
+ * Currently covers:
+ *   - Season rollover (startNewSeason + call-site outer catches + window beacon)
+ *   - Expansion-takeover (5/27 — "Play as [expansion team]" handler + window beacon)
  *
- * bige08676 (5/18) spent 3 messages trying to retrieve these via browser
- * devtools and got blocked — bookmark URLs, address-bar code injection,
- * "eruda" extensions all failed for his environment. This page removes the
- * devtools requirement entirely: testers visit /diagnostics on the same
- * browser/device where the soft-lock happens, hit "Copy all diagnostics",
- * and paste the block into #bug-reports.
+ * bige08676 (5/18) spent 3 messages trying to retrieve breadcrumbs via
+ * browser devtools and got blocked — bookmark URLs, address-bar code
+ * injection, "eruda" extensions all failed for his environment. This page
+ * removes the devtools requirement entirely: testers visit /diagnostics on
+ * the same browser/device where the soft-lock or fatal happens, hit
+ * "Copy all diagnostics", and paste the block into #bug-reports.
  *
  * Read-only — no engine state mutation. No SAVE_VERSION bump.
  */
@@ -38,9 +32,19 @@ const ROLLOVER_KEYS = [
   'gg-rollover-recoverable-error',
 ] as const;
 
-type RolloverKey = (typeof ROLLOVER_KEYS)[number];
+const EXPANSION_TAKEOVER_KEYS = [
+  'gg-expansion-takeover-entry',
+  'gg-expansion-takeover-step',
+  'gg-expansion-takeover-exit',
+  'gg-expansion-takeover-outer-error',
+  'gg-expansion-takeover-async-error',
+] as const;
 
-function readBreadcrumb(key: RolloverKey): string | null {
+const ALL_KEYS = [...ROLLOVER_KEYS, ...EXPANSION_TAKEOVER_KEYS] as const;
+
+type DiagnosticKey = (typeof ALL_KEYS)[number];
+
+function readBreadcrumb(key: DiagnosticKey): string | null {
   try {
     return localStorage.getItem(key);
   } catch {
@@ -58,12 +62,19 @@ function formatValue(raw: string | null): string {
   }
 }
 
-function buildPasteBlock(values: Record<RolloverKey, string | null>): string {
-  const lines: string[] = ['BS Football — rollover diagnostics'];
+function buildPasteBlock(values: Record<DiagnosticKey, string | null>): string {
+  const lines: string[] = ['BS Football — diagnostics'];
   lines.push(`Captured: ${new Date().toISOString()}`);
   lines.push(`Browser: ${typeof navigator === 'undefined' ? '(unknown)' : navigator.userAgent}`);
   lines.push('');
+  lines.push('# Rollover');
   for (const key of ROLLOVER_KEYS) {
+    lines.push(`--- ${key} ---`);
+    lines.push(formatValue(values[key]));
+    lines.push('');
+  }
+  lines.push('# Expansion takeover');
+  for (const key of EXPANSION_TAKEOVER_KEYS) {
     lines.push(`--- ${key} ---`);
     lines.push(formatValue(values[key]));
     lines.push('');
@@ -97,35 +108,22 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
+function emptyValues(): Record<DiagnosticKey, string | null> {
+  const out = {} as Record<DiagnosticKey, string | null>;
+  for (const key of ALL_KEYS) out[key] = null;
+  return out;
+}
+
 export default function DiagnosticsPage() {
-  const [values, setValues] = useState<Record<RolloverKey, string | null>>(
-    () => ({
-      'gg-rollover-entry': null,
-      'gg-rollover-exit': null,
-      'gg-rollover-error': null,
-      'gg-rollover-outer-error': null,
-      'gg-rollover-outer-throw': null,
-      'gg-rollover-step': null,
-      'gg-rollover-async-error': null,
-      'gg-rollover-recoverable-error': null,
-    }),
-  );
+  const [values, setValues] = useState<Record<DiagnosticKey, string | null>>(emptyValues);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'ok' | 'fail'>('idle');
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     // Read after mount — avoids SSR/client mismatch since localStorage isn't
     // available during prerender.
-    const next: Record<RolloverKey, string | null> = {
-      'gg-rollover-entry': readBreadcrumb('gg-rollover-entry'),
-      'gg-rollover-exit': readBreadcrumb('gg-rollover-exit'),
-      'gg-rollover-error': readBreadcrumb('gg-rollover-error'),
-      'gg-rollover-outer-error': readBreadcrumb('gg-rollover-outer-error'),
-      'gg-rollover-outer-throw': readBreadcrumb('gg-rollover-outer-throw'),
-      'gg-rollover-step': readBreadcrumb('gg-rollover-step'),
-      'gg-rollover-async-error': readBreadcrumb('gg-rollover-async-error'),
-      'gg-rollover-recoverable-error': readBreadcrumb('gg-rollover-recoverable-error'),
-    };
+    const next = emptyValues();
+    for (const key of ALL_KEYS) next[key] = readBreadcrumb(key);
     setValues(next);
     setHydrated(true);
   }, []);
@@ -137,22 +135,22 @@ export default function DiagnosticsPage() {
   }
 
   function handleClear() {
-    for (const key of ROLLOVER_KEYS) {
+    for (const key of ALL_KEYS) {
       try { localStorage.removeItem(key); } catch { /* private mode — ignore */ }
     }
     window.location.reload();
   }
 
-  const allEmpty = hydrated && ROLLOVER_KEYS.every(k => values[k] === null);
+  const allEmpty = hydrated && ALL_KEYS.every(k => values[k] === null);
 
   return (
     <div className="min-h-screen p-4 sm:p-6 bg-[var(--bg)] text-[var(--text)]">
       <div className="max-w-3xl mx-auto space-y-4">
         <header className="space-y-1">
-          <h1 className="text-2xl sm:text-3xl font-bold">Rollover diagnostics</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Diagnostics</h1>
           <p className="text-sm text-[var(--text-sec)] leading-relaxed">
-            Paste this in <code className="text-xs">#bug-reports</code> if you&rsquo;ve hit a soft-lock at the &ldquo;Start New Season&rdquo; step.
-            These values are written automatically when the game tries to advance to a new season. They contain only the names of internal steps the rollover went through, plus any error message and the timestamp &mdash; no personal information.
+            Paste this in <code className="text-xs">#bug-reports</code> if you&rsquo;ve hit a soft-lock on &ldquo;Start New Season&rdquo; or a fatal after the expansion draft.
+            These values are written automatically when the game runs these flows. They contain only the names of internal steps, any error message, and the timestamp &mdash; no personal information.
           </p>
         </header>
 
@@ -183,12 +181,24 @@ export default function DiagnosticsPage() {
 
         {hydrated && allEmpty && (
           <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm">
-            All breadcrumbs are empty &mdash; either the game has never tried to roll over a season on this browser, or you cleared them. Try to reproduce the soft-lock and come back to this page; the breadcrumbs will populate automatically.
+            All breadcrumbs are empty &mdash; either the game has never run an instrumented flow on this browser, or you cleared them. Try to reproduce the issue and come back to this page; the breadcrumbs will populate automatically.
           </div>
         )}
 
         <div className="space-y-3">
+          <h2 className="text-lg font-semibold text-[var(--text-sec)]">Rollover</h2>
           {ROLLOVER_KEYS.map(key => (
+            <section key={key} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+              <div className="px-3 py-2 bg-[var(--surface-2)] border-b border-[var(--border)] font-mono text-xs text-[var(--text-sec)]">
+                {key}
+              </div>
+              <pre className="p-3 text-xs whitespace-pre-wrap break-words font-mono leading-relaxed">
+                {hydrated ? formatValue(values[key]) : '(loading…)'}
+              </pre>
+            </section>
+          ))}
+          <h2 className="text-lg font-semibold text-[var(--text-sec)] pt-2">Expansion takeover</h2>
+          {EXPANSION_TAKEOVER_KEYS.map(key => (
             <section key={key} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
               <div className="px-3 py-2 bg-[var(--surface-2)] border-b border-[var(--border)] font-mono text-xs text-[var(--text-sec)]">
                 {key}
