@@ -8,6 +8,7 @@ import { HOOPS_LEAGUE_TEAMS } from '@/lib/data/teams';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { NewsFeed } from '@/components/feed/NewsFeed';
 
 /**
  * BS Hoops home — port of bs-football's TeamPicker pattern.
@@ -67,8 +68,8 @@ export default function HomePage() {
     const playedCount = league.games.filter(g => g.status === 'played').length;
     const userTeam = league.userTeamId ? league.teams.find(t => t.id === league.userTeamId) : null;
     return (
-      <div className="max-w-5xl mx-auto px-5 py-12">
-        <div className="flex flex-wrap items-baseline gap-4 mb-2">
+      <div className="max-w-6xl mx-auto px-5 py-12">
+        <div className="flex flex-wrap items-baseline gap-4 mb-6">
           <h1
             className="text-5xl sm:text-6xl font-black tracking-tight"
             style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}
@@ -80,43 +81,59 @@ export default function HomePage() {
           </span>
         </div>
 
-        {userTeam && (
-          <div className="flex items-center gap-3 mb-8 mt-4">
-            <TeamLogo
-              abbreviation={userTeam.abbreviation}
-              primaryColor={userTeam.primaryColor}
-              secondaryColor={userTeam.secondaryColor}
-              size="lg"
-            />
-            <div>
-              <div className="text-xs uppercase tracking-widest opacity-60">You manage</div>
-              <div className="text-xl font-bold">{userTeam.city} {userTeam.name}</div>
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Main column */}
+          <div className="lg:col-span-2">
+            {userTeam && (
+              <div className="flex items-center gap-3 mb-8">
+                <TeamLogo
+                  abbreviation={userTeam.abbreviation}
+                  primaryColor={userTeam.primaryColor}
+                  secondaryColor={userTeam.secondaryColor}
+                  size="lg"
+                />
+                <div>
+                  <div className="text-xs uppercase tracking-widest opacity-60">You manage</div>
+                  <div className="text-xl font-bold">{userTeam.city} {userTeam.name}</div>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+              <StatCard label="Teams" value={league.teams.length} />
+              <StatCard label="Games Played" value={`${playedCount} / ${league.games.length}`} />
+              <StatCard label="Day" value={league.currentTick} />
+              <StatCard label="Saves" value={saves.length} />
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Link href="/league">
+                <Button variant="primary" size="lg">Enter League →</Button>
+              </Link>
+              <Link href="/standings">
+                <Button variant="secondary" size="lg">Standings</Button>
+              </Link>
+              {userTeam && (
+                <Link href={`/team/${userTeam.id}`}>
+                  <Button variant="secondary" size="lg">My Team</Button>
+                </Link>
+              )}
+              <Button variant="ghost" size="lg" onClick={clearActive}>
+                ← Back to menu
+              </Button>
             </div>
           </div>
-        )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-          <StatCard label="Teams" value={league.teams.length} />
-          <StatCard label="Games Played" value={`${playedCount} / ${league.games.length}`} />
-          <StatCard label="Day" value={league.currentTick} />
-          <StatCard label="Saves" value={saves.length} />
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          <Link href="/league">
-            <Button variant="primary" size="lg">Enter League →</Button>
-          </Link>
-          <Link href="/standings">
-            <Button variant="secondary" size="lg">Standings</Button>
-          </Link>
-          {userTeam && (
-            <Link href={`/team/${userTeam.id}`}>
-              <Button variant="secondary" size="lg">My Team</Button>
-            </Link>
-          )}
-          <Button variant="ghost" size="lg" onClick={clearActive}>
-            ← Back to menu
-          </Button>
+          {/* News sidebar */}
+          <aside className="lg:col-span-1">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-bold">League News</h2>
+              <Link href="/news" className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>
+                View all →
+              </Link>
+            </div>
+            <NewsFeed league={league} max={6} />
+          </aside>
         </div>
       </div>
     );

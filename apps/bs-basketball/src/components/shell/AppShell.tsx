@@ -95,6 +95,7 @@ function TopBar({
             <nav className="flex items-center gap-1 ml-2">
               <NavLink href="/league"    label="League"    active={pathname.startsWith('/league')} />
               <NavLink href="/standings" label="Standings" active={pathname.startsWith('/standings')} />
+              <NavLink href="/news"      label="News"      active={pathname.startsWith('/news')} />
               {userTeamId && (
                 <NavLink
                   href={`/team/${userTeamId}`}
