@@ -2,7 +2,7 @@ function uuid(): string {
   return crypto.randomUUID();
 }
 import type { Player, PlayerRatings, Position } from '@/types';
-import { emptyStats, deriveSubPosition } from '@/types';
+import { emptyStats, deriveSubPosition, backfillTeamSubPositions } from '@/types';
 import { randomName } from '@/lib/data/names';
 import { estimateSalary } from './salary';
 
@@ -357,6 +357,10 @@ export function generatePlayer(
   return player;
 }
 
+// generateRoster assigns authoritative sub-positions once the whole roster
+// exists (see below) — the per-player derive above is just a seed for any
+// player that's ever inspected before its team is assembled.
+
 /** Generates a full roster of ~53 players for a team. */
 export function generateRoster(teamId: string, tierMean: number): Player[] {
   const rosterSpec: { position: Position; count: number }[] = [
@@ -381,6 +385,11 @@ export function generateRoster(teamId: string, tierMean: number): Player[] {
       players.push(generatePlayer(position, talent, { teamId }));
     }
   }
+  // Authoritative team-relative sub-position split (OT/OG/C, EDGE/DT, OLB/MLB,
+  // FS/SS). Ranks each position group within this roster so labels distribute
+  // realistically instead of collapsing to the interior default.
+  backfillTeamSubPositions(players);
+
   return players;
 }
 
