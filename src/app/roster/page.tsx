@@ -215,6 +215,7 @@ export default function RosterPage() {
 
   // Drag state for depth chart
   const [dragPosition, setDragPosition] = useState<Position | null>(null);
+  const [dragSubPos, setDragSubPos] = useState<SubPosition | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
@@ -346,8 +347,29 @@ export default function RosterPage() {
     return posPlayers.sort((a, b) => b.ratings.overall - a.ratings.overall);
   }
 
-  function handleDragStart(position: Position, index: number) {
+  // ─── Depth-chart sub-position grouping (§1.2 — bryangrove 5/29) ──────────
+  // OL/DL/LB/S carry a meaningful detailed breakdown; the depth chart splits
+  // each into sub-position sub-rows (OT/OG/C, EDGE/DT, OLB/MLB, FS/SS) rather
+  // than one flat broad-position pool. `subPos === null` means a whole-position
+  // row (QB/RB/WR/TE/CB/K/P) that reorders against the full depthChart array;
+  // a non-null subPos reorders only within that sub-position's slots.
+  const SUB_POSITIONS_BY_POS: Partial<Record<Position, SubPosition[]>> = {
+    OL: ['OT', 'OG', 'C'],
+    DL: ['EDGE', 'DT'],
+    LB: ['OLB', 'MLB'],
+    S: ['FS', 'SS'],
+  };
+  const SUB_POS_LABELS: Record<string, string> = {
+    OT: 'Tackles', OG: 'Guards', C: 'Centers',
+    EDGE: 'Edge', DT: 'Interior DL',
+    OLB: 'Outside LB', MLB: 'Inside LB',
+    FS: 'Free Safety', SS: 'Strong Safety',
+  };
+  const effectiveSubPos = (p: Player): SubPosition => p.subPosition ?? deriveSubPosition(p);
+
+  function handleDragStart(position: Position, index: number, subPos: SubPosition | null = null) {
     setDragPosition(position);
+    setDragSubPos(subPos);
     setDragIndex(index);
   }
   function handleDragOver(e: React.DragEvent, index: number) {
@@ -356,13 +378,20 @@ export default function RosterPage() {
   }
   function handleDragEnd() {
     if (dragPosition !== null && dragIndex !== null && dragOverIndex !== null && dragIndex !== dragOverIndex) {
-      const group = getDepthGroup(dragPosition);
-      const ids = group.map(p => p.id);
-      const [movedId] = ids.splice(dragIndex, 1);
-      ids.splice(dragOverIndex, 0, movedId);
-      reorderDepthChart(dragPosition, ids);
+      if (dragSubPos) {
+        const subIds = getDepthGroup(dragPosition)
+          .filter(p => effectiveSubPos(p) === dragSubPos)
+          .map(p => p.id);
+        applySubReorder(dragPosition, subIds, dragIndex, dragOverIndex);
+      } else {
+        const ids = getDepthGroup(dragPosition).map(p => p.id);
+        const [movedId] = ids.splice(dragIndex, 1);
+        ids.splice(dragOverIndex, 0, movedId);
+        reorderDepthChart(dragPosition, ids);
+      }
     }
     setDragPosition(null);
+    setDragSubPos(null);
     setDragIndex(null);
     setDragOverIndex(null);
   }
@@ -376,11 +405,141 @@ export default function RosterPage() {
     reorderDepthChart(position, ids);
   }
 
+  // Reorder within a sub-position sub-row. Permutes only the depth slots
+  // currently occupied by that sub-position's members and leaves everyone else
+  // in place, so the flat depthChart[pos] array the sim reads stays valid.
+  function applySubReorder(position: Position, subIds: string[], fromSubIdx: number, toSubIdx: number) {
+    if (toSubIdx < 0 || toSubIdx >= subIds.length || fromSubIdx === toSubIdx) return;
+    const reorderedSub = [...subIds];
+    const [moved] = reorderedSub.splice(fromSubIdx, 1);
+    reorderedSub.splice(toSubIdx, 0, moved);
+    const subSet = new Set(subIds);
+    let k = 0;
+    const newFlat = getDepthGroup(position).map(p => p.id).map(id => (subSet.has(id) ? reorderedSub[k++] : id));
+    reorderDepthChart(position, newFlat);
+  }
+
   const positionGroups: Array<{ label: string; positions: Position[] }> = [
     { label: 'Offense', positions: ['QB', 'RB', 'WR', 'TE', 'OL'] },
     { label: 'Defense', positions: ['DL', 'LB', 'CB', 'S'] },
     { label: 'Special Teams', positions: ['K', 'P'] },
   ];
+
+  // One depth-chart player tile. `subPos === null` → whole-position row (reorders
+  // against the full depthChart array); a non-null subPos → sub-position sub-row
+  // (reorders only within that sub-position's slots). `rowPlayers`/`idx` are the
+  // row-local ordering used for drag + ▲▼.
+  const renderDepthTile = (pos: Position, subPos: SubPosition | null, rowPlayers: Player[], player: Player, idx: number) => {
+    const rowLen = rowPlayers.length;
+    const isAllPro = allProPlayerIds.has(player.id);
+    const isDragging = dragPosition === pos && dragSubPos === subPos && dragIndex === idx;
+    const isDragOver = dragPosition === pos && dragSubPos === subPos && dragOverIndex === idx;
+    const canPlayThrough = isViewingOwnTeam && player.injury && player.injury.weeksLeft > 0 && player.injury.weeksLeft <= 3 && !player.onIR;
+    const playingThrough = !!player.playingThroughInjury;
+    const ptPenalty = player.injury && playingThrough ? (player.injury.weeksLeft >= 3 ? 20 : player.injury.weeksLeft === 2 ? 12 : 5) : 0;
+    const move = (from: number, to: number) => {
+      if (subPos) applySubReorder(pos, rowPlayers.map(p => p.id), from, to);
+      else handleMovePlayer(pos, from, to);
+    };
+    const slotLabel = pos === 'OL' && player.olSlot ? player.olSlot : (DEPTH_LABELS[idx] ?? `${idx + 1}th`);
+    return (
+      <div
+        key={player.id}
+        draggable
+        onDragStart={() => handleDragStart(pos, idx, subPos)}
+        onDragOver={(e) => handleDragOver(e, idx)}
+        onDragEnd={handleDragEnd}
+        className={`bg-[var(--surface-2)] rounded-lg p-2 cursor-grab active:cursor-grabbing transition-all ${
+          isDragging ? 'opacity-40 scale-95' : ''
+        } ${isDragOver ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-[var(--bg)]' : ''} ${
+          playingThrough ? 'ring-2 ring-amber-400 ring-offset-1 ring-offset-[var(--bg)]' : ''
+        }`}
+      >
+        <div className="flex items-center justify-between mb-0.5">
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-[var(--text-sec)]">{slotLabel}</span>
+            {isViewingOwnTeam && rowLen > 1 && (
+              <div className="flex gap-0.5">
+                <button
+                  onClick={(e) => { e.stopPropagation(); move(idx, idx - 1); }}
+                  disabled={idx === 0}
+                  className="w-4 h-4 flex items-center justify-center rounded text-[8px] bg-[var(--surface)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-20 border border-[var(--border)]"
+                  title="Move up"
+                >
+                  ▲
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); move(idx, idx + 1); }}
+                  disabled={idx >= rowLen - 1}
+                  className="w-4 h-4 flex items-center justify-center rounded text-[8px] bg-[var(--surface)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-20 border border-[var(--border)]"
+                  title="Move down"
+                >
+                  ▼
+                </button>
+              </div>
+            )}
+            {canPlayThrough && (() => {
+              const w = player.injury!.weeksLeft;
+              const penalty = w >= 3 ? 20 : w === 2 ? 12 : 5;
+              const reinjPct = w >= 3 ? 25 : w === 2 ? 15 : 8;
+              return (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (playingThrough) {
+                      togglePlayingThroughInjury(player.id);
+                      return;
+                    }
+                    const ok = window.confirm(
+                      `Start ${player.firstName} ${player.lastName} at ${w} week${w === 1 ? '' : 's'} remaining?\n\n` +
+                      `• Plays at ~${Math.max(30, player.ratings.overall - penalty)} OVR (-${penalty})\n` +
+                      `• ${reinjPct}% chance of re-injury per game (worse & longer)`
+                    );
+                    if (ok) togglePlayingThroughInjury(player.id);
+                  }}
+                  className={`w-4 h-4 flex items-center justify-center rounded text-[9px] border ${
+                    playingThrough
+                      ? 'bg-amber-100 text-amber-800 border-amber-400'
+                      : 'bg-[var(--surface)] text-[var(--text-sec)] hover:text-amber-700 hover:border-amber-400 border-[var(--border)]'
+                  }`}
+                  title={playingThrough ? 'Disable play through' : `Play through injury (-${penalty} OVR, ${reinjPct}% re-injury risk)`}
+                >
+                  ✚
+                </button>
+              );
+            })()}
+          </div>
+          <span className={`text-xs font-bold ${ratingColor(player.ratings.overall)}`}>
+            {playingThrough ? (
+              <>
+                {Math.max(30, player.ratings.overall - ptPenalty)}
+                <span className="ml-0.5 text-[9px] text-red-600">(-{ptPenalty})</span>
+              </>
+            ) : (
+              player.ratings.overall
+            )}
+          </span>
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); setSelectedPlayerId(player.id); }}
+          className="text-xs font-semibold sm:truncate block hover:text-blue-600 transition-colors text-left"
+        >
+          {isAllPro && <span className="text-amber-600 mr-0.5">★</span>}
+          {player.firstName[0]}. {player.lastName}
+        </button>
+        <div className="text-[10px] text-[var(--text-sec)] mt-0.5 sm:truncate">
+          {getGenericStat(player)}
+        </div>
+        {player.injury && (
+          <div className="text-[10px] text-red-600">
+            {player.injury.type} ({player.injury.weeksLeft}w)
+            {playingThrough && <span className="ml-1 text-amber-700 font-bold">· ⚠</span>}
+          </div>
+        )}
+        {player.onIR && <div className="text-[10px] text-amber-600">IR</div>}
+      </div>
+    );
+  };
 
   const SortHeader = ({ k, children, className = '' }: { k: SortKey; children: React.ReactNode; className?: string }) => (
     <th
@@ -977,7 +1136,6 @@ export default function RosterPage() {
                       // stay accurate (LDE / LDT) but the slot is filled
                       // with whoever the team actually has at the position.
                       const baseList = getDepthGroup(slot.pos);
-                      const effectiveSubPos = (p: Player) => p.subPosition ?? deriveSubPosition(p);
                       const subPosList = slot.subPos
                         ? baseList.filter(p => effectiveSubPos(p) === slot.subPos)
                         : baseList;
@@ -1049,6 +1207,33 @@ export default function RosterPage() {
                 <div className="space-y-0">
                   {group.positions.map(pos => {
                     const depthGroup = getDepthGroup(pos);
+                    const subs = SUB_POSITIONS_BY_POS[pos];
+                    // OL/DL/LB/S: split into sub-position sub-rows (OT/OG/C,
+                    // EDGE/DT, OLB/MLB, FS/SS) so the depth chart reads by
+                    // detailed position, not just one flat broad-position pool.
+                    if (subs) {
+                      return (
+                        <div key={pos} className="border-t border-[var(--border)] first:border-t-0 py-1">
+                          <div className="px-2 pt-1 pb-0.5 text-[11px] font-black uppercase tracking-wide text-[var(--text)]">{pos}</div>
+                          {subs.map(sp => {
+                            const rowPlayers = depthGroup.filter(p => effectiveSubPos(p) === sp);
+                            return (
+                              <div key={sp} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2 py-1 px-2">
+                                <div className="sm:w-24 shrink-0 flex sm:flex-col items-baseline sm:items-start gap-1 sm:gap-0 pt-0.5">
+                                  <span className="text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">{sp}</span>
+                                  <span className="text-[9px] text-[var(--text-sec)] sm:mt-0.5">{SUB_POS_LABELS[sp]}</span>
+                                </div>
+                                <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
+                                  {rowPlayers.length === 0
+                                    ? <div className="text-xs text-[var(--text-sec)] italic py-1 px-2">none</div>
+                                    : rowPlayers.map((player, idx) => renderDepthTile(pos, sp, rowPlayers, player, idx))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    }
                     return (
                       <div key={pos} className="border-t border-[var(--border)] first:border-t-0">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 py-2 px-2">
@@ -1059,113 +1244,7 @@ export default function RosterPage() {
                               if (!player) {
                                 return <div key={idx} className="text-xs text-[var(--text-sec)] py-1 px-2">—</div>;
                               }
-                              const isAllPro = allProPlayerIds.has(player.id);
-                              const isDragging = dragPosition === pos && dragIndex === idx;
-                              const isDragOver = dragPosition === pos && dragOverIndex === idx;
-                              const canPlayThrough = isViewingOwnTeam && player.injury && player.injury.weeksLeft > 0 && player.injury.weeksLeft <= 3 && !player.onIR;
-                              const playingThrough = !!player.playingThroughInjury;
-                              const ptPenalty = player.injury && playingThrough ? (player.injury.weeksLeft >= 3 ? 20 : player.injury.weeksLeft === 2 ? 12 : 5) : 0;
-                              return (
-                                <div
-                                  key={player.id}
-                                  draggable
-                                  onDragStart={() => handleDragStart(pos, idx)}
-                                  onDragOver={(e) => handleDragOver(e, idx)}
-                                  onDragEnd={handleDragEnd}
-                                  className={`bg-[var(--surface-2)] rounded-lg p-2 cursor-grab active:cursor-grabbing transition-all ${
-                                    isDragging ? 'opacity-40 scale-95' : ''
-                                  } ${isDragOver ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-[var(--bg)]' : ''} ${
-                                    playingThrough ? 'ring-2 ring-amber-400 ring-offset-1 ring-offset-[var(--bg)]' : ''
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between mb-0.5">
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-[10px] text-[var(--text-sec)]">
-                                        {pos === 'OL' && idx < 5 && player.olSlot
-                                          ? player.olSlot
-                                          : (DEPTH_LABELS[idx] ?? `${idx + 1}th`)}
-                                      </span>
-                                      {isViewingOwnTeam && depthGroup.length > 1 && (
-                                        <div className="flex gap-0.5">
-                                          <button
-                                            onClick={(e) => { e.stopPropagation(); handleMovePlayer(pos, idx, idx - 1); }}
-                                            disabled={idx === 0}
-                                            className="w-4 h-4 flex items-center justify-center rounded text-[8px] bg-[var(--surface)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-20 border border-[var(--border)]"
-                                            title="Move up"
-                                          >
-                                            ▲
-                                          </button>
-                                          <button
-                                            onClick={(e) => { e.stopPropagation(); handleMovePlayer(pos, idx, idx + 1); }}
-                                            disabled={idx >= depthGroup.length - 1}
-                                            className="w-4 h-4 flex items-center justify-center rounded text-[8px] bg-[var(--surface)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-20 border border-[var(--border)]"
-                                            title="Move down"
-                                          >
-                                            ▼
-                                          </button>
-                                        </div>
-                                      )}
-                                      {canPlayThrough && (() => {
-                                        const w = player.injury!.weeksLeft;
-                                        const penalty = w >= 3 ? 20 : w === 2 ? 12 : 5;
-                                        const reinjPct = w >= 3 ? 25 : w === 2 ? 15 : 8;
-                                        return (
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              if (playingThrough) {
-                                                togglePlayingThroughInjury(player.id);
-                                                return;
-                                              }
-                                              const ok = window.confirm(
-                                                `Start ${player.firstName} ${player.lastName} at ${w} week${w === 1 ? '' : 's'} remaining?\n\n` +
-                                                `• Plays at ~${Math.max(30, player.ratings.overall - penalty)} OVR (-${penalty})\n` +
-                                                `• ${reinjPct}% chance of re-injury per game (worse & longer)`
-                                              );
-                                              if (ok) togglePlayingThroughInjury(player.id);
-                                            }}
-                                            className={`w-4 h-4 flex items-center justify-center rounded text-[9px] border ${
-                                              playingThrough
-                                                ? 'bg-amber-100 text-amber-800 border-amber-400'
-                                                : 'bg-[var(--surface)] text-[var(--text-sec)] hover:text-amber-700 hover:border-amber-400 border-[var(--border)]'
-                                            }`}
-                                            title={playingThrough ? 'Disable play through' : `Play through injury (-${penalty} OVR, ${reinjPct}% re-injury risk)`}
-                                          >
-                                            ✚
-                                          </button>
-                                        );
-                                      })()}
-                                    </div>
-                                    <span className={`text-xs font-bold ${ratingColor(player.ratings.overall)}`}>
-                                      {playingThrough ? (
-                                        <>
-                                          {Math.max(30, player.ratings.overall - ptPenalty)}
-                                          <span className="ml-0.5 text-[9px] text-red-600">(-{ptPenalty})</span>
-                                        </>
-                                      ) : (
-                                        player.ratings.overall
-                                      )}
-                                    </span>
-                                  </div>
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); setSelectedPlayerId(player.id); }}
-                                    className="text-xs font-semibold sm:truncate block hover:text-blue-600 transition-colors text-left"
-                                  >
-                                    {isAllPro && <span className="text-amber-600 mr-0.5">★</span>}
-                                    {player.firstName[0]}. {player.lastName}
-                                  </button>
-                                  <div className="text-[10px] text-[var(--text-sec)] mt-0.5 sm:truncate">
-                                    {getGenericStat(player)}
-                                  </div>
-                                  {player.injury && (
-                                    <div className="text-[10px] text-red-600">
-                                      {player.injury.type} ({player.injury.weeksLeft}w)
-                                      {playingThrough && <span className="ml-1 text-amber-700 font-bold">· ⚠</span>}
-                                    </div>
-                                  )}
-                                  {player.onIR && <div className="text-[10px] text-amber-600">IR</div>}
-                                </div>
-                              );
+                              return renderDepthTile(pos, null, depthGroup, player, idx);
                             })}
                           </div>
                         </div>

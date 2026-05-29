@@ -10,7 +10,7 @@ import type {
   HoldoutEntry, TradeRumor, Rivalry, RivalryEvent,
   ExpansionTeamConfig, SocialPost, ImportedProspect, ApprovalState,
 } from '@/types';
-import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, assignOlSlots, assignJerseyNumber, reconcileJerseys, isPracticeSquadEligible, PRACTICE_SQUAD_LIMIT, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
+import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, backfillTeamSubPositions, assignOlSlots, assignJerseyNumber, reconcileJerseys, isPracticeSquadEligible, PRACTICE_SQUAD_LIMIT, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { applyEraHeadCoach } from '@/lib/data/eraCoachingStaff';
@@ -36,7 +36,7 @@ import { generateSocialPosts } from './social';
 import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from './simTelemetry';
 import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
 
-const SAVE_VERSION = 33;
+const SAVE_VERSION = 34;
 
 // Module-local dedup so the Week-1 roster-overflow alert can't infinite-loop
 // when simWeek() is invoked repeatedly from a caller (e.g. handleSimSeason
@@ -2554,10 +2554,14 @@ export const useGameStore = create<GameStore>()(
               team.baseFormation = '4-3';
             }
           }
-          // Auto-assign OL slots — done from imported.players (allImportedPlayers
-          // is defined later, but only adds street FAs which aren't on a team).
+          // Sub-position split first (OL slot assignment below depends on it),
+          // then auto-assign OL slots — done from imported.players
+          // (allImportedPlayers is defined later, but only adds street FAs which
+          // aren't on a team).
           for (const team of imported.teams) {
-            const teamOL = imported.players.filter(p => p.teamId === team.id && p.position === 'OL');
+            const teamRoster = imported.players.filter(p => p.teamId === team.id);
+            backfillTeamSubPositions(teamRoster);
+            const teamOL = teamRoster.filter(p => p.position === 'OL');
             const slotMap = assignOlSlots(teamOL);
             for (const p of teamOL) {
               const slot = slotMap.get(p.id);
@@ -2728,9 +2732,13 @@ export const useGameStore = create<GameStore>()(
             baseFormation: '4-3' as const,
           };
         });
-        // Auto-assign OL slots for synthetic rosters
+        // Sub-position split + OL slot assignment for synthetic rosters
+        // (generateRoster already backfills, but re-run here so any post-gen
+        // roster adjustment is reflected before slotting).
         for (const team of teams) {
-          const teamOL = allPlayers.filter(p => p.teamId === team.id && p.position === 'OL');
+          const teamRoster = allPlayers.filter(p => p.teamId === team.id);
+          backfillTeamSubPositions(teamRoster);
+          const teamOL = teamRoster.filter(p => p.position === 'OL');
           const slotMap = assignOlSlots(teamOL);
           for (const p of teamOL) {
             const slot = slotMap.get(p.id);
@@ -10504,6 +10512,41 @@ export const useGameStore = create<GameStore>()(
               for (const t of teams33) {
                 t.draftPicks = (t.draftPicks ?? []).filter(pk => !idsToDrop.has(pk.id));
               }
+            }
+          }
+        }
+        if (version < 34) {
+          // Re-derive detailed sub-positions per team. The v20 backfill (and
+          // generation) used deriveSubPosition() in isolation, whose thresholds
+          // collapsed almost every OL to OG and every DL to DT (bryangrove,
+          // 5/29). Re-run the team-relative classifier so OL splits OT/OG/C, DL
+          // splits EDGE/DT, LB splits OLB/MLB, S splits FS/SS. Overwrites the
+          // stale labels rather than only filling blanks, since the prior values
+          // were wrong. Free agents / draft prospects (no team) are classified
+          // individually via the per-player fallback.
+          const teams34 = ((state as any).teams ?? []) as Array<{ id: string }>;
+          const players34 = ((state as any).players ?? []) as Array<Record<string, unknown>>;
+          if (Array.isArray(players34) && players34.length > 0) {
+            type Classifiable = Parameters<typeof backfillTeamSubPositions>[0][number];
+            const byTeam = new Map<string, Classifiable[]>();
+            const orphans: Classifiable[] = [];
+            for (const p of players34) {
+              const tid = p.teamId as string | null | undefined;
+              if (tid) {
+                const list = byTeam.get(tid) ?? [];
+                list.push(p as unknown as Classifiable);
+                byTeam.set(tid, list);
+              } else {
+                orphans.push(p as unknown as Classifiable);
+              }
+            }
+            for (const team of teams34) {
+              const roster = byTeam.get(team.id);
+              if (roster && roster.length > 0) backfillTeamSubPositions(roster);
+            }
+            for (const p of orphans) {
+              (p as Record<string, unknown>).subPosition =
+                deriveSubPosition(p as Parameters<typeof deriveSubPosition>[0]);
             }
           }
         }
