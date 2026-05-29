@@ -1,0 +1,20 @@
+# Next.js build output
+.next/
+out/
+
+# Dependencies (installed by root npm workspace)
+node_modules/
+
+# Local env
+.env*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+
+# Turbopack trace
+.next/dev/trace
