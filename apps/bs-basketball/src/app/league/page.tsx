@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -96,15 +97,17 @@ export default function LeaguePage() {
                       <li key={t.id}>
                         <Link
                           href={`/team/${t.id}`}
-                          className="flex items-center gap-3 px-3 py-2 rounded border hover:border-current transition"
+                          className="flex items-center gap-3 px-3 py-2 rounded-lg border bg-[var(--surface)] hover:border-[var(--accent)] hover:shadow-lg hover:shadow-[var(--accent-glow)] transition-all"
                           style={{ borderColor: 'var(--border)' }}
                         >
-                          <span
-                            className="inline-block w-4 h-4 rounded-sm"
-                            style={{ background: t.primaryColor }}
+                          <TeamLogo
+                            abbreviation={t.abbreviation}
+                            primaryColor={t.primaryColor}
+                            secondaryColor={t.secondaryColor}
+                            size="sm"
                           />
-                          <span className="font-semibold">{t.city} {t.name}</span>
-                          <span className="ml-auto text-xs opacity-50">{t.abbreviation}</span>
+                          <span className="font-semibold text-sm">{t.city}</span>
+                          <span className="text-xs text-[var(--text-sec)] truncate">{t.name}</span>
                         </Link>
                       </li>
                     ))}

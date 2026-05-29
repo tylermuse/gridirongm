@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -85,12 +86,12 @@ export default function TeamPage() {
       </Link>
 
       <header className="flex flex-wrap items-center gap-4 mt-2 mb-4">
-        <div
-          className="w-14 h-14 rounded-lg flex items-center justify-center font-extrabold text-2xl"
-          style={{ background: team.primaryColor, color: team.secondaryColor }}
-        >
-          {team.abbreviation.slice(0, 3)}
-        </div>
+        <TeamLogo
+          abbreviation={team.abbreviation}
+          primaryColor={team.primaryColor}
+          secondaryColor={team.secondaryColor}
+          size="xl"
+        />
         <div>
           <h1 className="text-4xl font-extrabold flex items-center gap-2">
             {team.city} {team.name}

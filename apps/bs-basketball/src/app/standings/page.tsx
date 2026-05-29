@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useMemo } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -134,18 +135,23 @@ function ConferenceTable({
                 }}
               >
                 <td className="px-2 py-1">
-                  <span className="opacity-50 mr-1 text-xs">{i + 1}.</span>
-                  <span
-                    className="inline-block w-2.5 h-2.5 rounded-sm mr-2 align-middle"
-                    style={{ background: t.primaryColor }}
-                  />
-                  <Link
-                    href={`/team/${t.id}`}
-                    className="font-semibold hover:underline"
-                    style={{ color: isUser ? 'var(--accent)' : undefined }}
-                  >
-                    {t.city} {t.name}
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <span className="opacity-50 text-xs w-4">{i + 1}.</span>
+                    <TeamLogo
+                      abbreviation={t.abbreviation}
+                      primaryColor={t.primaryColor}
+                      secondaryColor={t.secondaryColor}
+                      size="xs"
+                    />
+                    <Link
+                      href={`/team/${t.id}`}
+                      className="font-semibold hover:underline"
+                      style={{ color: isUser ? 'var(--accent)' : undefined }}
+                    >
+                      {t.city}
+                    </Link>
+                    <span className="text-xs text-[var(--text-sec)] truncate">{t.name}</span>
+                  </div>
                 </td>
                 <td className="px-2 py-1 text-right">{t.record.wins}</td>
                 <td className="px-2 py-1 text-right">{t.record.losses}</td>

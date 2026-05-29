@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMemo } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
+import { TeamLogo } from '@/components/ui/TeamLogo';
 import type {
   BasketballPlayer,
   BasketballStats,
@@ -124,12 +125,12 @@ function TeamScoreCell({
   return (
     <div className={`flex items-center gap-3 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
       {align === 'left' && (
-        <div
-          className="w-10 h-10 rounded flex items-center justify-center font-extrabold"
-          style={{ background: team.primaryColor, color: team.secondaryColor }}
-        >
-          {team.abbreviation.slice(0, 3)}
-        </div>
+        <TeamLogo
+          abbreviation={team.abbreviation}
+          primaryColor={team.primaryColor}
+          secondaryColor={team.secondaryColor}
+          size="lg"
+        />
       )}
       <div className={align === 'right' ? 'text-right' : ''}>
         <div className="text-xs opacity-70">{team.city}</div>
@@ -142,12 +143,12 @@ function TeamScoreCell({
         {score}
       </div>
       {align === 'right' && (
-        <div
-          className="w-10 h-10 rounded flex items-center justify-center font-extrabold"
-          style={{ background: team.primaryColor, color: team.secondaryColor }}
-        >
-          {team.abbreviation.slice(0, 3)}
-        </div>
+        <TeamLogo
+          abbreviation={team.abbreviation}
+          primaryColor={team.primaryColor}
+          secondaryColor={team.secondaryColor}
+          size="lg"
+        />
       )}
     </div>
   );
