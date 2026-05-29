@@ -15,7 +15,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { LEAGUE_TEAMS, type TeamTemplate } from '@/lib/data/teams';
-import { type ImportedLeagueData, loadLeagueFromUrl } from '@/lib/data/leagueImport';
+import { type ImportedLeagueData, loadLeagueFromUrl, BsfNativeSaveImportError } from '@/lib/data/leagueImport';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { SpectatorBanner, useIsSpectator } from '@/components/game/SpectatorBanner';
 import { generateTeamSpotlight, COMMENTATORS, type SpotlightContext } from '@/lib/engine/debate';
@@ -61,7 +61,7 @@ function TeamPicker() {
         setImportedTeams(data);
         setActiveUrl(url);
       })
-      .catch(() => setError('Failed to load roster file.'))
+      .catch((err) => setError(err instanceof BsfNativeSaveImportError ? err.message : 'Failed to load roster file.'))
       .finally(() => setImportLoading(false));
   }, [searchParams]);
 
@@ -163,8 +163,8 @@ function TeamPicker() {
       const data = await loadLeagueFromUrl(importUrl.trim());
       setImportedTeams(data);
       setActiveUrl(importUrl.trim());
-    } catch {
-      setError('Failed to load league file. Check the URL and try again.');
+    } catch (err) {
+      setError(err instanceof BsfNativeSaveImportError ? err.message : 'Failed to load league file. Check the URL and try again.');
     } finally {
       setImportLoading(false);
     }
