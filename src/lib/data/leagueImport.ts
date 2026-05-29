@@ -603,13 +603,18 @@ function validateImportedLeague(season: number, teams: Team[], players: Player[]
  *  https://raw.githubusercontent.com/SunsFan99/FSL-2/main/FSL-2104-Season/grid.json
  *  and silently fell back to a default league.) */
 export class BsfNativeSaveImportError extends Error {
-  constructor() {
+  /** The parsed native-save JSON ({ state, version }). Carried so the caller can
+   *  route it straight into the running app instead of dead-ending on the error
+   *  (§1.3 — somedude4759 5/29). Undefined only when constructed without it. */
+  readonly nativeSave?: unknown;
+  constructor(nativeSave?: unknown) {
     super(
       "This URL points to a BS Football save export, not an FBGM roster file. " +
       "BS Football saves can only be loaded via Save/Load → Import (not by URL). " +
       "Try downloading the file and opening it from the Save/Load menu.",
     );
     this.name = 'BsfNativeSaveImportError';
+    this.nativeSave = nativeSave;
   }
 }
 
@@ -630,9 +635,43 @@ export async function loadLeagueFromUrl(url: string): Promise<ImportedLeagueData
     })
     .then((raw) => {
       if (looksLikeBsfNativeSave(raw)) {
-        throw new BsfNativeSaveImportError();
+        throw new BsfNativeSaveImportError(raw);
       }
       return convertFbgmLeague(raw as FbgmLeagueFile);
     });
   return data;
+}
+
+/** Light metadata pulled from a native save for the import-success toast. */
+export interface NativeSaveMeta {
+  season?: number;
+  teamAbbr?: string;
+  teamName?: string;
+}
+
+/** Route a detected BS-native save (from a URL import) into the running app.
+ *
+ *  A native save export is exactly the persisted autosave shape
+ *  (`{ state, version }`), so loading it is the same operation Save/Load uses:
+ *  write it to the `gridiron-gm-autosave` key, then let the caller reload — the
+ *  persist middleware rehydrates and runs the normal save migrations on mount.
+ *  Returns light metadata so the caller can explain what happened. Throws if the
+ *  value isn't actually a native save (defensive — the caller already detected
+ *  it via looksLikeBsfNativeSave). */
+export async function loadNativeSaveIntoApp(nativeSave: unknown): Promise<NativeSaveMeta> {
+  if (!looksLikeBsfNativeSave(nativeSave)) {
+    throw new Error('Not a BS Football save export.');
+  }
+  const blob = JSON.stringify(nativeSave);
+  const { setItem } = await import('@bs/core/storage');
+  await setItem('gridiron-gm-autosave', blob);
+
+  const state = (nativeSave as { state?: Record<string, unknown> }).state ?? {};
+  const season = typeof state.season === 'number' ? state.season : undefined;
+  const userTeamId = state.userTeamId as string | undefined;
+  const teams = Array.isArray(state.teams)
+    ? (state.teams as Array<{ id: string; abbreviation?: string; name?: string }>)
+    : [];
+  const team = teams.find(t => t.id === userTeamId);
+  return { season, teamAbbr: team?.abbreviation, teamName: team?.name };
 }

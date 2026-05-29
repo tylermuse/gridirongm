@@ -15,7 +15,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { LEAGUE_TEAMS, type TeamTemplate } from '@/lib/data/teams';
-import { type ImportedLeagueData, loadLeagueFromUrl, BsfNativeSaveImportError } from '@/lib/data/leagueImport';
+import { type ImportedLeagueData, loadLeagueFromUrl, loadNativeSaveIntoApp, BsfNativeSaveImportError } from '@/lib/data/leagueImport';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { SpectatorBanner, useIsSpectator } from '@/components/game/SpectatorBanner';
 import { generateTeamSpotlight, COMMENTATORS, type SpotlightContext } from '@/lib/engine/debate';
@@ -38,6 +38,7 @@ function TeamPicker() {
   const [importedTeams, setImportedTeams] = useState<ImportedLeagueData | null>(null);
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
   const [savedGame, setSavedGame] = useState<{ teamAbbr: string; season: number; wins: number; losses: number; phase: string } | null>(null);
+  const [importNotice, setImportNotice] = useState<string | null>(null);
   const [resumeLoading, setResumeLoading] = useState(false);
   const [startMode, setStartMode] = useState<'offseason' | 'regular'>(
     searchParams.get('startMode') === 'regular' ? 'regular' : 'offseason'
@@ -61,11 +62,31 @@ function TeamPicker() {
         setImportedTeams(data);
         setActiveUrl(url);
       })
-      .catch((err) => setError(err instanceof BsfNativeSaveImportError ? err.message : 'Failed to load roster file.'))
+      .catch(async (err) => {
+        if (err instanceof BsfNativeSaveImportError && err.nativeSave !== undefined) {
+          const routed = await routeNativeSave(err.nativeSave);
+          if (routed) return; // reloading into the loaded save
+        }
+        setError(err instanceof BsfNativeSaveImportError ? err.message : 'Failed to load roster file.');
+      })
       .finally(() => setImportLoading(false));
   }, [searchParams]);
 
   const [migrated, setMigrated] = useState(false);
+
+  // After a native-save URL import reloads the page (§1.3), surface the one-time
+  // notice explaining that the link was a saved game (now loaded), not a roster.
+  useEffect(() => {
+    let msg: string | null = null;
+    try {
+      msg = sessionStorage.getItem('gg-import-notice');
+      if (msg) sessionStorage.removeItem('gg-import-notice');
+    } catch { /* sessionStorage unavailable */ }
+    if (!msg) return;
+    setImportNotice(msg);
+    const t = setTimeout(() => setImportNotice(null), 9000);
+    return () => clearTimeout(t);
+  }, []);
 
   // Migrate localStorage → IndexedDB on first load, then check for autosave
   useEffect(() => {
@@ -155,6 +176,29 @@ function TeamPicker() {
     }
   }
 
+  // When a URL import turns out to be a BS Football native save (someone pasting
+  // a community *save* link rather than a roster — e.g. somedude4759's FSL-2
+  // file), don't dead-end on the typed error. Load it the same way Save/Load
+  // does, stash a one-time notice, and reload so it rehydrates. (§1.3)
+  async function routeNativeSave(nativeSave: unknown): Promise<boolean> {
+    try {
+      const meta = await loadNativeSaveIntoApp(nativeSave);
+      const where = meta.season
+        ? ` (Season ${meta.season}${meta.teamAbbr ? `, ${meta.teamAbbr}` : ''})`
+        : '';
+      try {
+        sessionStorage.setItem(
+          'gg-import-notice',
+          `Loaded as a BS Football save${where} — that link was a saved game, not a roster. Hit Resume to jump back in.`,
+        );
+      } catch { /* sessionStorage unavailable — proceed without the notice */ }
+      window.location.reload();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async function handleImport() {
     if (!importUrl.trim()) return;
     setImportLoading(true);
@@ -164,6 +208,10 @@ function TeamPicker() {
       setImportedTeams(data);
       setActiveUrl(importUrl.trim());
     } catch (err) {
+      if (err instanceof BsfNativeSaveImportError && err.nativeSave !== undefined) {
+        const routed = await routeNativeSave(err.nativeSave);
+        if (routed) return; // reloading into the loaded save
+      }
       setError(err instanceof BsfNativeSaveImportError ? err.message : 'Failed to load league file. Check the URL and try again.');
     } finally {
       setImportLoading(false);
@@ -189,6 +237,21 @@ function TeamPicker() {
         </h1>
         <p className="text-[var(--text-sec)] text-sm sm:text-lg">Choose your franchise. Build your dynasty.</p>
       </div>
+
+      {/* Native-save URL-import notice (§1.3) */}
+      {importNotice && (
+        <div className="mb-6 max-w-2xl w-full rounded-xl border border-blue-400/40 bg-blue-50 dark:bg-blue-950/40 px-4 py-3 flex items-start gap-3">
+          <span className="text-lg leading-none">💾</span>
+          <p className="flex-1 text-sm text-blue-900 dark:text-blue-200">{importNotice}</p>
+          <button
+            onClick={() => setImportNotice(null)}
+            className="text-blue-700/60 dark:text-blue-300/60 hover:text-blue-900 dark:hover:text-blue-100 text-sm shrink-0"
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* BS Mode Banner */}
       {(

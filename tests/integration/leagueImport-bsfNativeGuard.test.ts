@@ -14,7 +14,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { looksLikeBsfNativeSave } from '@/lib/data/leagueImport';
+import { looksLikeBsfNativeSave, loadNativeSaveIntoApp } from '@/lib/data/leagueImport';
+import { getItem } from '@bs/core/storage';
 
 describe('looksLikeBsfNativeSave', () => {
   it('detects the BS native save export shape ({state, version})', () => {
@@ -39,5 +40,36 @@ describe('looksLikeBsfNativeSave', () => {
 
   it('does not flag a file that happens to have a state field but is otherwise FBGM-shaped', () => {
     expect(looksLikeBsfNativeSave({ teams: [], state: 'something', version: 1 })).toBe(false);
+  });
+});
+
+describe('loadNativeSaveIntoApp (§1.3 auto-route)', () => {
+  it('persists the native save as the live autosave + returns season/team meta', async () => {
+    const save = {
+      state: {
+        season: 2104,
+        userTeamId: 'A',
+        teams: [{ id: 'A', abbreviation: 'PHX', name: 'Suns' }],
+      },
+      version: 33,
+    };
+    const meta = await loadNativeSaveIntoApp(save);
+    expect(meta.season).toBe(2104);
+    expect(meta.teamAbbr).toBe('PHX');
+    expect(meta.teamName).toBe('Suns');
+    // It writes the exact blob to the autosave key the persist middleware reads.
+    const stored = await getItem('gridiron-gm-autosave');
+    expect(stored).toBe(JSON.stringify(save));
+  });
+
+  it('returns empty meta when the save has no userTeam yet (still persists)', async () => {
+    const save = { state: { season: 1, teams: [] }, version: 30 };
+    const meta = await loadNativeSaveIntoApp(save);
+    expect(meta.season).toBe(1);
+    expect(meta.teamAbbr).toBeUndefined();
+  });
+
+  it('rejects a non-native value rather than corrupting the autosave', async () => {
+    await expect(loadNativeSaveIntoApp({ teams: [], players: [] })).rejects.toThrow();
   });
 });
