@@ -4,18 +4,19 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { listLeagues, deleteLeague, type LeagueSaveMeta } from '@/lib/persistence/db';
-import { basketballAdapter } from '@bs/sport-basketball';
+import { Button } from '@/components/ui/Button';
+import { Card, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
 
 /**
- * BS Hoops home page.
+ * BS Hoops splash + entry page.
  *
- * 2C-2a: Three primary actions — New Game / Continue / Load Game.
- * In-memory league state lives in the Zustand store; persistence is via
- * Dexie. Once a league is loaded, this page shows a confirmation summary
- * (real league pages land in 2C-3).
+ * Two modes:
+ *   - No league loaded: hero + 3 CTAs (New / Continue / Load).
+ *   - League loaded: dashboard with stats + Enter League + Standings.
  *
- * Once an actual /league route exists we'll router.push() there instead of
- * rendering inline.
+ * 2C-7a pass: lean on the Card / Button / Badge primitives and the
+ * Barlow Condensed display font.
  */
 
 export default function HomePage() {
@@ -23,8 +24,6 @@ export default function HomePage() {
   const [saves, setSaves] = useState<LeagueSaveMeta[]>([]);
   const [showLoadList, setShowLoadList] = useState(false);
 
-  // Refresh the save list whenever the active league changes (covers the
-  // post-creation case where we want the new save reflected immediately).
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -40,178 +39,155 @@ export default function HomePage() {
     setSaves(all);
   }
 
-  // ---------- League-loaded view ----------
+  // ---------- League-loaded dashboard ----------
   if (league) {
+    const playedCount = league.games.filter(g => g.status === 'played').length;
     return (
-      <main className="max-w-4xl mx-auto p-8">
-        <header className="border-b pb-4 mb-8" style={{ borderColor: 'var(--accent)' }}>
-          <h1 className="text-5xl font-extrabold tracking-tight" style={{ color: 'var(--accent)' }}>
+      <div className="max-w-5xl mx-auto px-5 py-10">
+        <div className="flex flex-wrap items-baseline gap-4 mb-8">
+          <h1
+            className="text-5xl font-black tracking-tight"
+            style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}
+          >
             {league.displayName}
           </h1>
-          <p className="text-lg mt-1 opacity-70">
-            Season {league.currentSeason} · {league.currentPhase}
-          </p>
-        </header>
+          <Badge variant="default" size="md">
+            Season {league.currentSeason}
+          </Badge>
+          <span className="text-[var(--text-sec)] text-sm">
+            {league.currentPhase}
+          </span>
+        </div>
 
-        <section className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-          <Stat label="Teams" value={league.teams.length} />
-          <Stat
-            label="Games played"
-            value={`${league.games.filter(g => g.status === 'played').length} / ${league.games.length}`}
-          />
-          <Stat label="Day" value={league.currentTick} />
-          <Stat label="Save version" value={league.saveVersion} />
-        </section>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+          <StatCard label="Teams" value={league.teams.length} />
+          <StatCard label="Games Played" value={`${playedCount} / ${league.games.length}`} />
+          <StatCard label="Day" value={league.currentTick} />
+          <StatCard label="Your Team" value={league.userTeamId ? '✓' : '—'} />
+        </div>
 
         <div className="flex flex-wrap gap-3">
-          <Link
-            href="/league"
-            className="px-6 py-3 rounded-lg font-bold text-lg"
-            style={{ background: 'var(--accent)', color: '#fff' }}
-          >
-            Enter League →
+          <Link href="/league">
+            <Button variant="primary" size="lg">
+              Enter League →
+            </Button>
           </Link>
-          <Link
-            href="/standings"
-            className="px-4 py-3 rounded-lg font-semibold"
-            style={{ background: 'var(--muted)', color: 'var(--foreground)' }}
-          >
-            Standings
+          <Link href="/standings">
+            <Button variant="secondary" size="lg">
+              Standings
+            </Button>
           </Link>
-          <button
-            onClick={clearActive}
-            className="px-4 py-2 rounded font-semibold"
-            style={{ background: 'var(--muted)', color: 'var(--foreground)' }}
-          >
+          <Button variant="ghost" size="lg" onClick={clearActive}>
             ← Back to menu
-          </button>
+          </Button>
         </div>
-      </main>
+      </div>
     );
   }
 
-  // ---------- Splash view (no league loaded) ----------
+  // ---------- Splash (no league loaded) ----------
   return (
-    <main className="max-w-2xl mx-auto p-8">
-      <header className="text-center mb-12">
-        <h1 className="text-6xl font-extrabold tracking-tight" style={{ color: 'var(--accent)' }}>
-          BS Hoops
+    <div className="max-w-3xl mx-auto px-5 py-16">
+      <section className="text-center mb-12">
+        <h1
+          className="text-7xl sm:text-8xl font-black tracking-tighter leading-none"
+          style={{
+            fontFamily: 'var(--font-display)',
+            color: 'var(--accent)',
+            textShadow: '0 2px 0 var(--accent-alt)',
+          }}
+        >
+          BS HOOPS
         </h1>
-        <p className="text-lg mt-2 opacity-70">
+        <p className="text-lg sm:text-xl mt-4 text-[var(--text-sec)] max-w-xl mx-auto">
           Build your dynasty. Run the franchise.
+          <br />
+          30 teams · 82 games · one championship.
         </p>
-      </header>
+      </section>
 
       {error && (
-        <div className="mb-6 p-3 rounded border" style={{ borderColor: '#dc2626', background: '#fee2e2', color: '#991b1b' }}>
+        <Card className="mb-6 border-red-300 bg-red-50 text-red-700">
           {error}
-        </div>
+        </Card>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-3 mb-6">
         <Button
-          primary
+          variant="primary"
+          size="lg"
           disabled={loading}
           onClick={() => void newLeague()}
+          className="w-full"
         >
           {loading ? 'Generating…' : 'New Game'}
         </Button>
 
         <Button
+          variant="secondary"
+          size="lg"
           disabled={loading || saves.length === 0}
           onClick={() => void continueLatest()}
+          className="w-full"
         >
-          {saves.length === 0 ? 'Continue (no saves)' : 'Continue'}
+          {saves.length === 0 ? 'Continue (no saves yet)' : `Continue · ${saves[0]?.displayName ?? ''}`}
         </Button>
 
         <Button
+          variant="ghost"
+          size="lg"
           disabled={saves.length === 0}
           onClick={() => setShowLoadList(s => !s)}
+          className="w-full"
         >
           Load Game ({saves.length})
         </Button>
       </div>
 
       {showLoadList && saves.length > 0 && (
-        <section className="mt-6">
-          <h2 className="font-bold mb-2">Saved leagues</h2>
-          <ul className="space-y-2">
+        <section>
+          <CardHeader>
+            <CardTitle>Saved leagues</CardTitle>
+          </CardHeader>
+          <div className="space-y-2">
             {saves.map(s => (
-              <li
-                key={s.id}
-                className="p-3 rounded border flex items-center gap-3"
-                style={{ borderColor: 'var(--border)' }}
-              >
-                <div className="flex-1">
-                  <div className="font-semibold">{s.displayName}</div>
-                  <div className="text-xs opacity-60">
+              <Card key={s.id} className="flex items-center gap-3 p-4">
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold truncate">{s.displayName}</div>
+                  <CardSubtitle>
                     Season {s.currentSeason} · {s.currentPhase} · {s.teamCount} teams · {s.playerCount} players
-                  </div>
-                  <div className="text-xs opacity-50">
+                  </CardSubtitle>
+                  <div className="text-xs text-[var(--text-sec)] opacity-70 mt-0.5">
                     Saved {new Date(s.updatedAt).toLocaleString()}
                   </div>
                 </div>
-                <button
-                  onClick={() => void loadLeague(s.id)}
-                  className="px-3 py-1 rounded text-sm font-semibold"
-                  style={{ background: 'var(--accent)', color: '#fff' }}
-                >
-                  Load
-                </button>
-                <button
-                  onClick={() => void handleDelete(s.id)}
-                  className="px-3 py-1 rounded text-sm opacity-70 hover:opacity-100"
-                  style={{ background: 'var(--muted)' }}
-                  title="Delete save"
-                >
+                <Button size="sm" onClick={() => void loadLeague(s.id)}>Load</Button>
+                <Button size="sm" variant="ghost" onClick={() => void handleDelete(s.id)} title="Delete save">
                   ✕
-                </button>
-              </li>
+                </Button>
+              </Card>
             ))}
-          </ul>
+          </div>
         </section>
       )}
-
-      <footer className="mt-16 pt-4 border-t opacity-60 text-xs text-center" style={{ borderColor: 'var(--border)' }}>
-        BS Hoops · adapter {basketballAdapter.sportId} · {basketballAdapter.positions.length} positions ·{' '}
-        {basketballAdapter.competitions.length} competition
-      </footer>
-    </main>
-  );
-}
-
-// ===========================================================================
-// Reusable bits (inline for now — extract to /components in a later slice)
-// ===========================================================================
-
-function Button({
-  children, onClick, disabled, primary,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
-  primary?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="w-full px-6 py-4 rounded-lg font-bold text-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-      style={{
-        background: primary ? 'var(--accent)' : 'var(--muted)',
-        color: primary ? '#fff' : 'var(--foreground)',
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="p-3 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
-      <div className="text-2xl font-extrabold" style={{ color: 'var(--accent)' }}>{value}</div>
-      <div className="text-xs opacity-70 uppercase tracking-wide">{label}</div>
     </div>
+  );
+}
+
+// ===========================================================================
+// Bits
+// ===========================================================================
+
+function StatCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <Card className="!p-4">
+      <div
+        className="text-2xl font-black"
+        style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}
+      >
+        {value}
+      </div>
+      <div className="text-[10px] uppercase tracking-widest opacity-60 mt-0.5">{label}</div>
+    </Card>
   );
 }

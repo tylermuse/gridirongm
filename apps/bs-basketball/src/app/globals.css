@@ -11,21 +11,40 @@
  * --------------------------------------------------------------------------- */
 
 :root {
-  --background: #ffffff;
-  --foreground: #0f172a;
-  --accent: #E66B00;
-  --accent-alt: #1D428A;
-  --muted: #f1f5f9;
+  /* Surfaces (background tiers) */
+  --bg: #ffffff;
+  --background: #ffffff;       /* alias for compatibility */
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --muted: #f1f5f9;            /* alias */
   --border: #e2e8f0;
+
+  /* Text */
+  --foreground: #0f172a;
+  --text: #0f172a;
+  --text-sec: #475569;
+
+  /* Brand */
+  --accent: #E66B00;           /* basketball orange */
+  --accent-alt: #1D428A;       /* navy */
+  --accent-glow: rgba(230, 107, 0, 0.25);
 }
 
 :root[data-theme='dark'] {
+  --bg: #0b1220;
   --background: #0b1220;
-  --foreground: #f1f5f9;
-  --accent: #f59e0b;
-  --accent-alt: #2563eb;
+  --surface: #0f1828;
+  --surface-2: #111827;
   --muted: #111827;
   --border: #1f2937;
+
+  --foreground: #f1f5f9;
+  --text: #f1f5f9;
+  --text-sec: #94a3b8;
+
+  --accent: #f59e0b;
+  --accent-alt: #2563eb;
+  --accent-glow: rgba(245, 158, 11, 0.20);
 }
 
 body {
