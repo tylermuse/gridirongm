@@ -1,35 +1,26 @@
 {
-  "name": "bs-football",
+  "name": "bs-basketball",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
-    "@serwist/next": "^9.5.11",
+    "@bs/core": "*",
+    "@bs/sport-basketball": "*",
     "@stripe/stripe-js": "^8.9.0",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.98.0",
     "@tailwindcss/typography": "^0.5.19",
     "dexie": "^4.3.0",
     "idb": "^8.0.3",
-    "lightningcss": "^1.31.1",
     "next": "16.1.6",
-    "openai": "^4.85.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "serwist": "^9.5.11",
     "stripe": "^20.4.1",
     "uuid": "^13.0.0",
     "zustand": "^5.0.11"
@@ -40,13 +31,9 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
-    "@vitest/ui": "^2.1.8",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "fake-indexeddb": "^6.0.0",
-    "happy-dom": "^15.11.7",
     "tailwindcss": "^4",
-    "typescript": "^5",
-    "vitest": "^2.1.8"
+    "typescript": "^5"
   }
 }
