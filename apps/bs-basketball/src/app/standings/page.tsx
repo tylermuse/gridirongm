@@ -129,7 +129,8 @@ function ConferenceTable({
       <h2 className="px-3 py-2 font-bold border-b" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
         {label}
       </h2>
-      <table className="w-full text-sm">
+      {/* Desktop table */}
+      <table className="w-full text-sm hidden sm:table">
         <thead className="opacity-70 text-xs">
           <tr>
             <th className="px-2 py-1 text-left">Team</th>
@@ -209,6 +210,61 @@ function ConferenceTable({
           })}
         </tbody>
       </table>
+
+      {/* Mobile card list */}
+      <ul className="sm:hidden divide-y" style={{ borderColor: 'var(--border)' }}>
+        {teams.map((t, i) => {
+          const games = t.record.wins + t.record.losses;
+          const pct = games > 0 ? t.record.wins / games : 0;
+          const diff = t.record.pointsFor - t.record.pointsAgainst;
+          const isUser = userTeamId === t.id;
+          return (
+            <li
+              key={t.id}
+              className="p-3"
+              style={{
+                borderColor: 'var(--border)',
+                background: isUser ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined,
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <span className="opacity-50 text-xs w-5">{i + 1}.</span>
+                <TeamLogo
+                  abbreviation={t.abbreviation}
+                  primaryColor={t.primaryColor}
+                  secondaryColor={t.secondaryColor}
+                  size="sm"
+                />
+                <Link
+                  href={`/team/${t.id}`}
+                  className="font-semibold hover:underline truncate"
+                  style={{ color: isUser ? 'var(--accent)' : undefined }}
+                >
+                  {t.city} <span className="text-[var(--text-sec)] font-normal">{t.name}</span>
+                </Link>
+                <button
+                  onClick={() => onRosterClick(t.id)}
+                  aria-label={`View ${t.city} roster`}
+                  className="ml-auto w-11 h-11 inline-flex items-center justify-center rounded-md text-[var(--text-sec)] hover:bg-[var(--surface-2)] hover:text-[var(--accent)] transition-colors"
+                >
+                  👁
+                </button>
+              </div>
+              <div className="flex items-center gap-4 mt-1.5 pl-7 text-sm">
+                <span className="font-semibold">{t.record.wins}–{t.record.losses}</span>
+                <span className="tabular-nums text-[var(--text-sec)]">{pct.toFixed(3).slice(1)}</span>
+                <span
+                  className="tabular-nums"
+                  style={{ color: diff > 0 ? '#10b981' : diff < 0 ? '#dc2626' : undefined }}
+                >
+                  {diff > 0 ? '+' : ''}{diff}
+                </span>
+                <span className="font-mono text-xs ml-auto">{t.record.streak.slice(-5).join('') || '—'}</span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
