@@ -592,14 +592,47 @@ function validateImportedLeague(season: number, teams: Team[], players: Player[]
   }
 }
 
+/** Thrown when the URL points to a BS Football native save export (the
+ *  `{ state, version }` shape produced by Save/Load → Export) rather than
+ *  an FBGM raw roster (`{ teams, players, gameAttributes, draftPicks }`).
+ *  The FBGM importer can't ingest the native save shape — there's no
+ *  conversion step that maps `state.teams` / `state.players` through the
+ *  FBGM-rating normalization layer. Callers should surface a clearer
+ *  message than the generic "Failed to load league file." (somedude4759
+ *  5/27 attempted to URL-import the FSL-2 community save at
+ *  https://raw.githubusercontent.com/SunsFan99/FSL-2/main/FSL-2104-Season/grid.json
+ *  and silently fell back to a default league.) */
+export class BsfNativeSaveImportError extends Error {
+  constructor() {
+    super(
+      "This URL points to a BS Football save export, not an FBGM roster file. " +
+      "BS Football saves can only be loaded via Save/Load → Import (not by URL). " +
+      "Try downloading the file and opening it from the Save/Load menu.",
+    );
+    this.name = 'BsfNativeSaveImportError';
+  }
+}
+
+export function looksLikeBsfNativeSave(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object') return false;
+  const obj = raw as Record<string, unknown>;
+  // BS-native save export shape: { state: {...}, version: N }, no top-level teams.
+  return 'state' in obj && 'version' in obj && !('teams' in obj);
+}
+
 export async function loadLeagueFromUrl(url: string): Promise<ImportedLeagueData> {
   const data = await fetch(url, { cache: 'no-store' })
     .then((response) => {
       if (!response.ok) {
         throw new Error(`Failed to load league data: ${response.status}`);
       }
-      return response.json() as Promise<FbgmLeagueFile>;
+      return response.json() as Promise<unknown>;
     })
-    .then((raw) => convertFbgmLeague(raw));
+    .then((raw) => {
+      if (looksLikeBsfNativeSave(raw)) {
+        throw new BsfNativeSaveImportError();
+      }
+      return convertFbgmLeague(raw as FbgmLeagueFile);
+    });
   return data;
 }
