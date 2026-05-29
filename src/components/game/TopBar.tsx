@@ -263,6 +263,26 @@ export function TopBar({ onMenuToggle }: { onMenuToggle?: () => void } = {}) {
                     </Button>
                   </span>
                 )}
+                {/* 5/25 (tofftanaut 5/8 msg 1502199098504253492): Watch Live
+                    entry point in the TopBar score row when the user team
+                    has an unplayed game this week. Sibling button on /roster
+                    covers the roster surface. */}
+                {!isSpectator && (() => {
+                  const userGame = schedule.find(g =>
+                    g.week === week && !g.played &&
+                    (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId));
+                  if (!userGame) return null;
+                  return (
+                    <Button
+                      onClick={() => router.push(`/game/${userGame.id}`)}
+                      size="sm"
+                      className="active:scale-95 transition-transform bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse mr-1.5 align-middle" />
+                      Watch Live
+                    </Button>
+                  );
+                })()}
                 <Button onClick={handleSimWeek} size="sm" className="active:scale-95 transition-transform" disabled={schedule.filter(g => g.week === week).length > 0 && schedule.filter(g => g.week === week).every(g => g.played)}>
                   Sim Week {week}
                 </Button>

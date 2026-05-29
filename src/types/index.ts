@@ -33,7 +33,7 @@ export function deriveSubPosition(player: {
   position: Position;
   ratings: {
     passRush: number; speed: number; tackling: number; coverage: number;
-    strength: number; agility: number; blocking: number; carrying: number;
+    strength: number; agility: number; blocking: number; awareness: number;
   };
 }): SubPosition {
   if (player.position === 'QB') return 'QB';
@@ -50,36 +50,35 @@ export function deriveSubPosition(player: {
     return fbScore > rbScore * 1.05 ? 'FB' : 'RB';
   }
 
-  // OL: OT/OG/C
-  // OT: agility+speed dominant (pass protectors on the edge)
-  // OG: strength+blocking dominant (interior run blockers)
-  // C: balanced blocking — small carve-out for the smartest interior linemen
+  // NOTE: this single-player path is a *coarse fallback* — without the rest of
+  // a team's roster you can't tell whether a given lineman is the team's most
+  // athletic (an OT) or its strongest interior body (an OG). The authoritative
+  // distribution comes from classifyTeamSubPositions() below, which ranks each
+  // team's position group and splits it proportionally. The thresholds here are
+  // calibrated against playerGen's position means (OL: agi~36 spd~35 str~66
+  // blk~66 awa~56; DL: pr~67 spd~56 str~68 tkl~56; LB: pr~35 spd~57 cov~57
+  // tkl~67 awa~58; S: cov~67 spd~56 tkl~67 str~35) so a lone generated player
+  // lands on a sensible label instead of collapsing to the interior default.
+
+  // OL: OT (athletic edge protectors) vs OG (power interior) vs C (smart pivot)
   if (player.position === 'OL') {
-    const tackleScore = player.ratings.agility + player.ratings.speed;
-    const guardScore = player.ratings.strength + player.ratings.blocking;
-    const balancedScore = (player.ratings.blocking + player.ratings.tackling) / 2;
-    if (
-      balancedScore > tackleScore * 0.55
-      && balancedScore > guardScore * 0.55
-      && Math.random() < 0.18
-    ) {
-      return 'C';
-    }
-    if (tackleScore > guardScore * 0.95) return 'OT';
-    return 'OG';
+    const athletic = player.ratings.agility + player.ratings.speed;
+    const power = player.ratings.strength + player.ratings.blocking;
+    if (player.ratings.awareness >= 68 && athletic < 75) return 'C';
+    return athletic > power * 0.55 ? 'OT' : 'OG';
   }
 
-  // DL: EDGE vs DT
+  // DL: EDGE (pass-rush + speed/agility) vs DT (interior strength)
   if (player.position === 'DL') {
-    const edgeScore = player.ratings.passRush + player.ratings.speed;
-    const interiorScore = player.ratings.strength * 2;
+    const edgeScore = player.ratings.passRush + player.ratings.speed + player.ratings.agility;
+    const interiorScore = (player.ratings.strength + player.ratings.tackling) * 1.25;
     return edgeScore > interiorScore ? 'EDGE' : 'DT';
   }
 
   // LB: OLB (edge/cover) vs MLB (inside/run defense)
   if (player.position === 'LB') {
-    const edgeScore = player.ratings.passRush + player.ratings.speed;
-    const insideScore = player.ratings.tackling + player.ratings.coverage;
+    const edgeScore = player.ratings.passRush + player.ratings.speed + player.ratings.coverage;
+    const insideScore = player.ratings.tackling + player.ratings.strength + player.ratings.awareness;
     return edgeScore > insideScore ? 'OLB' : 'MLB';
   }
 
@@ -87,10 +86,146 @@ export function deriveSubPosition(player: {
   if (player.position === 'S') {
     const fsScore = player.ratings.coverage + player.ratings.speed;
     const ssScore = player.ratings.tackling + player.ratings.strength;
-    return fsScore > ssScore ? 'FS' : 'SS';
+    return fsScore > ssScore + 20 ? 'FS' : 'SS';
   }
 
   return player.position as SubPosition;
+}
+
+/** Players accepted by the team-level sub-position classifier/backfill. A
+ *  structural subset of Player so migration code (raw records) and the live
+ *  engine can both call it. */
+type SubPosClassifiable = {
+  id: string;
+  position: Position;
+  subPosition?: SubPosition;
+  ratings: {
+    passRush: number; speed: number; tackling: number; coverage: number;
+    strength: number; agility: number; blocking: number; awareness: number;
+  };
+};
+
+/** Authoritative sub-position assignment for a whole team's roster.
+ *
+ *  Unlike deriveSubPosition() (which judges a player in isolation and so
+ *  collapses toward interior labels — the 5/29 bryangrove bug where every OL
+ *  read OG and every DL read DT), this ranks each position group *within the
+ *  team* and splits it into realistic proportions. Returns a Map<id,SubPosition>
+ *  and does NOT mutate — callers apply it (or use backfillTeamSubPositions).
+ *
+ *  Splits (calibrated to real NFL position-group construction):
+ *    OL  → ~45% OT, one C (the smartest non-tackle pivot), rest OG
+ *    DL  → ~45% EDGE, rest DT
+ *    LB  → ~55% OLB, rest MLB
+ *    S   → ~50% FS, rest SS
+ *  Positions with a 1:1 broad→detailed mapping pass straight through. */
+export function classifyTeamSubPositions(players: SubPosClassifiable[]): Map<string, SubPosition> {
+  const map = new Map<string, SubPosition>();
+  const byPos = (pos: Position) => players.filter(p => p.position === pos);
+
+  for (const p of players) {
+    switch (p.position) {
+      case 'QB': map.set(p.id, 'QB'); break;
+      case 'WR': map.set(p.id, 'WR'); break;
+      case 'TE': map.set(p.id, 'TE'); break;
+      case 'CB': map.set(p.id, 'CB'); break;
+      case 'K': map.set(p.id, 'K'); break;
+      case 'P': map.set(p.id, 'P'); break;
+    }
+  }
+
+  // RB vs FB — FBs are rare, so keep the per-player heuristic rather than
+  // force a proportion (most teams carry zero true fullbacks).
+  for (const p of byPos('RB')) {
+    const rb = p.ratings.speed + p.ratings.agility;
+    const fb = p.ratings.strength + p.ratings.blocking;
+    map.set(p.id, fb > rb * 1.15 ? 'FB' : 'RB');
+  }
+
+  // OL: rank by athleticism → OT; carve the smartest interior pivot as C; rest OG.
+  {
+    const ol = byPos('OL');
+    const n = ol.length;
+    if (n > 0) {
+      const otScore = (p: SubPosClassifiable) =>
+        p.ratings.agility + p.ratings.speed + p.ratings.blocking * 0.5;
+      const sorted = [...ol].sort((a, b) => otScore(b) - otScore(a));
+      // ~45% OT, but always leave room for at least one C + the OGs.
+      let otCount = Math.round(n * 0.45);
+      otCount = Math.max(n >= 4 ? 2 : 0, Math.min(otCount, Math.max(0, n - 2)));
+      const tackles = sorted.slice(0, otCount);
+      const interior = sorted.slice(otCount);
+      for (const p of tackles) map.set(p.id, 'OT');
+      const cCount = n >= 12 ? 2 : n >= 4 ? 1 : 0;
+      const centers = [...interior]
+        .sort((a, b) =>
+          (b.ratings.awareness + b.ratings.blocking - b.ratings.agility) -
+          (a.ratings.awareness + a.ratings.blocking - a.ratings.agility))
+        .slice(0, cCount);
+      const centerIds = new Set(centers.map(p => p.id));
+      for (const p of centers) map.set(p.id, 'C');
+      for (const p of interior) if (!centerIds.has(p.id)) map.set(p.id, 'OG');
+    }
+  }
+
+  // DL: rank by pass-rush/burst → EDGE; rest DT (~45% EDGE).
+  {
+    const dl = byPos('DL');
+    const n = dl.length;
+    if (n > 0) {
+      const edgeScore = (p: SubPosClassifiable) =>
+        p.ratings.passRush + p.ratings.speed + p.ratings.agility * 0.5 - p.ratings.strength * 0.5;
+      const sorted = [...dl].sort((a, b) => edgeScore(b) - edgeScore(a));
+      let edgeCount = Math.round(n * 0.45);
+      edgeCount = Math.max(n >= 2 ? 1 : 0, Math.min(edgeCount, n));
+      sorted.forEach((p, i) => map.set(p.id, i < edgeCount ? 'EDGE' : 'DT'));
+    }
+  }
+
+  // LB: rank by edge/coverage → OLB; rest MLB (~55% OLB — most fronts run more
+  // OLB-type bodies than true thumpers).
+  {
+    const lb = byPos('LB');
+    const n = lb.length;
+    if (n > 0) {
+      const olbScore = (p: SubPosClassifiable) =>
+        p.ratings.passRush + p.ratings.coverage * 0.5 + p.ratings.speed * 0.5 - p.ratings.tackling * 0.6;
+      const sorted = [...lb].sort((a, b) => olbScore(b) - olbScore(a));
+      const olbCount = Math.max(n >= 2 ? 1 : 0, Math.round(n * 0.55));
+      sorted.forEach((p, i) => map.set(p.id, i < olbCount ? 'OLB' : 'MLB'));
+    }
+  }
+
+  // S: rank by coverage/speed → FS; rest SS (~50%).
+  {
+    const s = byPos('S');
+    const n = s.length;
+    if (n > 0) {
+      const fsScore = (p: SubPosClassifiable) =>
+        p.ratings.coverage + p.ratings.speed - p.ratings.tackling - p.ratings.strength;
+      const sorted = [...s].sort((a, b) => fsScore(b) - fsScore(a));
+      const fsCount = Math.round(n / 2);
+      sorted.forEach((p, i) => map.set(p.id, i < fsCount ? 'FS' : 'SS'));
+    }
+  }
+
+  // Any position not handled above (shouldn't happen) → broad position.
+  for (const p of players) {
+    if (!map.has(p.id)) map.set(p.id, p.position as SubPosition);
+  }
+
+  return map;
+}
+
+/** Apply classifyTeamSubPositions() in place — sets player.subPosition on every
+ *  player in the given roster. Idempotent; safe to re-run after any roster
+ *  mutation (trade/sign/release) or at load time. */
+export function backfillTeamSubPositions(players: SubPosClassifiable[]): void {
+  const map = classifyTeamSubPositions(players);
+  for (const p of players) {
+    const sub = map.get(p.id);
+    if (sub) p.subPosition = sub;
+  }
 }
 
 /** Auto-assign OL slot positions (LT/LG/C/RG/RT) to a team's offensive
@@ -123,29 +258,17 @@ export function assignOlSlots(rosterPlayers: {
  * sub-position label. New code should use Player.subPosition (typed) directly,
  * which is set at generation time and backfilled on load.
  */
-export function getSubPosition(player: { position: Position; ratings: { passRush: number; speed: number; tackling: number; coverage: number; strength: number; agility: number; blocking: number } }): string {
-  if (player.position === 'OL') {
-    const tackleScore = player.ratings.agility + player.ratings.speed;
-    const guardScore = player.ratings.strength + player.ratings.blocking;
-    if (tackleScore > guardScore * 0.95) return 'OT';
-    return 'OG';
-  }
-  if (player.position === 'LB') {
-    const edgeScore = player.ratings.passRush + player.ratings.speed;
-    const insideScore = player.ratings.tackling + player.ratings.coverage;
-    return edgeScore > insideScore ? 'OLB' : 'ILB';
-  }
-  if (player.position === 'DL') {
-    const edgeScore = player.ratings.passRush + player.ratings.speed;
-    const interiorScore = player.ratings.strength * 2;
-    return edgeScore > interiorScore ? 'EDGE' : 'DT';
-  }
-  if (player.position === 'S') {
-    const fsScore = player.ratings.coverage + player.ratings.speed;
-    const ssScore = player.ratings.tackling + player.ratings.strength;
-    return fsScore > ssScore ? 'FS' : 'SS';
-  }
-  return player.position;
+export function getSubPosition(player: {
+  position: Position;
+  subPosition?: SubPosition;
+  ratings: { passRush: number; speed: number; tackling: number; coverage: number; strength: number; agility: number; blocking: number; carrying: number; awareness: number };
+}): string {
+  // Prefer the stored sub-position (set at generation, backfilled per team on
+  // load, and re-derived after roster moves) — it reflects the team-relative
+  // classification, not the coarse per-player guess. Fall back to deriving only
+  // when an older save hasn't populated the field yet.
+  if (player.subPosition) return player.subPosition;
+  return deriveSubPosition(player);
 }
 
 /** NFL Passer Rating (scale 0-158.3). Pass attempts must be > 0. */

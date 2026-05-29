@@ -639,9 +639,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       pendingAutoPlayRef.current = true;
       setLiveExtraEvents(prev => [...prev, ...newEvents]);
 
-      // Compute delay: animation + pause time based on speed
+      // Compute delay: animation + pause time based on speed.
+      // 5/25 (icantletugoo msg 1502864375202189493): bump 5x pauseMs from
+      // 150 -> 1700 so plays render at ~2s on the fastest readable speed.
+      // Prior 5x total was 280ms animMs + 150ms pause = 430ms — felt
+      // jarringly fast for an at-a-glance read. Now ~1.98s. 'max' is
+      // unchanged (intended to be near-instant).
       const animMs = SPEED_MS[speed] * 0.35;
-      const pauseMs = speed === '1x' ? 3500 : speed === '2x' ? 1200 : speed === '5x' ? 150 : 0;
+      const pauseMs = speed === '1x' ? 3500 : speed === '2x' ? 1200 : speed === '5x' ? 1700 : 0;
       // Big moments (turnovers, scores, FGs) get extra dwell time
       const lastEvent = newEvents[newEvents.length - 1];
       const isBigMoment = lastEvent && (

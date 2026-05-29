@@ -10,7 +10,7 @@ import type {
   HoldoutEntry, TradeRumor, Rivalry, RivalryEvent,
   ExpansionTeamConfig, SocialPost, ImportedProspect, ApprovalState,
 } from '@/types';
-import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, assignOlSlots, assignJerseyNumber, reconcileJerseys, isPracticeSquadEligible, PRACTICE_SQUAD_LIMIT, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
+import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, backfillTeamSubPositions, assignOlSlots, assignJerseyNumber, reconcileJerseys, isPracticeSquadEligible, PRACTICE_SQUAD_LIMIT, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { applyEraHeadCoach } from '@/lib/data/eraCoachingStaff';
@@ -36,7 +36,7 @@ import { generateSocialPosts } from './social';
 import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from './simTelemetry';
 import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
 
-const SAVE_VERSION = 33;
+const SAVE_VERSION = 34;
 
 // Module-local dedup so the Week-1 roster-overflow alert can't infinite-loop
 // when simWeek() is invoked repeatedly from a caller (e.g. handleSimSeason
@@ -154,6 +154,13 @@ interface GameStore extends LeagueState {
   togglePlayingThroughInjury: (playerId: string) => void;
   setBaseFormation: (formation: '3-4' | '4-3' | 'Nickel') => void;
   retireJerseyNumber: (playerId: string) => string;
+  /** Edit a player's jersey number. Validates 0-99. Returns '' on success
+   *  or a non-empty reason string on rejection. A same-team collision is
+   *  reported as a non-empty warning prefix "warn:..." but the write still
+   *  completes — jersey collisions are real-world rare events handled by
+   *  the league office, not a hard block. Net-new feature for its_camare07
+   *  (msg 1508330204924215357, 2026-05-25). */
+  setPlayerJerseyNumber: (playerId: string, jerseyNumber: number) => string;
   /** Replace the user team's head coach with a user-supplied profile. Name,
    *  age, schemes, and ovr are overwritten; career record + history reset.
    *  Callable from the Staff page at any time. */
@@ -894,8 +901,15 @@ export function playerTradeValue(player: Player): number {
 
 /** Generates a position-by-position preview grade for the upcoming draft class.
  *  Uses a fresh sample-generated draft class to preview class quality without
- *  committing to specific players. The actual class is generated at draft time. */
-function generateDraftClassPreview(season: number): { season: number; groups: { position: string; grade: string; depthNote: string; ovrLow: number; ovrHigh: number; topOvr: number }[] } {
+ *  committing to specific players. The actual class is generated at draft time.
+ *
+ *  Exported 5/25 (its_camare07 5/16 msg 1505029205602205797): the
+ *  draft-preview page renders multiple future years (+0/+1/+2) using this
+ *  generator on-demand. Calls are cheap (single generateDraftClass +
+ *  small math) but the function is pure relative to its season arg, so
+ *  the page memoizes results.
+ */
+export function generateDraftClassPreview(season: number): { season: number; groups: { position: string; grade: string; depthNote: string; ovrLow: number; ovrHigh: number; topOvr: number }[] } {
   // Generate a sample class to estimate quality distributions
   const sample = generateDraftClass(224, { chaosDraft: false });
   const POSITIONS_TO_RATE: Position[] = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S'];
@@ -2540,10 +2554,14 @@ export const useGameStore = create<GameStore>()(
               team.baseFormation = '4-3';
             }
           }
-          // Auto-assign OL slots — done from imported.players (allImportedPlayers
-          // is defined later, but only adds street FAs which aren't on a team).
+          // Sub-position split first (OL slot assignment below depends on it),
+          // then auto-assign OL slots — done from imported.players
+          // (allImportedPlayers is defined later, but only adds street FAs which
+          // aren't on a team).
           for (const team of imported.teams) {
-            const teamOL = imported.players.filter(p => p.teamId === team.id && p.position === 'OL');
+            const teamRoster = imported.players.filter(p => p.teamId === team.id);
+            backfillTeamSubPositions(teamRoster);
+            const teamOL = teamRoster.filter(p => p.position === 'OL');
             const slotMap = assignOlSlots(teamOL);
             for (const p of teamOL) {
               const slot = slotMap.get(p.id);
@@ -2714,9 +2732,13 @@ export const useGameStore = create<GameStore>()(
             baseFormation: '4-3' as const,
           };
         });
-        // Auto-assign OL slots for synthetic rosters
+        // Sub-position split + OL slot assignment for synthetic rosters
+        // (generateRoster already backfills, but re-run here so any post-gen
+        // roster adjustment is reflected before slotting).
         for (const team of teams) {
-          const teamOL = allPlayers.filter(p => p.teamId === team.id && p.position === 'OL');
+          const teamRoster = allPlayers.filter(p => p.teamId === team.id);
+          backfillTeamSubPositions(teamRoster);
+          const teamOL = teamRoster.filter(p => p.position === 'OL');
           const slotMap = assignOlSlots(teamOL);
           for (const p of teamOL) {
             const slot = slotMap.get(p.id);
@@ -6414,6 +6436,38 @@ export const useGameStore = create<GameStore>()(
         return '';
       },
 
+      setPlayerJerseyNumber: (playerId: string, jerseyNumber: number): string => {
+        if (!Number.isInteger(jerseyNumber) || jerseyNumber < 0 || jerseyNumber > 99) {
+          return 'Jersey number must be a whole number between 0 and 99.';
+        }
+        const state = get();
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return 'Player not found.';
+        // Honor team-level jersey retirements when present — block if the
+        // number is retired on the player's current team.
+        if (player.teamId) {
+          const team = state.teams.find(t => t.id === player.teamId);
+          const retired = (team?.retiredNumbers ?? []).some(r => r.number === jerseyNumber);
+          if (retired) return `#${jerseyNumber} is retired by the ${team?.city ?? ''} ${team?.name ?? ''}.`;
+        }
+        // Collision check (same team, different player). Warn but allow:
+        // jersey collisions are real-world rare events; this surface lets
+        // the user override consciously. UI surfaces the warning text.
+        let warn = '';
+        if (player.teamId) {
+          const collision = state.players.find(p =>
+            p.id !== playerId && p.teamId === player.teamId && p.jerseyNumber === jerseyNumber);
+          if (collision) {
+            warn = `warn:#${jerseyNumber} is also worn by ${collision.firstName} ${collision.lastName}.`;
+          }
+        }
+        set({
+          players: state.players.map(p =>
+            p.id === playerId ? { ...p, jerseyNumber } : p),
+        });
+        return warn;
+      },
+
       togglePlayingThroughInjury: (playerId: string) => {
         const state = get();
         const player = state.players.find(p => p.id === playerId);
@@ -8200,8 +8254,11 @@ export const useGameStore = create<GameStore>()(
           localStorage.removeItem('gg-rollover-exit');
           localStorage.removeItem('gg-rollover-error');
           localStorage.removeItem('gg-rollover-outer-error');
+          localStorage.removeItem('gg-rollover-outer-throw');
           localStorage.removeItem('gg-rollover-async-error');
+          localStorage.removeItem('gg-rollover-recoverable-error');
           localStorage.removeItem('gg-rollover-step');
+          localStorage.removeItem('gg-rollover-substep');
         } catch { /* best-effort */ }
         try {
           localStorage.setItem('gg-rollover-entry', JSON.stringify({
@@ -8250,7 +8307,26 @@ export const useGameStore = create<GameStore>()(
           currentStep = s;
           try { localStorage.setItem('gg-rollover-step', s); } catch { /* best-effort */ }
         };
+        // 5/28 sub-step instrumentation (bige08676 5/28 07:05 UTC capture: first
+        // post-lock-steal-fix retest still hangs at step=final-state-commit but
+        // with no recoverable-error and no exit — second silent-hang vector
+        // INSIDE the commit step. Sub-step shadows the boundaries within that
+        // step so a future paste names which sub-op (zustand set, BS-mode QB
+        // pyramid, AI auto-cut loop) is hanging.
+        const setSubstep = (s: string) => {
+          try { localStorage.setItem('gg-rollover-substep', s); } catch { /* best-effort */ }
+        };
         setStep(currentStep);
+        // 5/25 (bige08676 fresh recapture): the original exit-breadcrumb write
+        // sat OUTSIDE the inner try/catch. If anything between entry and the
+        // try block threw synchronously, or if the recovery catch block itself
+        // threw, exit never landed and we couldn't tell "did the function
+        // complete?" Wrap the whole body in try/finally so exit ALWAYS writes,
+        // even on a throw escape. Diagnostic guarantee: if entry is set and
+        // exit is not, the JS engine never reached the bottom of this function
+        // — which is a stronger signal than the previous ambiguous state.
+        let outerThrow: unknown = undefined;
+        try {
         try {
         // Auto-fill K and P for user's team if missing — sign best available from FA
         {
@@ -9006,6 +9082,7 @@ export const useGameStore = create<GameStore>()(
         const preseasonSchedule = enterPreseason ? generatePreseasonSchedule(teamsAfterCoaches, numPreseasonGames, newSeason) : undefined;
         setStep("final-state-commit");
 
+        setSubstep("commit:set-main:start");
         set({
           season: newSeason,
           week: enterPreseason ? 0 : 1,
@@ -9084,9 +9161,11 @@ export const useGameStore = create<GameStore>()(
             qbTiers: computeLeagueQBTiers(grownTeams, allPlayersForNewSeason),
           } : { qbTiers: undefined }),
         });
+        setSubstep("commit:set-main:end");
 
         // BS Mode: generate QB Pyramid news
         if (state.leagueSettings?.bsMode) {
+          setSubstep("commit:qb-pyramid:start");
           const freshState = get();
           const tiers = freshState.qbTiers ?? {};
           const elites = Object.entries(tiers).filter(([, v]) => v.tier === 'Elite' || v.tier === 'Franchise');
@@ -9103,6 +9182,7 @@ export const useGameStore = create<GameStore>()(
               isUserTeam: false,
             })] });
           }
+          setSubstep("commit:qb-pyramid:end");
         }
 
         // Auto-cut every AI team to the 53-man limit. The USER's team is
@@ -9110,10 +9190,15 @@ export const useGameStore = create<GameStore>()(
         // /post-draft-cuts flow (or the roster page) and optionally demote
         // to PS instead of outright releasing — previous behavior silently
         // deleted the lowest-OVR signings which was tofftanaut's 4/19 report.
+        setSubstep("commit:autocut:start");
         const userId = get().userTeamId;
+        let autocutIdx = 0;
         for (const t of get().teams) {
+          setSubstep(`commit:autocut:tick:${autocutIdx}:${t.abbreviation ?? t.id}`);
+          autocutIdx++;
           if (t.id !== userId) get().autoCutToRosterLimit(t.id);
         }
+        setSubstep("commit:autocut:end");
         } catch (error) {
           // Surface the underlying offseason exception in three places so
           // we can diagnose seed-specific failures (bige08676 + marioalsosa
@@ -9170,14 +9255,37 @@ export const useGameStore = create<GameStore>()(
             console.error('[startNewSeason] recovery news-append also failed', newsErr);
           }
         }
-        // Successful exit breadcrumb — easy diagnostic for testers retesting:
-        // if rollover entry localStorage is set but exit isn't, recovery
-        // failed silently.
-        try {
-          localStorage.setItem('gg-rollover-exit', JSON.stringify({
-            ts: new Date().toISOString(), season: get().season, phase: get().phase,
-          }));
-        } catch { /* best-effort */ }
+        } catch (outerErr) {
+          // 5/25: outer-throw catcher — anything that escapes the inner
+          // recovery catch lands here. Surface as a distinct breadcrumb so
+          // we can tell apart "rollover recovery worked" vs "recovery itself
+          // threw" on a future paste.
+          outerThrow = outerErr;
+          console.error('[startNewSeason] outer throw escaped recovery:', outerErr);
+          try {
+            localStorage.setItem('gg-rollover-outer-throw', JSON.stringify({
+              ts: new Date().toISOString(),
+              step: currentStep,
+              error: outerErr instanceof Error ? outerErr.message : String(outerErr),
+              stack: outerErr instanceof Error ? outerErr.stack?.split('\n').slice(0, 6).join('\n') : undefined,
+            }));
+          } catch { /* best-effort */ }
+        } finally {
+          // Successful exit breadcrumb — easy diagnostic for testers retesting:
+          // if rollover entry localStorage is set but exit isn't, the JS
+          // engine never reached the bottom of this function (the finally
+          // wrapper added 5/25 closes the prior gap where a throw outside
+          // the inner try/catch left exit absent ambiguously).
+          try {
+            localStorage.setItem('gg-rollover-exit', JSON.stringify({
+              ts: new Date().toISOString(),
+              season: get().season,
+              phase: get().phase,
+              lastStep: currentStep,
+              outerThrew: outerThrow !== undefined,
+            }));
+          } catch { /* best-effort */ }
+        }
       },
 
       updateLeagueSettings: (updates: Partial<LeagueSettings>) => {
@@ -10404,6 +10512,41 @@ export const useGameStore = create<GameStore>()(
               for (const t of teams33) {
                 t.draftPicks = (t.draftPicks ?? []).filter(pk => !idsToDrop.has(pk.id));
               }
+            }
+          }
+        }
+        if (version < 34) {
+          // Re-derive detailed sub-positions per team. The v20 backfill (and
+          // generation) used deriveSubPosition() in isolation, whose thresholds
+          // collapsed almost every OL to OG and every DL to DT (bryangrove,
+          // 5/29). Re-run the team-relative classifier so OL splits OT/OG/C, DL
+          // splits EDGE/DT, LB splits OLB/MLB, S splits FS/SS. Overwrites the
+          // stale labels rather than only filling blanks, since the prior values
+          // were wrong. Free agents / draft prospects (no team) are classified
+          // individually via the per-player fallback.
+          const teams34 = ((state as any).teams ?? []) as Array<{ id: string }>;
+          const players34 = ((state as any).players ?? []) as Array<Record<string, unknown>>;
+          if (Array.isArray(players34) && players34.length > 0) {
+            type Classifiable = Parameters<typeof backfillTeamSubPositions>[0][number];
+            const byTeam = new Map<string, Classifiable[]>();
+            const orphans: Classifiable[] = [];
+            for (const p of players34) {
+              const tid = p.teamId as string | null | undefined;
+              if (tid) {
+                const list = byTeam.get(tid) ?? [];
+                list.push(p as unknown as Classifiable);
+                byTeam.set(tid, list);
+              } else {
+                orphans.push(p as unknown as Classifiable);
+              }
+            }
+            for (const team of teams34) {
+              const roster = byTeam.get(team.id);
+              if (roster && roster.length > 0) backfillTeamSubPositions(roster);
+            }
+            for (const p of orphans) {
+              (p as Record<string, unknown>).subPosition =
+                deriveSubPosition(p as Parameters<typeof deriveSubPosition>[0]);
             }
           }
         }
