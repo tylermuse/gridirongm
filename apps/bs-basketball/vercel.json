@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+
+  "// Install + build run from REPO ROOT": "",
+  "// so npm workspaces resolves @bs/core + @bs/sport-basketball.": "",
+  "// The Vercel project's Root Directory should be set to apps/bs-basketball": "",
+  "// so this file is picked up.": "",
+
+  "installCommand": "cd ../.. && npm install",
+  "buildCommand": "cd ../.. && npm run build --workspace=apps/bs-basketball",
+  "outputDirectory": ".next"
+}
