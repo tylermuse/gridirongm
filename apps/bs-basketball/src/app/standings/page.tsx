@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { TeamRosterModal } from '@/components/modals/TeamRosterModal';
+import { PlayerModal } from '@/components/modals/PlayerModal';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -27,6 +29,8 @@ function sd(t: BasketballTeam): TeamSportData {
 export default function StandingsPage() {
   const { league, loading, error } = useLeagueOrHydrate();
   const { simDay, loading: storeLoading } = useLeagueStore();
+  const [rosterTeamId, setRosterTeamId] = useState<string | null>(null);
+  const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
 
   const sorted = useMemo(() => {
     if (!league) return { Eastern: [], Western: [] } as Record<'Eastern' | 'Western', BasketballTeam[]>;
@@ -80,9 +84,17 @@ export default function StandingsPage() {
             label={`${conf} Conference`}
             teams={sorted[conf]}
             userTeamId={league.userTeamId ?? null}
+            onRosterClick={setRosterTeamId}
           />
         ))}
       </div>
+
+      <TeamRosterModal
+        teamId={rosterTeamId}
+        onClose={() => setRosterTeamId(null)}
+        onPlayerClick={pid => { setRosterTeamId(null); setModalPlayerId(pid); }}
+      />
+      <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
     </main>
   );
 }
@@ -92,11 +104,12 @@ export default function StandingsPage() {
 // ===========================================================================
 
 function ConferenceTable({
-  label, teams, userTeamId,
+  label, teams, userTeamId, onRosterClick,
 }: {
   label: string;
   teams: BasketballTeam[];
   userTeamId: string | null;
+  onRosterClick: (teamId: string) => void;
 }) {
   const leader = teams[0];
   return (
@@ -114,6 +127,7 @@ function ConferenceTable({
             <th className="px-2 py-1 text-right">GB</th>
             <th className="px-2 py-1 text-right">Diff</th>
             <th className="px-2 py-1 text-left pl-3">Last 5</th>
+            <th className="px-2 py-1 w-9" aria-label="Roster" />
           </tr>
         </thead>
         <tbody>
@@ -167,6 +181,16 @@ function ConferenceTable({
                 </td>
                 <td className="px-2 py-1 pl-3 font-mono text-xs">
                   {t.record.streak.slice(-5).join('') || '—'}
+                </td>
+                <td className="px-2 py-1 text-center">
+                  <button
+                    onClick={() => onRosterClick(t.id)}
+                    title={`View ${t.city} roster`}
+                    aria-label={`View ${t.city} roster`}
+                    className="w-7 h-7 inline-flex items-center justify-center rounded-md text-[var(--text-sec)] hover:bg-[var(--surface-2)] hover:text-[var(--accent)] transition-colors"
+                  >
+                    👁
+                  </button>
                 </td>
               </tr>
             );

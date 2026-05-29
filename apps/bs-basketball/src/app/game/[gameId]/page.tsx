@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { PlayerModal } from '@/components/modals/PlayerModal';
 import type {
   BasketballPlayer,
   BasketballStats,
@@ -37,6 +38,7 @@ const BOXSCORE_COLS: { key: keyof BasketballStats; label: string }[] = [
 export default function GamePage() {
   const params = useParams<{ gameId: string }>();
   const { league, loading, error } = useLeagueOrHydrate();
+  const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
 
   const game = useMemo(() => {
     if (!league) return null;
@@ -103,9 +105,11 @@ export default function GamePage() {
       </section>
 
       <div className="grid md:grid-cols-2 gap-6">
-        <BoxScoreTable team={awayTeam} game={game} playerMap={playerMap} />
-        <BoxScoreTable team={homeTeam} game={game} playerMap={playerMap} />
+        <BoxScoreTable team={awayTeam} game={game} playerMap={playerMap} onPlayerClick={setModalPlayerId} />
+        <BoxScoreTable team={homeTeam} game={game} playerMap={playerMap} onPlayerClick={setModalPlayerId} />
       </div>
+
+      <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
     </main>
   );
 }
@@ -155,11 +159,12 @@ function TeamScoreCell({
 }
 
 function BoxScoreTable({
-  team, game, playerMap,
+  team, game, playerMap, onPlayerClick,
 }: {
   team: BasketballTeam;
   game: { boxScores: Record<string, Partial<BasketballStats>> };
   playerMap: Record<string, BasketballPlayer>;
+  onPlayerClick: (playerId: string) => void;
 }) {
   // Players who appeared (have a box score) — sorted by points descending.
   const lines = team.playerIds
@@ -188,13 +193,13 @@ function BoxScoreTable({
           {lines.map(({ player, stats }) => (
             <tr key={player.id} className="border-t" style={{ borderColor: 'var(--border)' }}>
               <td className="px-2 py-1">
-                <Link
-                  href={`/player/${player.id}`}
-                  className="font-semibold hover:underline"
+                <button
+                  onClick={() => onPlayerClick(player.id)}
+                  className="font-semibold hover:underline text-left"
                   style={{ color: 'var(--accent)' }}
                 >
                   {player.firstName[0]}. {player.lastName}
-                </Link>
+                </button>
                 <span className="opacity-60 ml-1">{player.sportData.position}</span>
               </td>
               {BOXSCORE_COLS.map(c => (
