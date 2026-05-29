@@ -28,6 +28,7 @@ const ROLLOVER_KEYS = [
   'gg-rollover-outer-error',
   'gg-rollover-outer-throw',
   'gg-rollover-step',
+  'gg-rollover-substep',
   'gg-rollover-async-error',
   'gg-rollover-recoverable-error',
 ] as const;

@@ -8250,6 +8250,7 @@ export const useGameStore = create<GameStore>()(
           localStorage.removeItem('gg-rollover-async-error');
           localStorage.removeItem('gg-rollover-recoverable-error');
           localStorage.removeItem('gg-rollover-step');
+          localStorage.removeItem('gg-rollover-substep');
         } catch { /* best-effort */ }
         try {
           localStorage.setItem('gg-rollover-entry', JSON.stringify({
@@ -8297,6 +8298,15 @@ export const useGameStore = create<GameStore>()(
         const setStep = (s: string) => {
           currentStep = s;
           try { localStorage.setItem('gg-rollover-step', s); } catch { /* best-effort */ }
+        };
+        // 5/28 sub-step instrumentation (bige08676 5/28 07:05 UTC capture: first
+        // post-lock-steal-fix retest still hangs at step=final-state-commit but
+        // with no recoverable-error and no exit — second silent-hang vector
+        // INSIDE the commit step. Sub-step shadows the boundaries within that
+        // step so a future paste names which sub-op (zustand set, BS-mode QB
+        // pyramid, AI auto-cut loop) is hanging.
+        const setSubstep = (s: string) => {
+          try { localStorage.setItem('gg-rollover-substep', s); } catch { /* best-effort */ }
         };
         setStep(currentStep);
         // 5/25 (bige08676 fresh recapture): the original exit-breadcrumb write
@@ -9064,6 +9074,7 @@ export const useGameStore = create<GameStore>()(
         const preseasonSchedule = enterPreseason ? generatePreseasonSchedule(teamsAfterCoaches, numPreseasonGames, newSeason) : undefined;
         setStep("final-state-commit");
 
+        setSubstep("commit:set-main:start");
         set({
           season: newSeason,
           week: enterPreseason ? 0 : 1,
@@ -9142,9 +9153,11 @@ export const useGameStore = create<GameStore>()(
             qbTiers: computeLeagueQBTiers(grownTeams, allPlayersForNewSeason),
           } : { qbTiers: undefined }),
         });
+        setSubstep("commit:set-main:end");
 
         // BS Mode: generate QB Pyramid news
         if (state.leagueSettings?.bsMode) {
+          setSubstep("commit:qb-pyramid:start");
           const freshState = get();
           const tiers = freshState.qbTiers ?? {};
           const elites = Object.entries(tiers).filter(([, v]) => v.tier === 'Elite' || v.tier === 'Franchise');
@@ -9161,6 +9174,7 @@ export const useGameStore = create<GameStore>()(
               isUserTeam: false,
             })] });
           }
+          setSubstep("commit:qb-pyramid:end");
         }
 
         // Auto-cut every AI team to the 53-man limit. The USER's team is
@@ -9168,10 +9182,15 @@ export const useGameStore = create<GameStore>()(
         // /post-draft-cuts flow (or the roster page) and optionally demote
         // to PS instead of outright releasing — previous behavior silently
         // deleted the lowest-OVR signings which was tofftanaut's 4/19 report.
+        setSubstep("commit:autocut:start");
         const userId = get().userTeamId;
+        let autocutIdx = 0;
         for (const t of get().teams) {
+          setSubstep(`commit:autocut:tick:${autocutIdx}:${t.abbreviation ?? t.id}`);
+          autocutIdx++;
           if (t.id !== userId) get().autoCutToRosterLimit(t.id);
         }
+        setSubstep("commit:autocut:end");
         } catch (error) {
           // Surface the underlying offseason exception in three places so
           // we can diagnose seed-specific failures (bige08676 + marioalsosa
