@@ -2,8 +2,11 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
+import { TeamLogo } from '@/components/ui/TeamLogo';
+import { PlayerModal } from '@/components/modals/PlayerModal';
+import { dropConfetti } from '@/lib/ui/confetti';
 import type {
   BasketballPlayer,
   BasketballStats,
@@ -36,6 +39,7 @@ const BOXSCORE_COLS: { key: keyof BasketballStats; label: string }[] = [
 export default function GamePage() {
   const params = useParams<{ gameId: string }>();
   const { league, loading, error } = useLeagueOrHydrate();
+  const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
 
   const game = useMemo(() => {
     if (!league) return null;
@@ -51,6 +55,21 @@ export default function GamePage() {
     if (!league || !game) return null;
     return (league.teams.find(t => t.id === game.awayTeamId) as BasketballTeam | undefined) ?? null;
   }, [league, game]);
+
+  // Confetti when the user's team won this game — once per viewed game.
+  const celebratedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!league?.userTeamId || !game || game.status !== 'played' || !game.finalScore) return;
+    const userId = league.userTeamId;
+    const inGame = game.homeTeamId === userId || game.awayTeamId === userId;
+    if (!inGame) return;
+    const userScore = game.homeTeamId === userId ? game.finalScore.home : game.finalScore.away;
+    const oppScore = game.homeTeamId === userId ? game.finalScore.away : game.finalScore.home;
+    if (userScore > oppScore && celebratedRef.current !== game.id) {
+      celebratedRef.current = game.id;
+      dropConfetti();
+    }
+  }, [league?.userTeamId, game]);
 
   if (loading) return <Loading />;
   if (!league) return <NotFound message={error ?? 'No league loaded.'} />;
@@ -102,9 +121,11 @@ export default function GamePage() {
       </section>
 
       <div className="grid md:grid-cols-2 gap-6">
-        <BoxScoreTable team={awayTeam} game={game} playerMap={playerMap} />
-        <BoxScoreTable team={homeTeam} game={game} playerMap={playerMap} />
+        <BoxScoreTable team={awayTeam} game={game} playerMap={playerMap} onPlayerClick={setModalPlayerId} />
+        <BoxScoreTable team={homeTeam} game={game} playerMap={playerMap} onPlayerClick={setModalPlayerId} />
       </div>
+
+      <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
     </main>
   );
 }
@@ -124,12 +145,12 @@ function TeamScoreCell({
   return (
     <div className={`flex items-center gap-3 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
       {align === 'left' && (
-        <div
-          className="w-10 h-10 rounded flex items-center justify-center font-extrabold"
-          style={{ background: team.primaryColor, color: team.secondaryColor }}
-        >
-          {team.abbreviation.slice(0, 3)}
-        </div>
+        <TeamLogo
+          abbreviation={team.abbreviation}
+          primaryColor={team.primaryColor}
+          secondaryColor={team.secondaryColor}
+          size="lg"
+        />
       )}
       <div className={align === 'right' ? 'text-right' : ''}>
         <div className="text-xs opacity-70">{team.city}</div>
@@ -142,23 +163,24 @@ function TeamScoreCell({
         {score}
       </div>
       {align === 'right' && (
-        <div
-          className="w-10 h-10 rounded flex items-center justify-center font-extrabold"
-          style={{ background: team.primaryColor, color: team.secondaryColor }}
-        >
-          {team.abbreviation.slice(0, 3)}
-        </div>
+        <TeamLogo
+          abbreviation={team.abbreviation}
+          primaryColor={team.primaryColor}
+          secondaryColor={team.secondaryColor}
+          size="lg"
+        />
       )}
     </div>
   );
 }
 
 function BoxScoreTable({
-  team, game, playerMap,
+  team, game, playerMap, onPlayerClick,
 }: {
   team: BasketballTeam;
   game: { boxScores: Record<string, Partial<BasketballStats>> };
   playerMap: Record<string, BasketballPlayer>;
+  onPlayerClick: (playerId: string) => void;
 }) {
   // Players who appeared (have a box score) — sorted by points descending.
   const lines = team.playerIds
@@ -187,13 +209,13 @@ function BoxScoreTable({
           {lines.map(({ player, stats }) => (
             <tr key={player.id} className="border-t" style={{ borderColor: 'var(--border)' }}>
               <td className="px-2 py-1">
-                <Link
-                  href={`/player/${player.id}`}
-                  className="font-semibold hover:underline"
+                <button
+                  onClick={() => onPlayerClick(player.id)}
+                  className="font-semibold hover:underline text-left"
                   style={{ color: 'var(--accent)' }}
                 >
                   {player.firstName[0]}. {player.lastName}
-                </Link>
+                </button>
                 <span className="opacity-60 ml-1">{player.sportData.position}</span>
               </td>
               {BOXSCORE_COLS.map(c => (

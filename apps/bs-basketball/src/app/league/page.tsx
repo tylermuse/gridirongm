@@ -2,6 +2,9 @@
 
 import Link from 'next/link';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
+import { useLeagueStore } from '@/lib/store/leagueStore';
+import { TeamLogo } from '@/components/ui/TeamLogo';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -27,6 +30,7 @@ function teamDiv(t: BasketballTeam): TeamSportData {
 
 export default function LeaguePage() {
   const { league, loading, error } = useLeagueOrHydrate();
+  const continueLatest = useLeagueStore(s => s.continueLatest);
 
   if (loading) {
     return (
@@ -39,10 +43,17 @@ export default function LeaguePage() {
   if (!league) {
     return (
       <main className="max-w-4xl mx-auto p-8">
-        <p className="mb-4">{error ?? 'No league loaded.'}</p>
-        <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>
-          ← Back to home
-        </Link>
+        <EmptyState
+          icon="🏀"
+          title="Couldn’t load a league"
+          message={error ?? 'No league loaded yet.'}
+          action={{ label: 'Retry', onClick: () => void continueLatest() }}
+        />
+        <div className="text-center">
+          <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>
+            ← Back to home
+          </Link>
+        </div>
       </main>
     );
   }
@@ -96,15 +107,17 @@ export default function LeaguePage() {
                       <li key={t.id}>
                         <Link
                           href={`/team/${t.id}`}
-                          className="flex items-center gap-3 px-3 py-2 rounded border hover:border-current transition"
+                          className="flex items-center gap-3 px-3 py-2 rounded-lg border bg-[var(--surface)] hover:border-[var(--accent)] hover:shadow-lg hover:shadow-[var(--accent-glow)] transition-all"
                           style={{ borderColor: 'var(--border)' }}
                         >
-                          <span
-                            className="inline-block w-4 h-4 rounded-sm"
-                            style={{ background: t.primaryColor }}
+                          <TeamLogo
+                            abbreviation={t.abbreviation}
+                            primaryColor={t.primaryColor}
+                            secondaryColor={t.secondaryColor}
+                            size="sm"
                           />
-                          <span className="font-semibold">{t.city} {t.name}</span>
-                          <span className="ml-auto text-xs opacity-50">{t.abbreviation}</span>
+                          <span className="font-semibold text-sm">{t.city}</span>
+                          <span className="text-xs text-[var(--text-sec)] truncate">{t.name}</span>
                         </Link>
                       </li>
                     ))}

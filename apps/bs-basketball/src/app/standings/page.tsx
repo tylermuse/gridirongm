@@ -1,9 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
+import { TeamLogo } from '@/components/ui/TeamLogo';
+import { TeamRosterModal } from '@/components/modals/TeamRosterModal';
+import { PlayerModal } from '@/components/modals/PlayerModal';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -26,6 +30,8 @@ function sd(t: BasketballTeam): TeamSportData {
 export default function StandingsPage() {
   const { league, loading, error } = useLeagueOrHydrate();
   const { simDay, loading: storeLoading } = useLeagueStore();
+  const [rosterTeamId, setRosterTeamId] = useState<string | null>(null);
+  const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
 
   const sorted = useMemo(() => {
     if (!league) return { Eastern: [], Western: [] } as Record<'Eastern' | 'Western', BasketballTeam[]>;
@@ -72,6 +78,17 @@ export default function StandingsPage() {
         </button>
       </header>
 
+      {gamesPlayed === 0 && (
+        <div className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+          <EmptyState
+            icon="🏀"
+            title="Day 1 — preseason"
+            message="No games played yet. Sim a day to start writing the standings."
+            action={{ label: 'Sim Day →', onClick: () => void simDay() }}
+          />
+        </div>
+      )}
+
       <div className="grid md:grid-cols-2 gap-8">
         {(['Eastern', 'Western'] as const).map(conf => (
           <ConferenceTable
@@ -79,9 +96,17 @@ export default function StandingsPage() {
             label={`${conf} Conference`}
             teams={sorted[conf]}
             userTeamId={league.userTeamId ?? null}
+            onRosterClick={setRosterTeamId}
           />
         ))}
       </div>
+
+      <TeamRosterModal
+        teamId={rosterTeamId}
+        onClose={() => setRosterTeamId(null)}
+        onPlayerClick={pid => { setRosterTeamId(null); setModalPlayerId(pid); }}
+      />
+      <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
     </main>
   );
 }
@@ -91,11 +116,12 @@ export default function StandingsPage() {
 // ===========================================================================
 
 function ConferenceTable({
-  label, teams, userTeamId,
+  label, teams, userTeamId, onRosterClick,
 }: {
   label: string;
   teams: BasketballTeam[];
   userTeamId: string | null;
+  onRosterClick: (teamId: string) => void;
 }) {
   const leader = teams[0];
   return (
@@ -103,7 +129,8 @@ function ConferenceTable({
       <h2 className="px-3 py-2 font-bold border-b" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
         {label}
       </h2>
-      <table className="w-full text-sm">
+      {/* Desktop table */}
+      <table className="w-full text-sm hidden sm:table">
         <thead className="opacity-70 text-xs">
           <tr>
             <th className="px-2 py-1 text-left">Team</th>
@@ -113,6 +140,7 @@ function ConferenceTable({
             <th className="px-2 py-1 text-right">GB</th>
             <th className="px-2 py-1 text-right">Diff</th>
             <th className="px-2 py-1 text-left pl-3">Last 5</th>
+            <th className="px-2 py-1 w-9" aria-label="Roster" />
           </tr>
         </thead>
         <tbody>
@@ -134,18 +162,23 @@ function ConferenceTable({
                 }}
               >
                 <td className="px-2 py-1">
-                  <span className="opacity-50 mr-1 text-xs">{i + 1}.</span>
-                  <span
-                    className="inline-block w-2.5 h-2.5 rounded-sm mr-2 align-middle"
-                    style={{ background: t.primaryColor }}
-                  />
-                  <Link
-                    href={`/team/${t.id}`}
-                    className="font-semibold hover:underline"
-                    style={{ color: isUser ? 'var(--accent)' : undefined }}
-                  >
-                    {t.city} {t.name}
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <span className="opacity-50 text-xs w-4">{i + 1}.</span>
+                    <TeamLogo
+                      abbreviation={t.abbreviation}
+                      primaryColor={t.primaryColor}
+                      secondaryColor={t.secondaryColor}
+                      size="xs"
+                    />
+                    <Link
+                      href={`/team/${t.id}`}
+                      className="font-semibold hover:underline"
+                      style={{ color: isUser ? 'var(--accent)' : undefined }}
+                    >
+                      {t.city}
+                    </Link>
+                    <span className="text-xs text-[var(--text-sec)] truncate">{t.name}</span>
+                  </div>
                 </td>
                 <td className="px-2 py-1 text-right">{t.record.wins}</td>
                 <td className="px-2 py-1 text-right">{t.record.losses}</td>
@@ -162,11 +195,76 @@ function ConferenceTable({
                 <td className="px-2 py-1 pl-3 font-mono text-xs">
                   {t.record.streak.slice(-5).join('') || '—'}
                 </td>
+                <td className="px-2 py-1 text-center">
+                  <button
+                    onClick={() => onRosterClick(t.id)}
+                    title={`View ${t.city} roster`}
+                    aria-label={`View ${t.city} roster`}
+                    className="w-7 h-7 inline-flex items-center justify-center rounded-md text-[var(--text-sec)] hover:bg-[var(--surface-2)] hover:text-[var(--accent)] transition-colors"
+                  >
+                    👁
+                  </button>
+                </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+
+      {/* Mobile card list */}
+      <ul className="sm:hidden divide-y" style={{ borderColor: 'var(--border)' }}>
+        {teams.map((t, i) => {
+          const games = t.record.wins + t.record.losses;
+          const pct = games > 0 ? t.record.wins / games : 0;
+          const diff = t.record.pointsFor - t.record.pointsAgainst;
+          const isUser = userTeamId === t.id;
+          return (
+            <li
+              key={t.id}
+              className="p-3"
+              style={{
+                borderColor: 'var(--border)',
+                background: isUser ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined,
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <span className="opacity-50 text-xs w-5">{i + 1}.</span>
+                <TeamLogo
+                  abbreviation={t.abbreviation}
+                  primaryColor={t.primaryColor}
+                  secondaryColor={t.secondaryColor}
+                  size="sm"
+                />
+                <Link
+                  href={`/team/${t.id}`}
+                  className="font-semibold hover:underline truncate"
+                  style={{ color: isUser ? 'var(--accent)' : undefined }}
+                >
+                  {t.city} <span className="text-[var(--text-sec)] font-normal">{t.name}</span>
+                </Link>
+                <button
+                  onClick={() => onRosterClick(t.id)}
+                  aria-label={`View ${t.city} roster`}
+                  className="ml-auto w-11 h-11 inline-flex items-center justify-center rounded-md text-[var(--text-sec)] hover:bg-[var(--surface-2)] hover:text-[var(--accent)] transition-colors"
+                >
+                  👁
+                </button>
+              </div>
+              <div className="flex items-center gap-4 mt-1.5 pl-7 text-sm">
+                <span className="font-semibold">{t.record.wins}–{t.record.losses}</span>
+                <span className="tabular-nums text-[var(--text-sec)]">{pct.toFixed(3).slice(1)}</span>
+                <span
+                  className="tabular-nums"
+                  style={{ color: diff > 0 ? '#10b981' : diff < 0 ? '#dc2626' : undefined }}
+                >
+                  {diff > 0 ? '+' : ''}{diff}
+                </span>
+                <span className="font-mono text-xs ml-auto">{t.record.streak.slice(-5).join('') || '—'}</span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
