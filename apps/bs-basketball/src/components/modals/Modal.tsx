@@ -18,7 +18,6 @@ import {
   useCallback,
   useEffect,
   useRef,
-  useState,
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -37,11 +36,8 @@ const FOCUSABLE =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 
 export function Modal({ open, onClose, title, children, maxWidthClass = 'max-w-2xl' }: ModalProps) {
-  const [mounted, setMounted] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const lastFocused = useRef<HTMLElement | null>(null);
-
-  useEffect(() => setMounted(true), []);
 
   // Remember the trigger element, move focus into the panel, restore on close.
   useEffect(() => {
@@ -96,7 +92,9 @@ export function Modal({ open, onClose, title, children, maxWidthClass = 'max-w-2
     [onClose],
   );
 
-  if (!mounted || !open) return null;
+  // Modals only open via client-side interaction, so document is available
+  // by the time `open` flips true — no SSR mount guard needed.
+  if (!open || typeof document === 'undefined') return null;
 
   return createPortal(
     <div

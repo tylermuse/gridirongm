@@ -309,7 +309,7 @@ const ICONS: Record<string, IconFn> = {
       <path d="M16 12c2 1 3 3 3 6" stroke={bg} strokeWidth="0.8" opacity="0.3" fill="none"/>
     </svg>
   ),
-  LSH: (c, bg) => ( // Shores — breaking wave under a low sun
+  LSH: (c) => ( // Shores — breaking wave under a low sun
     <svg viewBox="0 0 32 32" fill="none">
       <circle cx="16" cy="10" r="4.5" fill={c}/>
       <path d="M9 10h-3M26 10h-3M16 3v-1" stroke={c} strokeWidth="1.3" strokeLinecap="round" opacity="0.7"/>

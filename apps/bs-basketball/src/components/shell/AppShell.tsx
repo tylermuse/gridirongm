@@ -67,9 +67,6 @@ function TopBar({
   const playedCount = league?.games.filter(g => g.status === 'played').length ?? 0;
   const totalGames = league?.games.length ?? 0;
 
-  // Close the mobile menu whenever the route changes.
-  useEffect(() => { setMenuOpen(false); }, [pathname]);
-
   const navItems: { href: string; label: string; active: boolean; emphasis?: boolean }[] = league
     ? [
         { href: '/league',    label: 'League',    active: pathname.startsWith('/league') },
@@ -149,6 +146,7 @@ function TopBar({
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => setMenuOpen(false)}
                 className={`flex items-center min-h-11 px-3 rounded-md text-base font-semibold transition ${
                   item.active
                     ? 'text-[var(--accent)] bg-[var(--surface-2)]'
