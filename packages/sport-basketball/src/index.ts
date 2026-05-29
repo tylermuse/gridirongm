@@ -20,3 +20,4 @@ export * from './draftSystem';
 export * from './awards';
 export * from './developmentSystem';
 export * from './capRules';
+export * from './tradeEvaluator';

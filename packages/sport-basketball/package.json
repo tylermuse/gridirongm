@@ -14,7 +14,8 @@
     "./draftSystem": "./src/draftSystem/index.ts",
     "./awards": "./src/awards/index.ts",
     "./developmentSystem": "./src/developmentSystem/index.ts",
-    "./capRules": "./src/capRules/index.ts"
+    "./capRules": "./src/capRules/index.ts",
+    "./tradeEvaluator": "./src/tradeEvaluator/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
