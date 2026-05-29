@@ -21,3 +21,6 @@ export * from './awards';
 export * from './developmentSystem';
 export * from './capRules';
 export * from './tradeEvaluator';
+export * from './lineupModel';
+export * from './coachingSystem';
+export * from './uiMetadata';

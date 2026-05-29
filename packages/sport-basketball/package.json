@@ -15,7 +15,10 @@
     "./awards": "./src/awards/index.ts",
     "./developmentSystem": "./src/developmentSystem/index.ts",
     "./capRules": "./src/capRules/index.ts",
-    "./tradeEvaluator": "./src/tradeEvaluator/index.ts"
+    "./tradeEvaluator": "./src/tradeEvaluator/index.ts",
+    "./lineupModel": "./src/lineupModel/index.ts",
+    "./coachingSystem": "./src/coachingSystem/index.ts",
+    "./uiMetadata": "./src/uiMetadata/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
