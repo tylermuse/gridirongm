@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { listLeagues, deleteLeague, type LeagueSaveMeta } from '@/lib/persistence/db';
 import { basketballAdapter } from '@bs/sport-basketball';
@@ -59,29 +60,14 @@ export default function HomePage() {
           <Stat label="Save version" value={league.saveVersion} />
         </section>
 
-        <section className="mb-8">
-          <h2 className="text-2xl font-bold mb-3">Teams</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {league.teams.map(t => (
-              <div
-                key={t.id}
-                className="px-3 py-2 rounded border flex items-center gap-2"
-                style={{ borderColor: 'var(--border)' }}
-              >
-                <span
-                  className="inline-block w-3 h-3 rounded-full"
-                  style={{ background: t.primaryColor }}
-                />
-                <span className="font-semibold text-sm">
-                  {t.city} {t.name}
-                </span>
-                <span className="opacity-50 text-xs ml-auto">{t.abbreviation}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/league"
+            className="px-6 py-3 rounded-lg font-bold text-lg"
+            style={{ background: 'var(--accent)', color: '#fff' }}
+          >
+            Enter League →
+          </Link>
           <button
             onClick={clearActive}
             className="px-4 py-2 rounded font-semibold"
