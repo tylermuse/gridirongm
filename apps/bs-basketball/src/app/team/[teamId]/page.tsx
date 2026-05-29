@@ -9,6 +9,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type {
   BasketballPlayer,
   BasketballStats,
@@ -238,7 +239,7 @@ export default function TeamPage() {
               }}
             />
           ) : (
-            <InlineEmpty
+            <EmptyState
               icon="🏁"
               title="Season complete"
               message="No scheduled games remaining — see standings."
@@ -253,7 +254,7 @@ export default function TeamPage() {
           <CardTitle>Recent Games</CardTitle>
         </CardHeader>
         {recentGames.length === 0 ? (
-          <InlineEmpty
+          <EmptyState
             icon="🏀"
             title="No games played yet"
             message="Sim some games to see results here."
@@ -404,16 +405,6 @@ function NextGamePanel({
           <Badge variant="default" size="md">Upcoming</Badge>
         )}
       </div>
-    </div>
-  );
-}
-
-function InlineEmpty({ icon, title, message }: { icon: string; title: string; message: string }) {
-  return (
-    <div className="text-center py-8 px-4">
-      <div className="text-4xl mb-2">{icon}</div>
-      <div className="font-bold">{title}</div>
-      <p className="text-sm text-[var(--text-sec)] mt-1">{message}</p>
     </div>
   );
 }

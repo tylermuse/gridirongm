@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { buildFeed } from '@/lib/feed/buildFeed';
 import { PlayerModal } from '@/components/modals/PlayerModal';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
 
 interface NewsFeedProps {
@@ -30,10 +31,12 @@ export function NewsFeed({ league, max }: NewsFeedProps) {
 
   if (items.length === 0) {
     return (
-      <div className="text-center py-10 px-4 rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-        <div className="text-4xl mb-2">🌙</div>
-        <div className="font-bold">Quiet night in the league</div>
-        <p className="text-sm text-[var(--text-sec)] mt-1">Sim some games to see moments here.</p>
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+        <EmptyState
+          icon="🌙"
+          title="Quiet night in the league"
+          message="Sim some games to see moments here."
+        />
       </div>
     );
   }

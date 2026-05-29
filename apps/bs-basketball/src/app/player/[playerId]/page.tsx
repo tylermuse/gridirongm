@@ -8,6 +8,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import {
   basketballUiMetadata,
   type BasketballPlayer,
@@ -200,7 +201,7 @@ export default function PlayerPage() {
             <Stat label="FT%" value={pct(stats.freeThrowsMade, stats.freeThrowsAttempted)} />
           </div>
         ) : (
-          <InlineEmpty
+          <EmptyState
             icon="📊"
             title={`No ${statMode} stats yet`}
             message={`${player.firstName} hasn't logged ${statMode} numbers — sim some games.`}
@@ -269,7 +270,7 @@ export default function PlayerPage() {
           )}
         </CardHeader>
         {gameLog.length === 0 ? (
-          <InlineEmpty
+          <EmptyState
             icon="🏀"
             title="No game log yet"
             message={`${player.firstName} hasn't taken the floor yet.`}
@@ -391,16 +392,6 @@ function Stat({ label, value }: { label: string; value: string | number }) {
     <div className="p-2.5 rounded-lg" style={{ background: 'var(--surface-2)' }}>
       <div className="text-base font-bold" style={{ color: 'var(--accent)' }}>{value}</div>
       <div className="text-[10px] opacity-70 uppercase tracking-wide">{label}</div>
-    </div>
-  );
-}
-
-function InlineEmpty({ icon, title, message }: { icon: string; title: string; message: string }) {
-  return (
-    <div className="text-center py-8 px-4">
-      <div className="text-4xl mb-2">{icon}</div>
-      <div className="font-bold">{title}</div>
-      <p className="text-sm text-[var(--text-sec)] mt-1">{message}</p>
     </div>
   );
 }

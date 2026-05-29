@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Badge } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -78,8 +79,12 @@ export default function PowerRankingsPage() {
       </header>
 
       {gamesPlayed === 0 && (
-        <div className="mb-4 text-sm text-[var(--text-sec)]">
-          Preseason — rankings settle once games are played.
+        <div className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+          <EmptyState
+            icon="📊"
+            title="Rankings update once games are played"
+            message="It’s preseason — every team starts level. Sim some games to see the board move."
+          />
         </div>
       )}
 

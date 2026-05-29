@@ -7,6 +7,7 @@ import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { TeamRosterModal } from '@/components/modals/TeamRosterModal';
 import { PlayerModal } from '@/components/modals/PlayerModal';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -76,6 +77,17 @@ export default function StandingsPage() {
           {storeLoading ? 'Simming…' : 'Sim Day →'}
         </button>
       </header>
+
+      {gamesPlayed === 0 && (
+        <div className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+          <EmptyState
+            icon="🏀"
+            title="Day 1 — preseason"
+            message="No games played yet. Sim a day to start writing the standings."
+            action={{ label: 'Sim Day →', onClick: () => void simDay() }}
+          />
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-8">
         {(['Eastern', 'Western'] as const).map(conf => (

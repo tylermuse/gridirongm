@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
+import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -28,6 +30,7 @@ function teamDiv(t: BasketballTeam): TeamSportData {
 
 export default function LeaguePage() {
   const { league, loading, error } = useLeagueOrHydrate();
+  const continueLatest = useLeagueStore(s => s.continueLatest);
 
   if (loading) {
     return (
@@ -40,10 +43,17 @@ export default function LeaguePage() {
   if (!league) {
     return (
       <main className="max-w-4xl mx-auto p-8">
-        <p className="mb-4">{error ?? 'No league loaded.'}</p>
-        <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>
-          ← Back to home
-        </Link>
+        <EmptyState
+          icon="🏀"
+          title="Couldn’t load a league"
+          message={error ?? 'No league loaded yet.'}
+          action={{ label: 'Retry', onClick: () => void continueLatest() }}
+        />
+        <div className="text-center">
+          <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>
+            ← Back to home
+          </Link>
+        </div>
       </main>
     );
   }
