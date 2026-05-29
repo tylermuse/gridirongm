@@ -1,108 +1,221 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useLeagueStore } from '@/lib/store/leagueStore';
+import { listLeagues, deleteLeague, type LeagueSaveMeta } from '@/lib/persistence/db';
 import { basketballAdapter } from '@bs/sport-basketball';
 
 /**
- * BS Hoops landing page (2C-1 shell verification).
+ * BS Hoops home page.
  *
- * This page proves the engine wiring works:
- *   - apps/bs-basketball/ resolves @bs/sport-basketball from packages/
- *   - basketballAdapter satisfies the SportAdapter contract
- *   - Calendar phases, rating fields, and award definitions render
+ * 2C-2a: Three primary actions — New Game / Continue / Load Game.
+ * In-memory league state lives in the Zustand store; persistence is via
+ * Dexie. Once a league is loaded, this page shows a confirmation summary
+ * (real league pages land in 2C-3).
  *
- * Future 2C slices replace this with the real home page (new game,
- * continue, settings).
+ * Once an actual /league route exists we'll router.push() there instead of
+ * rendering inline.
  */
+
 export default function HomePage() {
+  const { league, loading, error, newLeague, continueLatest, loadLeague, clearActive } = useLeagueStore();
+  const [saves, setSaves] = useState<LeagueSaveMeta[]>([]);
+  const [showLoadList, setShowLoadList] = useState(false);
+
+  // Refresh the save list whenever the active league changes (covers the
+  // post-creation case where we want the new save reflected immediately).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const all = await listLeagues();
+      if (!cancelled) setSaves(all);
+    })();
+    return () => { cancelled = true; };
+  }, [league]);
+
+  async function handleDelete(id: string) {
+    await deleteLeague(id);
+    const all = await listLeagues();
+    setSaves(all);
+  }
+
+  // ---------- League-loaded view ----------
+  if (league) {
+    return (
+      <main className="max-w-4xl mx-auto p-8">
+        <header className="border-b pb-4 mb-8" style={{ borderColor: 'var(--accent)' }}>
+          <h1 className="text-5xl font-extrabold tracking-tight" style={{ color: 'var(--accent)' }}>
+            {league.displayName}
+          </h1>
+          <p className="text-lg mt-1 opacity-70">
+            Season {league.currentSeason} · {league.currentPhase}
+          </p>
+        </header>
+
+        <section className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+          <Stat label="Teams" value={league.teams.length} />
+          <Stat label="Players" value={Object.keys(league.players).length} />
+          <Stat label="Games scheduled" value={league.games.length} />
+          <Stat label="Save version" value={league.saveVersion} />
+        </section>
+
+        <section className="mb-8">
+          <h2 className="text-2xl font-bold mb-3">Teams</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {league.teams.map(t => (
+              <div
+                key={t.id}
+                className="px-3 py-2 rounded border flex items-center gap-2"
+                style={{ borderColor: 'var(--border)' }}
+              >
+                <span
+                  className="inline-block w-3 h-3 rounded-full"
+                  style={{ background: t.primaryColor }}
+                />
+                <span className="font-semibold text-sm">
+                  {t.city} {t.name}
+                </span>
+                <span className="opacity-50 text-xs ml-auto">{t.abbreviation}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="flex gap-3">
+          <button
+            onClick={clearActive}
+            className="px-4 py-2 rounded font-semibold"
+            style={{ background: 'var(--muted)', color: 'var(--foreground)' }}
+          >
+            ← Back to menu
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // ---------- Splash view (no league loaded) ----------
   return (
-    <main className="max-w-4xl mx-auto p-8">
-      <header className="border-b pb-4 mb-8" style={{ borderColor: 'var(--accent)' }}>
-        <h1
-          className="text-5xl font-extrabold tracking-tight"
-          style={{ color: 'var(--accent)' }}
-        >
-          {basketballAdapter.brandName}
+    <main className="max-w-2xl mx-auto p-8">
+      <header className="text-center mb-12">
+        <h1 className="text-6xl font-extrabold tracking-tight" style={{ color: 'var(--accent)' }}>
+          BS Hoops
         </h1>
-        <p className="text-lg mt-1 opacity-70">
+        <p className="text-lg mt-2 opacity-70">
           Build your dynasty. Run the franchise.
         </p>
       </header>
 
-      <section className="mb-8">
-        <h2 className="text-2xl font-bold mb-3">Engine wired</h2>
-        <p className="mb-2">
-          Adapter <code className="bg-slate-200 dark:bg-slate-800 px-1 rounded">sportId</code>:{' '}
-          <strong>{basketballAdapter.sportId}</strong>
-        </p>
-        <p className="mb-2">
-          Positions:{' '}
-          <strong>{basketballAdapter.positions.join(' / ')}</strong>
-        </p>
-        <p className="mb-2">
-          Roster size: <strong>{basketballAdapter.rosterRules.activeRosterSize}</strong> active +{' '}
-          {basketballAdapter.rosterRules.buckets
-            .filter(b => b.name !== 'active')
-            .map(b => `${b.capacity === Infinity ? '∞' : b.capacity} ${b.label.toLowerCase()}`)
-            .join(' + ')}
-        </p>
-        <p>
-          Calendar: <strong>{basketballAdapter.seasonCalendar.ticksPerSeason}</strong> ticks across{' '}
-          <strong>{basketballAdapter.seasonCalendar.phases.length}</strong> phases
-        </p>
-      </section>
-
-      <section className="mb-8">
-        <h2 className="text-2xl font-bold mb-3">Season phases</h2>
-        <ul className="space-y-1">
-          {basketballAdapter.seasonCalendar.phases.map(phase => (
-            <li key={phase.name} className="flex items-baseline gap-3">
-              <span
-                className="font-semibold w-40"
-                style={{ color: 'var(--accent-alt)' }}
-              >
-                {phase.label}
-              </span>
-              <span className="opacity-70 text-sm">
-                ticks {phase.startTick}–{phase.endTick}
-                {phase.hasGames ? '' : ' · no games'}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="mb-8">
-        <h2 className="text-2xl font-bold mb-3">Awards</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {basketballAdapter.awards.definitions.map(a => (
-            <div
-              key={a.id}
-              className="p-3 rounded border"
-              style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}
-            >
-              <div className="font-bold">{a.name}</div>
-              <div className="text-xs opacity-60">{a.description}</div>
-            </div>
-          ))}
+      {error && (
+        <div className="mb-6 p-3 rounded border" style={{ borderColor: '#dc2626', background: '#fee2e2', color: '#991b1b' }}>
+          {error}
         </div>
-      </section>
+      )}
 
-      <section>
-        <h2 className="text-2xl font-bold mb-3">Coaching schemes</h2>
-        <ul className="flex flex-wrap gap-2">
-          {basketballAdapter.coachingSystem.schemes.HC.map(s => (
-            <li
-              key={s}
-              className="px-3 py-1 rounded-full text-sm font-medium"
-              style={{ background: 'var(--accent)', color: '#fff' }}
-            >
-              {s}
-            </li>
-          ))}
-        </ul>
-      </section>
+      <div className="space-y-3">
+        <Button
+          primary
+          disabled={loading}
+          onClick={() => void newLeague()}
+        >
+          {loading ? 'Generating…' : 'New Game'}
+        </Button>
 
-      <footer className="mt-12 pt-4 border-t opacity-60 text-sm" style={{ borderColor: 'var(--border)' }}>
-        2C-1 shell · adapter assembled · {basketballAdapter.competitions.length} competition(s)
+        <Button
+          disabled={loading || saves.length === 0}
+          onClick={() => void continueLatest()}
+        >
+          {saves.length === 0 ? 'Continue (no saves)' : 'Continue'}
+        </Button>
+
+        <Button
+          disabled={saves.length === 0}
+          onClick={() => setShowLoadList(s => !s)}
+        >
+          Load Game ({saves.length})
+        </Button>
+      </div>
+
+      {showLoadList && saves.length > 0 && (
+        <section className="mt-6">
+          <h2 className="font-bold mb-2">Saved leagues</h2>
+          <ul className="space-y-2">
+            {saves.map(s => (
+              <li
+                key={s.id}
+                className="p-3 rounded border flex items-center gap-3"
+                style={{ borderColor: 'var(--border)' }}
+              >
+                <div className="flex-1">
+                  <div className="font-semibold">{s.displayName}</div>
+                  <div className="text-xs opacity-60">
+                    Season {s.currentSeason} · {s.currentPhase} · {s.teamCount} teams · {s.playerCount} players
+                  </div>
+                  <div className="text-xs opacity-50">
+                    Saved {new Date(s.updatedAt).toLocaleString()}
+                  </div>
+                </div>
+                <button
+                  onClick={() => void loadLeague(s.id)}
+                  className="px-3 py-1 rounded text-sm font-semibold"
+                  style={{ background: 'var(--accent)', color: '#fff' }}
+                >
+                  Load
+                </button>
+                <button
+                  onClick={() => void handleDelete(s.id)}
+                  className="px-3 py-1 rounded text-sm opacity-70 hover:opacity-100"
+                  style={{ background: 'var(--muted)' }}
+                  title="Delete save"
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <footer className="mt-16 pt-4 border-t opacity-60 text-xs text-center" style={{ borderColor: 'var(--border)' }}>
+        BS Hoops · adapter {basketballAdapter.sportId} · {basketballAdapter.positions.length} positions ·{' '}
+        {basketballAdapter.competitions.length} competition
       </footer>
     </main>
+  );
+}
+
+// ===========================================================================
+// Reusable bits (inline for now — extract to /components in a later slice)
+// ===========================================================================
+
+function Button({
+  children, onClick, disabled, primary,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  primary?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="w-full px-6 py-4 rounded-lg font-bold text-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+      style={{
+        background: primary ? 'var(--accent)' : 'var(--muted)',
+        color: primary ? '#fff' : 'var(--foreground)',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="p-3 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
+      <div className="text-2xl font-extrabold" style={{ color: 'var(--accent)' }}>{value}</div>
+      <div className="text-xs opacity-70 uppercase tracking-wide">{label}</div>
+    </div>
   );
 }
