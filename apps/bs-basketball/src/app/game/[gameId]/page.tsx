@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerModal } from '@/components/modals/PlayerModal';
+import { dropConfetti } from '@/lib/ui/confetti';
 import type {
   BasketballPlayer,
   BasketballStats,
@@ -54,6 +55,21 @@ export default function GamePage() {
     if (!league || !game) return null;
     return (league.teams.find(t => t.id === game.awayTeamId) as BasketballTeam | undefined) ?? null;
   }, [league, game]);
+
+  // Confetti when the user's team won this game — once per viewed game.
+  const celebratedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!league?.userTeamId || !game || game.status !== 'played' || !game.finalScore) return;
+    const userId = league.userTeamId;
+    const inGame = game.homeTeamId === userId || game.awayTeamId === userId;
+    if (!inGame) return;
+    const userScore = game.homeTeamId === userId ? game.finalScore.home : game.finalScore.away;
+    const oppScore = game.homeTeamId === userId ? game.finalScore.away : game.finalScore.home;
+    if (userScore > oppScore && celebratedRef.current !== game.id) {
+      celebratedRef.current = game.id;
+      dropConfetti();
+    }
+  }, [league?.userTeamId, game]);
 
   if (loading) return <Loading />;
   if (!league) return <NotFound message={error ?? 'No league loaded.'} />;

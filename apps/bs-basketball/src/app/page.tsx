@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { listLeagues, deleteLeague, type LeagueSaveMeta } from '@/lib/persistence/db';
@@ -29,6 +29,22 @@ export default function HomePage() {
   const [showLoadList, setShowLoadList] = useState(false);
   const [search, setSearch] = useState('');
   const [pickingAbbr, setPickingAbbr] = useState<string | null>(null);
+  const [flashGames, setFlashGames] = useState(false);
+  const prevPlayedRef = useRef<number | null>(null);
+
+  // Total played games — used to flash the Games Played card after a sim.
+  const playedCount = league ? league.games.filter(g => g.status === 'played').length : 0;
+
+  useEffect(() => {
+    if (!league) { prevPlayedRef.current = null; return; }
+    const prev = prevPlayedRef.current;
+    prevPlayedRef.current = playedCount;
+    if (prev !== null && playedCount > prev) {
+      setFlashGames(true);
+      const id = window.setTimeout(() => setFlashGames(false), 1200);
+      return () => window.clearTimeout(id);
+    }
+  }, [playedCount, league]);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,7 +81,6 @@ export default function HomePage() {
 
   // ---------------- League loaded ----------------
   if (league) {
-    const playedCount = league.games.filter(g => g.status === 'played').length;
     const userTeam = league.userTeamId ? league.teams.find(t => t.id === league.userTeamId) : null;
     return (
       <div className="max-w-6xl mx-auto px-5 py-12">
@@ -101,7 +116,7 @@ export default function HomePage() {
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
               <StatCard label="Teams" value={league.teams.length} />
-              <StatCard label="Games Played" value={`${playedCount} / ${league.games.length}`} />
+              <StatCard label="Games Played" value={`${playedCount} / ${league.games.length}`} flash={flashGames} />
               <StatCard label="Day" value={league.currentTick} />
               <StatCard label="Saves" value={saves.length} />
             </div>
@@ -261,7 +276,23 @@ export default function HomePage() {
         <div className="text-[var(--accent)] text-xl group-hover:translate-x-1 transition-transform shrink-0">→</div>
       </button>
 
-      {/* Team grid */}
+      {/* Team grid (skeletons while a saved league is loading) */}
+      {loading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-w-4xl w-full">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--surface)]"
+            >
+              <div className="w-12 h-12 rounded-xl bg-[var(--surface-2)] animate-pulse shrink-0" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="h-3 w-3/4 rounded bg-[var(--surface-2)] animate-pulse" />
+                <div className="h-2.5 w-1/2 rounded bg-[var(--surface-2)] animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-w-4xl w-full">
         {filtered.map(team => {
           const isPicking = pickingAbbr === team.abbreviation;
@@ -290,6 +321,7 @@ export default function HomePage() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }
@@ -298,9 +330,9 @@ export default function HomePage() {
 // Bits
 // ===========================================================================
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
+function StatCard({ label, value, flash }: { label: string; value: string | number; flash?: boolean }) {
   return (
-    <Card className="!p-4">
+    <Card className={`!p-4 transition-shadow ${flash ? 'ring-2 ring-yellow-400 animate-pulse' : ''}`}>
       <div
         className="text-2xl font-black"
         style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}

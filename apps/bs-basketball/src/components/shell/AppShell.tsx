@@ -43,7 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         isHome={isHome}
       />
 
-      <main className="flex-1">{children}</main>
+      <main key={pathname} className="flex-1 bs-animate-fade">{children}</main>
 
       <Footer />
     </div>
