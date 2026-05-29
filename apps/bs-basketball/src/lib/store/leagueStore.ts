@@ -29,6 +29,8 @@ import {
   mostRecentLeague,
   type BasketballLeagueState,
 } from '../persistence/db';
+import { simNextGameForTeam } from '../sim/runNextGame';
+import type { TeamId } from '@bs/core/adapter';
 
 interface LeagueStore {
   /** Currently loaded league, or null if user hasn't started one. */
@@ -52,6 +54,13 @@ interface LeagueStore {
 
   /** Drop the active league from memory (does NOT delete the save). */
   clearActive: () => void;
+
+  /** Set which team the user is GMing. Persisted via Dexie. */
+  pickUserTeam: (teamId: TeamId) => Promise<void>;
+
+  /** Sim the next scheduled game involving the user's team. Returns the
+   *  played game's id on success, or null if there's no game to sim. */
+  simNextUserGame: () => Promise<string | null>;
 }
 
 export const useLeagueStore = create<LeagueStore>((set, get) => ({
@@ -119,5 +128,45 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
 
   clearActive() {
     set({ league: null, error: null });
+  },
+
+  async pickUserTeam(teamId) {
+    const current = get().league;
+    if (!current) return;
+    const updated = { ...current, userTeamId: teamId };
+    set({ league: updated });
+    try {
+      await saveLeague(updated);
+    } catch (err) {
+      console.error('[bs-hoops] pickUserTeam save failed:', err);
+      set({ error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  async simNextUserGame() {
+    const current = get().league;
+    if (!current) {
+      set({ error: 'No league loaded.' });
+      return null;
+    }
+    if (!current.userTeamId) {
+      set({ error: 'Pick a team first.' });
+      return null;
+    }
+    set({ loading: true, error: null });
+    try {
+      const outcome = simNextGameForTeam(current, current.userTeamId);
+      if (!outcome) {
+        set({ loading: false, error: 'No more scheduled games for this team.' });
+        return null;
+      }
+      await saveLeague(outcome.league);
+      set({ league: outcome.league, loading: false });
+      return outcome.gameId;
+    } catch (err) {
+      console.error('[bs-hoops] simNextUserGame failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
   },
 }));

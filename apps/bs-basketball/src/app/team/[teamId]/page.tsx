@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
+import { useLeagueStore } from '@/lib/store/leagueStore';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -28,9 +29,12 @@ const SORTABLE: { key: SortKey; label: string; align?: 'left' | 'right' }[] = [
 
 export default function TeamPage() {
   const params = useParams<{ teamId: string }>();
+  const router = useRouter();
   const { league, loading, error } = useLeagueOrHydrate();
+  const { pickUserTeam, simNextUserGame } = useLeagueStore();
   const [sortKey, setSortKey] = useState<SortKey>('overall');
   const [sortDesc, setSortDesc] = useState(true);
+  const [simming, setSimming] = useState(false);
 
   const team: BasketballTeam | null = useMemo(() => {
     if (!league) return null;
@@ -80,7 +84,7 @@ export default function TeamPage() {
         ← League
       </Link>
 
-      <header className="flex items-center gap-4 mt-2 mb-6">
+      <header className="flex flex-wrap items-center gap-4 mt-2 mb-4">
         <div
           className="w-14 h-14 rounded-lg flex items-center justify-center font-extrabold text-2xl"
           style={{ background: team.primaryColor, color: team.secondaryColor }}
@@ -88,12 +92,55 @@ export default function TeamPage() {
           {team.abbreviation.slice(0, 3)}
         </div>
         <div>
-          <h1 className="text-4xl font-extrabold">{team.city} {team.name}</h1>
+          <h1 className="text-4xl font-extrabold flex items-center gap-2">
+            {team.city} {team.name}
+            {league.userTeamId === team.id && (
+              <span
+                className="text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wide"
+                style={{ background: 'var(--accent)', color: '#fff' }}
+              >
+                Your team
+              </span>
+            )}
+          </h1>
           <p className="text-sm opacity-70">
             {sd.conference} Conference · {sd.division} Division
           </p>
         </div>
+
+        <div className="ml-auto flex gap-2">
+          {league.userTeamId === team.id ? (
+            <button
+              disabled={simming}
+              onClick={async () => {
+                setSimming(true);
+                const gameId = await simNextUserGame();
+                setSimming(false);
+                if (gameId) router.push(`/game/${gameId}`);
+              }}
+              className="px-4 py-2 rounded-lg font-bold transition disabled:opacity-50"
+              style={{ background: 'var(--accent)', color: '#fff' }}
+            >
+              {simming ? 'Simming…' : 'Sim Next Game →'}
+            </button>
+          ) : league.userTeamId ? null : (
+            <button
+              onClick={() => void pickUserTeam(team.id)}
+              className="px-4 py-2 rounded-lg font-bold transition"
+              style={{ background: 'var(--accent)', color: '#fff' }}
+            >
+              Pick This Team
+            </button>
+          )}
+        </div>
       </header>
+
+      <p className="text-sm opacity-70 mb-4">
+        Record: <strong>{team.record.wins}–{team.record.losses}</strong>
+        {team.record.streak.length > 0 && (
+          <> · Streak: <span className="font-mono">{team.record.streak.slice(-5).join('')}</span></>
+        )}
+      </p>
 
       <section className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-6">
         <Stat label="Players" value={roster.length} />
