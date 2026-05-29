@@ -1,0 +1,187 @@
+'use client';
+
+import Link from 'next/link';
+import { useMemo } from 'react';
+import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
+import { useLeagueStore } from '@/lib/store/leagueStore';
+import type { BasketballTeam } from '@bs/sport-basketball';
+
+/**
+ * /standings — standings by conference.
+ *
+ * Computes from team.record. Default sort: wins desc, then losses asc, then
+ * points-diff desc. GB is computed against the conference leader.
+ *
+ * User's team row is highlighted with the accent color.
+ *
+ * Quick-action: 'Sim Day' button up top advances the season by one day.
+ */
+
+interface TeamSportData { conference: 'Eastern' | 'Western'; division: string }
+
+function sd(t: BasketballTeam): TeamSportData {
+  return t.sportData as TeamSportData;
+}
+
+export default function StandingsPage() {
+  const { league, loading, error } = useLeagueOrHydrate();
+  const { simDay, loading: storeLoading } = useLeagueStore();
+
+  const sorted = useMemo(() => {
+    if (!league) return { Eastern: [], Western: [] } as Record<'Eastern' | 'Western', BasketballTeam[]>;
+    const byConf: Record<'Eastern' | 'Western', BasketballTeam[]> = { Eastern: [], Western: [] };
+    for (const t of league.teams) {
+      byConf[sd(t as BasketballTeam).conference].push(t as BasketballTeam);
+    }
+    for (const conf of ['Eastern', 'Western'] as const) {
+      byConf[conf].sort((a, b) => {
+        if (b.record.wins !== a.record.wins) return b.record.wins - a.record.wins;
+        if (a.record.losses !== b.record.losses) return a.record.losses - b.record.losses;
+        return (b.record.pointsFor - b.record.pointsAgainst) - (a.record.pointsFor - a.record.pointsAgainst);
+      });
+    }
+    return byConf;
+  }, [league]);
+
+  if (loading) return <Loading />;
+  if (!league) return <NotFound message={error ?? 'No league loaded.'} />;
+
+  const gamesPlayed = league.games.filter(g => g.status === 'played').length;
+  const totalGames = league.games.length;
+
+  return (
+    <main className="max-w-6xl mx-auto p-8">
+      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">
+        ← Home
+      </Link>
+
+      <header className="flex flex-wrap items-baseline gap-4 mt-2 mb-6">
+        <h1 className="text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>
+          Standings
+        </h1>
+        <p className="text-sm opacity-70">
+          Season {league.currentSeason} · Day {league.currentTick} · {gamesPlayed} / {totalGames} games played
+        </p>
+        <button
+          onClick={() => void simDay()}
+          disabled={storeLoading || gamesPlayed === totalGames}
+          className="ml-auto px-4 py-2 rounded-lg font-bold transition disabled:opacity-50"
+          style={{ background: 'var(--accent)', color: '#fff' }}
+        >
+          {storeLoading ? 'Simming…' : 'Sim Day →'}
+        </button>
+      </header>
+
+      <div className="grid md:grid-cols-2 gap-8">
+        {(['Eastern', 'Western'] as const).map(conf => (
+          <ConferenceTable
+            key={conf}
+            label={`${conf} Conference`}
+            teams={sorted[conf]}
+            userTeamId={league.userTeamId ?? null}
+          />
+        ))}
+      </div>
+    </main>
+  );
+}
+
+// ===========================================================================
+// Components
+// ===========================================================================
+
+function ConferenceTable({
+  label, teams, userTeamId,
+}: {
+  label: string;
+  teams: BasketballTeam[];
+  userTeamId: string | null;
+}) {
+  const leader = teams[0];
+  return (
+    <section className="rounded border" style={{ borderColor: 'var(--border)' }}>
+      <h2 className="px-3 py-2 font-bold border-b" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
+        {label}
+      </h2>
+      <table className="w-full text-sm">
+        <thead className="opacity-70 text-xs">
+          <tr>
+            <th className="px-2 py-1 text-left">Team</th>
+            <th className="px-2 py-1 text-right">W</th>
+            <th className="px-2 py-1 text-right">L</th>
+            <th className="px-2 py-1 text-right">PCT</th>
+            <th className="px-2 py-1 text-right">GB</th>
+            <th className="px-2 py-1 text-right">Diff</th>
+            <th className="px-2 py-1 text-left pl-3">Last 5</th>
+          </tr>
+        </thead>
+        <tbody>
+          {teams.map((t, i) => {
+            const games = t.record.wins + t.record.losses;
+            const pct = games > 0 ? t.record.wins / games : 0;
+            const gb = leader && leader !== t
+              ? ((leader.record.wins - t.record.wins) + (t.record.losses - leader.record.losses)) / 2
+              : 0;
+            const diff = t.record.pointsFor - t.record.pointsAgainst;
+            const isUser = userTeamId === t.id;
+            return (
+              <tr
+                key={t.id}
+                className="border-t"
+                style={{
+                  borderColor: 'var(--border)',
+                  background: isUser ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined,
+                }}
+              >
+                <td className="px-2 py-1">
+                  <span className="opacity-50 mr-1 text-xs">{i + 1}.</span>
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-sm mr-2 align-middle"
+                    style={{ background: t.primaryColor }}
+                  />
+                  <Link
+                    href={`/team/${t.id}`}
+                    className="font-semibold hover:underline"
+                    style={{ color: isUser ? 'var(--accent)' : undefined }}
+                  >
+                    {t.city} {t.name}
+                  </Link>
+                </td>
+                <td className="px-2 py-1 text-right">{t.record.wins}</td>
+                <td className="px-2 py-1 text-right">{t.record.losses}</td>
+                <td className="px-2 py-1 text-right tabular-nums">{pct.toFixed(3).slice(1)}</td>
+                <td className="px-2 py-1 text-right tabular-nums">
+                  {gb === 0 ? '—' : gb.toFixed(1).replace('.0', '')}
+                </td>
+                <td
+                  className="px-2 py-1 text-right tabular-nums"
+                  style={{ color: diff > 0 ? '#10b981' : diff < 0 ? '#dc2626' : undefined }}
+                >
+                  {diff > 0 ? '+' : ''}{diff}
+                </td>
+                <td className="px-2 py-1 pl-3 font-mono text-xs">
+                  {t.record.streak.slice(-5).join('') || '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+function Loading() {
+  return <main className="max-w-4xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>;
+}
+
+function NotFound({ message }: { message: string }) {
+  return (
+    <main className="max-w-4xl mx-auto p-8">
+      <p className="mb-4">{message}</p>
+      <Link href="/" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>
+        ← Home
+      </Link>
+    </main>
+  );
+}
