@@ -53,11 +53,20 @@ export default function LeaguePage() {
         <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">
           ← Home
         </Link>
-        <h1 className="text-4xl font-extrabold mt-2" style={{ color: 'var(--accent)' }}>
-          {league.displayName}
-        </h1>
-        <p className="opacity-70">
-          {league.teams.length} teams · Season {league.currentSeason} · {league.currentPhase}
+        <div className="flex flex-wrap items-baseline gap-4 mt-2">
+          <h1 className="text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>
+            {league.displayName}
+          </h1>
+          <Link
+            href="/standings"
+            className="ml-auto px-3 py-1 rounded font-semibold text-sm"
+            style={{ background: 'var(--muted)' }}
+          >
+            Standings →
+          </Link>
+        </div>
+        <p className="opacity-70 mt-1">
+          {league.teams.length} teams · Season {league.currentSeason} · Day {league.currentTick}
         </p>
       </header>
 

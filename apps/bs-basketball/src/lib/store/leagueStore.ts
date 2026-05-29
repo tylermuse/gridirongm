@@ -30,6 +30,7 @@ import {
   type BasketballLeagueState,
 } from '../persistence/db';
 import { simNextGameForTeam } from '../sim/runNextGame';
+import { simNextDay } from '../sim/runSimDay';
 import type { TeamId } from '@bs/core/adapter';
 
 interface LeagueStore {
@@ -61,6 +62,10 @@ interface LeagueStore {
   /** Sim the next scheduled game involving the user's team. Returns the
    *  played game's id on success, or null if there's no game to sim. */
   simNextUserGame: () => Promise<string | null>;
+
+  /** Sim every scheduled game on the next day-of-season. Returns the day
+   *  + number of games on success. */
+  simDay: () => Promise<{ day: number; gamesSimmed: number } | null>;
 }
 
 export const useLeagueStore = create<LeagueStore>((set, get) => ({
@@ -140,6 +145,29 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     } catch (err) {
       console.error('[bs-hoops] pickUserTeam save failed:', err);
       set({ error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  async simDay() {
+    const current = get().league;
+    if (!current) {
+      set({ error: 'No league loaded.' });
+      return null;
+    }
+    set({ loading: true, error: null });
+    try {
+      const outcome = simNextDay(current);
+      if (!outcome) {
+        set({ loading: false, error: 'No more scheduled games to sim.' });
+        return null;
+      }
+      await saveLeague(outcome.league);
+      set({ league: outcome.league, loading: false });
+      return { day: outcome.day, gamesSimmed: outcome.gamesSimmed };
+    } catch (err) {
+      console.error('[bs-hoops] simDay failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return null;
     }
   },
 

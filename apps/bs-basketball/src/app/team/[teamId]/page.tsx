@@ -31,7 +31,7 @@ export default function TeamPage() {
   const params = useParams<{ teamId: string }>();
   const router = useRouter();
   const { league, loading, error } = useLeagueOrHydrate();
-  const { pickUserTeam, simNextUserGame } = useLeagueStore();
+  const { pickUserTeam, simNextUserGame, simDay } = useLeagueStore();
   const [sortKey, setSortKey] = useState<SortKey>('overall');
   const [sortDesc, setSortDesc] = useState(true);
   const [simming, setSimming] = useState(false);
@@ -108,21 +108,35 @@ export default function TeamPage() {
           </p>
         </div>
 
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex flex-wrap gap-2">
           {league.userTeamId === team.id ? (
-            <button
-              disabled={simming}
-              onClick={async () => {
-                setSimming(true);
-                const gameId = await simNextUserGame();
-                setSimming(false);
-                if (gameId) router.push(`/game/${gameId}`);
-              }}
-              className="px-4 py-2 rounded-lg font-bold transition disabled:opacity-50"
-              style={{ background: 'var(--accent)', color: '#fff' }}
-            >
-              {simming ? 'Simming…' : 'Sim Next Game →'}
-            </button>
+            <>
+              <button
+                disabled={simming}
+                onClick={async () => {
+                  setSimming(true);
+                  const gameId = await simNextUserGame();
+                  setSimming(false);
+                  if (gameId) router.push(`/game/${gameId}`);
+                }}
+                className="px-4 py-2 rounded-lg font-bold transition disabled:opacity-50"
+                style={{ background: 'var(--accent)', color: '#fff' }}
+              >
+                {simming ? 'Simming…' : 'Sim Next Game →'}
+              </button>
+              <button
+                disabled={simming}
+                onClick={async () => {
+                  setSimming(true);
+                  await simDay();
+                  setSimming(false);
+                }}
+                className="px-4 py-2 rounded-lg font-semibold transition disabled:opacity-50"
+                style={{ background: 'var(--muted)', color: 'var(--foreground)' }}
+              >
+                Sim Day
+              </button>
+            </>
           ) : league.userTeamId ? null : (
             <button
               onClick={() => void pickUserTeam(team.id)}

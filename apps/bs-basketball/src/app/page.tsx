@@ -55,8 +55,11 @@ export default function HomePage() {
 
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
           <Stat label="Teams" value={league.teams.length} />
-          <Stat label="Players" value={Object.keys(league.players).length} />
-          <Stat label="Games scheduled" value={league.games.length} />
+          <Stat
+            label="Games played"
+            value={`${league.games.filter(g => g.status === 'played').length} / ${league.games.length}`}
+          />
+          <Stat label="Day" value={league.currentTick} />
           <Stat label="Save version" value={league.saveVersion} />
         </section>
 
@@ -67,6 +70,13 @@ export default function HomePage() {
             style={{ background: 'var(--accent)', color: '#fff' }}
           >
             Enter League →
+          </Link>
+          <Link
+            href="/standings"
+            className="px-4 py-3 rounded-lg font-semibold"
+            style={{ background: 'var(--muted)', color: 'var(--foreground)' }}
+          >
+            Standings
           </Link>
           <button
             onClick={clearActive}
