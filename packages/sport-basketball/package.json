@@ -18,7 +18,9 @@
     "./tradeEvaluator": "./src/tradeEvaluator/index.ts",
     "./lineupModel": "./src/lineupModel/index.ts",
     "./coachingSystem": "./src/coachingSystem/index.ts",
-    "./uiMetadata": "./src/uiMetadata/index.ts"
+    "./uiMetadata": "./src/uiMetadata/index.ts",
+    "./statsEngine": "./src/statsEngine/index.ts",
+    "./adapter": "./src/adapter/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

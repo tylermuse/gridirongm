@@ -56,14 +56,14 @@ const statColumns = [
   { key: 'turnovers', label: 'TO', category: 'Playmaking', format: 'decimal' as const, higherIsBetter: false },
   { key: 'steals', label: 'STL', category: 'Defense', format: 'decimal' as const, higherIsBetter: true },
   { key: 'blocks', label: 'BLK', category: 'Defense', format: 'decimal' as const, higherIsBetter: true },
-  { key: 'fouls', label: 'PF', category: 'Defense', format: 'decimal' as const, higherIsBetter: false },
+  { key: 'personalFouls', label: 'PF', category: 'Defense', format: 'decimal' as const, higherIsBetter: false },
   { key: 'fieldGoalsMade', label: 'FGM', category: 'Shooting', format: 'integer' as const, higherIsBetter: true },
   { key: 'fieldGoalsAttempted', label: 'FGA', category: 'Shooting', format: 'integer' as const, higherIsBetter: true },
   { key: 'threePointsMade', label: '3PM', category: 'Shooting', format: 'integer' as const, higherIsBetter: true },
   { key: 'threePointsAttempted', label: '3PA', category: 'Shooting', format: 'integer' as const, higherIsBetter: true },
   { key: 'freeThrowsMade', label: 'FTM', category: 'Shooting', format: 'integer' as const, higherIsBetter: true },
   { key: 'freeThrowsAttempted', label: 'FTA', category: 'Shooting', format: 'integer' as const, higherIsBetter: true },
-  { key: 'minutesPlayed', label: 'MIN', category: 'Usage', format: 'decimal' as const, higherIsBetter: true },
+  { key: 'minutes', label: 'MIN', category: 'Usage', format: 'decimal' as const, higherIsBetter: true },
   { key: 'plusMinus', label: '+/-', category: 'Impact', format: 'decimal' as const, higherIsBetter: true },
 ] as const;
 

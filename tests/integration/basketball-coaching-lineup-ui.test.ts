@@ -299,7 +299,7 @@ describe('basketball UI metadata', () => {
 
   it('turnovers and fouls are marked higherIsBetter=false', () => {
     const to = basketballUiMetadata.statColumns.find(c => c.key === 'turnovers')!;
-    const pf = basketballUiMetadata.statColumns.find(c => c.key === 'fouls')!;
+    const pf = basketballUiMetadata.statColumns.find(c => c.key === 'personalFouls')!;
     expect(to.higherIsBetter).toBe(false);
     expect(pf.higherIsBetter).toBe(false);
   });

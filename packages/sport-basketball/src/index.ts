@@ -24,3 +24,5 @@ export * from './tradeEvaluator';
 export * from './lineupModel';
 export * from './coachingSystem';
 export * from './uiMetadata';
+export * from './statsEngine';
+export * from './adapter';
