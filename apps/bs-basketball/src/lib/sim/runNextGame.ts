@@ -21,6 +21,7 @@ import {
   type BasketballTeam,
 } from '@bs/sport-basketball';
 import { resolveLineup } from '../lineup';
+import { getInjuries, healthyPlayers, applyInjuryRolls, type InjuryMap } from '../injuries';
 import type {
   BaseGameResult,
   BaseLeagueState,
@@ -60,8 +61,10 @@ export function simNextGameForTeam(
   const awayTeam = league.teams.find(t => t.id === game.awayTeamId) as BasketballTeam | undefined;
   if (!homeTeam || !awayTeam) return null;
 
-  const homeSnap = buildSnapshot(league, homeTeam);
-  const awaySnap = buildSnapshot(league, awayTeam);
+  const gameDayNum = (game.sportData as { dayOfSeason?: number } | undefined)?.dayOfSeason ?? league.currentTick;
+  const injuries = getInjuries(league);
+  const homeSnap = buildSnapshot(league, homeTeam, injuries, gameDayNum);
+  const awaySnap = buildSnapshot(league, awayTeam, injuries, gameDayNum);
 
   const ctx: GameContext = {
     season: league.currentSeason,
@@ -93,12 +96,11 @@ export function simNextGameForTeam(
   const finalScore = playedGame.finalScore ?? { home: 0, away: 0 };
   const updatedTeams = updateTeamRecords(league.teams, playedGame, finalScore);
 
+  const simmed: LeagueState = { ...league, games: updatedGames, teams: updatedTeams };
+  const withInjuries = applyInjuryRolls(simmed, [playedGame], gameDayNum, league.currentSeason);
+
   return {
-    league: {
-      ...league,
-      games: updatedGames,
-      teams: updatedTeams,
-    },
+    league: withInjuries,
     gameId: playedGame.id,
     finalScore,
   };
@@ -111,13 +113,21 @@ export function simNextGameForTeam(
 function buildSnapshot(
   league: LeagueState,
   team: BasketballTeam,
+  injuries: InjuryMap,
+  day: number,
 ): TeamSnapshot<BasketballRatings, BasketballStats> {
   const playerMap = league.players as Record<string, BasketballPlayer>;
-  const players = team.playerIds
+  const roster = team.playerIds
     .map((pid: PlayerId) => playerMap[pid])
     .filter((p): p is BasketballPlayer => !!p);
-
-  const lineup = resolveLineup(team, players);
+  let players = healthyPlayers(roster, injuries, day);
+  let lineup = resolveLineup(team, players);
+  // If injuries leave the team unable to field a full five, the walking
+  // wounded suit up for this game rather than crashing the sim.
+  if (players.length < 5 || lineup.starters.some(id => !id)) {
+    players = roster;
+    lineup = resolveLineup(team, players);
+  }
 
   return {
     team,

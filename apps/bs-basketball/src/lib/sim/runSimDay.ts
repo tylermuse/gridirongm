@@ -19,6 +19,7 @@ import {
   type BasketballTeam,
 } from '@bs/sport-basketball';
 import { resolveLineup } from '../lineup';
+import { getInjuries, healthyPlayers, applyInjuryRolls, type InjuryMap } from '../injuries';
 import type {
   BaseGameResult,
   BaseLeagueState,
@@ -63,12 +64,14 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
   // Build quick lookups.
   const teamById = new Map(league.teams.map(t => [t.id, t as BasketballTeam]));
   const playerMap = league.players as Record<string, BasketballPlayer>;
+  const injuries = getInjuries(league);
 
   // Track mutable team records.
   const recordsById = new Map(league.teams.map(t => [t.id, { ...t.record }]));
 
   // Sim each scheduled game on that day.
   const updatedGames = league.games.slice();
+  const playedGames: GameResult[] = [];
   let gamesSimmed = 0;
 
   for (let i = 0; i < updatedGames.length; i++) {
@@ -80,8 +83,8 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
     const away = teamById.get(g.awayTeamId);
     if (!home || !away) continue;
 
-    const homeSnap = buildSnapshot(home, playerMap);
-    const awaySnap = buildSnapshot(away, playerMap);
+    const homeSnap = buildSnapshot(home, playerMap, injuries, nextDay);
+    const awaySnap = buildSnapshot(away, playerMap, injuries, nextDay);
 
     const ctx: GameContext = {
       season: league.currentSeason,
@@ -106,6 +109,7 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
       status: 'played',
     };
     updatedGames[i] = playedGame;
+    playedGames.push(playedGame);
     gamesSimmed++;
 
     const homeWon = final.home > final.away;
@@ -121,19 +125,20 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
     return { ...t, record: rec };
   });
 
-  return {
-    league: {
-      ...league,
-      games: updatedGames,
-      teams: updatedTeams,
-      // Keep the calendar monotonic. In normal play nextDay > currentTick, so
-      // this is just nextDay; for a legacy save mopping up trailing day-0 games
-      // after reaching day 169, it avoids the badge snapping back to "Day 0".
-      currentTick: Math.max(nextDay, league.currentTick),
-    },
-    day: nextDay,
-    gamesSimmed,
+  const simmed: LeagueState = {
+    ...league,
+    games: updatedGames,
+    teams: updatedTeams,
+    // Keep the calendar monotonic. In normal play nextDay > currentTick, so
+    // this is just nextDay; for a legacy save mopping up trailing day-0 games
+    // after reaching day 169, it avoids the badge snapping back to "Day 0".
+    currentTick: Math.max(nextDay, league.currentTick),
   };
+
+  // Heal anyone due back and roll new injuries from today's games.
+  const withInjuries = applyInjuryRolls(simmed, playedGames, nextDay, league.currentSeason);
+
+  return { league: withInjuries, day: nextDay, gamesSimmed };
 }
 
 // ===========================================================================
@@ -143,11 +148,21 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
 function buildSnapshot(
   team: BasketballTeam,
   playerMap: Record<string, BasketballPlayer>,
+  injuries: InjuryMap,
+  day: number,
 ): TeamSnapshot<BasketballRatings, BasketballStats> {
-  const players = team.playerIds
+  const roster = team.playerIds
     .map((pid: PlayerId) => playerMap[pid])
     .filter((p): p is BasketballPlayer => !!p);
-  const lineup = resolveLineup(team, players);
+  // Injured players are unavailable — they neither play nor get auto-slotted.
+  let players = healthyPlayers(roster, injuries, day);
+  let lineup = resolveLineup(team, players);
+  // If injuries leave the team unable to field a full five, the walking
+  // wounded suit up for this game rather than crashing the sim.
+  if (players.length < 5 || lineup.starters.some(id => !id)) {
+    players = roster;
+    lineup = resolveLineup(team, players);
+  }
   return { team, availablePlayers: players, lineup, coach: null };
 }
 

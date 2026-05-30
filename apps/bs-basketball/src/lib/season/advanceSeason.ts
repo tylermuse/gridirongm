@@ -226,6 +226,7 @@ export function startNextSeason(league: LeagueState): LeagueState {
   const sportData = { ...(league.sportData as LeagueSportData) };
   delete sportData.draft;
   delete sportData.playoffs;
+  delete sportData.injuries; // everyone starts the new season healthy
   sportData.freeAgentLastTeam = freeAgentLastTeam;
 
   // Season history was recorded in enterOffseason (before aging) — don't
