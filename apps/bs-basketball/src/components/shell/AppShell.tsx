@@ -77,6 +77,7 @@ function TopBar({
         { href: '/free-agency', label: 'FA',      active: pathname.startsWith('/free-agency') },
         { href: '/trade',     label: 'Trade',     active: pathname.startsWith('/trade') },
         { href: '/awards',    label: 'Awards',    active: pathname.startsWith('/awards') },
+        { href: '/recap',     label: 'Recap',     active: pathname.startsWith('/recap') },
         { href: '/news',      label: 'News',      active: pathname.startsWith('/news') },
         ...(userTeamId
           ? [{ href: `/team/${userTeamId}`, label: 'My Team', active: pathname === `/team/${userTeamId}`, emphasis: true }]
