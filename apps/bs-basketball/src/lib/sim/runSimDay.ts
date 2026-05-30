@@ -41,16 +41,22 @@ export interface SimDayResult {
 }
 
 function gameDay(g: GameResult): number {
-  return (g.sportData as { dayOfSeason: number } | undefined)?.dayOfSeason ?? 0;
+  // Missing day → Infinity so it's never picked as "next" (effectively skipped).
+  // A real day of 0 is valid: older saves use a 0-indexed schedule (days 0..169),
+  // newer ones are 1-indexed (1..170). Both must be simmable.
+  const d = (g.sportData as { dayOfSeason?: number } | undefined)?.dayOfSeason;
+  return typeof d === 'number' ? d : Infinity;
 }
 
 export function simNextDay(league: LeagueState): SimDayResult | null {
-  // Find the earliest dayOfSeason with at least one scheduled game.
+  // Find the earliest dayOfSeason with at least one scheduled game. Day 0 is a
+  // real opening-night day in legacy 0-indexed saves — do NOT skip it, or those
+  // games never play and the regular season can't complete (blocking playoffs).
   let nextDay = Infinity;
   for (const g of league.games) {
     if (g.status !== 'scheduled') continue;
     const d = gameDay(g);
-    if (d > 0 && d < nextDay) nextDay = d;
+    if (d < nextDay) nextDay = d;
   }
   if (!isFinite(nextDay)) return null;
 
@@ -120,7 +126,10 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
       ...league,
       games: updatedGames,
       teams: updatedTeams,
-      currentTick: nextDay,
+      // Keep the calendar monotonic. In normal play nextDay > currentTick, so
+      // this is just nextDay; for a legacy save mopping up trailing day-0 games
+      // after reaching day 169, it avoids the badge snapping back to "Day 0".
+      currentTick: Math.max(nextDay, league.currentTick),
     },
     day: nextDay,
     gamesSimmed,

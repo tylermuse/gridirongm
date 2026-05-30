@@ -46,6 +46,46 @@ function runPlayoffsToCompletion(league: ReturnType<typeof createNewBasketballLe
   return l;
 }
 
+describe('legacy 0-indexed saves', () => {
+  // Saves created before the schedule generator was 1-indexed have games on
+  // dayOfSeason 0..169. The sim runner must still play the day-0 (opening
+  // night) games, or the regular season can never complete and playoffs are
+  // permanently locked. Reproduce that exact save shape and sim it out.
+  function makeLegacyZeroIndexedLeague(seed: string) {
+    const league = createNewBasketballLeague({ rngSeed: seed });
+    const games = league.games.map(g => {
+      const sd = g.sportData as { dayOfSeason: number };
+      return { ...g, sportData: { ...sd, dayOfSeason: sd.dayOfSeason - 1 } };
+    });
+    return { ...league, games };
+  }
+
+  it('plays the day-0 games and completes the regular season', () => {
+    const league = makeLegacyZeroIndexedLeague('legacy-save');
+    const dayZeroGames = league.games.filter(
+      g => (g.sportData as { dayOfSeason: number }).dayOfSeason === 0,
+    );
+    expect(dayZeroGames.length).toBeGreaterThan(0); // there really are day-0 games
+
+    let l = league;
+    let guard = 0;
+    while (!isRegularSeasonComplete(l) && guard < 400) {
+      const r = simNextDay(l);
+      if (!r) break;
+      l = r.league;
+      guard++;
+    }
+
+    expect(isRegularSeasonComplete(l)).toBe(true);
+    expect(l.games.every(g => g.status === 'played')).toBe(true);
+    // The day-0 games specifically were played.
+    for (const g of dayZeroGames) {
+      const played = l.games.find(x => x.id === g.id)!;
+      expect(played.status).toBe('played');
+    }
+  });
+});
+
 describe('playoff seeding', () => {
   it('seeds 8 teams per conference, all distinct, ranked by record', () => {
     const league = playFullRegularSeason('seed-test');
