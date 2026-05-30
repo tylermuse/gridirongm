@@ -31,6 +31,7 @@ import {
 } from '../persistence/db';
 import { simNextGameForTeam } from '../sim/runNextGame';
 import { simNextDay } from '../sim/runSimDay';
+import { simThroughDay, TRADE_DEADLINE_DAY } from '../sim/simRange';
 import {
   initializePlayoffs,
   simPlayoffDay,
@@ -86,6 +87,10 @@ interface LeagueStore {
   /** Sim every scheduled game on the next day-of-season. Returns the day
    *  + number of games on success. */
   simDay: () => Promise<{ day: number; gamesSimmed: number } | null>;
+
+  /** Bulk-sim to a milestone: a week ahead, the trade deadline, or the end of
+   *  the regular season. Returns days + games simmed. */
+  simRange: (target: 'week' | 'deadline' | 'season') => Promise<{ daysSimmed: number; gamesSimmed: number } | null>;
 
   /** Seed + generate the playoff bracket once the regular season is done.
    *  Returns true if playoffs were started (or already running). */
@@ -482,6 +487,33 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       console.error('[bs-hoops] saveLineup failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return false;
+    }
+  },
+
+  async simRange(target) {
+    const current = get().league;
+    if (!current) {
+      set({ error: 'No league loaded.' });
+      return null;
+    }
+    const targetDay =
+      target === 'week' ? current.currentTick + 7 :
+      target === 'deadline' ? TRADE_DEADLINE_DAY :
+      null;
+    set({ loading: true, error: null });
+    try {
+      const outcome = simThroughDay(current, targetDay);
+      if (outcome.gamesSimmed === 0) {
+        set({ loading: false, error: 'No games left to sim in that range.' });
+        return null;
+      }
+      await saveLeague(outcome.league);
+      set({ league: outcome.league, loading: false });
+      return { daysSimmed: outcome.daysSimmed, gamesSimmed: outcome.gamesSimmed };
+    } catch (err) {
+      console.error('[bs-hoops] simRange failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return null;
     }
   },
 

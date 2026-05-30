@@ -8,6 +8,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { evaluateTrade, isExecutable, type TradeSideInput } from '@/lib/trade';
+import { tradeWindowClosed } from '@/lib/sim/simRange';
 import type { BasketballPlayer, BasketballTeam, TeamTradeOutcome } from '@bs/sport-basketball';
 
 /**
@@ -63,7 +64,8 @@ export default function TradePage() {
   const userTeam = teamById.get(userTeamId)!;
   const targetTeam = targetId ? teamById.get(targetId) : null;
   const playerById = league.players as Record<string, BasketballPlayer>;
-  const canExecute = evaluation ? isExecutable(evaluation, sides) : false;
+  const window = tradeWindowClosed(league);
+  const canExecute = !window.closed && evaluation ? isExecutable(evaluation, sides) : false;
 
   function toggle(set: Set<string>, setter: (s: Set<string>) => void, id: string) {
     const next = new Set(set);
@@ -106,6 +108,12 @@ export default function TradePage() {
             .map(t => <option key={t.id} value={t.id}>{t.city} {t.name}</option>)}
         </select>
       </div>
+
+      {window.closed && (
+        <div className="mb-5 px-4 py-2 rounded-lg text-sm border" style={{ borderColor: '#dc2626', background: 'color-mix(in srgb, #dc2626 8%, transparent)' }}>
+          🔒 {window.reason} You can browse, but new trades can&apos;t be executed.
+        </div>
+      )}
 
       {resultMsg && (
         <div className="mb-5 px-4 py-2 rounded-lg text-sm border" style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 10%, transparent)' }}>
