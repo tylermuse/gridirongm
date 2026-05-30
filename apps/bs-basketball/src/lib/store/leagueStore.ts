@@ -37,7 +37,15 @@ import {
   isRegularSeasonComplete,
   getBracket,
 } from '../playoffs';
-import { advanceToNextSeason, canAdvanceSeason } from '../season';
+import { enterOffseason, startNextSeason, canAdvanceSeason } from '../season';
+import {
+  makeDraftPick,
+  autoPickCurrent,
+  autoPickUntilUser,
+  revealLottery as revealLotteryState,
+  getDraft,
+  currentSlot,
+} from '../draft';
 import type { TeamId } from '@bs/core/adapter';
 
 interface LeagueStore {
@@ -82,10 +90,28 @@ interface LeagueStore {
    *  the games simmed + champion id (set only when the Finals finish). */
   simPlayoffDay: () => Promise<{ gamesSimmed: number; champion: string | null } | null>;
 
-  /** Roll over to next season once a champion is crowned: age/retire players,
-   *  refill rosters from a new draft class, regenerate the schedule, reset
-   *  standings. Returns the new season number, or null if not yet allowed. */
-  advanceSeason: () => Promise<number | null>;
+  /** Enter the offseason once a champion is crowned: age/retire players and
+   *  set up the draft. Returns true on success (or if already in offseason). */
+  enterOffseason: () => Promise<boolean>;
+
+  /** Make the user team's current draft pick. */
+  draftPick: (prospectId: string) => Promise<boolean>;
+
+  /** Auto-make the pick currently on the clock (AI). */
+  simDraftPick: () => Promise<boolean>;
+
+  /** Auto-pick until the user team is on the clock or the draft ends. */
+  simDraftToUser: () => Promise<boolean>;
+
+  /** Auto-pick every remaining selection, including the user's. */
+  simDraftAll: () => Promise<boolean>;
+
+  /** Reveal the lottery order (cosmetic gate). */
+  revealLottery: () => Promise<void>;
+
+  /** Finalize the offseason and tip off the next season. Returns the new
+   *  season number, or null if the draft isn't complete. */
+  startNextSeason: () => Promise<number | null>;
 }
 
 export const useLeagueStore = create<LeagueStore>((set, get) => ({
@@ -238,24 +264,136 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
   },
 
-  async advanceSeason() {
+  async enterOffseason() {
+    const current = get().league;
+    if (!current) {
+      set({ error: 'No league loaded.' });
+      return false;
+    }
+    if (getDraft(current)) return true; // already in the offseason/draft
+    if (!canAdvanceSeason(current)) {
+      set({ error: 'Finish the playoffs before entering the offseason.' });
+      return false;
+    }
+    set({ loading: true, error: null });
+    try {
+      const league = enterOffseason(current);
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] enterOffseason failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
+  async draftPick(prospectId) {
+    const current = get().league;
+    if (!current) return false;
+    const draft = getDraft(current);
+    const slot = draft ? currentSlot(draft) : null;
+    if (!slot) {
+      set({ error: 'The draft is not in progress.' });
+      return false;
+    }
+    if (slot.teamId !== current.userTeamId) {
+      set({ error: 'It is not your pick.' });
+      return false;
+    }
+    set({ loading: true, error: null });
+    try {
+      const league = makeDraftPick(current, prospectId as Parameters<typeof makeDraftPick>[1]);
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] draftPick failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
+  async simDraftPick() {
+    const current = get().league;
+    if (!current || !getDraft(current)) return false;
+    set({ loading: true, error: null });
+    try {
+      const league = autoPickCurrent(current);
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] simDraftPick failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
+  async simDraftToUser() {
+    const current = get().league;
+    if (!current || !getDraft(current)) return false;
+    set({ loading: true, error: null });
+    try {
+      const league = autoPickUntilUser(current, current.userTeamId);
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] simDraftToUser failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
+  async simDraftAll() {
+    const current = get().league;
+    if (!current || !getDraft(current)) return false;
+    set({ loading: true, error: null });
+    try {
+      const league = autoPickUntilUser(current, null); // null → picks everyone
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] simDraftAll failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
+  async revealLottery() {
+    const current = get().league;
+    if (!current || !getDraft(current)) return;
+    try {
+      const league = revealLotteryState(current);
+      await saveLeague(league);
+      set({ league });
+    } catch (err) {
+      console.error('[bs-hoops] revealLottery failed:', err);
+      set({ error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  async startNextSeason() {
     const current = get().league;
     if (!current) {
       set({ error: 'No league loaded.' });
       return null;
     }
-    if (!canAdvanceSeason(current)) {
-      set({ error: 'Finish the playoffs before advancing to next season.' });
+    const draft = getDraft(current);
+    if (!draft || !draft.complete) {
+      set({ error: 'Finish the draft before starting the season.' });
       return null;
     }
     set({ loading: true, error: null });
     try {
-      const league = advanceToNextSeason(current);
+      const league = startNextSeason(current);
       await saveLeague(league);
       set({ league, loading: false });
       return league.currentSeason;
     } catch (err) {
-      console.error('[bs-hoops] advanceSeason failed:', err);
+      console.error('[bs-hoops] startNextSeason failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return null;
     }
