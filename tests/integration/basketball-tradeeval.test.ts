@@ -99,9 +99,11 @@ describe('basketball trade evaluator — basic mechanics', () => {
     const teamARoster = fillRosterToPayroll(50_000_000);
     const teamBRoster = fillRosterToPayroll(50_000_000);
 
-    // Star players with similar profiles + similar salaries
+    // Identical star profiles + salaries → exactly even value, so the result is
+    // deterministic. (Two separately-generated 85-OVR players get random
+    // positions/ratings and thus unequal value, which made this test flaky.)
     const playerA = makePlayerWithSalary(85, 25_000_000, 3);
-    const playerB = makePlayerWithSalary(85, 25_000_000, 3);
+    const playerB: BasketballPlayer = { ...playerA, id: 'even-trade-player-b' as typeof playerA.id };
     teamARoster.push(playerA);
     teamBRoster.push(playerB);
 

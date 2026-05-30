@@ -171,22 +171,23 @@ describe('basketball draft class generator', () => {
   });
 
   it('talent distribution: a few stars, many role players, some fringe', () => {
-    // Generate a few draft classes to reduce variance
+    // Large sample (30 classes = 1800 prospects) so proportions are stable and
+    // the bounds can be wide — keeps the shape meaningful without flaking on the
+    // RNG variance of a small sample.
     const allProspects: BasketballPlayer[] = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 30; i++) {
       allProspects.push(...generateBasketballDraftClass(2026 + i, 60));
     }
-    // 300 prospects total over 5 classes
+    const total = allProspects.length; // 1800
     const ovrs = allProspects.map(p => p.ratings.overall);
     const stars = ovrs.filter(o => o >= 80).length;
     const fringe = ovrs.filter(o => o < 65).length;
 
-    // ~12% of class should be future starters/stars (80+)
-    expect(stars).toBeGreaterThan(15); // > 5% of 300
-    expect(stars).toBeLessThan(120); // < 40%
-
-    // Some fringe players too
-    expect(fringe).toBeGreaterThan(10);
+    // Stars are a small minority; fringe players are common; stars rarer than fringe.
+    expect(stars).toBeGreaterThan(total * 0.02);
+    expect(stars).toBeLessThan(total * 0.35);
+    expect(fringe).toBeGreaterThan(total * 0.08);
+    expect(stars).toBeLessThan(fringe);
   });
 
   it('all 5 positions represented in a draft class', () => {
