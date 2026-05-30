@@ -27,6 +27,8 @@ import {
   generateBasketballDraftClass,
   generateBasketballSchedule,
   generateBasketballPlayer,
+  addBasketballStats,
+  emptyBasketballStats,
   type BasketballPlayer,
   type BasketballPosition,
   type BasketballTeam,
@@ -35,6 +37,8 @@ import type { BaseLeagueState, PlayerId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { getBracket } from '../playoffs';
 import { setupDraft, getDraft, autoPickUntilUser } from '../draft';
+import { computeSeasonAwards } from '../awards';
+import { buildSeasonHistoryEntry } from '../history';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -63,12 +67,21 @@ export function canAdvanceSeason(league: LeagueState): boolean {
 export function enterOffseason(league: LeagueState): LeagueState {
   const nextSeason = league.currentSeason + 1;
 
+  // Snapshot the finished season into history + accumulate career stats — both
+  // done BEFORE aging, so they reflect the season just played.
+  const historyEntry = buildSeasonHistoryEntry(league);
+  const seasonStats = computeSeasonAwards(league)?.seasonStats;
+
   // Develop everyone; drop retirees (the schedule is replaced later, so nothing
   // references them once the season starts).
   const players: Record<string, BasketballPlayer> = {};
   const retired = new Set<PlayerId>();
   for (const [id, raw] of Object.entries(league.players)) {
-    const developed = developBasketballPlayer(raw as BasketballPlayer, nextSeason);
+    const p = raw as BasketballPlayer;
+    const withCareer = seasonStats
+      ? { ...p, careerStats: addBasketballStats(p.careerStats, seasonStats.get(id as PlayerId) ?? emptyBasketballStats()) }
+      : p;
+    const developed = developBasketballPlayer(withCareer, nextSeason);
     if (shouldBasketballPlayerRetire(developed)) {
       retired.add(id as PlayerId);
       continue;
@@ -103,6 +116,7 @@ export function enterOffseason(league: LeagueState): LeagueState {
   return {
     ...interim,
     currentPhase: 'offseason',
+    seasonHistory: { ...league.seasonHistory, [league.currentSeason]: historyEntry },
     sportData: { ...(league.sportData as LeagueSportData), draft },
   };
 }
@@ -117,8 +131,6 @@ export function startNextSeason(league: LeagueState): LeagueState {
     throw new Error('The draft must be complete before starting the season.');
   }
   const season = draft.season;
-  const prevSeason = league.currentSeason;
-  const champion = getBracket(league)?.championTeamId ?? null;
 
   const players = { ...league.players } as Record<string, BasketballPlayer>;
   const ovr = (id: string) => (players[id]?.ratings.overall ?? 0);
@@ -189,6 +201,8 @@ export function startNextSeason(league: LeagueState): LeagueState {
   delete sportData.playoffs;
   sportData.freeAgentLastTeam = freeAgentLastTeam;
 
+  // Season history was recorded in enterOffseason (before aging) — don't
+  // overwrite it here.
   return {
     ...league,
     currentSeason: season,
@@ -199,10 +213,6 @@ export function startNextSeason(league: LeagueState): LeagueState {
     freeAgentIds,
     competitions,
     games,
-    seasonHistory: {
-      ...league.seasonHistory,
-      [prevSeason]: { champion },
-    },
     sportData,
   };
 }
