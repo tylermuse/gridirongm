@@ -47,6 +47,7 @@ import {
   currentSlot,
 } from '../draft';
 import { resolveUserOffer, type Offer, type OfferResult } from '../freeAgency';
+import { executeTrade, type TradeSideInput } from '../trade';
 import type { TeamId } from '@bs/core/adapter';
 
 interface LeagueStore {
@@ -117,6 +118,9 @@ interface LeagueStore {
   /** Make a free-agent offer for the user team. Optionally release a player to
    *  open a roster spot. Returns the resolution (signed / elsewhere / rejected). */
   signFreeAgent: (playerId: string, offer: Offer, releaseId?: string) => Promise<OfferResult | null>;
+
+  /** Execute a (pre-validated) two-team trade. Returns true on success. */
+  executeTrade: (sides: TradeSideInput[]) => Promise<boolean>;
 }
 
 export const useLeagueStore = create<LeagueStore>((set, get) => ({
@@ -433,6 +437,25 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       console.error('[bs-hoops] signFreeAgent failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return null;
+    }
+  },
+
+  async executeTrade(sides) {
+    const current = get().league;
+    if (!current) {
+      set({ error: 'No league loaded.' });
+      return false;
+    }
+    set({ loading: true, error: null });
+    try {
+      const league = executeTrade(current, sides);
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] executeTrade failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
     }
   },
 
