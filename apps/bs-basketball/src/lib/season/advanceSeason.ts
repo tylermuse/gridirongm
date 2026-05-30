@@ -29,6 +29,7 @@ import {
   generateBasketballPlayer,
   addBasketballStats,
   emptyBasketballStats,
+  perGame,
   type BasketballPlayer,
   type BasketballPosition,
   type BasketballTeam,
@@ -55,6 +56,8 @@ interface LeagueSportData {
 /** Positions cycled through when generating emergency roster filler. */
 const ROSTER_FILL_POSITIONS: BasketballPosition[] = ['PG', 'SG', 'SF', 'PF', 'C'];
 
+const round1 = (n: number): number => Math.round(n * 10) / 10;
+
 /** True once a champion exists for the current season — the rollover gate. */
 export function canAdvanceSeason(league: LeagueState): boolean {
   return !!getBracket(league)?.complete;
@@ -78,10 +81,30 @@ export function enterOffseason(league: LeagueState): LeagueState {
   const retired = new Set<PlayerId>();
   for (const [id, raw] of Object.entries(league.players)) {
     const p = raw as BasketballPlayer;
-    const withCareer = seasonStats
-      ? { ...p, careerStats: addBasketballStats(p.careerStats, seasonStats.get(id as PlayerId) ?? emptyBasketballStats()) }
-      : p;
-    const developed = developBasketballPlayer(withCareer, nextSeason);
+    const stats = seasonStats?.get(id as PlayerId) ?? emptyBasketballStats();
+
+    // Snapshot pre-aging ratings + a year-by-year log entry (Phase 2E-1).
+    const pg = perGame(stats);
+    const prevLog = p.sportData.seasonLog ?? [];
+    const seasonLog = stats.gamesPlayed > 0
+      ? [...prevLog, {
+          season: league.currentSeason,
+          age: p.age,
+          overall: p.ratings.overall,
+          gamesPlayed: stats.gamesPlayed,
+          ppg: round1(pg.points ?? 0),
+          rpg: round1(pg.totalRebounds ?? 0),
+          apg: round1(pg.assists ?? 0),
+        }]
+      : prevLog;
+
+    const snapshot: BasketballPlayer = {
+      ...p,
+      careerStats: addBasketballStats(p.careerStats, stats),
+      sportData: { ...p.sportData, prevRatings: p.ratings, seasonLog },
+    };
+
+    const developed = developBasketballPlayer(snapshot, nextSeason);
     if (shouldBasketballPlayerRetire(developed)) {
       retired.add(id as PlayerId);
       continue;
