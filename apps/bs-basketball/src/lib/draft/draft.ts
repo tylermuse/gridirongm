@@ -22,6 +22,7 @@ import {
 import type { BaseLeagueState, PlayerId, TeamId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { getBracket } from '../playoffs';
+import { appendTransaction } from '../transactions';
 import type { DraftPickSlot, DraftState } from './types';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
@@ -148,12 +149,19 @@ export function makeDraftPick(league: LeagueState, prospectId: PlayerId): League
     complete: currentPick >= picks.length,
   };
 
-  return {
+  const updated: LeagueState = {
     ...league,
     players,
     teams,
     sportData: { ...(league.sportData as LeagueSportData), draft: nextDraft },
   };
+  return appendTransaction(updated, {
+    kind: 'draft',
+    season: draft.season,
+    teamIds: [team.id],
+    summary: `${team.city} ${team.name} draft ${prospect.firstName} ${prospect.lastName}`,
+    detail: `Pick ${slot.overall} (R${slot.round}): ${prospect.firstName} ${prospect.lastName}, ${prospect.sportData.position} · ${prospect.ratings.overall} OVR.`,
+  });
 }
 
 /** Make the current pick automatically via the AI. */

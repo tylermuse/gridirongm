@@ -3,5 +3,4 @@ export {
   executeTrade,
   isExecutable,
   type TradeSideInput,
-  type TransactionEntry,
 } from './trade';

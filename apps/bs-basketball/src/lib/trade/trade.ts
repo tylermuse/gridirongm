@@ -15,20 +15,9 @@ import {
 } from '@bs/sport-basketball';
 import type { BaseLeagueState, PlayerId, TeamId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
+import { appendTransaction } from '../transactions';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
-
-interface LeagueSportData {
-  transactions?: TransactionEntry[];
-  [key: string]: unknown;
-}
-
-export interface TransactionEntry {
-  kind: 'trade';
-  season: number;
-  summary: string;
-  detail: string;
-}
 
 export interface TradeSideInput {
   teamId: TeamId;
@@ -115,19 +104,12 @@ export function executeTrade(league: LeagueState, sides: TradeSideInput[]): Leag
       return p ? `${p.firstName} ${p.lastName}` : id;
     }).join(', ') || 'nothing';
 
-  const entry: TransactionEntry = {
+  const moved: LeagueState = { ...league, players, teams };
+  return appendTransaction(moved, {
     kind: 'trade',
     season: league.currentSeason,
+    teamIds: [a.teamId, b.teamId],
     summary: `Trade: ${teamName(a.teamId)} ↔ ${teamName(b.teamId)}`,
     detail: `${teamName(a.teamId)} send ${names(a.playerIds)}; ${teamName(b.teamId)} send ${names(b.playerIds)}.`,
-  };
-  const sd = league.sportData as LeagueSportData;
-  const transactions = [entry, ...(sd.transactions ?? [])].slice(0, 100);
-
-  return {
-    ...league,
-    players,
-    teams,
-    sportData: { ...sd, transactions },
-  };
+  });
 }

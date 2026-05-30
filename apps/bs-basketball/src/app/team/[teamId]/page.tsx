@@ -10,6 +10,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { getTransactions } from '@/lib/transactions';
 import type {
   BasketballPlayer,
   BasketballStats,
@@ -250,6 +251,30 @@ export default function TeamPage() {
           )}
         </Card>
       </div>
+
+      {/* Recent activity */}
+      {(() => {
+        const teamTxns = getTransactions(league).filter(t => t.teamIds.includes(team.id)).slice(0, 5);
+        if (teamTxns.length === 0) return null;
+        return (
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+              <Link href="/transactions" className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>
+                View all →
+              </Link>
+            </CardHeader>
+            <ul className="divide-y" style={{ borderColor: 'var(--border)' }}>
+              {teamTxns.map((t, i) => (
+                <li key={i} className="py-1.5 text-sm">
+                  <span className="font-semibold">{t.summary}</span>
+                  <span className="text-xs text-[var(--text-sec)] ml-2">{t.detail}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        );
+      })()}
 
       {/* Recent games */}
       <Card className="mb-4">
