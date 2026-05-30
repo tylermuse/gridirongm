@@ -24,8 +24,18 @@ import {
 } from '@bs/sport-basketball';
 import type { BaseContract, BaseLeagueState, PlayerId, TeamId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
+import { appendTransaction } from '../transactions';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
+
+function teamLabel(league: LeagueState, teamId: TeamId): string {
+  const t = league.teams.find(x => x.id === teamId);
+  return t ? `${t.city} ${t.name}` : teamId;
+}
+function playerLabel(league: LeagueState, playerId: PlayerId): string {
+  const p = league.players[playerId] as BasketballPlayer | undefined;
+  return p ? `${p.firstName} ${p.lastName}` : playerId;
+}
 
 export const MAX_ROSTER = 15;
 /** Players won't take less than this fraction of their market total. */
@@ -196,13 +206,21 @@ function addToTeam(
   );
   const lastTeam = { ...lastTeamMap(league) };
   delete lastTeam[playerId];
-  return {
+  const signed: LeagueState = {
     ...league,
     players,
     teams,
     freeAgentIds: league.freeAgentIds.filter(id => id !== playerId),
     sportData: { ...(league.sportData as LeagueSportData), freeAgentLastTeam: lastTeam },
   };
+  const yearly = contract.years[0]?.baseSalary ?? 0;
+  return appendTransaction(signed, {
+    kind: 'signing',
+    season: league.currentSeason,
+    teamIds: [teamId],
+    summary: `${teamLabel(league, teamId)} sign ${playerLabel(league, playerId)}`,
+    detail: `${playerLabel(league, playerId)} — ${contract.years.length}yr, $${(yearly / 1_000_000).toFixed(1)}M/yr.`,
+  });
 }
 
 /** Release a rostered player back into free agency (opens a roster spot). */
@@ -224,13 +242,20 @@ export function releasePlayer(league: LeagueState, playerId: PlayerId): LeagueSt
       : t,
   );
   const lastTeam = { ...lastTeamMap(league), [playerId]: teamId };
-  return {
+  const released: LeagueState = {
     ...league,
     players,
     teams,
     freeAgentIds: [...league.freeAgentIds, playerId],
     sportData: { ...(league.sportData as LeagueSportData), freeAgentLastTeam: lastTeam },
   };
+  return appendTransaction(released, {
+    kind: 'release',
+    season: league.currentSeason,
+    teamIds: [teamId],
+    summary: `${teamLabel(league, teamId)} waive ${playerLabel(league, playerId)}`,
+    detail: `${playerLabel(league, playerId)} released to free agency.`,
+  });
 }
 
 /**
