@@ -48,7 +48,7 @@ export default function HistoryPage() {
 
       {history.length === 0 ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-          <EmptyState icon="📚" title="No history yet" message="Finish a season — playoffs, then advance to the next year — and the record book starts filling in." />
+          <EmptyState icon="📚" title="The record book is blank — for now" message="Run a season to its end, crown a champion, and the banners start going up here." />
         </div>
       ) : (
         <div className="grid lg:grid-cols-[1.5fr_1fr] gap-6">

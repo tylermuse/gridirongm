@@ -73,8 +73,8 @@ export default function PlayoffsPage() {
           ) : (
             <EmptyState
               icon="🏀"
-              title="Playoffs haven't started"
-              message="Finish out the 82-game regular season first. Sim days from the standings page until every game is played."
+              title="16 teams. One survives."
+              message="Finish the 82-game grind first — the bracket sets once every regular-season game is in the books."
             />
           )}
         </div>

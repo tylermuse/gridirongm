@@ -59,7 +59,7 @@ export default function TransactionsPage() {
 
       {shown.length === 0 ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-          <EmptyState icon="📋" title="No transactions yet" message="Trades, signings, releases, and draft picks will show up here as they happen." />
+          <EmptyState icon="📋" title="The wire's been quiet" message="Every trade, signing, release, and draft pick around the league lands here. Go make some noise." />
         </div>
       ) : (
         <ul className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>

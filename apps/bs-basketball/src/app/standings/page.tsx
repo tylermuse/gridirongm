@@ -122,8 +122,8 @@ export default function StandingsPage() {
         <div className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <EmptyState
             icon="🏀"
-            title="Day 1 — preseason"
-            message="No games played yet. Sim a day to start writing the standings."
+            title="Day 1. Nobody's 0–0 forever."
+            message="Tip off the season and start writing your record. 82 games to a playoff spot."
             action={{ label: 'Sim Day →', onClick: () => void simDay() }}
           />
         </div>
