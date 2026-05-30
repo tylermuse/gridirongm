@@ -5,6 +5,9 @@
 
 import type { PlayerId, TeamId } from '@bs/core/adapter';
 
+/** Scouting reveals a prospect's true potential; you get this many per draft. */
+export const SCOUTS_PER_DRAFT = 8;
+
 export interface DraftPickSlot {
   /** 1..60 overall pick number. */
   overall: number;
@@ -32,4 +35,8 @@ export interface DraftState {
   complete: boolean;
   /** Whether the lottery order has been revealed (cosmetic gate). */
   lotteryRevealed: boolean;
+  /** Scouting budget left for this draft. */
+  scoutsRemaining?: number;
+  /** Prospect ids whose true potential has been revealed. */
+  scoutedIds?: PlayerId[];
 }

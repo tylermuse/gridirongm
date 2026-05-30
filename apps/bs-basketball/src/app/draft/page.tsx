@@ -10,7 +10,8 @@ import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { getDraft, currentSlot, recommendedProspectId } from '@/lib/draft';
-import type { DraftPickSlot } from '@/lib/draft';
+import type { DraftPickSlot, DraftState } from '@/lib/draft';
+import { perceivedPotential, projectionGrade, isScouted, scoutsLeft, GRADE_LABEL } from '@/lib/scouting';
 import type { BasketballPlayer, BasketballRatings, BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -95,13 +96,17 @@ export default function DraftPage() {
   const userOnClock = !!slot && slot.teamId === league.userTeamId;
   const recommendedId = !draft.complete ? recommendedProspectId(league, draft) : null;
 
+  // POT sorting uses what the GM can actually see: true potential once scouted,
+  // otherwise the noisy perceived estimate.
+  const potFor = (p: BasketballPlayer) =>
+    isScouted(draft, p.id) ? p.development.potential : perceivedPotential(p, draft.season);
   const pool = draft.poolIds
     .map(id => playerById[id])
     .filter(Boolean)
     .sort((a, b) =>
       sortKey === 'overall'
         ? b.ratings.overall - a.ratings.overall
-        : b.development.potential - a.development.potential,
+        : potFor(b) - potFor(a),
     );
 
   const shown =
@@ -139,7 +144,10 @@ export default function DraftPage() {
                 </span>
               )}
             </div>
-            <div className="ml-auto flex flex-wrap gap-2">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold px-2 py-1 rounded-md" style={{ background: 'var(--surface-2)', color: 'var(--text-sec)' }} title="Scouts reveal a prospect's true potential">
+                🔍 {scoutsLeft(draft)} scouts left
+              </span>
               {!userOnClock && (
                 <Button variant="secondary" disabled={store.loading} onClick={() => void store.simDraftPick()}>
                   Sim Pick
@@ -183,9 +191,11 @@ export default function DraftPage() {
           {shown && (
             <ScoutingPanel
               prospect={shown}
+              draft={draft}
               isRecommended={shown.id === recommendedId}
               canDraft={userOnClock && !draft.complete}
               loading={store.loading}
+              onScout={() => void store.scoutProspect(shown.id)}
               onDraft={() => {
                 void (async () => {
                   const ok = await store.draftPick(shown.id);
@@ -208,6 +218,7 @@ export default function DraftPage() {
                 <ProspectRow
                   key={p.id}
                   prospect={p}
+                  draft={draft}
                   selected={shown?.id === p.id}
                   isRecommended={p.id === recommendedId}
                   onSelect={() => setSelectedId(p.id)}
@@ -268,13 +279,16 @@ function BoardRow({
 }
 
 function ProspectRow({
-  prospect, selected, isRecommended, onSelect,
+  prospect, draft, selected, isRecommended, onSelect,
 }: {
   prospect: BasketballPlayer;
+  draft: DraftState;
   selected: boolean;
   isRecommended: boolean;
   onSelect: () => void;
 }) {
+  const scouted = isScouted(draft, prospect.id);
+  const grade = projectionGrade(perceivedPotential(prospect, draft.season));
   return (
     <li>
       <button
@@ -290,22 +304,30 @@ function ProspectRow({
         )}
         <span className="text-xs opacity-60 w-6">{prospect.sportData.position}</span>
         <span className="text-xs tabular-nums w-7 text-right font-bold">{prospect.ratings.overall}</span>
-        <span className="text-xs tabular-nums w-7 text-right opacity-50">{prospect.development.potential}</span>
+        {/* POT column: true potential once scouted, otherwise a projection grade. */}
+        <span className="text-xs tabular-nums w-7 text-right" style={{ opacity: scouted ? 0.5 : 1, fontWeight: scouted ? 400 : 700 }}>
+          {scouted ? prospect.development.potential : grade}
+        </span>
       </button>
     </li>
   );
 }
 
 function ScoutingPanel({
-  prospect, isRecommended, canDraft, loading, onDraft,
+  prospect, draft, isRecommended, canDraft, loading, onScout, onDraft,
 }: {
   prospect: BasketballPlayer;
+  draft: DraftState;
   isRecommended: boolean;
   canDraft: boolean;
   loading: boolean;
+  onScout: () => void;
   onDraft: () => void;
 }) {
   const c = composite(prospect.ratings);
+  const scouted = isScouted(draft, prospect.id);
+  const grade = projectionGrade(perceivedPotential(prospect, draft.season));
+  const scoutsAvailable = scoutsLeft(draft) > 0;
   return (
     <div className="rounded-xl border bg-[var(--surface)] p-4" style={{ borderColor: 'var(--border)' }}>
       <div className="flex items-center gap-3">
@@ -318,7 +340,9 @@ function ScoutingPanel({
         </div>
         <div className="text-right">
           <div className="text-2xl font-black tabular-nums" style={{ color: 'var(--accent)' }}>{prospect.ratings.overall}</div>
-          <div className="text-[10px] uppercase tracking-widest opacity-60">OVR · {prospect.development.potential} POT</div>
+          <div className="text-[10px] uppercase tracking-widest opacity-60">
+            OVR · {scouted ? `${prospect.development.potential} POT` : `proj ${grade}`}
+          </div>
         </div>
       </div>
 
@@ -329,6 +353,25 @@ function ScoutingPanel({
             <div className="text-[9px] uppercase tracking-wide opacity-60">{label}</div>
           </div>
         ))}
+      </div>
+
+      {/* Scouting: reveal true potential, or show the unscouted projection. */}
+      <div className="mt-3 rounded-lg px-3 py-2 text-xs" style={{ background: 'var(--surface-2)' }}>
+        {scouted ? (
+          <span>🔍 Scouted — true potential <strong>{prospect.development.potential}</strong>.</span>
+        ) : (
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[var(--text-sec)]">Projection <strong style={{ color: 'var(--text)' }}>{GRADE_LABEL[grade]}</strong> — ceiling unconfirmed.</span>
+            <button
+              onClick={onScout}
+              disabled={!scoutsAvailable || loading}
+              className="shrink-0 px-2 py-1 rounded-md font-semibold disabled:opacity-40"
+              style={{ background: 'var(--accent)', color: '#fff' }}
+            >
+              🔍 Scout
+            </button>
+          </div>
+        )}
       </div>
 
       {isRecommended && (
