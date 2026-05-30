@@ -167,6 +167,9 @@ export interface BasketballTeamData {
   /** Lottery odds for next draft. Populated after season ends if team missed
    *  playoffs; null otherwise. */
   lotteryOdds?: { combinations: number; expectedPick: number };
+  /** User-set rotation. When present (and still valid for the roster) the sim
+   *  uses it instead of the auto-built default lineup. (Phase 2D-7.) */
+  lineup?: BasketballLineup;
 }
 
 // ============================================================================

@@ -187,6 +187,9 @@ export default function TeamPage() {
               >
                 Sim Day
               </Button>
+              <Link href={`/team/${team.id}/lineup`}>
+                <Button variant="secondary">Edit Lineup</Button>
+              </Link>
             </>
           ) : league.userTeamId ? null : (
             <Button variant="primary" onClick={() => void pickUserTeam(team.id)}>

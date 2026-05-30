@@ -15,10 +15,10 @@
 
 import {
   basketballAdapter,
-  buildDefaultBasketballLineup,
   type BasketballPlayer,
   type BasketballTeam,
 } from '@bs/sport-basketball';
+import { resolveLineup } from '../lineup';
 import type {
   BaseGameResult,
   BaseLeagueState,
@@ -147,7 +147,7 @@ function buildSnapshot(
   const players = team.playerIds
     .map((pid: PlayerId) => playerMap[pid])
     .filter((p): p is BasketballPlayer => !!p);
-  const lineup = buildDefaultBasketballLineup(players);
+  const lineup = resolveLineup(team, players);
   return { team, availablePlayers: players, lineup, coach: null };
 }
 

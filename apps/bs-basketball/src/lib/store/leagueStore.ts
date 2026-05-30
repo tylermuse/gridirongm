@@ -48,7 +48,9 @@ import {
 } from '../draft';
 import { resolveUserOffer, type Offer, type OfferResult } from '../freeAgency';
 import { executeTrade, type TradeSideInput } from '../trade';
+import { setTeamLineup } from '../lineup';
 import type { TeamId } from '@bs/core/adapter';
+import type { BasketballLineup } from '@bs/sport-basketball';
 
 interface LeagueStore {
   /** Currently loaded league, or null if user hasn't started one. */
@@ -121,6 +123,9 @@ interface LeagueStore {
 
   /** Execute a (pre-validated) two-team trade. Returns true on success. */
   executeTrade: (sides: TradeSideInput[]) => Promise<boolean>;
+
+  /** Persist a team's lineup (the sim uses it when valid). Returns true on success. */
+  saveLineup: (teamId: string, lineup: BasketballLineup) => Promise<boolean>;
 }
 
 export const useLeagueStore = create<LeagueStore>((set, get) => ({
@@ -454,6 +459,25 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       return true;
     } catch (err) {
       console.error('[bs-hoops] executeTrade failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
+  async saveLineup(teamId, lineup) {
+    const current = get().league;
+    if (!current) {
+      set({ error: 'No league loaded.' });
+      return false;
+    }
+    set({ loading: true, error: null });
+    try {
+      const league = setTeamLineup(current, teamId as TeamId, lineup);
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] saveLineup failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return false;
     }
