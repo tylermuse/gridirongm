@@ -49,6 +49,7 @@ import {
 import { resolveUserOffer, type Offer, type OfferResult } from '../freeAgency';
 import { executeTrade, type TradeSideInput } from '../trade';
 import { setTeamLineup } from '../lineup';
+import { clearGmFired } from '../approval';
 import type { TeamId } from '@bs/core/adapter';
 import type { BasketballLineup } from '@bs/sport-basketball';
 
@@ -198,7 +199,8 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
   async pickUserTeam(teamId) {
     const current = get().league;
     if (!current) return;
-    const updated = { ...current, userTeamId: teamId };
+    // Taking over a team clears any prior "fired" state.
+    const updated = clearGmFired({ ...current, userTeamId: teamId });
     set({ league: updated });
     try {
       await saveLeague(updated);

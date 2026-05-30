@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { canAdvanceSeason } from '@/lib/season';
 import { getBracket } from '@/lib/playoffs';
 import { getDraft } from '@/lib/draft';
+import { getGmFired } from '@/lib/approval';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -90,6 +91,7 @@ export default function HomePage() {
     const userTeam = league.userTeamId ? league.teams.find(t => t.id === league.userTeamId) : null;
     const bracket = getBracket(league);
     const draft = getDraft(league);
+    const fired = getGmFired(league);
     const seasonOver = canAdvanceSeason(league);
     const champion = seasonOver && bracket?.championTeamId
       ? (league.teams.find(t => t.id === bracket.championTeamId) as BasketballTeam | undefined)
@@ -107,6 +109,21 @@ export default function HomePage() {
             Season {league.currentSeason} · {league.currentPhase} · Day {league.currentTick}
           </span>
         </div>
+
+        {fired && !league.userTeamId && (
+          <div className="mb-8 rounded-xl border-2 p-5 flex flex-wrap items-center gap-4" style={{ borderColor: '#dc2626', background: 'color-mix(in srgb, #dc2626 8%, transparent)' }}>
+            <div className="text-3xl">📉</div>
+            <div className="min-w-0 flex-1">
+              <div className="font-bold">You were fired by the {fired.teamName}</div>
+              <div className="text-sm text-[var(--text-sec)]">
+                Ownership ran out of patience after the {fired.season} season. Take over any club from the League page to keep your GM career going.
+              </div>
+            </div>
+            <Link href="/league">
+              <Button variant="primary" size="lg">Find a New Team →</Button>
+            </Link>
+          </div>
+        )}
 
         {draft ? (
           <div
@@ -183,6 +200,8 @@ export default function HomePage() {
               <StatCard label="Day" value={league.currentTick} />
               <StatCard label="Saves" value={saves.length} />
             </div>
+
+            {userTeam && <FrontOffice team={userTeam as BasketballTeam} />}
 
             <div className="flex flex-wrap gap-3">
               <Link href="/league">
@@ -404,5 +423,44 @@ function StatCard({ label, value, flash }: { label: string; value: string | numb
       </div>
       <div className="text-[10px] uppercase tracking-widest opacity-60 mt-0.5">{label}</div>
     </Card>
+  );
+}
+
+const JOB_SECURITY_META: Record<string, { label: string; color: string }> = {
+  safe: { label: 'Safe', color: '#10b981' },
+  warm: { label: 'On Notice', color: '#f59e0b' },
+  hot: { label: 'Hot Seat', color: '#f97316' },
+  final_warning: { label: 'Final Warning', color: '#dc2626' },
+};
+
+function FrontOffice({ team }: { team: BasketballTeam }) {
+  const { fanApproval, ownerApproval, jobSecurity } = team.approval;
+  const job = JOB_SECURITY_META[jobSecurity] ?? JOB_SECURITY_META.safe;
+  return (
+    <Card className="!p-4 mb-8">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs uppercase tracking-widest opacity-60">Front Office</div>
+        <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ background: `color-mix(in srgb, ${job.color} 18%, transparent)`, color: job.color }}>
+          {job.label}
+        </span>
+      </div>
+      <ApprovalBar label="Owner approval" value={ownerApproval} />
+      <ApprovalBar label="Fan approval" value={fanApproval} />
+    </Card>
+  );
+}
+
+function ApprovalBar({ label, value }: { label: string; value: number }) {
+  const color = value >= 60 ? '#10b981' : value >= 40 ? '#f59e0b' : '#dc2626';
+  return (
+    <div className="mb-2 last:mb-0">
+      <div className="flex justify-between text-xs mb-1">
+        <span className="opacity-70">{label}</span>
+        <span className="tabular-nums font-semibold">{Math.round(value)}</span>
+      </div>
+      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
+        <div className="h-full rounded-full" style={{ width: `${value}%`, background: color }} />
+      </div>
+    </div>
   );
 }
