@@ -46,6 +46,7 @@ import {
   getDraft,
   currentSlot,
 } from '../draft';
+import { resolveUserOffer, type Offer, type OfferResult } from '../freeAgency';
 import type { TeamId } from '@bs/core/adapter';
 
 interface LeagueStore {
@@ -112,6 +113,10 @@ interface LeagueStore {
   /** Finalize the offseason and tip off the next season. Returns the new
    *  season number, or null if the draft isn't complete. */
   startNextSeason: () => Promise<number | null>;
+
+  /** Make a free-agent offer for the user team. Optionally release a player to
+   *  open a roster spot. Returns the resolution (signed / elsewhere / rejected). */
+  signFreeAgent: (playerId: string, offer: Offer, releaseId?: string) => Promise<OfferResult | null>;
 }
 
 export const useLeagueStore = create<LeagueStore>((set, get) => ({
@@ -394,6 +399,38 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       return league.currentSeason;
     } catch (err) {
       console.error('[bs-hoops] startNextSeason failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  },
+
+  async signFreeAgent(playerId, offer, releaseId) {
+    const current = get().league;
+    if (!current) {
+      set({ error: 'No league loaded.' });
+      return null;
+    }
+    if (!current.userTeamId) {
+      set({ error: 'Pick a team first.' });
+      return null;
+    }
+    set({ loading: true, error: null });
+    try {
+      const result = resolveUserOffer(
+        current,
+        playerId as Parameters<typeof resolveUserOffer>[1],
+        offer,
+        releaseId as Parameters<typeof resolveUserOffer>[3],
+      );
+      if (result.outcome !== 'rejected') {
+        await saveLeague(result.league);
+        set({ league: result.league, loading: false });
+      } else {
+        set({ loading: false });
+      }
+      return result;
+    } catch (err) {
+      console.error('[bs-hoops] signFreeAgent failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return null;
     }

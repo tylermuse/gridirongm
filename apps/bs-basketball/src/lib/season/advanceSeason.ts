@@ -122,6 +122,8 @@ export function startNextSeason(league: LeagueState): LeagueState {
 
   const players = { ...league.players } as Record<string, BasketballPlayer>;
   const ovr = (id: string) => (players[id]?.ratings.overall ?? 0);
+  // Track each waived player's last team so the free-agency UI can show it.
+  const freeAgentLastTeam: Record<string, typeof league.teams[number]['id']> = {};
 
   const teams: BasketballTeam[] = league.teams.map(t => {
     let ids = [...t.playerIds];
@@ -130,7 +132,10 @@ export function startNextSeason(league: LeagueState): LeagueState {
     if (ids.length > TARGET_ROSTER) {
       ids.sort((a, b) => ovr(b) - ovr(a));
       const waived = ids.slice(TARGET_ROSTER);
-      for (const id of waived) players[id] = { ...players[id], rosterSlot: null };
+      for (const id of waived) {
+        players[id] = { ...players[id], rosterSlot: null };
+        freeAgentLastTeam[id] = t.id;
+      }
       ids = ids.slice(0, TARGET_ROSTER);
     }
 
@@ -182,6 +187,7 @@ export function startNextSeason(league: LeagueState): LeagueState {
   const sportData = { ...(league.sportData as LeagueSportData) };
   delete sportData.draft;
   delete sportData.playoffs;
+  sportData.freeAgentLastTeam = freeAgentLastTeam;
 
   return {
     ...league,

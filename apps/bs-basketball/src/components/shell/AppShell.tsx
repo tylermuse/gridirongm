@@ -74,6 +74,7 @@ function TopBar({
         { href: '/power-rankings', label: 'Power', active: pathname.startsWith('/power-rankings') },
         { href: '/playoffs',  label: 'Playoffs',  active: pathname.startsWith('/playoffs') },
         { href: '/draft',     label: 'Draft',     active: pathname.startsWith('/draft') },
+        { href: '/free-agency', label: 'FA',      active: pathname.startsWith('/free-agency') },
         { href: '/awards',    label: 'Awards',    active: pathname.startsWith('/awards') },
         { href: '/news',      label: 'News',      active: pathname.startsWith('/news') },
         ...(userTeamId
