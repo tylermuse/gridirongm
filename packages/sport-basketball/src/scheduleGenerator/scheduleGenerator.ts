@@ -313,7 +313,11 @@ function assignDates(
       homeTeamId: g.homeTeamId,
       awayTeamId: g.awayTeamId,
       date: addDaysIso(seasonStart, day),
-      dayOfSeason: day,
+      // 1-indexed so day-of-season runs 1..170. (The calendar `date` above
+      // stays 0-based off seasonStart, so opening night is still seasonStart.)
+      // This keeps the sim-runner's "next scheduled day > 0" scan from
+      // silently skipping opening-night games.
+      dayOfSeason: day + 1,
     });
   }
 
