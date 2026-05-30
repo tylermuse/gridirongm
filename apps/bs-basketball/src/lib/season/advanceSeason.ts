@@ -40,6 +40,7 @@ import { getBracket } from '../playoffs';
 import { setupDraft, getDraft, autoPickUntilUser } from '../draft';
 import { computeSeasonAwards } from '../awards';
 import { buildSeasonHistoryEntry } from '../history';
+import { applySeasonApproval } from '../approval';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -67,7 +68,10 @@ export function canAdvanceSeason(league: LeagueState): boolean {
 // Step 1 — enter the offseason: age, retire, set up the draft
 // ===========================================================================
 
-export function enterOffseason(league: LeagueState): LeagueState {
+export function enterOffseason(input: LeagueState): LeagueState {
+  // End-of-season approval swing for the user team (may fire the GM, which
+  // clears userTeamId). Done first, while record + bracket are intact.
+  const league = applySeasonApproval(input).league;
   const nextSeason = league.currentSeason + 1;
 
   // Snapshot the finished season into history + accumulate career stats — both
