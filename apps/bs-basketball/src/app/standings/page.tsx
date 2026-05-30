@@ -54,6 +54,7 @@ export default function StandingsPage() {
 
   const gamesPlayed = league.games.filter(g => g.status === 'played').length;
   const totalGames = league.games.length;
+  const regularSeasonDone = !league.games.some(g => g.status === 'scheduled');
 
   return (
     <main className="max-w-6xl mx-auto p-8">
@@ -68,14 +69,24 @@ export default function StandingsPage() {
         <p className="text-sm opacity-70">
           Season {league.currentSeason} · Day {league.currentTick} · {gamesPlayed} / {totalGames} games played
         </p>
-        <button
-          onClick={() => void simDay()}
-          disabled={storeLoading || gamesPlayed === totalGames}
-          className="ml-auto px-4 py-2 rounded-lg font-bold transition disabled:opacity-50"
-          style={{ background: 'var(--accent)', color: '#fff' }}
-        >
-          {storeLoading ? 'Simming…' : 'Sim Day →'}
-        </button>
+        {regularSeasonDone ? (
+          <Link
+            href="/playoffs"
+            className="ml-auto px-4 py-2 rounded-lg font-bold transition"
+            style={{ background: 'var(--accent)', color: '#fff' }}
+          >
+            🏆 Playoffs →
+          </Link>
+        ) : (
+          <button
+            onClick={() => void simDay()}
+            disabled={storeLoading}
+            className="ml-auto px-4 py-2 rounded-lg font-bold transition disabled:opacity-50"
+            style={{ background: 'var(--accent)', color: '#fff' }}
+          >
+            {storeLoading ? 'Simming…' : 'Sim Day →'}
+          </button>
+        )}
       </header>
 
       {gamesPlayed === 0 && (
