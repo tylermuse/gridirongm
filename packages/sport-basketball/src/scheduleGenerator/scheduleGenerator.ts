@@ -212,24 +212,54 @@ function pickConfHeavyEdges(
   confTeams: BasketballTeamForSchedule[],
   rng: SimpleRng,
 ): Set<string> {
-  // Build the list of non-div pairs in this conference
+  // Group by division (3 divisions of 5, validated upstream).
+  const byDiv = new Map<string, BasketballTeamForSchedule[]>();
+  for (const t of confTeams) {
+    const d = teamDivision(t);
+    if (!byDiv.has(d)) byDiv.set(d, []);
+    byDiv.get(d)!.push(t);
+  }
+  const divs = [...byDiv.keys()];
+  const allFive = divs.length === 3 && divs.every(d => byDiv.get(d)!.length === 5);
+
+  // Deterministic construction: between each division pair, lay down a
+  // 3-regular bipartite graph via a circulant (team a ↔ b where b ∈ {a, a+1,
+  // a+2} mod 5). Each team ends with 3 + 3 = exactly 6 heavy edges — always a
+  // valid 6-regular subgraph, so no random retries that can fail. The rng only
+  // shuffles team order within each division for season-to-season variety.
+  if (allFive) {
+    const groups = divs.map(d => shuffle(byDiv.get(d)!, rng));
+    const heavy = new Set<string>();
+    for (let i = 0; i < groups.length; i++) {
+      for (let j = i + 1; j < groups.length; j++) {
+        const A = groups[i];
+        const B = groups[j];
+        for (let a = 0; a < A.length; a++) {
+          for (let k = 0; k < 3; k++) {
+            const b = (a + k) % B.length;
+            heavy.add(pairKey(A[a].id, B[b].id));
+          }
+        }
+      }
+    }
+    return heavy;
+  }
+
+  // Fallback for non-standard structures: randomized greedy with retry.
   const allPairs: { a: BasketballTeamForSchedule; b: BasketballTeamForSchedule; key: string }[] = [];
   for (let i = 0; i < confTeams.length; i++) {
     for (let j = i + 1; j < confTeams.length; j++) {
       const a = confTeams[i];
       const b = confTeams[j];
-      if (teamDivision(a) === teamDivision(b)) continue; // same div = already 4 games
+      if (teamDivision(a) === teamDivision(b)) continue;
       allPairs.push({ a, b, key: pairKey(a.id, b.id) });
     }
   }
-  // Expected: 75 pairs (10 non-div opponents per team × 15 teams / 2)
-
-  for (let attempt = 0; attempt < 50; attempt++) {
+  for (let attempt = 0; attempt < 200; attempt++) {
     const shuffled = shuffle(allPairs, rng);
     const heavy = new Set<string>();
     const heavyCount = new Map<TeamId, number>();
     for (const t of confTeams) heavyCount.set(t.id, 0);
-
     for (const p of shuffled) {
       const aCount = heavyCount.get(p.a.id)!;
       const bCount = heavyCount.get(p.b.id)!;
@@ -239,16 +269,13 @@ function pickConfHeavyEdges(
         heavyCount.set(p.b.id, bCount + 1);
       }
     }
-
-    // Validate: every team should have exactly 6 heavy edges
     let valid = true;
     for (const t of confTeams) {
       if (heavyCount.get(t.id) !== 6) { valid = false; break; }
     }
     if (valid) return heavy;
   }
-
-  throw new Error('Could not construct 6-regular heavy-edge subgraph in 50 attempts');
+  throw new Error('Could not construct 6-regular heavy-edge subgraph in 200 attempts');
 }
 
 // ===========================================================================
