@@ -1,16 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/modals/Modal';
 import { dropConfetti } from '@/lib/ui/confetti';
 import { getBracket, isRegularSeasonComplete } from '@/lib/playoffs';
+import { computeSeasonAwards } from '@/lib/awards';
 import type { PlayoffSeries } from '@/lib/playoffs';
-import type { BasketballTeam } from '@bs/sport-basketball';
+import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
 /**
  * /playoffs — the postseason bracket (Phase 2D-1).
@@ -33,14 +35,24 @@ export default function PlayoffsPage() {
     return m;
   }, [league]);
 
-  // Confetti once when a champion is crowned.
-  const celebratedRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (bracket?.complete && bracket.championTeamId && celebratedRef.current !== bracket.championTeamId) {
-      celebratedRef.current = bracket.championTeamId;
+  // Awards modal pops the moment the clinching game is simmed (event-driven,
+  // not an effect — avoids cascading-render setState-in-effect).
+  const [awardsModalOpen, setAwardsModalOpen] = useState(false);
+  async function handleSimPlayoffDay() {
+    const res = await simPlayoffDay();
+    if (res?.champion) {
       dropConfetti();
+      setAwardsModalOpen(true);
     }
-  }, [bracket?.complete, bracket?.championTeamId]);
+  }
+
+  // MVP for the finish modal — computed lazily, only when the season is done.
+  const mvp = useMemo<BasketballPlayer | null>(() => {
+    if (!league || !bracket?.complete) return null;
+    const awards = computeSeasonAwards(league);
+    const id = awards?.winners.mvp?.winnerId;
+    return id ? ((league.players as Record<string, BasketballPlayer>)[id] ?? null) : null;
+  }, [league, bracket?.complete]);
 
   if (loading) return <Loading />;
   if (!league) return <NotFound message={error ?? 'No league loaded.'} />;
@@ -99,7 +111,7 @@ export default function PlayoffsPage() {
         {!bracket.complete && (
           <Button
             variant="primary"
-            onClick={() => void simPlayoffDay()}
+            onClick={() => void handleSimPlayoffDay()}
             disabled={storeLoading}
             className="ml-auto"
           >
@@ -126,6 +138,11 @@ export default function PlayoffsPage() {
               {champion.city} {champion.name}
             </span>
           </div>
+          <div className="mt-4">
+            <Link href="/awards">
+              <Button variant="secondary">🏆 View Season Awards →</Button>
+            </Link>
+          </div>
         </div>
       )}
 
@@ -141,6 +158,36 @@ export default function PlayoffsPage() {
           <BracketColumn title="First Round" series={westR1} teamById={teamById} />
         </div>
       </div>
+
+      <Modal
+        open={awardsModalOpen && !!champion}
+        onClose={() => setAwardsModalOpen(false)}
+        title="🏆 Champions!"
+        maxWidthClass="max-w-md"
+      >
+        {champion && (
+          <div className="text-center p-2">
+            <div className="text-5xl mb-2">🏆</div>
+            <div className="text-xl font-black" style={{ color: 'var(--accent)' }}>
+              {champion.city} {champion.name}
+            </div>
+            <div className="text-sm text-[var(--text-sec)] mt-1">
+              {bracket.season} BS Hoops Champions
+            </div>
+            {mvp && (
+              <div className="mt-4 text-sm">
+                <span className="opacity-60">MVP: </span>
+                <span className="font-bold">{mvp.firstName} {mvp.lastName}</span>
+              </div>
+            )}
+            <div className="mt-5 flex justify-center gap-2">
+              <Link href="/awards" onClick={() => setAwardsModalOpen(false)}>
+                <Button variant="primary">View all awards →</Button>
+              </Link>
+            </div>
+          </div>
+        )}
+      </Modal>
     </Shell>
   );
 }
