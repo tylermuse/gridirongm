@@ -9,6 +9,9 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { NewsFeed } from '@/components/feed/NewsFeed';
+import { canAdvanceSeason } from '@/lib/season';
+import { getBracket } from '@/lib/playoffs';
+import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
  * BS Hoops home — port of bs-football's TeamPicker pattern.
@@ -24,7 +27,7 @@ import { NewsFeed } from '@/components/feed/NewsFeed';
  */
 
 export default function HomePage() {
-  const { league, loading, error, newLeague, continueLatest, loadLeague, pickUserTeam, clearActive } = useLeagueStore();
+  const { league, loading, error, newLeague, continueLatest, loadLeague, pickUserTeam, clearActive, advanceSeason } = useLeagueStore();
   const [saves, setSaves] = useState<LeagueSaveMeta[]>([]);
   const [showLoadList, setShowLoadList] = useState(false);
   const [search, setSearch] = useState('');
@@ -82,6 +85,11 @@ export default function HomePage() {
   // ---------------- League loaded ----------------
   if (league) {
     const userTeam = league.userTeamId ? league.teams.find(t => t.id === league.userTeamId) : null;
+    const bracket = getBracket(league);
+    const seasonOver = canAdvanceSeason(league);
+    const champion = seasonOver && bracket?.championTeamId
+      ? (league.teams.find(t => t.id === bracket.championTeamId) as BasketballTeam | undefined)
+      : undefined;
     return (
       <div className="max-w-6xl mx-auto px-5 py-12">
         <div className="flex flex-wrap items-baseline gap-4 mb-6">
@@ -95,6 +103,37 @@ export default function HomePage() {
             Season {league.currentSeason} · {league.currentPhase} · Day {league.currentTick}
           </span>
         </div>
+
+        {seasonOver && (
+          <div
+            className="mb-8 rounded-xl border-2 p-5 flex flex-wrap items-center gap-4"
+            style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}
+          >
+            <div className="text-3xl">🏁</div>
+            <div className="min-w-0 flex-1">
+              <div className="font-bold">Season {league.currentSeason} is complete</div>
+              <div className="text-sm text-[var(--text-sec)]">
+                {champion
+                  ? `${champion.city} ${champion.name} are your champions. `
+                  : ''}
+                Age your league, run the draft, and tip off {league.currentSeason + 1}.
+              </div>
+            </div>
+            <Button
+              variant="primary"
+              size="lg"
+              disabled={loading}
+              onClick={() => {
+                void (async () => {
+                  const next = await advanceSeason();
+                  if (next) window.scrollTo({ top: 0 });
+                })();
+              }}
+            >
+              {loading ? 'Advancing…' : `Start ${league.currentSeason + 1} Season →`}
+            </Button>
+          </div>
+        )}
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main column */}

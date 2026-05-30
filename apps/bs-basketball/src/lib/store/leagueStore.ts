@@ -37,6 +37,7 @@ import {
   isRegularSeasonComplete,
   getBracket,
 } from '../playoffs';
+import { advanceToNextSeason, canAdvanceSeason } from '../season';
 import type { TeamId } from '@bs/core/adapter';
 
 interface LeagueStore {
@@ -80,6 +81,11 @@ interface LeagueStore {
   /** Sim one playoff "day" — the next game of every active series. Returns
    *  the games simmed + champion id (set only when the Finals finish). */
   simPlayoffDay: () => Promise<{ gamesSimmed: number; champion: string | null } | null>;
+
+  /** Roll over to next season once a champion is crowned: age/retire players,
+   *  refill rosters from a new draft class, regenerate the schedule, reset
+   *  standings. Returns the new season number, or null if not yet allowed. */
+  advanceSeason: () => Promise<number | null>;
 }
 
 export const useLeagueStore = create<LeagueStore>((set, get) => ({
@@ -227,6 +233,29 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       return { gamesSimmed: outcome.gamesSimmed, champion: outcome.champion };
     } catch (err) {
       console.error('[bs-hoops] simPlayoffDay failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  },
+
+  async advanceSeason() {
+    const current = get().league;
+    if (!current) {
+      set({ error: 'No league loaded.' });
+      return null;
+    }
+    if (!canAdvanceSeason(current)) {
+      set({ error: 'Finish the playoffs before advancing to next season.' });
+      return null;
+    }
+    set({ loading: true, error: null });
+    try {
+      const league = advanceToNextSeason(current);
+      await saveLeague(league);
+      set({ league, loading: false });
+      return league.currentSeason;
+    } catch (err) {
+      console.error('[bs-hoops] advanceSeason failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return null;
     }
