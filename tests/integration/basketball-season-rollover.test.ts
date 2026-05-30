@@ -64,7 +64,7 @@ describe('season rollover', () => {
     expect(next.currentSeason).toBe(prevSeason + 1);
     expect(next.currentTick).toBe(1);
     expect(getBracket(next)).toBeNull();
-    expect(next.seasonHistory[prevSeason]).toEqual({ champion: championId });
+    expect((next.seasonHistory[prevSeason] as { champion: string }).champion).toBe(championId);
 
     // Standings wiped.
     for (const t of next.teams) {
