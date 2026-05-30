@@ -9,6 +9,7 @@ import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ratingDeltas, trajectoryDescription } from '@/lib/development';
 import {
   basketballUiMetadata,
   type BasketballPlayer,
@@ -166,6 +167,47 @@ export default function PlayerPage() {
         <Stat label="Hand" value={player.sportData.shootingHand} />
         <Stat label="Two-way" value={player.sportData.isTwoWay ? 'Yes' : 'No'} />
       </section>
+
+      {/* Development */}
+      {(() => {
+        const deltas = ratingDeltas(player);
+        const log = player.sportData.seasonLog ?? [];
+        const desc = trajectoryDescription(traj);
+        if (!desc && deltas.length === 0 && log.length === 0) return null;
+        return (
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle>Development</CardTitle>
+              {log.length > 0 && (
+                <Link href={`/player/${player.id}/history`} className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>
+                  Year-by-year →
+                </Link>
+              )}
+            </CardHeader>
+            {desc && (
+              <p className="text-sm text-[var(--text-sec)] mb-3">
+                <span className="capitalize font-semibold" style={{ color: 'var(--text)' }}>{traj}</span> · {desc}
+              </p>
+            )}
+            {deltas.length > 0 && (
+              <>
+                <div className="text-xs uppercase tracking-widest opacity-60 mb-2">What changed last offseason</div>
+                <div className="flex flex-wrap gap-2">
+                  {deltas.slice(0, 8).map(d => (
+                    <span
+                      key={d.label}
+                      className="text-xs px-2 py-1 rounded-md tabular-nums"
+                      style={{ background: 'var(--surface-2)', color: d.delta > 0 ? '#10b981' : '#dc2626' }}
+                    >
+                      {d.label} {d.delta > 0 ? '▲' : '▼'}{Math.abs(d.delta)}
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
+          </Card>
+        );
+      })()}
 
       {/* Stat block with season/career toggle */}
       <Card className="mb-4">

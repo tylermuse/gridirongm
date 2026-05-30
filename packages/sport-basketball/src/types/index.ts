@@ -154,6 +154,22 @@ export interface BasketballPlayerData {
   /** Preferred shooting hand. Affects late-game free throw selection,
    *  matchups, and a few sim edge cases. */
   shootingHand: 'left' | 'right';
+  /** Ratings snapshot from before the last offseason's aging — drives the
+   *  "what changed" rating deltas on the player page. (Phase 2E-1.) */
+  prevRatings?: BasketballRatings;
+  /** Compact year-by-year log appended at each rollover. (Phase 2E-1.) */
+  seasonLog?: PlayerSeasonLogEntry[];
+}
+
+export interface PlayerSeasonLogEntry {
+  season: number;
+  age: number;
+  /** Overall rating during that season (pre-aging snapshot). */
+  overall: number;
+  gamesPlayed: number;
+  ppg: number;
+  rpg: number;
+  apg: number;
 }
 
 export interface BasketballTeamData {
