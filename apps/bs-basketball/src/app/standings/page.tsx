@@ -8,6 +8,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { TeamRosterModal } from '@/components/modals/TeamRosterModal';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { TRADE_DEADLINE_DAY } from '@/lib/sim/simRange';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -29,7 +30,7 @@ function sd(t: BasketballTeam): TeamSportData {
 
 export default function StandingsPage() {
   const { league, loading, error } = useLeagueOrHydrate();
-  const { simDay, loading: storeLoading } = useLeagueStore();
+  const { simDay, simRange, loading: storeLoading } = useLeagueStore();
   const [rosterTeamId, setRosterTeamId] = useState<string | null>(null);
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
 
@@ -78,14 +79,42 @@ export default function StandingsPage() {
             🏆 Playoffs →
           </Link>
         ) : (
-          <button
-            onClick={() => void simDay()}
-            disabled={storeLoading}
-            className="ml-auto px-4 py-2 rounded-lg font-bold transition disabled:opacity-50"
-            style={{ background: 'var(--accent)', color: '#fff' }}
-          >
-            {storeLoading ? 'Simming…' : 'Sim Day →'}
-          </button>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <button
+              onClick={() => void simDay()}
+              disabled={storeLoading}
+              className="px-4 py-2 rounded-lg font-bold transition disabled:opacity-50"
+              style={{ background: 'var(--accent)', color: '#fff' }}
+            >
+              {storeLoading ? 'Simming…' : 'Sim Day'}
+            </button>
+            <button
+              onClick={() => void simRange('week')}
+              disabled={storeLoading}
+              className="px-3 py-2 rounded-lg font-semibold transition disabled:opacity-50 border"
+              style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+            >
+              Sim Week
+            </button>
+            {league.currentTick <= TRADE_DEADLINE_DAY && (
+              <button
+                onClick={() => void simRange('deadline')}
+                disabled={storeLoading}
+                className="px-3 py-2 rounded-lg font-semibold transition disabled:opacity-50 border"
+                style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+              >
+                Sim to Deadline
+              </button>
+            )}
+            <button
+              onClick={() => void simRange('season')}
+              disabled={storeLoading}
+              className="px-3 py-2 rounded-lg font-semibold transition disabled:opacity-50 border"
+              style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+            >
+              Sim Season
+            </button>
+          </div>
         )}
       </header>
 
