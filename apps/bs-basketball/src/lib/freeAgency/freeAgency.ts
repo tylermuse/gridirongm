@@ -1,0 +1,309 @@
+/**
+ * Free agency (Phase 2D-5).
+ *
+ * Pure functions over league state. The free-agent pool is `league.freeAgentIds`
+ * (draft-overflow waivers + any unsigned). A signing is the user (or a competing
+ * AI team) winning a player with a contract built from years × salary.
+ *
+ * "Multi-team bidding (simplified)": when the user makes an offer we compute the
+ * single best competing AI offer (a team with cap room + positional need willing
+ * to pay market). The player takes the larger total — ties go to the user. The
+ * displayed "projected acceptance" is a heuristic estimate to guide the offer.
+ *
+ * Contracts only exist on drafted rookies + FA signings in v1, so cap room is
+ * effectively the full cap for most teams — we still compute + show it.
+ */
+
+import {
+  basketballMarketSalary,
+  basketballMarketContractYears,
+  basketballSalaryCap,
+  basketballTeamPayroll,
+  LEAGUE_MINIMUM_SALARY,
+  type BasketballPlayer,
+} from '@bs/sport-basketball';
+import type { BaseContract, BaseLeagueState, PlayerId, TeamId } from '@bs/core/adapter';
+import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
+
+type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
+
+export const MAX_ROSTER = 15;
+/** Players won't take less than this fraction of their market total. */
+const LOWBALL_FLOOR = 0.7;
+
+interface LeagueSportData {
+  freeAgentLastTeam?: Record<string, TeamId>;
+  [key: string]: unknown;
+}
+
+export interface FreeAgentInfo {
+  player: BasketballPlayer;
+  /** Asking salary, $/year (deterministic per player+season). */
+  marketSalary: number;
+  desiredYears: number;
+  lastTeamId: TeamId | null;
+  birdRights: 'full' | 'early' | 'none';
+}
+
+export interface Offer {
+  years: number;
+  salaryPerYear: number;
+}
+
+export interface OfferResult {
+  outcome: 'signed' | 'signed_elsewhere' | 'rejected';
+  league: LeagueState;
+  signedTeamId: TeamId | null;
+  competingTeamId: TeamId | null;
+  competingOfferTotal: number;
+  message: string;
+}
+
+// ===========================================================================
+// Pool + cap
+// ===========================================================================
+
+function lastTeamMap(league: LeagueState): Record<string, TeamId> {
+  return (league.sportData as LeagueSportData | undefined)?.freeAgentLastTeam ?? {};
+}
+
+export function freeAgentInfo(league: LeagueState, playerId: PlayerId): FreeAgentInfo | null {
+  const player = league.players[playerId] as BasketballPlayer | undefined;
+  if (!player) return null;
+  return {
+    player,
+    marketSalary: basketballMarketSalary(player, {
+      season: league.currentSeason,
+      noiseSeed: `fa-${player.id}-${league.currentSeason}`,
+    }),
+    desiredYears: basketballMarketContractYears(player),
+    lastTeamId: lastTeamMap(league)[playerId] ?? null,
+    birdRights: (player.sportData as { birdRights: 'full' | 'early' | 'none' }).birdRights,
+  };
+}
+
+/** The free-agent pool, richest-talent first. */
+export function freeAgentPool(league: LeagueState): FreeAgentInfo[] {
+  return league.freeAgentIds
+    .map(id => freeAgentInfo(league, id))
+    .filter((f): f is FreeAgentInfo => !!f)
+    .sort((a, b) => b.player.ratings.overall - a.player.ratings.overall);
+}
+
+export function rosterCount(league: LeagueState, teamId: TeamId): number {
+  return league.teams.find(t => t.id === teamId)?.playerIds.length ?? 0;
+}
+
+export function capRoom(league: LeagueState, teamId: TeamId): number {
+  const team = league.teams.find(t => t.id === teamId);
+  if (!team) return 0;
+  const players = team.playerIds
+    .map(id => league.players[id] as BasketballPlayer | undefined)
+    .filter((p): p is BasketballPlayer => !!p);
+  const payroll = basketballTeamPayroll(players, league.currentSeason);
+  return basketballSalaryCap(league.currentSeason) - payroll;
+}
+
+// ===========================================================================
+// Offer math
+// ===========================================================================
+
+/** Projected chance the user's offer wins the player (heuristic, for the UI). */
+export function acceptanceProbability(
+  info: FreeAgentInfo,
+  offer: Offer,
+  competingTotal: number,
+): number {
+  const marketTotal = info.marketSalary * info.desiredYears;
+  const userTotal = offer.salaryPerYear * offer.years;
+  // 0 at 60% of market, 1 at 120% of market.
+  const vsMarket = clamp((userTotal / marketTotal - 0.6) / 0.6, 0, 1);
+  const vsCompeting = competingTotal > 0 ? clamp(userTotal / competingTotal, 0, 1.2) / 1.2 : 1;
+  return clamp(vsMarket * (0.45 + 0.55 * vsCompeting), 0.02, 0.98);
+}
+
+/** The best competing AI offer: a team with cap room + need willing to pay
+ *  market for the desired term. Null if no one is interested. */
+export function bestCompetingOffer(
+  league: LeagueState,
+  info: FreeAgentInfo,
+): { teamId: TeamId; total: number } | null {
+  const pos = info.player.sportData.position;
+  const total = info.marketSalary * info.desiredYears;
+
+  let best: { teamId: TeamId; score: number } | null = null;
+  for (const team of league.teams) {
+    if (team.id === league.userTeamId) continue;
+    if (team.playerIds.length >= MAX_ROSTER) continue;
+    if (capRoom(league, team.id) < info.marketSalary) continue;
+    // Positional need: how light is the team at this position?
+    const atPos = team.playerIds.filter(
+      id => (league.players[id] as BasketballPlayer | undefined)?.sportData.position === pos,
+    ).length;
+    const need = atPos <= 1 ? 2 : atPos === 2 ? 1 : 0;
+    // Only contenders for needs / good players bid.
+    if (need === 0 && info.player.ratings.overall < 75) continue;
+    const score = need * 100 + info.player.ratings.overall;
+    if (!best || score > best.score) best = { teamId: team.id, score };
+  }
+  return best ? { teamId: best.teamId, total } : null;
+}
+
+// ===========================================================================
+// Signing
+// ===========================================================================
+
+export function buildContract(offer: Offer, signedSeason: number): BaseContract {
+  const years = [];
+  for (let i = 0; i < offer.years; i++) {
+    years.push({
+      season: signedSeason + i,
+      baseSalary: offer.salaryPerYear,
+      proratedBonus: 0,
+      guaranteed: true,
+    });
+  }
+  return {
+    years,
+    signedSeason,
+    guaranteedAtSigning: offer.salaryPerYear * offer.years,
+    modifications: [],
+    sportData: { contractType: 'free_agent' },
+  };
+}
+
+function addToTeam(
+  league: LeagueState,
+  playerId: PlayerId,
+  teamId: TeamId,
+  contract: BaseContract,
+): LeagueState {
+  const team = league.teams.find(t => t.id === teamId)!;
+  const players = { ...league.players };
+  players[playerId] = {
+    ...(players[playerId] as BasketballPlayer),
+    contract,
+    rosterSlot: { teamId, bucket: 'active', index: team.playerIds.length },
+  };
+  const teams = league.teams.map(t =>
+    t.id === teamId
+      ? {
+          ...t,
+          playerIds: [...t.playerIds, playerId],
+          rosterBuckets: { ...t.rosterBuckets, active: [...(t.rosterBuckets.active ?? []), playerId] },
+        }
+      : t,
+  );
+  const lastTeam = { ...lastTeamMap(league) };
+  delete lastTeam[playerId];
+  return {
+    ...league,
+    players,
+    teams,
+    freeAgentIds: league.freeAgentIds.filter(id => id !== playerId),
+    sportData: { ...(league.sportData as LeagueSportData), freeAgentLastTeam: lastTeam },
+  };
+}
+
+/** Release a rostered player back into free agency (opens a roster spot). */
+export function releasePlayer(league: LeagueState, playerId: PlayerId): LeagueState {
+  const player = league.players[playerId] as BasketballPlayer | undefined;
+  const teamId = player?.rosterSlot?.teamId;
+  if (!player || !teamId) return league;
+  const players = { ...league.players };
+  players[playerId] = { ...player, rosterSlot: null };
+  const teams = league.teams.map(t =>
+    t.id === teamId
+      ? {
+          ...t,
+          playerIds: t.playerIds.filter(id => id !== playerId),
+          rosterBuckets: Object.fromEntries(
+            Object.entries(t.rosterBuckets).map(([k, ids]) => [k, ids.filter(id => id !== playerId)]),
+          ),
+        }
+      : t,
+  );
+  const lastTeam = { ...lastTeamMap(league), [playerId]: teamId };
+  return {
+    ...league,
+    players,
+    teams,
+    freeAgentIds: [...league.freeAgentIds, playerId],
+    sportData: { ...(league.sportData as LeagueSportData), freeAgentLastTeam: lastTeam },
+  };
+}
+
+/**
+ * Resolve a user offer for a free agent. The player signs with the larger total
+ * (user vs best competing AI), provided it clears the lowball floor; ties go to
+ * the user. If signing to a full user roster, `releaseId` must name the player
+ * to waive first.
+ */
+export function resolveUserOffer(
+  league: LeagueState,
+  playerId: PlayerId,
+  offer: Offer,
+  releaseId?: PlayerId,
+): OfferResult {
+  const info = freeAgentInfo(league, playerId);
+  const userTeamId = league.userTeamId;
+  if (!info || !userTeamId) {
+    return { outcome: 'rejected', league, signedTeamId: null, competingTeamId: null, competingOfferTotal: 0, message: 'No team to sign for.' };
+  }
+
+  const marketTotal = info.marketSalary * info.desiredYears;
+  const userTotal = offer.salaryPerYear * offer.years;
+  const competing = bestCompetingOffer(league, info);
+  const competingTotal = competing?.total ?? 0;
+  const name = `${info.player.firstName} ${info.player.lastName}`;
+
+  // Player won't accept a lowball from anyone.
+  if (userTotal < marketTotal * LOWBALL_FLOOR && competingTotal < marketTotal * LOWBALL_FLOOR) {
+    return {
+      outcome: 'rejected', league, signedTeamId: null,
+      competingTeamId: competing?.teamId ?? null, competingOfferTotal: competingTotal,
+      message: `${name} turned down your offer — it's well below market.`,
+    };
+  }
+
+  // User wins on a tie or a higher total (and must clear the floor themselves).
+  const userWins = userTotal >= competingTotal && userTotal >= marketTotal * LOWBALL_FLOOR;
+
+  if (userWins) {
+    let l = league;
+    if (rosterCount(l, userTeamId) >= MAX_ROSTER) {
+      if (!releaseId) {
+        return {
+          outcome: 'rejected', league, signedTeamId: null,
+          competingTeamId: competing?.teamId ?? null, competingOfferTotal: competingTotal,
+          message: 'Your roster is full (15/15) — release a player to make room.',
+        };
+      }
+      l = releasePlayer(l, releaseId);
+    }
+    l = addToTeam(l, playerId, userTeamId, buildContract(offer, l.currentSeason));
+    return {
+      outcome: 'signed', league: l, signedTeamId: userTeamId,
+      competingTeamId: competing?.teamId ?? null, competingOfferTotal: competingTotal,
+      message: `${name} signed with your team!`,
+    };
+  }
+
+  // Otherwise the competing team lands them (it had room + need by construction).
+  const l = addToTeam(league, playerId, competing!.teamId, buildContract(
+    { years: info.desiredYears, salaryPerYear: info.marketSalary },
+    league.currentSeason,
+  ));
+  const team = league.teams.find(t => t.id === competing!.teamId);
+  return {
+    outcome: 'signed_elsewhere', league: l, signedTeamId: competing!.teamId,
+    competingTeamId: competing!.teamId, competingOfferTotal: competingTotal,
+    message: `${name} signed elsewhere — ${team?.city ?? 'another team'} offered more.`,
+  };
+}
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n));
+}
+
+export { LEAGUE_MINIMUM_SALARY };
