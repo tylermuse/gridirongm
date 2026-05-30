@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { NewsFeed } from '@/components/feed/NewsFeed';
+import { useRouter } from 'next/navigation';
 import { canAdvanceSeason } from '@/lib/season';
 import { getBracket } from '@/lib/playoffs';
+import { getDraft } from '@/lib/draft';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -27,7 +29,8 @@ import type { BasketballTeam } from '@bs/sport-basketball';
  */
 
 export default function HomePage() {
-  const { league, loading, error, newLeague, continueLatest, loadLeague, pickUserTeam, clearActive, advanceSeason } = useLeagueStore();
+  const { league, loading, error, newLeague, continueLatest, loadLeague, pickUserTeam, clearActive, enterOffseason } = useLeagueStore();
+  const router = useRouter();
   const [saves, setSaves] = useState<LeagueSaveMeta[]>([]);
   const [showLoadList, setShowLoadList] = useState(false);
   const [search, setSearch] = useState('');
@@ -86,6 +89,7 @@ export default function HomePage() {
   if (league) {
     const userTeam = league.userTeamId ? league.teams.find(t => t.id === league.userTeamId) : null;
     const bracket = getBracket(league);
+    const draft = getDraft(league);
     const seasonOver = canAdvanceSeason(league);
     const champion = seasonOver && bracket?.championTeamId
       ? (league.teams.find(t => t.id === bracket.championTeamId) as BasketballTeam | undefined)
@@ -104,7 +108,27 @@ export default function HomePage() {
           </span>
         </div>
 
-        {seasonOver && (
+        {draft ? (
+          <div
+            className="mb-8 rounded-xl border-2 p-5 flex flex-wrap items-center gap-4"
+            style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}
+          >
+            <div className="text-3xl">🎟️</div>
+            <div className="min-w-0 flex-1">
+              <div className="font-bold">{draft.season} Draft is on the clock</div>
+              <div className="text-sm text-[var(--text-sec)]">
+                {draft.complete
+                  ? 'The draft is done — finalize rosters and tip off the season.'
+                  : `Pick ${draft.currentPick + 1} of ${draft.picks.length}. Make your selections, then start the season.`}
+              </div>
+            </div>
+            <Link href="/draft">
+              <Button variant="primary" size="lg">
+                {draft.complete ? 'Finish Offseason →' : 'Continue Draft →'}
+              </Button>
+            </Link>
+          </div>
+        ) : seasonOver && (
           <div
             className="mb-8 rounded-xl border-2 p-5 flex flex-wrap items-center gap-4"
             style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}
@@ -116,7 +140,7 @@ export default function HomePage() {
                 {champion
                   ? `${champion.city} ${champion.name} are your champions. `
                   : ''}
-                Age your league, run the draft, and tip off {league.currentSeason + 1}.
+                Age your league and head into the {league.currentSeason + 1} Draft.
               </div>
             </div>
             <Button
@@ -125,12 +149,12 @@ export default function HomePage() {
               disabled={loading}
               onClick={() => {
                 void (async () => {
-                  const next = await advanceSeason();
-                  if (next) window.scrollTo({ top: 0 });
+                  const ok = await enterOffseason();
+                  if (ok) router.push('/draft');
                 })();
               }}
             >
-              {loading ? 'Advancing…' : `Start ${league.currentSeason + 1} Season →`}
+              {loading ? 'Working…' : 'Enter Offseason →'}
             </Button>
           </div>
         )}

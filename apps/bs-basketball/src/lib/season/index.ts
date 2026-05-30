@@ -1,1 +1,6 @@
-export { advanceToNextSeason, canAdvanceSeason } from './advanceSeason';
+export {
+  advanceToNextSeason,
+  canAdvanceSeason,
+  enterOffseason,
+  startNextSeason,
+} from './advanceSeason';

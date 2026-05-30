@@ -1,25 +1,24 @@
 /**
- * Season rollover (Phase 2D-3): offseason → next season.
+ * Season rollover (Phases 2D-3 + 2D-4): offseason → draft → next season.
  *
- * Runs once the playoffs crown a champion. In one atomic step it ages the whole
- * league, retires the old guard, refills rosters, and lays down a fresh
- * regular season so the game can be played indefinitely.
+ * The rollover is a two-step offseason so the draft (2D-4) can sit in the
+ * middle:
+ *   1. `enterOffseason` — age + retire the league, generate the draft class,
+ *      and set up the draft order. Phase becomes 'offseason'; the class is the
+ *      draft pool, NOT auto-assigned.
+ *   2. (the user runs the /draft board — see lib/draft)
+ *   3. `startNextSeason` — normalize rosters to a legal size (waive the excess
+ *      created by draft picks → free agency; emergency-fill anyone short),
+ *      regenerate the schedule, reset standings, increment the season, clear the
+ *      draft + bracket, and record the champion.
  *
- * Steps (mirrors the roadmap, adapted to the real data model):
- *   1. Develop every player (aging + ratings drift) via the engine.
- *   2. Retire players the engine flags; prune them from rosters and the player
- *      map (we replace the schedule below, so nothing references them anymore).
- *   3. Generate the next draft class (60 age-19 prospects).
- *   4. Backfill rosters to a legal size from that class, worst-record team first
- *      (a stand-in auto-draft until the 2D-4 draft UI lands); leftover prospects
- *      become free agents. Safety-fill with fresh bodies if a class runs dry.
- *   5. Increment the season, regenerate the schedule, reset standings/records,
- *      clear the playoff bracket, and record the champion in season history.
+ * `advanceToNextSeason` runs all three with the draft auto-picked — a "sim the
+ * whole offseason" shortcut used by tests and an optional skip-the-draft path.
  *
- * Note: players carry `contract: null` in v1, so the roadmap's "resolve expiring
- * contracts" has nothing to act on yet — retirements are the only roster churn.
- * The previous season's games are replaced (not archived); league history is
- * Phase 2E-4.
+ * Notes: players carry `contract: null` until drafted (rookie scale) in v1, so
+ * the roadmap's "expire contracts" is a no-op — retirements + draft-overflow
+ * waivers are the roster churn. Previous-season games are replaced, not archived
+ * (league history is 2E-4).
  */
 
 import {
@@ -32,46 +31,51 @@ import {
   type BasketballPosition,
   type BasketballTeam,
 } from '@bs/sport-basketball';
-import type {
-  BaseLeagueState,
-  PlayerId,
-} from '@bs/core/adapter';
+import type { BaseLeagueState, PlayerId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { getBracket } from '../playoffs';
+import { setupDraft, getDraft, autoPickUntilUser } from '../draft';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
 const TARGET_ROSTER = 15;
 const MIN_LEGAL_ROSTER = 13;
+const DRAFT_CLASS_SIZE = 60;
 
 interface LeagueSportData {
+  draft?: unknown;
   playoffs?: unknown;
   [key: string]: unknown;
 }
+
+/** Positions cycled through when generating emergency roster filler. */
+const ROSTER_FILL_POSITIONS: BasketballPosition[] = ['PG', 'SG', 'SF', 'PF', 'C'];
 
 /** True once a champion exists for the current season — the rollover gate. */
 export function canAdvanceSeason(league: LeagueState): boolean {
   return !!getBracket(league)?.complete;
 }
 
-export function advanceToNextSeason(league: LeagueState): LeagueState {
-  const prevSeason = league.currentSeason;
-  const nextSeason = prevSeason + 1;
-  const champion = getBracket(league)?.championTeamId ?? null;
+// ===========================================================================
+// Step 1 — enter the offseason: age, retire, set up the draft
+// ===========================================================================
 
-  // --- 1 & 2: develop everyone, collect retirements ---
+export function enterOffseason(league: LeagueState): LeagueState {
+  const nextSeason = league.currentSeason + 1;
+
+  // Develop everyone; drop retirees (the schedule is replaced later, so nothing
+  // references them once the season starts).
   const players: Record<string, BasketballPlayer> = {};
   const retired = new Set<PlayerId>();
   for (const [id, raw] of Object.entries(league.players)) {
     const developed = developBasketballPlayer(raw as BasketballPlayer, nextSeason);
     if (shouldBasketballPlayerRetire(developed)) {
       retired.add(id as PlayerId);
-      continue; // prune — dropped from the player map entirely
+      continue;
     }
     players[id] = developed;
   }
 
-  // --- Strip retired players from every roster bucket ---
   const teams: BasketballTeam[] = league.teams.map(t => {
     const buckets: Record<string, PlayerId[]> = {};
     for (const [name, ids] of Object.entries(t.rosterBuckets)) {
@@ -84,56 +88,84 @@ export function advanceToNextSeason(league: LeagueState): LeagueState {
     } as BasketballTeam;
   });
 
-  // --- 3: next draft class ---
-  const draftClass = generateBasketballDraftClass(nextSeason, 60);
-  for (const p of draftClass) players[p.id] = p;
-
-  // --- 4: backfill rosters, worst record first, best prospect first ---
-  const available = [...draftClass].sort((a, b) => b.ratings.overall - a.ratings.overall);
-  let nextProspect = 0;
-  const draftOrder = [...teams].sort((a, b) => a.record.wins - b.record.wins);
-
-  function signToTeam(team: BasketballTeam, player: BasketballPlayer): void {
-    const index = team.playerIds.length;
-    players[player.id] = {
-      ...players[player.id],
-      rosterSlot: { teamId: team.id, bucket: 'active', index },
-    };
-    team.playerIds.push(player.id);
-    (team.rosterBuckets.active ??= []).push(player.id);
+  // Generate the draft class — the pool, not auto-assigned.
+  const draftClass = generateBasketballDraftClass(nextSeason, DRAFT_CLASS_SIZE);
+  const poolIds: PlayerId[] = [];
+  for (const p of draftClass) {
+    players[p.id] = p;
+    poolIds.push(p.id);
   }
 
-  for (const team of draftOrder) {
-    while (team.playerIds.length < TARGET_ROSTER && nextProspect < available.length) {
-      signToTeam(team, available[nextProspect++]);
+  // Draft order is computed off the just-finished standings + playoff field.
+  const interim: LeagueState = { ...league, players, teams };
+  const draft = setupDraft(interim, nextSeason, poolIds);
+
+  return {
+    ...interim,
+    currentPhase: 'offseason',
+    sportData: { ...(league.sportData as LeagueSportData), draft },
+  };
+}
+
+// ===========================================================================
+// Step 3 — start the next season: normalize rosters, regenerate, reset
+// ===========================================================================
+
+export function startNextSeason(league: LeagueState): LeagueState {
+  const draft = getDraft(league);
+  if (!draft || !draft.complete) {
+    throw new Error('The draft must be complete before starting the season.');
+  }
+  const season = draft.season;
+  const prevSeason = league.currentSeason;
+  const champion = getBracket(league)?.championTeamId ?? null;
+
+  const players = { ...league.players } as Record<string, BasketballPlayer>;
+  const ovr = (id: string) => (players[id]?.ratings.overall ?? 0);
+
+  const teams: BasketballTeam[] = league.teams.map(t => {
+    let ids = [...t.playerIds];
+
+    // Draft picks can push a roster over the cap — waive the weakest to 15.
+    if (ids.length > TARGET_ROSTER) {
+      ids.sort((a, b) => ovr(b) - ovr(a));
+      const waived = ids.slice(TARGET_ROSTER);
+      for (const id of waived) players[id] = { ...players[id], rosterSlot: null };
+      ids = ids.slice(0, TARGET_ROSTER);
     }
-    // Safety net: if the class ran dry, generate fresh bodies to stay legal.
-    while (team.playerIds.length < MIN_LEGAL_ROSTER) {
-      const pos = ROSTER_FILL_POSITIONS[team.playerIds.length % ROSTER_FILL_POSITIONS.length];
+
+    // Anyone short of the legal minimum gets fresh bodies.
+    while (ids.length < MIN_LEGAL_ROSTER) {
+      const pos = ROSTER_FILL_POSITIONS[ids.length % ROSTER_FILL_POSITIONS.length];
       const filler = generateBasketballPlayer({ position: pos, targetOverall: 62, age: 22 });
       players[filler.id] = filler;
-      signToTeam(team, filler);
+      ids.push(filler.id);
     }
-  }
 
-  // --- Free agents: every unsigned, non-retired player ---
+    // Re-index every kept player's roster slot.
+    ids.forEach((id, idx) => {
+      players[id] = { ...players[id], rosterSlot: { teamId: t.id, bucket: 'active', index: idx } };
+    });
+
+    return {
+      ...t,
+      playerIds: ids,
+      rosterBuckets: { ...t.rosterBuckets, active: ids, two_way: [], inactive: [] },
+      record: { wins: 0, losses: 0, otherResults: 0, pointsFor: 0, pointsAgainst: 0, streak: [] },
+    } as BasketballTeam;
+  });
+
   const freeAgentIds: PlayerId[] = (Object.keys(players) as PlayerId[]).filter(
     id => !players[id].rosterSlot,
   );
 
-  // --- 5: fresh season — reset records, regenerate schedule, clear bracket ---
-  const resetTeams: BasketballTeam[] = teams.map(t => ({
-    ...t,
-    record: { wins: 0, losses: 0, otherResults: 0, pointsFor: 0, pointsAgainst: 0, streak: [] },
-  }));
-
-  const games = generateBasketballSchedule(resetTeams, { season: nextSeason });
+  const games = generateBasketballSchedule(teams, { season });
 
   const competitions = league.competitions.map((c, i) =>
     i === 0
       ? {
           ...c,
-          standings: resetTeams.map((t, idx) => ({
+          standings: teams.map((t, idx) => ({
             teamId: t.id,
             wins: 0,
             losses: 0,
@@ -148,14 +180,15 @@ export function advanceToNextSeason(league: LeagueState): LeagueState {
   );
 
   const sportData = { ...(league.sportData as LeagueSportData) };
+  delete sportData.draft;
   delete sportData.playoffs;
 
   return {
     ...league,
-    currentSeason: nextSeason,
+    currentSeason: season,
     currentPhase: 'preseason',
     currentTick: 1,
-    teams: resetTeams,
+    teams,
     players,
     freeAgentIds,
     competitions,
@@ -168,5 +201,13 @@ export function advanceToNextSeason(league: LeagueState): LeagueState {
   };
 }
 
-/** Positions cycled through when generating emergency roster filler. */
-const ROSTER_FILL_POSITIONS: BasketballPosition[] = ['PG', 'SG', 'SF', 'PF', 'C'];
+// ===========================================================================
+// Convenience — run the whole offseason with the draft auto-picked
+// ===========================================================================
+
+export function advanceToNextSeason(league: LeagueState): LeagueState {
+  const offseason = enterOffseason(league);
+  // userTeamId null → never matches a pick → auto-pick all 60.
+  const drafted = autoPickUntilUser(offseason, null);
+  return startNextSeason(drafted);
+}
