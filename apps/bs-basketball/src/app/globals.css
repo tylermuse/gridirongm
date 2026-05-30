@@ -11,46 +11,56 @@
  * --------------------------------------------------------------------------- */
 
 :root {
-  /* Surfaces (background tiers) */
-  --bg: #ffffff;
-  --background: #ffffff;       /* alias for compatibility */
+  /* Surfaces (background tiers). The page background is a soft warm-neutral so
+   * white surfaces/cards lift off it — flat #fff-on-#fff reads as a bare form. */
+  --bg: #f3f4f7;
+  --background: #f3f4f7;       /* alias for compatibility */
   --surface: #ffffff;
-  --surface-2: #f1f5f9;
-  --muted: #f1f5f9;            /* alias */
-  --border: #e2e8f0;
+  --surface-2: #e9ecf2;
+  --muted: #eef0f5;            /* card headers / table headers */
+  --border: #d6dae3;
 
   /* Text */
-  --foreground: #0f172a;
-  --text: #0f172a;
-  --text-sec: #475569;
+  --foreground: #16181d;
+  --text: #16181d;
+  --text-sec: #5a6272;
 
   /* Brand */
   --accent: #E66B00;           /* basketball orange */
+  --accent-strong: #c75a00;    /* darker orange for hover/press */
   --accent-alt: #1D428A;       /* navy */
-  --accent-glow: rgba(230, 107, 0, 0.25);
+  --accent-glow: rgba(230, 107, 0, 0.14);
 }
 
 :root[data-theme='dark'] {
   --bg: #0b1220;
   --background: #0b1220;
-  --surface: #0f1828;
-  --surface-2: #111827;
-  --muted: #111827;
-  --border: #1f2937;
+  --surface: #131c2e;
+  --surface-2: #1b2538;
+  --muted: #18202f;
+  --border: #2a3547;
 
   --foreground: #f1f5f9;
   --text: #f1f5f9;
-  --text-sec: #94a3b8;
+  --text-sec: #97a3b6;
 
-  --accent: #f59e0b;
+  --accent: #f7861f;
+  --accent-strong: #e2710a;
   --accent-alt: #2563eb;
-  --accent-glow: rgba(245, 158, 11, 0.20);
+  --accent-glow: rgba(247, 134, 31, 0.16);
 }
 
-body {
+html, body {
   background: var(--background);
   color: var(--foreground);
+  font-family: var(--font-body), ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
+
+/* Custom scrollbar — small touch that reads as "crafted". */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-sec); }
 
 @theme {
   --color-accent: var(--accent);

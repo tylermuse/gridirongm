@@ -26,7 +26,7 @@ interface ButtonProps {
 }
 
 const variants = {
-  primary:   'bg-[var(--accent)] hover:brightness-110 text-white shadow-lg shadow-[var(--accent-glow)]',
+  primary:   'bg-[var(--accent)] hover:bg-[var(--accent-strong)] text-white shadow-md shadow-[var(--accent-glow)] hover:shadow-lg',
   secondary: 'bg-[var(--surface-2)] hover:bg-[var(--border)] text-[var(--text)]',
   ghost:     'hover:bg-[var(--surface-2)] text-[var(--text-sec)]',
   danger:    'bg-red-600 hover:bg-red-500 text-white',
