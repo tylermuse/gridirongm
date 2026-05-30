@@ -73,6 +73,7 @@ function TopBar({
         { href: '/standings', label: 'Standings', active: pathname.startsWith('/standings') },
         { href: '/power-rankings', label: 'Power', active: pathname.startsWith('/power-rankings') },
         { href: '/playoffs',  label: 'Playoffs',  active: pathname.startsWith('/playoffs') },
+        { href: '/awards',    label: 'Awards',    active: pathname.startsWith('/awards') },
         { href: '/news',      label: 'News',      active: pathname.startsWith('/news') },
         ...(userTeamId
           ? [{ href: `/team/${userTeamId}`, label: 'My Team', active: pathname === `/team/${userTeamId}`, emphasis: true }]
