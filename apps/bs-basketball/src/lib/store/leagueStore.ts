@@ -51,6 +51,7 @@ import { resolveUserOffer, type Offer, type OfferResult } from '../freeAgency';
 import { executeTrade, type TradeSideInput } from '../trade';
 import { setTeamLineup } from '../lineup';
 import { clearGmFired } from '../approval';
+import { scoutProspect as scoutProspectState } from '../scouting';
 import type { TeamId } from '@bs/core/adapter';
 import type { BasketballLineup } from '@bs/sport-basketball';
 
@@ -118,6 +119,9 @@ interface LeagueStore {
 
   /** Reveal the lottery order (cosmetic gate). */
   revealLottery: () => Promise<void>;
+
+  /** Spend a scout to reveal a draft prospect's true potential. */
+  scoutProspect: (prospectId: string) => Promise<void>;
 
   /** Finalize the offseason and tip off the next season. Returns the new
    *  season number, or null if the draft isn't complete. */
@@ -380,6 +384,19 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       console.error('[bs-hoops] simDraftAll failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return false;
+    }
+  },
+
+  async scoutProspect(prospectId) {
+    const current = get().league;
+    if (!current || !getDraft(current)) return;
+    try {
+      const league = scoutProspectState(current, prospectId);
+      await saveLeague(league);
+      set({ league });
+    } catch (err) {
+      console.error('[bs-hoops] scoutProspect failed:', err);
+      set({ error: err instanceof Error ? err.message : String(err) });
     }
   },
 

@@ -23,7 +23,7 @@ import type { BaseLeagueState, PlayerId, TeamId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { getBracket } from '../playoffs';
 import { appendTransaction } from '../transactions';
-import type { DraftPickSlot, DraftState } from './types';
+import { SCOUTS_PER_DRAFT, type DraftPickSlot, type DraftState } from './types';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -78,6 +78,8 @@ export function setupDraft(league: LeagueState, season: number, poolIds: PlayerI
     currentPick: 0,
     complete: false,
     lotteryRevealed: false,
+    scoutsRemaining: SCOUTS_PER_DRAFT,
+    scoutedIds: [],
   };
 }
 
