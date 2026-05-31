@@ -7,6 +7,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PlayerModal } from '@/components/modals/PlayerModal';
+import { AwardsCeremony } from '@/components/awards/Ceremony';
 import { computeSeasonAwards, computeHonors, type SeasonAwards, type SeasonHonors, type AllLeagueTeam } from '@/lib/awards';
 import { getBracket } from '@/lib/playoffs';
 import { perGame, emptyBasketballStats, type BasketballPlayer, type BasketballTeam } from '@bs/sport-basketball';
@@ -48,6 +49,7 @@ const NOT_AWARDED_REASON: Partial<Record<AwardDef['key'], string>> = {
 export default function AwardsPage() {
   const { league, loading, error } = useLeagueOrHydrate();
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
+  const [ceremonyOpen, setCeremonyOpen] = useState(false);
 
   const awards = useMemo<SeasonAwards | null>(
     () => (league ? computeSeasonAwards(league) : null),
@@ -79,6 +81,14 @@ export default function AwardsPage() {
           Awards
         </h1>
         <p className="text-sm opacity-70">Season {league.currentSeason}</p>
+        {bracket?.complete && awards && (
+          <button
+            onClick={() => setCeremonyOpen(true)}
+            className="ml-auto rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white active:scale-95 hover:brightness-110"
+          >
+            ▶ Play ceremony
+          </button>
+        )}
       </header>
 
       {!bracket?.complete || !awards ? (
@@ -144,6 +154,15 @@ export default function AwardsPage() {
             </>
           )}
         </>
+      )}
+
+      {ceremonyOpen && awards && (
+        <AwardsCeremony
+          awards={awards}
+          teamById={teamById}
+          playerById={playerById}
+          onClose={() => setCeremonyOpen(false)}
+        />
       )}
 
       <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
