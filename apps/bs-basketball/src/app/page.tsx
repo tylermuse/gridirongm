@@ -14,6 +14,7 @@ import { OwnerObjectives } from '@/components/dashboard/OwnerObjectives';
 import { NextMatchupCard } from '@/components/dashboard/NextMatchup';
 import { DashboardRow } from '@/components/dashboard/DashboardRow';
 import { LiveViewer } from '@/components/live/LiveViewer';
+import { GamePlanModal } from '@/components/modals/GamePlanModal';
 import { nextAction } from '@/lib/ui/nextAction';
 import { useRouter } from 'next/navigation';
 import { canAdvanceSeason } from '@/lib/season';
@@ -39,6 +40,7 @@ export default function HomePage() {
   const { league, loading, error, newLeague, continueLatest, loadLeague, pickUserTeam, clearActive, enterOffseason, watchNextUserGame } = useLeagueStore();
   const router = useRouter();
   const [watching, setWatching] = useState<{ userGameId: string; dayGameIds: string[] } | null>(null);
+  const [gamePlanOpen, setGamePlanOpen] = useState(false);
 
   async function handleWatchLive() {
     const res = await watchNextUserGame();
@@ -178,7 +180,7 @@ export default function HomePage() {
 
         {userTeam && (
           <>
-            <NextMatchupCard league={league} team={userTeam as BasketballTeam} onWatchLive={() => void handleWatchLive()} loading={loading} />
+            <NextMatchupCard league={league} team={userTeam as BasketballTeam} onWatchLive={() => void handleWatchLive()} onGamePlan={() => setGamePlanOpen(true)} loading={loading} />
             <DashboardRow league={league} team={userTeam as BasketballTeam} />
           </>
         )}
@@ -221,6 +223,9 @@ export default function HomePage() {
 
         {watching && (
           <LiveViewer userGameId={watching.userGameId} dayGameIds={watching.dayGameIds} onClose={() => setWatching(null)} />
+        )}
+        {userTeam && (
+          <GamePlanModal teamId={userTeam.id} open={gamePlanOpen} onClose={() => setGamePlanOpen(false)} />
         )}
       </div>
     );

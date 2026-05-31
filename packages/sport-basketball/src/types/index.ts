@@ -128,6 +128,33 @@ export interface BasketballLineup {
   pace: 'fast' | 'medium' | 'slow';
 }
 
+/** Pre-game strategy (stored on team.sportData.gamePlan). Every lever is neutral
+ *  at its 'balanced'/'man' default, so an unset or default plan leaves the sim
+ *  exactly as it was. The sim reads these per side and biases the box score. */
+export interface BasketballGamePlan {
+  /** Tempo → possessions per game. */
+  pace: 'slow' | 'balanced' | 'fast';
+  /** Shot location lean → 3PA vs interior mix. */
+  offensiveFocus: 'inside' | 'balanced' | 'perimeter';
+  /** Shot difficulty/variance → 3PA + make% trade-off. */
+  shotRisk: 'conservative' | 'balanced' | 'hero';
+  /** Defensive coverage. */
+  defensiveScheme: 'man' | 'zone' | 'switch';
+  /** Ball pressure → forced turnovers vs easy buckets allowed. */
+  pressure: 'pack' | 'balanced' | 'press';
+  /** Minutes lean (reserved for rotation weighting). */
+  rotation: 'starters' | 'balanced' | 'bench';
+}
+
+export const DEFAULT_GAME_PLAN: BasketballGamePlan = {
+  pace: 'balanced',
+  offensiveFocus: 'balanced',
+  shotRisk: 'balanced',
+  defensiveScheme: 'man',
+  pressure: 'balanced',
+  rotation: 'balanced',
+};
+
 // ============================================================================
 // Sport-specific extension data (lives in BasePlayer.sportData)
 // ============================================================================

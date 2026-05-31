@@ -14,11 +14,12 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
  * result when the slate is done), with a Box Score / Watch link.
  */
 export function NextMatchupCard({
-  league, team, onWatchLive, loading,
+  league, team, onWatchLive, onGamePlan, loading,
 }: {
   league: LeagueState;
   team: BasketballTeam;
   onWatchLive?: () => void;
+  onGamePlan?: () => void;
   loading?: boolean;
 }) {
   const m = nextMatchup(league, team.id);
@@ -36,9 +37,16 @@ export function NextMatchupCard({
     <div className="rounded-xl border bg-[var(--surface)] p-4 mb-6" style={{ borderColor: 'var(--border)' }}>
       <div className="flex items-center justify-between">
         <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-widest opacity-60">
-            {m.played ? 'Last game' : 'Next game'}
-            {m.dayOfSeason != null ? ` · Day ${m.dayOfSeason}` : ''} · {m.isHome ? 'Home' : 'Away'}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-widest opacity-60">
+              {m.played ? 'Last game' : 'Next game'}
+              {m.dayOfSeason != null ? ` · Day ${m.dayOfSeason}` : ''} · {m.isHome ? 'Home' : 'Away'}
+            </span>
+            {onGamePlan && (
+              <button onClick={onGamePlan} className="text-[10px] font-bold rounded px-1.5 py-0.5 border hover:bg-[var(--surface-2)]" style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}>
+                📋 Game Plan
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-1.5">
             <TeamLogo abbreviation={opp.abbreviation} primaryColor={opp.primaryColor} secondaryColor={opp.secondaryColor} size="md" />

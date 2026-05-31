@@ -66,6 +66,9 @@ export function selectShotType(
   shooterPosition: BasketballPosition,
   shooterRatings: BasketballRatings,
   rng: Rng,
+  /** Game-plan three-point lean (1 = neutral). >1 perimeter, <1 inside. The
+   *  weighted pick renormalizes, so biasing the 3 weight shifts the whole mix. */
+  threeMult = 1,
 ): ShotType {
   const base = BASE_SHOT_MIX[shooterPosition];
   // Modulate weights by the shooter's rating in each shot category.
@@ -73,7 +76,7 @@ export function selectShotType(
   // the position baseline; a poor shooter (50) shoots fewer.
   const r = shooterRatings;
   const weights: Record<ShotType, number> = {
-    three: base.three * ratingMultiplier(r.threePoint),
+    three: base.three * ratingMultiplier(r.threePoint) * threeMult,
     midrange: base.midrange * ratingMultiplier(r.midRange),
     at_rim: base.at_rim * ratingMultiplier(r.finishing),
     post: base.post * ratingMultiplier(r.postScoring),
