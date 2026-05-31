@@ -16,6 +16,7 @@ import {
 } from '@bs/sport-basketball';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
+import { getHeadCoach, coachSalary } from '@/lib/coaching/coaches';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -62,11 +63,13 @@ export function teamFinances(league: LeagueState, team: BasketballTeam): TeamFin
   const merch = Math.round((20_000_000 + 30_000_000 * winPct) * mkt * (0.8 + Math.max(0, starOvr - 75) / 50));
   const revTotal = NATIONAL_TV + localTv + gate + merch;
 
+  const hc = getHeadCoach(league, team.id);
+  const coaching = hc ? coachSalary(hc) : 0;
   const expenses = {
     payroll: cap.payroll,
-    coaching: 0, // coaching staff (and its payroll) lands in a later P0 item
+    coaching,
     luxuryTax: cap.taxBill,
-    total: cap.payroll + cap.taxBill,
+    total: cap.payroll + cap.taxBill + coaching,
   };
 
   const byPosition: Record<BasketballPosition, number> = { PG: 0, SG: 0, SF: 0, PF: 0, C: 0 };

@@ -56,7 +56,7 @@ import { setTeamLineup } from '../lineup';
 import { clearGmFired } from '../approval';
 import { scoutProspect as scoutProspectState } from '../scouting';
 import { markChangelogSeen as markChangelogSeenState } from '../ui/changelog';
-import type { TeamId } from '@bs/core/adapter';
+import type { TeamId, BaseCoach } from '@bs/core/adapter';
 import type { BasketballLineup, BasketballPlayer, BasketballTeam, BasketballGamePlan } from '@bs/sport-basketball';
 
 interface LeagueStore {
@@ -162,6 +162,9 @@ interface LeagueStore {
 
   /** Persist a team's pre-game plan (the sim biases the box score by it). */
   saveGamePlan: (teamId: string, plan: BasketballGamePlan) => Promise<boolean>;
+
+  /** Hire a head coach for a team (the outgoing coach leaves). */
+  hireCoach: (teamId: string, coach: BaseCoach) => Promise<boolean>;
 
   /** Waive a rostered player to free agency (opens a roster spot). */
   releasePlayer: (playerId: string) => Promise<boolean>;
@@ -617,6 +620,28 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       return true;
     } catch (err) {
       console.error('[bs-hoops] saveLineup failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
+  async hireCoach(teamId, coach) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return false; }
+    set({ loading: true, error: null });
+    try {
+      const team = current.teams.find(t => t.id === teamId);
+      const coaches = { ...current.coaches } as Record<string, BaseCoach>;
+      if (team) for (const id of team.coachIds) delete coaches[id]; // outgoing coach leaves
+      const hired: BaseCoach = { ...coach, teamId: teamId as TeamId, role: 'HC' };
+      coaches[hired.id] = hired;
+      const teams = current.teams.map(t => (t.id === teamId ? ({ ...t, coachIds: [hired.id] } as typeof t) : t));
+      const league = { ...current, coaches, teams };
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] hireCoach failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return false;
     }
