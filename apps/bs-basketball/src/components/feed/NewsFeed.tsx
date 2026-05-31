@@ -9,7 +9,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { buildFeed } from '@/lib/feed/buildFeed';
+import { buildFeed, type FeedItem } from '@/lib/feed/buildFeed';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
@@ -18,16 +18,19 @@ interface NewsFeedProps {
   league: BasketballLeagueState | null;
   /** Cap the number of items shown (e.g. sidebar). Omit for the full feed. */
   max?: number;
+  /** Optional predicate to scope the feed (e.g. just the user team's moments). */
+  filter?: (item: FeedItem) => boolean;
 }
 
-export function NewsFeed({ league, max }: NewsFeedProps) {
+export function NewsFeed({ league, max, filter }: NewsFeedProps) {
   const router = useRouter();
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
 
   const items = useMemo(() => {
-    const all = buildFeed(league);
+    let all = buildFeed(league);
+    if (filter) all = all.filter(filter);
     return max ? all.slice(0, max) : all;
-  }, [league, max]);
+  }, [league, max, filter]);
 
   if (items.length === 0) {
     return (
