@@ -67,16 +67,30 @@ export function buildDefaultBasketballLineup(
     byPos[pos].sort((a, b) => b.ratings.overall - a.ratings.overall);
   }
 
-  // Pick starters (top of each pile)
+  // Pick starters (top of each pile). If a position is empty, fall back to the
+  // best unused player from ANY position rather than emitting an empty-string
+  // sentinel — the sim engine assumes all five starters are real PlayerIds, and
+  // a '' there dereferences to undefined and crashes the possession loop. A
+  // cross-position start (e.g. a backup PF at C) is a `validate` warning, not a
+  // crash. Only when the roster has fewer than five players total does a
+  // sentinel remain — a genuinely unfillable lineup the caller must handle.
   const starterIds: PlayerId[] = [];
   const used = new Set<PlayerId>();
   for (const pos of STARTER_POSITIONS) {
-    const top = byPos[pos][0];
+    const top = byPos[pos].find(p => !used.has(p.id));
     if (top) {
       starterIds.push(top.id);
       used.add(top.id);
+      continue;
+    }
+    const fallback = roster
+      .filter(p => !used.has(p.id))
+      .sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+    if (fallback) {
+      starterIds.push(fallback.id);
+      used.add(fallback.id);
     } else {
-      // No player at this position — use sentinel
+      // Truly empty — fewer than 5 players on the roster.
       starterIds.push('' as PlayerId);
     }
   }

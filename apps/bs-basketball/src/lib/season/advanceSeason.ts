@@ -48,6 +48,11 @@ const TARGET_ROSTER = 15;
 const MIN_LEGAL_ROSTER = 13;
 const DRAFT_CLASS_SIZE = 60;
 
+/** Minimum players to keep at each position when waiving roster overflow. Stops
+ *  the OVR-only cut from stripping a team of every center (low-OVR role players
+ *  were always the first to go), which left teams unable to field a lineup. */
+const POS_FLOOR: Record<BasketballPosition, number> = { PG: 2, SG: 2, SF: 2, PF: 2, C: 2 };
+
 interface LeagueSportData {
   draft?: unknown;
   playoffs?: unknown;
@@ -164,18 +169,32 @@ export function startNextSeason(league: LeagueState): LeagueState {
   // Track each waived player's last team so the free-agency UI can show it.
   const freeAgentLastTeam: Record<string, typeof league.teams[number]['id']> = {};
 
+  const posOf = (id: string): BasketballPosition | null => players[id]?.sportData.position ?? null;
+
   const teams: BasketballTeam[] = league.teams.map(t => {
     let ids = [...t.playerIds];
 
-    // Draft picks can push a roster over the cap — waive the weakest to 15.
+    // Draft picks can push a roster over the cap — waive the weakest to 15, but
+    // never cut a position below its floor (worst → best, skipping anyone whose
+    // removal would drop their position under POS_FLOOR).
     if (ids.length > TARGET_ROSTER) {
-      ids.sort((a, b) => ovr(b) - ovr(a));
-      const waived = ids.slice(TARGET_ROSTER);
+      const posCount: Record<BasketballPosition, number> = { PG: 0, SG: 0, SF: 0, PF: 0, C: 0 };
+      for (const id of ids) { const p = posOf(id); if (p) posCount[p]++; }
+
+      const worstFirst = [...ids].sort((a, b) => ovr(a) - ovr(b));
+      const waived = new Set<string>();
+      for (const id of worstFirst) {
+        if (ids.length - waived.size <= TARGET_ROSTER) break;
+        const pos = posOf(id);
+        if (pos && posCount[pos] <= POS_FLOOR[pos]) continue; // protect the floor
+        waived.add(id);
+        if (pos) posCount[pos]--;
+      }
       for (const id of waived) {
         players[id] = { ...players[id], rosterSlot: null };
         freeAgentLastTeam[id] = t.id;
       }
-      ids = ids.slice(0, TARGET_ROSTER);
+      ids = ids.filter(id => !waived.has(id));
     }
 
     // Anyone short of the legal minimum gets fresh bodies.
@@ -184,6 +203,20 @@ export function startNextSeason(league: LeagueState): LeagueState {
       const filler = generateBasketballPlayer({ position: pos, targetOverall: 62, age: 22 });
       players[filler.id] = filler;
       ids.push(filler.id);
+    }
+
+    // Guarantee at least one player at every position (belt-and-suspenders for
+    // rosters that arrived here already missing one). Only fills while there's
+    // room under the cap — a full roster missing a position is repaired on load.
+    const posAfter: Record<BasketballPosition, number> = { PG: 0, SG: 0, SF: 0, PF: 0, C: 0 };
+    for (const id of ids) { const p = posOf(id); if (p) posAfter[p]++; }
+    for (const pos of ROSTER_FILL_POSITIONS) {
+      while (posAfter[pos] < 1 && ids.length < TARGET_ROSTER) {
+        const filler = generateBasketballPlayer({ position: pos, targetOverall: 62, age: 22 });
+        players[filler.id] = filler;
+        ids.push(filler.id);
+        posAfter[pos]++;
+      }
     }
 
     // Re-index every kept player's roster slot.

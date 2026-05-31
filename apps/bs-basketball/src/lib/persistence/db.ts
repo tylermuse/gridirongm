@@ -17,6 +17,7 @@
 import Dexie, { type Table } from 'dexie';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
+import { repairRosterPositions } from './repair';
 
 // ===========================================================================
 // Types
@@ -95,7 +96,12 @@ export async function loadLeague(id: string): Promise<BasketballLeagueState | nu
   const row = await db().leagues.get(id);
   if (!row) return null;
   try {
-    return JSON.parse(row.state) as BasketballLeagueState;
+    const parsed = JSON.parse(row.state) as BasketballLeagueState;
+    // Heal any save left with a position at 0 players by an older waiver bug —
+    // idempotent, so it's a no-op for healthy saves.
+    const { state, repaired } = repairRosterPositions(parsed);
+    if (repaired) console.warn('[bs-hoops] repaired roster positions on load for', id);
+    return state;
   } catch (err) {
     console.error('[bs-hoops] failed to parse league save:', err);
     return null;

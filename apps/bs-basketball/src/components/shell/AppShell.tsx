@@ -10,6 +10,7 @@ import { Sidebar } from './Sidebar';
 import { SimToast } from '@/components/ui/Toast';
 import { WhatsNew } from '@/components/ui/WhatsNew';
 import { GameSounds } from '@/components/ui/GameSounds';
+import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { GameTicker } from '@/components/dashboard/GameTicker';
 import { nextAction, type ActionKey } from '@/lib/ui/nextAction';
 import { getBracket } from '@/lib/playoffs';
@@ -45,6 +46,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return (
       <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
         <main className="flex-1 bs-animate-fade">{children}</main>
+        <ErrorBanner />
       </div>
     );
   }
@@ -76,6 +78,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <SimToast />
       <WhatsNew />
       <GameSounds />
+      <ErrorBanner />
     </div>
   );
 }
