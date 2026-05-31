@@ -21,6 +21,7 @@ import {
   type BasketballTeam,
 } from '@bs/sport-basketball';
 import { resolveLineup } from '../lineup';
+import { getHeadCoach } from '../coaching/coaches';
 import { getInjuries, healthyPlayers, applyInjuryRolls, type InjuryMap } from '../injuries';
 import type {
   BaseGameResult,
@@ -140,7 +141,7 @@ function buildSnapshot(
     team,
     availablePlayers: players,
     lineup,
-    coach: null, // v1: no coaches yet
+    coach: getHeadCoach(league, team.id),
   };
 }
 

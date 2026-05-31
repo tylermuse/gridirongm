@@ -41,6 +41,7 @@ import type {
   BasketballGamePlan,
 } from '../types';
 import { emptyBasketballStats, addBasketballStats } from '../types';
+import type { CoachSchemeEffect } from '../coachingSystem';
 import { createRng, type Rng } from './rng';
 import { simPossession, type SimLineup, type StatEvent } from './possession';
 
@@ -58,6 +59,8 @@ export interface BasketballGameSide {
   lineup: BasketballLineup;
   /** Pre-game plan. Absent = neutral (the sim runs exactly as before). */
   plan?: BasketballGamePlan;
+  /** Head coach's scheme effect. Absent = neutral. */
+  schemeEffect?: CoachSchemeEffect;
 }
 
 export interface BasketballGameContext {
@@ -172,6 +175,7 @@ function buildActiveLineup(
         BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer,
       ],
       plan: side.plan,
+      schemeEffect: side.schemeEffect,
     };
   }
   // Bench unit: first 5 in bench list. If bench has fewer than 5, mix in
@@ -190,6 +194,7 @@ function buildActiveLineup(
       BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer,
     ],
     plan: side.plan,
+      schemeEffect: side.schemeEffect,
   };
 }
 
@@ -231,7 +236,10 @@ export function simBasketballGame(
 
   // Pace + possession-length tuning
   const pace = gamePace(home, away);
-  const avgPossessionSeconds = PACE_AVG_POSSESSION_SECONDS[pace];
+  // Coach scheme nudges tempo on top of the discrete pace tier — a faster scheme
+  // shortens possessions (→ more of them). Neutral (1.0) when neither has a coach.
+  const schemePaceMult = ((home.schemeEffect?.paceMultiplier ?? 1) + (away.schemeEffect?.paceMultiplier ?? 1)) / 2;
+  const avgPossessionSeconds = PACE_AVG_POSSESSION_SECONDS[pace] / schemePaceMult;
 
   // Track which unit is on the floor for each team, plus stint progress
   let homeUnit: 'starters' | 'bench' = 'starters';

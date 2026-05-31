@@ -19,6 +19,7 @@ import {
   type BasketballTeam,
 } from '@bs/sport-basketball';
 import { resolveLineup } from '../lineup';
+import { getHeadCoach } from '../coaching/coaches';
 import { getInjuries, healthyPlayers, applyInjuryRolls, type InjuryMap } from '../injuries';
 import type {
   BaseGameResult,
@@ -83,8 +84,8 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
     const away = teamById.get(g.awayTeamId);
     if (!home || !away) continue;
 
-    const homeSnap = buildSnapshot(home, playerMap, injuries, nextDay);
-    const awaySnap = buildSnapshot(away, playerMap, injuries, nextDay);
+    const homeSnap = buildSnapshot(home, playerMap, injuries, nextDay, getHeadCoach(league, home.id));
+    const awaySnap = buildSnapshot(away, playerMap, injuries, nextDay, getHeadCoach(league, away.id));
 
     const ctx: GameContext = {
       season: league.currentSeason,
@@ -162,6 +163,7 @@ function buildSnapshot(
   playerMap: Record<string, BasketballPlayer>,
   injuries: InjuryMap,
   day: number,
+  coach: TeamSnapshot<BasketballRatings, BasketballStats>['coach'],
 ): TeamSnapshot<BasketballRatings, BasketballStats> {
   const roster = team.playerIds
     .map((pid: PlayerId) => playerMap[pid])
@@ -175,7 +177,7 @@ function buildSnapshot(
     players = roster;
     lineup = resolveLineup(team, players);
   }
-  return { team, availablePlayers: players, lineup, coach: null };
+  return { team, availablePlayers: players, lineup, coach };
 }
 
 function bumpRecord(
