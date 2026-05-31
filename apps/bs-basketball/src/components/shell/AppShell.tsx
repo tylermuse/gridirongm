@@ -1,215 +1,177 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { Badge } from '@/components/ui/Badge';
+import { TeamLogo } from '@/components/ui/TeamLogo';
+import { Sidebar } from './Sidebar';
+import { nextAction, type ActionKey } from '@/lib/ui/nextAction';
+import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
- * Persistent app shell.
+ * Persistent app shell (Tier 1.1 + 1.2).
  *
- * Top bar: BS HOOPS wordmark (always visible) + primary nav (League /
- * Standings / My Team) + day badge when a league is loaded.
- *
- * The nav links only render once a league is in memory — pre-league the
- * shell is minimal so the splash page can dominate.
- *
- * Auto-hydrate: on first mount, try to load the most recent saved league
- * from Dexie. That way the nav has data to render against even on a hard
- * refresh.
+ * League loaded → a sectioned sidebar (desktop) / slide-out drawer (mobile) +
+ * a slim, phase-aware top bar whose primary CTA is always "the next thing to
+ * do". Pre-league, the shell is minimal so the splash dominates.
  */
-
 export function AppShell({ children }: { children: ReactNode }) {
   const { league, continueLatest } = useLeagueStore();
   const pathname = usePathname() ?? '/';
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Auto-hydrate once at app load.
   useEffect(() => {
     if (league) return;
     void continueLatest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const isHome = pathname === '/';
-  const userTeamId = league?.userTeamId ?? null;
+  // Pre-league: minimal shell so the splash page owns the screen.
+  if (!league) {
+    return (
+      <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
+        <main className="flex-1 bs-animate-fade">{children}</main>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
-      <TopBar
-        league={league}
-        userTeamId={userTeamId}
-        pathname={pathname}
-        isHome={isHome}
-      />
+    <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
+      {/* Desktop sidebar */}
+      <div className="hidden md:flex md:sticky md:top-0 md:h-screen">
+        <Sidebar league={league} pathname={pathname} />
+      </div>
 
-      <main key={pathname} className="flex-1 bs-animate-fade">{children}</main>
+      {/* Mobile drawer */}
+      {drawerOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-40 md:hidden" onClick={() => setDrawerOpen(false)} />
+          <div className="fixed inset-y-0 left-0 z-50 md:hidden bs-animate-fade">
+            <Sidebar league={league} pathname={pathname} onNavigate={() => setDrawerOpen(false)} />
+          </div>
+        </>
+      )}
 
-      <Footer />
+      {/* Main column */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <TopBar league={league} onMenu={() => setDrawerOpen(true)} />
+        <main key={pathname} className="flex-1 bs-animate-fade">{children}</main>
+        <Footer />
+      </div>
     </div>
   );
 }
 
 // ===========================================================================
-// TopBar
+// Slim, phase-aware top bar
 // ===========================================================================
 
 function TopBar({
-  league, userTeamId, pathname, isHome,
+  league, onMenu,
 }: {
-  league: ReturnType<typeof useLeagueStore.getState>['league'];
-  userTeamId: string | null;
-  pathname: string;
-  isHome: boolean;
+  league: NonNullable<ReturnType<typeof useLeagueStore.getState>['league']>;
+  onMenu: () => void;
 }) {
+  const store = useLeagueStore();
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
-  const day = league?.currentTick;
-  const playedCount = league?.games.filter(g => g.status === 'played').length ?? 0;
-  const totalGames = league?.games.length ?? 0;
 
-  const navItems: { href: string; label: string; active: boolean; emphasis?: boolean }[] = league
-    ? [
-        { href: '/league',    label: 'League',    active: pathname.startsWith('/league') },
-        { href: '/standings', label: 'Standings', active: pathname.startsWith('/standings') },
-        { href: '/power-rankings', label: 'Power', active: pathname.startsWith('/power-rankings') },
-        { href: '/playoffs',  label: 'Playoffs',  active: pathname.startsWith('/playoffs') },
-        { href: '/draft',     label: 'Draft',     active: pathname.startsWith('/draft') },
-        { href: '/free-agency', label: 'FA',      active: pathname.startsWith('/free-agency') },
-        { href: '/trade',     label: 'Trade',     active: pathname.startsWith('/trade') },
-        { href: '/awards',    label: 'Awards',    active: pathname.startsWith('/awards') },
-        { href: '/recap',     label: 'Recap',     active: pathname.startsWith('/recap') },
-        { href: '/news',      label: 'News',      active: pathname.startsWith('/news') },
-        ...(userTeamId
-          ? [{ href: `/team/${userTeamId}`, label: 'My Team', active: pathname === `/team/${userTeamId}`, emphasis: true }]
-          : []),
-      ]
-    : [];
+  const action = nextAction(league);
+  const played = league.games.filter(g => g.status === 'played').length;
+  const total = league.games.length;
+  const userTeam = league.userTeamId
+    ? (league.teams.find(t => t.id === league.userTeamId) as BasketballTeam | undefined) ?? null
+    : null;
+
+  async function run(key: ActionKey) {
+    setMenuOpen(false);
+    switch (key) {
+      case 'simDay': await store.simDay(); break;
+      case 'simWeek': await store.simRange('week'); break;
+      case 'simDeadline': await store.simRange('deadline'); break;
+      case 'simSeason': await store.simRange('season'); break;
+      case 'simPlayoffDay': await store.simPlayoffDay(); break;
+      case 'simDraftToUser': await store.simDraftToUser(); break;
+      case 'goDraft': router.push('/draft'); break;
+      case 'startPlayoffs': { if (await store.startPlayoffs()) router.push('/playoffs'); break; }
+      case 'enterOffseason': { if (await store.enterOffseason()) router.push('/draft'); break; }
+      case 'startNextSeason': { const s = await store.startNextSeason(); if (s) router.push('/'); break; }
+    }
+  }
 
   return (
     <header
-      className="sticky top-0 z-40 border-b backdrop-blur"
-      style={{
-        background: 'color-mix(in srgb, var(--bg) 88%, transparent)',
-        borderColor: 'var(--border)',
-      }}
+      className="sticky top-0 z-30 h-14 border-b backdrop-blur flex items-center gap-3 px-4"
+      style={{ background: 'color-mix(in srgb, var(--bg) 88%, transparent)', borderColor: 'var(--border)' }}
     >
-      <div className="max-w-6xl mx-auto px-5 py-3 flex items-center gap-4 sm:gap-6">
-        <Link href="/" className="flex items-baseline gap-2 group">
-          <span
-            className="text-2xl font-black tracking-tight leading-none"
-            style={{
-              fontFamily: 'var(--font-display)',
-              color: 'var(--accent)',
-            }}
+      <button onClick={onMenu} aria-label="Menu" className="md:hidden w-9 h-9 -ml-1 inline-flex items-center justify-center rounded-lg hover:bg-[var(--surface-2)]">
+        <span className="text-xl leading-none">☰</span>
+      </button>
+      <Link href="/" className="md:hidden text-lg font-black tracking-tight" style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>
+        BS HOOPS
+      </Link>
+
+      <Badge variant="orange" size="md">Day {league.currentTick}</Badge>
+      <span className="hidden sm:inline text-xs text-[var(--text-sec)] tabular-nums">{played} / {total} games</span>
+
+      <div className="ml-auto flex items-center gap-2">
+        {/* Phase-aware primary CTA (+ secondary dropdown) */}
+        <div className="relative inline-flex">
+          <button
+            onClick={() => void run(action.primary)}
+            disabled={store.loading}
+            className="px-4 py-2 rounded-lg font-bold text-sm transition disabled:opacity-50 text-white"
+            style={{ background: 'var(--accent)', borderTopRightRadius: action.secondary ? 0 : undefined, borderBottomRightRadius: action.secondary ? 0 : undefined }}
           >
-            BS HOOPS
-          </span>
-          <span className="text-[10px] uppercase tracking-widest opacity-50 hidden sm:inline">
-            GM
-          </span>
-        </Link>
-
-        {league && (
-          <>
-            {/* Desktop nav */}
-            <nav className="hidden sm:flex items-center gap-1 ml-2">
-              {navItems.map(item => (
-                <NavLink key={item.href} {...item} />
+            {store.loading ? 'Working…' : `${action.label} →`}
+          </button>
+          {action.secondary && (
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              disabled={store.loading}
+              aria-label="More sim options"
+              className="px-2 py-2 rounded-r-lg font-bold text-sm text-white border-l border-white/25 disabled:opacity-50"
+              style={{ background: 'var(--accent)' }}
+            >
+              ▾
+            </button>
+          )}
+          {menuOpen && action.secondary && (
+            <div className="absolute right-0 top-full mt-1 w-52 rounded-lg border bg-[var(--surface)] shadow-lg overflow-hidden z-40" style={{ borderColor: 'var(--border)' }}>
+              {action.secondary.map(s => (
+                <button
+                  key={s.key}
+                  onClick={() => void run(s.key)}
+                  className="w-full text-left px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-2)]"
+                >
+                  {s.label}
+                </button>
               ))}
-            </nav>
-
-            <div className="ml-auto flex items-center gap-3">
-              {!isHome && (
-                <span className="hidden sm:inline text-xs text-[var(--text-sec)]">
-                  {playedCount} / {totalGames} games
-                </span>
-              )}
-              <Badge variant="orange" size="md">
-                {day ? `Day ${day}` : 'Day 1'}
-              </Badge>
-              {/* Hamburger (mobile only) */}
-              <button
-                onClick={() => setMenuOpen(o => !o)}
-                aria-label="Menu"
-                aria-expanded={menuOpen}
-                className="sm:hidden w-11 h-11 -mr-2 inline-flex items-center justify-center rounded-lg text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors"
-              >
-                <span className="text-xl leading-none">{menuOpen ? '✕' : '☰'}</span>
-              </button>
             </div>
-          </>
+          )}
+        </div>
+
+        {userTeam && (
+          <Link href={`/team/${userTeam.id}`} className="hidden sm:block" title={`${userTeam.city} ${userTeam.name}`}>
+            <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="sm" />
+          </Link>
         )}
       </div>
-
-      {/* Mobile dropdown menu */}
-      {league && menuOpen && (
-        <nav
-          className="sm:hidden border-t bs-animate-fade"
-          style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
-        >
-          <div className="max-w-6xl mx-auto px-3 py-2 flex flex-col">
-            {navItems.map(item => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMenuOpen(false)}
-                className={`flex items-center min-h-11 px-3 rounded-md text-base font-semibold transition ${
-                  item.active
-                    ? 'text-[var(--accent)] bg-[var(--surface-2)]'
-                    : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'
-                }`}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        </nav>
-      )}
     </header>
   );
 }
 
-function NavLink({
-  href, label, active, emphasis,
-}: {
-  href: string; label: string; active?: boolean; emphasis?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`
-        px-3 py-1.5 rounded-md text-sm font-semibold transition
-        ${active
-          ? 'text-[var(--accent)] bg-[var(--surface-2)]'
-          : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'}
-        ${emphasis ? 'border border-[var(--accent)]' : ''}
-      `}
-    >
-      {label}
-    </Link>
-  );
-}
-
-// ===========================================================================
-// Footer
-// ===========================================================================
-
 function Footer() {
   return (
-    <footer
-      className="border-t mt-12"
-      style={{ borderColor: 'var(--border)' }}
-    >
+    <footer className="border-t mt-12" style={{ borderColor: 'var(--border)' }}>
       <div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between text-xs text-[var(--text-sec)]">
         <span>
-          <span className="font-black" style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>
-            BS HOOPS
-          </span>{' '}
+          <span className="font-black" style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>BS HOOPS</span>{' '}
           · built on the BS multi-sport adapter
         </span>
-        <span className="opacity-60 hidden sm:inline">
-          parody · not affiliated with the NBA
-        </span>
+        <span className="opacity-60 hidden sm:inline">parody · not affiliated with the NBA</span>
       </div>
     </footer>
   );

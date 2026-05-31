@@ -120,11 +120,17 @@ const ICONS: Record<string, IconFn> = {
   ),
 
   // ===================== Eastern — Central =====================
-  CHW: (c) => ( // Wind — swirling gust spirals
+  CHW: (c, bg) => ( // Gusts — curling wind with a leading swirl
     <svg viewBox="0 0 32 32" fill="none">
-      <path d="M5 11h13c2 0 4-1 4-3s-2-3-3-2c-1 .5-1 1.5-.4 2" stroke={c} strokeWidth="2.2" strokeLinecap="round" fill="none"/>
-      <path d="M4 17h18c2.5 0 4.5 1.4 4.5 3.6s-2.2 3.6-4 2.6c-1.2-.7-1.1-2 .1-2.5" stroke={c} strokeWidth="2.2" strokeLinecap="round" fill="none"/>
-      <path d="M6 23h8c1.8 0 3 1 3 2.4s-1.6 2.2-2.8 1.4" stroke={c} strokeWidth="2" strokeLinecap="round" fill="none"/>
+      {/* leading swirl */}
+      <path d="M18 8.5c2.4-1.9 5.7-1.5 6.9 1 .9 1.9.1 4-1.9 4.6-1.4.5-2.8-.5-2.8-1.7 0-.9.7-1.5 1.6-1.3" stroke={c} strokeWidth="2.3" strokeLinecap="round" fill="none"/>
+      {/* three driving gust lines, the middle one curling back */}
+      <path d="M4 12h12.5" stroke={c} strokeWidth="2.3" strokeLinecap="round"/>
+      <path d="M4 17h16.5c2.6 0 4.7 1.6 4.7 3.9s-2.4 4-4.3 2.8c-1.2-.8-1-2.2.3-2.6" stroke={c} strokeWidth="2.3" strokeLinecap="round" fill="none"/>
+      <path d="M6 22h8" stroke={c} strokeWidth="2.1" strokeLinecap="round" opacity="0.75"/>
+      {/* trailing wisps + gloss on the swirl */}
+      <path d="M3.4 12.4q1.1-.6 0-1.3M3.4 17.4q1.1-.6 0-1.3" stroke={c} strokeWidth="1.2" strokeLinecap="round" opacity="0.5"/>
+      <circle cx="23" cy="11" r="0.9" fill={bg} opacity="0.45"/>
     </svg>
   ),
   CLR: (c, bg) => ( // Rust — pitted gear with bolt center

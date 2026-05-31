@@ -102,8 +102,8 @@ export default function FreeAgencyPage() {
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <EmptyState
             icon="🧑‍💼"
-            title="No free agents available"
-            message="The pool fills up in the offseason — waived players and undrafted prospects land here after the draft."
+            title="Camp's quiet right now"
+            message="The pool fills up in the offseason — waived vets and undrafted prospects wash up here after the draft. Check back."
           />
         </div>
       ) : (

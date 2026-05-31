@@ -31,7 +31,7 @@ export default function RecapPage() {
     return (
       <Shell>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-          <EmptyState icon="🎬" title="No recap yet" message="Finish a season — play through the playoffs — and the recap is generated here." />
+          <EmptyState icon="🎬" title="No story to tell yet" message="Play a season through the Finals and the recap writes itself right here." />
         </div>
       </Shell>
     );

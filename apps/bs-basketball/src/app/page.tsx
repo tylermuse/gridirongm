@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { NewsFeed } from '@/components/feed/NewsFeed';
+import { GameTicker } from '@/components/dashboard/GameTicker';
 import { useRouter } from 'next/navigation';
 import { canAdvanceSeason } from '@/lib/season';
 import { getBracket } from '@/lib/playoffs';
@@ -219,6 +220,12 @@ export default function HomePage() {
                 ← Back to menu
               </Button>
             </div>
+
+            {userTeam && (
+              <div className="mt-8">
+                <GameTicker />
+              </div>
+            )}
           </div>
 
           {/* News sidebar */}
@@ -247,21 +254,32 @@ export default function HomePage() {
     .sort((a, b) => a.city.localeCompare(b.city));
 
   return (
-    <div className="min-h-[calc(100vh-200px)] flex flex-col items-center px-4 sm:px-8 py-10">
-      {/* Hero */}
-      <div className="text-center mb-8 max-w-2xl">
-        <h1
-          className="text-5xl sm:text-7xl font-black tracking-tighter leading-none"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          <span style={{ color: 'var(--accent)' }}>BS</span>{' '}
-          <span>HOOPS</span>
-        </h1>
-        <p className="text-[var(--text-sec)] text-sm sm:text-lg mt-3">
-          Choose your franchise. Build your dynasty.
-        </p>
+    <div className="min-h-screen flex flex-col items-center">
+      {/* Hero banner — full-bleed court backdrop with the wordmark over it. */}
+      <div className="w-full relative overflow-hidden" style={{ background: 'radial-gradient(120% 90% at 50% 110%, #2a1808 0%, #120c16 55%, #0a0a0f 100%)' }}>
+        {/* Court key lines */}
+        <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMax slice" viewBox="0 0 400 200" fill="none" aria-hidden>
+          <g stroke="#ffffff" strokeOpacity="0.07" strokeWidth="1.4">
+            <circle cx="200" cy="210" r="58" />
+            <circle cx="200" cy="210" r="30" />
+            <rect x="170" y="150" width="60" height="80" />
+            <path d="M118 230 A 100 100 0 0 1 282 230" />
+          </g>
+          <circle cx="200" cy="62" r="120" fill="#E66B00" fillOpacity="0.10" />
+        </svg>
+        <div className="relative z-10 flex flex-col items-center text-center px-4 pt-16 pb-12 sm:pt-20 sm:pb-16">
+          <span className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-white/40 mb-2">Franchise Basketball · Parody GM Sim</span>
+          <h1 className="text-6xl sm:text-8xl font-black tracking-tighter leading-none" style={{ fontFamily: 'var(--font-display)' }}>
+            <span style={{ color: 'var(--accent)' }}>BS</span> <span className="text-white">HOOPS</span>
+          </h1>
+          <p className="text-white/70 text-base sm:text-xl mt-4 max-w-xl">
+            30 cities. 60 prospects. One banner. Build your dynasty and run the franchise.
+          </p>
+          <div className="text-white/40 text-xs mt-6 animate-pulse">↓ pick your team</div>
+        </div>
       </div>
 
+      <div className="w-full flex flex-col items-center px-4 sm:px-8 py-10 max-w-5xl">
       {error && (
         <div className="mb-6 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-600 text-sm">
           {error}
@@ -404,6 +422,7 @@ export default function HomePage() {
         })}
       </div>
       )}
+      </div>
     </div>
   );
 }
