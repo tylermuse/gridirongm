@@ -21,12 +21,15 @@ import {
   generateBasketballSchedule,
   buildDefaultBasketballLineup,
   basketballAdapter,
+  basketballMarketSalary,
+  basketballMarketContractYears,
   type BasketballPlayer,
   type BasketballPosition,
   type BasketballTeam,
 } from '@bs/sport-basketball';
 import type {
   BaseLeagueState,
+  BaseContract,
   PlayerId,
   TeamId,
   Competition,
@@ -67,6 +70,31 @@ const ROSTER_POSITIONS: BasketballPosition[] = [
   'PF', 'PF', 'PF',
   'C',  'C',  'C',
 ];
+
+/**
+ * Give a generated player a market-value contract so the cap is real from day
+ * one. Without this, generated veterans carry no contract and every team sits
+ * at $0 payroll / full cap room — making the cap and free agency meaningless.
+ * Length + salary come from the same market model free agency uses; flat
+ * salary across the term, fully guaranteed. (New leagues only — existing saves
+ * are left untouched.)
+ */
+function marketContract(player: BasketballPlayer, season: number): BaseContract {
+  const salary = basketballMarketSalary(player, { season, noiseSeed: player.id });
+  const years = basketballMarketContractYears(player);
+  return {
+    years: Array.from({ length: years }, (_, i) => ({
+      season: season + i,
+      baseSalary: salary,
+      proratedBonus: 0,
+      guaranteed: true,
+    })),
+    signedSeason: season,
+    guaranteedAtSigning: salary * years,
+    modifications: [],
+    sportData: {},
+  };
+}
 
 // ===========================================================================
 // Main entry
@@ -109,10 +137,12 @@ export function createNewBasketballLeague(
         position: pos,
         targetOverall: targetOvr,
       });
-      // Stamp the player's rosterSlot so the team-by-player lookups work.
+      // Stamp the player's rosterSlot so the team-by-player lookups work, and a
+      // market-value contract so the team's payroll/cap is real from the start.
       const playerWithSlot: BasketballPlayer = {
         ...p,
         rosterSlot: { teamId, bucket: 'active', index: i },
+        contract: marketContract(p, season),
       };
       rosterPlayers.push(playerWithSlot);
       players[p.id] = playerWithSlot;
