@@ -16,8 +16,20 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://bs-basketball.vercel.app'),
   title: 'BS Hoops',
   description: 'Build your dynasty. Run the franchise.',
+  openGraph: {
+    title: 'BS Hoops',
+    description: 'Build your dynasty. Run the franchise.',
+    siteName: 'BS Hoops',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'BS Hoops',
+    description: 'Build your dynasty. Run the franchise.',
+  },
 };
 
 export const viewport = {
