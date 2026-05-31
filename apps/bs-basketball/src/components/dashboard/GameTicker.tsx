@@ -11,8 +11,20 @@ import type { BasketballStats, BasketballTeam } from '@bs/sport-basketball';
  * Horizontal, scrollable strip of every game on the user team's schedule
  * (Tier 1.3). Wins are green, losses red, unplayed neutral; the current day is
  * ringed. Auto-scrolls to the next game; played games link to the box score.
+ *
+ * Two variants:
+ *   - 'card' (default): self-contained card with a "Your Schedule" header.
+ *   - 'bare': just the cell strip, sized to fill its container — used in the
+ *     top bar. When there's no schedule to show, renders `fallback` instead of
+ *     nothing so the top bar can fall back to the phase label.
  */
-export function GameTicker() {
+export function GameTicker({
+  variant = 'card',
+  fallback = null,
+}: {
+  variant?: 'card' | 'bare';
+  fallback?: React.ReactNode;
+} = {}) {
   const { league } = useLeagueStore();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -41,8 +53,63 @@ export function GameTicker() {
     child?.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
   }, [games]);
 
-  if (!league || !userId || games.length === 0) return null;
+  if (!league || !userId || games.length === 0) return <>{fallback}</>;
   const currentDay = league.currentTick;
+  const bare = variant === 'bare';
+
+  const cells = games.map(g => {
+    const isHome = g.homeTeamId === userId;
+    const oppId = isHome ? g.awayTeamId : g.homeTeamId;
+    const opp = teamById.get(oppId);
+    const played = g.status === 'played' && !!g.finalScore;
+    const day = (g.sportData as { dayOfSeason?: number; isPlayoff?: boolean } | undefined);
+    const isPlayoff = !!day?.isPlayoff;
+    const userScore = played ? (isHome ? g.finalScore!.home : g.finalScore!.away) : 0;
+    const oppScore = played ? (isHome ? g.finalScore!.away : g.finalScore!.home) : 0;
+    const won = played && userScore > oppScore;
+    const isCurrent = !played && (day?.dayOfSeason ?? 0) >= currentDay;
+
+    const bg = played
+      ? won ? 'color-mix(in srgb, #10b981 14%, var(--surface))' : 'color-mix(in srgb, #dc2626 12%, var(--surface))'
+      : 'var(--surface)';
+
+    const inner = (
+      <div
+        className={`shrink-0 flex flex-col items-center justify-center border-r text-center ${bare ? 'h-full px-2.5 py-1' : 'px-2 py-1.5'}`}
+        style={{
+          minWidth: bare ? '72px' : '76px',
+          borderColor: 'var(--border)',
+          background: bg,
+          boxShadow: isCurrent ? 'inset 0 0 0 2px var(--accent)' : undefined,
+        }}
+      >
+        <div className="flex items-center gap-1 text-[10px] text-[var(--text-sec)] leading-none">
+          <span>{isHome ? 'vs' : '@'}</span>
+          {opp && <TeamLogo abbreviation={opp.abbreviation} primaryColor={opp.primaryColor} secondaryColor={opp.secondaryColor} size="xs" />}
+        </div>
+        <div className="text-xs font-bold mt-0.5 leading-none">{opp?.abbreviation ?? '—'}</div>
+        {played ? (
+          <div className="text-[11px] font-black tabular-nums mt-0.5" style={{ color: won ? '#10b981' : '#dc2626' }}>
+            {won ? 'W' : 'L'} {userScore}-{oppScore}
+          </div>
+        ) : (
+          <div className="text-[10px] text-[var(--text-sec)] mt-0.5">{isPlayoff ? 'PO' : `D${day?.dayOfSeason ?? ''}`}</div>
+        )}
+      </div>
+    );
+
+    return played
+      ? <Link key={g.id} href={`/game/${g.id}`}>{inner}</Link>
+      : <div key={g.id}>{inner}</div>;
+  });
+
+  if (bare) {
+    return (
+      <div ref={scrollRef} className="flex items-stretch h-full overflow-x-auto no-scrollbar" style={{ scrollbarWidth: 'none' }}>
+        {cells}
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
@@ -54,51 +121,7 @@ export function GameTicker() {
         </span>
       </div>
       <div ref={scrollRef} className="flex overflow-x-auto no-scrollbar" style={{ scrollbarWidth: 'none' }}>
-        {games.map(g => {
-          const isHome = g.homeTeamId === userId;
-          const oppId = isHome ? g.awayTeamId : g.homeTeamId;
-          const opp = teamById.get(oppId);
-          const played = g.status === 'played' && !!g.finalScore;
-          const day = (g.sportData as { dayOfSeason?: number; isPlayoff?: boolean } | undefined);
-          const isPlayoff = !!day?.isPlayoff;
-          const userScore = played ? (isHome ? g.finalScore!.home : g.finalScore!.away) : 0;
-          const oppScore = played ? (isHome ? g.finalScore!.away : g.finalScore!.home) : 0;
-          const won = played && userScore > oppScore;
-          const isCurrent = !played && (day?.dayOfSeason ?? 0) >= currentDay;
-
-          const bg = played
-            ? won ? 'color-mix(in srgb, #10b981 14%, var(--surface))' : 'color-mix(in srgb, #dc2626 12%, var(--surface))'
-            : 'var(--surface)';
-
-          const inner = (
-            <div
-              className="shrink-0 flex flex-col items-center justify-center px-2 py-1.5 border-r text-center"
-              style={{
-                minWidth: '76px',
-                borderColor: 'var(--border)',
-                background: bg,
-                boxShadow: isCurrent ? 'inset 0 0 0 2px var(--accent)' : undefined,
-              }}
-            >
-              <div className="flex items-center gap-1 text-[10px] text-[var(--text-sec)]">
-                <span>{isHome ? 'vs' : '@'}</span>
-                {opp && <TeamLogo abbreviation={opp.abbreviation} primaryColor={opp.primaryColor} secondaryColor={opp.secondaryColor} size="xs" />}
-              </div>
-              <div className="text-xs font-bold mt-0.5">{opp?.abbreviation ?? '—'}</div>
-              {played ? (
-                <div className="text-[11px] font-black tabular-nums" style={{ color: won ? '#10b981' : '#dc2626' }}>
-                  {won ? 'W' : 'L'} {userScore}-{oppScore}
-                </div>
-              ) : (
-                <div className="text-[10px] text-[var(--text-sec)]">{isPlayoff ? 'PO' : `D${day?.dayOfSeason ?? ''}`}</div>
-              )}
-            </div>
-          );
-
-          return played
-            ? <Link key={g.id} href={`/game/${g.id}`}>{inner}</Link>
-            : <div key={g.id}>{inner}</div>;
-        })}
+        {cells}
       </div>
     </div>
   );

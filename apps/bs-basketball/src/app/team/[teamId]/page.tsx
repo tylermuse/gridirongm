@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getTransactions } from '@/lib/transactions';
 import { getInjuries, SEVERITY_LABEL } from '@/lib/injuries';
-import { GameTicker } from '@/components/dashboard/GameTicker';
 import type {
   BasketballPlayer,
   BasketballStats,
@@ -209,12 +208,6 @@ export default function TeamPage() {
           )}
         </div>
       </header>
-
-      {isUserTeam && (
-        <div className="mb-4">
-          <GameTicker />
-        </div>
-      )}
 
       {/* Top row: Team Stats + Next Game */}
       <div className="grid md:grid-cols-2 gap-4 mb-4">
