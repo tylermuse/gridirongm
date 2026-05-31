@@ -15,6 +15,7 @@
  */
 
 import { v4 as uuid } from 'uuid';
+import { CHANGELOG_VERSION } from '../ui/changelog';
 import {
   generateBasketballPlayer,
   generateBasketballSchedule,
@@ -207,7 +208,7 @@ export function createNewBasketballLeague(
     seasonHistory: {},
     userTeamId: null,
     saveVersion: 1,
-    sportData: {},
+    sportData: { lastSeenChangelog: CHANGELOG_VERSION },
   };
 
   return state;
