@@ -40,6 +40,7 @@ export default function StandingsPage() {
   const { simDay, simRange, loading: storeLoading } = useLeagueStore();
   const [rosterTeamId, setRosterTeamId] = useState<string | null>(null);
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
+  const [view, setView] = useState<'standings' | 'schedule'>('standings');
 
   const sorted = useMemo(() => {
     if (!league) return { Eastern: [], Western: [] } as Record<'Eastern' | 'Western', BasketballTeam[]>;
@@ -125,7 +126,13 @@ export default function StandingsPage() {
         )}
       </header>
 
-      {gamesPlayed === 0 && (
+      <div className="mb-4 inline-flex rounded-lg border overflow-hidden text-sm font-semibold" style={{ borderColor: 'var(--border)' }}>
+        {(['standings', 'schedule'] as const).map(v => (
+          <button key={v} onClick={() => setView(v)} className="px-3 py-1.5 capitalize" style={view === v ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}>{v}</button>
+        ))}
+      </div>
+
+      {gamesPlayed === 0 && view === 'standings' && (
         <div className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <EmptyState
             icon="🏀"
@@ -136,17 +143,21 @@ export default function StandingsPage() {
         </div>
       )}
 
-      <div className="grid md:grid-cols-2 gap-8">
-        {(['Eastern', 'Western'] as const).map(conf => (
-          <ConferenceTable
-            key={conf}
-            label={`${conf} Conference`}
-            teams={sorted[conf]}
-            userTeamId={league.userTeamId ?? null}
-            onRosterClick={setRosterTeamId}
-          />
-        ))}
-      </div>
+      {view === 'standings' ? (
+        <div className="grid md:grid-cols-2 gap-8">
+          {(['Eastern', 'Western'] as const).map(conf => (
+            <ConferenceTable
+              key={conf}
+              label={`${conf} Conference`}
+              teams={sorted[conf]}
+              userTeamId={league.userTeamId ?? null}
+              onRosterClick={setRosterTeamId}
+            />
+          ))}
+        </div>
+      ) : (
+        <ScheduleView league={league} />
+      )}
 
       <TeamRosterModal
         teamId={rosterTeamId}
@@ -315,6 +326,43 @@ function ConferenceTable({
         })}
       </ul>
     </section>
+  );
+}
+
+function ScheduleView({ league }: { league: NonNullable<ReturnType<typeof useLeagueOrHydrate>['league']> }) {
+  const uid = league.userTeamId;
+  const teamById = new Map((league.teams as BasketballTeam[]).map(t => [t.id, t]));
+  if (!uid) {
+    return <p className="text-sm text-[var(--text-sec)]">Pick a team to see its schedule.</p>;
+  }
+  const dayOf = (g: { sportData: unknown }) => (g.sportData as { dayOfSeason?: number } | undefined)?.dayOfSeason ?? 0;
+  const games = league.games
+    .filter(g => g.homeTeamId === uid || g.awayTeamId === uid)
+    .sort((a, b) => dayOf(a) - dayOf(b));
+
+  return (
+    <div className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+      {games.map(g => {
+        const isHome = g.homeTeamId === uid;
+        const opp = teamById.get(isHome ? g.awayTeamId : g.homeTeamId);
+        const played = g.status === 'played' && !!g.finalScore;
+        const us = played ? (isHome ? g.finalScore!.home : g.finalScore!.away) : 0;
+        const them = played ? (isHome ? g.finalScore!.away : g.finalScore!.home) : 0;
+        const won = played && us > them;
+        const row = (
+          <div className="flex items-center gap-2 px-4 py-1.5 text-sm border-t first:border-t-0 hover:bg-[var(--surface-2)] transition-colors" style={{ borderColor: 'var(--border)' }}>
+            <span className="w-14 text-xs text-[var(--text-sec)] tabular-nums">Day {dayOf(g)}</span>
+            <span className="text-xs text-[var(--text-sec)] w-5">{isHome ? 'vs' : '@'}</span>
+            {opp && <TeamLogo abbreviation={opp.abbreviation} primaryColor={opp.primaryColor} secondaryColor={opp.secondaryColor} size="xs" />}
+            <span className="font-semibold flex-1 truncate">{opp ? `${opp.city} ${opp.name}` : '—'}</span>
+            {played
+              ? <span className="text-sm font-black tabular-nums" style={{ color: won ? '#10b981' : '#dc2626' }}>{won ? 'W' : 'L'} {us}–{them}</span>
+              : <span className="text-xs text-[var(--text-sec)]">scheduled</span>}
+          </div>
+        );
+        return played ? <Link key={g.id} href={`/game/${g.id}`}>{row}</Link> : <div key={g.id}>{row}</div>;
+      })}
+    </div>
   );
 }
 
