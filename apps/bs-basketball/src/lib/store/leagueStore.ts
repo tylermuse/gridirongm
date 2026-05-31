@@ -69,6 +69,8 @@ interface LeagueStore {
   simToast: { text: string } | null;
   /** Dismiss the sim toast. */
   dismissToast: () => void;
+  /** Clear the current error message (dismisses the error banner). */
+  clearError: () => void;
 
   /** Mark the current changelog version as seen (persisted on the league). */
   markChangelogSeen: () => Promise<void>;
@@ -183,6 +185,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
   error: null,
   simToast: null,
   dismissToast() { set({ simToast: null }); },
+  clearError() { set({ error: null }); },
 
   async markChangelogSeen() {
     const current = get().league;
