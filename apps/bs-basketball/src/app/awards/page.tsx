@@ -91,20 +91,35 @@ export default function AwardsPage() {
         )}
       </header>
 
-      {!bracket?.complete || !awards ? (
+      {!awards || !league.games.some(g => g.status === 'played') ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <EmptyState
             icon="🏆"
-            title="The awards ceremony is locked"
-            message="Play through the postseason first — the trophies (including Finals MVP) are handed out once a champion is crowned."
+            title="The race hasn't started"
+            message="Sim some games — the live award race fills in as players stack up numbers, and the trophies (plus Finals MVP) are handed out once a champion is crowned."
             action={undefined}
           />
-          <div className="pb-6 text-center">
-            <Link href="/playoffs" className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>
-              Go to Playoffs →
-            </Link>
-          </div>
         </div>
+      ) : !bracket?.complete ? (
+        <>
+          <div className="mb-4 rounded-lg border px-4 py-2.5 text-sm" style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>
+            🏁 <b>Award Race</b> — live leaders, updating as you sim. Finals MVP and the ceremony unlock once a champion is crowned.
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {AWARDS.filter(def => def.key !== 'finalsMvp').map(def => (
+              <AwardCard
+                key={def.key}
+                def={def}
+                winner={awards.winners[def.key]}
+                awards={awards}
+                league={league}
+                teamById={teamById}
+                playerById={playerById}
+                onPlayerClick={setModalPlayerId}
+              />
+            ))}
+          </div>
+        </>
       ) : (
         <>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
