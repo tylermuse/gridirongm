@@ -238,6 +238,7 @@ const basketballSimEngine: SimEngine<BasketballRatings, BasketballStats> = {
       teamId: snap.team.id,
       players: snap.availablePlayers as BasketballPlayer[],
       lineup: snap.lineup as BasketballLineup,
+      plan: (snap.team.sportData as { gamePlan?: BasketballGameSide['plan'] }).gamePlan,
     });
     const gameCtx: BasketballGameContext = {
       gameId: `game-${ctx.rngSeed}` as BasketballGameContext['gameId'],

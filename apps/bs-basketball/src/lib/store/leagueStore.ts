@@ -57,7 +57,7 @@ import { clearGmFired } from '../approval';
 import { scoutProspect as scoutProspectState } from '../scouting';
 import { markChangelogSeen as markChangelogSeenState } from '../ui/changelog';
 import type { TeamId } from '@bs/core/adapter';
-import type { BasketballLineup, BasketballPlayer } from '@bs/sport-basketball';
+import type { BasketballLineup, BasketballPlayer, BasketballTeam, BasketballGamePlan } from '@bs/sport-basketball';
 
 interface LeagueStore {
   /** Currently loaded league, or null if user hasn't started one. */
@@ -159,6 +159,9 @@ interface LeagueStore {
 
   /** Persist a team's lineup (the sim uses it when valid). Returns true on success. */
   saveLineup: (teamId: string, lineup: BasketballLineup) => Promise<boolean>;
+
+  /** Persist a team's pre-game plan (the sim biases the box score by it). */
+  saveGamePlan: (teamId: string, plan: BasketballGamePlan) => Promise<boolean>;
 
   /** Waive a rostered player to free agency (opens a roster spot). */
   releasePlayer: (playerId: string) => Promise<boolean>;
@@ -614,6 +617,27 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       return true;
     } catch (err) {
       console.error('[bs-hoops] saveLineup failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
+  async saveGamePlan(teamId, plan) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return false; }
+    set({ loading: true, error: null });
+    try {
+      const teams = current.teams.map(t =>
+        t.id === teamId
+          ? ({ ...t, sportData: { ...(t as BasketballTeam).sportData, gamePlan: plan } } as typeof t)
+          : t,
+      );
+      const league = { ...current, teams };
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] saveGamePlan failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return false;
     }

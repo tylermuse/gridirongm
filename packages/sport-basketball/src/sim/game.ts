@@ -38,6 +38,7 @@ import type {
   BasketballPlayer,
   BasketballStats,
   BasketballLineup,
+  BasketballGamePlan,
 } from '../types';
 import { emptyBasketballStats, addBasketballStats } from '../types';
 import { createRng, type Rng } from './rng';
@@ -55,6 +56,8 @@ export interface BasketballGameSide {
    *  referenced by `lineup.starters` and `lineup.bench`. */
   players: BasketballPlayer[];
   lineup: BasketballLineup;
+  /** Pre-game plan. Absent = neutral (the sim runs exactly as before). */
+  plan?: BasketballGamePlan;
 }
 
 export interface BasketballGameContext {
@@ -117,11 +120,20 @@ const PACE_AVG_POSSESSION_SECONDS: Record<'fast' | 'medium' | 'slow', number> = 
   slow: 17.0,
 };
 
+/** A side's effective pace — the game plan overrides the lineup pace when set. */
+function sidePace(side: BasketballGameSide): 'fast' | 'medium' | 'slow' {
+  const p = side.plan?.pace;
+  if (p === 'slow') return 'slow';
+  if (p === 'fast') return 'fast';
+  if (p === 'balanced') return 'medium';
+  return side.lineup.pace;
+}
+
 /** Combined pace of a game — average of both teams' pace settings. */
 function gamePace(home: BasketballGameSide, away: BasketballGameSide): 'fast' | 'medium' | 'slow' {
   const order = { slow: 0, medium: 1, fast: 2 };
   const reverse = ['slow', 'medium', 'fast'] as const;
-  const avg = Math.round((order[home.lineup.pace] + order[away.lineup.pace]) / 2);
+  const avg = Math.round((order[sidePace(home)] + order[sidePace(away)]) / 2);
   return reverse[avg];
 }
 
@@ -134,6 +146,15 @@ function gamePace(home: BasketballGameSide, away: BasketballGameSide): 'fast' | 
  *  Starters get ~67% of court time → ~32 min over a 48-min game. */
 const STARTER_STINT = 4;
 const BENCH_STINT = 2;
+
+/** Stint length for a unit, leaned by the game plan's rotation setting:
+ *  'starters' rides the starters (longer starter stints, shorter bench),
+ *  'bench' spreads minutes. Neutral (4/2) when unset. */
+function stintLength(side: BasketballGameSide, unit: 'starters' | 'bench'): number {
+  const r = side.plan?.rotation;
+  if (unit === 'starters') return r === 'starters' ? 6 : r === 'bench' ? 3 : STARTER_STINT;
+  return r === 'starters' ? 1 : r === 'bench' ? 2 : BENCH_STINT;
+}
 
 /** Build the active 5-man SimLineup for a team given which unit is on
  *  the floor. Falls back to starters if the bench doesn't have 5 players. */
@@ -150,6 +171,7 @@ function buildActiveLineup(
       players: arr as unknown as readonly [
         BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer,
       ],
+      plan: side.plan,
     };
   }
   // Bench unit: first 5 in bench list. If bench has fewer than 5, mix in
@@ -167,6 +189,7 @@ function buildActiveLineup(
     players: arr as unknown as readonly [
       BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer,
     ],
+    plan: side.plan,
   };
 }
 
@@ -213,8 +236,8 @@ export function simBasketballGame(
   // Track which unit is on the floor for each team, plus stint progress
   let homeUnit: 'starters' | 'bench' = 'starters';
   let awayUnit: 'starters' | 'bench' = 'starters';
-  let homeStintRemaining = STARTER_STINT;
-  let awayStintRemaining = STARTER_STINT;
+  let homeStintRemaining = stintLength(home, 'starters');
+  let awayStintRemaining = stintLength(away, 'starters');
 
   let totalPossessions = 0;
 
@@ -277,13 +300,13 @@ export function simBasketballGame(
         homeStintRemaining--;
         if (homeStintRemaining <= 0) {
           homeUnit = (homeUnit === 'starters') ? 'bench' : 'starters';
-          homeStintRemaining = (homeUnit === 'starters') ? STARTER_STINT : BENCH_STINT;
+          homeStintRemaining = stintLength(home, homeUnit);
         }
       } else {
         awayStintRemaining--;
         if (awayStintRemaining <= 0) {
           awayUnit = (awayUnit === 'starters') ? 'bench' : 'starters';
-          awayStintRemaining = (awayUnit === 'starters') ? STARTER_STINT : BENCH_STINT;
+          awayStintRemaining = stintLength(away, awayUnit);
         }
       }
 

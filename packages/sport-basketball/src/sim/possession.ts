@@ -22,7 +22,7 @@
  * per-player game lines.
  */
 
-import type { BasketballPlayer } from '../types';
+import type { BasketballPlayer, BasketballGamePlan } from '../types';
 import type { PlayerId } from '@bs/core/adapter';
 import type { Rng } from './rng';
 import { selectShotType, makeProbability, isContested, drewShootingFoul } from './shotModel';
@@ -37,6 +37,39 @@ import { selectShotType, makeProbability, isContested, drewShootingFoul } from '
 export interface SimLineup {
   /** Exactly 5 players in canonical position order: PG, SG, SF, PF, C. */
   players: readonly [BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer];
+  /** The team's pre-game plan, if set (neutral when absent). */
+  plan?: BasketballGamePlan;
+}
+
+// Game-plan effect multipliers — all 1.0 at the 'balanced' default, so an unset
+// or default plan leaves possession outcomes unchanged.
+function threeBias(plan?: BasketballGamePlan): number {
+  if (!plan) return 1;
+  let m = 1;
+  if (plan.offensiveFocus === 'perimeter') m *= 1.4;
+  else if (plan.offensiveFocus === 'inside') m *= 0.6;
+  if (plan.shotRisk === 'hero') m *= 1.12;
+  else if (plan.shotRisk === 'conservative') m *= 0.92;
+  return m;
+}
+
+function turnoverMult(off?: BasketballGamePlan, def?: BasketballGamePlan): number {
+  let m = 1;
+  if (def?.pressure === 'press') m *= 1.4;       // full-court pressure forces TOs
+  else if (def?.pressure === 'pack') m *= 0.92;
+  if (off?.shotRisk === 'conservative') m *= 0.92;
+  else if (off?.shotRisk === 'hero') m *= 1.08;
+  return m;
+}
+
+function makeMult(off?: BasketballGamePlan, def?: BasketballGamePlan): number {
+  let m = 1;
+  if (off?.shotRisk === 'hero') m *= 0.97;        // forcing tougher shots
+  else if (off?.shotRisk === 'conservative') m *= 1.02;
+  if (def?.pressure === 'press') m *= 1.05;       // gambling press → easier buckets when beaten
+  else if (def?.pressure === 'pack') m *= 0.96;   // packed paint contests everything
+  if (def?.defensiveScheme === 'zone') m *= 0.98; // a set zone slightly lowers FG%
+  return m;
 }
 
 /** A single stat change emitted by a possession. The game loop applies these
@@ -111,12 +144,11 @@ export function simPossession(
   rng: Rng,
 ): PossessionResult {
   const events: StatEvent[] = [];
-  let possessionFlipsToDefense = true;
   let pointsScored = 0;
 
   // Step 1: Did the possession end in a turnover?
   const turnoverCheck = rng.random();
-  if (turnoverCheck < BASE_TURNOVER_RATE) {
+  if (turnoverCheck < BASE_TURNOVER_RATE * turnoverMult(offense.plan, defense.plan)) {
     const wasSteal = rng.chance(STEAL_FRACTION_OF_TURNOVERS);
     const turnoverPlayer = selectTurnoverPlayer(offense, rng);
     events.push({ playerId: turnoverPlayer.id, field: 'turnovers' });
@@ -137,8 +169,8 @@ export function simPossession(
   const shooterIdx = offense.players.indexOf(shooter);
   const defender = defense.players[shooterIdx]; // same-position matchup, v1 simplification
 
-  // Step 3: Pick shot type
-  const shotType = selectShotType(shooter.sportData.position, shooter.ratings, rng);
+  // Step 3: Pick shot type (game plan biases the 3-point lean)
+  const shotType = selectShotType(shooter.sportData.position, shooter.ratings, rng, threeBias(offense.plan));
   const isThree = shotType === 'three';
   const contested = isContested(shooter.ratings, defender.ratings, rng);
 
@@ -155,8 +187,10 @@ export function simPossession(
     return resolveRebound(events, offense, defense, contested, rng, 0, false);
   }
 
-  // Step 5: Resolve shot make/miss
-  const makeP = makeProbability(shotType, shooter.ratings, defender.ratings, contested);
+  // Step 5: Resolve shot make/miss (game plan nudges shot quality)
+  const makeP = Math.max(0.02, Math.min(0.99,
+    makeProbability(shotType, shooter.ratings, defender.ratings, contested) * makeMult(offense.plan, defense.plan),
+  ));
   const made = rng.chance(makeP);
   const fouled = drewShootingFoul(shotType, shooter.ratings, defender.ratings, rng);
 
