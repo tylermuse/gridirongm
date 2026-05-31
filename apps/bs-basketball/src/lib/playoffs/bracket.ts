@@ -287,6 +287,60 @@ export function simPlayoffDay(league: LeagueState): SimPlayoffDayResult | null {
   };
 }
 
+/** Lowest round number among series still in progress (both teams known, no
+ *  winner). Returns Infinity when nothing is active. */
+function currentPlayoffRound(bracket: PlayoffBracket | null): number {
+  if (!bracket) return Infinity;
+  let min = Infinity;
+  for (const s of bracket.rounds.flat()) {
+    if (s.teamA && s.teamB && !s.winnerTeamId) min = Math.min(min, s.round);
+  }
+  return min;
+}
+
+export interface SimPlayoffBatchResult {
+  league: LeagueState;
+  gamesSimmed: number;
+  champion: TeamId | null;
+}
+
+/** Sim playoff days until the current round resolves (then stop) or a champion
+ *  is crowned. */
+export function simPlayoffRound(league: LeagueState): SimPlayoffBatchResult | null {
+  const startRound = currentPlayoffRound(getBracket(league));
+  if (!isFinite(startRound)) return null;
+  let l = league;
+  let gamesSimmed = 0;
+  let champion: TeamId | null = null;
+  for (let guard = 0; guard < 80; guard++) {
+    const r = simPlayoffDay(l);
+    if (!r) break;
+    l = r.league;
+    gamesSimmed += r.gamesSimmed;
+    champion = r.champion ?? champion;
+    const b = getBracket(l);
+    if (!b || b.complete) break;
+    if (currentPlayoffRound(b) > startRound) break; // advanced to the next round
+  }
+  return gamesSimmed === 0 ? null : { league: l, gamesSimmed, champion };
+}
+
+/** Sim the entire postseason to a champion. */
+export function simAllPlayoffs(league: LeagueState): SimPlayoffBatchResult | null {
+  let l = league;
+  let gamesSimmed = 0;
+  let champion: TeamId | null = null;
+  for (let guard = 0; guard < 160; guard++) {
+    const r = simPlayoffDay(l);
+    if (!r) break;
+    l = r.league;
+    gamesSimmed += r.gamesSimmed;
+    champion = r.champion ?? champion;
+    if (getBracket(l)?.complete) break;
+  }
+  return gamesSimmed === 0 ? null : { league: l, gamesSimmed, champion };
+}
+
 // ===========================================================================
 // Helpers
 // ===========================================================================

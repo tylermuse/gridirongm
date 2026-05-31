@@ -17,10 +17,12 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
 export type ActionKey =
   | 'simDay' | 'simWeek' | 'simDeadline' | 'simSeason'
-  | 'startPlayoffs' | 'simPlayoffDay' | 'enterOffseason'
-  | 'simDraftToUser' | 'goDraft' | 'startNextSeason';
+  | 'startPlayoffs' | 'simPlayoffDay' | 'simPlayoffRound' | 'simAllPlayoffs'
+  | 'enterOffseason' | 'simDraftToUser' | 'goDraft' | 'startNextSeason';
 
 export interface NextAction {
+  /** Short phase label for the bar, e.g. "Regular Season", "Playoffs". */
+  phaseLabel: string;
   label: string;
   primary: ActionKey;
   secondary?: { label: string; key: ActionKey }[];
@@ -33,22 +35,33 @@ export function nextAction(league: LeagueState): NextAction {
 
   // Offseason draft flow
   if (draft) {
-    if (draft.complete) return { label: `Start ${draft.season} Season`, primary: 'startNextSeason' };
-    if (league.userTeamId) return { label: 'Sim to My Pick', primary: 'simDraftToUser' };
-    return { label: 'Go to Draft', primary: 'goDraft' };
+    if (draft.complete) return { phaseLabel: 'Offseason · Draft', label: `Start ${draft.season} Season`, primary: 'startNextSeason' };
+    if (league.userTeamId) return { phaseLabel: `Draft · Pick ${draft.currentPick + 1}`, label: 'Sim to My Pick', primary: 'simDraftToUser' };
+    return { phaseLabel: 'Draft', label: 'Go to Draft', primary: 'goDraft' };
   }
 
   // Season finished → roll into the offseason
-  if (bracket?.complete) return { label: 'Enter Offseason', primary: 'enterOffseason' };
+  if (bracket?.complete) return { phaseLabel: 'Offseason', label: 'Enter Offseason', primary: 'enterOffseason' };
 
   // Playoffs underway
-  if (bracket) return { label: 'Sim Playoff Day', primary: 'simPlayoffDay' };
+  if (bracket) {
+    return {
+      phaseLabel: 'Playoffs',
+      label: 'Sim Day',
+      primary: 'simPlayoffDay',
+      secondary: [
+        { label: 'Sim Round', key: 'simPlayoffRound' },
+        { label: 'Sim All Playoffs', key: 'simAllPlayoffs' },
+      ],
+    };
+  }
 
   // Regular season complete, playoffs not started
-  if (!hasScheduled) return { label: 'Start Playoffs', primary: 'startPlayoffs' };
+  if (!hasScheduled) return { phaseLabel: 'Regular Season Over', label: 'Start Playoffs', primary: 'startPlayoffs' };
 
   // Regular season in progress
   return {
+    phaseLabel: `Day ${league.currentTick} · Regular Season`,
     label: 'Sim Day',
     primary: 'simDay',
     secondary: [

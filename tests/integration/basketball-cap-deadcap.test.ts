@@ -221,8 +221,13 @@ describe('market salary', () => {
   });
 
   it('centers + wings command a premium vs guards (same OVR)', () => {
-    const guard = generateBasketballPlayer({ age: 27, targetOverall: 80, position: 'PG' });
-    const center = generateBasketballPlayer({ age: 27, targetOverall: 80, position: 'C' });
+    // generateBasketballPlayer's OVR varies around the target, which can swamp
+    // the position premium — pin both to the same actual OVR so position is the
+    // only difference and the result is deterministic.
+    const guard0 = generateBasketballPlayer({ age: 27, targetOverall: 80, position: 'PG' });
+    const center0 = generateBasketballPlayer({ age: 27, targetOverall: 80, position: 'C' });
+    const guard = { ...guard0, ratings: { ...guard0.ratings, overall: 80 } };
+    const center = { ...center0, ratings: { ...center0.ratings, overall: 80 } };
     const guardSalary = basketballMarketSalary(guard, { season: 2026 });
     const centerSalary = basketballMarketSalary(center, { season: 2026 });
     expect(centerSalary).toBeGreaterThan(guardSalary);
