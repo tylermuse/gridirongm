@@ -149,9 +149,10 @@ export default function PlayoffsPage() {
         </div>
       )}
 
-      {/* Symmetric bracket — scrolls horizontally on small screens. */}
+      {/* Symmetric bracket — columns flex to fill the width so the whole tree
+          fits on one screen; only very narrow viewports scroll. */}
       <div className="overflow-x-auto pb-4">
-        <div className="flex gap-4 min-w-max items-stretch">
+        <div className="flex gap-2 items-stretch">
           <BracketColumn title="First Round" series={eastR1} teamById={teamById} />
           <BracketColumn title="Semifinals" series={eastSF} teamById={teamById} />
           <BracketColumn title="Conf Finals" series={eastCF} teamById={teamById} />
@@ -208,7 +209,7 @@ function BracketColumn({
   highlight?: boolean;
 }) {
   return (
-    <div className="flex flex-col justify-around gap-4 w-44 shrink-0">
+    <div className="flex flex-col justify-around gap-4 flex-1 min-w-[6.25rem]">
       <div
         className="text-[10px] uppercase tracking-widest text-center font-bold opacity-60"
         style={highlight ? { color: 'var(--accent)', opacity: 1 } : undefined}
