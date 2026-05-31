@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { Button } from '@/components/ui/Button';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -25,6 +25,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { league, continueLatest } = useLeagueStore();
   const pathname = usePathname() ?? '/';
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Direction of the current navigation, for the page transition. Read the
+  // previous path (held in a ref) during render — deeper path → slide from the
+  // right, shallower → from the left, same depth → plain fade.
+  const prevPathRef = useRef<string | null>(null);
+  const transitionClass = navTransitionClass(prevPathRef.current, pathname);
+  useEffect(() => { prevPathRef.current = pathname; }, [pathname]);
 
   useEffect(() => {
     if (league) return;
@@ -61,7 +68,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Main column */}
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar league={league} onMenu={() => setDrawerOpen(true)} />
-        <main key={pathname} className="flex-1 bs-animate-fade">{children}</main>
+        <main key={pathname} className={`flex-1 ${transitionClass}`}>{children}</main>
         <Footer />
       </div>
 
@@ -70,6 +77,20 @@ export function AppShell({ children }: { children: ReactNode }) {
       <GameSounds />
     </div>
   );
+}
+
+/** Path "depth" = number of segments ('/' is 0, '/team/x' is 2). */
+function pathDepth(path: string): number {
+  return path === '/' ? 0 : path.split('/').filter(Boolean).length;
+}
+
+/** Pick the page-transition class from where we came vs where we're going. */
+function navTransitionClass(prev: string | null, current: string): string {
+  if (!prev || prev === current) return 'bs-animate-fade';
+  const delta = pathDepth(current) - pathDepth(prev);
+  if (delta > 0) return 'bs-animate-slide-right';
+  if (delta < 0) return 'bs-animate-slide-left';
+  return 'bs-animate-fade';
 }
 
 // ===========================================================================
