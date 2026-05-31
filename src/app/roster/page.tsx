@@ -316,19 +316,12 @@ export default function RosterPage() {
       for (const p of posPlayers) {
         if (!ordered.includes(p)) ordered.push(p);
       }
-      // OL: enforce line order (LT → LG → C → RG → RT) for the first 5
-      // slots so the depth chart reads left-to-right like an actual O-line.
-      // Backups beyond slot 5 keep the user's manual ordering.
-      if (position === 'OL') {
-        const slotOrder: Array<'LT' | 'LG' | 'C' | 'RG' | 'RT'> = ['LT', 'LG', 'C', 'RG', 'RT'];
-        const starters: Player[] = [];
-        for (const slot of slotOrder) {
-          const p = ordered.find(pl => pl.olSlot === slot);
-          if (p) starters.push(p);
-        }
-        const backups = ordered.filter(p => !starters.includes(p));
-        return [...starters, ...backups];
-      }
+      // OL once had its saved order re-sorted here by olSlot on every render,
+      // which silently reverted any drag-drop reorder of the offensive line —
+      // every other position respected the saved order, which is exactly why
+      // the drag bug was OL-only. A saved depth order is the user's explicit
+      // choice, so return it as-is. The LT → LG → C → RG → RT slotting now
+      // only seeds the *initial* order in the no-saved-depth branch below.
       return ordered;
     }
     if (position === 'OL') {
