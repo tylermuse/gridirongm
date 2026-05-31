@@ -54,10 +54,13 @@ export function GameTicker({
   }, [games]);
 
   if (!league || !userId || games.length === 0) return <>{fallback}</>;
-  const currentDay = league.currentTick;
   const bare = variant === 'bare';
 
-  const cells = games.map(g => {
+  // Ring only the single next game, not every upcoming one — a wall of accent
+  // boxes reads as noise.
+  const nextIdx = games.findIndex(g => g.status !== 'played');
+
+  const cells = games.map((g, i) => {
     const isHome = g.homeTeamId === userId;
     const oppId = isHome ? g.awayTeamId : g.homeTeamId;
     const opp = teamById.get(oppId);
@@ -67,33 +70,34 @@ export function GameTicker({
     const userScore = played ? (isHome ? g.finalScore!.home : g.finalScore!.away) : 0;
     const oppScore = played ? (isHome ? g.finalScore!.away : g.finalScore!.home) : 0;
     const won = played && userScore > oppScore;
-    const isCurrent = !played && (day?.dayOfSeason ?? 0) >= currentDay;
+    const isNext = i === nextIdx;
 
     const bg = played
-      ? won ? 'color-mix(in srgb, #10b981 14%, var(--surface))' : 'color-mix(in srgb, #dc2626 12%, var(--surface))'
+      ? won ? 'color-mix(in srgb, #10b981 12%, var(--surface))' : 'color-mix(in srgb, #dc2626 10%, var(--surface))'
       : 'var(--surface)';
 
+    // Uniform layout: logo on top, then "@ABBR", then a single non-wrapping
+    // result/day line. Fixed width keeps every cell the same size.
     const inner = (
       <div
-        className={`shrink-0 flex flex-col items-center justify-center border-r text-center ${bare ? 'h-full px-2.5 py-1' : 'px-2 py-1.5'}`}
+        className={`shrink-0 flex flex-col items-center justify-center gap-1 border-r text-center ${bare ? 'h-full px-3' : 'px-3 py-2'}`}
         style={{
-          minWidth: bare ? '72px' : '76px',
+          minWidth: bare ? '84px' : '84px',
           borderColor: 'var(--border)',
           background: bg,
-          boxShadow: isCurrent ? 'inset 0 0 0 2px var(--accent)' : undefined,
+          boxShadow: isNext ? 'inset 0 0 0 2px var(--accent)' : undefined,
         }}
       >
-        <div className="flex items-center gap-1 text-[10px] text-[var(--text-sec)] leading-none">
-          <span>{isHome ? 'vs' : '@'}</span>
-          {opp && <TeamLogo abbreviation={opp.abbreviation} primaryColor={opp.primaryColor} secondaryColor={opp.secondaryColor} size="xs" />}
+        {opp && <TeamLogo abbreviation={opp.abbreviation} primaryColor={opp.primaryColor} secondaryColor={opp.secondaryColor} size="xs" />}
+        <div className="text-[11px] font-bold leading-none whitespace-nowrap">
+          <span className="font-normal text-[var(--text-sec)]">{isHome ? 'vs ' : '@ '}</span>{opp?.abbreviation ?? '—'}
         </div>
-        <div className="text-xs font-bold mt-0.5 leading-none">{opp?.abbreviation ?? '—'}</div>
         {played ? (
-          <div className="text-[11px] font-black tabular-nums mt-0.5" style={{ color: won ? '#10b981' : '#dc2626' }}>
-            {won ? 'W' : 'L'} {userScore}-{oppScore}
+          <div className="text-[10px] font-black tabular-nums leading-none whitespace-nowrap" style={{ color: won ? '#10b981' : '#dc2626' }}>
+            {won ? 'W' : 'L'} {userScore}–{oppScore}
           </div>
         ) : (
-          <div className="text-[10px] text-[var(--text-sec)] mt-0.5">{isPlayoff ? 'PO' : `D${day?.dayOfSeason ?? ''}`}</div>
+          <div className="text-[10px] text-[var(--text-sec)] leading-none whitespace-nowrap">{isPlayoff ? 'Playoffs' : `Day ${day?.dayOfSeason ?? ''}`}</div>
         )}
       </div>
     );

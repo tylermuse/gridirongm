@@ -179,6 +179,16 @@ function simSummary(league: BasketballLeagueState, gamesSimmed: number): string 
   return `${base} · You ${us > them ? 'won' : 'lost'} ${us}–${them} ${isHome ? 'vs' : '@'} ${opp?.abbreviation ?? ''}`.trim();
 }
 
+/** Yield a frame so the browser can paint the loading state before a heavy,
+ *  synchronous sim blocks the main thread — keeps clicking Sim responsive (INP).
+ *  No-op-safe on the server. */
+function yieldToPaint(): Promise<void> {
+  return new Promise(resolve => {
+    if (typeof window === 'undefined') { resolve(); return; }
+    window.setTimeout(resolve, 0);
+  });
+}
+
 export const useLeagueStore = create<LeagueStore>((set, get) => ({
   league: null,
   loading: false,
@@ -279,6 +289,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
     set({ loading: true, error: null });
     try {
+      await yieldToPaint();
       const outcome = simNextDay(current);
       if (!outcome) {
         set({ loading: false, error: 'No more scheduled games to sim.' });
@@ -326,6 +337,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
     set({ loading: true, error: null });
     try {
+      await yieldToPaint();
       const outcome = simPlayoffDay(current);
       if (!outcome) {
         set({ loading: false, error: 'No playoff games left to sim.' });
@@ -564,6 +576,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     if (!current) { set({ error: 'No league loaded.' }); return null; }
     set({ loading: true, error: null });
     try {
+      await yieldToPaint();
       const outcome = simPlayoffRound(current);
       if (!outcome) { set({ loading: false, error: 'No playoff games left to sim.' }); return null; }
       await saveLeague(outcome.league);
@@ -581,6 +594,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     if (!current) { set({ error: 'No league loaded.' }); return null; }
     set({ loading: true, error: null });
     try {
+      await yieldToPaint();
       const outcome = simAllPlayoffs(current);
       if (!outcome) { set({ loading: false, error: 'No playoff games left to sim.' }); return null; }
       await saveLeague(outcome.league);
@@ -605,6 +619,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       null;
     set({ loading: true, error: null });
     try {
+      await yieldToPaint();
       const outcome = simThroughDay(current, targetDay);
       if (outcome.gamesSimmed === 0) {
         set({ loading: false, error: 'No games left to sim in that range.' });
@@ -632,6 +647,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
     set({ loading: true, error: null });
     try {
+      await yieldToPaint();
       const outcome = simNextGameForTeam(current, current.userTeamId);
       if (!outcome) {
         set({ loading: false, error: 'No more scheduled games for this team.' });
