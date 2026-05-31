@@ -7,6 +7,7 @@ import { useLeagueStore } from '@/lib/store/leagueStore';
 import { Button } from '@/components/ui/Button';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Sidebar } from './Sidebar';
+import { SimToast } from '@/components/ui/Toast';
 import { nextAction, type ActionKey } from '@/lib/ui/nextAction';
 import { getBracket } from '@/lib/playoffs';
 import type { BasketballTeam } from '@bs/sport-basketball';
@@ -61,6 +62,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main key={pathname} className="flex-1 bs-animate-fade">{children}</main>
         <Footer />
       </div>
+
+      <SimToast />
     </div>
   );
 }

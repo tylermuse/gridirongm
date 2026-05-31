@@ -120,6 +120,8 @@ export default function GamePage() {
         />
       </section>
 
+      <GameLeaders away={awayTeam} home={homeTeam} game={game} playerMap={playerMap} onPlayerClick={setModalPlayerId} />
+
       <div className="grid md:grid-cols-2 gap-6">
         <BoxScoreTable team={awayTeam} game={game} playerMap={playerMap} onPlayerClick={setModalPlayerId} />
         <BoxScoreTable team={homeTeam} game={game} playerMap={playerMap} onPlayerClick={setModalPlayerId} />
@@ -142,35 +144,88 @@ function TeamScoreCell({
   won: boolean;
   align: 'left' | 'right';
 }) {
+  const logo = (
+    <Link href={`/team/${team.id}`} title={`${team.city} ${team.name}`}>
+      <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="lg" />
+    </Link>
+  );
   return (
     <div className={`flex items-center gap-3 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
-      {align === 'left' && (
-        <TeamLogo
-          abbreviation={team.abbreviation}
-          primaryColor={team.primaryColor}
-          secondaryColor={team.secondaryColor}
-          size="lg"
-        />
-      )}
-      <div className={align === 'right' ? 'text-right' : ''}>
+      {align === 'left' && logo}
+      <Link href={`/team/${team.id}`} className={`${align === 'right' ? 'text-right' : ''} hover:opacity-80`}>
         <div className="text-xs opacity-70">{team.city}</div>
         <div className="font-bold">{team.name}</div>
-      </div>
+      </Link>
       <div
         className="text-4xl font-extrabold"
         style={{ color: won ? 'var(--accent)' : 'var(--foreground)' }}
       >
         {score}
       </div>
-      {align === 'right' && (
-        <TeamLogo
-          abbreviation={team.abbreviation}
-          primaryColor={team.primaryColor}
-          secondaryColor={team.secondaryColor}
-          size="lg"
-        />
-      )}
+      {align === 'right' && logo}
     </div>
+  );
+}
+
+function GameLeaders({
+  away, home, game, playerMap, onPlayerClick,
+}: {
+  away: BasketballTeam;
+  home: BasketballTeam;
+  game: { boxScores: Record<string, Partial<BasketballStats>> };
+  playerMap: Record<string, BasketballPlayer>;
+  onPlayerClick: (id: string) => void;
+}) {
+  const cats: { key: keyof BasketballStats; label: string }[] = [
+    { key: 'points', label: 'PTS' },
+    { key: 'totalRebounds', label: 'REB' },
+    { key: 'assists', label: 'AST' },
+  ];
+  const leader = (team: BasketballTeam, key: keyof BasketballStats) => {
+    let best: { player: BasketballPlayer; value: number } | null = null;
+    for (const pid of team.playerIds) {
+      const v = (game.boxScores[pid]?.[key] as number | undefined) ?? 0;
+      const p = playerMap[pid];
+      if (v > 0 && p && (!best || v > best.value)) best = { player: p, value: v };
+    }
+    return best;
+  };
+  return (
+    <section className="mb-6">
+      <h2 className="text-xs font-bold uppercase tracking-widest opacity-60 mb-2">Game Leaders</h2>
+      <div className="grid sm:grid-cols-2 gap-4">
+        {[away, home].map(team => (
+          <div key={team.id} className="rounded-xl border bg-[var(--surface)] p-3" style={{ borderColor: 'var(--border)' }}>
+            <div className="flex items-center gap-2 mb-2 text-sm font-bold">
+              <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="xs" />
+              {team.city}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {cats.map(c => {
+                const l = leader(team, c.key);
+                return (
+                  <button
+                    key={String(c.key)}
+                    onClick={() => l && onPlayerClick(l.player.id)}
+                    className="text-left rounded-lg bg-[var(--surface-2)] p-2 hover:brightness-95 transition"
+                  >
+                    <div className="text-[9px] uppercase tracking-widest opacity-60">{c.label}</div>
+                    {l ? (
+                      <>
+                        <div className="text-lg font-black tabular-nums" style={{ color: 'var(--accent)' }}>{Math.round(l.value)}</div>
+                        <div className="text-xs font-semibold truncate">{l.player.firstName[0]}. {l.player.lastName}</div>
+                      </>
+                    ) : (
+                      <div className="text-sm opacity-40 mt-1">—</div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
