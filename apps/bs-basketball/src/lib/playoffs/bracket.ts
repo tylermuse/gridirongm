@@ -38,6 +38,7 @@ import type {
   BasketballRatings,
   BasketballStats,
 } from '@bs/sport-basketball';
+import { getHeadCoach } from '../coaching/coaches';
 import { seedConferences } from './seeding';
 import type { PlayoffBracket, PlayoffSeedInfo, PlayoffSeries } from './types';
 
@@ -227,8 +228,8 @@ export function simPlayoffDay(league: LeagueState): SimPlayoffDayResult | null {
     };
 
     const result = basketballAdapter.simEngine.simGame(
-      buildSnapshot(home, playerMap),
-      buildSnapshot(away, playerMap),
+      buildSnapshot(home, playerMap, getHeadCoach(league, home.id)),
+      buildSnapshot(away, playerMap, getHeadCoach(league, away.id)),
       ctx,
     );
     const final = result.finalScore ?? { home: 0, away: 0 };
@@ -455,10 +456,11 @@ function higherSeed(
 function buildSnapshot(
   team: BasketballTeam,
   playerMap: Record<string, BasketballPlayer>,
+  coach: TeamSnapshot<BasketballRatings, BasketballStats>['coach'],
 ): TeamSnapshot<BasketballRatings, BasketballStats> {
   const players = team.playerIds
     .map((pid: PlayerId) => playerMap[pid])
     .filter((p): p is BasketballPlayer => !!p);
   const lineup = buildDefaultBasketballLineup(players);
-  return { team, availablePlayers: players, lineup, coach: null };
+  return { team, availablePlayers: players, lineup, coach };
 }

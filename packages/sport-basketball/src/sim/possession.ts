@@ -23,6 +23,7 @@
  */
 
 import type { BasketballPlayer, BasketballGamePlan } from '../types';
+import type { CoachSchemeEffect } from '../coachingSystem';
 import type { PlayerId } from '@bs/core/adapter';
 import type { Rng } from './rng';
 import { selectShotType, makeProbability, isContested, drewShootingFoul } from './shotModel';
@@ -39,6 +40,8 @@ export interface SimLineup {
   players: readonly [BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer, BasketballPlayer];
   /** The team's pre-game plan, if set (neutral when absent). */
   plan?: BasketballGamePlan;
+  /** The head coach's scheme effect, if any (neutral when absent). */
+  schemeEffect?: CoachSchemeEffect;
 }
 
 // Game-plan effect multipliers — all 1.0 at the 'balanced' default, so an unset
@@ -146,9 +149,11 @@ export function simPossession(
   const events: StatEvent[] = [];
   let pointsScored = 0;
 
-  // Step 1: Did the possession end in a turnover?
+  // Step 1: Did the possession end in a turnover? (defensive scheme intensity
+  // forces a few more TOs at >1, fewer at <1)
+  const defIntensity = defense.schemeEffect?.defensiveIntensityMultiplier ?? 1;
   const turnoverCheck = rng.random();
-  if (turnoverCheck < BASE_TURNOVER_RATE * turnoverMult(offense.plan, defense.plan)) {
+  if (turnoverCheck < BASE_TURNOVER_RATE * turnoverMult(offense.plan, defense.plan) * defIntensity) {
     const wasSteal = rng.chance(STEAL_FRACTION_OF_TURNOVERS);
     const turnoverPlayer = selectTurnoverPlayer(offense, rng);
     events.push({ playerId: turnoverPlayer.id, field: 'turnovers' });
@@ -169,8 +174,10 @@ export function simPossession(
   const shooterIdx = offense.players.indexOf(shooter);
   const defender = defense.players[shooterIdx]; // same-position matchup, v1 simplification
 
-  // Step 3: Pick shot type (game plan biases the 3-point lean)
-  const shotType = selectShotType(shooter.sportData.position, shooter.ratings, rng, threeBias(offense.plan));
+  // Step 3: Pick shot type (game plan + coach scheme bias 3-point / post lean)
+  const threeMult = threeBias(offense.plan) * (offense.schemeEffect?.threePointAttemptMultiplier ?? 1);
+  const postMult = offense.schemeEffect?.postAttemptMultiplier ?? 1;
+  const shotType = selectShotType(shooter.sportData.position, shooter.ratings, rng, threeMult, postMult);
   const isThree = shotType === 'three';
   const contested = isContested(shooter.ratings, defender.ratings, rng);
 
@@ -187,9 +194,12 @@ export function simPossession(
     return resolveRebound(events, offense, defense, contested, rng, 0, false);
   }
 
-  // Step 5: Resolve shot make/miss (game plan nudges shot quality)
+  // Step 5: Resolve shot make/miss (game plan + a tighter defensive scheme nudge
+  // shot quality; intensity >1 shaves the opponent's make%)
   const makeP = Math.max(0.02, Math.min(0.99,
-    makeProbability(shotType, shooter.ratings, defender.ratings, contested) * makeMult(offense.plan, defense.plan),
+    makeProbability(shotType, shooter.ratings, defender.ratings, contested)
+      * makeMult(offense.plan, defense.plan)
+      * (1 - (defIntensity - 1) * 0.3),
   ));
   const made = rng.chance(makeP);
   const fouled = drewShootingFoul(shotType, shooter.ratings, defender.ratings, rng);

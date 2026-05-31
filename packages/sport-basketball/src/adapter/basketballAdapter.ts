@@ -81,7 +81,7 @@ import {
 import { basketballMarketSalary } from '../capRules';
 import { computeBasketballAwards, type TeamSeasonRecord } from '../awards';
 import { basketballLineupModel } from '../lineupModel';
-import { basketballCoachingSystem } from '../coachingSystem';
+import { basketballCoachingSystem, resolveBasketballSchemeEffect, type BasketballHCScheme } from '../coachingSystem';
 import { basketballUiMetadata } from '../uiMetadata';
 
 // ===========================================================================
@@ -234,12 +234,16 @@ const basketballSimEngine: SimEngine<BasketballRatings, BasketballStats> = {
     away: TeamSnapshot<BasketballRatings, BasketballStats>,
     ctx: GameContext,
   ): BaseGameResult<BasketballStats> {
-    const buildSide = (snap: TeamSnapshot<BasketballRatings, BasketballStats>): BasketballGameSide => ({
-      teamId: snap.team.id,
-      players: snap.availablePlayers as BasketballPlayer[],
-      lineup: snap.lineup as BasketballLineup,
-      plan: (snap.team.sportData as { gamePlan?: BasketballGameSide['plan'] }).gamePlan,
-    });
+    const buildSide = (snap: TeamSnapshot<BasketballRatings, BasketballStats>): BasketballGameSide => {
+      const scheme = (snap.coach?.sportData as { scheme?: BasketballHCScheme } | undefined)?.scheme;
+      return {
+        teamId: snap.team.id,
+        players: snap.availablePlayers as BasketballPlayer[],
+        lineup: snap.lineup as BasketballLineup,
+        plan: (snap.team.sportData as { gamePlan?: BasketballGameSide['plan'] }).gamePlan,
+        schemeEffect: scheme ? resolveBasketballSchemeEffect(scheme) : undefined,
+      };
+    };
     const gameCtx: BasketballGameContext = {
       gameId: `game-${ctx.rngSeed}` as BasketballGameContext['gameId'],
       season: ctx.season,

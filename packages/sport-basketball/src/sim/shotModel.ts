@@ -69,6 +69,8 @@ export function selectShotType(
   /** Game-plan three-point lean (1 = neutral). >1 perimeter, <1 inside. The
    *  weighted pick renormalizes, so biasing the 3 weight shifts the whole mix. */
   threeMult = 1,
+  /** Coach-scheme post-up lean (1 = neutral). */
+  postMult = 1,
 ): ShotType {
   const base = BASE_SHOT_MIX[shooterPosition];
   // Modulate weights by the shooter's rating in each shot category.
@@ -79,7 +81,7 @@ export function selectShotType(
     three: base.three * ratingMultiplier(r.threePoint) * threeMult,
     midrange: base.midrange * ratingMultiplier(r.midRange),
     at_rim: base.at_rim * ratingMultiplier(r.finishing),
-    post: base.post * ratingMultiplier(r.postScoring),
+    post: base.post * ratingMultiplier(r.postScoring) * postMult,
   };
   return rng.pickWeighted(
     ['three', 'midrange', 'at_rim', 'post'] as const,
