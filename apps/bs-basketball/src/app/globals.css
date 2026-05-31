@@ -86,10 +86,27 @@ html, body {
   to   { opacity: 1; transform: scale(1); }
 }
 
-.bs-animate-fade  { animation: bs-fade-in 0.15s ease-out; }
-.bs-animate-modal { animation: bs-modal-in 0.15s ease-out; }
+/* Directional page transitions (Tier 3.2): slide-from-right when navigating
+ * deeper (home → team), slide-from-left when navigating back. Same-depth moves
+ * (sibling pages) just fade. The translate is small — spatial hint, not a swoosh. */
+@keyframes bs-slide-right {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes bs-slide-left {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.bs-animate-fade        { animation: bs-fade-in 0.15s ease-out; }
+.bs-animate-modal       { animation: bs-modal-in 0.15s ease-out; }
+.bs-animate-slide-right { animation: bs-slide-right 0.2s ease-out; }
+.bs-animate-slide-left  { animation: bs-slide-left 0.2s ease-out; }
 
 @media (prefers-reduced-motion: reduce) {
   .bs-animate-fade,
-  .bs-animate-modal { animation: none; }
+  .bs-animate-modal,
+  .bs-animate-slide-right,
+  .bs-animate-slide-left { animation: none; }
 }
