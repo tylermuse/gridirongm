@@ -34,6 +34,7 @@ function sectionsFor(userTeamId: string | null): NavSection[] {
     {
       label: 'Front Office',
       items: [
+        { href: '/finances', label: 'Finances', icon: '💰' },
         { href: '/draft', label: 'Draft', icon: '🎯' },
         { href: '/free-agency', label: 'Free Agency', icon: '🖊️' },
         { href: '/trade', label: 'Trade', icon: '🔄' },
