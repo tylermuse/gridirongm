@@ -3,18 +3,23 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
+import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PlayerModal } from '@/components/modals/PlayerModal';
-import { resolveLineup } from '@/lib/lineup';
+import { resolveLineup, validateBasketballLineup, buildDefaultBasketballLineup } from '@/lib/lineup';
 import { teamCap, fmtMoney } from '@/lib/dashboard/summary';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
-import type { BasketballPlayer, BasketballPosition, BasketballTeam } from '@bs/sport-basketball';
+import type { BasketballLineup, BasketballPlayer, BasketballPosition, BasketballTeam } from '@bs/sport-basketball';
 
 /**
- * /roster — the user team's roster (P0.1). A dedicated, richer view than the
- * generic /team/[id] browse: position-composition bar, position filter pills,
- * and a sortable table with role + contract columns.
+ * /roster — combined roster + depth chart (lineup editor).
+ *
+ * One view: the full roster with the starting five grouped at the top (one per
+ * position slot, accent background) and the bench below. Drag a player onto a
+ * starting slot — or use the Start / Bench buttons — to set the lineup the sim
+ * uses, then Save. Position-composition bar + cap up top.
  */
 
 const POSITIONS: BasketballPosition[] = ['PG', 'SG', 'SF', 'PF', 'C'];
@@ -24,14 +29,18 @@ const POS_COLORS: Record<BasketballPosition, string> = {
 const TARGET_ROSTER = 15;
 const MIN_ROSTER = 13;
 
-type SortKey = 'position' | 'name' | 'age' | 'overall' | 'potential' | 'gp';
+// Shared grid so starter and bench rows line up.
+const ROW_GRID = 'grid items-center gap-2 px-2 py-1.5 min-w-[44rem]';
+const ROW_COLS = { gridTemplateColumns: '2.75rem 1fr 2.5rem 2.5rem 2.75rem 2.75rem 6rem 3rem 4.5rem' };
+
+interface DragData { id: string; from: 'starter' | 'bench'; slot: number }
 
 export default function RosterPage() {
   const { league, loading, error } = useLeagueOrHydrate();
-  const [filter, setFilter] = useState<BasketballPosition | 'ALL'>('ALL');
-  const [sortKey, setSortKey] = useState<SortKey>('position');
-  const [sortDesc, setSortDesc] = useState(false);
+  const store = useLeagueStore();
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
+  const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
+  const [saved, setSaved] = useState(false);
 
   const team = useMemo<BasketballTeam | null>(() => {
     if (!league?.userTeamId) return null;
@@ -44,42 +53,29 @@ export default function RosterPage() {
     return team.playerIds.map(id => players[id]).filter((p): p is BasketballPlayer => !!p);
   }, [league, team]);
 
-  // Season stats are aggregated from box scores — player.seasonStats isn't kept.
   const statsMap = useMemo(() => (league ? regularSeasonStatsByPlayer(league) : new Map()), [league]);
 
-  // Role per player, derived from the resolved lineup.
-  const roleById = useMemo(() => {
-    const m = new Map<string, 'Starter' | 'Rotation' | 'Bench'>();
-    if (team && roster.length) {
-      const lineup = resolveLineup(team, roster);
-      lineup.starters.forEach(id => id && m.set(id, 'Starter'));
-      lineup.bench.slice(0, 5).forEach(id => m.set(id, 'Rotation'));
-    }
-    return m;
-  }, [team, roster]);
-
-  const counts = useMemo(() => {
-    const c: Record<BasketballPosition, number> = { PG: 0, SG: 0, SF: 0, PF: 0, C: 0 };
-    for (const p of roster) c[p.sportData.position]++;
-    return c;
-  }, [roster]);
-
-  const rows = useMemo(() => {
-    const filtered = filter === 'ALL' ? roster : roster.filter(p => p.sportData.position === filter);
-    const dir = sortDesc ? -1 : 1;
-    return [...filtered].sort((a, b) => {
-      let d = 0;
-      switch (sortKey) {
-        case 'position': d = POSITIONS.indexOf(a.sportData.position) - POSITIONS.indexOf(b.sportData.position); break;
-        case 'name': d = a.lastName.localeCompare(b.lastName); break;
-        case 'age': d = a.age - b.age; break;
-        case 'overall': d = a.ratings.overall - b.ratings.overall; break;
-        case 'potential': d = a.development.potential - b.development.potential; break;
-        case 'gp': d = statsForPlayer(statsMap, a.id).gamesPlayed - statsForPlayer(statsMap, b.id).gamesPlayed; break;
-      }
-      return d * dir;
-    });
-  }, [roster, filter, sortKey, sortDesc, statsMap]);
+  // Lineup state — seeded once from the resolved (saved-or-default) lineup.
+  const [starters, setStarters] = useState<string[]>([]);
+  const [bench, setBench] = useState<string[]>([]);
+  const [initialized, setInitialized] = useState(false);
+  if (!initialized && team && roster.length > 0) {
+    const base = resolveLineup(team, roster);
+    const s = [...base.starters];
+    const benchInit = roster
+      .filter(p => !s.includes(p.id))
+      .sort((a, b) => {
+        const ia = base.bench.indexOf(a.id), ib = base.bench.indexOf(b.id);
+        if (ia !== -1 && ib !== -1) return ia - ib;
+        if (ia !== -1) return -1;
+        if (ib !== -1) return 1;
+        return b.ratings.overall - a.ratings.overall;
+      })
+      .map(p => p.id);
+    setStarters(s);
+    setBench(benchInit);
+    setInitialized(true);
+  }
 
   if (loading) return <Shell><p className="opacity-60">Loading…</p></Shell>;
   if (!league) return <Shell><p>{error ?? 'No league loaded.'}</p></Shell>;
@@ -93,17 +89,87 @@ export default function RosterPage() {
     );
   }
 
+  const playerById = league.players as Record<string, BasketballPlayer>;
   const cap = teamCap(league, team);
+  const counts = countByPos(roster);
+  const lineup: BasketballLineup = {
+    starters: starters as BasketballLineup['starters'],
+    bench: bench as BasketballLineup['bench'],
+    backupsByPosition: { PG: null, SG: null, SF: null, PF: null, C: null },
+    pace: team.sportData.lineup?.pace ?? team.sportData.pace ?? 'medium',
+  };
+  const validation = validateBasketballLineup(lineup, roster);
+
+  // --- lineup mutations ---
+  function setStarter(slot: number, playerId: string) {
+    setSaved(false);
+    const existingSlot = starters.indexOf(playerId);
+    const next = [...starters];
+    if (existingSlot !== -1) {
+      next[existingSlot] = starters[slot];
+      next[slot] = playerId;
+      setStarters(next);
+      return;
+    }
+    const demoted = starters[slot];
+    next[slot] = playerId;
+    setStarters(next);
+    setBench(prev => {
+      const without = prev.filter(id => id !== playerId);
+      return demoted ? [...without, demoted] : without;
+    });
+  }
+
+  /** Promote a bench player to the slot for its natural position (swap). */
+  function startPlayer(id: string) {
+    const pos = playerById[id]?.sportData.position;
+    const slot = pos ? POSITIONS.indexOf(pos) : 0;
+    setStarter(slot < 0 ? 0 : slot, id);
+  }
+
+  /** Bench a starter, auto-promoting the best matching bench player. */
+  function benchStarter(slot: number) {
+    const pos = POSITIONS[slot];
+    const replacement = [...bench]
+      .map(id => playerById[id])
+      .filter(Boolean)
+      .sort((a, b) => {
+        const am = a.sportData.position === pos ? 1 : 0;
+        const bm = b.sportData.position === pos ? 1 : 0;
+        if (am !== bm) return bm - am;
+        return b.ratings.overall - a.ratings.overall;
+      })[0];
+    if (replacement) setStarter(slot, replacement.id);
+  }
+
+  function onDropSlot(slot: number, e: React.DragEvent) {
+    e.preventDefault();
+    setDragOverSlot(null);
+    const raw = e.dataTransfer.getData('application/json');
+    if (!raw) return;
+    try {
+      const { id } = JSON.parse(raw) as DragData;
+      if (id && id !== starters[slot]) setStarter(slot, id);
+    } catch { /* ignore */ }
+  }
+
+  async function save() {
+    const ok = await store.saveLineup(team!.id, lineup);
+    if (ok) setSaved(true);
+  }
+
+  function autoFill() {
+    setSaved(false);
+    const def = buildDefaultBasketballLineup(roster);
+    setStarters([...def.starters]);
+    setBench(roster.filter(p => !def.starters.includes(p.id)).sort((a, b) => b.ratings.overall - a.ratings.overall).map(p => p.id));
+  }
+
   const sizeBadge = roster.length > TARGET_ROSTER
     ? { text: `Cut to ${TARGET_ROSTER}`, color: '#dc2626' }
     : roster.length < MIN_ROSTER
     ? { text: 'Sign a free agent', color: '#f59e0b' }
     : { text: `${roster.length} / ${TARGET_ROSTER}`, color: 'var(--text-sec)' };
-
-  function toggleSort(key: SortKey) {
-    if (sortKey === key) setSortDesc(d => !d);
-    else { setSortKey(key); setSortDesc(key === 'overall' || key === 'potential' || key === 'gp'); }
-  }
 
   return (
     <Shell>
@@ -111,21 +177,15 @@ export default function RosterPage() {
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="lg" />
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-black" style={{ fontFamily: 'var(--font-display)' }}>
-            {team.city} {team.name} Roster
-          </h1>
+          <h1 className="text-2xl sm:text-3xl font-black" style={{ fontFamily: 'var(--font-display)' }}>{team.city} {team.name} Roster</h1>
           <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-sec)]">
             <span className="tabular-nums font-semibold">{team.record.wins}–{team.record.losses}</span>
-            <span>·</span>
+            <span>· payroll {fmtMoney(cap.payroll)} ·</span>
             <span className="tabular-nums">{cap.capRoom >= 0 ? `${fmtMoney(cap.capRoom)} room` : `${fmtMoney(-cap.capRoom)} over`}</span>
           </div>
         </div>
-        <span className="ml-auto text-xs font-bold rounded-full px-3 py-1" style={{ background: `color-mix(in srgb, ${sizeBadge.color} 16%, transparent)`, color: sizeBadge.color }}>
-          {sizeBadge.text}
-        </span>
-        <Link href="/trade" className="text-xs font-semibold rounded-lg border px-3 py-1.5 hover:bg-[var(--surface-2)]" style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}>
-          Trade →
-        </Link>
+        <span className="ml-auto text-xs font-bold rounded-full px-3 py-1" style={{ background: `color-mix(in srgb, ${sizeBadge.color} 16%, transparent)`, color: sizeBadge.color }}>{sizeBadge.text}</span>
+        <Link href="/trade" className="text-xs font-semibold rounded-lg border px-3 py-1.5 hover:bg-[var(--surface-2)]" style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}>Trade →</Link>
       </div>
 
       {/* Position composition bar */}
@@ -137,80 +197,125 @@ export default function RosterPage() {
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-[var(--text-sec)]">
           {POSITIONS.map(pos => (
-            <span key={pos} className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full" style={{ background: POS_COLORS[pos] }} />
-              {pos} {counts[pos]}
-            </span>
+            <span key={pos} className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: POS_COLORS[pos] }} />{pos} {counts[pos]}</span>
           ))}
         </div>
       </div>
 
-      {/* Filter pills */}
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {(['ALL', ...POSITIONS] as const).map(p => (
-          <button
-            key={p}
-            onClick={() => setFilter(p)}
-            className="text-xs font-bold rounded-full px-3 py-1 border transition active:scale-95"
-            style={filter === p
-              ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' }
-              : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}
-          >
-            {p}{p !== 'ALL' ? ` ${counts[p as BasketballPosition]}` : ` ${roster.length}`}
-          </button>
-        ))}
+      {/* Lineup controls */}
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <p className="text-xs text-[var(--text-sec)] mr-auto">Drag a player onto a starting slot, or use <b>Start</b> / <b>Bench</b>, then save.</p>
+        <Button variant="ghost" onClick={autoFill}>Auto-fill</Button>
+        <Button variant="primary" disabled={!validation.valid || store.loading} onClick={() => void save()}>
+          {store.loading ? 'Saving…' : 'Save Lineup'}
+        </Button>
+        {saved && <span className="text-sm" style={{ color: 'var(--accent)' }}>✓ Saved</span>}
       </div>
 
-      {/* Table */}
+      {/* Combined table */}
       <div className="rounded-xl border bg-[var(--surface)] overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-[var(--text-sec)] text-xs border-b" style={{ borderColor: 'var(--border)' }}>
-              <Th onClick={() => toggleSort('name')} active={sortKey === 'name'} desc={sortDesc} align="left">Name</Th>
-              <Th onClick={() => toggleSort('position')} active={sortKey === 'position'} desc={sortDesc} align="left">Pos</Th>
-              <Th onClick={() => toggleSort('age')} active={sortKey === 'age'} desc={sortDesc}>Age</Th>
-              <Th onClick={() => toggleSort('overall')} active={sortKey === 'overall'} desc={sortDesc}>OVR</Th>
-              <Th onClick={() => toggleSort('potential')} active={sortKey === 'potential'} desc={sortDesc}>POT</Th>
-              <th className="px-3 py-2 text-right">Contract</th>
-              <th className="px-3 py-2 text-left">Role</th>
-              <Th onClick={() => toggleSort('gp')} active={sortKey === 'gp'} desc={sortDesc}>GP</Th>
-              <th className="px-3 py-2 text-right">PPG</th>
-              <th className="px-3 py-2 text-right">RPG</th>
-              <th className="px-3 py-2 text-right">APG</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(p => {
-              const s = statsForPlayer(statsMap, p.id);
-              const gp = s.gamesPlayed;
-              const per = (v: number) => (gp > 0 ? (v / gp).toFixed(1) : '—');
-              const role = roleById.get(p.id) ?? 'Bench';
-              return (
-                <tr key={p.id} className="border-t hover:bg-[var(--surface-2)] transition-colors" style={{ borderColor: 'var(--border)' }}>
-                  <td className="px-3 py-2">
-                    <button onClick={() => setModalPlayerId(p.id)} className="font-semibold hover:underline text-left" style={{ color: 'var(--accent)' }}>
-                      {p.firstName} {p.lastName}
-                    </button>
-                  </td>
-                  <td className="px-3 py-2"><span className="font-mono text-xs" style={{ color: POS_COLORS[p.sportData.position] }}>{p.sportData.position}</span></td>
-                  <td className="px-3 py-2 text-right tabular-nums">{p.age}</td>
-                  <td className="px-3 py-2 text-right tabular-nums font-bold" style={{ color: ovrColor(p.ratings.overall) }}>{p.ratings.overall}</td>
-                  <td className="px-3 py-2 text-right tabular-nums opacity-70">{p.development.potential}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-xs">{contractLabel(p, league.currentSeason)}</td>
-                  <td className="px-3 py-2"><RoleBadge role={role} /></td>
-                  <td className="px-3 py-2 text-right tabular-nums">{gp}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{per(s.points)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{per(s.totalRebounds)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{per(s.assists)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        {/* Header */}
+        <div className={`${ROW_GRID} text-[10px] uppercase tracking-wide text-[var(--text-sec)] border-b font-semibold`} style={{ ...ROW_COLS, borderColor: 'var(--border)' }}>
+          <span></span><span>Name</span><span>Pos</span><span className="text-right">Age</span><span className="text-right">OVR</span><span className="text-right">POT</span><span className="text-right">Contract</span><span className="text-right">PPG</span><span></span>
+        </div>
+
+        {/* Starters */}
+        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>Starters</div>
+        {POSITIONS.map((pos, slot) => {
+          const p = starters[slot] ? playerById[starters[slot]] : null;
+          return (
+            <div
+              key={pos}
+              onDragOver={e => { e.preventDefault(); setDragOverSlot(slot); }}
+              onDragLeave={() => setDragOverSlot(s => (s === slot ? null : s))}
+              onDrop={e => onDropSlot(slot, e)}
+              className={`${ROW_GRID} border-t`}
+              style={{ ...ROW_COLS, borderColor: 'var(--border)', background: dragOverSlot === slot ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'color-mix(in srgb, var(--accent) 5%, transparent)' }}
+            >
+              <span className="text-[11px] font-black w-9 text-center rounded" style={{ color: POS_COLORS[pos] }} title={`Starting ${pos}`}>{pos}</span>
+              {p ? <PlayerCells p={p} stats={statsForPlayer(statsMap, p.id)} season={league.currentSeason} from="starter" slot={slot} onName={setModalPlayerId} /> : <EmptyStarter />}
+              {p
+                ? <button onClick={() => benchStarter(slot)} className="text-[11px] font-semibold rounded border px-1.5 py-0.5 hover:bg-[var(--surface-2)]" style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}>Bench</button>
+                : <span />}
+            </div>
+          );
+        })}
+
+        {/* Bench */}
+        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-[var(--text-sec)]" style={{ background: 'var(--surface-2)' }}>Bench</div>
+        {bench.map(id => {
+          const p = playerById[id];
+          if (!p) return null;
+          return (
+            <div key={id} className={`${ROW_GRID} border-t`} style={{ ...ROW_COLS, borderColor: 'var(--border)' }}>
+              <span className="text-xs opacity-30 text-center cursor-grab select-none" aria-hidden>⠿</span>
+              <PlayerCellsInner p={p} stats={statsForPlayer(statsMap, p.id)} season={league.currentSeason} onName={setModalPlayerId} draggable from="bench" slot={-1} />
+              <button onClick={() => startPlayer(id)} className="text-[11px] font-semibold rounded border px-1.5 py-0.5 hover:bg-[var(--surface-2)]" style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}>Start</button>
+            </div>
+          );
+        })}
       </div>
+
+      {validation.warnings.length > 0 && (
+        <p className="mt-2 text-xs" style={{ color: '#f59e0b' }}>⚠ {validation.warnings[0].message}</p>
+      )}
 
       <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
     </Shell>
+  );
+}
+
+// ===========================================================================
+// Row cells
+// ===========================================================================
+
+/** Draggable wrapper for a starter row's player cells (handle is the slot badge,
+ *  which isn't draggable; the name area carries the drag). */
+function PlayerCells(props: { p: BasketballPlayer; stats: ReturnType<typeof statsForPlayer>; season: number; from: 'starter'; slot: number; onName: (id: string) => void }) {
+  return <PlayerCellsInner {...props} draggable />;
+}
+
+function PlayerCellsInner({
+  p, stats, season, onName, draggable, from, slot,
+}: {
+  p: BasketballPlayer;
+  stats: ReturnType<typeof statsForPlayer>;
+  season: number;
+  onName: (id: string) => void;
+  draggable?: boolean;
+  from: 'starter' | 'bench';
+  slot: number;
+}) {
+  const gp = stats.gamesPlayed;
+  const ppg = gp > 0 ? (stats.points / gp).toFixed(1) : '—';
+  return (
+    <>
+      <button
+        draggable={draggable}
+        onDragStart={e => { e.dataTransfer.setData('application/json', JSON.stringify({ id: p.id, from, slot })); e.dataTransfer.effectAllowed = 'move'; }}
+        onClick={() => onName(p.id)}
+        className="font-semibold text-left truncate hover:underline cursor-grab"
+        style={{ color: 'var(--accent)' }}
+        title="Drag to a starting slot, or click for details"
+      >
+        {p.firstName} {p.lastName}
+      </button>
+      <span className="text-xs font-mono" style={{ color: POS_COLORS[p.sportData.position] }}>{p.sportData.position}</span>
+      <span className="text-right tabular-nums text-sm">{p.age}</span>
+      <span className="text-right tabular-nums text-sm font-bold" style={{ color: ovrColor(p.ratings.overall) }}>{p.ratings.overall}</span>
+      <span className="text-right tabular-nums text-sm opacity-70">{p.development.potential}</span>
+      <span className="text-right tabular-nums text-xs">{contractLabel(p, season)}</span>
+      <span className="text-right tabular-nums text-sm">{ppg}</span>
+    </>
+  );
+}
+
+function EmptyStarter() {
+  return (
+    <>
+      <span className="text-sm" style={{ color: '#dc2626' }}>— empty —</span>
+      <span /><span /><span /><span /><span /><span />
+    </>
   );
 }
 
@@ -227,19 +332,10 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Th({ children, onClick, active, desc, align = 'right' }: { children: React.ReactNode; onClick: () => void; active: boolean; desc: boolean; align?: 'left' | 'right' }) {
-  return (
-    <th className={`px-3 py-2 ${align === 'left' ? 'text-left' : 'text-right'}`}>
-      <button onClick={onClick} className="inline-flex items-center gap-1 hover:text-[var(--text)] font-semibold">
-        {children}{active && <span aria-hidden>{desc ? '▼' : '▲'}</span>}
-      </button>
-    </th>
-  );
-}
-
-function RoleBadge({ role }: { role: 'Starter' | 'Rotation' | 'Bench' }) {
-  const meta = role === 'Starter' ? { c: '#10b981' } : role === 'Rotation' ? { c: '#f59e0b' } : { c: 'var(--text-sec)' };
-  return <span className="text-xs font-semibold" style={{ color: meta.c }}>{role}</span>;
+function countByPos(roster: BasketballPlayer[]): Record<BasketballPosition, number> {
+  const c: Record<BasketballPosition, number> = { PG: 0, SG: 0, SF: 0, PF: 0, C: 0 };
+  for (const p of roster) c[p.sportData.position]++;
+  return c;
 }
 
 function ovrColor(v: number): string {
