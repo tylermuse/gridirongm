@@ -9,6 +9,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Sidebar } from './Sidebar';
 import { SimToast } from '@/components/ui/Toast';
 import { WhatsNew } from '@/components/ui/WhatsNew';
+import { GameSounds } from '@/components/ui/GameSounds';
 import { nextAction, type ActionKey } from '@/lib/ui/nextAction';
 import { getBracket } from '@/lib/playoffs';
 import type { BasketballTeam } from '@bs/sport-basketball';
@@ -66,6 +67,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <SimToast />
       <WhatsNew />
+      <GameSounds />
     </div>
   );
 }

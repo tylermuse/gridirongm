@@ -125,6 +125,23 @@ export function Sidebar({
         ))}
       </div>
 
+      <Link
+        href="/settings"
+        onClick={onNavigate}
+        className={`flex items-center gap-2.5 px-4 py-2 text-sm border-t transition-colors ${
+          isActive('/settings') ? 'font-bold' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'
+        }`}
+        style={{
+          borderColor: 'var(--border)',
+          ...(isActive('/settings')
+            ? { color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)', boxShadow: 'inset 3px 0 0 var(--accent)' }
+            : {}),
+        }}
+      >
+        <span className="text-base leading-none w-5 text-center" aria-hidden>⚙️</span>
+        Settings
+      </Link>
+
       <div className="px-4 py-3 border-t text-[10px] text-[var(--text-sec)]" style={{ borderColor: 'var(--border)' }}>
         <span className="font-black" style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>BS HOOPS</span> · parody, not the NBA
       </div>
