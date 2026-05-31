@@ -36,7 +36,7 @@ import { generateSocialPosts } from './social';
 import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from './simTelemetry';
 import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
 
-const SAVE_VERSION = 34;
+const SAVE_VERSION = 35;
 
 // Module-local dedup so the Week-1 roster-overflow alert can't infinite-loop
 // when simWeek() is invoked repeatedly from a caller (e.g. handleSimSeason
@@ -10547,6 +10547,73 @@ export const useGameStore = create<GameStore>()(
             for (const p of orphans) {
               (p as Record<string, unknown>).subPosition =
                 deriveSubPosition(p as Parameters<typeof deriveSubPosition>[0]);
+            }
+          }
+        }
+        if (version < 35) {
+          // Remove duplicate-player junk stubs that the 2026 source roster
+          // shipped with: a real player plus a second undrafted stub for the
+          // same person on the same team (e.g. two "Michael Penix Jr." on ATL
+          // — the real #8/2024 pick plus a bogus 46-OVR "Original Roster"
+          // twin). PR #111 fixed the source file; this repairs leagues already
+          // seeded from the old file.
+          //
+          // Tight rule so legit same-name teammates survive (there are two
+          // real "Connor McGovern" OL on one team): only drop a player that
+          // (a) shares a teammate's last name AND a first-name prefix — to
+          // also catch the Micheal/Michael spelling split — AND (b) looks like
+          // a junk stub (undrafted: round 0/null, and no career stats) while
+          // (c) that same-name teammate is real (drafted or has stats). Both
+          // McGoverns are drafted with stats, so neither is junk → both kept.
+          const players35 = ((state as any).players ?? []) as Array<{
+            id: string;
+            firstName?: string;
+            lastName?: string;
+            teamId?: string | null;
+            draftRound?: number | null;
+            stats?: unknown[];
+          }>;
+          if (Array.isArray(players35) && players35.length > 0) {
+            const norm = (s: string | undefined) => (s ?? '').trim().toLowerCase();
+            const isStub = (p: { draftRound?: number | null; stats?: unknown[] }) =>
+              (p.draftRound == null || p.draftRound === 0) && (p.stats?.length ?? 0) === 0;
+            const isReal = (p: { draftRound?: number | null; stats?: unknown[] }) =>
+              (p.draftRound != null && p.draftRound >= 1) || (p.stats?.length ?? 0) > 0;
+            // Group by (lastName, teamId) on real teams only.
+            const groups = new Map<string, typeof players35>();
+            for (const p of players35) {
+              if (!p.teamId) continue;
+              const key = `${norm(p.lastName)}|${p.teamId}`;
+              const list = groups.get(key) ?? [];
+              list.push(p);
+              groups.set(key, list);
+            }
+            const dropIds = new Set<string>();
+            for (const [, grp] of groups) {
+              if (grp.length < 2) continue;
+              for (const p of grp) {
+                if (!isStub(p)) continue;
+                const pf = norm(p.firstName).slice(0, 4);
+                const hasRealTwin = grp.some(
+                  q => q.id !== p.id && isReal(q) && norm(q.firstName).slice(0, 4) === pf && pf.length > 0,
+                );
+                if (hasRealTwin) dropIds.add(p.id);
+              }
+            }
+            if (dropIds.size > 0) {
+              (state as any).players = players35.filter(p => !dropIds.has(p.id));
+              // Scrub dropped ids from team depth charts so no slot references
+              // a player that no longer exists.
+              const teams35 = ((state as any).teams ?? []) as Array<{
+                depthChart?: Record<string, string[]>;
+              }>;
+              for (const t of teams35) {
+                const dc = t.depthChart;
+                if (!dc) continue;
+                for (const pos of Object.keys(dc)) {
+                  dc[pos] = (dc[pos] ?? []).filter(id => !dropIds.has(id));
+                }
+              }
             }
           }
         }

@@ -544,6 +544,15 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
     };
   });
 
+  // Defensive guard: drop duplicate-player junk stubs. Some source roster
+  // files (and community FBGM uploads) ship a real player plus a second
+  // undrafted stub for the same person on the same team (e.g. two
+  // "Michael Penix Jr." on ATL). The pid-keyed conversion above can't catch
+  // these — the stubs carry distinct pids. Same tight rule as the v35 save
+  // migration so legit same-name teammates (two real "Connor McGovern")
+  // survive: only drop a stub that has a real same-name teammate.
+  removeDuplicateStubs(finalizedTeams, players);
+
   // Integrity validator — runs after the import is fully assembled. Catches
   // snapshot-generation bugs where the source roster file was serialized
   // mid-offseason or with stale team assignments. Logs everything as a
@@ -553,6 +562,54 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
   validateImportedLeague(season, finalizedTeams, players);
 
   return { season, teams: finalizedTeams, players, freeAgentIds: expiredFreeAgentIds };
+}
+
+/**
+ * Remove duplicate-player junk stubs in place, and scrub the dropped ids
+ * from team rosters + depth charts. A stub is an undrafted player (round
+ * 0/undefined) with no pro experience; we only drop it when a same-team
+ * teammate shares its last name + first-name 4-char prefix (catches the
+ * Micheal/Michael spelling split) and that teammate is real (drafted or
+ * experienced). Two real same-name teammates are both "real" → both kept.
+ */
+function removeDuplicateStubs(teams: Team[], players: Player[]): void {
+  const norm = (s: string | undefined) => (s ?? '').trim().toLowerCase();
+  const isStub = (p: Player) =>
+    (p.draftRound == null || p.draftRound === 0) && (p.experience ?? 0) === 0;
+  const isReal = (p: Player) =>
+    (p.draftRound != null && p.draftRound >= 1) || (p.experience ?? 0) > 0;
+
+  const groups = new Map<string, Player[]>();
+  for (const p of players) {
+    if (!p.teamId) continue;
+    const key = `${norm(p.lastName)}|${p.teamId}`;
+    const list = groups.get(key) ?? [];
+    list.push(p);
+    groups.set(key, list);
+  }
+  const dropIds = new Set<string>();
+  for (const [, grp] of groups) {
+    if (grp.length < 2) continue;
+    for (const p of grp) {
+      if (!isStub(p)) continue;
+      const pf = norm(p.firstName).slice(0, 4);
+      const hasRealTwin = grp.some(
+        q => q.id !== p.id && isReal(q) && norm(q.firstName).slice(0, 4) === pf && pf.length > 0,
+      );
+      if (hasRealTwin) dropIds.add(p.id);
+    }
+  }
+  if (dropIds.size === 0) return;
+
+  for (let i = players.length - 1; i >= 0; i--) {
+    if (dropIds.has(players[i].id)) players.splice(i, 1);
+  }
+  for (const t of teams) {
+    t.roster = t.roster.filter(id => !dropIds.has(id));
+    for (const pos of Object.keys(t.depthChart) as Position[]) {
+      t.depthChart[pos] = (t.depthChart[pos] ?? []).filter(id => !dropIds.has(id));
+    }
+  }
 }
 
 function validateImportedLeague(season: number, teams: Team[], players: Player[]): void {
