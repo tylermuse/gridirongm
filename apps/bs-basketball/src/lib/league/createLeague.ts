@@ -17,6 +17,7 @@
 import { v4 as uuid } from 'uuid';
 import { CHANGELOG_VERSION } from '../ui/changelog';
 import { marketContract } from './contracts';
+import { generateHeadCoach } from '../coaching/coaches';
 import {
   generateBasketballPlayer,
   generateBasketballSchedule,
@@ -28,6 +29,8 @@ import {
 } from '@bs/sport-basketball';
 import type {
   BaseLeagueState,
+  BaseCoach,
+  CoachId,
   PlayerId,
   TeamId,
   Competition,
@@ -84,9 +87,14 @@ export function createNewBasketballLeague(
   // --- Build teams + players ---
   const teams: BasketballTeam[] = [];
   const players: Record<PlayerId, BasketballPlayer> = {};
+  const coaches: Record<CoachId, BaseCoach> = {};
 
   for (const template of templates) {
     const teamId = `team-${template.abbreviation.toLowerCase()}-${uuid().slice(0, 8)}` as TeamId;
+
+    // Each team gets a head coach (scheme + ratings drive fit + future effects).
+    const headCoach = generateHeadCoach(teamId);
+    coaches[headCoach.id] = headCoach;
 
     // Generate the roster. Slice to rosterSize in case caller passed a smaller value.
     // Interleave positions (PG→C) starting at a per-team offset, so the star /
@@ -146,7 +154,7 @@ export function createNewBasketballLeague(
         pointsAgainst: 0,
         streak: [],
       },
-      coachIds: [],
+      coachIds: [headCoach.id],
       approval: {
         fanApproval: 50,
         ownerApproval: 50,
@@ -205,7 +213,7 @@ export function createNewBasketballLeague(
     teams,
     players,
     freeAgentIds: [],
-    coaches: {},
+    coaches,
     competitions: [competition],
     games: scheduledGames,
     seasonHistory: {},

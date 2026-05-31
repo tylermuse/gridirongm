@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { ExtendModal } from '@/components/modals/ExtendModal';
 import { resolveLineup, validateBasketballLineup, buildDefaultBasketballLineup } from '@/lib/lineup';
+import { getHeadCoach, coachScheme, schemeFit, type SchemeFit } from '@/lib/coaching/coaches';
 import { teamCap, fmtMoney } from '@/lib/dashboard/summary';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import { playerMood, type Mood } from '@/lib/roster/mood';
@@ -203,8 +204,10 @@ export default function RosterPage() {
     ? { text: 'Sign a free agent', color: '#f59e0b' }
     : { text: `${roster.length} / ${TARGET_ROSTER}`, color: 'var(--text-sec)' };
 
+  const hc = getHeadCoach(league, team.id);
+  const hcScheme = hc ? coachScheme(hc) : null;
   const renderCells = (p: BasketballPlayer, isStarter: boolean, dragData: object) => (
-    <PlayerCells p={p} stats={statsForPlayer(statsMap, p.id)} mood={moodFor(p, isStarter)} season={season} dragData={dragData} onName={setModalPlayerId} />
+    <PlayerCells p={p} stats={statsForPlayer(statsMap, p.id)} mood={moodFor(p, isStarter)} fit={hcScheme ? schemeFit(p, hcScheme) : null} season={season} dragData={dragData} onName={setModalPlayerId} />
   );
 
   return (
@@ -327,11 +330,12 @@ export default function RosterPage() {
 // ===========================================================================
 
 function PlayerCells({
-  p, stats, mood, season, dragData, onName,
+  p, stats, mood, fit, season, dragData, onName,
 }: {
   p: BasketballPlayer;
   stats: BasketballStats;
   mood: Mood;
+  fit: SchemeFit | null;
   season: number;
   dragData: object;
   onName: (id: string) => void;
@@ -345,11 +349,18 @@ function PlayerCells({
         draggable
         onDragStart={e => { e.dataTransfer.setData('application/json', JSON.stringify(dragData)); e.dataTransfer.effectAllowed = 'move'; }}
         onClick={() => onName(p.id)}
-        className="font-semibold text-left truncate hover:underline cursor-grab"
+        className="font-semibold text-left truncate hover:underline cursor-grab inline-flex items-center gap-1.5 min-w-0"
         style={{ color: 'var(--accent)' }}
         title="Drag to a starting slot, or click for details"
       >
-        {p.firstName} {p.lastName}
+        {fit && fit.delta !== 0 && (
+          <span
+            className="shrink-0 w-1.5 h-1.5 rounded-full"
+            style={{ background: fit.color }}
+            title={`Scheme fit: ${fit.tier} (${fit.delta > 0 ? '+' : ''}${fit.delta} OVR)`}
+          />
+        )}
+        <span className="truncate">{p.firstName} {p.lastName}</span>
       </button>
       <span className="text-xs font-mono" style={{ color: POS_COLORS[p.sportData.position] }}>{p.sportData.position}</span>
       <span className="text-right tabular-nums text-sm">{p.age}</span>
