@@ -12,6 +12,7 @@ import { PlayerModal } from '@/components/modals/PlayerModal';
 import { ExtendModal } from '@/components/modals/ExtendModal';
 import { resolveLineup, validateBasketballLineup, buildDefaultBasketballLineup } from '@/lib/lineup';
 import { getHeadCoach, coachScheme, schemeFit, type SchemeFit } from '@/lib/coaching/coaches';
+import { getInjuries } from '@/lib/injuries';
 import { teamCap, fmtMoney } from '@/lib/dashboard/summary';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import { playerMood, type Mood } from '@/lib/roster/mood';
@@ -206,8 +207,15 @@ export default function RosterPage() {
 
   const hc = getHeadCoach(league, team.id);
   const hcScheme = hc ? coachScheme(hc) : null;
+  const injuries = getInjuries(league);
+  const today = league.currentTick;
+  const injuryLabel = (id: string): string | null => {
+    const inj = injuries[id];
+    if (!inj || inj.returnDay <= today) return null;
+    return inj.returnDay >= 50_000 ? 'OUT' : `OUT ${inj.returnDay - today}d`;
+  };
   const renderCells = (p: BasketballPlayer, isStarter: boolean, dragData: object) => (
-    <PlayerCells p={p} stats={statsForPlayer(statsMap, p.id)} mood={moodFor(p, isStarter)} fit={hcScheme ? schemeFit(p, hcScheme) : null} season={season} dragData={dragData} onName={setModalPlayerId} />
+    <PlayerCells p={p} stats={statsForPlayer(statsMap, p.id)} mood={moodFor(p, isStarter)} fit={hcScheme ? schemeFit(p, hcScheme) : null} injury={injuryLabel(p.id)} season={season} dragData={dragData} onName={setModalPlayerId} />
   );
 
   return (
@@ -330,12 +338,13 @@ export default function RosterPage() {
 // ===========================================================================
 
 function PlayerCells({
-  p, stats, mood, fit, season, dragData, onName,
+  p, stats, mood, fit, injury, season, dragData, onName,
 }: {
   p: BasketballPlayer;
   stats: BasketballStats;
   mood: Mood;
   fit: SchemeFit | null;
+  injury: string | null;
   season: number;
   dragData: object;
   onName: (id: string) => void;
@@ -370,9 +379,15 @@ function PlayerCells({
       <span className="text-right tabular-nums text-sm">{gp || '—'}</span>
       <span className="text-right tabular-nums text-xs">{statLine}</span>
       <span className="flex justify-center">
-        <span className="text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap" style={{ background: `color-mix(in srgb, ${mood.color} 16%, transparent)`, color: mood.color }} title={mood.reason}>
-          {mood.label}
-        </span>
+        {injury ? (
+          <span className="text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap" style={{ background: 'color-mix(in srgb, #dc2626 16%, transparent)', color: '#dc2626' }} title="Injured — unavailable">
+            🏥 {injury}
+          </span>
+        ) : (
+          <span className="text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap" style={{ background: `color-mix(in srgb, ${mood.color} 16%, transparent)`, color: mood.color }} title={mood.reason}>
+            {mood.label}
+          </span>
+        )}
       </span>
     </>
   );

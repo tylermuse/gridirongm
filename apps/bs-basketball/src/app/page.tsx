@@ -15,6 +15,7 @@ import { NextMatchupCard } from '@/components/dashboard/NextMatchup';
 import { DashboardRow } from '@/components/dashboard/DashboardRow';
 import { LiveViewer } from '@/components/live/LiveViewer';
 import { ApprovalRings, TrophyCase } from '@/components/dashboard/MetaWidgets';
+import { InjuryReport } from '@/components/dashboard/InjuryReport';
 import { GamePlanModal } from '@/components/modals/GamePlanModal';
 import { nextAction } from '@/lib/ui/nextAction';
 import { useRouter } from 'next/navigation';
@@ -182,6 +183,7 @@ export default function HomePage() {
         {userTeam && (
           <>
             <NextMatchupCard league={league} team={userTeam as BasketballTeam} onWatchLive={() => void handleWatchLive()} onGamePlan={() => setGamePlanOpen(true)} loading={loading} />
+            <InjuryReport league={league} team={userTeam as BasketballTeam} />
             <DashboardRow league={league} team={userTeam as BasketballTeam} />
             <div className="grid md:grid-cols-[1fr_15rem] gap-4 mb-6 items-start">
               <TrophyCase league={league} team={userTeam as BasketballTeam} />
