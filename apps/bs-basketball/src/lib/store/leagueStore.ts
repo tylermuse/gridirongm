@@ -49,7 +49,8 @@ import {
   getDraft,
   currentSlot,
 } from '../draft';
-import { resolveUserOffer, type Offer, type OfferResult } from '../freeAgency';
+import { resolveUserOffer, releasePlayer as releasePlayerState, type Offer, type OfferResult } from '../freeAgency';
+import { extendContract } from '../roster/playerActions';
 import { executeTrade, type TradeSideInput } from '../trade';
 import { setTeamLineup } from '../lineup';
 import { clearGmFired } from '../approval';
@@ -154,6 +155,12 @@ interface LeagueStore {
 
   /** Persist a team's lineup (the sim uses it when valid). Returns true on success. */
   saveLineup: (teamId: string, lineup: BasketballLineup) => Promise<boolean>;
+
+  /** Waive a rostered player to free agency (opens a roster spot). */
+  releasePlayer: (playerId: string) => Promise<boolean>;
+
+  /** Extend a player with market-value years onto the end of their deal. */
+  extendPlayer: (playerId: string) => Promise<boolean>;
 }
 
 /** One-line summary for the sim toast: games simmed + the user team's most
@@ -566,6 +573,42 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       return true;
     } catch (err) {
       console.error('[bs-hoops] saveLineup failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
+  async releasePlayer(playerId) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return false; }
+    set({ loading: true, error: null });
+    try {
+      const league = releasePlayerState(current, playerId as Parameters<typeof releasePlayerState>[1]);
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] releasePlayer failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
+  async extendPlayer(playerId) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return false; }
+    const player = current.players[playerId as Parameters<typeof releasePlayerState>[1]];
+    if (!player) { set({ error: 'Player not found.' }); return false; }
+    set({ loading: true, error: null });
+    try {
+      const contract = extendContract(player as Parameters<typeof extendContract>[0], current.currentSeason);
+      const players = { ...current.players, [playerId]: { ...player, contract } };
+      const league = { ...current, players };
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] extendPlayer failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return false;
     }
