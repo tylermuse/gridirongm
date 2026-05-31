@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { NewsFeed } from '@/components/feed/NewsFeed';
-import { GameTicker } from '@/components/dashboard/GameTicker';
 import { useRouter } from 'next/navigation';
 import { canAdvanceSeason } from '@/lib/season';
 import { getBracket } from '@/lib/playoffs';
@@ -221,11 +220,6 @@ export default function HomePage() {
               </Button>
             </div>
 
-            {userTeam && (
-              <div className="mt-8">
-                <GameTicker />
-              </div>
-            )}
           </div>
 
           {/* News sidebar */}

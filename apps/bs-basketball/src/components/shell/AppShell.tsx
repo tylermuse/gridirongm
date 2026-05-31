@@ -10,6 +10,7 @@ import { Sidebar } from './Sidebar';
 import { SimToast } from '@/components/ui/Toast';
 import { WhatsNew } from '@/components/ui/WhatsNew';
 import { GameSounds } from '@/components/ui/GameSounds';
+import { GameTicker } from '@/components/dashboard/GameTicker';
 import { nextAction, type ActionKey } from '@/lib/ui/nextAction';
 import { getBracket } from '@/lib/playoffs';
 import type { BasketballTeam } from '@bs/sport-basketball';
@@ -140,9 +141,17 @@ function TopBar({
           BS HOOPS
         </Link>
 
-        {/* Phase label (left) */}
-        <div className="hidden sm:flex items-center gap-2 text-sm text-[var(--text-sec)] font-semibold">
-          {action.phaseLabel}
+        {/* Schedule ticker (left/center) — replaces the static phase label, with
+            the phase label as a fallback when there's no schedule (offseason). */}
+        <div className="hidden sm:block flex-1 min-w-0 h-full">
+          <GameTicker
+            variant="bare"
+            fallback={
+              <span className="flex items-center h-full text-sm text-[var(--text-sec)] font-semibold">
+                {action.phaseLabel}
+              </span>
+            }
+          />
         </div>
 
         {/* Controls (right) */}
