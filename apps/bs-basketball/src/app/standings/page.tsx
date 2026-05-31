@@ -28,6 +28,13 @@ function sd(t: BasketballTeam): TeamSportData {
   return t.sportData as TeamSportData;
 }
 
+/** Division anchor colors — a scannable left stripe per row (NBA convention). */
+const DIVISION_COLORS: Record<string, string> = {
+  Atlantic: '#10b981', Central: '#8b5cf6', Southeast: '#f59e0b',
+  Northwest: '#f43f5e', Pacific: '#06b6d4', Southwest: '#f97316',
+};
+const divStripe = (t: BasketballTeam) => `inset 3px 0 0 ${DIVISION_COLORS[sd(t).division] ?? 'transparent'}`;
+
 export default function StandingsPage() {
   const { league, loading, error } = useLeagueOrHydrate();
   const { simDay, simRange, loading: storeLoading } = useLeagueStore();
@@ -199,6 +206,7 @@ function ConferenceTable({
                 style={{
                   borderColor: 'var(--border)',
                   background: isUser ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined,
+                  boxShadow: divStripe(t),
                 }}
               >
                 <td className="px-2 py-1">
@@ -265,6 +273,7 @@ function ConferenceTable({
               style={{
                 borderColor: 'var(--border)',
                 background: isUser ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined,
+                boxShadow: divStripe(t),
               }}
             >
               <div className="flex items-center gap-2">
