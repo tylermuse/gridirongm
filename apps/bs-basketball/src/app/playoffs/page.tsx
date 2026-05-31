@@ -26,7 +26,7 @@ import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
  */
 export default function PlayoffsPage() {
   const { league, loading, error } = useLeagueOrHydrate();
-  const { startPlayoffs, simPlayoffDay, loading: storeLoading } = useLeagueStore();
+  const { startPlayoffs, simPlayoffDay, simPlayoffRound, simAllPlayoffs, loading: storeLoading } = useLeagueStore();
 
   const bracket = league ? getBracket(league) : null;
   const teamById = useMemo(() => {
@@ -38,8 +38,8 @@ export default function PlayoffsPage() {
   // Awards modal pops the moment the clinching game is simmed (event-driven,
   // not an effect — avoids cascading-render setState-in-effect).
   const [awardsModalOpen, setAwardsModalOpen] = useState(false);
-  async function handleSimPlayoffDay() {
-    const res = await simPlayoffDay();
+  async function runPlayoffSim(fn: () => Promise<{ champion: string | null } | null>) {
+    const res = await fn();
     if (res?.champion) {
       dropConfetti();
       setAwardsModalOpen(true);
@@ -109,14 +109,17 @@ export default function PlayoffsPage() {
             : `Day ${bracket.dayIndex} · best-of-7 every round`}
         </p>
         {!bracket.complete && (
-          <Button
-            variant="primary"
-            onClick={() => void handleSimPlayoffDay()}
-            disabled={storeLoading}
-            className="ml-auto"
-          >
-            {storeLoading ? 'Simming…' : 'Sim Playoff Day →'}
-          </Button>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button variant="primary" disabled={storeLoading} onClick={() => void runPlayoffSim(simPlayoffDay)}>
+              {storeLoading ? 'Simming…' : 'Sim Day'}
+            </Button>
+            <Button variant="secondary" disabled={storeLoading} onClick={() => void runPlayoffSim(simPlayoffRound)}>
+              Sim Round
+            </Button>
+            <Button variant="secondary" disabled={storeLoading} onClick={() => void runPlayoffSim(simAllPlayoffs)}>
+              Sim All Playoffs
+            </Button>
+          </div>
         )}
       </div>
 

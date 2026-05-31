@@ -35,6 +35,8 @@ import { simThroughDay, TRADE_DEADLINE_DAY } from '../sim/simRange';
 import {
   initializePlayoffs,
   simPlayoffDay,
+  simPlayoffRound,
+  simAllPlayoffs,
   isRegularSeasonComplete,
   getBracket,
 } from '../playoffs';
@@ -100,6 +102,12 @@ interface LeagueStore {
   /** Sim one playoff "day" — the next game of every active series. Returns
    *  the games simmed + champion id (set only when the Finals finish). */
   simPlayoffDay: () => Promise<{ gamesSimmed: number; champion: string | null } | null>;
+
+  /** Sim until the current playoff round resolves. */
+  simPlayoffRound: () => Promise<{ gamesSimmed: number; champion: string | null } | null>;
+
+  /** Sim the rest of the postseason to a champion. */
+  simAllPlayoffs: () => Promise<{ gamesSimmed: number; champion: string | null } | null>;
 
   /** Enter the offseason once a champion is crowned: age/retire players and
    *  set up the draft. Returns true on success (or if already in offseason). */
@@ -504,6 +512,40 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       console.error('[bs-hoops] saveLineup failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return false;
+    }
+  },
+
+  async simPlayoffRound() {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return null; }
+    set({ loading: true, error: null });
+    try {
+      const outcome = simPlayoffRound(current);
+      if (!outcome) { set({ loading: false, error: 'No playoff games left to sim.' }); return null; }
+      await saveLeague(outcome.league);
+      set({ league: outcome.league, loading: false });
+      return { gamesSimmed: outcome.gamesSimmed, champion: outcome.champion };
+    } catch (err) {
+      console.error('[bs-hoops] simPlayoffRound failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  },
+
+  async simAllPlayoffs() {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return null; }
+    set({ loading: true, error: null });
+    try {
+      const outcome = simAllPlayoffs(current);
+      if (!outcome) { set({ loading: false, error: 'No playoff games left to sim.' }); return null; }
+      await saveLeague(outcome.league);
+      set({ league: outcome.league, loading: false });
+      return { gamesSimmed: outcome.gamesSimmed, champion: outcome.champion };
+    } catch (err) {
+      console.error('[bs-hoops] simAllPlayoffs failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return null;
     }
   },
 

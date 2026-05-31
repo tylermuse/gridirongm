@@ -3,7 +3,10 @@ export {
   isRegularSeasonComplete,
   initializePlayoffs,
   simPlayoffDay,
+  simPlayoffRound,
+  simAllPlayoffs,
   type SimPlayoffDayResult,
+  type SimPlayoffBatchResult,
 } from './bracket';
 export { seedConferences } from './seeding';
 export type {

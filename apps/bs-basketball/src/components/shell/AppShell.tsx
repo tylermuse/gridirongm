@@ -4,10 +4,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useLeagueStore } from '@/lib/store/leagueStore';
-import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Sidebar } from './Sidebar';
 import { nextAction, type ActionKey } from '@/lib/ui/nextAction';
+import { getBracket } from '@/lib/playoffs';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -76,23 +77,22 @@ function TopBar({
 }) {
   const store = useLeagueStore();
   const router = useRouter();
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const action = nextAction(league);
-  const played = league.games.filter(g => g.status === 'played').length;
-  const total = league.games.length;
   const userTeam = league.userTeamId
     ? (league.teams.find(t => t.id === league.userTeamId) as BasketballTeam | undefined) ?? null
     : null;
+  const banner = bannerText(league, userTeam);
 
   async function run(key: ActionKey) {
-    setMenuOpen(false);
     switch (key) {
       case 'simDay': await store.simDay(); break;
       case 'simWeek': await store.simRange('week'); break;
       case 'simDeadline': await store.simRange('deadline'); break;
       case 'simSeason': await store.simRange('season'); break;
       case 'simPlayoffDay': await store.simPlayoffDay(); break;
+      case 'simPlayoffRound': await store.simPlayoffRound(); break;
+      case 'simAllPlayoffs': await store.simAllPlayoffs(); break;
       case 'simDraftToUser': await store.simDraftToUser(); break;
       case 'goDraft': router.push('/draft'); break;
       case 'startPlayoffs': { if (await store.startPlayoffs()) router.push('/playoffs'); break; }
@@ -102,65 +102,69 @@ function TopBar({
   }
 
   return (
-    <header
-      className="sticky top-0 z-30 h-14 border-b backdrop-blur flex items-center gap-3 px-4"
-      style={{ background: 'color-mix(in srgb, var(--bg) 88%, transparent)', borderColor: 'var(--border)' }}
-    >
-      <button onClick={onMenu} aria-label="Menu" className="md:hidden w-9 h-9 -ml-1 inline-flex items-center justify-center rounded-lg hover:bg-[var(--surface-2)]">
-        <span className="text-xl leading-none">☰</span>
-      </button>
-      <Link href="/" className="md:hidden text-lg font-black tracking-tight" style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>
-        BS HOOPS
-      </Link>
+    <header className="sticky top-0 z-30 border-b" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+      {/* Main row */}
+      <div className="h-14 flex items-center gap-2 px-3 md:px-6">
+        <button onClick={onMenu} aria-label="Menu" className="md:hidden w-9 h-9 -ml-1 inline-flex items-center justify-center rounded-lg hover:bg-[var(--surface-2)]">
+          <span className="text-xl leading-none">☰</span>
+        </button>
+        <Link href="/" className="md:hidden text-base font-black tracking-tight mr-1" style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>
+          BS HOOPS
+        </Link>
 
-      <Badge variant="orange" size="md">Day {league.currentTick}</Badge>
-      <span className="hidden sm:inline text-xs text-[var(--text-sec)] tabular-nums">{played} / {total} games</span>
-
-      <div className="ml-auto flex items-center gap-2">
-        {/* Phase-aware primary CTA (+ secondary dropdown) */}
-        <div className="relative inline-flex">
-          <button
-            onClick={() => void run(action.primary)}
-            disabled={store.loading}
-            className="px-4 py-2 rounded-lg font-bold text-sm transition disabled:opacity-50 text-white"
-            style={{ background: 'var(--accent)', borderTopRightRadius: action.secondary ? 0 : undefined, borderBottomRightRadius: action.secondary ? 0 : undefined }}
-          >
-            {store.loading ? 'Working…' : `${action.label} →`}
-          </button>
-          {action.secondary && (
-            <button
-              onClick={() => setMenuOpen(o => !o)}
-              disabled={store.loading}
-              aria-label="More sim options"
-              className="px-2 py-2 rounded-r-lg font-bold text-sm text-white border-l border-white/25 disabled:opacity-50"
-              style={{ background: 'var(--accent)' }}
-            >
-              ▾
-            </button>
-          )}
-          {menuOpen && action.secondary && (
-            <div className="absolute right-0 top-full mt-1 w-52 rounded-lg border bg-[var(--surface)] shadow-lg overflow-hidden z-40" style={{ borderColor: 'var(--border)' }}>
-              {action.secondary.map(s => (
-                <button
-                  key={s.key}
-                  onClick={() => void run(s.key)}
-                  className="w-full text-left px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-2)]"
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          )}
+        {/* Phase label (left) */}
+        <div className="hidden sm:flex items-center gap-2 text-sm text-[var(--text-sec)] font-semibold">
+          {action.phaseLabel}
         </div>
 
-        {userTeam && (
-          <Link href={`/team/${userTeam.id}`} className="hidden sm:block" title={`${userTeam.city} ${userTeam.name}`}>
-            <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="sm" />
-          </Link>
-        )}
+        {/* Controls (right) */}
+        <div className="ml-auto flex items-center gap-1.5 md:gap-2 flex-wrap justify-end">
+          <Button size="sm" disabled={store.loading} onClick={() => void run(action.primary)} className="active:scale-95">
+            {store.loading ? 'Working…' : action.label}
+          </Button>
+          {action.secondary?.map(s => (
+            <Button key={s.key} size="sm" variant="secondary" disabled={store.loading} onClick={() => void run(s.key)} className="hidden sm:inline-flex active:scale-95">
+              {s.label}
+            </Button>
+          ))}
+          {userTeam && (
+            <Link href={`/team/${userTeam.id}`} className="ml-1" title={`${userTeam.city} ${userTeam.name}`}>
+              <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="sm" />
+            </Link>
+          )}
+        </div>
       </div>
+
+      {/* Status banner */}
+      {banner && (
+        <div className="px-3 md:px-6 py-1.5 border-t text-xs text-[var(--text-sec)] truncate" style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}>
+          {banner}
+        </div>
+      )}
     </header>
   );
+}
+
+/** Context line under the top bar — the user team's record + games left / seed. */
+function bannerText(
+  league: NonNullable<ReturnType<typeof useLeagueStore.getState>['league']>,
+  userTeam: BasketballTeam | null,
+): string | null {
+  if (!userTeam) return `${league.teams.length} teams · Day ${league.currentTick}`;
+  const rec = `${userTeam.record.wins}–${userTeam.record.losses}`;
+  const bracket = getBracket(league);
+  if (bracket) {
+    const seed = bracket.seedInfo[userTeam.id]?.seed;
+    if (bracket.complete) {
+      const champ = bracket.championTeamId === userTeam.id;
+      return `${userTeam.city} ${userTeam.name} · ${rec} · ${champ ? '🏆 Champions' : 'Season complete'}`;
+    }
+    return `${userTeam.city} ${userTeam.name} · ${rec} · ${seed ? `#${seed} seed` : 'did not make the playoffs'}`;
+  }
+  const remaining = league.games.filter(
+    g => g.status === 'scheduled' && (g.homeTeamId === userTeam.id || g.awayTeamId === userTeam.id),
+  ).length;
+  return `${userTeam.city} ${userTeam.name} · ${rec}${remaining > 0 ? ` · ${remaining} games remaining` : ''}`;
 }
 
 function Footer() {
