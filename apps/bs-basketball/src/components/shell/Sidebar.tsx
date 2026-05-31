@@ -52,7 +52,7 @@ function sectionsFor(userTeamId: string | null): NavSection[] {
     sections.splice(1, 0, {
       label: 'My Team',
       items: [
-        { href: `/team/${userTeamId}`, label: 'Roster', icon: '👥' },
+        { href: '/roster', label: 'Roster', icon: '👥' },
         { href: `/team/${userTeamId}/lineup`, label: 'Lineup', icon: '📝' },
       ],
     });
