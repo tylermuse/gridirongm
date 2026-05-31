@@ -7,7 +7,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PlayerModal } from '@/components/modals/PlayerModal';
-import { computeSeasonAwards, type SeasonAwards } from '@/lib/awards';
+import { computeSeasonAwards, computeHonors, type SeasonAwards, type SeasonHonors, type AllLeagueTeam } from '@/lib/awards';
 import { getBracket } from '@/lib/playoffs';
 import { perGame, emptyBasketballStats, type BasketballPlayer, type BasketballTeam } from '@bs/sport-basketball';
 import type { AwardResult } from '@bs/sport-basketball';
@@ -53,6 +53,10 @@ export default function AwardsPage() {
     () => (league ? computeSeasonAwards(league) : null),
     [league],
   );
+  const honors = useMemo<SeasonHonors | null>(
+    () => (league ? computeHonors(league) : null),
+    [league],
+  );
   const teamById = useMemo(() => {
     const m = new Map<string, BasketballTeam>();
     if (league) for (const t of league.teams) m.set(t.id, t as BasketballTeam);
@@ -92,20 +96,54 @@ export default function AwardsPage() {
           </div>
         </div>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {AWARDS.map(def => (
-            <AwardCard
-              key={def.key}
-              def={def}
-              winner={awards.winners[def.key]}
-              awards={awards}
-              league={league}
-              teamById={teamById}
-              playerById={playerById}
-              onPlayerClick={setModalPlayerId}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {AWARDS.map(def => (
+              <AwardCard
+                key={def.key}
+                def={def}
+                winner={awards.winners[def.key]}
+                awards={awards}
+                league={league}
+                teamById={teamById}
+                playerById={playerById}
+                onPlayerClick={setModalPlayerId}
+              />
+            ))}
+          </div>
+
+          {honors && (
+            <>
+              <AllLeagueSection title="All-NBA" teams={honors.allNBA} teamById={teamById} onPlayerClick={setModalPlayerId} />
+              <AllLeagueSection title="All-Defensive" teams={honors.allDefensive} teamById={teamById} onPlayerClick={setModalPlayerId} />
+              <AllLeagueSection title="All-Rookie" teams={honors.allRookie} teamById={teamById} onPlayerClick={setModalPlayerId} />
+
+              {honors.retirements.length > 0 && (
+                <section className="mt-8">
+                  <h2 className="text-lg font-bold mb-3">🎩 Retiring this offseason ({honors.retirements.length})</h2>
+                  <div className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+                    {honors.retirements.map(r => {
+                      const team = r.teamId ? teamById.get(r.teamId) : null;
+                      return (
+                        <button
+                          key={r.playerId}
+                          onClick={() => setModalPlayerId(r.playerId)}
+                          className="w-full flex items-center gap-2 px-4 py-2 border-t first:border-t-0 text-left text-sm hover:bg-[var(--surface-2)]"
+                          style={{ borderColor: 'var(--border)' }}
+                        >
+                          <span className="w-7 text-xs font-mono text-[var(--text-sec)]">{r.position}</span>
+                          <span className="font-semibold truncate flex-1">{r.name}</span>
+                          {team && <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="xs" />}
+                          <span className="text-xs text-[var(--text-sec)] tabular-nums">{r.overall} OVR · age {r.age}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+        </>
       )}
 
       <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
@@ -232,6 +270,50 @@ function AwardCard({
         </div>
       )}
     </Shell>
+  );
+}
+
+function AllLeagueSection({
+  title, teams, teamById, onPlayerClick,
+}: {
+  title: string;
+  teams: AllLeagueTeam[];
+  teamById: Map<string, BasketballTeam>;
+  onPlayerClick: (id: string) => void;
+}) {
+  if (teams.length === 0 || teams.every(t => t.players.length === 0)) return null;
+  return (
+    <section className="mt-8">
+      <h2 className="text-lg font-bold mb-3">{title}</h2>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {teams.map(team => (
+          <div key={team.name} className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+            <div className="px-3 py-2 border-b text-[10px] font-bold uppercase tracking-widest opacity-70" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
+              {team.name}
+            </div>
+            <ul>
+              {team.players.map(pl => {
+                const t = pl.teamId ? teamById.get(pl.teamId) : null;
+                return (
+                  <li key={pl.playerId}>
+                    <button
+                      onClick={() => onPlayerClick(pl.playerId)}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 border-t first:border-t-0 text-left text-sm hover:bg-[var(--surface-2)]"
+                      style={{ borderColor: 'var(--border)' }}
+                    >
+                      <span className="w-6 text-xs font-mono text-[var(--text-sec)]">{pl.position}</span>
+                      <span className="font-semibold truncate flex-1">{pl.name}</span>
+                      {t && <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="xs" />}
+                      <span className="text-[10px] text-[var(--text-sec)] tabular-nums">{pl.statline}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
