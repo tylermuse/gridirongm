@@ -16,20 +16,18 @@
 
 import { v4 as uuid } from 'uuid';
 import { CHANGELOG_VERSION } from '../ui/changelog';
+import { marketContract } from './contracts';
 import {
   generateBasketballPlayer,
   generateBasketballSchedule,
   buildDefaultBasketballLineup,
   basketballAdapter,
-  basketballMarketSalary,
-  basketballMarketContractYears,
   type BasketballPlayer,
   type BasketballPosition,
   type BasketballTeam,
 } from '@bs/sport-basketball';
 import type {
   BaseLeagueState,
-  BaseContract,
   PlayerId,
   TeamId,
   Competition,
@@ -61,40 +59,11 @@ export interface CreateBasketballLeagueOptions {
 // Roster position distribution
 // ===========================================================================
 
-/** Target position counts on a 15-man roster (3 of each, then +1 for guards
- *  +1 for wings — close to real NBA composition). */
-const ROSTER_POSITIONS: BasketballPosition[] = [
-  'PG', 'PG', 'PG',
-  'SG', 'SG', 'SG',
-  'SF', 'SF', 'SF',
-  'PF', 'PF', 'PF',
-  'C',  'C',  'C',
-];
-
-/**
- * Give a generated player a market-value contract so the cap is real from day
- * one. Without this, generated veterans carry no contract and every team sits
- * at $0 payroll / full cap room — making the cap and free agency meaningless.
- * Length + salary come from the same market model free agency uses; flat
- * salary across the term, fully guaranteed. (New leagues only — existing saves
- * are left untouched.)
- */
-function marketContract(player: BasketballPlayer, season: number): BaseContract {
-  const salary = basketballMarketSalary(player, { season, noiseSeed: player.id });
-  const years = basketballMarketContractYears(player);
-  return {
-    years: Array.from({ length: years }, (_, i) => ({
-      season: season + i,
-      baseSalary: salary,
-      proratedBonus: 0,
-      guaranteed: true,
-    })),
-    signedSeason: season,
-    guaranteedAtSigning: salary * years,
-    modifications: [],
-    sportData: {},
-  };
-}
+/** Position cycle. Roster slots interleave PG→C (rotated per team) so the
+ *  talent tiers — which are assigned by slot index — spread across positions
+ *  instead of stacking the best ratings on point guards and the worst on
+ *  centers. 15 slots → 3 of each position. */
+const POS_ORDER: BasketballPosition[] = ['PG', 'SG', 'SF', 'PF', 'C'];
 
 // ===========================================================================
 // Main entry
@@ -120,13 +89,17 @@ export function createNewBasketballLeague(
     const teamId = `team-${template.abbreviation.toLowerCase()}-${uuid().slice(0, 8)}` as TeamId;
 
     // Generate the roster. Slice to rosterSize in case caller passed a smaller value.
-    const positions = ROSTER_POSITIONS.slice(0, rosterSize);
+    // Interleave positions (PG→C) starting at a per-team offset, so the star /
+    // starter tiers below rotate through positions instead of always landing on
+    // point guards.
+    const posOffset = Math.floor(Math.random() * POS_ORDER.length);
+    const positions = Array.from({ length: rosterSize }, (_, i) => POS_ORDER[(posOffset + i) % POS_ORDER.length]);
     const rosterPlayers: BasketballPlayer[] = [];
     for (let i = 0; i < positions.length; i++) {
       const pos = positions[i];
       // Mix the target OVR so each team has a star, several starters, role
-      // players, and a couple of bench guys. Position 0 (the highest-OVR PG)
-      // is the team's "star"; positions 5-9 are starters; rest is depth.
+      // players, and a couple of bench guys. Slot 0 is the team's "star";
+      // slots 1-4 starters; 5-9 rotation; the rest depth.
       let targetOvr: number;
       if (i === 0) targetOvr = 78 + Math.round(Math.random() * 8); // 78-85
       else if (i < 5) targetOvr = 73 + Math.round(Math.random() * 6); // 73-78
