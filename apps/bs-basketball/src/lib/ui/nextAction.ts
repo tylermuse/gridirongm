@@ -18,7 +18,7 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 export type ActionKey =
   | 'simDay' | 'simWeek' | 'simDeadline' | 'simSeason'
   | 'startPlayoffs' | 'simPlayoffDay' | 'simPlayoffRound' | 'simAllPlayoffs'
-  | 'enterOffseason' | 'simDraftToUser' | 'goDraft' | 'startNextSeason';
+  | 'enterOffseason' | 'simDraftToUser' | 'goDraft' | 'startNextSeason' | 'goFreeAgency';
 
 export interface NextAction {
   /** Short phase label for the bar, e.g. "Regular Season", "Playoffs". */
@@ -58,6 +58,19 @@ export function nextAction(league: LeagueState): NextAction {
 
   // Regular season complete, playoffs not started
   if (!hasScheduled) return { phaseLabel: 'Regular Season Over', label: 'Start Playoffs', primary: 'startPlayoffs' };
+
+  // Preseason: a fresh schedule with no games played yet AND free agents in the
+  // pool (waived-overflow + undrafted players from the rollover). Steer the user
+  // to sign them before tipping off, since nothing else surfaces free agency.
+  const noGamesPlayed = !league.games.some(g => g.status === 'played');
+  if (noGamesPlayed && league.freeAgentIds.length > 0) {
+    return {
+      phaseLabel: 'Preseason · Free Agency',
+      label: 'Sign Free Agents',
+      primary: 'goFreeAgency',
+      secondary: [{ label: 'Sim Day', key: 'simDay' }],
+    };
+  }
 
   // Regular season in progress
   return {

@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { resolveLineup } from '@/lib/lineup';
 import { teamCap, fmtMoney } from '@/lib/dashboard/summary';
+import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import type { BasketballPlayer, BasketballPosition, BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -43,6 +44,9 @@ export default function RosterPage() {
     return team.playerIds.map(id => players[id]).filter((p): p is BasketballPlayer => !!p);
   }, [league, team]);
 
+  // Season stats are aggregated from box scores — player.seasonStats isn't kept.
+  const statsMap = useMemo(() => (league ? regularSeasonStatsByPlayer(league) : new Map()), [league]);
+
   // Role per player, derived from the resolved lineup.
   const roleById = useMemo(() => {
     const m = new Map<string, 'Starter' | 'Rotation' | 'Bench'>();
@@ -71,11 +75,11 @@ export default function RosterPage() {
         case 'age': d = a.age - b.age; break;
         case 'overall': d = a.ratings.overall - b.ratings.overall; break;
         case 'potential': d = a.development.potential - b.development.potential; break;
-        case 'gp': d = a.seasonStats.gamesPlayed - b.seasonStats.gamesPlayed; break;
+        case 'gp': d = statsForPlayer(statsMap, a.id).gamesPlayed - statsForPlayer(statsMap, b.id).gamesPlayed; break;
       }
       return d * dir;
     });
-  }, [roster, filter, sortKey, sortDesc]);
+  }, [roster, filter, sortKey, sortDesc, statsMap]);
 
   if (loading) return <Shell><p className="opacity-60">Loading…</p></Shell>;
   if (!league) return <Shell><p>{error ?? 'No league loaded.'}</p></Shell>;
@@ -177,7 +181,8 @@ export default function RosterPage() {
           </thead>
           <tbody>
             {rows.map(p => {
-              const gp = p.seasonStats.gamesPlayed;
+              const s = statsForPlayer(statsMap, p.id);
+              const gp = s.gamesPlayed;
               const per = (v: number) => (gp > 0 ? (v / gp).toFixed(1) : '—');
               const role = roleById.get(p.id) ?? 'Bench';
               return (
@@ -194,9 +199,9 @@ export default function RosterPage() {
                   <td className="px-3 py-2 text-right tabular-nums text-xs">{contractLabel(p, league.currentSeason)}</td>
                   <td className="px-3 py-2"><RoleBadge role={role} /></td>
                   <td className="px-3 py-2 text-right tabular-nums">{gp}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{per(p.seasonStats.points)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{per(p.seasonStats.totalRebounds)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{per(p.seasonStats.assists)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{per(s.points)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{per(s.totalRebounds)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{per(s.assists)}</td>
                 </tr>
               );
             })}

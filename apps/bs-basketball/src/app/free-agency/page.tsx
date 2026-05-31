@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -30,6 +31,7 @@ import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 export default function FreeAgencyPage() {
   const { league, loading, error } = useLeagueOrHydrate();
   const store = useLeagueStore();
+  const router = useRouter();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [years, setYears] = useState(2);
@@ -83,6 +85,16 @@ export default function FreeAgencyPage() {
           <p className="text-sm opacity-70">
             {userTeam.city} · roster {count}/{MAX_ROSTER} · cap room {money(room)}
           </p>
+        )}
+        {!league.games.some(g => g.status === 'played') && (
+          <Button
+            variant="primary"
+            className="ml-auto"
+            disabled={store.loading}
+            onClick={() => { void store.simDay().then(() => router.push('/')); }}
+          >
+            {store.loading ? 'Tipping off…' : 'Start the Season →'}
+          </Button>
         )}
       </header>
 

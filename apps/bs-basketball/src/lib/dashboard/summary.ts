@@ -14,6 +14,7 @@ import {
 } from '@bs/sport-basketball';
 import type { BaseGameResult, BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
+import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 type GameResult = BaseGameResult<BasketballStats>;
@@ -121,10 +122,12 @@ export function teamStatLine(league: LeagueState, team: BasketballTeam): TeamSta
   const ppg = gp > 0 ? team.record.pointsFor / gp : 0;
   const oppPpg = gp > 0 ? team.record.pointsAgainst / gp : 0;
 
+  // Season stats are aggregated from box scores (player.seasonStats isn't kept).
+  const statsMap = regularSeasonStatsByPlayer(league);
   let fgm = 0, fga = 0, tpm = 0, tpa = 0, ftm = 0, fta = 0;
   let leader: { name: string; ppg: number } | null = null;
   for (const p of teamPlayers(league, team)) {
-    const s = p.seasonStats;
+    const s = statsForPlayer(statsMap, p.id);
     fgm += s.fieldGoalsMade; fga += s.fieldGoalsAttempted;
     tpm += s.threePointsMade; tpa += s.threePointsAttempted;
     ftm += s.freeThrowsMade; fta += s.freeThrowsAttempted;
