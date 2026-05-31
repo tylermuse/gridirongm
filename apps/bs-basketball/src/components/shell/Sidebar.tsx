@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { SidebarFooter } from './SidebarFooter';
 import type { useLeagueStore } from '@/lib/store/leagueStore';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
@@ -52,7 +53,7 @@ function sectionsFor(userTeamId: string | null): NavSection[] {
     sections.splice(1, 0, {
       label: 'My Team',
       items: [
-        { href: `/team/${userTeamId}`, label: 'Roster', icon: '👥' },
+        { href: '/roster', label: 'Roster', icon: '👥' },
         { href: `/team/${userTeamId}/lineup`, label: 'Lineup', icon: '📝' },
       ],
     });
@@ -142,6 +143,8 @@ export function Sidebar({
         <span className="text-base leading-none w-5 text-center" aria-hidden>⚙️</span>
         Settings
       </Link>
+
+      <SidebarFooter onNavigate={onNavigate} />
 
       <div className="px-4 py-3 border-t text-[10px] text-[var(--text-sec)]" style={{ borderColor: 'var(--border)' }}>
         <span className="font-black" style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>BS HOOPS</span> · parody, not the NBA

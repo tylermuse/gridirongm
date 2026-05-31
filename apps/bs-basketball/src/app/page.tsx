@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { listLeagues, deleteLeague, type LeagueSaveMeta } from '@/lib/persistence/db';
@@ -9,6 +9,11 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { NewsFeed } from '@/components/feed/NewsFeed';
+import { TeamHero } from '@/components/dashboard/TeamHero';
+import { OwnerObjectives } from '@/components/dashboard/OwnerObjectives';
+import { NextMatchupCard } from '@/components/dashboard/NextMatchup';
+import { DashboardRow } from '@/components/dashboard/DashboardRow';
+import { nextAction } from '@/lib/ui/nextAction';
 import { useRouter } from 'next/navigation';
 import { canAdvanceSeason } from '@/lib/season';
 import { getBracket } from '@/lib/playoffs';
@@ -36,22 +41,6 @@ export default function HomePage() {
   const [showLoadList, setShowLoadList] = useState(false);
   const [search, setSearch] = useState('');
   const [pickingAbbr, setPickingAbbr] = useState<string | null>(null);
-  const [flashGames, setFlashGames] = useState(false);
-  const prevPlayedRef = useRef<number | null>(null);
-
-  // Total played games — used to flash the Games Played card after a sim.
-  const playedCount = league ? league.games.filter(g => g.status === 'played').length : 0;
-
-  useEffect(() => {
-    if (!league) { prevPlayedRef.current = null; return; }
-    const prev = prevPlayedRef.current;
-    prevPlayedRef.current = playedCount;
-    if (prev !== null && playedCount > prev) {
-      setFlashGames(true);
-      const id = window.setTimeout(() => setFlashGames(false), 1200);
-      return () => window.clearTimeout(id);
-    }
-  }, [playedCount, league]);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,17 +87,21 @@ export default function HomePage() {
       : undefined;
     return (
       <div className="max-w-6xl mx-auto px-5 py-12">
-        <div className="flex flex-wrap items-baseline gap-4 mb-6">
-          <h1
-            className="text-5xl sm:text-6xl font-black tracking-tight"
-            style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}
-          >
-            {league.displayName}
-          </h1>
-          <span className="text-[var(--text-sec)] text-sm">
-            Season {league.currentSeason} · {league.currentPhase} · Day {league.currentTick}
-          </span>
-        </div>
+        {userTeam ? (
+          <TeamHero league={league} team={userTeam as BasketballTeam} />
+        ) : (
+          <div className="flex flex-wrap items-baseline gap-4 mb-6">
+            <h1
+              className="text-5xl sm:text-6xl font-black tracking-tight"
+              style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}
+            >
+              {league.displayName}
+            </h1>
+            <span className="text-[var(--text-sec)] text-sm">
+              Season {league.currentSeason} · {nextAction(league).phaseLabel}
+            </span>
+          </div>
+        )}
 
         {fired && !league.userTeamId && (
           <div className="mb-8 rounded-xl border-2 p-5 flex flex-wrap items-center gap-4" style={{ borderColor: '#dc2626', background: 'color-mix(in srgb, #dc2626 8%, transparent)' }}>
@@ -176,32 +169,17 @@ export default function HomePage() {
           </div>
         )}
 
+        {userTeam && (
+          <>
+            <NextMatchupCard league={league} team={userTeam as BasketballTeam} />
+            <DashboardRow league={league} team={userTeam as BasketballTeam} />
+          </>
+        )}
+
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main column */}
           <div className="lg:col-span-2">
-            {userTeam && (
-              <div className="flex items-center gap-3 mb-8">
-                <TeamLogo
-                  abbreviation={userTeam.abbreviation}
-                  primaryColor={userTeam.primaryColor}
-                  secondaryColor={userTeam.secondaryColor}
-                  size="lg"
-                />
-                <div>
-                  <div className="text-xs uppercase tracking-widest opacity-60">You manage</div>
-                  <div className="text-xl font-bold">{userTeam.city} {userTeam.name}</div>
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-              <StatCard label="Teams" value={league.teams.length} />
-              <StatCard label="Games Played" value={`${playedCount} / ${league.games.length}`} flash={flashGames} />
-              <StatCard label="Day" value={league.currentTick} />
-              <StatCard label="Saves" value={saves.length} />
-            </div>
-
-            {userTeam && <FrontOffice team={userTeam as BasketballTeam} />}
+            {userTeam && <OwnerObjectives league={league} team={userTeam as BasketballTeam} />}
 
             <div className="flex flex-wrap gap-3">
               <Link href="/league">
@@ -425,55 +403,3 @@ export default function HomePage() {
 // Bits
 // ===========================================================================
 
-function StatCard({ label, value, flash }: { label: string; value: string | number; flash?: boolean }) {
-  return (
-    <Card className={`!p-4 transition-shadow ${flash ? 'ring-2 ring-yellow-400 animate-pulse' : ''}`}>
-      <div
-        className="text-2xl font-black"
-        style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}
-      >
-        {value}
-      </div>
-      <div className="text-[10px] uppercase tracking-widest opacity-60 mt-0.5">{label}</div>
-    </Card>
-  );
-}
-
-const JOB_SECURITY_META: Record<string, { label: string; color: string }> = {
-  safe: { label: 'Safe', color: '#10b981' },
-  warm: { label: 'On Notice', color: '#f59e0b' },
-  hot: { label: 'Hot Seat', color: '#f97316' },
-  final_warning: { label: 'Final Warning', color: '#dc2626' },
-};
-
-function FrontOffice({ team }: { team: BasketballTeam }) {
-  const { fanApproval, ownerApproval, jobSecurity } = team.approval;
-  const job = JOB_SECURITY_META[jobSecurity] ?? JOB_SECURITY_META.safe;
-  return (
-    <Card className="!p-4 mb-8">
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-xs uppercase tracking-widest opacity-60">Front Office</div>
-        <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ background: `color-mix(in srgb, ${job.color} 18%, transparent)`, color: job.color }}>
-          {job.label}
-        </span>
-      </div>
-      <ApprovalBar label="Owner approval" value={ownerApproval} />
-      <ApprovalBar label="Fan approval" value={fanApproval} />
-    </Card>
-  );
-}
-
-function ApprovalBar({ label, value }: { label: string; value: number }) {
-  const color = value >= 60 ? '#10b981' : value >= 40 ? '#f59e0b' : '#dc2626';
-  return (
-    <div className="mb-2 last:mb-0">
-      <div className="flex justify-between text-xs mb-1">
-        <span className="opacity-70">{label}</span>
-        <span className="tabular-nums font-semibold">{Math.round(value)}</span>
-      </div>
-      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
-        <div className="h-full rounded-full" style={{ width: `${value}%`, background: color }} />
-      </div>
-    </div>
-  );
-}
