@@ -25,6 +25,7 @@ function sectionsFor(userTeamId: string | null): NavSection[] {
         { href: '/league', label: 'League', icon: '🏟️' },
         { href: '/standings', label: 'Standings', icon: '📊' },
         { href: '/power-rankings', label: 'Power Rankings', icon: '📈' },
+        { href: '/compare', label: 'Compare', icon: '⚖️' },
         { href: '/playoffs', label: 'Playoffs', icon: '🏆' },
         { href: '/news', label: 'News', icon: '📰' },
       ],
