@@ -64,6 +64,10 @@ interface LeagueStore {
   loading: boolean;
   /** Last error message, or null. */
   error: string | null;
+  /** Transient sim-result toast (new object each sim → re-triggers display). */
+  simToast: { text: string } | null;
+  /** Dismiss the sim toast. */
+  dismissToast: () => void;
 
   /** Create a fresh league and persist it. */
   newLeague: (opts?: CreateBasketballLeagueOptions) => Promise<void>;
@@ -146,10 +150,35 @@ interface LeagueStore {
   saveLineup: (teamId: string, lineup: BasketballLineup) => Promise<boolean>;
 }
 
+/** One-line summary for the sim toast: games simmed + the user team's most
+ *  recent result. */
+function simSummary(league: BasketballLeagueState, gamesSimmed: number): string {
+  const base = `${gamesSimmed} game${gamesSimmed === 1 ? '' : 's'} simmed`;
+  const uid = league.userTeamId;
+  if (!uid) return base;
+  let latest: (typeof league.games)[number] | null = null;
+  let latestDay = -1;
+  for (const g of league.games) {
+    if (g.status !== 'played' || !g.finalScore) continue;
+    if (g.homeTeamId !== uid && g.awayTeamId !== uid) continue;
+    const d = (g.sportData as { dayOfSeason?: number } | undefined)?.dayOfSeason ?? 0;
+    if (d > latestDay) { latestDay = d; latest = g; }
+  }
+  if (!latest || !latest.finalScore) return base;
+  const isHome = latest.homeTeamId === uid;
+  const us = isHome ? latest.finalScore.home : latest.finalScore.away;
+  const them = isHome ? latest.finalScore.away : latest.finalScore.home;
+  const oppId = isHome ? latest.awayTeamId : latest.homeTeamId;
+  const opp = league.teams.find(t => t.id === oppId);
+  return `${base} · You ${us > them ? 'won' : 'lost'} ${us}–${them} ${isHome ? 'vs' : '@'} ${opp?.abbreviation ?? ''}`.trim();
+}
+
 export const useLeagueStore = create<LeagueStore>((set, get) => ({
   league: null,
   loading: false,
   error: null,
+  simToast: null,
+  dismissToast() { set({ simToast: null }); },
 
   async newLeague(opts) {
     set({ loading: true, error: null });
@@ -241,7 +270,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         return null;
       }
       await saveLeague(outcome.league);
-      set({ league: outcome.league, loading: false });
+      set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) } });
       return { day: outcome.day, gamesSimmed: outcome.gamesSimmed };
     } catch (err) {
       console.error('[bs-hoops] simDay failed:', err);
@@ -288,7 +317,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         return null;
       }
       await saveLeague(outcome.league);
-      set({ league: outcome.league, loading: false });
+      set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) } });
       return { gamesSimmed: outcome.gamesSimmed, champion: outcome.champion };
     } catch (err) {
       console.error('[bs-hoops] simPlayoffDay failed:', err);
@@ -523,7 +552,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       const outcome = simPlayoffRound(current);
       if (!outcome) { set({ loading: false, error: 'No playoff games left to sim.' }); return null; }
       await saveLeague(outcome.league);
-      set({ league: outcome.league, loading: false });
+      set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) } });
       return { gamesSimmed: outcome.gamesSimmed, champion: outcome.champion };
     } catch (err) {
       console.error('[bs-hoops] simPlayoffRound failed:', err);
@@ -540,7 +569,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       const outcome = simAllPlayoffs(current);
       if (!outcome) { set({ loading: false, error: 'No playoff games left to sim.' }); return null; }
       await saveLeague(outcome.league);
-      set({ league: outcome.league, loading: false });
+      set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) } });
       return { gamesSimmed: outcome.gamesSimmed, champion: outcome.champion };
     } catch (err) {
       console.error('[bs-hoops] simAllPlayoffs failed:', err);
@@ -567,7 +596,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         return null;
       }
       await saveLeague(outcome.league);
-      set({ league: outcome.league, loading: false });
+      set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) } });
       return { daysSimmed: outcome.daysSimmed, gamesSimmed: outcome.gamesSimmed };
     } catch (err) {
       console.error('[bs-hoops] simRange failed:', err);
@@ -594,7 +623,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         return null;
       }
       await saveLeague(outcome.league);
-      set({ league: outcome.league, loading: false });
+      set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, 1) } });
       return outcome.gameId;
     } catch (err) {
       console.error('[bs-hoops] simNextUserGame failed:', err);
