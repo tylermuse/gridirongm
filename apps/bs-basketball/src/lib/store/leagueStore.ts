@@ -54,6 +54,7 @@ import { executeTrade, type TradeSideInput } from '../trade';
 import { setTeamLineup } from '../lineup';
 import { clearGmFired } from '../approval';
 import { scoutProspect as scoutProspectState } from '../scouting';
+import { markChangelogSeen as markChangelogSeenState } from '../ui/changelog';
 import type { TeamId } from '@bs/core/adapter';
 import type { BasketballLineup } from '@bs/sport-basketball';
 
@@ -68,6 +69,9 @@ interface LeagueStore {
   simToast: { text: string } | null;
   /** Dismiss the sim toast. */
   dismissToast: () => void;
+
+  /** Mark the current changelog version as seen (persisted on the league). */
+  markChangelogSeen: () => Promise<void>;
 
   /** Create a fresh league and persist it. */
   newLeague: (opts?: CreateBasketballLeagueOptions) => Promise<void>;
@@ -179,6 +183,14 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
   error: null,
   simToast: null,
   dismissToast() { set({ simToast: null }); },
+
+  async markChangelogSeen() {
+    const current = get().league;
+    if (!current) return;
+    const league = markChangelogSeenState(current);
+    set({ league });
+    try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] markChangelogSeen failed:', err); }
+  },
 
   async newLeague(opts) {
     set({ loading: true, error: null });
