@@ -37,6 +37,7 @@ import {
 import type { BaseLeagueState, PlayerId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { getBracket } from '../playoffs';
+import { marketContract, hasContractForSeason } from '../league/contracts';
 import { setupDraft, getDraft, autoPickUntilUser } from '../draft';
 import { computeSeasonAwards } from '../awards';
 import { buildSeasonHistoryEntry } from '../history';
@@ -231,6 +232,18 @@ export function startNextSeason(league: LeagueState): LeagueState {
       record: { wins: 0, losses: 0, otherResults: 0, pointsFor: 0, pointsAgainst: 0, streak: [] },
     } as BasketballTeam;
   });
+
+  // Re-sign any rostered player whose deal expired this offseason at market
+  // value — otherwise the contract silently vanishes (player sits at $0) and the
+  // team's payroll drifts down every year. Teams keep their own players.
+  for (const t of teams) {
+    for (const id of t.playerIds) {
+      const p = players[id];
+      if (p && !hasContractForSeason(p, season)) {
+        players[id] = { ...p, contract: marketContract(p, season) };
+      }
+    }
+  }
 
   const freeAgentIds: PlayerId[] = (Object.keys(players) as PlayerId[]).filter(
     id => !players[id].rosterSlot,
