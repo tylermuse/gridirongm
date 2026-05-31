@@ -149,12 +149,21 @@ export default function PlayerPage() {
             {player.sportData.isTwoWay && <Badge variant="amber" size="md">Two-way</Badge>}
           </div>
         </div>
-        <div
-          className="ml-auto text-5xl font-extrabold px-4 py-1 rounded-lg text-white self-start"
-          style={{ background: primary, color: secondary, fontFamily: 'var(--font-display)' }}
-          title="Overall rating"
-        >
-          {player.ratings.overall}
+        <div className="ml-auto self-start flex flex-col items-end gap-2">
+          <div
+            className="text-5xl font-extrabold px-4 py-1 rounded-lg text-white"
+            style={{ background: primary, color: secondary, fontFamily: 'var(--font-display)' }}
+            title="Overall rating"
+          >
+            {player.ratings.overall}
+          </div>
+          <Link
+            href={`/compare?a=${player.id}`}
+            className="text-xs font-semibold rounded-lg border px-3 py-1.5 hover:bg-[var(--surface-2)]"
+            style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}
+          >
+            ⚖ Compare
+          </Link>
         </div>
       </header>
 
