@@ -77,6 +77,7 @@ export function initializePlayoffs(league: LeagueState): LeagueState {
   const { Eastern, Western, seedInfo } = seedConferences(league);
 
   const rounds: PlayoffSeries[][] = [[], [], [], []];
+  const playIn: PlayoffSeries[] = [];
 
   // Build each conference's bracket. Round-1 vertical order is 1v8 / 4v5 /
   // 3v6 / 2v7 so that semiA = (1v8, 4v5) and semiB = (3v6, 2v7), and the 1 and
@@ -91,7 +92,8 @@ export function initializePlayoffs(league: LeagueState): LeagueState {
     sfA.next = { seriesId: cf.id, slot: 'A' };
     sfB.next = { seriesId: cf.id, slot: 'B' };
 
-    // Round-1 matchups: [highSeed, lowSeed] by seed number.
+    // Round-1 matchups: [highSeed, lowSeed] by seed number. The 7 and 8 seeds
+    // come from the play-in, so those slots start TBD.
     const r1Defs: { hi: number; lo: number; next: { seriesId: string; slot: 'A' | 'B' } }[] = [
       { hi: 1, lo: 8, next: { seriesId: sfA.id, slot: 'A' } },
       { hi: 4, lo: 5, next: { seriesId: sfA.id, slot: 'B' } },
@@ -102,15 +104,41 @@ export function initializePlayoffs(league: LeagueState): LeagueState {
     r1Defs.forEach((d, i) => {
       const s = blankSeries(`${prefix}-R1-${i + 1}`, 1, 'First Round', conf);
       s.teamA = seeds[d.hi - 1] ?? null;
-      s.teamB = seeds[d.lo - 1] ?? null;
       s.seedA = d.hi;
-      s.seedB = d.lo;
+      const fromPlayIn = d.lo >= 7; // 7 or 8 seed — decided by the play-in
+      s.teamB = fromPlayIn ? null : seeds[d.lo - 1] ?? null;
+      s.seedB = fromPlayIn ? null : d.lo;
       s.next = d.next;
       rounds[0].push(s);
     });
 
     rounds[1].push(sfA, sfB);
     rounds[2].push(cf);
+
+    // Play-in: 7v8 (winner is the 7 seed) and 9v10 (loser is out); the 7/8
+    // loser then meets the 9/10 winner for the 8 seed. All single games.
+    const piA = blankSeries(`${prefix}-PI-A`, 0, '7/8 · winner is #7', conf);
+    piA.winsNeeded = 1;
+    piA.teamA = seeds[6] ?? null; piA.seedA = 7;
+    piA.teamB = seeds[7] ?? null; piA.seedB = 8;
+    piA.next = { seriesId: `${prefix}-R1-4`, slot: 'B' }; // winner → 2v7 as the 7
+    piA.feedsSeed = 7;
+    piA.loserNext = { seriesId: `${prefix}-PI-C`, slot: 'A' };
+
+    const piB = blankSeries(`${prefix}-PI-B`, 0, '9/10 · loser out', conf);
+    piB.winsNeeded = 1;
+    piB.teamA = seeds[8] ?? null; piB.seedA = 9;
+    piB.teamB = seeds[9] ?? null; piB.seedB = 10;
+    piB.next = { seriesId: `${prefix}-PI-C`, slot: 'B' }; // winner → 8-seed game
+    piB.loserNext = null;
+
+    const piC = blankSeries(`${prefix}-PI-C`, 0, '8 seed · winner in', conf);
+    piC.winsNeeded = 1;
+    piC.next = { seriesId: `${prefix}-R1-1`, slot: 'B' }; // winner → 1v8 as the 8
+    piC.feedsSeed = 8;
+    piC.loserNext = null;
+
+    playIn.push(piA, piB, piC);
   }
 
   // Finals: conference champions, home court by record.
@@ -125,6 +153,7 @@ export function initializePlayoffs(league: LeagueState): LeagueState {
 
   const bracket: PlayoffBracket = {
     season: league.currentSeason,
+    playIn,
     rounds,
     seeds: { Eastern, Western },
     seedInfo,
@@ -134,7 +163,8 @@ export function initializePlayoffs(league: LeagueState): LeagueState {
     complete: false,
   };
 
-  // Normalize round-1 series so teamA is the home-court (higher) seed.
+  // Normalize the play-in + round-1 series so teamA is the home-court (higher) seed.
+  for (const s of playIn) normalizeSeries(s, bracket);
   for (const s of rounds[0]) normalizeSeries(s, bracket);
 
   return {
@@ -162,7 +192,7 @@ export function simPlayoffDay(league: LeagueState): SimPlayoffDayResult | null {
 
   // Deep clone the bracket (plain data) so we can mutate freely.
   const bracket: PlayoffBracket = JSON.parse(JSON.stringify(existing));
-  const allSeries = bracket.rounds.flat();
+  const allSeries = [...bracket.rounds.flat(), ...(bracket.playIn ?? [])];
   const seriesById = new Map(allSeries.map(s => [s.id, s]));
 
   const active = allSeries.filter(
@@ -231,15 +261,22 @@ export function simPlayoffDay(league: LeagueState): SimPlayoffDayResult | null {
     else series.winsB += 1;
   }
 
-  // Resolve finished series and advance winners into the next round.
+  // Resolve finished series and advance winners (and play-in losers) onward.
   for (const series of active) {
     if (series.winnerTeamId) continue;
+    const winsNeeded = series.winsNeeded ?? SERIES_WINS_NEEDED;
     let winnerId: TeamId | null = null;
-    if (series.winsA >= SERIES_WINS_NEEDED) winnerId = series.teamA;
-    else if (series.winsB >= SERIES_WINS_NEEDED) winnerId = series.teamB;
+    if (series.winsA >= winsNeeded) winnerId = series.teamA;
+    else if (series.winsB >= winsNeeded) winnerId = series.teamB;
     if (!winnerId) continue;
 
     series.winnerTeamId = winnerId;
+    const loserId = winnerId === series.teamA ? series.teamB : series.teamA;
+
+    // Play-in: the winner takes a fixed bracket seed (7 or 8) into the main draw.
+    if (series.feedsSeed != null && bracket.seedInfo[winnerId]) {
+      bracket.seedInfo[winnerId].seed = series.feedsSeed;
+    }
 
     if (series.next) {
       const nextSeries = seriesById.get(series.next.seriesId);
@@ -254,6 +291,16 @@ export function simPlayoffDay(league: LeagueState): SimPlayoffDayResult | null {
       bracket.runnerUpTeamId =
         winnerId === series.teamA ? series.teamB : series.teamA;
       bracket.complete = true;
+    }
+
+    // Play-in loser drops to the 8-seed game (if any); otherwise eliminated.
+    if (series.loserNext && loserId) {
+      const dropSeries = seriesById.get(series.loserNext.seriesId);
+      if (dropSeries) {
+        if (series.loserNext.slot === 'A') dropSeries.teamA = loserId;
+        else dropSeries.teamB = loserId;
+        normalizeSeries(dropSeries, bracket);
+      }
     }
   }
 
@@ -292,7 +339,7 @@ export function simPlayoffDay(league: LeagueState): SimPlayoffDayResult | null {
 function currentPlayoffRound(bracket: PlayoffBracket | null): number {
   if (!bracket) return Infinity;
   let min = Infinity;
-  for (const s of bracket.rounds.flat()) {
+  for (const s of [...bracket.rounds.flat(), ...(bracket.playIn ?? [])]) {
     if (s.teamA && s.teamB && !s.winnerTeamId) min = Math.min(min, s.round);
   }
   return min;

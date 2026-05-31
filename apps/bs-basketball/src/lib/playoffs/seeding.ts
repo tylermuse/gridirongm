@@ -138,9 +138,10 @@ export function seedConferences(league: LeagueState): {
 
   for (const conf of ['Eastern', 'Western'] as const) {
     const inConf = [...metrics.values()].filter(m => m.conference === conf).sort(compare);
-    const top8 = inConf.slice(0, 8);
-    result[conf] = top8.map(m => m.teamId);
-    top8.forEach((m, i) => {
+    // Top 10 make the field: 1-6 are locked in, 7-10 fight through the play-in.
+    const topN = inConf.slice(0, 10);
+    result[conf] = topN.map(m => m.teamId);
+    topN.forEach((m, i) => {
       seedInfo[m.teamId] = {
         teamId: m.teamId,
         conference: conf,

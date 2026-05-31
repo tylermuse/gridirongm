@@ -35,12 +35,20 @@ export interface PlayoffSeries {
   seedB: number | null;
   winsA: number;
   winsB: number;
-  /** Set when one side reaches 4 wins. */
+  /** Set when one side reaches `winsNeeded` wins. */
   winnerTeamId: TeamId | null;
   /** Ids of games played in this series, in order. */
   gameIds: string[];
   /** Where this series' winner advances. Null for the Finals. */
   next: { seriesId: string; slot: 'A' | 'B' } | null;
+  /** Wins to clinch. Omitted = best-of-7 (4). Play-in games are single (1). */
+  winsNeeded?: number;
+  /** Where the LOSER goes (play-in only — e.g. the 7/8 loser drops to the
+   *  8-seed game). Omitted = the loser is eliminated. */
+  loserNext?: { seriesId: string; slot: 'A' | 'B' } | null;
+  /** For play-in games that decide a seed: the bracket seed (7 or 8) the winner
+   *  takes into the main bracket. */
+  feedsSeed?: number;
 }
 
 /** Per-team metadata used to decide home court in any matchup. */
@@ -54,6 +62,9 @@ export interface PlayoffSeedInfo {
 
 export interface PlayoffBracket {
   season: number;
+  /** Conference play-in games (3 per conference, round 0) that decide the 7 & 8
+   *  seeds. Absent on legacy brackets created before the play-in shipped. */
+  playIn?: PlayoffSeries[];
   /** rounds[0] = first round (8 series), [1] = semis (4), [2] = conf finals (2),
    *  [3] = Finals (1). */
   rounds: PlayoffSeries[][];

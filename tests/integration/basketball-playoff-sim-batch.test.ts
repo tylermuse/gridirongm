@@ -17,19 +17,24 @@ function toPlayoffs(seed: string) {
 }
 
 describe('playoff batch sim', () => {
-  it('sim round advances exactly one round', () => {
+  it('sim round advances exactly one round (play-in first)', () => {
     const league = toPlayoffs('po-round');
     const before = getBracket(league)!;
-    const r1Resolved = before.rounds[0].filter(s => s.winnerTeamId).length;
-    expect(r1Resolved).toBe(0);
+    expect(before.playIn!.some(s => s.winnerTeamId)).toBe(false);
 
-    const out = simPlayoffRound(league)!;
-    const after = getBracket(out.league)!;
-    // The whole first round is now decided.
-    expect(after.rounds[0].every(s => s.winnerTeamId)).toBe(true);
-    // But the conference finals haven't started (round didn't blow past one).
-    expect(after.complete).toBe(false);
-    expect(after.rounds[2].some(s => s.winnerTeamId)).toBe(false);
+    // The first round to resolve is the play-in.
+    const out1 = simPlayoffRound(league)!;
+    const afterPlayIn = getBracket(out1.league)!;
+    expect(afterPlayIn.playIn!.every(s => s.winnerTeamId)).toBe(true);
+    expect(afterPlayIn.complete).toBe(false);
+    // The conference finals certainly haven't started.
+    expect(afterPlayIn.rounds[2].some(s => s.winnerTeamId)).toBe(false);
+
+    // The next sim-round resolves the first round proper.
+    const out2 = simPlayoffRound(out1.league)!;
+    const afterR1 = getBracket(out2.league)!;
+    expect(afterR1.rounds[0].every(s => s.winnerTeamId)).toBe(true);
+    expect(afterR1.complete).toBe(false);
   });
 
   it('sim all playoffs reaches a champion', () => {

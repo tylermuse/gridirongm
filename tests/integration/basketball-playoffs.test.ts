@@ -87,14 +87,14 @@ describe('legacy 0-indexed saves', () => {
 });
 
 describe('playoff seeding', () => {
-  it('seeds 8 teams per conference, all distinct, ranked by record', () => {
+  it('seeds 10 teams per conference (play-in field), all distinct, ranked by record', () => {
     const league = playFullRegularSeason('seed-test');
     expect(isRegularSeasonComplete(league)).toBe(true);
 
     const { Eastern, Western, seedInfo } = seedConferences(league);
-    expect(Eastern).toHaveLength(8);
-    expect(Western).toHaveLength(8);
-    expect(new Set([...Eastern, ...Western]).size).toBe(16);
+    expect(Eastern).toHaveLength(10);
+    expect(Western).toHaveLength(10);
+    expect(new Set([...Eastern, ...Western]).size).toBe(20);
 
     // Seeds must be in non-increasing win order within each conference.
     const winsOf = (id: string) =>
@@ -104,13 +104,13 @@ describe('playoff seeding', () => {
         expect(winsOf(conf[i - 1])).toBeGreaterThanOrEqual(winsOf(conf[i]));
       }
     }
-    // Seed metadata covers exactly the 16 playoff teams.
-    expect(Object.keys(seedInfo)).toHaveLength(16);
+    // Seed metadata covers exactly the 20 play-in-field teams.
+    expect(Object.keys(seedInfo)).toHaveLength(20);
   });
 });
 
 describe('bracket generation', () => {
-  it('builds a 16-team bracket with 1v8/4v5/3v6/2v7 first-round matchups', () => {
+  it('builds the bracket with a play-in feeding the 7/8 seeds', () => {
     const league = initializePlayoffs(playFullRegularSeason('bracket-test'));
     const bracket = getBracket(league)!;
 
@@ -119,15 +119,46 @@ describe('bracket generation', () => {
     expect(bracket.rounds[1]).toHaveLength(4); // semis
     expect(bracket.rounds[2]).toHaveLength(2); // conf finals
     expect(bracket.rounds[3]).toHaveLength(1); // finals
+    expect(bracket.playIn).toHaveLength(6); // 3 per conference
 
-    // Each first-round series pairs seeds summing to 9 (1+8, 2+7, 3+6, 4+5).
     for (const s of bracket.rounds[0]) {
-      expect((s.seedA ?? 0) + (s.seedB ?? 0)).toBe(9);
-      // teamA is the home-court (higher) seed.
-      expect(s.seedA).toBeLessThan(s.seedB!);
+      if (s.seedB == null) {
+        // 7/8 seed comes from the play-in — only the 1 or 2 seed is set.
+        expect([1, 2]).toContain(s.seedA);
+        expect(s.teamB).toBeNull();
+      } else {
+        // 4v5 / 3v6 are locked in and sum to 9, home court to the higher seed.
+        expect((s.seedA ?? 0) + (s.seedB ?? 0)).toBe(9);
+        expect(s.seedA).toBeLessThan(s.seedB!);
+      }
     }
+
+    // Play-in: 7v8 and 9v10 start with both teams; the 8-seed game is TBD.
+    const piA = bracket.playIn!.filter(s => s.seedA === 7 && s.seedB === 8);
+    const pi910 = bracket.playIn!.filter(s => s.seedA === 9 && s.seedB === 10);
+    expect(piA).toHaveLength(2);
+    expect(pi910).toHaveLength(2);
+    for (const s of bracket.playIn!) expect(s.winsNeeded).toBe(1);
+
     // Later rounds start empty.
     expect(bracket.rounds[3][0].teamA).toBeNull();
+  });
+
+  it('resolves the play-in and fills the 7/8 seeds, then crowns a champion', () => {
+    let league = initializePlayoffs(playFullRegularSeason('playin-resolve'));
+    let guard = 0;
+    while (!getBracket(league)!.complete && guard++ < 200) {
+      const r = simPlayoffDay(league);
+      if (!r) break;
+      league = r.league;
+    }
+    const bracket = getBracket(league)!;
+    expect(bracket.complete).toBe(true);
+    // Every play-in game decided a winner.
+    expect(bracket.playIn!.every(s => s.winnerTeamId)).toBe(true);
+    // The 1v8 and 2v7 first-round series got their 7/8 seeds from the play-in.
+    const r1 = bracket.rounds[0];
+    expect(r1.every(s => s.teamA && s.teamB)).toBe(true);
   });
 });
 

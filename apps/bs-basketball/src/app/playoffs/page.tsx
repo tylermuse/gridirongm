@@ -67,7 +67,7 @@ export default function PlayoffsPage() {
             <EmptyState
               icon="🏆"
               title="The regular season is in the books"
-              message="Seed the field and tip off the postseason. Top 8 in each conference make it; higher seeds get home court."
+              message="Seed the field and tip off the postseason. The top 6 in each conference are locked in; seeds 7–10 fight through the play-in for the last two spots. Higher seeds get home court."
               action={{ label: 'Start Playoffs →', onClick: () => void startPlayoffs() }}
             />
           ) : (
@@ -149,6 +149,10 @@ export default function PlayoffsPage() {
         </div>
       )}
 
+      {bracket.playIn && bracket.playIn.length > 0 && (
+        <PlayInSection playIn={bracket.playIn} teamById={teamById} />
+      )}
+
       {/* Symmetric bracket — columns flex to fill the width so the whole tree
           fits on one screen; only very narrow viewports scroll. */}
       <div className="overflow-x-auto pb-4">
@@ -199,6 +203,36 @@ export default function PlayoffsPage() {
 // ===========================================================================
 // Components
 // ===========================================================================
+
+function PlayInSection({
+  playIn, teamById,
+}: {
+  playIn: PlayoffSeries[];
+  teamById: Map<string, BasketballTeam>;
+}) {
+  return (
+    <div className="mb-8">
+      <div className="text-xs uppercase tracking-widest text-center font-bold opacity-60 mb-3">
+        Play-In Tournament
+      </div>
+      <div className="grid sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
+        {(['Eastern', 'Western'] as const).map(conf => (
+          <div key={conf} className="rounded-xl border bg-[var(--surface)] p-3" style={{ borderColor: 'var(--border)' }}>
+            <div className="text-[10px] uppercase tracking-widest font-bold opacity-60 mb-2">{conf}</div>
+            <div className="space-y-2.5">
+              {playIn.filter(s => s.conference === conf).map(s => (
+                <div key={s.id}>
+                  <div className="text-[9px] uppercase tracking-wider text-[var(--text-sec)] mb-0.5">{s.roundName}</div>
+                  <SeriesCard series={s} teamById={teamById} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function BracketColumn({
   title, series, teamById, highlight,
