@@ -57,7 +57,7 @@ import { clearGmFired } from '../approval';
 import { scoutProspect as scoutProspectState } from '../scouting';
 import { markChangelogSeen as markChangelogSeenState } from '../ui/changelog';
 import type { TeamId } from '@bs/core/adapter';
-import type { BasketballLineup, BasketballPlayer } from '@bs/sport-basketball';
+import type { BasketballLineup, BasketballPlayer, BasketballTeam, BasketballGamePlan } from '@bs/sport-basketball';
 
 interface LeagueStore {
   /** Currently loaded league, or null if user hasn't started one. */
@@ -101,6 +101,10 @@ interface LeagueStore {
   /** Sim every scheduled game on the next day-of-season. Returns the day
    *  + number of games on success. */
   simDay: () => Promise<{ day: number; gamesSimmed: number } | null>;
+
+  /** Advance day-by-day until the user team plays, then return that game (for
+   *  the live viewer) plus the rest of the day's slate. No spoiler toast. */
+  watchNextUserGame: () => Promise<{ userGameId: string; dayGameIds: string[]; day: number } | null>;
 
   /** Bulk-sim to a milestone: a week ahead, the trade deadline, or the end of
    *  the regular season. Returns days + games simmed. */
@@ -155,6 +159,9 @@ interface LeagueStore {
 
   /** Persist a team's lineup (the sim uses it when valid). Returns true on success. */
   saveLineup: (teamId: string, lineup: BasketballLineup) => Promise<boolean>;
+
+  /** Persist a team's pre-game plan (the sim biases the box score by it). */
+  saveGamePlan: (teamId: string, plan: BasketballGamePlan) => Promise<boolean>;
 
   /** Waive a rostered player to free agency (opens a roster spot). */
   releasePlayer: (playerId: string) => Promise<boolean>;
@@ -308,6 +315,42 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       return { day: outcome.day, gamesSimmed: outcome.gamesSimmed };
     } catch (err) {
       console.error('[bs-hoops] simDay failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  },
+
+  async watchNextUserGame() {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return null; }
+    const uid = current.userTeamId;
+    if (!uid) { set({ error: 'Pick a team first.' }); return null; }
+    set({ loading: true, error: null });
+    await yieldToPaint();
+    try {
+      let league = current;
+      let result: { userGameId: string; dayGameIds: string[]; day: number } | null = null;
+      for (let guard = 0; guard < 200; guard++) {
+        const outcome = simNextDay(league);
+        if (!outcome) break;
+        league = outcome.league;
+        const day = outcome.day;
+        const dayGames = league.games.filter(
+          g => g.status === 'played' && (g.sportData as { dayOfSeason?: number } | undefined)?.dayOfSeason === day,
+        );
+        const userGame = dayGames.find(g => g.homeTeamId === uid || g.awayTeamId === uid);
+        if (userGame) {
+          result = { userGameId: userGame.id, dayGameIds: dayGames.map(g => g.id), day };
+          break;
+        }
+      }
+      if (!result) { set({ loading: false, error: 'No upcoming game to watch.' }); return null; }
+      await saveLeague(league);
+      // Deliberately no sim toast — it would spoil the score before the watch.
+      set({ league, loading: false });
+      return result;
+    } catch (err) {
+      console.error('[bs-hoops] watchNextUserGame failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return null;
     }
@@ -574,6 +617,27 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       return true;
     } catch (err) {
       console.error('[bs-hoops] saveLineup failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
+  async saveGamePlan(teamId, plan) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return false; }
+    set({ loading: true, error: null });
+    try {
+      const teams = current.teams.map(t =>
+        t.id === teamId
+          ? ({ ...t, sportData: { ...(t as BasketballTeam).sportData, gamePlan: plan } } as typeof t)
+          : t,
+      );
+      const league = { ...current, teams };
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] saveGamePlan failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return false;
     }

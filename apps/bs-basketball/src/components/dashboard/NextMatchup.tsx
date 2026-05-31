@@ -13,7 +13,15 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
  * Next-matchup card (P0.4). Shows the team's upcoming game (or its most recent
  * result when the slate is done), with a Box Score / Watch link.
  */
-export function NextMatchupCard({ league, team }: { league: LeagueState; team: BasketballTeam }) {
+export function NextMatchupCard({
+  league, team, onWatchLive, onGamePlan, loading,
+}: {
+  league: LeagueState;
+  team: BasketballTeam;
+  onWatchLive?: () => void;
+  onGamePlan?: () => void;
+  loading?: boolean;
+}) {
   const m = nextMatchup(league, team.id);
   if (!m || !m.opponent) return null;
 
@@ -29,9 +37,16 @@ export function NextMatchupCard({ league, team }: { league: LeagueState; team: B
     <div className="rounded-xl border bg-[var(--surface)] p-4 mb-6" style={{ borderColor: 'var(--border)' }}>
       <div className="flex items-center justify-between">
         <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-widest opacity-60">
-            {m.played ? 'Last game' : 'Next game'}
-            {m.dayOfSeason != null ? ` · Day ${m.dayOfSeason}` : ''} · {m.isHome ? 'Home' : 'Away'}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-widest opacity-60">
+              {m.played ? 'Last game' : 'Next game'}
+              {m.dayOfSeason != null ? ` · Day ${m.dayOfSeason}` : ''} · {m.isHome ? 'Home' : 'Away'}
+            </span>
+            {onGamePlan && (
+              <button onClick={onGamePlan} className="text-[10px] font-bold rounded px-1.5 py-0.5 border hover:bg-[var(--surface-2)]" style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}>
+                📋 Game Plan
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-1.5">
             <TeamLogo abbreviation={opp.abbreviation} primaryColor={opp.primaryColor} secondaryColor={opp.secondaryColor} size="md" />
@@ -55,9 +70,14 @@ export function NextMatchupCard({ league, team }: { league: LeagueState; team: B
               Box Score →
             </Link>
           ) : (
-            <span className="rounded-lg px-3 py-1.5 text-sm font-bold text-[var(--text-sec)] border" style={{ borderColor: 'var(--border)' }} title="Live sim coming soon">
-              Watch Live
-            </span>
+            <button
+              onClick={onWatchLive}
+              disabled={loading}
+              className="rounded-lg px-3 py-1.5 text-sm font-bold text-white active:scale-95 disabled:opacity-60"
+              style={{ background: 'var(--accent)' }}
+            >
+              {loading ? 'Loading…' : '▶ Watch Live'}
+            </button>
           )}
         </div>
       </div>

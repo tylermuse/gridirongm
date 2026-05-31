@@ -13,6 +13,8 @@ import { TeamHero } from '@/components/dashboard/TeamHero';
 import { OwnerObjectives } from '@/components/dashboard/OwnerObjectives';
 import { NextMatchupCard } from '@/components/dashboard/NextMatchup';
 import { DashboardRow } from '@/components/dashboard/DashboardRow';
+import { LiveViewer } from '@/components/live/LiveViewer';
+import { GamePlanModal } from '@/components/modals/GamePlanModal';
 import { nextAction } from '@/lib/ui/nextAction';
 import { useRouter } from 'next/navigation';
 import { canAdvanceSeason } from '@/lib/season';
@@ -35,8 +37,15 @@ import type { BasketballTeam } from '@bs/sport-basketball';
  */
 
 export default function HomePage() {
-  const { league, loading, error, newLeague, continueLatest, loadLeague, pickUserTeam, clearActive, enterOffseason } = useLeagueStore();
+  const { league, loading, error, newLeague, continueLatest, loadLeague, pickUserTeam, clearActive, enterOffseason, watchNextUserGame } = useLeagueStore();
   const router = useRouter();
+  const [watching, setWatching] = useState<{ userGameId: string; dayGameIds: string[] } | null>(null);
+  const [gamePlanOpen, setGamePlanOpen] = useState(false);
+
+  async function handleWatchLive() {
+    const res = await watchNextUserGame();
+    if (res) setWatching({ userGameId: res.userGameId, dayGameIds: res.dayGameIds });
+  }
   const [saves, setSaves] = useState<LeagueSaveMeta[]>([]);
   const [showLoadList, setShowLoadList] = useState(false);
   const [search, setSearch] = useState('');
@@ -171,7 +180,7 @@ export default function HomePage() {
 
         {userTeam && (
           <>
-            <NextMatchupCard league={league} team={userTeam as BasketballTeam} />
+            <NextMatchupCard league={league} team={userTeam as BasketballTeam} onWatchLive={() => void handleWatchLive()} onGamePlan={() => setGamePlanOpen(true)} loading={loading} />
             <DashboardRow league={league} team={userTeam as BasketballTeam} />
           </>
         )}
@@ -211,6 +220,13 @@ export default function HomePage() {
             <NewsFeed league={league} max={6} />
           </aside>
         </div>
+
+        {watching && (
+          <LiveViewer userGameId={watching.userGameId} dayGameIds={watching.dayGameIds} onClose={() => setWatching(null)} />
+        )}
+        {userTeam && (
+          <GamePlanModal teamId={userTeam.id} open={gamePlanOpen} onClose={() => setGamePlanOpen(false)} />
+        )}
       </div>
     );
   }
