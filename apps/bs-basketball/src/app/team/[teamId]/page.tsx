@@ -146,25 +146,33 @@ export default function TeamPage() {
         ← League
       </Link>
 
-      <header className="flex flex-wrap items-center gap-4 mt-2 mb-6">
+      <header
+        className="relative overflow-hidden rounded-2xl mt-2 mb-6 flex flex-wrap items-center gap-4 p-5 sm:p-6"
+        style={{ background: `linear-gradient(135deg, ${team.primaryColor} 0%, ${team.primaryColor} 55%, ${team.secondaryColor} 100%)` }}
+      >
+        {/* Diagonal chevron texture in the team's secondary color */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ opacity: 0.1, backgroundImage: `repeating-linear-gradient(135deg, ${team.secondaryColor} 0 14px, transparent 14px 30px)` }}
+        />
         <TeamLogo
           abbreviation={team.abbreviation}
           primaryColor={team.primaryColor}
           secondaryColor={team.secondaryColor}
           size="xl"
         />
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0">
+          <h1 className="text-3xl sm:text-4xl font-extrabold flex flex-wrap items-center gap-2 text-white" style={{ textShadow: '0 1px 6px rgba(0,0,0,0.35)' }}>
             {team.city} {team.name}
             {isUserTeam && <Badge variant="orange" size="md">Your team</Badge>}
           </h1>
-          <p className="text-sm opacity-70">
+          <p className="text-sm text-white/85" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.35)' }}>
             {sd.conference} Conference · {sd.division} Division ·{' '}
             <strong>{team.record.wins}–{team.record.losses}</strong>
           </p>
         </div>
 
-        <div className="ml-auto flex flex-wrap gap-2">
+        <div className="relative ml-auto flex flex-wrap gap-2">
           {isUserTeam ? (
             <>
               <Button
