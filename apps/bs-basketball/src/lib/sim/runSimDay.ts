@@ -107,6 +107,14 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
       homeTeamId: g.homeTeamId,
       awayTeamId: g.awayTeamId,
       status: 'played',
+      // Merge the sim engine's sportData (quarterScores, possessions, …) over
+      // the scheduled game's, but KEEP dayOfSeason — spreading `...result` alone
+      // dropped it, which is why the news feed read "Day 0".
+      sportData: {
+        ...(g.sportData as Record<string, unknown> ?? {}),
+        ...(result.sportData as Record<string, unknown> ?? {}),
+        dayOfSeason: nextDay,
+      },
     };
     updatedGames[i] = playedGame;
     playedGames.push(playedGame);
@@ -129,6 +137,10 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
     ...league,
     games: updatedGames,
     teams: updatedTeams,
+    // Simming a scheduled regular-season day means we're in the regular season.
+    // `currentPhase` was stamped 'preseason' at creation and never advanced, so
+    // the dashboard kept reading "preseason" hundreds of games in.
+    currentPhase: 'regular_season',
     // Keep the calendar monotonic. In normal play nextDay > currentTick, so
     // this is just nextDay; for a legacy save mopping up trailing day-0 games
     // after reaching day 169, it avoids the badge snapping back to "Day 0".

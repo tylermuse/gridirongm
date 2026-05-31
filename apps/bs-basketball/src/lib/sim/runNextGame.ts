@@ -88,6 +88,13 @@ export function simNextGameForTeam(
     homeTeamId: game.homeTeamId,
     awayTeamId: game.awayTeamId,
     status: 'played',
+    // Preserve dayOfSeason (and any scheduled flags) under the sim engine's
+    // sportData — otherwise the played game reads "Day 0" in the news feed.
+    sportData: {
+      ...(game.sportData as Record<string, unknown> ?? {}),
+      ...(result.sportData as Record<string, unknown> ?? {}),
+      dayOfSeason: gameDayNum,
+    },
   };
 
   const updatedGames = [...league.games];
@@ -96,7 +103,7 @@ export function simNextGameForTeam(
   const finalScore = playedGame.finalScore ?? { home: 0, away: 0 };
   const updatedTeams = updateTeamRecords(league.teams, playedGame, finalScore);
 
-  const simmed: LeagueState = { ...league, games: updatedGames, teams: updatedTeams };
+  const simmed: LeagueState = { ...league, games: updatedGames, teams: updatedTeams, currentPhase: 'regular_season' };
   const withInjuries = applyInjuryRolls(simmed, [playedGame], gameDayNum, league.currentSeason);
 
   return {
