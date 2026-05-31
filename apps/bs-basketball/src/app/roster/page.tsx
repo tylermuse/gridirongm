@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -11,15 +12,17 @@ import { PlayerModal } from '@/components/modals/PlayerModal';
 import { resolveLineup, validateBasketballLineup, buildDefaultBasketballLineup } from '@/lib/lineup';
 import { teamCap, fmtMoney } from '@/lib/dashboard/summary';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
-import type { BasketballLineup, BasketballPlayer, BasketballPosition, BasketballTeam } from '@bs/sport-basketball';
+import { playerMood, type Mood } from '@/lib/roster/mood';
+import { contractYearsLeft } from '@/lib/roster/playerActions';
+import type { BasketballLineup, BasketballPlayer, BasketballPosition, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
 
 /**
- * /roster — combined roster + depth chart (lineup editor).
+ * /roster — combined roster + depth chart (lineup editor) + front-office actions.
  *
- * One view: the full roster with the starting five grouped at the top (one per
- * position slot, accent background) and the bench below. Drag a player onto a
- * starting slot — or use the Start / Bench buttons — to set the lineup the sim
- * uses, then Save. Position-composition bar + cap up top.
+ * Starting five grouped on top (one accent row per position slot), bench below.
+ * Drag a player onto a slot — or use Start / Bench — to set the lineup, then
+ * Save. Each row shows OVR/POT, contract, season stats (GP + PPG/RPG/APG), a
+ * derived Mood chip, and an Actions menu (Extend / Release / Details / Trade).
  */
 
 const POSITIONS: BasketballPosition[] = ['PG', 'SG', 'SF', 'PF', 'C'];
@@ -29,18 +32,19 @@ const POS_COLORS: Record<BasketballPosition, string> = {
 const TARGET_ROSTER = 15;
 const MIN_ROSTER = 13;
 
-// Shared grid so starter and bench rows line up.
-const ROW_GRID = 'grid items-center gap-2 px-2 py-1.5 min-w-[44rem]';
-const ROW_COLS = { gridTemplateColumns: '2.75rem 1fr 2.5rem 2.5rem 2.75rem 2.75rem 6rem 3rem 4.5rem' };
+const ROW_GRID = 'grid items-center gap-2 px-2 py-1.5 min-w-[52rem]';
+const ROW_COLS = { gridTemplateColumns: '2.75rem 1fr 2.4rem 2.4rem 2.6rem 2.6rem 5.5rem 2.2rem 6.5rem 5rem 5.5rem' };
 
-interface DragData { id: string; from: 'starter' | 'bench'; slot: number }
+interface MenuState { id: string; x: number; y: number }
 
 export default function RosterPage() {
   const { league, loading, error } = useLeagueOrHydrate();
   const store = useLeagueStore();
+  const router = useRouter();
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
   const [saved, setSaved] = useState(false);
+  const [menu, setMenu] = useState<MenuState | null>(null);
 
   const team = useMemo<BasketballTeam | null>(() => {
     if (!league?.userTeamId) return null;
@@ -54,6 +58,13 @@ export default function RosterPage() {
   }, [league, team]);
 
   const statsMap = useMemo(() => (league ? regularSeasonStatsByPlayer(league) : new Map()), [league]);
+
+  // OVR rank on the team (0 = best) — drives the Mood model.
+  const talentRank = useMemo(() => {
+    const m = new Map<string, number>();
+    [...roster].sort((a, b) => b.ratings.overall - a.ratings.overall).forEach((p, i) => m.set(p.id, i));
+    return m;
+  }, [roster]);
 
   // Lineup state — seeded once from the resolved (saved-or-default) lineup.
   const [starters, setStarters] = useState<string[]>([]);
@@ -90,6 +101,7 @@ export default function RosterPage() {
   }
 
   const playerById = league.players as Record<string, BasketballPlayer>;
+  const season = league.currentSeason;
   const cap = teamCap(league, team);
   const counts = countByPos(roster);
   const lineup: BasketballLineup = {
@@ -99,6 +111,10 @@ export default function RosterPage() {
     pace: team.sportData.lineup?.pace ?? team.sportData.pace ?? 'medium',
   };
   const validation = validateBasketballLineup(lineup, roster);
+
+  function moodFor(p: BasketballPlayer, isStarter: boolean): Mood {
+    return playerMood({ player: p, talentRank: talentRank.get(p.id) ?? 99, isStarter, yearsLeft: contractYearsLeft(p, season) });
+  }
 
   // --- lineup mutations ---
   function setStarter(slot: number, playerId: string) {
@@ -120,14 +136,12 @@ export default function RosterPage() {
     });
   }
 
-  /** Promote a bench player to the slot for its natural position (swap). */
   function startPlayer(id: string) {
     const pos = playerById[id]?.sportData.position;
     const slot = pos ? POSITIONS.indexOf(pos) : 0;
     setStarter(slot < 0 ? 0 : slot, id);
   }
 
-  /** Bench a starter, auto-promoting the best matching bench player. */
   function benchStarter(slot: number) {
     const pos = POSITIONS[slot];
     const replacement = [...bench]
@@ -148,7 +162,7 @@ export default function RosterPage() {
     const raw = e.dataTransfer.getData('application/json');
     if (!raw) return;
     try {
-      const { id } = JSON.parse(raw) as DragData;
+      const { id } = JSON.parse(raw) as { id: string };
       if (id && id !== starters[slot]) setStarter(slot, id);
     } catch { /* ignore */ }
   }
@@ -165,11 +179,31 @@ export default function RosterPage() {
     setBench(roster.filter(p => !def.starters.includes(p.id)).sort((a, b) => b.ratings.overall - a.ratings.overall).map(p => p.id));
   }
 
+  // --- front-office actions ---
+  async function onRelease(id: string) {
+    setMenu(null);
+    const p = playerById[id];
+    if (!window.confirm(`Release ${p?.firstName} ${p?.lastName} to free agency?`)) return;
+    const ok = await store.releasePlayer(id);
+    if (ok) {
+      setStarters(s => s.map(x => (x === id ? '' : x)));
+      setBench(b => b.filter(x => x !== id));
+      setSaved(false);
+    }
+  }
+  function onExtend(id: string) { setMenu(null); void store.extendPlayer(id); }
+  function onDetails(id: string) { setMenu(null); setModalPlayerId(id); }
+  function onTrade() { setMenu(null); router.push('/trade'); }
+
   const sizeBadge = roster.length > TARGET_ROSTER
     ? { text: `Cut to ${TARGET_ROSTER}`, color: '#dc2626' }
     : roster.length < MIN_ROSTER
     ? { text: 'Sign a free agent', color: '#f59e0b' }
     : { text: `${roster.length} / ${TARGET_ROSTER}`, color: 'var(--text-sec)' };
+
+  const renderCells = (p: BasketballPlayer, isStarter: boolean, dragData: object) => (
+    <PlayerCells p={p} stats={statsForPlayer(statsMap, p.id)} mood={moodFor(p, isStarter)} season={season} dragData={dragData} onName={setModalPlayerId} />
+  );
 
   return (
     <Shell>
@@ -207,16 +241,15 @@ export default function RosterPage() {
         <p className="text-xs text-[var(--text-sec)] mr-auto">Drag a player onto a starting slot, or use <b>Start</b> / <b>Bench</b>, then save.</p>
         <Button variant="ghost" onClick={autoFill}>Auto-fill</Button>
         <Button variant="primary" disabled={!validation.valid || store.loading} onClick={() => void save()}>
-          {store.loading ? 'Saving…' : 'Save Lineup'}
+          {store.loading ? 'Working…' : 'Save Lineup'}
         </Button>
         {saved && <span className="text-sm" style={{ color: 'var(--accent)' }}>✓ Saved</span>}
       </div>
 
       {/* Combined table */}
       <div className="rounded-xl border bg-[var(--surface)] overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
-        {/* Header */}
         <div className={`${ROW_GRID} text-[10px] uppercase tracking-wide text-[var(--text-sec)] border-b font-semibold`} style={{ ...ROW_COLS, borderColor: 'var(--border)' }}>
-          <span></span><span>Name</span><span>Pos</span><span className="text-right">Age</span><span className="text-right">OVR</span><span className="text-right">POT</span><span className="text-right">Contract</span><span className="text-right">PPG</span><span></span>
+          <span></span><span>Name</span><span>Pos</span><span className="text-right">Age</span><span className="text-right">OVR</span><span className="text-right">POT</span><span className="text-right">Contract</span><span className="text-right">GP</span><span className="text-right">PPG/RPG/APG</span><span className="text-center">Mood</span><span className="text-right">Action</span>
         </div>
 
         {/* Starters */}
@@ -232,11 +265,12 @@ export default function RosterPage() {
               className={`${ROW_GRID} border-t`}
               style={{ ...ROW_COLS, borderColor: 'var(--border)', background: dragOverSlot === slot ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'color-mix(in srgb, var(--accent) 5%, transparent)' }}
             >
-              <span className="text-[11px] font-black w-9 text-center rounded" style={{ color: POS_COLORS[pos] }} title={`Starting ${pos}`}>{pos}</span>
-              {p ? <PlayerCells p={p} stats={statsForPlayer(statsMap, p.id)} season={league.currentSeason} from="starter" slot={slot} onName={setModalPlayerId} /> : <EmptyStarter />}
-              {p
-                ? <button onClick={() => benchStarter(slot)} className="text-[11px] font-semibold rounded border px-1.5 py-0.5 hover:bg-[var(--surface-2)]" style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}>Bench</button>
-                : <span />}
+              <span className="text-[11px] font-black text-center rounded" style={{ color: POS_COLORS[pos] }} title={`Starting ${pos}`}>{pos}</span>
+              {p ? renderCells(p, true, { id: p.id, from: 'starter', slot }) : <EmptyStarter />}
+              <ActionCell
+                toggle={p ? { label: 'Bench', onClick: () => benchStarter(slot) } : null}
+                onMenu={p ? e => setMenu({ id: p.id, x: e.clientX, y: e.clientY }) : undefined}
+              />
             </div>
           );
         })}
@@ -249,8 +283,11 @@ export default function RosterPage() {
           return (
             <div key={id} className={`${ROW_GRID} border-t`} style={{ ...ROW_COLS, borderColor: 'var(--border)' }}>
               <span className="text-xs opacity-30 text-center cursor-grab select-none" aria-hidden>⠿</span>
-              <PlayerCellsInner p={p} stats={statsForPlayer(statsMap, p.id)} season={league.currentSeason} onName={setModalPlayerId} draggable from="bench" slot={-1} />
-              <button onClick={() => startPlayer(id)} className="text-[11px] font-semibold rounded border px-1.5 py-0.5 hover:bg-[var(--surface-2)]" style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}>Start</button>
+              {renderCells(p, false, { id: p.id, from: 'bench', slot: -1 })}
+              <ActionCell
+                toggle={{ label: 'Start', onClick: () => startPlayer(id), accent: true }}
+                onMenu={e => setMenu({ id: p.id, x: e.clientX, y: e.clientY })}
+              />
             </div>
           );
         })}
@@ -260,39 +297,50 @@ export default function RosterPage() {
         <p className="mt-2 text-xs" style={{ color: '#f59e0b' }}>⚠ {validation.warnings[0].message}</p>
       )}
 
+      {/* Actions menu (fixed, so the scroll container can't clip it) */}
+      {menu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} />
+          <div
+            className="fixed z-50 rounded-lg border bg-[var(--surface)] shadow-lg py-1 text-sm w-44"
+            style={{ left: menu.x, top: menu.y, transform: 'translateX(-100%)', borderColor: 'var(--border)' }}
+          >
+            <MenuItem label="Extend contract" onClick={() => onExtend(menu.id)} />
+            <MenuItem label="View details" onClick={() => onDetails(menu.id)} />
+            <MenuItem label="Trade…" onClick={onTrade} />
+            <div className="my-1 border-t" style={{ borderColor: 'var(--border)' }} />
+            <MenuItem label="Release" danger onClick={() => void onRelease(menu.id)} />
+          </div>
+        </>
+      )}
+
       <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
     </Shell>
   );
 }
 
 // ===========================================================================
-// Row cells
+// Cells
 // ===========================================================================
 
-/** Draggable wrapper for a starter row's player cells (handle is the slot badge,
- *  which isn't draggable; the name area carries the drag). */
-function PlayerCells(props: { p: BasketballPlayer; stats: ReturnType<typeof statsForPlayer>; season: number; from: 'starter'; slot: number; onName: (id: string) => void }) {
-  return <PlayerCellsInner {...props} draggable />;
-}
-
-function PlayerCellsInner({
-  p, stats, season, onName, draggable, from, slot,
+function PlayerCells({
+  p, stats, mood, season, dragData, onName,
 }: {
   p: BasketballPlayer;
-  stats: ReturnType<typeof statsForPlayer>;
+  stats: BasketballStats;
+  mood: Mood;
   season: number;
+  dragData: object;
   onName: (id: string) => void;
-  draggable?: boolean;
-  from: 'starter' | 'bench';
-  slot: number;
 }) {
   const gp = stats.gamesPlayed;
-  const ppg = gp > 0 ? (stats.points / gp).toFixed(1) : '—';
+  const per = (v: number) => (gp > 0 ? (v / gp).toFixed(1) : '—');
+  const statLine = gp > 0 ? `${per(stats.points)} / ${per(stats.totalRebounds)} / ${per(stats.assists)}` : '—';
   return (
     <>
       <button
-        draggable={draggable}
-        onDragStart={e => { e.dataTransfer.setData('application/json', JSON.stringify({ id: p.id, from, slot })); e.dataTransfer.effectAllowed = 'move'; }}
+        draggable
+        onDragStart={e => { e.dataTransfer.setData('application/json', JSON.stringify(dragData)); e.dataTransfer.effectAllowed = 'move'; }}
         onClick={() => onName(p.id)}
         className="font-semibold text-left truncate hover:underline cursor-grab"
         style={{ color: 'var(--accent)' }}
@@ -305,16 +353,54 @@ function PlayerCellsInner({
       <span className="text-right tabular-nums text-sm font-bold" style={{ color: ovrColor(p.ratings.overall) }}>{p.ratings.overall}</span>
       <span className="text-right tabular-nums text-sm opacity-70">{p.development.potential}</span>
       <span className="text-right tabular-nums text-xs">{contractLabel(p, season)}</span>
-      <span className="text-right tabular-nums text-sm">{ppg}</span>
+      <span className="text-right tabular-nums text-sm">{gp || '—'}</span>
+      <span className="text-right tabular-nums text-xs">{statLine}</span>
+      <span className="flex justify-center">
+        <span className="text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap" style={{ background: `color-mix(in srgb, ${mood.color} 16%, transparent)`, color: mood.color }} title={mood.reason}>
+          {mood.label}
+        </span>
+      </span>
     </>
   );
 }
 
+function ActionCell({ toggle, onMenu }: { toggle: { label: string; onClick: () => void; accent?: boolean } | null; onMenu?: (e: React.MouseEvent) => void }) {
+  return (
+    <span className="flex items-center justify-end gap-1">
+      {toggle && (
+        <button
+          onClick={toggle.onClick}
+          className="text-[11px] font-semibold rounded border px-1.5 py-0.5 hover:bg-[var(--surface-2)]"
+          style={{ borderColor: toggle.accent ? 'var(--accent)' : 'var(--border)', color: toggle.accent ? 'var(--accent)' : 'var(--text-sec)' }}
+        >
+          {toggle.label}
+        </button>
+      )}
+      {onMenu && (
+        <button onClick={onMenu} className="w-6 h-6 rounded hover:bg-[var(--surface-2)] text-[var(--text-sec)]" aria-label="Player actions" title="Actions">⋯</button>
+      )}
+    </span>
+  );
+}
+
+function MenuItem({ label, onClick, danger }: { label: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left px-3 py-1.5 hover:bg-[var(--surface-2)]"
+      style={danger ? { color: '#dc2626' } : undefined}
+    >
+      {label}
+    </button>
+  );
+}
+
 function EmptyStarter() {
+  // 9 cells to match PlayerCells: name, pos, age, ovr, pot, contract, gp, stats, mood.
   return (
     <>
       <span className="text-sm" style={{ color: '#dc2626' }}>— empty —</span>
-      <span /><span /><span /><span /><span /><span />
+      <span /><span /><span /><span /><span /><span /><span /><span />
     </>
   );
 }
@@ -325,7 +411,7 @@ function EmptyStarter() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="max-w-5xl mx-auto p-5 sm:p-8">
+    <main className="max-w-6xl mx-auto p-5 sm:p-8">
       <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
       <div className="mt-2">{children}</div>
     </main>
