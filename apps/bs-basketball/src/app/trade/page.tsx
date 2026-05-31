@@ -26,6 +26,7 @@ export default function TradePage() {
   const [mine, setMine] = useState<Set<string>>(new Set());
   const [theirs, setTheirs] = useState<Set<string>>(new Set());
   const [resultMsg, setResultMsg] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
 
   const teamById = useMemo(() => {
     const m = new Map<string, BasketballTeam>();
@@ -72,6 +73,30 @@ export default function TradePage() {
     if (next.has(id)) next.delete(id); else next.add(id);
     setter(next);
     setResultMsg(null);
+  }
+
+  function addTo(set: Set<string>, setter: (s: Set<string>) => void, id: string) {
+    if (set.has(id)) return;
+    const next = new Set(set);
+    next.add(id);
+    setter(next);
+    setResultMsg(null);
+  }
+
+  // Drag a roster row onto the trade block — routed to the correct side by the
+  // dragstart payload. Click-to-toggle still works for touch / no-DnD.
+  function onDropDeal(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const raw = e.dataTransfer.getData('application/json');
+    if (!raw) return;
+    try {
+      const { id, side } = JSON.parse(raw) as { id: string; side: 'mine' | 'theirs' };
+      if (side === 'mine') addTo(mine, setMine, id);
+      else if (side === 'theirs') addTo(theirs, setTheirs, id);
+    } catch {
+      /* malformed payload — ignore */
+    }
   }
 
   async function propose() {
@@ -122,48 +147,69 @@ export default function TradePage() {
       )}
 
       <div className="grid lg:grid-cols-[1fr_1fr_0.9fr] gap-5">
-        <RosterColumn team={userTeam} playerById={playerById} season={league.currentSeason} selected={mine} onToggle={id => toggle(mine, setMine, id)} />
+        <RosterColumn team={userTeam} playerById={playerById} season={league.currentSeason} selected={mine} onToggle={id => toggle(mine, setMine, id)} side="mine" />
         {targetTeam ? (
-          <RosterColumn team={targetTeam} playerById={playerById} season={league.currentSeason} selected={theirs} onToggle={id => toggle(theirs, setTheirs, id)} />
+          <RosterColumn team={targetTeam} playerById={playerById} season={league.currentSeason} selected={theirs} onToggle={id => toggle(theirs, setTheirs, id)} side="theirs" />
         ) : (
           <div className="rounded-xl border bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-sec)]" style={{ borderColor: 'var(--border)' }}>
             Select a trade partner to see their roster.
           </div>
         )}
 
-        {/* Evaluation */}
-        <section className="rounded-xl border bg-[var(--surface)] p-4 self-start" style={{ borderColor: 'var(--border)' }}>
-          <h2 className="font-bold text-sm mb-3">Evaluation</h2>
-          {!evaluation || (mine.size === 0 && theirs.size === 0) ? (
-            <p className="text-sm text-[var(--text-sec)]">Add players from each side to evaluate.</p>
-          ) : (
-            <>
-              <div
-                className="text-sm font-semibold mb-3 px-2 py-1.5 rounded"
-                style={{
-                  background: !evaluation.legal
-                    ? 'color-mix(in srgb, #dc2626 14%, transparent)'
-                    : evaluation.allAccept
-                    ? 'color-mix(in srgb, #10b981 16%, transparent)'
-                    : 'color-mix(in srgb, #f59e0b 16%, transparent)',
-                }}
-              >
-                {evaluation.summary}
-              </div>
+        <div className="space-y-4 self-start">
+          {/* Trade block (drop zone) */}
+          <section
+            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDropDeal}
+            className="rounded-xl border-2 border-dashed p-4 transition-colors"
+            style={{
+              borderColor: dragOver ? 'var(--accent)' : 'var(--border)',
+              background: dragOver ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'var(--surface)',
+            }}
+          >
+            <h2 className="font-bold text-sm mb-2">Trade block</h2>
+            <DealHalf label={`${userTeam.city} send`} ids={[...mine]} playerById={playerById} accent="#dc2626" onRemove={id => toggle(mine, setMine, id)} />
+            <DealHalf label={`${targetTeam ? targetTeam.city + ' send' : 'You receive'}`} ids={[...theirs]} playerById={playerById} accent="#10b981" onRemove={id => toggle(theirs, setTheirs, id)} />
+            {mine.size === 0 && theirs.size === 0 && (
+              <p className="text-xs text-[var(--text-sec)] mt-1">Drag players here — or tap them in the rosters.</p>
+            )}
+          </section>
 
-              {userOutcome && <OutcomeBlock label={`${userTeam.city} (You)`} outcome={userOutcome} />}
-              {targetOutcome && targetTeam && <OutcomeBlock label={targetTeam.city} outcome={targetOutcome} />}
+          {/* Evaluation */}
+          <section className="rounded-xl border bg-[var(--surface)] p-4" style={{ borderColor: 'var(--border)' }}>
+            <h2 className="font-bold text-sm mb-3">Evaluation</h2>
+            {!evaluation || (mine.size === 0 && theirs.size === 0) ? (
+              <p className="text-sm text-[var(--text-sec)]">Add players from each side to evaluate.</p>
+            ) : (
+              <>
+                <div
+                  className="text-sm font-semibold mb-3 px-2 py-1.5 rounded"
+                  style={{
+                    background: !evaluation.legal
+                      ? 'color-mix(in srgb, #dc2626 14%, transparent)'
+                      : evaluation.allAccept
+                      ? 'color-mix(in srgb, #10b981 16%, transparent)'
+                      : 'color-mix(in srgb, #f59e0b 16%, transparent)',
+                  }}
+                >
+                  {evaluation.summary}
+                </div>
 
-              {evaluation.warnings.map((w, i) => (
-                <p key={i} className="text-xs mt-2" style={{ color: '#f59e0b' }}>⚠ {w}</p>
-              ))}
+                {userOutcome && <OutcomeBlock label={`${userTeam.city} (You)`} outcome={userOutcome} />}
+                {targetOutcome && targetTeam && <OutcomeBlock label={targetTeam.city} outcome={targetOutcome} />}
 
-              <Button variant="primary" className="w-full mt-4" disabled={!canExecute || store.loading} onClick={() => void propose()}>
-                {store.loading ? 'Processing…' : canExecute ? 'Propose Trade' : 'Not acceptable'}
-              </Button>
-            </>
-          )}
-        </section>
+                {evaluation.warnings.map((w, i) => (
+                  <p key={i} className="text-xs mt-2" style={{ color: '#f59e0b' }}>⚠ {w}</p>
+                ))}
+
+                <Button variant="primary" className="w-full mt-4" disabled={!canExecute || store.loading} onClick={() => void propose()}>
+                  {store.loading ? 'Processing…' : canExecute ? 'Propose Trade' : 'Not acceptable'}
+                </Button>
+              </>
+            )}
+          </section>
+        </div>
       </div>
     </Shell>
   );
@@ -174,13 +220,14 @@ export default function TradePage() {
 // ===========================================================================
 
 function RosterColumn({
-  team, playerById, season, selected, onToggle,
+  team, playerById, season, selected, onToggle, side,
 }: {
   team: BasketballTeam;
   playerById: Record<string, BasketballPlayer>;
   season: number;
   selected: Set<string>;
   onToggle: (id: string) => void;
+  side: 'mine' | 'theirs';
 }) {
   const players = team.playerIds
     .map(id => playerById[id])
@@ -200,10 +247,17 @@ function RosterColumn({
           return (
             <li key={p.id}>
               <button
+                draggable
+                onDragStart={e => {
+                  e.dataTransfer.setData('application/json', JSON.stringify({ id: p.id, side }));
+                  e.dataTransfer.effectAllowed = 'copy';
+                }}
                 onClick={() => onToggle(p.id)}
-                className="w-full flex items-center gap-2 px-3 py-1.5 border-t text-left text-sm hover:bg-[var(--surface-2)] transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-1.5 border-t text-left text-sm hover:bg-[var(--surface-2)] transition-colors cursor-grab active:cursor-grabbing"
                 style={{ borderColor: 'var(--border)', background: sel ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined }}
+                title="Drag onto the trade block, or tap to add"
               >
+                <span className="w-3 text-center text-xs opacity-30 select-none" aria-hidden>⠿</span>
                 <span className="w-4 text-center" style={{ color: sel ? 'var(--accent)' : 'var(--text-sec)' }}>{sel ? '✓' : '+'}</span>
                 <span className="font-semibold truncate flex-1">{p.firstName} {p.lastName}</span>
                 <span className="text-xs opacity-60 w-6">{p.sportData.position}</span>
@@ -215,6 +269,42 @@ function RosterColumn({
         })}
       </ul>
     </section>
+  );
+}
+
+function DealHalf({
+  label, ids, playerById, accent, onRemove,
+}: {
+  label: string;
+  ids: string[];
+  playerById: Record<string, BasketballPlayer>;
+  accent: string;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <div className="mb-2">
+      <div className="text-[10px] uppercase tracking-widest opacity-60 mb-1">{label}</div>
+      {ids.length === 0 ? (
+        <div className="text-xs opacity-40">—</div>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {ids.map(id => {
+            const p = playerById[id];
+            if (!p) return null;
+            return (
+              <span
+                key={id}
+                className="inline-flex items-center gap-1 text-xs font-semibold rounded-full pl-2 pr-1 py-0.5"
+                style={{ background: `color-mix(in srgb, ${accent} 16%, transparent)` }}
+              >
+                {p.firstName[0]}. {p.lastName}
+                <button onClick={() => onRemove(id)} className="opacity-50 hover:opacity-100 px-0.5" title="Remove from deal">✕</button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
