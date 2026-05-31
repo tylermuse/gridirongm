@@ -115,9 +115,11 @@ export default function DraftPage() {
     pool[0] ||
     null;
 
-  async function handleStartSeason() {
+  async function handleStartSeason(dest: string) {
+    // Finalizes rosters (overflow → free-agent pool) and tips into the
+    // preseason. We route to free agency by default since that's the next step.
     const next = await store.startNextSeason();
-    if (next) router.push('/');
+    if (next) router.push(dest);
   }
 
   return (
@@ -127,9 +129,14 @@ export default function DraftPage() {
         {draft.complete ? (
           <>
             <div className="font-bold">🏁 Draft complete — {draft.picks.length} picks in.</div>
-            <Button variant="primary" disabled={store.loading} onClick={() => void handleStartSeason()} className="ml-auto">
-              {store.loading ? 'Starting…' : `Start ${draft.season} Season →`}
-            </Button>
+            <div className="ml-auto flex items-center gap-2">
+              <Button variant="ghost" disabled={store.loading} onClick={() => void handleStartSeason('/')}>
+                Skip to season
+              </Button>
+              <Button variant="primary" disabled={store.loading} onClick={() => void handleStartSeason('/free-agency')}>
+                {store.loading ? 'Working…' : 'Sign Free Agents →'}
+              </Button>
+            </div>
           </>
         ) : (
           <>

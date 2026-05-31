@@ -10,6 +10,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ratingDeltas, trajectoryDescription } from '@/lib/development';
+import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import {
   basketballUiMetadata,
   type BasketballPlayer,
@@ -98,7 +99,10 @@ export default function PlayerPage() {
     grouped.get(f.group)!.push({ key: String(f.key), label: f.label });
   }
 
-  const stats = statMode === 'season' ? player.seasonStats : player.careerStats;
+  // Season stats come from box-score aggregation (player.seasonStats isn't kept
+  // up to date during the season); career stats are rolled up at season's end.
+  const aggregatedSeason = statsForPlayer(regularSeasonStatsByPlayer(league), player.id);
+  const stats = statMode === 'season' ? aggregatedSeason : player.careerStats;
   const traj = player.development.currentTrajectory;
   const visibleGames = showAllGames ? gameLog : gameLog.slice(0, 10);
 
