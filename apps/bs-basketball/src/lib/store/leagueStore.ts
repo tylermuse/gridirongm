@@ -50,14 +50,14 @@ import {
   currentSlot,
 } from '../draft';
 import { resolveUserOffer, releasePlayer as releasePlayerState, type Offer, type OfferResult } from '../freeAgency';
-import { extendContract } from '../roster/playerActions';
+import { extensionMarket, extensionAccepted, buildExtension } from '../roster/extension';
 import { executeTrade, type TradeSideInput } from '../trade';
 import { setTeamLineup } from '../lineup';
 import { clearGmFired } from '../approval';
 import { scoutProspect as scoutProspectState } from '../scouting';
 import { markChangelogSeen as markChangelogSeenState } from '../ui/changelog';
 import type { TeamId } from '@bs/core/adapter';
-import type { BasketballLineup } from '@bs/sport-basketball';
+import type { BasketballLineup, BasketballPlayer } from '@bs/sport-basketball';
 
 interface LeagueStore {
   /** Currently loaded league, or null if user hasn't started one. */
@@ -159,8 +159,9 @@ interface LeagueStore {
   /** Waive a rostered player to free agency (opens a roster spot). */
   releasePlayer: (playerId: string) => Promise<boolean>;
 
-  /** Extend a player with market-value years onto the end of their deal. */
-  extendPlayer: (playerId: string) => Promise<boolean>;
+  /** Negotiate a contract extension. The player accepts a fair offer (a touch
+   *  under market, for loyalty) and the years append to the end of the deal. */
+  extendPlayer: (playerId: string, offer: Offer) => Promise<{ accepted: boolean; message: string } | null>;
 }
 
 /** One-line summary for the sim toast: games simmed + the user team's most
@@ -594,23 +595,30 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
   },
 
-  async extendPlayer(playerId) {
+  async extendPlayer(playerId, offer) {
     const current = get().league;
-    if (!current) { set({ error: 'No league loaded.' }); return false; }
-    const player = current.players[playerId as Parameters<typeof releasePlayerState>[1]];
-    if (!player) { set({ error: 'Player not found.' }); return false; }
+    if (!current) { set({ error: 'No league loaded.' }); return null; }
+    const player = current.players[playerId as Parameters<typeof releasePlayerState>[1]] as BasketballPlayer | undefined;
+    if (!player) { set({ error: 'Player not found.' }); return null; }
+
+    const market = extensionMarket(player, current.currentSeason);
+    if (!extensionAccepted(market, offer)) {
+      const ask = `$${(market.marketSalary / 1e6).toFixed(1)}M/yr over ${market.desiredYears}y`;
+      return { accepted: false, message: `${player.firstName} ${player.lastName} turned it down — he's looking for closer to ${ask}.` };
+    }
+
     set({ loading: true, error: null });
     try {
-      const contract = extendContract(player as Parameters<typeof extendContract>[0], current.currentSeason);
+      const contract = buildExtension(player, offer, market);
       const players = { ...current.players, [playerId]: { ...player, contract } };
       const league = { ...current, players };
       await saveLeague(league);
       set({ league, loading: false });
-      return true;
+      return { accepted: true, message: `${player.firstName} ${player.lastName} signed a ${offer.years}-year, $${(offer.salaryPerYear / 1e6).toFixed(1)}M/yr extension.` };
     } catch (err) {
       console.error('[bs-hoops] extendPlayer failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
-      return false;
+      return null;
     }
   },
 

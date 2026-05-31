@@ -9,6 +9,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PlayerModal } from '@/components/modals/PlayerModal';
+import { ExtendModal } from '@/components/modals/ExtendModal';
 import { resolveLineup, validateBasketballLineup, buildDefaultBasketballLineup } from '@/lib/lineup';
 import { teamCap, fmtMoney } from '@/lib/dashboard/summary';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
@@ -42,6 +43,7 @@ export default function RosterPage() {
   const store = useLeagueStore();
   const router = useRouter();
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
+  const [extendId, setExtendId] = useState<string | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
   const [saved, setSaved] = useState(false);
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -191,7 +193,7 @@ export default function RosterPage() {
       setSaved(false);
     }
   }
-  function onExtend(id: string) { setMenu(null); void store.extendPlayer(id); }
+  function onExtend(id: string) { setMenu(null); setExtendId(id); }
   function onDetails(id: string) { setMenu(null); setModalPlayerId(id); }
   function onTrade() { setMenu(null); router.push('/trade'); }
 
@@ -315,6 +317,7 @@ export default function RosterPage() {
       )}
 
       <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
+      <ExtendModal playerId={extendId} onClose={() => setExtendId(null)} />
     </Shell>
   );
 }
