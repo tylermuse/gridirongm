@@ -13,7 +13,14 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
  * Next-matchup card (P0.4). Shows the team's upcoming game (or its most recent
  * result when the slate is done), with a Box Score / Watch link.
  */
-export function NextMatchupCard({ league, team }: { league: LeagueState; team: BasketballTeam }) {
+export function NextMatchupCard({
+  league, team, onWatchLive, loading,
+}: {
+  league: LeagueState;
+  team: BasketballTeam;
+  onWatchLive?: () => void;
+  loading?: boolean;
+}) {
   const m = nextMatchup(league, team.id);
   if (!m || !m.opponent) return null;
 
@@ -55,9 +62,14 @@ export function NextMatchupCard({ league, team }: { league: LeagueState; team: B
               Box Score →
             </Link>
           ) : (
-            <span className="rounded-lg px-3 py-1.5 text-sm font-bold text-[var(--text-sec)] border" style={{ borderColor: 'var(--border)' }} title="Live sim coming soon">
-              Watch Live
-            </span>
+            <button
+              onClick={onWatchLive}
+              disabled={loading}
+              className="rounded-lg px-3 py-1.5 text-sm font-bold text-white active:scale-95 disabled:opacity-60"
+              style={{ background: 'var(--accent)' }}
+            >
+              {loading ? 'Loading…' : '▶ Watch Live'}
+            </button>
           )}
         </div>
       </div>

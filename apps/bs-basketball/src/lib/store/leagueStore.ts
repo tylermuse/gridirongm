@@ -102,6 +102,10 @@ interface LeagueStore {
    *  + number of games on success. */
   simDay: () => Promise<{ day: number; gamesSimmed: number } | null>;
 
+  /** Advance day-by-day until the user team plays, then return that game (for
+   *  the live viewer) plus the rest of the day's slate. No spoiler toast. */
+  watchNextUserGame: () => Promise<{ userGameId: string; dayGameIds: string[]; day: number } | null>;
+
   /** Bulk-sim to a milestone: a week ahead, the trade deadline, or the end of
    *  the regular season. Returns days + games simmed. */
   simRange: (target: 'week' | 'deadline' | 'season') => Promise<{ daysSimmed: number; gamesSimmed: number } | null>;
@@ -308,6 +312,42 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       return { day: outcome.day, gamesSimmed: outcome.gamesSimmed };
     } catch (err) {
       console.error('[bs-hoops] simDay failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  },
+
+  async watchNextUserGame() {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return null; }
+    const uid = current.userTeamId;
+    if (!uid) { set({ error: 'Pick a team first.' }); return null; }
+    set({ loading: true, error: null });
+    await yieldToPaint();
+    try {
+      let league = current;
+      let result: { userGameId: string; dayGameIds: string[]; day: number } | null = null;
+      for (let guard = 0; guard < 200; guard++) {
+        const outcome = simNextDay(league);
+        if (!outcome) break;
+        league = outcome.league;
+        const day = outcome.day;
+        const dayGames = league.games.filter(
+          g => g.status === 'played' && (g.sportData as { dayOfSeason?: number } | undefined)?.dayOfSeason === day,
+        );
+        const userGame = dayGames.find(g => g.homeTeamId === uid || g.awayTeamId === uid);
+        if (userGame) {
+          result = { userGameId: userGame.id, dayGameIds: dayGames.map(g => g.id), day };
+          break;
+        }
+      }
+      if (!result) { set({ loading: false, error: 'No upcoming game to watch.' }); return null; }
+      await saveLeague(league);
+      // Deliberately no sim toast — it would spoil the score before the watch.
+      set({ league, loading: false });
+      return result;
+    } catch (err) {
+      console.error('[bs-hoops] watchNextUserGame failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return null;
     }
