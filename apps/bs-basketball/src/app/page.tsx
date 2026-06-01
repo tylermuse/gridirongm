@@ -15,6 +15,7 @@ import { NextMatchupCard } from '@/components/dashboard/NextMatchup';
 import { DashboardRow } from '@/components/dashboard/DashboardRow';
 import { EditorialWidgets } from '@/components/dashboard/EditorialWidgets';
 import { TeamSpotlight } from '@/components/show/TeamSpotlight';
+import { TeamLeaders } from '@/components/dashboard/TeamLeaders';
 import { LiveViewer } from '@/components/live/LiveViewer';
 import { ApprovalRings, TrophyCase } from '@/components/dashboard/MetaWidgets';
 import { InjuryReport } from '@/components/dashboard/InjuryReport';
@@ -188,6 +189,7 @@ export default function HomePage() {
             <InjuryReport league={league} team={userTeam as BasketballTeam} />
             <DashboardRow league={league} team={userTeam as BasketballTeam} />
             <div className="mb-6"><TeamSpotlight league={league} compact /></div>
+            <TeamLeaders league={league} team={userTeam as BasketballTeam} />
             <EditorialWidgets league={league} team={userTeam as BasketballTeam} />
             <div className="grid md:grid-cols-[1fr_15rem] gap-4 mb-6 items-start">
               <TrophyCase league={league} team={userTeam as BasketballTeam} />

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { standingsSlice, teamCap, teamStatLine, fmtMoney } from '@/lib/dashboard/summary';
+import { teamStatRanks, type RankedStat } from '@/lib/dashboard/leaders';
 import type { BasketballTeam } from '@bs/sport-basketball';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
@@ -87,6 +88,7 @@ function CapRow({ label, value, color }: { label: string; value: string; color?:
 
 function TeamStatsCard({ league, team }: { league: LeagueState; team: BasketballTeam }) {
   const s = teamStatLine(league, team);
+  const ranks = teamStatRanks(league, team);
   const pct = (v: number | null) => (v == null ? '—' : `${Math.round(v)}%`);
   return (
     <Card>
@@ -98,9 +100,9 @@ function TeamStatsCard({ league, team }: { league: LeagueState; team: Basketball
       ) : (
         <>
           <div className="grid grid-cols-3 gap-2 mb-3">
-            <StatTile label="PPG" value={s.ppg.toFixed(1)} />
-            <StatTile label="Opp PPG" value={s.oppPpg.toFixed(1)} />
-            <StatTile label="Diff" value={`${s.diff >= 0 ? '+' : ''}${s.diff.toFixed(1)}`} color={s.diff >= 0 ? '#10b981' : '#dc2626'} />
+            <StatTile label="PPG" value={s.ppg.toFixed(1)} rank={ranks.ppg} />
+            <StatTile label="Opp PPG" value={s.oppPpg.toFixed(1)} rank={ranks.oppPpg} />
+            <StatTile label="Diff" value={`${s.diff >= 0 ? '+' : ''}${s.diff.toFixed(1)}`} color={s.diff >= 0 ? '#10b981' : '#dc2626'} rank={ranks.diff} />
           </div>
           <div className="flex gap-3 text-xs text-[var(--text-sec)] mb-2">
             <span>FG {pct(s.fgPct)}</span>
@@ -120,11 +122,18 @@ function TeamStatsCard({ league, team }: { league: LeagueState; team: Basketball
   );
 }
 
-function StatTile({ label, value, color }: { label: string; value: string; color?: string }) {
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
+}
+
+function StatTile({ label, value, color, rank }: { label: string; value: string; color?: string; rank?: RankedStat }) {
+  const rankColor = rank ? (rank.rank <= 5 ? '#10b981' : rank.rank >= rank.of - 4 ? '#ef4444' : 'var(--text-sec)') : undefined;
   return (
     <div className="p-2.5 rounded-lg" style={{ background: 'var(--surface-2)' }}>
       <div className="text-lg font-black tabular-nums" style={{ color: color ?? 'var(--accent)' }}>{value}</div>
       <div className="text-[10px] uppercase tracking-wide opacity-70">{label}</div>
+      {rank && <div className="text-[10px] font-bold tabular-nums" style={{ color: rankColor }}>{ordinal(rank.rank)}</div>}
     </div>
   );
 }
