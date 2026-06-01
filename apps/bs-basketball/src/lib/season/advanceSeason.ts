@@ -30,6 +30,7 @@ import {
   addBasketballStats,
   emptyBasketballStats,
   perGame,
+  resolveBasketballPDCEffect,
   type BasketballPlayer,
   type BasketballPosition,
   type BasketballTeam,
@@ -38,6 +39,7 @@ import type { BaseLeagueState, PlayerId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { getBracket } from '../playoffs';
 import { marketContract, hasContractForSeason } from '../league/contracts';
+import { getHeadCoach } from '../coaching/coaches';
 import { setupDraft, getDraft, autoPickUntilUser } from '../draft';
 import { computeSeasonAwards } from '../awards';
 import { buildSeasonHistoryEntry } from '../history';
@@ -85,6 +87,14 @@ export function enterOffseason(input: LeagueState): LeagueState {
   const historyEntry = buildSeasonHistoryEntry(league);
   const seasonStats = computeSeasonAwards(league)?.seasonStats;
 
+  // Each team's head-coach development rating drives how fast its young players
+  // grow over the offseason (parity: coaching matters for the rebuild loop).
+  const teamDevRating = new Map<string, number>();
+  for (const t of league.teams) {
+    const hc = getHeadCoach(league, t.id);
+    if (hc) teamDevRating.set(t.id, hc.ratings.development);
+  }
+
   // Develop everyone; drop retirees (the schedule is replaced later, so nothing
   // references them once the season starts).
   const players: Record<string, BasketballPlayer> = {};
@@ -114,7 +124,11 @@ export function enterOffseason(input: LeagueState): LeagueState {
       sportData: { ...p.sportData, prevRatings: p.ratings, seasonLog },
     };
 
-    const developed = developBasketballPlayer(snapshot, nextSeason);
+    const devRating = p.rosterSlot?.teamId ? teamDevRating.get(p.rosterSlot.teamId) : undefined;
+    const developmentMultiplier = devRating != null
+      ? resolveBasketballPDCEffect(devRating, p.age)
+      : undefined;
+    const developed = developBasketballPlayer(snapshot, nextSeason, { developmentMultiplier });
     if (shouldBasketballPlayerRetire(developed)) {
       retired.add(id as PlayerId);
       continue;

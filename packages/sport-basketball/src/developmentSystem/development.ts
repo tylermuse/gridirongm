@@ -53,6 +53,13 @@ function driftStdForAge(age: number): number {
 export interface DevelopSeasonOptions {
   /** RNG seed for reproducibility. Default: derived from player ID + season. */
   rngSeed?: string;
+  /**
+   * Multiplier applied to POSITIVE year-over-year drift (i.e. a young player's
+   * growth), e.g. from a player-development coach. 1.0 = neutral (default);
+   * >1 accelerates improvement. Never penalizes decline, so it only ever helps
+   * rising players. Omitting it reproduces the un-coached aging curve exactly.
+   */
+  developmentMultiplier?: number;
 }
 
 /**
@@ -69,7 +76,11 @@ export function developBasketballPlayer(
 
   const expected = expectedDriftForAge(newAge);
   const std = driftStdForAge(newAge);
-  const drift = Math.round(expected + gaussian(0, std, rng));
+  const raw = expected + gaussian(0, std, rng);
+  // A development coach only accelerates upward drift; decline is unaffected.
+  // mult === 1 leaves the expression identical to the un-coached path.
+  const mult = opts.developmentMultiplier ?? 1;
+  const drift = Math.round(mult !== 1 && raw > 0 ? raw * mult : raw);
 
   const newRatings = applyAgingToRatings(player.ratings, newAge, drift, rng);
   const newOverall = approximateOverall(newRatings, player.sportData.position);
