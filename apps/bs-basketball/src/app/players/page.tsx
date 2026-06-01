@@ -25,6 +25,8 @@ export default function PlayersPage() {
   const [teamId, setTeamId] = useState<string>('ALL');
   const [status, setStatus] = useState<Status>('all');
   const [minOvr, setMinOvr] = useState(0);
+  const [minPot, setMinPot] = useState(0);
+  const [maxAge, setMaxAge] = useState(42);
   const [sortKey, setSortKey] = useState<SortKey>('overall');
   const [desc, setDesc] = useState(true);
   const [limit, setLimit] = useState(PAGE);
@@ -46,6 +48,8 @@ export default function PlayersPage() {
       if (pos !== 'ALL' && p.sportData.position !== pos) return false;
       if (teamId === 'FA' ? !!p.rosterSlot : teamId !== 'ALL' && p.rosterSlot?.teamId !== teamId) return false;
       if (p.ratings.overall < minOvr) return false;
+      if (p.development.potential < minPot) return false;
+      if (p.age > maxAge) return false;
       if (status === 'free_agent' && p.rosterSlot) return false;
       if (status === 'signed' && !p.rosterSlot) return false;
       if (status === 'expiring') {
@@ -66,7 +70,7 @@ export default function PlayersPage() {
       return d * dir;
     });
     return filtered;
-  }, [league, q, pos, teamId, status, minOvr, sortKey, desc]);
+  }, [league, q, pos, teamId, status, minOvr, minPot, maxAge, sortKey, desc]);
 
   if (loading) return <Shell><p className="opacity-60">Loading…</p></Shell>;
   if (!league) return <Shell><p>{error ?? 'No league loaded.'}</p></Shell>;
@@ -100,6 +104,12 @@ export default function PlayersPage() {
         </select>
         <label className="flex items-center gap-1.5 text-xs text-[var(--text-sec)]">
           OVR ≥ <input type="range" min={0} max={95} value={minOvr} onChange={e => { setMinOvr(Number(e.target.value)); setLimit(PAGE); }} /> <span className="tabular-nums w-6">{minOvr}</span>
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-[var(--text-sec)]">
+          POT ≥ <input type="range" min={0} max={95} value={minPot} onChange={e => { setMinPot(Number(e.target.value)); setLimit(PAGE); }} /> <span className="tabular-nums w-6">{minPot}</span>
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-[var(--text-sec)]">
+          Age ≤ <input type="range" min={19} max={42} value={maxAge} onChange={e => { setMaxAge(Number(e.target.value)); setLimit(PAGE); }} /> <span className="tabular-nums w-6">{maxAge}</span>
         </label>
       </div>
       <div className="flex flex-wrap gap-1.5 mb-3">
