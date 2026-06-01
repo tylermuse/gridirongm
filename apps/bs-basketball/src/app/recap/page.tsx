@@ -8,6 +8,7 @@ import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { buildRecap, type RecapAward, type SeasonRecap } from '@/lib/recap';
+import { RecapShow } from '@/components/recap/RecapShow';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -68,6 +69,9 @@ export default function RecapPage() {
           </div>
         )}
       </section>
+
+      {/* Episodic recap show (#15) */}
+      <RecapShow league={league} recap={recap} />
 
       {/* Marquee awards */}
       <div className="grid sm:grid-cols-3 gap-4 mb-6">
