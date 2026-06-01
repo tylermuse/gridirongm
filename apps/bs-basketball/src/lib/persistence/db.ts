@@ -125,6 +125,21 @@ export async function deleteLeague(id: string): Promise<void> {
   await db().leagues.delete(id);
 }
 
+/** Rename a saved league (updates the stored displayName + the row meta). */
+export async function renameLeague(id: string, name: string): Promise<void> {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  const row = await db().leagues.get(id);
+  if (!row) return;
+  let state = row.state;
+  try {
+    const parsed = JSON.parse(row.state) as BasketballLeagueState;
+    parsed.displayName = trimmed;
+    state = JSON.stringify(parsed);
+  } catch { /* keep original state blob if it won't parse */ }
+  await db().leagues.put({ ...row, displayName: trimmed, state });
+}
+
 /** Nuke all saves. Used by the settings page (later 2C slice). */
 export async function clearAllLeagues(): Promise<void> {
   await db().leagues.clear();

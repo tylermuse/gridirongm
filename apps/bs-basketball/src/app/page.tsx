@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useLeagueStore } from '@/lib/store/leagueStore';
-import { listLeagues, deleteLeague, type LeagueSaveMeta } from '@/lib/persistence/db';
+import { listLeagues, deleteLeague, renameLeague, type LeagueSaveMeta } from '@/lib/persistence/db';
 import { HOOPS_LEAGUE_TEAMS } from '@/lib/data/teams';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -84,7 +84,16 @@ export default function HomePage() {
   }
 
   async function handleDelete(id: string) {
+    if (!window.confirm('Delete this saved league? This cannot be undone.')) return;
     await deleteLeague(id);
+    const all = await listLeagues();
+    setSaves(all);
+  }
+
+  async function handleRename(id: string, current: string) {
+    const name = window.prompt('Rename this league', current);
+    if (name == null || !name.trim()) return;
+    await renameLeague(id, name);
     const all = await listLeagues();
     setSaves(all);
   }
@@ -344,6 +353,7 @@ export default function HomePage() {
                   </div>
                 </div>
                 <Button size="sm" onClick={() => void loadLeague(s.id)}>Load</Button>
+                <Button size="sm" variant="ghost" onClick={() => void handleRename(s.id, s.displayName)} title="Rename save">✎</Button>
                 <Button size="sm" variant="ghost" onClick={() => void handleDelete(s.id)} title="Delete save">✕</Button>
               </Card>
             ))}
