@@ -31,6 +31,7 @@ function sectionsFor(userTeamId: string | null): NavSection[] {
         { href: '/compare', label: 'Compare', icon: '⚖️' },
         { href: '/playoffs', label: 'Playoffs', icon: '🏆' },
         { href: '/news', label: 'News', icon: '📰' },
+        { href: '/buzz', label: 'Buzz', icon: '💬' },
       ],
     },
     {
