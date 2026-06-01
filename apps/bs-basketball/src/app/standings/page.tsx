@@ -9,7 +9,14 @@ import { TeamRosterModal } from '@/components/modals/TeamRosterModal';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TRADE_DEADLINE_DAY } from '@/lib/sim/simRange';
+import { clinchMarks, CLINCH_LEGEND, type ClinchMark } from '@/lib/standings/clinch';
 import type { BasketballTeam } from '@bs/sport-basketball';
+
+type Grouping = 'conference' | 'division' | 'league';
+const DIVISIONS_BY_CONF: Record<string, string[]> = {
+  Eastern: ['Atlantic', 'Central', 'Southeast'],
+  Western: ['Northwest', 'Pacific', 'Southwest'],
+};
 
 /**
  * /standings — standings by conference.
@@ -41,22 +48,36 @@ export default function StandingsPage() {
   const [rosterTeamId, setRosterTeamId] = useState<string | null>(null);
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
   const [view, setView] = useState<'standings' | 'schedule'>('standings');
+  const [grouping, setGrouping] = useState<Grouping>('conference');
 
-  const sorted = useMemo(() => {
-    if (!league) return { Eastern: [], Western: [] } as Record<'Eastern' | 'Western', BasketballTeam[]>;
-    const byConf: Record<'Eastern' | 'Western', BasketballTeam[]> = { Eastern: [], Western: [] };
-    for (const t of league.teams) {
-      byConf[sd(t as BasketballTeam).conference].push(t as BasketballTeam);
+  const byStanding = (a: BasketballTeam, b: BasketballTeam) => {
+    if (b.record.wins !== a.record.wins) return b.record.wins - a.record.wins;
+    if (a.record.losses !== b.record.losses) return a.record.losses - b.record.losses;
+    return (b.record.pointsFor - b.record.pointsAgainst) - (a.record.pointsFor - a.record.pointsAgainst);
+  };
+
+  // Groups of teams to render as separate tables, per the chosen grouping.
+  const groups = useMemo<{ label: string; teams: BasketballTeam[] }[]>(() => {
+    if (!league) return [];
+    const all = league.teams as BasketballTeam[];
+    if (grouping === 'league') {
+      return [{ label: 'League', teams: [...all].sort(byStanding) }];
     }
-    for (const conf of ['Eastern', 'Western'] as const) {
-      byConf[conf].sort((a, b) => {
-        if (b.record.wins !== a.record.wins) return b.record.wins - a.record.wins;
-        if (a.record.losses !== b.record.losses) return a.record.losses - b.record.losses;
-        return (b.record.pointsFor - b.record.pointsAgainst) - (a.record.pointsFor - a.record.pointsAgainst);
-      });
+    if (grouping === 'division') {
+      const out: { label: string; teams: BasketballTeam[] }[] = [];
+      for (const conf of ['Eastern', 'Western'] as const)
+        for (const division of DIVISIONS_BY_CONF[conf])
+          out.push({ label: `${division}`, teams: all.filter(t => sd(t).division === division).sort(byStanding) });
+      return out;
     }
-    return byConf;
-  }, [league]);
+    return (['Eastern', 'Western'] as const).map(conf => ({
+      label: `${conf} Conference`,
+      teams: all.filter(t => sd(t).conference === conf).sort(byStanding),
+    }));
+  }, [league, grouping]);
+
+  const marks = useMemo(() => (league ? clinchMarks(league) : new Map<string, ClinchMark>()), [league]);
+  const anyMarks = useMemo(() => [...marks.values()].some(Boolean), [marks]);
 
   if (loading) return <Loading />;
   if (!league) return <NotFound message={error ?? 'No league loaded.'} />;
@@ -126,10 +147,28 @@ export default function StandingsPage() {
         )}
       </header>
 
-      <div className="mb-4 inline-flex rounded-lg border overflow-hidden text-sm font-semibold" style={{ borderColor: 'var(--border)' }}>
-        {(['standings', 'schedule'] as const).map(v => (
-          <button key={v} onClick={() => setView(v)} className="px-3 py-1.5 capitalize" style={view === v ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}>{v}</button>
-        ))}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg border overflow-hidden text-sm font-semibold" style={{ borderColor: 'var(--border)' }}>
+          {(['standings', 'schedule'] as const).map(v => (
+            <button key={v} onClick={() => setView(v)} className="px-3 py-1.5 capitalize" style={view === v ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}>{v}</button>
+          ))}
+        </div>
+        {view === 'standings' && (
+          <div className="inline-flex rounded-lg border overflow-hidden text-sm font-semibold" style={{ borderColor: 'var(--border)' }}>
+            {(['division', 'conference', 'league'] as const).map(g => (
+              <button key={g} onClick={() => setGrouping(g)} className="px-3 py-1.5 capitalize" style={grouping === g ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}>{g}</button>
+            ))}
+          </div>
+        )}
+        {view === 'standings' && anyMarks && (
+          <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-[var(--text-sec)] ml-auto">
+            {CLINCH_LEGEND.map(l => (
+              <span key={l.mark} className="inline-flex items-center gap-1">
+                <span className="font-bold tabular-nums" style={{ color: l.color }}>{l.mark}</span>{l.label}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {gamesPlayed === 0 && view === 'standings' && (
@@ -144,13 +183,14 @@ export default function StandingsPage() {
       )}
 
       {view === 'standings' ? (
-        <div className="grid md:grid-cols-2 gap-8">
-          {(['Eastern', 'Western'] as const).map(conf => (
+        <div className={grouping === 'league' ? '' : 'grid md:grid-cols-2 gap-8'}>
+          {groups.map(g => (
             <ConferenceTable
-              key={conf}
-              label={`${conf} Conference`}
-              teams={sorted[conf]}
+              key={g.label}
+              label={g.label}
+              teams={g.teams}
               userTeamId={league.userTeamId ?? null}
+              marks={marks}
               onRosterClick={setRosterTeamId}
             />
           ))}
@@ -173,12 +213,34 @@ export default function StandingsPage() {
 // Components
 // ===========================================================================
 
+const MARK_COLOR: Record<string, string> = { z: '#fbbf24', y: '#10b981', x: '#3b82f6', e: '#ef4444' };
+
+/** Last 5 results as small colored W/L pills. */
+function Last5({ streak }: { streak: string[] }) {
+  const last5 = streak.slice(-5);
+  if (last5.length === 0) return <span className="text-xs text-[var(--text-sec)]">—</span>;
+  return (
+    <span className="inline-flex gap-0.5">
+      {last5.map((c, i) => (
+        <span
+          key={i}
+          className="inline-grid place-items-center w-4 h-4 rounded text-[9px] font-bold"
+          style={{ background: c === 'W' ? 'color-mix(in srgb, #10b981 20%, transparent)' : 'color-mix(in srgb, #ef4444 20%, transparent)', color: c === 'W' ? '#10b981' : '#ef4444' }}
+        >
+          {c}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function ConferenceTable({
-  label, teams, userTeamId, onRosterClick,
+  label, teams, userTeamId, marks, onRosterClick,
 }: {
   label: string;
   teams: BasketballTeam[];
   userTeamId: string | null;
+  marks: Map<string, ClinchMark>;
   onRosterClick: (teamId: string) => void;
 }) {
   const leader = teams[0];
@@ -223,6 +285,7 @@ function ConferenceTable({
                 <td className="px-2 py-1">
                   <div className="flex items-center gap-2">
                     <span className="opacity-50 text-xs w-4">{i + 1}.</span>
+                    {marks.get(t.id) && <span className="text-[10px] font-bold tabular-nums w-2.5 -ml-1" style={{ color: MARK_COLOR[marks.get(t.id)!] }} title={marks.get(t.id)!}>{marks.get(t.id)}</span>}
                     <TeamLogo
                       abbreviation={t.abbreviation}
                       primaryColor={t.primaryColor}
@@ -251,9 +314,7 @@ function ConferenceTable({
                 >
                   {diff > 0 ? '+' : ''}{diff}
                 </td>
-                <td className="px-2 py-1 pl-3 font-mono text-xs">
-                  {t.record.streak.slice(-5).join('') || '—'}
-                </td>
+                <td className="px-2 py-1 pl-3"><Last5 streak={t.record.streak} /></td>
                 <td className="px-2 py-1 text-center">
                   <button
                     onClick={() => onRosterClick(t.id)}
@@ -289,6 +350,7 @@ function ConferenceTable({
             >
               <div className="flex items-center gap-2">
                 <span className="opacity-50 text-xs w-5">{i + 1}.</span>
+                {marks.get(t.id) && <span className="text-[10px] font-bold tabular-nums -ml-1" style={{ color: MARK_COLOR[marks.get(t.id)!] }}>{marks.get(t.id)}</span>}
                 <TeamLogo
                   abbreviation={t.abbreviation}
                   primaryColor={t.primaryColor}
@@ -319,7 +381,7 @@ function ConferenceTable({
                 >
                   {diff > 0 ? '+' : ''}{diff}
                 </span>
-                <span className="font-mono text-xs ml-auto">{t.record.streak.slice(-5).join('') || '—'}</span>
+                <span className="ml-auto"><Last5 streak={t.record.streak} /></span>
               </div>
             </li>
           );
