@@ -91,7 +91,8 @@ export default function FinancesPage() {
       <div className="grid md:grid-cols-2 gap-4 mb-4">
         <Card>
           <CardHeader><CardTitle>Cap &amp; Apron</CardTitle></CardHeader>
-          <dl className="space-y-1.5 text-sm">
+          <ApronMeter cap={fin.cap} />
+          <dl className="space-y-1.5 text-sm mt-4">
             <Row label="Salary cap" value={fmtMoney(fin.cap.cap)} />
             <Row label="Payroll" value={fmtMoney(fin.cap.payroll)} />
             <Row label="Cap room" value={`${fin.cap.capRoom >= 0 ? '+' : ''}${fmtMoney(fin.cap.capRoom)}`} color={fin.cap.capRoom >= 0 ? '#10b981' : '#f97316'} />
@@ -104,15 +105,20 @@ export default function FinancesPage() {
         <Card>
           <CardHeader><CardTitle>Salary by position</CardTitle></CardHeader>
           <div className="space-y-2">
-            {POSITIONS.map(pos => (
-              <div key={pos} className="flex items-center gap-2 text-sm">
-                <span className="w-7 font-mono text-xs" style={{ color: POS_COLORS[pos] }}>{pos}</span>
-                <div className="flex-1 h-3 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
-                  <div className="h-full rounded-full" style={{ width: `${(fin.byPosition[pos] / maxPos) * 100}%`, background: POS_COLORS[pos] }} />
+            {POSITIONS.map(pos => {
+              const totalPos = POSITIONS.reduce((s, p) => s + fin.byPosition[p], 0) || 1;
+              const sharePct = Math.round((fin.byPosition[pos] / totalPos) * 100);
+              return (
+                <div key={pos} className="flex items-center gap-2 text-sm">
+                  <span className="w-7 font-mono text-xs" style={{ color: POS_COLORS[pos] }}>{pos}</span>
+                  <div className="flex-1 h-3 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
+                    <div className="h-full rounded-full" style={{ width: `${(fin.byPosition[pos] / maxPos) * 100}%`, background: POS_COLORS[pos] }} />
+                  </div>
+                  <span className="w-8 text-right tabular-nums text-[11px] text-[var(--text-sec)]">{sharePct}%</span>
+                  <span className="w-14 text-right tabular-nums text-xs">{fmtMoney(fin.byPosition[pos])}</span>
                 </div>
-                <span className="w-14 text-right tabular-nums text-xs">{fmtMoney(fin.byPosition[pos])}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       </div>
@@ -152,6 +158,40 @@ function SalaryList({ rows, onName }: { rows: { player: { id: string; firstName:
           <span className="tabular-nums font-semibold w-14 text-right">{fmtMoney(salary)}</span>
         </button>
       ))}
+    </div>
+  );
+}
+
+/** Visual cap → tax → 1st apron → 2nd apron meter with a payroll marker. */
+function ApronMeter({ cap }: { cap: { payroll: number; cap: number; taxThreshold: number; firstApron: number; secondApron: number } }) {
+  // Scale runs from the salary cap to a touch past the 2nd apron.
+  const lo = cap.cap;
+  const hi = cap.secondApron + (cap.secondApron - cap.firstApron);
+  const pos = (v: number) => `${Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100))}%`;
+  const payrollPos = pos(cap.payroll);
+  const tiers: { at: number; label: string; color: string }[] = [
+    { at: cap.taxThreshold, label: 'Tax', color: '#f59e0b' },
+    { at: cap.firstApron, label: '1st', color: '#f97316' },
+    { at: cap.secondApron, label: '2nd', color: '#dc2626' },
+  ];
+  const overColor = cap.payroll >= cap.secondApron ? '#dc2626' : cap.payroll >= cap.firstApron ? '#f97316' : cap.payroll >= cap.taxThreshold ? '#f59e0b' : '#10b981';
+  return (
+    <div className="pt-1">
+      <div className="relative h-3 rounded-full" style={{ background: 'linear-gradient(90deg,#10b981, #eab308 45%, #f97316 72%, #dc2626)' , opacity: 0.35 }} />
+      <div className="relative h-0">
+        {/* threshold ticks */}
+        {tiers.map(t => (
+          <div key={t.label} className="absolute -top-3 flex flex-col items-center" style={{ left: pos(t.at), transform: 'translateX(-50%)' }}>
+            <div className="w-px h-3" style={{ background: t.color }} />
+            <span className="text-[9px] font-bold mt-0.5" style={{ color: t.color }}>{t.label}</span>
+          </div>
+        ))}
+        {/* payroll marker */}
+        <div className="absolute -top-[18px]" style={{ left: payrollPos, transform: 'translateX(-50%)' }}>
+          <div className="w-2.5 h-2.5 rotate-45 rounded-[2px]" style={{ background: overColor, boxShadow: `0 0 6px ${overColor}` }} />
+        </div>
+      </div>
+      <div className="text-[10px] text-[var(--text-sec)] mt-5">Payroll marker (◆) vs cap thresholds</div>
     </div>
   );
 }
