@@ -15,6 +15,8 @@ import type { BasketballPlayer, BasketballStats, BasketballTeam } from '@bs/spor
 type GameResult = BaseGameResult<BasketballStats>;
 type Side = 'home' | 'away';
 
+export type LiveEventKind = 'make3' | 'make2' | 'ft' | 'block' | 'steal' | 'turnover' | 'rebound';
+
 export interface LiveEvent {
   quarter: number;     // 1-4, 5+ = OT
   clock: string;       // "8:42"
@@ -23,6 +25,8 @@ export interface LiveEvent {
   home: number;        // running score after this event
   away: number;
   scoring: boolean;
+  kind: LiveEventKind;
+  points: number;      // points scored on this event (0 for non-scoring)
 }
 
 interface Basket { side: Side; playerId: string; pts: number; kind: '3' | '2' | 'ft' }
@@ -102,17 +106,17 @@ function basketsFor(team: BasketballTeam, side: Side, box: Record<string, Partia
   return shuffle(out, rand);
 }
 
-interface Flavor { side: Side; playerId: string; verb: string }
+interface Flavor { side: Side; playerId: string; verb: string; kind: LiveEventKind }
 
 function flavorFor(team: BasketballTeam, side: Side, box: Record<string, Partial<BasketballStats>>): Flavor[] {
   const out: Flavor[] = [];
   for (const pid of team.playerIds) {
     const s = box[pid];
     if (!s) continue;
-    for (let i = 0; i < (s.blocks ?? 0); i++) out.push({ side, playerId: pid, verb: 'rejects the shot' });
-    for (let i = 0; i < (s.steals ?? 0); i++) out.push({ side, playerId: pid, verb: 'picks off the pass' });
-    for (let i = 0; i < Math.min(2, s.turnovers ?? 0); i++) out.push({ side, playerId: pid, verb: 'turns it over' });
-    for (let i = 0; i < Math.min(1, s.offensiveRebounds ?? 0); i++) out.push({ side, playerId: pid, verb: 'crashes the offensive glass' });
+    for (let i = 0; i < (s.blocks ?? 0); i++) out.push({ side, playerId: pid, verb: 'rejects the shot', kind: 'block' });
+    for (let i = 0; i < (s.steals ?? 0); i++) out.push({ side, playerId: pid, verb: 'picks off the pass', kind: 'steal' });
+    for (let i = 0; i < Math.min(2, s.turnovers ?? 0); i++) out.push({ side, playerId: pid, verb: 'turns it over', kind: 'turnover' });
+    for (let i = 0; i < Math.min(1, s.offensiveRebounds ?? 0); i++) out.push({ side, playerId: pid, verb: 'crashes the offensive glass', kind: 'rebound' });
   }
   return out;
 }
@@ -166,9 +170,10 @@ export function synthesizePlayByPlay(
       const clock = clockFor(q + 1, i, combined.length);
       if (item.type === 'basket') {
         if (item.b.side === 'home') home += item.b.pts; else away += item.b.pts;
-        events.push({ quarter: q + 1, clock, side: item.b.side, text: scoreText(item.b, players, rand), home, away, scoring: true });
+        const kind: LiveEventKind = item.b.kind === '3' ? 'make3' : item.b.kind === 'ft' ? 'ft' : 'make2';
+        events.push({ quarter: q + 1, clock, side: item.b.side, text: scoreText(item.b, players, rand), home, away, scoring: true, kind, points: item.b.pts });
       } else {
-        events.push({ quarter: q + 1, clock, side: item.f.side, text: `${nm(players, item.f.playerId)} ${item.f.verb}`, home, away, scoring: false });
+        events.push({ quarter: q + 1, clock, side: item.f.side, text: `${nm(players, item.f.playerId)} ${item.f.verb}`, home, away, scoring: false, kind: item.f.kind, points: 0 });
       }
     });
   }
