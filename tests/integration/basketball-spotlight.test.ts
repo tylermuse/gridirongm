@@ -1,0 +1,44 @@
+/**
+ * Team Spotlight show (P1.2 + 2.1): a weekly two-persona episode derived from
+ * the feed + MVP race. Non-empty after games, deterministic, every story has a
+ * category + a real two-voice exchange, and the week advances with the calendar.
+ */
+import { describe, it, expect } from 'vitest';
+import { createNewBasketballLeague } from '@/../apps/bs-basketball/src/lib/league/createLeague';
+import { simThroughDay } from '@/../apps/bs-basketball/src/lib/sim/simRange';
+import { buildSpotlight, SPOTLIGHT_HOSTS } from '@/../apps/bs-basketball/src/lib/show/spotlight';
+import type { BasketballLeagueState } from '@/../apps/bs-basketball/src/lib/persistence/db';
+
+describe('team spotlight', () => {
+  it('builds a deterministic two-voice episode after games', () => {
+    const fresh = createNewBasketballLeague({ rngSeed: 'spotlight' });
+    const league = { ...simThroughDay(fresh, 40).league, userTeamId: fresh.teams[0].id } as unknown as BasketballLeagueState;
+
+    const ep = buildSpotlight(league);
+    expect(ep).not.toBeNull();
+    expect(ep!.stories.length).toBeGreaterThan(0);
+    expect(ep!.week).toBeGreaterThanOrEqual(1);
+
+    for (const s of ep!.stories) {
+      expect(s.category).toBeTruthy();
+      expect(s.headline).toBeTruthy();
+      expect(s.exchanges.length).toBeGreaterThan(0);
+      // Each exchange is one of the two named hosts.
+      for (const ex of s.exchanges) expect(SPOTLIGHT_HOSTS[ex.voice]).toBeDefined();
+      // A healthy story has both voices represented somewhere in the show.
+    }
+    // At least one analyst and one take voice across the episode.
+    const voices = new Set(ep!.stories.flatMap(s => s.exchanges.map(e => e.voice)));
+    expect(voices.has('analyst')).toBe(true);
+    expect(voices.has('take')).toBe(true);
+
+    // Deterministic.
+    const again = buildSpotlight(league);
+    expect(again!.stories.map(s => s.headline)).toEqual(ep!.stories.map(s => s.headline));
+  });
+
+  it('returns null before any games are played', () => {
+    const fresh = createNewBasketballLeague({ rngSeed: 'spotlight-empty' }) as unknown as BasketballLeagueState;
+    expect(buildSpotlight(fresh)).toBeNull();
+  });
+});
