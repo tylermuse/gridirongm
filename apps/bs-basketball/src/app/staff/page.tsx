@@ -13,7 +13,7 @@ import {
   schemeFit, SCHEME_LABELS, schemeDescription,
 } from '@/lib/coaching/coaches';
 import type { BaseCoach } from '@bs/core/adapter';
-import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
+import { resolveBasketballPDCEffect, type BasketballPlayer, type BasketballTeam } from '@bs/sport-basketball';
 
 /**
  * /staff — the team's head coach (scheme, ratings, salary) + a hiring market,
@@ -89,6 +89,16 @@ export default function StaffPage() {
               <RatingTile label="Development" value={hc.ratings.development} />
               <RatingTile label="Morale" value={hc.ratings.morale} />
             </div>
+            {(() => {
+              const boost = Math.round((resolveBasketballPDCEffect(hc.ratings.development, 21) - 1) * 100);
+              return (
+                <p className="mt-2 text-xs text-[var(--text-sec)]">
+                  {boost > 0
+                    ? `Develops under-25 players ${boost}% faster each offseason.`
+                    : 'Average development staff — no growth boost for young players.'}
+                </p>
+              );
+            })()}
             {fitCounts && (
               <div className="mt-3 text-sm flex flex-wrap gap-3">
                 <span className="text-[var(--text-sec)]">Roster fit:</span>
