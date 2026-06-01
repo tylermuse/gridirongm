@@ -8,6 +8,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { evaluateTrade, isExecutable, type TradeSideInput } from '@/lib/trade';
+import { findDealsForPlayer, incomingOffers, type DealSuggestion } from '@/lib/trade/finder';
 import { tradeWindowClosed } from '@/lib/sim/simRange';
 import type { BasketballPlayer, BasketballTeam, TeamTradeOutcome } from '@bs/sport-basketball';
 
@@ -27,6 +28,8 @@ export default function TradePage() {
   const [theirs, setTheirs] = useState<Set<string>>(new Set());
   const [resultMsg, setResultMsg] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [tab, setTab] = useState<'build' | 'finder' | 'offers'>('build');
+  const [finderId, setFinderId] = useState('');
 
   const teamById = useMemo(() => {
     const m = new Map<string, BasketballTeam>();
@@ -109,11 +112,35 @@ export default function TradePage() {
     }
   }
 
+  async function proposeDeal(d: DealSuggestion) {
+    const s: TradeSideInput[] = [
+      { teamId: userTeamId as TradeSideInput['teamId'], playerIds: d.giveIds as TradeSideInput['playerIds'] },
+      { teamId: d.partnerTeamId as TradeSideInput['teamId'], playerIds: d.getIds as TradeSideInput['playerIds'] },
+    ];
+    const ok = await store.executeTrade(s);
+    if (ok) { setResultMsg('✅ Trade executed.'); setTab('build'); }
+  }
+
   const userOutcome = evaluation?.perTeam.find(t => t.teamId === userTeamId) ?? null;
   const targetOutcome = evaluation && targetId ? evaluation.perTeam.find(t => t.teamId === targetId) ?? null : null;
 
   return (
     <Shell>
+      <div className="mb-4 inline-flex rounded-lg border overflow-hidden text-sm font-semibold" style={{ borderColor: 'var(--border)' }}>
+        {([['build', 'Build trade'], ['finder', 'Trade finder'], ['offers', 'Offers']] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)} className="px-3 py-1.5" style={tab === k ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}>{l}</button>
+        ))}
+      </div>
+
+      {tab === 'finder' && (
+        <TradeFinderPanel league={league} userTeam={userTeam} teamById={teamById} playerById={playerById} finderId={finderId} setFinderId={setFinderId} onPropose={proposeDeal} loading={store.loading} />
+      )}
+      {tab === 'offers' && (
+        <OffersPanel league={league} teamById={teamById} playerById={playerById} onPropose={proposeDeal} loading={store.loading} />
+      )}
+
+      {tab === 'build' && (
+      <>
       <div className="flex flex-wrap items-center gap-3 mb-5">
         <div className="flex items-center gap-2 font-bold">
           <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="xs" />
@@ -211,6 +238,8 @@ export default function TradePage() {
           </section>
         </div>
       </div>
+      </>
+      )}
     </Shell>
   );
 }
@@ -218,6 +247,80 @@ export default function TradePage() {
 // ===========================================================================
 // Components
 // ===========================================================================
+
+function TradeFinderPanel({
+  league, userTeam, teamById, playerById, finderId, setFinderId, onPropose, loading,
+}: {
+  league: NonNullable<ReturnType<typeof useLeagueOrHydrate>['league']>;
+  userTeam: BasketballTeam;
+  teamById: Map<string, BasketballTeam>;
+  playerById: Record<string, BasketballPlayer>;
+  finderId: string;
+  setFinderId: (id: string) => void;
+  onPropose: (d: DealSuggestion) => void;
+  loading: boolean;
+}) {
+  const roster = userTeam.playerIds.map(id => playerById[id]).filter(Boolean).sort((a, b) => b.ratings.overall - a.ratings.overall);
+  const deals = useMemo(() => (finderId ? findDealsForPlayer(league, finderId) : []), [league, finderId]);
+  return (
+    <div>
+      <p className="text-sm text-[var(--text-sec)] mb-2">Shop one of your players around — the engine surfaces legal deals other teams would actually accept.</p>
+      <select value={finderId} onChange={e => setFinderId(e.target.value)} className="px-2 py-1.5 rounded-lg border bg-[var(--surface)] text-sm mb-4" style={{ borderColor: 'var(--border)' }}>
+        <option value="">Select a player to shop…</option>
+        {roster.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName} ({p.sportData.position} · {p.ratings.overall})</option>)}
+      </select>
+      {finderId && (deals.length === 0
+        ? <p className="text-sm text-[var(--text-sec)]">No team is biting on that player right now.</p>
+        : <div className="space-y-2">{deals.map((d, i) => <DealCard key={i} d={d} teamById={teamById} playerById={playerById} label="Propose" onPropose={onPropose} loading={loading} />)}</div>)}
+    </div>
+  );
+}
+
+function OffersPanel({
+  league, teamById, playerById, onPropose, loading,
+}: {
+  league: NonNullable<ReturnType<typeof useLeagueOrHydrate>['league']>;
+  teamById: Map<string, BasketballTeam>;
+  playerById: Record<string, BasketballPlayer>;
+  onPropose: (d: DealSuggestion) => void;
+  loading: boolean;
+}) {
+  const offers = useMemo(() => incomingOffers(league), [league]);
+  if (offers.length === 0) {
+    return <p className="text-sm text-[var(--text-sec)]">No offers on the table — no rival is calling about your roster right now.</p>;
+  }
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-[var(--text-sec)] mb-2">Rivals are interested in your players — accept to make the deal.</p>
+      {offers.map((d, i) => <DealCard key={i} d={d} teamById={teamById} playerById={playerById} label="Accept" onPropose={onPropose} loading={loading} />)}
+    </div>
+  );
+}
+
+function DealCard({
+  d, teamById, playerById, label, onPropose, loading,
+}: {
+  d: DealSuggestion;
+  teamById: Map<string, BasketballTeam>;
+  playerById: Record<string, BasketballPlayer>;
+  label: string;
+  onPropose: (d: DealSuggestion) => void;
+  loading: boolean;
+}) {
+  const partner = teamById.get(d.partnerTeamId);
+  const names = (ids: string[]) => ids.map(id => { const p = playerById[id]; return p ? `${p.firstName[0]}. ${p.lastName} (${p.ratings.overall})` : '—'; }).join(', ');
+  return (
+    <div className="rounded-xl border bg-[var(--surface)] p-3 flex flex-wrap items-center gap-3" style={{ borderColor: 'var(--border)' }}>
+      {partner && <TeamLogo abbreviation={partner.abbreviation} primaryColor={partner.primaryColor} secondaryColor={partner.secondaryColor} size="sm" />}
+      <div className="min-w-0 text-sm">
+        <div className="font-bold">{partner ? `${partner.city} ${partner.name}` : '—'}</div>
+        <div className="text-xs"><span className="font-semibold" style={{ color: '#10b981' }}>You get:</span> {names(d.getIds)}</div>
+        <div className="text-xs"><span className="font-semibold" style={{ color: '#dc2626' }}>You give:</span> {names(d.giveIds)}</div>
+      </div>
+      <Button variant="primary" className="ml-auto" disabled={loading} onClick={() => onPropose(d)}>{label}</Button>
+    </div>
+  );
+}
 
 function RosterColumn({
   team, playerById, season, selected, onToggle, side,
