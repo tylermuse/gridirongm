@@ -9193,12 +9193,40 @@ export const useGameStore = create<GameStore>()(
         setSubstep("commit:autocut:start");
         const userId = get().userTeamId;
         let autocutIdx = 0;
-        for (const t of get().teams) {
-          setSubstep(`commit:autocut:tick:${autocutIdx}:${t.abbreviation ?? t.id}`);
-          autocutIdx++;
-          if (t.id !== userId) get().autoCutToRosterLimit(t.id);
+        try {
+          for (const t of get().teams) {
+            setSubstep(`commit:autocut:tick:${autocutIdx}:${t.abbreviation ?? t.id}`);
+            autocutIdx++;
+            if (t.id !== userId) {
+              try {
+                get().autoCutToRosterLimit(t.id);
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                const isLockSteal =
+                  e instanceof Error && e.name === "AbortError" && /steal/i.test(msg);
+                if (isLockSteal) {
+                  // bige08676 5/30 23:42-23:43 UTC dumps (msgs 1510428338920099993
+                  // + 1510428509418422343): Supabase auth lock-steal landed inside
+                  // the per-team autocut loop. PR #59 caught it at the window
+                  // listener but the unwind left the loop wedged at tick:31:WAS.
+                  // Swallow ONLY the lock-steal so the loop completes; the window
+                  // listener still records gg-rollover-recoverable-error for
+                  // telemetry. Any other throw still surfaces below.
+                  console.warn(
+                    `[startNewSeason] autocut tick ${autocutIdx - 1} (${t.abbreviation ?? t.id}) hit recoverable lock-steal; continuing`,
+                    msg,
+                  );
+                  continue;
+                }
+                throw e;
+              }
+            }
+          }
+        } finally {
+          // Advance the substep even if a tick aborted mid-iteration so
+          // /diagnostics accurately reflects "made it past autocut".
+          setSubstep("commit:autocut:end");
         }
-        setSubstep("commit:autocut:end");
         } catch (error) {
           // Surface the underlying offseason exception in three places so
           // we can diagnose seed-specific failures (bige08676 + marioalsosa
