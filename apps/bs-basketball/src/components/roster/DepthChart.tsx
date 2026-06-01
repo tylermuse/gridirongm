@@ -27,10 +27,11 @@ export function DepthChart({ roster, starterIds, onName }: { roster: BasketballP
       <button onClick={() => setOpen(o => !o)} className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-[var(--surface-2)] transition-colors">
         <span className="text-sm font-bold">Depth by position</span>
         <span className="text-xs text-[var(--text-sec)]">starter → backups, with two-way / reserve tags</span>
-        <span className="ml-auto text-[var(--text-sec)]">{open ? '▾' : '▸'}</span>
+        <span className="ml-auto text-[var(--text-sec)] transition-transform duration-200" style={{ transform: open ? 'rotate(90deg)' : 'none' }}>▸</span>
       </button>
 
-      {open && (
+      <div className="grid transition-all duration-200 ease-out" style={{ gridTemplateRows: open ? '1fr' : '0fr' }}>
+        <div className="overflow-hidden">
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px" style={{ background: 'var(--border)' }}>
           {chart.map(col => (
             <div key={col.position} className="bg-[var(--surface)] p-3">
@@ -58,7 +59,8 @@ export function DepthChart({ roster, starterIds, onName }: { roster: BasketballP
             </div>
           ))}
         </div>
-      )}
+        </div>
+      </div>
     </div>
   );
 }
