@@ -7,9 +7,10 @@ import { NewsFeed } from '@/components/feed/NewsFeed';
 import { getTransactions, type TransactionEntry } from '@/lib/transactions';
 
 /**
- * /news — league moments feed with All / My Team / Transactions tabs (P2 #16).
+ * /news — league moments feed with All / My Team / Injuries / Transactions tabs.
  */
-type Tab = 'all' | 'my_team' | 'transactions';
+type Tab = 'all' | 'my_team' | 'injuries' | 'transactions';
+const INJURY_KINDS = new Set(['injury', 'suspension', 'fine']);
 
 export default function NewsPage() {
   const { league, loading, error } = useLeagueOrHydrate();
@@ -38,6 +39,7 @@ export default function NewsPage() {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'all', label: 'All' },
     ...(hasTeam ? [{ key: 'my_team' as Tab, label: 'My Team' }] : []),
+    { key: 'injuries', label: 'Injuries' },
     { key: 'transactions', label: 'Transactions' },
   ];
 
@@ -49,16 +51,21 @@ export default function NewsPage() {
         <span className="text-sm text-[var(--text-sec)]">Season {league.currentSeason} · Day {league.currentTick}</span>
       </header>
 
-      <div className="mb-4 inline-flex rounded-lg border overflow-hidden text-sm font-semibold" style={{ borderColor: 'var(--border)' }}>
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} className="px-3 py-1.5" style={tab === t.key ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}>{t.label}</button>
-        ))}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg border overflow-hidden text-sm font-semibold" style={{ borderColor: 'var(--border)' }}>
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)} className="px-3 py-1.5" style={tab === t.key ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}>{t.label}</button>
+          ))}
+        </div>
+        <Link href="/buzz" className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>💬 Social timeline →</Link>
       </div>
 
       {tab === 'transactions' ? (
         <TransactionsList txns={txns} />
       ) : tab === 'my_team' ? (
-        <NewsFeed league={league} filter={item => !!item.gameId && userGameIds.has(item.gameId)} />
+        <NewsFeed league={league} filter={item => (!!item.gameId && userGameIds.has(item.gameId)) || (!!item.teamId && item.teamId === league.userTeamId)} />
+      ) : tab === 'injuries' ? (
+        <NewsFeed league={league} filter={item => INJURY_KINDS.has(item.kind)} />
       ) : (
         <NewsFeed league={league} />
       )}
