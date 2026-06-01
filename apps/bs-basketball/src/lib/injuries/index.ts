@@ -1,6 +1,10 @@
 export {
   getInjuries,
+  getPlayThrough,
   isInjuredOn,
+  isPlayingThrough,
+  canPlayThrough,
+  playThroughInjury,
   healthyPlayers,
   clearHealed,
   rollGameInjuries,
@@ -8,5 +12,6 @@ export {
   SEVERITY_LABEL,
   type InjuryRecord,
   type InjuryMap,
+  type PlayThroughMap,
   type InjurySeverity,
 } from './injuries';
