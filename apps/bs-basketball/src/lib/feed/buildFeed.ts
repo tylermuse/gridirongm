@@ -15,6 +15,7 @@
  */
 
 import type { BasketballLeagueState } from '../persistence/db';
+import { getDiscipline } from '../discipline';
 import type {
   BasketballPlayer,
   BasketballStats,
@@ -29,6 +30,8 @@ export type FeedKind =
   | 'career_night'
   | 'streak'
   | 'upset'
+  | 'suspension'
+  | 'fine'
   | 'schedule_notice';
 
 export interface FeedItem {
@@ -49,6 +52,8 @@ const ICONS: Record<FeedKind, string> = {
   career_night: '🎯',
   streak: '📈',
   upset: '🚨',
+  suspension: '🚫',
+  fine: '💸',
   schedule_notice: '📅',
 };
 
@@ -192,6 +197,23 @@ export function buildFeed(league: BasketballLeagueState | null): FeedItem[] {
         day: league.currentTick,
       });
     }
+  }
+
+  // ── discipline (suspensions + fines from on-court incidents) ──
+  for (const [pid, d] of Object.entries(getDiscipline(league))) {
+    const p = players[pid] as BasketballPlayer | undefined;
+    if (!p) continue;
+    const who = `${p.firstName} ${p.lastName}`;
+    items.push({
+      id: `discipline-${pid}-${d.occurredDay}`,
+      kind: d.kind === 'suspension' ? 'suspension' : 'fine',
+      icon: d.kind === 'suspension' ? ICONS.suspension : ICONS.fine,
+      headline: d.kind === 'suspension'
+        ? `${who} ${d.reason} — out ${d.games} game${d.games === 1 ? '' : 's'}`
+        : `${who} ${d.reason} ($${(d.fine / 1000).toFixed(0)}K)`,
+      day: d.occurredDay,
+      playerId: pid,
+    });
   }
 
   // recency desc, then de-prioritize schedule ties; cap at 20

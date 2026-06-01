@@ -21,6 +21,7 @@ import {
 import { resolveLineup } from '../lineup';
 import { getHeadCoach } from '../coaching/coaches';
 import { getInjuries, healthyPlayers, applyInjuryRolls, type InjuryMap } from '../injuries';
+import { getDiscipline, isSuspendedOn, applyDisciplineRolls, type DisciplineMap } from '../discipline';
 import type {
   BaseGameResult,
   BaseLeagueState,
@@ -66,6 +67,7 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
   const teamById = new Map(league.teams.map(t => [t.id, t as BasketballTeam]));
   const playerMap = league.players as Record<string, BasketballPlayer>;
   const injuries = getInjuries(league);
+  const discipline = getDiscipline(league);
 
   // Track mutable team records.
   const recordsById = new Map(league.teams.map(t => [t.id, { ...t.record }]));
@@ -84,8 +86,8 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
     const away = teamById.get(g.awayTeamId);
     if (!home || !away) continue;
 
-    const homeSnap = buildSnapshot(home, playerMap, injuries, nextDay, getHeadCoach(league, home.id));
-    const awaySnap = buildSnapshot(away, playerMap, injuries, nextDay, getHeadCoach(league, away.id));
+    const homeSnap = buildSnapshot(home, playerMap, injuries, discipline, nextDay, getHeadCoach(league, home.id));
+    const awaySnap = buildSnapshot(away, playerMap, injuries, discipline, nextDay, getHeadCoach(league, away.id));
 
     const ctx: GameContext = {
       season: league.currentSeason,
@@ -150,8 +152,10 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
 
   // Heal anyone due back and roll new injuries from today's games.
   const withInjuries = applyInjuryRolls(simmed, playedGames, nextDay, league.currentSeason);
+  // Clear served suspensions and roll new discipline from today's foul-outs.
+  const withDiscipline = applyDisciplineRolls(withInjuries, playedGames, nextDay, league.currentSeason);
 
-  return { league: withInjuries, day: nextDay, gamesSimmed };
+  return { league: withDiscipline, day: nextDay, gamesSimmed };
 }
 
 // ===========================================================================
@@ -162,14 +166,15 @@ function buildSnapshot(
   team: BasketballTeam,
   playerMap: Record<string, BasketballPlayer>,
   injuries: InjuryMap,
+  discipline: DisciplineMap,
   day: number,
   coach: TeamSnapshot<BasketballRatings, BasketballStats>['coach'],
 ): TeamSnapshot<BasketballRatings, BasketballStats> {
   const roster = team.playerIds
     .map((pid: PlayerId) => playerMap[pid])
     .filter((p): p is BasketballPlayer => !!p);
-  // Injured players are unavailable — they neither play nor get auto-slotted.
-  let players = healthyPlayers(roster, injuries, day);
+  // Injured or suspended players are unavailable — they neither play nor get auto-slotted.
+  let players = healthyPlayers(roster, injuries, day).filter(p => !isSuspendedOn(discipline, p.id, day));
   let lineup = resolveLineup(team, players);
   // If injuries leave the team unable to field a full five, the walking
   // wounded suit up for this game rather than crashing the sim.

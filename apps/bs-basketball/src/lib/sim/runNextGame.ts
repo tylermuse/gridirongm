@@ -23,6 +23,7 @@ import {
 import { resolveLineup } from '../lineup';
 import { getHeadCoach } from '../coaching/coaches';
 import { getInjuries, healthyPlayers, applyInjuryRolls, type InjuryMap } from '../injuries';
+import { getDiscipline, isSuspendedOn, applyDisciplineRolls, type DisciplineMap } from '../discipline';
 import type {
   BaseGameResult,
   BaseLeagueState,
@@ -64,8 +65,9 @@ export function simNextGameForTeam(
 
   const gameDayNum = (game.sportData as { dayOfSeason?: number } | undefined)?.dayOfSeason ?? league.currentTick;
   const injuries = getInjuries(league);
-  const homeSnap = buildSnapshot(league, homeTeam, injuries, gameDayNum);
-  const awaySnap = buildSnapshot(league, awayTeam, injuries, gameDayNum);
+  const discipline = getDiscipline(league);
+  const homeSnap = buildSnapshot(league, homeTeam, injuries, discipline, gameDayNum);
+  const awaySnap = buildSnapshot(league, awayTeam, injuries, discipline, gameDayNum);
 
   const ctx: GameContext = {
     season: league.currentSeason,
@@ -106,9 +108,10 @@ export function simNextGameForTeam(
 
   const simmed: LeagueState = { ...league, games: updatedGames, teams: updatedTeams, currentPhase: 'regular_season' };
   const withInjuries = applyInjuryRolls(simmed, [playedGame], gameDayNum, league.currentSeason);
+  const withDiscipline = applyDisciplineRolls(withInjuries, [playedGame], gameDayNum, league.currentSeason);
 
   return {
-    league: withInjuries,
+    league: withDiscipline,
     gameId: playedGame.id,
     finalScore,
   };
@@ -122,13 +125,14 @@ function buildSnapshot(
   league: LeagueState,
   team: BasketballTeam,
   injuries: InjuryMap,
+  discipline: DisciplineMap,
   day: number,
 ): TeamSnapshot<BasketballRatings, BasketballStats> {
   const playerMap = league.players as Record<string, BasketballPlayer>;
   const roster = team.playerIds
     .map((pid: PlayerId) => playerMap[pid])
     .filter((p): p is BasketballPlayer => !!p);
-  let players = healthyPlayers(roster, injuries, day);
+  let players = healthyPlayers(roster, injuries, day).filter(p => !isSuspendedOn(discipline, p.id, day));
   let lineup = resolveLineup(team, players);
   // If injuries leave the team unable to field a full five, the walking
   // wounded suit up for this game rather than crashing the sim.
