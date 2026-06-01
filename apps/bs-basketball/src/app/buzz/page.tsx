@@ -7,6 +7,7 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { buildBuzz, type BuzzPost } from '@/lib/social/buzz';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Skeleton, SkeletonList } from '@/components/ui/Skeleton';
 
 /**
  * /buzz — "Hoops Buzz" social timeline (parity audit #14). A derived feed of
@@ -18,7 +19,7 @@ export default function BuzzPage() {
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
   const posts = useMemo(() => buildBuzz(league), [league]);
 
-  if (loading) return <main className="max-w-2xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>;
+  if (loading) return <main className="max-w-2xl mx-auto p-5 sm:p-8"><Skeleton className="h-8 w-40 mb-4" /><SkeletonList rows={6} /></main>;
   if (!league) {
     return (
       <main className="max-w-2xl mx-auto p-8">

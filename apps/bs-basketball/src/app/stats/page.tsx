@@ -6,6 +6,7 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { regularSeasonStatsByPlayer } from '@/lib/stats/seasonStats';
+import { SkeletonList } from '@/components/ui/Skeleton';
 import type { BasketballPlayer, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -68,7 +69,7 @@ export default function StatsPage() {
     return rows.sort((a, b) => b.value - a.value).slice(0, 20);
   }, [league, statsMap, catKey]);
 
-  if (loading) return <Shell><p className="opacity-60">Loading…</p></Shell>;
+  if (loading) return <Shell><SkeletonList rows={8} /></Shell>;
   if (!league) return <Shell><p>{error ?? 'No league loaded.'}</p></Shell>;
 
   const anyGames = league.games.some(g => g.status === 'played');
