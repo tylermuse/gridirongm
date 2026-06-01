@@ -14,7 +14,7 @@
  *   - schedule_notice "{N} games today" — scheduled games on the next day
  */
 
-import type { BasketballLeagueState } from '@/lib/persistence/db';
+import type { BasketballLeagueState } from '../persistence/db';
 import type {
   BasketballPlayer,
   BasketballStats,
