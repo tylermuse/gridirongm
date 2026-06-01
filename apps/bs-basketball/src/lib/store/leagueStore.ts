@@ -51,6 +51,7 @@ import {
 } from '../draft';
 import { resolveUserOffer, releasePlayer as releasePlayerState, type Offer, type OfferResult } from '../freeAgency';
 import { applyRelease } from '../roster/release';
+import { playThroughInjury as playThroughInjuryState } from '../injuries';
 import { extensionMarket, extensionAccepted, buildExtension } from '../roster/extension';
 import { executeTrade, type TradeSideInput } from '../trade';
 import { setTeamLineup } from '../lineup';
@@ -169,6 +170,7 @@ interface LeagueStore {
 
   /** Waive a rostered player to free agency (opens a roster spot). */
   releasePlayer: (playerId: string, stretch?: boolean) => Promise<boolean>;
+  playThroughInjury: (playerId: string) => Promise<boolean>;
 
   /** Negotiate a contract extension. The player accepts a fair offer (a touch
    *  under market, for loyalty) and the years append to the end of the deal. */
@@ -681,6 +683,21 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     } catch (err) {
       console.error('[bs-hoops] releasePlayer failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
+  async playThroughInjury(playerId) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return false; }
+    try {
+      const league = playThroughInjuryState(current, playerId, current.currentTick) as typeof current;
+      await saveLeague(league);
+      set({ league });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] playThroughInjury failed:', err);
+      set({ error: err instanceof Error ? err.message : String(err) });
       return false;
     }
   },

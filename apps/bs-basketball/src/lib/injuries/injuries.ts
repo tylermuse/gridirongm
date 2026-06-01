@@ -28,10 +28,22 @@ export interface InjuryRecord {
 
 export type InjuryMap = Record<string, InjuryRecord>;
 
+/** Players who returned early by "playing through" an injury — elevated
+ *  re-injury risk until `until` (day-of-season). */
+export type PlayThroughMap = Record<string, { until: number }>;
+
 interface LeagueSportData {
   injuries?: InjuryMap;
+  playThrough?: PlayThroughMap;
   [key: string]: unknown;
 }
+
+/** Severities a player can choose to suit up through (not majors). */
+const PLAYABLE_SEVERITIES: InjurySeverity[] = ['day_to_day', 'minor'];
+/** How long elevated re-injury risk lasts after playing through (days). */
+const PLAY_THROUGH_WINDOW = 10;
+/** Re-injury rate multiplier while playing through. */
+const PLAY_THROUGH_RISK = 2.2;
 
 const BODY_PARTS = ['ankle', 'knee', 'hamstring', 'shoulder', 'wrist', 'back', 'foot', 'calf', 'hip', 'groin'];
 /** Base per-game injury probability at 36 minutes. */
@@ -53,13 +65,44 @@ export function getInjuries(league: LeagueState): InjuryMap {
   return (league.sportData as LeagueSportData | undefined)?.injuries ?? {};
 }
 
+export function getPlayThrough(league: LeagueState): PlayThroughMap {
+  return (league.sportData as LeagueSportData | undefined)?.playThrough ?? {};
+}
+
 export function isInjuredOn(injuries: InjuryMap, playerId: string, day: number): boolean {
   const inj = injuries[playerId];
   return !!inj && inj.returnDay > day;
 }
 
+/** Whether a (now-available) player is currently playing through an injury. */
+export function isPlayingThrough(map: PlayThroughMap, playerId: string, day: number): boolean {
+  const pt = map[playerId];
+  return !!pt && pt.until > day;
+}
+
+/** Can this injury be suited up through? (day-to-day / minor only.) */
+export function canPlayThrough(inj: InjuryRecord | undefined): boolean {
+  return !!inj && PLAYABLE_SEVERITIES.includes(inj.severity);
+}
+
 function setInjuries(league: LeagueState, injuries: InjuryMap): LeagueState {
   return { ...league, sportData: { ...(league.sportData as LeagueSportData), injuries } };
+}
+
+/**
+ * Suit a banged-up player up early: clear a day-to-day / minor injury so he's
+ * available now, but flag elevated re-injury risk for a window. No-op for
+ * majors or the healthy. Pure.
+ */
+export function playThroughInjury(league: LeagueState, playerId: string, day: number): LeagueState {
+  const injuries = getInjuries(league);
+  const inj = injuries[playerId];
+  if (!canPlayThrough(inj) || inj.returnDay <= day) return league;
+  const nextInjuries: InjuryMap = { ...injuries };
+  delete nextInjuries[playerId];
+  const sd = league.sportData as LeagueSportData;
+  const playThrough: PlayThroughMap = { ...(sd.playThrough ?? {}), [playerId]: { until: day + PLAY_THROUGH_WINDOW } };
+  return { ...league, sportData: { ...sd, injuries: nextInjuries, playThrough } };
 }
 
 /** Roster players who are healthy as of `day`. */
@@ -94,6 +137,7 @@ export function rollGameInjuries(
   game: GameResult,
   day: number,
   season: number,
+  playThrough: PlayThroughMap = {},
 ): InjuryMap {
   let result = injuries;
   for (const [pid, box] of Object.entries(game.boxScores)) {
@@ -101,7 +145,8 @@ export function rollGameInjuries(
     const minutes = box.minutes ?? 0;
     if (minutes <= 0) continue;
     const rng = makeRng(`injury-${game.id}-${pid}-${season}`);
-    const chance = BASE_INJURY_RATE * Math.min(1.4, minutes / 36);
+    const risk = isPlayingThrough(playThrough, pid, day) ? PLAY_THROUGH_RISK : 1;
+    const chance = BASE_INJURY_RATE * Math.min(1.4, minutes / 36) * risk;
     if (rng.random() >= chance) continue;
     if (result === injuries) result = { ...injuries }; // copy-on-write
     result[pid] = makeInjury(pid as PlayerId, day, rng);
@@ -128,11 +173,19 @@ export function applyInjuryRolls(
   day: number,
   season: number,
 ): LeagueState {
+  const playThrough = getPlayThrough(league);
   let injuries = getInjuries(clearHealed(league, day));
   for (const g of playedGames) {
-    injuries = rollGameInjuries(injuries, g, day, season);
+    injuries = rollGameInjuries(injuries, g, day, season, playThrough);
   }
-  return setInjuries(league, injuries);
+  // Drop play-through flags whose elevated-risk window has expired.
+  const sd = league.sportData as LeagueSportData;
+  const nextPT: PlayThroughMap = {};
+  let ptChanged = false;
+  for (const [id, pt] of Object.entries(playThrough)) {
+    if (pt.until > day) nextPT[id] = pt; else ptChanged = true;
+  }
+  return { ...league, sportData: { ...sd, injuries, ...(ptChanged ? { playThrough: nextPT } : {}) } };
 }
 
 // ===========================================================================
