@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { ExtendModal } from '@/components/modals/ExtendModal';
+import { ReleaseModal } from '@/components/modals/ReleaseModal';
 import { resolveLineup, validateBasketballLineup, buildDefaultBasketballLineup } from '@/lib/lineup';
 import { getHeadCoach, coachScheme, schemeFit, type SchemeFit } from '@/lib/coaching/coaches';
 import { getInjuries } from '@/lib/injuries';
@@ -46,6 +47,7 @@ export default function RosterPage() {
   const router = useRouter();
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
   const [extendId, setExtendId] = useState<string | null>(null);
+  const [releaseId, setReleaseId] = useState<string | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
   const [saved, setSaved] = useState(false);
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -184,16 +186,14 @@ export default function RosterPage() {
   }
 
   // --- front-office actions ---
-  async function onRelease(id: string) {
+  function onRelease(id: string) {
     setMenu(null);
-    const p = playerById[id];
-    if (!window.confirm(`Release ${p?.firstName} ${p?.lastName} to free agency?`)) return;
-    const ok = await store.releasePlayer(id);
-    if (ok) {
-      setStarters(s => s.map(x => (x === id ? '' : x)));
-      setBench(b => b.filter(x => x !== id));
-      setSaved(false);
-    }
+    setReleaseId(id);
+  }
+  function onReleased(id: string) {
+    setStarters(s => s.map(x => (x === id ? '' : x)));
+    setBench(b => b.filter(x => x !== id));
+    setSaved(false);
   }
   function onExtend(id: string) { setMenu(null); setExtendId(id); }
   function onDetails(id: string) { setMenu(null); setModalPlayerId(id); }
@@ -329,6 +329,7 @@ export default function RosterPage() {
 
       <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
       <ExtendModal playerId={extendId} onClose={() => setExtendId(null)} />
+      <ReleaseModal playerId={releaseId} onClose={() => setReleaseId(null)} onReleased={onReleased} />
     </Shell>
   );
 }

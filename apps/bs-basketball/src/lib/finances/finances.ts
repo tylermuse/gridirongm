@@ -17,6 +17,7 @@ import {
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { getHeadCoach, coachSalary } from '@/lib/coaching/coaches';
+import { teamDeadCap } from '@/lib/roster/release';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -24,7 +25,7 @@ const NATIONAL_TV = 110_000_000; // league-shared national TV money, flat per te
 
 export interface TeamFinances {
   revenue: { nationalTv: number; localTv: number; gate: number; merch: number; total: number };
-  expenses: { payroll: number; coaching: number; luxuryTax: number; total: number };
+  expenses: { payroll: number; coaching: number; luxuryTax: number; deadCap: number; total: number };
   profit: number;
   cap: TeamCapStatus;
   byPosition: Record<BasketballPosition, number>;
@@ -65,11 +66,13 @@ export function teamFinances(league: LeagueState, team: BasketballTeam): TeamFin
 
   const hc = getHeadCoach(league, team.id);
   const coaching = hc ? coachSalary(hc) : 0;
+  const deadCap = teamDeadCap(team, season);
   const expenses = {
     payroll: cap.payroll,
     coaching,
     luxuryTax: cap.taxBill,
-    total: cap.payroll + cap.taxBill + coaching,
+    deadCap,
+    total: cap.payroll + cap.taxBill + coaching + deadCap,
   };
 
   const byPosition: Record<BasketballPosition, number> = { PG: 0, SG: 0, SF: 0, PF: 0, C: 0 };
