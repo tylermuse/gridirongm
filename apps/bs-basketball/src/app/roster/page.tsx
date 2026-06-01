@@ -13,7 +13,7 @@ import { ExtendModal } from '@/components/modals/ExtendModal';
 import { ReleaseModal } from '@/components/modals/ReleaseModal';
 import { DepthChart } from '@/components/roster/DepthChart';
 import { resolveLineup, validateBasketballLineup, buildDefaultBasketballLineup } from '@/lib/lineup';
-import { getHeadCoach, coachScheme, schemeFit, type SchemeFit } from '@/lib/coaching/coaches';
+import { getHeadCoach, coachScheme, schemeFit, SCHEME_LABELS, type SchemeFit } from '@/lib/coaching/coaches';
 import { getInjuries } from '@/lib/injuries';
 import { teamCap, fmtMoney } from '@/lib/dashboard/summary';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
@@ -259,6 +259,16 @@ export default function RosterPage() {
         </Button>
         {saved && <span className="text-sm" style={{ color: 'var(--accent)' }}>✓ Saved</span>}
       </div>
+
+      {/* Scheme-fit legend */}
+      {hcScheme && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3 text-[11px] text-[var(--text-sec)]">
+          <span>Scheme fit ({SCHEME_LABELS[hcScheme]}):</span>
+          {([['great', '#10b981'], ['good', '#84cc16'], ['neutral', '#f59e0b'], ['poor', '#dc2626']] as const).map(([label, color]) => (
+            <span key={label} className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: color }} />{label}</span>
+          ))}
+        </div>
+      )}
 
       {/* Combined table */}
       <div className="rounded-xl border bg-[var(--surface)] overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
