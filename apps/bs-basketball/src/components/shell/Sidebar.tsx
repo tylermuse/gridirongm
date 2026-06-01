@@ -28,6 +28,7 @@ function sectionsFor(userTeamId: string | null): NavSection[] {
         { href: '/stats', label: 'Stats', icon: '🔢' },
         { href: '/players', label: 'Players', icon: '🔎' },
         { href: '/power-rankings', label: 'Power Rankings', icon: '📈' },
+        { href: '/gm-rankings', label: 'GM Rankings', icon: '🏅' },
         { href: '/compare', label: 'Compare', icon: '⚖️' },
         { href: '/playoffs', label: 'Playoffs', icon: '🏆' },
         { href: '/news', label: 'News', icon: '📰' },
