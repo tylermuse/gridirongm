@@ -64,6 +64,7 @@ const KIND_POOL: Record<FeedKind | 'trade' | 'signing' | 'release' | 'draft', Pe
   career_night: ['beat', 'analyst', 'homer'],
   streak: ['homer', 'casual', 'analyst'],
   upset: ['hater', 'casual', 'beat'],
+  injury: ['beat', 'insider', 'casual'],
   suspension: ['insider', 'hater', 'casual'],
   fine: ['casual', 'analyst', 'beat'],
   schedule_notice: ['casual', 'beat'],
@@ -109,7 +110,7 @@ function engagement(seed: number, weight: number): { likes: number; reposts: num
 
 const WEIGHT: Record<string, number> = {
   trade: 3.2, career_night: 2.6, upset: 2.4, suspension: 2.2, draft: 2.0, big_game: 1.6,
-  streak: 1.3, signing: 1.2, release: 1.1, fine: 0.9, schedule_notice: 0.5,
+  streak: 1.3, injury: 1.25, signing: 1.2, release: 1.1, fine: 0.9, schedule_notice: 0.5,
 };
 
 /** Build the social timeline, newest-first. */

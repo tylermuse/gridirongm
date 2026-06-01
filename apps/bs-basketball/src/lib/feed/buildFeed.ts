@@ -16,6 +16,7 @@
 
 import type { BasketballLeagueState } from '../persistence/db';
 import { getDiscipline } from '../discipline';
+import { getInjuries } from '../injuries';
 import type {
   BasketballPlayer,
   BasketballStats,
@@ -30,6 +31,7 @@ export type FeedKind =
   | 'career_night'
   | 'streak'
   | 'upset'
+  | 'injury'
   | 'suspension'
   | 'fine'
   | 'schedule_notice';
@@ -45,6 +47,8 @@ export interface FeedItem {
   gameId?: string;
   /** Player this moment is about — opens the PlayerModal. */
   playerId?: string;
+  /** Subject team — drives the team-color chip in the news feed. */
+  teamId?: string;
 }
 
 const ICONS: Record<FeedKind, string> = {
@@ -52,6 +56,7 @@ const ICONS: Record<FeedKind, string> = {
   career_night: '🎯',
   streak: '📈',
   upset: '🚨',
+  injury: '🏥',
   suspension: '🚫',
   fine: '💸',
   schedule_notice: '📅',
@@ -137,6 +142,7 @@ export function buildFeed(league: BasketballLeagueState | null): FeedItem[] {
         headline: `${winner.city} ${winner.name} blew past ${loser.city} ${loser.name}, ${wScore}–${lScore}`,
         day,
         gameId: g.id,
+        teamId: winner.id,
       });
     }
 
@@ -154,6 +160,7 @@ export function buildFeed(league: BasketballLeagueState | null): FeedItem[] {
         headline: `${winner.city} ${winner.name} stunned #${lRank} ${loser.city} ${loser.name}, ${wScore}–${lScore}`,
         day,
         gameId: g.id,
+        teamId: winner.id,
       });
     }
 
@@ -177,6 +184,7 @@ export function buildFeed(league: BasketballLeagueState | null): FeedItem[] {
           day,
           gameId: g.id,
           playerId: pid,
+          teamId: p.rosterSlot?.teamId,
         });
       }
     }
@@ -195,8 +203,27 @@ export function buildFeed(league: BasketballLeagueState | null): FeedItem[] {
             ? `${t.city} ${t.name} are riding a ${len}-game win streak`
             : `${t.city} ${t.name} have dropped ${len} straight`,
         day: league.currentTick,
+        teamId: t.id,
       });
     }
+  }
+
+  // ── injuries (active, from the injury system) ──
+  const today = league.currentTick;
+  for (const [pid, inj] of Object.entries(getInjuries(league))) {
+    if (inj.returnDay <= today) continue; // healed
+    const p = players[pid];
+    if (!p) continue;
+    const out = inj.returnDay >= 50_000 ? 'out for the season' : `out ~${inj.returnDay - today} day${inj.returnDay - today === 1 ? '' : 's'}`;
+    items.push({
+      id: `injury-${pid}-${inj.occurredDay}`,
+      kind: 'injury',
+      icon: ICONS.injury,
+      headline: `${p.firstName} ${p.lastName} — ${inj.bodyPart} (${inj.severity.replace(/_/g, '-')}), ${out}`,
+      day: inj.occurredDay,
+      playerId: pid,
+      teamId: p.rosterSlot?.teamId,
+    });
   }
 
   // ── discipline (suspensions + fines from on-court incidents) ──
@@ -213,10 +240,13 @@ export function buildFeed(league: BasketballLeagueState | null): FeedItem[] {
         : `${who} ${d.reason} ($${(d.fine / 1000).toFixed(0)}K)`,
       day: d.occurredDay,
       playerId: pid,
+      teamId: p.rosterSlot?.teamId,
     });
   }
 
-  // recency desc, then de-prioritize schedule ties; cap at 20
+  // Recency desc. No hard cap here — callers cap via NewsFeed's `max` (the
+  // dashboard sidebar) while the full /news view (and its Injuries filter) needs
+  // every item. A generous ceiling guards against pathological late-season lists.
   items.sort((a, b) => b.day - a.day);
-  return items.slice(0, 20);
+  return items.slice(0, 120);
 }
