@@ -6,6 +6,7 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { fmtMoney } from '@/lib/dashboard/summary';
 import {
@@ -100,11 +101,12 @@ export default function StaffPage() {
               );
             })()}
             {fitCounts && (
-              <div className="mt-3 text-sm flex flex-wrap gap-3">
-                <span className="text-[var(--text-sec)]">Roster fit:</span>
-                <span style={{ color: '#10b981' }}>● {fitCounts.great ?? 0} great</span>
-                <span style={{ color: '#84cc16' }}>● {fitCounts.good ?? 0} good</span>
-                <span style={{ color: '#dc2626' }}>● {fitCounts.poor ?? 0} poor</span>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-[var(--text-sec)]">Roster fit</span>
+                <FitChip color="#10b981" count={fitCounts.great ?? 0} label="great" />
+                <FitChip color="#84cc16" count={fitCounts.good ?? 0} label="good" />
+                <FitChip color="#f59e0b" count={fitCounts.neutral ?? 0} label="neutral" />
+                <FitChip color="#dc2626" count={fitCounts.poor ?? 0} label="poor" />
               </div>
             )}
           </div>
@@ -122,8 +124,8 @@ export default function StaffPage() {
             return (
               <div key={c.id} className="flex flex-wrap items-center gap-3 px-4 py-2 border-t" style={{ borderColor: 'var(--border)' }}>
                 <div className="min-w-0">
-                  <div className="font-semibold truncate">{c.firstName} {c.lastName}</div>
-                  <div className="text-xs text-[var(--text-sec)]">Age {c.age} · {coachOverall(c)} OVR · {SCHEME_LABELS[sc]}</div>
+                  <div className="font-semibold truncate flex items-center gap-1.5">{c.firstName} {c.lastName} <Chip tone="blue">{SCHEME_LABELS[sc]}</Chip></div>
+                  <div className="text-xs text-[var(--text-sec)]">Age {c.age} · {coachOverall(c)} OVR</div>
                 </div>
                 <div className="hidden sm:flex gap-2 text-[10px] text-[var(--text-sec)]">
                   <span>OFF {c.ratings.offense}</span>
@@ -144,6 +146,14 @@ export default function StaffPage() {
 
       <p className="mt-3 text-xs text-[var(--text-sec)]">Per-player scheme fit shows on the <Link href="/roster" className="font-semibold" style={{ color: 'var(--accent)' }}>Roster</Link>. The coaching salary appears in <Link href="/finances" className="font-semibold" style={{ color: 'var(--accent)' }}>Finances</Link>.</p>
     </Shell>
+  );
+}
+
+function FitChip({ color, count, label }: { color: string; count: number; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-bold rounded-full px-2 py-0.5" style={{ background: `color-mix(in srgb, ${color} 16%, transparent)`, color }}>
+      {count} {label}
+    </span>
   );
 }
 
