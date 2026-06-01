@@ -50,6 +50,7 @@ import {
   currentSlot,
 } from '../draft';
 import { resolveUserOffer, releasePlayer as releasePlayerState, type Offer, type OfferResult } from '../freeAgency';
+import { applyRelease } from '../roster/release';
 import { extensionMarket, extensionAccepted, buildExtension } from '../roster/extension';
 import { executeTrade, type TradeSideInput } from '../trade';
 import { setTeamLineup } from '../lineup';
@@ -167,7 +168,7 @@ interface LeagueStore {
   hireCoach: (teamId: string, coach: BaseCoach) => Promise<boolean>;
 
   /** Waive a rostered player to free agency (opens a roster spot). */
-  releasePlayer: (playerId: string) => Promise<boolean>;
+  releasePlayer: (playerId: string, stretch?: boolean) => Promise<boolean>;
 
   /** Negotiate a contract extension. The player accepts a fair offer (a touch
    *  under market, for loyalty) and the years append to the end of the deal. */
@@ -668,12 +669,12 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
   },
 
-  async releasePlayer(playerId) {
+  async releasePlayer(playerId, stretch = false) {
     const current = get().league;
     if (!current) { set({ error: 'No league loaded.' }); return false; }
     set({ loading: true, error: null });
     try {
-      const league = releasePlayerState(current, playerId as Parameters<typeof releasePlayerState>[1]);
+      const league = applyRelease(current, playerId, stretch) as typeof current;
       await saveLeague(league);
       set({ league, loading: false });
       return true;

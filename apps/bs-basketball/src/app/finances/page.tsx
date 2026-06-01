@@ -75,6 +75,7 @@ export default function FinancesPage() {
             <Row label="Player payroll" value={fmtMoney(fin.expenses.payroll)} />
             <Row label="Coaching payroll" value={fmtMoney(fin.expenses.coaching)} muted />
             <Row label="Luxury tax" value={fmtMoney(fin.expenses.luxuryTax)} color={fin.expenses.luxuryTax > 0 ? '#dc2626' : undefined} />
+            {fin.expenses.deadCap > 0 && <Row label="Dead cap" value={fmtMoney(fin.expenses.deadCap)} color="#f59e0b" />}
           </dl>
         </Card>
         <Card>
