@@ -6,6 +6,7 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { gmRankings, type GmRanking } from '@/lib/rankings/gmRankings';
+import { Skeleton, SkeletonList } from '@/components/ui/Skeleton';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -23,7 +24,7 @@ export default function GmRankingsPage() {
     return m;
   }, [league]);
 
-  if (loading) return <main className="max-w-3xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>;
+  if (loading) return <main className="max-w-3xl mx-auto p-5 sm:p-8"><Skeleton className="h-8 w-44 mb-4" /><SkeletonList rows={10} /></main>;
   if (!league) {
     return (
       <main className="max-w-3xl mx-auto p-8">
