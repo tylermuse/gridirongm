@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { ExtendModal } from '@/components/modals/ExtendModal';
 import { ReleaseModal } from '@/components/modals/ReleaseModal';
+import { DepthChart } from '@/components/roster/DepthChart';
 import { resolveLineup, validateBasketballLineup, buildDefaultBasketballLineup } from '@/lib/lineup';
 import { getHeadCoach, coachScheme, schemeFit, type SchemeFit } from '@/lib/coaching/coaches';
 import { getInjuries } from '@/lib/injuries';
@@ -309,6 +310,9 @@ export default function RosterPage() {
       {validation.warnings.length > 0 && (
         <p className="mt-2 text-xs" style={{ color: '#f59e0b' }}>⚠ {validation.warnings[0].message}</p>
       )}
+
+      {/* Per-position depth chart (#21) */}
+      <DepthChart roster={roster} starterIds={starters} onName={setModalPlayerId} />
 
       {/* Actions menu (fixed, so the scroll container can't clip it) */}
       {menu && (
