@@ -11,4 +11,11 @@ export type {
   BasketballTradeContext,
   TeamTradeOutcome,
   BasketballTradeEvaluation,
+  TeamDisposition,
 } from './tradeEvaluator';
+export {
+  basketballTradeValue,
+  basketballPickTradeValue,
+  basketballFuturePickValue,
+} from './tradeValue';
+export type { TradeValueOptions, PickValueContext } from './tradeValue';

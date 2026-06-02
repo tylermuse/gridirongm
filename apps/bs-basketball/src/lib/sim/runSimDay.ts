@@ -22,6 +22,7 @@ import { resolveLineup } from '../lineup';
 import { getHeadCoach } from '../coaching/coaches';
 import { getInjuries, healthyPlayers, applyInjuryRolls, type InjuryMap } from '../injuries';
 import { getDiscipline, isSuspendedOn, applyDisciplineRolls, type DisciplineMap } from '../discipline';
+import { refreshTradeRumors } from '../trade/rumors';
 import type {
   BaseGameResult,
   BaseLeagueState,
@@ -154,8 +155,10 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
   const withInjuries = applyInjuryRolls(simmed, playedGames, nextDay, league.currentSeason);
   // Clear served suspensions and roll new discipline from today's foul-outs.
   const withDiscipline = applyDisciplineRolls(withInjuries, playedGames, nextDay, league.currentSeason);
+  // Advance the trade-rumor mill (generates + resolves; ramps toward deadline).
+  const withRumors = refreshTradeRumors(withDiscipline);
 
-  return { league: withDiscipline, day: nextDay, gamesSimmed };
+  return { league: withRumors, day: nextDay, gamesSimmed };
 }
 
 // ===========================================================================

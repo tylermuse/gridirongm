@@ -23,6 +23,7 @@ import type { BaseLeagueState, PlayerId, TeamId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { getBracket } from '../playoffs';
 import { appendTransaction } from '../transactions';
+import { currentOwner } from '../trade/picks';
 import { SCOUTS_PER_DRAFT, type DraftPickSlot, type DraftState } from './types';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
@@ -62,14 +63,31 @@ export function setupDraft(league: LeagueState, season: number, poolIds: PlayerI
   }));
 
   const order = generateBasketballDraftOrder(standings, { rngSeed: `draft-${season}` });
-  const picks: DraftPickSlot[] = order.map((teamId, i) => ({
-    overall: i + 1,
-    round: i < 30 ? 1 : 2,
-    pickInRound: (i % 30) + 1,
-    teamId,
-    isLottery: i < 14,
-    prospectId: null,
-  }));
+  const picks: DraftPickSlot[] = order.map((originalTeamId, i) => {
+    const round = i < 30 ? 1 : 2;
+    // Traded picks convey here: the slot is earned by the original team's
+    // record but made by whoever currently owns that pick.
+    const teamId = currentOwner(league, season, round, originalTeamId);
+    return {
+      overall: i + 1,
+      round,
+      pickInRound: (i % 30) + 1,
+      teamId,
+      isLottery: i < 14,
+      prospectId: null,
+    };
+  });
+
+  // Pre-lottery seeding: lottery teams (non-playoff) sorted worst-to-best by
+  // record — index 0 = the team that "should" pick #1 on odds alone. The reveal
+  // diffs this against the actual order to show who jumped and who fell. Mirrors
+  // the sort inside generateBasketballDraftOrder so the seeds line up exactly.
+  const lotteryOrder = standings
+    .slice()
+    .sort((a, b) => (b.losses - a.losses) || (a.wins - b.wins))
+    .filter(s => !s.madePlayoffs)
+    .slice(0, 14)
+    .map(s => s.teamId);
 
   return {
     season,
@@ -78,6 +96,7 @@ export function setupDraft(league: LeagueState, season: number, poolIds: PlayerI
     currentPick: 0,
     complete: false,
     lotteryRevealed: false,
+    lotteryOrder,
     scoutsRemaining: SCOUTS_PER_DRAFT,
     scoutedIds: [],
   };
