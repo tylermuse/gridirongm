@@ -9,8 +9,9 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
-import { getDraft, currentSlot, recommendedProspectId } from '@/lib/draft';
+import { getDraft, currentSlot, recommendedProspectId, buildLotteryReveal } from '@/lib/draft';
 import type { DraftPickSlot, DraftState } from '@/lib/draft';
+import { LotteryRevealCeremony } from '@/components/draft/LotteryReveal';
 import { perceivedPotential, projectionGrade, isScouted, scoutsLeft, GRADE_LABEL } from '@/lib/scouting';
 import type { BasketballPlayer, BasketballRatings, BasketballTeam } from '@bs/sport-basketball';
 
@@ -28,6 +29,7 @@ export default function DraftPage() {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<'overall' | 'potential'>('overall');
+  const [showCeremony, setShowCeremony] = useState(false);
 
   const draft = league ? getDraft(league) : null;
   const teamById = useMemo(() => {
@@ -63,13 +65,20 @@ export default function DraftPage() {
 
   // --- Lottery reveal gate ---
   if (!draft.lotteryRevealed) {
+    const revealCards = buildLotteryReveal(draft, teamById, league.userTeamId);
+    // Closing the ceremony (or skipping) is what flips the persisted flag and
+    // opens the board. Older saves with no seeding fall back to an instant reveal.
+    const finishReveal = () => {
+      setShowCeremony(false);
+      void store.revealLottery();
+    };
     return (
       <Shell season={draft.season}>
         <div className="rounded-xl border-2 p-8 text-center" style={{ borderColor: 'var(--accent)' }}>
           <div className="text-5xl mb-3">🎰</div>
           <h2 className="text-xl font-black mb-1">The Draft Lottery</h2>
           <p className="text-sm text-[var(--text-sec)] max-w-md mx-auto mb-6">
-            Fourteen envelopes, fourteen non-playoff teams. Reveal the order to see who jumped — and who fell — before the board opens.
+            Fourteen envelopes, fourteen non-playoff teams. Reveal the order live — pick by pick, #14 down to #1 — and watch who jumped the odds and who fell.
           </p>
           <div className="flex flex-wrap justify-center gap-2 mb-6">
             {draft.picks.slice(0, 14).map(p => (
@@ -82,10 +91,18 @@ export default function DraftPage() {
               </div>
             ))}
           </div>
-          <Button variant="primary" size="lg" disabled={store.loading} onClick={() => void store.revealLottery()}>
-            {store.loading ? 'Revealing…' : 'Reveal the Lottery →'}
+          <Button
+            variant="primary"
+            size="lg"
+            disabled={store.loading}
+            onClick={() => (revealCards.length ? setShowCeremony(true) : finishReveal())}
+          >
+            {store.loading ? 'Revealing…' : 'Start the Lottery Reveal →'}
           </Button>
         </div>
+        {showCeremony && revealCards.length > 0 && (
+          <LotteryRevealCeremony cards={revealCards} onClose={finishReveal} />
+        )}
       </Shell>
     );
   }

@@ -53,7 +53,7 @@ import { resolveUserOffer, releasePlayer as releasePlayerState, type Offer, type
 import { applyRelease } from '../roster/release';
 import { playThroughInjury as playThroughInjuryState } from '../injuries';
 import { extensionMarket, extensionAccepted, buildExtension } from '../roster/extension';
-import { executeTrade, type TradeSideInput } from '../trade';
+import { executeTrade, proposeTrade as proposeTradeLib, type TradeSideInput, type ProposeResult } from '../trade';
 import { setTeamLineup } from '../lineup';
 import { clearGmFired } from '../approval';
 import { scoutProspect as scoutProspectState } from '../scouting';
@@ -158,6 +158,7 @@ interface LeagueStore {
 
   /** Execute a (pre-validated) two-team trade. Returns true on success. */
   executeTrade: (sides: TradeSideInput[]) => Promise<boolean>;
+  proposeTrade: (sides: TradeSideInput[]) => Promise<ProposeResult | null>;
 
   /** Persist a team's lineup (the sim uses it when valid). Returns true on success. */
   saveLineup: (teamId: string, lineup: BasketballLineup) => Promise<boolean>;
@@ -606,6 +607,25 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       console.error('[bs-hoops] executeTrade failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return false;
+    }
+  },
+
+  async proposeTrade(sides) {
+    const current = get().league;
+    if (!current) {
+      set({ error: 'No league loaded.' });
+      return null;
+    }
+    set({ loading: true, error: null });
+    try {
+      const result = proposeTradeLib(current, sides);
+      await saveLeague(result.league);
+      set({ league: result.league, loading: false });
+      return result;
+    } catch (err) {
+      console.error('[bs-hoops] proposeTrade failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return null;
     }
   },
 

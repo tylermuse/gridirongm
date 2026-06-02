@@ -35,6 +35,13 @@ export interface DraftState {
   complete: boolean;
   /** Whether the lottery order has been revealed (cosmetic gate). */
   lotteryRevealed: boolean;
+  /**
+   * Pre-lottery seeding of the lottery teams, worst record first (index 0 =
+   * expected #1 pick). Lets the reveal compute who jumped and who fell vs. their
+   * odds. Optional for backward-compat with saves drafted before the dramatic
+   * reveal landed.
+   */
+  lotteryOrder?: TeamId[];
   /** Scouting budget left for this draft. */
   scoutsRemaining?: number;
   /** Prospect ids whose true potential has been revealed. */
