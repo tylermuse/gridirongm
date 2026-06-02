@@ -123,21 +123,37 @@ export interface PickValueContext {
   standingsWorstFirst: string[];
   /** Season the trade resolves in — future picks are discounted for distance. */
   currentSeason: number;
+  /**
+   * How much to trust current standings, 0..1 (default 1). Low early in the
+   * season (small sample) regresses the projected slot toward mid-first-round
+   * so a pick's value doesn't swing wildly off an 8-game record. Caller derives
+   * it from games played. Omitted → full trust (legacy behavior).
+   */
+  confidence?: number;
 }
 
 /**
  * Estimate a (future) pick's trade value from the original team's projected
- * standing. Picks further out are discounted for uncertainty.
+ * standing. The projected slot is regressed toward the middle of the round when
+ * standings are still noisy (early season) and for picks further out — both are
+ * genuinely uncertain — then the value is discounted per year of distance.
  */
 export function basketballFuturePickValue(
   pick: { season: number; round: number; originalTeamId: string },
   ctx: PickValueContext,
 ): number {
-  const slot = Math.max(0, ctx.standingsWorstFirst.indexOf(pick.originalTeamId));
-  const idx = slot >= 0 ? slot : Math.floor(ctx.numTeams / 2);
-  const overall = (pick.round - 1) * ctx.numTeams + idx + 1;
-  const base = basketballPickTradeValue(overall);
+  const rank = ctx.standingsWorstFirst.indexOf(pick.originalTeamId);
+  const rankSlot = rank >= 0 ? rank : Math.floor(ctx.numTeams / 2);
+  const midSlot = (ctx.numTeams - 1) / 2;
+
   const yearsOut = Math.max(0, pick.season - ctx.currentSeason);
+  // Trust shrinks with a small sample (confidence) and with distance: a pick
+  // two drafts out barely tracks today's standings, so it sits near mid-round.
+  const trust = (ctx.confidence ?? 1) * Math.pow(0.7, yearsOut);
+  const slot = rankSlot * trust + midSlot * (1 - trust);
+
+  const overall = (pick.round - 1) * ctx.numTeams + slot + 1;
+  const base = basketballPickTradeValue(overall);
   // ~8% haircut per year out — a 2029 pick is worth less than a 2027 one.
   return Math.round(base * Math.pow(0.92, yearsOut));
 }
