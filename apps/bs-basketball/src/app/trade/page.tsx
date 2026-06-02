@@ -385,7 +385,9 @@ function RumorsPanel({ league }: { league: League }) {
       <button onClick={() => setOpen(o => !o)} className="w-full flex items-center gap-2 px-4 py-2.5 border-b text-left" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
         <span className="font-bold text-sm">📰 Trade Rumors</span>
         <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: 'var(--surface-2)', color: 'var(--text-sec)' }}>
-          Season Accuracy: {acc.accurate}/{acc.resolved} ({acc.pct}%)
+          {acc.resolved === 0
+            ? 'Season Accuracy: — (no rumors resolved yet)'
+            : `Season Accuracy: ${acc.accurate}/${acc.resolved} (${acc.pct}%)`}
         </span>
         <span className="ml-auto text-xs opacity-60">{open ? '▾' : '▸'}</span>
       </button>

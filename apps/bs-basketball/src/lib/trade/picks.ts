@@ -120,10 +120,17 @@ export function pickFromId(league: LeagueState, id: string): OwnedPick | null {
 // ===========================================================================
 
 export function pickValueContext(league: LeagueState): PickValueContext {
+  // Confidence in current standings grows with sample size — full trust by the
+  // ~halfway mark (41 games). Keeps early-season pick values from swinging on a
+  // handful of games.
+  const totalGames = league.teams.reduce((s, t) => s + t.record.wins + t.record.losses, 0);
+  const avgGames = totalGames / (league.teams.length || 1);
+  const confidence = Math.min(1, avgGames / 41);
   return {
     numTeams: league.teams.length || 30,
     standingsWorstFirst: standingsWorstFirst(league),
     currentSeason: league.currentSeason,
+    confidence,
   };
 }
 
