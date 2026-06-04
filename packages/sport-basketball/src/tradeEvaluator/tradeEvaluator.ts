@@ -35,12 +35,15 @@
 import type { TeamId, PlayerId, BaseDraftPick } from '@bs/core/adapter';
 import type { BasketballPlayer } from '../types';
 import {
-  basketballMarketSalary,
   basketballSalaryCap,
   basketballTeamCapStatus,
   basketballContractYearForSeason,
-  basketballPickValue,
-} from '../index';
+  type TeamCapStatus,
+} from '../capRules';
+import { basketballTradeValue, basketballPickTradeValue } from './tradeValue';
+
+/** AI disposition used to weight trade acceptance (see P1.4). */
+export type TeamDisposition = 'Rebuilding' | 'Developing' | 'Contending' | 'Win Now';
 
 // ===========================================================================
 // Public types
@@ -67,32 +70,42 @@ export interface BasketballTradeContext {
    *  current cap status. Each value is the team's full active+inactive
    *  player list (whatever your store treats as "on the roster"). */
   teamRosters: Map<TeamId, BasketballPlayer[]>;
-  /** Optional: pick value override for non-standard pick-value heuristics. */
+  /** Optional: pick value override (PTS). Defaults to a round-midpoint
+   *  estimate; the app passes a standings-aware version. */
   pickValueFn?: (pick: BaseDraftPick) => number;
+  /** Optional: id → display name, so verdicts read "Atlanta" not a raw id. */
+  teamName?: (id: TeamId) => string;
+  /** Optional: per-team AI disposition. Tilts acceptance — a rebuilder prizes
+   *  youth + picks, a win-now team prizes proven on-court value. */
+  disposition?: (id: TeamId) => TeamDisposition | undefined;
 }
 
 export interface TeamTradeOutcome {
   teamId: TeamId;
-  /** Total dollar value coming in (players + picks + cash). */
+  /** Total trade value (PTS) coming in (players + picks + cash). */
   valueIn: number;
-  /** Total dollar value going out. */
+  /** Total trade value (PTS) going out. */
   valueOut: number;
-  /** Positive = team gains value, negative = team loses value. */
+  /** Positive = team gains value, negative = team loses value. PTS. */
   netValue: number;
   /** Will the AI accept this side of the deal? Based on netValue plus
-   *  a small fairness tolerance. */
+   *  a fairness tolerance, tilted by the team's disposition. */
   willAccept: boolean;
   /** Did the team pass cap salary-matching rules? */
   capCompliant: boolean;
   /** Human-readable explanation of the per-team outcome. */
   reasoning: string;
-  /** Cap-relevant numbers for UI display. */
+  /** The team's disposition used in the decision, if provided. */
+  disposition?: TeamDisposition;
+  /** Cap-relevant numbers (dollars) for UI display. */
   capDetail: {
     outgoingSalary: number;
     incomingSalary: number;
     maxIncomingAllowed: number;
     isOverCap: boolean;
   };
+  /** Full cap status AFTER the trade resolves — drives the apron/tax summary. */
+  postCap: TeamCapStatus;
 }
 
 export interface BasketballTradeEvaluation {
@@ -123,7 +136,11 @@ export function evaluateBasketballTrade(
 ): BasketballTradeEvaluation {
   const warnings: string[] = [];
   const perTeam: TeamTradeOutcome[] = [];
-  const pickValueFn = context.pickValueFn ?? ((p: BaseDraftPick) => basketballPickValue(p.round));
+  // Default pick value: estimate the slot from the round midpoint (the app
+  // passes a standings-aware fn that knows the original team's projected slot).
+  const pickValueFn =
+    context.pickValueFn ?? ((p: BaseDraftPick) => basketballPickTradeValue((p.round - 1) * 30 + 15));
+  const nameOf = (id: TeamId) => context.teamName?.(id) ?? id;
 
   // Build a quick (teamId,playerId) → player lookup
   const allPlayers = new Map<PlayerId, BasketballPlayer>();
@@ -160,19 +177,31 @@ export function evaluateBasketballTrade(
     );
     const capCompliant = incoming.salary <= maxIncomingAllowed + 1; // +1 for float fuzz
 
+    // Post-trade cap status: roster minus outgoing players plus incoming ones.
+    const incomingPlayers = incomingPlayersFor(side, proposal, allPlayers);
+    const sentSet = new Set(side.playersSent);
+    const postRoster = teamRoster.filter(p => !sentSet.has(p.id)).concat(incomingPlayers);
+    const postCap = basketballTeamCapStatus(postRoster, proposal.season);
+
+    // Value math is in PTS now (see tradeValue.ts).
+    const disposition = context.disposition?.(side.teamId);
     const netValue = incoming.totalValue - outgoing.totalValue;
-    const fairnessTolerance = Math.max(2_000_000, outgoing.totalValue * 0.15);
+    // Base tolerance: ~12% of outgoing value, floored at 150 PTS. Disposition
+    // shifts the bar — rebuilders are pickier on value-for-value, win-now teams
+    // will pay a premium for proven talent.
+    const dispShift = dispositionTolerance(disposition, incoming, outgoing);
+    const fairnessTolerance = Math.max(150, outgoing.totalValue * 0.12) + dispShift;
     const willAccept = netValue >= -fairnessTolerance;
 
     let reasoning: string;
     if (!capCompliant) {
-      reasoning = `Cap violation: taking back $${(incoming.salary / 1e6).toFixed(1)}M exceeds max $${(maxIncomingAllowed / 1e6).toFixed(1)}M for $${(outgoing.salary / 1e6).toFixed(1)}M outgoing.`;
-    } else if (netValue >= 1_500_000) {
-      reasoning = `Team gains ~$${(netValue / 1e6).toFixed(1)}M in value — clear win.`;
-    } else if (netValue >= -fairnessTolerance) {
-      reasoning = `Roughly even value (within $${(Math.abs(netValue) / 1e6).toFixed(1)}M).`;
+      reasoning = `Salary doesn't match — taking back $${(incoming.salary / 1e6).toFixed(1)}M exceeds the $${(maxIncomingAllowed / 1e6).toFixed(1)}M ceiling for $${(outgoing.salary / 1e6).toFixed(1)}M out.`;
+    } else if (netValue >= Math.max(150, outgoing.totalValue * 0.05)) {
+      reasoning = `${nameOf(side.teamId)} gains ~${Math.round(netValue).toLocaleString()} pts of value — clear win.`;
+    } else if (willAccept) {
+      reasoning = `Roughly even value (within ${Math.round(Math.abs(netValue)).toLocaleString()} pts)${disposition ? ` — fits a ${disposition.toLowerCase()} plan` : ''}.`;
     } else {
-      reasoning = `Team loses ~$${(Math.abs(netValue) / 1e6).toFixed(1)}M in value — unlikely to accept.`;
+      reasoning = `${nameOf(side.teamId)} loses ~${Math.round(Math.abs(netValue)).toLocaleString()} pts of value — unlikely to accept.`;
     }
 
     perTeam.push({
@@ -183,12 +212,14 @@ export function evaluateBasketballTrade(
       willAccept,
       capCompliant,
       reasoning,
+      disposition,
       capDetail: {
         outgoingSalary: outgoing.salary,
         incomingSalary: incoming.salary,
         maxIncomingAllowed,
         isOverCap,
       },
+      postCap,
     });
   }
 
@@ -200,7 +231,12 @@ export function evaluateBasketballTrade(
     );
     if (status.isOverFirstApron && outcome.capDetail.incomingSalary > outcome.capDetail.outgoingSalary + 1) {
       warnings.push(
-        `${outcome.teamId} is over the first apron — taking back more salary than sending may not be permitted in real CBA (v1 doesn't enforce).`,
+        `${nameOf(outcome.teamId)} is over the first apron — taking back more salary than they send out may not be permitted under the real CBA (v1 doesn't block it).`,
+      );
+    }
+    if (outcome.postCap.isOverSecondApron && !status.isOverSecondApron) {
+      warnings.push(
+        `This deal pushes ${nameOf(outcome.teamId)} over the second apron ($${(outcome.postCap.payroll / 1e6).toFixed(1)}M) — hard-cap territory.`,
       );
     }
   }
@@ -210,12 +246,12 @@ export function evaluateBasketballTrade(
 
   let summary: string;
   if (!legal) {
-    summary = 'Trade is not cap-legal.';
+    summary = 'Trade is not cap-legal — salaries don’t match.';
   } else if (allAccept) {
-    summary = 'Trade is legal and accepted by all teams.';
+    summary = 'Trade is legal and accepted by both sides.';
   } else {
-    const rejecting = perTeam.filter(t => !t.willAccept).map(t => t.teamId).join(', ');
-    summary = `Trade is legal but rejected by: ${rejecting}.`;
+    const rejecting = perTeam.filter(t => !t.willAccept).map(t => nameOf(t.teamId)).join(', ');
+    summary = `Trade is legal but rejected by ${rejecting}.`;
   }
 
   return { legal, allAccept, perTeam, summary, warnings };
@@ -252,10 +288,9 @@ function computeMaxIncomingSalary(
 // ===========================================================================
 
 interface CollectedAssets {
-  /** Total dollar value (players + picks + cash). Used for "fairness." */
+  /** Total trade value in PTS (players + picks). Used for fairness + totals. */
   totalValue: number;
-  /** Salary-only sum (just the cap hits of player years for this season).
-   *  Used for cap matching. */
+  /** Salary-only sum in dollars (cap hits for this season). Cap matching. */
   salary: number;
 }
 
@@ -270,14 +305,55 @@ function collectOutgoing(
   for (const id of side.playersSent) {
     const p = allPlayers.get(id);
     if (!p) continue;
-    totalValue += playerValue(p, season);
+    totalValue += basketballTradeValue(p, { season });
     salary += currentSeasonSalary(p, season);
   }
   for (const pick of side.picksSent) {
-    totalValue += pickValueFn(pick) * 100_000; // scale pick "points" to dollars-ish
+    totalValue += pickValueFn(pick); // already in PTS
   }
-  totalValue += side.cashSent ?? 0;
+  // Cash is a value transfer only (not cap-charged in v1); treated as PTS-neutral.
   return { totalValue, salary };
+}
+
+/** Players flowing INTO this side — the union of every other side's outgoing
+ *  players (exact for 2-team trades). */
+function incomingPlayersFor(
+  side: BasketballTradeSide,
+  proposal: BasketballTradeProposal,
+  allPlayers: Map<PlayerId, BasketballPlayer>,
+): BasketballPlayer[] {
+  const players: BasketballPlayer[] = [];
+  for (const other of proposal.sides) {
+    if (other.teamId === side.teamId) continue;
+    for (const id of other.playersSent) {
+      const p = allPlayers.get(id);
+      if (p) players.push(p);
+    }
+  }
+  return players;
+}
+
+/** Disposition tilt (PTS) on the acceptance bar. A rebuilder leans into youth
+ *  and picks; a win-now team leans into proven, win-ready talent. Returns extra
+ *  tolerance — how many more PTS of "loss" the team will stomach for a fit. */
+function dispositionTolerance(
+  disposition: TeamDisposition | undefined,
+  incoming: CollectedAssets,
+  _outgoing: CollectedAssets,
+): number {
+  if (!disposition) return 0;
+  // Modest, value-relative nudge so disposition flavors — but never dominates —
+  // the value check. Capped so a lopsided deal still gets rejected.
+  const swing = Math.min(400, incoming.totalValue * 0.1);
+  switch (disposition) {
+    case 'Rebuilding':
+    case 'Developing':
+      return swing; // friendlier to taking on assets/upside
+    case 'Win Now':
+      return swing * 0.6;
+    default:
+      return 0;
+  }
 }
 
 /** For a given side, sum the outgoing of OTHER sides as incoming. */
@@ -301,16 +377,6 @@ function collectIncomingForSide(
     salary += out.salary / Math.max(1, proposal.sides.length - 1);
   }
   return { totalValue, salary };
-}
-
-/** Player value for fairness math: market salary + contract surplus. */
-function playerValue(player: BasketballPlayer, season: number): number {
-  const market = basketballMarketSalary(player, { season });
-  const currentSalary = currentSeasonSalary(player, season);
-  // Surplus value = how much team is "saving" vs market rate.
-  // A $5M player on a $1M deal has $4M of surplus value.
-  const surplus = Math.max(0, market - currentSalary);
-  return market + surplus * 1.5; // weight surplus higher than nominal market
 }
 
 function currentSeasonSalary(player: BasketballPlayer, season: number): number {
