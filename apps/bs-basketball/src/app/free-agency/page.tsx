@@ -17,6 +17,7 @@ import {
   bestCompetingOffer,
   MAX_ROSTER,
   type FreeAgentInfo,
+  type CounterOffer,
 } from '@/lib/freeAgency';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
@@ -38,6 +39,7 @@ export default function FreeAgencyPage() {
   const [salaryM, setSalaryM] = useState(5);
   const [releaseId, setReleaseId] = useState<string>('');
   const [resultMsg, setResultMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [counter, setCounter] = useState<CounterOffer | null>(null);
 
   const pool = useMemo<FreeAgentInfo[]>(() => (league ? freeAgentPool(league) : []), [league]);
   const teamById = useMemo(() => {
@@ -66,14 +68,29 @@ export default function FreeAgencyPage() {
     setSalaryM(Math.round((f.marketSalary / 1_000_000) * 10) / 10);
     setReleaseId('');
     setResultMsg(null);
+    setCounter(null);
   }
 
   async function makeOffer() {
     if (!selected) return;
-    const res = await store.signFreeAgent(selected.player.id, offer, rosterFull ? releaseId || undefined : undefined);
-    if (!res) return;
-    setResultMsg({ ok: res.outcome === 'signed', text: res.message });
-    if (res.outcome !== 'rejected') setSelectedId(null);
+    const neg = await store.negotiateFreeAgent(selected.player.id, offer, rosterFull ? releaseId || undefined : undefined);
+    if (!neg) return;
+    if (neg.kind === 'counter') {
+      setCounter(neg.counter);
+      setResultMsg({ ok: false, text: neg.counter.message });
+    } else {
+      setCounter(null);
+      setResultMsg({ ok: neg.result.outcome === 'signed', text: neg.result.message });
+      if (neg.result.outcome !== 'rejected') setSelectedId(null);
+    }
+  }
+
+  function meetDemand() {
+    if (!counter) return;
+    setYears(counter.years);
+    setSalaryM(Math.round(counter.salaryPerYear / 100_000) / 10);
+    setCounter(null);
+    setResultMsg(null);
   }
 
   return (
@@ -239,13 +256,27 @@ export default function FreeAgencyPage() {
                   </div>
                 )}
 
+                {counter && (
+                  <div className="mb-3 rounded-lg px-3 py-2.5" style={{ background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>
+                    <div className="text-xs font-semibold mb-2">🗣 {counter.message}</div>
+                    <button
+                      onClick={meetDemand}
+                      className="text-xs font-bold rounded-md px-2.5 py-1.5"
+                      style={{ background: 'var(--accent)', color: '#fff' }}
+                    >
+                      Meet their ask — {counter.years}yr · {money(counter.salaryPerYear)}/yr
+                    </button>
+                    <span className="text-[11px] text-[var(--text-sec)] ml-2">or adjust your offer and counter back.</span>
+                  </div>
+                )}
+
                 <Button
                   variant="primary"
                   className="w-full"
                   disabled={store.loading || (rosterFull && !releaseId)}
                   onClick={() => void makeOffer()}
                 >
-                  {store.loading ? 'Submitting…' : 'Make Offer'}
+                  {store.loading ? 'Submitting…' : counter ? 'Counter Offer' : 'Make Offer'}
                 </Button>
               </div>
             )}

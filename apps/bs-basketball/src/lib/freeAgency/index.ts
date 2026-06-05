@@ -8,9 +8,12 @@ export {
   buildContract,
   releasePlayer,
   resolveUserOffer,
+  negotiateOffer,
   MAX_ROSTER,
   LEAGUE_MINIMUM_SALARY,
   type FreeAgentInfo,
   type Offer,
   type OfferResult,
+  type Negotiation,
+  type CounterOffer,
 } from './freeAgency';
