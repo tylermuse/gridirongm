@@ -62,6 +62,7 @@ import { extensionMarket, extensionAccepted, buildExtension } from '../roster/ex
 import { executeTrade, proposeTrade as proposeTradeLib, type TradeSideInput, type ProposeResult } from '../trade';
 import { setTeamLineup } from '../lineup';
 import { clearGmFired } from '../approval';
+import { setGodMode as setGodModeLib, editPlayer as editPlayerLib, type PlayerEdit } from '../godMode/godMode';
 import { scoutProspect as scoutProspectState } from '../scouting';
 import { markChangelogSeen as markChangelogSeenState } from '../ui/changelog';
 import type { TeamId, BaseCoach } from '@bs/core/adapter';
@@ -109,6 +110,10 @@ interface LeagueStore {
 
   /** Set which team the user is GMing. Persisted via Dexie. */
   pickUserTeam: (teamId: TeamId) => Promise<void>;
+
+  /** God Mode (save-level): toggle, and edit a player's overall/age/potential. */
+  setGodMode: (on: boolean) => Promise<void>;
+  godEditPlayer: (playerId: string, patch: PlayerEdit) => Promise<void>;
 
   /** Sim the next scheduled game involving the user's team. Returns the
    *  played game's id on success, or null if there's no game to sim. */
@@ -366,6 +371,22 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       console.error('[bs-hoops] pickUserTeam save failed:', err);
       set({ error: err instanceof Error ? err.message : String(err) });
     }
+  },
+
+  async setGodMode(on) {
+    const current = get().league;
+    if (!current) return;
+    const league = setGodModeLib(current, on);
+    set({ league });
+    try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] setGodMode failed:', err); }
+  },
+
+  async godEditPlayer(playerId, patch) {
+    const current = get().league;
+    if (!current) return;
+    const league = editPlayerLib(current, playerId, patch);
+    set({ league });
+    try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] godEditPlayer failed:', err); }
   },
 
   async simDay() {
