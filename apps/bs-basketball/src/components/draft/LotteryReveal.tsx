@@ -146,11 +146,9 @@ export function LotteryRevealCeremony({
               style={{ color: meta.color, background: 'rgba(255,255,255,0.06)' }}
             >
               {meta.badge(Math.abs(card.delta))}
-              {card.movement !== 'held' && (
-                <span className="text-white/40 normal-case tracking-normal font-semibold">
-                  · seeded {ordinal(card.expectedSlot)}
-                </span>
-              )}
+              <span className="text-white/40 normal-case tracking-normal font-semibold">
+                · seeded {ordinal(card.expectedSlot)} ({card.oddsPct.toFixed(1)}% at No. 1)
+              </span>
             </div>
 
             {/* War-room reaction */}

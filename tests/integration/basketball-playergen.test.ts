@@ -170,7 +170,7 @@ describe('basketball draft class generator', () => {
     }
   });
 
-  it('talent distribution: a few stars, many role players, some fringe', () => {
+  it('rookies enter raw: low current overall, with upside in potential', () => {
     // Large sample (30 classes = 1800 prospects) so proportions are stable and
     // the bounds can be wide — keeps the shape meaningful without flaking on the
     // RNG variance of a small sample.
@@ -180,14 +180,37 @@ describe('basketball draft class generator', () => {
     }
     const total = allProspects.length; // 1800
     const ovrs = allProspects.map(p => p.ratings.overall);
-    const stars = ovrs.filter(o => o >= 80).length;
-    const fringe = ovrs.filter(o => o < 65).length;
 
-    // Stars are a small minority; fringe players are common; stars rarer than fringe.
-    expect(stars).toBeGreaterThan(total * 0.02);
-    expect(stars).toBeLessThan(total * 0.35);
-    expect(fringe).toBeGreaterThan(total * 0.08);
-    expect(stars).toBeLessThan(fringe);
+    // Rookies are NOT finished products: essentially none enter as 80-OVR stars,
+    // and the class is dominated by sub-65 raw prospects. (Stardom lives in
+    // potential, asserted below — this is the regression guard for the bug where
+    // second-rounders generated as 80-OVR veterans.)
+    const finishedStars = ovrs.filter(o => o >= 78).length;
+    const raw = ovrs.filter(o => o < 65).length;
+    expect(finishedStars).toBeLessThan(total * 0.01);
+    expect(raw).toBeGreaterThan(total * 0.4);
+
+    // Upside is concentrated at the top of the board: a meaningful minority
+    // project to stars (high potential), but they're a minority and the upside
+    // tapers — most prospects top out modestly.
+    const pots = allProspects.map(p => p.development.potential);
+    const highUpside = pots.filter(pot => pot >= 85).length;
+    const lowUpside = pots.filter(pot => pot < 70).length;
+    expect(highUpside).toBeGreaterThan(total * 0.02);
+    expect(highUpside).toBeLessThan(total * 0.3);
+    expect(highUpside).toBeLessThan(lowUpside);
+  });
+
+  it('current overall tapers from the top of the board to round 2', () => {
+    // Average pick-1 vs round-2 overall across many classes — the top of the
+    // board should clearly out-rate the second round.
+    let pick1 = 0, round2 = 0, r2n = 0, n = 0;
+    for (let i = 0; i < 30; i++) {
+      const klass = generateBasketballDraftClass(2026 + i, 60);
+      pick1 += klass[0].ratings.overall; n++;
+      for (let k = 30; k < 60; k++) { round2 += klass[k].ratings.overall; r2n++; }
+    }
+    expect(pick1 / n).toBeGreaterThan(round2 / r2n + 8);
   });
 
   it('all 5 positions represented in a draft class', () => {

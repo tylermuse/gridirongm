@@ -15,8 +15,14 @@ export interface DraftPickSlot {
   round: number;
   /** 1..30 within the round. */
   pickInRound: number;
-  /** Team making this pick (draft order, post-lottery). */
+  /** Team currently making this pick. Re-resolved from the pick-ownership
+   *  registry on every read (see getDraft), so a mid-draft pick trade takes
+   *  effect immediately. */
   teamId: TeamId;
+  /** The team whose record earned this slot — the stable key into the
+   *  pick-ownership registry. Lets ownership be re-resolved after trades.
+   *  (Optional at runtime for saves made before this field existed.) */
+  originalTeamId: TeamId;
   /** Lottery picks are 1..14. */
   isLottery: boolean;
   /** Prospect taken, or null if not yet made. */

@@ -251,8 +251,8 @@ export default function TradePage() {
                 </span>
               )}
             </div>
-            <DealHalf label={`${userTeam.city} send`} playerIds={[...mine]} pickIds={[...myPicks]} league={league} playerById={playerById} accent="#dc2626" onRemovePlayer={id => toggle(mine, setMine, id)} onRemovePick={id => toggle(myPicks, setMyPicks, id)} />
-            <DealHalf label={`${targetTeam ? targetTeam.city + ' send' : 'You receive'}`} playerIds={[...theirs]} pickIds={[...theirPicks]} league={league} playerById={playerById} accent="#10b981" onRemovePlayer={id => toggle(theirs, setTheirs, id)} onRemovePick={id => toggle(theirPicks, setTheirPicks, id)} />
+            <DealHalf label={`${userTeam.city} send`} playerIds={[...mine]} pickIds={[...myPicks]} league={league} playerById={playerById} season={season} accent="#dc2626" onRemovePlayer={id => toggle(mine, setMine, id)} onRemovePick={id => toggle(myPicks, setMyPicks, id)} />
+            <DealHalf label={`${targetTeam ? targetTeam.city + ' send' : 'You receive'}`} playerIds={[...theirs]} pickIds={[...theirPicks]} league={league} playerById={playerById} season={season} accent="#10b981" onRemovePlayer={id => toggle(theirs, setTheirs, id)} onRemovePick={id => toggle(theirPicks, setTheirPicks, id)} />
             {!hasAssets && (
               <p className="text-xs text-[var(--text-sec)] mt-1">Drag players or picks here — or tap them in the rosters.</p>
             )}
@@ -755,13 +755,14 @@ function RosterColumn({
 // ===========================================================================
 
 function DealHalf({
-  label, playerIds, pickIds, league, playerById, accent, onRemovePlayer, onRemovePick,
+  label, playerIds, pickIds, league, playerById, season, accent, onRemovePlayer, onRemovePick,
 }: {
   label: string;
   playerIds: string[];
   pickIds: string[];
   league: League;
   playerById: Record<string, BasketballPlayer>;
+  season: number;
   accent: string;
   onRemovePlayer: (id: string) => void;
   onRemovePick: (id: string) => void;
@@ -773,16 +774,41 @@ function DealHalf({
       {empty ? (
         <div className="text-xs opacity-40">—</div>
       ) : (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="space-y-1">
+          {/* Players show the detail you need to judge the deal: position, OVR
+              (+ upside when notable), age, and the contract (salary · years left). */}
           {playerIds.map(id => {
             const p = playerById[id];
             if (!p) return null;
-            return <Chip key={id} accent={accent} onRemove={() => onRemovePlayer(id)}>{p.firstName[0]}. {p.lastName}</Chip>;
+            const salary = contractSalary(p, season);
+            const yearsLeft = p.contract ? p.contract.years.filter(y => y.season >= season).length : 0;
+            const pot = p.development.potential;
+            const showPot = pot >= p.ratings.overall + 3;
+            return (
+              <div
+                key={id}
+                className="flex items-center gap-2 rounded-lg px-2 py-1"
+                style={{ background: `color-mix(in srgb, ${accent} 12%, transparent)` }}
+              >
+                <span className="font-semibold text-xs truncate min-w-0 flex-1">{p.firstName} {p.lastName}</span>
+                <span className="text-[10px] tabular-nums opacity-70 whitespace-nowrap">
+                  {p.sportData.position} · {p.ratings.overall} OVR{showPot ? ` (${pot}↑)` : ''} · {p.age}y
+                </span>
+                <span className="text-[10px] tabular-nums opacity-70 whitespace-nowrap">
+                  {salary > 0 ? `${money(salary)} · ${yearsLeft}y` : 'no deal'}
+                </span>
+                <button onClick={() => onRemovePlayer(id)} className="opacity-50 hover:opacity-100 px-0.5 text-xs shrink-0" title="Remove from deal">✕</button>
+              </div>
+            );
           })}
-          {pickIds.map(id => {
-            const pk = pickFromId(league, id);
-            return <Chip key={id} accent={accent} onRemove={() => onRemovePick(id)}>🎟️ {pk ? pickShort(league, pk) : id}</Chip>;
-          })}
+          {pickIds.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {pickIds.map(id => {
+                const pk = pickFromId(league, id);
+                return <Chip key={id} accent={accent} onRemove={() => onRemovePick(id)}>🎟️ {pk ? pickShort(league, pk) : id}</Chip>;
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
