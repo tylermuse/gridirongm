@@ -18,7 +18,7 @@ import type { TeamId } from '@bs/core/adapter';
  */
 
 // Bump `?v=` when the JSON is regenerated to bust the Vercel edge cache.
-const CACHE_BUST = 1;
+const CACHE_BUST = 2;
 const NBA_FILE = '/rosters/BBGM_NBA_Roster_2026_Updated.json';
 const nbaUrl = `${NBA_FILE}?v=${CACHE_BUST}`;
 
