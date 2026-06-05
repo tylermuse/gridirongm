@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
+import { computeLeagueStatRanks, ordinal, type StatCategory } from '@/lib/stats/leagueRank';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -103,6 +104,9 @@ export default function PlayerPage() {
   // up to date during the season); career stats are rolled up at season's end.
   const aggregatedSeason = statsForPlayer(regularSeasonStatsByPlayer(league), player.id);
   const stats = statMode === 'season' ? aggregatedSeason : player.careerStats;
+  // League ranks only make sense for the current season's per-game stats.
+  const seasonRanks = statMode === 'season' ? computeLeagueStatRanks(league) : null;
+  const statRank = (cat: StatCategory): number | null => seasonRanks?.rank(player.id, cat) ?? null;
   const traj = player.development.currentTrajectory;
   const visibleGames = showAllGames ? gameLog : gameLog.slice(0, 10);
 
@@ -246,11 +250,11 @@ export default function PlayerPage() {
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
             <Stat label="GP" value={stats.gamesPlayed} />
             <Stat label="MPG" value={per(stats.minutes, stats.gamesPlayed)} />
-            <Stat label="PPG" value={per(stats.points, stats.gamesPlayed)} />
-            <Stat label="RPG" value={per(stats.totalRebounds, stats.gamesPlayed)} />
-            <Stat label="APG" value={per(stats.assists, stats.gamesPlayed)} />
-            <Stat label="SPG" value={per(stats.steals, stats.gamesPlayed)} />
-            <Stat label="BPG" value={per(stats.blocks, stats.gamesPlayed)} />
+            <Stat label="PPG" value={per(stats.points, stats.gamesPlayed)} rank={statRank('ppg')} />
+            <Stat label="RPG" value={per(stats.totalRebounds, stats.gamesPlayed)} rank={statRank('rpg')} />
+            <Stat label="APG" value={per(stats.assists, stats.gamesPlayed)} rank={statRank('apg')} />
+            <Stat label="SPG" value={per(stats.steals, stats.gamesPlayed)} rank={statRank('spg')} />
+            <Stat label="BPG" value={per(stats.blocks, stats.gamesPlayed)} rank={statRank('bpg')} />
             <Stat label="FG%" value={pct(stats.fieldGoalsMade, stats.fieldGoalsAttempted)} />
             <Stat label="3P%" value={pct(stats.threePointsMade, stats.threePointsAttempted)} />
             <Stat label="FT%" value={pct(stats.freeThrowsMade, stats.freeThrowsAttempted)} />
@@ -442,11 +446,13 @@ function trajectoryVariant(t: string): 'green' | 'red' | 'default' {
   return 'default';
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+function Stat({ label, value, rank }: { label: string; value: string | number; rank?: number | null }) {
   return (
     <div className="p-2.5 rounded-lg" style={{ background: 'var(--surface-2)' }}>
       <div className="text-base font-bold" style={{ color: 'var(--accent)' }}>{value}</div>
-      <div className="text-[10px] opacity-70 uppercase tracking-wide">{label}</div>
+      <div className="text-[10px] opacity-70 uppercase tracking-wide">
+        {label}{rank ? <span className="normal-case"> · {ordinal(rank)}</span> : null}
+      </div>
     </div>
   );
 }

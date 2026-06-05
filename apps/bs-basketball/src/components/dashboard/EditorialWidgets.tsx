@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { byTheNumbers, scoringLeaders, teamStar } from '@/lib/dashboard/editorial';
+import { computeLeagueStatRanks, ordinal } from '@/lib/stats/leagueRank';
 import type { BasketballTeam } from '@bs/sport-basketball';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
@@ -20,6 +21,7 @@ export function EditorialWidgets({ league, team }: { league: LeagueState; team: 
   const numbers = useMemo(() => byTheNumbers(league, team), [league, team]);
   const star = useMemo(() => teamStar(league, team), [league, team]);
   const mvpRace = useMemo(() => scoringLeaders(league, 5), [league]);
+  const ranks = useMemo(() => computeLeagueStatRanks(league), [league]);
 
   if (numbers.length === 0 && !star) return null;
 
@@ -53,9 +55,9 @@ export function EditorialWidgets({ league, team }: { league: LeagueState; team: 
               <div className="text-[10px] uppercase tracking-widest text-[var(--text-sec)] mb-0.5">Your standout</div>
               <div className="font-bold">{star.name} <span className="text-[var(--text-sec)] font-normal">· {star.position}</span></div>
               <div className="text-sm tabular-nums mt-0.5">
-                <span className="font-semibold">{star.ppg.toFixed(1)}</span> ppg ·{' '}
-                <span className="font-semibold">{star.rpg.toFixed(1)}</span> rpg ·{' '}
-                <span className="font-semibold">{star.apg.toFixed(1)}</span> apg
+                <span className="font-semibold">{star.ppg.toFixed(1)}</span> ppg{(() => { const r = ranks.rank(star.id, 'ppg'); return r ? <span className="opacity-60"> ({ordinal(r)})</span> : null; })()} ·{' '}
+                <span className="font-semibold">{star.rpg.toFixed(1)}</span> rpg{(() => { const r = ranks.rank(star.id, 'rpg'); return r ? <span className="opacity-60"> ({ordinal(r)})</span> : null; })()} ·{' '}
+                <span className="font-semibold">{star.apg.toFixed(1)}</span> apg{(() => { const r = ranks.rank(star.id, 'apg'); return r ? <span className="opacity-60"> ({ordinal(r)})</span> : null; })()}
               </div>
             </button>
           )}
