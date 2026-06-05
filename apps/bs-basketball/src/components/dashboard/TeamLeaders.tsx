@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { teamLeaders } from '@/lib/dashboard/leaders';
+import { ordinal } from '@/lib/stats/leagueRank';
 import type { BasketballTeam } from '@bs/sport-basketball';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
@@ -39,7 +40,9 @@ export function TeamLeaders({ league, team }: { league: LeagueState; team: Baske
             </div>
             <div className="text-right shrink-0">
               <div className="text-xl font-black tabular-nums" style={{ color: 'var(--accent)' }}>{l.value.toFixed(1)}</div>
-              <div className="text-[10px] uppercase tracking-wide text-[var(--text-sec)]">{l.unit}</div>
+              <div className="text-[10px] uppercase tracking-wide text-[var(--text-sec)]">
+                {l.unit}{l.rank ? <span className="normal-case"> · {ordinal(l.rank)}</span> : null}
+              </div>
             </div>
           </button>
         ))}

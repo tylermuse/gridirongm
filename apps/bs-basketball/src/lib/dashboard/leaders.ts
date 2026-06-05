@@ -7,6 +7,7 @@
  */
 
 import { regularSeasonStatsByPlayer } from '../stats/seasonStats';
+import { computeLeagueStatRanks, type StatCategory } from '../stats/leagueRank';
 import type { BasketballPlayer, BasketballTeam, BasketballStats } from '@bs/sport-basketball';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings } from '@bs/sport-basketball';
@@ -52,6 +53,10 @@ export interface LeaderLine {
   value: number;
   unit: string;
   meta: string;
+  /** League rank for this stat (1 = leader), or null if unranked / unqualified. */
+  rank: number | null;
+  /** Qualified-player denominator for the rank. */
+  of: number;
 }
 
 function metaOf(p: BasketballPlayer): string {
@@ -76,14 +81,15 @@ export function teamLeaders(league: LeagueState, team: BasketballTeam): LeaderLi
     return top;
   };
 
+  const ranks = computeLeagueStatRanks(league);
   const out: LeaderLine[] = [];
-  const add = (category: string, unit: string, pick: (s: BasketballStats) => number) => {
+  const add = (category: string, unit: string, cat: StatCategory, pick: (s: BasketballStats) => number) => {
     const b = best(pick);
-    if (b) out.push({ category, player: b.player, value: b.value, unit, meta: metaOf(b.player) });
+    if (b) out.push({ category, player: b.player, value: b.value, unit, meta: metaOf(b.player), rank: ranks.rank(b.player.id, cat), of: ranks.of });
   };
-  add('Points', 'PPG', s => s.points / s.gamesPlayed);
-  add('Rebounds', 'RPG', s => s.totalRebounds / s.gamesPlayed);
-  add('Assists', 'APG', s => s.assists / s.gamesPlayed);
-  add('Defense', 'STK', s => (s.steals + s.blocks) / s.gamesPlayed);
+  add('Points', 'PPG', 'ppg', s => s.points / s.gamesPlayed);
+  add('Rebounds', 'RPG', 'rpg', s => s.totalRebounds / s.gamesPlayed);
+  add('Assists', 'APG', 'apg', s => s.assists / s.gamesPlayed);
+  add('Defense', 'STK', 'stk', s => (s.steals + s.blocks) / s.gamesPlayed);
   return out;
 }
