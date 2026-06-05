@@ -21,7 +21,6 @@ import { generateHeadCoach } from '../coaching/coaches';
 import {
   generateBasketballPlayer,
   generateBasketballSchedule,
-  buildDefaultBasketballLineup,
   basketballAdapter,
   type BasketballPlayer,
   type BasketballPosition,
@@ -87,14 +86,9 @@ export function createNewBasketballLeague(
   // --- Build teams + players ---
   const teams: BasketballTeam[] = [];
   const players: Record<PlayerId, BasketballPlayer> = {};
-  const coaches: Record<CoachId, BaseCoach> = {};
 
   for (const template of templates) {
     const teamId = `team-${template.abbreviation.toLowerCase()}-${uuid().slice(0, 8)}` as TeamId;
-
-    // Each team gets a head coach (scheme + ratings drive fit + future effects).
-    const headCoach = generateHeadCoach(teamId);
-    coaches[headCoach.id] = headCoach;
 
     // Generate the roster. Slice to rosterSize in case caller passed a smaller value.
     // Interleave positions (PG→C) starting at a per-team offset, so the star /
@@ -129,53 +123,109 @@ export function createNewBasketballLeague(
       players[p.id] = playerWithSlot;
     }
 
-    // Default lineup from the generated roster.
-    const lineup = buildDefaultBasketballLineup(rosterPlayers);
-
-    const team: BasketballTeam = {
+    teams.push(makeBasketballTeam({
       id: teamId,
-      city: template.city,
-      name: template.name,
-      abbreviation: template.abbreviation,
-      primaryColor: template.primaryColor,
-      secondaryColor: template.secondaryColor,
+      template,
       playerIds: rosterPlayers.map(p => p.id),
-      rosterBuckets: {
-        active: rosterPlayers.map(p => p.id),
-        two_way: [],
-        inactive: [],
-      },
-      draftPicks: [],
-      record: {
-        wins: 0,
-        losses: 0,
-        otherResults: 0,
-        pointsFor: 0,
-        pointsAgainst: 0,
-        streak: [],
-      },
-      coachIds: [headCoach.id],
-      approval: {
-        fanApproval: 50,
-        ownerApproval: 50,
-        objectives: [],
-        jobSecurity: 'safe',
-      },
-      capState: null,
-      sportData: {
-        conference: template.conference,
-        division: template.division,
-        pace: 'medium' as const,
-        defensiveScheme: 'switch_everything' as const,
-      },
-    };
-
-    teams.push(team);
-    // Stash the default lineup somewhere accessible. For now we cache it on
-    // the team via a side-channel; later we'll persist it through the
-    // adapter's lineupModel. v1: leaning on the runtime to remember.
-    void lineup;
+    }));
   }
+
+  return assembleLeague({ teams, players, season, displayName, rngSeed: opts.rngSeed });
+}
+
+// ===========================================================================
+// Reusable team + league assembly (shared by generate + import paths)
+// ===========================================================================
+
+/** Build a zeroed-out BasketballTeam shell from a template. Coaches are
+ *  attached later in assembleLeague so both the procedural-generate path and
+ *  the league-import path produce identical team shape. */
+export function makeBasketballTeam(opts: {
+  id: TeamId;
+  template: Pick<BasketballTeamTemplate, 'city' | 'name' | 'abbreviation' | 'primaryColor' | 'secondaryColor' | 'conference' | 'division'>;
+  playerIds: PlayerId[];
+  /** Optional display overrides (the import path carries real-team colors/logo). */
+  primaryColor?: string;
+  secondaryColor?: string;
+  logoUrl?: string;
+}): BasketballTeam {
+  const { template } = opts;
+  return {
+    id: opts.id,
+    city: template.city,
+    name: template.name,
+    abbreviation: template.abbreviation,
+    primaryColor: opts.primaryColor ?? template.primaryColor,
+    secondaryColor: opts.secondaryColor ?? template.secondaryColor,
+    ...(opts.logoUrl ? { logoUrl: opts.logoUrl } : {}),
+    playerIds: opts.playerIds,
+    rosterBuckets: {
+      active: opts.playerIds,
+      two_way: [],
+      inactive: [],
+    },
+    draftPicks: [],
+    record: {
+      wins: 0,
+      losses: 0,
+      otherResults: 0,
+      pointsFor: 0,
+      pointsAgainst: 0,
+      streak: [],
+    },
+    coachIds: [],
+    approval: {
+      fanApproval: 50,
+      ownerApproval: 50,
+      objectives: [],
+      jobSecurity: 'safe',
+    },
+    capState: null,
+    sportData: {
+      conference: template.conference,
+      division: template.division,
+      pace: 'medium' as const,
+      defensiveScheme: 'switch_everything' as const,
+    },
+  };
+}
+
+export interface AssembleLeagueOptions {
+  /** Fully-formed teams (coachIds may be empty — a head coach is generated here). */
+  teams: BasketballTeam[];
+  /** Player lookup keyed by id. */
+  players: Record<PlayerId, BasketballPlayer>;
+  /** Free agents not on any roster (import path supplies real veteran FAs). */
+  freeAgentIds?: PlayerId[];
+  season: number;
+  displayName?: string;
+  rngSeed?: string;
+}
+
+/**
+ * Turn a set of teams + players into a ready-to-persist BaseLeagueState:
+ * generates a head coach per team, builds the 82-game schedule, wires the
+ * single 'primary' competition, and stamps league metadata. Both the
+ * procedural-generate path (createNewBasketballLeague) and the league-import
+ * path call this so league shape stays identical.
+ */
+export function assembleLeague(
+  opts: AssembleLeagueOptions,
+): BaseLeagueState<BasketballRatings, BasketballStats> {
+  const { players, season } = opts;
+  const displayName = opts.displayName ?? 'BS Hoops';
+
+  if (opts.teams.length !== 30) {
+    throw new Error(`Need 30 teams to assemble a league; got ${opts.teams.length}`);
+  }
+
+  // Each team gets a head coach (scheme + ratings drive fit + future effects).
+  const coaches: Record<CoachId, BaseCoach> = {};
+  const teams: BasketballTeam[] = opts.teams.map(team => {
+    const headCoach = generateHeadCoach(team.id);
+    coaches[headCoach.id] = headCoach;
+    return { ...team, coachIds: [headCoach.id] };
+  });
 
   // --- Schedule the 82-game regular season ---
   const scheduledGames = generateBasketballSchedule(teams, {
@@ -212,7 +262,7 @@ export function createNewBasketballLeague(
     currentTick: 1,
     teams,
     players,
-    freeAgentIds: [],
+    freeAgentIds: opts.freeAgentIds ?? [],
     coaches,
     competitions: [competition],
     games: scheduledGames,

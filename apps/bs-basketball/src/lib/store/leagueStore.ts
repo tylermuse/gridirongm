@@ -21,8 +21,14 @@
 import { create } from 'zustand';
 import {
   createNewBasketballLeague,
+  assembleLeague,
   type CreateBasketballLeagueOptions,
 } from '../league/createLeague';
+import {
+  convertBbgmLeague,
+  loadHoopsLeagueFromUrl,
+  type ImportedHoopsLeague,
+} from '../data/leagueImport';
 import {
   saveLeague,
   loadLeague as loadLeagueFromDb,
@@ -80,6 +86,14 @@ interface LeagueStore {
 
   /** Create a fresh league and persist it. */
   newLeague: (opts?: CreateBasketballLeagueOptions) => Promise<void>;
+
+  /** Import a BBGM/ZenGM roster file from a URL, build a league, and persist it.
+   *  Returns true on success. The new league has no user team yet — call
+   *  pickUserTeam next. */
+  importLeagueFromUrl: (url: string) => Promise<boolean>;
+
+  /** Import from already-parsed BBGM JSON (the file-upload path). */
+  importLeagueFromData: (raw: unknown) => Promise<boolean>;
 
   /** Load an existing league by id. */
   loadLeague: (id: string) => Promise<void>;
@@ -201,6 +215,23 @@ function simSummary(league: BasketballLeagueState, gamesSimmed: number): string 
   return `${base} · You ${us > them ? 'won' : 'lost'} ${us}–${them} ${isHome ? 'vs' : '@'} ${opp?.abbreviation ?? ''}`.trim();
 }
 
+/** Build a persistable league from converted import data. */
+function leagueFromImport(imported: ImportedHoopsLeague): BasketballLeagueState {
+  return assembleLeague({
+    teams: imported.teams,
+    players: imported.players,
+    freeAgentIds: imported.freeAgentIds,
+    season: imported.season,
+    displayName: `NBA ${imported.season}`,
+  });
+}
+
+/** Friendly error copy for a failed import. */
+function importErrorMessage(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  return `Couldn't import that roster file. ${msg}`;
+}
+
 /** Yield a frame so the browser can paint the loading state before a heavy,
  *  synchronous sim blocks the main thread — keeps clicking Sim responsive (INP).
  *  No-op-safe on the server. */
@@ -236,6 +267,36 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     } catch (err) {
       console.error('[bs-hoops] newLeague failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  async importLeagueFromUrl(url) {
+    set({ loading: true, error: null });
+    try {
+      const imported = await loadHoopsLeagueFromUrl(url);
+      const league = leagueFromImport(imported);
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] importLeagueFromUrl failed:', err);
+      set({ loading: false, error: importErrorMessage(err) });
+      return false;
+    }
+  },
+
+  async importLeagueFromData(raw) {
+    set({ loading: true, error: null });
+    try {
+      const imported = convertBbgmLeague(raw as Parameters<typeof convertBbgmLeague>[0]);
+      const league = leagueFromImport(imported);
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] importLeagueFromData failed:', err);
+      set({ loading: false, error: importErrorMessage(err) });
+      return false;
     }
   },
 

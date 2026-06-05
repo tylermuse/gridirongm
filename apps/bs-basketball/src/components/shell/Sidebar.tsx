@@ -27,6 +27,7 @@ function sectionsFor(userTeamId: string | null): NavSection[] {
         { href: '/standings', label: 'Standings', icon: '📊' },
         { href: '/stats', label: 'Stats', icon: '🔢' },
         { href: '/players', label: 'Players', icon: '🔎' },
+        { href: '/rosters', label: 'Rosters', icon: '📥' },
         { href: '/power-rankings', label: 'Power Rankings', icon: '📈' },
         { href: '/gm-rankings', label: 'GM Rankings', icon: '🏅' },
         { href: '/compare', label: 'Compare', icon: '⚖️' },
