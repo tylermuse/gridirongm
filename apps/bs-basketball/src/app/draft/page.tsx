@@ -14,6 +14,8 @@ import { LotteryBoard } from '@/components/draft/LotteryBoard';
 import type { DraftPickSlot, DraftState } from '@/lib/draft';
 import { LotteryRevealCeremony } from '@/components/draft/LotteryReveal';
 import { perceivedPotential, projectionGrade, isScouted, scoutsLeft, GRADE_LABEL } from '@/lib/scouting';
+import { buildScoutingReport } from '@/lib/scouting/scoutingReport';
+import { ScoutingReportModal } from '@/components/draft/ScoutingReportModal';
 import type { BasketballPlayer, BasketballRatings, BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -356,6 +358,7 @@ function ScoutingPanel({
   const scouted = isScouted(draft, prospect.id);
   const grade = projectionGrade(perceivedPotential(prospect, draft.season));
   const scoutsAvailable = scoutsLeft(draft) > 0;
+  const [reportOpen, setReportOpen] = useState(false);
   return (
     <div className="rounded-xl border bg-[var(--surface)] p-4" style={{ borderColor: 'var(--border)' }}>
       <div className="flex items-center gap-3">
@@ -401,6 +404,23 @@ function ScoutingPanel({
           </div>
         )}
       </div>
+
+      <button
+        onClick={() => setReportOpen(true)}
+        className="mt-2 w-full text-xs font-semibold rounded-lg py-1.5 border hover:bg-[var(--surface-2)] transition-colors"
+        style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}
+      >
+        📋 Full scouting report →
+      </button>
+      {reportOpen && (
+        <ScoutingReportModal
+          player={prospect}
+          report={buildScoutingReport(prospect, { season: draft.season, scouted })}
+          onClose={() => setReportOpen(false)}
+          onScout={() => { onScout(); }}
+          canScout={scoutsAvailable && !loading}
+        />
+      )}
 
       {isRecommended && (
         <div className="text-xs mt-3 opacity-70">⭐ Top recommendation from your scouting staff for this pick.</div>
