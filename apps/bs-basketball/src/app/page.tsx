@@ -387,6 +387,22 @@ export default function HomePage() {
         <div className="text-[var(--accent)] text-xl group-hover:translate-x-1 transition-transform shrink-0">→</div>
       </button>
 
+      {/* Import a real roster (BBGM/ZenGM) */}
+      <Link
+        href="/rosters"
+        className="w-full max-w-4xl mb-3 group flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface)]
+                   hover:border-[var(--accent)] hover:shadow-lg hover:shadow-[var(--accent-glow)] transition-all text-left"
+      >
+        <div className="w-12 h-12 rounded-lg bg-[var(--surface-2)] flex items-center justify-center text-2xl shrink-0">
+          📥
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold">Import a real roster</div>
+          <div className="text-xs text-[var(--text-sec)]">Start from the real NBA roster — or your own BBGM/ZenGM league file.</div>
+        </div>
+        <div className="text-[var(--accent)] text-xl group-hover:translate-x-1 transition-transform shrink-0">→</div>
+      </Link>
+
       {/* Team grid (skeletons while a saved league is loading) */}
       {loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-w-4xl w-full">
