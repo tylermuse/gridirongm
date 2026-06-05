@@ -18,6 +18,7 @@ import type { BasketballLeagueState } from '../persistence/db';
 import { getDiscipline } from '../discipline';
 import { getInjuries } from '../injuries';
 import { getTransactions } from '../transactions/transactions';
+import { buildRivalryEvents } from '../rivalries/rivalries';
 import type {
   BasketballPlayer,
   BasketballStats,
@@ -36,6 +37,7 @@ export type FeedKind =
   | 'suspension'
   | 'fine'
   | 'trade'
+  | 'rivalry'
   | 'schedule_notice';
 
 export interface FeedItem {
@@ -62,6 +64,7 @@ const ICONS: Record<FeedKind, string> = {
   suspension: '🚫',
   fine: '💸',
   trade: '🔄',
+  rivalry: '😤',
   schedule_notice: '📅',
 };
 
@@ -263,6 +266,20 @@ export function buildFeed(league: BasketballLeagueState | null): FeedItem[] {
       teamId: subjectId,
     });
   });
+
+  // ── rivalry beats (close / OT division games — not covered by big_game) ──
+  for (const r of buildRivalryEvents(league)) {
+    if (r.kind === 'statement') continue; // blowouts already surface as big_game
+    items.push({
+      id: r.id,
+      kind: 'rivalry',
+      icon: ICONS.rivalry,
+      headline: r.headline,
+      day: r.day,
+      gameId: r.gameId,
+      teamId: r.homeTeamId,
+    });
+  }
 
   // Recency desc. No hard cap here — callers cap via NewsFeed's `max` (the
   // dashboard sidebar) while the full /news view (and its Injuries filter) needs

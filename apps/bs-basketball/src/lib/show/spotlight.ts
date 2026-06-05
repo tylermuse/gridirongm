@@ -11,6 +11,7 @@
 
 import { buildFeed, type FeedItem, type FeedKind } from '../feed/buildFeed';
 import { scoringLeaders } from '../dashboard/editorial';
+import { buildRivalryEvents } from '../rivalries/rivalries';
 import type { BasketballLeagueState } from '../persistence/db';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
@@ -22,7 +23,7 @@ export const SPOTLIGHT_HOSTS: Record<SpotlightVoice, { name: string; avatar: str
 };
 
 export interface SpotlightExchange { voice: SpotlightVoice; line: string }
-export type StoryCategory = 'Statement' | 'Upset' | 'Breakout' | 'Streak' | 'Discipline' | 'MVP Race' | 'Your Team';
+export type StoryCategory = 'Statement' | 'Upset' | 'Breakout' | 'Streak' | 'Discipline' | 'MVP Race' | 'Rivalry' | 'Your Team';
 
 export interface SpotlightStory {
   id: string;
@@ -99,6 +100,11 @@ function exchangesFor(cat: StoryCategory, headline: string, seed: number): Spotl
       return [
         a([`${headline}. For your club, the takeaway is the process — good looks, sound defense.`, `${headline}. Trends in the right direction if the role players hold up.`]),
         t([`YOUR TEAM IS GOING ALL THE WAY. I BELIEVE. DO YOU BELIEVE? BELIEVE.`, `THIS IS THE YEAR. I FEEL IT IN MY BONES. RING SZN.`]),
+      ];
+    case 'Rivalry':
+      return [
+        a([`${headline}. Division games carry extra weight — they swing tiebreakers and seeding.`, `${headline}. Familiarity breeds intensity; both benches were standing all night.`]),
+        t([`THIS IS WHAT IT'S ALL ABOUT. PURE HATRED. I LOVE IT. RUN IT BACK TOMORROW.`, `THEY DON'T LIKE EACH OTHER AND IT SHOWS. BEST RIVALRY IN THE LEAGUE.`]),
       ];
   }
 }
@@ -194,6 +200,15 @@ export function buildSpotlight(league: BasketballLeagueState | null): SpotlightE
     if (!cat || seenCats.has(cat)) continue;
     seenCats.add(cat);
     stories.push({ id: item.id, category: cat, headline: item.headline, exchanges: exchangesFor(cat, item.headline, hash(item.id)), playerId: item.playerId, gameId: item.gameId });
+  }
+
+  // A rivalry beat — prefer one involving the user's team.
+  if (stories.length < 5) {
+    const rivalries = buildRivalryEvents(league);
+    const riv = (userId && rivalries.find(r => r.homeTeamId === userId || r.awayTeamId === userId)) || rivalries[0];
+    if (riv) {
+      stories.push({ id: `riv-${riv.id}`, category: 'Rivalry', headline: riv.headline, exchanges: exchangesFor('Rivalry', riv.headline, hash(riv.id)), gameId: riv.gameId });
+    }
   }
 
   // Always close on the MVP race if we have leaders.

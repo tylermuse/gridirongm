@@ -36,6 +36,7 @@ const CAT: Record<FeedKind, { label: string; tone: ChipTone }> = {
   suspension: { label: 'Discipline', tone: 'violet' },
   fine: { label: 'Fine', tone: 'violet' },
   trade: { label: 'Trade', tone: 'accent' },
+  rivalry: { label: 'Rivalry', tone: 'red' },
   schedule_notice: { label: 'Schedule', tone: 'slate' },
 };
 
