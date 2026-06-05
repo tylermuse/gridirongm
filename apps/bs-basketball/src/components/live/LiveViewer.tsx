@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { synthesizePlayByPlay, type LiveEvent, type LiveEventKind } from '@/lib/live/playByPlay';
+import { computeEventBeats } from '@/lib/live/beats';
 import type { BaseGameResult } from '@bs/core/adapter';
 import type { BasketballPlayer, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
 
@@ -57,6 +58,13 @@ export function LiveViewer({
       .map(id => league?.games.find(g => g.id === id) as GameResult | undefined)
       .filter((g): g is GameResult => !!g),
     [dayGameIds, userGameId, league],
+  );
+
+  // Broadcast beats: tag scoring plays that flipped the lead, tied it, or
+  // extended a run — indexed 1:1 with the events array.
+  const beats = useMemo(
+    () => (home && away ? computeEventBeats(events, home.abbreviation, away.abbreviation) : []),
+    [events, home, away],
   );
 
   const atEnd = cursor >= events.length;
@@ -122,12 +130,21 @@ export function LiveViewer({
                 {feed.length === 0 && <div className="text-white/40 text-sm">Tip-off…</div>}
                 {feed.map((e, i) => {
                   const team = e.side === 'home' ? home : away;
+                  const beat = beats[cursor - 1 - i];
+                  const three = e.scoring && e.points >= 3;
+                  // 3-pointers get a gold rail; everything else the team color.
+                  const rail = three ? '#f59e0b' : team.primaryColor;
                   return (
-                    <div key={cursor - i} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm ${i === 0 ? 'bg-white/10' : ''}`} style={e.scoring && i === 0 ? { boxShadow: `inset 2px 0 0 ${team.primaryColor}` } : undefined}>
+                    <div key={cursor - i} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm ${i === 0 ? 'bg-white/10' : ''}`} style={e.scoring && (i === 0 || three) ? { boxShadow: `inset 2px 0 0 ${rail}` } : undefined}>
                       <span className="text-[10px] tabular-nums text-white/40 w-10 shrink-0">{e.clock}</span>
                       <span className="w-4 text-center shrink-0 text-xs" aria-hidden>{EVENT_ICON[e.kind]}</span>
                       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: team.primaryColor }} />
-                      <span className={`flex-1 ${e.scoring ? 'text-white font-semibold' : 'text-white/60'}`}>{e.text}{e.points >= 3 ? ' (+3)' : ''}</span>
+                      <span className={`flex-1 ${e.scoring ? 'text-white font-semibold' : 'text-white/60'}`}>
+                        {e.text}{three ? ' (+3)' : ''}
+                        {beat?.leadChange && <Beat label="Lead change" color="#f59e0b" />}
+                        {beat?.tie && <Beat label="Tie game" color="#38bdf8" />}
+                        {beat?.runText && <Beat label={beat.runText} color="#ef4444" />}
+                      </span>
                       {e.scoring && <span className="text-xs tabular-nums text-white/50">{e.away}–{e.home}</span>}
                     </div>
                   );
@@ -323,6 +340,18 @@ function AroundCard({ game, teamById, progress }: { game: GameResult; teamById: 
         {!done && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />}{done ? 'Final' : 'Live'}
       </div>
     </div>
+  );
+}
+
+/** Inline broadcast badge for a notable moment (lead change / tie / run). */
+function Beat({ label, color }: { label: string; color: string }) {
+  return (
+    <span
+      className="ml-1.5 inline-block align-middle text-[9px] font-black uppercase tracking-wider rounded px-1 py-0.5"
+      style={{ color, background: `color-mix(in srgb, ${color} 18%, transparent)` }}
+    >
+      {label}
+    </span>
   );
 }
 
