@@ -34,6 +34,7 @@ import { checkDisciplineEvents, disciplineNewsItems, isPlayerSuspended, tickSusp
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
 import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from './simTelemetry';
+import { clearRolloverTickInstrumentation, setAutocutSubstep, recordTickTiming, recordTickRosterSize } from '@/lib/instrumentation/rolloverTickTimings';
 import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
 
 const SAVE_VERSION = 35;
@@ -5892,7 +5893,18 @@ export const useGameStore = create<GameStore>()(
         const targetTeams = teamId ? state.teams.filter(t => t.id === teamId) : state.teams;
         const cutsByTeam = new Map<string, string[]>();
 
+        // Sub-op breadcrumbs for the single-team rollover call path (the path
+        // bige08676's sliding tail-team hang lives on — see
+        // rolloverTickTimings.ts). No-op outside an active rollover and in the
+        // bulk fresh-league path (teamId undefined), so it only fires where we
+        // need the granularity.
+        const markSubop = teamId
+          ? (abbr: string, op: string) => setAutocutSubstep(`commit:autocut:subop:${abbr}:${op}`)
+          : () => {};
+
         for (const t of targetTeams) {
+          const subAbbr = t.abbreviation ?? t.id;
+          markSubop(subAbbr, 'read-roster');
           // Only the active 53 counts toward the cap. PS players live on
           // team.practiceSquad and must not be cut by auto-cut.
           const activeIds = new Set(t.roster);
@@ -5902,9 +5914,11 @@ export const useGameStore = create<GameStore>()(
           // player if their position would drop below ROSTER_LIMITS.min.
           // Without this, backup RBs get cut and RB1 ends up with 100% of
           // carries, producing 2k+ rushing yard seasons.
+          markSubop(subAbbr, 'sort');
           const posCount: Record<string, number> = {};
           for (const p of teamPlayers) posCount[p.position] = (posCount[p.position] ?? 0) + 1;
           const sorted = [...teamPlayers].sort((a, b) => a.ratings.overall - b.ratings.overall);
+          markSubop(subAbbr, 'select');
           const cuts: string[] = [];
           const needToCut = teamPlayers.length - ROSTER_CAP;
           for (const p of sorted) {
@@ -5917,6 +5931,11 @@ export const useGameStore = create<GameStore>()(
           if (cuts.length > 0) cutsByTeam.set(t.id, cuts);
         }
         if (cutsByTeam.size === 0) return;
+
+        // write-back rebuilds the whole-league players[] + teams[] (O(all
+        // players) per call) — the suspected cumulative cost of the rollover
+        // loop. Mark it so a tail-team hang names this sub-op specifically.
+        if (teamId) markSubop(targetTeams[0]?.abbreviation ?? teamId, 'write-back');
 
         const allCutIds = new Set<string>();
         for (const ids of cutsByTeam.values()) ids.forEach(id => allCutIds.add(id));
@@ -5959,6 +5978,8 @@ export const useGameStore = create<GameStore>()(
           teams: updatedTeams,
           freeAgents: [...state.freeAgents, ...allCutIds],
         });
+
+        if (teamId) markSubop(targetTeams[0]?.abbreviation ?? teamId, 'end');
       },
 
       initializeFreshLeagueRosters: () => {
@@ -8260,6 +8281,9 @@ export const useGameStore = create<GameStore>()(
           localStorage.removeItem('gg-rollover-step');
           localStorage.removeItem('gg-rollover-substep');
         } catch { /* best-effort */ }
+        // Clear the per-tick autocut instrumentation arrays so each rollover
+        // attempt's timing/roster-size data starts fresh (bige08676 §1.3).
+        clearRolloverTickInstrumentation();
         try {
           localStorage.setItem('gg-rollover-entry', JSON.stringify({
             ts: new Date().toISOString(), season: entrySeason, phase: entryPhase,
@@ -9195,11 +9219,23 @@ export const useGameStore = create<GameStore>()(
         let autocutIdx = 0;
         try {
           for (const t of get().teams) {
-            setSubstep(`commit:autocut:tick:${autocutIdx}:${t.abbreviation ?? t.id}`);
+            const tickAbbr = t.abbreviation ?? t.id;
+            setSubstep(`commit:autocut:tick:${autocutIdx}:${tickAbbr}`);
             autocutIdx++;
             if (t.id !== userId) {
+              // Per-tick timing + roster-size capture (bige08676's sliding
+              // tail-team hang). t.roster is the active-53 list, so its length
+              // is the iteration-entry roster size without a re-filter. If the
+              // cumulative-cost hypothesis holds these deltas climb across the
+              // loop; a single multi-second outlier instead means one bad team.
+              const tickStart = typeof performance !== 'undefined' ? performance.now() : 0;
+              const tickRosterSize = t.roster?.length ?? 0;
               try {
                 get().autoCutToRosterLimit(t.id);
+                if (typeof performance !== 'undefined') {
+                  recordTickTiming(t.id, tickAbbr, performance.now() - tickStart);
+                }
+                recordTickRosterSize(t.id, tickAbbr, tickRosterSize);
               } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
                 const isLockSteal =

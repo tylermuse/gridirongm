@@ -1768,7 +1768,27 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             // tackle distribution that the per-event snapshots can't
             // deterministically produce).
             const isGameFinishedReveal = revealedCount >= totalEvents && totalEvents > 0;
-            const lastRevealedEvent = revealedCount > 0 ? liveResult.events[revealedCount - 1] : undefined;
+            // Read the running box score from the most-recently-revealed event
+            // that carries a bucket snapshot, walking the COMBINED stream
+            // (allEvents) — NOT the raw pre-sim array. During a live-coached
+            // game the revealed stream is pre-sim[0..pivot] + engine events;
+            // engine events carry no bucket snapshot (liveCoachEngine), and
+            // indexing liveResult.events by the combined revealedCount surfaced
+            // stale pre-sim plays from PAST the pivot — phantom TDs/yards that
+            // never happened in the user's game (this is why passing vs
+            // receiving TDs failed to reconcile mid-game). Walking allEvents
+            // back to the last snapshot keeps the panel consistent with what
+            // was actually played and with the final committed box score, which
+            // derives from the same pre-pivot bucket. In pure watch-live mode
+            // (pivot === null) allEvents === liveResult.events and every event
+            // has a snapshot, so this is identical to the old behavior.
+            // (tofftanaut 6/2: passing TDs ≠ receiving TDs in the live-coach
+            //  in-progress stats panel at ~1:30 game time.)
+            let lastRevealedEvent: PlayEvent | undefined;
+            for (let i = Math.min(revealedCount, allEvents.length) - 1; i >= 0; i--) {
+              const ev = allEvents[i];
+              if (ev?.homeBucketSnap && ev?.awayBucketSnap) { lastRevealedEvent = ev; break; }
+            }
             const stats = isGameFinishedReveal
               ? liveResult.playerStats
               : livePlayerStatsAtEvent(lastRevealedEvent, homePlayers, awayPlayers);
