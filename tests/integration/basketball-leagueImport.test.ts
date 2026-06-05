@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { BasketballPlayer, BasketballPosition } from '@bs/sport-basketball';
+import { computeOverall, type BasketballPlayer, type BasketballPosition } from '@bs/sport-basketball';
 import {
   convertBbgmLeague,
   type BbgmLeagueFile,
@@ -61,12 +61,33 @@ describe('convertBbgmLeague', () => {
         // Overall on the BS Hoops 40–99 scale (BBGM ovr is not carried).
         expect(p.ratings.overall).toBeGreaterThanOrEqual(40);
         expect(p.ratings.overall).toBeLessThanOrEqual(99);
+        // Overall stays consistent with attributes (so it survives aging,
+        // which recomputes overall from the same weighted formula).
+        expect(p.ratings.overall).toBe(computeOverall(p.ratings, p.sportData.position));
         // Rostered players carry a real, current contract.
         expect(p.contract).not.toBeNull();
         expect(p.contract!.years.length).toBeGreaterThanOrEqual(1);
         expect(p.contract!.years[0].baseSalary).toBeGreaterThan(0);
       }
     }
+  });
+
+  it('calibrates overalls to an NBA-shaped distribution (real stars are stars)', () => {
+    const imported = convertBbgmLeague(fixture);
+    const players = imported.players as Record<string, BasketballPlayer>;
+    const ovr = imported.teams
+      .flatMap(t => t.playerIds)
+      .map(id => players[id].ratings.overall)
+      .sort((a, b) => b - a);
+
+    // A real star tier exists (mapping raw computeOverall straight through caps
+    // at ~78 — calibration lifts the elite into the high-80s/90s).
+    expect(ovr[0]).toBeGreaterThanOrEqual(90);
+    expect(ovr.filter(o => o >= 85).length).toBeGreaterThanOrEqual(8);
+    // Rotation core sits in a believable band, not bunched at the floor.
+    const median = ovr[Math.floor(ovr.length / 2)];
+    expect(median).toBeGreaterThanOrEqual(68);
+    expect(median).toBeLessThanOrEqual(80);
   });
 
   it('routes free agents to the FA pool and excludes retired/draft-pool players', () => {

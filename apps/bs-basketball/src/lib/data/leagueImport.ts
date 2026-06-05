@@ -231,6 +231,9 @@ function ensurePositionCoverage(teamPlayers: BasketballPlayer[]): void {
     if (!cand) cand = [...teamPlayers].sort((a, b) => a.ratings.overall - b.ratings.overall)[0];
     if (cand) {
       cand.sportData = { ...cand.sportData, secondaryPosition: cand.sportData.position, position: pos };
+      // Overall is position-weighted — recompute for the new slot so it stays
+      // consistent with the attributes (the aging pass recomputes it too).
+      cand.ratings = { ...cand.ratings, overall: computeOverall(cand.ratings, pos) };
       c = counts();
     }
   }
@@ -275,7 +278,61 @@ function mapRatings(
   };
   // Recompute overall on the BS Hoops 40–99 scale (BBGM ovr is not carried).
   ratings.overall = computeOverall(ratings, primary);
-  return ratings;
+  return calibrateToNba(ratings, primary);
+}
+
+// ---------------------------------------------------------------------------
+// NBA-realistic overall calibration
+// ---------------------------------------------------------------------------
+//
+// Mapping BBGM's spread + blended-defense attributes straight through
+// computeOverall compresses the top end: even elite real players land ~78,
+// while generated fictional stars reach 85. That makes an imported league feel
+// star-less. We stretch each player's *skill* attributes (not height/wingspan)
+// by a single additive delta, solved so computeOverall lands on an NBA-shaped
+// target. Lifting the attributes — rather than just the overall number — means
+// the calibration survives the offseason aging pass, which recomputes overall
+// from attributes (developmentSystem.approximateOverall, same weighted formula).
+
+/** Skill ratings that feed computeOverall (everything except height/wingspan/overall). */
+const OVR_SKILL_KEYS: (keyof BasketballRatings)[] = [
+  'speed', 'strength', 'vertical',
+  'threePoint', 'midRange', 'finishing', 'freeThrow', 'postScoring',
+  'handles', 'passing',
+  'perimeterDefense', 'interiorDefense', 'rebounding', 'steal', 'block',
+  'basketballIQ', 'intangibles',
+];
+
+/** Raw computeOverall → NBA-shaped target. Tuned so the source distribution
+ *  (~40 floor, ~52 median, ~78 ceiling) lands at role players in the low-70s,
+ *  starters low-80s, and stars high-80s/90s. Monotonic, so order is preserved. */
+function nbaTargetOverall(raw: number): number {
+  return clamp(Math.round(0.92 * raw + 25), 40, 99);
+}
+
+function calibrateToNba(base: BasketballRatings, position: BasketballPosition): BasketballRatings {
+  const target = nbaTargetOverall(base.overall);
+
+  // computeOverall is a monotonic weighted mean of the skill keys, so the
+  // overall after a uniform +d shift is monotonic in d — bisect for the d that
+  // hits the target (clamping keeps maxed attributes from overshooting).
+  const overallAtDelta = (d: number): number => {
+    const probe = { ...base };
+    for (const k of OVR_SKILL_KEYS) probe[k] = clamp(base[k] + d);
+    return computeOverall(probe, position);
+  };
+
+  let lo = 0, hi = 60;
+  for (let i = 0; i < 16; i++) {
+    const mid = (lo + hi) / 2;
+    if (overallAtDelta(mid) < target) lo = mid; else hi = mid;
+  }
+  const delta = (lo + hi) / 2;
+
+  const out = { ...base };
+  for (const k of OVR_SKILL_KEYS) out[k] = clamp(base[k] + delta);
+  out.overall = computeOverall(out, position);
+  return out;
 }
 
 // ===========================================================================
