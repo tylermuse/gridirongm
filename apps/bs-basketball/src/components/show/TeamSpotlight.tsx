@@ -9,7 +9,7 @@ import { buildSpotlight, SPOTLIGHT_HOSTS, type SpotlightEpisode, type SpotlightS
 import type { BasketballLeagueState } from '@/lib/persistence/db';
 
 const CAT_TONE: Record<StoryCategory, ChipTone> = {
-  Statement: 'blue', Upset: 'red', Breakout: 'green', Streak: 'amber', Discipline: 'violet', 'MVP Race': 'accent', 'Your Team': 'accent',
+  Statement: 'blue', Upset: 'red', Breakout: 'green', Streak: 'amber', Discipline: 'violet', 'MVP Race': 'accent', Rivalry: 'red', 'Your Team': 'accent',
 };
 
 /**
