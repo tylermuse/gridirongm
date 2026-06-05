@@ -387,35 +387,42 @@ function generatePlayerId(): string {
 // Draft class generation
 // ===========================================================================
 
-/** Generate a draft class of N prospects with realistic talent distribution.
+/** Generate a draft class of N prospects.
  *
- *  Real NBA draft class shape (rough):
- *   - 2-3 generational/All-NBA prospects (90+ potential)
- *   - 5-10 future All-Stars (85-89 potential)
- *   - 15-25 future starters (78-84 potential)
- *   - 20-30 future rotation/role players (72-77 potential)
- *   - 5-15 fringe/G-League guys (65-71 potential)
+ *  Rookies enter RAW: a low current overall now, with the upside (potential)
+ *  concentrated near the top of the board. The array index is the scouting
+ *  rank (best prospect first), so best-available drafting maps the top of the
+ *  board to the top picks. Rough shape across the two rounds:
+ *   - Top of round 1: ~64-71 OVR now, projecting to 88-99 (future stars)
+ *   - Late round 1:   ~55-62 OVR now, projecting to low-70s/80 (starters)
+ *   - Round 2:        ~46-60 OVR now, modest upside (projects / fringe)
+ *
+ *  Previously every prospect was generated at its *projection* as a current
+ *  overall, so second-rounders came out as finished 80-OVR players. Now current
+ *  overall and potential both taper down the board.
  *
  *  All prospects are age 19 (basketball eligibility minimum). */
 export function generateBasketballDraftClass(_season: number, count = 60): BasketballPlayer[] {
   // _season is unused in v1 — future enhancement could vary class strength
   // by year (some drafts are deeper than others, mirroring real NBA cycles).
   const prospects: BasketballPlayer[] = [];
-  for (let i = 0; i < count; i++) {
-    // Talent distribution: pick a target overall from a skewed distribution
-    const r = Math.random();
-    let targetOvr: number;
-    if (r < 0.03) targetOvr = Math.round(82 + Math.random() * 7); // top 3 — superstars
-    else if (r < 0.12) targetOvr = Math.round(76 + Math.random() * 8); // lottery talent
-    else if (r < 0.35) targetOvr = Math.round(70 + Math.random() * 7); // future starters
-    else if (r < 0.70) targetOvr = Math.round(64 + Math.random() * 7); // role/rotation
-    else targetOvr = Math.round(58 + Math.random() * 7); // fringe
-    prospects.push(generateBasketballPlayer({
-      age: 19,
-      targetOverall: targetOvr,
-    }));
+  for (let rank = 0; rank < count; rank++) {
+    // Current overall declines down the board (round 1 ≈ ranks 0-29).
+    const ovrBase = rank < 30
+      ? 68 - (rank * (68 - 58)) / 29        // R1: 68 → 58
+      : 57 - ((rank - 30) * (57 - 46)) / 29; // R2: 57 → 46
+    const targetOvr = clamp(Math.round(ovrBase + gaussian(0, 3)), 42, 75);
+    const p = generateBasketballPlayer({ age: 19, targetOverall: targetOvr });
+
+    // Upside tapers too: a top-3 pick can project to a star, a late
+    // second-rounder is mostly a finished, fringe product.
+    const upsideBase = rank < 30
+      ? 22 - (rank * (22 - 6)) / 29         // R1: +22 → +6
+      : 5 - ((rank - 30) * (5 - 1)) / 29;   // R2: +5 → +1
+    const gap = Math.max(0, Math.round(upsideBase + gaussian(0, 3)));
+    const potential = Math.min(99, p.ratings.overall + gap);
+
+    prospects.push({ ...p, development: { ...p.development, potential } });
   }
-  // Position in array implicitly corresponds to scouting rank. Real
-  // draft ordering comes from the draft system, not here.
   return prospects;
 }

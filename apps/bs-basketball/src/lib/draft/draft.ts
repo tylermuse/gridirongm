@@ -34,7 +34,23 @@ interface LeagueSportData {
 }
 
 export function getDraft(league: LeagueState): DraftState | null {
-  return (league.sportData as LeagueSportData | undefined)?.draft ?? null;
+  const draft = (league.sportData as LeagueSportData | undefined)?.draft ?? null;
+  if (!draft) return null;
+  // Re-resolve each slot's owner against the live pick-ownership registry.
+  // draft.picks[].teamId is only a setup-time snapshot; without this a pick
+  // traded mid-draft would keep showing — and pick for — its old team. The
+  // registry key uses draft.season + round + the slot's originalTeamId, which
+  // matches what trades write. originalTeamId falls back to the snapshot team
+  // for saves made before the field existed.
+  let changed = false;
+  const picks = draft.picks.map(p => {
+    const originalTeamId = p.originalTeamId ?? p.teamId;
+    const owner = currentOwner(league, draft.season, p.round, originalTeamId);
+    if (owner === p.teamId && p.originalTeamId === originalTeamId) return p;
+    changed = true;
+    return { ...p, originalTeamId, teamId: owner };
+  });
+  return changed ? { ...draft, picks } : draft;
 }
 
 /** The pick currently on the clock, or null if the draft is done. */
@@ -73,6 +89,7 @@ export function setupDraft(league: LeagueState, season: number, poolIds: PlayerI
       round,
       pickInRound: (i % 30) + 1,
       teamId,
+      originalTeamId,
       isLottery: i < 14,
       prospectId: null,
     };

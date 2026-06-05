@@ -12,7 +12,7 @@
  */
 
 import type { TeamId } from '@bs/core/adapter';
-import type { BasketballTeam } from '@bs/sport-basketball';
+import { lotteryTopPickOddsPct, type BasketballTeam } from '@bs/sport-basketball';
 import type { DraftState } from './types';
 
 export type LotteryMovement = 'big_jump' | 'jump' | 'held' | 'slip' | 'big_slip';
@@ -23,6 +23,8 @@ export interface LotteryRevealCard {
   team: BasketballTeam;
   /** Pick this team was seeded to land on its odds alone (1..14). */
   expectedSlot: number;
+  /** The seeded team's pre-lottery chance (%) at the No. 1 pick. */
+  oddsPct: number;
   /** expectedSlot − overall. Positive = moved up the board. */
   delta: number;
   movement: LotteryMovement;
@@ -151,6 +153,7 @@ export function buildLotteryReveal(
       overall: slot.overall,
       team,
       expectedSlot,
+      oddsPct: lotteryTopPickOddsPct(expectedSlot),
       delta,
       movement: movementOf(delta),
       isUser: slot.teamId === userTeamId,
@@ -160,4 +163,19 @@ export function buildLotteryReveal(
 
   // Reveal worst-to-best: #14 down to #1.
   return cards.reverse();
+}
+
+/**
+ * The same lottery data as a static, top-down board (pick #1 → #14) for review
+ * after the ceremony: each team's pre-lottery seed + odds vs. where it actually
+ * landed. Returns [] when the draft lacks lottery seeding (older save).
+ */
+export function buildLotteryBoard(
+  draft: DraftState,
+  teamById: Map<string, BasketballTeam>,
+  userTeamId: TeamId | null,
+): LotteryRevealCard[] {
+  return buildLotteryReveal(draft, teamById, userTeamId)
+    .slice()
+    .sort((a, b) => a.overall - b.overall);
 }

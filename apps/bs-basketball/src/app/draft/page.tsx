@@ -9,7 +9,8 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
-import { getDraft, currentSlot, recommendedProspectId, buildLotteryReveal } from '@/lib/draft';
+import { getDraft, currentSlot, recommendedProspectId, buildLotteryReveal, buildLotteryBoard } from '@/lib/draft';
+import { LotteryBoard } from '@/components/draft/LotteryBoard';
 import type { DraftPickSlot, DraftState } from '@/lib/draft';
 import { LotteryRevealCeremony } from '@/components/draft/LotteryReveal';
 import { perceivedPotential, projectionGrade, isScouted, scoutsLeft, GRADE_LABEL } from '@/lib/scouting';
@@ -189,6 +190,9 @@ export default function DraftPage() {
           </>
         )}
       </div>
+
+      {/* Reviewable lottery results: odds + slated seed vs. where teams landed. */}
+      <LotteryBoard cards={buildLotteryBoard(draft, teamById, league.userTeamId)} />
 
       <div className="grid lg:grid-cols-[1fr_1.1fr] gap-6">
         {/* Board */}

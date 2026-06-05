@@ -41,6 +41,14 @@ const LOTTERY_TOTAL = 1000;
   }
 }
 
+/** Chance (in %) that the team seeded at `seedSlot` (1 = worst record, 14 =
+ *  best non-playoff record) wins the No. 1 pick. Used by the lottery reveal to
+ *  show each team's pre-lottery odds. Returns 0 outside the 14-team lottery. */
+export function lotteryTopPickOddsPct(seedSlot: number): number {
+  const combinations = LOTTERY_ODDS_NUMBER_ONE[seedSlot - 1] ?? 0;
+  return combinations / (LOTTERY_TOTAL / 100);
+}
+
 // ===========================================================================
 // Tiny seeded RNG (same algorithm as elsewhere in the package)
 // ===========================================================================
