@@ -247,7 +247,7 @@ export default function TradePage() {
               <h2 className="font-bold text-sm">Trade block</h2>
               {hasAssets && (
                 <span className="text-[11px] font-semibold tabular-nums" style={{ color: 'var(--text-sec)' }}>
-                  Send <span style={{ color: '#dc2626' }}>{fmtPts(sendValue)}</span> · Receive <span style={{ color: '#10b981' }}>{fmtPts(receiveValue)}</span>
+                  Send <span style={{ color: '#dc2626' }}>{fmtPts(sendValue)}</span> · Receive <span style={{ color: '#10b981' }}>{fmtPts(receiveValue)}</span> trade pts
                 </span>
               )}
             </div>
@@ -267,6 +267,7 @@ export default function TradePage() {
               <>
                 <GradeHeader receiveValue={receiveValue} sendValue={sendValue} />
                 <TradeValueBar receiveValue={receiveValue} sendValue={sendValue} />
+                {userOutcome && <CapImpactLine outcome={userOutcome} />}
 
                 <div
                   className="text-xs font-semibold mt-3 mb-3 px-2 py-1.5 rounded"
@@ -461,38 +462,89 @@ function gradeColor(g: TradeGrade): string {
   return '#dc2626';
 }
 
+// Grade badge palette mirrors football's trade summary (src/app/trades/page.tsx):
+// A → green, B → blue, C → yellow, D/F → red. Inline hex keeps it consistent
+// with this app's styling convention while matching football's exact colors.
+function gradeBadgeStyle(g: TradeGrade): { color: string; background: string } {
+  if (g.startsWith('A')) return { color: '#15803d', background: '#dcfce7' };
+  if (g.startsWith('B')) return { color: '#1d4ed8', background: '#dbeafe' };
+  if (g === 'C') return { color: '#a16207', background: '#fef9c3' };
+  return { color: '#b91c1c', background: '#fee2e2' };
+}
+
+// Qualitative verdict tag — football's exact label set + thresholds
+// (TradeValueBar in src/app/trades/page.tsx).
+function verdictTag(receiveValue: number, sendValue: number): { label: string; color: string } {
+  const total = Math.max(receiveValue + sendValue, 1);
+  const diff = (receiveValue / total) * 100 - 50;
+  if (diff > 5) return { label: 'Great Deal', color: '#10b981' };
+  if (diff > -5) return { label: 'Fair Trade', color: 'var(--text-sec)' };
+  if (diff > -15) return { label: 'Slight Overpay', color: '#d97706' };
+  return { label: 'Bad Deal', color: '#dc2626' };
+}
+
 function GradeHeader({ receiveValue, sendValue }: { receiveValue: number; sendValue: number }) {
   const grade = computeTradeGrade(receiveValue, sendValue);
   const delta = receiveValue - sendValue;
-  const deltaLabel = delta === 0 ? 'even' : delta > 0 ? `+${fmtPts(delta)} in your favor` : `${fmtPts(delta)} against you`;
+  const maxVal = Math.max(receiveValue, sendValue, 1);
+  // Football's exact phrasing + color logic: "You gain/lose ~N pts",
+  // green when near-even (<10% of max), blue on a gain, amber on a loss.
+  const deltaLabel = delta === 0 ? 'even value' : delta > 0 ? `You gain ~${fmtPts(delta)} pts` : `You lose ~${fmtPts(Math.abs(delta))} pts`;
+  const deltaColor = Math.abs(delta) < maxVal * 0.1 ? '#10b981' : delta > 0 ? '#2563eb' : '#d97706';
+  const badge = gradeBadgeStyle(grade);
+  const verdict = verdictTag(receiveValue, sendValue);
   return (
-    <div className="flex items-center justify-between">
-      <div className="text-sm">
-        <span className="text-[var(--text-sec)]">Value: </span>
-        <span className="font-bold tabular-nums">{fmtPts(sendValue)}</span>
+    <div className="text-sm font-semibold flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span>
+        <span className="text-[var(--text-sec)] font-normal">Value: </span>
+        <span className="tabular-nums">{fmtPts(sendValue)}</span>
         <span className="opacity-50"> → </span>
-        <span className="font-bold tabular-nums">{fmtPts(receiveValue)}</span>
-        <span className="ml-1.5 text-xs" style={{ color: delta >= 0 ? '#10b981' : '#dc2626' }}>({deltaLabel})</span>
-      </div>
-      <div className="text-2xl font-black leading-none" style={{ color: gradeColor(grade) }}>{grade}</div>
+        <span className="tabular-nums">{fmtPts(receiveValue)} pts</span>
+      </span>
+      <span className="text-xs font-normal" style={{ color: deltaColor }}>({deltaLabel})</span>
+      <span className="text-[10px] font-black px-1.5 py-0.5 rounded" style={{ color: badge.color, background: badge.background }}>{grade}</span>
+      <span className="text-xs font-bold" style={{ color: verdict.color }}>{verdict.label}</span>
     </div>
   );
 }
 
+// Send/Get balance bars — matches football's main-builder layout exactly:
+// a red "Send" bar over a green "Get" bar, each scaled to the larger side.
 function TradeValueBar({ receiveValue, sendValue }: { receiveValue: number; sendValue: number }) {
-  const total = Math.max(receiveValue + sendValue, 1);
-  const yourPct = Math.max(3, Math.min(97, (receiveValue / total) * 100));
-  const favorsYou = receiveValue >= sendValue;
+  const maxBar = Math.max(receiveValue, sendValue, 1);
   return (
-    <div className="mt-2">
-      <div className="flex h-2.5 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
-        <div style={{ width: `${yourPct}%`, background: favorsYou ? '#10b981' : '#f59e0b' }} />
-        <div style={{ width: `${100 - yourPct}%`, background: '#dc2626' }} />
+    <div className="mt-2 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-[var(--text-sec)] w-9">Send</span>
+        <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
+          <div className="h-full rounded-full" style={{ width: `${(sendValue / maxBar) * 100}%`, background: '#f87171' }} />
+        </div>
       </div>
-      <div className="flex justify-between text-[10px] uppercase tracking-wide mt-1 opacity-60">
-        <span>You receive</span>
-        <span>You send</span>
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-[var(--text-sec)] w-9">Get</span>
+        <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
+          <div className="h-full rounded-full" style={{ width: `${(receiveValue / maxBar) * 100}%`, background: '#4ade80' }} />
+        </div>
       </div>
+    </div>
+  );
+}
+
+// User-team cap snapshot in football's compact form:
+// "Cap impact: ±$X.XM   Post-trade space: $Y.YM". NBA apron detail stays in
+// the per-team OutcomeBlock below; this is the at-a-glance line football shows.
+function CapImpactLine({ outcome }: { outcome: TeamTradeOutcome }) {
+  const impact = outcome.capDetail.outgoingSalary - outcome.capDetail.incomingSalary;
+  const space = outcome.postCap.capRoom;
+  const fM = (n: number) => `$${(Math.abs(n) / 1_000_000).toFixed(1)}M`;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 text-xs mt-2">
+      <span className="text-[var(--text-sec)]">
+        Cap impact: <span className="font-medium" style={{ color: impact >= 0 ? '#10b981' : '#dc2626' }}>{impact >= 0 ? '+' : '−'}{fM(impact)}</span>
+      </span>
+      <span className="text-[var(--text-sec)]">
+        Post-trade space: <span className="font-medium" style={{ color: space < 0 ? '#dc2626' : '#10b981' }}>{space < 0 ? '−' : ''}{fM(space)}</span>
+      </span>
     </div>
   );
 }
@@ -630,7 +682,7 @@ function RosterColumn({
         <span className="w-6 text-right">POS</span>
         <span className="w-7 text-right">OVR</span>
         <span className="w-11 text-right">SAL</span>
-        <span className="w-10 text-right">VALUE</span>
+        <span className="w-10 text-right">PTS</span>
       </div>
       <ul className="max-h-[30rem] overflow-y-auto">
         {players.map(p => {
@@ -750,7 +802,7 @@ function OutcomeBlock({ label, outcome }: { label: string; outcome: TeamTradeOut
   return (
     <div className="mb-2 text-xs">
       <div className="flex items-center justify-between">
-        <span className="font-bold">{label}{outcome.disposition ? <span className="ml-1.5 font-normal opacity-50">· {outcome.disposition}</span> : null}</span>
+        <span className="font-bold">{label}{outcome.disposition ? <span className="ml-1.5 font-normal opacity-50">· Strategy: {outcome.disposition}</span> : null}</span>
         <span style={{ color: outcome.willAccept ? '#10b981' : '#dc2626' }}>
           {outcome.willAccept ? 'accepts' : 'rejects'}{!outcome.capCompliant ? ' · cap ✗' : ''}
         </span>
