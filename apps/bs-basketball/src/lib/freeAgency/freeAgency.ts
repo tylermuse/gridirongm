@@ -327,6 +327,87 @@ export function resolveUserOffer(
   };
 }
 
+// ===========================================================================
+// Negotiation (counter-offers)
+// ===========================================================================
+
+/** Below this fraction of market, the agent won't even engage. */
+const ENGAGE_FLOOR = 0.45;
+
+export interface CounterOffer {
+  years: number;
+  salaryPerYear: number;
+  total: number;
+  /** The competing total the player is weighing, if any. */
+  competingTotal: number;
+  message: string;
+}
+
+export type Negotiation =
+  | { kind: 'resolved'; result: OfferResult }
+  | { kind: 'counter'; counter: CounterOffer };
+
+function faMoney(n: number): string {
+  return n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : `$${Math.round(n / 1000)}K`;
+}
+
+/**
+ * A negotiating layer over resolveUserOffer. An offer that clears the bar (beats
+ * any rival + clears the lowball floor) signs immediately; a fair-but-short
+ * offer draws a COUNTER with the agent's number (so the user can raise instead
+ * of instantly losing the player); an insulting offer is brushed off. The
+ * competing-team note surfaces who else is bidding.
+ */
+export function negotiateOffer(
+  league: LeagueState,
+  playerId: PlayerId,
+  offer: Offer,
+  releaseId?: PlayerId,
+): Negotiation {
+  const info = freeAgentInfo(league, playerId);
+  if (!info || !league.userTeamId) {
+    return { kind: 'resolved', result: resolveUserOffer(league, playerId, offer, releaseId) };
+  }
+  const name = `${info.player.firstName} ${info.player.lastName}`;
+  const marketTotal = info.marketSalary * info.desiredYears;
+  const userTotal = offer.salaryPerYear * offer.years;
+  const competing = bestCompetingOffer(league, info);
+  const competingTotal = competing?.total ?? 0;
+  const winBar = Math.max(competingTotal, marketTotal * LOWBALL_FLOOR);
+
+  // Clears the bar → sign (resolveUserOffer handles roster-full / releaseId).
+  if (userTotal >= winBar) {
+    return { kind: 'resolved', result: resolveUserOffer(league, playerId, offer, releaseId) };
+  }
+
+  // Insulting → the camp won't engage (but the player stays available).
+  if (userTotal < marketTotal * ENGAGE_FLOOR) {
+    return {
+      kind: 'resolved',
+      result: {
+        outcome: 'rejected', league, signedTeamId: null,
+        competingTeamId: competing?.teamId ?? null, competingOfferTotal: competingTotal,
+        message: `${name}'s camp won't take that call — it's nowhere near market.`,
+      },
+    };
+  }
+
+  // Fair-but-short → counter at the number it takes to win (≥ market).
+  const targetTotal = Math.max(winBar, marketTotal);
+  const years = info.desiredYears;
+  const perYear = Math.max(LEAGUE_MINIMUM_SALARY, Math.round(targetTotal / years / 100_000) * 100_000);
+  const compNote = competingTotal > 0
+    ? ` ${teamLabel(league, competing!.teamId)} is in at ~${faMoney(competingTotal)}.`
+    : '';
+  return {
+    kind: 'counter',
+    counter: {
+      years, salaryPerYear: perYear, total: perYear * years, competingTotal,
+      message: `${name}'s agent counters: ${years}yr at ${faMoney(perYear)}/yr.${compNote}`,
+    },
+  };
+}
+
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }

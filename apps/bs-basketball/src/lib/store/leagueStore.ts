@@ -55,7 +55,7 @@ import {
   getDraft,
   currentSlot,
 } from '../draft';
-import { resolveUserOffer, releasePlayer as releasePlayerState, type Offer, type OfferResult } from '../freeAgency';
+import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, type Offer, type OfferResult, type Negotiation } from '../freeAgency';
 import { applyRelease } from '../roster/release';
 import { playThroughInjury as playThroughInjuryState } from '../injuries';
 import { extensionMarket, extensionAccepted, buildExtension } from '../roster/extension';
@@ -169,6 +169,10 @@ interface LeagueStore {
   /** Make a free-agent offer for the user team. Optionally release a player to
    *  open a roster spot. Returns the resolution (signed / elsewhere / rejected). */
   signFreeAgent: (playerId: string, offer: Offer, releaseId?: string) => Promise<OfferResult | null>;
+
+  /** Negotiate a free-agent offer: signs if it clears the bar, otherwise
+   *  returns the agent's counter (no state change). */
+  negotiateFreeAgent: (playerId: string, offer: Offer, releaseId?: string) => Promise<Negotiation | null>;
 
   /** Execute a (pre-validated) two-team trade. Returns true on success. */
   executeTrade: (sides: TradeSideInput[]) => Promise<boolean>;
@@ -647,6 +651,32 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       return result;
     } catch (err) {
       console.error('[bs-hoops] signFreeAgent failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  },
+
+  async negotiateFreeAgent(playerId, offer, releaseId) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return null; }
+    if (!current.userTeamId) { set({ error: 'Pick a team first.' }); return null; }
+    set({ loading: true, error: null });
+    try {
+      const neg = negotiateOffer(
+        current,
+        playerId as Parameters<typeof negotiateOffer>[1],
+        offer,
+        releaseId as Parameters<typeof negotiateOffer>[3],
+      );
+      if (neg.kind === 'resolved' && neg.result.outcome !== 'rejected') {
+        await saveLeague(neg.result.league);
+        set({ league: neg.result.league, loading: false });
+      } else {
+        set({ loading: false });
+      }
+      return neg;
+    } catch (err) {
+      console.error('[bs-hoops] negotiateFreeAgent failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return null;
     }
