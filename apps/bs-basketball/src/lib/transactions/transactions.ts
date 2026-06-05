@@ -18,6 +18,9 @@ export type TransactionKind = 'trade' | 'signing' | 'release' | 'draft';
 export interface TransactionEntry {
   kind: TransactionKind;
   season: number;
+  /** Day-of-season the move happened. Auto-stamped by appendTransaction so the
+   *  news feed can place trades on the right day. Optional for older saves. */
+  day?: number;
   /** Teams involved — used for the per-team activity feed. */
   teamIds: TeamId[];
   /** Short headline. */
@@ -38,9 +41,11 @@ export function getTransactions(league: LeagueState): TransactionEntry[] {
   return (league.sportData as LeagueSportData | undefined)?.transactions ?? [];
 }
 
-/** Prepend an entry (newest first) and return a new league. */
+/** Prepend an entry (newest first) and return a new league. Stamps the current
+ *  day-of-season when the caller didn't set one. */
 export function appendTransaction(league: LeagueState, entry: TransactionEntry): LeagueState {
   const sd = league.sportData as LeagueSportData;
-  const transactions = [entry, ...(sd.transactions ?? [])].slice(0, MAX_TRANSACTIONS);
+  const stamped: TransactionEntry = { ...entry, day: entry.day ?? league.currentTick };
+  const transactions = [stamped, ...(sd.transactions ?? [])].slice(0, MAX_TRANSACTIONS);
   return { ...league, sportData: { ...sd, transactions } };
 }

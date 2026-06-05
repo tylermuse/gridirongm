@@ -17,6 +17,7 @@
 import type { BasketballLeagueState } from '../persistence/db';
 import { getDiscipline } from '../discipline';
 import { getInjuries } from '../injuries';
+import { getTransactions } from '../transactions/transactions';
 import type {
   BasketballPlayer,
   BasketballStats,
@@ -34,6 +35,7 @@ export type FeedKind =
   | 'injury'
   | 'suspension'
   | 'fine'
+  | 'trade'
   | 'schedule_notice';
 
 export interface FeedItem {
@@ -59,6 +61,7 @@ const ICONS: Record<FeedKind, string> = {
   injury: '🏥',
   suspension: '🚫',
   fine: '💸',
+  trade: '🔄',
   schedule_notice: '📅',
 };
 
@@ -190,22 +193,25 @@ export function buildFeed(league: BasketballLeagueState | null): FeedItem[] {
     }
   }
 
-  // ── streaks (team-level, from current record) ──
-  for (const t of teams) {
-    const { char, len } = trailingRun(t.record.streak);
-    if (len >= 5 && (char === 'W' || char === 'L')) {
-      items.push({
-        id: `streak-${t.id}`,
-        kind: 'streak',
-        icon: ICONS.streak,
-        headline:
-          char === 'W'
-            ? `${t.city} ${t.name} are riding a ${len}-game win streak`
-            : `${t.city} ${t.name} have dropped ${len} straight`,
-        day: league.currentTick,
-        teamId: t.id,
-      });
-    }
+  // ── streaks (team-level) — only the most notable, so they don't drown the
+  // feed. League-wide, keep the longest few active runs (≥6 games).
+  const streakCandidates = teams
+    .map(t => ({ t, ...trailingRun(t.record.streak) }))
+    .filter(s => s.len >= 6 && (s.char === 'W' || s.char === 'L'))
+    .sort((a, b) => b.len - a.len)
+    .slice(0, 3);
+  for (const { t, char, len } of streakCandidates) {
+    items.push({
+      id: `streak-${t.id}`,
+      kind: 'streak',
+      icon: ICONS.streak,
+      headline:
+        char === 'W'
+          ? `${t.city} ${t.name} are riding a ${len}-game win streak`
+          : `${t.city} ${t.name} have dropped ${len} straight`,
+      day: league.currentTick,
+      teamId: t.id,
+    });
   }
 
   // ── injuries (active, from the injury system) ──
@@ -243,6 +249,20 @@ export function buildFeed(league: BasketballLeagueState | null): FeedItem[] {
       teamId: p.rosterSlot?.teamId,
     });
   }
+
+  // ── trades (from the transaction log) — recency falls out of the day sort ──
+  getTransactions(league).forEach((tx, i) => {
+    if (tx.kind !== 'trade' || tx.day == null) return;
+    const subjectId = tx.teamIds[0];
+    items.push({
+      id: `trade-${tx.day}-${i}`,
+      kind: 'trade',
+      icon: ICONS.trade,
+      headline: tx.summary,
+      day: tx.day,
+      teamId: subjectId,
+    });
+  });
 
   // Recency desc. No hard cap here — callers cap via NewsFeed's `max` (the
   // dashboard sidebar) while the full /news view (and its Injuries filter) needs
