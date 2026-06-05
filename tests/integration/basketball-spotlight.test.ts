@@ -41,4 +41,20 @@ describe('team spotlight', () => {
     const fresh = createNewBasketballLeague({ rngSeed: 'spotlight-empty' }) as unknown as BasketballLeagueState;
     expect(buildSpotlight(fresh)).toBeNull();
   });
+
+  it('always leads with the user team (parity 1.3), even on a quiet night', () => {
+    const fresh = createNewBasketballLeague({ rngSeed: 'spotlight-lead' });
+    const played = new Set<string>();
+    const base = simThroughDay(fresh, 40).league;
+    for (const g of base.games) {
+      if (g.status === 'played') { played.add(g.homeTeamId); played.add(g.awayTeamId); }
+    }
+    const userTeam = base.teams.find(t => played.has(t.id))!;
+    const league = { ...base, userTeamId: userTeam.id } as unknown as BasketballLeagueState;
+
+    const ep = buildSpotlight(league);
+    expect(ep!.stories.length).toBeGreaterThan(1);
+    expect(ep!.stories[0].category).toBe('Your Team');
+    expect(ep!.stories[0].headline).toContain(userTeam.city);
+  });
 });

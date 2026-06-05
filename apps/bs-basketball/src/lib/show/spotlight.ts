@@ -12,6 +12,7 @@
 import { buildFeed, type FeedItem, type FeedKind } from '../feed/buildFeed';
 import { scoringLeaders } from '../dashboard/editorial';
 import type { BasketballLeagueState } from '../persistence/db';
+import type { BasketballTeam } from '@bs/sport-basketball';
 
 export type SpotlightVoice = 'analyst' | 'take';
 
@@ -103,6 +104,59 @@ function exchangesFor(cat: StoryCategory, headline: string, seed: number): Spotl
 }
 
 function dayOf(item: FeedItem): number { return Math.floor(item.day); }
+function gameDay(g: BasketballLeagueState['games'][number]): number {
+  return (g.sportData as { dayOfSeason?: number } | undefined)?.dayOfSeason ?? 0;
+}
+
+/**
+ * Always-on "Your Team" storyline built straight from the user's last result +
+ * recent form — so the spotlight leads with the user's club even on a routine
+ * night the news feed didn't flag. Null only before the user has played.
+ */
+function userTeamStory(league: BasketballLeagueState, userId: string): SpotlightStory | null {
+  const teamById = new Map((league.teams as BasketballTeam[]).map(t => [t.id as string, t]));
+  const team = teamById.get(userId);
+  if (!team) return null;
+
+  const games = league.games
+    .filter(g => g.status === 'played' && g.finalScore && (g.homeTeamId === userId || g.awayTeamId === userId))
+    .sort((a, b) => gameDay(b) - gameDay(a));
+  if (games.length === 0) return null;
+
+  const resultOf = (g: typeof games[number]) => {
+    const home = g.homeTeamId === userId;
+    const us = home ? g.finalScore!.home : g.finalScore!.away;
+    const them = home ? g.finalScore!.away : g.finalScore!.home;
+    return { home, us, them, won: us > them, oppId: home ? g.awayTeamId : g.homeTeamId };
+  };
+
+  const last = games[0];
+  const r = resultOf(last);
+  const opp = teamById.get(r.oppId);
+  const oppName = opp ? `${opp.city} ${opp.name}` : 'their opponent';
+
+  // Current streak + last-5 form, newest-first.
+  let streak = 0;
+  for (const g of games) { if (resultOf(g).won === r.won) streak++; else break; }
+  const last5 = games.slice(0, 5);
+  const w5 = last5.filter(g => resultOf(g).won).length;
+
+  const verb = r.won
+    ? pick(['took down', 'beat', 'handled', 'knocked off'], hash(last.id))
+    : pick(['fell to', 'dropped one to', 'lost to', 'came up short against'], hash(last.id));
+  const form = streak >= 3
+    ? ` — ${streak} straight ${r.won ? 'wins' : 'losses'}`
+    : ` — ${w5}-${last5.length - w5} over their last ${last5.length}`;
+  const headline = `${team.city} ${verb} the ${oppName} ${r.us}–${r.them}${form}`;
+
+  return {
+    id: `your-team-${last.id}`,
+    category: 'Your Team',
+    headline,
+    exchanges: exchangesFor('Your Team', headline, hash(last.id)),
+    gameId: last.id,
+  };
+}
 
 /** Build the current week's episode, or null before any games are played. */
 export function buildSpotlight(league: BasketballLeagueState | null): SpotlightEpisode | null {
@@ -121,11 +175,16 @@ export function buildSpotlight(league: BasketballLeagueState | null): SpotlightE
   const seenCats = new Set<StoryCategory>();
   const userId = league.userTeamId;
 
-  // Lead with the user team's latest result, if any.
+  // Always lead with the user team. Prefer a flagged moment about them (a
+  // career night / blowout the feed surfaced); otherwise synthesize from their
+  // last result so the user's club still headlines on a quiet night.
   if (userId) {
     const mine = pool.find(i => i.gameId && league.games.some(g => g.id === i.gameId && (g.homeTeamId === userId || g.awayTeamId === userId)));
     if (mine) {
       stories.push({ id: `your-${mine.id}`, category: 'Your Team', headline: mine.headline, exchanges: exchangesFor('Your Team', mine.headline, hash(mine.id)), playerId: mine.playerId, gameId: mine.gameId });
+    } else {
+      const synth = userTeamStory(league, userId);
+      if (synth) stories.push(synth);
     }
   }
 

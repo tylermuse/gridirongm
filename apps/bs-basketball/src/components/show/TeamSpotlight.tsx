@@ -20,7 +20,8 @@ const CAT_TONE: Record<StoryCategory, ChipTone> = {
 export function TeamSpotlight({ league, compact = false }: { league: BasketballLeagueState | null; compact?: boolean }) {
   const episode = useMemo(() => buildSpotlight(league), [league]);
   if (!episode) return null;
-  const stories = compact ? episode.stories.slice(0, 1) : episode.stories;
+  // Dashboard embeds the top few storylines (user team first); /show shows all.
+  const stories = compact ? episode.stories.slice(0, 3) : episode.stories;
   return <SpotlightCard episode={episode} stories={stories} compact={compact} />;
 }
 
@@ -46,7 +47,7 @@ function SpotlightCard({ episode, stories, compact }: { episode: SpotlightEpisod
         </div>
         <p className="text-xs text-[var(--text-sec)] mt-1">
           with {SPOTLIGHT_HOSTS.analyst.name} {SPOTLIGHT_HOSTS.analyst.avatar} &amp; {SPOTLIGHT_HOSTS.take.name} {SPOTLIGHT_HOSTS.take.avatar}
-          {!compact && <button onClick={expandAll} className="ml-2 font-semibold hover:underline" style={{ color: 'var(--accent)' }}>{allOpen ? 'Collapse all' : 'Expand all'}</button>}
+          {stories.length > 1 && <button onClick={expandAll} className="ml-2 font-semibold hover:underline" style={{ color: 'var(--accent)' }}>{allOpen ? 'Collapse all' : 'Expand all'}</button>}
         </p>
       </div>
 
