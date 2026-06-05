@@ -29,6 +29,12 @@ const ROLLOVER_KEYS = [
   'gg-rollover-outer-throw',
   'gg-rollover-step',
   'gg-rollover-substep',
+  // Per-tick autocut instrumentation (bige08676 sliding tail-team hang): JSON
+  // arrays of {tid, abbr, deltaMs} and {tid, abbr, size}. Climbing deltaMs
+  // across the loop confirms cumulative per-iteration cost; a lone outlier
+  // points at one team instead.
+  'gg-rollover-tick-timings',
+  'gg-rollover-tick-rostersize',
   'gg-rollover-async-error',
   'gg-rollover-recoverable-error',
 ] as const;
