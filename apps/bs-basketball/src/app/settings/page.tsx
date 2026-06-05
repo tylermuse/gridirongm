@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { getTheme, setTheme, type Theme } from '@/lib/ui/theme';
 import { isSoundEnabled, setSoundEnabled, playSound } from '@/lib/ui/sound';
+import { useLeagueStore } from '@/lib/store/leagueStore';
+import { isGodMode } from '@/lib/godMode/godMode';
 
 /**
  * /settings — appearance + sound preferences (Tier 3.1 + 3.7).
@@ -15,6 +17,9 @@ export default function SettingsPage() {
   const [mounted, setMounted] = useState(false);
   const [theme, setThemeState] = useState<Theme>('light');
   const [sound, setSoundState] = useState(false);
+  const league = useLeagueStore(s => s.league);
+  const setGodMode = useLeagueStore(s => s.setGodMode);
+  const godOn = isGodMode(league);
 
   useEffect(() => {
     // Read device-local prefs after mount (deferred so we're not setting state
@@ -74,6 +79,22 @@ export default function SettingsPage() {
           </button>
         )}
       </Section>
+
+      {/* God Mode (save-level) */}
+      {league && (
+        <Section
+          title="God Mode"
+          desc="Commissioner powers — edit any player's overall, age, and potential from their card. Saved with this league."
+        >
+          <div className="flex gap-2">
+            <Choice active={!godOn} onClick={() => void setGodMode(false)} icon="🔒" label="Off" />
+            <Choice active={godOn} onClick={() => void setGodMode(true)} icon="🛠️" label="On" />
+          </div>
+          {godOn && (
+            <p className="text-xs text-[var(--text-sec)] mt-3">Open any player and use the God Mode editor on their card.</p>
+          )}
+        </Section>
+      )}
     </main>
   );
 }
