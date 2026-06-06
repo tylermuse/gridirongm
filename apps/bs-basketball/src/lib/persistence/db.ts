@@ -18,6 +18,7 @@ import Dexie, { type Table } from 'dexie';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { repairRosterPositions } from './repair';
+import { migrateSave } from './migrations';
 
 // ===========================================================================
 // Types
@@ -97,9 +98,12 @@ export async function loadLeague(id: string): Promise<BasketballLeagueState | nu
   if (!row) return null;
   try {
     const parsed = JSON.parse(row.state) as BasketballLeagueState;
-    // Heal any save left with a position at 0 players by an older waiver bug —
+    // Step the save forward through any schema migrations first…
+    const { state: migrated, migrated: didMigrate } = migrateSave(parsed);
+    if (didMigrate) console.warn('[bs-hoops] migrated save schema on load for', id);
+    // …then heal any position left at 0 players by an older waiver bug —
     // idempotent, so it's a no-op for healthy saves.
-    const { state, repaired } = repairRosterPositions(parsed);
+    const { state, repaired } = repairRosterPositions(migrated);
     if (repaired) console.warn('[bs-hoops] repaired roster positions on load for', id);
     return state;
   } catch (err) {

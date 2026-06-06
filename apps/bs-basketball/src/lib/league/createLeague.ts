@@ -39,6 +39,7 @@ import type {
   BasketballStats,
 } from '@bs/sport-basketball';
 import { HOOPS_LEAGUE_TEAMS, type BasketballTeamTemplate } from '../data/teams';
+import { CURRENT_SAVE_VERSION } from '../persistence/migrations';
 
 // ===========================================================================
 // Options
@@ -268,7 +269,7 @@ export function assembleLeague(
     games: scheduledGames,
     seasonHistory: {},
     userTeamId: null,
-    saveVersion: 1,
+    saveVersion: CURRENT_SAVE_VERSION,
     sportData: { lastSeenChangelog: CHANGELOG_VERSION },
   };
 
