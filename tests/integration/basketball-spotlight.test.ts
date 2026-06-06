@@ -23,9 +23,11 @@ describe('team spotlight', () => {
       expect(s.category).toBeTruthy();
       expect(s.headline).toBeTruthy();
       expect(s.exchanges.length).toBeGreaterThan(0);
-      // Each exchange is one of the two named hosts.
-      for (const ex of s.exchanges) expect(SPOTLIGHT_HOSTS[ex.voice]).toBeDefined();
-      // A healthy story has both voices represented somewhere in the show.
+      // Commentator exchanges map to a named host; player/fan are bubble variants.
+      for (const ex of s.exchanges) {
+        if (ex.voice === 'analyst' || ex.voice === 'take') expect(SPOTLIGHT_HOSTS[ex.voice]).toBeDefined();
+        else expect(['player', 'fan']).toContain(ex.voice);
+      }
     }
     // At least one analyst and one take voice across the episode.
     const voices = new Set(ep!.stories.flatMap(s => s.exchanges.map(e => e.voice)));

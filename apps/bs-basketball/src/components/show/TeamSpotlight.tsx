@@ -23,10 +23,14 @@ export function TeamSpotlight({ league, compact = false }: { league: BasketballL
   if (!episode) return null;
   // Dashboard embeds the top few storylines (user team first); /show shows all.
   const stories = compact ? episode.stories.slice(0, 3) : episode.stories;
-  return <SpotlightCard episode={episode} stories={stories} compact={compact} />;
+  return <SpotlightCard episode={episode} stories={stories} compact={compact} league={league} />;
 }
 
-function SpotlightCard({ episode, stories, compact }: { episode: SpotlightEpisode; stories: SpotlightStory[]; compact: boolean }) {
+function SpotlightCard({ episode, stories, compact, league }: { episode: SpotlightEpisode; stories: SpotlightStory[]; compact: boolean; league: BasketballLeagueState | null }) {
+  const playerName = (id?: string): string => {
+    const p = id ? (league?.players as Record<string, { firstName: string; lastName: string }> | undefined)?.[id] : undefined;
+    return p ? `${p.firstName} ${p.lastName}` : 'The Player';
+  };
   const router = useRouter();
   const [open, setOpen] = useState<Set<string>>(() => new Set(stories.length ? [stories[0].id] : []));
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
@@ -38,7 +42,7 @@ function SpotlightCard({ episode, stories, compact }: { episode: SpotlightEpisod
 
   function toggleListen() {
     if (playing) { stopSpeech(); setPlaying(false); return; }
-    const lines = stories.flatMap(s => s.exchanges.map(ex => ({ text: ex.line, voice: ex.voice })));
+    const lines = stories.flatMap(s => s.exchanges.map(ex => ({ text: ex.line, voice: (ex.voice === 'analyst' ? 'analyst' : 'take') as 'analyst' | 'take' })));
     setPlaying(true);
     speakLines(lines, () => setPlaying(false));
   }
@@ -85,6 +89,35 @@ function SpotlightCard({ episode, stories, compact }: { episode: SpotlightEpisod
                 <div className="overflow-hidden">
                   <div className="px-4 sm:px-5 pb-4 space-y-2.5">
                     {story.exchanges.map((ex, i) => {
+                      // Player tweet variant.
+                      if (ex.voice === 'player') {
+                        const name = playerName(story.playerId);
+                        const handle = '@' + name.toLowerCase().replace(/[^a-z]/g, '');
+                        return (
+                          <div key={i} className="flex justify-center my-1">
+                            <div className="rounded-2xl px-4 pt-3 pb-3 text-white shadow-lg max-w-[400px] w-full" style={{ background: '#15202b' }}>
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <span className="h-9 w-9 rounded-full grid place-items-center text-base" style={{ background: '#38444d' }} aria-hidden>🏀</span>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1 text-sm font-bold leading-tight">{name}<span style={{ color: '#1d9bf0' }}>✓</span></div>
+                                  <div className="text-xs text-[#8899a6]">{handle}</div>
+                                </div>
+                              </div>
+                              <div className="text-[15px] leading-snug">{ex.line}</div>
+                              <div className="flex gap-6 mt-2 text-xs text-[#8899a6]">💬 🔁 ❤️</div>
+                            </div>
+                          </div>
+                        );
+                      }
+                      // Fan-pulse variant.
+                      if (ex.voice === 'fan') {
+                        return (
+                          <div key={i} className="text-center my-1">
+                            <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: '#059669' }}>Fan Pulse</div>
+                            <div className="inline-block rounded-xl px-4 py-2 text-sm italic mt-0.5" style={{ background: 'color-mix(in srgb, #10b981 12%, transparent)', border: '1px solid color-mix(in srgb, #10b981 30%, transparent)', color: '#047857' }}>{ex.line}</div>
+                          </div>
+                        );
+                      }
                       const host = SPOTLIGHT_HOSTS[ex.voice];
                       const left = ex.voice === 'analyst';
                       return (
