@@ -20,6 +20,24 @@ import type { BasketballLineup, BasketballPlayer, BasketballPosition, Basketball
  */
 
 const SLOTS: BasketballPosition[] = ['PG', 'SG', 'SF', 'PF', 'C'];
+const POS_ORDER: Record<BasketballPosition, number> = { PG: 0, SG: 1, SF: 2, PF: 3, C: 4 };
+
+/** How well a player's natural position fits a lineup slot. Adjacent positions
+ *  (a PF at the SF spot, a SG at the PG spot) play fine; two+ slots away (a PG
+ *  at center) is a real stretch the sim will punish. */
+function fitLevel(playerPos: BasketballPosition, slotPos: BasketballPosition): 'natural' | 'flex' | 'poor' {
+  const d = Math.abs(POS_ORDER[playerPos] - POS_ORDER[slotPos]);
+  return d === 0 ? 'natural' : d === 1 ? 'flex' : 'poor';
+}
+
+function FitChip({ playerPos, slotPos }: { playerPos: BasketballPosition; slotPos: BasketballPosition }) {
+  const fit = fitLevel(playerPos, slotPos);
+  if (fit === 'natural') return null; // no chip when it's their position
+  const style = fit === 'flex'
+    ? { background: 'color-mix(in srgb, var(--accent-alt) 16%, transparent)', color: 'var(--accent-alt)', label: `${playerPos}→${slotPos}` }
+    : { background: 'color-mix(in srgb, #d97706 18%, transparent)', color: '#d97706', label: 'out of position' };
+  return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: style.background, color: style.color }}>{style.label}</span>;
+}
 
 export default function LineupPage() {
   const params = useParams<{ teamId: string }>();
@@ -95,6 +113,34 @@ export default function LineupPage() {
     });
   }
 
+  // Promote a bench player straight into the slot that best fits their natural
+  // position (swapping whoever's there to the bench). The one-click way to move
+  // a bench player into the starting five.
+  function promoteToStarter(playerId: string) {
+    setSaved(false);
+    const p = playerById[playerId];
+    const slot = p ? POS_ORDER[p.sportData.position] : 0;
+    const displaced = starters[slot];
+    const nextStarters = [...starters];
+    nextStarters[slot] = playerId;
+    setStarters(nextStarters);
+    setBench(prev => {
+      const without = prev.filter(id => id !== playerId);
+      return displaced ? [...without, displaced] : without;
+    });
+  }
+
+  // Send a starter to the bench, leaving the slot open for another player.
+  function benchStarter(slot: number) {
+    const id = starters[slot];
+    if (!id) return;
+    setSaved(false);
+    const nextStarters = [...starters];
+    nextStarters[slot] = '';
+    setStarters(nextStarters);
+    setBench(prev => [id, ...prev.filter(x => x !== id)]);
+  }
+
   function moveBench(i: number, dir: -1 | 1) {
     const j = i + dir;
     if (j < 0 || j >= bench.length) return;
@@ -137,25 +183,33 @@ export default function LineupPage() {
           <h2 className="px-3 py-2 font-bold border-b text-sm" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
             Starters
           </h2>
+          <p className="px-3 pt-2 text-[11px] text-[var(--text-sec)]">Any player can start at any spot — adjacent positions play fine; a guard at center gets punished by the sim.</p>
           <div className="p-3 space-y-2">
-            {SLOTS.map((pos, i) => (
-              <div key={pos} className="flex items-center gap-2">
-                <span className="w-8 text-xs font-bold opacity-60">{pos}</span>
-                <select
-                  value={starters[i] ?? ''}
-                  onChange={e => setStarter(i, e.target.value)}
-                  className="flex-1 px-2 py-1.5 rounded-lg border bg-[var(--surface)] text-sm"
-                  style={{ borderColor: 'var(--border)' }}
-                >
-                  <option value="">— empty —</option>
-                  {roster.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.firstName} {p.lastName} ({p.sportData.position} · {p.ratings.overall})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
+            {SLOTS.map((pos, i) => {
+              const sp = starters[i] ? playerById[starters[i]] : null;
+              return (
+                <div key={pos} className="flex items-center gap-2">
+                  <span className="w-8 text-xs font-bold opacity-60">{pos}</span>
+                  <select
+                    value={starters[i] ?? ''}
+                    onChange={e => setStarter(i, e.target.value)}
+                    className="flex-1 px-2 py-1.5 rounded-lg border bg-[var(--surface)] text-sm min-w-0"
+                    style={{ borderColor: 'var(--border)' }}
+                  >
+                    <option value="">— empty —</option>
+                    {roster.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.firstName} {p.lastName} ({p.sportData.position} · {p.ratings.overall})
+                      </option>
+                    ))}
+                  </select>
+                  {sp && <FitChip playerPos={sp.sportData.position} slotPos={pos} />}
+                  {sp && (
+                    <button onClick={() => benchStarter(i)} className="w-6 h-6 rounded hover:bg-[var(--surface-2)] text-xs shrink-0" title="Send to bench" aria-label="Send to bench">▼</button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </section>
 
@@ -174,7 +228,8 @@ export default function LineupPage() {
                   <span className="font-semibold truncate flex-1">{p.firstName} {p.lastName}</span>
                   <span className="text-xs opacity-60 w-6">{p.sportData.position}</span>
                   <span className="text-xs tabular-nums w-7 text-right font-bold">{p.ratings.overall}</span>
-                  <span className="flex gap-0.5">
+                  <span className="flex gap-0.5 items-center">
+                    <button onClick={() => promoteToStarter(id)} className="px-1.5 h-6 rounded hover:bg-[var(--surface-2)] text-xs font-bold whitespace-nowrap" style={{ color: 'var(--accent)' }} title="Move into the starting five" aria-label="Move to starters">▲ Start</button>
                     <button onClick={() => moveBench(i, -1)} disabled={i === 0} className="w-6 h-6 rounded hover:bg-[var(--surface-2)] disabled:opacity-30" aria-label="Move up">↑</button>
                     <button onClick={() => moveBench(i, 1)} disabled={i === bench.length - 1} className="w-6 h-6 rounded hover:bg-[var(--surface-2)] disabled:opacity-30" aria-label="Move down">↓</button>
                   </span>
@@ -191,7 +246,8 @@ export default function LineupPage() {
           {validation.violations.map((v, i) => (
             <p key={`v${i}`} className="text-sm" style={{ color: '#dc2626' }}>✗ {v.message}</p>
           ))}
-          {validation.warnings.map((w, i) => (
+          {/* Position mismatches are shown inline as fit chips, not as scary warnings. */}
+          {validation.warnings.filter(w => w.code !== 'LINEUP_POSITION_MISMATCH').map((w, i) => (
             <p key={`w${i}`} className="text-sm" style={{ color: '#f59e0b' }}>⚠ {w.message}</p>
           ))}
         </div>
