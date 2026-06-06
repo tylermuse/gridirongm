@@ -19,7 +19,8 @@ import {
   type FreeAgentInfo,
   type CounterOffer,
 } from '@/lib/freeAgency';
-import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
+import { OffseasonStepper } from '@/components/shell/OffseasonStepper';
+import type { BasketballPlayer, BasketballPosition, BasketballTeam } from '@bs/sport-basketball';
 
 /**
  * /free-agency — sign players from the free-agent pool (Phase 2D-5).
@@ -40,8 +41,10 @@ export default function FreeAgencyPage() {
   const [releaseId, setReleaseId] = useState<string>('');
   const [resultMsg, setResultMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [counter, setCounter] = useState<CounterOffer | null>(null);
+  const [posFilter, setPosFilter] = useState<'ALL' | BasketballPosition>('ALL');
 
-  const pool = useMemo<FreeAgentInfo[]>(() => (league ? freeAgentPool(league) : []), [league]);
+  const allPool = useMemo<FreeAgentInfo[]>(() => (league ? freeAgentPool(league) : []), [league]);
+  const pool = posFilter === 'ALL' ? allPool : allPool.filter(f => f.player.sportData.position === posFilter);
   const teamById = useMemo(() => {
     const m = new Map<string, BasketballTeam>();
     if (league) for (const t of league.teams) m.set(t.id, t as BasketballTeam);
@@ -96,12 +99,17 @@ export default function FreeAgencyPage() {
   return (
     <main className="max-w-6xl mx-auto p-8">
       <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
-      <header className="flex flex-wrap items-baseline gap-3 mt-2 mb-6">
-        <h1 className="text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>Free Agency</h1>
+      <OffseasonStepper active="fa" />
+      <header className="flex flex-wrap items-center gap-3 mb-5">
+        <div>
+          <h1 className="text-2xl font-black uppercase tracking-tight">Free Agency</h1>
+          {userTeam && <p className="text-sm text-[var(--text-sec)]">{userTeam.city} · roster {count}/{MAX_ROSTER}</p>}
+        </div>
         {userTeam && (
-          <p className="text-sm opacity-70">
-            {userTeam.city} · roster {count}/{MAX_ROSTER} · cap room {money(room)}
-          </p>
+          <div className="text-right">
+            <div className="text-2xl font-black tabular-nums" style={{ color: room > 10_000_000 ? '#10b981' : room > 0 ? '#d97706' : '#dc2626' }}>{money(room)}</div>
+            <div className="text-[10px] uppercase tracking-wide opacity-60">Cap Space</div>
+          </div>
         )}
         <div className="ml-auto flex items-center gap-2">
           <Button variant="secondary" disabled={store.loading} onClick={() => { void store.simFreeAgency(); }}>
@@ -131,7 +139,14 @@ export default function FreeAgencyPage() {
         </div>
       )}
 
-      {pool.length === 0 ? (
+      {/* Position filters */}
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        {(['ALL', 'PG', 'SG', 'SF', 'PF', 'C'] as const).map(p => (
+          <button key={p} onClick={() => setPosFilter(p)} className="text-xs font-bold rounded-md px-2.5 py-1" style={posFilter === p ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--surface-2)', color: 'var(--text-sec)' }}>{p}</button>
+        ))}
+      </div>
+
+      {allPool.length === 0 ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <EmptyState
             icon="🧑‍💼"
@@ -143,10 +158,11 @@ export default function FreeAgencyPage() {
         <div className="grid lg:grid-cols-[1.3fr_1fr] gap-6">
           {/* Pool */}
           <section className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-            <h2 className="px-3 py-2 font-bold border-b text-sm" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
+            <h2 className="px-3 py-2 font-bold border-b text-sm" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
               Available ({pool.length})
             </h2>
             <ul className="max-h-[36rem] overflow-y-auto">
+              {pool.length === 0 && <li className="px-3 py-6 text-center text-sm text-[var(--text-sec)]">No free agents at this position.</li>}
               {pool.map(f => {
                 const last = f.lastTeamId ? teamById.get(f.lastTeamId) : null;
                 const isSel = selectedId === f.player.id;
