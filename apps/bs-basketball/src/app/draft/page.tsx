@@ -193,6 +193,12 @@ export default function DraftPage() {
         )}
       </div>
 
+      {/* Scouting + recap surfaces. */}
+      <div className="flex flex-wrap gap-3 mb-4 text-sm font-semibold">
+        <Link href="/draft-preview" className="hover:underline" style={{ color: 'var(--accent)' }}>🔭 Big Board →</Link>
+        {draft.complete && <Link href="/draft-recap" className="hover:underline" style={{ color: 'var(--accent)' }}>🎬 Draft Recap →</Link>}
+      </div>
+
       {/* Reviewable lottery results: odds + slated seed vs. where teams landed. */}
       <LotteryBoard cards={buildLotteryBoard(draft, teamById, league.userTeamId)} />
 
