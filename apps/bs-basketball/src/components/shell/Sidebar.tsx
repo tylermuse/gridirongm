@@ -62,6 +62,7 @@ function sectionsFor(userTeamId: string | null): NavSection[] {
       label: 'My Team',
       items: [
         { href: '/roster', label: 'Roster & Lineup', icon: '👥' },
+        { href: '/re-sign', label: 'Re-sign', icon: '✍️' },
       ],
     });
   }
