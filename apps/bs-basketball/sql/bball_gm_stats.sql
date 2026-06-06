@@ -34,9 +34,14 @@ CREATE TABLE IF NOT EXISTS bball_gm_season_history (
   losses INT NOT NULL DEFAULT 0,
   made_playoffs BOOLEAN NOT NULL DEFAULT false,
   won_championship BOOLEAN NOT NULL DEFAULT false,
+  draft_score REAL,
+  draft_grade TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (user_id, season)
 );
+-- Back-compat: add the draft columns to a table created before Best Draft.
+ALTER TABLE bball_gm_season_history ADD COLUMN IF NOT EXISTS draft_score REAL;
+ALTER TABLE bball_gm_season_history ADD COLUMN IF NOT EXISTS draft_grade TEXT;
 
 -- ── bball_gm_awards: trophy case ────────────────────────────────────
 CREATE TABLE IF NOT EXISTS bball_gm_awards (
