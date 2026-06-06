@@ -54,7 +54,10 @@ import {
   revealLottery as revealLotteryState,
   getDraft,
   currentSlot,
+  setupDraft,
+  type DraftState,
 } from '../draft';
+import { pickKey } from '../trade/picks';
 import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, type Offer, type OfferResult, type Negotiation } from '../freeAgency';
 import { applyRelease } from '../roster/release';
 import { playThroughInjury as playThroughInjuryState } from '../injuries';
@@ -121,6 +124,10 @@ interface LeagueStore {
   forceUserGame: (win: boolean) => Promise<boolean>;
   /** God Mode: relocate / rebrand a franchise (city, name, abbrev, colors). */
   relocateTeam: (teamId: string, edit: FranchiseEdit) => Promise<void>;
+
+  /** Finish an imported league's inaugural draft → tip into the current
+   *  season's preseason (no year roll); undrafted prospects become free agents. */
+  finishInauguralDraft: () => Promise<void>;
 
   /** Sim the next scheduled game involving the user's team. Returns the
    *  played game's id on success, or null if there's no game to sim. */
@@ -233,15 +240,33 @@ function simSummary(league: BasketballLeagueState, gamesSimmed: number): string 
 
 /** Build a persistable league from converted import data. */
 function leagueFromImport(imported: ImportedHoopsLeague): BasketballLeagueState {
-  const league = assembleLeague({
+  let league = assembleLeague({
     teams: imported.teams,
     players: imported.players,
     freeAgentIds: imported.freeAgentIds,
     season: imported.season,
     displayName: `NBA ${imported.season}`,
   });
+
+  // Real traded-pick ownership from the file → the pick-ownership registry, so
+  // the inaugural draft conveys traded picks correctly.
+  const pickOwnership: Record<string, TeamId> = {};
+  for (const o of imported.draftPickOwnership) {
+    pickOwnership[pickKey(imported.season, o.round, o.originalTeamId)] = o.ownerTeamId;
+  }
   // Flag custom-roster leagues so they're excluded from the global GM board.
-  return { ...league, sportData: { ...(league.sportData as object), imported: true } };
+  league = { ...league, sportData: { ...(league.sportData as object), imported: true, pickOwnership } };
+
+  // Imported leagues start with their upcoming draft (real class + ownership)
+  // before free agency — the file is a pre-draft snapshot, so don't skip it.
+  // Slot order is seeded by the draft system (the file doesn't store it); the
+  // ceremony is skipped since there's no prior-season lottery to reveal.
+  if (imported.draftProspectIds.length > 0) {
+    const draft = setupDraft(league, imported.season, imported.draftProspectIds);
+    const inaugural: DraftState = { ...draft, inaugural: true, lotteryRevealed: true };
+    league = { ...league, sportData: { ...(league.sportData as object), draft: inaugural }, currentPhase: 'offseason' };
+  }
+  return league;
 }
 
 /** Friendly error copy for a failed import. */
@@ -414,6 +439,27 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     const league = relocateTeamLib(current, teamId, edit);
     set({ league });
     try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] relocateTeam failed:', err); }
+  },
+
+  async finishInauguralDraft() {
+    const current = get().league;
+    if (!current) return;
+    const draft = getDraft(current);
+    // Undrafted prospects fall to free agency.
+    const undrafted = (draft?.poolIds ?? []).filter(id => {
+      const p = current.players[id] as BasketballPlayer | undefined;
+      return p && !p.rosterSlot;
+    });
+    const sd = { ...(current.sportData as Record<string, unknown>) };
+    delete sd.draft;
+    const league = {
+      ...current,
+      sportData: sd,
+      currentPhase: 'preseason' as const,
+      freeAgentIds: [...current.freeAgentIds, ...undrafted],
+    } as BasketballLeagueState;
+    set({ league });
+    try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] finishInauguralDraft failed:', err); }
   },
 
   async simDay() {

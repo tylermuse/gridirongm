@@ -41,6 +41,9 @@ export interface DraftState {
   complete: boolean;
   /** Whether the lottery order has been revealed (cosmetic gate). */
   lotteryRevealed: boolean;
+  /** True for the one-off draft an imported league starts with — on completion
+   *  it tips into the current season's preseason instead of rolling the year. */
+  inaugural?: boolean;
   /**
    * Pre-lottery seeding of the lottery teams, worst record first (index 0 =
    * expected #1 pick). Lets the reveal compute who jumped and who fell vs. their

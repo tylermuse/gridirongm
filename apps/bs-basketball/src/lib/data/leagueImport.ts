@@ -63,12 +63,30 @@ interface BbgmTeam {
   disabled?: boolean;
 }
 
+interface BbgmDraftPick {
+  tid: number;        // current owner
+  originalTid: number; // team whose pick this originally was
+  round: number;
+  pick: number;
+  season: number;
+}
+
 export interface BbgmLeagueFile {
   startingSeason?: number;
   version?: number;
   players: BbgmPlayer[];
   teams: BbgmTeam[];
+  draftPicks?: BbgmDraftPick[];
   gameAttributes?: Array<{ key: string; value: unknown }> | Record<string, unknown>;
+}
+
+/** A pick's ownership for the upcoming draft (our team ids). The slot order
+ *  isn't in the file (BBGM resolves it by lottery), so the draft system seeds
+ *  the order; this just conveys who owns each original team's pick (trades). */
+export interface ImportedPickOwnership {
+  round: number;
+  originalTeamId: TeamId;
+  ownerTeamId: TeamId;
 }
 
 export interface ImportedHoopsLeague {
@@ -77,6 +95,10 @@ export interface ImportedHoopsLeague {
   players: Record<PlayerId, BasketballPlayer>;
   /** Players with tid -1 — real veterans who populate the FA pool. */
   freeAgentIds: PlayerId[];
+  /** The upcoming draft's prospect class (in `players`, unrostered). */
+  draftProspectIds: PlayerId[];
+  /** Pick ownership for the upcoming draft (real traded picks from the file). */
+  draftPickOwnership: ImportedPickOwnership[];
 }
 
 // ===========================================================================
@@ -494,11 +516,22 @@ export function convertBbgmLeague(file: BbgmLeagueFile): ImportedHoopsLeague {
   // --- Convert players, routing by tid ---
   const players: Record<PlayerId, BasketballPlayer> = {};
   const freeAgentIds: PlayerId[] = [];
+  const draftProspectIds: PlayerId[] = [];
 
   file.players.forEach((bp, index) => {
     const tid = bp.tid;
     if (typeof tid !== 'number') return;
-    if (tid <= -2) return; // -3 retired, -2 draft pool — skipped in v1.
+    if (tid === -3) return; // retired — dropped.
+
+    if (tid === -2) {
+      // Draft pool. Only this season's class becomes the upcoming draft;
+      // future classes (2027+) are left out for v1.
+      if (bp.draft?.year === season) {
+        const pr = convertPlayer(bp, index, season, null, 0);
+        if (pr) { players[pr.id] = pr; draftProspectIds.push(pr.id); }
+      }
+      return;
+    }
 
     if (tid === -1) {
       const fa = convertPlayer(bp, index, season, null, 0);
@@ -529,7 +562,19 @@ export function convertBbgmLeague(file: BbgmLeagueFile): ImportedHoopsLeague {
     });
   }
 
-  return { season, teams, players, freeAgentIds };
+  // --- Pick ownership for the upcoming draft (real traded picks from file) ---
+  const tidToTeamId = new Map<number, TeamId>();
+  for (const [tid, meta] of teamMeta) tidToTeamId.set(tid, meta.team.id);
+  const draftPickOwnership: ImportedPickOwnership[] = [];
+  for (const dp of file.draftPicks ?? []) {
+    if (dp.season !== season) continue;
+    const owner = tidToTeamId.get(dp.tid);
+    const original = tidToTeamId.get(dp.originalTid);
+    if (!owner || !original || owner === original) continue; // only record actual trades
+    draftPickOwnership.push({ round: dp.round, originalTeamId: original, ownerTeamId: owner });
+  }
+
+  return { season, teams, players, freeAgentIds, draftProspectIds, draftPickOwnership };
 }
 
 // ===========================================================================

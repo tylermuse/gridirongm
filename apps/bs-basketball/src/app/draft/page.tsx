@@ -136,6 +136,13 @@ export default function DraftPage() {
     null;
 
   async function handleStartSeason(dest: string) {
+    // An imported league's inaugural draft tips straight into the current
+    // season's preseason (no year roll); a normal draft rolls the season.
+    if (draft?.inaugural) {
+      await store.finishInauguralDraft();
+      router.push(dest);
+      return;
+    }
     // Finalizes rosters (overflow → free-agent pool) and tips into the
     // preseason. We route to free agency by default since that's the next step.
     const next = await store.startNextSeason();
