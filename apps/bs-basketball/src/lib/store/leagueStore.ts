@@ -54,10 +54,11 @@ import {
   revealLottery as revealLotteryState,
   getDraft,
   currentSlot,
-  setupDraft,
+  SCOUTS_PER_DRAFT,
   type DraftState,
+  type DraftPickSlot,
 } from '../draft';
-import { pickKey } from '../trade/picks';
+import { pickKey, currentOwner } from '../trade/picks';
 import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, runAiFreeAgency, type Offer, type OfferResult, type Negotiation } from '../freeAgency';
 import { applyRelease } from '../roster/release';
 import { playThroughInjury as playThroughInjuryState } from '../injuries';
@@ -261,12 +262,45 @@ function leagueFromImport(imported: ImportedHoopsLeague): BasketballLeagueState 
 
   // Imported leagues start with their upcoming draft (real class + ownership)
   // before free agency — the file is a pre-draft snapshot, so don't skip it.
-  // Slot order is seeded by the draft system (the file doesn't store it); the
-  // ceremony is skipped since there's no prior-season lottery to reveal.
+  // The file doesn't store the lottery slot order (every pick is pick:0), so we
+  // order it by reverse roster strength (weakest team picks first) — a sensible,
+  // NBA-shaped order — and apply the file's real traded-pick ownership on top.
   if (imported.draftProspectIds.length > 0) {
-    const draft = setupDraft(league, imported.season, imported.draftProspectIds);
-    const inaugural: DraftState = { ...draft, inaugural: true, lotteryRevealed: true };
-    league = { ...league, sportData: { ...(league.sportData as object), draft: inaugural }, currentPhase: 'offseason' };
+    const teamStrength = (t: BasketballTeam): number => {
+      const ovrs = t.playerIds
+        .map(id => (league.players[id] as BasketballPlayer | undefined)?.ratings.overall ?? 0)
+        .sort((a, b) => b - a)
+        .slice(0, 8);
+      return ovrs.length ? ovrs.reduce((s, v) => s + v, 0) / ovrs.length : 0;
+    };
+    const ordered = [...(league.teams as BasketballTeam[])].sort((a, b) => teamStrength(a) - teamStrength(b));
+    const picks: DraftPickSlot[] = [];
+    for (let round = 1; round <= 2; round++) {
+      ordered.forEach((t, i) => {
+        const overall = (round - 1) * ordered.length + i + 1;
+        picks.push({
+          overall,
+          round,
+          pickInRound: i + 1,
+          originalTeamId: t.id,
+          teamId: currentOwner(league, imported.season, round, t.id),
+          isLottery: overall <= 14,
+          prospectId: null,
+        });
+      });
+    }
+    const draft: DraftState = {
+      season: imported.season,
+      picks,
+      poolIds: [...imported.draftProspectIds],
+      currentPick: 0,
+      complete: false,
+      lotteryRevealed: true,
+      scoutsRemaining: SCOUTS_PER_DRAFT,
+      scoutedIds: [],
+      inaugural: true,
+    };
+    league = { ...league, sportData: { ...(league.sportData as object), draft }, currentPhase: 'offseason' };
   }
   return league;
 }

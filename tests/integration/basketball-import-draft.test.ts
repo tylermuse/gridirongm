@@ -25,6 +25,15 @@ describe('convertBbgmLeague — inaugural draft', () => {
     }
   });
 
+  it('rates prospects raw (low current OVR) with the upside in potential, not as inflated veterans', () => {
+    const pros = imported.draftProspectIds.map(id => imported.players[id]);
+    // No prospect should be calibrated into the established-pro 70s/80s.
+    expect(Math.max(...pros.map(p => p.ratings.overall))).toBeLessThanOrEqual(70);
+    // Most carry real upside (a clear gap from current OVR to ceiling).
+    const withUpside = pros.filter(p => p.development.potential >= p.ratings.overall + 10);
+    expect(withUpside.length).toBeGreaterThan(pros.length / 2);
+  });
+
   it('keeps the real pick ownership for traded picks', () => {
     // Only actual trades are recorded (owner !== original).
     for (const o of imported.draftPickOwnership) {
