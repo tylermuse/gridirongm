@@ -246,16 +246,20 @@ export default function TradePage() {
         </div>
       ))}
 
-      <div className="grid lg:grid-cols-[1fr_1fr_0.95fr] gap-5">
-        <RosterColumn league={league} team={userTeam} playerById={playerById} season={season} selected={mine} selectedPicks={myPicks} onToggle={id => toggle(mine, setMine, id)} onTogglePick={id => toggle(myPicks, setMyPicks, id)} side="mine" />
+      {/* Two offer cards — Your Offer / You Receive */}
+      <div className="grid lg:grid-cols-2 gap-5 mb-5">
+        <RosterColumn league={league} team={userTeam} playerById={playerById} season={season} selected={mine} selectedPicks={myPicks} onToggle={id => toggle(mine, setMine, id)} onTogglePick={id => toggle(myPicks, setMyPicks, id)} side="mine" title="Your Offer" pts={sendValue} />
         {targetTeam ? (
-          <RosterColumn league={league} team={targetTeam} playerById={playerById} season={season} selected={theirs} selectedPicks={theirPicks} onToggle={id => toggle(theirs, setTheirs, id)} onTogglePick={id => toggle(theirPicks, setTheirPicks, id)} side="theirs" />
+          <RosterColumn league={league} team={targetTeam} playerById={playerById} season={season} selected={theirs} selectedPicks={theirPicks} onToggle={id => toggle(theirs, setTheirs, id)} onTogglePick={id => toggle(theirPicks, setTheirPicks, id)} side="theirs" title="You Receive" pts={receiveValue} />
         ) : (
           <div className="rounded-xl border bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-sec)]" style={{ borderColor: 'var(--border)' }}>
             Select a trade partner to see their roster and picks.
           </div>
         )}
+      </div>
 
+      {/* Trade block (bonus drag-drop) + full-width evaluation summary */}
+      <div className="grid lg:grid-cols-[0.9fr_1.1fr] gap-5">
         <div className="space-y-4 self-start">
           {/* Trade block (drop zone) */}
           <section
@@ -282,8 +286,10 @@ export default function TradePage() {
               <p className="text-xs text-[var(--text-sec)] mt-1">Drag players or picks here — or tap them in the rosters.</p>
             )}
           </section>
+        </div>
 
-          {/* Evaluation */}
+        {/* Evaluation summary (full-width right) */}
+        <div className="self-start">
           <section className="rounded-xl border bg-[var(--surface)] p-4" style={{ borderColor: 'var(--border)' }}>
             <h2 className="font-bold text-sm mb-3">Evaluation</h2>
             {!evaluation || !hasAssets ? (
@@ -722,6 +728,8 @@ function DealCard({
   const getVal = valOf(d.getIds);
   const giveVal = valOf(d.giveIds);
   const grade = computeTradeGrade(getVal, giveVal);
+  const verdict = verdictTag(getVal, giveVal);
+  const total = getVal + giveVal;
   return (
     <div className="rounded-xl border bg-[var(--surface)] p-3 flex flex-wrap items-center gap-3" style={{ borderColor: 'var(--border)' }}>
       {partner && <TeamLogo abbreviation={partner.abbreviation} primaryColor={partner.primaryColor} secondaryColor={partner.secondaryColor} size="sm" />}
@@ -733,6 +741,13 @@ function DealCard({
         </div>
         <div className="text-xs"><span className="font-semibold" style={{ color: '#10b981' }}>You get:</span> {names(d.getIds)} <span className="opacity-50 tabular-nums">· {fmtPts(getVal)} pts</span></div>
         <div className="text-xs"><span className="font-semibold" style={{ color: '#dc2626' }}>You give:</span> {names(d.giveIds)} <span className="opacity-50 tabular-nums">· {fmtPts(giveVal)} pts</span></div>
+        <div className="mt-1.5 max-w-[280px]">
+          <div className="flex h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
+            <div className="bg-green-500" style={{ width: `${total > 0 ? (getVal / total) * 100 : 50}%` }} />
+            <div className="bg-red-400" style={{ width: `${total > 0 ? (giveVal / total) * 100 : 50}%` }} />
+          </div>
+          <div className="text-[10px] font-bold text-center mt-0.5" style={{ color: verdict.color }}>{verdict.label}</div>
+        </div>
       </div>
       <div className="flex flex-col gap-1.5 ml-auto">
         <Button variant="primary" disabled={loading} onClick={() => onPropose(d)}>{primaryLabel}</Button>
@@ -747,7 +762,7 @@ function DealCard({
 // ===========================================================================
 
 function RosterColumn({
-  league, team, playerById, season, selected, selectedPicks, onToggle, onTogglePick, side,
+  league, team, playerById, season, selected, selectedPicks, onToggle, onTogglePick, side, title, pts,
 }: {
   league: League;
   team: BasketballTeam;
@@ -758,6 +773,8 @@ function RosterColumn({
   onToggle: (id: string) => void;
   onTogglePick: (id: string) => void;
   side: 'mine' | 'theirs';
+  title?: string;
+  pts?: number;
 }) {
   const players = team.playerIds
     .map(id => playerById[id])
@@ -767,9 +784,10 @@ function RosterColumn({
 
   return (
     <section className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-      <h2 className="px-3 py-2 font-bold border-b text-sm flex items-center gap-2" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
+      <h2 className="px-3 py-2 font-bold border-b text-sm flex items-center gap-2" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
         <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="xs" />
-        {team.city}
+        {title ? <span>{title} <span className="font-normal text-[var(--text-sec)]">· {team.city}</span></span> : team.city}
+        {pts !== undefined && pts > 0 && <span className="ml-auto text-[11px] font-bold tabular-nums" style={{ color: 'var(--accent)' }}>{pts} pts</span>}
       </h2>
       <div className="px-2 pt-1">
         <SortableTradeTable players={players} season={season} selected={selected} onToggle={onToggle} side={side} />
