@@ -412,4 +412,100 @@ function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
 
+// ===========================================================================
+// AI free agency — CPU teams sign / upgrade from the pool
+// ===========================================================================
+
+/** Waive a player to the free-agent pool (no dead cap — AI churn is simple). */
+function waivePlayer(league: LeagueState, teamId: TeamId, playerId: PlayerId): LeagueState {
+  const players = { ...league.players };
+  players[playerId] = { ...(players[playerId] as BasketballPlayer), contract: null, rosterSlot: null };
+  const teams = league.teams.map(t =>
+    t.id === teamId
+      ? {
+          ...t,
+          playerIds: t.playerIds.filter(id => id !== playerId),
+          rosterBuckets: { ...t.rosterBuckets, active: (t.rosterBuckets.active ?? []).filter(id => id !== playerId) },
+        }
+      : t,
+  );
+  const lastTeam = { ...lastTeamMap(league), [playerId]: teamId };
+  return {
+    ...league,
+    players,
+    teams,
+    freeAgentIds: [...league.freeAgentIds, playerId],
+    sportData: { ...(league.sportData as LeagueSportData), freeAgentLastTeam: lastTeam },
+  };
+}
+
+function ovr(p: BasketballPlayer): number { return p.ratings.overall; }
+function rosterPlayers(league: LeagueState, teamId: TeamId): BasketballPlayer[] {
+  const t = league.teams.find(x => x.id === teamId);
+  return (t?.playerIds ?? []).map(id => league.players[id] as BasketballPlayer | undefined).filter((p): p is BasketballPlayer => !!p);
+}
+function countAtPos(roster: BasketballPlayer[], pos: string): number {
+  return roster.filter(p => p.sportData.position === pos).length;
+}
+
+export interface AiFreeAgencyResult { league: LeagueState; signings: { teamId: TeamId; playerId: PlayerId }[] }
+
+/**
+ * One pass of CPU free agency: each non-user team fills open roster spots at
+ * positions of need, then makes at most one upgrade (waive its weakest player
+ * for a clearly-better, affordable free agent). Bounded + deterministic — no
+ * RNG — so it's safe to run on demand. The user's team is never touched.
+ */
+export function runAiFreeAgency(league: LeagueState, opts?: { rounds?: number }): AiFreeAgencyResult {
+  let l = league;
+  const signings: { teamId: TeamId; playerId: PlayerId }[] = [];
+  const rounds = opts?.rounds ?? 3;
+  const UPGRADE_GAP = 4;
+
+  for (let round = 0; round < rounds; round++) {
+    let progressed = false;
+    for (const team of l.teams) {
+      const teamId = team.id;
+      if (teamId === l.userTeamId) continue;
+      if (l.freeAgentIds.length === 0) break;
+
+      // 1) Fill an open spot at a position of need with the best affordable FA.
+      if (rosterCount(l, teamId) < MAX_ROSTER) {
+        const room = capRoom(l, teamId);
+        const roster = rosterPlayers(l, teamId);
+        const fill = freeAgentPool(l).find(f => {
+          if (f.marketSalary > room) return false;
+          const atPos = countAtPos(roster, f.player.sportData.position);
+          return atPos < 2 || f.player.ratings.overall >= 75; // need, or a clear talent add
+        });
+        if (fill) {
+          l = addToTeam(l, fill.player.id, teamId, buildContract({ years: fill.desiredYears, salaryPerYear: fill.marketSalary }, l.currentSeason));
+          signings.push({ teamId, playerId: fill.player.id });
+          progressed = true;
+          continue;
+        }
+      }
+
+      // 2) One upgrade: swap the weakest rostered player for a notably better,
+      //    affordable free agent (room frees up once the weak player is waived).
+      const roster = rosterPlayers(l, teamId);
+      if (roster.length === 0) continue;
+      const worst = [...roster].sort((a, b) => ovr(a) - ovr(b))[0];
+      const roomAfterWaive = capRoom(l, teamId) + (worst.contract?.years[0]?.baseSalary ?? 0);
+      const upgrade = freeAgentPool(l).find(f =>
+        f.player.ratings.overall >= ovr(worst) + UPGRADE_GAP && f.marketSalary <= roomAfterWaive,
+      );
+      if (upgrade) {
+        l = waivePlayer(l, teamId, worst.id);
+        l = addToTeam(l, upgrade.player.id, teamId, buildContract({ years: upgrade.desiredYears, salaryPerYear: upgrade.marketSalary }, l.currentSeason));
+        signings.push({ teamId, playerId: upgrade.player.id });
+        progressed = true;
+      }
+    }
+    if (!progressed) break;
+  }
+
+  return { league: l, signings };
+}
+
 export { LEAGUE_MINIMUM_SALARY };

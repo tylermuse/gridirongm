@@ -58,7 +58,7 @@ import {
   type DraftState,
 } from '../draft';
 import { pickKey } from '../trade/picks';
-import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, type Offer, type OfferResult, type Negotiation } from '../freeAgency';
+import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, runAiFreeAgency, type Offer, type OfferResult, type Negotiation } from '../freeAgency';
 import { applyRelease } from '../roster/release';
 import { playThroughInjury as playThroughInjuryState } from '../injuries';
 import { extensionMarket, extensionAccepted, buildExtension } from '../roster/extension';
@@ -188,6 +188,8 @@ interface LeagueStore {
   /** Make a free-agent offer for the user team. Optionally release a player to
    *  open a roster spot. Returns the resolution (signed / elsewhere / rejected). */
   signFreeAgent: (playerId: string, offer: Offer, releaseId?: string) => Promise<OfferResult | null>;
+  /** Run one pass of CPU free agency (other teams sign/upgrade). Returns count. */
+  simFreeAgency: () => Promise<number>;
 
   /** Negotiate a free-agent offer: signs if it clears the bar, otherwise
    *  returns the agent's counter (no state change). */
@@ -727,6 +729,26 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       console.error('[bs-hoops] startNextSeason failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return null;
+    }
+  },
+
+  async simFreeAgency() {
+    const current = get().league;
+    if (!current) return 0;
+    set({ loading: true, error: null });
+    try {
+      const { league, signings } = runAiFreeAgency(current);
+      await saveLeague(league);
+      set({
+        league,
+        loading: false,
+        simToast: { text: signings.length ? `🖊️ ${signings.length} free-agent signing${signings.length === 1 ? '' : 's'} across the league` : 'No free-agent moves this round' },
+      });
+      return signings.length;
+    } catch (err) {
+      console.error('[bs-hoops] simFreeAgency failed:', err);
+      set({ loading: false });
+      return 0;
     }
   },
 

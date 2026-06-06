@@ -9,6 +9,7 @@ export {
   releasePlayer,
   resolveUserOffer,
   negotiateOffer,
+  runAiFreeAgency,
   MAX_ROSTER,
   LEAGUE_MINIMUM_SALARY,
   type FreeAgentInfo,
@@ -16,4 +17,5 @@ export {
   type OfferResult,
   type Negotiation,
   type CounterOffer,
+  type AiFreeAgencyResult,
 } from './freeAgency';

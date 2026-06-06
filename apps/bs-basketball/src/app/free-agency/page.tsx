@@ -103,16 +103,20 @@ export default function FreeAgencyPage() {
             {userTeam.city} · roster {count}/{MAX_ROSTER} · cap room {money(room)}
           </p>
         )}
-        {!league.games.some(g => g.status === 'played') && (
-          <Button
-            variant="primary"
-            className="ml-auto"
-            disabled={store.loading}
-            onClick={() => { void store.simDay().then(() => router.push('/')); }}
-          >
-            {store.loading ? 'Tipping off…' : 'Start the Season →'}
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="secondary" disabled={store.loading} onClick={() => { void store.simFreeAgency(); }}>
+            {store.loading ? 'Working…' : 'Sim Free Agency'}
           </Button>
-        )}
+          {!league.games.some(g => g.status === 'played') && (
+            <Button
+              variant="primary"
+              disabled={store.loading}
+              onClick={() => { void store.simDay().then(() => router.push('/')); }}
+            >
+              {store.loading ? 'Tipping off…' : 'Start the Season →'}
+            </Button>
+          )}
+        </div>
       </header>
 
       {resultMsg && (
