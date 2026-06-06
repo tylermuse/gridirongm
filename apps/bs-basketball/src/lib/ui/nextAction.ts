@@ -18,7 +18,7 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 export type ActionKey =
   | 'simDay' | 'simWeek' | 'simDeadline' | 'simSeason'
   | 'startPlayoffs' | 'simPlayoffDay' | 'simPlayoffRound' | 'simAllPlayoffs'
-  | 'enterOffseason' | 'simDraftToUser' | 'goDraft' | 'startNextSeason' | 'goFreeAgency' | 'goReSign';
+  | 'enterOffseason' | 'simDraftToUser' | 'goDraft' | 'startNextSeason' | 'goFreeAgency' | 'goReSign' | 'goPostDraftCuts';
 
 /** User-team players with no contract for the upcoming season (expiring). */
 function userExpiringCount(league: LeagueState, upcomingSeason: number): number {
@@ -60,7 +60,14 @@ export function nextAction(league: LeagueState): NextAction {
         };
       }
     }
-    if (draft.complete) return { phaseLabel: 'Offseason · Draft', label: `Start ${draft.season} Season`, primary: 'startNextSeason' };
+    if (draft.complete) {
+      // Over the 15-man limit → make cuts first (a real step, not silent).
+      const rosterN = league.userTeamId ? (league.teams.find(t => t.id === league.userTeamId)?.playerIds.length ?? 0) : 0;
+      if (!draft.inaugural && rosterN > 15) {
+        return { phaseLabel: 'Offseason · Cuts', label: 'Make Roster Cuts', primary: 'goPostDraftCuts' };
+      }
+      return { phaseLabel: 'Offseason · Draft', label: `Start ${draft.season} Season`, primary: 'startNextSeason' };
+    }
     if (league.userTeamId) return { phaseLabel: `Draft · Pick ${draft.currentPick + 1}`, label: 'Sim to My Pick', primary: 'simDraftToUser' };
     return { phaseLabel: 'Draft', label: 'Go to Draft', primary: 'goDraft' };
   }
