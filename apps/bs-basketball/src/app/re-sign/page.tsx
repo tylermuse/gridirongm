@@ -6,6 +6,7 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ExtendModal } from '@/components/modals/ExtendModal';
+import { OffseasonStepper } from '@/components/shell/OffseasonStepper';
 import { contractYearsLeft } from '@/lib/roster/playerActions';
 import { extensionMarket } from '@/lib/roster/extension';
 import { capRoom } from '@/lib/freeAgency';
@@ -39,12 +40,18 @@ export default function ReSignPage() {
   if (!userTeam) return <Shell><p className="text-sm text-[var(--text-sec)]">You&apos;re spectating — pick a team to manage contracts.</p></Shell>;
 
   const room = capRoom(league, userTeam.id);
+  const askingTotal = expiring.reduce((s, p) => s + extensionMarket(p, season).marketSalary, 0);
+  const afterAll = room - askingTotal;
 
   return (
     <Shell>
-      <p className="text-sm text-[var(--text-sec)] mb-2">
-        {userTeam.city} · cap room {money(room)} · {expiring.length} player{expiring.length === 1 ? '' : 's'} in a contract year.
-      </p>
+      <OffseasonStepper active="resign" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <CapTile label="Cap Space" value={money(room)} color={room > 10_000_000 ? '#10b981' : room > 0 ? '#d97706' : '#dc2626'} />
+        <CapTile label="Players Asking" value={money(askingTotal)} color="#d97706" />
+        <CapTile label={afterAll >= 0 ? 'Room if all re-sign' : 'Over if all re-sign'} value={money(Math.abs(afterAll))} color={afterAll >= 0 ? '#10b981' : '#dc2626'} />
+        <CapTile label="In a contract year" value={String(expiring.length)} color="var(--accent)" />
+      </div>
       {expiring.length > 0 && (
         <p className="text-sm font-semibold mb-4 rounded-lg px-3 py-2" style={{ background: 'color-mix(in srgb, #d97706 14%, transparent)', color: '#b45309' }}>
           ⚠ Any expiring player you don&apos;t re-sign will walk to free agency when the next season starts.
@@ -89,8 +96,23 @@ export default function ReSignPage() {
         </section>
       )}
 
+      <div className="mt-6 flex justify-end">
+        <Link href="/draft" className="rounded-lg px-4 py-2 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>
+          Continue to Draft →
+        </Link>
+      </div>
+
       <ExtendModal playerId={extendId} onClose={() => setExtendId(null)} />
     </Shell>
+  );
+}
+
+function CapTile({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="rounded-lg border px-3 py-2" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+      <div className="text-lg font-black tabular-nums" style={{ color }}>{value}</div>
+      <div className="text-[10px] uppercase tracking-wide opacity-60">{label}</div>
+    </div>
   );
 }
 
@@ -102,9 +124,9 @@ function money(n: number): string {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="max-w-3xl mx-auto p-8">
+    <main className="max-w-5xl mx-auto p-8">
       <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
-      <h1 className="text-3xl font-extrabold mt-2 mb-4" style={{ color: 'var(--accent)' }}>Re-sign Players</h1>
+      <h1 className="text-2xl font-black uppercase tracking-tight mt-2 mb-4">Re-signing Window</h1>
       {children}
     </main>
   );
