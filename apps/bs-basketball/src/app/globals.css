@@ -110,3 +110,34 @@ html, body {
   .bs-animate-slide-right,
   .bs-animate-slide-left { animation: none; }
 }
+
+/* Draft pick clock — drives the 30s "on the clock" timer bar. */
+@keyframes shrink {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
+
+/* Freeze the first/last columns of wide draft tables on small screens, with an
+ * edge gradient so scrolled-under content reads as hidden (parity with football). */
+.sticky-col th:first-child,
+.sticky-col td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+.sticky-action th:last-child,
+.sticky-action td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+.sticky-col tr:hover td:first-child,
+.sticky-action tr:hover td:last-child { background: var(--surface-2); }
+@media (min-width: 640px) {
+  .sticky-col th:first-child,
+  .sticky-col td:first-child,
+  .sticky-action th:last-child,
+  .sticky-action td:last-child { position: static; }
+}

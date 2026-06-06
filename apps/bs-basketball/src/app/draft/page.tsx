@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { getDraft, currentSlot, recommendedProspectId, buildLotteryReveal, buildLotteryBoard } from '@/lib/draft';
 import { LotteryBoard } from '@/components/draft/LotteryBoard';
+import { OnTheClockSection } from '@/components/draft/OnTheClockSection';
 import type { DraftPickSlot, DraftState } from '@/lib/draft';
 import { LotteryRevealCeremony } from '@/components/draft/LotteryReveal';
 import { perceivedPotential, projectionGrade, isScouted, scoutsLeft, GRADE_LABEL } from '@/lib/scouting';
@@ -112,7 +113,6 @@ export default function DraftPage() {
 
   // --- Active draft ---
   const slot = currentSlot(draft);
-  const onClockTeam = slot ? teamById.get(slot.teamId) : null;
   const userOnClock = !!slot && slot.teamId === league.userTeamId;
   const recommendedId = !draft.complete ? recommendedProspectId(league, draft) : null;
 
@@ -151,53 +151,40 @@ export default function DraftPage() {
 
   return (
     <Shell season={draft.season}>
-      {/* Status + controls */}
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        {draft.complete ? (
-          <>
-            <div className="font-bold">🏁 Draft complete — {draft.picks.length} picks in.</div>
-            <div className="ml-auto flex items-center gap-2">
-              <Button variant="ghost" disabled={store.loading} onClick={() => void handleStartSeason('/')}>
-                Skip to season
-              </Button>
-              <Button variant="primary" disabled={store.loading} onClick={() => void handleStartSeason('/free-agency')}>
-                {store.loading ? 'Working…' : 'Sign Free Agents →'}
-              </Button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-xs uppercase tracking-widest opacity-60">
-                R{slot?.round} · Pick {slot?.overall}
-              </span>
-              {onClockTeam && (
-                <span className="flex items-center gap-1.5 font-bold truncate">
-                  <TeamLogo abbreviation={onClockTeam.abbreviation} primaryColor={onClockTeam.primaryColor} secondaryColor={onClockTeam.secondaryColor} size="xs" />
-                  {onClockTeam.city} {userOnClock && <span style={{ color: 'var(--accent)' }}>(You)</span>}
-                </span>
-              )}
-            </div>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold px-2 py-1 rounded-md" style={{ background: 'var(--surface-2)', color: 'var(--text-sec)' }} title="Scouts reveal a prospect's true potential">
-                🔍 {scoutsLeft(draft)} scouts left
-              </span>
-              {!userOnClock && (
-                <Button variant="secondary" disabled={store.loading} onClick={() => void store.simDraftPick()}>
-                  Sim Pick
-                </Button>
-              )}
-              {league.userTeamId && (
-                <Button variant="secondary" disabled={store.loading} onClick={() => void store.simDraftToUser()}>
-                  Sim to My Pick
-                </Button>
-              )}
-              <Button variant="ghost" disabled={store.loading} onClick={() => void store.simDraftAll()}>
-                Sim Whole Draft
-              </Button>
-            </div>
-          </>
-        )}
+      {/* Draft-complete: tip into the season. */}
+      {draft.complete && (
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <div className="font-bold">🏁 Draft complete — {draft.picks.length} picks in.</div>
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="ghost" disabled={store.loading} onClick={() => void handleStartSeason('/')}>
+              Skip to season
+            </Button>
+            <Button variant="primary" disabled={store.loading} onClick={() => void handleStartSeason('/free-agency')}>
+              {store.loading ? 'Working…' : 'Sign Free Agents →'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* On-the-clock hero — team-color band, needs, best-available/fit/scouts, next pick. */}
+      <div className="mb-4">
+        <OnTheClockSection
+          league={league}
+          draft={draft}
+          teamById={teamById}
+          loading={store.loading}
+          onSimPick={() => void store.simDraftPick()}
+          onSimToUser={() => void store.simDraftToUser()}
+          onSimAll={() => void store.simDraftAll()}
+          onOpenTrade={() => router.push('/trade')}
+          onSelectProspect={(id) => setSelectedId(id)}
+          onDraftProspect={(id) => {
+            void (async () => {
+              const ok = await store.draftPick(id);
+              if (ok) setSelectedId(null);
+            })();
+          }}
+        />
       </div>
 
       {/* Scouting + recap surfaces. */}
