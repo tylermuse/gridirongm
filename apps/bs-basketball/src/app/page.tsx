@@ -26,6 +26,7 @@ import { canAdvanceSeason } from '@/lib/season';
 import { getBracket } from '@/lib/playoffs';
 import { getDraft } from '@/lib/draft';
 import { getGmFired } from '@/lib/approval';
+import { isGodMode } from '@/lib/godMode/godMode';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -195,6 +196,14 @@ export default function HomePage() {
         {userTeam && (
           <>
             <NextMatchupCard league={league} team={userTeam as BasketballTeam} onWatchLive={() => void handleWatchLive()} onGamePlan={() => setGamePlanOpen(true)} loading={loading} />
+            {isGodMode(league) && (
+              <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 6%, transparent)' }}>
+                <span className="font-bold" style={{ color: 'var(--accent)' }}>🛠️ God Mode</span>
+                <span className="text-[var(--text-sec)]">Force your next game:</span>
+                <button onClick={() => void useLeagueStore.getState().forceUserGame(true)} className="rounded-md px-2.5 py-1 text-xs font-bold" style={{ background: 'var(--accent)', color: '#fff' }}>Force Win</button>
+                <button onClick={() => void useLeagueStore.getState().forceUserGame(false)} className="rounded-md px-2.5 py-1 text-xs font-bold border" style={{ borderColor: 'var(--border)' }}>Force Loss</button>
+              </div>
+            )}
             <InjuryReport league={league} team={userTeam as BasketballTeam} />
             <DashboardRow league={league} team={userTeam as BasketballTeam} />
             <div className="mb-6"><TeamSpotlight league={league} compact /></div>
