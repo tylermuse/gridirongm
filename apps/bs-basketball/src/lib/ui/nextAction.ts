@@ -18,7 +18,19 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 export type ActionKey =
   | 'simDay' | 'simWeek' | 'simDeadline' | 'simSeason'
   | 'startPlayoffs' | 'simPlayoffDay' | 'simPlayoffRound' | 'simAllPlayoffs'
-  | 'enterOffseason' | 'simDraftToUser' | 'goDraft' | 'startNextSeason' | 'goFreeAgency';
+  | 'enterOffseason' | 'simDraftToUser' | 'goDraft' | 'startNextSeason' | 'goFreeAgency' | 'goReSign';
+
+/** User-team players with no contract for the upcoming season (expiring). */
+function userExpiringCount(league: LeagueState, upcomingSeason: number): number {
+  if (!league.userTeamId) return 0;
+  const team = league.teams.find(t => t.id === league.userTeamId);
+  let n = 0;
+  for (const id of team?.playerIds ?? []) {
+    const p = league.players[id];
+    if (p && !p.contract?.years.some(y => y.season >= upcomingSeason)) n++;
+  }
+  return n;
+}
 
 export interface NextAction {
   /** Short phase label for the bar, e.g. "Regular Season", "Playoffs". */
@@ -35,6 +47,19 @@ export function nextAction(league: LeagueState): NextAction {
 
   // Offseason draft flow
   if (draft) {
+    // Re-sign step comes first: force the expiring-contract decision before the
+    // draft (they'll walk to free agency if ignored).
+    if (!draft.complete && league.userTeamId) {
+      const expiring = userExpiringCount(league, draft.season);
+      if (expiring > 0) {
+        return {
+          phaseLabel: 'Offseason · Re-sign',
+          label: `Re-sign ${expiring} Player${expiring === 1 ? '' : 's'}`,
+          primary: 'goReSign',
+          secondary: [{ label: 'Skip to Draft', key: 'goDraft' }],
+        };
+      }
+    }
     if (draft.complete) return { phaseLabel: 'Offseason · Draft', label: `Start ${draft.season} Season`, primary: 'startNextSeason' };
     if (league.userTeamId) return { phaseLabel: `Draft · Pick ${draft.currentPick + 1}`, label: 'Sim to My Pick', primary: 'simDraftToUser' };
     return { phaseLabel: 'Draft', label: 'Go to Draft', primary: 'goDraft' };
