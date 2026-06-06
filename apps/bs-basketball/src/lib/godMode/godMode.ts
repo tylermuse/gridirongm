@@ -13,6 +13,9 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
 interface LeagueSportData {
   godMode?: boolean;
+  /** Sticky: once God Mode is used, the save is forever excluded from the
+   *  global GM leaderboard (closes the toggle-off-to-sync-clean loophole). */
+  godModeEverUsed?: boolean;
   [key: string]: unknown;
 }
 
@@ -31,8 +34,14 @@ export function isGodMode(league: LeagueState | null): boolean {
   return !!(league?.sportData as LeagueSportData | undefined)?.godMode;
 }
 
+/** True if God Mode has ever been turned on / used in this save (sticky). */
+export function godModeEverUsed(league: LeagueState | null): boolean {
+  return !!(league?.sportData as LeagueSportData | undefined)?.godModeEverUsed;
+}
+
 export function setGodMode(league: LeagueState, on: boolean): LeagueState {
-  return { ...league, sportData: { ...(league.sportData as LeagueSportData), godMode: on } };
+  const sd = league.sportData as LeagueSportData;
+  return { ...league, sportData: { ...sd, godMode: on, godModeEverUsed: sd?.godModeEverUsed || on } };
 }
 
 /** Shift skill ratings by a uniform delta until computeOverall hits `target`. */
@@ -80,5 +89,7 @@ export function editPlayer(league: LeagueState, playerId: string, patch: PlayerE
     ...league.players,
     [playerId]: { ...p, ratings, age, development: { ...p.development, potential } },
   };
-  return { ...league, players };
+  // Editing a player is a God-Mode action — stamp the sticky flag.
+  const sd = league.sportData as LeagueSportData;
+  return { ...league, players, sportData: { ...sd, godModeEverUsed: true } };
 }

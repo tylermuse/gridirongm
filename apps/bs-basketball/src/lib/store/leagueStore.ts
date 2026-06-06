@@ -63,6 +63,7 @@ import { executeTrade, proposeTrade as proposeTradeLib, type TradeSideInput, typ
 import { setTeamLineup } from '../lineup';
 import { clearGmFired } from '../approval';
 import { setGodMode as setGodModeLib, editPlayer as editPlayerLib, type PlayerEdit } from '../godMode/godMode';
+import { buildGmSyncPayload, syncGmStats } from '../gm/gmSync';
 import { scoutProspect as scoutProspectState } from '../scouting';
 import { markChangelogSeen as markChangelogSeenState } from '../ui/changelog';
 import type { TeamId, BaseCoach } from '@bs/core/adapter';
@@ -226,13 +227,15 @@ function simSummary(league: BasketballLeagueState, gamesSimmed: number): string 
 
 /** Build a persistable league from converted import data. */
 function leagueFromImport(imported: ImportedHoopsLeague): BasketballLeagueState {
-  return assembleLeague({
+  const league = assembleLeague({
     teams: imported.teams,
     players: imported.players,
     freeAgentIds: imported.freeAgentIds,
     season: imported.season,
     displayName: `NBA ${imported.season}`,
   });
+  // Flag custom-roster leagues so they're excluded from the global GM board.
+  return { ...league, sportData: { ...(league.sportData as object), imported: true } };
 }
 
 /** Friendly error copy for a failed import. */
@@ -510,6 +513,11 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
     set({ loading: true, error: null });
     try {
+      // Sync the just-completed season to the global GM board before rollover
+      // (current still holds the final bracket + records). Fire-and-forget.
+      const payload = buildGmSyncPayload(current);
+      if (payload) syncGmStats(payload);
+
       const league = enterOffseason(current);
       await saveLeague(league);
       set({ league, loading: false });
