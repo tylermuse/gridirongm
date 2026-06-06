@@ -8,7 +8,7 @@ import { createNewBasketballLeague } from '@/../apps/bs-basketball/src/lib/leagu
 import { simNextDay } from '@/../apps/bs-basketball/src/lib/sim/runSimDay';
 import { initializePlayoffs, simPlayoffDay, getBracket, isRegularSeasonComplete } from '@/../apps/bs-basketball/src/lib/playoffs';
 import { enterOffseason } from '@/../apps/bs-basketball/src/lib/season';
-import { getDraft, autoPickUntilUser, buildBigBoard, buildDraftRecap } from '@/../apps/bs-basketball/src/lib/draft';
+import { getDraft, autoPickUntilUser, buildBigBoard, buildDraftRecap, buildTeamDraftGrades } from '@/../apps/bs-basketball/src/lib/draft';
 
 type League = ReturnType<typeof createNewBasketballLeague>;
 function reg(l: League): League { let g = 0; while (!isRegularSeasonComplete(l) && g < 500) { const r = simNextDay(l); if (!r) break; l = r.league as League; g++; } return l; }
@@ -42,5 +42,14 @@ describe('draft big board + recap', () => {
     // Steals fell past their value; reaches went early.
     expect(recap.steals.every(p => p.delta >= 6)).toBe(true);
     expect(recap.reaches.every(p => p.delta <= -6)).toBe(true);
+
+    // Team grades: sorted best-to-worst by average value gained.
+    const grades = buildTeamDraftGrades(recap);
+    expect(grades.length).toBeGreaterThan(0);
+    for (let i = 1; i < grades.length; i++) expect(grades[i - 1].avgDelta).toBeGreaterThanOrEqual(grades[i].avgDelta);
+    for (const g of grades) {
+      expect(g.grade).toMatch(/^[ABCDF][+-]?$/);
+      expect(g.pickCount).toBeGreaterThanOrEqual(1);
+    }
   }, 120_000);
 });

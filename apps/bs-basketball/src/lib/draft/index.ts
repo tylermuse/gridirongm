@@ -12,5 +12,5 @@ export { SCOUTS_PER_DRAFT } from './types';
 export type { DraftState, DraftPickSlot } from './types';
 export { buildLotteryReveal, buildLotteryBoard } from './lotteryReveal';
 export type { LotteryRevealCard, LotteryMovement } from './lotteryReveal';
-export { buildBigBoard, buildDraftRecap } from './recap';
-export type { BigBoardEntry, DraftRecap, RecapPick } from './recap';
+export { buildBigBoard, buildDraftRecap, buildTeamDraftGrades } from './recap';
+export type { BigBoardEntry, DraftRecap, RecapPick, TeamDraftGrade } from './recap';

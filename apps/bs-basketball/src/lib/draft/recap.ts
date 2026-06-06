@@ -129,3 +129,40 @@ export function buildDraftRecap(league: LeagueState): DraftRecap | null {
     userPicks: picks.filter(p => p.isUser),
   };
 }
+
+export interface TeamDraftGrade {
+  teamId: string;
+  teamLabel: string;
+  grade: string;
+  gradeColor: string;
+  avgDelta: number;
+  pickCount: number;
+  bestPick: RecapPick | null;
+  isUser: boolean;
+}
+
+/** Per-team draft grade (average pick value-vs-slot), best to worst. */
+export function buildTeamDraftGrades(recap: DraftRecap): TeamDraftGrade[] {
+  const byTeam = new Map<string, RecapPick[]>();
+  for (const p of recap.picks) {
+    const list = byTeam.get(p.teamId) ?? [];
+    list.push(p);
+    byTeam.set(p.teamId, list);
+  }
+  return [...byTeam.values()]
+    .map(picks => {
+      const avg = picks.reduce((s, p) => s + p.delta, 0) / picks.length;
+      const { grade, color } = pickGrade(avg);
+      const bestPick = [...picks].sort((a, b) => b.delta - a.delta)[0] ?? null;
+      return {
+        teamId: picks[0].teamId,
+        teamLabel: picks[0].teamLabel,
+        grade, gradeColor: color,
+        avgDelta: Math.round(avg * 10) / 10,
+        pickCount: picks.length,
+        bestPick,
+        isUser: picks.some(p => p.isUser),
+      };
+    })
+    .sort((a, b) => b.avgDelta - a.avgDelta);
+}
