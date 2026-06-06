@@ -195,11 +195,22 @@ export function enterOffseason(input: LeagueState): LeagueState {
   const interim: LeagueState = { ...league, players, teams };
   const draft = setupDraft(interim, nextSeason, poolIds);
 
+  // Flag the user's expiring players (no deal for next season) for the forced
+  // re-sign step. Any they don't re-sign walk to free agency at season start.
+  const pendingResign: PlayerId[] = [];
+  if (league.userTeamId) {
+    const ut = teams.find(t => t.id === league.userTeamId);
+    for (const id of ut?.playerIds ?? []) {
+      const p = players[id];
+      if (p && !hasContractForSeason(p, nextSeason)) pendingResign.push(id as PlayerId);
+    }
+  }
+
   return {
     ...interim,
     currentPhase: 'offseason',
     seasonHistory: { ...league.seasonHistory, [league.currentSeason]: historyEntry },
-    sportData: { ...(league.sportData as LeagueSportData), draft },
+    sportData: { ...(league.sportData as LeagueSportData), draft, pendingResign },
   };
 }
 
@@ -229,8 +240,27 @@ export function startNextSeason(league: LeagueState): LeagueState {
 
   const posOf = (id: string): BasketballPosition | null => players[id]?.sportData.position ?? null;
 
+  // The user's expiring players that they didn't re-sign walk to free agency.
+  // (AI teams keep their own automatically, below.) Done before the trim so the
+  // roster-fill backfills any holes.
+  const userTeamId = league.userTeamId;
+  const userWalk = new Set<string>();
+  if (userTeamId) {
+    const ut = league.teams.find(t => t.id === userTeamId);
+    for (const id of ut?.playerIds ?? []) {
+      if (!hasContractForSeason(players[id], season)) userWalk.add(id);
+    }
+  }
+
   const teams: BasketballTeam[] = league.teams.map(t => {
     let ids = [...t.playerIds];
+
+    if (t.id === userTeamId && userWalk.size) {
+      for (const id of ids) {
+        if (userWalk.has(id)) { players[id] = { ...players[id], rosterSlot: null }; freeAgentLastTeam[id] = t.id; }
+      }
+      ids = ids.filter(id => !userWalk.has(id));
+    }
 
     // Draft picks can push a roster over the cap — waive the lowest keep-value
     // players to 15, but never cut a position below its floor.
@@ -322,6 +352,7 @@ export function startNextSeason(league: LeagueState): LeagueState {
   const sportData = { ...(league.sportData as LeagueSportData) };
   delete sportData.draft;
   delete sportData.playoffs;
+  delete sportData.pendingResign; // re-sign decisions resolved for this offseason
   delete sportData.injuries; // everyone starts the new season healthy
   sportData.freeAgentLastTeam = freeAgentLastTeam;
 

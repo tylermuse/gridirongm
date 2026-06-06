@@ -114,6 +114,7 @@ export default function DraftPage() {
   // --- Active draft ---
   const slot = currentSlot(draft);
   const userOnClock = !!slot && slot.teamId === league.userTeamId;
+  const resignCount = (league.sportData as { pendingResign?: string[] }).pendingResign?.length ?? 0;
   const recommendedId = !draft.complete ? recommendedProspectId(league, draft) : null;
 
   // POT sorting uses what the GM can actually see: true potential once scouted,
@@ -191,6 +192,9 @@ export default function DraftPage() {
       <div className="flex flex-wrap gap-3 mb-4 text-sm font-semibold">
         <Link href="/draft-preview" className="hover:underline" style={{ color: 'var(--accent)' }}>🔭 Big Board →</Link>
         {draft.complete && <Link href="/draft-recap" className="hover:underline" style={{ color: 'var(--accent)' }}>🎬 Draft Recap →</Link>}
+        {resignCount > 0 && (
+          <Link href="/re-sign" className="hover:underline" style={{ color: '#b45309' }}>🖊️ Re-sign {resignCount} expiring player{resignCount === 1 ? '' : 's'} →</Link>
+        )}
       </div>
 
       {/* Reviewable lottery results: odds + slated seed vs. where teams landed. */}

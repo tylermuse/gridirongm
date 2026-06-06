@@ -42,10 +42,14 @@ export default function ReSignPage() {
 
   return (
     <Shell>
-      <p className="text-sm text-[var(--text-sec)] mb-4">
+      <p className="text-sm text-[var(--text-sec)] mb-2">
         {userTeam.city} · cap room {money(room)} · {expiring.length} player{expiring.length === 1 ? '' : 's'} in a contract year.
-        Re-sign them now or risk losing them in free agency.
       </p>
+      {expiring.length > 0 && (
+        <p className="text-sm font-semibold mb-4 rounded-lg px-3 py-2" style={{ background: 'color-mix(in srgb, #d97706 14%, transparent)', color: '#b45309' }}>
+          ⚠ Any expiring player you don&apos;t re-sign will walk to free agency when the next season starts.
+        </p>
+      )}
 
       {expiring.length === 0 ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
