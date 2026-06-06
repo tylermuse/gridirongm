@@ -6,6 +6,7 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { gmRankings, type GmRanking } from '@/lib/rankings/gmRankings';
+import { GlobalLeaderboard } from '@/components/gm/GlobalLeaderboard';
 import { Skeleton, SkeletonList } from '@/components/ui/Skeleton';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
@@ -45,6 +46,10 @@ export default function GmRankingsPage() {
       </header>
       <p className="text-sm text-[var(--text-sec)] mb-5">Front offices ranked by results, roster talent, young-core upside, cap health, and franchise legacy.</p>
 
+      {/* Cross-player global board (opt-in, online). Renders nothing if online accounts aren't configured. */}
+      <GlobalLeaderboard />
+
+      <h2 className="text-sm font-bold uppercase tracking-widest text-[var(--text-sec)] mb-2">This league</h2>
       {ranked.length === 0 ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <EmptyState icon="🏅" title="No rankings yet" message="Start a league to see the GM leaderboard." />
