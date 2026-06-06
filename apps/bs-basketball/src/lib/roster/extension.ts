@@ -12,7 +12,7 @@ import {
   type BasketballPlayer,
 } from '@bs/sport-basketball';
 import type { BaseContract } from '@bs/core/adapter';
-import type { Offer } from '@/lib/freeAgency';
+import type { Offer } from '../freeAgency';
 
 export interface ExtensionMarket {
   /** Salary $/yr the player is looking for. */
