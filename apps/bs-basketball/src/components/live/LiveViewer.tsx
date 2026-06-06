@@ -274,7 +274,7 @@ function QuarterSplits({ game, home, away, uptoQuarter, atEnd }: { game: GameRes
   const quarters = (game.sportData as { quarterScores?: { home: number; away: number }[] } | undefined)?.quarterScores ?? [];
   const shown = atEnd ? quarters.length : Math.min(quarters.length, uptoQuarter);
   return (
-    <table className="w-full text-sm text-white/80">
+    <div className="overflow-x-auto"><table className="w-full text-sm text-white/80">
       <thead className="text-[11px] text-white/40">
         <tr>
           <th className="text-left py-1">Team</th>
@@ -293,7 +293,7 @@ function QuarterSplits({ game, home, away, uptoQuarter, atEnd }: { game: GameRes
           </tr>
         ))}
       </tbody>
-    </table>
+    </table></div>
   );
 }
 

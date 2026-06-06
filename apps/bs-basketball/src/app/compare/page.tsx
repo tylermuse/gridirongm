@@ -184,7 +184,7 @@ function CompareTable({ title, rows }: { title: string; rows: Row[] }) {
       <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest opacity-60 border-b" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
         {title}
       </div>
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto"><table className="w-full text-sm">
         <tbody>
           {rows.map(r => {
             const aWins = r.aValue > r.bValue;
@@ -205,7 +205,7 @@ function CompareTable({ title, rows }: { title: string; rows: Row[] }) {
             );
           })}
         </tbody>
-      </table>
+      </table></div>
     </section>
   );
 }
