@@ -6,18 +6,15 @@ import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
-import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { getDraft, currentSlot, recommendedProspectId, buildLotteryReveal, buildLotteryBoard } from '@/lib/draft';
 import { LotteryBoard } from '@/components/draft/LotteryBoard';
 import { OnTheClockSection } from '@/components/draft/OnTheClockSection';
-import type { DraftPickSlot, DraftState } from '@/lib/draft';
+import { DraftBoardCard } from '@/components/draft/DraftBoardCard';
+import type { DraftPickSlot } from '@/lib/draft';
 import { LotteryRevealCeremony } from '@/components/draft/LotteryReveal';
-import { perceivedPotential, projectionGrade, isScouted, scoutsLeft, GRADE_LABEL } from '@/lib/scouting';
-import { buildScoutingReport } from '@/lib/scouting/scoutingReport';
-import { ScoutingReportModal } from '@/components/draft/ScoutingReportModal';
-import type { BasketballPlayer, BasketballRatings, BasketballTeam } from '@bs/sport-basketball';
+import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
 /**
  * /draft — the NBA draft board (Phase 2D-4).
@@ -31,8 +28,6 @@ export default function DraftPage() {
   const { league, loading, error } = useLeagueOrHydrate();
   const store = useLeagueStore();
   const router = useRouter();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<'overall' | 'potential'>('overall');
   const [showCeremony, setShowCeremony] = useState(false);
 
   const draft = league ? getDraft(league) : null;
@@ -117,24 +112,10 @@ export default function DraftPage() {
   const resignCount = (league.sportData as { pendingResign?: string[] }).pendingResign?.length ?? 0;
   const recommendedId = !draft.complete ? recommendedProspectId(league, draft) : null;
 
-  // POT sorting uses what the GM can actually see: true potential once scouted,
-  // otherwise the noisy perceived estimate.
-  const potFor = (p: BasketballPlayer) =>
-    isScouted(draft, p.id) ? p.development.potential : perceivedPotential(p, draft.season);
   const pool = draft.poolIds
     .map(id => playerById[id])
     .filter(Boolean)
-    .sort((a, b) =>
-      sortKey === 'overall'
-        ? b.ratings.overall - a.ratings.overall
-        : potFor(b) - potFor(a),
-    );
-
-  const shown =
-    (selectedId && pool.find(p => p.id === selectedId)) ||
-    (recommendedId ? playerById[recommendedId] : null) ||
-    pool[0] ||
-    null;
+    .sort((a, b) => b.ratings.overall - a.ratings.overall);
 
   async function handleStartSeason(dest: string) {
     // An imported league's inaugural draft tips straight into the current
@@ -178,13 +159,8 @@ export default function DraftPage() {
           onSimToUser={() => void store.simDraftToUser()}
           onSimAll={() => void store.simDraftAll()}
           onOpenTrade={() => router.push('/trade')}
-          onSelectProspect={(id) => setSelectedId(id)}
-          onDraftProspect={(id) => {
-            void (async () => {
-              const ok = await store.draftPick(id);
-              if (ok) setSelectedId(null);
-            })();
-          }}
+          onSelectProspect={() => { /* the board below is the prospect surface */ }}
+          onDraftProspect={(id) => { void store.draftPick(id); }}
         />
       </div>
 
@@ -220,47 +196,17 @@ export default function DraftPage() {
           </ol>
         </section>
 
-        {/* Prospects + scouting */}
-        <section className="space-y-4">
-          {shown && (
-            <ScoutingPanel
-              prospect={shown}
-              draft={draft}
-              isRecommended={shown.id === recommendedId}
-              canDraft={userOnClock && !draft.complete}
-              loading={store.loading}
-              onScout={() => void store.scoutProspect(shown.id)}
-              onDraft={() => {
-                void (async () => {
-                  const ok = await store.draftPick(shown.id);
-                  if (ok) setSelectedId(null);
-                })();
-              }}
-            />
-          )}
-
-          <div className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-            <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
-              <h2 className="font-bold text-sm">Available ({pool.length})</h2>
-              <div className="flex gap-1 text-xs">
-                <SortTab label="OVR" active={sortKey === 'overall'} onClick={() => setSortKey('overall')} />
-                <SortTab label="POT" active={sortKey === 'potential'} onClick={() => setSortKey('potential')} />
-              </div>
-            </div>
-            <ul className="max-h-[26rem] overflow-y-auto">
-              {pool.map(p => (
-                <ProspectRow
-                  key={p.id}
-                  prospect={p}
-                  draft={draft}
-                  selected={shown?.id === p.id}
-                  isRecommended={p.id === recommendedId}
-                  onSelect={() => setSelectedId(p.id)}
-                />
-              ))}
-            </ul>
-          </div>
-        </section>
+        {/* Prospect board (search/filter/scout + inline expansion) */}
+        <DraftBoardCard
+          league={league}
+          draft={draft}
+          pool={pool}
+          recommendedId={recommendedId}
+          userOnClock={userOnClock && !draft.complete}
+          loading={store.loading}
+          onScout={(id) => void store.scoutProspect(id)}
+          onDraft={(id) => { void store.draftPick(id); }}
+        />
       </div>
     </Shell>
   );
@@ -310,160 +256,6 @@ function BoardRow({
       )}
     </li>
   );
-}
-
-function ProspectRow({
-  prospect, draft, selected, isRecommended, onSelect,
-}: {
-  prospect: BasketballPlayer;
-  draft: DraftState;
-  selected: boolean;
-  isRecommended: boolean;
-  onSelect: () => void;
-}) {
-  const scouted = isScouted(draft, prospect.id);
-  const grade = projectionGrade(perceivedPotential(prospect, draft.season));
-  return (
-    <li>
-      <button
-        onClick={onSelect}
-        className="w-full flex items-center gap-2 px-3 py-1.5 border-t text-left text-sm hover:bg-[var(--surface-2)] transition-colors"
-        style={{ borderColor: 'var(--border)', background: selected ? 'var(--surface-2)' : undefined }}
-      >
-        <span className="font-semibold truncate flex-1">{prospect.firstName} {prospect.lastName}</span>
-        {isRecommended && (
-          <span className="text-[9px] font-black px-1.5 py-0.5 rounded" style={{ background: 'var(--accent)', color: '#fff' }}>
-            REC
-          </span>
-        )}
-        <span className="text-xs opacity-60 w-6">{prospect.sportData.position}</span>
-        <span className="text-xs tabular-nums w-7 text-right font-bold">{prospect.ratings.overall}</span>
-        {/* POT column: true potential once scouted, otherwise a projection grade. */}
-        <span className="text-xs tabular-nums w-7 text-right" style={{ opacity: scouted ? 0.5 : 1, fontWeight: scouted ? 400 : 700 }}>
-          {scouted ? prospect.development.potential : grade}
-        </span>
-      </button>
-    </li>
-  );
-}
-
-function ScoutingPanel({
-  prospect, draft, isRecommended, canDraft, loading, onScout, onDraft,
-}: {
-  prospect: BasketballPlayer;
-  draft: DraftState;
-  isRecommended: boolean;
-  canDraft: boolean;
-  loading: boolean;
-  onScout: () => void;
-  onDraft: () => void;
-}) {
-  const c = composite(prospect.ratings);
-  const scouted = isScouted(draft, prospect.id);
-  const grade = projectionGrade(perceivedPotential(prospect, draft.season));
-  const scoutsAvailable = scoutsLeft(draft) > 0;
-  const [reportOpen, setReportOpen] = useState(false);
-  return (
-    <div className="rounded-xl border bg-[var(--surface)] p-4" style={{ borderColor: 'var(--border)' }}>
-      <div className="flex items-center gap-3">
-        <PlayerAvatar firstName={prospect.firstName} lastName={prospect.lastName} primaryColor="#444" secondaryColor="#fff" size="lg" />
-        <div className="min-w-0 flex-1">
-          <div className="font-bold truncate">{prospect.firstName} {prospect.lastName}</div>
-          <div className="text-xs text-[var(--text-sec)]">
-            {prospect.sportData.position} · Age {prospect.age} · {prospect.sportData.starTier}
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="text-2xl font-black tabular-nums" style={{ color: 'var(--accent)' }}>{prospect.ratings.overall}</div>
-          <div className="text-[10px] uppercase tracking-widest opacity-60">
-            OVR · {scouted ? `${prospect.development.potential} POT` : `proj ${grade}`}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 mt-4">
-        {Object.entries(c).map(([label, val]) => (
-          <div key={label} className="rounded-lg bg-[var(--surface-2)] px-2 py-1.5">
-            <div className="text-sm font-bold tabular-nums">{val}</div>
-            <div className="text-[9px] uppercase tracking-wide opacity-60">{label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Scouting: reveal true potential, or show the unscouted projection. */}
-      <div className="mt-3 rounded-lg px-3 py-2 text-xs" style={{ background: 'var(--surface-2)' }}>
-        {scouted ? (
-          <span>🔍 Scouted — true potential <strong>{prospect.development.potential}</strong>.</span>
-        ) : (
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[var(--text-sec)]">Projection <strong style={{ color: 'var(--text)' }}>{GRADE_LABEL[grade]}</strong> — ceiling unconfirmed.</span>
-            <button
-              onClick={onScout}
-              disabled={!scoutsAvailable || loading}
-              className="shrink-0 px-2 py-1 rounded-md font-semibold disabled:opacity-40"
-              style={{ background: 'var(--accent)', color: '#fff' }}
-            >
-              🔍 Scout
-            </button>
-          </div>
-        )}
-      </div>
-
-      <button
-        onClick={() => setReportOpen(true)}
-        className="mt-2 w-full text-xs font-semibold rounded-lg py-1.5 border hover:bg-[var(--surface-2)] transition-colors"
-        style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}
-      >
-        📋 Full scouting report →
-      </button>
-      {reportOpen && (
-        <ScoutingReportModal
-          player={prospect}
-          report={buildScoutingReport(prospect, { season: draft.season, scouted })}
-          onClose={() => setReportOpen(false)}
-          onScout={() => { onScout(); }}
-          canScout={scoutsAvailable && !loading}
-        />
-      )}
-
-      {isRecommended && (
-        <div className="text-xs mt-3 opacity-70">⭐ Top recommendation from your scouting staff for this pick.</div>
-      )}
-
-      <div className="mt-4">
-        <Button variant="primary" disabled={!canDraft || loading} onClick={onDraft} className="w-full">
-          {canDraft ? `Draft ${prospect.lastName}` : 'Not your pick'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function SortTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="px-2 py-0.5 rounded font-semibold transition-colors"
-      style={{
-        background: active ? 'var(--accent)' : 'transparent',
-        color: active ? '#fff' : 'var(--text-sec)',
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
-function composite(r: BasketballRatings): Record<string, number> {
-  const avg = (...xs: number[]) => Math.round(xs.reduce((a, b) => a + b, 0) / xs.length);
-  return {
-    Inside: avg(r.finishing, r.postScoring),
-    Outside: avg(r.threePoint, r.midRange),
-    Playmk: avg(r.passing, r.handles),
-    Defense: avg(r.perimeterDefense, r.interiorDefense, r.steal, r.block),
-    Athletic: avg(r.speed, r.vertical, r.strength),
-    IQ: r.basketballIQ,
-  };
 }
 
 function Shell({ season, children }: { season: number; children: React.ReactNode }) {
