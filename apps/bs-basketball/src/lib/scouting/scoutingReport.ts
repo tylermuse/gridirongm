@@ -28,13 +28,31 @@ export interface BasketballScoutingReport {
   /** Ceiling (true if scouted, perceived projection otherwise). */
   ceiling: number;
   ceilingNote: string;
+  /** Downside projection if development stalls. */
+  floor: number;
+  confidence: 'High' | 'Medium' | 'Low';
+  riskLevel: 'Low' | 'Medium' | 'High';
+  /** Development trajectory label. */
+  trajectory: 'Rapid Riser' | 'Steady Climber' | 'Slow Developer' | 'Near Ceiling';
+  peakAge: number;
+  /** NBA-style player comparison. */
+  nbaComparison: string;
   measurables: Measurable[];
+  physicalTraits: RatingLine[];
   devCurve: DevCurvePoint[];
-  character: { grade: string; note: string };
+  character: { workEthic: number; leadership: number; coachability: number; competitiveness: number; notes: string };
   strengths: string[];
   weaknesses: string[];
   keyRatings: RatingLine[];
 }
+
+const NBA_COMPS: Record<BasketballPosition, string[]> = {
+  PG: ['a rangy lead guard like Jalen Suggs', 'shades of Derrick White', 'a young Coby White', 'a steady Mike Conley type'],
+  SG: ['a 3-and-D wing in the DiVincenzo mold', 'flashes of Bogdan Bogdanović', 'a microwave scorer like Malik Monk', 'a bigger Gary Trent Jr.'],
+  SF: ['a connector forward like Mikal Bridges', 'two-way upside à la Herb Jones', 'a bigger OG Anunoby', 'a slasher like Cam Johnson'],
+  PF: ['a stretch four like Kyle Kuzma', 'rim-running energy à la Aaron Gordon', 'a switchy combo forward', 'a modern P.J. Washington'],
+  C: ['a rim-runner like Walker Kessler', 'rim protection à la Jarrett Allen', 'a stretch five like Myles Turner', 'a mobile Nic Claxton type'],
+};
 
 function hash(s: string): number {
   let h = 2166136261;
@@ -131,19 +149,36 @@ export function buildScoutingReport(
     projected: clamp(r.overall + gap * f, 40, 99),
   }));
 
-  // Character — basketball IQ + intangibles + a seeded work-ethic roll.
+  // Character — basketball IQ + intangibles, split into four seeded sub-scores.
   const charScore = clamp((r.basketballIQ + r.intangibles) / 2 + (((seed >> 4) % 14) - 6));
-  const charGrade = charScore >= 78 ? 'A' : charScore >= 68 ? 'B' : charScore >= 58 ? 'C' : 'D';
+  const wob = (shift: number) => clamp(charScore + (((seed >> shift) % 12) - 6));
   const character = {
-    grade: charGrade,
-    note: pick([
+    workEthic: wob(6),
+    leadership: wob(9),
+    coachability: wob(12),
+    competitiveness: wob(15),
+    notes: pick([
       'Coaches rave about the work ethic and film study.',
       'High-character kid; vocal leader in the locker room.',
       'Steady temperament — plays within himself.',
       'Some maturity questions, but the talent is real.',
       'Competitive edge that shows up in the biggest moments.',
-    ], seed >> 6 + charScore),
+    ], (seed >> 6) + charScore),
   };
+
+  // Floor / risk / trajectory / peak / comp.
+  const floor = clamp(r.overall - Math.round(gap * 0.2) - 3, 40, ceiling);
+  const confidence: BasketballScoutingReport['confidence'] = opts.scouted ? 'High' : gap >= 12 ? 'Low' : gap >= 6 ? 'Medium' : 'High';
+  const riskLevel: BasketballScoutingReport['riskLevel'] = gap >= 12 ? 'High' : gap >= 6 ? 'Medium' : 'Low';
+  const trajectory: BasketballScoutingReport['trajectory'] = gap >= 12 ? 'Rapid Riser' : gap >= 5 ? 'Steady Climber' : gap >= 1 ? 'Slow Developer' : 'Near Ceiling';
+  const peakAge = player.age + (gap >= 10 ? 5 : gap >= 5 ? 4 : 3);
+  const nbaComparison = pick(NBA_COMPS[player.sportData.position], seed >> 3);
+  const physicalTraits: RatingLine[] = [
+    { label: 'Speed', value: r.speed },
+    { label: 'Strength', value: r.strength },
+    { label: 'Vertical', value: r.vertical },
+    { label: 'Length', value: clamp(50 + (r.wingspan - r.height) * 5) },
+  ];
 
   // Strengths / weaknesses from the skill ratings.
   const skills = (Object.keys(RATING_LABELS) as (keyof BasketballRatings)[])
@@ -166,8 +201,8 @@ export function buildScoutingReport(
     scouted: opts.scouted,
     grade, gradeColor: color,
     archetype, summary,
-    ceiling, ceilingNote,
-    measurables, devCurve, character,
+    ceiling, ceilingNote, floor, confidence, riskLevel, trajectory, peakAge, nbaComparison,
+    measurables, physicalTraits, devCurve, character,
     strengths, weaknesses, keyRatings,
   };
 }
