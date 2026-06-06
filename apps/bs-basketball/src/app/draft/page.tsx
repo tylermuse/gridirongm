@@ -13,6 +13,7 @@ import { OnTheClockSection } from '@/components/draft/OnTheClockSection';
 import { DraftBoardCard } from '@/components/draft/DraftBoardCard';
 import { DraftResultsCard } from '@/components/draft/DraftResultsCard';
 import { DraftFooter } from '@/components/draft/DraftFooter';
+import { DraftRecapInline } from '@/components/draft/DraftRecapInline';
 import { LotteryRevealCeremony } from '@/components/draft/LotteryReveal';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
@@ -195,6 +196,9 @@ export default function DraftPage() {
 
       {/* Your needs + recent picks */}
       <DraftFooter league={league} draft={draft} teamById={teamById} playerById={playerById} />
+
+      {/* Team grades, once the board's complete. */}
+      {draft.complete && <DraftRecapInline league={league} />}
     </Shell>
   );
 }
