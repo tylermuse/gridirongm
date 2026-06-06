@@ -22,7 +22,10 @@ export const SPOTLIGHT_HOSTS: Record<SpotlightVoice, { name: string; avatar: str
   take: { name: 'Jax Maddox', avatar: '🔥', tagline: 'the takes' },
 };
 
-export interface SpotlightExchange { voice: SpotlightVoice; line: string }
+/** Commentator voices are keyed in SPOTLIGHT_HOSTS; player/fan are bubble
+ *  variants (a tweet card / a fan-pulse callout) rendered differently. */
+export type ExchangeVoice = SpotlightVoice | 'player' | 'fan';
+export interface SpotlightExchange { voice: ExchangeVoice; line: string }
 export type StoryCategory = 'Statement' | 'Upset' | 'Breakout' | 'Streak' | 'Discipline' | 'MVP Race' | 'Rivalry' | 'Your Team';
 
 export interface SpotlightStory {
@@ -63,6 +66,8 @@ const CATEGORY_OF: Partial<Record<FeedKind, StoryCategory>> = {
 function exchangesFor(cat: StoryCategory, headline: string, seed: number): SpotlightExchange[] {
   const a = (lines: string[]) => ({ voice: 'analyst' as const, line: pick(lines, seed) });
   const t = (lines: string[]) => ({ voice: 'take' as const, line: pick(lines, seed >> 3) });
+  const p = (lines: string[]): SpotlightExchange => ({ voice: 'player', line: pick(lines, seed >> 5) });
+  const f = (lines: string[]): SpotlightExchange => ({ voice: 'fan', line: pick(lines, seed >> 6) });
   switch (cat) {
     case 'Statement':
       return [
@@ -74,10 +79,12 @@ function exchangesFor(cat: StoryCategory, headline: string, seed: number): Spotl
       return [
         a([`${headline}. The favorite settled for jumpers and got punished in transition.`, `${headline}. Upsets like this usually trace to one bad shot-selection night.`]),
         t([`UPSET?! NO SUCH THING. THE \"FAVORITE\" IS A FRAUD AND WE ALL KNEW IT.`, `BURN THE SEEDINGS. CHAOS REIGNS. I LOVE THIS LEAGUE.`]),
+        f([`Did NOT have this on my bingo card 😭🔥`, `WE BEAT THEM?! best night of my life`, `nobody believed in us. NOBODY.`]),
       ];
     case 'Breakout':
       return [
         a([`${headline}. The usage spiked and the efficiency held — that's the real signal.`, `${headline}. Career night, but the shot profile says it's sustainable.`]),
+        p([`Tonight was special. Blessed to be in this position 🙏 hard work pays off.`, `Just trying to win for my guys. We not done. 💯`, `God is good. On to the next one.`]),
         t([`SUSTAINABLE?! HE'S A SUPERSTAR NOW. ALL-NBA. MVP. GIVE HIM THE KEYS.`, `I'M TRADING MY WHOLE TEAM FOR THIS GUY. WRITE IT DOWN.`]),
         a([`Let's pump the brakes — one box score isn't a career.`, `He's good. Let's not coronate him in November.`]),
       ];
