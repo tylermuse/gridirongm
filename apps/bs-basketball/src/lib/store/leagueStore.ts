@@ -262,28 +262,23 @@ function leagueFromImport(imported: ImportedHoopsLeague): BasketballLeagueState 
 
   // Imported leagues start with their upcoming draft (real class + ownership)
   // before free agency — the file is a pre-draft snapshot, so don't skip it.
-  // The file doesn't store the lottery slot order (every pick is pick:0), so we
-  // order it by reverse roster strength (weakest team picks first) — a sensible,
-  // NBA-shaped order — and apply the file's real traded-pick ownership on top.
+  // The slot order is the most recent completed season's reverse standings
+  // (worst picks first — the real basis), with the file's traded-pick ownership
+  // applied on top.
   if (imported.draftProspectIds.length > 0) {
-    const teamStrength = (t: BasketballTeam): number => {
-      const ovrs = t.playerIds
-        .map(id => (league.players[id] as BasketballPlayer | undefined)?.ratings.overall ?? 0)
-        .sort((a, b) => b - a)
-        .slice(0, 8);
-      return ovrs.length ? ovrs.reduce((s, v) => s + v, 0) / ovrs.length : 0;
-    };
-    const ordered = [...(league.teams as BasketballTeam[])].sort((a, b) => teamStrength(a) - teamStrength(b));
+    const ordered = imported.draftOrderTeamIds.length === league.teams.length
+      ? imported.draftOrderTeamIds
+      : (league.teams as BasketballTeam[]).map(t => t.id);
     const picks: DraftPickSlot[] = [];
     for (let round = 1; round <= 2; round++) {
-      ordered.forEach((t, i) => {
+      ordered.forEach((originalTeamId, i) => {
         const overall = (round - 1) * ordered.length + i + 1;
         picks.push({
           overall,
           round,
           pickInRound: i + 1,
-          originalTeamId: t.id,
-          teamId: currentOwner(league, imported.season, round, t.id),
+          originalTeamId,
+          teamId: currentOwner(league, imported.season, round, originalTeamId),
           isLottery: overall <= 14,
           prospectId: null,
         });

@@ -27,11 +27,22 @@ describe('convertBbgmLeague — inaugural draft', () => {
 
   it('rates prospects raw (low current OVR) with the upside in potential, not as inflated veterans', () => {
     const pros = imported.draftProspectIds.map(id => imported.players[id]);
-    // No prospect should be calibrated into the established-pro 70s/80s.
-    expect(Math.max(...pros.map(p => p.ratings.overall))).toBeLessThanOrEqual(70);
+    // Prospects stay in draft range (the consensus #1 tops out ~73), never
+    // calibrated into established-veteran territory (80+).
+    expect(Math.max(...pros.map(p => p.ratings.overall))).toBeLessThanOrEqual(75);
     // Most carry real upside (a clear gap from current OVR to ceiling).
     const withUpside = pros.filter(p => p.development.potential >= p.ratings.overall + 10);
     expect(withUpside.length).toBeGreaterThan(pros.length / 2);
+  });
+
+  it('ranks the consensus class (Dybantsa #1) and orders by reverse standings', () => {
+    const pros = imported.draftProspectIds
+      .map(id => imported.players[id])
+      .sort((a, b) => b.ratings.overall - a.ratings.overall || b.development.potential - a.development.potential);
+    expect(`${pros[0].firstName} ${pros[0].lastName}`).toBe('AJ Dybantsa');
+    // Worst record from the most recent completed season picks first (Utah 17-65).
+    expect(imported.draftOrderTeamIds).toHaveLength(30);
+    expect(imported.draftOrderTeamIds[0]).toBe('team-uta');
   });
 
   it('keeps the real pick ownership for traded picks', () => {

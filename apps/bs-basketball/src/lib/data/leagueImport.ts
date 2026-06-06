@@ -23,6 +23,7 @@ import {
 } from '@bs/sport-basketball';
 import type { PlayerId, TeamId } from '@bs/core/adapter';
 import { HOOPS_LEAGUE_TEAMS, type BasketballTeamTemplate } from './teams';
+import { consensus2026Rank, consensus2026Value } from './draft2026';
 import { makeBasketballTeam } from '../league/createLeague';
 
 // ===========================================================================
@@ -61,6 +62,7 @@ interface BbgmTeam {
   colors?: string[];
   imgURL?: string;
   disabled?: boolean;
+  seasons?: { season?: number; won?: number; lost?: number }[];
 }
 
 interface BbgmDraftPick {
@@ -99,6 +101,9 @@ export interface ImportedHoopsLeague {
   draftProspectIds: PlayerId[];
   /** Pick ownership for the upcoming draft (real traded picks from the file). */
   draftPickOwnership: ImportedPickOwnership[];
+  /** Draft order (our team ids, worst-first) from the most recent completed
+   *  season's reverse standings — the real basis for the upcoming draft. */
+  draftOrderTeamIds: TeamId[];
 }
 
 // ===========================================================================
@@ -539,7 +544,20 @@ export function convertBbgmLeague(file: BbgmLeagueFile): ImportedHoopsLeague {
       // future classes (2027+) are left out for v1.
       if (bp.draft?.year === season) {
         const pr = convertPlayer(bp, index, season, null, 0, true);
-        if (pr) { players[pr.id] = pr; draftProspectIds.push(pr.id); }
+        if (pr) {
+          // Lift consensus-class prospects to their real draft value, so the
+          // big board matches reality (a raw teen's attributes otherwise rank
+          // the #1 pick below role players).
+          const rank = consensus2026Rank(`${pr.firstName} ${pr.lastName}`);
+          if (rank) {
+            const v = consensus2026Value(rank);
+            pr.ratings.overall = Math.max(pr.ratings.overall, v.overall);
+            pr.development.potential = Math.max(pr.development.potential, v.potential, pr.ratings.overall);
+            pr.sportData.starTier = starTierFor(pr.ratings.overall);
+          }
+          players[pr.id] = pr;
+          draftProspectIds.push(pr.id);
+        }
       }
       return;
     }
@@ -573,6 +591,20 @@ export function convertBbgmLeague(file: BbgmLeagueFile): ImportedHoopsLeague {
     });
   }
 
+  // --- Draft order from the most recent completed season's reverse standings ---
+  // (worst record picks first — the real basis; the 2026 slot order isn't in the
+  // file because the season that determines it hasn't been played).
+  const recordByTid = new Map<number, number>(); // tid → win differential
+  for (const t of file.teams) {
+    if (typeof t.tid !== 'number' || t.tid < 0 || t.disabled) continue;
+    const played = (t.seasons ?? []).filter(s => (s.won ?? 0) + (s.lost ?? 0) > 0);
+    const last = played[played.length - 1];
+    if (last) recordByTid.set(t.tid, (last.won ?? 0) - (last.lost ?? 0));
+  }
+  const draftOrderTeamIds: TeamId[] = [...teamMeta.entries()]
+    .sort((a, b) => (recordByTid.get(a[0]) ?? 0) - (recordByTid.get(b[0]) ?? 0)) // worst diff first
+    .map(([, meta]) => meta.team.id);
+
   // --- Pick ownership for the upcoming draft (real traded picks from file) ---
   const tidToTeamId = new Map<number, TeamId>();
   for (const [tid, meta] of teamMeta) tidToTeamId.set(tid, meta.team.id);
@@ -585,7 +617,7 @@ export function convertBbgmLeague(file: BbgmLeagueFile): ImportedHoopsLeague {
     draftPickOwnership.push({ round: dp.round, originalTeamId: original, ownerTeamId: owner });
   }
 
-  return { season, teams, players, freeAgentIds, draftProspectIds, draftPickOwnership };
+  return { season, teams, players, freeAgentIds, draftProspectIds, draftPickOwnership, draftOrderTeamIds };
 }
 
 // ===========================================================================
