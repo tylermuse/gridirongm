@@ -269,6 +269,7 @@ function mapRatings(
   r: BbgmRatingSeason,
   heightInches: number,
   primary: BasketballPosition,
+  calibrate = true,
 ): BasketballRatings {
   const guard = primary === 'PG' || primary === 'SG';
   const big = primary === 'C' || primary === 'PF';
@@ -300,7 +301,9 @@ function mapRatings(
   };
   // Recompute overall on the BS Hoops 40–99 scale (BBGM ovr is not carried).
   ratings.overall = computeOverall(ratings, primary);
-  return calibrateToNba(ratings, primary);
+  // Veterans get calibrated up to NBA-realistic levels; draft prospects stay
+  // raw (calibration would inflate a raw teenager into an 80-OVR pro).
+  return calibrate ? calibrateToNba(ratings, primary) : ratings;
 }
 
 // ---------------------------------------------------------------------------
@@ -396,13 +399,17 @@ function convertPlayer(
   season: number,
   teamId: TeamId | null,
   rosterIndex: number,
+  isProspect = false,
 ): BasketballPlayer | null {
   const r = latestRatings(bbgm);
   if (!r) return null;
 
   const heightInches = bbgm.hgt && bbgm.hgt > 30 ? bbgm.hgt : 78; // sane default 6'6"
   const { primary, secondary } = mapPosition(bbgm.pos, r);
-  const ratings = mapRatings(r, heightInches, primary);
+  // Prospects stay raw (no NBA calibration) so they read like real draftees —
+  // a low current overall with the upside carried in potential, not inflated
+  // into 80-OVR veterans.
+  const ratings = mapRatings(r, heightInches, primary, !isProspect);
   const overall = ratings.overall;
 
   const { firstName, lastName } = splitName(bbgm);
@@ -430,7 +437,11 @@ function convertPlayer(
 
   // Younger players get headroom; veterans cap near their current overall.
   const youthBump = age <= 21 ? 8 : age <= 23 ? 5 : age <= 25 ? 2 : 0;
-  const potential = clamp(overall + youthBump, overall, 99);
+  // Prospects carry their NBA projection as a *ceiling* (the calibrated target
+  // they'd reach if they hit), so a raw current OVR still has real draft upside.
+  const potential = isProspect
+    ? clamp(Math.max(nbaTargetOverall(overall) + 6, overall + youthBump + 6), overall + 6, 99)
+    : clamp(overall + youthBump, overall, 99);
   const trajectory: BasketballPlayer['development']['currentTrajectory'] =
     age <= 24 ? 'rising' : age <= 29 ? 'plateau' : 'declining';
 
@@ -527,7 +538,7 @@ export function convertBbgmLeague(file: BbgmLeagueFile): ImportedHoopsLeague {
       // Draft pool. Only this season's class becomes the upcoming draft;
       // future classes (2027+) are left out for v1.
       if (bp.draft?.year === season) {
-        const pr = convertPlayer(bp, index, season, null, 0);
+        const pr = convertPlayer(bp, index, season, null, 0, true);
         if (pr) { players[pr.id] = pr; draftProspectIds.push(pr.id); }
       }
       return;
