@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Chip, type ChipTone } from '@/components/ui/Chip';
 import { PlayerModal } from '@/components/modals/PlayerModal';
+import { speakLines, stopSpeech, isSpeechSupported } from '@/lib/ui/speech';
 import { buildSpotlight, SPOTLIGHT_HOSTS, type SpotlightEpisode, type SpotlightStory, type StoryCategory } from '@/lib/show/spotlight';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
 
@@ -29,7 +30,18 @@ function SpotlightCard({ episode, stories, compact }: { episode: SpotlightEpisod
   const router = useRouter();
   const [open, setOpen] = useState<Set<string>>(() => new Set(stories.length ? [stories[0].id] : []));
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
+  const [playing, setPlaying] = useState(false);
   const allOpen = stories.every(s => open.has(s.id));
+
+  // Stop any narration when this card unmounts.
+  useEffect(() => () => stopSpeech(), []);
+
+  function toggleListen() {
+    if (playing) { stopSpeech(); setPlaying(false); return; }
+    const lines = stories.flatMap(s => s.exchanges.map(ex => ({ text: ex.line, voice: ex.voice })));
+    setPlaying(true);
+    speakLines(lines, () => setPlaying(false));
+  }
 
   const toggle = (id: string) => setOpen(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const expandAll = () => setOpen(allOpen ? new Set() : new Set(stories.map(s => s.id)));
@@ -41,9 +53,16 @@ function SpotlightCard({ episode, stories, compact }: { episode: SpotlightEpisod
           <span className="text-lg" aria-hidden>🎙️</span>
           <span className="font-black tracking-tight">Team Spotlight</span>
           <span className="text-xs text-[var(--text-sec)]">· Week {episode.week}</span>
-          <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold rounded-full px-2 py-0.5" style={{ background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }}>
-            🎧 Listen <span className="opacity-60">AI</span>
-          </span>
+          {isSpeechSupported() && (
+            <button
+              onClick={toggleListen}
+              className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold rounded-full px-2 py-0.5 hover:opacity-80 transition-opacity"
+              style={{ background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }}
+              title={playing ? 'Stop narration' : 'Read this episode aloud'}
+            >
+              {playing ? '⏹ Stop' : '🎧 Listen'}
+            </button>
+          )}
         </div>
         <p className="text-xs text-[var(--text-sec)] mt-1">
           with {SPOTLIGHT_HOSTS.analyst.name} {SPOTLIGHT_HOSTS.analyst.avatar} &amp; {SPOTLIGHT_HOSTS.take.name} {SPOTLIGHT_HOSTS.take.avatar}
