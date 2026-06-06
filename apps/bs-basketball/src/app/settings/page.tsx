@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getTheme, setTheme, type Theme } from '@/lib/ui/theme';
 import { isSoundEnabled, setSoundEnabled, playSound } from '@/lib/ui/sound';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { isGodMode } from '@/lib/godMode/godMode';
+import { type FranchiseEdit } from '@/lib/godMode/relocate';
+import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
  * /settings — appearance + sound preferences (Tier 3.1 + 3.7).
@@ -91,11 +93,81 @@ export default function SettingsPage() {
             <Choice active={godOn} onClick={() => void setGodMode(true)} icon="🛠️" label="On" />
           </div>
           {godOn && (
-            <p className="text-xs text-[var(--text-sec)] mt-3">Open any player and use the God Mode editor on their card.</p>
+            <p className="text-xs text-[var(--text-sec)] mt-3">Open any player and use the God Mode editor on their card; force game outcomes from the dashboard.</p>
           )}
         </Section>
       )}
+
+      {/* Franchise relocation / rebrand (God Mode) */}
+      {league && godOn && <RelocatePanel />}
     </main>
+  );
+}
+
+function RelocatePanel() {
+  const league = useLeagueStore(s => s.league);
+  const relocate = useLeagueStore(s => s.relocateTeam);
+  const teams = useMemo(
+    () => [...((league?.teams ?? []) as BasketballTeam[])].sort((a, b) => a.city.localeCompare(b.city)),
+    [league],
+  );
+  const [teamId, setTeamId] = useState('');
+  const sel = teams.find(t => t.id === teamId) ?? null;
+  const [form, setForm] = useState<FranchiseEdit>({});
+  const [saved, setSaved] = useState(false);
+
+  function choose(id: string) {
+    setTeamId(id);
+    const t = teams.find(x => x.id === id);
+    setForm(t ? { city: t.city, name: t.name, abbreviation: t.abbreviation, primaryColor: t.primaryColor, secondaryColor: t.secondaryColor } : {});
+    setSaved(false);
+  }
+  async function apply() {
+    if (!teamId) return;
+    await relocate(teamId, form);
+    setSaved(true);
+  }
+
+  return (
+    <Section title="Relocate / rebrand a franchise" desc="Rename, re-city, and recolor any team. (Full league expansion to 31–32 teams is deferred — it requires a schedule-generator rewrite.)">
+      <select value={teamId} onChange={e => choose(e.target.value)} className="w-full px-2 py-1.5 rounded-lg border bg-[var(--surface-2)] text-sm mb-3" style={{ borderColor: 'var(--border)' }}>
+        <option value="">Select a team…</option>
+        {teams.map(t => <option key={t.id} value={t.id}>{t.city} {t.name}</option>)}
+      </select>
+      {sel && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="City" value={form.city ?? ''} onChange={v => { setForm(f => ({ ...f, city: v })); setSaved(false); }} />
+            <Field label="Name" value={form.name ?? ''} onChange={v => { setForm(f => ({ ...f, name: v })); setSaved(false); }} />
+            <Field label="Abbrev" value={form.abbreviation ?? ''} onChange={v => { setForm(f => ({ ...f, abbreviation: v })); setSaved(false); }} />
+            <div />
+            <ColorField label="Primary" value={form.primaryColor ?? '#000000'} onChange={v => { setForm(f => ({ ...f, primaryColor: v })); setSaved(false); }} />
+            <ColorField label="Secondary" value={form.secondaryColor ?? '#ffffff'} onChange={v => { setForm(f => ({ ...f, secondaryColor: v })); setSaved(false); }} />
+          </div>
+          <button onClick={() => void apply()} className="mt-1 rounded-lg px-3 py-1.5 text-sm font-bold" style={{ background: 'var(--accent)', color: '#fff' }}>
+            {saved ? 'Saved ✓' : 'Apply'}
+          </button>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function Field({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="block">
+      <span className="text-[10px] uppercase tracking-wide opacity-60">{label}</span>
+      <input value={value} onChange={e => onChange(e.target.value)} className="w-full px-2 py-1.5 rounded-lg border bg-[var(--surface-2)] text-sm" style={{ borderColor: 'var(--border)' }} />
+    </label>
+  );
+}
+
+function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="flex items-center gap-2">
+      <input type="color" value={value} onChange={e => onChange(e.target.value)} className="h-8 w-10 rounded border" style={{ borderColor: 'var(--border)' }} />
+      <span className="text-[10px] uppercase tracking-wide opacity-60">{label}</span>
+    </label>
   );
 }
 
