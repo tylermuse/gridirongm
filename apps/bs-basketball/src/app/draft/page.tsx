@@ -5,14 +5,14 @@ import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
-import { TeamLogo } from '@/components/ui/TeamLogo';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { getDraft, currentSlot, recommendedProspectId, buildLotteryReveal, buildLotteryBoard } from '@/lib/draft';
 import { LotteryBoard } from '@/components/draft/LotteryBoard';
 import { OnTheClockSection } from '@/components/draft/OnTheClockSection';
 import { DraftBoardCard } from '@/components/draft/DraftBoardCard';
-import type { DraftPickSlot } from '@/lib/draft';
+import { DraftResultsCard } from '@/components/draft/DraftResultsCard';
+import { DraftFooter } from '@/components/draft/DraftFooter';
 import { LotteryRevealCeremony } from '@/components/draft/LotteryReveal';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
@@ -176,26 +176,7 @@ export default function DraftPage() {
       {/* Reviewable lottery results: odds + slated seed vs. where teams landed. */}
       <LotteryBoard cards={buildLotteryBoard(draft, teamById, league.userTeamId)} />
 
-      <div className="grid lg:grid-cols-[1fr_1.1fr] gap-6">
-        {/* Board */}
-        <section className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-          <h2 className="px-3 py-2 font-bold border-b text-sm" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
-            Draft Board
-          </h2>
-          <ol className="max-h-[34rem] overflow-y-auto">
-            {draft.picks.map((p, i) => (
-              <BoardRow
-                key={p.overall}
-                slot={p}
-                team={teamById.get(p.teamId)}
-                prospect={p.prospectId ? playerById[p.prospectId] : null}
-                isCurrent={i === draft.currentPick && !draft.complete}
-                isUser={p.teamId === league.userTeamId}
-              />
-            ))}
-          </ol>
-        </section>
-
+      <div className="grid lg:grid-cols-[1.1fr_1fr] gap-6">
         {/* Prospect board (search/filter/scout + inline expansion) */}
         <DraftBoardCard
           league={league}
@@ -207,7 +188,13 @@ export default function DraftPage() {
           onScout={(id) => void store.scoutProspect(id)}
           onDraft={(id) => { void store.draftPick(id); }}
         />
+
+        {/* Draft results running board */}
+        <DraftResultsCard league={league} draft={draft} teamById={teamById} playerById={playerById} />
       </div>
+
+      {/* Your needs + recent picks */}
+      <DraftFooter league={league} draft={draft} teamById={teamById} playerById={playerById} />
     </Shell>
   );
 }
@@ -215,48 +202,6 @@ export default function DraftPage() {
 // ===========================================================================
 // Components
 // ===========================================================================
-
-function BoardRow({
-  slot, team, prospect, isCurrent, isUser,
-}: {
-  slot: DraftPickSlot;
-  team?: BasketballTeam;
-  prospect: BasketballPlayer | null;
-  isCurrent: boolean;
-  isUser: boolean;
-}) {
-  return (
-    <li
-      className="flex items-center gap-2 px-3 py-1.5 border-t text-sm"
-      style={{
-        borderColor: 'var(--border)',
-        background: isCurrent
-          ? 'color-mix(in srgb, var(--accent) 16%, transparent)'
-          : isUser
-          ? 'color-mix(in srgb, var(--accent) 7%, transparent)'
-          : undefined,
-        animation: slot.isLottery ? 'bs-fade-in 0.4s ease both' : undefined,
-        animationDelay: slot.isLottery ? `${slot.overall * 55}ms` : undefined,
-      }}
-    >
-      <span className="w-6 text-xs tabular-nums opacity-50 text-right">{slot.overall}</span>
-      {team && (
-        <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="xs" />
-      )}
-      <span className="w-9 text-xs font-semibold">{team?.abbreviation}</span>
-      {prospect ? (
-        <span className="truncate">
-          <span className="font-semibold">{prospect.firstName[0]}. {prospect.lastName}</span>
-          <span className="opacity-50 ml-1 text-xs">{prospect.sportData.position} · {prospect.ratings.overall}</span>
-        </span>
-      ) : isCurrent ? (
-        <span className="text-xs font-bold" style={{ color: 'var(--accent)' }}>On the clock</span>
-      ) : (
-        <span className="text-xs opacity-30">—</span>
-      )}
-    </li>
-  );
-}
 
 function Shell({ season, children }: { season: number; children: React.ReactNode }) {
   return (
