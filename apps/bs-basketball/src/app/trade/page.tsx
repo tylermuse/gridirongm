@@ -14,7 +14,7 @@ import { teamStrategy, getTeamPicks, pickFromId, pickShort, pickValue } from '@/
 import { getActiveRumors, rumorAccuracy, rumorPlayerMeta, type TradeRumor } from '@/lib/trade';
 import { computeTradeGrade, getProposalHistory, type TradeGrade, type ProposalRecord } from '@/lib/trade';
 import { tradeWindowClosed, TRADE_DEADLINE_DAY } from '@/lib/sim/simRange';
-import { basketballTradeValue, type BasketballPlayer, type BasketballTeam, type TeamTradeOutcome, type TeamCapStatus } from '@bs/sport-basketball';
+import { basketballTradeValue, type BasketballPlayer, type BasketballPosition, type BasketballTeam, type TeamTradeOutcome, type TeamCapStatus } from '@bs/sport-basketball';
 
 type League = NonNullable<ReturnType<typeof useLeagueOrHydrate>['league']>;
 
@@ -38,7 +38,7 @@ export default function TradePage() {
   const [theirPicks, setTheirPicks] = useState<Set<string>>(new Set());
   const [resultMsg, setResultMsg] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [tab, setTab] = useState<'build' | 'finder' | 'offers'>('build');
+  const [tab, setTab] = useState<'build' | 'finder' | 'offers' | 'block'>('build');
   const [finderId, setFinderId] = useState('');
 
   const teamById = useMemo(() => {
@@ -176,7 +176,7 @@ export default function TradePage() {
       <RumorsPanel league={league} />
 
       <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-6 w-fit overflow-x-auto max-w-full">
-        {([['offers', 'Incoming Offers'], ['build', 'Propose Trade'], ['finder', 'Trade Finder']] as const).map(([k, l]) => (
+        {([['offers', 'Incoming Offers'], ['block', 'Trading Block'], ['build', 'Propose Trade'], ['finder', 'Trade Finder']] as const).map(([k, l]) => (
           <button
             key={k}
             onClick={() => setTab(k)}
@@ -198,6 +198,9 @@ export default function TradePage() {
       )}
       {tab === 'offers' && (
         <OffersPanel league={league} teamById={teamById} playerById={playerById} season={season} onPropose={proposeDeal} onLoad={loadDeal} loading={store.loading} />
+      )}
+      {tab === 'block' && (
+        <TradingBlockTab league={league} userTeam={userTeam} teamById={teamById} playerById={playerById} season={season} onPropose={proposeDeal} onLoad={loadDeal} loading={store.loading} />
       )}
 
       {tab === 'build' && (
@@ -620,6 +623,82 @@ function OffersPanel({
     <div className="space-y-2">
       <p className="text-sm text-[var(--text-sec)] mb-2">Rivals are interested in your players — accept the deal, or counter it in the builder.</p>
       {offers.map((d, i) => <DealCard key={i} d={d} teamById={teamById} playerById={playerById} season={season} primaryLabel="Accept" secondaryLabel="Counter" onPropose={onPropose} onLoad={onLoad} loading={loading} />)}
+    </div>
+  );
+}
+
+// ===========================================================================
+// Trading block — list players, pick desired return, ask rivals for offers
+// ===========================================================================
+
+const BLOCK_POSITIONS: BasketballPosition[] = ['PG', 'SG', 'SF', 'PF', 'C'];
+
+function TradingBlockTab({
+  league, userTeam, teamById, playerById, season, onPropose, onLoad, loading,
+}: {
+  league: League;
+  userTeam: BasketballTeam;
+  teamById: Map<string, BasketballTeam>;
+  playerById: Record<string, BasketballPlayer>;
+  season: number;
+  onPropose: (d: DealSuggestion) => void;
+  onLoad: (d: DealSuggestion) => void;
+  loading: boolean;
+}) {
+  const [block, setBlock] = useState<Set<string>>(new Set());
+  const [seeking, setSeeking] = useState<Set<BasketballPosition>>(new Set());
+  const [proposals, setProposals] = useState<DealSuggestion[] | null>(null);
+
+  const players = userTeam.playerIds.map(id => playerById[id]).filter(Boolean) as BasketballPlayer[];
+
+  function toggleSet<T>(set: Set<T>, setFn: (s: Set<T>) => void, v: T) {
+    const n = new Set(set); if (n.has(v)) n.delete(v); else n.add(v); setFn(n); setProposals(null);
+  }
+
+  function ask() {
+    const all: DealSuggestion[] = [];
+    for (const id of block) all.push(...findDealsForPlayer(league, id, 6));
+    const wanted = seeking.size === 0
+      ? all
+      : all.filter(d => d.getIds.some(gid => seeking.has(playerById[gid]?.sportData.position as BasketballPosition)));
+    const seen = new Set<string>();
+    const unique: DealSuggestion[] = [];
+    for (const d of wanted) {
+      const k = `${d.partnerTeamId}|${[...d.giveIds].sort().join(',')}|${[...d.getIds].sort().join(',')}`;
+      if (!seen.has(k)) { seen.add(k); unique.push(d); }
+    }
+    setProposals(unique.slice(0, 12));
+  }
+
+  return (
+    <div className="grid lg:grid-cols-[1fr_1fr] gap-5">
+      <section className="rounded-xl border bg-[var(--surface)] overflow-hidden self-start" style={{ borderColor: 'var(--border)' }}>
+        <h2 className="px-3 py-2 font-bold border-b text-sm" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>Players on the Block</h2>
+        <div className="px-2 pt-1">
+          <SortableTradeTable players={players} season={season} selected={block} onToggle={id => toggleSet(block, setBlock, id)} side="mine" />
+        </div>
+        <div className="px-3 py-3 border-t" style={{ borderColor: 'var(--border)' }}>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Seeking in return</div>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {BLOCK_POSITIONS.map(pos => (
+              <button key={pos} onClick={() => toggleSet(seeking, setSeeking, pos)} className="text-xs font-bold rounded-md px-2.5 py-1 border" style={seeking.has(pos) ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}>{pos}</button>
+            ))}
+          </div>
+          <Button variant="primary" disabled={block.size === 0 || loading} onClick={ask} className="w-full">
+            {loading ? 'Working…' : `Ask for Proposals${block.size ? ` (${block.size})` : ''}`}
+          </Button>
+        </div>
+      </section>
+
+      <section className="space-y-2 self-start">
+        {proposals === null ? (
+          <p className="text-sm text-[var(--text-sec)] px-1">Put players on the block and ask rivals what they&apos;d give up.</p>
+        ) : proposals.length === 0 ? (
+          <p className="text-sm text-[var(--text-sec)] px-1">No rival bit on those players{seeking.size ? ' for that return' : ''} — try different names or loosen what you&apos;re seeking.</p>
+        ) : (
+          proposals.map((d, i) => <DealCard key={i} d={d} teamById={teamById} playerById={playerById} season={season} primaryLabel="Propose" secondaryLabel="Load & tweak" onPropose={onPropose} onLoad={onLoad} loading={loading} />)
+        )}
+      </section>
     </div>
   );
 }
