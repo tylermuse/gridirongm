@@ -80,7 +80,7 @@ function Loaded({ data }: { data: Profile }) {
 
       <section className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
         <h2 className="px-3 py-2 font-bold border-b text-sm" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>Season history</h2>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="text-[10px] uppercase tracking-wide text-[var(--text-sec)]">
             <tr><th className="text-left px-3 py-1.5">Season</th><th className="text-left px-3 py-1.5">Team</th><th className="text-right px-3 py-1.5">W-L</th><th className="text-right px-3 py-1.5">Result</th></tr>
           </thead>
@@ -94,7 +94,7 @@ function Loaded({ data }: { data: Profile }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </section>
     </>
   );

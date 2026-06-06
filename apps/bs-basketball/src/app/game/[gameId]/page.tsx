@@ -251,7 +251,7 @@ function BoxScoreTable({
       <h2 className="px-3 py-2 font-bold border-b" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
         {team.city} {team.name}
       </h2>
-      <table className="w-full text-xs">
+      <div className="overflow-x-auto"><table className="w-full text-xs">
         <thead>
           <tr className="opacity-70">
             <th className="px-2 py-1 text-left">Player</th>
@@ -281,7 +281,7 @@ function BoxScoreTable({
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </section>
   );
 }
