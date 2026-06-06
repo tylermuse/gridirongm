@@ -8,6 +8,9 @@ import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { AwardsCeremony } from '@/components/awards/Ceremony';
+import { RankingsTabs } from '@/components/awards/RankingsTabs';
+import { AwardRaceCard } from '@/components/awards/AwardRaceCard';
+import { computeAwardRaces } from '@/lib/awards/computeAwardRaces';
 import { computeSeasonAwards, computeHonors, type SeasonAwards, type SeasonHonors, type AllLeagueTeam } from '@/lib/awards';
 import { getBracket } from '@/lib/playoffs';
 import { perGame, emptyBasketballStats, type BasketballPlayer, type BasketballTeam } from '@bs/sport-basketball';
@@ -59,6 +62,7 @@ export default function AwardsPage() {
     () => (league ? computeHonors(league) : null),
     [league],
   );
+  const races = useMemo(() => (league ? computeAwardRaces(league) : null), [league]);
   const teamById = useMemo(() => {
     const m = new Map<string, BasketballTeam>();
     if (league) for (const t of league.teams) m.set(t.id, t as BasketballTeam);
@@ -76,6 +80,21 @@ export default function AwardsPage() {
       <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">
         ← Home
       </Link>
+      <div className="mt-2"><RankingsTabs /></div>
+
+      {/* Live Award Race leaderboards (football parity). */}
+      {races && league.games.some(g => g.status === 'played') && (
+        <section className="mb-8">
+          <h2 className="text-2xl font-black uppercase tracking-tight">Award Race</h2>
+          <p className="text-xs text-[var(--text-sec)] mt-1 mb-4">
+            Season {league.currentSeason} · live ranking{bracket?.complete ? ' · season-end winners marked with 🏆.' : '…'}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {races.map(race => <AwardRaceCard key={race.key} race={race} league={league} showWinnerCrown={!!bracket?.complete} />)}
+          </div>
+        </section>
+      )}
+
       <header className="flex flex-wrap items-baseline gap-3 mt-2 mb-6">
         <h1 className="text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>
           Awards
