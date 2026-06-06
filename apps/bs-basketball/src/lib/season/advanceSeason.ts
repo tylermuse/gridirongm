@@ -56,6 +56,41 @@ const DRAFT_CLASS_SIZE = 60;
  *  were always the first to go), which left teams unable to field a lineup. */
 const POS_FLOOR: Record<BasketballPosition, number> = { PG: 2, SG: 2, SF: 2, PF: 2, C: 2 };
 
+/** "Keep value" for roster trims — values upside, not just current overall, so
+ *  freshly-drafted raw rookies (low OVR, high potential) aren't auto-waived. */
+export function keepValueOf(overall: number, potential: number): number {
+  return Math.max(overall, Math.round((potential ?? 0) * 0.9));
+}
+
+/**
+ * Choose which ids to waive to get a roster down to `target`, cutting lowest
+ * keep-value first but never dropping a position below its floor. Pure.
+ */
+export function selectRosterWaivers(
+  ids: string[],
+  opts: {
+    value: (id: string) => number;
+    position: (id: string) => BasketballPosition | null;
+    target: number;
+    posFloor: Record<BasketballPosition, number>;
+  },
+): Set<string> {
+  const { value, position, target, posFloor } = opts;
+  if (ids.length <= target) return new Set();
+  const posCount: Record<BasketballPosition, number> = { PG: 0, SG: 0, SF: 0, PF: 0, C: 0 };
+  for (const id of ids) { const p = position(id); if (p) posCount[p]++; }
+  const worstFirst = [...ids].sort((a, b) => value(a) - value(b));
+  const waived = new Set<string>();
+  for (const id of worstFirst) {
+    if (ids.length - waived.size <= target) break;
+    const pos = position(id);
+    if (pos && posCount[pos] <= posFloor[pos]) continue; // protect the floor
+    waived.add(id);
+    if (pos) posCount[pos]--;
+  }
+  return waived;
+}
+
 interface LeagueSportData {
   draft?: unknown;
   playoffs?: unknown;
@@ -180,7 +215,15 @@ export function startNextSeason(league: LeagueState): LeagueState {
   const season = draft.season;
 
   const players = { ...league.players } as Record<string, BasketballPlayer>;
-  const ovr = (id: string) => (players[id]?.ratings.overall ?? 0);
+  // Trim by *keep value*, not raw current overall — rookies enter deliberately
+  // raw (low OVR, upside in potential), so sorting on overall alone waives every
+  // pick you just made. Valuing potential keeps high-upside young players (and
+  // the projects you drafted) over fringe veterans.
+  const keepValue = (id: string) => {
+    const p = players[id];
+    if (!p) return 0;
+    return keepValueOf(p.ratings.overall, p.development?.potential ?? 0);
+  };
   // Track each waived player's last team so the free-agency UI can show it.
   const freeAgentLastTeam: Record<string, typeof league.teams[number]['id']> = {};
 
@@ -189,22 +232,15 @@ export function startNextSeason(league: LeagueState): LeagueState {
   const teams: BasketballTeam[] = league.teams.map(t => {
     let ids = [...t.playerIds];
 
-    // Draft picks can push a roster over the cap — waive the weakest to 15, but
-    // never cut a position below its floor (worst → best, skipping anyone whose
-    // removal would drop their position under POS_FLOOR).
+    // Draft picks can push a roster over the cap — waive the lowest keep-value
+    // players to 15, but never cut a position below its floor.
     if (ids.length > TARGET_ROSTER) {
-      const posCount: Record<BasketballPosition, number> = { PG: 0, SG: 0, SF: 0, PF: 0, C: 0 };
-      for (const id of ids) { const p = posOf(id); if (p) posCount[p]++; }
-
-      const worstFirst = [...ids].sort((a, b) => ovr(a) - ovr(b));
-      const waived = new Set<string>();
-      for (const id of worstFirst) {
-        if (ids.length - waived.size <= TARGET_ROSTER) break;
-        const pos = posOf(id);
-        if (pos && posCount[pos] <= POS_FLOOR[pos]) continue; // protect the floor
-        waived.add(id);
-        if (pos) posCount[pos]--;
-      }
+      const waived = selectRosterWaivers(ids, {
+        value: keepValue,
+        position: posOf,
+        target: TARGET_ROSTER,
+        posFloor: POS_FLOOR,
+      });
       for (const id of waived) {
         players[id] = { ...players[id], rosterSlot: null };
         freeAgentLastTeam[id] = t.id;

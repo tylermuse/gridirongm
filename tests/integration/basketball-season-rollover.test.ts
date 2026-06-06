@@ -98,6 +98,17 @@ describe('season rollover', () => {
     }
   });
 
+  it('keeps high-upside drafted rookies through the roster trim', () => {
+    // Rookies enter raw (low current OVR), so a trim sorted on overall alone
+    // would waive every pick just made. The trim values potential, so drafted
+    // projects stay rostered instead of being cut to free agency.
+    const next = advanceToNextSeason(completeSeason('rollover-rookies'));
+    const rosteredRookies = Object.values(next.players).filter(
+      p => (p as BasketballPlayer).age === 19 && (p as BasketballPlayer).rosterSlot != null,
+    );
+    expect(rosteredRookies.length).toBeGreaterThan(0);
+  });
+
   it('ages returning players by one year', () => {
     const done = completeSeason('rollover-age');
     // Pick a rostered player who should survive to next season.
