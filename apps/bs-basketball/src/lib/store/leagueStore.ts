@@ -63,6 +63,7 @@ import { executeTrade, proposeTrade as proposeTradeLib, type TradeSideInput, typ
 import { setTeamLineup } from '../lineup';
 import { clearGmFired } from '../approval';
 import { setGodMode as setGodModeLib, editPlayer as editPlayerLib, type PlayerEdit } from '../godMode/godMode';
+import { forceUserGameResult } from '../godMode/forceGame';
 import { buildGmSyncPayload, syncGmStats, computeUserDraftGrade } from '../gm/gmSync';
 import { scoutProspect as scoutProspectState } from '../scouting';
 import { markChangelogSeen as markChangelogSeenState } from '../ui/changelog';
@@ -115,6 +116,8 @@ interface LeagueStore {
   /** God Mode (save-level): toggle, and edit a player's overall/age/potential. */
   setGodMode: (on: boolean) => Promise<void>;
   godEditPlayer: (playerId: string, patch: PlayerEdit) => Promise<void>;
+  /** God Mode: force the user's next scheduled game to a win/loss. */
+  forceUserGame: (win: boolean) => Promise<boolean>;
 
   /** Sim the next scheduled game involving the user's team. Returns the
    *  played game's id on success, or null if there's no game to sim. */
@@ -390,6 +393,16 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     const league = editPlayerLib(current, playerId, patch);
     set({ league });
     try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] godEditPlayer failed:', err); }
+  },
+
+  async forceUserGame(win) {
+    const current = get().league;
+    if (!current) return false;
+    const league = forceUserGameResult(current, win);
+    if (!league) { set({ error: 'No upcoming game to force (God Mode off, spectating, or season over).' }); return false; }
+    set({ league, simToast: { text: win ? 'God Mode: forced a win 🛠️' : 'God Mode: forced a loss 🛠️' } });
+    try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] forceUserGame failed:', err); }
+    return true;
   },
 
   async simDay() {
