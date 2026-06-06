@@ -14,6 +14,7 @@ import { DraftBoardCard } from '@/components/draft/DraftBoardCard';
 import { DraftResultsCard } from '@/components/draft/DraftResultsCard';
 import { DraftFooter } from '@/components/draft/DraftFooter';
 import { DraftRecapInline } from '@/components/draft/DraftRecapInline';
+import { TradePickModal } from '@/components/draft/TradePickModal';
 import { LotteryRevealCeremony } from '@/components/draft/LotteryReveal';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
@@ -30,6 +31,7 @@ export default function DraftPage() {
   const store = useLeagueStore();
   const router = useRouter();
   const [showCeremony, setShowCeremony] = useState(false);
+  const [tradeOpen, setTradeOpen] = useState(false);
 
   const draft = league ? getDraft(league) : null;
   const teamById = useMemo(() => {
@@ -159,7 +161,7 @@ export default function DraftPage() {
           onSimPick={() => void store.simDraftPick()}
           onSimToUser={() => void store.simDraftToUser()}
           onSimAll={() => void store.simDraftAll()}
-          onOpenTrade={() => router.push('/trade')}
+          onOpenTrade={() => setTradeOpen(true)}
           onSelectProspect={() => { /* the board below is the prospect surface */ }}
           onDraftProspect={(id) => { void store.draftPick(id); }}
         />
@@ -199,6 +201,8 @@ export default function DraftPage() {
 
       {/* Team grades, once the board's complete. */}
       {draft.complete && <DraftRecapInline league={league} />}
+
+      {tradeOpen && <TradePickModal onClose={() => setTradeOpen(false)} />}
     </Shell>
   );
 }
