@@ -10,13 +10,19 @@
 
 import { isGodMode, godModeEverUsed } from '../godMode/godMode';
 import { getBracket } from '../playoffs';
+import { getDraft } from '../draft';
+import { buildDraftRecap } from '../draft/recap';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
+interface DraftGrade { score: number; grade: string }
 interface LeagueSportData {
   imported?: boolean;
+  /** User draft grade keyed by the season the rookies enter (set at
+   *  startNextSeason; ridden along on that season's end-of-season sync). */
+  draftGradeBySeason?: Record<number, DraftGrade>;
   [key: string]: unknown;
 }
 
@@ -29,6 +35,25 @@ export interface GmSyncPayload {
   losses: number;
   madePlayoffs: boolean;
   wonChampionship: boolean;
+  draftScore?: number;
+  draftGrade?: string;
+}
+
+/**
+ * The user's draft grade for the class just drafted, keyed to the season those
+ * rookies enter (draft.season). Average pick value-vs-slot (steals positive),
+ * letter-graded. Null if the draft isn't complete or the user made no picks.
+ * Call at startNextSeason and stash on sportData.draftGradeBySeason.
+ */
+export function computeUserDraftGrade(league: LeagueState): { season: number; score: number; grade: string } | null {
+  const draft = getDraft(league);
+  if (!draft || !draft.complete) return null;
+  const recap = buildDraftRecap(league);
+  if (!recap || recap.userPicks.length === 0) return null;
+  const avg = recap.userPicks.reduce((s, p) => s + p.delta, 0) / recap.userPicks.length;
+  const score = Math.round(avg * 10) / 10;
+  const grade = avg >= 6 ? 'A' : avg >= 3 ? 'B' : avg >= 0 ? 'C' : 'D';
+  return { season: draft.season, score, grade };
 }
 
 /**
@@ -47,6 +72,7 @@ export function buildGmSyncPayload(league: LeagueState): GmSyncPayload | null {
   const bracket = getBracket(league);
   const madePlayoffs = !!bracket && (bracket.seeds.Eastern.includes(team.id) || bracket.seeds.Western.includes(team.id));
   const wonChampionship = !!bracket && bracket.championTeamId === team.id;
+  const draft = (league.sportData as LeagueSportData | undefined)?.draftGradeBySeason?.[league.currentSeason];
 
   return {
     season: league.currentSeason,
@@ -57,6 +83,7 @@ export function buildGmSyncPayload(league: LeagueState): GmSyncPayload | null {
     losses: team.record.losses,
     madePlayoffs,
     wonChampionship,
+    ...(draft ? { draftScore: draft.score, draftGrade: draft.grade } : {}),
   };
 }
 

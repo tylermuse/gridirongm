@@ -21,7 +21,7 @@ function getServiceClient() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { season, teamId, teamName, teamAbbreviation, wins, losses, madePlayoffs, wonChampionship } = body;
+    const { season, teamId, teamName, teamAbbreviation, wins, losses, madePlayoffs, wonChampionship, draftScore, draftGrade } = body;
 
     if (typeof season !== 'number' || typeof wins !== 'number' || typeof losses !== 'number') {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -30,6 +30,7 @@ export async function POST(request: Request) {
     if (wins < 0 || wins > 82 || losses < 0 || losses > 82 || wins + losses > 82) {
       return NextResponse.json({ error: 'Invalid wins/losses for a single season' }, { status: 400 });
     }
+    const hasDraft = typeof draftScore === 'number' && Number.isFinite(draftScore) && Math.abs(draftScore) <= 100;
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
         user_id: userId, season,
         team_id: teamId ?? null, team_name: teamName ?? null,
         wins, losses, made_playoffs: !!madePlayoffs, won_championship: !!wonChampionship,
+        ...(hasDraft ? { draft_score: draftScore, draft_grade: typeof draftGrade === 'string' ? draftGrade : null } : {}),
       },
       { onConflict: 'user_id,season' },
     );

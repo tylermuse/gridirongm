@@ -2,31 +2,33 @@
  * GM award nominees (parity 3.3 Phase B). Pure derivation from season-history
  * rows so it's testable and shared between the nominees + finalize routes.
  *
- * v1 categories — both computable from records alone:
+ * Categories (all derivable from synced season rows):
  *   - gm_of_year   : best win% that season
  *   - best_rebuild : biggest win improvement vs the prior season
- * (best_draft is reserved in the schema but needs draft data we don't sync yet.)
+ *   - best_draft   : best draft grade (avg pick value-vs-slot), when synced
  */
 
-export type AwardType = 'gm_of_year' | 'best_rebuild';
+export type AwardType = 'gm_of_year' | 'best_rebuild' | 'best_draft';
 
-export const AWARD_TYPES: AwardType[] = ['gm_of_year', 'best_rebuild'];
+export const AWARD_TYPES: AwardType[] = ['gm_of_year', 'best_rebuild', 'best_draft'];
 
 export const AWARD_LABELS: Record<AwardType, string> = {
   gm_of_year: 'GM of the Year',
   best_rebuild: 'Best Rebuild',
+  best_draft: 'Best Draft',
 };
 
 export const AWARD_BLURB: Record<AwardType, string> = {
   gm_of_year: 'Best record this season.',
   best_rebuild: 'Biggest win jump from last season.',
+  best_draft: 'Best value drafted this class.',
 };
 
-export interface SeasonStatRow { userId: string; wins: number; losses: number }
+export interface SeasonStatRow { userId: string; wins: number; losses: number; draftScore?: number | null }
 
 export interface Nominee {
   userId: string;
-  /** win% for gm_of_year, win-delta for best_rebuild. */
+  /** win% for gm_of_year, win-delta for best_rebuild, draft score for best_draft. */
   value: number;
 }
 
@@ -48,5 +50,11 @@ export function deriveNominees(
     .sort((a, b) => b.value - a.value)
     .slice(0, 3);
 
-  return { gm_of_year: gmOfYear, best_rebuild: bestRebuild };
+  const bestDraft: Nominee[] = seasonRows
+    .filter(r => typeof r.draftScore === 'number')
+    .map(r => ({ userId: r.userId, value: r.draftScore as number }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 3);
+
+  return { gm_of_year: gmOfYear, best_rebuild: bestRebuild, best_draft: bestDraft };
 }

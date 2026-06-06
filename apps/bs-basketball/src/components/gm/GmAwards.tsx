@@ -71,7 +71,9 @@ export function GmAwards() {
                       {isWinner && <span aria-hidden>👑</span>}
                       <Link href={`/gm/${n.userId}`} className="font-semibold truncate flex-1 hover:underline">{n.displayName}</Link>
                       <span className="text-xs tabular-nums text-[var(--text-sec)]">
-                        {type === 'gm_of_year' ? n.value.toFixed(3).replace(/^0/, '') : `+${n.value}`}
+                        {type === 'gm_of_year' ? n.value.toFixed(3).replace(/^0/, '')
+                          : type === 'best_rebuild' ? `+${n.value}`
+                          : n.value.toFixed(1)}
                       </span>
                       <span className="text-xs tabular-nums text-[var(--text-sec)] w-12 text-right">{n.votes} vote{n.votes === 1 ? '' : 's'}</span>
                       {user && (

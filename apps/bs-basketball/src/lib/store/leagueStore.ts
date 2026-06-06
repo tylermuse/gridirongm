@@ -63,7 +63,7 @@ import { executeTrade, proposeTrade as proposeTradeLib, type TradeSideInput, typ
 import { setTeamLineup } from '../lineup';
 import { clearGmFired } from '../approval';
 import { setGodMode as setGodModeLib, editPlayer as editPlayerLib, type PlayerEdit } from '../godMode/godMode';
-import { buildGmSyncPayload, syncGmStats } from '../gm/gmSync';
+import { buildGmSyncPayload, syncGmStats, computeUserDraftGrade } from '../gm/gmSync';
 import { scoutProspect as scoutProspectState } from '../scouting';
 import { markChangelogSeen as markChangelogSeenState } from '../ui/changelog';
 import type { TeamId, BaseCoach } from '@bs/core/adapter';
@@ -642,7 +642,14 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
     set({ loading: true, error: null });
     try {
-      const league = startNextSeason(current);
+      // Stamp the user's draft grade (the draft is complete here) keyed to the
+      // season the rookies enter, so the GM board's Best Draft award can rank it.
+      const grade = computeUserDraftGrade(current);
+      let league = startNextSeason(current);
+      if (grade) {
+        const sd = league.sportData as { draftGradeBySeason?: Record<number, { score: number; grade: string }> };
+        league = { ...league, sportData: { ...sd, draftGradeBySeason: { ...(sd?.draftGradeBySeason ?? {}), [grade.season]: { score: grade.score, grade: grade.grade } } } };
+      }
       await saveLeague(league);
       set({ league, loading: false });
       return league.currentSeason;

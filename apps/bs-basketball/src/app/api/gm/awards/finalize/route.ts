@@ -25,14 +25,14 @@ export async function POST(request: Request) {
     if (!service) return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
 
     const [{ data: seasonRows }, { data: priorRows }, { data: voteRows }] = await Promise.all([
-      service.from('bball_gm_season_history').select('user_id, wins, losses').eq('season', season),
+      service.from('bball_gm_season_history').select('user_id, wins, losses, draft_score').eq('season', season),
       service.from('bball_gm_season_history').select('user_id, wins').eq('season', season - 1),
       service.from('bball_gm_award_votes').select('award_type, nominee_user_id').eq('season', season),
     ]);
 
     const priorWins = new Map<string, number>((priorRows ?? []).map((r: { user_id: string; wins: number }) => [r.user_id, r.wins]));
     const nominees = deriveNominees(
-      (seasonRows ?? []).map((r: { user_id: string; wins: number; losses: number }) => ({ userId: r.user_id, wins: r.wins, losses: r.losses })),
+      (seasonRows ?? []).map((r: { user_id: string; wins: number; losses: number; draft_score: number | null }) => ({ userId: r.user_id, wins: r.wins, losses: r.losses, draftScore: r.draft_score })),
       priorWins,
     );
 
