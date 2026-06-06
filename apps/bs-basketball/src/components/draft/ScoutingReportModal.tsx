@@ -62,6 +62,37 @@ export function ScoutingReportModal({
             )}
           </div>
 
+          {/* Draft grade matrix */}
+          <Section title="Draft grade">
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+              <GradeCell label="Grade" value={report.grade} color={report.gradeColor} />
+              <GradeCell label="Floor" value={String(report.floor)} />
+              <GradeCell label="Ceiling" value={String(report.ceiling)} />
+              <GradeCell label="Confidence" value={report.confidence} />
+              <GradeCell label="Risk" value={report.riskLevel} />
+            </div>
+          </Section>
+
+          {/* NBA comparison */}
+          <Section title="NBA comparison">
+            <div className="rounded-lg px-3 py-2 text-sm" style={{ background: 'var(--surface-2)' }}>{report.nbaComparison}</div>
+          </Section>
+
+          {/* Physical traits */}
+          <Section title="Physical traits">
+            <div className="space-y-1.5">
+              {report.physicalTraits.map(t => (
+                <div key={t.label} className="flex items-center gap-2">
+                  <span className="text-xs w-20 shrink-0 text-[var(--text-sec)]">{t.label}</span>
+                  <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
+                    <div className="h-full rounded-full" style={{ width: `${t.value}%`, background: 'var(--accent)' }} />
+                  </div>
+                  <span className="text-xs font-bold tabular-nums w-7 text-right">{t.value}</span>
+                </div>
+              ))}
+            </div>
+          </Section>
+
           {/* Combine measurables */}
           <Section title="Combine">
             <div className="grid grid-cols-5 gap-2">
@@ -77,6 +108,10 @@ export function ScoutingReportModal({
 
           {/* Development curve */}
           <Section title={`Projected development${report.scouted ? '' : ' (unconfirmed)'}`}>
+            <div className="flex items-center gap-2 mb-2 text-xs">
+              <span className="font-bold px-2 py-0.5 rounded" style={{ background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }}>{report.trajectory}</span>
+              <span className="text-[var(--text-sec)]">peaks around age {report.peakAge}</span>
+            </div>
             <div className="flex items-end gap-2 h-24">
               {report.devCurve.map(d => (
                 <div key={d.label} className="flex-1 flex flex-col items-center justify-end gap-1">
@@ -122,12 +157,15 @@ export function ScoutingReportModal({
             </div>
           )}
 
-          {/* Character */}
-          <Section title="Character">
-            <div className="flex items-start gap-2 text-sm">
-              <span className="shrink-0 font-black px-2 py-0.5 rounded text-xs" style={{ background: 'var(--surface-2)' }}>{report.character.grade}</span>
-              <span className="text-[var(--text-sec)]">{report.character.note}</span>
+          {/* Character & intangibles */}
+          <Section title="Character & intangibles">
+            <div className="grid grid-cols-4 gap-2 mb-2">
+              <GradeCell label="Work" value={String(report.character.workEthic)} />
+              <GradeCell label="Lead" value={String(report.character.leadership)} />
+              <GradeCell label="Coach" value={String(report.character.coachability)} />
+              <GradeCell label="Compete" value={String(report.character.competitiveness)} />
             </div>
+            <p className="text-xs italic text-[var(--text-sec)]">{report.character.notes}</p>
           </Section>
         </div>
       </div>
@@ -140,6 +178,15 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div>
       <div className="text-[10px] uppercase tracking-widest text-[var(--text-sec)] mb-2">{title}</div>
       {children}
+    </div>
+  );
+}
+
+function GradeCell({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="rounded-lg bg-[var(--surface-2)] px-2 py-2 text-center">
+      <div className="text-lg font-black tabular-nums" style={color ? { color } : undefined}>{value}</div>
+      <div className="text-[8px] uppercase tracking-wide opacity-60">{label}</div>
     </div>
   );
 }

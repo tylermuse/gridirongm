@@ -20,9 +20,21 @@ describe('buildScoutingReport', () => {
     expect(a.gradeColor).toMatch(/^#/);
     expect(a.archetype.length).toBeGreaterThan(0);
     expect(a.measurables).toHaveLength(5);
+    expect(a.physicalTraits).toHaveLength(4);
     expect(a.devCurve).toHaveLength(5);
     expect(a.keyRatings).toHaveLength(5);
-    expect(a.character.grade).toMatch(/^[ABCD]$/);
+
+    // Extended draft-grade matrix + character sub-scores (§F).
+    expect(a.floor).toBeLessThanOrEqual(a.ceiling);
+    expect(['High', 'Medium', 'Low']).toContain(a.confidence);
+    expect(['Low', 'Medium', 'High']).toContain(a.riskLevel);
+    expect(a.peakAge).toBeGreaterThan(prospect.age);
+    expect(a.nbaComparison.length).toBeGreaterThan(0);
+    for (const v of [a.character.workEthic, a.character.leadership, a.character.coachability, a.character.competitiveness]) {
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(99);
+    }
+    expect(a.character.notes.length).toBeGreaterThan(0);
 
     // Dev curve starts at the current overall and climbs toward the ceiling.
     expect(a.devCurve[0].projected).toBe(prospect.ratings.overall);
