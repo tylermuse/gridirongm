@@ -7,6 +7,7 @@ import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { SortableTradeTable } from '@/components/trade/SortableTradeTable';
 import { evaluateTrade, isExecutable, type TradeSideInput } from '@/lib/trade';
 import { findDealsForPlayer, incomingOffers, type DealSuggestion } from '@/lib/trade/finder';
 import { teamStrategy, getTeamPicks, pickFromId, pickShort, pickValue } from '@/lib/trade';
@@ -47,6 +48,7 @@ export default function TradePage() {
   }, [league]);
 
   const userTeamId = league?.userTeamId ?? null;
+  const pendingCount = useMemo(() => (league ? incomingOffers(league).length : 0), [league]);
 
   const sides = useMemo<TradeSideInput[]>(() => {
     if (!userTeamId || !targetId) return [];
@@ -173,9 +175,19 @@ export default function TradePage() {
     <Shell>
       <RumorsPanel league={league} />
 
-      <div className="mb-4 inline-flex rounded-lg border overflow-hidden text-sm font-semibold" style={{ borderColor: 'var(--border)' }}>
-        {([['build', 'Build trade'], ['finder', 'Trade finder'], ['offers', 'Offers']] as const).map(([k, l]) => (
-          <button key={k} onClick={() => setTab(k)} className="px-3 py-1.5" style={tab === k ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}>{l}</button>
+      <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-6 w-fit overflow-x-auto max-w-full">
+        {([['offers', 'Incoming Offers'], ['build', 'Propose Trade'], ['finder', 'Trade Finder']] as const).map(([k, l]) => (
+          <button
+            key={k}
+            onClick={() => setTab(k)}
+            className="px-3 py-1.5 text-xs rounded font-medium transition-colors whitespace-nowrap"
+            style={tab === k ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}
+          >
+            {l}
+            {k === 'offers' && pendingCount > 0 && (
+              <span className="ml-1.5 rounded-full px-1.5 text-[10px] font-bold" style={{ background: '#dc2626', color: '#fff' }}>{pendingCount}</span>
+            )}
+          </button>
         ))}
       </div>
 
@@ -674,46 +686,9 @@ function RosterColumn({
         <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="xs" />
         {team.city}
       </h2>
-      {/* Column header */}
-      <div className="flex items-center gap-2 px-3 py-1 text-[9px] uppercase tracking-wide opacity-50 border-b" style={{ borderColor: 'var(--border)' }}>
-        <span className="w-3" aria-hidden />
-        <span className="w-4" aria-hidden />
-        <span className="flex-1">Player</span>
-        <span className="w-6 text-right">POS</span>
-        <span className="w-7 text-right">OVR</span>
-        <span className="w-11 text-right">SAL</span>
-        <span className="w-10 text-right">PTS</span>
+      <div className="px-2 pt-1">
+        <SortableTradeTable players={players} season={season} selected={selected} onToggle={onToggle} side={side} />
       </div>
-      <ul className="max-h-[30rem] overflow-y-auto">
-        {players.map(p => {
-          const sel = selected.has(p.id);
-          const salary = contractSalary(p, season);
-          const val = basketballTradeValue(p, { season });
-          return (
-            <li key={p.id}>
-              <button
-                draggable
-                onDragStart={e => {
-                  e.dataTransfer.setData('application/json', JSON.stringify({ id: p.id, side, kind: 'player' }));
-                  e.dataTransfer.effectAllowed = 'copy';
-                }}
-                onClick={() => onToggle(p.id)}
-                className="w-full flex items-center gap-2 px-3 py-1.5 border-t text-left text-sm hover:bg-[var(--surface-2)] transition-colors cursor-grab active:cursor-grabbing"
-                style={{ borderColor: 'var(--border)', background: sel ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined }}
-                title="Drag onto the trade block, or tap to add"
-              >
-                <span className="w-3 text-center text-xs opacity-30 select-none" aria-hidden>⠿</span>
-                <span className="w-4 text-center" style={{ color: sel ? 'var(--accent)' : 'var(--text-sec)' }}>{sel ? '✓' : '+'}</span>
-                <span className="font-semibold truncate flex-1">{p.firstName} {p.lastName}</span>
-                <span className="text-xs opacity-60 w-6 text-right">{p.sportData.position}</span>
-                <span className="text-xs tabular-nums w-7 text-right font-bold">{p.ratings.overall}</span>
-                <span className="text-[10px] tabular-nums w-11 text-right opacity-60">{salary > 0 ? money(salary) : '—'}</span>
-                <span className="text-[11px] tabular-nums w-10 text-right font-bold" style={{ color: 'var(--accent)' }}>{fmtPts(val)}</span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
       {/* Draft picks */}
       {picks.length > 0 && (
         <>
@@ -890,7 +865,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="max-w-6xl mx-auto p-8">
       <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
-      <h1 className="text-4xl font-extrabold mt-2 mb-6" style={{ color: 'var(--accent)' }}>Trade Center</h1>
+      <h2 className="text-2xl font-black uppercase tracking-tight mt-2 mb-6">Trade Center</h2>
       {children}
     </main>
   );
