@@ -128,6 +128,7 @@ function TopBar({
       case 'simDraftToUser': await store.simDraftToUser(); break;
       case 'goDraft': router.push('/draft'); break;
       case 'goReSign': router.push('/re-sign'); break;
+      case 'goPostDraftCuts': router.push('/post-draft-cuts'); break;
       case 'goFreeAgency': router.push('/free-agency'); break;
       case 'startPlayoffs': { if (await store.startPlayoffs()) router.push('/playoffs'); break; }
       case 'enterOffseason': { if (await store.enterOffseason()) router.push('/draft'); break; }
