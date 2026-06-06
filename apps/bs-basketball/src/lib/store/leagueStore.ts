@@ -64,6 +64,7 @@ import { setTeamLineup } from '../lineup';
 import { clearGmFired } from '../approval';
 import { setGodMode as setGodModeLib, editPlayer as editPlayerLib, type PlayerEdit } from '../godMode/godMode';
 import { forceUserGameResult } from '../godMode/forceGame';
+import { relocateTeam as relocateTeamLib, type FranchiseEdit } from '../godMode/relocate';
 import { buildGmSyncPayload, syncGmStats, computeUserDraftGrade } from '../gm/gmSync';
 import { scoutProspect as scoutProspectState } from '../scouting';
 import { markChangelogSeen as markChangelogSeenState } from '../ui/changelog';
@@ -118,6 +119,8 @@ interface LeagueStore {
   godEditPlayer: (playerId: string, patch: PlayerEdit) => Promise<void>;
   /** God Mode: force the user's next scheduled game to a win/loss. */
   forceUserGame: (win: boolean) => Promise<boolean>;
+  /** God Mode: relocate / rebrand a franchise (city, name, abbrev, colors). */
+  relocateTeam: (teamId: string, edit: FranchiseEdit) => Promise<void>;
 
   /** Sim the next scheduled game involving the user's team. Returns the
    *  played game's id on success, or null if there's no game to sim. */
@@ -403,6 +406,14 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     set({ league, simToast: { text: win ? 'God Mode: forced a win 🛠️' : 'God Mode: forced a loss 🛠️' } });
     try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] forceUserGame failed:', err); }
     return true;
+  },
+
+  async relocateTeam(teamId, edit) {
+    const current = get().league;
+    if (!current) return;
+    const league = relocateTeamLib(current, teamId, edit);
+    set({ league });
+    try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] relocateTeam failed:', err); }
   },
 
   async simDay() {
