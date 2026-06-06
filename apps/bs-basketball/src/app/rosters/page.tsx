@@ -59,7 +59,10 @@ export default function RostersPage() {
 
   async function choose(teamId: TeamId) {
     await pickUserTeam(teamId);
-    router.push('/league');
+    // Imported leagues start in the offseason with their draft pending — go run
+    // it first; otherwise straight to the team dashboard.
+    const picked = useLeagueStore.getState().league;
+    router.push(picked?.sportData && (picked.sportData as { draft?: unknown }).draft ? '/draft' : '/league');
   }
 
   // --- After a successful import: pick your team ---
