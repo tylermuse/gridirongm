@@ -227,11 +227,21 @@ export default function TradePage() {
         )}
       </div>
 
-      {resultMsg && (
-        <div className="mb-5 px-4 py-2 rounded-lg text-sm border" style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 10%, transparent)' }}>
-          {resultMsg}
+      {resultMsg && (resultMsg.startsWith('✅') ? (
+        <div className="mb-5 rounded-lg border p-4 flex items-center gap-3" style={{ borderColor: '#86efac', background: 'color-mix(in srgb, #10b981 12%, transparent)' }}>
+          <span className="text-2xl">✅</span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold" style={{ color: '#15803d' }}>Trade Accepted!</div>
+            <div className="text-xs text-[var(--text-sec)]">The deal went through — rosters and picks have been updated.</div>
+          </div>
+          <button onClick={() => setResultMsg(null)} className="text-xs font-semibold rounded-md px-2.5 py-1 border shrink-0" style={{ borderColor: 'var(--border)' }}>Dismiss</button>
         </div>
-      )}
+      ) : (
+        <div className="mb-5 rounded-lg border p-3" style={{ borderColor: '#fcd34d', background: 'color-mix(in srgb, #f59e0b 12%, transparent)' }}>
+          <div className="text-sm" style={{ color: '#b45309' }}>{resultMsg.replace(/^❌\s*/, '')}</div>
+          <div className="text-xs mt-0.5" style={{ color: '#b45309', opacity: 0.8 }}>Adjust the deal and try again.</div>
+        </div>
+      ))}
 
       <div className="grid lg:grid-cols-[1fr_1fr_0.95fr] gap-5">
         <RosterColumn league={league} team={userTeam} playerById={playerById} season={season} selected={mine} selectedPicks={myPicks} onToggle={id => toggle(mine, setMine, id)} onTogglePick={id => toggle(myPicks, setMyPicks, id)} side="mine" />
@@ -387,31 +397,27 @@ function HistoryRow({ rec }: { rec: ProposalRecord }) {
 // ===========================================================================
 
 function RumorsPanel({ league }: { league: League }) {
-  const [open, setOpen] = useState(true);
   const rumors = useMemo(() => getActiveRumors(league), [league]);
   const acc = useMemo(() => rumorAccuracy(league), [league]);
 
   if (rumors.length === 0 && acc.resolved === 0) return null;
 
   return (
-    <section className="mb-5 rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center gap-2 px-4 py-2.5 border-b text-left" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
+    <section className="mb-6 rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
         <span className="font-bold text-sm">📰 Trade Rumors</span>
-        <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: 'var(--surface-2)', color: 'var(--text-sec)' }}>
+        <span className="ml-auto text-xs font-semibold text-[var(--text-sec)]">
           {acc.resolved === 0
             ? 'Season Accuracy: — (no rumors resolved yet)'
             : `Season Accuracy: ${acc.accurate}/${acc.resolved} (${acc.pct}%)`}
         </span>
-        <span className="ml-auto text-xs opacity-60">{open ? '▾' : '▸'}</span>
-      </button>
-      {open && (
-        rumors.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-[var(--text-sec)]">The mill is quiet right now — sim toward the deadline and the rumors will heat up.</p>
-        ) : (
-          <div className="grid sm:grid-cols-2 gap-2 p-3">
-            {rumors.map(r => <RumorCard key={r.id} league={league} rumor={r} />)}
-          </div>
-        )
+      </div>
+      {rumors.length === 0 ? (
+        <p className="px-4 py-3 text-sm text-[var(--text-sec)]">The mill is quiet right now — sim toward the deadline and the rumors will heat up.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
+          {rumors.map(r => <RumorCard key={r.id} league={league} rumor={r} />)}
+        </div>
       )}
     </section>
   );
