@@ -38,7 +38,9 @@ const TARGET_ROSTER = 15;
 const MIN_ROSTER = 13;
 
 const ROW_GRID = 'grid items-center gap-2 px-2 py-1.5 min-w-[52rem]';
-const ROW_COLS = { gridTemplateColumns: '2.75rem 1fr 2.4rem 2.4rem 2.6rem 2.6rem 5.5rem 6.5rem 2.2rem 6.5rem 5rem 5.5rem' };
+// Name is capped so it no longer hogs all the slack; the stats column shares the
+// remaining width with it, so PPG/RPG/APG · MP · PER has room to breathe.
+const ROW_COLS = { gridTemplateColumns: '2.5rem minmax(9rem,1fr) 2.6rem 2.6rem 2.8rem 2.8rem 6rem 7rem 2.6rem minmax(9rem,1fr) 6rem 5rem' };
 
 interface MenuState { id: string; x: number; y: number }
 
