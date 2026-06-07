@@ -29,6 +29,7 @@ import {
   loadHoopsLeagueFromUrl,
   type ImportedHoopsLeague,
 } from '../data/leagueImport';
+import { ESPN_2026_R1_ORDER, normalizeAbbrev } from '../data/draft2026';
 import {
   saveLeague,
   loadLeague as loadLeagueFromDb,
@@ -260,25 +261,33 @@ function leagueFromImport(imported: ImportedHoopsLeague): BasketballLeagueState 
   // Flag custom-roster leagues so they're excluded from the global GM board.
   league = { ...league, sportData: { ...(league.sportData as object), imported: true, pickOwnership } };
 
-  // Imported leagues start with their upcoming draft (real class + ownership)
-  // before free agency — the file is a pre-draft snapshot, so don't skip it.
-  // The slot order is the most recent completed season's reverse standings
-  // (worst picks first — the real basis), with the file's traded-pick ownership
-  // applied on top.
+  // Imported leagues start with their upcoming draft before free agency — the
+  // file is a pre-draft snapshot, so don't skip it. Round 1 uses the real ESPN
+  // 2026 order (team that makes each pick, traded picks baked in); round 2 falls
+  // back to the most recent completed season's reverse standings.
   if (imported.draftProspectIds.length > 0) {
-    const ordered = imported.draftOrderTeamIds.length === league.teams.length
+    const reverseStandings = imported.draftOrderTeamIds.length === league.teams.length
       ? imported.draftOrderTeamIds
-      : (league.teams as BasketballTeam[]).map(t => t.id);
+      : (league.teams as BasketballTeam[]).map(t => t.id as string);
+    const idByAbbrev = new Map<string, string>();
+    for (const t of league.teams as BasketballTeam[]) idByAbbrev.set(normalizeAbbrev(t.abbreviation), t.id as string);
+    const espnR1 = ESPN_2026_R1_ORDER.map(a => idByAbbrev.get(normalizeAbbrev(a))).filter((id): id is string => !!id);
+    const round1 = espnR1.length === league.teams.length ? espnR1 : reverseStandings;
+
     const picks: DraftPickSlot[] = [];
     for (let round = 1; round <= 2; round++) {
-      ordered.forEach((originalTeamId, i) => {
-        const overall = (round - 1) * ordered.length + i + 1;
+      const order = round === 1 ? round1 : reverseStandings;
+      order.forEach((teamId, i) => {
+        const overall = (round - 1) * order.length + i + 1;
+        // R1 owner comes straight from ESPN (trades baked in) — no registry
+        // re-resolution (getDraft skips inaugural drafts); R2 conveys via the
+        // file's pick ownership.
         picks.push({
           overall,
           round,
           pickInRound: i + 1,
-          originalTeamId,
-          teamId: currentOwner(league, imported.season, round, originalTeamId),
+          originalTeamId: teamId as TeamId,
+          teamId: round === 1 ? (teamId as TeamId) : currentOwner(league, imported.season, round, teamId as TeamId),
           isLottery: overall <= 14,
           prospectId: null,
         });

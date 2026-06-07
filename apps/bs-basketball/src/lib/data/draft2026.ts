@@ -70,6 +70,25 @@ export function consensus2026Rank(name: string): number | null {
   return RANK_BY_NAME.get(normalize(name)) ?? null;
 }
 
+/**
+ * Real 2026 first-round draft order (team that *makes* each pick, traded picks
+ * included), per ESPN. BBGM-canonical abbreviations; map to imported team ids
+ * with normalizeAbbrev. Round 2 isn't published there — callers fall back to
+ * reverse standings for it.
+ */
+export const ESPN_2026_R1_ORDER: string[] = [
+  'WAS', 'UTA', 'MEM', 'CHI', 'LAC', 'BKN', 'SAC', 'ATL', 'DAL', 'MIL',
+  'GSW', 'OKC', 'MIA', 'CHA', 'CHI', 'MEM', 'OKC', 'CHA', 'TOR', 'SAS',
+  'DET', 'PHI', 'NYK', 'LAL', 'DEN', 'BOS', 'MIN', 'CLE', 'DAL', 'OKC',
+];
+
+/** Normalize BBGM/ESPN abbrev variants to a canonical form for matching. */
+export function normalizeAbbrev(a: string): string {
+  const up = a.toUpperCase();
+  const map: Record<string, string> = { BRK: 'BKN', CHO: 'CHA', PHO: 'PHX', WSH: 'WAS', NY: 'NYK', GS: 'GSW', SA: 'SAS', NO: 'NOP', SAN: 'SAS' };
+  return map[up] ?? up;
+}
+
 /** Draft value (current OVR floor + ceiling) implied by a consensus rank. */
 export function consensus2026Value(rank: number): { overall: number; potential: number } {
   const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(n)));
