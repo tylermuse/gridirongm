@@ -101,8 +101,8 @@ export default function ReSignPage() {
       )}
 
       <div className="mt-6 flex justify-end">
-        <Link href="/draft" className="rounded-lg px-4 py-2 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>
-          Continue to Draft →
+        <Link href="/post-draft-cuts" className="rounded-lg px-4 py-2 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>
+          Continue to Roster Cuts →
         </Link>
       </div>
 

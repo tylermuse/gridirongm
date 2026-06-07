@@ -245,26 +245,37 @@ export function startNextSeason(league: LeagueState): LeagueState {
 
   const posOf = (id: string): BasketballPosition | null => players[id]?.sportData.position ?? null;
 
-  // The user's expiring players that they didn't re-sign walk to free agency.
-  // (AI teams keep their own automatically, below.) Done before the trim so the
-  // roster-fill backfills any holes.
+  // Expiring players who reach free agency. The user's expiring players walk
+  // unless they re-signed them; AI teams keep their keepers (stars + prospects)
+  // and let their lower-value expiring players test the market — that's what
+  // actually stocks the free-agent pool. Done before the trim so the roster-fill
+  // backfills any holes.
   const userTeamId = league.userTeamId;
-  const userWalk = new Set<string>();
-  if (userTeamId) {
-    const ut = league.teams.find(t => t.id === userTeamId);
-    for (const id of ut?.playerIds ?? []) {
-      if (!hasContractForSeason(players[id], season)) userWalk.add(id);
+  const AI_KEEP_VALUE = 70; // keep-value at/above which an AI team re-signs its own
+  const walk = new Set<string>();
+  for (const t of league.teams) {
+    const expiring = (t.playerIds as string[]).filter(id => !hasContractForSeason(players[id], season));
+    if (t.id === userTeamId) {
+      // The user decides via the re-sign step; anything not re-signed walks.
+      for (const id of expiring) walk.add(id);
+      continue;
+    }
+    // AI: walk the lowest-value expiring first, keeping at least a legal roster.
+    let rosterAfter = t.playerIds.length;
+    for (const id of [...expiring].sort((a, b) => keepValue(a) - keepValue(b))) {
+      if (rosterAfter <= MIN_LEGAL_ROSTER + 1) break;
+      if (keepValue(id) < AI_KEEP_VALUE) { walk.add(id); rosterAfter--; }
     }
   }
 
   const teams: BasketballTeam[] = league.teams.map(t => {
     let ids = [...t.playerIds];
 
-    if (t.id === userTeamId && userWalk.size) {
+    if (ids.some(id => walk.has(id))) {
       for (const id of ids) {
-        if (userWalk.has(id)) { players[id] = { ...players[id], rosterSlot: null }; freeAgentLastTeam[id] = t.id; }
+        if (walk.has(id)) { players[id] = { ...players[id], rosterSlot: null }; freeAgentLastTeam[id] = t.id; }
       }
-      ids = ids.filter(id => !userWalk.has(id));
+      ids = ids.filter(id => !walk.has(id));
     }
 
     // Draft picks can push a roster over the cap — waive the lowest keep-value
@@ -318,9 +329,9 @@ export function startNextSeason(league: LeagueState): LeagueState {
     } as BasketballTeam;
   });
 
-  // Re-sign any rostered player whose deal expired this offseason at market
-  // value — otherwise the contract silently vanishes (player sits at $0) and the
-  // team's payroll drifts down every year. Teams keep their own players.
+  // Re-sign any still-rostered player whose deal expired (the keepers that didn't
+  // walk, above) at market value — otherwise the contract silently vanishes
+  // (player sits at $0) and the team's payroll drifts down every year.
   for (const t of teams) {
     for (const id of t.playerIds) {
       const p = players[id];

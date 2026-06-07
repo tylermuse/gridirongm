@@ -171,7 +171,7 @@ export default function DraftPage() {
 
   return (
     <Shell season={draft.season}>
-      {/* Draft-complete: tip into the season. */}
+      {/* Draft-complete: re-sign comes next (then cuts, then free agency). */}
       {draft.complete && (
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <div className="font-bold">🏁 Draft complete — {draft.picks.length} picks in.</div>
@@ -179,9 +179,15 @@ export default function DraftPage() {
             <Button variant="ghost" disabled={store.loading} onClick={() => void handleStartSeason('/')}>
               Skip to season
             </Button>
-            <Button variant="primary" disabled={store.loading} onClick={() => void handleStartSeason('/free-agency')}>
-              {store.loading ? 'Working…' : 'Sign Free Agents →'}
-            </Button>
+            {!draft.inaugural && resignCount > 0 ? (
+              <Link href="/re-sign" className="rounded-lg px-4 py-2 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>
+                Re-sign {resignCount} Player{resignCount === 1 ? '' : 's'} →
+              </Link>
+            ) : (
+              <Button variant="primary" disabled={store.loading} onClick={() => void handleStartSeason('/free-agency')}>
+                {store.loading ? 'Working…' : 'Sign Free Agents →'}
+              </Button>
+            )}
           </div>
         </div>
       )}
