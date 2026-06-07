@@ -16,6 +16,7 @@ export const CONSENSUS_2026_BIG_BOARD: string[] = [
   'Caleb Wilson',
   'Nate Ament',
   'Darius Acuff Jr.',
+  'Keaton Wagler',
   'Koa Peat',
   'Mikel Brown Jr.',
   'Karim Lopez',
