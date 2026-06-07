@@ -45,31 +45,33 @@ export function nextAction(league: LeagueState): NextAction {
   const bracket = getBracket(league);
   const hasScheduled = league.games.some(g => g.status === 'scheduled');
 
-  // Offseason draft flow
+  // Offseason flow: Draft → Re-sign → Cuts → Free Agency.
   if (draft) {
-    // Re-sign step comes first: force the expiring-contract decision before the
-    // draft (they'll walk to free agency if ignored).
-    if (!draft.complete && league.userTeamId) {
+    // 1) The draft itself, until every pick is in.
+    if (!draft.complete) {
+      if (league.userTeamId) return { phaseLabel: `Draft · Pick ${draft.currentPick + 1}`, label: 'Sim to My Pick', primary: 'simDraftToUser' };
+      return { phaseLabel: 'Draft', label: 'Go to Draft', primary: 'goDraft' };
+    }
+    // 2) Re-sign your expiring players — after the draft, before free agency.
+    //    Anything left un-re-signed walks to free agency at season start.
+    if (league.userTeamId) {
       const expiring = userExpiringCount(league, draft.season);
       if (expiring > 0) {
         return {
           phaseLabel: 'Offseason · Re-sign',
           label: `Re-sign ${expiring} Player${expiring === 1 ? '' : 's'}`,
           primary: 'goReSign',
-          secondary: [{ label: 'Skip to Draft', key: 'goDraft' }],
+          secondary: [{ label: 'Skip re-signing', key: 'startNextSeason' }],
         };
       }
     }
-    if (draft.complete) {
-      // Over the 15-man limit → make cuts first (a real step, not silent).
-      const rosterN = league.userTeamId ? (league.teams.find(t => t.id === league.userTeamId)?.playerIds.length ?? 0) : 0;
-      if (!draft.inaugural && rosterN > 15) {
-        return { phaseLabel: 'Offseason · Cuts', label: 'Make Roster Cuts', primary: 'goPostDraftCuts' };
-      }
-      return { phaseLabel: 'Offseason · Draft', label: `Start ${draft.season} Season`, primary: 'startNextSeason' };
+    // 3) Over the 15-man limit → make cuts (a real step, not silent).
+    const rosterN = league.userTeamId ? (league.teams.find(t => t.id === league.userTeamId)?.playerIds.length ?? 0) : 0;
+    if (!draft.inaugural && rosterN > 15) {
+      return { phaseLabel: 'Offseason · Cuts', label: 'Make Roster Cuts', primary: 'goPostDraftCuts' };
     }
-    if (league.userTeamId) return { phaseLabel: `Draft · Pick ${draft.currentPick + 1}`, label: 'Sim to My Pick', primary: 'simDraftToUser' };
-    return { phaseLabel: 'Draft', label: 'Go to Draft', primary: 'goDraft' };
+    // 4) Tip into the season (free agency surfaces in the preseason).
+    return { phaseLabel: 'Offseason · Draft', label: `Start ${draft.season} Season`, primary: 'startNextSeason' };
   }
 
   // Season finished → roll into the offseason

@@ -98,6 +98,16 @@ describe('season rollover', () => {
     }
   });
 
+  it('stocks free agency with veterans AI teams let walk (not just rookies)', () => {
+    const next = advanceToNextSeason(completeSeason('rollover-fa-pool'));
+    const players = next.players as Record<string, BasketballPlayer>;
+    // AI teams keep their keepers but let lower-value expiring vets test the
+    // market, so the pool has established players, not only undrafted rookies.
+    const vets = next.freeAgentIds.filter(id => players[id].age >= 24);
+    expect(vets.length).toBeGreaterThan(5);
+    expect(next.freeAgentIds.length).toBeGreaterThan(20);
+  });
+
   it('keeps high-upside drafted rookies through the roster trim', () => {
     // Rookies enter raw (low current OVR), so a trim sorted on overall alone
     // would waive every pick just made. The trim values potential, so drafted
