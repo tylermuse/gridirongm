@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -31,7 +31,11 @@ export default function DraftPage() {
   const store = useLeagueStore();
   const router = useRouter();
   const [showCeremony, setShowCeremony] = useState(false);
+  const [revealStep, setRevealStep] = useState(0);
+  const [replay, setReplay] = useState(false);
+  const [skipPref] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem('bshoops-skip-lottery') === '1');
   const [tradeOpen, setTradeOpen] = useState(false);
+  const autoSkippedRef = useRef(false);
 
   const draft = league ? getDraft(league) : null;
   const teamById = useMemo(() => {
@@ -39,6 +43,14 @@ export default function DraftPage() {
     if (league) for (const t of league.teams) m.set(t.id, t as BasketballTeam);
     return m;
   }, [league]);
+
+  // Honor the skip preference: jump straight to the settled board, once.
+  useEffect(() => {
+    if (skipPref && draft && !draft.lotteryRevealed && !autoSkippedRef.current) {
+      autoSkippedRef.current = true;
+      void store.revealLottery();
+    }
+  }, [skipPref, draft, store]);
 
   if (loading) return <Loading />;
   if (!league) return <NotFound message={error ?? 'No league loaded.'} />;
@@ -68,12 +80,26 @@ export default function DraftPage() {
   // --- Lottery reveal gate ---
   if (!draft.lotteryRevealed) {
     const revealCards = buildLotteryReveal(draft, teamById, league.userTeamId);
+    const boardCards = buildLotteryBoard(draft, teamById, league.userTeamId);
     // Closing the ceremony (or skipping) is what flips the persisted flag and
     // opens the board. Older saves with no seeding fall back to an instant reveal.
     const finishReveal = () => {
       setShowCeremony(false);
       void store.revealLottery();
     };
+    const skipForever = () => {
+      if (typeof window !== 'undefined') window.localStorage.setItem('bshoops-skip-lottery', '1');
+      finishReveal();
+    };
+    // Mid-ceremony: inline broadcast panel + the board filling in live.
+    if (showCeremony && revealCards.length > 0) {
+      return (
+        <Shell season={draft.season}>
+          <LotteryRevealCeremony cards={revealCards} onClose={finishReveal} onStep={setRevealStep} />
+          <LotteryBoard cards={boardCards} revealedThrough={revealCards[revealStep]?.overall} />
+        </Shell>
+      );
+    }
     return (
       <Shell season={draft.season}>
         <div className="rounded-xl border-2 p-8 text-center" style={{ borderColor: 'var(--accent)' }}>
@@ -93,18 +119,24 @@ export default function DraftPage() {
               </div>
             ))}
           </div>
-          <Button
-            variant="primary"
-            size="lg"
-            disabled={store.loading}
-            onClick={() => (revealCards.length ? setShowCeremony(true) : finishReveal())}
-          >
-            {store.loading ? 'Revealing…' : 'Start the Lottery Reveal →'}
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Button
+              variant="primary"
+              size="lg"
+              disabled={store.loading}
+              onClick={() => (revealCards.length ? setShowCeremony(true) : finishReveal())}
+            >
+              {store.loading ? 'Revealing…' : 'Start the Lottery Reveal →'}
+            </Button>
+            <button
+              onClick={skipForever}
+              disabled={store.loading}
+              className="text-sm font-semibold text-[var(--text-sec)] hover:text-[var(--text)] underline disabled:opacity-40"
+            >
+              Skip — reveal instantly →
+            </button>
+          </div>
         </div>
-        {showCeremony && revealCards.length > 0 && (
-          <LotteryRevealCeremony cards={revealCards} onClose={finishReveal} />
-        )}
       </Shell>
     );
   }
@@ -177,7 +209,24 @@ export default function DraftPage() {
       </div>
 
       {/* Reviewable lottery results: odds + slated seed vs. where teams landed. */}
-      <LotteryBoard cards={buildLotteryBoard(draft, teamById, league.userTeamId)} />
+      {(() => {
+        const boardCards = buildLotteryBoard(draft, teamById, league.userTeamId);
+        if (boardCards.length === 0) return null;
+        const replayCards = buildLotteryReveal(draft, teamById, league.userTeamId);
+        return (
+          <>
+            {replay && replayCards.length > 0 && (
+              <LotteryRevealCeremony cards={replayCards} onClose={() => setReplay(false)} onStep={setRevealStep} />
+            )}
+            <LotteryBoard cards={boardCards} revealedThrough={replay ? replayCards[revealStep]?.overall : undefined} />
+            {!replay && (
+              <button onClick={() => { setRevealStep(0); setReplay(true); }} className="text-xs font-semibold mb-4 -mt-2 ml-1 hover:underline" style={{ color: 'var(--accent)' }}>
+                ▶ Replay lottery reveal
+              </button>
+            )}
+          </>
+        );
+      })()}
 
       <div className="grid lg:grid-cols-[1.1fr_1fr] gap-6">
         {/* Prospect board (search/filter/scout + inline expansion) */}
