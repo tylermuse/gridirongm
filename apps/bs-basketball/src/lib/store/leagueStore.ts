@@ -688,10 +688,16 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     const val = (os: number[]) => os.reduce((s, o) => s + basketballPickValue(o), 0);
     const sendVal = val(sendOveralls);
     const getVal = val(getOveralls);
-    // The partner receives your sent picks and gives up the ones you're getting —
-    // they won't accept a clear loss of value.
-    if (sendVal < getVal * 0.95) {
-      return { accepted: false, reason: `They want more — that's ${Math.round(sendVal)} pts for ${Math.round(getVal)}.` };
+    // The partner receives your sent picks and gives up the ones you're getting.
+    // Teams trading DOWN value extra picks (asset accumulation), so a team giving
+    // up one higher pick for two lower ones will take a small raw-value discount.
+    // Tolerance widens with each extra pick you send so a normal trade-up (e.g.
+    // two firsts to move up a few spots) goes through — matching the modal's
+    // "you gain value" verdict instead of silently rejecting it.
+    const extraPicksSent = Math.max(0, sendOveralls.length - getOveralls.length);
+    const quantityBonus = extraPicksSent * 25;
+    if (sendVal + quantityBonus < getVal * 0.9) {
+      return { accepted: false, reason: `They want more value — package another pick or two to move up.` };
     }
 
     const send = new Set(sendOveralls);
