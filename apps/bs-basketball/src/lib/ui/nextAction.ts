@@ -18,7 +18,7 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 export type ActionKey =
   | 'simDay' | 'simWeek' | 'simDeadline' | 'simSeason'
   | 'startPlayoffs' | 'simPlayoffDay' | 'simPlayoffRound' | 'simAllPlayoffs'
-  | 'enterOffseason' | 'simDraftToUser' | 'goDraft' | 'startNextSeason' | 'goFreeAgency' | 'goReSign' | 'goPostDraftCuts';
+  | 'enterOffseason' | 'simDraftToUser' | 'simDraftAll' | 'goDraft' | 'startNextSeason' | 'goFreeAgency' | 'goReSign' | 'goPostDraftCuts';
 
 /** User-team players with no contract for the upcoming season (expiring). */
 function userExpiringCount(league: LeagueState, upcomingSeason: number): number {
@@ -49,7 +49,12 @@ export function nextAction(league: LeagueState): NextAction {
   if (draft) {
     // 1) The draft itself, until every pick is in.
     if (!draft.complete) {
-      if (league.userTeamId) return { phaseLabel: `Draft · Pick ${draft.currentPick + 1}`, label: 'Sim to My Pick', primary: 'simDraftToUser' };
+      if (league.userTeamId) return {
+        phaseLabel: `Draft · Pick ${draft.currentPick + 1}`,
+        label: 'Sim to My Pick',
+        primary: 'simDraftToUser',
+        secondary: [{ label: 'Auto Draft All', key: 'simDraftAll' }],
+      };
       return { phaseLabel: 'Draft', label: 'Go to Draft', primary: 'goDraft' };
     }
     // 2) Re-sign your expiring players — after the draft, before free agency.
