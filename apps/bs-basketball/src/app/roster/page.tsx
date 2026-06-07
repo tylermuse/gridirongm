@@ -146,9 +146,17 @@ export default function RosterPage() {
   }
 
   function startPlayer(id: string) {
+    // The five slots are on-court roles, not position gates — any player can fill
+    // any slot. Prefer the player's natural-position slot when it's open; if it's
+    // already taken, drop into the first empty slot so you can stack a position
+    // (e.g. start five guards). Only when the lineup is full do we swap into the
+    // natural slot.
     const pos = playerById[id]?.sportData.position;
-    const slot = pos ? POSITIONS.indexOf(pos) : 0;
-    setStarter(slot < 0 ? 0 : slot, id);
+    const natural = pos ? POSITIONS.indexOf(pos) : 0;
+    const firstEmpty = starters.findIndex(s => !s);
+    let slot = natural >= 0 && !starters[natural] ? natural : firstEmpty;
+    if (slot < 0) slot = natural >= 0 ? natural : 0; // lineup full → swap into natural
+    setStarter(slot, id);
   }
 
   function benchStarter(slot: number) {
