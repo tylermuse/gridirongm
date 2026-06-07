@@ -158,9 +158,9 @@ export default function AwardsPage() {
 
           {honors && (
             <>
-              <AllLeagueSection title="All-NBA" teams={honors.allNBA} teamById={teamById} onPlayerClick={setModalPlayerId} />
-              <AllLeagueSection title="All-Defensive" teams={honors.allDefensive} teamById={teamById} onPlayerClick={setModalPlayerId} />
-              <AllLeagueSection title="All-Rookie" teams={honors.allRookie} teamById={teamById} onPlayerClick={setModalPlayerId} />
+              <AllLeagueSection title="All-NBA" teams={honors.allNBA} teamById={teamById} onPlayerClick={setModalPlayerId} userTeamId={league.userTeamId} />
+              <AllLeagueSection title="All-Defensive" teams={honors.allDefensive} teamById={teamById} onPlayerClick={setModalPlayerId} userTeamId={league.userTeamId} />
+              <AllLeagueSection title="All-Rookie" teams={honors.allRookie} teamById={teamById} onPlayerClick={setModalPlayerId} userTeamId={league.userTeamId} />
 
               {honors.retirements.length > 0 && (
                 <section className="mt-8">
@@ -168,15 +168,17 @@ export default function AwardsPage() {
                   <div className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
                     {honors.retirements.map(r => {
                       const team = r.teamId ? teamById.get(r.teamId) : null;
+                      const isUser = !!league.userTeamId && r.teamId === league.userTeamId;
                       return (
                         <button
                           key={r.playerId}
                           onClick={() => setModalPlayerId(r.playerId)}
                           className="w-full flex items-center gap-2 px-4 py-2 border-t first:border-t-0 text-left text-sm hover:bg-[var(--surface-2)]"
-                          style={{ borderColor: 'var(--border)' }}
+                          style={{ borderColor: 'var(--border)', background: isUser ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : undefined }}
                         >
                           <span className="w-7 text-xs font-mono text-[var(--text-sec)]">{r.position}</span>
                           <span className="font-semibold truncate flex-1">{r.name}</span>
+                          {isUser && <span className="text-[10px] font-black" style={{ color: 'var(--accent)' }}>YOU</span>}
                           {team && <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="xs" />}
                           <span className="text-xs text-[var(--text-sec)] tabular-nums">{r.overall} OVR · age {r.age}</span>
                         </button>
@@ -327,12 +329,13 @@ function AwardCard({
 }
 
 function AllLeagueSection({
-  title, teams, teamById, onPlayerClick,
+  title, teams, teamById, onPlayerClick, userTeamId,
 }: {
   title: string;
   teams: AllLeagueTeam[];
   teamById: Map<string, BasketballTeam>;
   onPlayerClick: (id: string) => void;
+  userTeamId: string | null;
 }) {
   if (teams.length === 0 || teams.every(t => t.players.length === 0)) return null;
   return (
@@ -347,15 +350,17 @@ function AllLeagueSection({
             <ul>
               {team.players.map(pl => {
                 const t = pl.teamId ? teamById.get(pl.teamId) : null;
+                const isUser = !!userTeamId && pl.teamId === userTeamId;
                 return (
                   <li key={pl.playerId}>
                     <button
                       onClick={() => onPlayerClick(pl.playerId)}
                       className="w-full flex items-center gap-2 px-3 py-1.5 border-t first:border-t-0 text-left text-sm hover:bg-[var(--surface-2)]"
-                      style={{ borderColor: 'var(--border)' }}
+                      style={{ borderColor: 'var(--border)', background: isUser ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : undefined }}
                     >
                       <span className="w-6 text-xs font-mono text-[var(--text-sec)]">{pl.position}</span>
                       <span className="font-semibold truncate flex-1">{pl.name}</span>
+                      {isUser && <span className="text-[10px] font-black" style={{ color: 'var(--accent)' }}>YOU</span>}
                       {t && <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="xs" />}
                       <span className="text-[10px] text-[var(--text-sec)] tabular-nums">{pl.statline}</span>
                     </button>
