@@ -51,7 +51,12 @@ export function ExtendModal({ playerId, onClose }: { playerId: string | null; on
   async function propose() {
     if (!player) return;
     const res = await extendPlayer(player.id, offer);
-    if (res) setResult(res);
+    if (!res) return;
+    // Accepted → close immediately (the page shows a toast). This prevents the
+    // form re-rendering and stacking another year on each extra click. Rejected
+    // → keep the modal open with what he's actually after so the user can adjust.
+    if (res.accepted) onClose();
+    else setResult(res);
   }
 
   if (!player || !market) {
@@ -114,8 +119,8 @@ export function ExtendModal({ playerId, onClose }: { playerId: string | null; on
           ) : (
             <>
               <Button variant="ghost" onClick={onClose}>Cancel</Button>
-              <Button variant="primary" disabled={loading} onClick={() => void propose()}>
-                {loading ? 'Working…' : 'Propose extension'}
+              <Button variant="primary" disabled={loading || contractYearsLeft(player, season) > 1} onClick={() => void propose()}>
+                {loading ? 'Working…' : contractYearsLeft(player, season) > 1 ? 'Already re-signed' : 'Propose extension'}
               </Button>
             </>
           )}

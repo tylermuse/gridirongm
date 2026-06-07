@@ -1109,8 +1109,9 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       const players = { ...current.players, [playerId]: { ...player, contract } };
       const league = { ...current, players };
       await saveLeague(league);
-      set({ league, loading: false });
-      return { accepted: true, message: `${player.firstName} ${player.lastName} signed a ${offer.years}-year, $${(offer.salaryPerYear / 1e6).toFixed(1)}M/yr extension.` };
+      const message = `${player.firstName} ${player.lastName} signed a ${offer.years}-year, $${(offer.salaryPerYear / 1e6).toFixed(1)}M/yr extension.`;
+      set({ league, loading: false, simToast: { text: `✅ ${message}` } });
+      return { accepted: true, message };
     } catch (err) {
       console.error('[bs-hoops] extendPlayer failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
