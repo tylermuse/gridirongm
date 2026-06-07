@@ -14,6 +14,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { GameTicker } from '@/components/dashboard/GameTicker';
 import { nextAction, type ActionKey } from '@/lib/ui/nextAction';
 import { getBracket } from '@/lib/playoffs';
+import { getGmFired } from '@/lib/approval';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -71,6 +72,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Main column */}
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar league={league} onMenu={() => setDrawerOpen(true)} />
+        <FiredBanner />
         <main key={pathname} className={`flex-1 ${transitionClass}`}>{children}</main>
         <Footer />
       </div>
@@ -79,6 +81,22 @@ export function AppShell({ children }: { children: ReactNode }) {
       <WhatsNew />
       <GameSounds />
       <ErrorBanner />
+    </div>
+  );
+}
+
+/** Persistent "you were fired" banner across every page (home shows the full
+ *  openings UI, so it's suppressed there). */
+function FiredBanner() {
+  const league = useLeagueStore(s => s.league);
+  const pathname = usePathname() ?? '/';
+  if (!league || pathname === '/' || league.userTeamId) return null;
+  const fired = getGmFired(league);
+  if (!fired) return null;
+  return (
+    <div className="px-4 py-2 text-sm font-semibold text-white flex flex-wrap items-center gap-2" style={{ background: '#dc2626' }}>
+      <span>📉 You were fired by the {fired.teamName}.</span>
+      <Link href="/" className="underline hover:no-underline">Pick a new GM job →</Link>
     </div>
   );
 }

@@ -630,7 +630,14 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
 
       const league = enterOffseason(current);
       await saveLeague(league);
-      set({ league, loading: false });
+      // Immediate heads-up if ownership just fired the GM (userTeamId cleared).
+      const justFired = !!current.userTeamId && !league.userTeamId;
+      const fired = (league.sportData as { gmFired?: { teamName: string } }).gmFired;
+      set({
+        league,
+        loading: false,
+        simToast: justFired && fired ? { text: `📉 You've been fired by the ${fired.teamName}. Pick a new GM job from Home.` } : undefined,
+      });
       return true;
     } catch (err) {
       console.error('[bs-hoops] enterOffseason failed:', err);

@@ -3,6 +3,7 @@ export {
   jobSecurityFor,
   userPlayoffResult,
   getGmFired,
+  getGmOpenings,
   clearGmFired,
   type JobSecurity,
   type PlayoffResult,
