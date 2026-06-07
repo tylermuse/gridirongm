@@ -37,6 +37,7 @@ export default function TradePage() {
   const [myPicks, setMyPicks] = useState<Set<string>>(new Set());
   const [theirPicks, setTheirPicks] = useState<Set<string>>(new Set());
   const [resultMsg, setResultMsg] = useState<string | null>(null);
+  const [pinnedRumor, setPinnedRumor] = useState<{ headline: string; detail: string } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [tab, setTab] = useState<'build' | 'finder' | 'offers' | 'block'>('build');
   const [finderId, setFinderId] = useState('');
@@ -173,7 +174,18 @@ export default function TradePage() {
 
   return (
     <Shell>
-      <RumorsPanel league={league} />
+      <RumorsPanel
+        league={league}
+        onOpen={(rumor) => {
+          if (rumor.teamId === userTeamId) return;
+          setTab('build');
+          setTargetId(rumor.teamId);
+          setTheirs(new Set());
+          setTheirPicks(new Set());
+          setResultMsg(null);
+          setPinnedRumor({ headline: rumor.headline, detail: rumor.detail });
+        }}
+      />
 
       <div className="flex gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-1 mb-6 w-fit overflow-x-auto max-w-full">
         {([['offers', 'Incoming Offers'], ['block', 'Trading Block'], ['build', 'Propose Trade'], ['finder', 'Trade Finder']] as const).map(([k, l]) => (
@@ -205,6 +217,16 @@ export default function TradePage() {
 
       {tab === 'build' && (
       <>
+      {pinnedRumor && (
+        <div className="mb-3 rounded-lg border px-4 py-2.5 flex items-start gap-3" style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>
+          <span className="text-lg shrink-0">🗞️</span>
+          <div className="min-w-0 flex-1">
+            <div className="font-bold text-sm">{pinnedRumor.headline}</div>
+            <div className="text-xs text-[var(--text-sec)]">{pinnedRumor.detail}</div>
+          </div>
+          <button onClick={() => setPinnedRumor(null)} className="text-xs font-semibold opacity-60 hover:opacity-100 shrink-0" title="Dismiss">✕</button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-3 mb-3">
         <div className="flex items-center gap-2 font-bold">
           <TeamLogo abbreviation={userTeam.abbreviation} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="xs" />
@@ -405,7 +427,7 @@ function HistoryRow({ rec }: { rec: ProposalRecord }) {
 // Trade rumors (P2.1)
 // ===========================================================================
 
-function RumorsPanel({ league }: { league: League }) {
+function RumorsPanel({ league, onOpen }: { league: League; onOpen: (rumor: TradeRumor) => void }) {
   const rumors = useMemo(() => getActiveRumors(league), [league]);
   const acc = useMemo(() => rumorAccuracy(league), [league]);
 
@@ -425,17 +447,25 @@ function RumorsPanel({ league }: { league: League }) {
         <p className="px-4 py-3 text-sm text-[var(--text-sec)]">The mill is quiet right now — sim toward the deadline and the rumors will heat up.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
-          {rumors.map(r => <RumorCard key={r.id} league={league} rumor={r} />)}
+          {rumors.map(r => <RumorCard key={r.id} league={league} rumor={r} onOpen={onOpen} />)}
         </div>
       )}
     </section>
   );
 }
 
-function RumorCard({ league, rumor }: { league: League; rumor: TradeRumor }) {
+function RumorCard({ league, rumor, onOpen }: { league: League; rumor: TradeRumor; onOpen: (rumor: TradeRumor) => void }) {
   const meta = rumorPlayerMeta(league, rumor);
+  const clickable = rumor.teamId !== league.userTeamId;
   return (
-    <div className="rounded-lg border p-3" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+    <div
+      onClick={clickable ? () => onOpen(rumor) : undefined}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? (e) => { if (e.key === 'Enter') onOpen(rumor); } : undefined}
+      className={`rounded-lg border p-3 ${clickable ? 'cursor-pointer hover:border-[var(--accent)] transition-colors' : ''}`}
+      style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}
+    >
       <div className="flex items-center gap-2 mb-1">
         <span
           className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded"
@@ -446,6 +476,7 @@ function RumorCard({ league, rumor }: { league: League; rumor: TradeRumor }) {
           {rumor.hot ? '🔥 Hot' : '❄ Cold'}
         </span>
         <span className="text-[10px] uppercase tracking-wide opacity-50">Day {rumor.day}</span>
+        {clickable && <span className="ml-auto text-[10px] font-semibold" style={{ color: 'var(--accent)' }}>Open trade →</span>}
       </div>
       <div className="font-semibold text-sm leading-snug">{rumor.headline}</div>
       <div className="text-xs text-[var(--text-sec)] mt-0.5">{rumor.detail}</div>
