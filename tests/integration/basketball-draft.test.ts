@@ -158,6 +158,37 @@ describe('AI draft pick', () => {
     expect(topThree.some(p => p.id === chosen.id)).toBe(true);
   });
 
+  it('takes the high-ceiling prospect over a polished-but-capped one (upside BPA)', () => {
+    // The Dybantsa case: a consensus #1 with a modest current OVR but elite
+    // potential must not fall behind higher-OVR, low-ceiling role players.
+    const base = generateBasketballPlayer({ position: 'SF', targetOverall: 73 });
+    const ceiling = {
+      ...base,
+      id: 'ceiling-prospect' as ReturnType<typeof generateBasketballPlayer>['id'],
+      ratings: { ...base.ratings, overall: 73 },
+      development: { ...base.development, potential: 93 },
+      sportData: { ...base.sportData, position: 'SF' as const },
+    };
+    const capped = {
+      ...base,
+      id: 'capped-prospect' as ReturnType<typeof generateBasketballPlayer>['id'],
+      ratings: { ...base.ratings, overall: 76 },
+      development: { ...base.development, potential: 78 },
+      sportData: { ...base.sportData, position: 'PG' as const },
+    };
+    let ceilingWins = 0;
+    const trials = 50;
+    for (let i = 0; i < trials; i++) {
+      const choice = aiBasketballDraftPick(
+        { teamId: 'team-test' as TeamId, rosterPlayers: [] },
+        [capped, ceiling],
+        { rngSeed: `upside-${i}` },
+      );
+      if (choice === 'ceiling-prospect') ceilingWins++;
+    }
+    expect(ceilingWins).toBeGreaterThan(trials * 0.9);
+  });
+
   it('weighs positional need on a roster lacking a position', () => {
     // Build a roster with NO centers but at least 2 SGs — drafting AI
     // should bump a C up. (Having only 1 SG would also trigger high need

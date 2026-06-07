@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '@/components/modals/Modal';
 import { Button } from '@/components/ui/Button';
 import { useLeagueStore } from '@/lib/store/leagueStore';
@@ -22,30 +22,44 @@ export function ExtendModal({ playerId, onClose }: { playerId: string | null; on
   const market = useMemo(() => (player ? extensionMarket(player, season) : null), [player, season]);
   const [years, setYears] = useState(2);
   const [salaryM, setSalaryM] = useState(5);
-  const [seededFor, setSeededFor] = useState<string | null>(null);
   const [result, setResult] = useState<{ accepted: boolean; message: string } | null>(null);
 
-  // Seed the inputs to the player's ask the first time this player opens.
-  if (player && market && seededFor !== player.id) {
-    setYears(market.desiredYears);
-    setSalaryM(Math.round((market.marketSalary / 1e6) * 10) / 10);
-    setSeededFor(player.id);
+  // Seed the inputs to the player's ask — only when a *different* player opens,
+  // so re-signing (which mutates the player object) doesn't reset the result or
+  // re-trigger the modal. Re-seeding on every player-ref change is what made the
+  // modal flicker closed-then-open after Propose.
+  useEffect(() => {
+    if (!playerId || !league) return;
+    const p = league.players[playerId as keyof typeof league.players] as BasketballPlayer | undefined;
+    if (!p) return;
+    const m = extensionMarket(p, season);
+    setYears(m.desiredYears);
+    setSalaryM(Math.round((m.marketSalary / 1e6) * 10) / 10);
     setResult(null);
-  }
+    // Intentionally keyed on playerId only — see comment above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerId]);
 
-  if (!player || !market) return <Modal open={false} onClose={onClose}><span /></Modal>;
+  // The modal's open state is driven solely by playerId, so it never flips
+  // closed when the player object changes mid-extension.
+  if (!playerId) return null;
 
   const offer = { years, salaryPerYear: Math.round(salaryM * 1e6) };
-  const acceptPct = Math.round(extensionAcceptance(market, offer) * 100);
+  const acceptPct = player && market ? Math.round(extensionAcceptance(market, offer) * 100) : 0;
   const meterColor = acceptPct >= 50 ? '#10b981' : acceptPct >= 25 ? '#f59e0b' : '#dc2626';
 
   async function propose() {
-    const res = await extendPlayer(player!.id, offer);
+    if (!player) return;
+    const res = await extendPlayer(player.id, offer);
     if (res) setResult(res);
   }
 
+  if (!player || !market) {
+    return <Modal open onClose={onClose} title="Extend" maxWidthClass="max-w-md"><p className="p-2 text-sm text-[var(--text-sec)]">Player unavailable.</p></Modal>;
+  }
+
   return (
-    <Modal open={!!playerId} onClose={onClose} title={`Extend ${player.firstName} ${player.lastName}`} maxWidthClass="max-w-md">
+    <Modal open onClose={onClose} title={`Extend ${player.firstName} ${player.lastName}`} maxWidthClass="max-w-md">
       <div className="space-y-4 p-1">
         <div className="flex items-center justify-between text-sm">
           <span className="text-[var(--text-sec)]">{player.sportData.position} · Age {player.age} · {player.ratings.overall} OVR</span>
