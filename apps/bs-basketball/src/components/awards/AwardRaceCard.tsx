@@ -37,8 +37,9 @@ export function AwardRaceCard({ race, league, showWinnerCrown }: { race: AwardRa
             const team = teamById.get(e.teamId);
             const barPct = Math.max(4, Math.round(((e.score - minScore) / range) * 100));
             const p = e.isCoach ? null : players[e.playerId];
+            const isUser = !!league.userTeamId && e.teamId === league.userTeamId;
             return (
-              <div key={e.playerId} className="flex items-center gap-2 min-w-0">
+              <div key={e.playerId} className="flex items-center gap-2 min-w-0 rounded-md px-1 -mx-1" style={isUser ? { background: 'color-mix(in srgb, var(--accent) 12%, transparent)' } : undefined}>
                 <span className="w-5 shrink-0 text-xs font-bold text-[var(--text-sec)] tabular-nums text-right">{i + 1}</span>
                 {e.isCoach
                   ? team && <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="md" />
@@ -49,6 +50,7 @@ export function AwardRaceCard({ race, league, showWinnerCrown }: { race: AwardRa
                       ? <span className="text-sm font-bold truncate">{team ? `${team.city} ${team.name}` : 'Team'}</span>
                       : <Link href={`/player/${e.playerId}`} className="text-sm font-bold truncate hover:text-[var(--accent)] transition-colors">{p ? `${p.firstName} ${p.lastName}` : 'Player'}</Link>}
                     {showWinnerCrown && i === 0 && <AwardWinnerBadge />}
+                    {isUser && <span className="text-[9px] font-black" style={{ color: 'var(--accent)' }}>YOU</span>}
                     {!e.isCoach && <span className="text-[10px] text-[var(--text-sec)]">{e.position}</span>}
                     {team && !e.isCoach && <span className="text-[10px] text-[var(--text-sec)] hidden sm:inline">{team.abbreviation}</span>}
                   </div>
