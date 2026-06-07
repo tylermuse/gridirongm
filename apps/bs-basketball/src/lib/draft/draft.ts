@@ -36,6 +36,10 @@ interface LeagueSportData {
 export function getDraft(league: LeagueState): DraftState | null {
   const draft = (league.sportData as LeagueSportData | undefined)?.draft ?? null;
   if (!draft) return null;
+  // Inaugural (imported) drafts bake their order from the real ESPN slot list —
+  // don't re-resolve against the ownership registry (which is keyed by original
+  // team and would scramble the fixed order).
+  if (draft.inaugural) return draft;
   // Re-resolve each slot's owner against the live pick-ownership registry.
   // draft.picks[].teamId is only a setup-time snapshot; without this a pick
   // traded mid-draft would keep showing — and pick for — its old team. The
