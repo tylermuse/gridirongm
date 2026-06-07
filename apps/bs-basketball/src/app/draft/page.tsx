@@ -14,7 +14,7 @@ import { DraftBoardCard } from '@/components/draft/DraftBoardCard';
 import { DraftResultsCard } from '@/components/draft/DraftResultsCard';
 import { DraftFooter } from '@/components/draft/DraftFooter';
 import { DraftRecapInline } from '@/components/draft/DraftRecapInline';
-import { TradePickModal } from '@/components/draft/TradePickModal';
+import { DraftPickTradeModal } from '@/components/draft/DraftPickTradeModal';
 import { ScoutingReportModal } from '@/components/draft/ScoutingReportModal';
 import { buildScoutingReport, teamFitFor } from '@/lib/scouting/scoutingReport';
 import { LotteryRevealCeremony } from '@/components/draft/LotteryReveal';
@@ -277,7 +277,7 @@ export default function DraftPage() {
         );
       })()}
 
-      {tradeOpen && <TradePickModal onClose={() => setTradeOpen(false)} />}
+      {tradeOpen && <DraftPickTradeModal onClose={() => setTradeOpen(false)} />}
     </Shell>
   );
 }
