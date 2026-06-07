@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerModal } from '@/components/modals/PlayerModal';
+import { PlayersTabs } from '@/components/players/PlayersTabs';
 import type { BasketballPlayer, BasketballPosition, BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -86,6 +87,7 @@ export default function PlayersPage() {
 
   return (
     <Shell>
+      <PlayersTabs />
       <h1 className="text-3xl sm:text-4xl font-black mb-4" style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>Player Search</h1>
 
       {/* Filters */}

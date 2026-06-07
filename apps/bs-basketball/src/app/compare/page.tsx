@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
+import { PlayersTabs } from '@/components/players/PlayersTabs';
 import {
   basketballUiMetadata,
   type BasketballPlayer,
@@ -60,7 +61,8 @@ function CompareInner() {
 
   return (
     <main className="max-w-4xl mx-auto p-5 sm:p-8">
-      <Link href="/league" className="text-sm font-semibold opacity-70 hover:opacity-100">← League</Link>
+      <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">← Home</Link>
+      <div className="mt-2"><PlayersTabs /></div>
       <header className="flex flex-wrap items-baseline gap-3 mt-2 mb-6">
         <h1 className="text-3xl sm:text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>Compare</h1>
         <p className="text-sm opacity-70">Two players, head to head.</p>
