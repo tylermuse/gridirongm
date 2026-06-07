@@ -38,5 +38,10 @@ export function migrateSave(state: BasketballLeagueState): { state: BasketballLe
     s = { ...s, saveVersion: CURRENT_SAVE_VERSION };
     migrated = true;
   }
+  // One-off normalization (version-independent): old imports were named "NBA YYYY".
+  if (typeof s.displayName === 'string' && /^NBA \d{4}$/.test(s.displayName)) {
+    s = { ...s, displayName: s.displayName.replace(/^NBA /, 'BS Hoops ') };
+    migrated = true;
+  }
   return { state: s, migrated };
 }

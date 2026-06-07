@@ -249,7 +249,7 @@ function leagueFromImport(imported: ImportedHoopsLeague): BasketballLeagueState 
     players: imported.players,
     freeAgentIds: imported.freeAgentIds,
     season: imported.season,
-    displayName: `NBA ${imported.season}`,
+    displayName: `BS Hoops ${imported.season}`,
   });
 
   // Real traded-pick ownership from the file → the pick-ownership registry, so
