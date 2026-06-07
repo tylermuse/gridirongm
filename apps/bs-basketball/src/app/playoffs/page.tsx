@@ -8,6 +8,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/modals/Modal';
+import { LiveViewer } from '@/components/live/LiveViewer';
 import { dropConfetti } from '@/lib/ui/confetti';
 import { getBracket, isRegularSeasonComplete } from '@/lib/playoffs';
 import { computeSeasonAwards } from '@/lib/awards';
@@ -26,7 +27,8 @@ import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
  */
 export default function PlayoffsPage() {
   const { league, loading, error } = useLeagueOrHydrate();
-  const { startPlayoffs, simPlayoffDay, simPlayoffRound, simAllPlayoffs, loading: storeLoading } = useLeagueStore();
+  const { startPlayoffs, simPlayoffDay, simPlayoffRound, simAllPlayoffs, watchNextPlayoffGame, loading: storeLoading } = useLeagueStore();
+  const [watching, setWatching] = useState<{ userGameId: string; dayGameIds: string[] } | null>(null);
 
   const bracket = league ? getBracket(league) : null;
   const teamById = useMemo(() => {
@@ -100,6 +102,18 @@ export default function PlayoffsPage() {
 
   const champion = bracket.championTeamId ? teamById.get(bracket.championTeamId) : null;
 
+  // The user can watch live while their team is still alive in the bracket.
+  const uid = league.userTeamId;
+  const allSeries = [...bracket.rounds.flat(), ...(bracket.playIn ?? [])];
+  const userInPlayoffs = !!uid && allSeries.some(s => s.teamA === uid || s.teamB === uid);
+  const userEliminated = !!uid && allSeries.some(s => s.winnerTeamId && s.winnerTeamId !== uid && (s.teamA === uid || s.teamB === uid));
+  const canWatch = !bracket.complete && userInPlayoffs && !userEliminated;
+
+  async function handleWatchPlayoff() {
+    const res = await watchNextPlayoffGame();
+    if (res) setWatching({ userGameId: res.userGameId, dayGameIds: res.dayGameIds });
+  }
+
   return (
     <Shell>
       <div className="flex flex-wrap items-center gap-3 mb-6">
@@ -110,7 +124,12 @@ export default function PlayoffsPage() {
         </p>
         {!bracket.complete && (
           <div className="ml-auto flex flex-wrap gap-2">
-            <Button variant="primary" disabled={storeLoading} onClick={() => void runPlayoffSim(simPlayoffDay)}>
+            {canWatch && (
+              <Button variant="primary" disabled={storeLoading} onClick={() => void handleWatchPlayoff()}>
+                {storeLoading ? 'Loading…' : '▶ Watch Live'}
+              </Button>
+            )}
+            <Button variant={canWatch ? 'secondary' : 'primary'} disabled={storeLoading} onClick={() => void runPlayoffSim(simPlayoffDay)}>
               {storeLoading ? 'Simming…' : 'Sim Day'}
             </Button>
             <Button variant="secondary" disabled={storeLoading} onClick={() => void runPlayoffSim(simPlayoffRound)}>
@@ -196,6 +215,10 @@ export default function PlayoffsPage() {
           </div>
         )}
       </Modal>
+
+      {watching && (
+        <LiveViewer userGameId={watching.userGameId} dayGameIds={watching.dayGameIds} onClose={() => setWatching(null)} />
+      )}
     </Shell>
   );
 }
