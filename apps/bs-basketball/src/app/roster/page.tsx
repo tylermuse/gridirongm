@@ -367,6 +367,14 @@ function PlayerCells({
   const gp = stats.gamesPlayed;
   const per = (v: number) => (gp > 0 ? (v / gp).toFixed(1) : '—');
   const statLine = gp > 0 ? `${per(stats.points)} / ${per(stats.totalRebounds)} / ${per(stats.assists)}` : '—';
+  const mpg = gp > 0 ? (stats.minutes / gp).toFixed(1) : null;
+  // Simplified efficiency rating (NBA "EFF" per game) shown as PER.
+  const eff = gp > 0
+    ? ((stats.points + stats.totalRebounds + stats.assists + stats.steals + stats.blocks
+        - (stats.fieldGoalsAttempted - stats.fieldGoalsMade)
+        - (stats.freeThrowsAttempted - stats.freeThrowsMade)
+        - stats.turnovers) / gp).toFixed(1)
+    : null;
   return (
     <>
       <button
@@ -392,16 +400,24 @@ function PlayerCells({
       <span className="text-right tabular-nums text-sm opacity-70">{p.development.potential}</span>
       <span className="text-right tabular-nums text-xs">{contractLabel(p, season)}</span>
       <span className="text-right tabular-nums text-sm">{gp || '—'}</span>
-      <span className="text-right tabular-nums text-xs">{statLine}</span>
+      <span className="text-right tabular-nums text-xs leading-tight">
+        <span className="block">{statLine}</span>
+        {mpg && <span className="block text-[10px] opacity-60">{mpg} MP · {eff} PER</span>}
+      </span>
       <span className="flex justify-center">
         {injury ? (
           <span className="text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap" style={{ background: 'color-mix(in srgb, #dc2626 16%, transparent)', color: '#dc2626' }} title="Injured — unavailable">
             🏥 {injury}
           </span>
         ) : (
-          <span className="text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap" style={{ background: `color-mix(in srgb, ${mood.color} 16%, transparent)`, color: mood.color }} title={mood.reason}>
-            {mood.label}
-          </span>
+          <button
+            onClick={() => onName(p.id)}
+            className="text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap inline-flex items-center gap-1 hover:brightness-105"
+            style={{ background: `color-mix(in srgb, ${mood.color} 24%, transparent)`, color: mood.color }}
+            title={`${mood.reason} — click for details`}
+          >
+            <span aria-hidden>{mood.emoji}</span>{mood.label}
+          </button>
         )}
       </span>
     </>
