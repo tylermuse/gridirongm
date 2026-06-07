@@ -60,6 +60,7 @@ import {
   type DraftPickSlot,
 } from '../draft';
 import { pickKey, currentOwner } from '../trade/picks';
+import { basketballPickValue } from '@bs/sport-basketball';
 import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, runAiFreeAgency, FA_DAYS, type Offer, type OfferResult, type Negotiation } from '../freeAgency';
 import { applyRelease } from '../roster/release';
 import { playThroughInjury as playThroughInjuryState } from '../injuries';
@@ -167,6 +168,8 @@ interface LeagueStore {
 
   /** Make the user team's current draft pick. */
   draftPick: (prospectId: string) => Promise<boolean>;
+  /** Trade picks within the current draft (updates the live order). */
+  tradeDraftPicks: (partnerId: string, sendOveralls: number[], getOveralls: number[]) => Promise<{ accepted: boolean; reason: string }>;
 
   /** Auto-make the pick currently on the clock (AI). */
   simDraftPick: () => Promise<boolean>;
@@ -671,6 +674,49 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       console.error('[bs-hoops] draftPick failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return false;
+    }
+  },
+
+  async tradeDraftPicks(partnerId, sendOveralls, getOveralls) {
+    const current = get().league;
+    const draft = current ? getDraft(current) : null;
+    if (!current || !draft) return { accepted: false, reason: 'No draft in progress.' };
+    const userTeamId = current.userTeamId;
+    if (!userTeamId) return { accepted: false, reason: 'You are spectating.' };
+    if (sendOveralls.length === 0 && getOveralls.length === 0) return { accepted: false, reason: 'Add picks to both sides.' };
+
+    const val = (os: number[]) => os.reduce((s, o) => s + basketballPickValue(o), 0);
+    const sendVal = val(sendOveralls);
+    const getVal = val(getOveralls);
+    // The partner receives your sent picks and gives up the ones you're getting —
+    // they won't accept a clear loss of value.
+    if (sendVal < getVal * 0.95) {
+      return { accepted: false, reason: `They want more — that's ${Math.round(sendVal)} pts for ${Math.round(getVal)}.` };
+    }
+
+    const send = new Set(sendOveralls);
+    const recv = new Set(getOveralls);
+    const sd = current.sportData as { pickOwnership?: Record<string, TeamId> };
+    const pickOwnership = { ...(sd.pickOwnership ?? {}) };
+    // Reassign each traded slot's owner directly (handles the imported draft,
+    // where teams can hold multiple firsts) AND mirror it into the ownership
+    // registry so a normal draft's re-resolution agrees.
+    const picks = draft.picks.map(p => {
+      if (send.has(p.overall)) { pickOwnership[pickKey(draft.season, p.round, p.originalTeamId)] = partnerId as TeamId; return { ...p, teamId: partnerId as TeamId }; }
+      if (recv.has(p.overall)) { pickOwnership[pickKey(draft.season, p.round, p.originalTeamId)] = userTeamId; return { ...p, teamId: userTeamId }; }
+      return p;
+    });
+
+    set({ loading: true, error: null });
+    try {
+      const league = { ...current, sportData: { ...(current.sportData as object), draft: { ...draft, picks }, pickOwnership } };
+      await saveLeague(league);
+      set({ league, loading: false });
+      return { accepted: true, reason: 'Trade accepted! Picks swapped.' };
+    } catch (err) {
+      console.error('[bs-hoops] tradeDraftPicks failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return { accepted: false, reason: 'Trade failed to save.' };
     }
   },
 
