@@ -142,9 +142,10 @@ function reSignStance(p: BasketballPlayer, team: BasketballTeam, season: number)
 }
 
 function money(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n > 0) return `$${Math.round(n / 1000)}K`;
-  return '$0';
+  if (n === 0) return '$0';
+  const sign = n < 0 ? '-' : '';
+  const a = Math.abs(n);
+  return a >= 1_000_000 ? `${sign}$${(a / 1_000_000).toFixed(1)}M` : `${sign}$${Math.round(a / 1000)}K`;
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
