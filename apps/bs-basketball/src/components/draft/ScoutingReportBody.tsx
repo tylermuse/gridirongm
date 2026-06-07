@@ -1,26 +1,43 @@
 'use client';
 
+import { ratingBgColor, ratingColor, ratingGrade, ratingHex } from '@/lib/ui/ratingColor';
 import type { BasketballPlayer } from '@bs/sport-basketball';
-import type { BasketballScoutingReport } from '@/lib/scouting/scoutingReport';
+import type { BasketballScoutingReport, TeamFit } from '@/lib/scouting/scoutingReport';
 
 /**
- * The full scouting report body (parity with football's inline eval): grade
- * matrix, NBA comp, physical traits, combine, dev curve, key ratings,
- * strengths/weaknesses, character, plus Film Review / In-Person collapsibles.
- * Shared by the ScoutingReportModal and the Draft Board's inline row expansion.
+ * The full scouting report body (parity with football's modal): a top summary
+ * row (OVR / Team Fit / Potential), grade matrix, NBA comp, color-tiered trait &
+ * key-rating bars with letter grades, combine, dev curve, strengths/weaknesses,
+ * character, plus Film Review / In-Person collapsibles. Shared by the
+ * ScoutingReportModal and the Draft Board's inline row expansion.
  */
 export function ScoutingReportBody({
-  player, report, onScout, canScout,
+  player, report, teamFit, onScout, canScout,
 }: {
   player: BasketballPlayer;
   report: BasketballScoutingReport;
+  teamFit?: TeamFit | null;
   onScout?: () => void;
   canScout?: boolean;
 }) {
   const maxProj = Math.max(...report.devCurve.map(d => d.projected), 1);
+  const ovr = player.ratings.overall;
+  const confColor = report.confidence === 'High' ? '#16a34a' : report.confidence === 'Medium' ? '#d97706' : '#dc2626';
+  const riskColor = report.riskLevel === 'Low' ? '#16a34a' : report.riskLevel === 'Medium' ? '#d97706' : '#dc2626';
 
   return (
     <div className="space-y-4">
+      {/* Top summary — OVR / Team Fit / Potential */}
+      <div className="grid grid-cols-3 gap-3">
+        <SummaryTile label="Overall"><span className={`text-2xl font-black tabular-nums ${ratingColor(ovr)}`}>{ovr}</span></SummaryTile>
+        <SummaryTile label={teamFit ? `Team Fit · ${teamFit.abbr}` : 'Team Fit'}>
+          {teamFit
+            ? <><span className="text-sm font-black" style={{ color: teamFit.color }}>{teamFit.label}</span><div className="text-[10px] text-[var(--text-sec)]">{teamFit.count} on roster</div></>
+            : <span className="text-sm text-[var(--text-sec)]">—</span>}
+        </SummaryTile>
+        <SummaryTile label="Potential"><span className={`text-2xl font-black tabular-nums ${ratingColor(report.ceiling)}`}>{report.ceiling}</span></SummaryTile>
+      </div>
+
       <p className="text-sm">{report.summary}</p>
 
       <div className="rounded-lg px-3 py-2 text-xs flex items-center justify-between gap-2" style={{ background: 'var(--surface-2)' }}>
@@ -34,9 +51,9 @@ export function ScoutingReportBody({
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
           <GradeCell label="Grade" value={report.grade} color={report.gradeColor} />
           <GradeCell label="Floor" value={String(report.floor)} />
-          <GradeCell label="Ceiling" value={String(report.ceiling)} />
-          <GradeCell label="Confidence" value={report.confidence} />
-          <GradeCell label="Risk" value={report.riskLevel} />
+          <GradeCell label="Ceiling" value={String(report.ceiling)} color={ratingHex(report.ceiling)} />
+          <GradeCell label="Confidence" value={report.confidence} color={confColor} />
+          <GradeCell label="Risk" value={report.riskLevel} color={riskColor} />
         </div>
       </Section>
 
@@ -68,10 +85,10 @@ export function ScoutingReportBody({
           <span className="text-[var(--text-sec)]">peaks around age {report.peakAge}</span>
         </div>
         <div className="flex items-end gap-2 h-24">
-          {report.devCurve.map(d => (
+          {report.devCurve.map((d, i) => (
             <div key={d.label} className="flex-1 flex flex-col items-center justify-end gap-1">
               <div className="text-[10px] font-bold tabular-nums">{d.projected}</div>
-              <div className="w-full rounded-t" style={{ height: `${(d.projected / maxProj) * 100}%`, background: 'var(--accent)', opacity: 0.35 + 0.65 * (d.projected / maxProj) }} />
+              <div className={`w-full rounded-t ${i === 0 ? 'bg-gray-400' : ratingBgColor(d.projected)}`} style={{ height: `${(d.projected / maxProj) * 100}%` }} />
               <div className="text-[9px] opacity-60">{d.label}</div>
               <div className="text-[8px] opacity-40">{d.age}y</div>
             </div>
@@ -81,7 +98,7 @@ export function ScoutingReportBody({
 
       <Section title="Position-key ratings">
         <div className="space-y-1.5">
-          {report.keyRatings.map(k => <Bar key={k.label} label={k.label} value={k.value} w="w-24" />)}
+          {report.keyRatings.map(k => <Bar key={k.label} label={k.label} value={k.value} w="w-28" grade />)}
         </div>
       </Section>
 
@@ -89,21 +106,21 @@ export function ScoutingReportBody({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <div className="text-[10px] uppercase tracking-widest text-[var(--text-sec)] mb-1">Strengths</div>
-            <ul className="text-xs space-y-0.5">{report.strengths.length ? report.strengths.map(s => <li key={s}>✅ {s}</li>) : <li className="opacity-50">—</li>}</ul>
+            <ul className="text-xs space-y-1">{report.strengths.length ? report.strengths.map(s => <Bullet key={s} color="#16a34a">{s}</Bullet>) : <li className="opacity-50">—</li>}</ul>
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-widest text-[var(--text-sec)] mb-1">Question marks</div>
-            <ul className="text-xs space-y-0.5">{report.weaknesses.length ? report.weaknesses.map(s => <li key={s}>⚠️ {s}</li>) : <li className="opacity-50">—</li>}</ul>
+            <ul className="text-xs space-y-1">{report.weaknesses.length ? report.weaknesses.map(s => <Bullet key={s} color="#f59e0b">{s}</Bullet>) : <li className="opacity-50">—</li>}</ul>
           </div>
         </div>
       )}
 
       <Section title="Character & intangibles">
         <div className="grid grid-cols-4 gap-2 mb-2">
-          <GradeCell label="Work" value={String(report.character.workEthic)} />
-          <GradeCell label="Lead" value={String(report.character.leadership)} />
-          <GradeCell label="Coach" value={String(report.character.coachability)} />
-          <GradeCell label="Compete" value={String(report.character.competitiveness)} />
+          <GradeCell label="Work" value={String(report.character.workEthic)} color={ratingHex(report.character.workEthic)} />
+          <GradeCell label="Lead" value={String(report.character.leadership)} color={ratingHex(report.character.leadership)} />
+          <GradeCell label="Coach" value={String(report.character.coachability)} color={ratingHex(report.character.coachability)} />
+          <GradeCell label="Compete" value={String(report.character.competitiveness)} color={ratingHex(report.character.competitiveness)} />
         </div>
         <p className="text-xs italic text-[var(--text-sec)]">{report.character.notes}</p>
       </Section>
@@ -124,14 +141,34 @@ export function ScoutingReportBody({
   );
 }
 
-function Bar({ label, value, w }: { label: string; value: number; w: string }) {
+function SummaryTile({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg bg-[var(--surface-2)] px-3 py-2 text-center">
+      {children}
+      <div className="text-[9px] uppercase tracking-wide opacity-60 mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+function Bullet({ color, children }: { color: string; children: React.ReactNode }) {
+  return (
+    <li className="flex items-start gap-1.5">
+      <span className="mt-1 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+      <span>{children}</span>
+    </li>
+  );
+}
+
+function Bar({ label, value, w, grade }: { label: string; value: number; w: string; grade?: boolean }) {
   return (
     <div className="flex items-center gap-2">
       <span className={`text-xs ${w} shrink-0 text-[var(--text-sec)]`}>{label}</span>
       <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
-        <div className="h-full rounded-full" style={{ width: `${value}%`, background: 'var(--accent)' }} />
+        <div className={`h-full rounded-full ${ratingBgColor(value)}`} style={{ width: `${value}%` }} />
       </div>
-      <span className="text-xs font-bold tabular-nums w-7 text-right">{value}</span>
+      <span className="text-xs font-bold tabular-nums w-12 text-right">
+        {value}{grade && <span className="text-[var(--text-sec)] font-normal"> {ratingGrade(value)}</span>}
+      </span>
     </div>
   );
 }

@@ -15,6 +15,8 @@ import { DraftResultsCard } from '@/components/draft/DraftResultsCard';
 import { DraftFooter } from '@/components/draft/DraftFooter';
 import { DraftRecapInline } from '@/components/draft/DraftRecapInline';
 import { TradePickModal } from '@/components/draft/TradePickModal';
+import { ScoutingReportModal } from '@/components/draft/ScoutingReportModal';
+import { buildScoutingReport, teamFitFor } from '@/lib/scouting/scoutingReport';
 import { LotteryRevealCeremony } from '@/components/draft/LotteryReveal';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
@@ -31,6 +33,7 @@ export default function DraftPage() {
   const store = useLeagueStore();
   const router = useRouter();
   const [showCeremony, setShowCeremony] = useState(false);
+  const [scoutedModalId, setScoutedModalId] = useState<string | null>(null);
   const [revealStep, setRevealStep] = useState(0);
   const [replay, setReplay] = useState(false);
   const [skipPref] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem('bshoops-skip-lottery') === '1');
@@ -237,7 +240,7 @@ export default function DraftPage() {
           recommendedId={recommendedId}
           userOnClock={userOnClock && !draft.complete}
           loading={store.loading}
-          onScout={(id) => void store.scoutProspect(id)}
+          onScout={async (id) => { await store.scoutProspect(id); setScoutedModalId(id); }}
           onDraft={(id) => { void store.draftPick(id); }}
         />
 
@@ -250,6 +253,23 @@ export default function DraftPage() {
 
       {/* Team grades, once the board's complete. */}
       {draft.complete && <DraftRecapInline league={league} />}
+
+      {/* Auto-opened scouting report (pops the moment a prospect is scouted). */}
+      {scoutedModalId && playerById[scoutedModalId] && (() => {
+        const p = playerById[scoutedModalId];
+        const userTeam = league.userTeamId ? teamById.get(league.userTeamId) : null;
+        const count = userTeam ? userTeam.playerIds.filter(id => playerById[id]?.sportData.position === p.sportData.position).length : 0;
+        return (
+          <ScoutingReportModal
+            player={p}
+            report={buildScoutingReport(p, { season: draft.season, scouted: true })}
+            teamFit={userTeam ? teamFitFor(count, userTeam.abbreviation) : null}
+            userOnClock={userOnClock && !draft.complete}
+            onDraft={() => { void store.draftPick(scoutedModalId); setScoutedModalId(null); }}
+            onClose={() => setScoutedModalId(null)}
+          />
+        );
+      })()}
 
       {tradeOpen && <TradePickModal onClose={() => setTradeOpen(false)} />}
     </Shell>

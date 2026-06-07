@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Chip } from '@/components/ui/Chip';
 import { ScoutingReportBody } from '@/components/draft/ScoutingReportBody';
-import { buildScoutingReport } from '@/lib/scouting/scoutingReport';
+import { buildScoutingReport, teamFitFor } from '@/lib/scouting/scoutingReport';
 import { isScouted, scoutsLeft } from '@/lib/scouting';
 import { SCOUTS_PER_DRAFT } from '@/lib/draft';
 import { positionNeeds, TARGET_DEPTH } from '@/lib/draft/needs';
@@ -173,6 +173,7 @@ export function DraftBoardCard({
                         <ScoutingReportBody
                           player={p}
                           report={buildScoutingReport(p, { season: draft.season, scouted })}
+                          teamFit={userTeam ? teamFitFor(userTeam.playerIds.filter(id => (league.players[id] as BasketballPlayer | undefined)?.sportData.position === p.sportData.position).length, userTeam.abbreviation) : null}
                           onScout={() => onScout(p.id)}
                           canScout={affordable && !loading}
                         />
