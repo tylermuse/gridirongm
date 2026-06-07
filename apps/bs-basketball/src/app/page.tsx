@@ -25,7 +25,7 @@ import { useRouter } from 'next/navigation';
 import { canAdvanceSeason } from '@/lib/season';
 import { getBracket } from '@/lib/playoffs';
 import { getDraft } from '@/lib/draft';
-import { getGmFired } from '@/lib/approval';
+import { getGmFired, getGmOpenings } from '@/lib/approval';
 import { isGodMode } from '@/lib/godMode/godMode';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
@@ -127,20 +127,41 @@ export default function HomePage() {
           </div>
         )}
 
-        {fired && !league.userTeamId && (
-          <div className="mb-8 rounded-xl border-2 p-5 flex flex-wrap items-center gap-4" style={{ borderColor: '#dc2626', background: 'color-mix(in srgb, #dc2626 8%, transparent)' }}>
-            <div className="text-3xl">📉</div>
-            <div className="min-w-0 flex-1">
-              <div className="font-bold">You were fired by the {fired.teamName}</div>
-              <div className="text-sm text-[var(--text-sec)]">
-                Ownership ran out of patience after the {fired.season} season. Take over any club from the League page to keep your GM career going.
+        {fired && !league.userTeamId && (() => {
+          const openingIds = getGmOpenings(league);
+          const openings = (openingIds.length ? openingIds : league.teams.map(t => t.id))
+            .map(id => league.teams.find(t => t.id === id) as BasketballTeam | undefined)
+            .filter((t): t is BasketballTeam => !!t);
+          return (
+            <div className="mb-8 rounded-xl border-2 p-5" style={{ borderColor: '#dc2626', background: 'color-mix(in srgb, #dc2626 8%, transparent)' }}>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="text-3xl">📉</div>
+                <div className="min-w-0">
+                  <div className="font-bold">You were fired by the {fired.teamName}</div>
+                  <div className="text-sm text-[var(--text-sec)]">
+                    Ownership ran out of patience after the {fired.season} season. {openings.length} club{openings.length === 1 ? '' : 's'} with a front-office vacancy want to talk — pick your next job.
+                  </div>
+                </div>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {openings.map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => void handlePick(t.abbreviation)}
+                    className="flex items-center gap-2 rounded-lg border bg-[var(--surface)] px-3 py-2 text-left hover:border-[var(--accent)] transition-colors"
+                    style={{ borderColor: 'var(--border)' }}
+                  >
+                    <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="sm" />
+                    <span className="min-w-0">
+                      <span className="font-bold text-sm block truncate">{t.city} {t.name}</span>
+                      <span className="text-[11px] text-[var(--text-sec)]">{t.record.wins}-{t.record.losses} · take the job →</span>
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
-            <Link href="/league">
-              <Button variant="primary" size="lg">Find a New Team →</Button>
-            </Link>
-          </div>
-        )}
+          );
+        })()}
 
         {draft ? (
           <div

@@ -28,6 +28,8 @@ const FIRE_THRESHOLD = 20;
 
 interface LeagueSportData {
   gmFired?: { season: number; teamId: TeamId; teamName: string };
+  /** Teams with a GM vacancy the fired user may take over (worst records). */
+  gmOpenings?: TeamId[];
   [key: string]: unknown;
 }
 
@@ -102,12 +104,19 @@ export function applySeasonApproval(league: LeagueState): ApprovalUpdate {
 
   const sd = league.sportData as LeagueSportData;
   const teamName = `${team.city} ${team.name}`;
+  // GM openings: a handful of the worst-performing other clubs are looking for a
+  // new front office — that's where a fired GM can land.
+  const gmOpenings = league.teams
+    .filter(t => t.id !== teamId)
+    .sort((a, b) => (a.record.wins - a.record.losses) - (b.record.wins - b.record.losses))
+    .slice(0, 5)
+    .map(t => t.id);
   const updated: LeagueState = {
     ...league,
     teams,
     userTeamId: fired ? null : league.userTeamId,
     sportData: fired
-      ? { ...sd, gmFired: { season: league.currentSeason, teamId, teamName } }
+      ? { ...sd, gmFired: { season: league.currentSeason, teamId, teamName }, gmOpenings }
       : sd,
   };
 
@@ -123,10 +132,16 @@ export function getGmFired(league: LeagueState): LeagueSportData['gmFired'] {
   return (league.sportData as LeagueSportData | undefined)?.gmFired;
 }
 
+/** Team ids with a GM vacancy the fired user can take over (empty if not fired). */
+export function getGmOpenings(league: LeagueState): TeamId[] {
+  return (league.sportData as LeagueSportData | undefined)?.gmOpenings ?? [];
+}
+
 /** Clear the fired flag (called when the user takes over a new team). */
 export function clearGmFired(league: LeagueState): LeagueState {
   const sd = { ...(league.sportData as LeagueSportData) };
   delete sd.gmFired;
+  delete sd.gmOpenings;
   return { ...league, sportData: sd };
 }
 
