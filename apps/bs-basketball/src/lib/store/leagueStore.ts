@@ -190,8 +190,8 @@ interface LeagueStore {
   /** Make a free-agent offer for the user team. Optionally release a player to
    *  open a roster spot. Returns the resolution (signed / elsewhere / rejected). */
   signFreeAgent: (playerId: string, offer: Offer, releaseId?: string) => Promise<OfferResult | null>;
-  /** Run one pass of CPU free agency (other teams sign/upgrade). Returns count. */
-  simFreeAgency: () => Promise<number>;
+  /** Run CPU free agency (other teams sign/upgrade); rounds controls how far. Returns count. */
+  simFreeAgency: (rounds?: number) => Promise<number>;
 
   /** Negotiate a free-agent offer: signs if it clears the bar, otherwise
    *  returns the agent's counter (no state change). */
@@ -777,12 +777,12 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
   },
 
-  async simFreeAgency() {
+  async simFreeAgency(rounds?: number) {
     const current = get().league;
     if (!current) return 0;
     set({ loading: true, error: null });
     try {
-      const { league, signings } = runAiFreeAgency(current);
+      const { league, signings } = runAiFreeAgency(current, rounds !== undefined ? { rounds } : undefined);
       await saveLeague(league);
       set({
         league,

@@ -5,8 +5,8 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
-import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
+import { FreeAgentTable } from '@/components/freeAgency/FreeAgentTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import {
@@ -42,9 +42,9 @@ export default function FreeAgencyPage() {
   const [resultMsg, setResultMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [counter, setCounter] = useState<CounterOffer | null>(null);
   const [posFilter, setPosFilter] = useState<'ALL' | BasketballPosition>('ALL');
+  const [affordableOnly, setAffordableOnly] = useState(false);
 
   const allPool = useMemo<FreeAgentInfo[]>(() => (league ? freeAgentPool(league) : []), [league]);
-  const pool = posFilter === 'ALL' ? allPool : allPool.filter(f => f.player.sportData.position === posFilter);
   const teamById = useMemo(() => {
     const m = new Map<string, BasketballTeam>();
     if (league) for (const t of league.teams) m.set(t.id, t as BasketballTeam);
@@ -59,6 +59,11 @@ export default function FreeAgencyPage() {
   const room = userTeamId ? capRoom(league, userTeamId) : 0;
   const count = userTeamId ? rosterCount(league, userTeamId) : 0;
   const rosterFull = count >= MAX_ROSTER;
+
+  const pool = allPool.filter(f =>
+    (posFilter === 'ALL' || f.player.sportData.position === posFilter) &&
+    (!affordableOnly || f.marketSalary <= room),
+  );
 
   const selected = selectedId ? pool.find(f => f.player.id === selectedId) ?? null : null;
   const offer = { years, salaryPerYear: Math.round(salaryM * 1_000_000) };
@@ -112,8 +117,10 @@ export default function FreeAgencyPage() {
           </div>
         )}
         <div className="ml-auto flex items-center gap-2">
+          <Button variant="secondary" disabled={store.loading} onClick={() => { void store.simFreeAgency(1); }}>Sim 1 Day</Button>
+          <Button variant="secondary" disabled={store.loading} onClick={() => { void store.simFreeAgency(7); }}>Sim 1 Week</Button>
           <Button variant="secondary" disabled={store.loading} onClick={() => { void store.simFreeAgency(); }}>
-            {store.loading ? 'Working…' : 'Sim Free Agency'}
+            {store.loading ? 'Working…' : 'Sim FA'}
           </Button>
           {!league.games.some(g => g.status === 'played') && (
             <Button
@@ -139,11 +146,16 @@ export default function FreeAgencyPage() {
         </div>
       )}
 
-      {/* Position filters */}
-      <div className="flex flex-wrap gap-1.5 mb-4">
+      {/* Position filters + affordable toggle */}
+      <div className="flex flex-wrap items-center gap-1.5 mb-4">
         {(['ALL', 'PG', 'SG', 'SF', 'PF', 'C'] as const).map(p => (
           <button key={p} onClick={() => setPosFilter(p)} className="text-xs font-bold rounded-md px-2.5 py-1" style={posFilter === p ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--surface-2)', color: 'var(--text-sec)' }}>{p}</button>
         ))}
+        {userTeam && (
+          <button onClick={() => setAffordableOnly(v => !v)} className="ml-2 text-xs font-bold rounded-md px-2.5 py-1 border" style={affordableOnly ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { background: 'var(--surface-2)', color: 'var(--text-sec)', borderColor: 'transparent' }}>
+            Show affordable only
+          </button>
+        )}
       </div>
 
       {allPool.length === 0 ? (
@@ -157,50 +169,13 @@ export default function FreeAgencyPage() {
       ) : (
         <div className="grid lg:grid-cols-[1.3fr_1fr] gap-6">
           {/* Pool */}
-          <section className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+          <section className="rounded-xl border bg-[var(--surface)] overflow-hidden self-start" style={{ borderColor: 'var(--border)' }}>
             <h2 className="px-3 py-2 font-bold border-b text-sm" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
               Available ({pool.length})
             </h2>
-            <ul className="max-h-[36rem] overflow-y-auto">
-              {pool.length === 0 && <li className="px-3 py-6 text-center text-sm text-[var(--text-sec)]">No free agents at this position.</li>}
-              {pool.map(f => {
-                const last = f.lastTeamId ? teamById.get(f.lastTeamId) : null;
-                const isSel = selectedId === f.player.id;
-                return (
-                  <li key={f.player.id}>
-                    <button
-                      onClick={() => selectFa(f)}
-                      className="w-full flex items-center gap-2 px-3 py-2 border-t text-left text-sm hover:bg-[var(--surface-2)] transition-colors"
-                      style={{ borderColor: 'var(--border)', background: isSel ? 'var(--surface-2)' : undefined }}
-                    >
-                      <PlayerAvatar
-                        firstName={f.player.firstName}
-                        lastName={f.player.lastName}
-                        primaryColor={last?.primaryColor ?? '#555'}
-                        secondaryColor={last?.secondaryColor ?? '#fff'}
-                        size="sm"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold truncate">{f.player.firstName} {f.player.lastName}</div>
-                        <div className="text-xs text-[var(--text-sec)] flex items-center gap-1.5">
-                          {f.player.sportData.position} · Age {f.player.age}
-                          {last && (
-                            <>
-                              · <TeamLogo abbreviation={last.abbreviation} primaryColor={last.primaryColor} secondaryColor={last.secondaryColor} size="xs" />
-                            </>
-                          )}
-                          <BirdBadge tier={f.birdRights} />
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <div className="font-black tabular-nums" style={{ color: 'var(--accent)' }}>{f.player.ratings.overall}</div>
-                        <div className="text-[10px] text-[var(--text-sec)]">asks {money(f.marketSalary)}/yr</div>
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+            <div className="max-h-[36rem] overflow-y-auto">
+              <FreeAgentTable league={league} pool={pool} room={room} selectedId={selectedId} onSelect={selectFa} />
+            </div>
           </section>
 
           {/* Offer panel */}
@@ -317,19 +292,6 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
       <div className="font-bold tabular-nums" style={{ color: accent ? 'var(--accent)' : undefined }}>{value}</div>
       <div className="text-[10px] uppercase tracking-widest opacity-60">{label}</div>
     </div>
-  );
-}
-
-function BirdBadge({ tier }: { tier: 'full' | 'early' | 'none' }) {
-  if (tier === 'none') return null;
-  return (
-    <span
-      className="text-[9px] font-bold px-1 py-0.5 rounded"
-      style={{ background: 'var(--surface-2)', color: 'var(--text-sec)' }}
-      title={`${tier} Bird rights`}
-    >
-      🐦 {tier}
-    </span>
   );
 }
 
