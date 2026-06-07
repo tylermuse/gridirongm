@@ -31,7 +31,7 @@ function rankOf(values: number[], value: number, lowerIsBetter = false): number 
   return sorted.indexOf(value) + 1;
 }
 
-export interface TeamStatRanks { ppg: RankedStat; oppPpg: RankedStat; diff: RankedStat }
+export interface TeamStatRanks { ppg: RankedStat; oppPpg: RankedStat; diff: RankedStat; rpg: RankedStat; apg: RankedStat; spg: RankedStat; bpg: RankedStat }
 
 export function teamStatRanks(league: LeagueState, team: BasketballTeam): TeamStatRanks {
   const teams = league.teams as BasketballTeam[];
@@ -40,10 +40,30 @@ export function teamStatRanks(league: LeagueState, team: BasketballTeam): TeamSt
   const oppPpgs = teams.map(teamOppPpg);
   const diffs = teams.map(t => teamPpg(t) - teamOppPpg(t));
   const ppg = teamPpg(team), oppPpg = teamOppPpg(team), diff = ppg - oppPpg;
+
+  // Team rebounds/assists/etc. aren't on team.record — aggregate from box scores.
+  const stats = regularSeasonStatsByPlayer(league);
+  const gamesOf = (t: BasketballTeam) => t.record.wins + t.record.losses + (t.record.otherResults ?? 0);
+  const perGameTeam = (t: BasketballTeam, pick: (s: BasketballStats) => number): number => {
+    let tot = 0;
+    for (const id of t.playerIds) { const s = stats.get(id as never); if (s) tot += pick(s); }
+    const gp = gamesOf(t);
+    return gp > 0 ? tot / gp : 0;
+  };
+  const ranked = (pick: (s: BasketballStats) => number): RankedStat => {
+    const vals = teams.map(t => perGameTeam(t, pick));
+    const v = perGameTeam(team, pick);
+    return { value: v, rank: rankOf(vals, v), of };
+  };
+
   return {
     ppg: { value: ppg, rank: rankOf(ppgs, ppg), of },
     oppPpg: { value: oppPpg, rank: rankOf(oppPpgs, oppPpg, true), of },
     diff: { value: diff, rank: rankOf(diffs, diff), of },
+    rpg: ranked(s => s.totalRebounds),
+    apg: ranked(s => s.assists),
+    spg: ranked(s => s.steals),
+    bpg: ranked(s => s.blocks),
   };
 }
 

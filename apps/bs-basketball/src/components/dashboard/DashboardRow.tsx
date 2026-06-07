@@ -99,10 +99,16 @@ function TeamStatsCard({ league, team }: { league: LeagueState; team: Basketball
         <p className="text-sm text-[var(--text-sec)]">No games played yet.</p>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-2 mb-3">
+          <div className="grid grid-cols-3 gap-2 mb-2">
             <StatTile label="PPG" value={s.ppg.toFixed(1)} rank={ranks.ppg} />
             <StatTile label="Opp PPG" value={s.oppPpg.toFixed(1)} rank={ranks.oppPpg} />
             <StatTile label="Diff" value={`${s.diff >= 0 ? '+' : ''}${s.diff.toFixed(1)}`} color={s.diff >= 0 ? '#10b981' : '#dc2626'} rank={ranks.diff} />
+          </div>
+          <div className="grid grid-cols-4 gap-2 mb-3">
+            <StatTile label="RPG" value={ranks.rpg.value.toFixed(1)} rank={ranks.rpg} />
+            <StatTile label="APG" value={ranks.apg.value.toFixed(1)} rank={ranks.apg} />
+            <StatTile label="SPG" value={ranks.spg.value.toFixed(1)} rank={ranks.spg} />
+            <StatTile label="BPG" value={ranks.bpg.value.toFixed(1)} rank={ranks.bpg} />
           </div>
           <div className="flex gap-3 text-xs text-[var(--text-sec)] mb-2">
             <span>FG {pct(s.fgPct)}</span>
