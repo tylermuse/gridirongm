@@ -60,7 +60,7 @@ import {
   type DraftPickSlot,
 } from '../draft';
 import { pickKey, currentOwner } from '../trade/picks';
-import { basketballPickValue } from '@bs/sport-basketball';
+import { basketballPickTradeValue, basketballTradeValue } from '@bs/sport-basketball';
 import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, runAiFreeAgency, FA_DAYS, type Offer, type OfferResult, type Negotiation } from '../freeAgency';
 import { applyRelease } from '../roster/release';
 import { playThroughInjury as playThroughInjuryState } from '../injuries';
@@ -168,8 +168,8 @@ interface LeagueStore {
 
   /** Make the user team's current draft pick. */
   draftPick: (prospectId: string) => Promise<boolean>;
-  /** Trade picks within the current draft (updates the live order). */
-  tradeDraftPicks: (partnerId: string, sendOveralls: number[], getOveralls: number[]) => Promise<{ accepted: boolean; reason: string }>;
+  /** Trade picks (and players) within the current draft (updates the live order). */
+  tradeDraftPicks: (partnerId: string, sendOveralls: number[], getOveralls: number[], sendPlayerIds?: string[], getPlayerIds?: string[]) => Promise<{ accepted: boolean; reason: string }>;
 
   /** Auto-make the pick currently on the clock (AI). */
   simDraftPick: () => Promise<boolean>;
@@ -677,48 +677,75 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
   },
 
-  async tradeDraftPicks(partnerId, sendOveralls, getOveralls) {
+  async tradeDraftPicks(partnerId, sendOveralls, getOveralls, sendPlayerIds = [], getPlayerIds = []) {
     const current = get().league;
     const draft = current ? getDraft(current) : null;
     if (!current || !draft) return { accepted: false, reason: 'No draft in progress.' };
     const userTeamId = current.userTeamId;
     if (!userTeamId) return { accepted: false, reason: 'You are spectating.' };
-    if (sendOveralls.length === 0 && getOveralls.length === 0) return { accepted: false, reason: 'Add picks to both sides.' };
-
-    const val = (os: number[]) => os.reduce((s, o) => s + basketballPickValue(o), 0);
-    const sendVal = val(sendOveralls);
-    const getVal = val(getOveralls);
-    // The partner receives your sent picks and gives up the ones you're getting.
-    // Teams trading DOWN value extra picks (asset accumulation), so a team giving
-    // up one higher pick for two lower ones will take a small raw-value discount.
-    // Tolerance widens with each extra pick you send so a normal trade-up (e.g.
-    // two firsts to move up a few spots) goes through — matching the modal's
-    // "you gain value" verdict instead of silently rejecting it.
-    const extraPicksSent = Math.max(0, sendOveralls.length - getOveralls.length);
-    const quantityBonus = extraPicksSent * 25;
-    if (sendVal + quantityBonus < getVal * 0.9) {
-      return { accepted: false, reason: `They want more value — package another pick or two to move up.` };
+    if (sendOveralls.length + getOveralls.length + sendPlayerIds.length + getPlayerIds.length === 0) {
+      return { accepted: false, reason: 'Add assets to both sides.' };
     }
 
-    const send = new Set(sendOveralls);
-    const recv = new Set(getOveralls);
-    const sd = current.sportData as { pickOwnership?: Record<string, TeamId> };
-    const pickOwnership = { ...(sd.pickOwnership ?? {}) };
-    // Reassign each traded slot's owner directly (handles the imported draft,
-    // where teams can hold multiple firsts) AND mirror it into the ownership
-    // registry so a normal draft's re-resolution agrees.
-    const picks = draft.picks.map(p => {
-      if (send.has(p.overall)) { pickOwnership[pickKey(draft.season, p.round, p.originalTeamId)] = partnerId as TeamId; return { ...p, teamId: partnerId as TeamId }; }
-      if (recv.has(p.overall)) { pickOwnership[pickKey(draft.season, p.round, p.originalTeamId)] = userTeamId; return { ...p, teamId: userTeamId }; }
-      return p;
-    });
+    // Value everything on the same PTS scale as the main trade center (picks by
+    // their exact slot, players by trade value), so picks + players mix fairly.
+    const srcPlayers = current.players as Record<string, BasketballPlayer>;
+    const pickVal = (os: number[]) => os.reduce((s, o) => s + basketballPickTradeValue(o), 0);
+    const playerVal = (ids: string[]) => ids.reduce((s, id) => s + (srcPlayers[id] ? basketballTradeValue(srcPlayers[id], { season: current.currentSeason }) : 0), 0);
+    const sendVal = pickVal(sendOveralls) + playerVal(sendPlayerIds);
+    const getVal = pickVal(getOveralls) + playerVal(getPlayerIds);
+    // Teams trading down value accumulating picks, so each extra pick you send
+    // widens their tolerance — a normal package-to-move-up goes through.
+    const quantityBonus = Math.max(0, sendOveralls.length - getOveralls.length) * 250;
+    if (sendVal + quantityBonus < getVal * 0.9) {
+      return { accepted: false, reason: 'They want more value — add a pick or player.' };
+    }
 
     set({ loading: true, error: null });
     try {
-      const league = { ...current, sportData: { ...(current.sportData as object), draft: { ...draft, picks }, pickOwnership } };
+      // 1) Move players (mirrors executeTrade's roster re-slotting).
+      const moveTo = new Map<string, TeamId>();
+      for (const id of sendPlayerIds) moveTo.set(id, partnerId as TeamId);
+      for (const id of getPlayerIds) moveTo.set(id, userTeamId);
+      const arriving: Record<string, string[]> = {};
+      for (const [pid, to] of moveTo) (arriving[to] ??= []).push(pid);
+      const players = { ...current.players } as Record<string, BasketballPlayer>;
+      const teams = current.teams.map(t => {
+        const incoming = arriving[t.id as string] ?? [];
+        const keep = (ids: string[]) => ids.filter(id => !moveTo.has(id));
+        const playerIds = [...keep(t.playerIds as unknown as string[]), ...incoming];
+        const rosterBuckets: Record<string, string[]> = {};
+        for (const [name, ids] of Object.entries(t.rosterBuckets)) {
+          rosterBuckets[name] = name === 'active' ? [...keep(ids as unknown as string[]), ...incoming] : keep(ids as unknown as string[]);
+        }
+        return { ...t, playerIds, rosterBuckets };
+      }) as typeof current.teams;
+      for (const team of teams) {
+        (team.playerIds as unknown as string[]).forEach((pid, index) => {
+          if (moveTo.has(pid)) {
+            const prev = players[pid];
+            players[pid] = { ...prev, rosterSlot: { teamId: team.id, bucket: 'active', index }, sportData: { ...prev.sportData, acquiredVia: 'trade', acquiredSeason: current.currentSeason } };
+          }
+        });
+      }
+
+      // 2) Reassign each traded pick's slot directly (handles the imported draft
+      //    where a team can hold multiple firsts) + mirror into the registry so a
+      //    normal draft's re-resolution agrees.
+      const send = new Set(sendOveralls);
+      const recv = new Set(getOveralls);
+      const sd = current.sportData as { pickOwnership?: Record<string, TeamId> };
+      const pickOwnership = { ...(sd.pickOwnership ?? {}) };
+      const picks = draft.picks.map(p => {
+        if (send.has(p.overall)) { pickOwnership[pickKey(draft.season, p.round, p.originalTeamId)] = partnerId as TeamId; return { ...p, teamId: partnerId as TeamId }; }
+        if (recv.has(p.overall)) { pickOwnership[pickKey(draft.season, p.round, p.originalTeamId)] = userTeamId; return { ...p, teamId: userTeamId }; }
+        return p;
+      });
+
+      const league = { ...current, teams, players, sportData: { ...(current.sportData as object), draft: { ...draft, picks }, pickOwnership } };
       await saveLeague(league);
       set({ league, loading: false });
-      return { accepted: true, reason: 'Trade accepted! Picks swapped.' };
+      return { accepted: true, reason: 'Trade accepted! Assets swapped.' };
     } catch (err) {
       console.error('[bs-hoops] tradeDraftPicks failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
