@@ -3,23 +3,27 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
+import { useLeagueStore } from '@/lib/store/leagueStore';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ExtendModal } from '@/components/modals/ExtendModal';
 import { OffseasonStepper } from '@/components/shell/OffseasonStepper';
 import { contractYearsLeft } from '@/lib/roster/playerActions';
 import { extensionMarket } from '@/lib/roster/extension';
-import { capRoom } from '@/lib/freeAgency';
+import { resignProjection, hasSalaryForSeason, salaryForSeason, type ResignDecision } from '@/lib/roster/resignProjection';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
 /**
- * /re-sign — extend your own players before their deals expire. Lists everyone
- * in their contract year with the extension ask; the row opens the same
- * ExtendModal the roster uses. Re-signing keeps a player off the open market.
+ * /re-sign — cap-management window (parity with football). Each expiring player
+ * can be Re-signed or Let Walk; the projected NEXT-season cap space depletes as
+ * you commit money and recovers as you let players go. Resolved decisions move to
+ * a section below with an Undo for walks.
  */
 export default function ReSignPage() {
   const { league, loading, error } = useLeagueOrHydrate();
+  const store = useLeagueStore();
   const [extendId, setExtendId] = useState<string | null>(null);
+  const [decisions, setDecisions] = useState<Record<string, ResignDecision>>({});
 
   const season = league?.currentSeason ?? 0;
   const userTeam = useMemo<BasketballTeam | null>(() => {
@@ -27,11 +31,21 @@ export default function ReSignPage() {
     return (league.teams.find(t => t.id === league.userTeamId) as BasketballTeam | undefined) ?? null;
   }, [league]);
 
-  const expiring = useMemo(() => {
-    if (!league || !userTeam) return [];
-    return userTeam.playerIds
-      .map(id => league.players[id] as BasketballPlayer | undefined)
-      .filter((p): p is BasketballPlayer => !!p && !!p.contract && contractYearsLeft(p, season) <= 1)
+  // Candidate pool = the expiring players flagged when the offseason began
+  // (stable across re-signs); fall back to a live computation for older saves.
+  const candidates = useMemo(() => {
+    if (!league || !userTeam) return [] as BasketballPlayer[];
+    const flagged = (league.sportData as { pendingResign?: string[] }).pendingResign;
+    const ids = flagged?.length
+      ? flagged
+      : userTeam.playerIds.filter(id => {
+          const p = league.players[id] as BasketballPlayer | undefined;
+          return !!p && !!p.contract && contractYearsLeft(p, season) <= 1;
+        });
+    const byId = league.players as Record<string, BasketballPlayer>;
+    return ids
+      .map(id => byId[id])
+      .filter((p): p is BasketballPlayer => !!p)
       .sort((a, b) => b.ratings.overall - a.ratings.overall);
   }, [league, userTeam, season]);
 
@@ -39,64 +53,109 @@ export default function ReSignPage() {
   if (!league) return <Shell><p>{error ?? 'No league loaded.'}</p></Shell>;
   if (!userTeam) return <Shell><p className="text-sm text-[var(--text-sec)]">You&apos;re spectating — pick a team to manage contracts.</p></Shell>;
 
-  const room = capRoom(league, userTeam.id);
-  const askingTotal = expiring.reduce((s, p) => s + extensionMarket(p, season).marketSalary, 0);
-  const afterAll = room - askingTotal;
+  const nextSeason = season + 1;
+  const proj = resignProjection(league, userTeam, decisions);
+
+  const active = candidates.filter(p => !hasSalaryForSeason(p, nextSeason) && decisions[p.id] !== 'walk');
+  const resigned = candidates.filter(p => hasSalaryForSeason(p, nextSeason));
+  const walking = candidates.filter(p => !hasSalaryForSeason(p, nextSeason) && decisions[p.id] === 'walk');
+
+  const setWalk = (id: string) => setDecisions(d => ({ ...d, [id]: 'walk' }));
+  const undoWalk = (id: string) => setDecisions(d => { const n = { ...d }; delete n[id]; return n; });
+
+  function letWalk(p: BasketballPlayer) {
+    if (p.ratings.overall >= 78 && !window.confirm(`Let ${p.firstName} ${p.lastName} (${p.ratings.overall} OVR) walk to free agency?`)) return;
+    setWalk(p.id);
+  }
+  async function resignAll() {
+    if (!window.confirm(`Re-sign all ${active.length} expiring players at their market ask?`)) return;
+    for (const p of active) {
+      const m = extensionMarket(p, season);
+      await store.extendPlayer(p.id, { years: m.desiredYears, salaryPerYear: m.marketSalary });
+    }
+  }
+  function letAllWalk() {
+    if (!window.confirm(`Let all ${active.length} expiring players walk to free agency?`)) return;
+    setDecisions(d => { const n = { ...d }; for (const p of active) n[p.id] = 'walk'; return n; });
+  }
+
+  const spaceColor = proj.projectedSpace > 10_000_000 ? '#10b981' : proj.projectedSpace > 0 ? '#d97706' : '#dc2626';
 
   return (
     <Shell>
       <OffseasonStepper active="resign" />
+
+      {/* Live projected NEXT-season cap — depletes as you re-sign. */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <CapTile label="Cap Space" value={money(room)} color={room > 10_000_000 ? '#10b981' : room > 0 ? '#d97706' : '#dc2626'} />
-        <CapTile label="Players Asking" value={money(askingTotal)} color="#d97706" />
-        <CapTile label={afterAll >= 0 ? 'Room if all re-sign' : 'Over if all re-sign'} value={money(Math.abs(afterAll))} color={afterAll >= 0 ? '#10b981' : '#dc2626'} />
-        <CapTile label="In a contract year" value={String(expiring.length)} color="var(--accent)" />
+        <CapTile label={`Projected ${nextSeason} Cap Space`} value={money(proj.projectedSpace)} color={spaceColor} />
+        <CapTile label="Committed payroll" value={money(proj.committed)} color="var(--text)" />
+        <CapTile label="Room if all re-signed" value={money(proj.roomIfAllReSigned)} color={proj.roomIfAllReSigned >= 0 ? '#10b981' : '#dc2626'} />
+        <CapTile label={proj.apron.text} value={proj.overTaxBy > 0 ? `tax +${money(proj.overTaxBy)}` : '—'} color={proj.apron.color} />
       </div>
-      {expiring.length > 0 && (
-        <p className="text-sm font-semibold mb-4 rounded-lg px-3 py-2" style={{ background: 'color-mix(in srgb, #d97706 14%, transparent)', color: '#b45309' }}>
-          ⚠ Any expiring player you don&apos;t re-sign will walk to free agency when the next season starts.
-        </p>
+
+      {active.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <p className="text-sm font-semibold mr-auto rounded-lg px-3 py-1.5" style={{ background: 'color-mix(in srgb, #d97706 14%, transparent)', color: '#b45309' }}>
+            ⚠ Decide on {active.length} expiring player{active.length === 1 ? '' : 's'} — anyone not re-signed walks to free agency.
+          </p>
+          <button onClick={() => void resignAll()} disabled={store.loading} className="text-xs font-bold rounded-lg px-3 py-1.5 text-white disabled:opacity-40" style={{ background: 'var(--accent)' }}>Re-sign All ({active.length})</button>
+          <button onClick={letAllWalk} className="text-xs font-bold rounded-lg px-3 py-1.5 border" style={{ borderColor: '#dc2626', color: '#dc2626' }}>Let All Walk ({active.length})</button>
+        </div>
       )}
 
-      {expiring.length === 0 ? (
+      {/* Active decisions */}
+      {active.length === 0 && resigned.length === 0 && walking.length === 0 ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <EmptyState icon="🖊️" title="No expiring contracts" message="Nobody's in their walk year — your books are settled for now." />
         </div>
       ) : (
         <section className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-          <ul>
-            {expiring.map(p => {
-              const cur = p.contract!.years.find(y => y.season === season);
-              const salary = cur ? cur.baseSalary + cur.proratedBonus : 0;
-              const ask = extensionMarket(p, season);
-              return (
-                <li key={p.id} className="flex items-center gap-3 px-3 py-2.5 border-t first:border-t-0" style={{ borderColor: 'var(--border)' }}>
-                  <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-semibold truncate">{p.firstName} {p.lastName}</span>
-                      {(() => { const s = reSignStance(p, userTeam, season); return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: s.bg, color: s.fg }}>{s.label}</span>; })()}
-                    </div>
-                    <div className="text-xs text-[var(--text-sec)]">
-                      {p.sportData.position} · Age {p.age} · {p.ratings.overall} OVR · expiring {money(salary)}/yr
-                    </div>
-                    {(() => { const log = lastSeasonLine(p); return log ? <div className="text-[11px] text-[var(--text-sec)] tabular-nums">Last season: {log}</div> : null; })()}
+          {active.map(p => {
+            const ask = extensionMarket(p, season);
+            const stance = willingness(p, userTeam, season);
+            return (
+              <div key={p.id} className="flex items-center gap-3 px-3 py-2.5 border-t first:border-t-0" style={{ borderColor: 'var(--border)' }}>
+                <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-semibold truncate">{p.firstName} {p.lastName}</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: stance.bg, color: stance.fg }}>{stance.label}</span>
                   </div>
-                  <div className="text-right shrink-0 hidden sm:block">
-                    <div className="text-[10px] uppercase tracking-wide text-[var(--text-sec)]">asks</div>
-                    <div className="text-sm font-semibold tabular-nums">{money(ask.marketSalary)}/yr · {ask.desiredYears}y</div>
-                  </div>
-                  <button
-                    onClick={() => setExtendId(p.id)}
-                    className="shrink-0 text-sm font-bold rounded-lg px-3 py-1.5"
-                    style={{ background: 'var(--accent)', color: '#fff' }}
-                  >
-                    Re-sign
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+                  <div className="text-xs text-[var(--text-sec)]">{p.sportData.position} · Age {p.age} · {p.ratings.overall} OVR{lastSeasonLine(p) ? ` · ${lastSeasonLine(p)}` : ''}</div>
+                </div>
+                <div className="text-right shrink-0 hidden sm:block">
+                  <div className="text-[10px] uppercase tracking-wide text-[var(--text-sec)]">asks · costs next yr</div>
+                  <div className="text-sm font-semibold tabular-nums">{money(ask.marketSalary)}/yr · {ask.desiredYears}y · <span style={{ color: '#dc2626' }}>−{money(ask.marketSalary)}</span></div>
+                </div>
+                <button onClick={() => setExtendId(p.id)} className="shrink-0 text-sm font-bold rounded-lg px-3 py-1.5" style={{ background: 'var(--accent)', color: '#fff' }}>Re-sign</button>
+                <button onClick={() => letWalk(p)} className="shrink-0 text-sm font-semibold rounded-lg px-2.5 py-1.5 border" style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}>Let Walk</button>
+              </div>
+            );
+          })}
+        </section>
+      )}
+
+      {/* Resolved decisions */}
+      {(resigned.length > 0 || walking.length > 0) && (
+        <section className="mt-4">
+          <h2 className="text-[10px] uppercase tracking-widest text-[var(--text-sec)] mb-2">Decisions ({resigned.length + walking.length})</h2>
+          <div className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+            {resigned.map(p => (
+              <div key={p.id} className="flex items-center gap-3 px-3 py-2 border-t first:border-t-0 text-sm" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, #10b981 7%, transparent)' }}>
+                <span className="text-[#059669] font-bold">✓</span>
+                <span className="font-semibold flex-1 truncate">{p.firstName} {p.lastName}</span>
+                <span className="text-xs text-[var(--text-sec)] tabular-nums">Re-signed · −{money(salaryForSeason(p, nextSeason))}/yr</span>
+              </div>
+            ))}
+            {walking.map(p => (
+              <div key={p.id} className="flex items-center gap-3 px-3 py-2 border-t first:border-t-0 text-sm" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, #dc2626 6%, transparent)' }}>
+                <span className="text-[#dc2626] font-bold">↪</span>
+                <span className="font-semibold flex-1 truncate">{p.firstName} {p.lastName}</span>
+                <span className="text-xs text-[#dc2626]">Walking to FA</span>
+                <button onClick={() => undoWalk(p.id)} className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>Undo</button>
+              </div>
+            ))}
+          </div>
         </section>
       )}
 
@@ -125,22 +184,19 @@ function lastSeasonLine(p: BasketballPlayer): string | null {
   const log = p.sportData.seasonLog;
   const last = log && log.length ? log[log.length - 1] : null;
   if (!last || !last.gamesPlayed) return null;
-  // PER is stored on newer logs; estimate from ppg/rpg/apg for older saves.
   const per = last.per ?? Math.round((last.ppg + last.rpg + last.apg) * 10) / 10;
-  return `${last.ppg} PPG · ${last.rpg} RPG · ${last.apg} APG · ${per} PER · ${last.gamesPlayed} GP`;
+  return `${last.ppg}/${last.rpg}/${last.apg} · ${per} PER`;
 }
 
-/** Deterministic re-sign posture — surfaces who's reluctant before you make an
- *  offer. Players on a struggling team are likelier to test the market. */
-function reSignStance(p: BasketballPlayer, team: BasketballTeam, season: number): { label: string; bg: string; fg: string } {
-  let h = 2166136261;
-  const key = `${p.id}-${season}`;
-  for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
-  const roll = (h >>> 0) % 100;
+/** Real re-sign posture from team success + ask vs current pay + role/age. */
+function willingness(p: BasketballPlayer, team: BasketballTeam, season: number): { label: string; bg: string; fg: string } {
+  const cur = (p.contract?.years.find(y => y.season === season)?.baseSalary ?? 0) + (p.contract?.years.find(y => y.season === season)?.proratedBonus ?? 0);
+  const ask = extensionMarket(p, season).marketSalary;
   const teamGood = team.record.wins >= 41;
-  if (!teamGood && roll < 35) return { label: 'Wants to test FA', bg: 'color-mix(in srgb,#d97706 16%,transparent)', fg: '#b45309' };
-  if (teamGood && roll < 55) return { label: 'Eager to stay', bg: 'color-mix(in srgb,#10b981 16%,transparent)', fg: '#059669' };
-  return { label: 'Will listen', bg: 'var(--surface-2)', fg: 'var(--text-sec)' };
+  if (!teamGood && p.ratings.overall >= 76) return { label: 'Wants to test FA', bg: 'color-mix(in srgb,#d97706 16%,transparent)', fg: '#b45309' };
+  if (ask > cur * 1.25) return { label: 'Seeking a raise', bg: 'color-mix(in srgb,#3b82f6 16%,transparent)', fg: '#2563eb' };
+  if (teamGood || (p.age <= 24 && (p.development?.potential ?? 0) - p.ratings.overall >= 4)) return { label: 'Eager to stay', bg: 'color-mix(in srgb,#10b981 16%,transparent)', fg: '#059669' };
+  return { label: 'Open to staying', bg: 'var(--surface-2)', fg: 'var(--text-sec)' };
 }
 
 function money(n: number): string {
