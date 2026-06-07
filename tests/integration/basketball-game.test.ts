@@ -203,6 +203,31 @@ describe('basketball sim — full game', () => {
     expect(avgStarterMins).toBeLessThan(45);
   });
 
+  it('gives the better starter more minutes than a fringe starter (realistic rotation)', () => {
+    const home = makeTeam('home');
+    const away = makeTeam('away');
+    // Make one starter a star and another a fringe piece.
+    const star = home.players.find(p => p.id === home.lineup.starters[0])!;
+    const fringe = home.players.find(p => p.id === home.lineup.starters[4])!;
+    star.ratings.overall = 92;
+    fringe.ratings.overall = 60;
+
+    const result = simBasketballGame(home, away, makeGameContext('mins-spread'));
+    const box = result.boxScores as Record<string, { minutes?: number }>;
+    const starterMins = home.lineup.starters.map(id => box[id]?.minutes ?? 0);
+
+    // Not a flat line — the five starters don't all log identical minutes.
+    expect(new Set(starterMins).size).toBeGreaterThan(1);
+    // The star outplays the fringe starter.
+    expect(box[star.id]!.minutes!).toBeGreaterThan(box[fringe.id]!.minutes! + 2);
+    // Reshaping preserves the team's total minutes (it only moves time within a
+    // tier) — so the total matches what the unrotated sim produced, not 240 on
+    // the nose (per-player rounding + the 4:2 model run a bit high).
+    const teamMins = home.players.reduce((s, p) => s + (box[p.id]?.minutes ?? 0), 0);
+    expect(teamMins).toBeGreaterThan(225);
+    expect(teamMins).toBeLessThan(290);
+  });
+
   it('is deterministic on same seed', () => {
     const home1 = makeTeam('home');
     const away1 = makeTeam('away');
