@@ -31,6 +31,8 @@ import {
   emptyBasketballStats,
   perGame,
   resolveBasketballPDCEffect,
+  basketballMarketSalary,
+  basketballFirstApron,
   type BasketballPlayer,
   type BasketballPosition,
   type BasketballTeam,
@@ -251,20 +253,41 @@ export function startNextSeason(league: LeagueState): LeagueState {
   // actually stocks the free-agent pool. Done before the trim so the roster-fill
   // backfills any holes.
   const userTeamId = league.userTeamId;
-  const AI_KEEP_VALUE = 70; // keep-value at/above which an AI team re-signs its own
+  // AI re-signs its best expiring players in value order until payroll reaches the
+  // first apron (teams won't blow past it for role players) or the roster fills;
+  // everyone else — and any sub-replacement scrub — walks to free agency. This is
+  // cap-driven, so with realistic salaries good teams shed real rotation players.
+  const AI_BUDGET = basketballFirstApron(season);
+  const AI_MIN_KEEP = 58;          // keep-value below this always walks
+  const salaryNext = (id: string) => {
+    const yr = players[id]?.contract?.years.find(y => y.season === season);
+    return yr ? yr.baseSalary + yr.proratedBonus : 0;
+  };
   const walk = new Set<string>();
   for (const t of league.teams) {
-    const expiring = (t.playerIds as string[]).filter(id => !hasContractForSeason(players[id], season));
+    const ids = t.playerIds as string[];
+    const expiring = ids.filter(id => !hasContractForSeason(players[id], season));
     if (t.id === userTeamId) {
-      // The user decides via the re-sign step; anything not re-signed walks.
-      for (const id of expiring) walk.add(id);
+      for (const id of expiring) walk.add(id); // user decides; un-re-signed walk
       continue;
     }
-    // AI: walk the lowest-value expiring first, keeping at least a legal roster.
-    let rosterAfter = t.playerIds.length;
-    for (const id of [...expiring].sort((a, b) => keepValue(a) - keepValue(b))) {
-      if (rosterAfter <= MIN_LEGAL_ROSTER + 1) break;
-      if (keepValue(id) < AI_KEEP_VALUE) { walk.add(id); rosterAfter--; }
+    // Payroll already committed for next season (multi-year deals).
+    let committed = ids.reduce((s, id) => s + salaryNext(id), 0);
+    let kept = ids.length - expiring.length;
+    for (const id of [...expiring].sort((a, b) => keepValue(b) - keepValue(a))) { // best first
+      const ask = basketballMarketSalary(players[id], { season });
+      if (keepValue(id) >= AI_MIN_KEEP && committed + ask <= AI_BUDGET && kept < TARGET_ROSTER) {
+        committed += ask; kept++;            // re-sign (contract written in the loop below)
+      } else {
+        walk.add(id);
+      }
+    }
+    // Don't fall below a legal roster — un-walk the best walked players if needed.
+    if (kept < MIN_LEGAL_ROSTER) {
+      for (const id of [...expiring].filter(id => walk.has(id)).sort((a, b) => keepValue(b) - keepValue(a))) {
+        if (kept >= MIN_LEGAL_ROSTER) break;
+        walk.delete(id); kept++;
+      }
     }
   }
 
