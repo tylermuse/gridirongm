@@ -122,20 +122,23 @@ function pickMvp(
     const team = teamFor(p);
     const teamWins = team?.wins ?? 0;
 
-    // Voters weight scoring + team success heavily
+    // Voters weight scoring + production first, then team success + efficiency.
+    // (The old formula leaned on per-game plus/minus * 5 — a volatile aggregate
+    // that let a 19-PPG player outscore a 30-PPG one. Removed.)
     const ppg = pg.points ?? 0;
     const apg = pg.assists ?? 0;
     const rpg = pg.totalRebounds ?? 0;
-    const plusMinusPerGame = (p.seasonStats.plusMinus ?? 0) / Math.max(1, p.seasonStats.gamesPlayed);
+    const gp = team ? team.wins + team.losses : 0;
+    const winPct = gp > 0 ? teamWins / gp : 0.5;
+    const tsa = p.seasonStats.fieldGoalsAttempted + 0.44 * p.seasonStats.freeThrowsAttempted;
+    const trueShooting = tsa > 0 ? p.seasonStats.points / (2 * tsa) : 0.5;
 
     const score =
       ppg * 1.0 +
-      apg * 0.8 +
       rpg * 0.6 +
-      teamWins * 0.4 +
-      plusMinusPerGame * 5 +
-      // Small bonus for shooting efficiency
-      ((p.seasonStats.fieldGoalsMade / Math.max(1, p.seasonStats.fieldGoalsAttempted)) - 0.45) * 20;
+      apg * 0.7 +
+      winPct * 18 +               // team success matters, but never swamps production
+      (trueShooting - 0.55) * 25;  // efficiency bonus/penalty around league-average TS
 
     return { player: p, score };
   });
@@ -174,18 +177,19 @@ function pickDpoy(
       ? Math.max(0, 120 - (team.pointsAgainst / Math.max(1, team.wins + team.losses)))
       : 0;
 
-    // Defensive contribution weighted by rating talent + actual stat output
-    const stocksPerGame = (pg.steals ?? 0) + (pg.blocks ?? 0);
-    const defRebPerGame = pg.defensiveRebounds ?? 0;
+    // Rim protection (blocks) is the headline DPOY trait, then steals + defensive
+    // skill + team defense. Defensive boards are a minor factor — they were
+    // over-weighted (×2), letting a high-rebounding, low-block center win it.
     const interior = (p.ratings.interiorDefense + p.ratings.block) / 2;
     const perimeter = p.ratings.perimeterDefense;
 
     const score =
-      stocksPerGame * 8 +
-      defRebPerGame * 2 +
-      interior * 0.15 +
-      perimeter * 0.1 +
-      teamDefenseRating * 0.3;
+      (pg.blocks ?? 0) * 14 +
+      (pg.steals ?? 0) * 7 +
+      (pg.defensiveRebounds ?? 0) * 0.8 +
+      interior * 0.3 +
+      perimeter * 0.12 +
+      teamDefenseRating * 0.5;
 
     return { player: p, score };
   });

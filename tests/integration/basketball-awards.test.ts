@@ -148,6 +148,17 @@ describe('MVP', () => {
     expect(awards.mvp!.winnerId).toBe('mvp-winner');
   });
 
+  it('does not let a low-scorer outrank a clearly better scorer (Sarr/KAT)', () => {
+    const elite = makeStatPlayer({ id: 'elite-scorer', teamId: 'team-a', pointsPerGame: 30, reboundsPerGame: 11, assistsPerGame: 5, plusMinusPerGame: 4 });
+    const midStats = makeStatPlayer({ id: 'mid-stats', teamId: 'team-b', pointsPerGame: 19, reboundsPerGame: 9, assistsPerGame: 4, plusMinusPerGame: 9 });
+    const teams = [
+      makeTeam({ teamId: 'team-a', wins: 50 }),
+      makeTeam({ teamId: 'team-b', wins: 18 }),
+    ];
+    const awards = computeBasketballAwards([elite, midStats], teams);
+    expect(awards.mvp!.winnerId).toBe('elite-scorer');
+  });
+
   it('returns null when no eligible players', () => {
     const awards = computeBasketballAwards([], [makeTeam({ teamId: 'a', wins: 50 })]);
     expect(awards.mvp).toBeNull();
