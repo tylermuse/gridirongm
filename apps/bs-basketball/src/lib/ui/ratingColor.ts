@@ -14,6 +14,18 @@ export function ratingBgColor(v: number): string {
   return v >= 80 ? 'bg-green-500' : v >= 65 ? 'bg-blue-500' : v >= 50 ? 'bg-amber-500' : 'bg-red-500';
 }
 
+/** Hex for a 0–99 rating — same tiers, for inline `style` (e.g. grade cells). */
+export function ratingHex(v: number): string {
+  return v >= 80 ? '#16a34a' : v >= 65 ? '#2563eb' : v >= 50 ? '#d97706' : '#dc2626';
+}
+
+/** Letter grade for a 0–99 rating (parity with football's ratingGrade). */
+export function ratingGrade(v: number): string {
+  return v >= 90 ? 'A+' : v >= 85 ? 'A' : v >= 80 ? 'A-'
+    : v >= 75 ? 'B+' : v >= 70 ? 'B' : v >= 65 ? 'B-'
+    : v >= 60 ? 'C+' : v >= 55 ? 'C' : v >= 50 ? 'C-' : 'D';
+}
+
 /** Readable text color (#fff / near-black) for content sitting on a team color. */
 export function getContrastText(hex: string): string {
   const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());

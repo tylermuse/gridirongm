@@ -16,6 +16,14 @@ export interface Measurable { label: string; value: string; note?: string }
 export interface DevCurvePoint { label: string; age: number; projected: number }
 export interface RatingLine { label: string; value: number }
 
+/** Team-fit at a prospect's position for the report's top summary tile. */
+export interface TeamFit { abbr: string; label: string; color: string; count: number }
+export function teamFitFor(count: number, abbr: string): TeamFit {
+  if (count < 2) return { abbr, count, label: 'Critical Need', color: '#dc2626' };
+  if (count < 3) return { abbr, count, label: 'Moderate Need', color: '#d97706' };
+  return { abbr, count, label: 'Low Priority', color: '#16a34a' };
+}
+
 export interface BasketballScoutingReport {
   scouted: boolean;
   /** Overall draft grade, e.g. "A-", "B+". */
