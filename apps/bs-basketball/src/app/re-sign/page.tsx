@@ -125,7 +125,9 @@ function lastSeasonLine(p: BasketballPlayer): string | null {
   const log = p.sportData.seasonLog;
   const last = log && log.length ? log[log.length - 1] : null;
   if (!last || !last.gamesPlayed) return null;
-  return `${last.ppg} PPG · ${last.rpg} RPG · ${last.apg} APG · ${last.gamesPlayed} GP`;
+  // PER is stored on newer logs; estimate from ppg/rpg/apg for older saves.
+  const per = last.per ?? Math.round((last.ppg + last.rpg + last.apg) * 10) / 10;
+  return `${last.ppg} PPG · ${last.rpg} RPG · ${last.apg} APG · ${per} PER · ${last.gamesPlayed} GP`;
 }
 
 /** Deterministic re-sign posture — surfaces who's reluctant before you make an

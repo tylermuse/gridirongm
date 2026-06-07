@@ -206,6 +206,9 @@ export interface PlayerSeasonLogEntry {
   ppg: number;
   rpg: number;
   apg: number;
+  /** Per-game efficiency rating (NBA "EFF"). Absent on logs written before it
+   *  was tracked — callers estimate from ppg/rpg/apg as a fallback. */
+  per?: number;
 }
 
 export interface BasketballTeamData {
