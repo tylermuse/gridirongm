@@ -2,37 +2,24 @@
 
 import { useMemo, useState } from 'react';
 import { Chip } from '@/components/ui/Chip';
-import { ScoutingReportModal } from '@/components/draft/ScoutingReportModal';
+import { ScoutingReportBody } from '@/components/draft/ScoutingReportBody';
 import { buildScoutingReport } from '@/lib/scouting/scoutingReport';
-import { isScouted, perceivedPotential, projectionGrade, scoutsLeft, GRADE_LABEL } from '@/lib/scouting';
+import { isScouted, scoutsLeft } from '@/lib/scouting';
 import { SCOUTS_PER_DRAFT } from '@/lib/draft';
 import { positionNeeds, TARGET_DEPTH } from '@/lib/draft/needs';
 import { ratingColor } from '@/lib/ui/ratingColor';
 import type { DraftState } from '@/lib/draft';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
-import type { BasketballPlayer, BasketballPosition, BasketballRatings, BasketballTeam } from '@bs/sport-basketball';
+import type { BasketballPlayer, BasketballPosition, BasketballTeam } from '@bs/sport-basketball';
 
 /**
  * Draft Board (parity §B): the rich prospect table — search + position + a
  * three-state filter (All / ⭐ Starred / Scouted), a scout-points bar with
- * auto-scout, a roster-needs snapshot, and inline row expansion (composite +
- * scouting). The single prospect surface (replaces the old Available list +
- * separate scouting panel).
+ * auto-scout, a roster-needs snapshot, and inline row expansion that renders the
+ * full scouting report. The single prospect surface.
  */
 
 const POSITIONS: (BasketballPosition | 'ALL')[] = ['ALL', 'PG', 'SG', 'SF', 'PF', 'C'];
-
-function composite(r: BasketballRatings): Record<string, number> {
-  const avg = (...xs: number[]) => Math.round(xs.reduce((a, b) => a + b, 0) / xs.length);
-  return {
-    Inside: avg(r.finishing, r.postScoring),
-    Outside: avg(r.threePoint, r.midRange),
-    Playmk: avg(r.passing, r.handles),
-    Defense: avg(r.perimeterDefense, r.interiorDefense, r.steal, r.block),
-    Athletic: avg(r.speed, r.vertical, r.strength),
-    IQ: r.basketballIQ,
-  };
-}
 
 export function DraftBoardCard({
   league, draft, pool, recommendedId, userOnClock, loading, onScout, onDraft,
@@ -52,7 +39,6 @@ export function DraftBoardCard({
   const [tab, setTab] = useState<'all' | 'starred' | 'scouted'>('all');
   const [starred, setStarred] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [reportId, setReportId] = useState<string | null>(null);
 
   // Projected draft rank = position on the overall board.
   const projRank = useMemo(() => {
@@ -147,7 +133,6 @@ export function DraftBoardCard({
           <tbody>
             {rows.map(p => {
               const scouted = isScouted(draft, p.id);
-              const grade = projectionGrade(perceivedPotential(p, draft.season));
               const isOpen = expanded === p.id;
               const affordable = scoutsRemaining > 0;
               const fillsNeed = needSet.has(p.sportData.position);
@@ -173,7 +158,7 @@ export function DraftBoardCard({
                     <td className={`text-center font-bold tabular-nums ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
                     <td className="text-center">
                       {scouted
-                        ? <span className="font-bold" style={{ color: grade.startsWith('A') ? '#10b981' : grade.startsWith('B') ? '#2563eb' : grade.startsWith('C') ? '#d97706' : '#dc2626' }}>{grade}</span>
+                        ? <span className={`font-bold tabular-nums ${ratingColor(p.development.potential)}`} title="Scouted ceiling">{p.development.potential}</span>
                         : <button onClick={e => { e.stopPropagation(); onScout(p.id); }} disabled={!affordable || loading} className="text-[10px] font-bold rounded border px-2 py-1 disabled:opacity-40" style={affordable ? { color: 'var(--accent)', background: 'var(--accent-glow)', borderColor: 'var(--accent)' } : { color: '#d97706', borderColor: '#d97706' }}>{affordable ? 'Scout' : '🔒'}</button>}
                     </td>
                     <td className="text-right pr-3">
@@ -185,20 +170,12 @@ export function DraftBoardCard({
                   {isOpen && (
                     <tr style={{ background: 'var(--surface-2)' }}>
                       <td colSpan={7} className="px-4 py-3">
-                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3">
-                          {Object.entries(composite(p.ratings)).map(([label, val]) => (
-                            <div key={label} className="rounded-lg bg-[var(--surface)] px-2 py-1.5 text-center">
-                              <div className="text-sm font-bold tabular-nums">{val}</div>
-                              <div className="text-[9px] uppercase tracking-wide opacity-60">{label}</div>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
-                          <span className="text-[var(--text-sec)]">
-                            {scouted ? <>🔍 True ceiling <strong>{p.development.potential}</strong>.</> : <>Projection <strong>{GRADE_LABEL[grade]}</strong> — scout to confirm.</>}
-                          </span>
-                          <button onClick={() => setReportId(p.id)} className="ml-auto font-semibold rounded-lg border px-2 py-1 hover:bg-[var(--surface)]" style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}>📋 Full report →</button>
-                        </div>
+                        <ScoutingReportBody
+                          player={p}
+                          report={buildScoutingReport(p, { season: draft.season, scouted })}
+                          onScout={() => onScout(p.id)}
+                          canScout={affordable && !loading}
+                        />
                       </td>
                     </tr>
                   )}
@@ -211,20 +188,6 @@ export function DraftBoardCard({
           </tbody>
         </table>
       </div>
-
-      {reportId && (() => {
-        const p = pool.find(x => x.id === reportId);
-        if (!p) return null;
-        return (
-          <ScoutingReportModal
-            player={p}
-            report={buildScoutingReport(p, { season: draft.season, scouted: isScouted(draft, p.id) })}
-            onClose={() => setReportId(null)}
-            onScout={() => onScout(p.id)}
-            canScout={scoutsRemaining > 0 && !loading}
-          />
-        );
-      })()}
     </section>
   );
 }
