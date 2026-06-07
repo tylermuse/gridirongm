@@ -12,6 +12,8 @@
  */
 
 import type { BasketballLeagueState } from './db';
+import type { BasketballPlayer } from '@bs/sport-basketball';
+import { consensus2026Rank, consensus2026Value } from '../data/draft2026';
 
 /** Bump this when the persisted shape changes; register the migration below. */
 export const CURRENT_SAVE_VERSION = 1;
@@ -42,6 +44,33 @@ export function migrateSave(state: BasketballLeagueState): { state: BasketballLe
   if (typeof s.displayName === 'string' && /^NBA \d{4}$/.test(s.displayName)) {
     s = { ...s, displayName: s.displayName.replace(/^NBA /, 'BS Hoops ') };
     migrated = true;
+  }
+
+  // Lift consensus-board draft prospects to their big-board rating in saves made
+  // before they were on the board (the consensus value is otherwise only stamped
+  // at import). Only touches prospects in the active draft pool, never rostered
+  // players, and only raises (never lowers).
+  const draft = (s.sportData as { draft?: { poolIds?: string[] } } | undefined)?.draft;
+  if (draft?.poolIds?.length) {
+    const players = { ...s.players } as Record<string, BasketballPlayer>;
+    let changed = false;
+    for (const id of draft.poolIds) {
+      const p = players[id];
+      if (!p) continue;
+      const rank = consensus2026Rank(`${p.firstName} ${p.lastName}`);
+      if (!rank) continue;
+      const v = consensus2026Value(rank);
+      const curPot = p.development?.potential ?? 0;
+      if (p.ratings.overall < v.overall || curPot < v.potential) {
+        players[id] = {
+          ...p,
+          ratings: { ...p.ratings, overall: Math.max(p.ratings.overall, v.overall) },
+          development: { ...p.development, potential: Math.max(curPot, v.potential) },
+        };
+        changed = true;
+      }
+    }
+    if (changed) { s = { ...s, players }; migrated = true; }
   }
   return { state: s, migrated };
 }
