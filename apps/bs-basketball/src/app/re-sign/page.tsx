@@ -154,7 +154,8 @@ export default function ReSignPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="font-semibold truncate">{p.firstName} {p.lastName}</span>
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: stance.bg, color: stance.fg }}>{stance.label}</span>
+                    {/* Stance chip steals room from the name on mobile — hide it there. */}
+                    <span className="hidden sm:inline-block text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: stance.bg, color: stance.fg }}>{stance.label}</span>
                   </div>
                   <div className="text-xs text-[var(--text-sec)]">{p.sportData.position} · Age {p.age} · {p.ratings.overall} OVR{lastSeasonLine(p) ? ` · ${lastSeasonLine(p)}` : ''}</div>
                 </div>
@@ -162,8 +163,11 @@ export default function ReSignPage() {
                   <div className="text-[10px] uppercase tracking-wide text-[var(--text-sec)]">asks · costs next yr</div>
                   <div className="text-sm font-semibold tabular-nums">{money(ask.marketSalary)}/yr · {ask.desiredYears}y · <span style={{ color: '#dc2626' }}>−{money(ask.marketSalary)}</span></div>
                 </div>
-                <button onClick={() => setExtendId(p.id)} className="shrink-0 text-sm font-bold rounded-lg px-3 py-1.5" style={{ background: 'var(--accent)', color: '#fff' }}>Re-sign</button>
-                <button onClick={() => letWalk(p)} className="shrink-0 text-sm font-semibold rounded-lg px-2.5 py-1.5 border" style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}>Let Walk</button>
+                {/* Stacked on mobile (narrower, more room for the name), side-by-side on desktop. */}
+                <div className="flex flex-col sm:flex-row gap-1.5 shrink-0">
+                  <button onClick={() => setExtendId(p.id)} className="text-sm font-bold rounded-lg px-3 py-1.5" style={{ background: 'var(--accent)', color: '#fff' }}>Re-sign</button>
+                  <button onClick={() => letWalk(p)} className="text-sm font-semibold rounded-lg px-2.5 py-1.5 border" style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}>Let Walk</button>
+                </div>
               </div>
             );
           })}
