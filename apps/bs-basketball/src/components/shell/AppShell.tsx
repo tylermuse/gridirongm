@@ -150,6 +150,7 @@ function TopBar({
       case 'simPlayoffRound': await store.simPlayoffRound(); break;
       case 'simAllPlayoffs': await store.simAllPlayoffs(); break;
       case 'simDraftToUser': await store.simDraftToUser(); break;
+      case 'simDraftPick': await store.simDraftPick(); break;
       case 'simDraftAll': await store.simDraftAll(); break;
       case 'goDraft': router.push('/draft'); break;
       case 'goReSign': router.push('/re-sign'); break;
