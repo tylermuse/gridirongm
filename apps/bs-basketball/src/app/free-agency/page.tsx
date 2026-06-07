@@ -195,8 +195,18 @@ export default function FreeAgencyPage() {
             </div>
           </section>
 
-          {/* Offer panel */}
-          <section>
+          {/* Offer panel — a bottom sheet on mobile (so tapping Offer brings it up
+              in place), the static side column on desktop. */}
+          {selected && <div className="lg:hidden fixed inset-0 z-40 bg-black/40" onClick={() => setSelectedId(null)} />}
+          <section
+            className={selected
+              ? 'fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t shadow-2xl p-4 bg-[var(--surface)] lg:static lg:inset-auto lg:z-auto lg:max-h-none lg:overflow-visible lg:rounded-none lg:border-0 lg:shadow-none lg:p-0 lg:bg-transparent'
+              : ''}
+            style={selected ? { borderColor: 'var(--border)' } : undefined}
+          >
+            {selected && (
+              <button onClick={() => setSelectedId(null)} className="lg:hidden absolute right-3 top-3 z-10 text-[var(--text-sec)] hover:text-[var(--text)] text-xl leading-none" aria-label="Close">✕</button>
+            )}
             {!selected ? (
               <div className="rounded-xl border bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-sec)]" style={{ borderColor: 'var(--border)' }}>
                 Select a free agent to make an offer.
