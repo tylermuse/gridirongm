@@ -141,6 +141,10 @@ export function enterOffseason(input: LeagueState): LeagueState {
     // Snapshot pre-aging ratings + a year-by-year log entry (Phase 2E-1).
     const pg = perGame(stats);
     const prevLog = p.sportData.seasonLog ?? [];
+    const effTotal = stats.points + stats.totalRebounds + stats.assists + stats.steals + stats.blocks
+      - (stats.fieldGoalsAttempted - stats.fieldGoalsMade)
+      - (stats.freeThrowsAttempted - stats.freeThrowsMade)
+      - stats.turnovers;
     const seasonLog = stats.gamesPlayed > 0
       ? [...prevLog, {
           season: league.currentSeason,
@@ -150,6 +154,7 @@ export function enterOffseason(input: LeagueState): LeagueState {
           ppg: round1(pg.points ?? 0),
           rpg: round1(pg.totalRebounds ?? 0),
           apg: round1(pg.assists ?? 0),
+          per: round1(effTotal / stats.gamesPlayed),
         }]
       : prevLog;
 
