@@ -16,6 +16,7 @@
  */
 
 import type { CSSProperties, ReactElement } from 'react';
+import { getTeamLogo } from '@/lib/ui/teamLogos';
 
 interface TeamLogoProps {
   abbreviation: string;
@@ -23,6 +24,9 @@ interface TeamLogoProps {
   secondaryColor: string;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
+  /** Real logo image URL. Falls back to the active league's registry entry for
+   *  this abbreviation, then the parody SVG icon / text badge. */
+  logoUrl?: string;
 }
 
 const SIZE_CLASSES: Record<string, string> = {
@@ -424,6 +428,7 @@ export function TeamLogo({
   secondaryColor,
   size = 'md',
   className = '',
+  logoUrl,
 }: TeamLogoProps) {
   const sizeClass = SIZE_CLASSES[size] ?? SIZE_CLASSES.md;
 
@@ -450,6 +455,22 @@ export function TeamLogo({
     background: 'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.08) 60%, transparent 100%)',
     borderRadius: '22% 22% 50% 50%',
   };
+
+  // Real logo image (from the roster file's per-team logoUrl) takes priority.
+  const imgSrc = logoUrl ?? getTeamLogo(abbreviation);
+  if (imgSrc) {
+    const pad = PADDING[size] ?? PADDING.md;
+    return (
+      <div
+        className={`${sizeClass} shrink-0 overflow-hidden relative ${className}`}
+        style={{ ...containerStyle, padding: pad }}
+      >
+        <div className="absolute inset-0 pointer-events-none" style={gradientOverlay} />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={imgSrc} alt={abbreviation} className="relative z-[1] w-full h-full object-contain" loading="lazy" />
+      </div>
+    );
+  }
 
   const iconFn = ICONS[abbreviation];
 

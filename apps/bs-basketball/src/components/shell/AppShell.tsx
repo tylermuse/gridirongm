@@ -15,6 +15,7 @@ import { GameTicker } from '@/components/dashboard/GameTicker';
 import { nextAction, type ActionKey } from '@/lib/ui/nextAction';
 import { getBracket } from '@/lib/playoffs';
 import { getGmFired } from '@/lib/approval';
+import { setTeamLogos } from '@/lib/ui/teamLogos';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -41,6 +42,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     void continueLatest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Publish the active league's per-team logo URLs so TeamLogo can render them.
+  useEffect(() => {
+    setTeamLogos((league?.teams ?? []) as ReadonlyArray<{ abbreviation: string; logoUrl?: string }>);
+  }, [league]);
 
   // Pre-league: minimal shell so the splash page owns the screen.
   if (!league) {
