@@ -39,6 +39,10 @@ export function LotteryBoard({
   const live = revealedThrough !== undefined;
   const isRevealed = (c: LotteryRevealCard) => !live || c.overall >= revealedThrough;
 
+  // Team seeded to each pick slot by its pre-lottery odds — used to project who
+  // "should" land at an un-revealed pick before the balls drop.
+  const seededBySlot = new Map(cards.map(c => [c.expectedSlot, c] as const));
+
   // Summary highlights (only once the board is fully settled).
   const jump = [...cards].sort((a, b) => b.delta - a.delta)[0];
   const fall = [...cards].sort((a, b) => a.delta - b.delta)[0];
@@ -94,9 +98,26 @@ export function LotteryBoard({
                           <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-sec)]">{c.oddsPct.toFixed(1)}%</td>
                           <td className="px-3 py-1.5 text-right tabular-nums"><MovementTag delta={c.delta} /></td>
                         </>
-                      ) : (
-                        <td className="px-3 py-1.5 text-[var(--text-sec)]" colSpan={4}>🔒 <span className="opacity-50">awaiting reveal…</span></td>
-                      )}
+                      ) : (() => {
+                        // Un-revealed: project the team seeded to this slot by odds.
+                        const proj = seededBySlot.get(c.overall);
+                        return (
+                          <>
+                            <td className="px-3 py-1.5 opacity-55">
+                              {proj ? (
+                                <span className="inline-flex items-center gap-2">
+                                  <TeamLogo abbreviation={proj.team.abbreviation} primaryColor={proj.team.primaryColor} secondaryColor={proj.team.secondaryColor} size="xs" />
+                                  <span className="font-semibold italic">{proj.team.city} {proj.team.name}</span>
+                                  <span className="text-[10px] uppercase tracking-wide">projected</span>
+                                </span>
+                              ) : <span className="opacity-60">🔒 awaiting reveal…</span>}
+                            </td>
+                            <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-sec)] opacity-60">{proj ? `seeded ${ordinal(proj.expectedSlot)}` : ''}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-sec)] opacity-60">{proj ? `${proj.oddsPct.toFixed(1)}%` : ''}</td>
+                            <td className="px-3 py-1.5 text-right text-[var(--text-sec)] opacity-50">—</td>
+                          </>
+                        );
+                      })()}
                     </tr>
                   );
                 })}
