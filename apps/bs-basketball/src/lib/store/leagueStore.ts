@@ -60,7 +60,7 @@ import {
   type DraftPickSlot,
 } from '../draft';
 import { pickKey, currentOwner } from '../trade/picks';
-import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, runAiFreeAgency, type Offer, type OfferResult, type Negotiation } from '../freeAgency';
+import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, runAiFreeAgency, FA_DAYS, type Offer, type OfferResult, type Negotiation } from '../freeAgency';
 import { applyRelease } from '../roster/release';
 import { playThroughInjury as playThroughInjuryState } from '../injuries';
 import { extensionMarket, extensionAccepted, buildExtension } from '../roster/extension';
@@ -192,6 +192,8 @@ interface LeagueStore {
   signFreeAgent: (playerId: string, offer: Offer, releaseId?: string) => Promise<OfferResult | null>;
   /** Run CPU free agency (other teams sign/upgrade); rounds controls how far. Returns count. */
   simFreeAgency: (rounds?: number) => Promise<number>;
+  /** Advance the FA day clock by `days` (price decay applies) + run CPU FA. */
+  advanceFreeAgency: (days: number) => Promise<number>;
 
   /** Negotiate a free-agent offer: signs if it clears the bar, otherwise
    *  returns the agent's counter (no state change). */
@@ -793,6 +795,30 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     } catch (err) {
       console.error('[bs-hoops] simFreeAgency failed:', err);
       set({ loading: false });
+      return 0;
+    }
+  },
+
+  async advanceFreeAgency(days) {
+    const current = get().league;
+    if (!current) return 0;
+    set({ loading: true, error: null });
+    try {
+      const sd = current.sportData as { faDay?: number };
+      const newDay = Math.min(FA_DAYS, (sd.faDay ?? 0) + days);
+      // Bump the day first so the price decay applies to this round's signings.
+      const withDay = { ...current, sportData: { ...(current.sportData as object), faDay: newDay } };
+      const { league, signings } = runAiFreeAgency(withDay, { rounds: Math.max(1, days) });
+      await saveLeague(league);
+      set({
+        league,
+        loading: false,
+        simToast: { text: `Day ${newDay} of ${FA_DAYS} · ${signings.length} signing${signings.length === 1 ? '' : 's'} league-wide` },
+      });
+      return signings.length;
+    } catch (err) {
+      console.error('[bs-hoops] advanceFreeAgency failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return 0;
     }
   },
