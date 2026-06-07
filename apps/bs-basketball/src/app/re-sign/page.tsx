@@ -93,6 +93,41 @@ export default function ReSignPage() {
         <CapTile label={proj.apron.text} value={proj.overTaxBy > 0 ? `tax +${money(proj.overTaxBy)}` : '—'} color={proj.apron.color} />
       </div>
 
+      {/* Roster composition — depth per position after your decisions (players you
+          let walk drop off), so you can see whether you can afford to lose one. */}
+      {(() => {
+        const POS = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
+        const depth: Record<string, number> = { PG: 0, SG: 0, SF: 0, PF: 0, C: 0 };
+        for (const id of userTeam.playerIds) {
+          if (decisions[id] === 'walk') continue;
+          const p = league.players[id] as BasketballPlayer | undefined;
+          if (p) depth[p.sportData.position]++;
+        }
+        const kept = Object.values(depth).reduce((a, b) => a + b, 0);
+        return (
+          <div className="rounded-xl border bg-[var(--surface)] px-4 py-3 mb-4" style={{ borderColor: 'var(--border)' }}>
+            <div className="flex items-baseline gap-2 mb-2">
+              <span className="text-[10px] uppercase tracking-widest text-[var(--text-sec)]">Roster after decisions</span>
+              <span className="text-xs text-[var(--text-sec)]">{kept} players</span>
+            </div>
+            <div className="grid grid-cols-5 gap-3">
+              {POS.map(pos => {
+                const n = depth[pos];
+                const color = n >= 3 ? '#10b981' : n >= 2 ? '#d97706' : '#dc2626';
+                return (
+                  <div key={pos}>
+                    <div className="flex justify-between text-xs mb-0.5"><span className="font-bold">{pos}</span><span className="tabular-nums" style={{ color }}>{n}</span></div>
+                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
+                      <div className="h-full rounded-full" style={{ width: `${Math.min(100, (n / 3) * 100)}%`, background: color }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {active.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <p className="text-sm font-semibold mr-auto rounded-lg px-3 py-1.5" style={{ background: 'color-mix(in srgb, #d97706 14%, transparent)', color: '#b45309' }}>
