@@ -400,11 +400,31 @@ export function simBasketballGame(
   }
 
   // ------------------------------------------------------------------
+  // Realistic per-player minutes. The two-unit rotation gives everyone in a unit
+  // identical court time (every starter ~33, every bench guy ~15). Reshape the
+  // recorded minutes WITHIN each tier by player rating — stars play more, fringe
+  // less — keeping each tier's total (so the team stays at 240). Scoring + box
+  // stats are untouched; minutes only feed the MPG/PER display.
+  const adjMinutes = new Map(minutesPlayed);
+  const reshapeTier = (ids: readonly PlayerId[], byId: Map<PlayerId, BasketballPlayer>) => {
+    const played = ids.filter(id => (adjMinutes.get(id) ?? 0) > 0);
+    if (played.length < 2) return;
+    const total = played.reduce((s, id) => s + (adjMinutes.get(id) ?? 0), 0);
+    const weights = played.map(id => Math.max(1, byId.get(id)?.ratings.overall ?? 60));
+    const sumW = weights.reduce((a, b) => a + b, 0);
+    played.forEach((id, i) => adjMinutes.set(id, (total * weights[i]) / sumW));
+  };
+  for (const [side, byId] of [[home, homePlayerById], [away, awayPlayerById]] as const) {
+    reshapeTier(side.lineup.starters, byId);
+    reshapeTier(side.lineup.bench.filter(id => (minutesPlayed.get(id) ?? 0) > 0), byId);
+  }
+
+  // ------------------------------------------------------------------
   // Finalize box scores: convert minutes to game stats + gamesPlayed
   // ------------------------------------------------------------------
   const finalBoxScores: Record<PlayerId, Partial<BasketballStats>> = {};
   for (const [playerId, stats] of boxScores) {
-    const mins = Math.round((minutesPlayed.get(playerId) ?? 0) / 60);
+    const mins = Math.round((adjMinutes.get(playerId) ?? 0) / 60);
     const withMinutesAndGame = addBasketballStats(stats, {
       minutes: mins,
       gamesPlayed: 1,
