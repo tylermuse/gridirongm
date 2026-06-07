@@ -129,9 +129,17 @@ export default function HomePage() {
 
         {fired && !league.userTeamId && (() => {
           const openingIds = getGmOpenings(league);
-          const openings = (openingIds.length ? openingIds : league.teams.map(t => t.id))
+          const stored = openingIds
             .map(id => league.teams.find(t => t.id === id) as BasketballTeam | undefined)
             .filter((t): t is BasketballTeam => !!t);
+          // Fallback for saves made before openings were tracked: the worst few
+          // other clubs by record. Never offer the team that just fired you.
+          const base = stored.length
+            ? stored
+            : [...(league.teams as BasketballTeam[])]
+                .sort((a, b) => (a.record.wins - a.record.losses) - (b.record.wins - b.record.losses))
+                .slice(0, 6);
+          const openings = base.filter(t => t.id !== fired.teamId).slice(0, 5);
           return (
             <div className="mb-8 rounded-xl border-2 p-5" style={{ borderColor: '#dc2626', background: 'color-mix(in srgb, #dc2626 8%, transparent)' }}>
               <div className="flex items-center gap-4 mb-4">
