@@ -23,14 +23,11 @@ function sectionsFor(userTeamId: string | null): NavSection[] {
       label: 'League',
       items: [
         { href: '/', label: 'Home', icon: '🏠' },
-        { href: '/league', label: 'League', icon: '🏟️' },
         { href: '/standings', label: 'Standings', icon: '📊' },
         { href: '/stats', label: 'Stats', icon: '🔢' },
         { href: '/players', label: 'Players', icon: '🔎' },
-        { href: '/rosters', label: 'Rosters', icon: '📥' },
         { href: '/power-rankings', label: 'Power Rankings', icon: '📈' },
         { href: '/gm-rankings', label: 'GM Rankings', icon: '🏅' },
-        { href: '/compare', label: 'Compare', icon: '⚖️' },
         { href: '/playoffs', label: 'Playoffs', icon: '🏆' },
         { href: '/news', label: 'News', icon: '📰' },
         { href: '/show', label: 'The Show', icon: '🎙️' },
@@ -54,6 +51,12 @@ function sectionsFor(userTeamId: string | null): NavSection[] {
         { href: '/awards', label: 'Awards', icon: '🏅' },
         { href: '/recap', label: 'Recap', icon: '🎬' },
         { href: '/history', label: 'History', icon: '🗃️' },
+      ],
+    },
+    {
+      label: 'More',
+      items: [
+        { href: '/rosters', label: 'Rosters', icon: '📥' },
       ],
     },
   ];
