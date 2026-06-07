@@ -72,16 +72,21 @@ function scoreProspect(
 ): number {
   const ovr = prospect.ratings.overall;
   const pot = prospect.development.potential;
-  // Weighted blend: ovr is 75% of value, potential is 25%
-  const talent = ovr * 0.75 + pot * 0.25;
+  // Rookie drafts are upside bets — prospects all carry low current OVR, so weight
+  // potential as the primary driver (65%) over today's overall (35%). This keeps a
+  // consensus-elite ceiling (e.g. a 73 OVR / 93 POT prospect) atop the board rather
+  // than behind polished-but-capped role players.
+  const talent = ovr * 0.35 + pot * 0.65;
 
-  // Positional need multiplier
+  // Positional need is a gentle additive nudge (~±4.5 pts), not a multiplier — it
+  // breaks ties between similar talents without burying a clearly better prospect.
   const need = needByPosition[prospect.sportData.position] ?? 1.0;
+  const needBonus = (need - 1) * 30;
 
-  // RNG noise: ±3 points
-  const noise = (rng.random() - 0.5) * 6;
+  // RNG noise: ±2.5 points
+  const noise = (rng.random() - 0.5) * 5;
 
-  return talent * need + noise;
+  return talent + needBonus + noise;
 }
 
 /**
