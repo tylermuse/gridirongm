@@ -168,7 +168,7 @@ export function DraftBoardCard({
                     <td className="text-center">
                       {scouted
                         ? <span className={`font-bold tabular-nums ${ratingColor(p.development.potential)}`} title="Scouted ceiling">{p.development.potential}</span>
-                        : <button onClick={e => { e.stopPropagation(); onScout(p.id); }} disabled={!affordable || loading} className="text-[10px] font-bold rounded border px-2 py-1 disabled:opacity-40" style={affordable ? { color: 'var(--accent)', background: 'var(--accent-glow)', borderColor: 'var(--accent)' } : { color: '#d97706', borderColor: '#d97706' }}>{affordable ? 'Scout' : '🔒'}</button>}
+                        : <button onClick={e => { e.stopPropagation(); onScout(p.id); setExpanded(p.id); }} disabled={!affordable || loading} className="text-[10px] font-bold rounded border px-2 py-1 disabled:opacity-40" style={affordable ? { color: 'var(--accent)', background: 'var(--accent-glow)', borderColor: 'var(--accent)' } : { color: '#d97706', borderColor: '#d97706' }}>{affordable ? 'Scout' : '🔒'}</button>}
                     </td>
                     <td className="text-right pr-3">
                       {userOnClock
