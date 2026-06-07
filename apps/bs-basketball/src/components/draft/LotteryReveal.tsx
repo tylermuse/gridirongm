@@ -135,6 +135,31 @@ export function LotteryRevealCeremony({
         </div>
       </div>
 
+      {/* Still in the running — teams not yet picked, by seed, + how far they'd
+          jump if they land the next (better) pick. */}
+      {(() => {
+        const nextPick = card.overall - 1;
+        const remaining = cards.filter(c => c.overall < card.overall).sort((a, b) => a.expectedSlot - b.expectedSlot);
+        if (remaining.length === 0) return null;
+        return (
+          <div className="mt-5 text-left max-w-md mx-auto">
+            <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1.5">Still in the running for #{nextPick} ({remaining.length})</div>
+            <div className="flex flex-wrap gap-1.5">
+              {remaining.map(r => {
+                const jump = r.expectedSlot - nextPick;
+                return (
+                  <span key={r.team.id} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] ${r.isUser ? 'ring-1' : ''}`} style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.85)' }}>
+                    <span className="font-bold">{r.team.abbreviation}</span>
+                    <span className="text-white/40">seed {r.expectedSlot}</span>
+                    {jump > 0 && <span className="font-bold" style={{ color: '#34d399' }}>▲{jump}</span>}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Progress dots */}
       <div className="flex flex-wrap justify-center gap-1.5 mt-7">
         {cards.map((c, i) => (
