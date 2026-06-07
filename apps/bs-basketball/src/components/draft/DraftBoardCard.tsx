@@ -7,6 +7,7 @@ import { buildScoutingReport, teamFitFor } from '@/lib/scouting/scoutingReport';
 import { isScouted, scoutsLeft } from '@/lib/scouting';
 import { SCOUTS_PER_DRAFT } from '@/lib/draft';
 import { positionNeeds, TARGET_DEPTH } from '@/lib/draft/needs';
+import { consensus2026Rank } from '@/lib/data/draft2026';
 import { ratingColor } from '@/lib/ui/ratingColor';
 import type { DraftState } from '@/lib/draft';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
@@ -20,6 +21,14 @@ import type { BasketballPlayer, BasketballPosition, BasketballTeam } from '@bs/s
  */
 
 const POSITIONS: (BasketballPosition | 'ALL')[] = ['ALL', 'PG', 'SG', 'SF', 'PF', 'C'];
+
+/** Board ranking score: consensus big-board prospects sit on top in board order
+ *  (so a high-upside teen isn't buried by his low current OVR); everyone else is
+ *  ranked by a potential-weighted projection (it's a draft — ceiling matters). */
+function prospectScore(p: BasketballPlayer): number {
+  const rank = consensus2026Rank(`${p.firstName} ${p.lastName}`);
+  return rank ? 10_000 - rank : p.ratings.overall * 0.35 + p.development.potential * 0.65;
+}
 
 export function DraftBoardCard({
   league, draft, pool, recommendedId, userOnClock, loading, onScout, onDraft,
@@ -43,7 +52,7 @@ export function DraftBoardCard({
   // Projected draft rank = position on the overall board.
   const projRank = useMemo(() => {
     const m = new Map<string, number>();
-    [...pool].sort((a, b) => b.ratings.overall - a.ratings.overall).forEach((p, i) => m.set(p.id, i + 1));
+    [...pool].sort((a, b) => prospectScore(b) - prospectScore(a)).forEach((p, i) => m.set(p.id, i + 1));
     return m;
   }, [pool]);
 
@@ -57,7 +66,7 @@ export function DraftBoardCard({
     if (tab === 'scouted' && !isScouted(draft, p.id)) return false;
     if (search && !`${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  });
+  }).sort((a, b) => prospectScore(b) - prospectScore(a));
 
   const scoutsRemaining = scoutsLeft(draft);
   const scoutPct = Math.round((scoutsRemaining / SCOUTS_PER_DRAFT) * 100);

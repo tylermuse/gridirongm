@@ -217,26 +217,6 @@ export default function DraftPage() {
         )}
       </div>
 
-      {/* Reviewable lottery results: odds + slated seed vs. where teams landed. */}
-      {(() => {
-        const boardCards = buildLotteryBoard(draft, teamById, league.userTeamId);
-        if (boardCards.length === 0) return null;
-        const replayCards = buildLotteryReveal(draft, teamById, league.userTeamId);
-        return (
-          <>
-            {replay && replayCards.length > 0 && (
-              <LotteryRevealCeremony cards={replayCards} onClose={() => setReplay(false)} onStep={setRevealStep} />
-            )}
-            <LotteryBoard cards={boardCards} revealedThrough={replay ? replayCards[revealStep]?.overall : undefined} />
-            {!replay && (
-              <button onClick={() => { setRevealStep(0); setReplay(true); }} className="text-xs font-semibold mb-4 -mt-2 ml-1 hover:underline" style={{ color: 'var(--accent)' }}>
-                ▶ Replay lottery reveal
-              </button>
-            )}
-          </>
-        );
-      })()}
-
       <div className="grid lg:grid-cols-[1.1fr_1fr] gap-6">
         {/* Prospect board (search/filter/scout + inline expansion) */}
         <DraftBoardCard
@@ -256,6 +236,26 @@ export default function DraftPage() {
 
       {/* Your needs + recent picks */}
       <DraftFooter league={league} draft={draft} teamById={teamById} playerById={playerById} />
+
+      {/* Lottery results — odds vs. where the balls fell (kept below the board). */}
+      {(() => {
+        const boardCards = buildLotteryBoard(draft, teamById, league.userTeamId);
+        if (boardCards.length === 0) return null;
+        const replayCards = buildLotteryReveal(draft, teamById, league.userTeamId);
+        return (
+          <div className="mt-6">
+            {replay && replayCards.length > 0 && (
+              <LotteryRevealCeremony cards={replayCards} onClose={() => setReplay(false)} onStep={setRevealStep} />
+            )}
+            <LotteryBoard cards={boardCards} revealedThrough={replay ? replayCards[revealStep]?.overall : undefined} defaultOpen={false} />
+            {!replay && (
+              <button onClick={() => { setRevealStep(0); setReplay(true); }} className="text-xs font-semibold -mt-2 ml-1 hover:underline" style={{ color: 'var(--accent)' }}>
+                ▶ Replay lottery reveal
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Team grades, once the board's complete. */}
       {draft.complete && <DraftRecapInline league={league} />}
