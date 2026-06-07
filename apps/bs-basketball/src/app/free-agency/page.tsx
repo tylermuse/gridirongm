@@ -334,8 +334,12 @@ function BirdBadge({ tier }: { tier: 'full' | 'early' | 'none' }) {
 }
 
 function money(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  return `$${Math.round(n / 1000)}K`;
+  // Format on the magnitude so negatives (over-cap) still convert to millions
+  // and the sign sits outside the $ — e.g. -$35.0M, not $-35039K.
+  const sign = n < 0 ? '-' : '';
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+  return `${sign}$${Math.round(abs / 1000)}K`;
 }
 
 function Loading() {
