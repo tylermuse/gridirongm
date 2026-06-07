@@ -15,6 +15,10 @@ import {
   rosterCount,
   acceptanceProbability,
   bestCompetingOffer,
+  getFaDay,
+  faPhase,
+  faPriceDecay,
+  FA_DAYS,
   MAX_ROSTER,
   type FreeAgentInfo,
   type CounterOffer,
@@ -59,6 +63,9 @@ export default function FreeAgencyPage() {
   const room = userTeamId ? capRoom(league, userTeamId) : 0;
   const count = userTeamId ? rosterCount(league, userTeamId) : 0;
   const rosterFull = count >= MAX_ROSTER;
+  const faDay = getFaDay(league);
+  const phase = faPhase(faDay);
+  const faClosed = faDay >= FA_DAYS;
 
   const pool = allPool.filter(f =>
     (posFilter === 'ALL' || f.player.sportData.position === posFilter) &&
@@ -117,11 +124,8 @@ export default function FreeAgencyPage() {
           </div>
         )}
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="secondary" disabled={store.loading} onClick={() => { void store.simFreeAgency(1); }}>Sim 1 Day</Button>
-          <Button variant="secondary" disabled={store.loading} onClick={() => { void store.simFreeAgency(7); }}>Sim 1 Week</Button>
-          <Button variant="secondary" disabled={store.loading} onClick={() => { void store.simFreeAgency(); }}>
-            {store.loading ? 'Working…' : 'Sim FA'}
-          </Button>
+          <Button variant="secondary" disabled={store.loading || faClosed} onClick={() => { void store.advanceFreeAgency(1); }}>Skip Day →</Button>
+          <Button variant="secondary" disabled={store.loading || faClosed} onClick={() => { void store.advanceFreeAgency(7); }}>Skip Week ⏩</Button>
           {!league.games.some(g => g.status === 'played') && (
             <Button
               variant="primary"
@@ -133,6 +137,19 @@ export default function FreeAgencyPage() {
           )}
         </div>
       </header>
+
+      {/* FA day clock + price-decay phase */}
+      <div className="mb-5">
+        <div className="flex items-center justify-between text-xs mb-1">
+          <span className="font-bold tabular-nums" style={{ color: 'var(--accent)' }}>Day {faDay} of {FA_DAYS}</span>
+          <span className="font-bold" style={{ color: phase.color }}>
+            {phase.label} · prices at {Math.round(faPriceDecay(faDay) * 100)}%{faClosed ? ' · window closed' : ''}
+          </span>
+        </div>
+        <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
+          <div className="h-full rounded-full transition-all" style={{ width: `${(faDay / FA_DAYS) * 100}%`, background: phase.color }} />
+        </div>
+      </div>
 
       {resultMsg && (
         <div

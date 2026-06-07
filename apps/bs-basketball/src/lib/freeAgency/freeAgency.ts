@@ -43,7 +43,33 @@ const LOWBALL_FLOOR = 0.7;
 
 interface LeagueSportData {
   freeAgentLastTeam?: Record<string, TeamId>;
+  /** Current day of the free-agency window (0..FA_DAYS). Drives price decay. */
+  faDay?: number;
   [key: string]: unknown;
+}
+
+/** Length of the free-agency window, in days. */
+export const FA_DAYS = 30;
+
+/** Current FA day (0 = market just opened). */
+export function getFaDay(league: LeagueState): number {
+  const d = (league.sportData as LeagueSportData | undefined)?.faDay ?? 0;
+  return Math.max(0, Math.min(FA_DAYS, d));
+}
+
+/** Market price multiplier as the window ages: 1.0 on day 0 → 0.6 by day 30.
+ *  Unsigned players grow cheaper, so late shopping lands bargains. */
+export function faPriceDecay(day: number): number {
+  const d = Math.max(0, Math.min(FA_DAYS, day));
+  return Math.max(0.6, 1 - d * (0.4 / FA_DAYS));
+}
+
+/** Phase label/color for the current FA day (UI). */
+export function faPhase(day: number): { label: string; color: string } {
+  if (day <= 7) return { label: 'Full Market', color: '#10b981' };
+  if (day <= 15) return { label: 'Cooling', color: '#3b82f6' };
+  if (day <= 23) return { label: 'Dropping', color: '#f59e0b' };
+  return { label: 'Bargain Bin', color: '#dc2626' };
 }
 
 export interface FreeAgentInfo {
@@ -80,12 +106,13 @@ function lastTeamMap(league: LeagueState): Record<string, TeamId> {
 export function freeAgentInfo(league: LeagueState, playerId: PlayerId): FreeAgentInfo | null {
   const player = league.players[playerId] as BasketballPlayer | undefined;
   if (!player) return null;
+  const decay = faPriceDecay(getFaDay(league));
   return {
     player,
-    marketSalary: basketballMarketSalary(player, {
+    marketSalary: Math.round(basketballMarketSalary(player, {
       season: league.currentSeason,
       noiseSeed: `fa-${player.id}-${league.currentSeason}`,
-    }),
+    }) * decay),
     desiredYears: basketballMarketContractYears(player),
     lastTeamId: lastTeamMap(league)[playerId] ?? null,
     birdRights: (player.sportData as { birdRights: 'full' | 'early' | 'none' }).birdRights,
