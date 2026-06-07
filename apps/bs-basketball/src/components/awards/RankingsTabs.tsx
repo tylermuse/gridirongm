@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 /** Segmented strip over power rankings / award race / GM rankings (parity). */
 const TABS = [
   { href: '/power-rankings', emoji: '💪', label: 'Power Rankings' },
-  { href: '/awards', emoji: '🎖️', label: 'Award Race' },
+  { href: '/award-race', emoji: '🎖️', label: 'Award Race' },
   { href: '/gm-rankings', emoji: '🏅', label: 'GM Rankings' },
 ];
 
