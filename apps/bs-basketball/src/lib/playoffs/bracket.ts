@@ -196,10 +196,17 @@ export function simPlayoffDay(league: LeagueState): SimPlayoffDayResult | null {
   const allSeries = [...bracket.rounds.flat(), ...(bracket.playIn ?? [])];
   const seriesById = new Map(allSeries.map(s => [s.id, s]));
 
-  const active = allSeries.filter(
+  const ready = allSeries.filter(
     s => s.teamA && s.teamB && !s.winnerTeamId,
   );
-  if (active.length === 0) return null;
+  if (ready.length === 0) return null;
+  // Only play the lowest active round each day. Round-1 series with fixed seeds
+  // (1–6) have both teams from the start, so without this gate they'd sim
+  // alongside the play-in (round 0) — racing ahead of the series still waiting on
+  // play-in winners. Gating keeps the play-in a true preliminary and starts each
+  // round aligned.
+  const minRound = Math.min(...ready.map(s => s.round));
+  const active = ready.filter(s => s.round === minRound);
 
   const teamById = new Map(league.teams.map(t => [t.id, t as BasketballTeam]));
   const playerMap = league.players as Record<string, BasketballPlayer>;

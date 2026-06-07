@@ -17,6 +17,7 @@ import { simNextDay } from '@/../apps/bs-basketball/src/lib/sim/runSimDay';
 import {
   initializePlayoffs,
   simPlayoffDay,
+  simPlayoffRound,
   getBracket,
   isRegularSeasonComplete,
   seedConferences,
@@ -159,6 +160,19 @@ describe('bracket generation', () => {
     // The 1v8 and 2v7 first-round series got their 7/8 seeds from the play-in.
     const r1 = bracket.rounds[0];
     expect(r1.every(s => s.teamA && s.teamB)).toBe(true);
+  });
+
+  it('Sim Round on the play-in resolves the play-in without starting round 1', () => {
+    const league = initializePlayoffs(playFullRegularSeason('playin-round-gate'));
+    const after = simPlayoffRound(league)!;
+    const bracket = getBracket(after.league)!;
+    // The play-in finished...
+    expect(bracket.playIn!.every(s => s.winnerTeamId)).toBe(true);
+    // ...but no first-round games were played yet (every series 0–0), so the
+    // round starts aligned next time rather than some series racing ahead.
+    for (const s of bracket.rounds[0]) {
+      expect(s.winsA + s.winsB).toBe(0);
+    }
   });
 });
 
