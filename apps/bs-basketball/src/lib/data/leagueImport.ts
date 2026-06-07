@@ -477,6 +477,13 @@ function convertPlayer(
       birdRights: yearsLeft >= 2 ? 'full' : 'none',
       isTwoWay: false,
       shootingHand: 'right',
+      // Prospects are stamped when drafted; rostered imports record how they
+      // arrived — by their real BBGM draft slot if known, else "initial".
+      ...(isProspect
+        ? {}
+        : bbgm.draft && (bbgm.draft.round ?? 0) > 0
+          ? { acquiredVia: 'draft' as const, acquiredSeason: draftYear, draftRound: bbgm.draft.round, draftPick: ((bbgm.draft.round ?? 1) - 1) * 30 + (bbgm.draft.pick ?? 0), draftYear }
+          : { acquiredVia: 'initial' as const, acquiredSeason: season }),
     },
   };
 }

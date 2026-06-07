@@ -119,6 +119,7 @@ export function createNewBasketballLeague(
         ...p,
         rosterSlot: { teamId, bucket: 'active', index: i },
         contract: marketContract(p, season),
+        sportData: { ...p.sportData, acquiredVia: 'initial', acquiredSeason: season },
       };
       rosterPlayers.push(playerWithSlot);
       players[p.id] = playerWithSlot;
