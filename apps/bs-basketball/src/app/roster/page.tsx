@@ -160,17 +160,14 @@ export default function RosterPage() {
   }
 
   function benchStarter(slot: number) {
-    const pos = POSITIONS[slot];
-    const replacement = [...bench]
-      .map(id => playerById[id])
-      .filter(Boolean)
-      .sort((a, b) => {
-        const am = a.sportData.position === pos ? 1 : 0;
-        const bm = b.sportData.position === pos ? 1 : 0;
-        if (am !== bm) return bm - am;
-        return b.ratings.overall - a.ratings.overall;
-      })[0];
-    if (replacement) setStarter(slot, replacement.id);
+    // Move the starter to the bench and leave the slot OPEN — don't auto-promote
+    // a same-position replacement (that's what blocked putting, say, a PF into the
+    // SF slot). Fill the empty slot by dragging a player onto it or clicking Start.
+    const id = starters[slot];
+    if (!id) return;
+    setSaved(false);
+    setStarters(prev => prev.map((x, i) => (i === slot ? '' : x)));
+    setBench(prev => (prev.includes(id) ? prev : [...prev, id]));
   }
 
   function onDropSlot(slot: number, e: React.DragEvent) {
@@ -293,10 +290,12 @@ export default function RosterPage() {
           return (
             <div
               key={pos}
+              draggable={!!p}
+              onDragStart={p ? e => { e.dataTransfer.setData('application/json', JSON.stringify({ id: p.id, from: 'starter', slot })); e.dataTransfer.effectAllowed = 'move'; } : undefined}
               onDragOver={e => { e.preventDefault(); setDragOverSlot(slot); }}
               onDragLeave={() => setDragOverSlot(s => (s === slot ? null : s))}
               onDrop={e => onDropSlot(slot, e)}
-              className={`${ROW_GRID} border-t`}
+              className={`${ROW_GRID} border-t ${p ? 'cursor-grab' : ''}`}
               style={{ ...ROW_COLS, borderColor: 'var(--border)', background: dragOverSlot === slot ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'color-mix(in srgb, var(--accent) 5%, transparent)' }}
             >
               <span className="text-[11px] font-black text-center rounded" style={{ color: POS_COLORS[pos] }} title={`Starting ${pos}`}>{pos}</span>
@@ -315,8 +314,14 @@ export default function RosterPage() {
           const p = playerById[id];
           if (!p) return null;
           return (
-            <div key={id} className={`${ROW_GRID} border-t`} style={{ ...ROW_COLS, borderColor: 'var(--border)' }}>
-              <span className="text-xs opacity-30 text-center cursor-grab select-none" aria-hidden>⠿</span>
+            <div
+              key={id}
+              draggable
+              onDragStart={e => { e.dataTransfer.setData('application/json', JSON.stringify({ id: p.id, from: 'bench', slot: -1 })); e.dataTransfer.effectAllowed = 'move'; }}
+              className={`${ROW_GRID} border-t cursor-grab`}
+              style={{ ...ROW_COLS, borderColor: 'var(--border)' }}
+            >
+              <span className="text-xs opacity-30 text-center select-none" aria-hidden>⠿</span>
               {renderCells(p, false, { id: p.id, from: 'bench', slot: -1 })}
               <ActionCell
                 toggle={{ label: 'Start', onClick: () => startPlayer(id), accent: true }}
