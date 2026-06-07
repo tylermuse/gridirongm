@@ -186,6 +186,15 @@ export interface BasketballPlayerData {
   prevRatings?: BasketballRatings;
   /** Compact year-by-year log appended at each rollover. (Phase 2E-1.) */
   seasonLog?: PlayerSeasonLogEntry[];
+  /** How the player joined his current team (drives the roster "Acquired"
+   *  column). Stamped at the draft / trade / free-agency / initial-roster
+   *  join points; absent on old saves (the UI infers from draft fields). */
+  acquiredVia?: 'draft' | 'free-agency' | 'trade' | 'initial';
+  acquiredSeason?: number;
+  /** Overall pick # / round / class year, set when acquired via the draft. */
+  draftPick?: number;
+  draftRound?: number;
+  draftYear?: number;
 }
 
 export interface PlayerSeasonLogEntry {

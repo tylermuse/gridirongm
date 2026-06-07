@@ -38,7 +38,7 @@ const TARGET_ROSTER = 15;
 const MIN_ROSTER = 13;
 
 const ROW_GRID = 'grid items-center gap-2 px-2 py-1.5 min-w-[52rem]';
-const ROW_COLS = { gridTemplateColumns: '2.75rem 1fr 2.4rem 2.4rem 2.6rem 2.6rem 5.5rem 2.2rem 6.5rem 5rem 5.5rem' };
+const ROW_COLS = { gridTemplateColumns: '2.75rem 1fr 2.4rem 2.4rem 2.6rem 2.6rem 5.5rem 6.5rem 2.2rem 6.5rem 5rem 5.5rem' };
 
 interface MenuState { id: string; x: number; y: number }
 
@@ -273,7 +273,7 @@ export default function RosterPage() {
       {/* Combined table */}
       <div className="rounded-xl border bg-[var(--surface)] overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
         <div className={`${ROW_GRID} text-[10px] uppercase tracking-wide text-[var(--text-sec)] border-b font-semibold`} style={{ ...ROW_COLS, borderColor: 'var(--border)' }}>
-          <span></span><span>Name</span><span>Pos</span><span className="text-right">Age</span><span className="text-right">OVR</span><span className="text-right">POT</span><span className="text-right">Contract</span><span className="text-right">GP</span><span className="text-right">PPG/RPG/APG</span><span className="text-center">Mood</span><span className="text-right">Action</span>
+          <span></span><span>Name</span><span>Pos</span><span className="text-right">Age</span><span className="text-right">OVR</span><span className="text-right">POT</span><span className="text-right">Contract</span><span className="text-right">Acquired</span><span className="text-right">GP</span><span className="text-right">PPG/RPG/APG</span><span className="text-center">Mood</span><span className="text-right">Action</span>
         </div>
 
         {/* Starters */}
@@ -399,6 +399,7 @@ function PlayerCells({
       <span className="text-right tabular-nums text-sm font-bold" style={{ color: ovrColor(p.ratings.overall) }}>{p.ratings.overall}</span>
       <span className="text-right tabular-nums text-sm opacity-70">{p.development.potential}</span>
       <span className="text-right tabular-nums text-xs">{contractLabel(p, season)}</span>
+      <span className="text-right text-xs text-[var(--text-sec)]">{acquiredLabel(p)}</span>
       <span className="text-right tabular-nums text-sm">{gp || '—'}</span>
       <span className="text-right tabular-nums text-xs leading-tight">
         <span className="block">{statLine}</span>
@@ -456,13 +457,26 @@ function MenuItem({ label, onClick, danger }: { label: string; onClick: () => vo
 }
 
 function EmptyStarter() {
-  // 9 cells to match PlayerCells: name, pos, age, ovr, pot, contract, gp, stats, mood.
+  // 10 cells to match PlayerCells: name, pos, age, ovr, pot, contract, acquired, gp, stats, mood.
   return (
     <>
       <span className="text-sm" style={{ color: '#dc2626' }}>— empty —</span>
-      <span /><span /><span /><span /><span /><span /><span /><span />
+      <span /><span /><span /><span /><span /><span /><span /><span /><span />
     </>
   );
+}
+
+/** How the player joined his team (roster "Acquired" column), with a fallback
+ *  for old saves that predate acquisition tracking. */
+function acquiredLabel(p: BasketballPlayer): string {
+  const sd = p.sportData;
+  switch (sd.acquiredVia) {
+    case 'draft': return `Draft #${sd.draftPick ?? '?'}${sd.draftYear ? ` (${sd.draftYear})` : ''}`;
+    case 'free-agency': return `Free Agent${sd.acquiredSeason ? ` (${sd.acquiredSeason})` : ''}`;
+    case 'trade': return `Trade${sd.acquiredSeason ? ` (${sd.acquiredSeason})` : ''}`;
+    case 'initial': return sd.draftPick ? `Draft #${sd.draftPick}` : 'Original';
+    default: return sd.draftPick ? `Draft #${sd.draftPick}` : sd.draftRound ? 'Drafted' : '—';
+  }
 }
 
 // ===========================================================================

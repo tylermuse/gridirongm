@@ -164,6 +164,14 @@ export function makeDraftPick(league: LeagueState, prospectId: PlayerId): League
     ...prospect,
     contract,
     rosterSlot: { teamId: team.id, bucket: 'active', index: team.playerIds.length },
+    sportData: {
+      ...prospect.sportData,
+      acquiredVia: 'draft',
+      acquiredSeason: draft.season,
+      draftPick: slot.overall,
+      draftRound: slot.round,
+      draftYear: draft.season,
+    },
   };
 
   const teams = league.teams.map(t =>

@@ -175,13 +175,15 @@ export function executeTrade(league: LeagueState, sides: TradeSideInput[]): Leag
     return { ...t, playerIds, rosterBuckets };
   });
 
-  // Re-slot every moved player onto its new team.
+  // Re-slot every moved player onto its new team + stamp the acquisition.
   for (const team of teams) {
     team.playerIds.forEach((pid, index) => {
       if (moveTo.has(pid)) {
+        const prev = players[pid] as BasketballPlayer;
         players[pid] = {
-          ...(players[pid] as BasketballPlayer),
+          ...prev,
           rosterSlot: { teamId: team.id, bucket: 'active', index },
+          sportData: { ...prev.sportData, acquiredVia: 'trade', acquiredSeason: league.currentSeason },
         };
       }
     });

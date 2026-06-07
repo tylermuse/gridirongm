@@ -190,10 +190,12 @@ function addToTeam(
 ): LeagueState {
   const team = league.teams.find(t => t.id === teamId)!;
   const players = { ...league.players };
+  const prev = players[playerId] as BasketballPlayer;
   players[playerId] = {
-    ...(players[playerId] as BasketballPlayer),
+    ...prev,
     contract,
     rosterSlot: { teamId, bucket: 'active', index: team.playerIds.length },
+    sportData: { ...prev.sportData, acquiredVia: 'free-agency', acquiredSeason: league.currentSeason },
   };
   const teams = league.teams.map(t =>
     t.id === teamId
