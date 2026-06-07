@@ -73,10 +73,14 @@ export default function ReSignPage() {
                 <li key={p.id} className="flex items-center gap-3 px-3 py-2.5 border-t first:border-t-0" style={{ borderColor: 'var(--border)' }}>
                   <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="sm" />
                   <div className="min-w-0 flex-1">
-                    <div className="font-semibold truncate">{p.firstName} {p.lastName}</div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-semibold truncate">{p.firstName} {p.lastName}</span>
+                      {(() => { const s = reSignStance(p, userTeam, season); return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: s.bg, color: s.fg }}>{s.label}</span>; })()}
+                    </div>
                     <div className="text-xs text-[var(--text-sec)]">
                       {p.sportData.position} · Age {p.age} · {p.ratings.overall} OVR · expiring {money(salary)}/yr
                     </div>
+                    {(() => { const log = lastSeasonLine(p); return log ? <div className="text-[11px] text-[var(--text-sec)] tabular-nums">Last season: {log}</div> : null; })()}
                   </div>
                   <div className="text-right shrink-0 hidden sm:block">
                     <div className="text-[10px] uppercase tracking-wide text-[var(--text-sec)]">asks</div>
@@ -114,6 +118,27 @@ function CapTile({ label, value, color }: { label: string; value: string; color:
       <div className="text-[10px] uppercase tracking-wide opacity-60">{label}</div>
     </div>
   );
+}
+
+/** Previous (just-completed) season's box-line, from the player's season log. */
+function lastSeasonLine(p: BasketballPlayer): string | null {
+  const log = p.sportData.seasonLog;
+  const last = log && log.length ? log[log.length - 1] : null;
+  if (!last || !last.gamesPlayed) return null;
+  return `${last.ppg} PPG · ${last.rpg} RPG · ${last.apg} APG · ${last.gamesPlayed} GP`;
+}
+
+/** Deterministic re-sign posture — surfaces who's reluctant before you make an
+ *  offer. Players on a struggling team are likelier to test the market. */
+function reSignStance(p: BasketballPlayer, team: BasketballTeam, season: number): { label: string; bg: string; fg: string } {
+  let h = 2166136261;
+  const key = `${p.id}-${season}`;
+  for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
+  const roll = (h >>> 0) % 100;
+  const teamGood = team.record.wins >= 41;
+  if (!teamGood && roll < 35) return { label: 'Wants to test FA', bg: 'color-mix(in srgb,#d97706 16%,transparent)', fg: '#b45309' };
+  if (teamGood && roll < 55) return { label: 'Eager to stay', bg: 'color-mix(in srgb,#10b981 16%,transparent)', fg: '#059669' };
+  return { label: 'Will listen', bg: 'var(--surface-2)', fg: 'var(--text-sec)' };
 }
 
 function money(n: number): string {
