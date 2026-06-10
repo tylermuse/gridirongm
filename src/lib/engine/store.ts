@@ -9214,53 +9214,157 @@ export const useGameStore = create<GameStore>()(
         // /post-draft-cuts flow (or the roster page) and optionally demote
         // to PS instead of outright releasing — previous behavior silently
         // deleted the lowest-OVR signings which was tofftanaut's 4/19 report.
+        //
+        // Vector 2 fix (bige08676 2032-save rollover hang; diagnostic msgs
+        // 1512388988659564705 + 1512516309475397744): this used to call the
+        // per-team autoCutToRosterLimit(t.id) action once per team, and EACH
+        // call re-scanned + rebuilt the whole-league players[] array (read
+        // filter + write map + salary filter), so the autocut phase cost was
+        // O(teams × players). players[] grows every season because retired
+        // records are never purged, so the per-tick cost climbed year over
+        // year until it crossed the rollover watchdog budget (bige's sliding
+        // tail-team hang + the 80+ roster-size anomalies). This bulk pass
+        // builds a player index ONCE and applies all cuts in a SINGLE
+        // write-back — O(players + Σroster) total instead of O(teams ×
+        // players). The public autoCutToRosterLimit action is unchanged (the
+        // roster page + fresh-league init still use it); only the rollover
+        // hot path is rerouted through this inline bulk variant.
         setSubstep("commit:autocut:start");
         const userId = get().userTeamId;
-        let autocutIdx = 0;
+        const autocutState = get();
+        const acRosterLimitOn =
+          (autocutState.leagueSettings ?? DEFAULT_LEAGUE_SETTINGS).rosterLimitEnabled !== false;
+        const AC_ROSTER_CAP = 53;
         try {
-          for (const t of get().teams) {
-            const tickAbbr = t.abbreviation ?? t.id;
-            setSubstep(`commit:autocut:tick:${autocutIdx}:${tickAbbr}`);
-            autocutIdx++;
-            if (t.id !== userId) {
-              // Per-tick timing + roster-size capture (bige08676's sliding
-              // tail-team hang). t.roster is the active-53 list, so its length
-              // is the iteration-entry roster size without a re-filter. If the
-              // cumulative-cost hypothesis holds these deltas climb across the
-              // loop; a single multi-second outlier instead means one bad team.
+          if (acRosterLimitOn) {
+            const playersById = new Map(autocutState.players.map(p => [p.id, p]));
+            const cutsByTeam = new Map<string, string[]>();
+            const allCutIds = new Set<string>();
+            let autocutIdx = 0;
+
+            // Pass 1 — compute cuts per team (O(roster) via the index). No
+            // store write here, so this loop cannot hit the Supabase auth
+            // lock-steal (that only fires from set()); the swallow now wraps
+            // the single write-back below.
+            for (const t of autocutState.teams) {
+              const tickAbbr = t.abbreviation ?? t.id;
+              setSubstep(`commit:autocut:tick:${autocutIdx}:${tickAbbr}`);
+              autocutIdx++;
+              if (t.id === userId) continue;
+
               const tickStart = typeof performance !== 'undefined' ? performance.now() : 0;
               const tickRosterSize = t.roster?.length ?? 0;
-              try {
-                get().autoCutToRosterLimit(t.id);
+              recordTickRosterSize(t.id, tickAbbr, tickRosterSize);
+
+              // Only the active 53 count toward the cap; PS players live on
+              // team.practiceSquad and must not be cut. Read via the index so
+              // this is O(roster), not O(all players).
+              const seen = new Set<string>();
+              const teamPlayers: Player[] = [];
+              for (const id of t.roster) {
+                if (seen.has(id)) continue;
+                seen.add(id);
+                const p = playersById.get(id);
+                if (p && !p.retired) teamPlayers.push(p);
+              }
+              if (teamPlayers.length <= AC_ROSTER_CAP) {
                 if (typeof performance !== 'undefined') {
                   recordTickTiming(t.id, tickAbbr, performance.now() - tickStart);
                 }
-                recordTickRosterSize(t.id, tickAbbr, tickRosterSize);
+                continue;
+              }
+
+              // Sort by OVR ascending but PROTECT position minimums — never
+              // cut a player if their position would drop below
+              // ROSTER_LIMITS.min (otherwise backup RBs get cut and RB1 ends
+              // up with 100% of carries → 2k+ rushing-yard seasons).
+              const posCount: Record<string, number> = {};
+              for (const p of teamPlayers) posCount[p.position] = (posCount[p.position] ?? 0) + 1;
+              const sorted = [...teamPlayers].sort((a, b) => a.ratings.overall - b.ratings.overall);
+              const cuts: string[] = [];
+              const needToCut = teamPlayers.length - AC_ROSTER_CAP;
+              for (const p of sorted) {
+                if (cuts.length >= needToCut) break;
+                const posMin = ROSTER_LIMITS[p.position]?.min ?? 1;
+                if ((posCount[p.position] ?? 0) <= posMin) continue; // protect position minimum
+                cuts.push(p.id);
+                posCount[p.position] = (posCount[p.position] ?? 1) - 1;
+              }
+              if (cuts.length > 0) {
+                cutsByTeam.set(t.id, cuts);
+                for (const id of cuts) allCutIds.add(id);
+              }
+              if (typeof performance !== 'undefined') {
+                recordTickTiming(t.id, tickAbbr, performance.now() - tickStart);
+              }
+            }
+
+            // Pass 2 — apply every team's cuts in ONE write-back. This is the
+            // single O(players) pass that replaces the former O(teams ×
+            // players) churn.
+            if (allCutIds.size > 0) {
+              setSubstep("commit:autocut:writeback");
+              const updatedPlayers = autocutState.players.map(p => {
+                if (!allCutIds.has(p.id)) return p;
+                return {
+                  ...p,
+                  teamId: null,
+                  onIR: false,
+                  contract: {
+                    salary: p.contract.salary,
+                    yearsLeft: p.contract.yearsLeft,
+                    guaranteed: p.contract.guaranteed,
+                    totalYears: p.contract.totalYears,
+                  },
+                };
+              });
+              const updatedTeams = autocutState.teams.map(t => {
+                const cuts = cutsByTeam.get(t.id);
+                if (!cuts || cuts.length === 0) return t;
+                const cutSet = new Set(cuts);
+                const salaryFreed = cuts.reduce(
+                  (s, id) => s + (playersById.get(id)?.contract.salary ?? 0),
+                  0,
+                );
+                const chart = POSITIONS.reduce<Record<Position, string[]>>((acc, pos) => {
+                  acc[pos] = (t.depthChart[pos] ?? []).filter(id => !cutSet.has(id));
+                  return acc;
+                }, {} as Record<Position, string[]>);
+                return {
+                  ...t,
+                  roster: t.roster.filter(id => !cutSet.has(id)),
+                  totalPayroll: Math.max(0, t.totalPayroll - salaryFreed),
+                  depthChart: chart,
+                };
+              });
+              try {
+                set({
+                  players: updatedPlayers,
+                  teams: updatedTeams,
+                  freeAgents: [...autocutState.freeAgents, ...allCutIds],
+                });
               } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
                 const isLockSteal =
                   e instanceof Error && e.name === "AbortError" && /steal/i.test(msg);
-                if (isLockSteal) {
-                  // bige08676 5/30 23:42-23:43 UTC dumps (msgs 1510428338920099993
-                  // + 1510428509418422343): Supabase auth lock-steal landed inside
-                  // the per-team autocut loop. PR #59 caught it at the window
-                  // listener but the unwind left the loop wedged at tick:31:WAS.
-                  // Swallow ONLY the lock-steal so the loop completes; the window
-                  // listener still records gg-rollover-recoverable-error for
-                  // telemetry. Any other throw still surfaces below.
-                  console.warn(
-                    `[startNewSeason] autocut tick ${autocutIdx - 1} (${t.abbreviation ?? t.id}) hit recoverable lock-steal; continuing`,
-                    msg,
-                  );
-                  continue;
-                }
-                throw e;
+                if (!isLockSteal) throw e;
+                // bige08676 5/30 23:42-23:43 UTC dumps (msgs 1510428338920099993
+                // + 1510428509418422343): Supabase auth lock-steal can land on
+                // the rollover write. PR #59 caught it at the window listener;
+                // swallow ONLY the lock-steal here so the season still advances
+                // (the autocut is best-effort and re-runs next rollover). The
+                // window listener still records gg-rollover-recoverable-error.
+                // Any other throw still surfaces.
+                console.warn(
+                  `[startNewSeason] autocut write-back hit recoverable lock-steal; skipping cuts this rollover`,
+                  msg,
+                );
               }
             }
           }
         } finally {
-          // Advance the substep even if a tick aborted mid-iteration so
-          // /diagnostics accurately reflects "made it past autocut".
+          // Advance the substep even if the write aborted so /diagnostics
+          // accurately reflects "made it past autocut".
           setSubstep("commit:autocut:end");
         }
         } catch (error) {
