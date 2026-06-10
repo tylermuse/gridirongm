@@ -99,10 +99,31 @@ type SubPosClassifiable = {
   id: string;
   position: Position;
   subPosition?: SubPosition;
+  firstName?: string;
+  lastName?: string;
   ratings: {
     passRush: number; speed: number; tackling: number; coverage: number;
     strength: number; agility: number; blocking: number; awareness: number;
   };
+};
+
+/** Reporter-confirmed real-world OL sub-positions for IMPORTED NFL rosters.
+ *  The FBGM source only carries the coarse "OL" group, and the ratings
+ *  heuristic below cannot recover a lineman's true OT/OG/C identity from
+ *  ratings alone — a slow, strong, smart center reads as interior, and a
+ *  developmental tackle reads as a backup guard. classifyTeamSubPositions
+ *  pins these names first (when useNameOverrides is set) and classifies only
+ *  the remaining linemen, so a known center can't be re-labeled a tackle.
+ *  Keyed by "First Last" (team in the comment for reference — real NFL OL
+ *  names are unique). Extend from tofftanaut's multi-team audit (#bug-reports
+ *  msgs 1512275710645899435 / 1512275801524146327 / 1512275857933336627 /
+ *  1512275900576694522). Only applied to imported/loaded real rosters, never
+ *  to synthetically generated players. */
+export const OL_SUBPOSITION_OVERRIDES: Record<string, 'OT' | 'OG' | 'C'> = {
+  'Aaron Brewer': 'C',       // MIA
+  'Jonah Savaiinaea': 'OG',  // MIA
+  'DJ Campbell': 'OG',       // MIA
+  'Patrick Paul': 'OT',      // MIA
 };
 
 /** Authoritative sub-position assignment for a whole team's roster.
@@ -119,7 +140,10 @@ type SubPosClassifiable = {
  *    LB  → ~55% OLB, rest MLB
  *    S   → ~50% FS, rest SS
  *  Positions with a 1:1 broad→detailed mapping pass straight through. */
-export function classifyTeamSubPositions(players: SubPosClassifiable[]): Map<string, SubPosition> {
+export function classifyTeamSubPositions(
+  players: SubPosClassifiable[],
+  useNameOverrides = false,
+): Map<string, SubPosition> {
   const map = new Map<string, SubPosition>();
   const byPos = (pos: Position) => players.filter(p => p.position === pos);
 
@@ -143,20 +167,37 @@ export function classifyTeamSubPositions(players: SubPosClassifiable[]): Map<str
   }
 
   // OL: rank by athleticism → OT; carve the smartest interior pivot as C; rest OG.
+  // Reporter-confirmed real-world labels (OL_SUBPOSITION_OVERRIDES) are pinned
+  // first and removed from the proportional split so a known C/OG can't be
+  // re-labeled OT by the heuristic. With useNameOverrides=false the pinned set
+  // is empty and this block is identical to the prior pure-heuristic behavior.
   {
     const ol = byPos('OL');
     const n = ol.length;
     if (n > 0) {
+      const pinned = new Map<string, 'OT' | 'OG' | 'C'>();
+      if (useNameOverrides) {
+        for (const p of ol) {
+          const key = `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim();
+          const ov = OL_SUBPOSITION_OVERRIDES[key];
+          if (ov) { map.set(p.id, ov); pinned.set(p.id, ov); }
+        }
+      }
+      let pinnedOT = 0, pinnedC = 0;
+      for (const v of pinned.values()) { if (v === 'OT') pinnedOT++; else if (v === 'C') pinnedC++; }
+
+      const pool = ol.filter(p => !pinned.has(p.id));
       const otScore = (p: SubPosClassifiable) =>
         p.ratings.agility + p.ratings.speed + p.ratings.blocking * 0.5;
-      const sorted = [...ol].sort((a, b) => otScore(b) - otScore(a));
-      // ~45% OT, but always leave room for at least one C + the OGs.
-      let otCount = Math.round(n * 0.45);
-      otCount = Math.max(n >= 4 ? 2 : 0, Math.min(otCount, Math.max(0, n - 2)));
+      const sorted = [...pool].sort((a, b) => otScore(b) - otScore(a));
+      // ~45% OT across the whole group (less any pinned OTs), but always leave
+      // room for at least one C + the OGs among the unpinned pool.
+      let otCount = Math.round(n * 0.45) - pinnedOT;
+      otCount = Math.max(n >= 4 ? Math.max(0, 2 - pinnedOT) : 0, Math.min(otCount, Math.max(0, pool.length - 2)));
       const tackles = sorted.slice(0, otCount);
       const interior = sorted.slice(otCount);
       for (const p of tackles) map.set(p.id, 'OT');
-      const cCount = n >= 12 ? 2 : n >= 4 ? 1 : 0;
+      const cCount = Math.max(0, (n >= 12 ? 2 : n >= 4 ? 1 : 0) - pinnedC);
       const centers = [...interior]
         .sort((a, b) =>
           (b.ratings.awareness + b.ratings.blocking - b.ratings.agility) -
@@ -220,8 +261,11 @@ export function classifyTeamSubPositions(players: SubPosClassifiable[]): Map<str
 /** Apply classifyTeamSubPositions() in place — sets player.subPosition on every
  *  player in the given roster. Idempotent; safe to re-run after any roster
  *  mutation (trade/sign/release) or at load time. */
-export function backfillTeamSubPositions(players: SubPosClassifiable[]): void {
-  const map = classifyTeamSubPositions(players);
+export function backfillTeamSubPositions(
+  players: SubPosClassifiable[],
+  useNameOverrides = false,
+): void {
+  const map = classifyTeamSubPositions(players, useNameOverrides);
   for (const p of players) {
     const sub = map.get(p.id);
     if (sub) p.subPosition = sub;

@@ -2561,7 +2561,9 @@ export const useGameStore = create<GameStore>()(
           // aren't on a team).
           for (const team of imported.teams) {
             const teamRoster = imported.players.filter(p => p.teamId === team.id);
-            backfillTeamSubPositions(teamRoster);
+            // Imported real roster — honor the curated OL sub-position overrides
+            // (FBGM source only carries coarse "OL"; tofftanaut #bug-reports).
+            backfillTeamSubPositions(teamRoster, true);
             const teamOL = teamRoster.filter(p => p.position === 'OL');
             const slotMap = assignOlSlots(teamOL);
             for (const p of teamOL) {
@@ -10710,7 +10712,9 @@ export const useGameStore = create<GameStore>()(
             }
             for (const team of teams34) {
               const roster = byTeam.get(team.id);
-              if (roster && roster.length > 0) backfillTeamSubPositions(roster);
+              // Load-time reclassify — honor curated OL overrides so imported
+              // saves migrating through this pass pick up the real labels.
+              if (roster && roster.length > 0) backfillTeamSubPositions(roster, true);
             }
             for (const p of orphans) {
               (p as Record<string, unknown>).subPosition =
