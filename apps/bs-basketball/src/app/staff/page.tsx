@@ -121,11 +121,18 @@ export default function StaffPage() {
         <div className="pb-2">
           {pool.map(c => {
             const sc = coachScheme(c);
+            // Same roster-fit breakdown the current-coach card shows, but
+            // computed against THIS candidate's scheme so the user can see
+            // how their roster would fit before hiring.
+            const fc = roster.reduce((acc, p) => { const t = schemeFit(p, sc).tier; acc[t] = (acc[t] ?? 0) + 1; return acc; }, {} as Record<string, number>);
             return (
               <div key={c.id} className="flex flex-wrap items-center gap-3 px-4 py-2 border-t" style={{ borderColor: 'var(--border)' }}>
                 <div className="min-w-0">
                   <div className="font-semibold truncate flex items-center gap-1.5">{c.firstName} {c.lastName} <Chip tone="blue">{SCHEME_LABELS[sc]}</Chip></div>
                   <div className="text-xs text-[var(--text-sec)]">Age {c.age} · {coachOverall(c)} OVR</div>
+                  <div className="text-[11px] text-[var(--text-sec)] mt-0.5">
+                    Roster fit: <span style={{ color: '#10b981' }}>{fc.great ?? 0} great</span> · <span style={{ color: '#84cc16' }}>{fc.good ?? 0} good</span> · {fc.neutral ?? 0} neutral · <span style={{ color: '#dc2626' }}>{fc.poor ?? 0} poor</span>
+                  </div>
                 </div>
                 <div className="hidden sm:flex gap-2 text-[10px] text-[var(--text-sec)]">
                   <span>OFF {c.ratings.offense}</span>

@@ -17,6 +17,7 @@ const FILTERS: { key: TransactionKind | 'all'; label: string }[] = [
   { key: 'signing', label: 'Signings' },
   { key: 'release', label: 'Releases' },
   { key: 'draft', label: 'Draft' },
+  { key: 'pick', label: 'Picks' },
 ];
 
 const ICON: Record<TransactionKind, string> = {
@@ -24,6 +25,7 @@ const ICON: Record<TransactionKind, string> = {
   signing: '✍️',
   release: '✂️',
   draft: '🎟️',
+  pick: '🔀',
 };
 
 export default function TransactionsPage() {

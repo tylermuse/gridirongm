@@ -61,7 +61,7 @@ import {
 } from '../draft';
 import { pickKey, currentOwner } from '../trade/picks';
 import { basketballPickTradeValue, basketballTradeValue } from '@bs/sport-basketball';
-import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, runAiFreeAgency, FA_DAYS, type Offer, type OfferResult, type Negotiation } from '../freeAgency';
+import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, runAiFreeAgency, isSeasonUnderway, FA_DAYS, type Offer, type OfferResult, type Negotiation } from '../freeAgency';
 import { applyRelease } from '../roster/release';
 import { playThroughInjury as playThroughInjuryState } from '../injuries';
 import { extensionMarket, extensionAccepted, buildExtension } from '../roster/extension';
@@ -199,6 +199,9 @@ interface LeagueStore {
   simFreeAgency: (rounds?: number) => Promise<number>;
   /** Advance the FA day clock by `days` (price decay applies) + run CPU FA. */
   advanceFreeAgency: (days: number) => Promise<number>;
+  /** Tip off the regular season from the FA window: closes free agency and marks
+   *  the season underway WITHOUT simming Day 1 (the first game stays unplayed). */
+  beginRegularSeason: () => Promise<boolean>;
 
   /** Negotiate a free-agent offer: signs if it clears the bar, otherwise
    *  returns the agent's counter (no state change). */
@@ -330,6 +333,26 @@ function yieldToPaint(): Promise<void> {
     if (typeof window === 'undefined') { resolve(); return; }
     window.setTimeout(resolve, 0);
   });
+}
+
+/**
+ * After the user signs a free agent during the preseason window, the market
+ * should move: advance the FA clock one day and run a round of CPU free agency
+ * so rivals compete for (and sometimes sign away) the remaining pool. No-op once
+ * the regular season is underway (mid-season signings don't burn an offseason
+ * day). Returns the updated league and how many league-wide moves happened.
+ */
+function advanceMarketAfterSigning(league: BasketballLeagueState): { league: BasketballLeagueState; aiSignings: number; day: number } {
+  const sd = league.sportData as { faDay?: number };
+  const day = sd.faDay ?? 0;
+  // Only during the open preseason FA window.
+  if (isSeasonUnderway(league) || league.games.some(g => g.status === 'played') || day >= FA_DAYS) {
+    return { league, aiSignings: 0, day };
+  }
+  const newDay = Math.min(FA_DAYS, day + 1);
+  const withDay = { ...league, sportData: { ...(league.sportData as object), faDay: newDay } } as BasketballLeagueState;
+  const { league: after, signings } = runAiFreeAgency(withDay, { rounds: 1 });
+  return { league: after as BasketballLeagueState, aiSignings: signings.length, day: newDay };
 }
 
 export const useLeagueStore = create<LeagueStore>((set, get) => ({
@@ -949,6 +972,27 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
   },
 
+  async beginRegularSeason() {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return false; }
+    set({ loading: true, error: null });
+    try {
+      // Close the FA window and mark the season underway. We deliberately do NOT
+      // sim Day 1 — the user lands on an unplayed Day 1 to set their lineup.
+      const league = {
+        ...current,
+        sportData: { ...(current.sportData as object), faDay: FA_DAYS, seasonStarted: true },
+      } as BasketballLeagueState;
+      await saveLeague(league);
+      set({ league, loading: false, simToast: { text: 'Season tipped off — Day 1 is live.' } });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] beginRegularSeason failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
   async signFreeAgent(playerId, offer, releaseId) {
     const current = get().league;
     if (!current) {
@@ -968,11 +1012,19 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         releaseId as Parameters<typeof resolveUserOffer>[3],
       );
       if (result.outcome !== 'rejected') {
-        await saveLeague(result.league);
-        set({ league: result.league, loading: false });
-      } else {
-        set({ loading: false });
+        // A signing moves the market: advance a day + let rivals respond.
+        const moved = advanceMarketAfterSigning(result.league as BasketballLeagueState);
+        await saveLeague(moved.league);
+        set({
+          league: moved.league,
+          loading: false,
+          ...(moved.aiSignings > 0
+            ? { simToast: { text: `Day ${moved.day} of ${FA_DAYS} · ${moved.aiSignings} rival signing${moved.aiSignings === 1 ? '' : 's'}` } }
+            : {}),
+        });
+        return { ...result, league: moved.league };
       }
+      set({ loading: false });
       return result;
     } catch (err) {
       console.error('[bs-hoops] signFreeAgent failed:', err);
@@ -994,11 +1046,18 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         releaseId as Parameters<typeof negotiateOffer>[3],
       );
       if (neg.kind === 'resolved' && neg.result.outcome !== 'rejected') {
-        await saveLeague(neg.result.league);
-        set({ league: neg.result.league, loading: false });
-      } else {
-        set({ loading: false });
+        const moved = advanceMarketAfterSigning(neg.result.league as BasketballLeagueState);
+        await saveLeague(moved.league);
+        set({
+          league: moved.league,
+          loading: false,
+          ...(moved.aiSignings > 0
+            ? { simToast: { text: `Day ${moved.day} of ${FA_DAYS} · ${moved.aiSignings} rival signing${moved.aiSignings === 1 ? '' : 's'}` } }
+            : {}),
+        });
+        return { ...neg, result: { ...neg.result, league: moved.league } };
       }
+      set({ loading: false });
       return neg;
     } catch (err) {
       console.error('[bs-hoops] negotiateFreeAgent failed:', err);

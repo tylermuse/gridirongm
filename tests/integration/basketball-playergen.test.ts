@@ -181,13 +181,14 @@ describe('basketball draft class generator', () => {
     const total = allProspects.length; // 1800
     const ovrs = allProspects.map(p => p.ratings.overall);
 
-    // Rookies are NOT finished products: essentially none enter as 80-OVR stars,
-    // and the class is dominated by sub-65 raw prospects. (Stardom lives in
-    // potential, asserted below — this is the regression guard for the bug where
-    // second-rounders generated as 80-OVR veterans.)
+    // Top picks ARE rotation/star caliber (BUG-10: a #1 generates ~75, fringe
+    // cases reach the high-70s), but they're a small minority — the class is
+    // still dominated by sub-65 raw prospects further down the board. This guards
+    // the original bug where second-rounders generated as 80-OVR veterans: with
+    // R2 running 62→50, finished stars can ONLY come from the very top of round 1.
     const finishedStars = ovrs.filter(o => o >= 78).length;
     const raw = ovrs.filter(o => o < 65).length;
-    expect(finishedStars).toBeLessThan(total * 0.01);
+    expect(finishedStars).toBeLessThan(total * 0.05);
     expect(raw).toBeGreaterThan(total * 0.4);
 
     // Upside is concentrated at the top of the board: a meaningful minority

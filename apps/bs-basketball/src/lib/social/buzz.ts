@@ -59,7 +59,7 @@ function pick<T>(arr: T[], seed: number): T {
 }
 
 /** Persona pools weighted to the event flavor. */
-const KIND_POOL: Record<FeedKind | 'trade' | 'signing' | 'release' | 'draft', PersonaKind[]> = {
+const KIND_POOL: Record<FeedKind | 'trade' | 'signing' | 'release' | 'draft' | 'pick', PersonaKind[]> = {
   big_game: ['homer', 'beat', 'casual'],
   career_night: ['beat', 'analyst', 'homer'],
   streak: ['homer', 'casual', 'analyst'],
@@ -73,6 +73,7 @@ const KIND_POOL: Record<FeedKind | 'trade' | 'signing' | 'release' | 'draft', Pe
   signing: ['insider', 'homer', 'casual'],
   release: ['insider', 'hater', 'casual'],
   draft: ['insider', 'analyst', 'beat'],
+  pick: ['insider', 'analyst', 'beat'],
 };
 
 function personaFor(poolKinds: PersonaKind[], seed: number): Persona {

@@ -292,7 +292,13 @@ interface CollectedAssets {
   totalValue: number;
   /** Salary-only sum in dollars (cap hits for this season). Cap matching. */
   salary: number;
+  /** Value (PTS) attributable to proven veterans (age ≥ 28). Lets a win-now
+   *  team pay a premium specifically for win-ready talent. */
+  vetValue: number;
 }
+
+/** Age at/after which a contributor counts as a "proven vet" for win-now teams. */
+const VET_AGE = 28;
 
 function collectOutgoing(
   side: BasketballTradeSide,
@@ -302,17 +308,20 @@ function collectOutgoing(
 ): CollectedAssets {
   let totalValue = 0;
   let salary = 0;
+  let vetValue = 0;
   for (const id of side.playersSent) {
     const p = allPlayers.get(id);
     if (!p) continue;
-    totalValue += basketballTradeValue(p, { season });
+    const v = basketballTradeValue(p, { season });
+    totalValue += v;
+    if (p.age >= VET_AGE) vetValue += v;
     salary += currentSeasonSalary(p, season);
   }
   for (const pick of side.picksSent) {
     totalValue += pickValueFn(pick); // already in PTS
   }
   // Cash is a value transfer only (not cap-charged in v1); treated as PTS-neutral.
-  return { totalValue, salary };
+  return { totalValue, salary, vetValue };
 }
 
 /** Players flowing INTO this side — the union of every other side's outgoing
@@ -349,8 +358,12 @@ function dispositionTolerance(
     case 'Rebuilding':
     case 'Developing':
       return swing; // friendlier to taking on assets/upside
-    case 'Win Now':
-      return swing * 0.6;
+    case 'Win Now': {
+      // Win-now teams pay a premium specifically for proven veterans — the more
+      // win-ready talent coming back, the more "loss" they'll stomach for it.
+      const vetPremium = Math.min(500, incoming.vetValue * 0.18);
+      return swing * 0.6 + vetPremium;
+    }
     default:
       return 0;
   }
@@ -366,6 +379,7 @@ function collectIncomingForSide(
 ): CollectedAssets {
   let totalValue = 0;
   let salary = 0;
+  let vetValue = 0;
   for (const other of proposal.sides) {
     if (other.teamId === side.teamId) continue;
     const out = collectOutgoing(other, allPlayers, season, pickValueFn);
@@ -373,10 +387,12 @@ function collectIncomingForSide(
     // multi-team trades. For 2-team trades this is exact. For 3+ team
     // trades, the caller can refine by setting up the sides so flow is
     // implicit; v2 should allow explicit per-side recipients.
-    totalValue += out.totalValue / Math.max(1, proposal.sides.length - 1);
-    salary += out.salary / Math.max(1, proposal.sides.length - 1);
+    const share = Math.max(1, proposal.sides.length - 1);
+    totalValue += out.totalValue / share;
+    salary += out.salary / share;
+    vetValue += out.vetValue / share;
   }
-  return { totalValue, salary };
+  return { totalValue, salary, vetValue };
 }
 
 function currentSeasonSalary(player: BasketballPlayer, season: number): number {

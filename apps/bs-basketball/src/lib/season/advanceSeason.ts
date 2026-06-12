@@ -37,7 +37,7 @@ import {
   type BasketballPosition,
   type BasketballTeam,
 } from '@bs/sport-basketball';
-import type { BaseLeagueState, PlayerId } from '@bs/core/adapter';
+import type { BaseLeagueState, PlayerId, TeamId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { getBracket } from '../playoffs';
 import { marketContract, hasContractForSeason } from '../league/contracts';
@@ -46,6 +46,8 @@ import { setupDraft, getDraft, autoPickUntilUser } from '../draft';
 import { computeSeasonAwards } from '../awards';
 import { buildSeasonHistoryEntry } from '../history';
 import { applySeasonApproval } from '../approval';
+import { resolveProtectedPicks, describeConveyance, pickKey, type PickProtection } from '../trade';
+import { appendTransaction } from '../transactions';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -200,7 +202,28 @@ export function enterOffseason(input: LeagueState): LeagueState {
 
   // Draft order is computed off the just-finished standings + playoff field.
   const interim: LeagueState = { ...league, players, teams };
-  const draft = setupDraft(interim, nextSeason, poolIds);
+  let draft = setupDraft(interim, nextSeason, poolIds);
+
+  // Settle protected-pick obligations now that the order is known: protected
+  // picks revert to their original team (and roll forward / expire), others
+  // convey to their creditor. Then re-slot the draft owners from the result.
+  const sportIn = league.sportData as LeagueSportData & {
+    pickOwnership?: Record<string, TeamId>;
+    pickProtections?: Record<string, PickProtection>;
+  };
+  const conv = resolveProtectedPicks(
+    sportIn.pickOwnership ?? {},
+    sportIn.pickProtections ?? {},
+    draft.picks,
+    nextSeason,
+  );
+  draft = {
+    ...draft,
+    picks: draft.picks.map(p => {
+      const orig = p.originalTeamId ?? p.teamId;
+      return { ...p, teamId: conv.ownership[pickKey(nextSeason, p.round, orig)] ?? orig };
+    }),
+  };
 
   // Flag the user's expiring players (no deal for next season) for the forced
   // re-sign step. Any they don't re-sign walk to free agency at season start.
@@ -213,12 +236,30 @@ export function enterOffseason(input: LeagueState): LeagueState {
     }
   }
 
-  return {
+  let result: LeagueState = {
     ...interim,
     currentPhase: 'offseason',
     seasonHistory: { ...league.seasonHistory, [league.currentSeason]: historyEntry },
-    sportData: { ...(league.sportData as LeagueSportData), draft, pendingResign },
+    sportData: {
+      ...(league.sportData as LeagueSportData),
+      draft,
+      pendingResign,
+      pickOwnership: conv.ownership,
+      pickProtections: conv.protections,
+    },
   };
+  // Surface each conveyance in League News so the user sees protections resolve.
+  for (const c of conv.conveyances) {
+    const t = describeConveyance(result, c);
+    result = appendTransaction(result, {
+      kind: 'pick',
+      season: nextSeason,
+      teamIds: t.teamIds,
+      summary: t.summary,
+      detail: t.detail,
+    });
+  }
+  return result;
 }
 
 // ===========================================================================
@@ -325,18 +366,33 @@ export function startNextSeason(league: LeagueState): LeagueState {
       ids.push(filler.id);
     }
 
-    // Guarantee at least one player at every position (belt-and-suspenders for
-    // rosters that arrived here already missing one). Only fills while there's
-    // room under the cap — a full roster missing a position is repaired on load.
+    // Guarantee at least one player at every position. If there's room, just add
+    // a filler; if the roster is already full but a position is uncovered, free
+    // the weakest player from the most-overstocked position to make room (he
+    // re-enters the FA pool below, since freeAgentIds is rebuilt from rosterSlot).
     const posAfter: Record<BasketballPosition, number> = { PG: 0, SG: 0, SF: 0, PF: 0, C: 0 };
     for (const id of ids) { const p = posOf(id); if (p) posAfter[p]++; }
     for (const pos of ROSTER_FILL_POSITIONS) {
-      while (posAfter[pos] < 1 && ids.length < TARGET_ROSTER) {
-        const filler = generateBasketballPlayer({ position: pos, targetOverall: 62, age: 22 });
-        players[filler.id] = filler;
-        ids.push(filler.id);
-        posAfter[pos]++;
+      if (posAfter[pos] >= 1) continue;
+      if (ids.length >= TARGET_ROSTER) {
+        let surplus: BasketballPosition | null = null;
+        for (const q of ROSTER_FILL_POSITIONS) {
+          if (posAfter[q] > 1 && (surplus === null || posAfter[q] > posAfter[surplus])) surplus = q;
+        }
+        if (!surplus) continue; // nothing to swap (shouldn't happen at 15 with a gap)
+        const cut = ids
+          .filter(id => posOf(id) === surplus)
+          .sort((a, b) => players[a].ratings.overall - players[b].ratings.overall)[0];
+        if (!cut) continue;
+        players[cut] = { ...players[cut], rosterSlot: null };
+        freeAgentLastTeam[cut] = t.id;
+        ids = ids.filter(id => id !== cut);
+        posAfter[surplus]--;
       }
+      const filler = generateBasketballPlayer({ position: pos, targetOverall: 62, age: 22 });
+      players[filler.id] = filler;
+      ids.push(filler.id);
+      posAfter[pos]++;
     }
 
     // Re-index every kept player's roster slot.
@@ -394,6 +450,8 @@ export function startNextSeason(league: LeagueState): LeagueState {
   delete sportData.pendingResign; // re-sign decisions resolved for this offseason
   delete sportData.injuries; // everyone starts the new season healthy
   sportData.freeAgentLastTeam = freeAgentLastTeam;
+  sportData.faDay = 0; // fresh free-agency window for the new preseason
+  sportData.seasonStarted = false; // user hasn't tipped off the regular season yet
 
   // Season history was recorded in enterOffseason (before aging) — don't
   // overwrite it here.

@@ -17,6 +17,8 @@ import {
   evaluateBasketballTrade,
   generateBasketballPlayer,
   basketballSalaryCap,
+  basketballTradeValue,
+  basketballPickTradeValue,
   type BasketballPlayer,
   type BasketballTradeProposal,
   type BasketballTradeContext,
@@ -179,7 +181,7 @@ describe('basketball trade evaluator — basic mechanics', () => {
     expect(result.legal).toBe(false);
     const teamA = result.perTeam.find(t => t.teamId === 'A')!;
     expect(teamA.capCompliant).toBe(false);
-    expect(teamA.reasoning).toMatch(/Cap violation/i);
+    expect(teamA.reasoning).toMatch(/salary doesn.?t match|exceeds the .* ceiling/i);
   });
 
   it('lets an under-cap team absorb a big incoming contract', () => {
@@ -208,6 +210,46 @@ describe('basketball trade evaluator — basic mechanics', () => {
     const teamA = result.perTeam.find(t => t.teamId === 'A')!;
     expect(teamA.capCompliant).toBe(true);
     expect(result.legal).toBe(true);
+  });
+});
+
+describe('trade value — productive veterans (BUG-8)', () => {
+  function withSeasonLog(p: BasketballPlayer, ppg: number, rpg: number, apg: number): BasketballPlayer {
+    return {
+      ...p,
+      sportData: {
+        ...p.sportData,
+        seasonLog: [{ season: SEASON - 1, age: p.age - 1, overall: p.ratings.overall, gamesPlayed: 70, ppg, rpg, apg }],
+      },
+    };
+  }
+
+  it('values a productive star vet above a raw teenager and a mid-first pick', () => {
+    // 81-OVR, 34-yo, ~21/4/5 producer (Kyrie-like).
+    const vetBase = generateBasketballPlayer({ targetOverall: 81, age: 34 });
+    const vet = withSeasonLog({ ...vetBase, contract: makeContract(39_500_000, 2) }, 21, 4, 5);
+    // 69-OVR, 19-yo prospect with upside but no production.
+    const teenBase = generateBasketballPlayer({ targetOverall: 69, age: 19 });
+    const teen = { ...teenBase, development: { ...teenBase.development, potential: 82 }, contract: makeContract(4_000_000, 3) };
+
+    const vetValue = basketballTradeValue(vet, { season: SEASON });
+    const teenValue = basketballTradeValue(teen, { season: SEASON });
+
+    // The reported bug: the vet was valued BELOW the teenager. Now he's clearly above.
+    expect(vetValue).toBeGreaterThan(teenValue);
+    // And worth more than a real first-round pick (≈ #25), so a win-now team
+    // would reasonably surrender a first for him (the bug had him below a late-
+    // first AND below the teenager).
+    expect(vetValue).toBeGreaterThan(basketballPickTradeValue(25));
+  });
+
+  it('still discounts an unproductive vet relative to a producer of equal age/OVR', () => {
+    const base = generateBasketballPlayer({ targetOverall: 81, age: 34 });
+    const producer = withSeasonLog({ ...base, contract: makeContract(20_000_000, 2) }, 22, 5, 6);
+    const benchwarmer = withSeasonLog({ ...base, contract: makeContract(20_000_000, 2) }, 5, 2, 1);
+    expect(basketballTradeValue(producer, { season: SEASON })).toBeGreaterThan(
+      basketballTradeValue(benchwarmer, { season: SEASON }),
+    );
   });
 });
 

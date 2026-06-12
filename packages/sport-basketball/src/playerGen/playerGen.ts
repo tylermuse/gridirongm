@@ -407,11 +407,14 @@ export function generateBasketballDraftClass(_season: number, count = 60): Baske
   // by year (some drafts are deeper than others, mirroring real NBA cycles).
   const prospects: BasketballPlayer[] = [];
   for (let rank = 0; rank < count; rank++) {
-    // Current overall declines down the board (round 1 ≈ ranks 0-29).
+    // Current overall declines down the board (round 1 ≈ ranks 0-29). Top picks
+    // generate high enough to crack an NBA rotation in year one — a #1 overall
+    // (~75) is a fringe starter / clear rotation piece, not a low-60s player
+    // buried on the bench (which had the ROY averaging ~5-8 PPG). See BUG-10.
     const ovrBase = rank < 30
-      ? 68 - (rank * (68 - 58)) / 29        // R1: 68 → 58
-      : 57 - ((rank - 30) * (57 - 46)) / 29; // R2: 57 → 46
-    const targetOvr = clamp(Math.round(ovrBase + gaussian(0, 3)), 42, 75);
+      ? 75 - (rank * (75 - 63)) / 29        // R1: 75 → 63
+      : 62 - ((rank - 30) * (62 - 50)) / 29; // R2: 62 → 50
+    const targetOvr = clamp(Math.round(ovrBase + gaussian(0, 3)), 42, 80);
     const p = generateBasketballPlayer({ age: 19, targetOverall: targetOvr });
 
     // Upside tapers too: a top-3 pick can project to a star, a late

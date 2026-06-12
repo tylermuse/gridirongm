@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getTransactions } from '@/lib/transactions';
 import { getInjuries, SEVERITY_LABEL } from '@/lib/injuries';
+import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import type {
   BasketballPlayer,
   BasketballStats,
@@ -33,14 +34,23 @@ interface TeamSportData {
   division: string;
 }
 
-type SortKey = 'overall' | 'age' | 'position' | 'name';
+type SortKey = 'overall' | 'age' | 'position' | 'name' | 'ppg' | 'rpg' | 'apg' | 'gp';
 
 const SORTABLE: { key: SortKey; label: string; align?: 'left' | 'right' }[] = [
   { key: 'name',     label: 'Name',     align: 'left' },
   { key: 'position', label: 'Pos',      align: 'left' },
   { key: 'age',      label: 'Age',      align: 'right' },
   { key: 'overall',  label: 'OVR',      align: 'right' },
+  { key: 'gp',       label: 'GP',       align: 'right' },
+  { key: 'ppg',      label: 'PPG',      align: 'right' },
+  { key: 'rpg',      label: 'RPG',      align: 'right' },
+  { key: 'apg',      label: 'APG',      align: 'right' },
 ];
+
+/** Per-game value, guarding the 0-games case. */
+function perGameStat(s: BasketballStats, key: 'points' | 'totalRebounds' | 'assists'): number {
+  return s.gamesPlayed > 0 ? s[key] / s.gamesPlayed : 0;
+}
 
 function gameDay(g: GameResult): number {
   return (g.sportData as { dayOfSeason?: number } | undefined)?.dayOfSeason ?? 0;
@@ -100,20 +110,32 @@ export default function TeamPage() {
     return { rank: idx + 1, of: peers.length, conf };
   }, [league, team]);
 
+  // Current-season aggregated box-score stats, keyed by player id.
+  const statsMap = useMemo(
+    () => (league ? regularSeasonStatsByPlayer(league) : new Map()),
+    [league],
+  );
+
   const sorted = useMemo(() => {
     const arr = [...roster];
     arr.sort((a, b) => {
+      const sa = statsForPlayer(statsMap, a.id);
+      const sb = statsForPlayer(statsMap, b.id);
       let diff = 0;
       switch (sortKey) {
         case 'overall':  diff = a.ratings.overall - b.ratings.overall; break;
         case 'age':      diff = a.age - b.age; break;
         case 'position': diff = a.sportData.position.localeCompare(b.sportData.position); break;
         case 'name':     diff = `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`); break;
+        case 'gp':       diff = sa.gamesPlayed - sb.gamesPlayed; break;
+        case 'ppg':      diff = perGameStat(sa, 'points') - perGameStat(sb, 'points'); break;
+        case 'rpg':      diff = perGameStat(sa, 'totalRebounds') - perGameStat(sb, 'totalRebounds'); break;
+        case 'apg':      diff = perGameStat(sa, 'assists') - perGameStat(sb, 'assists'); break;
       }
       return sortDesc ? -diff : diff;
     });
     return arr;
-  }, [roster, sortKey, sortDesc]);
+  }, [roster, sortKey, sortDesc, statsMap]);
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) {
@@ -398,25 +420,34 @@ export default function TeamPage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map(p => (
-                <tr key={p.id} className="border-t hover:bg-[var(--surface-2)] transition-colors" style={{ borderColor: 'var(--border)' }}>
-                  <td className="px-3 py-2">
-                    <Link
-                      href={`/player/${p.id}`}
-                      className="font-semibold hover:underline"
-                      style={{ color: 'var(--accent)' }}
-                    >
-                      {p.firstName} {p.lastName}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2">{p.sportData.position}</td>
-                  <td className="px-3 py-2 text-right">{p.age}</td>
-                  <td className="px-3 py-2 text-right font-bold">{p.ratings.overall}</td>
-                  <td className="px-3 py-2 text-right opacity-70">{p.ratings.threePoint}</td>
-                  <td className="px-3 py-2 text-right opacity-70">{Math.round((p.ratings.perimeterDefense + p.ratings.interiorDefense) / 2)}</td>
-                  <td className="px-3 py-2 text-right opacity-70">{p.ratings.rebounding}</td>
-                </tr>
-              ))}
+              {sorted.map(p => {
+                const s = statsForPlayer(statsMap, p.id);
+                const gp = s.gamesPlayed;
+                const pg = (v: number) => (gp > 0 ? (v / gp).toFixed(1) : '—');
+                return (
+                  <tr key={p.id} className="border-t hover:bg-[var(--surface-2)] transition-colors" style={{ borderColor: 'var(--border)' }}>
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`/player/${p.id}`}
+                        className="font-semibold hover:underline"
+                        style={{ color: 'var(--accent)' }}
+                      >
+                        {p.firstName} {p.lastName}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2">{p.sportData.position}</td>
+                    <td className="px-3 py-2 text-right">{p.age}</td>
+                    <td className="px-3 py-2 text-right font-bold">{p.ratings.overall}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{gp || '—'}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{pg(s.points)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{pg(s.totalRebounds)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{pg(s.assists)}</td>
+                    <td className="px-3 py-2 text-right opacity-70">{p.ratings.threePoint}</td>
+                    <td className="px-3 py-2 text-right opacity-70">{Math.round((p.ratings.perimeterDefense + p.ratings.interiorDefense) / 2)}</td>
+                    <td className="px-3 py-2 text-right opacity-70">{p.ratings.rebounding}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

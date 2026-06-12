@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { computeLeagueStatRanks, ordinal, type StatCategory } from '@/lib/stats/leagueRank';
@@ -9,8 +9,10 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ratingDeltas, trajectoryDescription } from '@/lib/development';
+import { getInjuries, SEVERITY_LABEL } from '@/lib/injuries';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import {
   basketballUiMetadata,
@@ -47,6 +49,7 @@ function gameDay(g: GameResult): number {
 
 export default function PlayerPage() {
   const params = useParams<{ playerId: string }>();
+  const router = useRouter();
   const { league, loading, error } = useLeagueOrHydrate();
   const [statMode, setStatMode] = useState<'season' | 'career'>('season');
   const [showAllGames, setShowAllGames] = useState(false);
@@ -110,6 +113,21 @@ export default function PlayerPage() {
   const traj = player.development.currentTrajectory;
   const visibleGames = showAllGames ? gameLog : gameLog.slice(0, 10);
 
+  // OVR trend vs the pre-offseason snapshot.
+  const ovrDelta = player.ratings.overall - (player.sportData.prevRatings?.overall ?? player.ratings.overall);
+
+  // Injury / health status (current day = league.currentTick).
+  const day = league.currentTick;
+  const injury = getInjuries(league)[player.id];
+  const injuryActive = !!injury && injury.returnDay > day;
+
+  // OVR history: season → overall, from the rollover log.
+  const ovrHistory = (player.sportData.seasonLog ?? []).map(e => ({ season: e.season, overall: e.overall }));
+
+  // "Trade for this player" — only for players on another team while managing.
+  const canTradeFor =
+    !!player.rosterSlot && !!league.userTeamId && player.rosterSlot.teamId !== league.userTeamId;
+
   return (
     <main className="max-w-4xl mx-auto p-5 sm:p-8">
       {team && (
@@ -155,6 +173,15 @@ export default function PlayerPage() {
               {player.sportData.yearsInLeague > 0 ? `Yr ${player.sportData.yearsInLeague}` : 'Rookie'}
             </Badge>
             {player.sportData.isTwoWay && <Badge variant="amber" size="md">Two-way</Badge>}
+            {injuryActive && injury ? (
+              <Badge variant="red" size="md">
+                {injury.returnDay >= 50_000
+                  ? `Out for season (${injury.bodyPart})`
+                  : `Out: ${injury.bodyPart} · returns day ${injury.returnDay} (${SEVERITY_LABEL[injury.severity]})`}
+              </Badge>
+            ) : (
+              <Badge variant="green" size="md">Healthy</Badge>
+            )}
           </div>
         </div>
         <div className="ml-auto self-start flex flex-col items-end gap-2">
@@ -165,6 +192,24 @@ export default function PlayerPage() {
           >
             {player.ratings.overall}
           </div>
+          {ovrDelta !== 0 && (
+            <span
+              className="text-sm font-bold tabular-nums"
+              style={{ color: ovrDelta > 0 ? '#10b981' : '#dc2626' }}
+              title="Change vs last season"
+            >
+              {ovrDelta > 0 ? '▲' : '▼'} {ovrDelta > 0 ? '+' : ''}{ovrDelta}
+            </span>
+          )}
+          {canTradeFor && player.rosterSlot && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => router.push(`/trade?target=${player.rosterSlot!.teamId}&getPlayer=${player.id}`)}
+            >
+              🔁 Trade for
+            </Button>
+          )}
           <Link
             href={`/compare?a=${player.id}`}
             className="text-xs font-semibold rounded-lg border px-3 py-1.5 hover:bg-[var(--surface-2)]"
@@ -190,7 +235,7 @@ export default function PlayerPage() {
         const deltas = ratingDeltas(player);
         const log = player.sportData.seasonLog ?? [];
         const desc = trajectoryDescription(traj);
-        if (!desc && deltas.length === 0 && log.length === 0) return null;
+        if (!desc && deltas.length === 0 && log.length === 0 && ovrHistory.length === 0) return null;
         return (
           <Card className="mb-4">
             <CardHeader>
@@ -221,6 +266,12 @@ export default function PlayerPage() {
                   ))}
                 </div>
               </>
+            )}
+            {ovrHistory.length > 0 && (
+              <div className="mt-4">
+                <div className="text-xs uppercase tracking-widest opacity-60 mb-2">OVR history</div>
+                <OvrSparkline history={ovrHistory} current={player.ratings.overall} />
+              </div>
             )}
           </Card>
         );
@@ -444,6 +495,41 @@ function trajectoryVariant(t: string): 'green' | 'red' | 'default' {
   if (t === 'breakout' || t === 'rising') return 'green';
   if (t === 'declining' || t === 'cliff') return 'red';
   return 'default';
+}
+
+/** Compact season→OVR history as a horizontal bar list (no charting dep). */
+function OvrSparkline({ history, current }: { history: { season: number; overall: number }[]; current: number }) {
+  const rows = [...history, { season: NaN, overall: current }];
+  const max = Math.max(...rows.map(r => r.overall), 1);
+  return (
+    <ul className="space-y-1.5">
+      {rows.map((r, i) => {
+        const isCurrent = Number.isNaN(r.season);
+        return (
+          <li key={isCurrent ? 'now' : r.season} className="flex items-center gap-3">
+            <span className="w-14 text-xs text-[var(--text-sec)] tabular-nums">
+              {isCurrent ? 'Now' : r.season}
+            </span>
+            <div className="flex-1 h-2 rounded-full" style={{ background: 'var(--border)' }}>
+              <div
+                className="h-2 rounded-full"
+                style={{ width: `${(r.overall / max) * 100}%`, background: ratingColor(r.overall) }}
+              />
+            </div>
+            <span className="w-8 text-right text-sm font-semibold tabular-nums">{r.overall}</span>
+            {i > 0 && (
+              <span
+                className="w-8 text-right text-xs tabular-nums"
+                style={{ color: r.overall - rows[i - 1].overall >= 0 ? '#10b981' : '#dc2626' }}
+              >
+                {r.overall - rows[i - 1].overall > 0 ? '+' : ''}{r.overall - rows[i - 1].overall || ''}
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
 function Stat({ label, value, rank }: { label: string; value: string | number; rank?: number | null }) {

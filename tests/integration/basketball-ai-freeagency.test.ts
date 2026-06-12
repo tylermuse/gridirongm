@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { createNewBasketballLeague } from '@/../apps/bs-basketball/src/lib/league/createLeague';
-import { runAiFreeAgency } from '@/../apps/bs-basketball/src/lib/freeAgency';
+import { runAiFreeAgency, signingBudget, bestCompetingOffer, freeAgentPool, capRoom } from '@/../apps/bs-basketball/src/lib/freeAgency';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
 describe('runAiFreeAgency', () => {
@@ -37,5 +37,41 @@ describe('runAiFreeAgency', () => {
     expect(signings.every(s => s.teamId !== userTeam.id)).toBe(true);
     const userAfter = after.teams.find(t => t.id === userTeam.id)!;
     expect(userAfter.playerIds.length).toBe(userTeam.playerIds.length - 1); // still down its dropped player
+  });
+
+  it('gives every team a real signing budget — over-cap teams get an exception, not zero', () => {
+    const league = createNewBasketballLeague({ rngSeed: 'ai-fa-budget' });
+    for (const t of league.teams) {
+      const budget = signingBudget(league, t.id);
+      // Every team can always offer at least a minimum deal.
+      expect(budget).toBeGreaterThan(0);
+      // Over-cap teams (the common case) still get a meaningful exception, which
+      // is the whole point of BUG-6 — competition used to read "none."
+      if (capRoom(league, t.id) <= 0) {
+        expect(budget).toBeGreaterThanOrEqual(1_200_000);
+      }
+    }
+  });
+
+  it('surfaces competing interest for a quality free agent even with no cap room', () => {
+    const base = createNewBasketballLeague({ rngSeed: 'ai-fa-comp' });
+    // Move a strong rostered player into the pool from one team.
+    const fromTeam = base.teams[0] as BasketballTeam;
+    const starId = [...fromTeam.playerIds].sort(
+      (a, b) => (base.players[b] as BasketballPlayer).ratings.overall - (base.players[a] as BasketballPlayer).ratings.overall,
+    )[0];
+    const players = { ...base.players } as Record<string, BasketballPlayer>;
+    players[starId] = { ...players[starId], rosterSlot: null, contract: null };
+    const teams = base.teams.map(t =>
+      t.id !== fromTeam.id ? t : { ...t, playerIds: t.playerIds.filter(id => id !== starId), rosterBuckets: { ...t.rosterBuckets, active: (t.rosterBuckets.active ?? []).filter(id => id !== starId) } },
+    );
+    const league = { ...base, players, teams, freeAgentIds: [...base.freeAgentIds, starId], userTeamId: fromTeam.id };
+
+    const info = freeAgentPool(league).find(f => f.player.id === starId)!;
+    expect(info).toBeTruthy();
+    // BUG-6: a productive free agent draws a rival bid (was always null).
+    const competing = bestCompetingOffer(league, info);
+    expect(competing).not.toBeNull();
+    expect(competing!.teamId).not.toBe(fromTeam.id);
   });
 });

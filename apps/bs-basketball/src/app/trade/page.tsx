@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
@@ -10,7 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { SortableTradeTable } from '@/components/trade/SortableTradeTable';
 import { evaluateTrade, isExecutable, type TradeSideInput } from '@/lib/trade';
 import { findDealsForPlayer, incomingOffers, type DealSuggestion } from '@/lib/trade/finder';
-import { teamStrategy, getTeamPicks, pickFromId, pickShort, pickValue } from '@/lib/trade';
+import { teamStrategy, getTeamPicks, pickFromId, pickShort, pickValue, protectionShort, type ProtectionTerms } from '@/lib/trade';
 import { getActiveRumors, rumorAccuracy, rumorPlayerMeta, type TradeRumor } from '@/lib/trade';
 import { computeTradeGrade, getProposalHistory, type TradeGrade, type ProposalRecord } from '@/lib/trade';
 import { tradeWindowClosed, TRADE_DEADLINE_DAY } from '@/lib/sim/simRange';
@@ -31,11 +32,23 @@ export default function TradePage() {
   const { league, loading, error } = useLeagueOrHydrate();
   const store = useLeagueStore();
 
-  const [targetId, setTargetId] = useState<string>('');
+  // FEAT-19: deep-link from a "Trade for this player" button elsewhere. Seed the
+  // builder once from ?target=<teamId>&getPlayer=<playerId> via lazy state
+  // initializers (no effect/ref — the React-recommended way to derive initial
+  // state from URL input). An invalid target degrades gracefully: targetTeam
+  // resolves to null below and the partner column shows its empty prompt.
+  const searchParams = useSearchParams();
+  const initTarget = searchParams.get('target');
+  const initGetPlayer = searchParams.get('getPlayer');
+
+  const [targetId, setTargetId] = useState<string>(() => initTarget ?? '');
   const [mine, setMine] = useState<Set<string>>(new Set());
-  const [theirs, setTheirs] = useState<Set<string>>(new Set());
+  const [theirs, setTheirs] = useState<Set<string>>(() => (initTarget && initGetPlayer ? new Set([initGetPlayer]) : new Set()));
   const [myPicks, setMyPicks] = useState<Set<string>>(new Set());
   const [theirPicks, setTheirPicks] = useState<Set<string>>(new Set());
+  // Protection terms authored on round-1 picks in the deal, keyed by pick id.
+  const [myPickProt, setMyPickProt] = useState<Record<string, ProtectionTerms>>({});
+  const [theirPickProt, setTheirPickProt] = useState<Record<string, ProtectionTerms>>({});
   const [resultMsg, setResultMsg] = useState<string | null>(null);
   const [pinnedRumor, setPinnedRumor] = useState<{ headline: string; detail: string } | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -51,13 +64,20 @@ export default function TradePage() {
   const userTeamId = league?.userTeamId ?? null;
   const pendingCount = useMemo(() => (league ? incomingOffers(league).length : 0), [league]);
 
+  // Keep protections only for picks still in the deal.
+  const pruneProt = (sel: Set<string>, prot: Record<string, ProtectionTerms>) => {
+    const out: Record<string, ProtectionTerms> = {};
+    for (const id of sel) if (prot[id]) out[id] = prot[id];
+    return out;
+  };
+
   const sides = useMemo<TradeSideInput[]>(() => {
     if (!userTeamId || !targetId) return [];
     return [
-      { teamId: userTeamId as TradeSideInput['teamId'], playerIds: [...mine] as TradeSideInput['playerIds'], pickIds: [...myPicks] },
-      { teamId: targetId as TradeSideInput['teamId'], playerIds: [...theirs] as TradeSideInput['playerIds'], pickIds: [...theirPicks] },
+      { teamId: userTeamId as TradeSideInput['teamId'], playerIds: [...mine] as TradeSideInput['playerIds'], pickIds: [...myPicks], pickProtections: pruneProt(myPicks, myPickProt) },
+      { teamId: targetId as TradeSideInput['teamId'], playerIds: [...theirs] as TradeSideInput['playerIds'], pickIds: [...theirPicks], pickProtections: pruneProt(theirPicks, theirPickProt) },
     ];
-  }, [userTeamId, targetId, mine, theirs, myPicks, theirPicks]);
+  }, [userTeamId, targetId, mine, theirs, myPicks, theirPicks, myPickProt, theirPickProt]);
 
   const evaluation = useMemo(
     () => (league && sides.length === 2 ? evaluateTrade(league, sides) : null),
@@ -302,8 +322,8 @@ export default function TradePage() {
                 </span>
               )}
             </div>
-            <DealHalf label={`${userTeam.city} send`} playerIds={[...mine]} pickIds={[...myPicks]} league={league} playerById={playerById} season={season} accent="#dc2626" onRemovePlayer={id => toggle(mine, setMine, id)} onRemovePick={id => toggle(myPicks, setMyPicks, id)} />
-            <DealHalf label={`${targetTeam ? targetTeam.city + ' send' : 'You receive'}`} playerIds={[...theirs]} pickIds={[...theirPicks]} league={league} playerById={playerById} season={season} accent="#10b981" onRemovePlayer={id => toggle(theirs, setTheirs, id)} onRemovePick={id => toggle(theirPicks, setTheirPicks, id)} />
+            <DealHalf label={`${userTeam.city} send`} playerIds={[...mine]} pickIds={[...myPicks]} league={league} playerById={playerById} season={season} accent="#dc2626" onRemovePlayer={id => toggle(mine, setMine, id)} onRemovePick={id => toggle(myPicks, setMyPicks, id)} protections={myPickProt} onSetProtection={(id, t) => { setMyPickProt(prev => { const next = { ...prev }; if (t) next[id] = t; else delete next[id]; return next; }); setResultMsg(null); }} />
+            <DealHalf label={`${targetTeam ? targetTeam.city + ' send' : 'You receive'}`} playerIds={[...theirs]} pickIds={[...theirPicks]} league={league} playerById={playerById} season={season} accent="#10b981" onRemovePlayer={id => toggle(theirs, setTheirs, id)} onRemovePick={id => toggle(theirPicks, setTheirPicks, id)} protections={theirPickProt} onSetProtection={(id, t) => { setTheirPickProt(prev => { const next = { ...prev }; if (t) next[id] = t; else delete next[id]; return next; }); setResultMsg(null); }} />
             {!hasAssets && (
               <p className="text-xs text-[var(--text-sec)] mt-1">Drag players or picks here — or tap them in the rosters.</p>
             )}
@@ -670,6 +690,70 @@ function OffersPanel({
 
 const BLOCK_POSITIONS: BasketballPosition[] = ['PG', 'SG', 'SF', 'PF', 'C'];
 
+// Asset/archetype tags the user can seek in return, beyond raw positions.
+// Each maps to a predicate over the proposal (incoming players + picks).
+type SeekTag =
+  | 'picks' | 'young' | 'expiring' | 'shooter' | 'rebounder'
+  | 'interior defender' | 'perimeter defender' | 'playmaker' | 'rim protector' | 'scorer';
+
+const SEEK_TAGS: SeekTag[] = [
+  'picks', 'young', 'expiring', 'shooter', 'rebounder',
+  'interior defender', 'perimeter defender', 'playmaker', 'rim protector', 'scorer',
+];
+
+const SEEK_LABELS: Record<SeekTag, string> = {
+  picks: 'Draft picks',
+  young: 'Young prospects',
+  expiring: 'Expiring deals',
+  shooter: 'Shooter',
+  rebounder: 'Rebounder',
+  'interior defender': 'Interior defender',
+  'perimeter defender': 'Perimeter defender',
+  playmaker: 'Playmaker',
+  'rim protector': 'Rim protector',
+  scorer: 'Scorer',
+};
+
+/** Does this proposal satisfy the given seek tag? Best-effort over the incoming
+ *  ("get") side: a tag passes if ANY incoming player (or, for picks, the deal)
+ *  matches. Rating thresholds are deliberately generous so selections shape
+ *  results without zeroing them out. */
+function dealMatchesTag(
+  d: DealSuggestion,
+  tag: SeekTag,
+  playerById: Record<string, BasketballPlayer>,
+  season: number,
+): boolean {
+  const incoming = d.getIds.map(id => playerById[id]).filter(Boolean) as BasketballPlayer[];
+  switch (tag) {
+    // The finder only surfaces player-for-player deals today, but honor any
+    // pick that does come back so the tag stays meaningful.
+    case 'picks':
+      return d.getIds.some(id => !playerById[id]);
+    case 'young':
+      return incoming.some(p => p.age <= 23);
+    case 'expiring':
+      return incoming.some(p => {
+        const yearsLeft = p.contract ? p.contract.years.filter(y => y.season >= season).length : 0;
+        return p.contract != null && yearsLeft <= 1;
+      });
+    case 'shooter':
+      return incoming.some(p => p.ratings.threePoint >= 78);
+    case 'rebounder':
+      return incoming.some(p => p.ratings.rebounding >= 78);
+    case 'interior defender':
+      return incoming.some(p => p.ratings.interiorDefense >= 75 && (p.sportData.position === 'C' || p.sportData.position === 'PF'));
+    case 'perimeter defender':
+      return incoming.some(p => p.ratings.perimeterDefense >= 78);
+    case 'playmaker':
+      return incoming.some(p => p.ratings.passing >= 78);
+    case 'rim protector':
+      return incoming.some(p => p.ratings.block >= 75 && (p.sportData.position === 'C' || p.sportData.position === 'PF'));
+    case 'scorer':
+      return incoming.some(p => Math.max(p.ratings.finishing, p.ratings.midRange, p.ratings.postScoring) >= 80);
+  }
+}
+
 function TradingBlockTab({
   league, userTeam, teamById, playerById, season, onPropose, onLoad, loading,
 }: {
@@ -683,7 +767,8 @@ function TradingBlockTab({
   loading: boolean;
 }) {
   const [block, setBlock] = useState<Set<string>>(new Set());
-  const [seeking, setSeeking] = useState<Set<BasketballPosition>>(new Set());
+  const [seekPos, setSeekPos] = useState<Set<BasketballPosition>>(new Set());
+  const [seekTags, setSeekTags] = useState<Set<SeekTag>>(new Set());
   const [proposals, setProposals] = useState<DealSuggestion[] | null>(null);
 
   const players = userTeam.playerIds.map(id => playerById[id]).filter(Boolean) as BasketballPlayer[];
@@ -695,9 +780,16 @@ function TradingBlockTab({
   function ask() {
     const all: DealSuggestion[] = [];
     for (const id of block) all.push(...findDealsForPlayer(league, id, 6));
-    const wanted = seeking.size === 0
+    const hasFilter = seekPos.size > 0 || seekTags.size > 0;
+    const wanted = !hasFilter
       ? all
-      : all.filter(d => d.getIds.some(gid => seeking.has(playerById[gid]?.sportData.position as BasketballPosition)));
+      : all.filter(d => {
+          // A proposal qualifies if it satisfies ANY selected position OR tag —
+          // selections widen what counts as a desirable return.
+          const posMatch = seekPos.size > 0 && d.getIds.some(gid => seekPos.has(playerById[gid]?.sportData.position as BasketballPosition));
+          const tagMatch = [...seekTags].some(t => dealMatchesTag(d, t, playerById, season));
+          return posMatch || tagMatch;
+        });
     const seen = new Set<string>();
     const unique: DealSuggestion[] = [];
     for (const d of wanted) {
@@ -706,6 +798,8 @@ function TradingBlockTab({
     }
     setProposals(unique.slice(0, 12));
   }
+
+  const seekingCount = seekPos.size + seekTags.size;
 
   return (
     <div className="grid lg:grid-cols-[1fr_1fr] gap-5">
@@ -716,9 +810,14 @@ function TradingBlockTab({
         </div>
         <div className="px-3 py-3 border-t" style={{ borderColor: 'var(--border)' }}>
           <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Seeking in return</div>
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex flex-wrap gap-2 mb-2">
             {BLOCK_POSITIONS.map(pos => (
-              <button key={pos} onClick={() => toggleSet(seeking, setSeeking, pos)} className="text-xs font-bold rounded-md px-2.5 py-1 border" style={seeking.has(pos) ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}>{pos}</button>
+              <button key={pos} onClick={() => toggleSet(seekPos, setSeekPos, pos)} className="text-xs font-bold rounded-md px-2.5 py-1 border" style={seekPos.has(pos) ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}>{pos}</button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {SEEK_TAGS.map(tag => (
+              <button key={tag} onClick={() => toggleSet(seekTags, setSeekTags, tag)} className="text-xs font-semibold rounded-md px-2.5 py-1 border" style={seekTags.has(tag) ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}>{SEEK_LABELS[tag]}</button>
             ))}
           </div>
           <Button variant="primary" disabled={block.size === 0 || loading} onClick={ask} className="w-full">
@@ -731,7 +830,7 @@ function TradingBlockTab({
         {proposals === null ? (
           <p className="text-sm text-[var(--text-sec)] px-1">Put players on the block and ask rivals what they&apos;d give up.</p>
         ) : proposals.length === 0 ? (
-          <p className="text-sm text-[var(--text-sec)] px-1">No rival bit on those players{seeking.size ? ' for that return' : ''} — try different names or loosen what you&apos;re seeking.</p>
+          <p className="text-sm text-[var(--text-sec)] px-1">No rival bit on those players{seekingCount ? ' for that return' : ''} — try different names or loosen what you&apos;re seeking.</p>
         ) : (
           proposals.map((d, i) => <DealCard key={i} d={d} teamById={teamById} playerById={playerById} season={season} primaryLabel="Propose" secondaryLabel="Load & tweak" onPropose={onPropose} onLoad={onLoad} loading={loading} />)
         )}
@@ -846,7 +945,7 @@ function RosterColumn({
                   >
                     <span className="w-3 text-center text-xs opacity-30 select-none" aria-hidden>⠿</span>
                     <span className="w-4 text-center" style={{ color: sel ? 'var(--accent)' : 'var(--text-sec)' }}>{sel ? '✓' : '+'}</span>
-                    <span className="truncate flex-1">🎟️ {pickShort(league, pk)}</span>
+                    <span className="truncate flex-1">🎟️ {pickShort(league, pk)}<span className="opacity-50">{protectionShort(league, pk)}</span></span>
                     <span className="text-[11px] tabular-nums w-10 text-right font-bold" style={{ color: 'var(--accent)' }}>{fmtPts(val)}</span>
                   </button>
                 </li>
@@ -863,8 +962,77 @@ function RosterColumn({
 // Trade block half + outcome
 // ===========================================================================
 
+/** Authoring control for a round-1 pick's protection. None → unconditional.
+ *  A protected pick can roll up to two further drafts, then settles per the
+ *  fallback (expire, or become the original team's second-rounder). */
+const PROTECTION_LEVELS: { topN: number; label: string }[] = [
+  { topN: 0, label: 'Unprotected' },
+  { topN: 1, label: 'Top-1 protected' },
+  { topN: 3, label: 'Top-3 protected' },
+  { topN: 5, label: 'Top-5 protected' },
+  { topN: 10, label: 'Top-10 protected' },
+  { topN: 14, label: 'Lottery protected' },
+];
+
+function PickProtectionControl({
+  label, pickSeason, terms, onChange,
+}: {
+  label: string;
+  pickSeason: number;
+  terms: ProtectionTerms | null;
+  onChange: (terms: ProtectionTerms | null) => void;
+}) {
+  const topN = terms?.topN ?? 0;
+  const fallback = terms?.fallback ?? 'second';
+  const rollYears = terms ? terms.rollUntilSeason - pickSeason : 2;
+
+  const setTopN = (n: number) => onChange(n <= 0 ? null : { topN: n, rollUntilSeason: pickSeason + rollYears, fallback });
+  const setFallback = (f: 'void' | 'second') => { if (topN > 0) onChange({ topN, rollUntilSeason: pickSeason + rollYears, fallback: f }); };
+  const setRollYears = (y: number) => { if (topN > 0) onChange({ topN, rollUntilSeason: pickSeason + y, fallback }); };
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 pl-1 mt-1 text-[10px]">
+      <span className="opacity-50">{label} protection:</span>
+      <select
+        value={topN}
+        onChange={e => setTopN(Number(e.target.value))}
+        className="rounded border bg-[var(--surface-2)] px-1 py-0.5 text-[10px]"
+        style={{ borderColor: 'var(--border)' }}
+      >
+        {PROTECTION_LEVELS.map(l => <option key={l.topN} value={l.topN}>{l.label}</option>)}
+      </select>
+      {topN > 0 && (
+        <>
+          <span className="opacity-50">· rolls</span>
+          <select
+            value={rollYears}
+            onChange={e => setRollYears(Number(e.target.value))}
+            className="rounded border bg-[var(--surface-2)] px-1 py-0.5 text-[10px]"
+            style={{ borderColor: 'var(--border)' }}
+          >
+            <option value={0}>this year only</option>
+            <option value={1}>1 extra yr</option>
+            <option value={2}>2 extra yrs</option>
+            <option value={3}>3 extra yrs</option>
+          </select>
+          <span className="opacity-50">then</span>
+          <select
+            value={fallback}
+            onChange={e => setFallback(e.target.value as 'void' | 'second')}
+            className="rounded border bg-[var(--surface-2)] px-1 py-0.5 text-[10px]"
+            style={{ borderColor: 'var(--border)' }}
+          >
+            <option value="second">becomes a 2nd</option>
+            <option value="void">expires</option>
+          </select>
+        </>
+      )}
+    </div>
+  );
+}
+
 function DealHalf({
-  label, playerIds, pickIds, league, playerById, season, accent, onRemovePlayer, onRemovePick,
+  label, playerIds, pickIds, league, playerById, season, accent, onRemovePlayer, onRemovePick, protections, onSetProtection,
 }: {
   label: string;
   playerIds: string[];
@@ -875,6 +1043,8 @@ function DealHalf({
   accent: string;
   onRemovePlayer: (id: string) => void;
   onRemovePick: (id: string) => void;
+  protections: Record<string, ProtectionTerms>;
+  onSetProtection: (pickId: string, terms: ProtectionTerms | null) => void;
 }) {
   const empty = playerIds.length === 0 && pickIds.length === 0;
   return (
@@ -914,10 +1084,24 @@ function DealHalf({
             <div className="flex flex-wrap gap-1.5 pt-0.5">
               {pickIds.map(id => {
                 const pk = pickFromId(league, id);
-                return <Chip key={id} accent={accent} onRemove={() => onRemovePick(id)}>🎟️ {pk ? pickShort(league, pk) : id}</Chip>;
+                return <Chip key={id} accent={accent} onRemove={() => onRemovePick(id)}>🎟️ {pk ? pickShort(league, pk) + protectionShort(league, pk) : id}</Chip>;
               })}
             </div>
           )}
+          {/* Conditional conveyance: author top-N protection on round-1 picks. */}
+          {pickIds.map(id => {
+            const pk = pickFromId(league, id);
+            if (!pk || pk.round !== 1) return null;
+            return (
+              <PickProtectionControl
+                key={`prot-${id}`}
+                label={pickShort(league, pk)}
+                pickSeason={pk.season}
+                terms={protections[id] ?? null}
+                onChange={t => onSetProtection(id, t)}
+              />
+            );
+          })}
         </div>
       )}
     </div>

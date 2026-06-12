@@ -9,6 +9,7 @@
 
 import { getDraft } from '../draft';
 import { getBracket } from '../playoffs';
+import { isSeasonUnderway } from '../freeAgency';
 import { TRADE_DEADLINE_DAY } from '../sim/simRange';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
@@ -18,7 +19,7 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 export type ActionKey =
   | 'simDay' | 'simWeek' | 'simDeadline' | 'simSeason'
   | 'startPlayoffs' | 'simPlayoffDay' | 'simPlayoffRound' | 'simAllPlayoffs'
-  | 'enterOffseason' | 'simDraftToUser' | 'simDraftPick' | 'simDraftAll' | 'goDraft' | 'startNextSeason' | 'goFreeAgency' | 'goReSign';
+  | 'enterOffseason' | 'simDraftToUser' | 'simDraftPick' | 'simDraftAll' | 'goDraft' | 'startNextSeason' | 'beginRegularSeason' | 'goFreeAgency' | 'goReSign';
 
 /** User-team players with no contract for the upcoming season (expiring). */
 export function userExpiringCount(league: LeagueState, upcomingSeason: number): number {
@@ -106,13 +107,15 @@ export function nextAction(league: LeagueState): NextAction {
   // Preseason: a fresh schedule with no games played yet AND free agents in the
   // pool (waived-overflow + undrafted players from the rollover). Steer the user
   // to sign them before tipping off, since nothing else surfaces free agency.
+  // Once the user explicitly tips off (beginRegularSeason), we stop steering to
+  // FA and fall through to the live regular season even with FAs still unsigned.
   const noGamesPlayed = !league.games.some(g => g.status === 'played');
-  if (noGamesPlayed && league.freeAgentIds.length > 0) {
+  if (noGamesPlayed && league.freeAgentIds.length > 0 && !isSeasonUnderway(league)) {
     return {
       phaseLabel: 'Preseason · Free Agency',
       label: 'Sign Free Agents',
       primary: 'goFreeAgency',
-      secondary: [{ label: 'Sim Day', key: 'simDay' }],
+      secondary: [{ label: 'Start the Season', key: 'beginRegularSeason' }],
     };
   }
 
