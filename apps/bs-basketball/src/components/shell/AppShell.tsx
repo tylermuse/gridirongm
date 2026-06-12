@@ -133,8 +133,11 @@ function TopBar({
 }) {
   const store = useLeagueStore();
   const router = useRouter();
+  const pathname = usePathname() ?? '/';
 
   const action = nextAction(league);
+  // "Go to Draft" is a redundant no-op while you're already on the board.
+  const secondary = (action.secondary ?? []).filter(s => !(s.key === 'goDraft' && pathname === '/draft'));
   const userTeam = league.userTeamId
     ? (league.teams.find(t => t.id === league.userTeamId) as BasketballTeam | undefined) ?? null
     : null;
@@ -154,7 +157,6 @@ function TopBar({
       case 'simDraftAll': await store.simDraftAll(); break;
       case 'goDraft': router.push('/draft'); break;
       case 'goReSign': router.push('/re-sign'); break;
-      case 'goPostDraftCuts': router.push('/post-draft-cuts'); break;
       case 'goFreeAgency': router.push('/free-agency'); break;
       case 'startPlayoffs': { if (await store.startPlayoffs()) router.push('/playoffs'); break; }
       case 'enterOffseason': { if (await store.enterOffseason()) router.push('/draft'); break; }
@@ -191,7 +193,7 @@ function TopBar({
           <Button size="sm" disabled={store.loading} onClick={() => void run(action.primary)} className="active:scale-95">
             {store.loading ? 'Working…' : action.label}
           </Button>
-          {action.secondary?.map(s => (
+          {secondary.map(s => (
             <Button key={s.key} size="sm" variant="secondary" disabled={store.loading} onClick={() => void run(s.key)} className="hidden sm:inline-flex active:scale-95">
               {s.label}
             </Button>

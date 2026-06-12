@@ -18,10 +18,10 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 export type ActionKey =
   | 'simDay' | 'simWeek' | 'simDeadline' | 'simSeason'
   | 'startPlayoffs' | 'simPlayoffDay' | 'simPlayoffRound' | 'simAllPlayoffs'
-  | 'enterOffseason' | 'simDraftToUser' | 'simDraftPick' | 'simDraftAll' | 'goDraft' | 'startNextSeason' | 'goFreeAgency' | 'goReSign' | 'goPostDraftCuts';
+  | 'enterOffseason' | 'simDraftToUser' | 'simDraftPick' | 'simDraftAll' | 'goDraft' | 'startNextSeason' | 'goFreeAgency' | 'goReSign';
 
 /** User-team players with no contract for the upcoming season (expiring). */
-function userExpiringCount(league: LeagueState, upcomingSeason: number): number {
+export function userExpiringCount(league: LeagueState, upcomingSeason: number): number {
   if (!league.userTeamId) return 0;
   const team = league.teams.find(t => t.id === league.userTeamId);
   let n = 0;
@@ -56,29 +56,31 @@ export function nextAction(league: LeagueState): NextAction {
         secondary: [
           { label: 'Sim One Pick', key: 'simDraftPick' },
           { label: 'Auto Draft All', key: 'simDraftAll' },
+          // Quick jump back to the board after checking the roster/trades mid-draft.
+          { label: 'Go to Draft', key: 'goDraft' },
         ],
       };
       return { phaseLabel: 'Draft', label: 'Go to Draft', primary: 'goDraft' };
     }
-    // 2) Re-sign your expiring players — after the draft, before free agency.
+    // 2) Re-sign your expiring players + finalize the roster — after the draft,
+    //    before free agency. The re-sign page hosts a hard 15-man trim gate, so an
+    //    over-limit roster routes there too (cuts aren't a separate step).
     //    Anything left un-re-signed walks to free agency at season start.
     if (league.userTeamId) {
       const expiring = userExpiringCount(league, draft.season);
-      if (expiring > 0) {
+      const rosterN = league.teams.find(t => t.id === league.userTeamId)?.playerIds.length ?? 0;
+      const overLimit = !draft.inaugural && rosterN > 15;
+      if (expiring > 0 || overLimit) {
         return {
-          phaseLabel: 'Offseason · Re-sign',
-          label: `Re-sign ${expiring} Player${expiring === 1 ? '' : 's'}`,
+          phaseLabel: overLimit && expiring === 0 ? 'Offseason · Roster' : 'Offseason · Re-sign',
+          label: expiring > 0 ? `Re-sign ${expiring} Player${expiring === 1 ? '' : 's'}` : 'Trim Roster to 15',
           primary: 'goReSign',
-          secondary: [{ label: 'Skip re-signing', key: 'startNextSeason' }],
+          // "Skip" only when it wouldn't bypass the hard 15-man gate.
+          secondary: overLimit ? undefined : [{ label: 'Skip to season', key: 'startNextSeason' }],
         };
       }
     }
-    // 3) Over the 15-man limit → make cuts (a real step, not silent).
-    const rosterN = league.userTeamId ? (league.teams.find(t => t.id === league.userTeamId)?.playerIds.length ?? 0) : 0;
-    if (!draft.inaugural && rosterN > 15) {
-      return { phaseLabel: 'Offseason · Cuts', label: 'Make Roster Cuts', primary: 'goPostDraftCuts' };
-    }
-    // 4) Tip into the season (free agency surfaces in the preseason).
+    // 3) Tip into the season (free agency surfaces in the preseason).
     return { phaseLabel: 'Offseason · Draft', label: `Start ${draft.season} Season`, primary: 'startNextSeason' };
   }
 

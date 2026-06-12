@@ -875,6 +875,16 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       set({ error: 'Finish the draft before starting the season.' });
       return null;
     }
+    // Hard 15-man roster gate (cuts are folded into the re-sign window). Inaugural
+    // (imported) drafts roster-balance differently and are exempt.
+    if (!draft.inaugural && current.userTeamId) {
+      const userTeam = current.teams.find(t => t.id === current.userTeamId);
+      const n = userTeam?.playerIds.length ?? 0;
+      if (n > 15) {
+        set({ error: `Trim your roster to 15 before starting the season (currently ${n}). Cut players in the Re-sign window.` });
+        return null;
+      }
+    }
     set({ loading: true, error: null });
     try {
       // Stamp the user's draft grade (the draft is complete here) keyed to the

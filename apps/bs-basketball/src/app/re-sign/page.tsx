@@ -2,28 +2,39 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
 import { ExtendModal } from '@/components/modals/ExtendModal';
 import { OffseasonStepper } from '@/components/shell/OffseasonStepper';
+import { ratingColor } from '@/lib/ui/ratingColor';
 import { contractYearsLeft } from '@/lib/roster/playerActions';
 import { extensionMarket } from '@/lib/roster/extension';
-import { resignProjection, hasSalaryForSeason, salaryForSeason, type ResignDecision } from '@/lib/roster/resignProjection';
+import { keepValueOf } from '@/lib/season/advanceSeason';
+import { MAX_ROSTER } from '@/lib/freeAgency';
+import { resignProjection, hasSalaryForSeason, salaryForSeason } from '@/lib/roster/resignProjection';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
 /**
- * /re-sign — cap-management window (parity with football). Each expiring player
- * can be Re-signed or Let Walk; the projected NEXT-season cap space depletes as
- * you commit money and recovers as you let players go. Resolved decisions move to
- * a section below with an Undo for walks.
+ * /re-sign — the offseason roster hub (parity with football). Each expiring
+ * player can be Re-signed or Let Walk; the projected NEXT-season cap space
+ * depletes as you commit money. "Let Walk" releases the player to free agency
+ * immediately (it persists — they come off the roster and the books now, and
+ * won't reappear in the roster-trim list). Once your roster is at the 15-man
+ * limit, "Start Season" tips off; over the limit it's a hard gate with inline cuts.
  */
 export default function ReSignPage() {
   const { league, loading, error } = useLeagueOrHydrate();
   const store = useLeagueStore();
+  const router = useRouter();
   const [extendId, setExtendId] = useState<string | null>(null);
-  const [decisions, setDecisions] = useState<Record<string, ResignDecision>>({});
+  // Players released this session, for "what I just did" feedback (they're already
+  // off the roster, so we keep a local note rather than re-deriving it).
+  const [walked, setWalked] = useState<{ id: string; name: string }[]>([]);
 
   const season = league?.currentSeason ?? 0;
   const userTeam = useMemo<BasketballTeam | null>(() => {
@@ -31,17 +42,19 @@ export default function ReSignPage() {
     return (league.teams.find(t => t.id === league.userTeamId) as BasketballTeam | undefined) ?? null;
   }, [league]);
 
-  // Candidate pool = the expiring players flagged when the offseason began
-  // (stable across re-signs); fall back to a live computation for older saves.
+  // Candidate pool = expiring players flagged when the offseason began, narrowed
+  // to those still on the roster (a Let Walk releases them, so they drop off).
   const candidates = useMemo(() => {
     if (!league || !userTeam) return [] as BasketballPlayer[];
+    const rosterSet = new Set<string>(userTeam.playerIds);
     const flagged = (league.sportData as { pendingResign?: string[] }).pendingResign;
-    const ids = flagged?.length
+    const ids = (flagged?.length
       ? flagged
       : userTeam.playerIds.filter(id => {
           const p = league.players[id] as BasketballPlayer | undefined;
           return !!p && !!p.contract && contractYearsLeft(p, season) <= 1;
-        });
+        })
+    ).filter(id => rosterSet.has(id));
     const byId = league.players as Record<string, BasketballPlayer>;
     return ids
       .map(id => byId[id])
@@ -49,23 +62,33 @@ export default function ReSignPage() {
       .sort((a, b) => b.ratings.overall - a.ratings.overall);
   }, [league, userTeam, season]);
 
+  // Full roster (for the trim gate), sorted by keep-value (lowest first = cut first).
+  const roster = useMemo<BasketballPlayer[]>(() => {
+    if (!league || !userTeam) return [];
+    return userTeam.playerIds
+      .map(id => league.players[id] as BasketballPlayer)
+      .filter(Boolean)
+      .sort((a, b) => keepValueOf(a.ratings.overall, a.development.potential) - keepValueOf(b.ratings.overall, b.development.potential));
+  }, [league, userTeam]);
+
   if (loading) return <Shell><p className="opacity-60">Loading…</p></Shell>;
   if (!league) return <Shell><p>{error ?? 'No league loaded.'}</p></Shell>;
   if (!userTeam) return <Shell><p className="text-sm text-[var(--text-sec)]">You&apos;re spectating — pick a team to manage contracts.</p></Shell>;
 
   const nextSeason = season + 1;
-  const proj = resignProjection(league, userTeam, decisions);
+  // Walked players are released immediately, so the projection reads straight from
+  // the live roster — no pending-decision bookkeeping needed.
+  const proj = resignProjection(league, userTeam, {});
 
-  const active = candidates.filter(p => !hasSalaryForSeason(p, nextSeason) && decisions[p.id] !== 'walk');
+  const active = candidates.filter(p => !hasSalaryForSeason(p, nextSeason));
   const resigned = candidates.filter(p => hasSalaryForSeason(p, nextSeason));
-  const walking = candidates.filter(p => !hasSalaryForSeason(p, nextSeason) && decisions[p.id] === 'walk');
 
-  const setWalk = (id: string) => setDecisions(d => ({ ...d, [id]: 'walk' }));
-  const undoWalk = (id: string) => setDecisions(d => { const n = { ...d }; delete n[id]; return n; });
+  const over = roster.length - MAX_ROSTER;
 
-  function letWalk(p: BasketballPlayer) {
-    if (p.ratings.overall >= 78 && !window.confirm(`Let ${p.firstName} ${p.lastName} (${p.ratings.overall} OVR) walk to free agency?`)) return;
-    setWalk(p.id);
+  async function letWalk(p: BasketballPlayer) {
+    if (p.ratings.overall >= 78 && !window.confirm(`Let ${p.firstName} ${p.lastName} (${p.ratings.overall} OVR) walk to free agency now? This frees the roster spot and his money immediately.`)) return;
+    const ok = await store.releasePlayer(p.id);
+    if (ok) setWalked(w => [...w, { id: p.id, name: `${p.firstName} ${p.lastName}` }]);
   }
   async function resignAll() {
     if (!window.confirm(`Re-sign all ${active.length} expiring players at their market ask?`)) return;
@@ -74,9 +97,16 @@ export default function ReSignPage() {
       await store.extendPlayer(p.id, { years: m.desiredYears, salaryPerYear: m.marketSalary });
     }
   }
-  function letAllWalk() {
-    if (!window.confirm(`Let all ${active.length} expiring players walk to free agency?`)) return;
-    setDecisions(d => { const n = { ...d }; for (const p of active) n[p.id] = 'walk'; return n; });
+  async function letAllWalk() {
+    if (!window.confirm(`Let all ${active.length} expiring players walk to free agency now?`)) return;
+    for (const p of [...active]) {
+      const ok = await store.releasePlayer(p.id);
+      if (ok) setWalked(w => [...w, { id: p.id, name: `${p.firstName} ${p.lastName}` }]);
+    }
+  }
+  async function startSeason() {
+    const next = await store.startNextSeason();
+    if (next) router.push('/free-agency');
   }
 
   const spaceColor = proj.projectedSpace > 10_000_000 ? '#10b981' : proj.projectedSpace > 0 ? '#d97706' : '#dc2626';
@@ -85,21 +115,20 @@ export default function ReSignPage() {
     <Shell>
       <OffseasonStepper active="resign" />
 
-      {/* Live projected NEXT-season cap — depletes as you re-sign. */}
+      {/* Live cap — what you have to spend on the upcoming season, recomputed every
+          render from the actual roster. Drops as you re-sign, frees up as you walk. */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <CapTile label={`Projected ${nextSeason} Cap Space`} value={money(proj.projectedSpace)} color={spaceColor} />
+        <CapTile label={`Cap space to spend (${nextSeason})`} value={money(proj.projectedSpace)} color={spaceColor} big />
         <CapTile label="Committed payroll" value={money(proj.committed)} color="var(--text)" />
         <CapTile label="Room if all re-signed" value={money(proj.roomIfAllReSigned)} color={proj.roomIfAllReSigned >= 0 ? '#10b981' : '#dc2626'} />
         <CapTile label={proj.apron.text} value={proj.overTaxBy > 0 ? `tax +${money(proj.overTaxBy)}` : '—'} color={proj.apron.color} />
       </div>
 
-      {/* Roster composition — depth per position after your decisions (players you
-          let walk drop off), so you can see whether you can afford to lose one. */}
+      {/* Roster composition — depth per position (released players are already off). */}
       {(() => {
         const POS = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
         const depth: Record<string, number> = { PG: 0, SG: 0, SF: 0, PF: 0, C: 0 };
         for (const id of userTeam.playerIds) {
-          if (decisions[id] === 'walk') continue;
           const p = league.players[id] as BasketballPlayer | undefined;
           if (p) depth[p.sportData.position]++;
         }
@@ -107,7 +136,7 @@ export default function ReSignPage() {
         return (
           <div className="rounded-xl border bg-[var(--surface)] px-4 py-3 mb-4" style={{ borderColor: 'var(--border)' }}>
             <div className="flex items-baseline gap-2 mb-2">
-              <span className="text-[10px] uppercase tracking-widest text-[var(--text-sec)]">Roster after decisions</span>
+              <span className="text-[10px] uppercase tracking-widest text-[var(--text-sec)]">Roster composition</span>
               <span className="text-xs text-[var(--text-sec)]">{kept} players</span>
             </div>
             <div className="grid grid-cols-5 gap-3">
@@ -131,53 +160,55 @@ export default function ReSignPage() {
       {active.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <p className="text-sm font-semibold mr-auto rounded-lg px-3 py-1.5" style={{ background: 'color-mix(in srgb, #d97706 14%, transparent)', color: '#b45309' }}>
-            ⚠ Decide on {active.length} expiring player{active.length === 1 ? '' : 's'} — anyone not re-signed walks to free agency.
+            ⚠ Decide on {active.length} expiring player{active.length === 1 ? '' : 's'} — Let Walk releases them to free agency now.
           </p>
           <button onClick={() => void resignAll()} disabled={store.loading} className="text-xs font-bold rounded-lg px-3 py-1.5 text-white disabled:opacity-40" style={{ background: 'var(--accent)' }}>Re-sign All ({active.length})</button>
-          <button onClick={letAllWalk} className="text-xs font-bold rounded-lg px-3 py-1.5 border" style={{ borderColor: '#dc2626', color: '#dc2626' }}>Let All Walk ({active.length})</button>
+          <button onClick={() => void letAllWalk()} disabled={store.loading} className="text-xs font-bold rounded-lg px-3 py-1.5 border disabled:opacity-40" style={{ borderColor: '#dc2626', color: '#dc2626' }}>Let All Walk ({active.length})</button>
         </div>
       )}
 
       {/* Active decisions */}
-      {active.length === 0 && resigned.length === 0 && walking.length === 0 ? (
+      {active.length === 0 && resigned.length === 0 && walked.length === 0 ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <EmptyState icon="🖊️" title="No expiring contracts" message="Nobody's in their walk year — your books are settled for now." />
         </div>
       ) : (
-        <section className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-          {active.map(p => {
-            const ask = extensionMarket(p, season);
-            const stance = willingness(p, userTeam, season);
-            return (
-              <div key={p.id} className="flex items-center gap-3 px-3 py-2.5 border-t first:border-t-0" style={{ borderColor: 'var(--border)' }}>
-                <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-semibold truncate">{p.firstName} {p.lastName}</span>
-                    {/* Stance chip steals room from the name on mobile — hide it there. */}
-                    <span className="hidden sm:inline-block text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: stance.bg, color: stance.fg }}>{stance.label}</span>
+        active.length > 0 && (
+          <section className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+            {active.map(p => {
+              const ask = extensionMarket(p, season);
+              const stance = willingness(p, userTeam, season);
+              return (
+                <div key={p.id} className="flex items-center gap-3 px-3 py-2.5 border-t first:border-t-0" style={{ borderColor: 'var(--border)' }}>
+                  <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-semibold truncate">{p.firstName} {p.lastName}</span>
+                      {/* Stance chip steals room from the name on mobile — hide it there. */}
+                      <span className="hidden sm:inline-block text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: stance.bg, color: stance.fg }}>{stance.label}</span>
+                    </div>
+                    <div className="text-xs text-[var(--text-sec)]">{p.sportData.position} · Age {p.age} · {p.ratings.overall} OVR{lastSeasonLine(p) ? ` · ${lastSeasonLine(p)}` : ''}</div>
                   </div>
-                  <div className="text-xs text-[var(--text-sec)]">{p.sportData.position} · Age {p.age} · {p.ratings.overall} OVR{lastSeasonLine(p) ? ` · ${lastSeasonLine(p)}` : ''}</div>
+                  <div className="text-right shrink-0 hidden sm:block">
+                    <div className="text-[10px] uppercase tracking-wide text-[var(--text-sec)]">asks · costs next yr</div>
+                    <div className="text-sm font-semibold tabular-nums">{money(ask.marketSalary)}/yr · {ask.desiredYears}y · <span style={{ color: '#dc2626' }}>−{money(ask.marketSalary)}</span></div>
+                  </div>
+                  {/* Stacked on mobile (narrower, more room for the name), side-by-side on desktop. */}
+                  <div className="flex flex-col sm:flex-row gap-1.5 shrink-0">
+                    <button onClick={() => setExtendId(p.id)} disabled={store.loading} className="text-sm font-bold rounded-lg px-3 py-1.5 disabled:opacity-40" style={{ background: 'var(--accent)', color: '#fff' }}>Re-sign</button>
+                    <button onClick={() => void letWalk(p)} disabled={store.loading} className="text-sm font-semibold rounded-lg px-2.5 py-1.5 border disabled:opacity-40" style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}>Let Walk</button>
+                  </div>
                 </div>
-                <div className="text-right shrink-0 hidden sm:block">
-                  <div className="text-[10px] uppercase tracking-wide text-[var(--text-sec)]">asks · costs next yr</div>
-                  <div className="text-sm font-semibold tabular-nums">{money(ask.marketSalary)}/yr · {ask.desiredYears}y · <span style={{ color: '#dc2626' }}>−{money(ask.marketSalary)}</span></div>
-                </div>
-                {/* Stacked on mobile (narrower, more room for the name), side-by-side on desktop. */}
-                <div className="flex flex-col sm:flex-row gap-1.5 shrink-0">
-                  <button onClick={() => setExtendId(p.id)} className="text-sm font-bold rounded-lg px-3 py-1.5" style={{ background: 'var(--accent)', color: '#fff' }}>Re-sign</button>
-                  <button onClick={() => letWalk(p)} className="text-sm font-semibold rounded-lg px-2.5 py-1.5 border" style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}>Let Walk</button>
-                </div>
-              </div>
-            );
-          })}
-        </section>
+              );
+            })}
+          </section>
+        )
       )}
 
       {/* Resolved decisions */}
-      {(resigned.length > 0 || walking.length > 0) && (
+      {(resigned.length > 0 || walked.length > 0) && (
         <section className="mt-4">
-          <h2 className="text-[10px] uppercase tracking-widest text-[var(--text-sec)] mb-2">Decisions ({resigned.length + walking.length})</h2>
+          <h2 className="text-[10px] uppercase tracking-widest text-[var(--text-sec)] mb-2">Decisions ({resigned.length + walked.length})</h2>
           <div className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
             {resigned.map(p => (
               <div key={p.id} className="flex items-center gap-3 px-3 py-2 border-t first:border-t-0 text-sm" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, #10b981 7%, transparent)' }}>
@@ -186,33 +217,65 @@ export default function ReSignPage() {
                 <span className="text-xs text-[var(--text-sec)] tabular-nums">Re-signed · −{money(salaryForSeason(p, nextSeason))}/yr</span>
               </div>
             ))}
-            {walking.map(p => (
-              <div key={p.id} className="flex items-center gap-3 px-3 py-2 border-t first:border-t-0 text-sm" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, #dc2626 6%, transparent)' }}>
+            {walked.map(w => (
+              <div key={w.id} className="flex items-center gap-3 px-3 py-2 border-t first:border-t-0 text-sm" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, #dc2626 6%, transparent)' }}>
                 <span className="text-[#dc2626] font-bold">↪</span>
-                <span className="font-semibold flex-1 truncate">{p.firstName} {p.lastName}</span>
-                <span className="text-xs text-[#dc2626]">Walking to FA</span>
-                <button onClick={() => undoWalk(p.id)} className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>Undo</button>
+                <span className="font-semibold flex-1 truncate">{w.name}</span>
+                <span className="text-xs text-[#dc2626]">Released to FA</span>
               </div>
             ))}
           </div>
         </section>
       )}
 
-      <div className="mt-6 flex justify-end">
-        <Link href="/post-draft-cuts" className="rounded-lg px-4 py-2 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>
-          Continue to Roster Cuts →
-        </Link>
-      </div>
+      {/* Finalize roster — hard 15-man gate before the season (cuts folded in here). */}
+      <section className="mt-6 rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+        <header className="flex flex-wrap items-baseline gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+          <h2 className="text-sm font-black uppercase tracking-tight">Finalize Roster</h2>
+          {over > 0
+            ? <span className="text-xs font-bold" style={{ color: '#dc2626' }}>Trim {over} — {roster.length}/{MAX_ROSTER}</span>
+            : <span className="text-xs font-bold" style={{ color: '#10b981' }}>At the limit — {roster.length}/{MAX_ROSTER} ✓</span>}
+        </header>
+        {over > 0 && (
+          <div className="px-2 py-1">
+            <p className="text-xs text-[var(--text-sec)] px-2 py-2">Over the 15-man limit — cut {over} more to start the season. Lowest keep-value first.</p>
+            {roster.slice(0, over + 3).map((p, i) => (
+              <div key={p.id} className="flex items-center gap-3 px-2 py-1.5 rounded-lg" style={{ background: i < over ? 'color-mix(in srgb, #dc2626 6%, transparent)' : undefined }}>
+                <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="sm" />
+                <span className="font-semibold truncate flex-1">{p.firstName} {p.lastName}</span>
+                <Chip>{p.sportData.position}</Chip>
+                <span className={`text-sm font-bold tabular-nums ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
+                <button
+                  onClick={() => { if (confirm(`Waive ${p.firstName} ${p.lastName}? They become a free agent.`)) void store.releasePlayer(p.id); }}
+                  disabled={store.loading}
+                  className="text-xs font-bold rounded-md px-2.5 py-1 text-white disabled:opacity-40"
+                  style={{ background: '#dc2626' }}
+                >
+                  Cut
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-3 px-4 py-3">
+          <Button variant="primary" disabled={over > 0 || store.loading} onClick={() => void startSeason()}>
+            {store.loading ? 'Tipping off…' : `Start ${nextSeason} Season →`}
+          </Button>
+          {over > 0
+            ? <span className="text-sm text-[var(--text-sec)]">Cut {over} more to start.</span>
+            : <span className="text-sm text-[var(--text-sec)]">Then sign free agents in the preseason.</span>}
+        </div>
+      </section>
 
       <ExtendModal playerId={extendId} onClose={() => setExtendId(null)} />
     </Shell>
   );
 }
 
-function CapTile({ label, value, color }: { label: string; value: string; color: string }) {
+function CapTile({ label, value, color, big }: { label: string; value: string; color: string; big?: boolean }) {
   return (
     <div className="rounded-lg border px-3 py-2" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-      <div className="text-lg font-black tabular-nums" style={{ color }}>{value}</div>
+      <div className={`${big ? 'text-xl' : 'text-lg'} font-black tabular-nums`} style={{ color }}>{value}</div>
       <div className="text-[10px] uppercase tracking-wide opacity-60">{label}</div>
     </div>
   );
