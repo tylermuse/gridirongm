@@ -32,9 +32,35 @@ export interface OwnedPick extends BaseDraftPick {
   overall?: number;
 }
 
+/**
+ * Conditional ("protected") pick obligation. When team A trades its pick to B
+ * top-N protected, ownership flips to B immediately but the conveyance is
+ * conditional: at the lottery, if A's pick lands within the top N it stays with
+ * A (the protection "hits") and the obligation rolls forward (or expires per the
+ * fallback); otherwise it conveys to B for good. Keyed in `pickProtections` by
+ * the same pickKey as ownership.
+ */
+export interface PickProtection {
+  /** Pick is PROTECTED (stays with the original team) when its pick-in-round is
+   *  ≤ topN. e.g. topN=2 → "top-2 protected", conveys at #3 or later. */
+  topN: number;
+  /** Team that receives the pick once it conveys (the creditor). */
+  creditorTeamId: TeamId;
+  /** Last season the obligation may roll. While the pick's season < this, a
+   *  protected (un-conveyed) pick rolls to next year's same-round pick with the
+   *  same terms. At/after it, `fallback` settles the debt. */
+  rollUntilSeason: number;
+  /** How the obligation settles if it never conveys by `rollUntilSeason`:
+   *  'void' → creditor gets nothing; 'second' → creditor takes the original
+   *  team's second-round pick that season instead. */
+  fallback: 'void' | 'second';
+}
+
 interface LeaguePickData {
   /** key = pickKey(season, round, originalTeamId) → current owner team id. */
   pickOwnership?: Record<string, TeamId>;
+  /** key = pickKey(...) → conditional-conveyance terms for that pick. */
+  pickProtections?: Record<string, PickProtection>;
   [key: string]: unknown;
 }
 
@@ -61,6 +87,35 @@ export function pickKey(season: number, round: number, originalTeamId: TeamId): 
 
 function ownership(league: LeagueState): Record<string, TeamId> {
   return (league.sportData as LeaguePickData | undefined)?.pickOwnership ?? {};
+}
+
+function protections(league: LeagueState): Record<string, PickProtection> {
+  return (league.sportData as LeaguePickData | undefined)?.pickProtections ?? {};
+}
+
+/** The protection terms attached to a pick, or null if it conveys unconditionally. */
+export function getProtection(
+  league: LeagueState,
+  season: number,
+  round: number,
+  originalTeamId: TeamId,
+): PickProtection | null {
+  return protections(league)[pickKey(season, round, originalTeamId)] ?? null;
+}
+
+/** "top-2 protected", "lottery protected", or "unprotected". */
+export function protectionText(topN: number, numTeams = 30): string {
+  if (topN <= 0) return 'unprotected';
+  if (topN >= 14 && topN < numTeams) return 'lottery protected';
+  return `top-${topN} protected`;
+}
+
+/** Compact protection tag for a pick chip, or '' when unprotected. */
+export function protectionShort(league: LeagueState, pick: BaseDraftPick): string {
+  const prot = getProtection(league, pick.season, pick.round, pick.originalTeamId);
+  if (!prot) return '';
+  const n = prot.topN;
+  return n >= 14 && n < (league.teams.length || 30) ? ' (lottery prot)' : ` (top-${n} prot)`;
 }
 
 /** The seasons whose drafts are currently tradeable: the next N after this one,
@@ -236,20 +291,178 @@ export function pickShort(league: LeagueState, pick: BaseDraftPick): string {
 // Mutation
 // ===========================================================================
 
+/** A protection authored on a pick at trade time (creditor is the receiving
+ *  team, so only the terms are supplied here). topN ≤ 0 → unprotected. */
+export interface ProtectionTerms {
+  topN: number;
+  rollUntilSeason: number;
+  fallback: 'void' | 'second';
+}
+
 /** Reassign a set of picks to new owners, returning a new league. Used by the
  *  trade executor. Each move is keyed by the pick's original team so provenance
- *  is preserved across multiple hops. */
+ *  is preserved across multiple hops. A move may carry `protection` terms, which
+ *  flip ownership to the receiver now but leave the conveyance conditional on the
+ *  lottery (resolved by `resolveProtectedPicks` at draft setup). */
 export function applyPickMoves(
   league: LeagueState,
-  moves: { pick: BaseDraftPick; toTeamId: TeamId }[],
+  moves: { pick: BaseDraftPick; toTeamId: TeamId; protection?: ProtectionTerms }[],
 ): LeagueState {
   if (moves.length === 0) return league;
   const sport = (league.sportData as LeaguePickData | undefined) ?? {};
   const next = { ...(sport.pickOwnership ?? {}) };
-  for (const { pick, toTeamId } of moves) {
+  const nextProt = { ...(sport.pickProtections ?? {}) };
+  for (const { pick, toTeamId, protection } of moves) {
     const key = pickKey(pick.season, pick.round, pick.originalTeamId);
-    if (toTeamId === pick.originalTeamId) delete next[key]; // back to origin → no override needed
-    else next[key] = toTeamId;
+    if (toTeamId === pick.originalTeamId) {
+      delete next[key]; // back to origin → no override needed
+      delete nextProt[key]; // a pick returning home carries no obligation
+    } else {
+      next[key] = toTeamId;
+      if (protection && protection.topN > 0) {
+        nextProt[key] = {
+          topN: protection.topN,
+          creditorTeamId: toTeamId,
+          rollUntilSeason: protection.rollUntilSeason,
+          fallback: protection.fallback,
+        };
+      } else {
+        delete nextProt[key]; // unconditional move clears any prior protection
+      }
+    }
   }
-  return { ...league, sportData: { ...sport, pickOwnership: next } };
+  return { ...league, sportData: { ...sport, pickOwnership: next, pickProtections: nextProt } };
+}
+
+// ===========================================================================
+// Protected-pick conveyance (resolved at draft setup, once the order is known)
+// ===========================================================================
+
+export interface PickConveyance {
+  season: number;
+  round: number;
+  originalTeamId: TeamId;
+  creditorTeamId: TeamId;
+  /** Where the original team's pick actually landed (1..30 within the round). */
+  pickInRound: number;
+  topN: number;
+  result: 'conveyed' | 'rolled' | 'expired-void' | 'expired-second';
+  /** For 'rolled': the season the obligation moved to. */
+  rolledToSeason?: number;
+}
+
+type DraftSlotLite = { round: number; pickInRound: number; originalTeamId?: TeamId; teamId: TeamId };
+
+/**
+ * Settle every protected obligation for `season` against the now-known draft
+ * order. Pure: takes the current ownership + protection registries and the
+ * draft slots, returns updated registries plus a conveyance log.
+ *
+ * - Lands OUTSIDE protection → conveys to the creditor (ownership stays flipped).
+ * - Lands INSIDE protection → reverts to the original team; if it can still roll,
+ *   the obligation moves to next season's same-round pick (same terms); otherwise
+ *   the fallback settles it (void, or the original team's 2nd-rounder).
+ */
+export function resolveProtectedPicks(
+  ownershipIn: Record<string, TeamId>,
+  protectionsIn: Record<string, PickProtection>,
+  draftSlots: DraftSlotLite[],
+  season: number,
+): {
+  ownership: Record<string, TeamId>;
+  protections: Record<string, PickProtection>;
+  conveyances: PickConveyance[];
+} {
+  const ownership = { ...ownershipIn };
+  const protections = { ...protectionsIn };
+  const conveyances: PickConveyance[] = [];
+
+  // pick-in-round for each (round, originalTeam) from the resolved order.
+  const slotByKey = new Map<string, number>();
+  for (const s of draftSlots) {
+    const orig = s.originalTeamId ?? s.teamId;
+    slotByKey.set(`${s.round}-${orig}`, s.pickInRound);
+  }
+
+  for (const [key, prot] of Object.entries(protectionsIn)) {
+    const m = /^(\d+)-r(\d+)-(.+)$/.exec(key);
+    if (!m) continue;
+    const pSeason = Number(m[1]);
+    const round = Number(m[2]);
+    const originalTeamId = m[3] as TeamId;
+    if (pSeason !== season) continue; // only this year's obligations settle now
+    const pickInRound = slotByKey.get(`${round}-${originalTeamId}`);
+    if (pickInRound == null) continue; // team has no slot this round (folded?) — leave as-is
+
+    const isProtected = pickInRound <= prot.topN;
+    const base = { season: pSeason, round, originalTeamId, creditorTeamId: prot.creditorTeamId, pickInRound, topN: prot.topN };
+
+    if (!isProtected) {
+      ownership[key] = prot.creditorTeamId; // conveys for good
+      delete protections[key];
+      conveyances.push({ ...base, result: 'conveyed' });
+      continue;
+    }
+
+    // Protected: the pick stays home this year.
+    delete ownership[key];
+    delete protections[key];
+
+    if (pSeason < prot.rollUntilSeason) {
+      const nextKey = pickKey(pSeason + 1, round, originalTeamId);
+      ownership[nextKey] = prot.creditorTeamId;
+      protections[nextKey] = { ...prot };
+      conveyances.push({ ...base, result: 'rolled', rolledToSeason: pSeason + 1 });
+    } else if (prot.fallback === 'second' && round === 1) {
+      const secondKey = pickKey(pSeason, 2, originalTeamId);
+      // Only divert the 2nd-rounder if the original team still holds it.
+      if ((ownership[secondKey] ?? originalTeamId) === originalTeamId) {
+        ownership[secondKey] = prot.creditorTeamId;
+        conveyances.push({ ...base, result: 'expired-second' });
+      } else {
+        conveyances.push({ ...base, result: 'expired-void' });
+      }
+    } else {
+      conveyances.push({ ...base, result: 'expired-void' });
+    }
+  }
+
+  return { ownership, protections, conveyances };
+}
+
+/** Build a transaction-log entry describing a conveyance for League News. */
+export function describeConveyance(
+  league: LeagueState,
+  c: PickConveyance,
+): { summary: string; detail: string; teamIds: TeamId[] } {
+  const orig = abbrOf(league, c.originalTeamId);
+  const cred = abbrOf(league, c.creditorTeamId);
+  const pickStr = `${c.season} R${c.round} (#${c.round === 1 ? c.pickInRound : c.pickInRound + 30})`;
+  const prot = protectionText(c.topN, league.teams.length || 30);
+  switch (c.result) {
+    case 'conveyed':
+      return {
+        summary: `${cred} receive ${orig}'s ${c.season} R${c.round} pick`,
+        detail: `${orig}'s pick landed at #${c.pickInRound} in round ${c.round}, outside its ${prot} — it conveys to ${cred}.`,
+        teamIds: [c.originalTeamId, c.creditorTeamId],
+      };
+    case 'rolled':
+      return {
+        summary: `${orig} keep ${prot} pick; obligation to ${cred} rolls to ${c.rolledToSeason}`,
+        detail: `${orig}'s ${pickStr} landed at #${c.pickInRound}, inside the ${prot} — ${orig} keep it and the obligation to ${cred} rolls to ${c.rolledToSeason}.`,
+        teamIds: [c.originalTeamId, c.creditorTeamId],
+      };
+    case 'expired-second':
+      return {
+        summary: `${orig}'s protection held; ${cred} take a 2nd-rounder instead`,
+        detail: `${orig}'s ${prot} pick stayed home for the final time — the debt settles with ${orig}'s ${c.season} second-round pick going to ${cred}.`,
+        teamIds: [c.originalTeamId, c.creditorTeamId],
+      };
+    default:
+      return {
+        summary: `${orig}'s protection held; obligation to ${cred} expires`,
+        detail: `${orig}'s ${prot} pick stayed home for the final time — the obligation to ${cred} expires with nothing conveyed.`,
+        teamIds: [c.originalTeamId, c.creditorTeamId],
+      };
+  }
 }

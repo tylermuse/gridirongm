@@ -16,6 +16,7 @@ import {
   acceptanceProbability,
   bestCompetingOffer,
   getFaDay,
+  isSeasonUnderway,
   faPhase,
   faPriceDecay,
   FA_DAYS,
@@ -127,11 +128,11 @@ export default function FreeAgencyPage() {
         <div className="ml-auto flex items-center gap-2">
           <Button variant="secondary" disabled={store.loading || faClosed} onClick={() => { void store.advanceFreeAgency(1); }}>Skip Day →</Button>
           <Button variant="secondary" disabled={store.loading || faClosed} onClick={() => { void store.advanceFreeAgency(7); }}>Skip Week ⏩</Button>
-          {!league.games.some(g => g.status === 'played') && (
+          {!isSeasonUnderway(league) && !league.games.some(g => g.status === 'played') && (
             <Button
               variant="primary"
               disabled={store.loading}
-              onClick={() => { void store.simDay().then(() => router.push('/')); }}
+              onClick={() => { void store.beginRegularSeason().then(ok => { if (ok) router.push('/'); }); }}
             >
               {store.loading ? 'Tipping off…' : 'Start the Season →'}
             </Button>

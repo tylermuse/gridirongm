@@ -20,6 +20,7 @@ import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonSt
 import { playerMood, type Mood } from '@/lib/roster/mood';
 import { contractYearsLeft } from '@/lib/roster/playerActions';
 import type { BasketballLineup, BasketballPlayer, BasketballPosition, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
+import type { ValidationViolation } from '@bs/core/adapter';
 
 /**
  * /roster — combined roster + depth chart (lineup editor) + front-office actions.
@@ -36,6 +37,12 @@ const POS_COLORS: Record<BasketballPosition, string> = {
 };
 const TARGET_ROSTER = 15;
 const MIN_ROSTER = 13;
+
+// Scheme-fit dot palette — shared by the legend and every row's dot so neutral
+// reads the same in both (muted amber rather than the engine's grey text token).
+const FIT_LEGEND_COLOR: Record<SchemeFit['tier'], string> = {
+  great: '#10b981', good: '#84cc16', neutral: '#f59e0b', poor: '#dc2626',
+};
 
 const ROW_GRID = 'grid items-center gap-2 px-2 py-1.5 min-w-[52rem]';
 // Name is capped so it no longer hogs all the slack; the stats column shares the
@@ -237,6 +244,8 @@ export default function RosterPage() {
             <span className="tabular-nums font-semibold">{team.record.wins}–{team.record.losses}</span>
             <span>· payroll {fmtMoney(cap.payroll)} ·</span>
             <span className="tabular-nums">{cap.capRoom >= 0 ? `${fmtMoney(cap.capRoom)} room` : `${fmtMoney(-cap.capRoom)} over`}</span>
+            <span>·</span>
+            <span className="tabular-nums">Roster {roster.length}/{TARGET_ROSTER}</span>
           </div>
         </div>
         <span className="ml-auto text-xs font-bold rounded-full px-3 py-1" style={{ background: `color-mix(in srgb, ${sizeBadge.color} 16%, transparent)`, color: sizeBadge.color }}>{sizeBadge.text}</span>
@@ -271,8 +280,8 @@ export default function RosterPage() {
       {hcScheme && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3 text-[11px] text-[var(--text-sec)]">
           <span>Scheme fit ({SCHEME_LABELS[hcScheme]}):</span>
-          {([['great', '#10b981'], ['good', '#84cc16'], ['neutral', '#f59e0b'], ['poor', '#dc2626']] as const).map(([label, color]) => (
-            <span key={label} className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: color }} />{label}</span>
+          {(['great', 'good', 'neutral', 'poor'] as const).map(label => (
+            <span key={label} className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: FIT_LEGEND_COLOR[label] }} />{label}</span>
           ))}
         </div>
       )}
@@ -333,7 +342,7 @@ export default function RosterPage() {
       </div>
 
       {validation.warnings.length > 0 && (
-        <p className="mt-2 text-xs" style={{ color: '#f59e0b' }}>⚠ {validation.warnings[0].message}</p>
+        <p className="mt-2 text-xs" style={{ color: '#f59e0b' }}>⚠ {humanizeWarning(validation.warnings[0], roster)}</p>
       )}
 
       {/* Per-position depth chart (#21) */}
@@ -400,18 +409,21 @@ function PlayerCells({
         style={{ color: 'var(--accent)' }}
         title="Drag to a starting slot, or click for details"
       >
-        {fit && fit.delta !== 0 && (
+        {fit && (
           <span
             className="shrink-0 w-1.5 h-1.5 rounded-full"
-            style={{ background: fit.color }}
-            title={`Scheme fit: ${fit.tier} (${fit.delta > 0 ? '+' : ''}${fit.delta} OVR)`}
+            style={{ background: FIT_LEGEND_COLOR[fit.tier] }}
+            title={`Scheme fit: ${fit.tier}${fit.delta !== 0 ? ` (${fit.delta > 0 ? '+' : ''}${fit.delta} OVR)` : ''}`}
           />
         )}
         <span className="truncate">{p.firstName} {p.lastName}</span>
       </button>
       <span className="text-xs font-mono" style={{ color: POS_COLORS[p.sportData.position] }}>{p.sportData.position}</span>
       <span className="text-right tabular-nums text-sm">{p.age}</span>
-      <span className="text-right tabular-nums text-sm font-bold" style={{ color: ovrColor(p.ratings.overall) }}>{p.ratings.overall}</span>
+      <span className="text-right tabular-nums text-sm font-bold inline-flex items-center justify-end gap-1" style={{ color: ovrColor(p.ratings.overall) }}>
+        {p.ratings.overall}
+        <OvrTrend player={p} />
+      </span>
       <span className="text-right tabular-nums text-sm opacity-70">{p.development.potential}</span>
       <span className="text-right tabular-nums text-xs">{contractLabel(p, season)}</span>
       <span className="text-right text-xs text-[var(--text-sec)]">{acquiredLabel(p)}</span>
@@ -437,6 +449,24 @@ function PlayerCells({
         )}
       </span>
     </>
+  );
+}
+
+/** Tiny inline OVR movement vs the pre-offseason snapshot (▲ +3 / ▼ -2). */
+function OvrTrend({ player }: { player: BasketballPlayer }) {
+  const prev = player.sportData.prevRatings?.overall;
+  if (prev == null) return null;
+  const delta = player.ratings.overall - prev;
+  if (delta === 0) return null;
+  const up = delta > 0;
+  return (
+    <span
+      className="text-[9px] font-bold leading-none tabular-nums"
+      style={{ color: up ? '#10b981' : '#dc2626' }}
+      title={`${up ? '+' : ''}${delta} OVR since last season`}
+    >
+      {up ? '▲' : '▼'}{up ? '+' : ''}{delta}
+    </span>
   );
 }
 
@@ -519,6 +549,22 @@ function ovrColor(v: number): string {
   if (v >= 70) return '#eab308';
   if (v >= 60) return '#f97316';
   return '#dc2626';
+}
+
+/** Turn a lineup-validation warning into player-friendly text: the engine builds
+ *  messages with raw player IDs (e.g. "player-105 listed as PG …"), so swap any
+ *  rostered player's id for their name before showing it. */
+function humanizeWarning(w: ValidationViolation, roster: BasketballPlayer[]): string {
+  const named = (p: BasketballPlayer) => `${p.firstName} ${p.lastName}`;
+  // Prefer the structured ref when present; still scrub the message body for any
+  // other ids that might be embedded.
+  let msg = w.message;
+  const ref = roster.find(p => p.id === w.ref?.id);
+  if (ref) msg = msg.split(ref.id).join(named(ref));
+  for (const p of roster) {
+    if (msg.includes(p.id)) msg = msg.split(p.id).join(named(p));
+  }
+  return msg;
 }
 
 function contractLabel(p: BasketballPlayer, season: number): string {

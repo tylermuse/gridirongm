@@ -64,6 +64,27 @@ function contractYearsLeft(player: BasketballPlayer, season: number): number {
   return player.contract.years.filter(y => y.season >= season).length;
 }
 
+/**
+ * Present-output value (PTS) from a player's most recent box production, on the
+ * SAME scale as the OVR-based value. Deliberately age-NEUTRAL: a contender buys
+ * this season's production regardless of the player's birthday, which is why a
+ * productive 34-yo vet shouldn't be valued like a washed role player. Returns 0
+ * when there's no logged production (e.g. an unproven rookie — his value comes
+ * from OVR/POT instead). Convex so stars dwarf rotation pieces.
+ */
+function recentProductionValue(player: BasketballPlayer): number {
+  const log = player.sportData?.seasonLog;
+  if (!log || log.length === 0) return 0;
+  const recent = log.reduce((a, b) => (b.season > a.season ? b : a));
+  if (recent.gamesPlayed < 10) return 0; // tiny sample → no production floor
+  // Rough box contribution; PPG dominates, with credit for boards + playmaking.
+  const boxScore = recent.ppg + 0.4 * recent.rpg + 0.5 * recent.apg;
+  // Calibrated so a ~36 box (30/8/6 superstar) ≈ 3,200; a ~25 (21/4/5 star vet)
+  // ≈ 1,400; a ~10 (role player) ≈ 200 — comparable to a mid-first-round pick.
+  const norm = Math.max(0, boxScore / 36);
+  return Math.round(Math.pow(norm, 2.2) * 3200);
+}
+
 export interface TradeValueOptions {
   /** Season the trade resolves in — drives the cap basis + contract year. */
   season: number;
@@ -88,7 +109,13 @@ export function basketballTradeValue(player: BasketballPlayer, opts: TradeValueO
   const potGap = Math.max(0, potential - ovr);
   const potBonus = potGap * (age <= 23 ? 6 : age <= 27 ? 3 : 1);
 
-  let value = (base + potBonus) * ageTradeMultiplier(age) * (POSITION_VALUE_MULT[pos] ?? 1.0);
+  const ovrValue = (base + potBonus) * ageTradeMultiplier(age) * (POSITION_VALUE_MULT[pos] ?? 1.0);
+
+  // Production floor: a still-productive player can't be valued below what his
+  // current output is worth to a contender, even if the age curve hammers his
+  // OVR-based value. This is what keeps a 21-PPG vet ahead of a raw teenager.
+  const prodValue = recentProductionValue(player) * (POSITION_VALUE_MULT[pos] ?? 1.0);
+  let value = Math.max(ovrValue, prodValue);
 
   // Contract adjustment: surplus vs. market lifts value, overpay drags it.
   const market = basketballMarketSalary(player, { season: opts.season });

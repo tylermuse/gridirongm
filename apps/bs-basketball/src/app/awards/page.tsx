@@ -194,12 +194,12 @@ function AwardCard({
     return (
       <Shell def={def}>
         {topTeam ? (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <TeamLogo
               abbreviation={topTeam.abbreviation}
               primaryColor={topTeam.primaryColor}
               secondaryColor={topTeam.secondaryColor}
-              size="lg"
+              size="md"
             />
             <div className="min-w-0">
               <div className="font-bold truncate">{topTeam.city} coaching staff</div>
@@ -240,48 +240,50 @@ function AwardCard({
 
   return (
     <Shell def={def}>
-      <button
-        onClick={() => onPlayerClick(player.id)}
-        className="flex items-center gap-3 w-full text-left group"
-      >
-        <PlayerAvatar
-          firstName={player.firstName}
-          lastName={player.lastName}
-          primaryColor={team?.primaryColor ?? '#999'}
-          secondaryColor={team?.secondaryColor ?? '#fff'}
-          size="lg"
-        />
-        <div className="min-w-0">
-          <div className="font-bold truncate group-hover:underline">
-            {player.firstName} {player.lastName}
-          </div>
-          {team && (
-            <div className="flex items-center gap-1.5 text-xs text-[var(--text-sec)]">
-              <TeamLogo
-                abbreviation={team.abbreviation}
-                primaryColor={team.primaryColor}
-                secondaryColor={team.secondaryColor}
-                size="xs"
-              />
-              {team.city} · {player.sportData.position}
+      <div className="flex items-center gap-2.5">
+        <button
+          onClick={() => onPlayerClick(player.id)}
+          className="flex items-center gap-2.5 min-w-0 text-left group"
+        >
+          <PlayerAvatar
+            firstName={player.firstName}
+            lastName={player.lastName}
+            primaryColor={team?.primaryColor ?? '#999'}
+            secondaryColor={team?.secondaryColor ?? '#fff'}
+            size="md"
+          />
+          <div className="min-w-0">
+            <div className="font-bold truncate group-hover:underline leading-tight">
+              {player.firstName} {player.lastName}
             </div>
-          )}
-        </div>
-      </button>
+            {team && (
+              <div className="flex items-center gap-1.5 text-xs text-[var(--text-sec)]">
+                <TeamLogo
+                  abbreviation={team.abbreviation}
+                  primaryColor={team.primaryColor}
+                  secondaryColor={team.secondaryColor}
+                  size="xs"
+                />
+                {team.city} · {player.sportData.position}
+              </div>
+            )}
+          </div>
+        </button>
 
-      <div className="flex gap-4 mt-3">
-        {statline.map(s => (
-          <div key={s.label}>
-            <div className="text-lg font-black tabular-nums" style={{ color: 'var(--accent)' }}>
-              {s.value}
+        <div className="ml-auto flex gap-3 shrink-0">
+          {statline.map(s => (
+            <div key={s.label} className="text-right">
+              <div className="text-base font-black tabular-nums leading-tight" style={{ color: 'var(--accent)' }}>
+                {s.value}
+              </div>
+              <div className="text-[9px] uppercase tracking-widest opacity-60">{s.label}</div>
             </div>
-            <div className="text-[10px] uppercase tracking-widest opacity-60">{s.label}</div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {winner.finalists.length > 0 && (
-        <div className="mt-3 pt-3 border-t text-xs text-[var(--text-sec)]" style={{ borderColor: 'var(--border)' }}>
+        <div className="mt-2 pt-2 border-t text-[11px] text-[var(--text-sec)] truncate" style={{ borderColor: 'var(--border)' }}>
           <span className="opacity-60">Finalists: </span>
           {winner.finalists
             .map(id => playerById[id])
@@ -343,10 +345,10 @@ function AllLeagueSection({
 
 function Shell({ def, children }: { def: AwardDef; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border bg-[var(--surface)] p-4" style={{ borderColor: 'var(--border)' }}>
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-2xl leading-none" aria-hidden>{def.emoji}</span>
-        <h2 className="text-xs uppercase tracking-widest font-bold opacity-70">{def.label}</h2>
+    <section className="rounded-xl border bg-[var(--surface)] p-3" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-lg leading-none" aria-hidden>{def.emoji}</span>
+        <h2 className="text-[11px] uppercase tracking-widest font-bold opacity-70">{def.label}</h2>
       </div>
       {children}
     </section>

@@ -16,11 +16,20 @@ export { teamStrategy, type TeamStrategy } from './strategy';
 export {
   getTeamPicks,
   pickFromId,
+  pickKey,
   pickLabel,
   pickShort,
   pickValue,
   pickWindow,
+  getProtection,
+  protectionText,
+  protectionShort,
+  resolveProtectedPicks,
+  describeConveyance,
   type OwnedPick,
+  type PickProtection,
+  type ProtectionTerms,
+  type PickConveyance,
 } from './picks';
 export {
   refreshTradeRumors,

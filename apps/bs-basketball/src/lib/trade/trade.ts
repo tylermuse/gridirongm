@@ -17,7 +17,7 @@ import type { BaseDraftPick, BaseLeagueState, PlayerId, TeamId } from '@bs/core/
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { appendTransaction } from '../transactions';
 import { teamStrategy } from './strategy';
-import { applyPickMoves, pickFromId, pickShort, pickValueFnFor } from './picks';
+import { applyPickMoves, pickFromId, pickShort, pickValueFnFor, type ProtectionTerms } from './picks';
 import { appendProposal, computeTradeGrade, type ProposalRecord } from './history';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
@@ -27,6 +27,9 @@ export interface TradeSideInput {
   playerIds: PlayerId[];
   /** Pick ids (see picks.ts) this team sends. Optional for back-compat. */
   pickIds?: string[];
+  /** Protection terms keyed by pick id, for picks this team sends. The receiving
+   *  team becomes the creditor; conveyance resolves at the lottery. */
+  pickProtections?: Record<string, ProtectionTerms>;
 }
 
 function teamRosters(league: LeagueState): Map<TeamId, BasketballPlayer[]> {
@@ -146,11 +149,16 @@ export function executeTrade(league: LeagueState, sides: TradeSideInput[]): Leag
   if (sides.length !== 2) throw new Error('v1 trades are two-team only.');
   const [a, b] = sides;
 
-  // Draft picks change hands first (pure ownership-registry update).
-  const pickMoves = [
-    ...picksForSide(league, a).map(pick => ({ pick, toTeamId: b.teamId })),
-    ...picksForSide(league, b).map(pick => ({ pick, toTeamId: a.teamId })),
-  ];
+  // Draft picks change hands first (pure ownership-registry update). A pick may
+  // carry protection terms (keyed by pick id on the sending side), which leave
+  // the conveyance conditional on the lottery.
+  const movesFor = (from: TradeSideInput, toTeamId: TeamId) =>
+    picksForSide(league, from).map(pick => ({
+      pick,
+      toTeamId,
+      protection: from.pickProtections?.[(pick as { id?: string }).id ?? ''],
+    }));
+  const pickMoves = [...movesFor(a, b.teamId), ...movesFor(b, a.teamId)];
   const aPickLabels = picksForSide(league, a).map(p => pickShort(league, p));
   const bPickLabels = picksForSide(league, b).map(p => pickShort(league, p));
   league = applyPickMoves(league, pickMoves);

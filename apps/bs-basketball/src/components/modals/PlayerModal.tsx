@@ -12,15 +12,21 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { Modal } from './Modal';
 import { isGodMode } from '@/lib/godMode/godMode';
+import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
+import { getInjuries, SEVERITY_LABEL } from '@/lib/injuries';
 import {
   basketballUiMetadata,
   type BasketballPlayer,
+  type BasketballStats,
   type BasketballTeam,
+  type PlayerSeasonLogEntry,
 } from '@bs/sport-basketball';
 
 interface PlayerModalProps {
@@ -30,6 +36,7 @@ interface PlayerModalProps {
 
 export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
   const league = useLeagueStore(s => s.league);
+  const router = useRouter();
 
   const player = playerId && league
     ? ((league.players as Record<string, BasketballPlayer>)[playerId] ?? null)
@@ -39,6 +46,31 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
     player?.rosterSlot && league
       ? ((league.teams.find(t => t.id === player.rosterSlot!.teamId) as BasketballTeam | undefined) ?? null)
       : null;
+
+  // Current-season averages (aggregated lazily from box scores) and the
+  // last-season line from the rollover log for comparison.
+  const seasonStats: BasketballStats | null =
+    player && league ? statsForPlayer(regularSeasonStatsByPlayer(league), player.id) : null;
+  const lastSeason: PlayerSeasonLogEntry | null = player
+    ? (player.sportData.seasonLog?.[player.sportData.seasonLog.length - 1] ?? null)
+    : null;
+
+  // OVR trend vs the pre-offseason snapshot.
+  const ovrDelta = player
+    ? player.ratings.overall - (player.sportData.prevRatings?.overall ?? player.ratings.overall)
+    : 0;
+
+  // Injury status (current day = league.currentTick).
+  const injuries = league ? getInjuries(league) : {};
+  const injury = player ? injuries[player.id] : undefined;
+  const day = league?.currentTick ?? 0;
+  const injuryActive = !!injury && injury.returnDay > day;
+
+  // "Trade for this player" — only for players on another team while managing.
+  const canTradeFor =
+    !!player?.rosterSlot &&
+    !!league?.userTeamId &&
+    player.rosterSlot.teamId !== league.userTeamId;
 
   // Group ratings by category as declared in basketballUiMetadata.
   const grouped = new Map<string, { key: string; label: string }[]>();
@@ -77,12 +109,15 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                 {' · '}<span className="capitalize">{player.sportData.starTier}</span>
               </p>
             </div>
-            <div
-              className="ml-auto text-4xl font-extrabold px-4 py-1 rounded-lg text-white"
-              style={{ background: 'var(--accent)' }}
-              title="Overall rating"
-            >
-              {player.ratings.overall}
+            <div className="ml-auto flex flex-col items-end gap-1">
+              <div
+                className="text-4xl font-extrabold px-4 py-1 rounded-lg text-white"
+                style={{ background: 'var(--accent)' }}
+                title="Overall rating"
+              >
+                {player.ratings.overall}
+              </div>
+              <OvrTrend delta={ovrDelta} />
             </div>
           </header>
 
@@ -95,7 +130,60 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
               {player.development.currentTrajectory}
             </Badge>
             {player.sportData.isTwoWay && <Badge variant="amber" size="md">Two-way</Badge>}
+            {injuryActive && injury && (
+              <Badge variant="red" size="md">
+                {injury.returnDay >= 50_000
+                  ? `Out for season (${injury.bodyPart})`
+                  : `Out: ${injury.bodyPart} · ${injury.returnDay - day}d (${SEVERITY_LABEL[injury.severity]})`}
+              </Badge>
+            )}
           </div>
+
+          {/* Stat lines: current season + last-season comparison. */}
+          {(seasonStats?.gamesPlayed || lastSeason) && (
+            <div
+              className="mb-5 p-3 rounded-lg space-y-2"
+              style={{ background: 'var(--surface-2)' }}
+            >
+              {seasonStats && seasonStats.gamesPlayed > 0 && (
+                <StatLine
+                  label="This season"
+                  ppg={per(seasonStats.points, seasonStats.gamesPlayed)}
+                  rpg={per(seasonStats.totalRebounds, seasonStats.gamesPlayed)}
+                  apg={per(seasonStats.assists, seasonStats.gamesPlayed)}
+                  fgPct={pct(seasonStats.fieldGoalsMade, seasonStats.fieldGoalsAttempted)}
+                  tpPct={pct(seasonStats.threePointsMade, seasonStats.threePointsAttempted)}
+                  gp={seasonStats.gamesPlayed}
+                  mpg={per(seasonStats.minutes, seasonStats.gamesPlayed)}
+                />
+              )}
+              {lastSeason && (
+                <StatLine
+                  label="Last season"
+                  ppg={lastSeason.ppg.toFixed(1)}
+                  rpg={lastSeason.rpg.toFixed(1)}
+                  apg={lastSeason.apg.toFixed(1)}
+                  gp={lastSeason.gamesPlayed}
+                  muted
+                />
+              )}
+            </div>
+          )}
+
+          {canTradeFor && player.rosterSlot && (
+            <div className="mb-5">
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => {
+                  onClose();
+                  router.push(`/trade?target=${player.rosterSlot!.teamId}&getPlayer=${player.id}`);
+                }}
+              >
+                🔁 Trade for this player
+              </Button>
+            </div>
+          )}
 
           <section className="grid sm:grid-cols-2 gap-4">
             {[...grouped.entries()].map(([group, fields]) => (
@@ -184,6 +272,57 @@ function Stepper({ label, value, min, max, onChange }: { label: string; value: n
       </div>
     </div>
   );
+}
+
+/** OVR delta indicator vs the pre-offseason snapshot. Nothing when delta is 0. */
+function OvrTrend({ delta }: { delta: number }) {
+  if (delta === 0) return null;
+  const up = delta > 0;
+  return (
+    <span
+      className="text-xs font-bold tabular-nums"
+      style={{ color: up ? '#10b981' : '#dc2626' }}
+      title="Change vs last season"
+    >
+      {up ? '▲' : '▼'} {up ? '+' : ''}{delta}
+    </span>
+  );
+}
+
+function StatLine({
+  label, ppg, rpg, apg, fgPct, tpPct, gp, mpg, muted,
+}: {
+  label: string;
+  ppg: string;
+  rpg: string;
+  apg: string;
+  fgPct?: string;
+  tpPct?: string;
+  gp: number;
+  mpg?: string;
+  muted?: boolean;
+}) {
+  return (
+    <div className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm ${muted ? 'opacity-70' : ''}`}>
+      <span className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-sec)] w-20">{label}</span>
+      <span><strong className="tabular-nums">{ppg}</strong> <span className="text-[var(--text-sec)] text-xs">PPG</span></span>
+      <span><strong className="tabular-nums">{rpg}</strong> <span className="text-[var(--text-sec)] text-xs">RPG</span></span>
+      <span><strong className="tabular-nums">{apg}</strong> <span className="text-[var(--text-sec)] text-xs">APG</span></span>
+      {fgPct && <span><strong className="tabular-nums">{fgPct}</strong> <span className="text-[var(--text-sec)] text-xs">FG</span></span>}
+      {tpPct && <span><strong className="tabular-nums">{tpPct}</strong> <span className="text-[var(--text-sec)] text-xs">3P</span></span>}
+      <span className="text-[var(--text-sec)] text-xs tabular-nums">{gp} GP{mpg ? ` · ${mpg} MPG` : ''}</span>
+    </div>
+  );
+}
+
+function per(total: number, games: number): string {
+  if (!games) return '0.0';
+  return (total / games).toFixed(1);
+}
+
+function pct(made: number, att: number): string {
+  if (!att) return '—';
+  return `${Math.round((made / att) * 100)}%`;
 }
 
 function ratingColor(v: number): string {

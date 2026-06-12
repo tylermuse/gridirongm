@@ -19,6 +19,7 @@ import {
   basketballMarketContractYears,
   basketballSalaryCap,
   basketballTeamPayroll,
+  basketballTeamCapStatus,
   LEAGUE_MINIMUM_SALARY,
   type BasketballPlayer,
 } from '@bs/sport-basketball';
@@ -45,6 +46,10 @@ interface LeagueSportData {
   freeAgentLastTeam?: Record<string, TeamId>;
   /** Current day of the free-agency window (0..FA_DAYS). Drives price decay. */
   faDay?: number;
+  /** Set once the user tips off the regular season from the FA window. Until
+   *  then the preseason steers to free agency even though a schedule exists;
+   *  after it, Day 1 is live and unplayed (we do NOT auto-sim game 1). */
+  seasonStarted?: boolean;
   [key: string]: unknown;
 }
 
@@ -55,6 +60,13 @@ export const FA_DAYS = 30;
 export function getFaDay(league: LeagueState): number {
   const d = (league.sportData as LeagueSportData | undefined)?.faDay ?? 0;
   return Math.max(0, Math.min(FA_DAYS, d));
+}
+
+/** True once the user has tipped off the regular season from the FA window.
+ *  Distinguishes "still in the preseason FA window" (free agents linger in the
+ *  pool all season) from "season is live, Day 1 unplayed". */
+export function isSeasonUnderway(league: LeagueState): boolean {
+  return (league.sportData as LeagueSportData | undefined)?.seasonStarted === true;
 }
 
 /** Market price multiplier as the window ages: 1.0 on day 0 → 0.6 by day 30.
@@ -141,6 +153,36 @@ export function capRoom(league: LeagueState, teamId: TeamId): number {
   return basketballSalaryCap(league.currentSeason) - payroll;
 }
 
+/**
+ * The most a team can realistically commit to a SINGLE free agent this offseason
+ * — the key to a live market. Cap room alone makes almost no one a bidder
+ * (most rosters are over the cap), which is why competition used to read "none."
+ * Over-cap teams get a Mid-Level-style exception instead, scaled down past the
+ * tax/apron and gone above the second apron (where only minimums remain). Every
+ * team can always offer at least the league minimum to fill out a roster.
+ */
+export function signingBudget(league: LeagueState, teamId: TeamId): number {
+  const team = league.teams.find(t => t.id === teamId);
+  if (!team) return 0;
+  const season = league.currentSeason;
+  const players = team.playerIds
+    .map(id => league.players[id] as BasketballPlayer | undefined)
+    .filter((p): p is BasketballPlayer => !!p);
+  const status = basketballTeamCapStatus(players, season);
+  if (status.capRoom > 0) return status.capRoom; // under the cap → full room
+
+  // Over the cap: largest available exception, scaled by how deep into the tax
+  // a team is, and hard-stopped at the second apron.
+  const cap = status.cap;
+  let exception: number;
+  if (status.isOverSecondApron) exception = 0; // only minimum deals remain
+  else if (status.isOverTax || status.isOverFirstApron) exception = cap * 0.04; // taxpayer MLE
+  else exception = cap * 0.094; // full non-tax MLE
+  // Don't let an exception signing punch through the second apron.
+  const apronHeadroom = Math.max(0, status.secondApron - status.payroll);
+  return Math.max(LEAGUE_MINIMUM_SALARY, Math.min(exception, apronHeadroom));
+}
+
 // ===========================================================================
 // Offer math
 // ===========================================================================
@@ -159,29 +201,57 @@ export function acceptanceProbability(
   return clamp(vsMarket * (0.45 + 0.55 * vsCompeting), 0.02, 0.98);
 }
 
-/** The best competing AI offer: a team with cap room + need willing to pay
- *  market for the desired term. Null if no one is interested. */
+/** The best competing AI offer: a team that can afford the player (cap room or
+ *  an exception) and either has an open spot at a need or would waive its weakest
+ *  player to add a clear upgrade. Null if no one is interested. Mirrors the logic
+ *  in `runAiFreeAgency`, so the displayed "Competition" matches who would sign. */
 export function bestCompetingOffer(
   league: LeagueState,
   info: FreeAgentInfo,
 ): { teamId: TeamId; total: number } | null {
   const pos = info.player.sportData.position;
   const total = info.marketSalary * info.desiredYears;
+  const ovr = info.player.ratings.overall;
 
   let best: { teamId: TeamId; score: number } | null = null;
   for (const team of league.teams) {
     if (team.id === league.userTeamId) continue;
-    if (team.playerIds.length >= MAX_ROSTER) continue;
-    if (capRoom(league, team.id) < info.marketSalary) continue;
-    // Positional need: how light is the team at this position?
-    const atPos = team.playerIds.filter(
-      id => (league.players[id] as BasketballPlayer | undefined)?.sportData.position === pos,
-    ).length;
+    const roster = team.playerIds
+      .map(id => league.players[id] as BasketballPlayer | undefined)
+      .filter((p): p is BasketballPlayer => !!p);
+    const atPos = roster.filter(p => p.sportData.position === pos).length;
     const need = atPos <= 1 ? 2 : atPos === 2 ? 1 : 0;
-    // Only contenders for needs / good players bid.
-    if (need === 0 && info.player.ratings.overall < 75) continue;
-    const score = need * 100 + info.player.ratings.overall;
+
+    let affordable: boolean;
+    if (team.playerIds.length < MAX_ROSTER) {
+      // Open spot: afford straight from the budget; only bid on a need or talent.
+      if (need === 0 && ovr < 75) continue;
+      affordable = signingBudget(league, team.id) >= info.marketSalary;
+    } else {
+      // Full roster: a contender waives its weakest player for a clear upgrade.
+      const worst = roster.length ? Math.min(...roster.map(p => p.ratings.overall)) : 99;
+      if (ovr < worst + 4) continue; // not enough of an upgrade to bother
+      const worstSalary = [...roster].sort((a, b) => a.ratings.overall - b.ratings.overall)[0]?.contract?.years[0]?.baseSalary ?? 0;
+      affordable = signingBudget(league, team.id) + worstSalary >= info.marketSalary;
+    }
+    if (!affordable) continue;
+
+    let score = need * 100 + ovr;
+    // Bird rights: a player's former team can exceed the cap to keep him, and
+    // fights to do so. Give that team a strong re-sign edge regardless of budget.
+    if (info.birdRights !== 'none' && team.id === info.lastTeamId) score += 250;
     if (!best || score > best.score) best = { teamId: team.id, score };
+  }
+
+  // Even a capped-out former team with Bird rights stays in the hunt — model it
+  // as a competitor at market when nobody else qualified (or it'd outbid them).
+  if (info.birdRights !== 'none' && info.lastTeamId && info.lastTeamId !== league.userTeamId) {
+    const holder = league.teams.find(t => t.id === info.lastTeamId);
+    if (holder && holder.playerIds.length < MAX_ROSTER && (!best || best.teamId !== info.lastTeamId)) {
+      // Bird team's effective pull beats a non-Bird suitor of similar interest.
+      const bestScore = best ? best.score : 0;
+      if (250 + ovr >= bestScore) best = { teamId: info.lastTeamId, score: 250 + ovr };
+    }
   }
   return best ? { teamId: best.teamId, total } : null;
 }
@@ -500,10 +570,10 @@ export function runAiFreeAgency(league: LeagueState, opts?: { rounds?: number })
 
       // 1) Fill an open spot at a position of need with the best affordable FA.
       if (rosterCount(l, teamId) < MAX_ROSTER) {
-        const room = capRoom(l, teamId);
+        const budget = signingBudget(l, teamId);
         const roster = rosterPlayers(l, teamId);
         const fill = freeAgentPool(l).find(f => {
-          if (f.marketSalary > room) return false;
+          if (f.marketSalary > budget) return false;
           const atPos = countAtPos(roster, f.player.sportData.position);
           return atPos < 2 || f.player.ratings.overall >= 75; // need, or a clear talent add
         });
@@ -517,12 +587,22 @@ export function runAiFreeAgency(league: LeagueState, opts?: { rounds?: number })
 
       // 2) One upgrade: swap the weakest rostered player for a notably better,
       //    affordable free agent (room frees up once the weak player is waived).
+      //    Never waive a team's LAST player at a position — a real GM keeps
+      //    positional coverage, and dropping the only C/PG would leave a hole the
+      //    next sim can't fill (also kept the multi-season roster invariant safe).
       const roster = rosterPlayers(l, teamId);
       if (roster.length === 0) continue;
-      const worst = [...roster].sort((a, b) => ovr(a) - ovr(b))[0];
-      const roomAfterWaive = capRoom(l, teamId) + (worst.contract?.years[0]?.baseSalary ?? 0);
+      const posCount: Record<string, number> = {};
+      for (const p of roster) posCount[p.sportData.position] = (posCount[p.sportData.position] ?? 0) + 1;
+      const worst = [...roster]
+        .filter(p => (posCount[p.sportData.position] ?? 0) > 1)
+        .sort((a, b) => ovr(a) - ovr(b))[0];
+      if (!worst) continue; // can't waive anyone without opening a positional hole
+      const budgetAfterWaive = signingBudget(l, teamId) + (worst.contract?.years[0]?.baseSalary ?? 0);
+      // Replace like-for-like at the freed position so coverage is preserved.
       const upgrade = freeAgentPool(l).find(f =>
-        f.player.ratings.overall >= ovr(worst) + UPGRADE_GAP && f.marketSalary <= roomAfterWaive,
+        f.player.sportData.position === worst.sportData.position &&
+        f.player.ratings.overall >= ovr(worst) + UPGRADE_GAP && f.marketSalary <= budgetAfterWaive,
       );
       if (upgrade) {
         l = waivePlayer(l, teamId, worst.id);

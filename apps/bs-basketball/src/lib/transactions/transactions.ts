@@ -13,7 +13,7 @@ import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
-export type TransactionKind = 'trade' | 'signing' | 'release' | 'draft';
+export type TransactionKind = 'trade' | 'signing' | 'release' | 'draft' | 'pick';
 
 export interface TransactionEntry {
   kind: TransactionKind;

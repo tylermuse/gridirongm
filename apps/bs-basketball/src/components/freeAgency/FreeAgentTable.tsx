@@ -147,7 +147,19 @@ function FaIntel({ league, info, room, teamById }: { league: BasketballLeagueSta
         <div><L>Accepts at market</L><div className="font-bold tabular-nums" style={{ color: accept >= 60 ? '#10b981' : accept >= 35 ? '#d97706' : '#dc2626' }}>{accept}%</div></div>
         <div><L>Market ask</L><div className="font-bold tabular-nums">{money(info.marketSalary)}/yr · {info.desiredYears}y</div><div className="opacity-60">{money(total)} total</div></div>
         <div><L>Competition</L><div className="font-semibold">{compTeam ? `${compTeam.city} ~${money(competing!.total)}` : 'No competing interest'}</div></div>
-        <div><L>Bird rights</L><div className="font-semibold capitalize">{info.birdRights}{info.birdRights !== 'none' ? ' — exceed cap to re-sign' : ''}</div></div>
+        <div>
+          <L>Bird rights</L>
+          <div
+            className="font-semibold capitalize"
+            title={
+              info.birdRights === 'none'
+                ? 'No Bird rights: his former team has no cap exception to re-sign him, so he signs like any free agent.'
+                : 'Bird rights let his former team exceed the salary cap to re-sign him (earned by 2-3 seasons on a roster). That team competes hard to keep him even when capped out.'
+            }
+          >
+            {info.birdRights}{info.birdRights !== 'none' ? ' — former team can exceed cap to keep him' : ''}
+          </div>
+        </div>
       </div>
       <div className="text-xs italic text-[var(--text-sec)]">
         GM take: {accept >= 60 ? 'Should sign at market.' : accept >= 35 ? 'May need to beat the market or his ask.' : 'Will likely take a better offer elsewhere.'}{!affordable ? ' Over your cap room — clear space first.' : ''}
