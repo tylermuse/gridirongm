@@ -4,17 +4,17 @@ import Link from 'next/link';
 
 /**
  * Offseason step indicator (parity with football's expansion stepper). Shows the
- * BS Hoops offseason order — Draft → Re-sign → Cuts → Free Agency — with the
- * current step highlighted. Steps link to their page.
+ * BS Hoops offseason order — Draft → Re-sign → Free Agency — with the current
+ * step highlighted. Steps link to their page. Roster cuts aren't a separate step:
+ * they're folded into Re-sign as a hard 15-man gate before the season starts.
  */
 
-export type OffseasonStep = 'resign' | 'draft' | 'cuts' | 'fa';
+export type OffseasonStep = 'resign' | 'draft' | 'fa';
 
 const STEPS: { key: OffseasonStep; label: string; href: string }[] = [
   { key: 'draft', label: '1. Draft', href: '/draft' },
   { key: 'resign', label: '2. Re-sign', href: '/re-sign' },
-  { key: 'cuts', label: '3. Cuts', href: '/post-draft-cuts' },
-  { key: 'fa', label: '4. Free Agency', href: '/free-agency' },
+  { key: 'fa', label: '3. Free Agency', href: '/free-agency' },
 ];
 
 export function OffseasonStepper({ active }: { active: OffseasonStep }) {

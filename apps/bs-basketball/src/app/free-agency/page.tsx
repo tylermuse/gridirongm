@@ -24,6 +24,7 @@ import {
   type CounterOffer,
 } from '@/lib/freeAgency';
 import { OffseasonStepper } from '@/components/shell/OffseasonStepper';
+import { positionNeeds } from '@/lib/draft/needs';
 import type { BasketballPlayer, BasketballPosition, BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -137,6 +138,10 @@ export default function FreeAgencyPage() {
           )}
         </div>
       </header>
+
+      {/* Roster needs — count gaps + quality (upgrade) gaps, so you don't have to
+          flip back to Roster & Lineup to see where you're thin. */}
+      {userTeam && <RosterNeeds players={league.players as Record<string, BasketballPlayer>} team={userTeam} />}
 
       {/* FA day clock + price-decay phase */}
       <div className="mb-5">
@@ -312,6 +317,60 @@ export default function FreeAgencyPage() {
 // ===========================================================================
 // Bits
 // ===========================================================================
+
+/**
+ * Roster-needs strip: per-position depth + best OVR, flagging count gaps (thin)
+ * and quality gaps (enough bodies but no starter-grade option). Count side reuses
+ * the draft's positionNeeds; quality is best-OVR < starter threshold.
+ */
+const STARTER_OVR = 75;
+function RosterNeeds({ players, team }: { players: Record<string, BasketballPlayer>; team: BasketballTeam }) {
+  const POS: BasketballPosition[] = ['PG', 'SG', 'SF', 'PF', 'C'];
+  const needs = positionNeeds(team, players);
+  const countByPos = new Map(needs.map(n => [n.position, n.count] as const));
+  const bestOvr: Record<BasketballPosition, number> = { PG: 0, SG: 0, SF: 0, PF: 0, C: 0 };
+  for (const id of team.playerIds) {
+    const p = players[id];
+    if (p) bestOvr[p.sportData.position] = Math.max(bestOvr[p.sportData.position], p.ratings.overall);
+  }
+
+  const items = POS.map(pos => {
+    const count = countByPos.get(pos) ?? 0;
+    const best = bestOvr[pos];
+    let kind: 'count' | 'quality' | 'ok';
+    let note: string;
+    if (count <= 1) { kind = 'count'; note = count === 0 ? 'empty' : 'thin'; }
+    else if (count === 2) { kind = 'count'; note = 'shallow'; }
+    else if (best < STARTER_OVR) { kind = 'quality'; note = 'upgrade'; }
+    else { kind = 'ok'; note = 'set'; }
+    const color = kind === 'count' ? (count <= 1 ? '#dc2626' : '#d97706') : kind === 'quality' ? '#2563eb' : '#10b981';
+    const bg = kind === 'ok' ? 'var(--surface-2)' : `color-mix(in srgb, ${color} 14%, transparent)`;
+    return { pos, count, best, kind, note, color, bg };
+  });
+  const gaps = items.filter(i => i.kind !== 'ok');
+
+  return (
+    <div className="rounded-xl border bg-[var(--surface)] px-4 py-3 mb-5" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex items-baseline gap-2 mb-2">
+        <span className="text-[10px] uppercase tracking-widest text-[var(--text-sec)]">Roster needs</span>
+        <span className="text-xs text-[var(--text-sec)]">
+          {gaps.length === 0
+            ? 'balanced across all five spots'
+            : gaps.map(g => g.kind === 'quality' ? `${g.pos} (upgrade)` : g.pos).join(' · ')}
+        </span>
+      </div>
+      <div className="grid grid-cols-5 gap-2">
+        {items.map(i => (
+          <div key={i.pos} className="rounded-lg px-2 py-1.5 text-center" style={{ background: i.bg }}>
+            <div className="text-xs font-black" style={{ color: i.kind === 'ok' ? 'var(--text)' : i.color }}>{i.pos}</div>
+            <div className="text-[11px] tabular-nums" style={{ color: 'var(--text-sec)' }}>{i.count} · {i.best || '—'} OVR</div>
+            <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: i.kind === 'ok' ? 'var(--text-sec)' : i.color }}>{i.note}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (

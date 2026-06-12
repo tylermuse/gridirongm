@@ -8,6 +8,7 @@ import { useLeagueStore } from '@/lib/store/leagueStore';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { getDraft, currentSlot, recommendedProspectId, buildLotteryReveal, buildLotteryBoard } from '@/lib/draft';
+import { userExpiringCount } from '@/lib/ui/nextAction';
 import { LotteryBoard } from '@/components/draft/LotteryBoard';
 import { OnTheClockSection } from '@/components/draft/OnTheClockSection';
 import { DraftBoardCard } from '@/components/draft/DraftBoardCard';
@@ -145,6 +146,10 @@ export default function DraftPage() {
   const slot = currentSlot(draft);
   const userOnClock = !!slot && slot.teamId === league.userTeamId;
   const resignCount = (league.sportData as { pendingResign?: string[] }).pendingResign?.length ?? 0;
+  // Single guided next-step after the draft (mirrors the top-bar nextAction).
+  const userTeam = league.userTeamId ? teamById.get(league.userTeamId) ?? null : null;
+  const expiringCount = !draft.inaugural ? userExpiringCount(league, draft.season) : 0;
+  const overLimit = !draft.inaugural && !!userTeam && userTeam.playerIds.length > 15;
   const recommendedId = !draft.complete ? recommendedProspectId(league, draft) : null;
 
   const pool = draft.poolIds
@@ -168,24 +173,33 @@ export default function DraftPage() {
 
   return (
     <Shell season={draft.season}>
-      {/* Draft-complete: re-sign comes next (then cuts, then free agency). */}
+      {/* Draft-complete: one guided next step — re-sign / trim, else start the
+          season. (Free agency surfaces in the preseason once the season tips.) */}
       {draft.complete && (
         <div className="flex flex-wrap items-center gap-3 mb-4">
-          <div className="font-bold">🏁 Draft complete — {draft.picks.length} picks in.</div>
+          <div className="font-bold">🏁 {draft.season} draft complete — {draft.picks.length} picks in.</div>
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" disabled={store.loading} onClick={() => void handleStartSeason('/')}>
-              Skip to season
-            </Button>
-            {!draft.inaugural && resignCount > 0 ? (
+            {expiringCount > 0 ? (
               <Link href="/re-sign" className="rounded-lg px-4 py-2 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>
-                Re-sign {resignCount} Player{resignCount === 1 ? '' : 's'} →
+                Re-sign {expiringCount} Player{expiringCount === 1 ? '' : 's'} →
+              </Link>
+            ) : overLimit ? (
+              <Link href="/re-sign" className="rounded-lg px-4 py-2 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>
+                Trim Roster to 15 →
               </Link>
             ) : (
               <Button variant="primary" disabled={store.loading} onClick={() => void handleStartSeason('/free-agency')}>
-                {store.loading ? 'Working…' : 'Sign Free Agents →'}
+                {store.loading ? 'Working…' : `Start ${draft.season} Season →`}
               </Button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Team grades + biggest steals, surfaced right at the top on completion. */}
+      {draft.complete && (
+        <div className="mb-4">
+          <DraftRecapInline league={league} />
         </div>
       )}
 
@@ -253,9 +267,6 @@ export default function DraftPage() {
           </div>
         );
       })()}
-
-      {/* Team grades, once the board's complete. */}
-      {draft.complete && <DraftRecapInline league={league} />}
 
       {tradeOpen && <DraftPickTradeModal onClose={() => setTradeOpen(false)} />}
     </Shell>
