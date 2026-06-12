@@ -1057,17 +1057,26 @@ export default function RosterPage() {
                   {(() => {
                     const formation = userTeam?.baseFormation ?? '4-3';
                     // Offense: same across formations.
-                    const offenseSlots: { label: string; pos: Position; idx: number }[] = [
+                    const offenseSlots: { label: string; pos: Position; idx: number; subPos?: SubPosition }[] = [
                       { label: 'QB', pos: 'QB', idx: 0 },
                       { label: 'RB', pos: 'RB', idx: 0 },
                       { label: 'WR1', pos: 'WR', idx: 0 },
                       { label: 'WR2', pos: 'WR', idx: 1 },
                       { label: 'TE', pos: 'TE', idx: 0 },
-                      { label: 'LT', pos: 'OL', idx: 0 },
-                      { label: 'LG', pos: 'OL', idx: 1 },
-                      { label: 'C',  pos: 'OL', idx: 2 },
-                      { label: 'RG', pos: 'OL', idx: 3 },
-                      { label: 'RT', pos: 'OL', idx: 4 },
+                      // OL slots route by sub-position, same as the defensive
+                      // slots below — otherwise renderSlot indexes into the
+                      // OVR-sorted OL pool and the highest-rated lineman lands
+                      // at LT regardless of his real spot (bryangrove 6/11:
+                      // Brewer, a 71-OVR center, showing at LT). subPos +
+                      // index mirrors assignOlSlots: LT/RT from OT, LG/RG
+                      // from OG, C from C. The fallback layer in renderSlot
+                      // fills a slot from the parent OL pool when a team lacks
+                      // a labeled player for it.
+                      { label: 'LT', pos: 'OL', idx: 0, subPos: 'OT' },
+                      { label: 'LG', pos: 'OL', idx: 0, subPos: 'OG' },
+                      { label: 'C',  pos: 'OL', idx: 0, subPos: 'C'  },
+                      { label: 'RG', pos: 'OL', idx: 1, subPos: 'OG' },
+                      { label: 'RT', pos: 'OL', idx: 1, subPos: 'OT' },
                     ];
                     // Defense: formation-specific slot counts plus a preferred
                     // sub-position per slot. renderSlot uses the sub-pos to
