@@ -13,6 +13,7 @@ import {
 } from '@/../apps/bs-basketball/src/lib/playoffs';
 import {
   applySeasonApproval, userPlayoffResult, jobSecurityFor, getGmFired,
+  getGmOpenings, clearGmFired,
 } from '@/../apps/bs-basketball/src/lib/approval';
 import type { BasketballTeam } from '@bs/sport-basketball';
 import type { TeamId } from '@bs/core/adapter';
@@ -68,5 +69,44 @@ describe('approval mechanics', () => {
     expect(res.fired).toBe(true);
     expect(res.league.userTeamId).toBeNull();
     expect(getGmFired(res.league)?.teamId).toBe(loser.id);
+  });
+});
+
+describe('taking over after a firing (BUG-23)', () => {
+  it('preserves the existing league — no regeneration, no data loss', () => {
+    const done = completeSeason('takeover-preserve');
+    const bracket = getBracket(done)!;
+    const playoff = new Set([...bracket.seeds.Eastern, ...bracket.seeds.Western]);
+    const loser = done.teams.find(t => !playoff.has(t.id))!;
+
+    // A custom-roster (imported) league the GM just got fired from. Build the
+    // fired state directly so this guards the takeover regardless of the firing
+    // rule. Capture the league's identity (teams + players + custom flag).
+    const openings = done.teams.filter(t => t.id !== loser.id).slice(0, 5).map(t => t.id);
+    const fired = {
+      ...done,
+      userTeamId: null,
+      sportData: {
+        ...(done.sportData as object),
+        imported: true,
+        gmFired: { season: done.currentSeason, teamId: loser.id, teamName: `${loser.city} ${loser.name}` },
+        gmOpenings: openings,
+      },
+    };
+    const teamIdsBefore = fired.teams.map(t => t.id).sort();
+    const playerIdsBefore = Object.keys(fired.players).sort();
+    const newTeamId = getGmOpenings(fired)[0];
+
+    // The store's pickUserTeam transform: take over WITHIN the league.
+    const after = clearGmFired({ ...fired, userTeamId: newTeamId });
+
+    // Same league: every team and player survives, custom-roster flag intact.
+    expect(after.teams.map(t => t.id).sort()).toEqual(teamIdsBefore);
+    expect(Object.keys(after.players).sort()).toEqual(playerIdsBefore);
+    expect((after.sportData as { imported?: boolean }).imported).toBe(true);
+    // The GM now controls the chosen club; the fired flags are cleared.
+    expect(after.userTeamId).toBe(newTeamId);
+    expect(getGmFired(after)).toBeUndefined();
+    expect(getGmOpenings(after)).toEqual([]);
   });
 });
