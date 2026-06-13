@@ -17,6 +17,7 @@ import { getHeadCoach, coachScheme, schemeFit, SCHEME_LABELS, type SchemeFit } f
 import { getInjuries } from '@/lib/injuries';
 import { teamCap, fmtMoney } from '@/lib/dashboard/summary';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
+import { lastSeasonLog } from '@/lib/stats/statLine';
 import { playerMood, moodFactors, type Mood, type MoodFactor } from '@/lib/roster/mood';
 import { contractYearsLeft } from '@/lib/roster/playerActions';
 import type { BasketballLineup, BasketballPlayer, BasketballPosition, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
@@ -458,6 +459,10 @@ function PlayerCells({
   onName: (id: string) => void;
 }) {
   const gp = stats.gamesPlayed;
+  // Before the season tips off (or right after taking over a team) nobody has
+  // current-season games, so fall back to last season's line so the inherited
+  // roster is still legible (BUG-24).
+  const lastLog = gp === 0 ? lastSeasonLog(p) : null;
   const per = (v: number) => (gp > 0 ? (v / gp).toFixed(1) : '—');
   const statLine = gp > 0 ? `${per(stats.points)} / ${per(stats.totalRebounds)} / ${per(stats.assists)}` : '—';
   const mpg = gp > 0 ? (stats.minutes / gp).toFixed(1) : null;
@@ -496,10 +501,21 @@ function PlayerCells({
       <span className="text-right tabular-nums text-sm opacity-70">{p.development.potential}</span>
       <span className="text-right tabular-nums text-xs">{contractLabel(p, season)}</span>
       <span className="text-right text-xs text-[var(--text-sec)]">{acquiredLabel(p)}</span>
-      <span className="text-right tabular-nums text-sm">{gp || '—'}</span>
+      <span className="text-right tabular-nums text-sm">{gp || (lastLog ? lastLog.gamesPlayed : '—')}</span>
       <span className="text-right tabular-nums text-xs leading-tight">
-        <span className="block">{statLine}</span>
-        {mpg && <span className="block text-[10px] opacity-60">{mpg} MP · {eff} PER</span>}
+        {gp > 0 ? (
+          <>
+            <span className="block">{statLine}</span>
+            {mpg && <span className="block text-[10px] opacity-60">{mpg} MP · {eff} PER</span>}
+          </>
+        ) : lastLog ? (
+          <>
+            <span className="block">{lastLog.ppg} / {lastLog.rpg} / {lastLog.apg}</span>
+            <span className="block text-[10px] opacity-60">&apos;{String(lastLog.season).slice(2)} · last season</span>
+          </>
+        ) : (
+          <span className="block">—</span>
+        )}
       </span>
       <span className="relative flex justify-center">
         {injury ? (
