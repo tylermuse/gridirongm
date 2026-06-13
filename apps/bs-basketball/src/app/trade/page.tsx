@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
@@ -28,7 +28,18 @@ type League = NonNullable<ReturnType<typeof useLeagueOrHydrate>['league']>;
  * cap/apron impact, and any blocking salary-match errors. Propose when legal +
  * accepted.
  */
-export default function TradePage() {
+// `useSearchParams()` (used inside TradePage for the FEAT-19 deep-link) triggers
+// a client-side bailout during static prerendering, so the page must sit inside
+// a Suspense boundary or `next build` fails exporting /trade.
+export default function TradePageRoute() {
+  return (
+    <Suspense fallback={null}>
+      <TradePage />
+    </Suspense>
+  );
+}
+
+function TradePage() {
   const { league, loading, error } = useLeagueOrHydrate();
   const store = useLeagueStore();
 
