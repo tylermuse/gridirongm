@@ -7,6 +7,7 @@ import { ratingColor } from '@/lib/ui/ratingColor';
 import { acceptanceProbability, bestCompetingOffer, rosterCount, MAX_ROSTER, type FreeAgentInfo } from '@/lib/freeAgency';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
 import type { BasketballTeam } from '@bs/sport-basketball';
+import { careerPerGameLine } from '@/lib/stats/statLine';
 
 /**
  * Sortable free-agent table with an expandable intel panel (parity with
@@ -24,8 +25,11 @@ function money(n: number): string {
 function lastLine(f: FreeAgentInfo): { ppg: number; text: string } {
   const log = f.player.sportData.seasonLog;
   const last = log && log.length ? log[log.length - 1] : null;
-  if (!last || !last.gamesPlayed) return { ppg: 0, text: '—' };
-  return { ppg: last.ppg, text: `${last.ppg}/${last.rpg}/${last.apg}` };
+  if (last && last.gamesPlayed) return { ppg: last.ppg, text: `${last.ppg}/${last.rpg}/${last.apg}` };
+  // Fallback: career per-game (BUG-27). Free agents who sat unsigned all year —
+  // or imported vets with no in-sim logged season — still show real production
+  // from their career totals instead of a bare "—".
+  return careerPerGameLine(f.player) ?? { ppg: 0, text: '—' };
 }
 
 export function FreeAgentTable({
