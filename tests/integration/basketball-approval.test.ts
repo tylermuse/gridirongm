@@ -50,25 +50,68 @@ describe('approval mechanics', () => {
     expect(after.jobSecurity).toBe('safe');
   });
 
-  it('fires the GM after a disastrous season', () => {
-    const done = completeSeason('approval-fire');
-    // Pick a non-playoff team and bottom out its owner approval to force a firing.
+});
+
+describe('firing rule — grace period + two strikes (BUG-22)', () => {
+  // A completed season where the user team missed the playoffs (playoffScore -12).
+  function missedLeague(seed: string) {
+    const done = completeSeason(seed);
     const bracket = getBracket(done)!;
     const playoff = new Set([...bracket.seeds.Eastern, ...bracket.seeds.Western]);
     const loser = done.teams.find(t => !playoff.has(t.id))!;
-    const league = {
+    return { done, loser };
+  }
+  function withState(
+    done: ReturnType<typeof completeSeason>,
+    loserId: TeamId,
+    s: { ownerApproval: number; tenureStart: number; consecutiveBad: number },
+  ) {
+    return {
       ...done,
-      userTeamId: loser.id,
-      teams: done.teams.map(t => t.id === loser.id
-        ? { ...t, approval: { ...t.approval, ownerApproval: 22 } }
-        : t),
+      userTeamId: loserId,
+      sportData: { ...(done.sportData as object), gmTenureStartSeason: s.tenureStart, gmConsecutiveBadSeasons: s.consecutiveBad },
+      teams: done.teams.map(t => t.id === loserId ? { ...t, approval: { ...t.approval, ownerApproval: s.ownerApproval } } : t),
     };
+  }
+  const badCount = (l: { sportData: unknown }) => (l.sportData as { gmConsecutiveBadSeasons?: number }).gmConsecutiveBadSeasons;
 
-    expect(userPlayoffResult(league, loser.id)).toBe('missed');
-    const res = applySeasonApproval(league);
+  it('one sub-threshold season is a final warning, not a firing', () => {
+    const { done, loser } = missedLeague('bug22-warn');
+    expect(userPlayoffResult({ ...done, userTeamId: loser.id }, loser.id)).toBe('missed');
+    const res = applySeasonApproval(withState(done, loser.id, { ownerApproval: 30, tenureStart: done.currentSeason - 5, consecutiveBad: 0 }));
+    expect(res.fired).toBe(false);
+    expect(res.league.userTeamId).toBe(loser.id);
+    expect((res.league.teams.find(t => t.id === loser.id) as BasketballTeam).approval.jobSecurity).toBe('final_warning');
+    expect(badCount(res.league)).toBe(1);
+  });
+
+  it('fires after two consecutive sub-threshold seasons, once past the grace window', () => {
+    const { done, loser } = missedLeague('bug22-fire');
+    const res = applySeasonApproval(withState(done, loser.id, { ownerApproval: 30, tenureStart: done.currentSeason - 5, consecutiveBad: 1 }));
     expect(res.fired).toBe(true);
     expect(res.league.userTeamId).toBeNull();
     expect(getGmFired(res.league)?.teamId).toBe(loser.id);
+  });
+
+  it('never fires within the first three seasons of a tenure (grace)', () => {
+    const { done, loser } = missedLeague('bug22-grace');
+    // Would be a second straight strike, but it's the GM's very first season.
+    const res = applySeasonApproval(withState(done, loser.id, { ownerApproval: 30, tenureStart: done.currentSeason, consecutiveBad: 1 }));
+    expect(res.fired).toBe(false);
+    expect((res.league.teams.find(t => t.id === loser.id) as BasketballTeam).approval.jobSecurity).toBe('final_warning');
+  });
+
+  it('an at/above-expectation season resets the bad-season counter', () => {
+    const done = completeSeason('bug22-reset');
+    const championId = getBracket(done)!.championTeamId as TeamId;
+    const league = {
+      ...done,
+      userTeamId: championId,
+      sportData: { ...(done.sportData as object), gmTenureStartSeason: done.currentSeason - 5, gmConsecutiveBadSeasons: 1 },
+    };
+    const res = applySeasonApproval(league);
+    expect(res.fired).toBe(false);
+    expect(badCount(res.league)).toBe(0);
   });
 });
 
