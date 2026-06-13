@@ -187,6 +187,50 @@ describe('FEAT-21: flexible G/F/C starter slots', () => {
   });
 });
 
+describe('BUG-21: young high-upside players get development minutes in the rotation', () => {
+  const mk = (
+    position: 'PG' | 'SG' | 'SF' | 'PF' | 'C',
+    overall: number,
+    age: number,
+    potential: number,
+  ): BasketballPlayer => {
+    const p = generateBasketballPlayer({ position, targetOverall: overall, age }) as BasketballPlayer;
+    // Pin OVR / potential / age so the rotation math is deterministic.
+    return { ...p, age, ratings: { ...p.ratings, overall }, development: { ...p.development, potential } };
+  };
+
+  it('slots a low-OVR but high-upside rookie into the 10-man rotation ahead of replacement vets', () => {
+    // Five clear starters, five replacement-level veterans (no upside), and one
+    // raw rookie whose current OVR is BELOW every veteran — under pure-OVR bench
+    // ordering he'd sit at the very back (roster spot 11) and never play.
+    const starters = [mk('PG', 80, 27, 80), mk('SG', 80, 27, 80), mk('SF', 80, 27, 80), mk('PF', 80, 27, 80), mk('C', 80, 27, 80)];
+    const vets = [mk('PG', 70, 30, 70), mk('SG', 70, 30, 70), mk('SF', 70, 30, 70), mk('PF', 70, 30, 70), mk('C', 70, 30, 70)];
+    const rookie = mk('SG', 66, 19, 92); // raw OVR 66 < vets, but big upside + youth
+    const roster = [...starters, ...vets, rookie];
+
+    const def = buildDefaultBasketballLineup(roster);
+
+    // The rookie is a reserve (the bump is bench-only — it never forces a start)...
+    expect(def.starters).not.toContain(rookie.id);
+    // ...but his development bump lifts him into the first five bench (the players
+    // the sim actually plays), ahead of the replacement-level veterans.
+    expect(def.bench.slice(0, 5)).toContain(rookie.id);
+    // A pure-OVR sort would have buried him dead last; the bump moved him up.
+    expect(def.bench[def.bench.length - 1]).not.toBe(rookie.id);
+  });
+
+  it('does not bump an older replacement-level player (no youth, no upside)', () => {
+    const starters = [mk('PG', 80, 27, 80), mk('SG', 80, 27, 80), mk('SF', 80, 27, 80), mk('PF', 80, 27, 80), mk('C', 80, 27, 80)];
+    const vets = [mk('PG', 72, 30, 72), mk('SG', 72, 30, 72), mk('SF', 72, 30, 72), mk('PF', 72, 30, 72), mk('C', 72, 30, 72)];
+    const oldScrub = mk('SG', 66, 31, 92); // same low OVR + "upside" but age 31 → no bump
+    const roster = [...starters, ...vets, oldScrub];
+
+    const def = buildDefaultBasketballLineup(roster);
+    // With no youth multiplier he stays behind the better veterans, at the back.
+    expect(def.bench.slice(0, 5)).not.toContain(oldScrub.id);
+  });
+});
+
 describe('FEAT-22: bench order controls minutes', () => {
   it('a bench player dragged higher out-minutes a higher-OVR player below him', () => {
     const { league, team, roster } = setup();
