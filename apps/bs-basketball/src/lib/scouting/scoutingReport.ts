@@ -54,13 +54,105 @@ export interface BasketballScoutingReport {
   keyRatings: RatingLine[];
 }
 
-const NBA_COMPS: Record<BasketballPosition, string[]> = {
-  PG: ['a rangy lead guard like Jalen Suggs', 'shades of Derrick White', 'a young Coby White', 'a steady Mike Conley type'],
-  SG: ['a 3-and-D wing in the DiVincenzo mold', 'flashes of Bogdan Bogdanović', 'a microwave scorer like Malik Monk', 'a bigger Gary Trent Jr.'],
-  SF: ['a connector forward like Mikal Bridges', 'two-way upside à la Herb Jones', 'a bigger OG Anunoby', 'a slasher like Cam Johnson'],
-  PF: ['a stretch four like Kyle Kuzma', 'rim-running energy à la Aaron Gordon', 'a switchy combo forward', 'a modern P.J. Washington'],
-  C: ['a rim-runner like Walker Kessler', 'rim protection à la Jarrett Allen', 'a stretch five like Myles Turner', 'a mobile Nic Claxton type'],
+/**
+ * NBA comparisons, keyed off a prospect's ARCHETYPE (not just raw position) and
+ * TIERED by projected ceiling (FEAT-28). An elite-ceiling stretch four maps to a
+ * star (KAT / Markkanen); a role-ceiling one maps to a bench spacer (Naz Reid /
+ * Olynyk) — never the reverse. Each archetype carries ~9–12 names across tiers,
+ * picked deterministically per prospect, so a given player's comp is stable while
+ * a draft class reads with real variety.
+ */
+type CompTier = 'elite' | 'solid' | 'role';
+
+const ARCHETYPE_COMPS: Record<string, Record<CompTier, string[]>> = {
+  'Floor general': {
+    elite: ['a maestro in the prime Chris Paul mold', 'shades of Tyrese Haliburton', 'a young Luka Dončić as a lead creator'],
+    solid: ['a steady orchestrator like Mike Conley', 'a pick-and-roll general à la Dejounte Murray', 'a table-setter like Tyus Jones'],
+    role: ['a heady reserve like T.J. McConnell', 'a backup floor general like Cory Joseph', 'a game-managing backup like Raul Neto'],
+  },
+  'Scoring lead guard': {
+    elite: ['a three-level scorer like Damian Lillard', "shades of Donovan Mitchell's shot-making", 'a bucket-getting lead guard à la Trae Young'],
+    solid: ['a scoring punch like Jamal Murray', 'a shifty scorer like CJ McCollum', 'shades of Tyler Herro'],
+    role: ['a microwave reserve like Malik Monk', 'instant offense à la Jordan Clarkson', 'a scoring spark like Bones Hyland'],
+  },
+  'Change-of-pace guard': {
+    elite: ['a disruptive two-way guard like Jrue Holiday', 'shades of Derrick White', 'a momentum-swinging guard à la prime Rajon Rondo'],
+    solid: ['a change-of-pace guard like Monte Morris', 'a steady backup à la Delon Wright', 'a connective reserve like Davion Mitchell'],
+    role: ['a pesky reserve like Patty Mills', 'a spark off the bench like Jose Alvarado', 'a veteran backup like Cory Joseph'],
+  },
+  '3-and-D wing': {
+    elite: ['an elite 3-and-D wing like Jaylen Brown', "shades of Kawhi Leonard's two-way game", 'a switchy stopper à la Jrue Holiday'],
+    solid: ['a 3-and-D connector like OG Anunoby', 'shades of Mikal Bridges', 'a rock-solid wing like Herb Jones'],
+    role: ['a 3-and-D role wing like Donte DiVincenzo', 'a corner-three stopper like Bruce Brown', 'a rotation wing à la Dorian Finney-Smith'],
+  },
+  'Microwave scorer': {
+    elite: ['an elite shot-maker like Devin Booker', "shades of Anthony Edwards' scoring pop", 'a flamethrower à la Zach LaVine'],
+    solid: ['a scoring punch like Bogdan Bogdanović', 'shades of Buddy Hield', 'a bigger Gary Trent Jr.'],
+    role: ['a microwave scorer like Malik Monk', 'a streaky gunner like Cam Thomas', 'instant offense like Jordan Clarkson'],
+  },
+  'Slashing guard': {
+    elite: ['a downhill force like Ja Morant', "shades of Anthony Edwards' explosion", "a slasher in prime Dwyane Wade's mold"],
+    solid: ['a slashing scorer like RJ Barrett', 'a downhill guard like Jalen Green', 'shades of Austin Reaves'],
+    role: ['a rim-attacking reserve like Talen Horton-Tucker', 'a driving spark like Quentin Grimes', 'an energy guard like Gary Payton II'],
+  },
+  'Two-way athlete': {
+    elite: ['a two-way star like Jayson Tatum', 'shades of prime Paul George', 'an athletic force à la Scottie Barnes'],
+    solid: ['a two-way wing like Franz Wagner', "shades of Aaron Nesmith's motor", 'a bouncy forward like Keldon Johnson'],
+    role: ['an athletic role wing like Josh Green', 'a defensive sparkplug like Ziaire Williams', 'a high-energy reserve like Pat Connaughton'],
+  },
+  'Connector forward': {
+    elite: ['a point-forward like Scottie Barnes', "shades of Andre Iguodala's peak versatility", 'a do-it-all forward à la Draymond Green'],
+    solid: ['a connector forward like Mikal Bridges', 'shades of Harrison Barnes', 'a glue wing like Kyle Anderson'],
+    role: ['a connective reserve like Torrey Craig', 'a glue-guy forward like Georges Niang', 'a rotation connector like Jae Crowder'],
+  },
+  'Stretch four': {
+    elite: ['a stretch big like Karl-Anthony Towns', 'shades of Lauri Markkanen', 'a pick-and-pop star à la prime Kevin Love'],
+    solid: ['a stretch four like Kyle Kuzma', 'shades of P.J. Washington', 'a floor-spacing four like Bobby Portis'],
+    role: ['a spacing big off the bench like Naz Reid', 'a stretch-four reserve like Georges Niang', 'a pick-and-pop reserve like Kelly Olynyk'],
+  },
+  'Defensive forward': {
+    elite: ['a defensive anchor like Draymond Green', 'shades of Jaren Jackson Jr.', 'an elite stopper à la prime Jonathan Isaac'],
+    solid: ['a defensive forward like Herb Jones', 'shades of Jarred Vanderbilt', 'a switchy stopper like Jalen McDaniels'],
+    role: ['a defensive reserve like Jae\'Sean Tate', 'a hustle forward like Torrey Craig', 'an energy stopper like Jalen Smith'],
+  },
+  'Energy big': {
+    elite: ['an athletic four like Aaron Gordon', 'shades of prime Kenneth Faried\'s motor', 'a relentless force à la Montrezl Harrell'],
+    solid: ['high-motor energy à la Jarred Vanderbilt', 'shades of Larry Nance Jr.', 'a glass-cleaning four like Nick Richards'],
+    role: ['an energy big off the bench like JaMychal Green', 'a hustle reserve like Drew Eubanks', 'a garbage-man four like Thomas Bryant'],
+  },
+  'Stretch five': {
+    elite: ['a stretch five like Karl-Anthony Towns', "shades of Brook Lopez's spacing + rim protection", 'a unicorn à la Kristaps Porziņģis'],
+    solid: ['a stretch five like Myles Turner', 'shades of Naz Reid', 'a floor-spacing center like Kelly Olynyk'],
+    role: ['a spacing reserve big like Dario Šarić', 'a pick-and-pop backup like Luke Kornet', 'a stretch-five reserve like Jeff Green'],
+  },
+  'Rim protector': {
+    elite: ['an elite rim protector like Rudy Gobert', 'shades of Jaren Jackson Jr.', 'a defensive anchor à la prime Brook Lopez'],
+    solid: ['rim protection à la Jarrett Allen', 'a shot-blocking center like Nic Claxton', 'shades of Walker Kessler'],
+    role: ['a backup rim protector like Daniel Gafford', 'a shot-blocking reserve like Day\'Ron Sharpe', 'a defensive backup like Moses Brown'],
+  },
+  'Rim-running big': {
+    elite: ['a lob-finishing force à la prime Clint Capela', 'a vertical-spacing big like Jarrett Allen', 'an athletic rim-runner like peak DeAndre Jordan'],
+    solid: ['a rim-runner like Walker Kessler', 'a mobile big like Nic Claxton', 'shades of Mitchell Robinson'],
+    role: ['a rim-running reserve like Daniel Gafford', 'a lob-catching backup like Mason Plumlee', 'an energy center like Drew Eubanks'],
+  },
 };
+
+/** Ceiling → comp tier. Stars sit at the top, rotation/role pieces below. */
+export function compTier(ceiling: number): CompTier {
+  return ceiling >= 86 ? 'elite' : ceiling >= 76 ? 'solid' : 'role';
+}
+
+/** Pick a deterministic, archetype- + tier-appropriate NBA comp (FEAT-28). */
+export function nbaComparisonFor(archetype: string, ceiling: number, seed: number): string {
+  const pools = ARCHETYPE_COMPS[archetype];
+  if (!pools) return 'a versatile rotation piece'; // archetypeFor always maps, but stay safe
+  const tier = compTier(ceiling);
+  // Fall back across tiers only if a pool were ever empty (it isn't today).
+  const pool = pools[tier].length ? pools[tier] : pools.solid.length ? pools.solid : pools.role;
+  return pick(pool, seed);
+}
+
+export { ARCHETYPE_COMPS };
 
 function hash(s: string): number {
   let h = 2166136261;
@@ -180,7 +272,7 @@ export function buildScoutingReport(
   const riskLevel: BasketballScoutingReport['riskLevel'] = gap >= 12 ? 'High' : gap >= 6 ? 'Medium' : 'Low';
   const trajectory: BasketballScoutingReport['trajectory'] = gap >= 12 ? 'Rapid Riser' : gap >= 5 ? 'Steady Climber' : gap >= 1 ? 'Slow Developer' : 'Near Ceiling';
   const peakAge = player.age + (gap >= 10 ? 5 : gap >= 5 ? 4 : 3);
-  const nbaComparison = pick(NBA_COMPS[player.sportData.position], seed >> 3);
+  const nbaComparison = nbaComparisonFor(archetypeFor(player), ceiling, seed >> 3);
   const physicalTraits: RatingLine[] = [
     { label: 'Speed', value: r.speed },
     { label: 'Strength', value: r.strength },

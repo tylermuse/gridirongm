@@ -61,11 +61,15 @@ export function migrateSave(state: BasketballLeagueState): { state: BasketballLe
       if (!rank) continue;
       const v = consensus2026Value(rank);
       const curPot = p.development?.potential ?? 0;
-      if (p.ratings.overall < v.overall || curPot < v.potential) {
+      // Stamp the consensus rank so the AI auto-pick anchors to the board
+      // (BUG-19) — older saves predate the field even when the ratings lifted.
+      const needsProjection = p.sportData.draftProjection !== rank;
+      if (p.ratings.overall < v.overall || curPot < v.potential || needsProjection) {
         players[id] = {
           ...p,
           ratings: { ...p.ratings, overall: Math.max(p.ratings.overall, v.overall) },
           development: { ...p.development, potential: Math.max(curPot, v.potential) },
+          sportData: { ...p.sportData, draftProjection: rank },
         };
         changed = true;
       }

@@ -8,6 +8,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { convertBbgmLeague, type BbgmLeagueFile } from '@/../apps/bs-basketball/src/lib/data/leagueImport';
+import { aiBasketballDraftPick } from '@bs/sport-basketball';
+import type { TeamId } from '@bs/core/adapter';
 
 const FILE = resolve(__dirname, '../../apps/bs-basketball/public/rosters/BBGM_NBA_Roster_2026_Updated.json');
 
@@ -64,5 +66,56 @@ describe('convertBbgmLeague — inaugural draft', () => {
       expect(rostered.has(id)).toBe(false);
       expect(imported.freeAgentIds).not.toContain(id);
     }
+  });
+});
+
+describe('strict consensus draft order (BUG-19)', () => {
+  const file = JSON.parse(readFileSync(FILE, 'utf8')) as BbgmLeagueFile;
+  const imported = convertBbgmLeague(file);
+
+  // Board prospects now carry their consensus rank as draftProjection.
+  const ranked = imported.draftProspectIds
+    .map(id => imported.players[id])
+    .filter(p => typeof p.sportData.draftProjection === 'number');
+
+  it('stamps the consensus rank on board prospects (Dybantsa = 1)', () => {
+    expect(ranked.length).toBeGreaterThanOrEqual(40); // ~41-name board
+    const top = [...ranked].sort(
+      (a, b) => a.sportData.draftProjection! - b.sportData.draftProjection!,
+    )[0];
+    expect(`${top.firstName} ${top.lastName}`).toBe('AJ Dybantsa');
+    expect(top.sportData.draftProjection).toBe(1);
+  });
+
+  it('auto-drafts the board in near-exact order with no reaches', () => {
+    const pool = imported.draftProspectIds.map(id => imported.players[id]);
+    const remaining = [...pool];
+    const draftedRanks: number[] = [];
+    let pick = 0;
+    while (remaining.length && pick < ranked.length) {
+      // Hand the picking team a lopsided roster so positional need is in play —
+      // the consensus board must still hold (no need-driven reaches).
+      const fakeRoster = pool.slice(0, (pick % 5) + 1);
+      const chosenId = aiBasketballDraftPick(
+        { teamId: `team-${pick}` as TeamId, rosterPlayers: fakeRoster },
+        remaining,
+        { rngSeed: `bug19-${pick}` },
+      );
+      const idx = remaining.findIndex(p => p.id === chosenId);
+      const chosen = remaining[idx];
+      remaining.splice(idx, 1);
+      if (typeof chosen.sportData.draftProjection === 'number') {
+        draftedRanks.push(chosen.sportData.draftProjection);
+      }
+      pick++;
+    }
+    // The consensus #1 goes first...
+    expect(draftedRanks[0]).toBe(1);
+    // ...and every ranked prospect comes off the board in exact ascending rank
+    // order — ranked talent always outscores unranked, so the board holds.
+    const expected = ranked
+      .map(p => p.sportData.draftProjection!)
+      .sort((a, b) => a - b);
+    expect(draftedRanks.slice(0, expected.length)).toEqual(expected);
   });
 });

@@ -18,6 +18,7 @@ import { contractYearsLeft } from '@/lib/roster/playerActions';
 import { extensionMarket } from '@/lib/roster/extension';
 import { keepValueOf } from '@/lib/season/advanceSeason';
 import { MAX_ROSTER } from '@/lib/freeAgency';
+import { getDraft } from '@/lib/draft';
 import { resignProjection, hasSalaryForSeason, salaryForSeason } from '@/lib/roster/resignProjection';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
@@ -78,7 +79,11 @@ export default function ReSignPage() {
   if (!league) return <Shell><p>{error ?? 'No league loaded.'}</p></Shell>;
   if (!userTeam) return <Shell><p className="text-sm text-[var(--text-sec)]">You&apos;re spectating — pick a team to manage contracts.</p></Shell>;
 
-  const nextSeason = season + 1;
+  // The upcoming season the re-sign window commits to: the draft year. Normal
+  // offseason → currentSeason + 1; inaugural imported draft → currentSeason
+  // itself (no year roll). Keeps cap tiles + the "kept" filter aligned (BUG-20).
+  const draft = getDraft(league);
+  const nextSeason = draft?.season ?? season + 1;
   // Walked players are released immediately, so the projection reads straight from
   // the live roster — no pending-decision bookkeeping needed.
   const proj = resignProjection(league, userTeam, {});
@@ -108,6 +113,14 @@ export default function ReSignPage() {
     }
   }
   async function startSeason() {
+    // An inaugural (imported) draft tips into the current season with no year
+    // roll, so it finishes via finishInauguralDraft rather than startNextSeason
+    // (which would roll the year and re-age the league). Both route on to FA.
+    if (draft?.inaugural) {
+      await store.finishInauguralDraft();
+      router.push('/free-agency');
+      return;
+    }
     const next = await store.startNextSeason();
     if (next) router.push('/free-agency');
   }

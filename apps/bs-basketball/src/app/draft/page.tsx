@@ -148,8 +148,10 @@ export default function DraftPage() {
   const resignCount = (league.sportData as { pendingResign?: string[] }).pendingResign?.length ?? 0;
   // Single guided next-step after the draft (mirrors the top-bar nextAction).
   const userTeam = league.userTeamId ? teamById.get(league.userTeamId) ?? null : null;
-  const expiringCount = !draft.inaugural ? userExpiringCount(league, draft.season) : 0;
-  const overLimit = !draft.inaugural && !!userTeam && userTeam.playerIds.length > 15;
+  // Inaugural imported drafts now run the full offseason too (BUG-20): Draft →
+  // Re-sign → Free Agency, same as a normal post-draft flow.
+  const expiringCount = userExpiringCount(league, draft.season);
+  const overLimit = !!userTeam && userTeam.playerIds.length > 15;
   const recommendedId = !draft.complete ? recommendedProspectId(league, draft) : null;
 
   const pool = draft.poolIds
@@ -187,14 +189,15 @@ export default function DraftPage() {
               <Link href="/re-sign" className="rounded-lg px-4 py-2 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>
                 Trim Roster to 15 →
               </Link>
-            ) : !draft.inaugural ? (
+            ) : userTeam ? (
               // Even with nothing to re-sign, guide through the Re-sign window (the
               // hub for cap review + the path to Free Agency), not straight to the
-              // season (BUG-12).
+              // season — for inaugural imported drafts too (BUG-12 / BUG-20).
               <Link href="/re-sign" className="rounded-lg px-4 py-2 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>
                 Re-sign Players →
               </Link>
             ) : (
+              // Spectating (no user team): nothing to re-sign — just tip off.
               <Button variant="primary" disabled={store.loading} onClick={() => void handleStartSeason('/free-agency')}>
                 {store.loading ? 'Working…' : `Start ${draft.season} Season →`}
               </Button>

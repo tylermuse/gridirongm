@@ -6,7 +6,12 @@
 
 import { describe, it, expect } from 'vitest';
 import { generateBasketballDraftClass } from '@bs/sport-basketball';
-import { buildScoutingReport } from '@/../apps/bs-basketball/src/lib/scouting/scoutingReport';
+import {
+  buildScoutingReport,
+  nbaComparisonFor,
+  compTier,
+  ARCHETYPE_COMPS,
+} from '@/../apps/bs-basketball/src/lib/scouting/scoutingReport';
 
 describe('buildScoutingReport', () => {
   const prospect = generateBasketballDraftClass(2027, 1)[0];
@@ -49,5 +54,41 @@ describe('buildScoutingReport', () => {
 
     const unscouted = buildScoutingReport(prospect, { season: 2027, scouted: false });
     expect(unscouted.ceilingNote).toContain('scout to confirm');
+  });
+});
+
+describe('FEAT-28: NBA comps are archetype-keyed and tier-aware', () => {
+  it('tiers comps by ceiling — elite ceiling → star comp, role ceiling → role comp', () => {
+    const arch = '3-and-D wing';
+    expect(compTier(90)).toBe('elite');
+    expect(compTier(80)).toBe('solid');
+    expect(compTier(70)).toBe('role');
+    // An elite-ceiling prospect maps into the star pool; a role-ceiling one into
+    // the role pool — never crossed.
+    const elite = nbaComparisonFor(arch, 92, 1234);
+    const role = nbaComparisonFor(arch, 68, 1234);
+    expect(ARCHETYPE_COMPS[arch].elite).toContain(elite);
+    expect(ARCHETYPE_COMPS[arch].role).toContain(role);
+    expect(elite).not.toBe(role);
+  });
+
+  it('is deterministic per prospect (same archetype/ceiling/seed → same comp)', () => {
+    expect(nbaComparisonFor('Stretch four', 88, 42)).toBe(nbaComparisonFor('Stretch four', 88, 42));
+  });
+
+  it('every archetype carries non-empty comps in all three tiers', () => {
+    for (const [arch, tiers] of Object.entries(ARCHETYPE_COMPS)) {
+      for (const tier of ['elite', 'solid', 'role'] as const) {
+        expect(tiers[tier].length, `${arch}/${tier}`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('produces real variety across a draft class (not the same handful of comps)', () => {
+    const cls = generateBasketballDraftClass(2027, 60);
+    const comps = new Set(cls.map(p => buildScoutingReport(p, { season: 2027, scouted: true }).nbaComparison));
+    // The old table could only ever yield 4 per position; the tiered pools give
+    // far more spread across a class.
+    expect(comps.size).toBeGreaterThan(10);
   });
 });

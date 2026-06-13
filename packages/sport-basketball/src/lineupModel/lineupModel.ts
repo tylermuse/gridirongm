@@ -85,6 +85,21 @@ export function isInPositionAtSlot(pos: BasketballPosition, slotIndex: number): 
  * Returns a partial lineup (with null IDs as placeholders) if the roster
  * is short at a position; callers should re-run validate() to catch it.
  */
+/**
+ * Bench rotation priority: a player's current OVR plus a small, bounded bump for
+ * young high-upside players ("development minutes"). Lets a promising rookie edge
+ * into the 10-man rotation over a replacement-level veteran, so rookies actually
+ * play and accrue stats (BUG-21). Bounded to +6 and gated on real youth + upside
+ * so it never leapfrogs genuine rotation talent. Used for bench ordering only —
+ * starters are still chosen on pure OVR/position.
+ */
+function rotationPriority(p: BasketballPlayer): number {
+  const ovr = p.ratings.overall;
+  const upside = Math.max(0, (p.development?.potential ?? ovr) - ovr);
+  const youth = p.age <= 21 ? 1 : p.age <= 23 ? 0.6 : p.age <= 25 ? 0.3 : 0;
+  return ovr + Math.min(6, upside * 0.5) * youth;
+}
+
 export function buildDefaultBasketballLineup(
   roster: BasketballPlayer[],
 ): BasketballLineup {
@@ -136,9 +151,20 @@ export function buildDefaultBasketballLineup(
   const [sf, pf] = order2(picked.F, 'SF', 'PF');
   const starterIds: PlayerId[] = [pg, sg, sf, pf, picked.C[0] ?? ('' as PlayerId)];
 
-  // Bench = everyone else, by OVR (rotation priority). Backups are vestigial now
-  // that resolveLineup repairs stale lineups via the bench order — leave null.
-  const bench = byOvr.filter(p => !used.has(p.id)).map(p => p.id);
+  // Bench = everyone else, by rotation priority. Backups are vestigial now that
+  // resolveLineup repairs stale lineups via the bench order — leave null.
+  //
+  // Rotation priority is OVR plus a bounded "development minutes" bump for young,
+  // high-upside players, so a promising rookie cracks the 10-man rotation (and
+  // accrues real games + stats) instead of rotting at roster spot 11+ behind
+  // replacement-level veterans. Without it, rookies on deep (esp. imported NBA)
+  // rosters never play, leaving All-Rookie teams nearly empty (BUG-21 — the tail
+  // of the BUG-10 rookie-minutes work). Bounded + youth-gated so it surfaces real
+  // prospects without displacing core rotation players. Starters are untouched.
+  const bench = [...roster]
+    .filter(p => !used.has(p.id))
+    .sort((a, b) => rotationPriority(b) - rotationPriority(a))
+    .map(p => p.id);
 
   return {
     starters: starterIds as BasketballLineup['starters'],

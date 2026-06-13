@@ -587,6 +587,9 @@ export function convertBbgmLeague(file: BbgmLeagueFile): ImportedHoopsLeague {
             pr.ratings.overall = Math.max(pr.ratings.overall, v.overall);
             pr.development.potential = Math.max(pr.development.potential, v.potential, pr.ratings.overall);
             pr.sportData.starTier = starTierFor(pr.ratings.overall);
+            // Anchor the AI auto-pick to the consensus board (BUG-19) so the
+            // draft follows the big board top-to-bottom instead of scrambling.
+            pr.sportData.draftProjection = rank;
           }
           players[pr.id] = pr;
           draftProspectIds.push(pr.id);
