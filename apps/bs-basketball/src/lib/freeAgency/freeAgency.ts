@@ -188,17 +188,49 @@ export function signingBudget(league: LeagueState, teamId: TeamId): number {
 // ===========================================================================
 
 /** Projected chance the user's offer wins the player (heuristic, for the UI). */
+/** A team's pull on free agents, 0..1, from its winning %. Contenders are a
+ *  draw (players take a touch less); cellar teams must pay a premium. */
+export function teamAppeal(league: LeagueState, teamId: TeamId): number {
+  const t = league.teams.find(x => x.id === teamId);
+  if (!t) return 0.5;
+  const gp = t.record.wins + t.record.losses;
+  return gp > 0 ? clamp(t.record.wins / gp, 0, 1) : 0.5;
+}
+
+/**
+ * The minimum CONTRACT TOTAL a free agent will accept from a team — the real
+ * gate (BUG-18). It's a fraction of his market ask, shaped by his tier (stars
+ * demand market+, depth pieces flex down) and the team's appeal (contenders get
+ * a discount, also-rans pay up), and never below a competing offer. A player
+ * with Bird rights gives his own team a small loyalty discount.
+ */
+export function acceptanceThreshold(
+  info: FreeAgentInfo,
+  appeal: number,
+  competingTotal: number,
+  isOwnBirdTeam = false,
+): number {
+  const marketTotal = info.marketSalary * info.desiredYears;
+  const ovr = info.player.ratings.overall;
+  let frac = ovr >= 80 ? 1.02 : ovr >= 74 ? 0.96 : ovr >= 68 ? 0.9 : 0.82;
+  frac += (0.5 - appeal) * 0.18; // appeal 1.0 → −0.09, appeal 0 → +0.09
+  if (isOwnBirdTeam && info.birdRights !== 'none') frac -= 0.04;
+  frac = clamp(frac, 0.72, 1.2);
+  return Math.max(competingTotal, Math.round(marketTotal * frac));
+}
+
+/** Projected chance the offer is accepted (for the UI), honest to the gate:
+ *  ~0 well below the acceptance threshold, ~1 at/above it. */
 export function acceptanceProbability(
   info: FreeAgentInfo,
   offer: Offer,
   competingTotal: number,
+  appeal = 0.5,
 ): number {
-  const marketTotal = info.marketSalary * info.desiredYears;
   const userTotal = offer.salaryPerYear * offer.years;
-  // 0 at 60% of market, 1 at 120% of market.
-  const vsMarket = clamp((userTotal / marketTotal - 0.6) / 0.6, 0, 1);
-  const vsCompeting = competingTotal > 0 ? clamp(userTotal / competingTotal, 0, 1.2) / 1.2 : 1;
-  return clamp(vsMarket * (0.45 + 0.55 * vsCompeting), 0.02, 0.98);
+  const threshold = acceptanceThreshold(info, appeal, competingTotal);
+  // 0 at 80% of the threshold, ~1 at/above it.
+  return clamp((userTotal / threshold - 0.8) / 0.25, 0.02, 0.99);
 }
 
 /** The best competing AI offer: a team that can afford the player (cap room or
@@ -381,17 +413,22 @@ export function resolveUserOffer(
   const competingTotal = competing?.total ?? 0;
   const name = `${info.player.firstName} ${info.player.lastName}`;
 
-  // Player won't accept a lowball from anyone.
-  if (userTotal < marketTotal * LOWBALL_FLOOR && competingTotal < marketTotal * LOWBALL_FLOOR) {
+  // The player's real bar: tier + team appeal + any competing offer (BUG-18).
+  const appeal = teamAppeal(league, userTeamId);
+  const isBird = info.birdRights !== 'none' && info.lastTeamId === userTeamId;
+  const threshold = acceptanceThreshold(info, appeal, competingTotal, isBird);
+  const userWins = userTotal >= threshold;
+
+  // Offer falls short and nobody else is bidding → he holds out for more.
+  if (!userWins && competingTotal === 0) {
     return {
       outcome: 'rejected', league, signedTeamId: null,
-      competingTeamId: competing?.teamId ?? null, competingOfferTotal: competingTotal,
-      message: `${name} turned down your offer — it's well below market.`,
+      competingTeamId: null, competingOfferTotal: 0,
+      message: userTotal < marketTotal * LOWBALL_FLOOR
+        ? `${name} turned that down flat — it's well below market.`
+        : `${name} wants closer to ${faMoney(threshold)} total; your ${faMoney(userTotal)} fell short.`,
     };
   }
-
-  // User wins on a tie or a higher total (and must clear the floor themselves).
-  const userWins = userTotal >= competingTotal && userTotal >= marketTotal * LOWBALL_FLOOR;
 
   if (userWins) {
     let l = league;
@@ -472,7 +509,9 @@ export function negotiateOffer(
   const userTotal = offer.salaryPerYear * offer.years;
   const competing = bestCompetingOffer(league, info);
   const competingTotal = competing?.total ?? 0;
-  const winBar = Math.max(competingTotal, marketTotal * LOWBALL_FLOOR);
+  const appeal = teamAppeal(league, league.userTeamId);
+  const isBird = info.birdRights !== 'none' && info.lastTeamId === league.userTeamId;
+  const winBar = acceptanceThreshold(info, appeal, competingTotal, isBird);
 
   // Clears the bar → sign (resolveUserOffer handles roster-full / releaseId).
   if (userTotal >= winBar) {

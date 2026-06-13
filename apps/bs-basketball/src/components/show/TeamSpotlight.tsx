@@ -6,12 +6,37 @@ import { useRouter } from 'next/navigation';
 import { Chip, type ChipTone } from '@/components/ui/Chip';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { speakLines, stopSpeech, isSpeechSupported } from '@/lib/ui/speech';
-import { buildSpotlight, SPOTLIGHT_HOSTS, type SpotlightEpisode, type SpotlightStory, type StoryCategory } from '@/lib/show/spotlight';
+import { buildSpotlight, SPOTLIGHT_HOSTS, type SpotlightEpisode, type SpotlightExchange, type SpotlightStory, type StoryCategory } from '@/lib/show/spotlight';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
 
 const CAT_TONE: Record<StoryCategory, ChipTone> = {
   Statement: 'blue', Upset: 'red', Breakout: 'green', Streak: 'amber', Discipline: 'violet', 'MVP Race': 'accent', Rivalry: 'red', 'Your Team': 'accent',
+  Record: 'blue', 'By the Numbers': 'slate', 'Star Watch': 'green', Cap: 'amber', 'Young Core': 'green', 'Playoff Picture': 'violet', Injury: 'red', AI: 'violet',
 };
+
+/** Categories that should surface the small purple "AI" badge in the header.
+ *  No data source feeds AI topics yet, so this is a ready-but-dormant hook. */
+const AI_CATEGORIES = new Set<StoryCategory>(['AI']);
+
+/** Analyst (left, blue) / take (right, red) chat bubble — mirrors football's
+ *  DebateBubble styling so the two shows read identically. */
+function HostBubble({ ex }: { ex: SpotlightExchange }) {
+  const host = SPOTLIGHT_HOSTS[ex.voice as 'analyst' | 'take'];
+  const left = ex.voice === 'analyst';
+  return (
+    <div className={`flex gap-3 ${left ? '' : 'flex-row-reverse'}`}>
+      <div className="shrink-0 pt-1">
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-lg ${left ? 'bg-blue-100' : 'bg-red-100'}`} aria-hidden>{host.avatar}</div>
+      </div>
+      <div className={`flex-1 max-w-[85%] ${left ? '' : 'ml-auto'}`}>
+        <div className={`text-[10px] font-bold uppercase tracking-wide mb-0.5 ${left ? 'text-blue-600' : 'text-right text-red-600'}`}>{host.name}</div>
+        <div className={`rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${left ? 'bg-blue-50 border border-blue-200 rounded-tl-sm' : 'bg-red-50 border border-red-200 rounded-tr-sm'}`}>
+          &ldquo;{ex.line}&rdquo;
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Team Spotlight — a two-persona talk show rendered as chat bubbles inside an
@@ -36,6 +61,7 @@ function SpotlightCard({ episode, stories, compact, league }: { episode: Spotlig
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const allOpen = stories.every(s => open.has(s.id));
+  const hasAi = stories.some(s => AI_CATEGORIES.has(s.category));
 
   // Stop any narration when this card unmounts.
   useEffect(() => () => stopSpeech(), []);
@@ -57,6 +83,11 @@ function SpotlightCard({ episode, stories, compact, league }: { episode: Spotlig
           <span className="text-lg" aria-hidden>🎙️</span>
           <span className="font-black tracking-tight">Team Spotlight</span>
           <span className="text-xs text-[var(--text-sec)]">· Week {episode.week}</span>
+          {hasAi && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-purple-100 text-purple-700">
+              ✨ AI
+            </span>
+          )}
           {isSpeechSupported() && (
             <button
               onClick={toggleListen}
@@ -69,10 +100,17 @@ function SpotlightCard({ episode, stories, compact, league }: { episode: Spotlig
           )}
         </div>
         <p className="text-xs text-[var(--text-sec)] mt-1">
-          with {SPOTLIGHT_HOSTS.analyst.name} {SPOTLIGHT_HOSTS.analyst.avatar} &amp; {SPOTLIGHT_HOSTS.take.name} {SPOTLIGHT_HOSTS.take.avatar}
+          with <span className="font-semibold text-blue-600">{SPOTLIGHT_HOSTS.analyst.name} {SPOTLIGHT_HOSTS.analyst.avatar}</span> &amp; <span className="font-semibold text-red-600">{SPOTLIGHT_HOSTS.take.name} {SPOTLIGHT_HOSTS.take.avatar}</span>
           {stories.length > 1 && <button onClick={expandAll} className="ml-2 font-semibold hover:underline" style={{ color: 'var(--accent)' }}>{allOpen ? 'Collapse all' : 'Expand all'}</button>}
         </p>
       </div>
+
+      {!compact && episode.intro.length > 0 && (
+        <div className="px-4 sm:px-5 pt-4 pb-3 space-y-2.5 border-b" style={{ borderColor: 'var(--border)' }}>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-sec)]">Cold open</div>
+          {episode.intro.map((ex, i) => <HostBubble key={i} ex={ex} />)}
+        </div>
+      )}
 
       <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
         {stories.map(story => {
@@ -118,22 +156,7 @@ function SpotlightCard({ episode, stories, compact, league }: { episode: Spotlig
                           </div>
                         );
                       }
-                      const host = SPOTLIGHT_HOSTS[ex.voice];
-                      const left = ex.voice === 'analyst';
-                      return (
-                        <div key={i} className={`flex items-end gap-2 ${left ? '' : 'flex-row-reverse'}`}>
-                          <span className="shrink-0 h-8 w-8 rounded-full grid place-items-center text-base" style={{ background: left ? 'color-mix(in srgb, #3b82f6 20%, var(--surface-2))' : 'color-mix(in srgb, #ef4444 20%, var(--surface-2))' }} aria-hidden>{host.avatar}</span>
-                          <div className={`min-w-0 max-w-[85%] ${left ? '' : 'text-right'}`}>
-                            <div className="text-[10px] font-bold text-[var(--text-sec)] px-1">{host.name}</div>
-                            <div
-                              className={`text-sm leading-snug rounded-2xl px-3 py-2 ${left ? 'rounded-bl-sm' : 'rounded-br-sm font-semibold'}`}
-                              style={{ background: left ? 'color-mix(in srgb, #3b82f6 12%, var(--surface-2))' : 'color-mix(in srgb, #ef4444 12%, var(--surface-2))', color: 'var(--text)' }}
-                            >
-                              {ex.line}
-                            </div>
-                          </div>
-                        </div>
-                      );
+                      return <HostBubble key={i} ex={ex} />;
                     })}
                     {(story.playerId || story.gameId) && (
                       <button
@@ -150,6 +173,13 @@ function SpotlightCard({ episode, stories, compact, league }: { episode: Spotlig
           );
         })}
       </div>
+
+      {!compact && episode.outro.length > 0 && (
+        <div className="px-4 sm:px-5 pt-4 pb-4 space-y-2.5 border-t" style={{ borderColor: 'var(--border)' }}>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-sec)]">Sign-off</div>
+          {episode.outro.map((ex, i) => <HostBubble key={i} ex={ex} />)}
+        </div>
+      )}
 
       {compact && (
         <div className="px-4 sm:px-5 py-2.5 border-t text-center" style={{ borderColor: 'var(--border)' }}>

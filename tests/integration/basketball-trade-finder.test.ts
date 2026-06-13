@@ -10,8 +10,8 @@ import type { BasketballPlayer } from '@bs/sport-basketball';
 
 function executable(l: ReturnType<typeof createNewBasketballLeague>, d: DealSuggestion): boolean {
   const sides: TradeSideInput[] = [
-    { teamId: l.userTeamId as TradeSideInput['teamId'], playerIds: d.giveIds as TradeSideInput['playerIds'] },
-    { teamId: d.partnerTeamId as TradeSideInput['teamId'], playerIds: d.getIds as TradeSideInput['playerIds'] },
+    { teamId: l.userTeamId as TradeSideInput['teamId'], playerIds: d.giveIds as TradeSideInput['playerIds'], pickIds: d.givePickIds ?? [] },
+    { teamId: d.partnerTeamId as TradeSideInput['teamId'], playerIds: d.getIds as TradeSideInput['playerIds'], pickIds: d.getPickIds ?? [] },
   ];
   return isExecutable(evaluateTrade(l, sides), sides);
 }

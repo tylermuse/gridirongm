@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/Button';
 import {
   freeAgentPool,
   capRoom,
+  signingBudget,
+  teamAppeal,
   rosterCount,
   acceptanceProbability,
   bestCompetingOffer,
@@ -63,6 +65,11 @@ export default function FreeAgencyPage() {
   const userTeamId = league.userTeamId;
   const userTeam = userTeamId ? (teamById.get(userTeamId) ?? null) : null;
   const room = userTeamId ? capRoom(league, userTeamId) : 0;
+  // What the team can actually spend on one signing — cap room, or a Mid-Level /
+  // minimum exception when over the cap. Over-cap teams can ALWAYS sign minimums
+  // with an open roster spot (BUG-17), so "affordable" keys off this, not raw room.
+  const budget = userTeamId ? signingBudget(league, userTeamId) : 0;
+  const appeal = userTeamId ? teamAppeal(league, userTeamId) : 0.5;
   const count = userTeamId ? rosterCount(league, userTeamId) : 0;
   const rosterFull = count >= MAX_ROSTER;
   const faDay = getFaDay(league);
@@ -71,13 +78,13 @@ export default function FreeAgencyPage() {
 
   const pool = allPool.filter(f =>
     (posFilter === 'ALL' || f.player.sportData.position === posFilter) &&
-    (!affordableOnly || f.marketSalary <= room),
+    (!affordableOnly || f.marketSalary <= budget),
   );
 
   const selected = selectedId ? pool.find(f => f.player.id === selectedId) ?? null : null;
   const offer = { years, salaryPerYear: Math.round(salaryM * 1_000_000) };
   const competing = selected ? bestCompetingOffer(league, selected) : null;
-  const acceptPct = selected ? Math.round(acceptanceProbability(selected, offer, competing?.total ?? 0) * 100) : 0;
+  const acceptPct = selected ? Math.round(acceptanceProbability(selected, offer, competing?.total ?? 0, appeal) * 100) : 0;
 
   function selectFa(f: FreeAgentInfo) {
     setSelectedId(f.player.id);
@@ -197,7 +204,7 @@ export default function FreeAgencyPage() {
               Available ({pool.length})
             </h2>
             <div className="max-h-[36rem] overflow-y-auto">
-              <FreeAgentTable league={league} pool={pool} room={room} selectedId={selectedId} onSelect={selectFa} />
+              <FreeAgentTable league={league} pool={pool} room={room} budget={budget} appeal={appeal} selectedId={selectedId} onSelect={selectFa} />
             </div>
           </section>
 

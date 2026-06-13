@@ -5,6 +5,8 @@ export {
   capRoom,
   signingBudget,
   acceptanceProbability,
+  acceptanceThreshold,
+  teamAppeal,
   bestCompetingOffer,
   buildContract,
   releasePlayer,

@@ -98,21 +98,21 @@ describe('resolving offers', () => {
     expect(res.league.teams.find(t => t.id === userTeam.id)!.playerIds).toContain(target.player.id);
   });
 
-  it('rejects a lowball when no rival is interested', () => {
+  it('a lowball never lands the player (rejected, or lost to a rival)', () => {
     const base = nextSeasonLeague('fa-lowball');
     const league = userWithRoom(base, base.teams[0].id);
 
-    // Find a FA nobody competes for.
+    // Any free agent: a 10%-of-market offer must not sign him to the user. With a
+    // genuinely competitive market (BUG-13/BUG-18) most FAs draw a rival bid, so
+    // the lowball either rejects outright or the player signs elsewhere — never
+    // with the lowballing user.
     const pool = freeAgentPool(league);
-    const lonely = pool.find(f => bestCompetingOffer(league, f) === null);
-    expect(lonely).toBeTruthy();
+    const target = [...pool].sort((a, b) => a.player.ratings.overall - b.player.ratings.overall)[0];
+    const offer = { years: 1, salaryPerYear: Math.round(target.marketSalary * 0.1) };
+    const res = resolveUserOffer(league, target.player.id, offer);
 
-    const offer = { years: 1, salaryPerYear: Math.round(lonely!.marketSalary * 0.1) };
-    const before = league.freeAgentIds.length;
-    const res = resolveUserOffer(league, lonely!.player.id, offer);
-
-    expect(res.outcome).toBe('rejected');
-    expect(res.league.freeAgentIds.length).toBe(before);
+    expect(res.outcome).not.toBe('signed');
+    expect(res.signedTeamId).not.toBe(league.userTeamId);
   });
 
   it('requires a release when the roster is full, then signs', () => {

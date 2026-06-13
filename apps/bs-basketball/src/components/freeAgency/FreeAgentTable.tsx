@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { Chip } from '@/components/ui/Chip';
 import { ratingColor } from '@/lib/ui/ratingColor';
-import { acceptanceProbability, bestCompetingOffer, type FreeAgentInfo } from '@/lib/freeAgency';
+import { acceptanceProbability, bestCompetingOffer, LEAGUE_MINIMUM_SALARY, type FreeAgentInfo } from '@/lib/freeAgency';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
@@ -29,11 +29,15 @@ function lastLine(f: FreeAgentInfo): { ppg: number; text: string } {
 }
 
 export function FreeAgentTable({
-  league, pool, room, selectedId, onSelect,
+  league, pool, room, budget, appeal, selectedId, onSelect,
 }: {
   league: BasketballLeagueState;
   pool: FreeAgentInfo[];
   room: number;
+  /** Max the team can spend on one signing (cap room or an exception). */
+  budget: number;
+  /** Team appeal 0..1 (drives acceptance odds). */
+  appeal: number;
   selectedId: string | null;
   onSelect: (f: FreeAgentInfo) => void;
 }) {
@@ -114,7 +118,7 @@ export function FreeAgentTable({
                 {isOpen && (
                   <tr style={{ background: 'color-mix(in srgb, var(--surface-2) 50%, transparent)' }}>
                     <td colSpan={9} className="px-4 py-3">
-                      <FaIntel league={league} info={f} room={room} teamById={teamById} />
+                      <FaIntel league={league} info={f} room={room} budget={budget} appeal={appeal} teamById={teamById} />
                     </td>
                   </tr>
                 )}
@@ -127,12 +131,15 @@ export function FreeAgentTable({
   );
 }
 
-function FaIntel({ league, info, room, teamById }: { league: BasketballLeagueState; info: FreeAgentInfo; room: number; teamById: Map<string, BasketballTeam> }) {
+function FaIntel({ league, info, room, budget, appeal, teamById }: { league: BasketballLeagueState; info: FreeAgentInfo; room: number; budget: number; appeal: number; teamById: Map<string, BasketballTeam> }) {
   const offer = { years: info.desiredYears, salaryPerYear: info.marketSalary };
   const competing = bestCompetingOffer(league, info);
-  const accept = Math.round(acceptanceProbability(info, offer, competing?.total ?? 0) * 100);
+  const accept = Math.round(acceptanceProbability(info, offer, competing?.total ?? 0, appeal) * 100);
   const total = info.marketSalary * info.desiredYears;
-  const affordable = info.marketSalary <= room;
+  // Signable if the ask fits cap room OR an exception/minimum (over-cap teams can
+  // always add minimum deals with an open spot — BUG-17).
+  const affordable = info.marketSalary <= budget;
+  const minDeal = room <= 0 && info.marketSalary <= LEAGUE_MINIMUM_SALARY * 1.5;
   const compTeam = competing ? teamById.get(competing.teamId) : null;
   const rec = info.player.ratings.overall >= 78 ? 'Priority Target' : info.player.ratings.overall >= 70 ? 'Solid Add' : affordable ? 'Depth Option' : 'Stretch';
   const recColor = rec === 'Priority Target' ? '#10b981' : rec === 'Stretch' ? '#d97706' : 'var(--accent-alt)';
@@ -141,6 +148,7 @@ function FaIntel({ league, info, room, teamById }: { league: BasketballLeagueSta
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-black px-2 py-0.5 rounded" style={{ background: `color-mix(in srgb, ${recColor} 16%, transparent)`, color: recColor }}>{rec}</span>
+        {minDeal && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'color-mix(in srgb, #10b981 16%, transparent)', color: '#059669' }} title="Over the cap, but a roster spot is open — you can still sign him to a minimum deal.">available at vet minimum</span>}
         <span className="text-xs text-[var(--text-sec)]">{info.player.sportData.position} · {info.player.ratings.overall} OVR · {info.player.development.potential} POT · age {info.player.age}</span>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">

@@ -10,7 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { SortableTradeTable } from '@/components/trade/SortableTradeTable';
 import { evaluateTrade, isExecutable, type TradeSideInput } from '@/lib/trade';
-import { findDealsForPlayer, incomingOffers, type DealSuggestion } from '@/lib/trade/finder';
+import { findDealsForPlayer, findDealsForPick, incomingOffers, type DealSuggestion } from '@/lib/trade/finder';
 import { teamStrategy, getTeamPicks, pickFromId, pickShort, pickValue, protectionShort, type ProtectionTerms } from '@/lib/trade';
 import { getActiveRumors, rumorAccuracy, rumorPlayerMeta, type TradeRumor } from '@/lib/trade';
 import { computeTradeGrade, getProposalHistory, type TradeGrade, type ProposalRecord } from '@/lib/trade';
@@ -181,8 +181,8 @@ function TradePage() {
 
   async function proposeDeal(d: DealSuggestion) {
     const s: TradeSideInput[] = [
-      { teamId: userTeamId as TradeSideInput['teamId'], playerIds: d.giveIds as TradeSideInput['playerIds'] },
-      { teamId: d.partnerTeamId as TradeSideInput['teamId'], playerIds: d.getIds as TradeSideInput['playerIds'] },
+      { teamId: userTeamId as TradeSideInput['teamId'], playerIds: d.giveIds as TradeSideInput['playerIds'], pickIds: d.givePickIds ?? [] },
+      { teamId: d.partnerTeamId as TradeSideInput['teamId'], playerIds: d.getIds as TradeSideInput['playerIds'], pickIds: d.getPickIds ?? [] },
     ];
     const result = await store.proposeTrade(s);
     if (result?.accepted) { setResultMsg('✅ Trade accepted and executed.'); setTab('build'); }
@@ -193,8 +193,8 @@ function TradePage() {
     setTargetId(d.partnerTeamId);
     setMine(new Set(d.giveIds));
     setTheirs(new Set(d.getIds));
-    setMyPicks(new Set());
-    setTheirPicks(new Set());
+    setMyPicks(new Set(d.givePickIds ?? []));
+    setTheirPicks(new Set(d.getPickIds ?? []));
     setResultMsg(null);
     setTab('build');
   }
@@ -657,17 +657,51 @@ function TradeFinderPanel({
   loading: boolean;
 }) {
   const roster = userTeam.playerIds.map(id => playerById[id]).filter(Boolean).sort((a, b) => b.ratings.overall - a.ratings.overall);
-  const deals = useMemo(() => (finderId ? findDealsForPlayer(league, finderId) : []), [league, finderId]);
+  // FEAT-25: owned picks the user can toss into a finder deal to sweeten it, and
+  // a toggle for whether returns may include the opponent's picks.
+  const [offerPicks, setOfferPicks] = useState<Set<string>>(new Set());
+  const [askPicks, setAskPicks] = useState(true);
+  const myPicks = useMemo(() => getTeamPicks(league, userTeam.id), [league, userTeam.id]);
+  const deals = useMemo(
+    () => (finderId ? findDealsForPlayer(league, finderId, 10, { offerPickIds: [...offerPicks], includeOpponentPicks: askPicks }) : []),
+    [league, finderId, offerPicks, askPicks],
+  );
+  const toggleOffer = (id: string) => setOfferPicks(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   return (
     <div>
       <p className="text-sm text-[var(--text-sec)] mb-2">Shop one of your players around — the engine surfaces legal deals other teams would actually accept.</p>
-      <select value={finderId} onChange={e => setFinderId(e.target.value)} className="px-2 py-1.5 rounded-lg border bg-[var(--surface)] text-sm mb-4" style={{ borderColor: 'var(--border)' }}>
+      <select value={finderId} onChange={e => setFinderId(e.target.value)} className="px-2 py-1.5 rounded-lg border bg-[var(--surface)] text-sm mb-3" style={{ borderColor: 'var(--border)' }}>
         <option value="">Select a player to shop…</option>
         {roster.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName} ({p.sportData.position} · {p.ratings.overall})</option>)}
       </select>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4">
+        {myPicks.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-sec)]">Throw in:</span>
+            {myPicks.map(pk => {
+              const sel = offerPicks.has(pk.id);
+              return (
+                <button
+                  key={pk.id}
+                  onClick={() => toggleOffer(pk.id)}
+                  className="text-xs font-semibold rounded-full px-2.5 py-1 border"
+                  style={sel ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}
+                  title="Offer this pick to sweeten the deal"
+                >
+                  🎟️ {pickShort(league, pk)}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <label className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-sec)] cursor-pointer">
+          <input type="checkbox" checked={askPicks} onChange={e => setAskPicks(e.target.checked)} />
+          Ask for their draft picks
+        </label>
+      </div>
       {finderId && (deals.length === 0
-        ? <p className="text-sm text-[var(--text-sec)]">No team is biting on that player right now — try a different player, or build a custom offer.</p>
-        : <div className="space-y-2">{deals.map((d, i) => <DealCard key={i} d={d} teamById={teamById} playerById={playerById} season={season} primaryLabel="Propose" secondaryLabel="Load & tweak" onPropose={onPropose} onLoad={onLoad} loading={loading} />)}</div>)}
+        ? <p className="text-sm text-[var(--text-sec)]">No team is biting on that player right now — try a different player, throw in a pick, or build a custom offer.</p>
+        : <div className="space-y-2">{deals.map((d, i) => <DealCard key={i} league={league} d={d} teamById={teamById} playerById={playerById} season={season} primaryLabel="Propose" secondaryLabel="Load & tweak" onPropose={onPropose} onLoad={onLoad} loading={loading} />)}</div>)}
     </div>
   );
 }
@@ -690,7 +724,7 @@ function OffersPanel({
   return (
     <div className="space-y-2">
       <p className="text-sm text-[var(--text-sec)] mb-2">Rivals are interested in your players — accept the deal, or counter it in the builder.</p>
-      {offers.map((d, i) => <DealCard key={i} d={d} teamById={teamById} playerById={playerById} season={season} primaryLabel="Accept" secondaryLabel="Counter" onPropose={onPropose} onLoad={onLoad} loading={loading} />)}
+      {offers.map((d, i) => <DealCard key={i} league={league} d={d} teamById={teamById} playerById={playerById} season={season} primaryLabel="Accept" secondaryLabel="Counter" onPropose={onPropose} onLoad={onLoad} loading={loading} />)}
     </div>
   );
 }
@@ -737,10 +771,10 @@ function dealMatchesTag(
 ): boolean {
   const incoming = d.getIds.map(id => playerById[id]).filter(Boolean) as BasketballPlayer[];
   switch (tag) {
-    // The finder only surfaces player-for-player deals today, but honor any
-    // pick that does come back so the tag stays meaningful.
+    // Returns can now include draft picks (FEAT-25) — satisfy the tag whenever
+    // the package brings back any pick.
     case 'picks':
-      return d.getIds.some(id => !playerById[id]);
+      return (d.getPickIds?.length ?? 0) > 0;
     case 'young':
       return incoming.some(p => p.age <= 23);
     case 'expiring':
@@ -778,11 +812,13 @@ function TradingBlockTab({
   loading: boolean;
 }) {
   const [block, setBlock] = useState<Set<string>>(new Set());
+  const [blockPicks, setBlockPicks] = useState<Set<string>>(new Set());
   const [seekPos, setSeekPos] = useState<Set<BasketballPosition>>(new Set());
   const [seekTags, setSeekTags] = useState<Set<SeekTag>>(new Set());
   const [proposals, setProposals] = useState<DealSuggestion[] | null>(null);
 
   const players = userTeam.playerIds.map(id => playerById[id]).filter(Boolean) as BasketballPlayer[];
+  const myPicks = useMemo(() => getTeamPicks(league, userTeam.id), [league, userTeam.id]);
 
   function toggleSet<T>(set: Set<T>, setFn: (s: Set<T>) => void, v: T) {
     const n = new Set(set); if (n.has(v)) n.delete(v); else n.add(v); setFn(n); setProposals(null);
@@ -790,7 +826,11 @@ function TradingBlockTab({
 
   function ask() {
     const all: DealSuggestion[] = [];
-    for (const id of block) all.push(...findDealsForPlayer(league, id, 6));
+    const offerPickIds = [...blockPicks];
+    // Players on the block: shop each, tossing in any blocked picks as sweeteners.
+    for (const id of block) all.push(...findDealsForPlayer(league, id, 6, { offerPickIds }));
+    // Picks on the block: shop each pick for the AI's players/picks.
+    for (const id of blockPicks) all.push(...findDealsForPick(league, id, 6, { offerPickIds: offerPickIds.filter(p => p !== id) }));
     const hasFilter = seekPos.size > 0 || seekTags.size > 0;
     const wanted = !hasFilter
       ? all
@@ -804,13 +844,14 @@ function TradingBlockTab({
     const seen = new Set<string>();
     const unique: DealSuggestion[] = [];
     for (const d of wanted) {
-      const k = `${d.partnerTeamId}|${[...d.giveIds].sort().join(',')}|${[...d.getIds].sort().join(',')}`;
+      const k = `${d.partnerTeamId}|${[...d.giveIds, ...(d.givePickIds ?? [])].sort().join(',')}|${[...d.getIds, ...(d.getPickIds ?? [])].sort().join(',')}`;
       if (!seen.has(k)) { seen.add(k); unique.push(d); }
     }
     setProposals(unique.slice(0, 12));
   }
 
   const seekingCount = seekPos.size + seekTags.size;
+  const blockCount = block.size + blockPicks.size;
 
   return (
     <div className="grid lg:grid-cols-[1fr_1fr] gap-5">
@@ -819,6 +860,27 @@ function TradingBlockTab({
         <div className="px-2 pt-1">
           <SortableTradeTable players={players} season={season} selected={block} onToggle={id => toggleSet(block, setBlock, id)} side="mine" />
         </div>
+        {myPicks.length > 0 && (
+          <>
+            <div className="px-3 py-1 text-[9px] uppercase tracking-wide opacity-50 border-t" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>Draft picks on the block</div>
+            <div className="flex flex-wrap gap-1.5 px-3 py-2 border-t" style={{ borderColor: 'var(--border)' }}>
+              {myPicks.map(pk => {
+                const sel = blockPicks.has(pk.id);
+                return (
+                  <button
+                    key={pk.id}
+                    onClick={() => toggleSet(blockPicks, setBlockPicks, pk.id)}
+                    className="text-xs font-semibold rounded-full px-2.5 py-1 border inline-flex items-center gap-1"
+                    style={sel ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}
+                    title="Put this pick on the block"
+                  >
+                    🎟️ {pickShort(league, pk)}<span className="opacity-60 tabular-nums">· {fmtPts(pickValue(league, pk))}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
         <div className="px-3 py-3 border-t" style={{ borderColor: 'var(--border)' }}>
           <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Seeking in return</div>
           <div className="flex flex-wrap gap-2 mb-2">
@@ -831,19 +893,19 @@ function TradingBlockTab({
               <button key={tag} onClick={() => toggleSet(seekTags, setSeekTags, tag)} className="text-xs font-semibold rounded-md px-2.5 py-1 border" style={seekTags.has(tag) ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}>{SEEK_LABELS[tag]}</button>
             ))}
           </div>
-          <Button variant="primary" disabled={block.size === 0 || loading} onClick={ask} className="w-full">
-            {loading ? 'Working…' : `Ask for Proposals${block.size ? ` (${block.size})` : ''}`}
+          <Button variant="primary" disabled={blockCount === 0 || loading} onClick={ask} className="w-full">
+            {loading ? 'Working…' : `Ask for Proposals${blockCount ? ` (${blockCount})` : ''}`}
           </Button>
         </div>
       </section>
 
       <section className="space-y-2 self-start">
         {proposals === null ? (
-          <p className="text-sm text-[var(--text-sec)] px-1">Put players on the block and ask rivals what they&apos;d give up.</p>
+          <p className="text-sm text-[var(--text-sec)] px-1">Put players or picks on the block and ask rivals what they&apos;d give up.</p>
         ) : proposals.length === 0 ? (
-          <p className="text-sm text-[var(--text-sec)] px-1">No rival bit on those players{seekingCount ? ' for that return' : ''} — try different names or loosen what you&apos;re seeking.</p>
+          <p className="text-sm text-[var(--text-sec)] px-1">No rival bit on those assets{seekingCount ? ' for that return' : ''} — try different names or loosen what you&apos;re seeking.</p>
         ) : (
-          proposals.map((d, i) => <DealCard key={i} d={d} teamById={teamById} playerById={playerById} season={season} primaryLabel="Propose" secondaryLabel="Load & tweak" onPropose={onPropose} onLoad={onLoad} loading={loading} />)
+          proposals.map((d, i) => <DealCard key={i} league={league} d={d} teamById={teamById} playerById={playerById} season={season} primaryLabel="Propose" secondaryLabel="Load & tweak" onPropose={onPropose} onLoad={onLoad} loading={loading} />)
         )}
       </section>
     </div>
@@ -851,8 +913,9 @@ function TradingBlockTab({
 }
 
 function DealCard({
-  d, teamById, playerById, season, primaryLabel, secondaryLabel, onPropose, onLoad, loading,
+  league, d, teamById, playerById, season, primaryLabel, secondaryLabel, onPropose, onLoad, loading,
 }: {
+  league: League;
   d: DealSuggestion;
   teamById: Map<string, BasketballTeam>;
   playerById: Record<string, BasketballPlayer>;
@@ -864,10 +927,18 @@ function DealCard({
   loading: boolean;
 }) {
   const partner = teamById.get(d.partnerTeamId);
-  const names = (ids: string[]) => ids.map(id => { const p = playerById[id]; return p ? `${p.firstName[0]}. ${p.lastName} (${p.ratings.overall})` : '—'; }).join(', ');
-  const valOf = (ids: string[]) => ids.reduce((s, id) => s + (playerById[id] ? basketballTradeValue(playerById[id], { season }) : 0), 0);
-  const getVal = valOf(d.getIds);
-  const giveVal = valOf(d.giveIds);
+  // Render players and any draft-pick chips (🎟️ '27 R1) on the same line.
+  const pickLabels = (ids?: string[]) => (ids ?? []).map(id => { const pk = pickFromId(league, id); return pk ? `🎟️ ${pickShort(league, pk)}` : '🎟️'; });
+  const assetText = (ids: string[], pickIds?: string[]) => {
+    const playerNames = ids.map(id => { const p = playerById[id]; return p ? `${p.firstName[0]}. ${p.lastName} (${p.ratings.overall})` : '—'; });
+    const all = [...playerNames, ...pickLabels(pickIds)];
+    return all.length ? all.join(', ') : '—';
+  };
+  const valOf = (ids: string[], pickIds?: string[]) =>
+    ids.reduce((s, id) => s + (playerById[id] ? basketballTradeValue(playerById[id], { season }) : 0), 0) +
+    (pickIds ?? []).reduce((s, id) => s + pickValueById(league, id), 0);
+  const getVal = valOf(d.getIds, d.getPickIds);
+  const giveVal = valOf(d.giveIds, d.givePickIds);
   const grade = computeTradeGrade(getVal, giveVal);
   const verdict = verdictTag(getVal, giveVal);
   const total = getVal + giveVal;
@@ -880,8 +951,8 @@ function DealCard({
           <span className="text-sm font-black" style={{ color: gradeColor(grade) }}>{grade}</span>
           <span className="text-[11px] opacity-60">✓ cap-legal</span>
         </div>
-        <div className="text-xs"><span className="font-semibold" style={{ color: '#10b981' }}>You get:</span> {names(d.getIds)} <span className="opacity-50 tabular-nums">· {fmtPts(getVal)} pts</span></div>
-        <div className="text-xs"><span className="font-semibold" style={{ color: '#dc2626' }}>You give:</span> {names(d.giveIds)} <span className="opacity-50 tabular-nums">· {fmtPts(giveVal)} pts</span></div>
+        <div className="text-xs"><span className="font-semibold" style={{ color: '#10b981' }}>You get:</span> {assetText(d.getIds, d.getPickIds)} <span className="opacity-50 tabular-nums">· {fmtPts(getVal)} pts</span></div>
+        <div className="text-xs"><span className="font-semibold" style={{ color: '#dc2626' }}>You give:</span> {assetText(d.giveIds, d.givePickIds)} <span className="opacity-50 tabular-nums">· {fmtPts(giveVal)} pts</span></div>
         <div className="mt-1.5 max-w-[280px]">
           <div className="flex h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
             <div className="bg-green-500" style={{ width: `${total > 0 ? (getVal / total) * 100 : 50}%` }} />

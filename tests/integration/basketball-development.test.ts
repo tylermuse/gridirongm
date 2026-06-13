@@ -182,3 +182,31 @@ describe('basketball tickPlayer (mid-season)', () => {
     expect(ticked).toBe(p);
   });
 });
+
+describe('development variation + ceilings (BUG-15)', () => {
+  const developN = (p: BasketballPlayer, years: number, seedPrefix: string): BasketballPlayer => {
+    let cur = p, season = 2027;
+    for (let i = 0; i < years; i++) { cur = developBasketballPlayer(cur, season, { rngSeed: `${seedPrefix}-${cur.id}-${season}` }); season++; }
+    return cur;
+  };
+
+  it("the SAME player's arc differs across saves (per-save seed)", () => {
+    const base = generateBasketballPlayer({ position: 'SG', targetOverall: 74, age: 19 });
+    const a = developN(base, 5, 'saveA');
+    const b = developN(base, 5, 'saveB');
+    // Same player + id, different save seed → different career outcome.
+    expect(a.ratings.overall).not.toBe(b.ratings.overall);
+  });
+
+  it('a high-potential young player trends up and keeps his ceiling', () => {
+    const prospect: BasketballPlayer = (() => {
+      const g = generateBasketballPlayer({ position: 'SF', targetOverall: 72, age: 19 });
+      return { ...g, development: { ...g.development, potential: 90 } };
+    })();
+    const grown = developN(prospect, 4, 'savePot');
+    // Trends toward the ceiling rather than stalling/sliding.
+    expect(grown.ratings.overall).toBeGreaterThan(prospect.ratings.overall);
+    // Ceiling isn't nuked to overall+10 — it stays lofty while he's young.
+    expect(grown.development.potential).toBeGreaterThanOrEqual(83);
+  });
+});
