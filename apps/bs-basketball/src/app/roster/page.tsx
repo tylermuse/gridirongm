@@ -37,7 +37,6 @@ const POS_COLORS: Record<BasketballPosition, string> = {
   PG: '#06b6d4', SG: '#10b981', SF: '#f59e0b', PF: '#f97316', C: '#8b5cf6',
 };
 const TARGET_ROSTER = 15;
-const MIN_ROSTER = 13;
 
 // Scheme-fit dot palette — shared by the legend and every row's dot so neutral
 // reads the same in both (muted amber rather than the engine's grey text token).
@@ -230,13 +229,13 @@ export default function RosterPage() {
   function onDetails(id: string) { setMenu(null); setModalPlayerId(id); }
   function onTrade() { setMenu(null); router.push('/trade'); }
 
-  const sizeBadge = isReadOnly
+  // Just the roster count, or "Cut to 15" when over the limit. There used to be a
+  // "Sign a free agent" pill when short-handed, but it was a non-interactive span
+  // and in-season free agency isn't supported, so it only looked clickable — drop
+  // it (BUG-25).
+  const sizeBadge = isReadOnly || roster.length <= TARGET_ROSTER
     ? { text: `${roster.length} / ${TARGET_ROSTER}`, color: 'var(--text-sec)' }
-    : roster.length > TARGET_ROSTER
-    ? { text: `Cut to ${TARGET_ROSTER}`, color: '#dc2626' }
-    : roster.length < MIN_ROSTER
-    ? { text: 'Sign a free agent', color: '#f59e0b' }
-    : { text: `${roster.length} / ${TARGET_ROSTER}`, color: 'var(--text-sec)' };
+    : { text: `Cut to ${TARGET_ROSTER}`, color: '#dc2626' };
 
   const hc = getHeadCoach(league, team.id);
   const hcScheme = hc ? coachScheme(hc) : null;
