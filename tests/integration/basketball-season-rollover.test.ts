@@ -18,7 +18,9 @@ import {
 import {
   advanceToNextSeason,
   canAdvanceSeason,
+  enterOffseason,
 } from '@/../apps/bs-basketball/src/lib/season';
+import { getFaDay, FA_DAYS } from '@/../apps/bs-basketball/src/lib/freeAgency';
 import type { BasketballPlayer } from '@bs/sport-basketball';
 
 function playFullRegularSeason(seed: string) {
@@ -139,5 +141,22 @@ describe('season rollover', () => {
     expect(r!.gamesSimmed).toBeGreaterThan(0);
     // The very first scheduled day is day 1 (1-indexed schedule).
     expect(r!.day).toBe(1);
+  });
+
+  it('opens a fresh free-agency window each offseason (BUG-26)', () => {
+    const done = completeSeason('rollover-fa-window');
+    // Simulate the season that just ended having tipped off (beginRegularSeason
+    // set faDay = FA_DAYS) — the stale "window closed" state in 2027+.
+    const stale = {
+      ...done,
+      sportData: { ...(done.sportData as object), faDay: FA_DAYS, seasonStarted: true },
+    };
+    expect(getFaDay(stale)).toBe(FA_DAYS); // window reads closed before the fix
+
+    const off = enterOffseason(stale);
+    // enterOffseason now reopens the window, so opening FA via the stepper during
+    // the offseason shows Day 0, not "Day 30 of 30 · closed".
+    expect(getFaDay(off)).toBe(0);
+    expect((off.sportData as { seasonStarted?: boolean }).seasonStarted).toBe(false);
   });
 });

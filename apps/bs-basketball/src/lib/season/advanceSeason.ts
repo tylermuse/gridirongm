@@ -253,6 +253,13 @@ export function enterOffseason(input: LeagueState): LeagueState {
       pendingResign,
       pickOwnership: conv.ownership,
       pickProtections: conv.protections,
+      // Open a FRESH free-agency window for the new offseason. faDay/seasonStarted
+      // were only reset in startNextSeason, but the FA page is reachable via the
+      // offseason stepper BEFORE that runs — so from 2027 on they still held last
+      // season's end-state (faDay = FA_DAYS, "window closed"). Reset here too
+      // (startNextSeason's reset stays, harmlessly idempotent). BUG-26.
+      faDay: 0,
+      seasonStarted: false,
     },
   };
   // Surface each conveyance in League News so the user sees protections resolve.
