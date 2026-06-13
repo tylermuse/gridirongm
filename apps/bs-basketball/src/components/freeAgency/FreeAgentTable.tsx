@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { Chip } from '@/components/ui/Chip';
 import { ratingColor } from '@/lib/ui/ratingColor';
-import { acceptanceProbability, bestCompetingOffer, LEAGUE_MINIMUM_SALARY, type FreeAgentInfo } from '@/lib/freeAgency';
+import { acceptanceProbability, bestCompetingOffer, rosterCount, MAX_ROSTER, type FreeAgentInfo } from '@/lib/freeAgency';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
@@ -139,7 +139,10 @@ function FaIntel({ league, info, room, budget, appeal, teamById }: { league: Bas
   // Signable if the ask fits cap room OR an exception/minimum (over-cap teams can
   // always add minimum deals with an open spot — BUG-17).
   const affordable = info.marketSalary <= budget;
-  const minDeal = room <= 0 && info.marketSalary <= LEAGUE_MINIMUM_SALARY * 1.5;
+  // Over the cap, but signable to a vet minimum because a roster spot is open and
+  // nobody else is bidding — regardless of his market value (BUG-30).
+  const openSpot = league.userTeamId ? rosterCount(league, league.userTeamId) < MAX_ROSTER : false;
+  const minDeal = room <= 0 && openSpot && !competing;
   const compTeam = competing ? teamById.get(competing.teamId) : null;
   const rec = info.player.ratings.overall >= 78 ? 'Priority Target' : info.player.ratings.overall >= 70 ? 'Solid Add' : affordable ? 'Depth Option' : 'Stretch';
   const recColor = rec === 'Priority Target' ? '#10b981' : rec === 'Stretch' ? '#d97706' : 'var(--accent-alt)';
