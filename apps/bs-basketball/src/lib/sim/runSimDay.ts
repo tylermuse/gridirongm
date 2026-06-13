@@ -23,6 +23,7 @@ import { getHeadCoach } from '../coaching/coaches';
 import { getInjuries, healthyPlayers, applyInjuryRolls, type InjuryMap } from '../injuries';
 import { getDiscipline, isSuspendedOn, applyDisciplineRolls, type DisciplineMap } from '../discipline';
 import { refreshTradeRumors } from '../trade/rumors';
+import { runAiFreeAgency } from '../freeAgency';
 import type {
   BaseGameResult,
   BaseLeagueState,
@@ -158,7 +159,16 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
   // Advance the trade-rumor mill (generates + resolves; ramps toward deadline).
   const withRumors = refreshTradeRumors(withDiscipline);
 
-  return { league: withRumors, day: nextDay, gamesSimmed };
+  // Light in-season free-agency backfill: roughly every two weeks, AI teams that
+  // sit below a full roster sign the best available depth (fill-only — no
+  // mid-season waive churn). Keeps AI rosters from thinning out and keeps the
+  // user competing for unsigned veterans instead of hoarding them.
+  const withFa =
+    nextDay > 0 && nextDay % 14 === 0
+      ? runAiFreeAgency(withRumors, { rounds: 1, fillOnly: true }).league
+      : withRumors;
+
+  return { league: withFa, day: nextDay, gamesSimmed };
 }
 
 // ===========================================================================

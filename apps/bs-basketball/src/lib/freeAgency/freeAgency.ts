@@ -39,6 +39,11 @@ function playerLabel(league: LeagueState, playerId: PlayerId): string {
 }
 
 export const MAX_ROSTER = 15;
+/** AI teams keep signing the best-available depth until they reach this many
+ *  men, even without a strict positional need — so the free-agent pool actually
+ *  drains each offseason and the user can't scoop a full bench of unsigned
+ *  65–74 OVR players (the core reason the league played too easy). */
+export const TARGET_ROSTER = 14;
 /** Players won't take less than this fraction of their market total. */
 const LOWBALL_FLOOR = 0.7;
 
@@ -256,8 +261,10 @@ export function bestCompetingOffer(
 
     let affordable: boolean;
     if (team.playerIds.length < MAX_ROSTER) {
-      // Open spot: afford straight from the budget; only bid on a need or talent.
-      if (need === 0 && ovr < 75) continue;
+      // Open spot: afford straight from the budget; bid on a need, clear talent,
+      // or — below a full roster — the best available depth (mirrors runAiFreeAgency).
+      const needsDepth = team.playerIds.length < TARGET_ROSTER;
+      if (need === 0 && ovr < 75 && !(needsDepth && atPos < 3)) continue;
       affordable = signingBudget(league, team.id) >= info.marketSalary;
     } else {
       // Full roster: a contender waives its weakest player for a clear upgrade.
@@ -594,10 +601,11 @@ export interface AiFreeAgencyResult { league: LeagueState; signings: { teamId: T
  * for a clearly-better, affordable free agent). Bounded + deterministic — no
  * RNG — so it's safe to run on demand. The user's team is never touched.
  */
-export function runAiFreeAgency(league: LeagueState, opts?: { rounds?: number }): AiFreeAgencyResult {
+export function runAiFreeAgency(league: LeagueState, opts?: { rounds?: number; fillOnly?: boolean }): AiFreeAgencyResult {
   let l = league;
   const signings: { teamId: TeamId; playerId: PlayerId }[] = [];
   const rounds = opts?.rounds ?? 3;
+  const fillOnly = opts?.fillOnly ?? false;
   const UPGRADE_GAP = 4;
 
   for (let round = 0; round < rounds; round++) {
@@ -607,14 +615,20 @@ export function runAiFreeAgency(league: LeagueState, opts?: { rounds?: number })
       if (teamId === l.userTeamId) continue;
       if (l.freeAgentIds.length === 0) break;
 
-      // 1) Fill an open spot at a position of need with the best affordable FA.
+      // 1) Fill an open spot with the best affordable FA. Genuine positional need
+      //    (fewer than 2 at the spot) and clear talent (75+ OVR anywhere) always
+      //    qualify; below a full roster the team also keeps adding the best
+      //    available depth (up to 3 deep at a position) so the pool drains instead
+      //    of leaving a benchful of useful veterans for the user to scoop.
       if (rosterCount(l, teamId) < MAX_ROSTER) {
         const budget = signingBudget(l, teamId);
         const roster = rosterPlayers(l, teamId);
+        const needsDepth = rosterCount(l, teamId) < TARGET_ROSTER;
         const fill = freeAgentPool(l).find(f => {
           if (f.marketSalary > budget) return false;
           const atPos = countAtPos(roster, f.player.sportData.position);
-          return atPos < 2 || f.player.ratings.overall >= 75; // need, or a clear talent add
+          if (atPos < 2 || f.player.ratings.overall >= 75) return true; // need, or a clear talent add
+          return needsDepth && atPos < 3; // round out the bench with the best affordable depth
         });
         if (fill) {
           l = addToTeam(l, fill.player.id, teamId, buildContract({ years: fill.desiredYears, salaryPerYear: fill.marketSalary }, l.currentSeason));
@@ -629,6 +643,8 @@ export function runAiFreeAgency(league: LeagueState, opts?: { rounds?: number })
       //    Never waive a team's LAST player at a position — a real GM keeps
       //    positional coverage, and dropping the only C/PG would leave a hole the
       //    next sim can't fill (also kept the multi-season roster invariant safe).
+      //    Skipped in fill-only mode (in-season backfill) to avoid waive churn.
+      if (fillOnly) continue;
       const roster = rosterPlayers(l, teamId);
       if (roster.length === 0) continue;
       const posCount: Record<string, number> = {};

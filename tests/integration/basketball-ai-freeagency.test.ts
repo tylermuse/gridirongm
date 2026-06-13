@@ -102,4 +102,36 @@ describe('runAiFreeAgency', () => {
     const signedStars = freed.filter(p => !stillFree.has(p.id)).length;
     expect(signedStars).toBeGreaterThanOrEqual(5);
   });
+
+  it('refills thinned AI rosters with depth and drains the pool, even with no positional need (difficulty fix)', () => {
+    const base = createNewBasketballLeague({ rngSeed: 'ai-fa-depth' });
+    const players = { ...base.players } as Record<string, BasketballPlayer>;
+    const freedIds = new Set<string>();
+    // Thin every AI team by waiving its 3 weakest, dumping them into the pool —
+    // each team keeps 2-per-position depth, so under the OLD gate (need<2 || 75+)
+    // none of these sub-75 depth pieces would ever get re-signed.
+    const teams = base.teams.map(t => {
+      const weakest = [...t.playerIds]
+        .sort((a, b) => (players[a] as BasketballPlayer).ratings.overall - (players[b] as BasketballPlayer).ratings.overall)
+        .slice(0, 3);
+      for (const id of weakest) { players[id] = { ...players[id], rosterSlot: null, contract: null }; freedIds.add(id); }
+      return {
+        ...t,
+        playerIds: t.playerIds.filter(id => !weakest.includes(id)),
+        rosterBuckets: { ...t.rosterBuckets, active: (t.rosterBuckets.active ?? []).filter(id => !weakest.includes(id)) },
+      };
+    });
+    const league = { ...base, players, teams, freeAgentIds: [...base.freeAgentIds, ...freedIds], userTeamId: null };
+
+    const poolBefore = league.freeAgentIds.length;
+    const { league: after, signings } = runAiFreeAgency(league, { rounds: 8 });
+
+    // AI teams round out their benches toward a full roster instead of stopping
+    // at two-per-position, so the average roster climbs back up.
+    const avgRoster = after.teams.reduce((s, t) => s + t.playerIds.length, 0) / after.teams.length;
+    expect(avgRoster).toBeGreaterThanOrEqual(13);
+    // The depth pool drains rather than lingering for the user to scoop.
+    expect(after.freeAgentIds.length).toBeLessThan(poolBefore);
+    expect(signings.length).toBeGreaterThanOrEqual(after.teams.length);
+  });
 });
