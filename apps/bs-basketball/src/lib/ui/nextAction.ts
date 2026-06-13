@@ -19,7 +19,7 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 export type ActionKey =
   | 'simDay' | 'simWeek' | 'simDeadline' | 'simSeason'
   | 'startPlayoffs' | 'simPlayoffDay' | 'simPlayoffRound' | 'simAllPlayoffs'
-  | 'enterOffseason' | 'simDraftToUser' | 'simDraftPick' | 'simDraftAll' | 'goDraft' | 'startNextSeason' | 'beginRegularSeason' | 'goFreeAgency' | 'goReSign';
+  | 'enterOffseason' | 'simDraftToUser' | 'simDraftPick' | 'simDraftAll' | 'goDraft' | 'startNextSeason' | 'finishInaugural' | 'beginRegularSeason' | 'goFreeAgency' | 'goReSign';
 
 /** User-team players with no contract for the upcoming season (expiring). */
 export function userExpiringCount(league: LeagueState, upcomingSeason: number): number {
@@ -65,13 +65,18 @@ export function nextAction(league: LeagueState): NextAction {
     }
     // 2) Re-sign your expiring players + finalize the roster — the next step
     //    after the draft, always, so the CTA guides Draft → Re-sign → Free Agency
-    //    (BUG-12) rather than skipping straight to "Start Season". The re-sign page
-    //    hosts a hard 15-man trim gate, so an over-limit roster routes there too.
-    //    Anything left un-re-signed walks to free agency at season start.
-    if (league.userTeamId && !draft.inaugural) {
+    //    (BUG-12) rather than skipping straight to "Start Season". This now also
+    //    covers the inaugural imported draft (BUG-20) — the "skip" just finishes
+    //    that draft (no year roll) instead of rolling into the next season. The
+    //    re-sign page hosts a hard 15-man trim gate, so an over-limit roster
+    //    routes there too. Anything left un-re-signed walks to FA at season start.
+    if (league.userTeamId) {
       const expiring = userExpiringCount(league, draft.season);
       const rosterN = league.teams.find(t => t.id === league.userTeamId)?.playerIds.length ?? 0;
       const overLimit = rosterN > 15;
+      // Inaugural tips into the current season via finishInauguralDraft; a normal
+      // offseason rolls the year via startNextSeason.
+      const skipKey: ActionKey = draft.inaugural ? 'finishInaugural' : 'startNextSeason';
       return {
         phaseLabel: overLimit && expiring === 0 ? 'Offseason · Roster' : 'Offseason · Re-sign',
         label: expiring > 0
@@ -79,11 +84,16 @@ export function nextAction(league: LeagueState): NextAction {
           : overLimit ? 'Trim Roster to 15' : 'Re-sign Players',
         primary: 'goReSign',
         // "Skip" only when it wouldn't bypass the hard 15-man gate.
-        secondary: overLimit ? undefined : [{ label: 'Skip to season', key: 'startNextSeason' }],
+        secondary: overLimit ? undefined : [{ label: 'Skip to season', key: skipKey }],
       };
     }
-    // 3) Inaugural (imported) draft has no re-sign step — tip into the season.
-    return { phaseLabel: 'Offseason · Draft', label: `Start ${draft.season} Season`, primary: 'startNextSeason' };
+    // 3) Spectating (no user team): just tip the season off — inaugural finishes
+    //    in place, a normal offseason rolls the year.
+    return {
+      phaseLabel: 'Offseason · Draft',
+      label: `Start ${draft.season} Season`,
+      primary: draft.inaugural ? 'finishInaugural' : 'startNextSeason',
+    };
   }
 
   // Season finished → roll into the offseason
