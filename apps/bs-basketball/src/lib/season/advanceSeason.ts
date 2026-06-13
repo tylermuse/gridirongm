@@ -422,10 +422,17 @@ export function startNextSeason(league: LeagueState): LeagueState {
     } as BasketballTeam;
   });
 
-  // Re-sign any still-rostered player whose deal expired (the keepers that didn't
-  // walk, above) at market value — otherwise the contract silently vanishes
-  // (player sits at $0) and the team's payroll drifts down every year.
+  // Re-sign any still-rostered AI player whose deal expired (the keepers that
+  // didn't walk, above) at market value — otherwise the contract silently
+  // vanishes (player sits at $0) and the team's payroll drifts down every year.
+  //
+  // AI ONLY (BUG-28): the user's expiring players must NOT be auto-re-signed —
+  // that silently adds salary the GM never agreed to (halving cap space) and
+  // contradicts the documented flow ("anything left un-re-signed walks to free
+  // agency"). The user's un-re-signed expiring players already walk via the
+  // `walk` set above; this loop must never quietly re-sign them back.
   for (const t of teams) {
+    if (t.id === league.userTeamId) continue;
     for (const id of t.playerIds) {
       const p = players[id];
       if (p && !hasContractForSeason(p, season)) {
