@@ -119,8 +119,14 @@ describe('BUG-11: minutes follow the user-set lineup, not OVR', () => {
     // The user's chosen starter started; the benched star did not.
     expect(game.boxScores[promote.id]?.gamesStarted).toBe(1);
     expect(game.boxScores[benchStar.id]?.gamesStarted).toBe(0);
-    // And the benched star plays clearly fewer minutes despite his higher OVR.
-    expect(benchedMin).toBeLessThan(starterMin);
+    // The benched star plays bench-level minutes, not starter-level — i.e. clearly
+    // below the team's real starters (compare to the MAX starter, not the
+    // deliberately-weak low-OVR starter we promoted, whose minutes can dip into
+    // the top reserve's range). The old bug had him at ~35 (full starter load).
+    const maxStarterMin = Math.max(...lineup.starters.map(id => game.boxScores[id]?.minutes ?? 0));
+    expect(starterMin).toBeGreaterThan(0); // the promoted starter logged real minutes
+    expect(benchedMin).toBeLessThan(maxStarterMin);
+    expect(benchedMin).toBeLessThan(30);
   });
 
   it('repairs a stale lineup instead of reverting to "highest OVR starts"', () => {

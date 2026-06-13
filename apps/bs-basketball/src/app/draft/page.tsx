@@ -187,6 +187,13 @@ export default function DraftPage() {
               <Link href="/re-sign" className="rounded-lg px-4 py-2 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>
                 Trim Roster to 15 →
               </Link>
+            ) : !draft.inaugural ? (
+              // Even with nothing to re-sign, guide through the Re-sign window (the
+              // hub for cap review + the path to Free Agency), not straight to the
+              // season (BUG-12).
+              <Link href="/re-sign" className="rounded-lg px-4 py-2 text-sm font-bold text-white" style={{ background: 'var(--accent)' }}>
+                Re-sign Players →
+              </Link>
             ) : (
               <Button variant="primary" disabled={store.loading} onClick={() => void handleStartSeason('/free-agency')}>
                 {store.loading ? 'Working…' : `Start ${draft.season} Season →`}

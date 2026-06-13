@@ -8,6 +8,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { dropConfetti } from '@/lib/ui/confetti';
 import type {
+  BasketballGameData,
   BasketballPlayer,
   BasketballStats,
   BasketballTeam,
@@ -56,6 +57,20 @@ export default function GamePage() {
     return (league.teams.find(t => t.id === game.awayTeamId) as BasketballTeam | undefined) ?? null;
   }, [league, game]);
 
+  // Prev/next played game in chronological order, so you can flip through the
+  // game log without going back to the schedule (FEAT-24).
+  const { prevId, nextId } = useMemo(() => {
+    if (!league) return { prevId: null as string | null, nextId: null as string | null };
+    const played = league.games
+      .filter(g => g.status === 'played')
+      .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '') || a.id.localeCompare(b.id));
+    const i = played.findIndex(g => g.id === params.gameId);
+    return {
+      prevId: i > 0 ? played[i - 1].id : null,
+      nextId: i >= 0 && i < played.length - 1 ? played[i + 1].id : null,
+    };
+  }, [league, params.gameId]);
+
   // Confetti when the user's team won this game — once per viewed game.
   const celebratedRef = useRef<string | null>(null);
   useEffect(() => {
@@ -89,17 +104,24 @@ export default function GamePage() {
 
   const playerMap = league.players as Record<string, BasketballPlayer>;
   const homeWon = game.finalScore.home > game.finalScore.away;
+  const gameData = game.sportData as BasketballGameData | undefined;
 
   return (
     <main className="max-w-5xl mx-auto p-8">
-      {league.userTeamId && (
-        <Link
-          href={`/team/${league.userTeamId}`}
-          className="text-sm font-semibold opacity-70 hover:opacity-100"
-        >
-          ← My Team
-        </Link>
-      )}
+      {/* Prev/next chevrons flank the page so you can flip through games. */}
+      <div className="flex items-center justify-between">
+        {league.userTeamId ? (
+          <Link href={`/team/${league.userTeamId}`} className="text-sm font-semibold opacity-70 hover:opacity-100">← My Team</Link>
+        ) : <span />}
+        <div className="flex items-center gap-2">
+          {prevId
+            ? <Link href={`/game/${prevId}`} className="text-sm font-semibold px-2 py-1 rounded hover:bg-[var(--surface-2)]" style={{ color: 'var(--accent)' }} title="Previous game">‹ Prev</Link>
+            : <span className="text-sm opacity-30 px-2 py-1">‹ Prev</span>}
+          {nextId
+            ? <Link href={`/game/${nextId}`} className="text-sm font-semibold px-2 py-1 rounded hover:bg-[var(--surface-2)]" style={{ color: 'var(--accent)' }} title="Next game">Next ›</Link>
+            : <span className="text-sm opacity-30 px-2 py-1">Next ›</span>}
+        </div>
+      </div>
 
       {/* Final score header */}
       <section className="grid grid-cols-3 items-center my-6 p-6 rounded-lg" style={{ background: 'var(--muted)' }}>
@@ -110,7 +132,7 @@ export default function GamePage() {
           align="left"
         />
         <div className="text-center text-sm opacity-60 uppercase tracking-wide">
-          Final
+          {gameData?.wentToOvertime ? `Final / ${gameData.periodsPlayed - 4} OT` : 'Final'}
         </div>
         <TeamScoreCell
           team={homeTeam}
@@ -119,6 +141,11 @@ export default function GamePage() {
           align="right"
         />
       </section>
+
+      {/* Quarter-by-quarter line score + game info (FEAT-24). */}
+      {gameData?.quarterScores?.length ? (
+        <LineScore away={awayTeam} home={homeTeam} data={gameData} />
+      ) : null}
 
       <GameLeaders away={awayTeam} home={homeTeam} game={game} playerMap={playerMap} onPlayerClick={setModalPlayerId} />
 
@@ -135,6 +162,44 @@ export default function GamePage() {
 // ===========================================================================
 // Components
 // ===========================================================================
+
+function LineScore({ away, home, data }: { away: BasketballTeam; home: BasketballTeam; data: BasketballGameData }) {
+  const qs = data.quarterScores;
+  const labels = qs.map((_, i) => (i < 4 ? `Q${i + 1}` : qs.length - 4 > 1 ? `OT${i - 3}` : 'OT'));
+  const rows: { team: BasketballTeam; side: 'home' | 'away' }[] = [
+    { team: away, side: 'away' },
+    { team: home, side: 'home' },
+  ];
+  const leadTeam = data.biggestLead.team === 'home' ? home : away;
+  return (
+    <section className="mb-6 rounded border overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="opacity-60" style={{ background: 'var(--muted)' }}>
+            <th className="px-3 py-1.5 text-left font-semibold">Team</th>
+            {labels.map((l, i) => <th key={i} className="px-3 py-1.5 text-center font-semibold">{l}</th>)}
+            <th className="px-3 py-1.5 text-center font-semibold">T</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ team, side }) => (
+            <tr key={side} className="border-t" style={{ borderColor: 'var(--border)' }}>
+              <td className="px-3 py-1.5 font-semibold">{team.abbreviation}</td>
+              {qs.map((q, i) => <td key={i} className="px-3 py-1.5 text-center tabular-nums">{q[side]}</td>)}
+              <td className="px-3 py-1.5 text-center font-bold tabular-nums">{qs.reduce((s, q) => s + q[side], 0)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="px-3 py-2 text-[11px] text-[var(--text-sec)] border-t flex flex-wrap gap-x-3 gap-y-0.5" style={{ borderColor: 'var(--border)' }}>
+        <span>Biggest lead: <span className="font-semibold">{leadTeam.abbreviation} +{data.biggestLead.points}</span></span>
+        <span>· {data.totalPossessions} possessions</span>
+        <span>· {data.pace} pace</span>
+        {data.wentToOvertime ? <span>· {data.periodsPlayed - 4} OT</span> : null}
+      </div>
+    </section>
+  );
+}
 
 function TeamScoreCell({
   team, score, won, align,
@@ -246,6 +311,16 @@ function BoxScoreTable({
     .filter(({ player, stats }) => player && (stats.minutes ?? 0) > 0)
     .sort((a, b) => (b.stats.points ?? 0) - (a.stats.points ?? 0));
 
+  // Team totals across every box-score column + shooting splits (FEAT-24).
+  const sum = (key: keyof BasketballStats) => lines.reduce((s, l) => s + ((l.stats[key] as number) ?? 0), 0);
+  const totals = Object.fromEntries(BOXSCORE_COLS.map(c => [c.key, sum(c.key)])) as Record<string, number>;
+  const pct = (made: number, att: number) => (att > 0 ? `${Math.round((made / att) * 100)}%` : '—');
+  const splits = [
+    { label: 'FG', text: `${totals.fieldGoalsMade}/${totals.fieldGoalsAttempted} ${pct(totals.fieldGoalsMade, totals.fieldGoalsAttempted)}` },
+    { label: '3P', text: `${totals.threePointsMade}/${totals.threePointsAttempted} ${pct(totals.threePointsMade, totals.threePointsAttempted)}` },
+    { label: 'FT', text: `${totals.freeThrowsMade}/${totals.freeThrowsAttempted} ${pct(totals.freeThrowsMade, totals.freeThrowsAttempted)}` },
+  ];
+
   return (
     <section className="rounded border overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
       <h2 className="px-3 py-2 font-bold border-b" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
@@ -280,8 +355,20 @@ function BoxScoreTable({
               ))}
             </tr>
           ))}
+          {/* Team totals */}
+          <tr className="border-t-2 font-bold" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
+            <td className="px-2 py-1">Team</td>
+            {BOXSCORE_COLS.map(c => (
+              <td key={String(c.key)} className="px-2 py-1 text-right">
+                {c.key === 'minutes' ? '' : formatStat(c.key, totals[c.key])}
+              </td>
+            ))}
+          </tr>
         </tbody>
       </table></div>
+      <div className="px-3 py-1.5 text-[11px] text-[var(--text-sec)] border-t flex flex-wrap gap-x-3" style={{ borderColor: 'var(--border)' }}>
+        {splits.map(s => <span key={s.label}><span className="opacity-60">{s.label}</span> {s.text}</span>)}
+      </div>
     </section>
   );
 }

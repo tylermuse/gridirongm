@@ -63,25 +63,26 @@ export function nextAction(league: LeagueState): NextAction {
       };
       return { phaseLabel: 'Draft', label: 'Go to Draft', primary: 'goDraft' };
     }
-    // 2) Re-sign your expiring players + finalize the roster — after the draft,
-    //    before free agency. The re-sign page hosts a hard 15-man trim gate, so an
-    //    over-limit roster routes there too (cuts aren't a separate step).
+    // 2) Re-sign your expiring players + finalize the roster — the next step
+    //    after the draft, always, so the CTA guides Draft → Re-sign → Free Agency
+    //    (BUG-12) rather than skipping straight to "Start Season". The re-sign page
+    //    hosts a hard 15-man trim gate, so an over-limit roster routes there too.
     //    Anything left un-re-signed walks to free agency at season start.
-    if (league.userTeamId) {
+    if (league.userTeamId && !draft.inaugural) {
       const expiring = userExpiringCount(league, draft.season);
       const rosterN = league.teams.find(t => t.id === league.userTeamId)?.playerIds.length ?? 0;
-      const overLimit = !draft.inaugural && rosterN > 15;
-      if (expiring > 0 || overLimit) {
-        return {
-          phaseLabel: overLimit && expiring === 0 ? 'Offseason · Roster' : 'Offseason · Re-sign',
-          label: expiring > 0 ? `Re-sign ${expiring} Player${expiring === 1 ? '' : 's'}` : 'Trim Roster to 15',
-          primary: 'goReSign',
-          // "Skip" only when it wouldn't bypass the hard 15-man gate.
-          secondary: overLimit ? undefined : [{ label: 'Skip to season', key: 'startNextSeason' }],
-        };
-      }
+      const overLimit = rosterN > 15;
+      return {
+        phaseLabel: overLimit && expiring === 0 ? 'Offseason · Roster' : 'Offseason · Re-sign',
+        label: expiring > 0
+          ? `Re-sign ${expiring} Player${expiring === 1 ? '' : 's'}`
+          : overLimit ? 'Trim Roster to 15' : 'Re-sign Players',
+        primary: 'goReSign',
+        // "Skip" only when it wouldn't bypass the hard 15-man gate.
+        secondary: overLimit ? undefined : [{ label: 'Skip to season', key: 'startNextSeason' }],
+      };
     }
-    // 3) Tip into the season (free agency surfaces in the preseason).
+    // 3) Inaugural (imported) draft has no re-sign step — tip into the season.
     return { phaseLabel: 'Offseason · Draft', label: `Start ${draft.season} Season`, primary: 'startNextSeason' };
   }
 

@@ -64,6 +64,7 @@ Status legend: ☐ open · ◐ in progress · ☑ shipped
 - **Priority:** P1
 
 ### ☑ BUG-9: Draft pick protections not honored
+> **Re-fixed (real root cause for imported leagues).** The protection/conveyance engine shipped earlier and works for user-initiated trades, but the user's "Dallas 2027 R1 → Charlotte" comes from the **imported NBA roster**, and the importer dropped it: `convertBbgmLeague` only captured picks where `dp.season === season` (`if (dp.season !== season) continue`), so all 160 *future* traded picks — including Dallas's 2027 R1 — were discarded and reverted to the original team at that draft. Fixed: import captures current **and** future traded picks keyed by their actual season; the store keys the registry by `o.season`. Verified on the real roster file (ownership now spans 2026–2032; 130 future obligations captured). Note: BBGM has no protection field, so imported picks convey **unconditionally** — correct for every outcome except the rare "lands inside protection" case, for which no source data exists.
 - **Where:** Draft lottery / pick ownership resolution
 - **Repro:** Dallas traded its 2027 R1 to Charlotte, top-2 protected. In the lottery Dallas landed at pick 5 — outside the protection.
 - **Expected:** Pick conveys to Charlotte (protection only applies if it lands top-2). Charlotte picks 5th with Dallas's pick.
@@ -72,19 +73,42 @@ Status legend: ☐ open · ◐ in progress · ☑ shipped
 - **Priority:** P0
 
 ### ☑ BUG-10: Rookies have unrealistically low impact in their rookie season
+> **Follow-up shipped (rookie depth + imported prospects).** Two paths fixed: (1) **synthetic** draft classes — shallower R1 curve (76→67, was 75→63) so the All-Rookie Second Team also cracks rotations: measured second-team PPG rose from ~8 to **~10–11** (top rookie ~16). (2) **Imported** leagues — the real root cause of the user's 2026 case: imported prospects skipped NBA calibration entirely and entered at ~50 OVR (buried → ~5 PPG). They now get a **partial calibration** (current OVR lifted 60% toward their NBA ceiling, which stays their potential): **AJ Dybantsa now 73 OVR / 93 POT** (was ~50), top-5 prospect OVR avg 71.6 — rotation-caliber, so the ROY will post realistic minutes/scoring.
 - **Where:** Game sim — rookie minutes/production
 - **Observed:** The Rookie of the Year is averaging ~5–8 PPG (e.g. ROY AJ Dybantsa at 5.6 PPG / 1.8 RPG / 1.6 APG). In a realistic league, the ROY typically averages ~15–20+ PPG, and several rookies are meaningful contributors.
 - **Likely causes:** rookies enter with low OVR relative to the league and/or AI lineups give them too few minutes; possibly rookie OVRs at draft (60s–70s) are fine but minutes allocation buries them.
+- **Additional evidence (S2026 All-Rookie First Team):** AI-team rookies averaged 5.2 / 4.7 / 4.9 PPG, while the user's two rookies (user-controlled minutes) averaged 11.7 and 9.0 — strongly suggests AI minutes allocation for rookies is the root cause, not rookie ratings.
+- **Update after fix:** Much improved — All-Rookie First Team now 9.7–14.4 PPG including AI rookies. Remaining issue: steep cliff to the Second Team (all ~6 PPG; realistically ~9–12). One more tuning pass on rookie depth beyond the top ~5.
 - **Expected:** Top-5 picks land in the realistic range — meaningful minutes, ROY around 15–20 PPG in a normal year.
 - **Related:** FEAT-14 (scouting/potential model) — rookie ratings and development curves probably need tuning together.
 - **Priority:** P1
 
 ### ☑ BUG-11: After a starter/bench swap, both players get starting minutes
-> **Fixed.** Root cause: `resolveLineup` discarded the **entire** saved lineup and rebuilt the OVR-default whenever it was stale — and the sim resolves against the *healthy* roster, so a single injury to any starter reverted everyone to "highest OVR starts," re-promoting deliberately-benched stars into starter minutes. Replaced the wholesale fallback with `repairLineup()`: available starters keep their slots, the user's bench order is preserved, and only the gaps left by unavailable players are filled (position-matched, by the user's bench order). Confirmed empirically + 2 regression tests. Typecheck clean.
 - **Where:** Roster & Lineup — minutes allocation after lineup changes
 - **Repro:** Swap a bench player into the starting lineup (e.g. Collin Sexton in for Darryn Peterson at SG), save, sim games.
 - **Expected:** The new starter gets starter minutes; the benched player gets bench minutes.
 - **Actual:** Both play starter-level minutes (observed: Sexton 35.2 MP while listed on bench, Peterson 31.2 MP as starter).
+- **Priority:** P0
+
+### ☑ BUG-12: Post-draft CTA still says "Start 2026 Season" instead of "Re-sign Players"
+> **Fixed.** For a normal (non-inaugural) draft, the post-draft primary CTA now always routes to the Re-sign window ("Re-sign N Players" / "Re-sign Players" / "Trim Roster to 15") instead of "Start Season" — in both `nextAction` (top bar) and the draft-complete banner — so the flow guides Draft → Re-sign → Free Agency. A "Skip to season" secondary remains for users with nothing to re-sign. Inaugural (imported) drafts have no re-sign step and still tip straight in.
+- **Where:** Draft page after completion + top bar
+- **Repro:** Complete the draft (draft recap now shows correctly).
+- **Expected:** Primary CTA leads to the next offseason step: "Re-sign Players →" (per the Draft → Re-sign → Cuts → Free Agency flow).
+- **Actual:** Buttons say "Start 2026 Season", skipping ahead in the flow.
+- **Related:** Follow-up to BUG-1 — the recap (FEAT-3) shipped but the CTA sequencing didn't fully change.
+- **Priority:** P1
+
+### ☑ BUG-13: League is too easy — user reaches 65+ wins in most saves
+> **Fixed (primary lever).** Confirmed empirically: an all-AI league already tops out at ~58 wins (the win curve is fine), but **AI free agency never ran on its own** — at a rollover with no user action, the FA pool went 0 → 57 and AI signed **zero** of them, leaving ~57 quality free agents for the user to scoop uncontested while AI rosters stagnated on 62-OVR filler. Fix: a guaranteed AI free-agency batch now runs at season tip-off (`beginRegularSeason`, 8 rounds — drains the quality tier, e.g. top pool OVR 79→66, ~30 signings), plus a light opening pass when the FA window opens (`startNextSeason`, 2 rounds) so the user faces a competitive market instead of first pick of everyone. Regression test added (AI absorbs ≥5 of 8 quality FAs off full rosters). **Deferred secondary levers** (noted, lower impact): home-court advantage is stubbed in the sim (parity), and AI teams never *propose* trades (no mid-season self-improvement) — both are follow-ups if the FA fix proves insufficient in playtest.
+- **Where:** Sim engine / AI team management (league balance)
+- **Observed:** Across most saves, the user's team easily becomes a 65+ win juggernaut. A well-run team should contend, but 65+ wins should be rare, not routine.
+- **Investigate (likely compounding causes):**
+  - AI offseason activity (BUG-6 follow-up): verify AI teams are actually competing for free agents now — it's still unclear in-game whether they sign anyone. If the user gets first pick of every FA, dominance follows.
+  - AI lineup/rotation quality (see BUG-10 evidence — AI misallocates minutes).
+  - Trade AI accepting lopsided deals (BUG-8).
+  - User team development/morale bonuses outpacing AI teams.
+- **Goal:** League where AI contenders also win 55–65 games and the FA market is genuinely competitive.
 - **Priority:** P0
 
 ## Features
@@ -221,14 +245,12 @@ Status legend: ☐ open · ◐ in progress · ☑ shipped
 - **Priority:** P1
 
 ### ☑ FEAT-20: Show what each team offers on the "pick your next job" screen
-> **Shipped.** Each vacancy card on the fired/job-pick screen (home page) now shows a situation summary: top-2 core players (name + OVR), cap space (or amount over), average roster age, owned future first-rounders (flagging any *extra* picks acquired via trade), and a young-talent count (players ≤ 23). Enough to tell a rebuild from a retool at a glance.
 - **Where:** Fired / front-office vacancy screen (after being fired, choosing a new team)
 - **Current:** Each open job shows only team name and record — nothing to base the decision on.
 - **What:** Add a summary per team so you can compare the situations: top players (e.g. "A. Edwards 85 · R. Gobert 88"), young talent/prospects, owned future draft picks (especially extra 1sts), cap space, and average roster age. Enough to tell a rebuild from a retool at a glance.
 - **Priority:** P2
 
 ### ☑ FEAT-21: Flexible lineup positions (G/F/C instead of rigid PG/SG/SF/PF/C)
-> **Shipped.** Lineups now build from position GROUPS — 2 guards, 2 forwards, 1 center — so the best two guards start even if both are SGs, instead of forcing a weak natural-PG in over a better SG (new `basketballPositionGroup`/`isInPositionAtSlot` + group-based `buildDefaultBasketballLineup`). The out-of-position warning (BUG-5) now only fires for a cross-group start (a center at guard), not a within-group flex, and the lineup page's fit chips are group-aware. `resolveLineup` repair also fills holes by group. Regression tests added.
 - **Where:** Roster & Lineup — starting slot position requirements
 - **Current:** Each starting slot demands the exact position (an SF slot wants an SF), forcing worse players into the lineup over better ones at an adjacent position.
 - **What:** Allow lineups built from any reasonable combination of guards, forwards, and centers — if a PF is the best forward, he can take either forward spot. Keep some sanity constraint (e.g. ~2 G / 2 F / 1 big or position-adjacent assignments with a small out-of-position penalty) rather than exact-position matching.
@@ -236,11 +258,29 @@ Status legend: ☐ open · ◐ in progress · ☑ shipped
 - **Priority:** P1
 
 ### ☑ FEAT-22: Bench order controls minutes distribution
-> **Shipped.** The engine's bench-minutes reshape now weights by the user's rotation **order** (geometric decay, rating only as a tiebreaker) instead of pure OVR — dragging a bench player up the list earns him more minutes; bench minutes still sit below the starters. The lineup page's bench reorder controls already persist the order. Regression test added.
 - **Where:** Roster & Lineup — bench section (drag handles already exist)
 - **What:** Let the user drag bench players into a priority order, and have the sim allocate bench minutes by that order (higher = more minutes). Right now there's no apparent way to influence who soaks up bench minutes.
 - **Related:** BUG-11 — minutes allocation logic is being touched anyway.
 - **Priority:** P1
+
+### ☑ FEAT-23: Show player stats in the Re-sign window
+> **Shipped.** Each expiring-player row now shows the last-season production line (PPG/RPG/APG · GP · PER) and the **name is clickable** to the player quick-view modal (which leads with stats per FEAT-15). Extracted a shared `lastSeasonStatLine` helper (`src/lib/stats/statLine.ts`) — the single source of truth the Re-sign window uses (and FA/modal can adopt), replacing the page-local copy and adding GP.
+- **Where:** Re-signing Window — expiring player rows
+- **Current:** Rows show position/age/OVR and the ask, but no production — can't judge whether a player is worth the money.
+- **What:** Add last-season stat line to each row (PPG/RPG/APG, GP, MPG), and ideally make the row expandable or the name clickable to the player quick-view (which per FEAT-15 should also show stats).
+- **Related:** FEAT-8 (same gap in Free Agency), FEAT-15 (modal stats).
+- **Priority:** P1
+
+### ☑ FEAT-24: Richer game detail page (quarter-by-quarter, team totals, game info)
+> **Shipped.** The game page now shows a **quarter-by-quarter line score** (Q1–Q4 + OT, with totals) from the sim's `quarterScores`, a **team-totals row + FG/3P/FT shooting splits** under each box score, a **game-info line** (biggest lead, possessions, pace, OT), and **prev/next chevrons** that flip through played games chronologically without returning to the schedule.
+- **Where:** Game detail page (clicking any played game)
+- **Current:** Shows final score, game leaders, and per-player box score tables.
+- **What:** Round out the game page:
+  - **Quarter-by-quarter line score** (Q1–Q4 + OT) for both teams at the top.
+  - **Team totals row** under each box score (FG%, 3P%, FT%, REB, AST, TOV, etc.).
+  - **Other game details:** lead changes, biggest lead/run, attendance/arena flavor — whatever the sim already tracks.
+  - **Prev/next navigation:** chevrons on the left/right of the page to flip to the previous/next simulated game without going back to the schedule.
+- **Priority:** P2
 
 ## Needs clarification
 

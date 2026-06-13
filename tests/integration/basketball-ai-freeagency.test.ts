@@ -74,4 +74,32 @@ describe('runAiFreeAgency', () => {
     expect(competing).not.toBeNull();
     expect(competing!.teamId).not.toBe(fromTeam.id);
   });
+
+  it('absorbs quality free agents off full rosters so the user can\'t scoop them (BUG-13)', () => {
+    const base = createNewBasketballLeague({ rngSeed: 'ai-fa-bug13' });
+    // Push several of the league's best players into the FA pool (as happens at a
+    // rollover when contracts expire), leaving every AI roster otherwise full.
+    const players = { ...base.players } as Record<string, BasketballPlayer>;
+    const ranked = Object.values(players)
+      .filter(p => p.rosterSlot)
+      .sort((a, b) => b.ratings.overall - a.ratings.overall);
+    const freed = ranked.slice(0, 8); // 8 strong players hit the market
+    const freedIds = new Set(freed.map(p => p.id));
+    for (const p of freed) players[p.id] = { ...players[p.id], rosterSlot: null, contract: null };
+    const teams = base.teams.map(t => ({
+      ...t,
+      playerIds: t.playerIds.filter(id => !freedIds.has(id)),
+      rosterBuckets: { ...t.rosterBuckets, active: (t.rosterBuckets.active ?? []).filter(id => !freedIds.has(id)) },
+    }));
+    // No user team — pure league-wide AI free agency (the offseason batch).
+    const league = { ...base, players, teams, freeAgentIds: [...base.freeAgentIds, ...freedIds], userTeamId: null };
+
+    const { league: after, signings } = runAiFreeAgency(league, { rounds: 8 });
+    expect(signings.length).toBeGreaterThan(0);
+    // Most of the strong free agents should have been signed by AI teams — not
+    // left sitting in the pool for the user.
+    const stillFree = new Set(after.freeAgentIds);
+    const signedStars = freed.filter(p => !stillFree.has(p.id)).length;
+    expect(signedStars).toBeGreaterThanOrEqual(5);
+  });
 });
