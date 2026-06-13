@@ -26,6 +26,7 @@ import {
 import type { BaseContract, BaseLeagueState, PlayerId, TeamId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { appendTransaction } from '../transactions';
+import { upcomingSeason } from '../draft/draft';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -151,11 +152,15 @@ export function rosterCount(league: LeagueState, teamId: TeamId): number {
 export function capRoom(league: LeagueState, teamId: TeamId): number {
   const team = league.teams.find(t => t.id === teamId);
   if (!team) return 0;
+  // Price the UPCOMING season (BUG-29) — the same year the Re-sign window uses —
+  // so the cap-space figure doesn't lurch between Re-sign and Free Agency when
+  // FA is opened during the offseason before the year has rolled.
+  const season = upcomingSeason(league);
   const players = team.playerIds
     .map(id => league.players[id] as BasketballPlayer | undefined)
     .filter((p): p is BasketballPlayer => !!p);
-  const payroll = basketballTeamPayroll(players, league.currentSeason);
-  return basketballSalaryCap(league.currentSeason) - payroll;
+  const payroll = basketballTeamPayroll(players, season);
+  return basketballSalaryCap(season) - payroll;
 }
 
 /**
@@ -169,7 +174,8 @@ export function capRoom(league: LeagueState, teamId: TeamId): number {
 export function signingBudget(league: LeagueState, teamId: TeamId): number {
   const team = league.teams.find(t => t.id === teamId);
   if (!team) return 0;
-  const season = league.currentSeason;
+  // Upcoming season (BUG-29) — consistent with capRoom + the Re-sign window.
+  const season = upcomingSeason(league);
   const players = team.playerIds
     .map(id => league.players[id] as BasketballPlayer | undefined)
     .filter((p): p is BasketballPlayer => !!p);

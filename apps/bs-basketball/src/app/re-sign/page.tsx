@@ -18,7 +18,7 @@ import { contractYearsLeft } from '@/lib/roster/playerActions';
 import { extensionMarket } from '@/lib/roster/extension';
 import { keepValueOf } from '@/lib/season/advanceSeason';
 import { MAX_ROSTER } from '@/lib/freeAgency';
-import { getDraft } from '@/lib/draft';
+import { getDraft, upcomingSeason } from '@/lib/draft';
 import { resignProjection, hasSalaryForSeason, salaryForSeason } from '@/lib/roster/resignProjection';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
@@ -83,7 +83,7 @@ export default function ReSignPage() {
   // offseason → currentSeason + 1; inaugural imported draft → currentSeason
   // itself (no year roll). Keeps cap tiles + the "kept" filter aligned (BUG-20).
   const draft = getDraft(league);
-  const nextSeason = draft?.season ?? season + 1;
+  const nextSeason = upcomingSeason(league);
   // Walked players are released immediately, so the projection reads straight from
   // the live roster — no pending-decision bookkeeping needed.
   const proj = resignProjection(league, userTeam, {});

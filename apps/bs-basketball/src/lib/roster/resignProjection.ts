@@ -15,7 +15,7 @@ import {
   type BasketballTeam,
 } from '@bs/sport-basketball';
 import { extensionMarket } from './extension';
-import { getDraft } from '../draft';
+import { upcomingSeason } from '../draft';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 
@@ -57,11 +57,11 @@ export function resignProjection(
   team: BasketballTeam,
   decisions: Record<string, ResignDecision>,
 ): ResignProjection {
-  // Re-sign dollars commit to the upcoming season's draft year. In the normal
-  // offseason the draft is for currentSeason + 1 (unchanged); for an imported
-  // league's inaugural draft it's currentSeason itself (no year roll), so anchor
-  // to the draft season to keep the cap tiles + "kept" filter correct (BUG-20).
-  const nextSeason = getDraft(league)?.season ?? league.currentSeason + 1;
+  // Re-sign dollars commit to the upcoming season — the single source of truth
+  // shared with Free Agency + Roster so the cap figure stays stable across the
+  // offseason (BUG-20 / BUG-29). The draft year is currentSeason + 1 in a normal
+  // offseason and currentSeason for an inaugural import.
+  const nextSeason = upcomingSeason(league);
   const cap = basketballSalaryCap(nextSeason);
   const taxLine = basketballTaxThreshold(nextSeason);
   const firstApron = basketballFirstApron(nextSeason);

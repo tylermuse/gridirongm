@@ -33,6 +33,17 @@ interface LeagueSportData {
   [key: string]: unknown;
 }
 
+/**
+ * The season upcoming contracts + cap math should target — the single source of
+ * truth shared by Re-sign, Free Agency, and the Roster so they all price the
+ * same year (BUG-29). During the offseason that's the pending draft's season
+ * (currentSeason + 1 normally, currentSeason for an inaugural import); once the
+ * season rolls and the draft clears, it's the current season.
+ */
+export function upcomingSeason(league: LeagueState): number {
+  return getDraft(league)?.season ?? league.currentSeason;
+}
+
 export function getDraft(league: LeagueState): DraftState | null {
   const draft = (league.sportData as LeagueSportData | undefined)?.draft ?? null;
   if (!draft) return null;
