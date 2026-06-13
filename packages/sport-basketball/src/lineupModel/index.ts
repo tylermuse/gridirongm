@@ -12,6 +12,8 @@ import {
 export {
   buildDefaultBasketballLineup,
   validateBasketballLineup,
+  basketballPositionGroup,
+  isInPositionAtSlot,
 } from './lineupModel';
 // BasketballLineup type is owned by ../types; consumers should import it
 // from @bs/sport-basketball/types (or the root barrel).

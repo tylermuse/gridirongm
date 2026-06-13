@@ -41,6 +41,38 @@ export type { BasketballLineup } from '../types';
 const STARTER_POSITIONS: readonly BasketballPosition[] = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
 
 // ===========================================================================
+// Position groups (FEAT-21: flexible G/F/C slots)
+// ===========================================================================
+//
+// Lineups are built from position GROUPS rather than the five exact positions:
+// two guards, two forwards, one center. So the best two guards start (even if
+// both are SGs) instead of forcing a weak natural-PG into the lineup over a
+// better SG. A start within your own group is "in position"; only a start
+// outside it (e.g. a center at guard) is flagged.
+
+type PositionGroup = 'G' | 'F' | 'C';
+
+const POSITION_GROUP: Record<BasketballPosition, PositionGroup> = {
+  PG: 'G', SG: 'G', SF: 'F', PF: 'F', C: 'C',
+};
+
+/** The group each starter slot belongs to, aligned with STARTER_POSITIONS. */
+const SLOT_GROUPS: readonly PositionGroup[] = ['G', 'G', 'F', 'F', 'C'];
+
+/** How many starters each group fields. */
+const GROUP_QUOTA: Record<PositionGroup, number> = { G: 2, F: 2, C: 1 };
+
+export function basketballPositionGroup(pos: BasketballPosition): PositionGroup {
+  return POSITION_GROUP[pos];
+}
+
+/** True if a player of `pos` is "in position" at starter slot `slotIndex`
+ *  (0..4) — i.e. their group matches the slot's group. */
+export function isInPositionAtSlot(pos: BasketballPosition, slotIndex: number): boolean {
+  return POSITION_GROUP[pos] === SLOT_GROUPS[slotIndex];
+}
+
+// ===========================================================================
 // buildDefault
 // ===========================================================================
 
@@ -56,68 +88,57 @@ const STARTER_POSITIONS: readonly BasketballPosition[] = ['PG', 'SG', 'SF', 'PF'
 export function buildDefaultBasketballLineup(
   roster: BasketballPlayer[],
 ): BasketballLineup {
-  // Group roster by position, each group sorted by OVR descending
-  const byPos: Record<BasketballPosition, BasketballPlayer[]> = {
-    PG: [], SG: [], SF: [], PF: [], C: [],
-  };
-  for (const p of roster) {
-    byPos[p.sportData.position].push(p);
-  }
-  for (const pos of STARTER_POSITIONS) {
-    byPos[pos].sort((a, b) => b.ratings.overall - a.ratings.overall);
-  }
-
-  // Pick starters (top of each pile). If a position is empty, fall back to the
-  // best unused player from ANY position rather than emitting an empty-string
-  // sentinel — the sim engine assumes all five starters are real PlayerIds, and
-  // a '' there dereferences to undefined and crashes the possession loop. A
-  // cross-position start (e.g. a backup PF at C) is a `validate` warning, not a
-  // crash. Only when the roster has fewer than five players total does a
-  // sentinel remain — a genuinely unfillable lineup the caller must handle.
-  const starterIds: PlayerId[] = [];
+  const byOvr = [...roster].sort((a, b) => b.ratings.overall - a.ratings.overall);
   const used = new Set<PlayerId>();
-  for (const pos of STARTER_POSITIONS) {
-    const top = byPos[pos].find(p => !used.has(p.id));
-    if (top) {
-      starterIds.push(top.id);
-      used.add(top.id);
-      continue;
-    }
-    const fallback = roster
-      .filter(p => !used.has(p.id))
-      .sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
-    if (fallback) {
-      starterIds.push(fallback.id);
-      used.add(fallback.id);
-    } else {
-      // Truly empty — fewer than 5 players on the roster.
-      starterIds.push('' as PlayerId);
+
+  // Fill each group (2 guards, 2 forwards, 1 center) with its best natural
+  // players first — so the two best GUARDS start, not the best natural-PG plus a
+  // worse natural-SG. Short groups (e.g. only one true center) borrow the best
+  // remaining player, position-adjacent before anything.
+  const picked: Record<PositionGroup, PlayerId[]> = { G: [], F: [], C: [] };
+  for (const p of byOvr) {
+    const g = POSITION_GROUP[p.sportData.position];
+    if (picked[g].length < GROUP_QUOTA[g]) {
+      picked[g].push(p.id);
+      used.add(p.id);
     }
   }
-
-  // Pick backups (second-best at each position; fall back to next-best
-  // unused player who can plausibly play the position)
-  const backupsByPosition: Record<BasketballPosition, PlayerId | null> = {
-    PG: null, SG: null, SF: null, PF: null, C: null,
+  const adjacency: Record<PositionGroup, PositionGroup[]> = {
+    G: ['F', 'C'], // a guard slot, if short, prefers a forward, then a center
+    F: ['C', 'G'], // a forward slot prefers a big, then a guard
+    C: ['F', 'G'], // a center slot prefers a forward, then a guard
   };
-  for (const pos of STARTER_POSITIONS) {
-    const candidate = byPos[pos].find(p => !used.has(p.id));
-    if (candidate) {
-      backupsByPosition[pos] = candidate.id;
-      used.add(candidate.id);
+  for (const g of ['G', 'F', 'C'] as PositionGroup[]) {
+    while (picked[g].length < GROUP_QUOTA[g]) {
+      const next =
+        adjacency[g]
+          .map(adj => byOvr.find(p => !used.has(p.id) && POSITION_GROUP[p.sportData.position] === adj))
+          .find(Boolean) ?? byOvr.find(p => !used.has(p.id));
+      if (!next) break; // fewer than 5 players total
+      picked[g].push(next.id);
+      used.add(next.id);
     }
   }
 
-  // Bench = everyone else, sorted by OVR descending (rotation priority)
-  const bench = roster
-    .filter(p => !used.has(p.id))
-    .sort((a, b) => b.ratings.overall - a.ratings.overall)
-    .map(p => p.id);
+  // Place the picks into the five named slots in group order [G, G, F, F, C].
+  // (The sim reads each player's own position for matchups, so within-group slot
+  // order is cosmetic; the named slots stay for the UI + position-fit display.)
+  const starterIds: PlayerId[] = [
+    picked.G[0] ?? ('' as PlayerId),
+    picked.G[1] ?? ('' as PlayerId),
+    picked.F[0] ?? ('' as PlayerId),
+    picked.F[1] ?? ('' as PlayerId),
+    picked.C[0] ?? ('' as PlayerId),
+  ];
+
+  // Bench = everyone else, by OVR (rotation priority). Backups are vestigial now
+  // that resolveLineup repairs stale lineups via the bench order — leave null.
+  const bench = byOvr.filter(p => !used.has(p.id)).map(p => p.id);
 
   return {
     starters: starterIds as BasketballLineup['starters'],
     bench,
-    backupsByPosition,
+    backupsByPosition: { PG: null, SG: null, SF: null, PF: null, C: null },
     pace: 'medium',
   };
 }
@@ -179,9 +200,10 @@ export function validateBasketballLineup(
       });
       continue;
     }
-    if (player.sportData.position !== expectedPos) {
-      // Warning rather than violation — small-ball / position-less can be
-      // legitimate, but UI should flag the mismatch.
+    // FEAT-21: only flag a start that's OUTSIDE the slot's position group (e.g. a
+    // center at guard) — a within-group flex (an SG at the PG slot, a PF at SF)
+    // is legitimate and no longer warned.
+    if (!isInPositionAtSlot(player.sportData.position, i)) {
       warnings.push({
         code: 'LINEUP_POSITION_MISMATCH',
         message: `${id} listed as ${player.sportData.position} starting at ${expectedPos}.`,

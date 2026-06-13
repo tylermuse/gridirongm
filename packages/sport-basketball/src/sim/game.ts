@@ -406,17 +406,30 @@ export function simBasketballGame(
   // less — keeping each tier's total (so the team stays at 240). Scoring + box
   // stats are untouched; minutes only feed the MPG/PER display.
   const adjMinutes = new Map(minutesPlayed);
-  const reshapeTier = (ids: readonly PlayerId[], byId: Map<PlayerId, BasketballPlayer>) => {
+  // Starters are reshaped by rating (stars play more). The bench is reshaped by
+  // the user's ROTATION ORDER instead — dragging a bench player up the list earns
+  // him more minutes (FEAT-22) — with rating only as a gentle tiebreaker. `played`
+  // preserves the bench array order, so index 0 is the first man off the bench.
+  const reshapeTier = (
+    ids: readonly PlayerId[],
+    byId: Map<PlayerId, BasketballPlayer>,
+    byOrder = false,
+  ) => {
     const played = ids.filter(id => (adjMinutes.get(id) ?? 0) > 0);
     if (played.length < 2) return;
     const total = played.reduce((s, id) => s + (adjMinutes.get(id) ?? 0), 0);
-    const weights = played.map(id => Math.max(1, byId.get(id)?.ratings.overall ?? 60));
+    const weights = played.map((id, i) => {
+      const ovr = Math.max(1, byId.get(id)?.ratings.overall ?? 60);
+      if (!byOrder) return ovr;
+      // Order dominates (geometric decay); rating nudges within a tie.
+      return Math.pow(0.8, i) * (0.6 + 0.4 * (ovr / 100));
+    });
     const sumW = weights.reduce((a, b) => a + b, 0);
     played.forEach((id, i) => adjMinutes.set(id, (total * weights[i]) / sumW));
   };
   for (const [side, byId] of [[home, homePlayerById], [away, awayPlayerById]] as const) {
     reshapeTier(side.lineup.starters, byId);
-    reshapeTier(side.lineup.bench.filter(id => (minutesPlayed.get(id) ?? 0) > 0), byId);
+    reshapeTier(side.lineup.bench.filter(id => (minutesPlayed.get(id) ?? 0) > 0), byId, true);
   }
 
   // ------------------------------------------------------------------
