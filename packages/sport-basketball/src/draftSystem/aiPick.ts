@@ -70,6 +70,19 @@ function scoreProspect(
   needByPosition: Record<BasketballPosition, number>,
   rng: SimpleRng,
 ): number {
+  // Strict consensus (BUG-19): a prospect carrying a real big-board rank is
+  // scored almost purely by that rank, with a large per-rank gap (10 pts) and
+  // only a hairline tie-break (±0.5) — so positional need and noise can never
+  // cause a reach. Ranked prospects always outscore unranked talent (even the
+  // board's tail anchors ~590, far above any unranked talent score ~86), which
+  // keeps generated future classes and off-board prospects below the board.
+  const rank = prospect.sportData.draftProjection;
+  if (typeof rank === 'number' && rank > 0) {
+    const anchor = 1000 - rank * 10;
+    const tieBreak = (rng.random() - 0.5); // ±0.5, sub-rank only
+    return anchor + tieBreak;
+  }
+
   const ovr = prospect.ratings.overall;
   const pot = prospect.development.potential;
   // Rookie drafts are upside bets — prospects all carry low current OVR, so weight

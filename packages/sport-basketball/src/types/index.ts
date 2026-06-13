@@ -195,6 +195,12 @@ export interface BasketballPlayerData {
   draftPick?: number;
   draftRound?: number;
   draftYear?: number;
+  /** Consensus big-board rank (1 = best prospect) for a draft-eligible
+   *  prospect, stamped at import/migration from the real-world board. Anchors
+   *  the AI auto-pick so the draft follows the board top-to-bottom. Absent for
+   *  generated future classes and off-board prospects (they fall back to
+   *  talent-based scoring). */
+  draftProjection?: number;
 }
 
 export interface PlayerSeasonLogEntry {
