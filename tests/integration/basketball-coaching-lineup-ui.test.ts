@@ -25,52 +25,60 @@ import {
   basketballUiMetadata,
   describeBasketballLineup,
   generateBasketballPlayer,
+  basketballPositionGroup,
   type BasketballLineup,
+  type BasketballPlayer,
+  type BasketballPosition,
 } from '@bs/sport-basketball';
+
+/** Generate a player with a pinned OVR (the generator adds variance otherwise). */
+function pinned(position: BasketballPosition, overall: number): BasketballPlayer {
+  const p = generateBasketballPlayer({ position, targetOverall: overall }) as BasketballPlayer;
+  return { ...p, ratings: { ...p.ratings, overall } };
+}
 
 // ---------------------------------------------------------------------------
 // Lineup model
 // ---------------------------------------------------------------------------
 
 describe('basketball lineup model — buildDefault', () => {
-  it('picks the highest-OVR player at each position as starter', () => {
-    const roster = [
-      generateBasketballPlayer({ position: 'PG', targetOverall: 88 }), // star PG
-      generateBasketballPlayer({ position: 'PG', targetOverall: 75 }), // backup
-      generateBasketballPlayer({ position: 'SG', targetOverall: 80 }),
-      generateBasketballPlayer({ position: 'SF', targetOverall: 78 }),
-      generateBasketballPlayer({ position: 'PF', targetOverall: 82 }),
-      generateBasketballPlayer({ position: 'C', targetOverall: 79 }),
-    ];
+  it('starts the best two guards, two forwards, and a center by position GROUP (FEAT-21)', () => {
+    const pg88 = pinned('PG', 88); // star PG
+    const pg75 = pinned('PG', 75); // weaker guard — should NOT be forced in
+    const sg80 = pinned('SG', 80);
+    const sf78 = pinned('SF', 78);
+    const pf82 = pinned('PF', 82);
+    const c79 = pinned('C', 79);
+    const roster = [pg88, pg75, sg80, sf78, pf82, c79];
     const lineup = buildDefaultBasketballLineup(roster);
+    const groupAt = (i: number) => basketballPositionGroup(roster.find(p => p.id === lineup.starters[i])!.sportData.position);
 
-    // PG starter should be the 88-rated player
-    const pgStarter = roster.find(p => p.id === lineup.starters[0])!;
-    expect(pgStarter.sportData.position).toBe('PG');
-    expect(pgStarter.ratings.overall).toBeGreaterThan(85);
-
-    // Each starter at the right slot index
-    const slotPositions = ['PG', 'SG', 'SF', 'PF', 'C'];
-    for (let i = 0; i < 5; i++) {
-      const starter = roster.find(p => p.id === lineup.starters[i])!;
-      expect(starter.sportData.position).toBe(slotPositions[i]);
-    }
+    // Slots fill by group: two guards, two forwards, one center.
+    expect(groupAt(0)).toBe('G');
+    expect(groupAt(1)).toBe('G');
+    expect(groupAt(2)).toBe('F');
+    expect(groupAt(3)).toBe('F');
+    expect(groupAt(4)).toBe('C');
+    // The best two guards (88, 80) and best two forwards (82, 78) start; the
+    // weaker guard sits — the old build forced him in at the PG slot.
+    const starterIds = new Set(lineup.starters);
+    for (const p of [pg88, sg80, pf82, sf78, c79]) expect(starterIds.has(p.id)).toBe(true);
+    expect(lineup.bench).toContain(pg75.id);
   });
 
-  it('puts second-best at each position as backup', () => {
-    const roster = [
-      generateBasketballPlayer({ position: 'PG', targetOverall: 85 }), // starter
-      generateBasketballPlayer({ position: 'PG', targetOverall: 75 }), // backup
-      generateBasketballPlayer({ position: 'PG', targetOverall: 65 }), // bench
-      generateBasketballPlayer({ position: 'SG', targetOverall: 78 }),
-      generateBasketballPlayer({ position: 'SF', targetOverall: 76 }),
-      generateBasketballPlayer({ position: 'PF', targetOverall: 80 }),
-      generateBasketballPlayer({ position: 'C', targetOverall: 79 }),
-    ];
+  it('benches the weaker same-group player instead of forcing him in', () => {
+    const pg85 = pinned('PG', 85);
+    const pg75 = pinned('PG', 75);
+    const pg65 = pinned('PG', 65);
+    const sg78 = pinned('SG', 78);
+    const roster = [pg85, pg75, pg65, sg78, pinned('SF', 76), pinned('PF', 80), pinned('C', 79)];
     const lineup = buildDefaultBasketballLineup(roster);
-    // PG backup should NOT be the starter
-    expect(lineup.backupsByPosition.PG).not.toBe(lineup.starters[0]);
-    expect(lineup.backupsByPosition.PG).not.toBeNull();
+    // The two best guards (85 PG, 78 SG) start; the extra guards go to the bench
+    // in rotation order (backups are no longer materialized — bench order rules).
+    expect(new Set(lineup.starters).has(pg85.id)).toBe(true);
+    expect(new Set(lineup.starters).has(sg78.id)).toBe(true);
+    expect(lineup.bench).toContain(pg75.id);
+    expect(lineup.bench).toContain(pg65.id);
   });
 
   it('puts remaining players on the bench sorted by OVR descending', () => {

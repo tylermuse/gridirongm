@@ -27,7 +27,9 @@ import { getBracket } from '@/lib/playoffs';
 import { getDraft } from '@/lib/draft';
 import { getGmFired, getGmOpenings } from '@/lib/approval';
 import { isGodMode } from '@/lib/godMode/godMode';
-import type { BasketballTeam } from '@bs/sport-basketball';
+import { capRoom } from '@/lib/freeAgency';
+import { getTeamPicks } from '@/lib/trade';
+import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
 /**
  * BS Hoops home — port of bs-football's TeamPicker pattern.
@@ -152,20 +154,52 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {openings.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => void handlePick(t.abbreviation)}
-                    className="flex items-center gap-2 rounded-lg border bg-[var(--surface)] px-3 py-2 text-left hover:border-[var(--accent)] transition-colors"
-                    style={{ borderColor: 'var(--border)' }}
-                  >
-                    <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="sm" />
-                    <span className="min-w-0">
-                      <span className="font-bold text-sm block truncate">{t.city} {t.name}</span>
-                      <span className="text-[11px] text-[var(--text-sec)]">{t.record.wins}-{t.record.losses} · take the job →</span>
-                    </span>
-                  </button>
-                ))}
+                {openings.map(t => {
+                  // Per-team situation summary so you can tell a rebuild from a
+                  // retool at a glance (FEAT-20).
+                  const players = t.playerIds
+                    .map(id => league.players[id] as BasketballPlayer | undefined)
+                    .filter((p): p is BasketballPlayer => !!p);
+                  const top = [...players].sort((a, b) => b.ratings.overall - a.ratings.overall).slice(0, 2);
+                  const avgAge = players.length ? players.reduce((s, p) => s + p.age, 0) / players.length : 0;
+                  const young = players.filter(p => p.age <= 23).length;
+                  const cap = capRoom(league, t.id);
+                  const r1 = getTeamPicks(league, t.id).filter(p => p.round === 1);
+                  const extra1 = r1.filter(p => p.originalTeamId !== t.id).length;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => void handlePick(t.abbreviation)}
+                      className="rounded-lg border bg-[var(--surface)] p-3 text-left hover:border-[var(--accent)] transition-colors"
+                      style={{ borderColor: 'var(--border)' }}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="sm" />
+                        <span className="min-w-0">
+                          <span className="font-bold text-sm block truncate">{t.city} {t.name}</span>
+                          <span className="text-[11px] text-[var(--text-sec)]">{t.record.wins}-{t.record.losses}</span>
+                        </span>
+                      </div>
+                      <div className="space-y-0.5 text-[11px] text-[var(--text-sec)]">
+                        <div className="truncate">
+                          <span className="opacity-60">Core: </span>
+                          {top.length ? top.map(p => `${p.lastName} ${p.ratings.overall}`).join(' · ') : '—'}
+                        </div>
+                        <div>
+                          <span className="opacity-60">Cap: </span>
+                          {cap >= 0 ? `$${(cap / 1e6).toFixed(1)}M space` : `$${(-cap / 1e6).toFixed(1)}M over`}
+                          <span className="opacity-60"> · Age </span>{avgAge.toFixed(1)}y
+                        </div>
+                        <div>
+                          <span className="opacity-60">Picks: </span>
+                          {r1.length} 1st{r1.length === 1 ? '' : 's'}{extra1 > 0 ? ` (${extra1} extra)` : ''}
+                          <span className="opacity-60"> · Young </span>{young}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-[11px] font-semibold" style={{ color: 'var(--accent)' }}>Take the job →</div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           );

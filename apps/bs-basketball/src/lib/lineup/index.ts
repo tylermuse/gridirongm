@@ -1,6 +1,7 @@
 export {
   getTeamLineup,
   resolveLineup,
+  repairLineup,
   setTeamLineup,
   buildDefaultBasketballLineup,
   validateBasketballLineup,

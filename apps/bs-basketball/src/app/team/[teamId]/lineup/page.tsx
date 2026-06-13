@@ -8,6 +8,7 @@ import { useLeagueStore } from '@/lib/store/leagueStore';
 import { Button } from '@/components/ui/Button';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { resolveLineup, validateBasketballLineup, buildDefaultBasketballLineup } from '@/lib/lineup';
+import { basketballPositionGroup } from '@bs/sport-basketball';
 import type { BasketballLineup, BasketballPlayer, BasketballPosition, BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -22,12 +23,16 @@ import type { BasketballLineup, BasketballPlayer, BasketballPosition, Basketball
 const SLOTS: BasketballPosition[] = ['PG', 'SG', 'SF', 'PF', 'C'];
 const POS_ORDER: Record<BasketballPosition, number> = { PG: 0, SG: 1, SF: 2, PF: 3, C: 4 };
 
-/** How well a player's natural position fits a lineup slot. Adjacent positions
- *  (a PF at the SF spot, a SG at the PG spot) play fine; two+ slots away (a PG
- *  at center) is a real stretch the sim will punish. */
+/** How well a player's natural position fits a lineup slot, by position GROUP
+ *  (FEAT-21): same group (any guard at either guard slot, any forward at either
+ *  forward slot) is a natural fit; an adjacent group (a forward at center) is a
+ *  workable flex; a far group (a guard at center) is a real stretch. */
+const GROUP_RANK: Record<'G' | 'F' | 'C', number> = { G: 0, F: 1, C: 2 };
 function fitLevel(playerPos: BasketballPosition, slotPos: BasketballPosition): 'natural' | 'flex' | 'poor' {
-  const d = Math.abs(POS_ORDER[playerPos] - POS_ORDER[slotPos]);
-  return d === 0 ? 'natural' : d === 1 ? 'flex' : 'poor';
+  const pg = basketballPositionGroup(playerPos);
+  const sg = basketballPositionGroup(slotPos);
+  if (pg === sg) return 'natural';
+  return Math.abs(GROUP_RANK[pg] - GROUP_RANK[sg]) === 1 ? 'flex' : 'poor';
 }
 
 function FitChip({ playerPos, slotPos }: { playerPos: BasketballPosition; slotPos: BasketballPosition }) {
