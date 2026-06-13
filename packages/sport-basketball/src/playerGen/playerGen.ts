@@ -411,10 +411,13 @@ export function generateBasketballDraftClass(_season: number, count = 60): Baske
     // generate high enough to crack an NBA rotation in year one — a #1 overall
     // (~75) is a fringe starter / clear rotation piece, not a low-60s player
     // buried on the bench (which had the ROY averaging ~5-8 PPG). See BUG-10.
+    // Shallower R1 decline so the mid-first round (the All-Rookie Second Team)
+    // also cracks rotations, not just the top 5 — lifts second-team scoring out
+    // of the ~6-PPG cliff into the realistic ~9-12 range (BUG-10 follow-up).
     const ovrBase = rank < 30
-      ? 75 - (rank * (75 - 63)) / 29        // R1: 75 → 63
-      : 62 - ((rank - 30) * (62 - 50)) / 29; // R2: 62 → 50
-    const targetOvr = clamp(Math.round(ovrBase + gaussian(0, 3)), 42, 80);
+      ? 76 - (rank * (76 - 67)) / 29        // R1: 76 → 67
+      : 64 - ((rank - 30) * (64 - 52)) / 29; // R2: 64 → 52
+    const targetOvr = clamp(Math.round(ovrBase + gaussian(0, 3)), 42, 81);
     const p = generateBasketballPlayer({ age: 19, targetOverall: targetOvr });
 
     // Upside tapers too: a top-3 pick can project to a star, a late

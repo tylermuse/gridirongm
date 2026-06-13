@@ -263,10 +263,12 @@ function leagueFromImport(imported: ImportedHoopsLeague): BasketballLeagueState 
   });
 
   // Real traded-pick ownership from the file → the pick-ownership registry, so
-  // the inaugural draft conveys traded picks correctly.
+  // the inaugural draft AND future drafts convey traded picks correctly. Each
+  // entry carries its own season (current or future), so a 2027 R1 already owned
+  // by another team conveys when the 2027 draft arrives instead of reverting.
   const pickOwnership: Record<string, TeamId> = {};
   for (const o of imported.draftPickOwnership) {
-    pickOwnership[pickKey(imported.season, o.round, o.originalTeamId)] = o.ownerTeamId;
+    pickOwnership[pickKey(o.season, o.round, o.originalTeamId)] = o.ownerTeamId;
   }
   // Flag custom-roster leagues so they're excluded from the global GM board.
   league = { ...league, sportData: { ...(league.sportData as object), imported: true, pickOwnership } };
@@ -914,6 +916,11 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       // season the rookies enter, so the GM board's Best Draft award can rank it.
       const grade = computeUserDraftGrade(current);
       let league = startNextSeason(current);
+      // Opening free-agency pass: AI teams immediately pursue the top of the pool
+      // so the market the user shops is genuinely competitive — they no longer get
+      // uncontested first pick of every free agent (BUG-13). The bulk AI pass runs
+      // at tip-off (beginRegularSeason); this just seeds early competition.
+      league = runAiFreeAgency(league, { rounds: 2 }).league;
       if (grade) {
         const sd = league.sportData as { draftGradeBySeason?: Record<number, { score: number; grade: string }> };
         league = { ...league, sportData: { ...sd, draftGradeBySeason: { ...(sd?.draftGradeBySeason ?? {}), [grade.season]: { score: grade.score, grade: grade.grade } } } };
@@ -977,14 +984,29 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     if (!current) { set({ error: 'No league loaded.' }); return false; }
     set({ loading: true, error: null });
     try {
+      // Guaranteed AI free-agency pass before tip-off: AI teams finish their
+      // offseason — re-absorbing good walked players and upgrading off the
+      // remaining pool — so the league is competitive even when the user tips off
+      // without working the FA window. Without this, ~57 quality free agents sat
+      // unsigned for the user to scoop uncontested, which is the core reason the
+      // league played too easy (BUG-13).
+      const { league: afterAi, signings } = runAiFreeAgency(current, { rounds: 8 });
       // Close the FA window and mark the season underway. We deliberately do NOT
       // sim Day 1 — the user lands on an unplayed Day 1 to set their lineup.
       const league = {
-        ...current,
-        sportData: { ...(current.sportData as object), faDay: FA_DAYS, seasonStarted: true },
+        ...afterAi,
+        sportData: { ...(afterAi.sportData as object), faDay: FA_DAYS, seasonStarted: true },
       } as BasketballLeagueState;
       await saveLeague(league);
-      set({ league, loading: false, simToast: { text: 'Season tipped off — Day 1 is live.' } });
+      set({
+        league,
+        loading: false,
+        simToast: {
+          text: signings.length
+            ? `Season tipped off — ${signings.length} late free-agent signing${signings.length === 1 ? '' : 's'} around the league.`
+            : 'Season tipped off — Day 1 is live.',
+        },
+      });
       return true;
     } catch (err) {
       console.error('[bs-hoops] beginRegularSeason failed:', err);

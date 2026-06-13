@@ -82,10 +82,12 @@ export interface BbgmLeagueFile {
   gameAttributes?: Array<{ key: string; value: unknown }> | Record<string, unknown>;
 }
 
-/** A pick's ownership for the upcoming draft (our team ids). The slot order
- *  isn't in the file (BBGM resolves it by lottery), so the draft system seeds
- *  the order; this just conveys who owns each original team's pick (trades). */
+/** A traded pick's ownership (our team ids), for the current draft AND future
+ *  years. The slot order isn't in the file (resolved by lottery), so the draft
+ *  system seeds the order; this conveys who owns each original team's pick. */
 export interface ImportedPickOwnership {
+  /** The draft season this pick is for (current or future). */
+  season: number;
   round: number;
   originalTeamId: TeamId;
   ownerTeamId: TeamId;
@@ -340,12 +342,13 @@ function nbaTargetOverall(raw: number): number {
   return clamp(Math.round(0.92 * raw + 25), 40, 99);
 }
 
-function calibrateToNba(base: BasketballRatings, position: BasketballPosition): BasketballRatings {
-  const target = nbaTargetOverall(base.overall);
-
-  // computeOverall is a monotonic weighted mean of the skill keys, so the
-  // overall after a uniform +d shift is monotonic in d — bisect for the d that
-  // hits the target (clamping keeps maxed attributes from overshooting).
+/** Shift every skill key by a uniform delta so the recomputed overall hits
+ *  `target`. computeOverall is monotonic in the shift, so bisect for the delta. */
+function calibrateToTarget(
+  base: BasketballRatings,
+  position: BasketballPosition,
+  target: number,
+): BasketballRatings {
   const overallAtDelta = (d: number): number => {
     const probe = { ...base };
     for (const k of OVR_SKILL_KEYS) probe[k] = clamp(base[k] + d);
@@ -364,6 +367,16 @@ function calibrateToNba(base: BasketballRatings, position: BasketballPosition): 
   out.overall = computeOverall(out, position);
   return out;
 }
+
+function calibrateToNba(base: BasketballRatings, position: BasketballPosition): BasketballRatings {
+  return calibrateToTarget(base, position, nbaTargetOverall(base.overall));
+}
+
+/** How far an imported prospect's CURRENT overall is lifted from its raw value
+ *  toward its NBA ceiling. 0 = raw teenager (buried on the bench → ~5 PPG),
+ *  1 = a finished pro. ~0.6 makes top picks rotation-capable in year one while
+ *  keeping real upside in their potential (BUG-10 follow-up for imported leagues). */
+const PROSPECT_CURRENT_LIFT = 0.6;
 
 // ===========================================================================
 // Player conversion
@@ -414,7 +427,17 @@ function convertPlayer(
   // Prospects stay raw (no NBA calibration) so they read like real draftees —
   // a low current overall with the upside carried in potential, not inflated
   // into 80-OVR veterans.
-  const ratings = mapRatings(r, heightInches, primary, !isProspect);
+  let ratings = mapRatings(r, heightInches, primary, !isProspect);
+  // A prospect's raw overall is its un-calibrated teenage level; its NBA ceiling
+  // (where calibration would put it) becomes the potential. Lift the CURRENT
+  // overall partway to that ceiling so top picks crack rotations instead of
+  // sitting at ~50 OVR and getting buried (BUG-10 follow-up, imported leagues).
+  const rawOverall = ratings.overall;
+  const prospectCeiling = nbaTargetOverall(rawOverall);
+  if (isProspect && prospectCeiling > rawOverall) {
+    const currentTarget = Math.round(rawOverall + PROSPECT_CURRENT_LIFT * (prospectCeiling - rawOverall));
+    ratings = calibrateToTarget(ratings, primary, currentTarget);
+  }
   const overall = ratings.overall;
 
   const { firstName, lastName } = splitName(bbgm);
@@ -445,7 +468,7 @@ function convertPlayer(
   // Prospects carry their NBA projection as a *ceiling* (the calibrated target
   // they'd reach if they hit), so a raw current OVR still has real draft upside.
   const potential = isProspect
-    ? clamp(Math.max(nbaTargetOverall(overall) + 6, overall + youthBump + 6), overall + 6, 99)
+    ? clamp(Math.max(prospectCeiling + 6, overall + youthBump + 6), overall + 6, 99)
     : clamp(overall + youthBump, overall, 99);
   const trajectory: BasketballPlayer['development']['currentTrajectory'] =
     age <= 24 ? 'rising' : age <= 29 ? 'plateau' : 'declining';
@@ -617,11 +640,15 @@ export function convertBbgmLeague(file: BbgmLeagueFile): ImportedHoopsLeague {
   for (const [tid, meta] of teamMeta) tidToTeamId.set(tid, meta.team.id);
   const draftPickOwnership: ImportedPickOwnership[] = [];
   for (const dp of file.draftPicks ?? []) {
-    if (dp.season !== season) continue;
+    // Capture the current draft AND all future-year traded picks — not just this
+    // season's. Future obligations (e.g. a 2027 R1 already owned by another team)
+    // were being dropped, so they reverted to the original team when that draft
+    // arrived (BUG-9 in imported leagues).
+    if ((dp.season ?? 0) < season) continue;
     const owner = tidToTeamId.get(dp.tid);
     const original = tidToTeamId.get(dp.originalTid);
     if (!owner || !original || owner === original) continue; // only record actual trades
-    draftPickOwnership.push({ round: dp.round, originalTeamId: original, ownerTeamId: owner });
+    draftPickOwnership.push({ season: dp.season, round: dp.round, originalTeamId: original, ownerTeamId: owner });
   }
 
   return { season, teams, players, freeAgentIds, draftProspectIds, draftPickOwnership, draftOrderTeamIds };

@@ -10,7 +10,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ExtendModal } from '@/components/modals/ExtendModal';
+import { PlayerModal } from '@/components/modals/PlayerModal';
 import { OffseasonStepper } from '@/components/shell/OffseasonStepper';
+import { lastSeasonStatLine } from '@/lib/stats/statLine';
 import { ratingColor } from '@/lib/ui/ratingColor';
 import { contractYearsLeft } from '@/lib/roster/playerActions';
 import { extensionMarket } from '@/lib/roster/extension';
@@ -32,6 +34,7 @@ export default function ReSignPage() {
   const store = useLeagueStore();
   const router = useRouter();
   const [extendId, setExtendId] = useState<string | null>(null);
+  const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
   // Players released this session, for "what I just did" feedback (they're already
   // off the roster, so we keep a local note rather than re-deriving it).
   const [walked, setWalked] = useState<{ id: string; name: string }[]>([]);
@@ -183,11 +186,11 @@ export default function ReSignPage() {
                   <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="sm" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-semibold truncate">{p.firstName} {p.lastName}</span>
+                      <button onClick={() => setModalPlayerId(p.id)} className="font-semibold truncate hover:underline text-left" style={{ color: 'var(--text)' }}>{p.firstName} {p.lastName}</button>
                       {/* Stance chip steals room from the name on mobile — hide it there. */}
                       <span className="hidden sm:inline-block text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: stance.bg, color: stance.fg }}>{stance.label}</span>
                     </div>
-                    <div className="text-xs text-[var(--text-sec)]">{p.sportData.position} · Age {p.age} · {p.ratings.overall} OVR{lastSeasonLine(p) ? ` · ${lastSeasonLine(p)}` : ''}</div>
+                    <div className="text-xs text-[var(--text-sec)]">{p.sportData.position} · Age {p.age} · {p.ratings.overall} OVR{lastSeasonStatLine(p) ? ` · ${lastSeasonStatLine(p)}` : ''}</div>
                   </div>
                   <div className="text-right shrink-0 hidden sm:block">
                     <div className="text-[10px] uppercase tracking-wide text-[var(--text-sec)]">asks · costs next yr</div>
@@ -268,6 +271,7 @@ export default function ReSignPage() {
       </section>
 
       <ExtendModal playerId={extendId} onClose={() => setExtendId(null)} />
+      <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
     </Shell>
   );
 }
@@ -281,14 +285,6 @@ function CapTile({ label, value, color, big }: { label: string; value: string; c
   );
 }
 
-/** Previous (just-completed) season's box-line, from the player's season log. */
-function lastSeasonLine(p: BasketballPlayer): string | null {
-  const log = p.sportData.seasonLog;
-  const last = log && log.length ? log[log.length - 1] : null;
-  if (!last || !last.gamesPlayed) return null;
-  const per = last.per ?? Math.round((last.ppg + last.rpg + last.apg) * 10) / 10;
-  return `${last.ppg}/${last.rpg}/${last.apg} · ${per} PER`;
-}
 
 /** Real re-sign posture from team success + ask vs current pay + role/age. */
 function willingness(p: BasketballPlayer, team: BasketballTeam, season: number): { label: string; bg: string; fg: string } {
