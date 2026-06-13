@@ -121,15 +121,20 @@ export function buildDefaultBasketballLineup(
   }
 
   // Place the picks into the five named slots in group order [G, G, F, F, C].
-  // (The sim reads each player's own position for matchups, so within-group slot
-  // order is cosmetic; the named slots stay for the UI + position-fit display.)
-  const starterIds: PlayerId[] = [
-    picked.G[0] ?? ('' as PlayerId),
-    picked.G[1] ?? ('' as PlayerId),
-    picked.F[0] ?? ('' as PlayerId),
-    picked.F[1] ?? ('' as PlayerId),
-    picked.C[0] ?? ('' as PlayerId),
-  ];
+  // Within a group, prefer each player's NATURAL slot when a clean assignment
+  // exists — so two guards land as PG+SG rather than a needlessly cross-assigned
+  // SG-at-PG / PG-at-SG (BUG-16). Only same-position pairs stay in OVR order.
+  const posOf = new Map(roster.map(p => [p.id, p.sportData.position] as const));
+  const order2 = (ids: PlayerId[], slotA: BasketballPosition, slotB: BasketballPosition): [PlayerId, PlayerId] => {
+    const a = ids[0] ?? ('' as PlayerId);
+    const b = ids[1] ?? ('' as PlayerId);
+    // Swap only when doing so gives BOTH players their natural slot.
+    if (posOf.get(a) === slotB && posOf.get(b) === slotA) return [b, a];
+    return [a, b];
+  };
+  const [pg, sg] = order2(picked.G, 'PG', 'SG');
+  const [sf, pf] = order2(picked.F, 'SF', 'PF');
+  const starterIds: PlayerId[] = [pg, sg, sf, pf, picked.C[0] ?? ('' as PlayerId)];
 
   // Bench = everyone else, by OVR (rotation priority). Backups are vestigial now
   // that resolveLineup repairs stale lineups via the bench order — leave null.

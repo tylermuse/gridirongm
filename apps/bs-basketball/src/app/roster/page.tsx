@@ -17,7 +17,7 @@ import { getHeadCoach, coachScheme, schemeFit, SCHEME_LABELS, type SchemeFit } f
 import { getInjuries } from '@/lib/injuries';
 import { teamCap, fmtMoney } from '@/lib/dashboard/summary';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
-import { playerMood, type Mood } from '@/lib/roster/mood';
+import { playerMood, moodFactors, type Mood, type MoodFactor } from '@/lib/roster/mood';
 import { contractYearsLeft } from '@/lib/roster/playerActions';
 import type { BasketballLineup, BasketballPlayer, BasketballPosition, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
 import type { ValidationViolation } from '@bs/core/adapter';
@@ -61,11 +61,18 @@ export default function RosterPage() {
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
   const [saved, setSaved] = useState(false);
   const [menu, setMenu] = useState<MenuState | null>(null);
+  // FEAT-26: which team's roster we're viewing. Defaults to the user's team;
+  // any other selection renders read-only (no lineup editing / front-office).
+  const [viewTeamId, setViewTeamId] = useState<string | null>(null);
+  const [moodOpenId, setMoodOpenId] = useState<string | null>(null);
+
+  const activeTeamId = viewTeamId ?? league?.userTeamId ?? null;
+  const isReadOnly = !!league && activeTeamId !== league.userTeamId;
 
   const team = useMemo<BasketballTeam | null>(() => {
-    if (!league?.userTeamId) return null;
-    return (league.teams.find(t => t.id === league.userTeamId) as BasketballTeam | undefined) ?? null;
-  }, [league]);
+    if (!league || !activeTeamId) return null;
+    return (league.teams.find(t => t.id === activeTeamId) as BasketballTeam | undefined) ?? null;
+  }, [league, activeTeamId]);
 
   const roster = useMemo<BasketballPlayer[]>(() => {
     if (!league || !team) return [];
@@ -82,11 +89,13 @@ export default function RosterPage() {
     return m;
   }, [roster]);
 
-  // Lineup state — seeded once from the resolved (saved-or-default) lineup.
+  // Lineup state — seeded from the resolved (saved-or-default) lineup. Re-seeds
+  // whenever the viewed team changes (FEAT-26 team switcher) so each team shows
+  // its own starters/bench.
   const [starters, setStarters] = useState<string[]>([]);
   const [bench, setBench] = useState<string[]>([]);
-  const [initialized, setInitialized] = useState(false);
-  if (!initialized && team && roster.length > 0) {
+  const [seededTeamId, setSeededTeamId] = useState<string | null>(null);
+  if (team && roster.length > 0 && seededTeamId !== team.id) {
     const base = resolveLineup(team, roster);
     const s = [...base.starters];
     const benchInit = roster
@@ -101,7 +110,10 @@ export default function RosterPage() {
       .map(p => p.id);
     setStarters(s);
     setBench(benchInit);
-    setInitialized(true);
+    setSeededTeamId(team.id);
+    setSaved(false);
+    setMenu(null);
+    setMoodOpenId(null);
   }
 
   if (loading) return <Shell><p className="opacity-60">Loading…</p></Shell>;
@@ -129,7 +141,10 @@ export default function RosterPage() {
   const validation = validateBasketballLineup(lineup, roster);
 
   function moodFor(p: BasketballPlayer, isStarter: boolean): Mood {
-    return playerMood({ player: p, talentRank: talentRank.get(p.id) ?? 99, isStarter, yearsLeft: contractYearsLeft(p, season) });
+    return playerMood({ player: p, team: team!, talentRank: talentRank.get(p.id) ?? 99, isStarter, yearsLeft: contractYearsLeft(p, season) });
+  }
+  function moodFactorsFor(p: BasketballPlayer, isStarter: boolean): MoodFactor[] {
+    return moodFactors({ player: p, team: team!, talentRank: talentRank.get(p.id) ?? 99, isStarter, yearsLeft: contractYearsLeft(p, season) });
   }
 
   // --- lineup mutations ---
@@ -214,7 +229,9 @@ export default function RosterPage() {
   function onDetails(id: string) { setMenu(null); setModalPlayerId(id); }
   function onTrade() { setMenu(null); router.push('/trade'); }
 
-  const sizeBadge = roster.length > TARGET_ROSTER
+  const sizeBadge = isReadOnly
+    ? { text: `${roster.length} / ${TARGET_ROSTER}`, color: 'var(--text-sec)' }
+    : roster.length > TARGET_ROSTER
     ? { text: `Cut to ${TARGET_ROSTER}`, color: '#dc2626' }
     : roster.length < MIN_ROSTER
     ? { text: 'Sign a free agent', color: '#f59e0b' }
@@ -230,7 +247,20 @@ export default function RosterPage() {
     return inj.returnDay >= 50_000 ? 'OUT' : `OUT ${inj.returnDay - today}d`;
   };
   const renderCells = (p: BasketballPlayer, isStarter: boolean, dragData: object) => (
-    <PlayerCells p={p} stats={statsForPlayer(statsMap, p.id)} mood={moodFor(p, isStarter)} fit={hcScheme ? schemeFit(p, hcScheme) : null} injury={injuryLabel(p.id)} season={season} dragData={dragData} onName={setModalPlayerId} />
+    <PlayerCells
+      p={p}
+      stats={statsForPlayer(statsMap, p.id)}
+      mood={moodFor(p, isStarter)}
+      moodFactors={moodFactorsFor(p, isStarter)}
+      moodOpen={moodOpenId === p.id}
+      onToggleMood={() => setMoodOpenId(cur => (cur === p.id ? null : p.id))}
+      fit={hcScheme ? schemeFit(p, hcScheme) : null}
+      injury={injuryLabel(p.id)}
+      season={season}
+      draggable={!isReadOnly}
+      dragData={dragData}
+      onName={setModalPlayerId}
+    />
   );
 
   return (
@@ -239,7 +269,30 @@ export default function RosterPage() {
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="lg" />
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-black" style={{ fontFamily: 'var(--font-display)' }}>{team.city} {team.name} Roster</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-black" style={{ fontFamily: 'var(--font-display)' }}>{team.city} {team.name} Roster</h1>
+            {/* FEAT-26: team switcher — view any team's roster read-only */}
+            <select
+              aria-label="View team roster"
+              value={team.id}
+              onChange={e => setViewTeamId(e.target.value)}
+              className="text-sm font-semibold rounded-lg border px-2 py-1 bg-[var(--surface)] hover:bg-[var(--surface-2)] cursor-pointer"
+              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+            >
+              {[...league.teams]
+                .sort((a, b) => `${a.city} ${a.name}`.localeCompare(`${b.city} ${b.name}`))
+                .map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.city} {t.name}{t.id === league.userTeamId ? ' (your team)' : ''}
+                  </option>
+                ))}
+            </select>
+            {isReadOnly && (
+              <span className="text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5" style={{ background: 'color-mix(in srgb, var(--text-sec) 16%, transparent)', color: 'var(--text-sec)' }}>
+                Read-only
+              </span>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-sec)]">
             <span className="tabular-nums font-semibold">{team.record.wins}–{team.record.losses}</span>
             <span>· payroll {fmtMoney(cap.payroll)} ·</span>
@@ -249,7 +302,9 @@ export default function RosterPage() {
           </div>
         </div>
         <span className="ml-auto text-xs font-bold rounded-full px-3 py-1" style={{ background: `color-mix(in srgb, ${sizeBadge.color} 16%, transparent)`, color: sizeBadge.color }}>{sizeBadge.text}</span>
-        <Link href="/trade" className="text-xs font-semibold rounded-lg border px-3 py-1.5 hover:bg-[var(--surface-2)]" style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}>Trade →</Link>
+        {!isReadOnly && (
+          <Link href="/trade" className="text-xs font-semibold rounded-lg border px-3 py-1.5 hover:bg-[var(--surface-2)]" style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}>Trade →</Link>
+        )}
       </div>
 
       {/* Position composition bar */}
@@ -266,15 +321,21 @@ export default function RosterPage() {
         </div>
       </div>
 
-      {/* Lineup controls */}
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <p className="text-xs text-[var(--text-sec)] mr-auto">Drag a player onto a starting slot, or use <b>Start</b> / <b>Bench</b>, then save.</p>
-        <Button variant="ghost" onClick={autoFill}>Auto-fill</Button>
-        <Button variant="primary" disabled={!validation.valid || store.loading} onClick={() => void save()}>
-          {store.loading ? 'Working…' : 'Save Lineup'}
-        </Button>
-        {saved && <span className="text-sm" style={{ color: 'var(--accent)' }}>✓ Saved</span>}
-      </div>
+      {/* Lineup controls — editing only on the user's own team (FEAT-26). */}
+      {isReadOnly ? (
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <p className="text-xs text-[var(--text-sec)] mr-auto">Viewing another team — lineup and roster moves are disabled.</p>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <p className="text-xs text-[var(--text-sec)] mr-auto">Drag a player onto a starting slot, or use <b>Start</b> / <b>Bench</b>, then save.</p>
+          <Button variant="ghost" onClick={autoFill}>Auto-fill</Button>
+          <Button variant="primary" disabled={!validation.valid || store.loading} onClick={() => void save()}>
+            {store.loading ? 'Working…' : 'Save Lineup'}
+          </Button>
+          {saved && <span className="text-sm" style={{ color: 'var(--accent)' }}>✓ Saved</span>}
+        </div>
+      )}
 
       {/* Scheme-fit legend */}
       {hcScheme && (
@@ -299,20 +360,22 @@ export default function RosterPage() {
           return (
             <div
               key={pos}
-              draggable={!!p}
-              onDragStart={p ? e => { e.dataTransfer.setData('application/json', JSON.stringify({ id: p.id, from: 'starter', slot })); e.dataTransfer.effectAllowed = 'move'; } : undefined}
-              onDragOver={e => { e.preventDefault(); setDragOverSlot(slot); }}
-              onDragLeave={() => setDragOverSlot(s => (s === slot ? null : s))}
-              onDrop={e => onDropSlot(slot, e)}
-              className={`${ROW_GRID} border-t ${p ? 'cursor-grab' : ''}`}
+              draggable={!!p && !isReadOnly}
+              onDragStart={p && !isReadOnly ? e => { e.dataTransfer.setData('application/json', JSON.stringify({ id: p.id, from: 'starter', slot })); e.dataTransfer.effectAllowed = 'move'; } : undefined}
+              onDragOver={isReadOnly ? undefined : e => { e.preventDefault(); setDragOverSlot(slot); }}
+              onDragLeave={isReadOnly ? undefined : () => setDragOverSlot(s => (s === slot ? null : s))}
+              onDrop={isReadOnly ? undefined : e => onDropSlot(slot, e)}
+              className={`${ROW_GRID} border-t ${p && !isReadOnly ? 'cursor-grab' : ''}`}
               style={{ ...ROW_COLS, borderColor: 'var(--border)', background: dragOverSlot === slot ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'color-mix(in srgb, var(--accent) 5%, transparent)' }}
             >
               <span className="text-[11px] font-black text-center rounded" style={{ color: POS_COLORS[pos] }} title={`Starting ${pos}`}>{pos}</span>
               {p ? renderCells(p, true, { id: p.id, from: 'starter', slot }) : <EmptyStarter />}
-              <ActionCell
-                toggle={p ? { label: 'Bench', onClick: () => benchStarter(slot) } : null}
-                onMenu={p ? e => setMenu({ id: p.id, x: e.clientX, y: e.clientY }) : undefined}
-              />
+              {isReadOnly ? <span /> : (
+                <ActionCell
+                  toggle={p ? { label: 'Bench', onClick: () => benchStarter(slot) } : null}
+                  onMenu={p ? e => setMenu({ id: p.id, x: e.clientX, y: e.clientY }) : undefined}
+                />
+              )}
             </div>
           );
         })}
@@ -325,17 +388,19 @@ export default function RosterPage() {
           return (
             <div
               key={id}
-              draggable
-              onDragStart={e => { e.dataTransfer.setData('application/json', JSON.stringify({ id: p.id, from: 'bench', slot: -1 })); e.dataTransfer.effectAllowed = 'move'; }}
-              className={`${ROW_GRID} border-t cursor-grab`}
+              draggable={!isReadOnly}
+              onDragStart={isReadOnly ? undefined : e => { e.dataTransfer.setData('application/json', JSON.stringify({ id: p.id, from: 'bench', slot: -1 })); e.dataTransfer.effectAllowed = 'move'; }}
+              className={`${ROW_GRID} border-t ${isReadOnly ? '' : 'cursor-grab'}`}
               style={{ ...ROW_COLS, borderColor: 'var(--border)' }}
             >
               <span className="text-xs opacity-30 text-center select-none" aria-hidden>⠿</span>
               {renderCells(p, false, { id: p.id, from: 'bench', slot: -1 })}
-              <ActionCell
-                toggle={{ label: 'Start', onClick: () => startPlayer(id), accent: true }}
-                onMenu={e => setMenu({ id: p.id, x: e.clientX, y: e.clientY })}
-              />
+              {isReadOnly ? <span /> : (
+                <ActionCell
+                  toggle={{ label: 'Start', onClick: () => startPlayer(id), accent: true }}
+                  onMenu={e => setMenu({ id: p.id, x: e.clientX, y: e.clientY })}
+                />
+              )}
             </div>
           );
         })}
@@ -377,14 +442,18 @@ export default function RosterPage() {
 // ===========================================================================
 
 function PlayerCells({
-  p, stats, mood, fit, injury, season, dragData, onName,
+  p, stats, mood, moodFactors, moodOpen, onToggleMood, fit, injury, season, draggable, dragData, onName,
 }: {
   p: BasketballPlayer;
   stats: BasketballStats;
   mood: Mood;
+  moodFactors: MoodFactor[];
+  moodOpen: boolean;
+  onToggleMood: () => void;
   fit: SchemeFit | null;
   injury: string | null;
   season: number;
+  draggable: boolean;
   dragData: object;
   onName: (id: string) => void;
 }) {
@@ -402,12 +471,12 @@ function PlayerCells({
   return (
     <>
       <button
-        draggable
-        onDragStart={e => { e.dataTransfer.setData('application/json', JSON.stringify(dragData)); e.dataTransfer.effectAllowed = 'move'; }}
+        draggable={draggable}
+        onDragStart={draggable ? e => { e.dataTransfer.setData('application/json', JSON.stringify(dragData)); e.dataTransfer.effectAllowed = 'move'; } : undefined}
         onClick={() => onName(p.id)}
-        className="font-semibold text-left truncate hover:underline cursor-grab inline-flex items-center gap-1.5 min-w-0"
+        className={`font-semibold text-left truncate hover:underline inline-flex items-center gap-1.5 min-w-0 ${draggable ? 'cursor-grab' : 'cursor-pointer'}`}
         style={{ color: 'var(--accent)' }}
-        title="Drag to a starting slot, or click for details"
+        title={draggable ? 'Drag to a starting slot, or click for details' : 'Click for details'}
       >
         {fit && (
           <span
@@ -432,20 +501,55 @@ function PlayerCells({
         <span className="block">{statLine}</span>
         {mpg && <span className="block text-[10px] opacity-60">{mpg} MP · {eff} PER</span>}
       </span>
-      <span className="flex justify-center">
+      <span className="relative flex justify-center">
         {injury ? (
           <span className="text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap" style={{ background: 'color-mix(in srgb, #dc2626 16%, transparent)', color: '#dc2626' }} title="Injured — unavailable">
             🏥 {injury}
           </span>
         ) : (
-          <button
-            onClick={() => onName(p.id)}
-            className="text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap inline-flex items-center gap-1 hover:brightness-105"
-            style={{ background: `color-mix(in srgb, ${mood.color} 24%, transparent)`, color: mood.color }}
-            title={`${mood.reason} — click for details`}
-          >
-            <span aria-hidden>{mood.emoji}</span>{mood.label}
-          </button>
+          <>
+            <button
+              onClick={onToggleMood}
+              aria-expanded={moodOpen}
+              className="text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap inline-flex items-center gap-1 hover:brightness-105"
+              style={{ background: `color-mix(in srgb, ${mood.color} 24%, transparent)`, color: mood.color }}
+              title={`${mood.reason} — click for the contributing factors`}
+            >
+              <span aria-hidden>{mood.emoji}</span>{mood.label}
+            </button>
+            {moodOpen && <MoodPopover mood={mood} factors={moodFactors} onClose={onToggleMood} />}
+          </>
+        )}
+      </span>
+    </>
+  );
+}
+
+/** FEAT-27: click-to-expand explainer listing the contributing mood factors. */
+function MoodPopover({ mood, factors, onClose }: { mood: Mood; factors: MoodFactor[]; onClose: () => void }) {
+  return (
+    <>
+      {/* click-away catcher */}
+      <span className="fixed inset-0 z-40" onClick={onClose} />
+      <span
+        className="absolute z-50 top-full right-0 mt-1 w-56 rounded-lg border bg-[var(--surface)] shadow-lg p-2.5 text-left normal-case"
+        style={{ borderColor: 'var(--border)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <span className="flex items-center gap-1.5 text-xs font-bold mb-1.5" style={{ color: mood.color }}>
+          <span aria-hidden>{mood.emoji}</span>{mood.label}
+        </span>
+        {factors.length === 0 ? (
+          <span className="block text-[11px] text-[var(--text-sec)]">Role fits his level — nothing notable.</span>
+        ) : (
+          <span className="block space-y-1">
+            {factors.map((f, i) => (
+              <span key={i} className="flex items-start gap-1.5 text-[11px] leading-snug text-[var(--text)]">
+                <span className="font-black shrink-0" style={{ color: f.positive ? '#16a34a' : '#dc2626' }}>{f.positive ? '+' : '−'}</span>
+                <span>{f.label}</span>
+              </span>
+            ))}
+          </span>
         )}
       </span>
     </>

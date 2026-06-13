@@ -64,7 +64,6 @@ Status legend: ☐ open · ◐ in progress · ☑ shipped
 - **Priority:** P1
 
 ### ☑ BUG-9: Draft pick protections not honored
-> **Re-fixed (real root cause for imported leagues).** The protection/conveyance engine shipped earlier and works for user-initiated trades, but the user's "Dallas 2027 R1 → Charlotte" comes from the **imported NBA roster**, and the importer dropped it: `convertBbgmLeague` only captured picks where `dp.season === season` (`if (dp.season !== season) continue`), so all 160 *future* traded picks — including Dallas's 2027 R1 — were discarded and reverted to the original team at that draft. Fixed: import captures current **and** future traded picks keyed by their actual season; the store keys the registry by `o.season`. Verified on the real roster file (ownership now spans 2026–2032; 130 future obligations captured). Note: BBGM has no protection field, so imported picks convey **unconditionally** — correct for every outcome except the rare "lands inside protection" case, for which no source data exists.
 - **Where:** Draft lottery / pick ownership resolution
 - **Repro:** Dallas traded its 2027 R1 to Charlotte, top-2 protected. In the lottery Dallas landed at pick 5 — outside the protection.
 - **Expected:** Pick conveys to Charlotte (protection only applies if it lands top-2). Charlotte picks 5th with Dallas's pick.
@@ -73,7 +72,6 @@ Status legend: ☐ open · ◐ in progress · ☑ shipped
 - **Priority:** P0
 
 ### ☑ BUG-10: Rookies have unrealistically low impact in their rookie season
-> **Follow-up shipped (rookie depth + imported prospects).** Two paths fixed: (1) **synthetic** draft classes — shallower R1 curve (76→67, was 75→63) so the All-Rookie Second Team also cracks rotations: measured second-team PPG rose from ~8 to **~10–11** (top rookie ~16). (2) **Imported** leagues — the real root cause of the user's 2026 case: imported prospects skipped NBA calibration entirely and entered at ~50 OVR (buried → ~5 PPG). They now get a **partial calibration** (current OVR lifted 60% toward their NBA ceiling, which stays their potential): **AJ Dybantsa now 73 OVR / 93 POT** (was ~50), top-5 prospect OVR avg 71.6 — rotation-caliber, so the ROY will post realistic minutes/scoring.
 - **Where:** Game sim — rookie minutes/production
 - **Observed:** The Rookie of the Year is averaging ~5–8 PPG (e.g. ROY AJ Dybantsa at 5.6 PPG / 1.8 RPG / 1.6 APG). In a realistic league, the ROY typically averages ~15–20+ PPG, and several rookies are meaningful contributors.
 - **Likely causes:** rookies enter with low OVR relative to the league and/or AI lineups give them too few minutes; possibly rookie OVRs at draft (60s–70s) are fine but minutes allocation buries them.
@@ -91,7 +89,6 @@ Status legend: ☐ open · ◐ in progress · ☑ shipped
 - **Priority:** P0
 
 ### ☑ BUG-12: Post-draft CTA still says "Start 2026 Season" instead of "Re-sign Players"
-> **Fixed.** For a normal (non-inaugural) draft, the post-draft primary CTA now always routes to the Re-sign window ("Re-sign N Players" / "Re-sign Players" / "Trim Roster to 15") instead of "Start Season" — in both `nextAction` (top bar) and the draft-complete banner — so the flow guides Draft → Re-sign → Free Agency. A "Skip to season" secondary remains for users with nothing to re-sign. Inaugural (imported) drafts have no re-sign step and still tip straight in.
 - **Where:** Draft page after completion + top bar
 - **Repro:** Complete the draft (draft recap now shows correctly).
 - **Expected:** Primary CTA leads to the next offseason step: "Re-sign Players →" (per the Draft → Re-sign → Cuts → Free Agency flow).
@@ -100,7 +97,6 @@ Status legend: ☐ open · ◐ in progress · ☑ shipped
 - **Priority:** P1
 
 ### ☑ BUG-13: League is too easy — user reaches 65+ wins in most saves
-> **Fixed (primary lever).** Confirmed empirically: an all-AI league already tops out at ~58 wins (the win curve is fine), but **AI free agency never ran on its own** — at a rollover with no user action, the FA pool went 0 → 57 and AI signed **zero** of them, leaving ~57 quality free agents for the user to scoop uncontested while AI rosters stagnated on 62-OVR filler. Fix: a guaranteed AI free-agency batch now runs at season tip-off (`beginRegularSeason`, 8 rounds — drains the quality tier, e.g. top pool OVR 79→66, ~30 signings), plus a light opening pass when the FA window opens (`startNextSeason`, 2 rounds) so the user faces a competitive market instead of first pick of everyone. Regression test added (AI absorbs ≥5 of 8 quality FAs off full rosters). **Deferred secondary levers** (noted, lower impact): home-court advantage is stubbed in the sim (parity), and AI teams never *propose* trades (no mid-season self-improvement) — both are follow-ups if the FA fix proves insufficient in playtest.
 - **Where:** Sim engine / AI team management (league balance)
 - **Observed:** Across most saves, the user's team easily becomes a 65+ win juggernaut. A well-run team should contend, but 65+ wins should be rare, not routine.
 - **Investigate (likely compounding causes):**
@@ -110,6 +106,81 @@ Status legend: ☐ open · ◐ in progress · ☑ shipped
   - User team development/morale bonuses outpacing AI teams.
 - **Goal:** League where AI contenders also win 55–65 games and the FA market is genuinely competitive.
 - **Priority:** P0
+
+### ◐ BUG-14: Redundant double-click to start a league from a roster file
+> **Investigated — needs live repro.** The `/rosters` flow is already single-click to Pick Your Team in code (`startFromUrl` → import → team picker); the perceived double is the home→catalog navigation, which is intentional (the catalog lets you choose a roster source / upload a file). The reported second "Start a league" click may be a transient roster-fetch/cache miss (see the `CACHE_BUST` mechanism). Deferred pending a reproducible case.
+- **Where:** Rosters page → new league flow
+- **Repro:** On /rosters, click "Start a league with this roster."
+- **Expected:** Go straight to "Pick your team."
+- **Actual:** Lands on an intermediate page where you must click "Start a league with this roster" a second time before reaching team selection.
+- **Fix:** Remove the middle step — first click goes directly to Pick Your Team.
+- **Priority:** P2
+
+### ☑ BUG-15: Player development outcomes are identical across saves (Keaton Wagler always busts)
+> **Fixed.** Two root causes: (1) **determinism** — development RNG was seeded by `player.id + season` only, so the same player replayed an identical boom/bust every save; now seeded with the save (`league.id`, a fresh uuid per save) so a 90-POT pick can hit in one save and bust in another. (2) **POT/OVR collapse** — `updatePotential` snapped a prospect's ceiling to `overall+~10` on the first tick (nuking 90-POT picks to ~80); now the ceiling erodes slowly and never below the current overall. Added a **potential-pull** so young talent below its ceiling trends toward it instead of stalling/sliding. (The "whole 2026 class craters to 45-53" was the imported prospects *entering* at ~50 raw OVR — fixed in #246; generated classes already develop healthily, verified 0/30 crater over 4 seasons.) Regression tests added.
+- **Where:** Sim engine — player development / boom-bust rolls
+- **Observed:** Across several saves of the same league, Keaton Wagler (drafted #9, 90 POT as a rookie) busts every single time (e.g. 45 OVR ▼-24, POT crashed to 56).
+- **Suspected cause:** Development outcomes appear deterministic — seeded by player identity rather than rolled per save. Whatever a player's boom/bust fate is, it replays identically in every league.
+- **Bigger finding — the entire 2026 draft class busts:** A few seasons in, the top of the 2026 class sits at 45–53 OVR across the board: A. Dybantsa 53, N. Ament 51, B. Smith 51, M. Brown Jr. 50, K. Peat 49, L. Philon 49, K. Wagler 45. This isn't one unlucky player — generated draft classes appear to systematically crater after entering the league (development model collapses their OVR/POT instead of growing them). Check how development treats game-generated rookies vs. roster-file players.
+- **Expected:** Development outcomes vary across saves. A 90-POT pick might boom in one save and bust in another. (Per-save RNG seed for development rolls.)
+- **Related:** FEAT-14 (scouting/hidden potential) — if fates are predetermined and repeat across saves, scouting is also moot for replayers.
+- **Priority:** P1
+
+### ☑ BUG-16: Lineup needlessly cross-assigns players (SG at PG, PG at SG)
+> **Fixed.** `buildDefaultBasketballLineup` now assigns within a position group to natural slots when a clean assignment exists — two guards land PG+SG instead of a needlessly cross-assigned SG-at-PG / PG-at-SG. Only same-position pairs stay in OVR order.
+- **Where:** Roster & Lineup — starting slot assignment
+- **Observed:** Jaden Ivey (SG) is in the PG slot while Cole Anthony (PG) is in the SG slot — both flagged with out-of-position dots even though simply swapping them gives everyone their natural position.
+- **Expected:** When assigning lineup slots (especially via Auto-fill), align players to natural positions whenever a clean assignment exists; only cross-assign when there's no alternative.
+- **Related:** FEAT-21 (flexible G/F/C slots) — under that model G↔G swaps shouldn't be penalized or flagged at all.
+- **Priority:** P2
+
+### ☑ FEAT-25: Draft picks on the Trading Block and in Trade Finder
+> **Shipped.** Draft picks are now tradeable assets in both the Trading Block (put owned picks up, field AI offers, picks as sweeteners) and the Trade Finder (offer picks to complete/sweeten a deal, ask for the opponent's picks, pick-for-pick), valued on the same PTS scale via the existing engine gate.
+- **Where:** Trade > Trading Block and Trade > Trade Finder
+- **What:** Both tools are players-only today. Allow draft picks as assets in both directions:
+  - **Trading Block:** put owned picks on the block (alongside players) and field AI offers for them.
+  - **Trade Finder:** include picks in what you can offer and what you can ask for.
+- **Related:** FEAT-1 (current-year picks tradeable, with pick number shown), FEAT-12 ("seeking in return" includes picks).
+- **Priority:** P1
+
+### ☑ FEAT-26: Team switcher dropdown on the Roster view
+> **Shipped.** A team-switcher dropdown on the Roster page renders any team's roster read-only (same table — OVR/POT trends, contract, stats, mood) with all edit-only controls hidden when viewing a non-user team.
+- **Where:** Roster & Lineup page header
+- **What:** Add a dropdown next to the team name to switch the roster view to any team in the league. Other teams render read-only (no lineup editing, no Start/Bench/drag) but show the same table: players, OVR/POT trends, contracts, stats, mood.
+- **Related:** FEAT-17 (team pages should show rosters) — this could be the same component; the dropdown is just a faster path during trade prep.
+- **Priority:** P1
+
+### ☑ BUG-17: Can't sign anyone when over the cap — minimum contracts should always be available
+> **Fixed.** Free-agency affordability now keys off `signingBudget` (cap room OR an MLE/minimum exception) instead of raw cap room, so over-cap teams see signable players and an "available at vet minimum" badge appears for cheap targets when over the cap. Signing was never cap-blocked, so minimums always go through with an open roster spot.
+- **Where:** Free Agency — affordability/signing rules
+- **Repro:** Be over the cap (or near $0 room) and open Free Agency.
+- **Expected:** Like the real NBA, over-cap teams can still sign players to minimum contracts as long as a roster spot is open. FA list should show minimum-salary-willing players as signable, with an indicator (e.g. "available at vet minimum").
+- **Actual:** No players are available to sign at all.
+- **Optional depth:** a simple mid-level exception (one ~$5–12M signing per offseason for over-cap teams) would add realistic team-building texture, but minimums are the must-have.
+- **Priority:** P1
+
+### ☑ TUNE-1: Cooper Flagg rated too low
+> **Addressed.** The development potential-pull (BUG-15) makes young blue-chippers trend UP toward their ceiling instead of declining, and the youngest imported players (≤20) now get extra potential headroom (+12) so a 19-20-yo projects as a budding star, not a finished rotation piece. (Per-player baseline OVR remains import-data-driven; the trajectory now trends sharply up.)
+- **Where:** NBA 2025-26 roster import data / young-star development
+- **Observed:** Flagg sits around 77–80 OVR (and trended *down*, 77 ▼-3, in one save) — he plays like a mid rotation guy instead of a budding superstar.
+- **What:** Raise his baseline OVR and ensure his development trajectory trends sharply up (potential 88+ should mean he's pushing mid-80s OVR by years 2–3, not declining at age 20).
+- **Related:** BUG-15 — a 20-year-old #1 pick losing OVR may be the same broken development model; also audit other young stars in the import for the same issue.
+- **Priority:** P2
+
+### ☑ BUG-18: Free agents accept any offer
+> **Fixed.** Replaced the flat "70% of market" gate with a real `acceptanceThreshold` (tier + team appeal + Bird loyalty, never below a competing offer): lowballs now reject or lose the player to a rival, and the displayed "Accepts %" maps honestly to that threshold. Regression test added (lowball never lands the player; market+ signs).
+- **Where:** Free Agency — offer acceptance logic
+- **Observed:** Essentially every free agent says yes regardless of the offer. The "Accepts at Market %" stat exists on player cards but doesn't seem to gate anything.
+- **Expected:** Acceptance should depend on offer vs. market ask (lowball → reject/counter), competing offers from AI teams, team appeal (contender status, role/minutes available, morale), and player personality (e.g. "Wants to test FA").
+- **Related:** BUG-6 / BUG-13 — with no AI competition and universal acceptance, the user can assemble any roster, which feeds "league too easy."
+- **Priority:** P0
+
+### ☑ FEAT-27: Clicking a player's mood explains why they feel that way
+> **Shipped.** The mood badge is now clickable, opening a popover that lists the contributing factors (role vs talent, contract year, dev trajectory, recent team form) with +/− signs, via a shared `moodFactors` helper.
+- **Where:** Roster & Lineup — Mood column (and anywhere mood badges appear)
+- **What:** Make the mood badge clickable (or hoverable) to show the contributing factors, e.g. "Unhappy: benched despite strong play (−), team losing streak (−), contract year (−)" or "Thrilled: starting role (+), team winning (+), recently extended (+)".
+- **Why:** Mood presumably drives re-sign willingness and morale effects — without the "why," the player can't act on it.
+- **Priority:** P1
 
 ## Features
 
@@ -264,7 +335,6 @@ Status legend: ☐ open · ◐ in progress · ☑ shipped
 - **Priority:** P1
 
 ### ☑ FEAT-23: Show player stats in the Re-sign window
-> **Shipped.** Each expiring-player row now shows the last-season production line (PPG/RPG/APG · GP · PER) and the **name is clickable** to the player quick-view modal (which leads with stats per FEAT-15). Extracted a shared `lastSeasonStatLine` helper (`src/lib/stats/statLine.ts`) — the single source of truth the Re-sign window uses (and FA/modal can adopt), replacing the page-local copy and adding GP.
 - **Where:** Re-signing Window — expiring player rows
 - **Current:** Rows show position/age/OVR and the ask, but no production — can't judge whether a player is worth the money.
 - **What:** Add last-season stat line to each row (PPG/RPG/APG, GP, MPG), and ideally make the row expandable or the name clickable to the player quick-view (which per FEAT-15 should also show stats).
@@ -272,7 +342,6 @@ Status legend: ☐ open · ◐ in progress · ☑ shipped
 - **Priority:** P1
 
 ### ☑ FEAT-24: Richer game detail page (quarter-by-quarter, team totals, game info)
-> **Shipped.** The game page now shows a **quarter-by-quarter line score** (Q1–Q4 + OT, with totals) from the sim's `quarterScores`, a **team-totals row + FG/3P/FT shooting splits** under each box score, a **game-info line** (biggest lead, possessions, pace, OT), and **prev/next chevrons** that flip through played games chronologically without returning to the schedule.
 - **Where:** Game detail page (clicking any played game)
 - **Current:** Shows final score, game leaders, and per-player box score tables.
 - **What:** Round out the game page:

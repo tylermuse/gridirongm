@@ -463,8 +463,11 @@ function convertPlayer(
     };
   })();
 
-  // Younger players get headroom; veterans cap near their current overall.
-  const youthBump = age <= 21 ? 8 : age <= 23 ? 5 : age <= 25 ? 2 : 0;
+  // Younger players get headroom; veterans cap near their current overall. The
+  // youngest (≤20) get extra ceiling so a 19-20-yo blue-chipper projects as a
+  // budding star, not a finished mid-rotation piece (TUNE-1: Cooper Flagg). The
+  // development potential-pull then trends them up toward it.
+  const youthBump = age <= 20 ? 12 : age <= 21 ? 8 : age <= 23 ? 5 : age <= 25 ? 2 : 0;
   // Prospects carry their NBA projection as a *ceiling* (the calibrated target
   // they'd reach if they hit), so a raw current OVR still has real draft upside.
   const potential = isProspect

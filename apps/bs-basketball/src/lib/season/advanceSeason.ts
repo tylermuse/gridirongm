@@ -172,7 +172,14 @@ export function enterOffseason(input: LeagueState): LeagueState {
     const developmentMultiplier = devRating != null
       ? resolveBasketballPDCEffect(devRating, p.age)
       : undefined;
-    const developed = developBasketballPlayer(snapshot, nextSeason, { developmentMultiplier });
+    // Seed development with the SAVE (league.id is a fresh uuid per save) so a
+    // player's boom/bust fate varies across saves of the same league — a 90-POT
+    // pick might hit in one save and bust in another (BUG-15). Without league.id
+    // the seed is just player+season, so every save replays identical outcomes.
+    const developed = developBasketballPlayer(snapshot, nextSeason, {
+      developmentMultiplier,
+      rngSeed: `${league.id}-${id}-${nextSeason}`,
+    });
     if (shouldBasketballPlayerRetire(developed)) {
       retired.add(id as PlayerId);
       continue;

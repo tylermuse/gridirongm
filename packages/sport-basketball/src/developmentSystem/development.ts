@@ -75,8 +75,16 @@ export function developBasketballPlayer(
   const newAge = player.age + 1;
 
   const expected = expectedDriftForAge(newAge);
+  // Talent with room to grow pulls upward: a young player well below his ceiling
+  // trends toward it, so high-potential prospects actually develop instead of
+  // stalling or randomly sliding (BUG-15 / TUNE-1). Fades to nothing as a player
+  // nears his potential, and doesn't apply to vets.
+  const ceilingGap = Math.max(0, player.development.potential - player.ratings.overall);
+  const potentialPull = newAge <= 23 ? Math.min(2.2, ceilingGap * 0.16)
+    : newAge <= 26 ? Math.min(1.0, ceilingGap * 0.08)
+    : 0;
   const std = driftStdForAge(newAge);
-  const raw = expected + gaussian(0, std, rng);
+  const raw = expected + potentialPull + gaussian(0, std, rng);
   // A development coach only accelerates upward drift; decline is unaffected.
   // mult === 1 leaves the expression identical to the un-coached path.
   const mult = opts.developmentMultiplier ?? 1;
@@ -249,14 +257,15 @@ function updatePotential(
   age: number,
   rng: SimpleRng,
 ): number {
-  let gap: number;
-  if (age <= 21) gap = Math.max(0, 10 + gaussian(0, 3, rng));
-  else if (age <= 24) gap = Math.max(0, 5 + gaussian(0, 2, rng));
-  else if (age <= 27) gap = Math.max(0, 2 + gaussian(0, 1.5, rng));
-  else gap = Math.max(0, gaussian(0, 1, rng));
-
-  const newCeiling = Math.min(99, newOverall + Math.round(gap));
-  return Math.max(newOverall, Math.min(currentPotential, newCeiling));
+  // The ceiling only ever drifts DOWN, and SLOWLY — a young prospect keeps his
+  // lofty projection while he's still developing instead of snapping to
+  // overall+small-gap on the first tick (which was nuking 90-POT picks to ~80
+  // immediately — BUG-15). It can never fall below the current overall, and a
+  // player who overachieves pulls his ceiling up to match.
+  const maxErosion = age <= 21 ? 1 : age <= 24 ? 1.5 : age <= 27 ? 2.5 : 3.5;
+  const erosion = Math.round(maxErosion * (0.4 + rng.random() * 0.8));
+  const eroded = Math.max(newOverall, currentPotential - erosion);
+  return clamp(eroded, newOverall, 99);
 }
 
 // ===========================================================================
