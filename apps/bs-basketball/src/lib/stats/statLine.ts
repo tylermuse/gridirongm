@@ -4,7 +4,7 @@
  * player quick-view modal (FEAT-15), so they stay consistent.
  */
 
-import type { BasketballPlayer } from '@bs/sport-basketball';
+import { perGame, type BasketballPlayer } from '@bs/sport-basketball';
 
 export interface SeasonLogLine {
   season: number;
@@ -33,4 +33,15 @@ export function lastSeasonStatLine(player: BasketballPlayer): string | null {
   const s = lastSeasonLog(player);
   if (!s) return null;
   return `${s.ppg} / ${s.rpg} / ${s.apg} · ${s.gamesPlayed} GP · ${lineEfficiency(s)} PER`;
+}
+
+/** Career per-game line "12.4/4.0/3.1" from careerStats, or null if the player
+ *  has never logged a game — the fallback when there's no per-season log entry
+ *  (a free agent who sat unsigned all year, or an imported vet). BUG-27. */
+export function careerPerGameLine(player: BasketballPlayer): { ppg: number; text: string } | null {
+  const cs = player.careerStats;
+  if (!cs || cs.gamesPlayed <= 0) return null;
+  const pg = perGame(cs);
+  const r1 = (n: number | undefined) => Math.round((n ?? 0) * 10) / 10;
+  return { ppg: r1(pg.points), text: `${r1(pg.points)}/${r1(pg.totalRebounds)}/${r1(pg.assists)}` };
 }

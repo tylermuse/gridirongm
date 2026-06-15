@@ -86,6 +86,20 @@ export default function HomePage() {
     }
   }
 
+  // Take over a club WITHIN the current league after being fired. Must NOT call
+  // newLeague() — that regenerates a fictional league and wipes the imported
+  // rosters (BUG-23 data loss). pickUserTeam clears the fired flag, sets the new
+  // userTeamId on the existing league, and drops the GM into the live offseason
+  // (pending draft, own picks, AI free agency not yet run).
+  async function handleTakeover(teamId: BasketballTeam['id'], abbreviation: string) {
+    setPickingAbbr(abbreviation);
+    try {
+      await pickUserTeam(teamId);
+    } finally {
+      setPickingAbbr(null);
+    }
+  }
+
   async function handleDelete(id: string) {
     if (!window.confirm('Delete this saved league? This cannot be undone.')) return;
     await deleteLeague(id);
@@ -169,8 +183,9 @@ export default function HomePage() {
                   return (
                     <button
                       key={t.id}
-                      onClick={() => void handlePick(t.abbreviation)}
-                      className="rounded-lg border bg-[var(--surface)] p-3 text-left hover:border-[var(--accent)] transition-colors"
+                      onClick={() => void handleTakeover(t.id, t.abbreviation)}
+                      disabled={pickingAbbr != null}
+                      className="rounded-lg border bg-[var(--surface)] p-3 text-left hover:border-[var(--accent)] transition-colors disabled:opacity-50"
                       style={{ borderColor: 'var(--border)' }}
                     >
                       <div className="flex items-center gap-2 mb-2">

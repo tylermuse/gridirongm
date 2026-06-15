@@ -4,9 +4,10 @@ import { useState } from 'react';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { Chip } from '@/components/ui/Chip';
 import { ratingColor } from '@/lib/ui/ratingColor';
-import { acceptanceProbability, bestCompetingOffer, LEAGUE_MINIMUM_SALARY, type FreeAgentInfo } from '@/lib/freeAgency';
+import { acceptanceProbability, bestCompetingOffer, rosterCount, MAX_ROSTER, type FreeAgentInfo } from '@/lib/freeAgency';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
 import type { BasketballTeam } from '@bs/sport-basketball';
+import { careerPerGameLine } from '@/lib/stats/statLine';
 
 /**
  * Sortable free-agent table with an expandable intel panel (parity with
@@ -24,8 +25,11 @@ function money(n: number): string {
 function lastLine(f: FreeAgentInfo): { ppg: number; text: string } {
   const log = f.player.sportData.seasonLog;
   const last = log && log.length ? log[log.length - 1] : null;
-  if (!last || !last.gamesPlayed) return { ppg: 0, text: '—' };
-  return { ppg: last.ppg, text: `${last.ppg}/${last.rpg}/${last.apg}` };
+  if (last && last.gamesPlayed) return { ppg: last.ppg, text: `${last.ppg}/${last.rpg}/${last.apg}` };
+  // Fallback: career per-game (BUG-27). Free agents who sat unsigned all year —
+  // or imported vets with no in-sim logged season — still show real production
+  // from their career totals instead of a bare "—".
+  return careerPerGameLine(f.player) ?? { ppg: 0, text: '—' };
 }
 
 export function FreeAgentTable({
@@ -139,7 +143,10 @@ function FaIntel({ league, info, room, budget, appeal, teamById }: { league: Bas
   // Signable if the ask fits cap room OR an exception/minimum (over-cap teams can
   // always add minimum deals with an open spot — BUG-17).
   const affordable = info.marketSalary <= budget;
-  const minDeal = room <= 0 && info.marketSalary <= LEAGUE_MINIMUM_SALARY * 1.5;
+  // Over the cap, but signable to a vet minimum because a roster spot is open and
+  // nobody else is bidding — regardless of his market value (BUG-30).
+  const openSpot = league.userTeamId ? rosterCount(league, league.userTeamId) < MAX_ROSTER : false;
+  const minDeal = room <= 0 && openSpot && !competing;
   const compTeam = competing ? teamById.get(competing.teamId) : null;
   const rec = info.player.ratings.overall >= 78 ? 'Priority Target' : info.player.ratings.overall >= 70 ? 'Solid Add' : affordable ? 'Depth Option' : 'Stretch';
   const recColor = rec === 'Priority Target' ? '#10b981' : rec === 'Stretch' ? '#d97706' : 'var(--accent-alt)';

@@ -468,8 +468,19 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
   async pickUserTeam(teamId) {
     const current = get().league;
     if (!current) return;
-    // Taking over a team clears any prior "fired" state.
-    const updated = clearGmFired({ ...current, userTeamId: teamId });
+    // Taking over a team clears any prior "fired" state and starts a fresh GM
+    // tenure — anchoring the firing grace period and zeroing the bad-season run
+    // (BUG-22) so a new hire gets full runway, even after inheriting a loser.
+    const withTenure = {
+      ...current,
+      userTeamId: teamId,
+      sportData: {
+        ...(current.sportData as Record<string, unknown>),
+        gmTenureStartSeason: current.currentSeason,
+        gmConsecutiveBadSeasons: 0,
+      },
+    };
+    const updated = clearGmFired(withTenure);
     set({ league: updated });
     try {
       await saveLeague(updated);

@@ -10,7 +10,7 @@ import { extensionMarket } from '@/../apps/bs-basketball/src/lib/roster/extensio
 import { simNextDay } from '@/../apps/bs-basketball/src/lib/sim/runSimDay';
 import { initializePlayoffs, simPlayoffDay, getBracket, isRegularSeasonComplete } from '@/../apps/bs-basketball/src/lib/playoffs';
 import { enterOffseason, startNextSeason } from '@/../apps/bs-basketball/src/lib/season';
-import { autoPickUntilUser } from '@/../apps/bs-basketball/src/lib/draft';
+import { autoPickUntilUser, getDraft } from '@/../apps/bs-basketball/src/lib/draft';
 import type { BasketballPlayer } from '@bs/sport-basketball';
 
 describe('re-sign data', () => {
@@ -79,5 +79,30 @@ describe('forced re-sign step', () => {
     expect(next.teams.find(t => t.id === uid)!.playerIds).not.toContain(walkId);
     // Re-signed player stayed on the roster.
     expect(next.teams.find(t => t.id === uid)!.playerIds).toContain(keepId);
+  });
+
+  it('never silently auto-re-signs the user\'s un-re-signed players (BUG-28)', () => {
+    const done = completeSeason('bug28-autoresign');
+    const uid = done.teams[0].id;
+    const userTeam = done.teams.find(t => t.id === uid)!;
+    // A young user player whose deal expires this offseason, left undecided.
+    const expId = userTeam.playerIds
+      .map(id => done.players[id] as BasketballPlayer)
+      .find(p => p.age < 28)!.id;
+    const yr = (s: number) => ({ season: s, baseSalary: 8_000_000, proratedBonus: 0, guaranteed: true });
+    const players = { ...done.players } as Record<string, BasketballPlayer>;
+    players[expId] = { ...players[expId], contract: { ...players[expId].contract!, years: [yr(done.currentSeason)] } };
+    const league = { ...done, players, userTeamId: uid };
+
+    const off = enterOffseason(league);
+    const season = getDraft(off)!.season;
+    const next = startNextSeason(autoPickUntilUser(off, null));
+
+    // The undecided player walked to FA and was NOT auto-re-signed to a market
+    // deal (which would silently eat the user's cap space).
+    expect(next.freeAgentIds).toContain(expId);
+    expect((next.players[expId] as BasketballPlayer).rosterSlot).toBeNull();
+    const hasNextDeal = ((next.players[expId] as BasketballPlayer).contract?.years ?? []).some(y => y.season === season);
+    expect(hasNextDeal).toBe(false);
   });
 });

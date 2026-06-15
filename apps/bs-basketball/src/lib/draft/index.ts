@@ -1,5 +1,6 @@
 export {
   getDraft,
+  upcomingSeason,
   currentSlot,
   setupDraft,
   recommendedProspectId,

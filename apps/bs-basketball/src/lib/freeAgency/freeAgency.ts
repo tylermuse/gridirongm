@@ -26,6 +26,7 @@ import {
 import type { BaseContract, BaseLeagueState, PlayerId, TeamId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { appendTransaction } from '../transactions';
+import { upcomingSeason } from '../draft/draft';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -151,11 +152,15 @@ export function rosterCount(league: LeagueState, teamId: TeamId): number {
 export function capRoom(league: LeagueState, teamId: TeamId): number {
   const team = league.teams.find(t => t.id === teamId);
   if (!team) return 0;
+  // Price the UPCOMING season (BUG-29) — the same year the Re-sign window uses —
+  // so the cap-space figure doesn't lurch between Re-sign and Free Agency when
+  // FA is opened during the offseason before the year has rolled.
+  const season = upcomingSeason(league);
   const players = team.playerIds
     .map(id => league.players[id] as BasketballPlayer | undefined)
     .filter((p): p is BasketballPlayer => !!p);
-  const payroll = basketballTeamPayroll(players, league.currentSeason);
-  return basketballSalaryCap(league.currentSeason) - payroll;
+  const payroll = basketballTeamPayroll(players, season);
+  return basketballSalaryCap(season) - payroll;
 }
 
 /**
@@ -169,7 +174,8 @@ export function capRoom(league: LeagueState, teamId: TeamId): number {
 export function signingBudget(league: LeagueState, teamId: TeamId): number {
   const team = league.teams.find(t => t.id === teamId);
   if (!team) return 0;
-  const season = league.currentSeason;
+  // Upcoming season (BUG-29) — consistent with capRoom + the Re-sign window.
+  const season = upcomingSeason(league);
   const players = team.playerIds
     .map(id => league.players[id] as BasketballPlayer | undefined)
     .filter((p): p is BasketballPlayer => !!p);
@@ -424,7 +430,18 @@ export function resolveUserOffer(
   const appeal = teamAppeal(league, userTeamId);
   const isBird = info.birdRights !== 'none' && info.lastTeamId === userTeamId;
   const threshold = acceptanceThreshold(info, appeal, competingTotal, isBird);
-  const userWins = userTotal >= threshold;
+
+  // Vet-minimum safety valve (BUG-30): a team with an open roster spot can always
+  // sign an UNCONTESTED free agent to a one-year minimum, regardless of his market
+  // value — so a short-handed team can always get back to a legal roster off the
+  // available pool. A contested player (someone else is bidding) still won't take
+  // the minimum, so this can't be used to poach stars on the cheap.
+  const isMinOffer = offer.years <= 1
+    && offer.salaryPerYear >= LEAGUE_MINIMUM_SALARY        // a real minimum, not a sub-min lowball
+    && offer.salaryPerYear <= LEAGUE_MINIMUM_SALARY * 1.5;
+  const hasOpenSpot = rosterCount(league, userTeamId) < MAX_ROSTER;
+  const minSigning = isMinOffer && hasOpenSpot && competingTotal === 0;
+  const userWins = userTotal >= threshold || minSigning;
 
   // Offer falls short and nobody else is bidding → he holds out for more.
   if (!userWins && competingTotal === 0) {

@@ -1,6 +1,6 @@
 # BS Basketball — Improvements Spec
 
-Last updated: 2026-06-12
+Last updated: 2026-06-13
 Status legend: ☐ open · ◐ in progress · ☑ shipped
 
 ## Bugs
@@ -182,6 +182,128 @@ Status legend: ☐ open · ◐ in progress · ☑ shipped
 - **Why:** Mood presumably drives re-sign willingness and morale effects — without the "why," the player can't act on it.
 - **Priority:** P1
 
+### ☑ BUG-19: 2026 draft order ignores the consensus big board (too random)
+- **Where:** Draft sim — AI auto-pick (`packages/sport-basketball/src/draftSystem/aiPick.ts`), consensus data (`apps/bs-basketball/src/lib/data/draft2026.ts`), import (`apps/bs-basketball/src/lib/data/leagueImport.ts` ~line 584).
+- **Repro:** Sim/auto-draft the 2026 class. AJ Dybantsa (consensus #1) frequently doesn't go #1; Caleb Wilson / Darryn Peterson slide while role players (Mikel Brown Jr., Labaron Philon) jump well ahead of their rank. Draft Recap shows wild ±9/±10 "reaches" and "steals" every time.
+- **Root cause:** `aiBasketballDraftPick` scores prospects as `ovr*0.35 + pot*0.65 + needBonus(±4.5) + noise(±2.5)` and has **no knowledge of the consensus board**. The board only sets prospect *ratings* via `consensus2026Value(rank)`, which spaces adjacent ranks just ~0.7 OVR / ~0.55 POT apart — so the talent term separates consecutive ranks by **<1 pt**, which the ±2.5 noise + ±4.5 need bonus easily overwhelm. The board scrambles. Meanwhile the *displayed* Big Board (`DraftBoardCard.prospectScore`) pins consensus prospects in exact order (`10000 - rank`), so the board the user sees and the picks the AI makes disagree.
+- **Decision (TYLER):** **Strict consensus** — the draft should follow the big board almost exactly top-to-bottom, with minimal randomness and essentially no reaches.
+- **Suggested fix:**
+  - Persist the consensus rank on each prospect: add `draftProjection?: number` to `BasketballPlayerData` (`packages/sport-basketball/src/types/index.ts`); set it where consensus value is applied in `leagueImport.ts`, and in `persistence/migrations.ts` for saves with a live pool.
+  - In `aiBasketballDraftPick`, when `draftProjection` is present, score by a rank anchor with large per-rank separation (e.g. `anchor = 1000 - rank*10`) plus only a hairline tie-break (±~0.5) so need/noise can't cause reaches. Unranked prospects (generated future classes, undrafted imports) keep the existing talent-based scoring and naturally sort below the board.
+  - Net result: Dybantsa #1 essentially always; board followed in order; near-zero reaches/steals in the recap.
+- **Notes:** Only affects *future* drafts — an already-completed draft can't be reordered. Generated 2027+ classes have no real board, so they keep talent-based variance (acceptable). Re-check `bs-hoops-draft-exact-match-spec.md` for any board-display assumptions.
+- **Priority:** P1
+
+### ☑ BUG-20: Imported league's first (inaugural) draft skips Re-sign + Free Agency
+- **Where:** Offseason flow for imported leagues — `src/lib/ui/nextAction.ts` (~line 71/86), `src/app/draft/page.tsx` (post-draft CTA), `src/lib/store/leagueStore.ts` (`finishInauguralDraft` ~line 516), `src/app/re-sign/page.tsx`, `src/lib/roster/resignProjection.ts`.
+- **Repro:** Import a roster file, complete the inaugural 2026 draft. The only CTA (top bar + draft page) is "Start 2026 Season" — it tips straight into the season, skipping the Re-sign and Free-Agency steps that a normal post-draft offseason runs.
+- **Root cause:** `nextAction` gates the Re-sign step on `!draft.inaugural`; the inaugural branch falls through to `Start ${draft.season} Season`. `draft/page.tsx` mirrors this. `finishInauguralDraft` sets phase to preseason **without rolling the year** (FA does surface in preseason, but Re-sign is never offered). This is the follow-up to BUG-1 / BUG-12, which only fixed the *non-inaugural* path.
+- **Decision (TYLER):** **Full offseason flow** — the inaugural draft should route Draft → Re-sign → Free Agency → Start Season, same as a normal offseason. "Start Season" becomes the secondary "skip" option.
+- **Suggested fix (watch the season math):**
+  - The re-sign window targets `league.currentSeason + 1`, but the inaugural import tips into `currentSeason` itself (no roll; `draft.season === currentSeason`). Unify the target to `getDraft(league)?.season ?? currentSeason + 1` in `resignProjection.ts` and `re-sign/page.tsx` — this equals `currentSeason + 1` in the normal flow (unchanged) and `currentSeason` for inaugural.
+  - Re-sign page "Start Season" calls `store.startNextSeason()`; for an inaugural draft it must call `store.finishInauguralDraft()` instead (no year roll), then route to `/free-agency`. Branch on `draft.inaugural`.
+  - Remove the `!draft.inaugural` gate in `nextAction` so inaugural gets the Re-sign primary action; make the "Skip to season" secondary map to the inaugural finish path (check the TopBar handler for the `startNextSeason` action key).
+  - Verify the 15-man trim gate and cap tiles read correctly with the unified target season.
+- **Related:** Follow-up to BUG-1 / BUG-12.
+- **Priority:** P1
+
+### ☑ BUG-21: All-Rookie team has only 2 players (S2026)
+- **Where:** `src/lib/awards/honors.ts` (`computeHonors`, All-Rookie selection ~line 123); root cause likely in AI rookie minutes (sim).
+- **Repro:** Play the 2026 season in an imported league, open Awards. The All-Rookie team(s) list only ~2 players instead of up to 10.
+- **Root cause analysis:** the All-Rookie pool filters `gamesPlayed >= MIN_ROOKIE_GAMES (20)` **and** `yearsInLeague === 0`, sorts by offense, and takes top-5 / next-5. Only ~2 rookies clear the bar because AI-team rookies are buried (few/no minutes → under 20 games or ~0 production), leaving essentially only the user's own rookies (user-controlled minutes). This is the unresolved tail of BUG-10 ("steep cliff beyond the top ~5 / AI rookie minutes"), showing up more severely on the imported-league path.
+- **Investigate:**
+  - Are AI-team rookies appearing in 20+ games at all? Check `gamesPlayed` accrual when a rookie's allocated minutes are ~0. The real fix is AI rookie minutes/depth (BUG-10), not the awards code.
+  - Timing: honors are computed live from `league` on the awards page; confirm they're computed for the just-finished season **before** the rollover increments `yearsInLeague` (`development.ts` line ~120 does `yearsInLeague + 1`). If honors ever run after the roll, the rookie pool empties entirely.
+  - Consider whether `MIN_ROOKIE_GAMES = 20` is too strict, but prioritize the minutes fix.
+- **Expected:** both All-Rookie teams populate (up to 10 players), including AI-team rookies, in a realistic production range.
+- **Related:** BUG-10, BUG-13 (AI rotation quality).
+- **Priority:** P1
+
+### ☑ BUG-22: GM firing is too strict (fired after 2 bad seasons)
+- **Where:** `src/lib/approval/approval.ts` (`applySeasonApproval`, `FIRE_THRESHOLD`), default approval in `src/lib/league/createLeague.ts` (~line 179).
+- **Repro:** Have two below-expectation seasons in a row → fired.
+- **Root cause:** owner approval starts at **50**, `FIRE_THRESHOLD = 20`, and a bad season swings owner approval by `clamp(winsDelta*0.6 + playoffScore, -30, 30)`. A missed-playoffs season (`playoffScore = -12`) at ~25 wins (`winsDelta = -16 → -9.6`) is ≈ **−22**, so 50 → 28 → 6 fires you on the second miss. There's no grace period and no "consecutive bad seasons" requirement — it's pure accumulation.
+- **Decision (TYLER):** **Grace period + two strikes.** Never fire within the first **3 seasons** of a tenure, AND only fire after **two consecutive** below-expectation (sub-threshold) seasons — i.e. one season below the line is a "final warning," not a firing. Track tenure start (reset when the user takes over a team) and a consecutive-bad-season counter (reset on any at/above-expectation season). A competent rebuild should get ~3–4 seasons of runway; only a sustained disaster gets you fired. Surface the "final warning" state in the UI (job-security indicator) so the user knows they're on the hot seat before the axe falls.
+- **Related:** BUG-23 (firing/takeover flow), FEAT-20 (job openings screen).
+- **Priority:** P1
+
+### ☑ BUG-23: Taking a new job after being fired wipes the league and turns it fictional (DATA LOSS)
+- **Where:** `src/app/page.tsx` — the fired-GM "pick your next job" openings (~line 171) and `handlePick` (~line 72).
+- **Repro:** Get fired in an imported (custom-roster) league → on the home screen click "Take the job →" on one of the openings.
+- **Actual:** The whole league becomes **fictional** — generated teams (e.g. "New Orleans Brass") and generated players replace the imported NBA rosters. The custom roster file the user uploaded is effectively gone; the new roster shows generic parody players, all "Acquired: Original," with no prior stats. (Screenshot: managing "New Orleans Brass," 0–0, fictional players.)
+- **Root cause:** the opening buttons call `handlePick(t.abbreviation)`, and `handlePick` calls **`newLeague()`** — which generates a brand-new default league from `HOOPS_LEAGUE_TEAMS` (the parody team set in `src/lib/data/teams.ts`, where New Orleans = "Brass") — then matches the chosen abbreviation. So "taking the job" discards the current league and spins up a fresh fictional one. This is also the source of the user's "the offseason was already simulated / I'm stuck with picks & FAs I didn't make" feeling — they're actually dropped into a generated league's starting roster.
+- **Fix:** the fired-flow openings must **take over within the current league** — call `store.pickUserTeam(t.id)` (which runs `clearGmFired` + sets `userTeamId` on the existing league), NOT `handlePick`/`newLeague`. Keep `handlePick`/`newLeague` only for the "start a brand-new league" team grid.
+- **Desired end-to-end flow (TYLER):** firing should resolve at the **end of the playoffs**, then the user picks a new team and lands in **that team's offseason at the draft (phase 1)** — controlling their own picks, re-signs, and FA. Verify sequencing: firing happens in `enterOffseason` (`advanceSeason.ts` line ~121) which also sets up the draft (not auto-simmed), so a correct `pickUserTeam` takeover should drop the new GM straight onto the pending draft with picks unsimmed and AI free agency not yet run. Confirm the draft isn't auto-simmed and AI FA hasn't run before takeover; consider surfacing the firing/openings at playoff completion rather than only after the user clicks "Enter Offseason."
+- **Related:** BUG-22, BUG-24, FEAT-20. Cross-check `BS-HOOPS-MULTISEASON-BUGS.md`.
+- **Priority:** **P0 (data loss)**
+
+### ☑ BUG-24: No roster context when taking over a team (last-season stats + acquisition)
+- **Where:** `src/app/roster/page.tsx` — roster table (GP / PPG-RPG-APG columns ~line 460, `Acquired` column `acquiredLabel` ~line 618).
+- **Repro:** Take over a team (or view any roster at the start of a season). The GP and PPG/RPG/APG columns show "—" and every player reads "Acquired: Original."
+- **Root cause:** the table pulls **current-season** stats via `regularSeasonStatsByPlayer(league)`; on day 1 (0–0) `gamesPlayed === 0`, so the stat line renders "—" with no fallback to last season. The `Acquired` column maps `acquiredVia: 'initial'` → "Original," so an inherited/generated roster reads "Original" for everyone.
+- **What:** when the current season has no games yet, fall back to the player's **last-season stat line** (from `sportData.seasonLog` / `careerStats`) so a new GM can evaluate the inherited roster; label it (e.g. "'25: 18.4/5.1/4.0"). Ensure acquisition shows something meaningful for inherited players. (Note: much of the "everyone is Original / no stats" symptom is a side effect of BUG-23 regenerating the league — fix BUG-23 first, then this is the genuine remaining gap.)
+- **Related:** BUG-23, FEAT-8 (prev-season stats for FAs), FEAT-23 (stats in re-sign), FEAT-15 (modal stats).
+- **Priority:** P1
+
+### ☑ BUG-25: "Sign a free agent" on the Roster page does nothing
+- **Where:** `src/app/roster/page.tsx` — the roster-size badge (`sizeBadge`, ~line 237; rendered as a `<span>` ~line 308). Free-agency flow in `src/app/free-agency/page.tsx` + `src/lib/freeAgency`.
+- **Repro:** Mid-season with a short roster (screenshot: Lakers 17–41, **Roster 12/15**, Day 117). The header shows an orange "Sign a free agent" pill; clicking it does nothing.
+- **Root cause (two layers):**
+  1. The pill is a **non-interactive `<span>`** — it's just a status badge (shown when `roster.length < MIN_ROSTER` (13)). It has no `onClick` and isn't a link, so it can never do anything. It only *looks* clickable.
+  2. Even if it linked to `/free-agency`, **free agency is offseason-gated** — `isSeasonUnderway(league)` / games-played / `day >= FA_DAYS` close the window once the season starts (see `freeAgency` + the FA page's `faClosed`). So mid-season there's currently no way to sign a free agent at all, which is why a team can get stuck at 12/15.
+- **Decision (TYLER):** **Remove it.** In-season free agency isn't supported, so the "Sign a free agent" pill is pointless — delete it. Drop the `roster.length < MIN_ROSTER` → "Sign a free agent" branch from `sizeBadge` so the badge only ever shows the roster count (or "Cut to 15" when over). Don't replace it with a link or a new flow. (If a short roster mid-season ever needs surfacing, do it as plain, non-clickable text — but per Tyler, simplest is to just remove the prompt entirely.)
+- **Expected:** no misleading clickable-looking "Sign a free agent" pill on the Roster page; the size badge just reflects roster count / over-limit state.
+- **Related:** BUG-6 (AI FA competition), FEAT-5 (FA roster needs).
+- **Priority:** P2
+
+### ☑ BUG-26: Free agency opens already at "Day 30 of 30 · window closed" in 2027+
+- **Where:** `src/lib/season/advanceSeason.ts` — `enterOffseason` (~line 118) vs `startNextSeason` (resets at lines 460–461); FA day read in `src/lib/freeAgency/freeAgency.ts` (`getFaDay`, `FA_DAYS = 30`).
+- **Repro:** Play a full season, reach the offseason, go Draft → Re-sign, then open "3. Free Agency" from the stepper. The window shows **Day 30 of 30 · prices at 60% · window closed** — the whole FA window is already spent. Only happens in **2027 and later** (the inaugural 2026 looks fine).
+- **Root cause:** `faDay` and `seasonStarted` are stored on `sportData` and are only reset in **`startNextSeason`** (the preseason tip-in: `faDay = 0`, `seasonStarted = false`). But the FA page is reachable **during the offseason via the stepper**, *before* `startNextSeason` runs. `enterOffseason` does **not** reset them, so they still hold the prior season's end-state (`faDay = 30` from last season's `beginRegularSeason`, which set `faDay = FA_DAYS`). In 2026 it's masked because `faDay` was 0 from import; every later season inherits 30 → "window closed."
+- **Fix:** reset `faDay = 0` and `seasonStarted = false` in **`enterOffseason`** (when the new offseason begins), not only in `startNextSeason`. That way the FA window is fresh throughout the offseason regardless of when the user opens it. (Leaving the reset in `startNextSeason` too is harmless/idempotent.) Add a regression test that rolls 2026→2027→2028 and asserts `getFaDay === 0` at the start of each offseason's FA view.
+- **Related:** BUG-1/BUG-20 (offseason flow), BUG-7 (season tip-off). Cross-check `BS-HOOPS-MULTISEASON-BUGS.md`.
+- **Priority:** P0
+
+### ☑ BUG-27: Free agents show no prior-season stats (LAST column is "—")
+- **Where:** `src/components/freeAgency/FreeAgentTable.tsx` — `lastLine()` (~line 24, reads `player.sportData.seasonLog`); season-log population in `src/lib/season/advanceSeason.ts` (`enterOffseason`, seasonLog append ~line 150, guarded by `stats.gamesPlayed > 0`).
+- **Repro:** Open Free Agency in 2027+. Every free agent's **LAST** column shows "—," even recognizable players (Jaden Ivey, Lonzo Ball, etc.).
+- **Root cause:** `lastLine()` pulls the most recent `seasonLog` entry, but `seasonLog` only gets an entry for a season the player **actually played** (`gamesPlayed > 0`). Free agents who sat unsigned all year accrue no entry → "—". As Tyler suspected, this is largely downstream of **AI teams not signing free agents** (BUG-6): the pool stagnates with players who never played, so they never build a stat history. Imported free agents also start with no in-sim history at all.
+- **Fix (layered):**
+  1. Primary: ensure AI free agency actually turns the pool over (BUG-6 follow-up) so quality FAs get signed and play, and the leftover pool reflects real role players — verify `runAiFreeAgency` is signing enough across a full offseason.
+  2. Fallback display: when `seasonLog` is empty, fall back to per-game `careerStats` (or the imported real prior-season line) so a recognizable vet still shows *some* production instead of "—".
+  3. For imported leagues, seed free agents with their real prior-season stat line so the first season's FA board isn't blank.
+- **Related:** BUG-6 (AI FA inactivity — likely root), FEAT-8 (prev-season stats for FAs, already shipped — this is the multi-season/empty-log gap), BUG-13.
+- **Priority:** P1
+
+### ☑ BUG-28: `startNextSeason` silently auto-re-signs the user's expiring players (slashes cap space)
+- **Where:** `src/lib/season/advanceSeason.ts` — `startNextSeason`, the "re-sign any still-rostered player whose deal expired" loop (~lines 417–427, `marketContract(p, season)`).
+- **Repro:** In the Re-sign window, re-sign/walk your expiring players; the cap tile reads e.g. **$31.4M cap space to spend (2028)**. Click "Start 2028 Season" → on Free Agency the cap space is roughly **halved**, with no signing you made.
+- **Root cause:** after the re-sign window, `startNextSeason` loops over **every still-rostered player without a contract for the upcoming season and auto-signs them to a `marketContract`** — for the user's team too. This silently adds salary the GM never agreed to and can push the team over the cap. It also **directly contradicts the documented flow** ("Anything left un-re-signed walks to free agency at season start," per `nextAction.ts`) — the code does the opposite and auto-keeps them.
+- **Fix:** scope the auto-re-sign to **AI teams only** (`t.id !== league.userTeamId`). For the user's team, players without a next-season contract who weren't explicitly re-signed should **walk to free agency** (be released), matching the re-sign window's stated behavior and its cap projection. (The loop exists so AI rosters don't bleed salary to $0 — keep that for AI.)
+- **Related:** BUG-2/BUG-3 (Let Walk), BUG-29 (cap inconsistency), BUG-1/BUG-20 (offseason flow).
+- **Priority:** P0
+
+### ☑ BUG-29: Cap space figure is inconsistent and jumps across Re-sign → Free Agency → Start Season
+- **Where:** `src/lib/roster/resignProjection.ts` (`resignProjection`, season = `getDraft(league)?.season ?? currentSeason+1`), `src/lib/freeAgency/freeAgency.ts` (`capRoom`/`signingBudget`, season = `league.currentSeason`), `src/app/free-agency/page.tsx` (header uses `capRoom`).
+- **Repro:** Same roster, no signings — the cap-space number lurches: **$31.4M** (Re-sign) → **$15.2M** (FA opened via stepper) → **$268K** → **$12.9M** (after "Start the Season"). 
+- **Root cause (two compounding):**
+  1. **Different season targets.** Re-sign computes cap for the *upcoming* season via `draft.season` (e.g. 2028). The FA page's `capRoom`/`signingBudget` compute for **`league.currentSeason`**, which is still the *old* season (2027) when FA is reached **before** `startNextSeason` rolls the year (possible because the stepper exposes "3. Free Agency" during the offseason — see BUG-26). So the two pages are pricing different seasons.
+  2. **Salary mutates mid-flow.** `startNextSeason` auto-re-signs players (BUG-28) and `beginRegularSeason` runs AI FA, so payroll changes between views.
+- **Fix:** establish a single source of truth for "cap space for the upcoming season" and use it on every offseason surface (Re-sign, Free Agency, Roster). Cap math should always target the upcoming season (`draft.season` until the roll, then `currentSeason`), never the stale current season. Combined with gating FA until the season actually rolls (BUG-26) and BUG-28, the number should stay stable from Re-sign through the FA window.
+- **Related:** BUG-26 (FA reachable pre-roll), BUG-28 (auto-re-sign), BUG-2.
+- **Priority:** P1
+
+### ☑ BUG-30: Can't sign any free agent when over the cap / window shows closed (and pool reads "Available 0")
+- **Where:** `src/components/freeAgency/FreeAgentTable.tsx` (min-deal gate `minDeal = room <= 0 && marketSalary <= LEAGUE_MINIMUM_SALARY*1.5`, ~line 142), FA window-closed gating (`faClosed`), pool source `freeAgentPool`.
+- **Repro:** Reach Free Agency short-handed (roster 11/15) with little/no cap space. Window reads **Day 30 of 30 · window closed**, **Available (0) / "No free agents match,"** and there's no way to add anyone.
+- **Root cause / gaps:**
+  1. **Window closed (BUG-26)** blocks FA entirely the moment you arrive (Skip Day/Week disabled, signings gated).
+  2. **Over-the-cap signing is too restrictive** — BUG-17 added vet-minimum deals, but only when `marketSalary <= 1.5× minimum`, so an over-cap team with open spots still can't fill out the roster with the available pool. With an **open roster spot**, vet-minimum signings should always be possible (NBA rules), regardless of the player's market value.
+  3. **Empty pool** — "Available (0)" suggests AI free agency consumed the whole pool (BUG-6/BUG-13 over-signing) or the closed-window state hides everyone; a short-handed team is then stuck below a legal roster with no recourse.
+- **Expected:** a team below the roster minimum can always sign available free agents to at least vet-minimum deals to get legal, and the FA window isn't spuriously "closed" during the offseason (BUG-26).
+- **Related:** BUG-17 (over-cap minimum deals), BUG-26 (window closed), BUG-6/BUG-13 (AI FA volume), BUG-25.
+- **Priority:** P1
+
 ## Features
 
 ### ☑ FEAT-1: Trade current-year (2026) draft picks in the Trade section
@@ -349,6 +471,16 @@ Status legend: ☐ open · ◐ in progress · ☑ shipped
   - **Team totals row** under each box score (FG%, 3P%, FT%, REB, AST, TOV, etc.).
   - **Other game details:** lead changes, biggest lead/run, attendance/arena flavor — whatever the sim already tracks.
   - **Prev/next navigation:** chevrons on the left/right of the page to flip to the previous/next simulated game without going back to the schedule.
+- **Priority:** P2
+
+### ☑ FEAT-28: NBA prospect comparisons are too repetitive
+- **Where:** `src/lib/scouting/scoutingReport.ts` — `NBA_COMPS` table + `nbaComparison` selection (~line 57 / ~line 183).
+- **Current:** Almost every prospect at a position gets the same handful of comps — "a connector forward like Mikal Bridges," "a microwave scorer like Malik Monk," etc. There are only **4 comps per position**, and `nbaComparison = pick(NBA_COMPS[pos], seed >> 3)` selects purely by position + a name-hash seed, ignoring the prospect's tier and skill profile.
+- **What:** Make comparisons robust and relevant:
+  - Expand the pools substantially (≈8–12 each) and key them off the already-computed **archetype** (`archetypeFor` derives Floor general / 3-and-D wing / Stretch four / Rim protector, etc.) and/or the skill ratings, not just raw position.
+  - **Tier** the comps by projected ceiling/OVR so an elite prospect maps to a star-level comp and a role prospect maps to a role-player comp (don't compare a 99-ceiling wing to a journeyman, or vice-versa).
+  - Keep selection deterministic per prospect (seeded) so a given player's comp is stable, while ensuring real variety across a draft class.
+- **Related:** FEAT-14 (scouting model), BUG-19 (draft realism) — same scouting surface.
 - **Priority:** P2
 
 ## Needs clarification

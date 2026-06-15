@@ -23,13 +23,24 @@ export type PlayoffResult =
 
 /** Baseline win expectation (a .500-ish playoff push). */
 const EXPECTED_WINS = 41;
-/** Owner approval below this fires the GM. */
+/** Owner approval below this marks a season as sub-threshold ("below the line"). */
 const FIRE_THRESHOLD = 20;
+/** No firing within the first N seasons of a tenure — rebuilds need runway. */
+const GRACE_SEASONS = 3;
+/** Consecutive sub-threshold seasons required to actually fire (one is a warning). */
+const STRIKES_TO_FIRE = 2;
 
 interface LeagueSportData {
   gmFired?: { season: number; teamId: TeamId; teamName: string };
   /** Teams with a GM vacancy the fired user may take over (worst records). */
   gmOpenings?: TeamId[];
+  /** Season the current GM took over their team (set on pick/takeover). Anchors
+   *  the firing grace period. Absent on old saves → lazy-defaulted to the
+   *  current season (a fresh, lenient grace window). */
+  gmTenureStartSeason?: number;
+  /** Run of consecutive sub-threshold seasons; reset by any at/above-line season
+   *  or a takeover. Two in a row (past the grace window) fires the GM (BUG-22). */
+  gmConsecutiveBadSeasons?: number;
   [key: string]: unknown;
 }
 
@@ -93,8 +104,21 @@ export function applySeasonApproval(league: LeagueState): ApprovalUpdate {
 
   const ownerApproval = clamp(team.approval.ownerApproval + ownerDelta, 0, 100);
   const fanApproval = clamp(team.approval.fanApproval + fanDelta, 0, 100);
-  const fired = ownerApproval < FIRE_THRESHOLD;
-  const jobSecurity = jobSecurityFor(ownerApproval);
+
+  const sd = league.sportData as LeagueSportData;
+  // Firing is no longer pure accumulation (BUG-22): it takes a SUSTAINED slump.
+  // A season is "below the line" when owner approval sits sub-threshold; one such
+  // season is a final warning, two in a row fires — but never within the grace
+  // window of a fresh tenure. Old saves lazily anchor tenure to the current
+  // season (a lenient fresh grace).
+  const tenureStart = sd.gmTenureStartSeason ?? league.currentSeason;
+  const tenureSeasons = league.currentSeason - tenureStart + 1; // incl. season just played
+  const inGracePeriod = tenureSeasons <= GRACE_SEASONS;
+  const belowLine = ownerApproval < FIRE_THRESHOLD;
+  const consecutiveBad = belowLine ? (sd.gmConsecutiveBadSeasons ?? 0) + 1 : 0;
+  const fired = belowLine && consecutiveBad >= STRIKES_TO_FIRE && !inGracePeriod;
+  // On the hot seat (sub-threshold but spared) → final warning; otherwise tier.
+  const jobSecurity: JobSecurity = belowLine ? 'final_warning' : jobSecurityFor(ownerApproval);
 
   const teams = league.teams.map(t =>
     t.id === teamId
@@ -102,7 +126,6 @@ export function applySeasonApproval(league: LeagueState): ApprovalUpdate {
       : t,
   );
 
-  const sd = league.sportData as LeagueSportData;
   const teamName = `${team.city} ${team.name}`;
   // GM openings: a handful of the worst-performing other clubs are looking for a
   // new front office — that's where a fired GM can land.
@@ -111,19 +134,29 @@ export function applySeasonApproval(league: LeagueState): ApprovalUpdate {
     .sort((a, b) => (a.record.wins - a.record.losses) - (b.record.wins - b.record.losses))
     .slice(0, 5)
     .map(t => t.id);
+  // Always persist tenure tracking (lazy-anchored start + the consecutive-bad
+  // run); add the fired flags only on an actual firing.
+  const tenureSd: LeagueSportData = {
+    ...sd,
+    gmTenureStartSeason: tenureStart,
+    gmConsecutiveBadSeasons: consecutiveBad,
+  };
   const updated: LeagueState = {
     ...league,
     teams,
     userTeamId: fired ? null : league.userTeamId,
     sportData: fired
-      ? { ...sd, gmFired: { season: league.currentSeason, teamId, teamName }, gmOpenings }
-      : sd,
+      ? { ...tenureSd, gmFired: { season: league.currentSeason, teamId, teamName }, gmOpenings }
+      : tenureSd,
   };
 
+  const onFinalWarning = belowLine && !fired;
   const summary = `Your team ${PLAYOFF_LABEL[result]} (${team.record.wins}–${team.record.losses}). ` +
     (fired
       ? `Ownership has let you go.`
-      : `Owner approval ${ownerDelta >= 0 ? '+' : ''}${ownerDelta}, fan approval ${fanDelta >= 0 ? '+' : ''}${fanDelta}.`);
+      : onFinalWarning
+        ? `Owner approval ${ownerDelta >= 0 ? '+' : ''}${ownerDelta} — ownership has put you on notice. One more season like this and you're out.`
+        : `Owner approval ${ownerDelta >= 0 ? '+' : ''}${ownerDelta}, fan approval ${fanDelta >= 0 ? '+' : ''}${fanDelta}.`);
 
   return { league: updated, fired, summary };
 }
