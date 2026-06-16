@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
+import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { dropConfetti } from '@/lib/ui/confetti';
@@ -39,6 +40,8 @@ const BOXSCORE_COLS: { key: keyof BasketballStats; label: string }[] = [
 
 export default function GamePage() {
   const params = useParams<{ gameId: string }>();
+  const router = useRouter();
+  const store = useLeagueStore();
   const { league, loading, error } = useLeagueOrHydrate();
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
 
@@ -57,19 +60,68 @@ export default function GamePage() {
     return (league.teams.find(t => t.id === game.awayTeamId) as BasketballTeam | undefined) ?? null;
   }, [league, game]);
 
-  // Prev/next played game in chronological order, so you can flip through the
-  // game log without going back to the schedule (FEAT-24).
-  const { prevId, nextId } = useMemo(() => {
-    if (!league) return { prevId: null as string | null, nextId: null as string | null };
-    const played = league.games
-      .filter(g => g.status === 'played')
-      .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '') || a.id.localeCompare(b.id));
+  // Prev/Next navigation. For a game involving the user's team this walks the
+  // USER's own schedule (not every game in the league) — and when you're caught
+  // up to your latest played game, "Next" SIMS your next game rather than
+  // dead-ending, which is what the chevrons are really for. Viewing some other
+  // team's game keeps the plain league-wide played-game flip.
+  const { prevId, nextId, canSimNext } = useMemo(() => {
+    const none = { prevId: null as string | null, nextId: null as string | null, canSimNext: false };
+    if (!league || !game) return none;
+    const byDate = (a: typeof league.games[number], b: typeof league.games[number]) =>
+      (a.date ?? '').localeCompare(b.date ?? '') || a.id.localeCompare(b.id);
+    const uid = league.userTeamId;
+    const isUserGame = !!uid && (game.homeTeamId === uid || game.awayTeamId === uid);
+
+    if (uid && isUserGame) {
+      const mine = league.games
+        .filter(g => g.homeTeamId === uid || g.awayTeamId === uid)
+        .sort(byDate);
+      const i = mine.findIndex(g => g.id === params.gameId);
+      // Prev = your previous already-played game.
+      let prevId: string | null = null;
+      for (let k = i - 1; k >= 0; k--) { if (mine[k].status === 'played') { prevId = mine[k].id; break; } }
+      // Next = the next game on your schedule: navigate if it's played, sim it if not.
+      const next = i >= 0 && i < mine.length - 1 ? mine[i + 1] : null;
+      if (next?.status === 'played') return { prevId, nextId: next.id, canSimNext: false };
+      return { prevId, nextId: null, canSimNext: !!next && next.status === 'scheduled' };
+    }
+
+    const played = league.games.filter(g => g.status === 'played').sort(byDate);
     const i = played.findIndex(g => g.id === params.gameId);
     return {
       prevId: i > 0 ? played[i - 1].id : null,
       nextId: i >= 0 && i < played.length - 1 ? played[i + 1].id : null,
+      canSimNext: false,
     };
-  }, [league, params.gameId]);
+  }, [league, game, params.gameId]);
+
+  async function simNext() {
+    const id = await store.simNextUserGame();
+    if (id) router.push(`/game/${id}`);
+  }
+
+  // The user's most recent played game.
+  const latestUserPlayedId = useMemo(() => {
+    if (!league?.userTeamId) return null;
+    const uid = league.userTeamId;
+    const mine = league.games
+      .filter(g => (g.homeTeamId === uid || g.awayTeamId === uid) && g.status === 'played')
+      .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '') || a.id.localeCompare(b.id));
+    return mine.length ? mine[mine.length - 1].id : null;
+  }, [league]);
+
+  // Follow the sim forward: if you're viewing your latest game and a newer one
+  // gets played (e.g. via the top-nav "Sim Day"), jump the view to it. Only
+  // auto-advances when you were already caught up, so reviewing an OLD game with
+  // Prev/Next isn't hijacked the moment the league simulates.
+  const caughtUpRef = useRef(false);
+  useEffect(() => {
+    if (params.gameId === latestUserPlayedId) { caughtUpRef.current = true; return; }
+    if (caughtUpRef.current && latestUserPlayedId) {
+      router.replace(`/game/${latestUserPlayedId}`);
+    }
+  }, [latestUserPlayedId, params.gameId, router]);
 
   // Confetti when the user's team won this game — once per viewed game.
   const celebratedRef = useRef<string | null>(null);
@@ -119,7 +171,9 @@ export default function GamePage() {
             : <span className="text-sm opacity-30 px-2 py-1">‹ Prev</span>}
           {nextId
             ? <Link href={`/game/${nextId}`} className="text-sm font-semibold px-2 py-1 rounded hover:bg-[var(--surface-2)]" style={{ color: 'var(--accent)' }} title="Next game">Next ›</Link>
-            : <span className="text-sm opacity-30 px-2 py-1">Next ›</span>}
+            : canSimNext
+              ? <button onClick={() => void simNext()} disabled={store.loading} className="text-sm font-semibold px-2 py-1 rounded hover:bg-[var(--surface-2)] disabled:opacity-50" style={{ color: 'var(--accent)' }} title="Simulate your next game">{store.loading ? 'Simming…' : 'Sim Next ›'}</button>
+              : <span className="text-sm opacity-30 px-2 py-1">Next ›</span>}
         </div>
       </div>
 
