@@ -29,6 +29,21 @@ export interface DraftPickSlot {
   prospectId: PlayerId | null;
 }
 
+/**
+ * A pick/player swap the user made during this draft, recorded for the post-draft
+ * report's "Trade Activity" panel. Pick numbers are the overall slot (1..60);
+ * player names are captured at trade time so the report doesn't have to chase
+ * roster moves. (FEAT: draft report.)
+ */
+export interface DraftTradeRecord {
+  partnerId: TeamId;
+  partnerLabel: string;
+  sentPicks: number[];
+  receivedPicks: number[];
+  sentPlayers: string[];
+  receivedPlayers: string[];
+}
+
 export interface DraftState {
   /** Season the rookies sign for (the upcoming season). */
   season: number;
@@ -55,4 +70,7 @@ export interface DraftState {
   scoutsRemaining?: number;
   /** Prospect ids whose true potential has been revealed. */
   scoutedIds?: PlayerId[];
+  /** Pick/player swaps the user made during the draft, oldest first. Drives the
+   *  post-draft report's Trade Activity panel. Absent on saves with no trades. */
+  trades?: DraftTradeRecord[];
 }

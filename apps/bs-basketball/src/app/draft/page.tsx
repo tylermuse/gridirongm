@@ -232,7 +232,7 @@ export default function DraftPage() {
       {/* Scouting + recap surfaces. */}
       <div className="flex flex-wrap gap-3 mb-4 text-sm font-semibold">
         <Link href="/draft-preview" className="hover:underline" style={{ color: 'var(--accent)' }}>🔭 Big Board →</Link>
-        {draft.complete && <Link href="/draft-recap" className="hover:underline" style={{ color: 'var(--accent)' }}>🎬 Draft Recap →</Link>}
+        {draft.complete && <Link href="/draft-recap" className="hover:underline" style={{ color: 'var(--accent)' }}>🎬 Draft Report →</Link>}
         {resignCount > 0 && (
           <Link href="/re-sign" className="hover:underline" style={{ color: '#b45309' }}>🖊️ Re-sign {resignCount} expiring player{resignCount === 1 ? '' : 's'} →</Link>
         )}

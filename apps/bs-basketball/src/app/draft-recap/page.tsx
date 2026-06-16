@@ -5,16 +5,20 @@ import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { buildDraftRecap, type DraftRecap, type RecapPick } from '@/lib/draft';
+import { DraftReportCard } from '@/components/draft/DraftReportCard';
+import { buildDraftRecap, buildUserDraftReport, type DraftRecap, type RecapPick, type UserDraftReport } from '@/lib/draft';
 
 /**
- * /draft-recap — post-draft grades. Your haul, the biggest steals (players who
- * fell past their board value) and reaches, and the full graded results.
+ * /draft-recap — post-draft report. Leads with the team Draft Report (your
+ * selections with badges + scouting blurbs, trade activity, an overall grade,
+ * narrative analysis, and your new starting five), then the league-wide grades:
+ * biggest steals, reaches, and the full graded results.
  */
 export default function DraftRecapPage() {
   const { league, loading, error } = useLeagueOrHydrate();
   const [modalId, setModalId] = useState<string | null>(null);
   const recap = useMemo<DraftRecap | null>(() => (league ? buildDraftRecap(league) : null), [league]);
+  const report = useMemo<UserDraftReport | null>(() => (league ? buildUserDraftReport(league) : null), [league]);
 
   if (loading) return <Shell><p className="opacity-60">Loading…</p></Shell>;
   if (!league) return <Shell><p>{error ?? 'No league loaded.'}</p></Shell>;
@@ -31,11 +35,13 @@ export default function DraftRecapPage() {
 
   return (
     <Shell>
-      {recap.userPicks.length > 0 && (
-        <Group title="Your haul">
-          {recap.userPicks.map(p => <PickRow key={p.overall} pick={p} onClick={() => setModalId(p.player.id)} />)}
-        </Group>
-      )}
+      {report
+        ? <DraftReportCard report={report} onSelectPlayer={setModalId} />
+        : recap.userPicks.length > 0 && (
+            <Group title="Your haul">
+              {recap.userPicks.map(p => <PickRow key={p.overall} pick={p} onClick={() => setModalId(p.player.id)} />)}
+            </Group>
+          )}
 
       <div className="grid md:grid-cols-2 gap-4">
         <Group title="💰 Biggest steals">
@@ -101,7 +107,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="max-w-3xl mx-auto p-8">
       <Link href="/draft" className="text-sm font-semibold opacity-70 hover:opacity-100">← Draft</Link>
-      <h1 className="text-3xl font-extrabold mt-2 mb-4" style={{ color: 'var(--accent)' }}>Draft Recap</h1>
+      <h1 className="text-3xl font-extrabold mt-2 mb-4" style={{ color: 'var(--accent)' }}>Draft Report</h1>
       {children}
     </main>
   );
