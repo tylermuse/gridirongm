@@ -183,7 +183,10 @@ export function signingBudget(league: LeagueState, teamId: TeamId): number {
     .map(id => league.players[id] as BasketballPlayer | undefined)
     .filter((p): p is BasketballPlayer => !!p);
   const status = basketballTeamCapStatus(players, season);
-  if (status.capRoom > 0) return status.capRoom; // under the cap → full room
+  // Under the cap → that room, but always at least a minimum deal: the minimum
+  // exception is always available, so a team a hair under the cap (e.g. $75K of
+  // room) must still read as able to sign someone, not "can't afford anyone".
+  if (status.capRoom > 0) return Math.max(LEAGUE_MINIMUM_SALARY, status.capRoom);
 
   // Over the cap: largest available exception, scaled by how deep into the tax
   // a team is, and hard-stopped at the second apron.
