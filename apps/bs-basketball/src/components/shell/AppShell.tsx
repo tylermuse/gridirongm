@@ -161,6 +161,9 @@ function TopBar({
       case 'startPlayoffs': { if (await store.startPlayoffs()) router.push('/playoffs'); break; }
       case 'enterOffseason': { if (await store.enterOffseason()) router.push('/draft'); break; }
       case 'startNextSeason': { const s = await store.startNextSeason(); if (s) router.push('/'); break; }
+      // Re-sign done → open the FA window (startNextSeason rolls rosters into the
+      // preseason + stocks the pool) and land on the Free Agency page.
+      case 'startFreeAgency': { const s = await store.startNextSeason(); if (s) router.push('/free-agency'); break; }
       // Inaugural imported draft finishes in place (no year roll), then on to FA (BUG-20).
       case 'finishInaugural': { await store.finishInauguralDraft(); router.push('/free-agency'); break; }
       case 'beginRegularSeason': { if (await store.beginRegularSeason()) router.push('/'); break; }
