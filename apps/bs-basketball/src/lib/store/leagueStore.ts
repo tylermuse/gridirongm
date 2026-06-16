@@ -815,7 +815,24 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         return p;
       });
 
-      const league = { ...current, teams, players, sportData: { ...(current.sportData as object), draft: { ...draft, picks }, pickOwnership } };
+      // Record the swap for the post-draft report's Trade Activity panel.
+      const partnerTeam = current.teams.find(t => t.id === partnerId);
+      const partnerLabel = partnerTeam ? `${partnerTeam.city} ${partnerTeam.name}` : String(partnerId);
+      const nameOf = (id: string) => {
+        const p = srcPlayers[id];
+        return p ? `${p.firstName} ${p.lastName} (${p.sportData.position})` : 'Player';
+      };
+      const tradeRecord = {
+        partnerId: partnerId as TeamId,
+        partnerLabel,
+        sentPicks: [...sendOveralls].sort((a, b) => a - b),
+        receivedPicks: [...getOveralls].sort((a, b) => a - b),
+        sentPlayers: sendPlayerIds.map(nameOf),
+        receivedPlayers: getPlayerIds.map(nameOf),
+      };
+      const trades = [...(draft.trades ?? []), tradeRecord];
+
+      const league = { ...current, teams, players, sportData: { ...(current.sportData as object), draft: { ...draft, picks, trades }, pickOwnership } };
       await saveLeague(league);
       set({ league, loading: false });
       return { accepted: true, reason: 'Trade accepted! Assets swapped.' };
