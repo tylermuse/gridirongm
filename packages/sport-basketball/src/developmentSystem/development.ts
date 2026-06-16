@@ -60,6 +60,27 @@ export interface DevelopSeasonOptions {
    * rising players. Omitting it reproduces the un-coached aging curve exactly.
    */
   developmentMultiplier?: number;
+  /**
+   * Stable per-save seed for the player's hidden development trait (the
+   * boom/bust "DNA"). Has NO season component on purpose, so a player's trait is
+   * fixed across his whole career within a save instead of re-rolling each year.
+   * Defaults to player.id when omitted (still stable, but shared across saves).
+   */
+  devTraitSeed?: string;
+}
+
+/**
+ * Hidden per-player development trait → a multiplier on year-over-year GROWTH.
+ * Roughly 15% bust (grow well short of their ceiling), 70% normal, 15% boom
+ * (rocket to it). Deterministic per seed, so a prospect's fate is intrinsic to
+ * him rather than a fresh yearly dice roll — which is what gives draft classes
+ * real hits and misses instead of nearly everyone panning out.
+ */
+export function developmentFactorFor(seed: string): number {
+  const r = makeRng(`devtrait-${seed}`).random();
+  if (r < 0.15) return 0.35 + (r / 0.15) * 0.35;          // 0.35..0.70 — bust
+  if (r > 0.85) return 1.25 + ((r - 0.85) / 0.15) * 0.45; // 1.25..1.70 — boom
+  return 0.80 + ((r - 0.15) / 0.70) * 0.40;               // 0.80..1.20 — normal
 }
 
 /**
@@ -84,7 +105,14 @@ export function developBasketballPlayer(
     : newAge <= 26 ? Math.min(1.0, ceilingGap * 0.08)
     : 0;
   const std = driftStdForAge(newAge);
-  const raw = expected + potentialPull + gaussian(0, std, rng);
+  // The player's hidden boom/bust trait scales GROWTH only (a bust grows well
+  // short of his ceiling; a boom rockets to it). Decline is left untouched, so
+  // the trait never changes how a vet ages — it only decides whether a young
+  // prospect hits. Career-stable via devTraitSeed.
+  const devFactor = developmentFactorFor(opts.devTraitSeed ?? player.id);
+  const growth = Math.max(0, expected) + potentialPull;
+  const decline = Math.min(0, expected);
+  const raw = decline + growth * devFactor + gaussian(0, std, rng);
   // A development coach only accelerates upward drift; decline is unaffected.
   // mult === 1 leaves the expression identical to the un-coached path.
   const mult = opts.developmentMultiplier ?? 1;
