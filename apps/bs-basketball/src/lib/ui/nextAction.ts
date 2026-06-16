@@ -19,7 +19,7 @@ type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 export type ActionKey =
   | 'simDay' | 'simWeek' | 'simDeadline' | 'simSeason'
   | 'startPlayoffs' | 'simPlayoffDay' | 'simPlayoffRound' | 'simAllPlayoffs'
-  | 'enterOffseason' | 'simDraftToUser' | 'simDraftPick' | 'simDraftAll' | 'goDraft' | 'startNextSeason' | 'finishInaugural' | 'beginRegularSeason' | 'goFreeAgency' | 'goReSign';
+  | 'enterOffseason' | 'simDraftToUser' | 'simDraftPick' | 'simDraftAll' | 'goDraft' | 'startNextSeason' | 'startFreeAgency' | 'finishInaugural' | 'beginRegularSeason' | 'goFreeAgency' | 'goReSign';
 
 /** User-team players with no contract for the upcoming season (expiring). */
 export function userExpiringCount(league: LeagueState, upcomingSeason: number): number {
@@ -63,28 +63,42 @@ export function nextAction(league: LeagueState): NextAction {
       };
       return { phaseLabel: 'Draft', label: 'Go to Draft', primary: 'goDraft' };
     }
-    // 2) Re-sign your expiring players + finalize the roster — the next step
-    //    after the draft, always, so the CTA guides Draft → Re-sign → Free Agency
-    //    (BUG-12) rather than skipping straight to "Start Season". This now also
-    //    covers the inaugural imported draft (BUG-20) — the "skip" just finishes
-    //    that draft (no year roll) instead of rolling into the next season. The
-    //    re-sign page hosts a hard 15-man trim gate, so an over-limit roster
-    //    routes there too. Anything left un-re-signed walks to FA at season start.
+    // 2) Re-sign → Free Agency. The offseason stepper is Draft → Re-sign → Free
+    //    Agency (BUG-12). The draft object lives for the WHOLE offseason (it's
+    //    cleared only at startNextSeason), so we can't key the phase off "draft
+    //    exists" alone — instead we advance the CTA off re-sign progress:
+    //      • players still to re-sign, or an over-15 roster → the Re-sign step
+    //        (which hosts the hard 15-man trim gate);
+    //      • re-signing done + legal roster → the Free Agency step. Its primary
+    //        opens the FA window (startNextSeason rolls rosters into the preseason
+    //        and stocks the pool) and lands on /free-agency.
+    //    Inaugural imported drafts finish in place (no year roll) via
+    //    finishInauguralDraft, which already opens FA.
     if (league.userTeamId) {
       const expiring = userExpiringCount(league, draft.season);
       const rosterN = league.teams.find(t => t.id === league.userTeamId)?.playerIds.length ?? 0;
       const overLimit = rosterN > 15;
-      // Inaugural tips into the current season via finishInauguralDraft; a normal
-      // offseason rolls the year via startNextSeason.
       const skipKey: ActionKey = draft.inaugural ? 'finishInaugural' : 'startNextSeason';
+
+      // Still re-signing, or an illegal roster → stay on the Re-sign step.
+      if (expiring > 0 || overLimit) {
+        return {
+          phaseLabel: overLimit && expiring === 0 ? 'Offseason · Roster' : 'Offseason · Re-sign',
+          label: expiring > 0
+            ? `Re-sign ${expiring} Player${expiring === 1 ? '' : 's'}`
+            : 'Trim Roster to 15',
+          primary: 'goReSign',
+          // "Skip" only when it wouldn't bypass the hard 15-man gate.
+          secondary: overLimit ? undefined : [{ label: 'Skip to season', key: skipKey }],
+        };
+      }
+
+      // Re-signing done + legal roster → advance to Free Agency.
       return {
-        phaseLabel: overLimit && expiring === 0 ? 'Offseason · Roster' : 'Offseason · Re-sign',
-        label: expiring > 0
-          ? `Re-sign ${expiring} Player${expiring === 1 ? '' : 's'}`
-          : overLimit ? 'Trim Roster to 15' : 'Re-sign Players',
-        primary: 'goReSign',
-        // "Skip" only when it wouldn't bypass the hard 15-man gate.
-        secondary: overLimit ? undefined : [{ label: 'Skip to season', key: skipKey }],
+        phaseLabel: 'Offseason · Free Agency',
+        label: 'Sign Free Agents',
+        primary: draft.inaugural ? 'finishInaugural' : 'startFreeAgency',
+        secondary: [{ label: 'Skip to season', key: skipKey }],
       };
     }
     // 3) Spectating (no user team): just tip the season off — inaugural finishes

@@ -119,8 +119,11 @@ export function ExtendModal({ playerId, onClose }: { playerId: string | null; on
           ) : (
             <>
               <Button variant="ghost" onClick={onClose}>Cancel</Button>
-              <Button variant="primary" disabled={loading || contractYearsLeft(player, season) > 1} onClick={() => void propose()}>
-                {loading ? 'Working…' : contractYearsLeft(player, season) > 1 ? 'Already re-signed' : 'Propose extension'}
+              {/* Extensions stack new years AFTER the current deal (see
+                  buildExtension), so a player with years left is exactly who you
+                  extend — never disable on "years left". */}
+              <Button variant="primary" disabled={loading} onClick={() => void propose()}>
+                {loading ? 'Working…' : 'Propose extension'}
               </Button>
             </>
           )}
