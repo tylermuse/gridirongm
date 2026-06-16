@@ -7,7 +7,7 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
-import { getDraft, currentSlot, recommendedProspectId, buildLotteryReveal, buildLotteryBoard } from '@/lib/draft';
+import { getDraft, currentSlot, recommendedProspectId, buildLotteryReveal, buildLotteryBoard, buildUserDraftReport } from '@/lib/draft';
 import { userExpiringCount } from '@/lib/ui/nextAction';
 import { LotteryBoard } from '@/components/draft/LotteryBoard';
 import { OnTheClockSection } from '@/components/draft/OnTheClockSection';
@@ -15,7 +15,9 @@ import { DraftBoardCard } from '@/components/draft/DraftBoardCard';
 import { DraftResultsCard } from '@/components/draft/DraftResultsCard';
 import { DraftFooter } from '@/components/draft/DraftFooter';
 import { DraftRecapInline } from '@/components/draft/DraftRecapInline';
+import { DraftReportCard } from '@/components/draft/DraftReportCard';
 import { DraftPickTradeModal } from '@/components/draft/DraftPickTradeModal';
+import { PlayerModal } from '@/components/modals/PlayerModal';
 import { LotteryRevealCeremony } from '@/components/draft/LotteryReveal';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
@@ -36,6 +38,7 @@ export default function DraftPage() {
   const [replay, setReplay] = useState(false);
   const [skipPref] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem('bshoops-skip-lottery') === '1');
   const [tradeOpen, setTradeOpen] = useState(false);
+  const [reportModalId, setReportModalId] = useState<string | null>(null);
   const autoSkippedRef = useRef(false);
 
   const draft = league ? getDraft(league) : null;
@@ -57,6 +60,10 @@ export default function DraftPage() {
   if (!league) return <NotFound message={error ?? 'No league loaded.'} />;
 
   const playerById = league.players as Record<string, BasketballPlayer>;
+
+  // The full No-Ceilings-style team report, surfaced inline the moment the draft
+  // finishes (null while in progress / when spectating).
+  const draftReport = draft?.complete ? buildUserDraftReport(league) : null;
 
   // --- No draft right now ---
   if (!draft) {
@@ -206,7 +213,14 @@ export default function DraftPage() {
         </div>
       )}
 
-      {/* Team grades + biggest steals, surfaced right at the top on completion. */}
+      {/* Your full team Draft Report (No-Ceilings-style), at the very top on
+          completion: selections + badges + blurbs, trade activity, narrative
+          analysis, and your new starting five. */}
+      {draft.complete && draftReport && (
+        <DraftReportCard report={draftReport} onSelectPlayer={setReportModalId} />
+      )}
+
+      {/* League-wide team grades + biggest steals, below your own report. */}
       {draft.complete && (
         <div className="mb-4">
           <DraftRecapInline league={league} />
@@ -279,6 +293,7 @@ export default function DraftPage() {
       })()}
 
       {tradeOpen && <DraftPickTradeModal onClose={() => setTradeOpen(false)} />}
+      <PlayerModal playerId={reportModalId} onClose={() => setReportModalId(null)} />
     </Shell>
   );
 }
