@@ -8182,18 +8182,38 @@ export const useGameStore = create<GameStore>()(
         set({ teams: updatedTeams });
       },
 
-      // PRD-13: Reset depth chart position to OVR order
+      // PRD-13: Reset a depth-chart position to its default order. For OL this
+      // seeds by olSlot (LT→LG→C→RG→RT) so the formation card routes each
+      // lineman to his real spot — pure OVR would land the highest-rated guy at
+      // LT regardless of position (bryangrove 6/11, msg 1514608132360241163).
+      // Every other group is plain OVR descending. Mirrors the no-saved-depth
+      // seed in getDepthGroup on the roster page. PS + retired players are
+      // excluded so the reset matches how drag-drop builds the saved order.
       resetDepthChart: (position: Position) => {
         const state = get();
         const updatedTeams = state.teams.map(t => {
           if (t.id !== state.userTeamId) return t;
-          const sorted = state.players
-            .filter(p => p.teamId === state.userTeamId && p.position === position)
-            .sort((a, b) => b.ratings.overall - a.ratings.overall)
-            .map(p => p.id);
+          const psIds = new Set(t.practiceSquad ?? []);
+          const posPlayers = state.players.filter(p =>
+            p.teamId === state.userTeamId && p.position === position && !p.retired && !psIds.has(p.id));
+          let ordered: typeof posPlayers;
+          if (position === 'OL') {
+            const slotOrder: Array<'LT' | 'LG' | 'C' | 'RG' | 'RT'> = ['LT', 'LG', 'C', 'RG', 'RT'];
+            const starters: typeof posPlayers = [];
+            for (const slot of slotOrder) {
+              const p = posPlayers.find(pl => pl.olSlot === slot);
+              if (p) starters.push(p);
+            }
+            const backups = posPlayers
+              .filter(p => !starters.includes(p))
+              .sort((a, b) => b.ratings.overall - a.ratings.overall);
+            ordered = [...starters, ...backups];
+          } else {
+            ordered = [...posPlayers].sort((a, b) => b.ratings.overall - a.ratings.overall);
+          }
           return {
             ...t,
-            depthChart: { ...t.depthChart, [position]: sorted },
+            depthChart: { ...t.depthChart, [position]: ordered.map(p => p.id) },
           };
         });
         set({ teams: updatedTeams });
