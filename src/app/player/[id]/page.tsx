@@ -195,6 +195,14 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                       )
                     )}
                     <span className="text-sm text-[var(--text-sec)]">Age {player.age}</span>
+                    {/* Height + weight (bryangrove 5/30, msg 1510181196259266650).
+                        height is already a formatted string ("6'3\""); weight is lbs. */}
+                    {player.height && (
+                      <span className="text-sm text-[var(--text-sec)]">{player.height}</span>
+                    )}
+                    {player.weight != null && (
+                      <span className="text-sm text-[var(--text-sec)]">{player.weight} lbs</span>
+                    )}
                     <span className="text-sm text-[var(--text-sec)]">
                       {player.experience === 0 ? 'Rookie' : `${player.experience}${player.experience === 1 ? 'st' : player.experience === 2 ? 'nd' : player.experience === 3 ? 'rd' : 'th'} Year`}
                     </span>
