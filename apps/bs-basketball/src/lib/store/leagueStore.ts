@@ -1063,13 +1063,17 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       );
       if (result.outcome !== 'rejected') {
         // A signing moves the market: advance a day + let rivals respond.
+        const prevDay = (current.sportData as { faDay?: number }).faDay ?? 0;
         const moved = advanceMarketAfterSigning(result.league as BasketballLeagueState);
         await saveLeague(moved.league);
+        // Always surface the day advance during the FA window — even with no rival
+        // signings — so it's clear that signing moved the market forward a day.
+        const advanced = moved.day > prevDay;
         set({
           league: moved.league,
           loading: false,
-          ...(moved.aiSignings > 0
-            ? { simToast: { text: `Day ${moved.day} of ${FA_DAYS} · ${moved.aiSignings} rival signing${moved.aiSignings === 1 ? '' : 's'}` } }
+          ...(advanced
+            ? { simToast: { text: `Day ${moved.day} of ${FA_DAYS}${moved.aiSignings > 0 ? ` · ${moved.aiSignings} rival signing${moved.aiSignings === 1 ? '' : 's'}` : ''}` } }
             : {}),
         });
         return { ...result, league: moved.league };
@@ -1096,13 +1100,15 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         releaseId as Parameters<typeof negotiateOffer>[3],
       );
       if (neg.kind === 'resolved' && neg.result.outcome !== 'rejected') {
+        const prevDay = (current.sportData as { faDay?: number }).faDay ?? 0;
         const moved = advanceMarketAfterSigning(neg.result.league as BasketballLeagueState);
         await saveLeague(moved.league);
+        const advanced = moved.day > prevDay;
         set({
           league: moved.league,
           loading: false,
-          ...(moved.aiSignings > 0
-            ? { simToast: { text: `Day ${moved.day} of ${FA_DAYS} · ${moved.aiSignings} rival signing${moved.aiSignings === 1 ? '' : 's'}` } }
+          ...(advanced
+            ? { simToast: { text: `Day ${moved.day} of ${FA_DAYS}${moved.aiSignings > 0 ? ` · ${moved.aiSignings} rival signing${moved.aiSignings === 1 ? '' : 's'}` : ''}` } }
             : {}),
         });
         return { ...neg, result: { ...neg.result, league: moved.league } };

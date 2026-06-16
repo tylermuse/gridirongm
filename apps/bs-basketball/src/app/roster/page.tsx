@@ -688,9 +688,14 @@ function humanizeWarning(w: ValidationViolation, roster: BasketballPlayer[]): st
 
 function contractLabel(p: BasketballPlayer, season: number): string {
   if (!p.contract) return '—';
-  const cur = p.contract.years.find(y => y.season === season);
-  const yearsLeft = p.contract.years.filter(y => y.season >= season).length;
-  const salary = cur ? cur.baseSalary + cur.proratedBonus : 0;
-  if (salary <= 0) return '—';
-  return `${fmtMoney(salary)} · ${yearsLeft}y`;
+  // Show the deal's AAV over its remaining years, not just THIS season's salary.
+  // After an extension the raise lands in future years, so the current-season
+  // figure made a freshly re-signed player still read at his old number ("didn't
+  // increase the amount"); AAV reflects the actual deal. Flat contracts are
+  // unchanged (AAV == current salary).
+  const remaining = p.contract.years.filter(y => y.season >= season);
+  if (remaining.length === 0) return '—';
+  const aav = remaining.reduce((s, y) => s + y.baseSalary + y.proratedBonus, 0) / remaining.length;
+  if (aav <= 0) return '—';
+  return `${fmtMoney(aav)} · ${remaining.length}y`;
 }
