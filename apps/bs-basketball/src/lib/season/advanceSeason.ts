@@ -295,7 +295,14 @@ export function startNextSeason(league: LeagueState): LeagueState {
   const keepValue = (id: string) => {
     const p = players[id];
     if (!p) return 0;
-    return keepValueOf(p.ratings.overall, p.development?.potential ?? 0);
+    const base = keepValueOf(p.ratings.overall, p.development?.potential ?? 0);
+    // Don't auto-waive a young player still on his first (rookie-scale) contract
+    // over a fringe veteran — value his FULL upside. Otherwise drafted prospects
+    // (deliberately low current OVR, high potential) leak back into the free-agent
+    // pool a year or two after you picked them.
+    const draftYear = p.sportData.draftYear;
+    const onRookieDeal = typeof draftYear === 'number' && season - draftYear <= 2;
+    return onRookieDeal ? Math.max(base, p.development?.potential ?? 0) : base;
   };
   // Track each waived player's last team so the free-agency UI can show it.
   const freeAgentLastTeam: Record<string, typeof league.teams[number]['id']> = {};
@@ -314,6 +321,11 @@ export function startNextSeason(league: LeagueState): LeagueState {
   // cap-driven, so with realistic salaries good teams shed real rotation players.
   const AI_BUDGET = basketballFirstApron(season);
   const AI_MIN_KEEP = 58;          // keep-value below this always walks
+  // A genuine star is retained even past the apron — no realistic GM lets an
+  // 80+ keep-value player walk for nothing, and the FA market can't absorb him
+  // (everyone's full + MLE-capped), so he'd just sit unsigned all season. This
+  // keeps stars off an unsignable market instead of flooding it.
+  const AI_STAR_KEEP = 78;
   const salaryNext = (id: string) => {
     const yr = players[id]?.contract?.years.find(y => y.season === season);
     return yr ? yr.baseSalary + yr.proratedBonus : 0;
@@ -331,7 +343,9 @@ export function startNextSeason(league: LeagueState): LeagueState {
     let kept = ids.length - expiring.length;
     for (const id of [...expiring].sort((a, b) => keepValue(b) - keepValue(a))) { // best first
       const ask = basketballMarketSalary(players[id], { season });
-      if (keepValue(id) >= AI_MIN_KEEP && committed + ask <= AI_BUDGET && kept < TARGET_ROSTER) {
+      const isStar = keepValue(id) >= AI_STAR_KEEP;
+      // Stars are kept regardless of the apron; everyone else only if affordable.
+      if (keepValue(id) >= AI_MIN_KEEP && kept < TARGET_ROSTER && (isStar || committed + ask <= AI_BUDGET)) {
         committed += ask; kept++;            // re-sign (contract written in the loop below)
       } else {
         walk.add(id);
@@ -394,9 +408,13 @@ export function startNextSeason(league: LeagueState): LeagueState {
           if (posAfter[q] > 1 && (surplus === null || posAfter[q] > posAfter[surplus])) surplus = q;
         }
         if (!surplus) continue; // nothing to swap (shouldn't happen at 15 with a gap)
+        // Cut by KEEP VALUE (potential-aware), not raw current overall — otherwise
+        // this swap dumps freshly-drafted high-upside rookies (low OVR, high
+        // potential) into free agency while keeping fringe vets, which is exactly
+        // how drafted prospects were leaking back into the FA pool a year later.
         const cut = ids
           .filter(id => posOf(id) === surplus)
-          .sort((a, b) => players[a].ratings.overall - players[b].ratings.overall)[0];
+          .sort((a, b) => keepValue(a) - keepValue(b))[0];
         if (!cut) continue;
         players[cut] = { ...players[cut], rosterSlot: null };
         freeAgentLastTeam[cut] = t.id;

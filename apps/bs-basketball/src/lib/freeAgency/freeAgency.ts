@@ -75,11 +75,14 @@ export function isSeasonUnderway(league: LeagueState): boolean {
   return (league.sportData as LeagueSportData | undefined)?.seasonStarted === true;
 }
 
-/** Market price multiplier as the window ages: 1.0 on day 0 → 0.6 by day 30.
- *  Unsigned players grow cheaper, so late shopping lands bargains. */
+/** Market price multiplier as the window ages: 1.0 on day 0 → 0.5 by day 30.
+ *  Unsigned players grow cheaper, so late shopping lands bargains. The floor was
+ *  0.6, which left expensive stars (an 83-OVR asking ~$30M → $18M at day 30)
+ *  above what any full-roster team can pay with its MLE-sized budget, so they sat
+ *  unsigned all window. Dropping to 0.5 lets the bargain bin actually clear. */
 export function faPriceDecay(day: number): number {
   const d = Math.max(0, Math.min(FA_DAYS, day));
-  return Math.max(0.6, 1 - d * (0.4 / FA_DAYS));
+  return Math.max(0.5, 1 - d * (0.5 / FA_DAYS));
 }
 
 /** Phase label/color for the current FA day (UI). */
