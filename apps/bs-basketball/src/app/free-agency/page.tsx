@@ -53,6 +53,25 @@ export default function FreeAgencyPage() {
   const [affordableOnly, setAffordableOnly] = useState(false);
 
   const allPool = useMemo<FreeAgentInfo[]>(() => (league ? freeAgentPool(league) : []), [league]);
+  // Who the user can actually sign: anyone within budget, PLUS — with an open
+  // roster spot — any uncontested player on a one-year minimum (the vet-minimum
+  // safety valve in resolveUserOffer). Otherwise "Show affordable only" hides the
+  // whole board the moment you're at/over the cap, even though you can still sign
+  // minimums to fill out the roster. Keyed on league so typing offers doesn't
+  // recompute the competition checks.
+  const affordableIds = useMemo<Set<string>>(() => {
+    const set = new Set<string>();
+    if (!league?.userTeamId) return set;
+    const tid = league.userTeamId;
+    const bud = signingBudget(league, tid);
+    const openSpot = rosterCount(league, tid) < MAX_ROSTER;
+    for (const f of allPool) {
+      const comp = bestCompetingOffer(league, f);
+      const uncontested = !comp || comp.total === 0;
+      if (f.marketSalary <= bud || (openSpot && uncontested)) set.add(f.player.id);
+    }
+    return set;
+  }, [league, allPool]);
   const teamById = useMemo(() => {
     const m = new Map<string, BasketballTeam>();
     if (league) for (const t of league.teams) m.set(t.id, t as BasketballTeam);
@@ -78,7 +97,7 @@ export default function FreeAgencyPage() {
 
   const pool = allPool.filter(f =>
     (posFilter === 'ALL' || f.player.sportData.position === posFilter) &&
-    (!affordableOnly || f.marketSalary <= budget),
+    (!affordableOnly || affordableIds.has(f.player.id)),
   );
 
   const selected = selectedId ? pool.find(f => f.player.id === selectedId) ?? null : null;
