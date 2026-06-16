@@ -179,6 +179,10 @@ export function enterOffseason(input: LeagueState): LeagueState {
     const developed = developBasketballPlayer(snapshot, nextSeason, {
       developmentMultiplier,
       rngSeed: `${league.id}-${id}-${nextSeason}`,
+      // Career-stable boom/bust trait: per save + per player, NO season — so the
+      // prospect's development DNA is fixed for his whole career, not re-rolled
+      // each offseason.
+      devTraitSeed: `${league.id}-${id}`,
     });
     if (shouldBasketballPlayerRetire(developed)) {
       retired.add(id as PlayerId);
