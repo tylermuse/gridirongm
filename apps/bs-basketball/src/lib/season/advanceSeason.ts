@@ -203,6 +203,24 @@ export function enterOffseason(input: LeagueState): LeagueState {
     } as BasketballTeam;
   });
 
+  // Recycle stale prospects from prior draft classes (BUG-19). An imported
+  // 2026 class has ~70 prospects but the inaugural draft has 60 picks, so ~10
+  // always go undrafted. Without recycling, they linger forever: contract=null,
+  // rosterSlot=null, never an NBA player but always swept into freeAgentIds by
+  // the startNextSeason rebuild. Tyler reported real-life 2026 prospects (Karim
+  // Lopez, Labaron Philon, Dame Sarr, etc.) still UFA in the 2027 offseason.
+  // Recycle anyone who: has no rosterSlot (never been on a roster), no contract
+  // (never been signed), and was a freeAgentId-only "ghost" — the safest marker.
+  // Walked vets are NOT touched (they have a contract with expired years).
+  const stalePros = new Set<PlayerId>();
+  for (const [id, raw] of Object.entries(players)) {
+    const p = raw as BasketballPlayer;
+    if (!p.rosterSlot && p.contract == null) {
+      stalePros.add(id as PlayerId);
+      delete players[id];
+    }
+  }
+
   // Generate the draft class — the pool, not auto-assigned.
   const draftClass = generateBasketballDraftClass(nextSeason, DRAFT_CLASS_SIZE);
   const poolIds: PlayerId[] = [];
@@ -250,6 +268,14 @@ export function enterOffseason(input: LeagueState): LeagueState {
   let result: LeagueState = {
     ...interim,
     currentPhase: 'offseason',
+    // Drop the recycled stale prospects from freeAgentIds in the same pass so
+    // there's no dangling reference between here and the startNextSeason
+    // rebuild — finishInauguralDraft pushes undrafted prospects into
+    // freeAgentIds, so they'd otherwise still be in the list pointing at
+    // deleted player records.
+    freeAgentIds: stalePros.size === 0
+      ? interim.freeAgentIds
+      : interim.freeAgentIds.filter(id => !stalePros.has(id)),
     seasonHistory: { ...league.seasonHistory, [league.currentSeason]: historyEntry },
     sportData: {
       ...(league.sportData as LeagueSportData),
