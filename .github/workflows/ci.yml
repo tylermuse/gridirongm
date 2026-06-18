@@ -53,3 +53,12 @@ jobs:
           # Provide empty placeholders so Next.js can complete the build
           # without secret values; runtime config still comes from Vercel.
           NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Build bs-basketball workspace
+        # CI previously only built the root (football) app, so Next prerender
+        # errors in apps/bs-basketball slipped through tsc + eslint and broke
+        # the Vercel deploy. This step builds the basketball workspace too so
+        # both apps are gated identically.
+        run: npm run build --workspace=apps/bs-basketball
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
