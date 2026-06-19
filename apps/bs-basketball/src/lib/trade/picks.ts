@@ -70,19 +70,40 @@ interface ActiveDraftLite {
   season: number;
   inaugural?: boolean;
   lotteryRevealed?: boolean;
-  picks: { overall: number; round: number; originalTeamId?: TeamId; teamId: TeamId; prospectId: string | null }[];
+  picks: { overall: number; round: number; pickInRound?: number; originalTeamId?: TeamId; teamId: TeamId; prospectId: string | null }[];
 }
 
 /** The in-progress draft IF it's a normal (non-inaugural) draft. Inaugural
- *  drafts use a slot-based model that the ownership registry can't uniquely key
- *  (a team can hold several firsts), so they trade only via the in-draft modal. */
+ *  drafts can have a team holding multiple slots in the same round (real-life
+ *  pick provenance from BBGM trades), so their slots use a distinct slot-keyed
+ *  identifier (see `inauguralPickKey`) instead of the registry-keyed one. */
 function activeNormalDraft(league: LeagueState): ActiveDraftLite | null {
   const d = (league.sportData as { draft?: ActiveDraftLite } | undefined)?.draft ?? null;
   return d && !d.inaugural ? d : null;
 }
 
+/** The in-progress draft IF it's an inaugural (import-time) draft. Inaugural
+ *  picks are tradeable too (FEAT-1) — keyed by overall number since multiple
+ *  slots in a round can share `originalTeamId` after pre-import trades. */
+function activeInauguralDraft(league: LeagueState): ActiveDraftLite | null {
+  const d = (league.sportData as { draft?: ActiveDraftLite } | undefined)?.draft ?? null;
+  return d && d.inaugural ? d : null;
+}
+
 export function pickKey(season: number, round: number, originalTeamId: TeamId): string {
   return `${season}-r${round}-${originalTeamId}`;
+}
+
+/** Unique id for an inaugural-draft slot. Inaugural slots can't share the
+ *  registry key (a team may hold several R1s), so they're keyed by overall pick
+ *  number — globally unique within a draft. */
+export function inauguralPickKey(season: number, overall: number): string {
+  return `inaug-${season}-o${overall}`;
+}
+
+function parseInauguralKey(id: string): { season: number; overall: number } | null {
+  const m = /^inaug-(\d+)-o(\d+)$/.exec(id);
+  return m ? { season: Number(m[1]), overall: Number(m[2]) } : null;
 }
 
 function ownership(league: LeagueState): Record<string, TeamId> {
@@ -169,12 +190,16 @@ function makeOwnedPick(season: number, round: number, originalTeamId: TeamId, ow
  *
  *  For the in-progress (current-year) draft, picks that have already been made
  *  are dropped (they've converted to the drafted player) and the remaining ones
- *  carry their exact overall number once the order is revealed. */
+ *  carry their exact overall number once the order is revealed.
+ *
+ *  Inaugural draft picks are included too (FEAT-1) — keyed by overall slot
+ *  number since multiple slots in a round can share the same originalTeamId
+ *  after pre-import trades. */
 export function getTeamPicks(league: LeagueState, teamId: TeamId): OwnedPick[] {
   const window = pickWindow(league);
   const slotOf = new Map(standingsWorstFirst(league).map((id, i) => [id, i] as const));
 
-  // Index the active draft by pick key: which are spent, and each one's overall.
+  // Index the active normal draft by pick key: which are spent, and each one's overall.
   const draft = activeNormalDraft(league);
   const made = new Set<string>();
   const overallByKey = new Map<string, number>();
@@ -199,6 +224,27 @@ export function getTeamPicks(league: LeagueState, teamId: TeamId): OwnedPick[] {
       }
     }
   }
+
+  // Inaugural-draft picks: enumerate slots directly from the draft state. Each
+  // slot has its OWN tradeable identity (multi-slot teams are supported), so we
+  // can't merge these into the registry-keyed picks above.
+  const inaug = activeInauguralDraft(league);
+  if (inaug) {
+    for (const slot of inaug.picks) {
+      if (slot.prospectId !== null) continue; // already drafted → converted to player
+      if (slot.teamId !== teamId) continue;
+      const orig = slot.originalTeamId ?? slot.teamId;
+      picks.push({
+        id: inauguralPickKey(inaug.season, slot.overall),
+        season: inaug.season,
+        round: slot.round,
+        originalTeamId: orig,
+        currentTeamId: teamId,
+        overall: slot.overall,
+      });
+    }
+  }
+
   return picks.sort(
     (a, b) =>
       a.season - b.season ||
@@ -210,6 +256,24 @@ export function getTeamPicks(league: LeagueState, teamId: TeamId): OwnedPick[] {
 
 /** Resolve a pick id back into an OwnedPick (by parsing the key). */
 export function pickFromId(league: LeagueState, id: string): OwnedPick | null {
+  // Inaugural pick → look up the slot directly by overall pick number.
+  const inaugParsed = parseInauguralKey(id);
+  if (inaugParsed) {
+    const inaug = activeInauguralDraft(league);
+    if (!inaug || inaug.season !== inaugParsed.season) return null;
+    const slot = inaug.picks.find(s => s.overall === inaugParsed.overall);
+    if (!slot || slot.prospectId !== null) return null;
+    return {
+      id,
+      season: inaugParsed.season,
+      round: slot.round,
+      originalTeamId: slot.originalTeamId ?? slot.teamId,
+      currentTeamId: slot.teamId,
+      overall: inaugParsed.overall,
+    };
+  }
+
+  // Normal pick → registry-keyed.
   const m = /^(\d+)-r(\d+)-(.+)$/.exec(id);
   if (!m) return null;
   const season = Number(m[1]);
@@ -303,16 +367,33 @@ export interface ProtectionTerms {
  *  trade executor. Each move is keyed by the pick's original team so provenance
  *  is preserved across multiple hops. A move may carry `protection` terms, which
  *  flip ownership to the receiver now but leave the conveyance conditional on the
- *  lottery (resolved by `resolveProtectedPicks` at draft setup). */
+ *  lottery (resolved by `resolveProtectedPicks` at draft setup).
+ *
+ *  Inaugural-draft picks (`(pick as OwnedPick).id` starts with `inaug-`) are
+ *  handled separately — they don't live in the ownership registry, so their
+ *  trade updates the slot's `teamId` on the active draft state directly. */
 export function applyPickMoves(
   league: LeagueState,
   moves: { pick: BaseDraftPick; toTeamId: TeamId; protection?: ProtectionTerms }[],
 ): LeagueState {
   if (moves.length === 0) return league;
-  const sport = (league.sportData as LeaguePickData | undefined) ?? {};
+
+  // Partition: inaugural picks update draft state directly, the rest hit the
+  // ownership registry. We carry both updates onto sportData in one pass.
+  const inauguralMoves: { overall: number; toTeamId: TeamId }[] = [];
+  const normalMoves: { pick: BaseDraftPick; toTeamId: TeamId; protection?: ProtectionTerms }[] = [];
+  for (const m of moves) {
+    const id = (m.pick as OwnedPick).id;
+    const inaugParsed = id ? parseInauguralKey(id) : null;
+    if (inaugParsed) inauguralMoves.push({ overall: inaugParsed.overall, toTeamId: m.toTeamId });
+    else normalMoves.push(m);
+  }
+
+  const sport = (league.sportData as (LeaguePickData & { draft?: ActiveDraftLite }) | undefined) ?? {};
   const next = { ...(sport.pickOwnership ?? {}) };
   const nextProt = { ...(sport.pickProtections ?? {}) };
-  for (const { pick, toTeamId, protection } of moves) {
+
+  for (const { pick, toTeamId, protection } of normalMoves) {
     const key = pickKey(pick.season, pick.round, pick.originalTeamId);
     if (toTeamId === pick.originalTeamId) {
       delete next[key]; // back to origin → no override needed
@@ -331,7 +412,28 @@ export function applyPickMoves(
       }
     }
   }
-  return { ...league, sportData: { ...sport, pickOwnership: next, pickProtections: nextProt } };
+
+  // Apply inaugural moves to the active draft state. The slot's `teamId` is
+  // the current owner — that's where the change lands. We re-shape it so the
+  // ESPN-derived order display + on-the-clock logic both see the new owner.
+  let draft = sport.draft;
+  if (inauguralMoves.length > 0 && draft && draft.inaugural) {
+    const overallToOwner = new Map(inauguralMoves.map(m => [m.overall, m.toTeamId] as const));
+    const updatedPicks = draft.picks.map(slot =>
+      overallToOwner.has(slot.overall) ? { ...slot, teamId: overallToOwner.get(slot.overall)! } : slot,
+    );
+    draft = { ...draft, picks: updatedPicks };
+  }
+
+  return {
+    ...league,
+    sportData: {
+      ...sport,
+      pickOwnership: next,
+      pickProtections: nextProt,
+      ...(draft ? { draft } : {}),
+    },
+  };
 }
 
 // ===========================================================================
