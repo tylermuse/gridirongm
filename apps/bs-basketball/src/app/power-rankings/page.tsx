@@ -6,25 +6,19 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { powerScore } from '@/lib/stats/powerScore';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
  * /power-rankings — all 30 teams ranked by a derived power score.
  *
- * powerScore = winPct*100 + pointDiff/10 + recentForm*2. Each card carries
+ * Score formula lives in `@/lib/stats/powerScore` so the /stats Power tab and
+ * this rich-card view always show the same numbers. Each card carries
  * auto-generated commentary tailored to the team's stat signature. The user's
  * team is highlighted with an accent border.
  */
 
 interface TeamSportData { conference: string; division: string }
-
-function powerScore(team: BasketballTeam): number {
-  const games = team.record.wins + team.record.losses;
-  const winPct = games > 0 ? team.record.wins / games : 0.5;
-  const pointDiff = team.record.pointsFor - team.record.pointsAgainst;
-  const recentForm = team.record.streak.slice(-5).filter(c => c === 'W').length;
-  return winPct * 100 + pointDiff / 10 + recentForm * 2;
-}
 
 function commentary(team: BasketballTeam): string {
   const games = team.record.wins + team.record.losses;
