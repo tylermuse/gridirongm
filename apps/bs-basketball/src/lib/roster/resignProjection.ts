@@ -15,7 +15,6 @@ import {
   type BasketballTeam,
 } from '@bs/sport-basketball';
 import { extensionMarket } from './extension';
-import { upcomingSeason } from '../draft';
 import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 
@@ -57,11 +56,16 @@ export function resignProjection(
   team: BasketballTeam,
   decisions: Record<string, ResignDecision>,
 ): ResignProjection {
-  // Re-sign dollars commit to the upcoming season — the single source of truth
-  // shared with Free Agency + Roster so the cap figure stays stable across the
-  // offseason (BUG-20 / BUG-29). The draft year is currentSeason + 1 in a normal
-  // offseason and currentSeason for an inaugural import.
-  const nextSeason = upcomingSeason(league);
+  // Re-sign EXTENSIONS commit to the season AFTER the player's existing deal
+  // expires, which for an expiring (1-year-left) candidate is currentSeason + 1
+  // regardless of inaugural status. Previously this used `upcomingSeason(league)`
+  // (which is the DRAFT year — currentSeason + 1 normally, but currentSeason for
+  // an inaugural import). That made every imported 1-year-left player register
+  // as "already re-signed" (their existing 2026 contract covered the inaugural's
+  // 2026 nextSeason), bricking the re-sign UI before the user made any choices
+  // (BUG-21). currentSeason + 1 matches what `extensionMarket.startSeason`
+  // returns for those candidates and gives a clean pending → resigned transition.
+  const nextSeason = league.currentSeason + 1;
   const cap = basketballSalaryCap(nextSeason);
   const taxLine = basketballTaxThreshold(nextSeason);
   const firstApron = basketballFirstApron(nextSeason);

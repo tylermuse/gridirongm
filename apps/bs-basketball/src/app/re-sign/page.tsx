@@ -18,7 +18,7 @@ import { contractYearsLeft } from '@/lib/roster/playerActions';
 import { extensionMarket } from '@/lib/roster/extension';
 import { keepValueOf } from '@/lib/season/advanceSeason';
 import { MAX_ROSTER } from '@/lib/freeAgency';
-import { getDraft, upcomingSeason } from '@/lib/draft';
+import { getDraft } from '@/lib/draft';
 import { resignProjection, hasSalaryForSeason, salaryForSeason } from '@/lib/roster/resignProjection';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
@@ -79,11 +79,15 @@ export default function ReSignPage() {
   if (!league) return <Shell><p>{error ?? 'No league loaded.'}</p></Shell>;
   if (!userTeam) return <Shell><p className="text-sm text-[var(--text-sec)]">You&apos;re spectating — pick a team to manage contracts.</p></Shell>;
 
-  // The upcoming season the re-sign window commits to: the draft year. Normal
-  // offseason → currentSeason + 1; inaugural imported draft → currentSeason
-  // itself (no year roll). Keeps cap tiles + the "kept" filter aligned (BUG-20).
+  // The season re-sign extensions commit to. Extensions append years AFTER the
+  // player's current deal expires (`extensionMarket.startSeason = expiringSeason
+  // + 1`), so for an expiring 1-year-left candidate that's currentSeason + 1
+  // regardless of inaugural status. Using the DRAFT year (`upcomingSeason`)
+  // was wrong for inaugural — it equals currentSeason there, which the
+  // candidate's existing contract already covered, so every expiring player
+  // showed as already re-signed before any user action (BUG-21).
   const draft = getDraft(league);
-  const nextSeason = upcomingSeason(league);
+  const nextSeason = league.currentSeason + 1;
   // Walked players are released immediately, so the projection reads straight from
   // the live roster — no pending-decision bookkeeping needed.
   const proj = resignProjection(league, userTeam, {});
