@@ -500,7 +500,11 @@ function PlayerCells({
       <span className="text-right tabular-nums text-sm opacity-70">{p.development.potential}</span>
       <span className="text-right tabular-nums text-xs">{contractLabel(p, season)}</span>
       <span className="text-right text-xs text-[var(--text-sec)]">{acquiredLabel(p)}</span>
-      <span className="text-right tabular-nums text-sm">{gp || (lastLog ? lastLog.gamesPlayed : '—')}</span>
+      {/* GP cell. When sourcing from `lastLog` (no current-season games yet),
+          mute the number so it doesn't read as a current-year count (BUG-25). */}
+      <span className={`text-right tabular-nums text-sm ${gp > 0 ? '' : 'text-[var(--text-sec)]'}`}>
+        {gp || (lastLog ? lastLog.gamesPlayed : '—')}
+      </span>
       <span className="text-right tabular-nums text-xs leading-tight">
         {gp > 0 ? (
           <>
@@ -510,7 +514,11 @@ function PlayerCells({
         ) : lastLog ? (
           <>
             <span className="block">{lastLog.ppg} / {lastLog.rpg} / {lastLog.apg}</span>
-            <span className="block text-[10px] opacity-60">&apos;{String(lastLog.season).slice(2)} · last season</span>
+            {/* Honest about what this is: the player has no games THIS season,
+                so we're showing his most recent logged season — which may be
+                multiple sim years back if he's been buried / injured / etc.
+                "last season" read as "season - 1" and misled users (BUG-25). */}
+            <span className="block text-[10px] opacity-60">Last played &apos;{String(lastLog.season).slice(2)}</span>
           </>
         ) : (
           <span className="block">—</span>
