@@ -53,22 +53,23 @@ export default function FreeAgencyPage() {
   const [affordableOnly, setAffordableOnly] = useState(false);
 
   const allPool = useMemo<FreeAgentInfo[]>(() => (league ? freeAgentPool(league) : []), [league]);
-  // Who the user can actually sign: anyone within budget, PLUS — with an open
-  // roster spot — any uncontested player on a one-year minimum (the vet-minimum
-  // safety valve in resolveUserOffer). Otherwise "Show affordable only" hides the
-  // whole board the moment you're at/over the cap, even though you can still sign
-  // minimums to fill out the roster. Keyed on league so typing offers doesn't
-  // recompute the competition checks.
+  // Who the user can realistically sign: anyone whose ask fits the signing
+  // budget. `signingBudget` already returns at least LEAGUE_MINIMUM_SALARY for
+  // any team (BUG-17 — minimum-exception availability is always guaranteed),
+  // so an over-cap team still sees their minimum-tier players in this filter.
+  //
+  // BUG-23: previously the predicate also added `(openSpot && uncontested)` as
+  // a "vet-minimum safety valve". At Day 0 every player is uncontested, so
+  // any team with an open roster spot saw EVERY free agent (including $45M
+  // superstars) flagged as affordable — making the filter a no-op. The vet-
+  // minimum signing path in resolveUserOffer still works at sign-time; the
+  // filter just shouldn't claim a $45M ask is affordable on a $10M budget.
   const affordableIds = useMemo<Set<string>>(() => {
     const set = new Set<string>();
     if (!league?.userTeamId) return set;
-    const tid = league.userTeamId;
-    const bud = signingBudget(league, tid);
-    const openSpot = rosterCount(league, tid) < MAX_ROSTER;
+    const bud = signingBudget(league, league.userTeamId);
     for (const f of allPool) {
-      const comp = bestCompetingOffer(league, f);
-      const uncontested = !comp || comp.total === 0;
-      if (f.marketSalary <= bud || (openSpot && uncontested)) set.add(f.player.id);
+      if (f.marketSalary <= bud) set.add(f.player.id);
     }
     return set;
   }, [league, allPool]);
