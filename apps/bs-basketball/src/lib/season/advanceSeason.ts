@@ -209,13 +209,20 @@ export function enterOffseason(input: LeagueState): LeagueState {
   // rosterSlot=null, never an NBA player but always swept into freeAgentIds by
   // the startNextSeason rebuild. Tyler reported real-life 2026 prospects (Karim
   // Lopez, Labaron Philon, Dame Sarr, etc.) still UFA in the 2027 offseason.
-  // Recycle anyone who: has no rosterSlot (never been on a roster), no contract
-  // (never been signed), and was a freeAgentId-only "ghost" — the safest marker.
-  // Walked vets are NOT touched (they have a contract with expired years).
+  //
+  // BUG-19 v2: the `!rosterSlot && !contract` pair also matches AI-waived
+  // players — `freeAgency.waivePlayer` nulls BOTH fields when a team churns
+  // its bench mid-season, so legitimate waived vets (Bradley Beal-tier) were
+  // also being deleted on the next offseason rollover, collapsing the FA pool
+  // to only the few walked-vets that hadn't yet cycled. The acquiredVia
+  // gate fixes that: imported prospects never receive an `acquiredVia` stamp
+  // (`leagueImport.ts:508-512` only stamps the rostered-import path); drafted,
+  // initial-import, and any once-rostered waived players all carry one, so
+  // they pass through this recycle untouched.
   const stalePros = new Set<PlayerId>();
   for (const [id, raw] of Object.entries(players)) {
     const p = raw as BasketballPlayer;
-    if (!p.rosterSlot && p.contract == null) {
+    if (!p.rosterSlot && p.contract == null && !p.sportData?.acquiredVia) {
       stalePros.add(id as PlayerId);
       delete players[id];
     }

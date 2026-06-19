@@ -214,4 +214,41 @@ describe('BUG-19: imported 2026 prospects do not still be UFAs in the 2027 offse
         }).join('\n'),
     ).toEqual([]);
   });
+
+  it('BUG-19v2 regression: AI-waived players (contract+rosterSlot both null) survive enterOffseason recycle', () => {
+    // Tyler reported 2027 FA pool collapsed to ~3 SGs after the BUG-19 ship.
+    // Root cause: waivePlayer at freeAgency.ts nulls BOTH contract and
+    // rosterSlot when AI teams churn their bench. The original BUG-19 recycle
+    // condition (!rosterSlot && contract == null) matched those waived vets
+    // and deleted them. The fix tightens the condition to also require
+    // !sportData.acquiredVia — imported prospects have no acquiredVia stamp,
+    // but every once-rostered player (drafted, imported, etc.) does.
+    let league = importLeagueWithInauguralDraft();
+
+    // Pick one rostered import-veteran (acquiredVia = 'draft' or 'initial')
+    // and simulate the waivePlayer side-effect: null contract + rosterSlot,
+    // add to freeAgentIds. This is what AI churn produces.
+    const firstTeam = league.teams[0];
+    const vetId = firstTeam.playerIds[firstTeam.playerIds.length - 1] as PlayerId;
+    const vet = league.players[vetId] as BasketballPlayer;
+    expect(vet.sportData?.acquiredVia, 'pre-condition: imported vets carry an acquiredVia stamp')
+      .toBeTruthy();
+
+    const players = { ...league.players };
+    players[vetId] = { ...vet, contract: null, rosterSlot: null };
+    league = {
+      ...league,
+      players,
+      freeAgentIds: [...league.freeAgentIds, vetId],
+    } as LeagueState;
+
+    // Cycle through the offseason — this is the rollover that previously
+    // deleted the waived vet.
+    league = enterOffseason(league);
+
+    const after = league.players[vetId] as BasketballPlayer | undefined;
+    expect(after, `waived vet ${vet.firstName} ${vet.lastName} was incorrectly recycled out of the league`)
+      .toBeTruthy();
+    expect(after!.sportData?.acquiredVia).toBe(vet.sportData.acquiredVia);
+  });
 });
