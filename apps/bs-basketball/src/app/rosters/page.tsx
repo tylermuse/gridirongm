@@ -15,6 +15,15 @@ import type { TeamId } from '@bs/core/adapter';
  *
  * Flow: pick a roster (download, start-from-URL, paste-a-URL, or upload a file)
  * → the store builds + persists the league → pick your team → /league.
+ *
+ * BUG-14: the picker state used to live in a `useState(false)` flipped to true
+ * after a successful import. That worked the first time, but the local state
+ * was lost on any remount (e.g. AppShell re-rendering because the league
+ * replacement flipped `userTeamId` to null and the sidebar reshapes its
+ * sections), bouncing the user back to the catalog state and forcing them to
+ * click "Start a league with this roster" a second time. Derive the picker
+ * state from league shape instead — if a league is loaded but no team's been
+ * picked, show the picker. Restartable + remount-safe.
  */
 
 // Bump `?v=` when the JSON is regenerated to bust the Vercel edge cache.
@@ -25,14 +34,21 @@ const nbaUrl = `${NBA_FILE}?v=${CACHE_BUST}`;
 export default function RostersPage() {
   const { importLeagueFromUrl, importLeagueFromData, pickUserTeam, league, loading, error, clearError } = useLeagueStore();
   const router = useRouter();
-  const [picking, setPicking] = useState(false);
   const [customUrl, setCustomUrl] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
 
+  // Show the team picker whenever a league is loaded without a user team —
+  // either a fresh import (the common path) or returning to /rosters with an
+  // imported-but-not-picked league. The catalog still shows when no league is
+  // loaded, OR (BUG-14: explicitly allow starting another league) when the
+  // user has already picked a team and revisits /rosters.
+  const picking = !!league && !league.userTeamId;
+
   async function startFromUrl(url: string) {
     clearError();
-    const ok = await importLeagueFromUrl(url);
-    if (ok) setPicking(true);
+    await importLeagueFromUrl(url);
+    // No setPicking — `picking` derives from league.userTeamId, which the
+    // import path leaves null. The next render flips into picker state.
   }
 
   async function startFromFile(file: File) {
@@ -40,8 +56,7 @@ export default function RostersPage() {
     try {
       const text = await file.text();
       const raw = JSON.parse(text);
-      const ok = await importLeagueFromData(raw);
-      if (ok) setPicking(true);
+      await importLeagueFromData(raw);
     } catch {
       useLeagueStore.setState({ error: "Couldn't read that file — is it valid league JSON?" });
     }
