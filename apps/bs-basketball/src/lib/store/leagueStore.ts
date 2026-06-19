@@ -742,11 +742,22 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       set({ error: 'It is not your pick.' });
       return false;
     }
+    // EPIC-F: capture the prospect before the pick mutates state so we can
+    // toast "Drafted X" instead of silently advancing the clock. The original
+    // critique called out that drafting was "the single most satisfying
+    // action in a draft has zero payoff."
+    const prospect = (current.players as Record<string, BasketballPlayer>)[prospectId as string];
+    const name = prospect ? `${prospect.firstName} ${prospect.lastName}` : 'your pick';
+    const posStr = prospect?.sportData.position ? ` (${prospect.sportData.position})` : '';
     set({ loading: true, error: null });
     try {
       const league = makeDraftPick(current, prospectId as Parameters<typeof makeDraftPick>[1]);
       await saveLeague(league);
-      set({ league, loading: false });
+      set({
+        league,
+        loading: false,
+        simToast: { text: `🎉 Drafted ${name}${posStr} · pick #${slot.overall}` },
+      });
       return true;
     } catch (err) {
       console.error('[bs-hoops] draftPick failed:', err);
@@ -1071,15 +1082,25 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         const prevDay = (current.sportData as { faDay?: number }).faDay ?? 0;
         const moved = advanceMarketAfterSigning(result.league as BasketballLeagueState);
         await saveLeague(moved.league);
-        // Always surface the day advance during the FA window — even with no rival
-        // signings — so it's clear that signing moved the market forward a day.
+
+        // EPIC-F: the previous toast text mentioned the day + rival signings
+        // but NOT the player you actually signed (or lost). Lead with the
+        // outcome — that's the verb the user just performed.
+        const player = (current.players as Record<string, BasketballPlayer>)[playerId as string];
+        const name = player ? `${player.firstName} ${player.lastName}` : 'the free agent';
         const advanced = moved.day > prevDay;
+        const dayTail = advanced ? ` · Day ${moved.day}/${FA_DAYS}` : '';
+        const rivalsTail = moved.aiSignings > 0
+          ? ` · ${moved.aiSignings} rival signing${moved.aiSignings === 1 ? '' : 's'}`
+          : '';
+        const text = result.outcome === 'signed'
+          ? `✅ Signed ${name}${dayTail}${rivalsTail}`
+          : `❌ ${name} signed elsewhere${dayTail}${rivalsTail}`;
+
         set({
           league: moved.league,
           loading: false,
-          ...(advanced
-            ? { simToast: { text: `Day ${moved.day} of ${FA_DAYS}${moved.aiSignings > 0 ? ` · ${moved.aiSignings} rival signing${moved.aiSignings === 1 ? '' : 's'}` : ''}` } }
-            : {}),
+          simToast: { text },
         });
         return { ...result, league: moved.league };
       }
