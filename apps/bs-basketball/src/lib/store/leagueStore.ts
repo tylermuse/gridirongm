@@ -435,7 +435,12 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     try {
       const meta = await mostRecentLeague();
       if (!meta) {
-        set({ loading: false, error: 'No saved leagues found.' });
+        // EPIC-A — "no saved leagues" is a normal first-run state, not an
+        // error. Surfacing it as `error: '...'` made the ErrorBanner render
+        // a red 'Something went wrong' toast that persisted across pages on
+        // first load. Just complete silently; pages that need to react to
+        // "no league loaded" check `!league && !loading` directly.
+        set({ loading: false });
         return;
       }
       const league = await loadLeagueFromDb(meta.id);
