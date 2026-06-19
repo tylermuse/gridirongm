@@ -182,6 +182,11 @@ export function makeDraftPick(league: LeagueState, prospectId: PlayerId): League
       draftPick: slot.overall,
       draftRound: slot.round,
       draftYear: draft.season,
+      // BUG-27: reset yearsInLeague to 0 at draft time so the rookie year
+      // counts correctly. playerGen seeds prospects with `age - 19`, so a 22yo
+      // prospect arrives with yearsInLeague=3 and never satisfies the ROY
+      // filter (which requires === 0) in his actual first NBA season.
+      yearsInLeague: 0,
     },
   };
 

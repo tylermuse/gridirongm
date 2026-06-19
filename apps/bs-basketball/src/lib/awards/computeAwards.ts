@@ -71,6 +71,25 @@ function aggregateStats(
   return acc;
 }
 
+/** Reconstruct a `BasketballStats`-shaped object from a `seasonLog` entry.
+ *  The log only carries aggregated per-game numbers (ppg/rpg/apg), so we
+ *  multiply back up by GP and zero the rest of the fields. Used to feed MIP
+ *  the prior-season baseline it needs (BUG-27 — MIP was returning null in
+ *  every season because no priorSeasonPlayers list was being computed). */
+function reconstructStatsFromLog(entry: {
+  gamesPlayed: number;
+  ppg: number;
+  rpg: number;
+  apg: number;
+}): BasketballStats {
+  const stats = emptyBasketballStats();
+  stats.gamesPlayed = entry.gamesPlayed;
+  stats.points = entry.ppg * entry.gamesPlayed;
+  stats.totalRebounds = entry.rpg * entry.gamesPlayed;
+  stats.assists = entry.apg * entry.gamesPlayed;
+  return stats;
+}
+
 /**
  * Compute the full set of season awards. Returns null only if no regular-season
  * games have been played yet (nothing to award). Finals MVP is populated only
@@ -105,9 +124,28 @@ export function computeSeasonAwards(league: LeagueState): SeasonAwards | null {
     ? aggregateStats(league.games, g => seriesIdOf(g) === 'FINALS')
     : null;
 
+  // Prior-season players for MIP (BUG-27). The seasonLog on each player carries
+  // a year-by-year aggregate written at the offseason rollover; we pick each
+  // player's most recent logged season as his "prior" baseline. Using the
+  // most-recent-with-stats (rather than strict `currentSeason - 1`) is the
+  // right call for buried/injured vets whose YOY comparison anchors on the
+  // last year they actually played. Players with no log get no baseline and
+  // simply don't appear as MIP candidates — which is correct.
+  const priorSeasonPlayers: BasketballPlayer[] = [];
+  for (const p of players) {
+    const log = (p.sportData.seasonLog ?? []) as Array<{
+      season: number; gamesPlayed: number; ppg: number; rpg: number; apg: number;
+    }>;
+    if (log.length === 0) continue;
+    const prior = log[log.length - 1];
+    if (prior.season >= league.currentSeason) continue; // only PRIOR seasons
+    priorSeasonPlayers.push({ ...p, seasonStats: reconstructStatsFromLog(prior) });
+  }
+
   const winners = computeBasketballAwards(playersWithStats, teamRecords, {
     championshipTeamId: championTeamId ?? undefined,
     finalsStats: finalsStats ? Object.fromEntries(finalsStats) as Record<PlayerId, BasketballStats> : undefined,
+    priorSeasonPlayers,
     minGamesPlayed: 50,
   });
 
