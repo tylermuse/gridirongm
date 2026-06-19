@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 
 /**
@@ -7,9 +9,20 @@ import { useLeagueStore } from '@/lib/store/leagueStore';
  * error on every failed action, but nothing surfaced it — a failed sim looked
  * like "nothing happened." This renders that error as a dismissible bar so a
  * failure is always visible (and copy-pasteable for a bug report).
+ *
+ * EPIC-A: clear the error on pathname change. A failed sim or import is
+ * relevant on the page that triggered it; once the user navigates somewhere
+ * unrelated, a lingering red banner is more noise than signal. The store still
+ * holds the last error string until then for copy-paste recovery.
  */
 export function ErrorBanner() {
   const { error, clearError } = useLeagueStore();
+  const pathname = usePathname();
+  useEffect(() => {
+    // Only clear on actual nav (not on the very first render).
+    if (error) clearError();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
   if (!error) return null;
 
   return (

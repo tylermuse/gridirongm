@@ -25,8 +25,10 @@ export function useLeagueOrHydrate() {
   useEffect(() => {
     if (league !== null) return;
     if (loading) return;
-    // Try to load the most recent save. If there are none, the store sets
-    // error to "No saved leagues found." and the page can react.
+    // Try to load the most recent save. If there are none, the store leaves
+    // both `league` and `error` null; pages handle "no league" via the
+    // `!league && !loading` shape rather than via an error message (EPIC-A —
+    // no-saves is a normal first-run state, not a failure).
     void continueLatest();
   }, [league, loading, continueLatest]);
 
