@@ -237,7 +237,7 @@ export function acceptanceThreshold(
 }
 
 /** Projected chance the offer is accepted (for the UI), honest to the gate:
- *  ~0 well below the acceptance threshold, ~1 at/above it. */
+ *  ~0 well below the acceptance threshold, exactly 1 at/above it. */
 export function acceptanceProbability(
   info: FreeAgentInfo,
   offer: Offer,
@@ -246,7 +246,12 @@ export function acceptanceProbability(
 ): number {
   const userTotal = offer.salaryPerYear * offer.years;
   const threshold = acceptanceThreshold(info, appeal, competingTotal);
-  // 0 at 80% of the threshold, ~1 at/above it.
+  // The acceptance gate (`resolveUserOffer`) is deterministic: `userTotal >=
+  // threshold` accepts, anything below rejects. The probability bar exists to
+  // guide the user toward that gate, so it should read 100% the moment the
+  // offer crosses it — not 99% forever (BUG-22). Below the gate, it decays
+  // linearly to 0 at 80% of threshold.
+  if (userTotal >= threshold) return 1;
   return clamp((userTotal / threshold - 0.8) / 0.25, 0.02, 0.99);
 }
 
@@ -561,9 +566,16 @@ export function negotiateOffer(
   }
 
   // Fair-but-short → counter at the number it takes to win (≥ market).
+  // Round UP to the nearest $100K (BUG-22): rounding to nearest caused the
+  // displayed counter to land just below the real `winBar` whenever
+  // targetTotal/years fell into the lower half of a $100K bucket, so matching
+  // the counter exactly still failed `userTotal >= winBar` and negotiateOffer
+  // re-countered at the same number — an infinite loop the user could only
+  // escape by offering more than the displayed ask. ceiling guarantees the
+  // counter total is at least `targetTotal`, so an exact-match offer closes.
   const targetTotal = Math.max(winBar, marketTotal);
   const years = info.desiredYears;
-  const perYear = Math.max(LEAGUE_MINIMUM_SALARY, Math.round(targetTotal / years / 100_000) * 100_000);
+  const perYear = Math.max(LEAGUE_MINIMUM_SALARY, Math.ceil(targetTotal / years / 100_000) * 100_000);
   const compNote = competingTotal > 0
     ? ` ${teamLabel(league, competing!.teamId)} is in at ~${faMoney(competingTotal)}.`
     : '';
