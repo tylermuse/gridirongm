@@ -43,7 +43,11 @@ function MiniStandings({ league, team }: { league: LeagueState; team: Basketball
           >
             <span className="w-5 text-xs tabular-nums text-[var(--text-sec)]">{r.seed}</span>
             <TeamLogo abbreviation={r.team.abbreviation} primaryColor={r.team.primaryColor} secondaryColor={r.team.secondaryColor} size="xs" />
-            <span className={`flex-1 truncate ${r.isUser ? 'font-bold' : ''}`}>{r.team.city}</span>
+            {/* EPIC-H: include the team name (Lakers / Clippers / etc.) so two
+                same-city teams aren't indistinguishable in the standings widget. */}
+            <span className={`flex-1 truncate ${r.isUser ? 'font-bold' : ''}`}>
+              {r.team.city} <span className="font-normal text-[var(--text-sec)]">{r.team.name}</span>
+            </span>
             <span className="tabular-nums text-[var(--text-sec)]">{r.team.record.wins}–{r.team.record.losses}</span>
           </Link>
         ))}
