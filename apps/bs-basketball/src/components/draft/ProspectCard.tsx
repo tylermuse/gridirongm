@@ -40,7 +40,7 @@ export function ProspectCard({
       </div>
       <div className="px-4 pb-3">
         <div className="flex items-center gap-3 mb-3">
-          <PlayerAvatar firstName={prospect.firstName} lastName={prospect.lastName} primaryColor={teamColor} secondaryColor="#fff" size="lg" />
+          <PlayerAvatar firstName={prospect.firstName} lastName={prospect.lastName} primaryColor={teamColor} secondaryColor="#fff" photoUrl={prospect.sportData.photoUrl} size="lg" />
           <div className="min-w-0">
             <button onClick={onOpen} className="font-bold text-base truncate hover:text-[var(--accent)] text-left block max-w-full">
               {prospect.firstName} {prospect.lastName}

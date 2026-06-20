@@ -43,7 +43,7 @@ export function AwardRaceCard({ race, league, showWinnerCrown }: { race: AwardRa
                 <span className="w-5 shrink-0 text-xs font-bold text-[var(--text-sec)] tabular-nums text-right">{i + 1}</span>
                 {e.isCoach
                   ? team && <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="md" />
-                  : <PlayerAvatar firstName={p?.firstName ?? '?'} lastName={p?.lastName ?? ''} primaryColor={team?.primaryColor ?? '#444'} secondaryColor={team?.secondaryColor ?? '#fff'} size="md" />}
+                  : <PlayerAvatar firstName={p?.firstName ?? '?'} lastName={p?.lastName ?? ''} primaryColor={team?.primaryColor ?? '#444'} secondaryColor={team?.secondaryColor ?? '#fff'} photoUrl={p?.sportData?.photoUrl} size="md" />}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 min-w-0">
                     {e.isCoach

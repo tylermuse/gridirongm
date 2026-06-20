@@ -143,6 +143,7 @@ export default function PlayerPage() {
           lastName={player.lastName}
           primaryColor={team?.primaryColor ?? '#E66B00'}
           secondaryColor={secondary}
+          photoUrl={player.sportData.photoUrl}
           size="xl"
         />
         <div className="min-w-0">

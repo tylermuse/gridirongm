@@ -250,6 +250,7 @@ function AwardCard({
             lastName={player.lastName}
             primaryColor={team?.primaryColor ?? '#999'}
             secondaryColor={team?.secondaryColor ?? '#fff'}
+            photoUrl={player.sportData.photoUrl}
             size="md"
           />
           <div className="min-w-0">
