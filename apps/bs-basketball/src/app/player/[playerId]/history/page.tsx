@@ -40,7 +40,7 @@ export default function PlayerHistoryPage() {
         ← {player.firstName} {player.lastName}
       </Link>
       <header className="flex items-center gap-3 mt-2 mb-6">
-        <PlayerAvatar firstName={player.firstName} lastName={player.lastName} primaryColor={team?.primaryColor ?? '#444'} secondaryColor={team?.secondaryColor ?? '#fff'} size="lg" />
+        <PlayerAvatar firstName={player.firstName} lastName={player.lastName} primaryColor={team?.primaryColor ?? '#444'} secondaryColor={team?.secondaryColor ?? '#fff'} photoUrl={player.sportData.photoUrl} size="lg" />
         <h1 className="text-3xl font-extrabold" style={{ color: 'var(--accent)' }}>Career History</h1>
       </header>
 
