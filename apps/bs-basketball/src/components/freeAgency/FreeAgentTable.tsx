@@ -118,7 +118,8 @@ export function FreeAgentTable({
                   <td className="text-center tabular-nums text-[var(--text-sec)] hidden md:table-cell">{ll.text}</td>
                   <td className="text-right tabular-nums">{money(f.marketSalary)}</td>
                   <td className="text-right pr-3">
-                    <button onClick={e => { e.stopPropagation(); onSelect(f); }} className="text-xs font-bold rounded-md px-2.5 py-1 text-white" style={{ background: 'var(--accent)' }}>Offer</button>
+                    {/* MOBILE-5: bumps to 44px min on touch only. */}
+                    <button onClick={e => { e.stopPropagation(); onSelect(f); }} className="bs-touch-target text-xs font-bold rounded-md px-2.5 py-1 text-white" style={{ background: 'var(--accent)' }}>Offer</button>
                   </td>
                 </tr>
                 {isOpen && (
