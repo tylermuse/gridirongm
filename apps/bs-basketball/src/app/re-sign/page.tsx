@@ -200,7 +200,7 @@ export default function ReSignPage() {
               const stance = willingness(p, userTeam, season);
               return (
                 <div key={p.id} className="flex items-center gap-3 px-3 py-2.5 border-t first:border-t-0" style={{ borderColor: 'var(--border)' }}>
-                  <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="sm" />
+                  <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} photoUrl={p.sportData.photoUrl} size="sm" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
                       <button onClick={() => setModalPlayerId(p.id)} className="font-semibold truncate hover:underline text-left" style={{ color: 'var(--text)' }}>{p.firstName} {p.lastName}</button>
@@ -271,7 +271,7 @@ export default function ReSignPage() {
             <p className="text-xs text-[var(--text-sec)] px-2 py-2">Over the 15-man limit — cut {over} more to start the season. Lowest keep-value first.</p>
             {roster.slice(0, over + 3).map((p, i) => (
               <div key={p.id} className="flex items-center gap-3 px-2 py-1.5 rounded-lg" style={{ background: i < over ? 'color-mix(in srgb, #dc2626 6%, transparent)' : undefined }}>
-                <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} size="sm" />
+                <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} photoUrl={p.sportData.photoUrl} size="sm" />
                 <span className="font-semibold truncate flex-1">{p.firstName} {p.lastName}</span>
                 <Chip>{p.sportData.position}</Chip>
                 <span className={`text-sm font-bold tabular-nums ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>

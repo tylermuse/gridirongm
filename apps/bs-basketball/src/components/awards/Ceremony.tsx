@@ -28,6 +28,8 @@ interface Slide {
   firstName: string;
   lastName: string;
   isMvp: boolean;
+  /** Optional headshot URL — BUG-31. Falls back to initials. */
+  photoUrl?: string;
 }
 
 // Lesser → greater, so the ceremony crescendos into MVP.
@@ -80,6 +82,7 @@ function buildSlides(
       secondaryColor: team?.secondaryColor ?? '#fff',
       firstName: player.firstName,
       lastName: player.lastName,
+      photoUrl: player.sportData.photoUrl,
       isMvp: def.key === 'mvp',
     });
   }
@@ -145,6 +148,7 @@ export function AwardsCeremony({
               lastName={slide.lastName}
               primaryColor={slide.primaryColor}
               secondaryColor={slide.secondaryColor}
+              photoUrl={slide.photoUrl}
               size="xl"
             />
             <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-3 py-0.5 text-[10px] font-black uppercase tracking-widest text-white">
