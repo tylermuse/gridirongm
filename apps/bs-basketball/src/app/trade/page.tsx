@@ -15,7 +15,8 @@ import { teamStrategy, getTeamPicks, pickFromId, pickShort, pickValue, protectio
 import { getActiveRumors, rumorAccuracy, rumorPlayerMeta, type TradeRumor } from '@/lib/trade';
 import { computeTradeGrade, getProposalHistory, type TradeGrade, type ProposalRecord } from '@/lib/trade';
 import { tradeWindowClosed, TRADE_DEADLINE_DAY } from '@/lib/sim/simRange';
-import { basketballTradeValue, type BasketballPlayer, type BasketballPosition, type BasketballTeam, type TeamTradeOutcome, type TeamCapStatus } from '@bs/sport-basketball';
+import { basketballTradeValue, type BasketballPlayer, type BasketballPosition, type BasketballStats, type BasketballTeam, type TeamTradeOutcome, type TeamCapStatus } from '@bs/sport-basketball';
+import { regularSeasonStatsByPlayer } from '@/lib/stats/seasonStats';
 
 type League = NonNullable<ReturnType<typeof useLeagueOrHydrate>['league']>;
 
@@ -111,6 +112,9 @@ function TradePage() {
   const userTeam = teamById.get(userTeamId)!;
   const targetTeam = targetId ? teamById.get(targetId) : null;
   const playerById = league.players as Record<string, BasketballPlayer>;
+  // BUG-26: per-player season stats, computed once at the page level and
+  // threaded through to the trade tables so users see PPG/RPG/APG inline.
+  const statsMap = useMemo(() => regularSeasonStatsByPlayer(league), [league]);
   const season = league.currentSeason;
   const window = tradeWindowClosed(league);
   const hasAssets = (mine.size + myPicks.size > 0) && (theirs.size + theirPicks.size > 0);
@@ -301,9 +305,9 @@ function TradePage() {
 
       {/* Two offer cards — Your Offer / You Receive */}
       <div className="grid lg:grid-cols-2 gap-5 mb-5">
-        <RosterColumn league={league} team={userTeam} playerById={playerById} season={season} selected={mine} selectedPicks={myPicks} onToggle={id => toggle(mine, setMine, id)} onTogglePick={id => toggle(myPicks, setMyPicks, id)} side="mine" title="Your Offer" pts={sendValue} />
+        <RosterColumn league={league} team={userTeam} playerById={playerById} season={season} selected={mine} selectedPicks={myPicks} onToggle={id => toggle(mine, setMine, id)} onTogglePick={id => toggle(myPicks, setMyPicks, id)} side="mine" title="Your Offer" pts={sendValue} statsMap={statsMap} />
         {targetTeam ? (
-          <RosterColumn league={league} team={targetTeam} playerById={playerById} season={season} selected={theirs} selectedPicks={theirPicks} onToggle={id => toggle(theirs, setTheirs, id)} onTogglePick={id => toggle(theirPicks, setTheirPicks, id)} side="theirs" title="You Receive" pts={receiveValue} />
+          <RosterColumn league={league} team={targetTeam} playerById={playerById} season={season} selected={theirs} selectedPicks={theirPicks} onToggle={id => toggle(theirs, setTheirs, id)} onTogglePick={id => toggle(theirPicks, setTheirPicks, id)} side="theirs" title="You Receive" pts={receiveValue} statsMap={statsMap} />
         ) : (
           <div className="rounded-xl border bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-sec)]" style={{ borderColor: 'var(--border)' }}>
             Select a trade partner to see their roster and picks.
@@ -819,6 +823,8 @@ function TradingBlockTab({
 
   const players = userTeam.playerIds.map(id => playerById[id]).filter(Boolean) as BasketballPlayer[];
   const myPicks = useMemo(() => getTeamPicks(league, userTeam.id), [league, userTeam.id]);
+  // BUG-26: per-player season stats for the inline PPG/RPG/APG column.
+  const statsMap = useMemo(() => regularSeasonStatsByPlayer(league), [league]);
 
   function toggleSet<T>(set: Set<T>, setFn: (s: Set<T>) => void, v: T) {
     const n = new Set(set); if (n.has(v)) n.delete(v); else n.add(v); setFn(n); setProposals(null);
@@ -858,7 +864,7 @@ function TradingBlockTab({
       <section className="rounded-xl border bg-[var(--surface)] overflow-hidden self-start" style={{ borderColor: 'var(--border)' }}>
         <h2 className="px-3 py-2 font-bold border-b text-sm" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>Players on the Block</h2>
         <div className="px-2 pt-1">
-          <SortableTradeTable players={players} season={season} selected={block} onToggle={id => toggleSet(block, setBlock, id)} side="mine" />
+          <SortableTradeTable players={players} season={season} selected={block} onToggle={id => toggleSet(block, setBlock, id)} side="mine" statsMap={statsMap} />
         </div>
         {myPicks.length > 0 && (
           <>
@@ -974,7 +980,7 @@ function DealCard({
 // ===========================================================================
 
 function RosterColumn({
-  league, team, playerById, season, selected, selectedPicks, onToggle, onTogglePick, side, title, pts,
+  league, team, playerById, season, selected, selectedPicks, onToggle, onTogglePick, side, title, pts, statsMap,
 }: {
   league: League;
   team: BasketballTeam;
@@ -987,6 +993,7 @@ function RosterColumn({
   side: 'mine' | 'theirs';
   title?: string;
   pts?: number;
+  statsMap?: Map<string, BasketballStats>;
 }) {
   const players = team.playerIds
     .map(id => playerById[id])
@@ -1002,7 +1009,7 @@ function RosterColumn({
         {pts !== undefined && pts > 0 && <span className="ml-auto text-[11px] font-bold tabular-nums" style={{ color: 'var(--accent)' }}>{pts} pts</span>}
       </h2>
       <div className="px-2 pt-1">
-        <SortableTradeTable players={players} season={season} selected={selected} onToggle={onToggle} side={side} />
+        <SortableTradeTable players={players} season={season} selected={selected} onToggle={onToggle} side={side} statsMap={statsMap} />
       </div>
       {/* Draft picks */}
       {picks.length > 0 && (
