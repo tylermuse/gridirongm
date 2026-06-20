@@ -136,8 +136,27 @@ function TopBar({
   const pathname = usePathname() ?? '/';
 
   const action = nextAction(league);
-  // "Go to Draft" is a redundant no-op while you're already on the board.
-  const secondary = (action.secondary ?? []).filter(s => !(s.key === 'goDraft' && pathname === '/draft'));
+  // EPIC-G: clean up redundant + miscued CTAs.
+  //   1. Pre-team picker (`/rosters` without a userTeamId): the body says
+  //      "Pick your team" but the top bar used to say "Draft / Go to Draft"
+  //      — confusing since the user can't reach the draft without picking
+  //      first. Override the phase label + hide the primary entirely.
+  //   2. Any goX primary on its own destination page (`goDraft` on /draft,
+  //      `goReSign` on /re-sign, `goFreeAgency` on /free-agency) is a no-op
+  //      and just adds visual noise.
+  const onPickerPage = pathname === '/rosters' && !league.userTeamId;
+  const primaryIsRedundant =
+    (action.primary === 'goDraft' && pathname === '/draft') ||
+    (action.primary === 'goReSign' && pathname === '/re-sign') ||
+    (action.primary === 'goFreeAgency' && pathname === '/free-agency');
+  const hidePrimary = onPickerPage || primaryIsRedundant;
+  const effectivePhaseLabel = onPickerPage ? 'Pick a Team' : action.phaseLabel;
+  // Filter the same redundant goX keys out of secondary actions too.
+  const secondary = (action.secondary ?? []).filter(s =>
+    !(s.key === 'goDraft' && pathname === '/draft') &&
+    !(s.key === 'goReSign' && pathname === '/re-sign') &&
+    !(s.key === 'goFreeAgency' && pathname === '/free-agency'),
+  );
   const userTeam = league.userTeamId
     ? (league.teams.find(t => t.id === league.userTeamId) as BasketballTeam | undefined) ?? null
     : null;
@@ -188,7 +207,7 @@ function TopBar({
             variant="bare"
             fallback={
               <span className="flex items-center h-full text-sm text-[var(--text-sec)] font-semibold">
-                {action.phaseLabel}
+                {effectivePhaseLabel}
               </span>
             }
           />
@@ -196,9 +215,11 @@ function TopBar({
 
         {/* Controls (right) */}
         <div className="ml-auto flex items-center gap-1.5 md:gap-2 flex-wrap justify-end">
-          <Button size="sm" disabled={store.loading} onClick={() => void run(action.primary)} className="active:scale-95">
-            {store.loading ? 'Working…' : action.label}
-          </Button>
+          {!hidePrimary && (
+            <Button size="sm" disabled={store.loading} onClick={() => void run(action.primary)} className="active:scale-95">
+              {store.loading ? 'Working…' : action.label}
+            </Button>
+          )}
           {secondary.map(s => (
             <Button key={s.key} size="sm" variant="secondary" disabled={store.loading} onClick={() => void run(s.key)} className="hidden sm:inline-flex active:scale-95">
               {s.label}
