@@ -21,6 +21,7 @@ import { Modal } from './Modal';
 import { isGodMode } from '@/lib/godMode/godMode';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import { getInjuries, SEVERITY_LABEL } from '@/lib/injuries';
+import { ratingHex, ratingTier } from '@/lib/ui/ratingColor';
 import {
   basketballUiMetadata,
   type BasketballPlayer,
@@ -197,13 +198,24 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                   {fields.map(f => {
                     const v = (player.ratings as unknown as Record<string, number>)[f.key];
                     if (typeof v !== 'number') return null;
+                    // EPIC-D: tier label + actual hex color on the bar.
+                    // Prior code used `background: ratingColor(v)` which returns
+                    // Tailwind class strings like 'text-green-600' — invalid as
+                    // inline CSS, so bars were rendering without color
+                    // differentiation. Use ratingHex now; add the qualitative
+                    // tier label between the bar and the number so new users can
+                    // read 'Elite / Good / Avg / Poor' without decoding raw 0–99
+                    // numbers (the football-parity ask).
+                    const tier = ratingTier(v);
+                    const hex = ratingHex(v);
                     return (
-                      <li key={f.key} className="flex items-center gap-3">
-                        <span className="w-14 text-xs text-[var(--text-sec)]">{f.label}</span>
+                      <li key={f.key} className="flex items-center gap-2 sm:gap-3" title={f.label}>
+                        <span className="w-14 text-xs text-[var(--text-sec)] truncate">{f.label}</span>
                         <div className="flex-1 h-2 rounded-full" style={{ background: 'var(--border)' }}>
-                          <div className="h-2 rounded-full" style={{ width: `${v}%`, background: ratingColor(v) }} />
+                          <div className="h-2 rounded-full" style={{ width: `${v}%`, background: hex }} />
                         </div>
-                        <span className="w-8 text-right text-sm font-semibold">{v}</span>
+                        <span className="w-10 text-[10px] uppercase tracking-wide font-bold text-right" style={{ color: hex }}>{tier}</span>
+                        <span className="w-7 text-right text-sm font-semibold tabular-nums">{v}</span>
                       </li>
                     );
                   })}
@@ -323,14 +335,6 @@ function per(total: number, games: number): string {
 function pct(made: number, att: number): string {
   if (!att) return '—';
   return `${Math.round((made / att) * 100)}%`;
-}
-
-function ratingColor(v: number): string {
-  if (v >= 90) return '#10b981';
-  if (v >= 80) return '#84cc16';
-  if (v >= 70) return '#eab308';
-  if (v >= 60) return '#f97316';
-  return '#dc2626';
 }
 
 function trajectoryVariant(t: string): 'green' | 'red' | 'default' {
