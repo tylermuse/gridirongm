@@ -112,10 +112,13 @@ export function SortableTradeTable({
                   const last = log.length ? log[log.length - 1] : null;
                   let text: string;
                   let muted = false;
+                  // BUG-34: include games-played alongside the PPG/RPG/APG
+                  // triple so the row's stat context is honest — a 0/0/0 line
+                  // off a 1-game sample reads very differently from off 70.
                   if (gp > 0 && s) {
-                    text = `${(s.points / gp).toFixed(1)}/${(s.totalRebounds / gp).toFixed(1)}/${(s.assists / gp).toFixed(1)}`;
+                    text = `${(s.points / gp).toFixed(1)}/${(s.totalRebounds / gp).toFixed(1)}/${(s.assists / gp).toFixed(1)} · ${gp} GP`;
                   } else if (last) {
-                    text = `${last.ppg.toFixed(1)}/${last.rpg.toFixed(1)}/${last.apg.toFixed(1)}`;
+                    text = `${last.ppg.toFixed(1)}/${last.rpg.toFixed(1)}/${last.apg.toFixed(1)} · ${last.gamesPlayed} GP`;
                     muted = true;
                   } else {
                     text = '—';
