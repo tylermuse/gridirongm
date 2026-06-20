@@ -36,7 +36,17 @@ export default function DraftPage() {
   const [showCeremony, setShowCeremony] = useState(false);
   const [revealStep, setRevealStep] = useState(0);
   const [replay, setReplay] = useState(false);
-  const [skipPref] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem('bshoops-skip-lottery') === '1');
+  // BUG-33: previously read a persisted "skip lottery" flag from localStorage,
+  // which made every season from the first skip onward auto-bypass the
+  // ceremony. The button label promised a one-time "Skip — reveal instantly"
+  // but the implementation skipped forever. Drop the persistence — Tyler can
+  // hit the skip button each year if he wants. Also clear any old flag from
+  // pre-fix saves so the lottery comes back on its own.
+  const [skipPref] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    window.localStorage.removeItem('bshoops-skip-lottery');
+    return false;
+  });
   const [tradeOpen, setTradeOpen] = useState(false);
   const [reportModalId, setReportModalId] = useState<string | null>(null);
   const autoSkippedRef = useRef(false);
@@ -95,10 +105,9 @@ export default function DraftPage() {
       setShowCeremony(false);
       void store.revealLottery();
     };
-    const skipForever = () => {
-      if (typeof window !== 'undefined') window.localStorage.setItem('bshoops-skip-lottery', '1');
-      finishReveal();
-    };
+    // BUG-33: was `skipForever` and persisted the choice to localStorage.
+    // Now strictly one-shot — matches the "Skip — reveal instantly" label.
+    const skipNow = finishReveal;
     // Mid-ceremony: inline broadcast panel + the board filling in live.
     if (showCeremony && revealCards.length > 0) {
       return (
@@ -137,7 +146,7 @@ export default function DraftPage() {
               {store.loading ? 'Revealing…' : 'Start the Lottery Reveal →'}
             </Button>
             <button
-              onClick={skipForever}
+              onClick={skipNow}
               disabled={store.loading}
               className="text-sm font-semibold text-[var(--text-sec)] hover:text-[var(--text)] underline disabled:opacity-40"
             >
