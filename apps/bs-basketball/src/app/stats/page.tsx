@@ -126,8 +126,36 @@ export default function StatsPage() {
       </div>
 
       {!anyGames ? (
-        <div className="rounded-xl border border-dashed p-10 text-center text-[var(--text-sec)]" style={{ borderColor: 'var(--border)' }}>
-          Stats populate once games are played. Sim some games to see who&apos;s balling out.
+        // EPIC-I: stronger empty state. The bare one-liner left ~60% of the
+        // viewport blank — read like an error. Promote to a centered card
+        // with an icon, a clear primary action, and a "what you'll see"
+        // preview so the page reads as intentional, not unfinished.
+        <div className="rounded-xl border border-dashed p-8 sm:p-12 flex flex-col items-center text-center" style={{ borderColor: 'var(--border)' }}>
+          <div className="text-5xl mb-3" aria-hidden>📊</div>
+          <h2 className="text-lg font-black mb-1" style={{ fontFamily: 'var(--font-display)' }}>No games yet</h2>
+          <p className="text-sm text-[var(--text-sec)] max-w-md mb-5">
+            League leaders, team rankings, and play-by-play stats populate once games are played.
+            Sim a week to see who&apos;s balling out.
+          </p>
+          <Link
+            href="/"
+            className="text-sm font-bold rounded-lg px-4 py-2 text-white transition active:scale-95"
+            style={{ background: 'var(--accent)' }}
+          >
+            ← Back to dashboard
+          </Link>
+          <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-[var(--text-sec)] max-w-2xl">
+            {[
+              { icon: '🏀', label: 'League leaders by PPG, RPG, APG, BLK, STL, 3PM' },
+              { icon: '🏆', label: 'Team rankings: offense, defense, pace, +/−' },
+              { icon: '📈', label: 'Per-game splits, hot/cold streaks, last-10 form' },
+            ].map(b => (
+              <div key={b.label} className="rounded-lg border p-3 bg-[var(--surface)]" style={{ borderColor: 'var(--border)' }}>
+                <div className="text-2xl mb-1" aria-hidden>{b.icon}</div>
+                <div>{b.label}</div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : tab === 'leaders' ? (
         <>
