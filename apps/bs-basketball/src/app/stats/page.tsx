@@ -140,17 +140,32 @@ export default function StatsPage() {
             ))}
           </div>
           <div className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-            {leaders.map((r, i) => (
-              <button key={r.player.id} onClick={() => setModalPlayerId(r.player.id)}
-                className="w-full flex items-center gap-3 px-4 py-2 border-t first:border-t-0 text-left text-sm hover:bg-[var(--surface-2)] transition-colors"
-                style={{ borderColor: 'var(--border)', background: r.player.rosterSlot?.teamId === userTeamId ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : undefined }}>
-                <span className="w-6 text-xs tabular-nums text-[var(--text-sec)]">{i + 1}</span>
-                <TeamCrest teamId={r.player.rosterSlot?.teamId} teamById={teamById} />
-                <span className="font-semibold truncate flex-1">{r.player.firstName} {r.player.lastName}</span>
-                <span className="text-xs text-[var(--text-sec)] w-7">{r.player.sportData.position}</span>
-                <span className="text-base font-black tabular-nums w-16 text-right" style={{ color: 'var(--accent)' }}>{cat.fmt(r.value)}</span>
-              </button>
-            ))}
+            {leaders.map((r, i) => {
+              // EPIC-H: the leaderboard row was just a name + single number,
+              // leaving a lot of horizontal slack. Add a secondary stat line
+              // (PPG/RPG/APG · MPG · GP) so the row earns its width.
+              const s = statsMap.get(r.player.id) as BasketballStats | undefined;
+              const gp = s?.gamesPlayed ?? 0;
+              const secondary = gp > 0 && s
+                ? `${(s.points / gp).toFixed(1)} / ${(s.totalRebounds / gp).toFixed(1)} / ${(s.assists / gp).toFixed(1)} · ${(s.minutes / gp).toFixed(1)} MP · ${gp} GP`
+                : null;
+              return (
+                <button key={r.player.id} onClick={() => setModalPlayerId(r.player.id)}
+                  className="w-full flex items-center gap-3 px-4 py-2 border-t first:border-t-0 text-left text-sm hover:bg-[var(--surface-2)] transition-colors"
+                  style={{ borderColor: 'var(--border)', background: r.player.rosterSlot?.teamId === userTeamId ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : undefined }}>
+                  <span className="w-6 text-xs tabular-nums text-[var(--text-sec)]">{i + 1}</span>
+                  <TeamCrest teamId={r.player.rosterSlot?.teamId} teamById={teamById} />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold truncate">{r.player.firstName} {r.player.lastName}</div>
+                    {secondary && (
+                      <div className="text-[10px] text-[var(--text-sec)] tabular-nums truncate">{secondary}</div>
+                    )}
+                  </div>
+                  <span className="text-xs text-[var(--text-sec)] w-7 shrink-0">{r.player.sportData.position}</span>
+                  <span className="text-base font-black tabular-nums w-16 text-right shrink-0" style={{ color: 'var(--accent)' }}>{cat.fmt(r.value)}</span>
+                </button>
+              );
+            })}
           </div>
         </>
       ) : tab === 'teams' ? (
