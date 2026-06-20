@@ -377,7 +377,11 @@ function TradePage() {
                   {evaluation.summary}
                 </div>
 
-                {userOutcome && <OutcomeBlock label={`${userTeam.city} (You)`} outcome={userOutcome} />}
+                {/* BUG-36: the user's own block is shown with a "your call"
+                    tag instead of accepts/rejects — Tyler is the GM, no AI
+                    veto on what he wants to propose. Cap-compliance flags
+                    still surface so an illegal deal stays blocked. */}
+                {userOutcome && <OutcomeBlock label={`${userTeam.city} (You)`} outcome={userOutcome} forceYourCall />}
                 {targetOutcome && targetTeam && <OutcomeBlock label={targetTeam.city} outcome={targetOutcome} />}
 
                 {evaluation.warnings.map((w, i) => (
@@ -1213,14 +1217,24 @@ function Chip({ accent, onRemove, children }: { accent: string; onRemove: () => 
   );
 }
 
-function OutcomeBlock({ label, outcome }: { label: string; outcome: TeamTradeOutcome }) {
+function OutcomeBlock({ label, outcome, forceYourCall }: { label: string; outcome: TeamTradeOutcome; forceYourCall?: boolean }) {
+  // BUG-36: when the block belongs to the user's own team we don't render
+  // the "rejects" verdict — the user is the GM. We still show a cap-fail
+  // marker because that's a hard legal block, not an AI preference.
+  const showVerdict = !forceYourCall;
   return (
     <div className="mb-2 text-xs">
       <div className="flex items-center justify-between">
         <span className="font-bold">{label}{outcome.disposition ? <span className="ml-1.5 font-normal opacity-50">· Strategy: {outcome.disposition}</span> : null}</span>
-        <span style={{ color: outcome.willAccept ? '#10b981' : '#dc2626' }}>
-          {outcome.willAccept ? 'accepts' : 'rejects'}{!outcome.capCompliant ? ' · cap ✗' : ''}
-        </span>
+        {showVerdict ? (
+          <span style={{ color: outcome.willAccept ? '#10b981' : '#dc2626' }}>
+            {outcome.willAccept ? 'accepts' : 'rejects'}{!outcome.capCompliant ? ' · cap ✗' : ''}
+          </span>
+        ) : (
+          <span style={{ color: 'var(--text-sec)' }}>
+            your call{!outcome.capCompliant ? ' · cap ✗' : ''}
+          </span>
+        )}
       </div>
       <div className="text-[var(--text-sec)]">{outcome.reasoning}</div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5 opacity-70">
