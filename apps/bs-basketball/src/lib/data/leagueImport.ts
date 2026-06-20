@@ -503,6 +503,10 @@ function convertPlayer(
       birdRights: yearsLeft >= 2 ? 'full' : 'none',
       isTwoWay: false,
       shootingHand: 'right',
+      // Carry BBGM/ZenGM's `imgURL` through to the player avatar. Generated
+      // players (drafted in-sim) never set this; PlayerAvatar falls back to
+      // initials when absent. BUG-31.
+      ...(bbgm.imgURL ? { photoUrl: bbgm.imgURL } : {}),
       // Prospects are stamped when drafted; rostered imports record how they
       // arrived — by their real BBGM draft slot if known, else "initial".
       ...(isProspect

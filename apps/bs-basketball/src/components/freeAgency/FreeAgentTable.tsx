@@ -106,7 +106,7 @@ export function FreeAgentTable({
                   <td className="pl-2"><svg width="9" height="9" viewBox="0 0 10 10" className={isOpen ? 'rotate-90' : ''} style={{ transition: 'transform .15s', opacity: 0.5 }}><path d="M3 1l4 4-4 4" stroke="currentColor" fill="none" strokeWidth="1.5" /></svg></td>
                   <td className="py-2 pl-1">
                     <div className="flex items-center gap-2">
-                      <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={last?.primaryColor ?? '#555'} secondaryColor={last?.secondaryColor ?? '#fff'} size="sm" />
+                      <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={last?.primaryColor ?? '#555'} secondaryColor={last?.secondaryColor ?? '#fff'} photoUrl={p.sportData.photoUrl} size="sm" />
                       <span className="font-semibold truncate">{p.firstName} {p.lastName}</span>
                       <BirdChip tier={f.birdRights} />
                     </div>
