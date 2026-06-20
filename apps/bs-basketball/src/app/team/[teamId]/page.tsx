@@ -36,15 +36,19 @@ interface TeamSportData {
 
 type SortKey = 'overall' | 'age' | 'position' | 'name' | 'ppg' | 'rpg' | 'apg' | 'gp';
 
-const SORTABLE: { key: SortKey; label: string; align?: 'left' | 'right' }[] = [
-  { key: 'name',     label: 'Name',     align: 'left' },
-  { key: 'position', label: 'Pos',      align: 'left' },
-  { key: 'age',      label: 'Age',      align: 'right' },
+// MOBILE-1: progressive column hiding on phone. At 390px we keep Name +
+// Pos + OVR + PPG (the headline stat); Age/GP/RPG/APG re-emerge at sm;
+// 3PT/DEF/REB only at md. Sortable headers + body rows share the same
+// `hidden` classes so the table stays aligned.
+const SORTABLE: { key: SortKey; label: string; align?: 'left' | 'right'; cls?: string }[] = [
+  { key: 'name',     label: 'Name',     align: 'left'  },
+  { key: 'position', label: 'Pos',      align: 'left'  },
+  { key: 'age',      label: 'Age',      align: 'right', cls: 'hidden sm:table-cell' },
   { key: 'overall',  label: 'OVR',      align: 'right' },
-  { key: 'gp',       label: 'GP',       align: 'right' },
+  { key: 'gp',       label: 'GP',       align: 'right', cls: 'hidden sm:table-cell' },
   { key: 'ppg',      label: 'PPG',      align: 'right' },
-  { key: 'rpg',      label: 'RPG',      align: 'right' },
-  { key: 'apg',      label: 'APG',      align: 'right' },
+  { key: 'rpg',      label: 'RPG',      align: 'right', cls: 'hidden sm:table-cell' },
+  { key: 'apg',      label: 'APG',      align: 'right', cls: 'hidden sm:table-cell' },
 ];
 
 /** Per-game value, guarding the 0-games case. */
@@ -407,16 +411,17 @@ export default function TeamPage() {
                 {SORTABLE.map(col => (
                   <th
                     key={col.key}
-                    className={`px-3 py-2 cursor-pointer select-none ${col.align === 'right' ? 'text-right' : 'text-left'}`}
+                    className={`px-3 py-2 cursor-pointer select-none ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.cls ?? ''}`}
                     onClick={() => toggleSort(col.key)}
                   >
                     {col.label}
                     {sortKey === col.key && <span className="ml-1 opacity-60">{sortDesc ? '▼' : '▲'}</span>}
                   </th>
                 ))}
-                <th className="px-3 py-2 text-right opacity-60">3PT</th>
-                <th className="px-3 py-2 text-right opacity-60">DEF</th>
-                <th className="px-3 py-2 text-right opacity-60">REB</th>
+                {/* Rating peeks — secondary context, only at md+. */}
+                <th className="px-3 py-2 text-right opacity-60 hidden md:table-cell">3PT</th>
+                <th className="px-3 py-2 text-right opacity-60 hidden md:table-cell">DEF</th>
+                <th className="px-3 py-2 text-right opacity-60 hidden md:table-cell">REB</th>
               </tr>
             </thead>
             <tbody>
@@ -436,15 +441,15 @@ export default function TeamPage() {
                       </Link>
                     </td>
                     <td className="px-3 py-2">{p.sportData.position}</td>
-                    <td className="px-3 py-2 text-right">{p.age}</td>
+                    <td className="px-3 py-2 text-right hidden sm:table-cell">{p.age}</td>
                     <td className="px-3 py-2 text-right font-bold">{p.ratings.overall}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{gp || '—'}</td>
+                    <td className="px-3 py-2 text-right tabular-nums hidden sm:table-cell">{gp || '—'}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{pg(s.points)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{pg(s.totalRebounds)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{pg(s.assists)}</td>
-                    <td className="px-3 py-2 text-right opacity-70">{p.ratings.threePoint}</td>
-                    <td className="px-3 py-2 text-right opacity-70">{Math.round((p.ratings.perimeterDefense + p.ratings.interiorDefense) / 2)}</td>
-                    <td className="px-3 py-2 text-right opacity-70">{p.ratings.rebounding}</td>
+                    <td className="px-3 py-2 text-right tabular-nums hidden sm:table-cell">{pg(s.totalRebounds)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums hidden sm:table-cell">{pg(s.assists)}</td>
+                    <td className="px-3 py-2 text-right opacity-70 hidden md:table-cell">{p.ratings.threePoint}</td>
+                    <td className="px-3 py-2 text-right opacity-70 hidden md:table-cell">{Math.round((p.ratings.perimeterDefense + p.ratings.interiorDefense) / 2)}</td>
+                    <td className="px-3 py-2 text-right opacity-70 hidden md:table-cell">{p.ratings.rebounding}</td>
                   </tr>
                 );
               })}
