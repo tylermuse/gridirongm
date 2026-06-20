@@ -25,11 +25,19 @@ function money(n: number): string {
 function lastLine(f: FreeAgentInfo): { ppg: number; text: string } {
   const log = f.player.sportData.seasonLog;
   const last = log && log.length ? log[log.length - 1] : null;
-  if (last && last.gamesPlayed) return { ppg: last.ppg, text: `${last.ppg}/${last.rpg}/${last.apg}` };
+  // BUG-34: append a games-played suffix so the user can read whether a
+  // line is off a real workload or a tiny sample (the FA pool routinely
+  // mixes both — vet starters and one-game cup-of-coffee deals).
+  if (last && last.gamesPlayed) return { ppg: last.ppg, text: `${last.ppg}/${last.rpg}/${last.apg} · ${last.gamesPlayed} GP` };
   // Fallback: career per-game (BUG-27). Free agents who sat unsigned all year —
   // or imported vets with no in-sim logged season — still show real production
   // from their career totals instead of a bare "—".
-  return careerPerGameLine(f.player) ?? { ppg: 0, text: '—' };
+  const career = careerPerGameLine(f.player);
+  if (career) {
+    const cs = f.player.careerStats;
+    return { ppg: career.ppg, text: `${career.text} · ${cs?.gamesPlayed ?? 0} GP` };
+  }
+  return { ppg: 0, text: '—' };
 }
 
 export function FreeAgentTable({
