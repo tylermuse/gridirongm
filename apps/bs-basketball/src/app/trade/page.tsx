@@ -52,9 +52,14 @@ function TradePage() {
   const searchParams = useSearchParams();
   const initTarget = searchParams.get('target');
   const initGetPlayer = searchParams.get('getPlayer');
+  // FEAT-5: ?give=<playerId> seeds the user's side with that player as an
+  // outgoing asset — invoked from the roster page Trade… menu item, so the
+  // builder opens with that player already on the block instead of dropping
+  // the user into an empty trade screen.
+  const initGivePlayer = searchParams.get('give');
 
   const [targetId, setTargetId] = useState<string>(() => initTarget ?? '');
-  const [mine, setMine] = useState<Set<string>>(new Set());
+  const [mine, setMine] = useState<Set<string>>(() => (initGivePlayer ? new Set([initGivePlayer]) : new Set()));
   const [theirs, setTheirs] = useState<Set<string>>(() => (initTarget && initGetPlayer ? new Set([initGetPlayer]) : new Set()));
   const [myPicks, setMyPicks] = useState<Set<string>>(new Set());
   const [theirPicks, setTheirPicks] = useState<Set<string>>(new Set());
