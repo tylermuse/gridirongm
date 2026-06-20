@@ -20,7 +20,12 @@ export type LotteryMovement = 'big_jump' | 'jump' | 'held' | 'slip' | 'big_slip'
 export interface LotteryRevealCard {
   /** 1..14 — the pick being revealed. */
   overall: number;
+  /** Current owner of the pick (the team that actually picks with it). */
   team: BasketballTeam;
+  /** Original owner of the pick — distinct from `team` when the pick has been
+   *  traded. The lottery seed + odds reflect this team's record, not the
+   *  current holder's. */
+  originalTeam: BasketballTeam | null;
   /** Pick this team was seeded to land on its odds alone (1..14). */
   expectedSlot: number;
   /** The seeded team's pre-lottery chance (%) at the No. 1 pick. */
@@ -147,11 +152,20 @@ export function buildLotteryReveal(
     if (!slot.isLottery) break;
     const team = teamById.get(slot.teamId);
     if (!team) continue;
-    const expectedSlot = seedOf.get(slot.teamId) ?? slot.overall;
+    // Lottery seed + odds are anchored on the pick's ORIGINAL owner (the team
+    // whose record earned the lottery slot), not the current holder after any
+    // trade — that's the row Tyler flagged where his Clippers acquired a pick
+    // but the reveal card surfaced HIS team's seed instead of the original.
+    const originalTeamId = slot.originalTeamId ?? slot.teamId;
+    const expectedSlot = seedOf.get(originalTeamId) ?? slot.overall;
     const delta = expectedSlot - slot.overall;
+    const originalTeam = originalTeamId !== slot.teamId
+      ? (teamById.get(originalTeamId) ?? null)
+      : null;
     const base = {
       overall: slot.overall,
       team,
+      originalTeam,
       expectedSlot,
       oddsPct: lotteryTopPickOddsPct(expectedSlot),
       delta,
