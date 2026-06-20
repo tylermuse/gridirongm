@@ -624,16 +624,18 @@ function ActionCell({ toggle, onMenu }: { toggle: { label: string; onClick: () =
   return (
     <span className="flex items-center justify-end gap-1">
       {toggle && (
+        // MOBILE-5: bs-touch-target lifts this from ~20px → 44px min on
+        // touch devices only — desktop stays compact.
         <button
           onClick={toggle.onClick}
-          className="text-[11px] font-semibold rounded border px-1.5 py-0.5 hover:bg-[var(--surface-2)]"
+          className="bs-touch-target text-[11px] font-semibold rounded border px-1.5 py-0.5 hover:bg-[var(--surface-2)]"
           style={{ borderColor: toggle.accent ? 'var(--accent)' : 'var(--border)', color: toggle.accent ? 'var(--accent)' : 'var(--text-sec)' }}
         >
           {toggle.label}
         </button>
       )}
       {onMenu && (
-        <button onClick={onMenu} className="w-6 h-6 rounded hover:bg-[var(--surface-2)] text-[var(--text-sec)]" aria-label="Player actions" title="Actions">⋯</button>
+        <button onClick={onMenu} className="bs-touch-target w-6 h-6 rounded hover:bg-[var(--surface-2)] text-[var(--text-sec)]" aria-label="Player actions" title="Actions">⋯</button>
       )}
     </span>
   );
