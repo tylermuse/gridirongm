@@ -277,8 +277,12 @@ function LineScoreFallback({
 }: {
   away: BasketballTeam;
   home: BasketballTeam;
-  game: { id: string; finalScore: { home: number; away: number } };
+  game: { id: string; finalScore: { home: number; away: number } | null };
 }) {
+  // Defensive: the outer page already short-circuits unplayed games, but the
+  // type is nullable upstream.
+  if (!game.finalScore) return null;
+  const finalScore = game.finalScore;
   const splitTotal = (total: number, seed: string): number[] => {
     // Tiny deterministic RNG (xfnv1 hash → mulberry-style step).
     let h = 2166136261;
@@ -294,12 +298,12 @@ function LineScoreFallback({
     raw[3] += diff;
     return raw;
   };
-  const awayQs = splitTotal(game.finalScore.away, `${game.id}-A`);
-  const homeQs = splitTotal(game.finalScore.home, `${game.id}-H`);
+  const awayQs = splitTotal(finalScore.away, `${game.id}-A`);
+  const homeQs = splitTotal(finalScore.home, `${game.id}-H`);
   const labels = ['Q1', 'Q2', 'Q3', 'Q4'];
   const rows: { team: BasketballTeam; qs: number[]; total: number }[] = [
-    { team: away, qs: awayQs, total: game.finalScore.away },
-    { team: home, qs: homeQs, total: game.finalScore.home },
+    { team: away, qs: awayQs, total: finalScore.away },
+    { team: home, qs: homeQs, total: finalScore.home },
   ];
   return (
     <section className="mb-6 rounded border overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
