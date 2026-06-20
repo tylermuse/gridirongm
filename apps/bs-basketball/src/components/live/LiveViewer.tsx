@@ -108,8 +108,12 @@ export function LiveViewer({
           <ScoreSide team={home} score={score.home} align="right" />
         </div>
 
-        {/* Court canvas */}
-        <div className="max-w-md mx-auto mt-3">
+        {/* Court canvas. MOBILE-3: hidden below md. The court at 390px renders
+            as a ~358×125px abstract strip that reads more like a hockey rink
+            than a basketball court — and the play-by-play below is the
+            genuinely good part of this view. Reclaiming that vertical space
+            until a proper mobile court redesign lands. */}
+        <div className="hidden md:block max-w-md mx-auto mt-3">
           <CourtCanvas home={home} away={away} last={last} cursor={cursor} />
         </div>
       </div>
