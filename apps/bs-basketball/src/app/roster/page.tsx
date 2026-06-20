@@ -82,6 +82,16 @@ export default function RosterPage() {
 
   const statsMap = useMemo(() => (league ? regularSeasonStatsByPlayer(league) : new Map()), [league]);
 
+  // BUG-24: during the offseason Re-sign phase, the engine flags expiring
+  // players on sportData.pendingResign. Tint their rows so the user can see
+  // his roster as it WOULD look without them (pending walk to FA).
+  const pendingResignIds = useMemo(
+    () => new Set<string>(
+      (league?.sportData as { pendingResign?: string[] } | undefined)?.pendingResign ?? [],
+    ),
+    [league],
+  );
+
   // OVR rank on the team (0 = best) — drives the Mood model.
   const talentRank = useMemo(() => {
     const m = new Map<string, number>();
@@ -357,6 +367,12 @@ export default function RosterPage() {
         <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>Starters</div>
         {POSITIONS.map((pos, slot) => {
           const p = starters[slot] ? playerById[starters[slot]] : null;
+          // BUG-24: amber tint overrides the starter-row accent when expiring.
+          const isPending = !!p && pendingResignIds.has(p.id);
+          const baseBg = dragOverSlot === slot
+            ? 'color-mix(in srgb, var(--accent) 14%, transparent)'
+            : 'color-mix(in srgb, var(--accent) 5%, transparent)';
+          const starterBg = isPending ? 'color-mix(in srgb, #f59e0b 14%, transparent)' : baseBg;
           return (
             <div
               key={pos}
@@ -366,7 +382,8 @@ export default function RosterPage() {
               onDragLeave={isReadOnly ? undefined : () => setDragOverSlot(s => (s === slot ? null : s))}
               onDrop={isReadOnly ? undefined : e => onDropSlot(slot, e)}
               className={`${ROW_GRID} border-t ${p && !isReadOnly ? 'cursor-grab' : ''}`}
-              style={{ ...ROW_COLS, borderColor: 'var(--border)', background: dragOverSlot === slot ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'color-mix(in srgb, var(--accent) 5%, transparent)' }}
+              style={{ ...ROW_COLS, borderColor: 'var(--border)', background: starterBg }}
+              title={isPending ? 'Expiring contract — re-sign or this player walks at season start' : undefined}
             >
               <span className="text-[11px] font-black text-center rounded" style={{ color: POS_COLORS[pos] }} title={`Starting ${pos}`}>{pos}</span>
               {p ? renderCells(p, true, { id: p.id, from: 'starter', slot }) : <EmptyStarter />}
@@ -385,13 +402,19 @@ export default function RosterPage() {
         {bench.map(id => {
           const p = playerById[id];
           if (!p) return null;
+          // BUG-24: amber tint for expiring players during Re-sign phase.
+          const isPending = pendingResignIds.has(p.id);
+          const benchRowStyle = isPending
+            ? { ...ROW_COLS, borderColor: 'var(--border)', background: 'color-mix(in srgb, #f59e0b 10%, transparent)' }
+            : { ...ROW_COLS, borderColor: 'var(--border)' };
           return (
             <div
               key={id}
               draggable={!isReadOnly}
               onDragStart={isReadOnly ? undefined : e => { e.dataTransfer.setData('application/json', JSON.stringify({ id: p.id, from: 'bench', slot: -1 })); e.dataTransfer.effectAllowed = 'move'; }}
               className={`${ROW_GRID} border-t ${isReadOnly ? '' : 'cursor-grab'}`}
-              style={{ ...ROW_COLS, borderColor: 'var(--border)' }}
+              style={benchRowStyle}
+              title={isPending ? 'Expiring contract — re-sign or this player walks at season start' : undefined}
             >
               <span className="text-xs opacity-30 text-center select-none" aria-hidden>⠿</span>
               {renderCells(p, false, { id: p.id, from: 'bench', slot: -1 })}
