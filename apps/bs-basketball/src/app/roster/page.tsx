@@ -237,7 +237,11 @@ export default function RosterPage() {
   }
   function onExtend(id: string) { setMenu(null); setExtendId(id); }
   function onDetails(id: string) { setMenu(null); setModalPlayerId(id); }
-  function onTrade() { setMenu(null); router.push('/trade'); }
+  // FEAT-5: deep-link the trade builder with this player pre-loaded as one of
+  // the user's outgoing assets. /trade already reads ?give=<playerId> for the
+  // user side (mirrors the existing ?target=...&getPlayer=... seed used by
+  // "Trade for this player" entry points on the team / player pages).
+  function onTrade(id: string) { setMenu(null); router.push(`/trade?give=${id}`); }
 
   // Just the roster count, or "Cut to 15" when over the limit. There used to be a
   // "Sign a free agent" pill when short-handed, but it was a non-interactive span
@@ -446,7 +450,7 @@ export default function RosterPage() {
           >
             <MenuItem label="Extend contract" onClick={() => onExtend(menu.id)} />
             <MenuItem label="View details" onClick={() => onDetails(menu.id)} />
-            <MenuItem label="Trade…" onClick={onTrade} />
+            <MenuItem label="Trade…" onClick={() => onTrade(menu.id)} />
             <div className="my-1 border-t" style={{ borderColor: 'var(--border)' }} />
             <MenuItem label="Release" danger onClick={() => void onRelease(menu.id)} />
           </div>
