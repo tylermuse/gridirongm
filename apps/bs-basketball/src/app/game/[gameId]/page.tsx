@@ -196,10 +196,16 @@ export default function GamePage() {
         />
       </section>
 
-      {/* Quarter-by-quarter line score + game info (FEAT-24). */}
+      {/* Quarter-by-quarter line score + game info (FEAT-24). When the engine
+          recorded per-quarter splits we use them; otherwise we fall back to a
+          deterministic synthetic split from the final score so the view is
+          always present (covers playoff games saved before BUG-30 lost the
+          quarterScores in sportData). */}
       {gameData?.quarterScores?.length ? (
         <LineScore away={awayTeam} home={homeTeam} data={gameData} />
-      ) : null}
+      ) : (
+        <LineScoreFallback away={awayTeam} home={homeTeam} game={game} />
+      )}
 
       <GameLeaders away={awayTeam} home={homeTeam} game={game} playerMap={playerMap} onPlayerClick={setModalPlayerId} />
 
@@ -250,6 +256,73 @@ function LineScore({ away, home, data }: { away: BasketballTeam; home: Basketbal
         <span>· {data.totalPossessions} possessions</span>
         <span>· {data.pace} pace</span>
         {data.wentToOvertime ? <span>· {data.periodsPlayed - 4} OT</span> : null}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Synthetic line score for games where the engine did not persist quarter
+ * splits (older saves + playoff games simmed before BUG-30 landed). We rebuild
+ * a plausible 4-quarter breakdown from the final score using a small seeded
+ * RNG keyed on the game id, so the split is deterministic across reloads:
+ * same game → same Q1/Q2/Q3/Q4 every time.
+ *
+ * The split favors a mild halftime bump (Q2 + Q3 a touch lower than Q1 + Q4
+ * to approximate NBA rest-pace patterns) and balances rounding so the four
+ * quarters always sum to the real total.
+ */
+function LineScoreFallback({
+  away, home, game,
+}: {
+  away: BasketballTeam;
+  home: BasketballTeam;
+  game: { id: string; finalScore: { home: number; away: number } };
+}) {
+  const splitTotal = (total: number, seed: string): number[] => {
+    // Tiny deterministic RNG (xfnv1 hash → mulberry-style step).
+    let h = 2166136261;
+    for (let i = 0; i < seed.length; i++) { h ^= seed.charCodeAt(i); h = Math.imul(h, 16777619); }
+    const next = () => { h = (h + 0x6D2B79F5) >>> 0; let t = h; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    // Base each quarter at total/4, jitter ±15% with a slight Q2/Q3 dip.
+    const base = total / 4;
+    const weights = [1.04, 0.96, 0.96, 1.04].map(w => w * (0.88 + next() * 0.24));
+    const wSum = weights.reduce((s, w) => s + w, 0);
+    const raw = weights.map(w => Math.round((base * 4) * (w / wSum)));
+    // Force exact sum by nudging the last quarter.
+    const diff = total - raw.reduce((s, n) => s + n, 0);
+    raw[3] += diff;
+    return raw;
+  };
+  const awayQs = splitTotal(game.finalScore.away, `${game.id}-A`);
+  const homeQs = splitTotal(game.finalScore.home, `${game.id}-H`);
+  const labels = ['Q1', 'Q2', 'Q3', 'Q4'];
+  const rows: { team: BasketballTeam; qs: number[]; total: number }[] = [
+    { team: away, qs: awayQs, total: game.finalScore.away },
+    { team: home, qs: homeQs, total: game.finalScore.home },
+  ];
+  return (
+    <section className="mb-6 rounded border overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="opacity-60" style={{ background: 'var(--muted)' }}>
+            <th className="px-3 py-1.5 text-left font-semibold">Team</th>
+            {labels.map(l => <th key={l} className="px-3 py-1.5 text-center font-semibold">{l}</th>)}
+            <th className="px-3 py-1.5 text-center font-semibold">T</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ team, qs, total }) => (
+            <tr key={team.id} className="border-t" style={{ borderColor: 'var(--border)' }}>
+              <td className="px-3 py-1.5 font-semibold">{team.abbreviation}</td>
+              {qs.map((n, i) => <td key={i} className="px-3 py-1.5 text-center tabular-nums">{n}</td>)}
+              <td className="px-3 py-1.5 text-center font-bold tabular-nums">{total}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="px-3 py-2 text-[11px] text-[var(--text-sec)] border-t" style={{ borderColor: 'var(--border)' }}>
+        Estimated splits — this game was simulated before per-quarter scoring was recorded.
       </div>
     </section>
   );
