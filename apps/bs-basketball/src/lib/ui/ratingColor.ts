@@ -26,6 +26,12 @@ export function ratingGrade(v: number): string {
     : v >= 60 ? 'C+' : v >= 55 ? 'C' : v >= 50 ? 'C-' : 'D';
 }
 
+/** Qualitative tier label for a 0–99 rating — football-parity for the
+ *  PlayerCard so a new user can read 'Elite' rather than decode '83'. */
+export function ratingTier(v: number): 'Elite' | 'Good' | 'Avg' | 'Poor' {
+  return v >= 80 ? 'Elite' : v >= 65 ? 'Good' : v >= 50 ? 'Avg' : 'Poor';
+}
+
 /** Readable text color (#fff / near-black) for content sitting on a team color. */
 export function getContrastText(hex: string): string {
   const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
