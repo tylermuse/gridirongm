@@ -78,10 +78,12 @@ export function FreeAgentTable({
             <th className="w-5"></th>
             <th className="text-left pl-1">Player</th>
             <th className="text-center">Pos</th>
-            {th('age', 'Age', 'text-center')}
+            {/* MOBILE-1c: hide Age / POT / Last on phone (drop the densest
+                columns to keep OVR + Ask + Action readable at 390px). */}
+            {th('age', 'Age', 'text-center hidden sm:table-cell')}
             {th('ovr', 'OVR', 'text-center')}
-            {th('pot', 'POT', 'text-center')}
-            {th('ppg', 'Last', 'text-center')}
+            {th('pot', 'POT', 'text-center hidden sm:table-cell')}
+            {th('ppg', 'Last', 'text-center hidden md:table-cell')}
             {th('ask', 'Ask', 'text-right')}
             <th className="text-right pr-3">Action</th>
           </tr>
@@ -110,10 +112,10 @@ export function FreeAgentTable({
                     </div>
                   </td>
                   <td className="text-center"><Chip>{p.sportData.position}</Chip></td>
-                  <td className="text-center tabular-nums text-[var(--text-sec)]">{p.age}</td>
+                  <td className="text-center tabular-nums text-[var(--text-sec)] hidden sm:table-cell">{p.age}</td>
                   <td className={`text-center font-bold tabular-nums ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
-                  <td className="text-center tabular-nums text-[var(--text-sec)]">{p.development.potential}</td>
-                  <td className="text-center tabular-nums text-[var(--text-sec)]">{ll.text}</td>
+                  <td className="text-center tabular-nums text-[var(--text-sec)] hidden sm:table-cell">{p.development.potential}</td>
+                  <td className="text-center tabular-nums text-[var(--text-sec)] hidden md:table-cell">{ll.text}</td>
                   <td className="text-right tabular-nums">{money(f.marketSalary)}</td>
                   <td className="text-right pr-3">
                     <button onClick={e => { e.stopPropagation(); onSelect(f); }} className="text-xs font-bold rounded-md px-2.5 py-1 text-white" style={{ background: 'var(--accent)' }}>Offer</button>
