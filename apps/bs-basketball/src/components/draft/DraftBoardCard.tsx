@@ -125,10 +125,13 @@ export function DraftBoardCard({
         </details>
       )}
 
-      {/* Table */}
-      <div className="overflow-x-auto">
+      {/* Table — FEAT-3: cap the visible window at ~10 rows so the board
+          doesn't sprawl down the page, and scroll the rest. max-h is sized
+          for thead + 10 body rows at the current py-2.5 row height. Sticky
+          thead keeps column labels in view while the user scans down. */}
+      <div className="overflow-auto max-h-[28rem]">
         <table className="w-full text-sm min-w-[480px] sticky-col sticky-action">
-          <thead className="text-[var(--text-sec)] text-[10px] uppercase tracking-wider">
+          <thead className="text-[var(--text-sec)] text-[10px] uppercase tracking-wider sticky top-0 z-10" style={{ background: 'var(--surface)' }}>
             <tr>
               <th className="w-6"></th>
               <th className="w-12 text-center py-2">Proj</th>
