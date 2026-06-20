@@ -133,7 +133,7 @@ export default function AwardsPage() {
 
           {honors && (
             <>
-              <AllLeagueSection title="All-NBA" teams={honors.allNBA} teamById={teamById} onPlayerClick={setModalPlayerId} userTeamId={league.userTeamId} />
+              <AllLeagueSection title="All-League" teams={honors.allNBA} teamById={teamById} onPlayerClick={setModalPlayerId} userTeamId={league.userTeamId} />
               <AllLeagueSection title="All-Defensive" teams={honors.allDefensive} teamById={teamById} onPlayerClick={setModalPlayerId} userTeamId={league.userTeamId} />
               <AllLeagueSection title="All-Rookie" teams={honors.allRookie} teamById={teamById} onPlayerClick={setModalPlayerId} userTeamId={league.userTeamId} />
 
