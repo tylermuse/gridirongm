@@ -204,10 +204,20 @@ export default function ReSignPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
                       <button onClick={() => setModalPlayerId(p.id)} className="font-semibold truncate hover:underline text-left" style={{ color: 'var(--text)' }}>{p.firstName} {p.lastName}</button>
-                      {/* Stance chip steals room from the name on mobile — hide it there. */}
-                      <span className="hidden sm:inline-block text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: stance.bg, color: stance.fg }}>{stance.label}</span>
+                      {/* MOBILE-1b: keep the stance chip visible on phone too —
+                          previously hidden under sm: so the user couldn't tell
+                          if the player even wanted to stay. */}
+                      <span className="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: stance.bg, color: stance.fg }}>{stance.label}</span>
                     </div>
                     <div className="text-xs text-[var(--text-sec)]">{p.sportData.position} · Age {p.age} · {p.ratings.overall} OVR{lastSeasonStatLine(p) ? ` · ${lastSeasonStatLine(p)}` : ''}</div>
+                    {/* MOBILE-1b: surface the cost on phone too — previously the
+                        whole asks block was `hidden sm:block` so phone users tapped
+                        Re-sign / Let Walk without seeing the salary / years / cap
+                        hit. Reflow under the name on mobile; the side-right block
+                        below still wins on >=sm. */}
+                    <div className="sm:hidden text-xs font-semibold tabular-nums mt-0.5">
+                      Asks {money(ask.marketSalary)}/yr · {ask.desiredYears}y · <span style={{ color: '#dc2626' }}>−{money(ask.marketSalary)}</span>
+                    </div>
                   </div>
                   <div className="text-right shrink-0 hidden sm:block">
                     <div className="text-[10px] uppercase tracking-wide text-[var(--text-sec)]">asks · costs next yr</div>
