@@ -82,10 +82,20 @@ function sideAssetCount(s: TradeSideInput): number {
   return s.playerIds.length + (s.pickIds?.length ?? 0);
 }
 
-/** True if the deal has assets on both sides and is legal + accepted by all. */
+/** True if the deal has assets on both sides, is legal, and the PARTNER (CPU
+ *  side) accepts. BUG-36: the user's own team used to be in the allAccept check,
+ *  which auto-rejected unfavorable-but-legal deals before the user could
+ *  even send them. Tyler's call on whether to take a "slight overpay" — only
+ *  the AI partner decides on its own behalf. sides[0] is always the user; we
+ *  override that side's willAccept by skipping it in the gate. */
 export function isExecutable(evaluation: BasketballTradeEvaluation, sides: TradeSideInput[]): boolean {
   const hasAssets = sides.length === 2 && sides.every(s => sideAssetCount(s) > 0);
-  return hasAssets && evaluation.legal && evaluation.allAccept;
+  if (!hasAssets || !evaluation.legal) return false;
+  const userTeamId = sides[0]?.teamId;
+  const partnerAccepts = evaluation.perTeam
+    .filter(t => t.teamId !== userTeamId)
+    .every(t => t.willAccept);
+  return partnerAccepts;
 }
 
 export interface ProposeResult {

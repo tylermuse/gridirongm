@@ -30,6 +30,7 @@ import {
   type ImportedHoopsLeague,
 } from '../data/leagueImport';
 import { ESPN_2026_R1_ORDER, normalizeAbbrev } from '../data/draft2026';
+import { backfillPlayerPhotos } from '../data/photoBackfill';
 import {
   saveLeague,
   loadLeague as loadLeagueFromDb,
@@ -443,10 +444,18 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         set({ loading: false });
         return;
       }
-      const league = await loadLeagueFromDb(meta.id);
-      if (!league) {
+      const loaded = await loadLeagueFromDb(meta.id);
+      if (!loaded) {
         set({ loading: false, error: 'Most recent save was corrupted.' });
         return;
+      }
+      // BUG-31b: pre-fix saves don't have photoUrl on existing players. Run
+      // the one-shot photo backfill (fetches the bundled NBA roster, matches
+      // by first+last, patches sportData.photoUrl). Persists the patched
+      // league back to Dexie so we don't repeat the fetch on next hydrate.
+      const league = await backfillPlayerPhotos(loaded);
+      if (league !== loaded) {
+        try { await saveLeague(league); } catch (err) { console.warn('[bs-hoops] photo backfill save failed', err); }
       }
       set({ league, loading: false });
     } catch (err) {
