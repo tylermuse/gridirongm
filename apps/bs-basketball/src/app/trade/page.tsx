@@ -96,8 +96,18 @@ function TradePage() {
     [league, sides],
   );
 
+  // BUG-26: per-player season stats, computed once at page level and
+  // threaded through to the trade tables for inline PPG/RPG/APG.
+  // Must be declared BEFORE the early returns below — calling useMemo
+  // conditionally is a Rules of Hooks violation, and the previous version
+  // sat after the loading/null checks. That meant the hook ordering shifted
+  // after a successful trade (when the store re-renders this component with
+  // a fresh league), throwing the "client-side exception" Tyler hit on
+  // /trade right after consummating a deal.
+  const statsMap = useMemo(() => (league ? regularSeasonStatsByPlayer(league) : null), [league]);
+
   if (loading) return <Loading />;
-  if (!league) return <NotFound message={error ?? 'No league loaded.'} />;
+  if (!league || !statsMap) return <NotFound message={error ?? 'No league loaded.'} />;
 
   if (!userTeamId) {
     return (
@@ -112,9 +122,6 @@ function TradePage() {
   const userTeam = teamById.get(userTeamId)!;
   const targetTeam = targetId ? teamById.get(targetId) : null;
   const playerById = league.players as Record<string, BasketballPlayer>;
-  // BUG-26: per-player season stats, computed once at page level and
-  // threaded through to the trade tables for inline PPG/RPG/APG.
-  const statsMap = useMemo(() => regularSeasonStatsByPlayer(league), [league]);
   const season = league.currentSeason;
   const window = tradeWindowClosed(league);
   const hasAssets = (mine.size + myPicks.size > 0) && (theirs.size + theirPicks.size > 0);
