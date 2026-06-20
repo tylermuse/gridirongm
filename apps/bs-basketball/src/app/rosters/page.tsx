@@ -176,6 +176,28 @@ export default function RostersPage() {
           />
         </div>
       </Card>
+
+      {/* EPIC-I: "What you'll get" preview. The page used to dead-end at the
+          two import cards, leaving ~60% of viewport empty — read like a
+          half-finished form. Anchor the bottom of the page with the value
+          props so the import feels like the start of something, not the
+          whole thing. */}
+      <div className="mt-8">
+        <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-sec)] mb-3">What you&apos;ll get</div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {[
+            { icon: '🏀', title: 'Full season sim', body: 'Play a single game or sim to the next milestone — All-Star break, playoffs, lottery.' },
+            { icon: '💼', title: 'Front-office tools', body: 'Trades with full pick + contract context, Bird-rights free agency, GM rankings.' },
+            { icon: '📊', title: 'Deep stats + awards', body: 'League leaders, team rankings, MVP / ROY / MIP races, draft scouting reports.' },
+          ].map(b => (
+            <div key={b.title} className="rounded-xl border p-4 bg-[var(--surface)]" style={{ borderColor: 'var(--border)' }}>
+              <div className="text-2xl mb-2" aria-hidden>{b.icon}</div>
+              <div className="text-sm font-bold mb-1">{b.title}</div>
+              <div className="text-xs text-[var(--text-sec)]">{b.body}</div>
+            </div>
+          ))}
+        </div>
+      </div>
     </main>
   );
 }
