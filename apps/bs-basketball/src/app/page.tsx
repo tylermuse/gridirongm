@@ -130,15 +130,21 @@ export default function HomePage() {
         {userTeam ? (
           <TeamHero league={league} team={userTeam as BasketballTeam} />
         ) : (
+          // R2-4: lead with the current season so the headline reads as the
+          // active state, not the league founding year. League name was
+          // surfacing as "BS Hoops 2026" (the year the save was created)
+          // adjacent to "Season 2029 · Draft" — those two years contradicted
+          // each other on first glance. Now the current season is the lockup
+          // and the league name is the smaller meta label underneath.
           <div className="flex flex-wrap items-baseline gap-4 mb-6">
             <h1
               className="text-5xl sm:text-6xl font-black tracking-tight"
               style={{ fontFamily: 'var(--font-display)', color: 'var(--accent)' }}
             >
-              {league.displayName}
+              {league.currentSeason} {nextAction(league).phaseLabel}
             </h1>
             <span className="text-[var(--text-sec)] text-sm">
-              Season {league.currentSeason} · {nextAction(league).phaseLabel}
+              {league.displayName}
             </span>
           </div>
         )}
@@ -220,7 +226,13 @@ export default function HomePage() {
           );
         })()}
 
-        {draft ? (
+        {/* R2-3: when the user has been fired and has not yet taken a new job,
+            suppress the draft / season-over CTAs and the bottom action row.
+            Otherwise the home dashboard had three competing "primary" paths
+            (the openings list, the draft banner, "Enter League") all asking
+            for the same click. Sequence it: take a job first, *then* surface
+            the draft / season-over CTAs once they have a team. */}
+        {fired && !league.userTeamId ? null : draft ? (
           <div
             className="mb-8 rounded-xl border-2 p-5 flex flex-wrap items-center gap-4"
             style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}
@@ -299,13 +311,26 @@ export default function HomePage() {
           <div className="lg:col-span-2">
             {userTeam && <OwnerObjectives league={league} team={userTeam as BasketballTeam} />}
 
+            {/* R2-3: bottom action row collapses while the user is between
+                jobs (fired + no replacement team). Only "Back to menu" remains
+                so they can bail out to save management — every other button
+                points to surfaces that require a team. */}
             <div className="flex flex-wrap gap-3">
-              <Link href="/league">
-                <Button variant="primary" size="lg">Enter League →</Button>
-              </Link>
-              <Link href="/standings">
-                <Button variant="secondary" size="lg">Standings</Button>
-              </Link>
+              {(!fired || !!league.userTeamId) && (
+                <>
+                  <Link href="/league">
+                    <Button variant="primary" size="lg">Enter League →</Button>
+                  </Link>
+                  <Link href="/standings">
+                    <Button variant="secondary" size="lg">Standings</Button>
+                  </Link>
+                </>
+              )}
+              {fired && !league.userTeamId && (
+                <Link href="/standings">
+                  <Button variant="secondary" size="lg">Browse Standings</Button>
+                </Link>
+              )}
               {userTeam && (
                 <Link href={`/team/${userTeam.id}`}>
                   <Button variant="secondary" size="lg">My Team</Button>
