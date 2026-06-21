@@ -125,11 +125,11 @@ export function DraftBoardCard({
         </details>
       )}
 
-      {/* Table — FEAT-3: cap the visible window at ~10 rows so the board
-          doesn't sprawl down the page, and scroll the rest. max-h is sized
-          for thead + 10 body rows at the current py-2.5 row height. Sticky
-          thead keeps column labels in view while the user scans down. */}
-      <div className="overflow-auto max-h-[28rem]">
+      {/* Table — FEAT-3 + STYLE-2: cap the visible window so the board doesn't
+          sprawl, while showing enough prospects to scout meaningfully. 40rem
+          ≈ 14 rows + thead — matches the paired Draft Results card and is
+          tall enough that the lottery range (14 picks) fits without scroll. */}
+      <div className="overflow-auto max-h-[40rem]">
         <table className="w-full text-sm min-w-[480px] sticky-col sticky-action">
           <thead className="text-[var(--text-sec)] text-[10px] uppercase tracking-wider sticky top-0 z-10" style={{ background: 'var(--surface)' }}>
             <tr>
