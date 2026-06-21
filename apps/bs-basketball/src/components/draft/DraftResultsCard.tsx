@@ -54,9 +54,13 @@ export function DraftResultsCard({
         )}
       </div>
 
-      {/* FEAT-3: match the Draft Board's 28rem scrollable window so the two
-          cards line up side-by-side instead of one running long. */}
-      <div className="overflow-x-auto max-h-[28rem] overflow-y-auto">
+      {/* FEAT-3 + STYLE-2: bump the scroll window so a clean number of full
+          rows is visible. The previous 28rem cap clipped the 11th row mid-cell
+          (Tyler's screenshot of the half-visible OKC #12). 40rem now shows ~14
+          clean rows with thead, matches the eyeline of the Draft Board next to
+          it without either table dead-ending the user before the lottery picks
+          finish. */}
+      <div className="overflow-x-auto max-h-[40rem] overflow-y-auto">
         <table className="w-full text-sm sticky-col">
           <thead className="text-[var(--text-sec)] text-[10px] uppercase tracking-wider sticky top-0" style={{ background: 'var(--surface)' }}>
             <tr>
