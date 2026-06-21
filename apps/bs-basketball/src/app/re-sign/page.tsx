@@ -303,7 +303,7 @@ export default function ReSignPage() {
         )}
         <div className="flex items-center gap-3 px-4 py-3">
           <Button variant="primary" disabled={over > 0 || store.loading} onClick={() => void startSeason()}>
-            {store.loading ? 'Opening free agency…' : 'Sign Free Agents in the Preseason →'}
+            {store.loading ? 'Opening free agency…' : 'Sign Free Agents →'}
           </Button>
           {over > 0 && <span className="text-sm text-[var(--text-sec)]">Cut {over} more to continue.</span>}
         </div>
