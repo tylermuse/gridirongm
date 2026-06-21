@@ -88,13 +88,21 @@ export function LotteryBoard({
                       {revealed ? (
                         <>
                           <td className="px-3 py-1.5">
-                            <span className="inline-flex items-center gap-2">
+                            <span className="inline-flex items-center gap-2 flex-wrap">
                               <TeamLogo abbreviation={c.team.abbreviation} primaryColor={c.team.primaryColor} secondaryColor={c.team.secondaryColor} size="xs" />
                               <span className="font-semibold">{c.team.city} {c.team.name}</span>
                               {c.isUser && <span className="text-[10px] font-bold" style={{ color: 'var(--accent)' }}>YOU</span>}
+                              {/* Traded pick: surface the original team whose
+                                  record actually earned this lottery slot. */}
+                              {c.originalTeam && (
+                                <span className="text-[10px] text-[var(--text-sec)]">via {c.originalTeam.abbreviation}</span>
+                              )}
                             </span>
                           </td>
-                          <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-sec)]">seeded {ordinal(c.expectedSlot)}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-sec)]">
+                            seeded {ordinal(c.expectedSlot)}
+                            {c.originalTeam && <span className="block text-[10px] opacity-70">({c.originalTeam.abbreviation})</span>}
+                          </td>
                           <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-sec)]">{c.oddsPct.toFixed(1)}%</td>
                           <td className="px-3 py-1.5 text-right tabular-nums"><MovementTag delta={c.delta} /></td>
                         </>

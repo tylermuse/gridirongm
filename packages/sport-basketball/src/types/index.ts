@@ -201,6 +201,11 @@ export interface BasketballPlayerData {
    *  generated future classes and off-board prospects (they fall back to
    *  talent-based scoring). */
   draftProjection?: number;
+  /** Headshot URL — stamped at import from BBGM/ZenGM's `imgURL` field.
+   *  PlayerAvatar renders it as a circular image when present and falls back
+   *  to initials otherwise. Generated players (drafted in-sim, future classes)
+   *  never have one. */
+  photoUrl?: string;
 }
 
 export interface PlayerSeasonLogEntry {

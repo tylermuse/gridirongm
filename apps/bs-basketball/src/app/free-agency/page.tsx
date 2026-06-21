@@ -251,7 +251,7 @@ export default function FreeAgencyPage() {
             ) : (
               <div className="rounded-xl border bg-[var(--surface)] p-4" style={{ borderColor: 'var(--border)' }}>
                 <div className="flex items-center gap-3 mb-4">
-                  <PlayerAvatar firstName={selected.player.firstName} lastName={selected.player.lastName} primaryColor="#444" secondaryColor="#fff" size="lg" />
+                  <PlayerAvatar firstName={selected.player.firstName} lastName={selected.player.lastName} primaryColor="#444" secondaryColor="#fff" photoUrl={selected.player.sportData.photoUrl} size="lg" />
                   <div className="min-w-0 flex-1">
                     <div className="font-bold truncate">{selected.player.firstName} {selected.player.lastName}</div>
                     <div className="text-xs text-[var(--text-sec)]">

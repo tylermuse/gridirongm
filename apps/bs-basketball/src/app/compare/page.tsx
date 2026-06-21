@@ -117,6 +117,7 @@ function PlayerSide({
           lastName={player.lastName}
           primaryColor={team?.primaryColor ?? '#E66B00'}
           secondaryColor={team?.secondaryColor ?? '#fff'}
+          photoUrl={player.sportData.photoUrl}
           size="lg"
         />
         <Link href={`/player/${player.id}`} className="font-bold leading-tight hover:underline">

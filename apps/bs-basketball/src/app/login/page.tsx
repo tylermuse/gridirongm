@@ -1,18 +1,42 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@bs/core/supabase/client';
 import { Button } from '@/components/ui/Button';
 
 /**
- * /login — optional sign-in for the global GM leaderboard (parity 3.3). The
- * game is fully playable logged-out; signing in just lets your franchise appear
- * on the global board. Email/password + Google + Discord.
+ * /login — optional sign-in for the global GM leaderboard (parity 3.3) AND
+ * the gateway used by the Stripe pricing flow. The game is fully playable
+ * logged-out; signing in lets your franchise appear on the leaderboard and
+ * connects a Supabase customer for billing.
+ *
+ * Honors a `?next=` query param (whitelisted to relative paths) so the pricing
+ * page can chain through here on the "Upgrade" CTA: /pricing → /login?next=/
+ * pricing?intent=checkout → /pricing auto-fires the Stripe checkout. Defaults
+ * to /gm-rankings when no `next` is set, mirroring the original behavior.
  */
+function safeNextPath(raw: string | null): string {
+  if (!raw) return '/gm-rankings';
+  if (!raw.startsWith('/') || raw.startsWith('//')) return '/gm-rankings';
+  return raw.length < 2048 ? raw : '/gm-rankings';
+}
+
 export default function LoginPage() {
+  // useSearchParams forces a client bailout — wrap in Suspense so `next build`
+  // can still prerender the route.
+  return (
+    <Suspense fallback={<main className="max-w-sm mx-auto p-8 text-sm text-[var(--text-sec)]">Loading…</main>}>
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = safeNextPath(searchParams.get('next'));
   const [mode, setMode] = useState<'in' | 'up'>('in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,12 +51,12 @@ export default function LoginPage() {
     setBusy(true); setMsg(null);
     try {
       if (mode === 'up') {
-        const { error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: `${window.location.origin}/api/auth/callback` } });
+        const { error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(next)}` } });
         setMsg(error ? error.message : 'Check your email to confirm, then sign in.');
       } else {
         const { error } = await sb.auth.signInWithPassword({ email, password });
         if (error) setMsg(error.message);
-        else router.push('/gm-rankings');
+        else router.push(next);
       }
     } finally { setBusy(false); }
   }
@@ -41,7 +65,7 @@ export default function LoginPage() {
     if (!sb) return;
     await sb.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent('/gm-rankings')}` },
+      options: { redirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(next)}` },
     });
   }
 

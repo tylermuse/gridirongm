@@ -122,17 +122,19 @@ export default function PlayersPage() {
         <span className="ml-auto text-xs text-[var(--text-sec)] self-center">{rows.length} players</span>
       </div>
 
-      {/* Table */}
+      {/* Table — MOBILE-4: progressive column hiding on phone (drop Team /
+          Age / POT below sm; drop Status below md). Keeps Name + Pos + OVR
+          legible at 390px without the side-scroll fight. */}
       <div className="rounded-xl border bg-[var(--surface)] overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
-        <table className="w-full text-sm min-w-[40rem]">
+        <table className="w-full text-sm">
           <thead><tr className="text-[var(--text-sec)] text-xs border-b" style={{ borderColor: 'var(--border)' }}>
             <Th onClick={() => toggleSort('name')} active={sortKey === 'name'} desc={desc} align="left">Name</Th>
-            <th className="px-3 py-2 text-left">Team</th>
+            <th className="px-3 py-2 text-left hidden sm:table-cell">Team</th>
             <th className="px-3 py-2 text-left">Pos</th>
-            <Th onClick={() => toggleSort('age')} active={sortKey === 'age'} desc={desc}>Age</Th>
+            <Th onClick={() => toggleSort('age')} active={sortKey === 'age'} desc={desc} className="hidden sm:table-cell">Age</Th>
             <Th onClick={() => toggleSort('overall')} active={sortKey === 'overall'} desc={desc}>OVR</Th>
-            <Th onClick={() => toggleSort('potential')} active={sortKey === 'potential'} desc={desc}>POT</Th>
-            <th className="px-3 py-2 text-right">Status</th>
+            <Th onClick={() => toggleSort('potential')} active={sortKey === 'potential'} desc={desc} className="hidden sm:table-cell">POT</Th>
+            <th className="px-3 py-2 text-right hidden md:table-cell">Status</th>
           </tr></thead>
           <tbody>
             {rows.slice(0, limit).map(p => {
@@ -143,12 +145,12 @@ export default function PlayersPage() {
                   <td className="px-3 py-1.5">
                     <button onClick={() => setModalPlayerId(p.id)} className="font-semibold hover:underline text-left" style={{ color: 'var(--accent)' }}>{p.firstName} {p.lastName}</button>
                   </td>
-                  <td className="px-3 py-1.5">{team ? <span className="inline-flex items-center gap-1.5"><TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="xs" />{team.abbreviation}</span> : <span className="text-[var(--text-sec)]">FA</span>}</td>
+                  <td className="px-3 py-1.5 hidden sm:table-cell">{team ? <span className="inline-flex items-center gap-1.5"><TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} size="xs" />{team.abbreviation}</span> : <span className="text-[var(--text-sec)]">FA</span>}</td>
                   <td className="px-3 py-1.5">{p.sportData.position}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">{p.age}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums hidden sm:table-cell">{p.age}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums font-bold" style={{ color: ovrColor(p.ratings.overall) }}>{p.ratings.overall}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums opacity-70">{p.development.potential}</td>
-                  <td className="px-3 py-1.5 text-right text-xs text-[var(--text-sec)]">{!p.rosterSlot ? 'Free agent' : yrs <= 1 ? 'Expiring' : `${yrs}y left`}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums opacity-70 hidden sm:table-cell">{p.development.potential}</td>
+                  <td className="px-3 py-1.5 text-right text-xs text-[var(--text-sec)] hidden md:table-cell">{!p.rosterSlot ? 'Free agent' : yrs <= 1 ? 'Expiring' : `${yrs}y left`}</td>
                 </tr>
               );
             })}
@@ -168,9 +170,9 @@ export default function PlayersPage() {
   );
 }
 
-function Th({ children, onClick, active, desc, align = 'right' }: { children: React.ReactNode; onClick: () => void; active: boolean; desc: boolean; align?: 'left' | 'right' }) {
+function Th({ children, onClick, active, desc, align = 'right', className = '' }: { children: React.ReactNode; onClick: () => void; active: boolean; desc: boolean; align?: 'left' | 'right'; className?: string }) {
   return (
-    <th className={`px-3 py-2 ${align === 'left' ? 'text-left' : 'text-right'}`}>
+    <th className={`px-3 py-2 ${align === 'left' ? 'text-left' : 'text-right'} ${className}`}>
       <button onClick={onClick} className="inline-flex items-center gap-1 hover:text-[var(--text)] font-semibold">{children}{active && <span aria-hidden>{desc ? '▼' : '▲'}</span>}</button>
     </th>
   );

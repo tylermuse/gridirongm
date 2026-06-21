@@ -237,7 +237,11 @@ export default function RosterPage() {
   }
   function onExtend(id: string) { setMenu(null); setExtendId(id); }
   function onDetails(id: string) { setMenu(null); setModalPlayerId(id); }
-  function onTrade() { setMenu(null); router.push('/trade'); }
+  // FEAT-5: deep-link the trade builder with this player pre-loaded as one of
+  // the user's outgoing assets. /trade already reads ?give=<playerId> for the
+  // user side (mirrors the existing ?target=...&getPlayer=... seed used by
+  // "Trade for this player" entry points on the team / player pages).
+  function onTrade(id: string) { setMenu(null); router.push(`/trade?give=${id}`); }
 
   // Just the roster count, or "Cut to 15" when over the limit. There used to be a
   // "Sign a free agent" pill when short-handed, but it was a non-interactive span
@@ -446,7 +450,7 @@ export default function RosterPage() {
           >
             <MenuItem label="Extend contract" onClick={() => onExtend(menu.id)} />
             <MenuItem label="View details" onClick={() => onDetails(menu.id)} />
-            <MenuItem label="Trade…" onClick={onTrade} />
+            <MenuItem label="Trade…" onClick={() => onTrade(menu.id)} />
             <div className="my-1 border-t" style={{ borderColor: 'var(--border)' }} />
             <MenuItem label="Release" danger onClick={() => void onRelease(menu.id)} />
           </div>
@@ -624,16 +628,18 @@ function ActionCell({ toggle, onMenu }: { toggle: { label: string; onClick: () =
   return (
     <span className="flex items-center justify-end gap-1">
       {toggle && (
+        // MOBILE-5: bs-touch-target lifts this from ~20px → 44px min on
+        // touch devices only — desktop stays compact.
         <button
           onClick={toggle.onClick}
-          className="text-[11px] font-semibold rounded border px-1.5 py-0.5 hover:bg-[var(--surface-2)]"
+          className="bs-touch-target text-[11px] font-semibold rounded border px-1.5 py-0.5 hover:bg-[var(--surface-2)]"
           style={{ borderColor: toggle.accent ? 'var(--accent)' : 'var(--border)', color: toggle.accent ? 'var(--accent)' : 'var(--text-sec)' }}
         >
           {toggle.label}
         </button>
       )}
       {onMenu && (
-        <button onClick={onMenu} className="w-6 h-6 rounded hover:bg-[var(--surface-2)] text-[var(--text-sec)]" aria-label="Player actions" title="Actions">⋯</button>
+        <button onClick={onMenu} className="bs-touch-target w-6 h-6 rounded hover:bg-[var(--surface-2)] text-[var(--text-sec)]" aria-label="Player actions" title="Actions">⋯</button>
       )}
     </span>
   );

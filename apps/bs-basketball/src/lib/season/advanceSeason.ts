@@ -339,7 +339,14 @@ export function startNextSeason(league: LeagueState): LeagueState {
     // pool a year or two after you picked them.
     const draftYear = p.sportData.draftYear;
     const onRookieDeal = typeof draftYear === 'number' && season - draftYear <= 2;
-    return onRookieDeal ? Math.max(base, p.development?.potential ?? 0) : base;
+    // BUG-28: also protect ANY young high-upside player (<=22 with potential >=75)
+    // regardless of how they were acquired. Catches undrafted 2026 prospects who
+    // were signed off the FA pool, played a few minutes, then would otherwise get
+    // auto-waived back to the pool — Tyler's screenshot of Dybantsa-type names in
+    // the 2027 FA list. Real teams don't waive 20-year-olds with 90+ potential.
+    const pot = p.development?.potential ?? 0;
+    const youngUpside = p.age <= 22 && pot >= 75;
+    return onRookieDeal || youngUpside ? Math.max(base, pot) : base;
   };
   // Track each waived player's last team so the free-agency UI can show it.
   const freeAgentLastTeam: Record<string, typeof league.teams[number]['id']> = {};

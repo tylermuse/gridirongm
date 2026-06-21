@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Chip } from '@/components/ui/Chip';
 import { ratingColor } from '@/lib/ui/ratingColor';
-import { basketballTradeValue, type BasketballPlayer } from '@bs/sport-basketball';
+import { basketballTradeValue, type BasketballPlayer, type BasketballStats } from '@bs/sport-basketball';
 
 /**
  * Sortable trade roster table (parity with football's SortableTradeTable) —
@@ -28,13 +28,17 @@ function money(n: number): string {
 }
 
 export function SortableTradeTable({
-  players, season, selected, onToggle, side,
+  players, season, selected, onToggle, side, statsMap,
 }: {
   players: BasketballPlayer[];
   season: number;
   selected: Set<string>;
   onToggle: (id: string) => void;
   side: 'mine' | 'theirs';
+  /** BUG-26: per-player season stats. When provided, the table renders a
+   *  PPG/RPG/APG column so users can evaluate trades without clicking each
+   *  player into their card. Football-parity. */
+  statsMap?: Map<string, BasketballStats>;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>('pts');
   const [dir, setDir] = useState<1 | -1>(-1);
@@ -78,6 +82,7 @@ export function SortableTradeTable({
             {th('name', 'Player', 'text-left')}
             {th('ovr', 'OVR', 'text-center')}
             {th('age', 'Age', 'text-center')}
+            {statsMap && <th className="py-1.5 text-right pr-2 hidden md:table-cell" title="Points / Rebounds / Assists per game">PPG/R/A</th>}
             {th('salary', 'Sal', 'text-right')}
             {th('yrs', 'Yrs', 'text-center')}
             {th('pts', 'Pts', 'text-right pr-2')}
@@ -100,6 +105,29 @@ export function SortableTradeTable({
                 <td className="py-1.5 font-semibold truncate hover:text-[var(--accent)]">{p.firstName} {p.lastName}</td>
                 <td className={`text-center font-bold tabular-nums ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
                 <td className="text-center tabular-nums text-[var(--text-sec)]">{p.age}</td>
+                {statsMap && (() => {
+                  const s = statsMap.get(p.id);
+                  const gp = s?.gamesPlayed ?? 0;
+                  const log = (p.sportData.seasonLog ?? []) as Array<{ gamesPlayed: number; ppg: number; rpg: number; apg: number }>;
+                  const last = log.length ? log[log.length - 1] : null;
+                  let text: string;
+                  let muted = false;
+                  // BUG-34: include games-played alongside the PPG/RPG/APG
+                  // triple so the row's stat context is honest — a 0/0/0 line
+                  // off a 1-game sample reads very differently from off 70.
+                  if (gp > 0 && s) {
+                    text = `${(s.points / gp).toFixed(1)}/${(s.totalRebounds / gp).toFixed(1)}/${(s.assists / gp).toFixed(1)} · ${gp} GP`;
+                  } else if (last) {
+                    text = `${last.ppg.toFixed(1)}/${last.rpg.toFixed(1)}/${last.apg.toFixed(1)} · ${last.gamesPlayed} GP`;
+                    muted = true;
+                  } else {
+                    text = '—';
+                    muted = true;
+                  }
+                  return (
+                    <td className={`text-right pr-2 tabular-nums hidden md:table-cell ${muted ? 'text-[var(--text-sec)]' : ''}`}>{text}</td>
+                  );
+                })()}
                 <td className="text-right tabular-nums text-[var(--text-sec)]">{money(salary)}</td>
                 <td className="text-center tabular-nums text-[var(--text-sec)]">{yrs || '—'}</td>
                 <td className="text-right pr-2 font-bold tabular-nums" style={{ color: 'var(--accent)' }}>~{pts}</td>

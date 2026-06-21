@@ -8,9 +8,14 @@
  *   - Any lottery team can win the lottery, but their final pick position
  *     is capped at "their reverse-standings slot + 4" (anti-tank rule)
  *
- * v1 simplification: implement the weighted odds but skip the "cannot
- * fall more than 4 spots" rule (it adds complexity for rare edge cases).
- * v2 can layer that on later.
+ * v1 detail: we resolve picks 1-3 via weighted odds, then picks 4-14 fall
+ * by the surviving pre-lottery seed order. The "cannot fall more than 4
+ * spots" rule is therefore satisfied *by construction*: only 3 teams can
+ * leapfrog into picks 1-3, so no remaining team can be displaced more than
+ * 3 slots from its pre-lottery seed. If a future revision moves to the NBA's
+ * 4-team lottery (top-4 picks by ping-pong balls), the fall-cap will need
+ * to be enforced explicitly because the max natural fall jumps to 4 — exactly
+ * the cap, with no margin for slot-swapping.
  *
  * Picks 15-30 (Round 1) and 31-60 (Round 2): strict reverse standings
  * of the playoff teams plus straight reverse standings of all teams for

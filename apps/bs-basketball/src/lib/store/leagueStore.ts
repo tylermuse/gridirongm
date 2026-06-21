@@ -30,6 +30,7 @@ import {
   type ImportedHoopsLeague,
 } from '../data/leagueImport';
 import { ESPN_2026_R1_ORDER, normalizeAbbrev } from '../data/draft2026';
+import { backfillPlayerPhotos } from '../data/photoBackfill';
 import {
   saveLeague,
   loadLeague as loadLeagueFromDb,
@@ -227,6 +228,15 @@ interface LeagueStore {
   /** Negotiate a contract extension. The player accepts a fair offer (a touch
    *  under market, for loyalty) and the years append to the end of the deal. */
   extendPlayer: (playerId: string, offer: Offer) => Promise<{ accepted: boolean; message: string } | null>;
+
+  /** R2-1: batch-extend N players in a single state update + single save. Used
+   *  by Re-sign All so we don't fire N sequential extendPlayer calls (each
+   *  rebuilds + persists league state, visibly stalling on a full class). */
+  extendPlayersBulk: (signings: { playerId: string; offer: Offer }[]) => Promise<{ accepted: number; declined: number }>;
+
+  /** R2-1: batch-release N players in one pass — pair to extendPlayersBulk for
+   *  the "Let All Walk" action. Returns the count released. */
+  releasePlayersBulk: (playerIds: string[]) => Promise<number>;
 }
 
 /** One-line summary for the sim toast: games simmed + the user team's most
@@ -443,10 +453,18 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         set({ loading: false });
         return;
       }
-      const league = await loadLeagueFromDb(meta.id);
-      if (!league) {
+      const loaded = await loadLeagueFromDb(meta.id);
+      if (!loaded) {
         set({ loading: false, error: 'Most recent save was corrupted.' });
         return;
+      }
+      // BUG-31b: pre-fix saves don't have photoUrl on existing players. Run
+      // the one-shot photo backfill (fetches the bundled NBA roster, matches
+      // by first+last, patches sportData.photoUrl). Persists the patched
+      // league back to Dexie so we don't repeat the fetch on next hydrate.
+      const league = await backfillPlayerPhotos(loaded);
+      if (league !== loaded) {
+        try { await saveLeague(league); } catch (err) { console.warn('[bs-hoops] photo backfill save failed', err); }
       }
       set({ league, loading: false });
     } catch (err) {
@@ -1304,6 +1322,69 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       console.error('[bs-hoops] extendPlayer failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return null;
+    }
+  },
+
+  // R2-1: batch-extend N players in one in-memory pass + a single save. The
+  // re-sign page's old "Re-sign All" loop awaited extendPlayer per player —
+  // each call rebuilt + persisted the full league state, visibly stalling
+  // through a class of 8+ expiring contracts. Now one immutable update +
+  // one Dexie write.
+  async extendPlayersBulk(signings) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return { accepted: 0, declined: 0 }; }
+    set({ loading: true, error: null });
+    try {
+      const players = { ...current.players } as Record<string, BasketballPlayer>;
+      let accepted = 0;
+      let declined = 0;
+      for (const { playerId, offer } of signings) {
+        const player = players[playerId] as BasketballPlayer | undefined;
+        if (!player) { declined++; continue; }
+        const market = extensionMarket(player, current.currentSeason);
+        if (!extensionAccepted(market, offer)) { declined++; continue; }
+        const contract = buildExtension(player, offer, market);
+        players[playerId] = { ...player, contract };
+        accepted++;
+      }
+      const league = { ...current, players };
+      await saveLeague(league);
+      set({
+        league,
+        loading: false,
+        simToast: { text: `✅ Re-signed ${accepted} player${accepted === 1 ? '' : 's'}${declined ? ` · ${declined} declined` : ''}.` },
+      });
+      return { accepted, declined };
+    } catch (err) {
+      console.error('[bs-hoops] extendPlayersBulk failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return { accepted: 0, declined: signings.length };
+    }
+  },
+
+  // R2-1: pair to extendPlayersBulk for the "Let All Walk" action.
+  async releasePlayersBulk(playerIds) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return 0; }
+    set({ loading: true, error: null });
+    try {
+      let league = current;
+      let count = 0;
+      for (const playerId of playerIds) {
+        league = applyRelease(league, playerId, false) as typeof current;
+        count++;
+      }
+      await saveLeague(league);
+      set({
+        league,
+        loading: false,
+        simToast: { text: `👋 ${count} player${count === 1 ? '' : 's'} walked to free agency.` },
+      });
+      return count;
+    } catch (err) {
+      console.error('[bs-hoops] releasePlayersBulk failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return 0;
     }
   },
 
