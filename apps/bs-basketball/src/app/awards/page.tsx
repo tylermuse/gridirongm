@@ -74,9 +74,15 @@ export default function AwardsPage() {
       <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">
         ← Home
       </Link>
-      <div className="mt-2">
-        <Link href="/award-race" className="text-sm font-semibold hover:underline" style={{ color: 'var(--accent)' }}>📊 Live Award Race →</Link>
-      </div>
+      {/* STYLE-4: the Live Award Race link only makes sense while a race is
+          still on. Once the playoffs have crowned a champion (bracket.complete)
+          the season is over and the trophies above are final — drop the link
+          so it doesn't dangle as a stale CTA on the awards ceremony page. */}
+      {!bracket?.complete && (
+        <div className="mt-2">
+          <Link href="/award-race" className="text-sm font-semibold hover:underline" style={{ color: 'var(--accent)' }}>📊 Live Award Race →</Link>
+        </div>
+      )}
 
       <header className="flex flex-wrap items-baseline gap-3 mt-2 mb-6">
         <h1 className="text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>
@@ -133,7 +139,7 @@ export default function AwardsPage() {
 
           {honors && (
             <>
-              <AllLeagueSection title="All-NBA" teams={honors.allNBA} teamById={teamById} onPlayerClick={setModalPlayerId} userTeamId={league.userTeamId} />
+              <AllLeagueSection title="All-League" teams={honors.allNBA} teamById={teamById} onPlayerClick={setModalPlayerId} userTeamId={league.userTeamId} />
               <AllLeagueSection title="All-Defensive" teams={honors.allDefensive} teamById={teamById} onPlayerClick={setModalPlayerId} userTeamId={league.userTeamId} />
               <AllLeagueSection title="All-Rookie" teams={honors.allRookie} teamById={teamById} onPlayerClick={setModalPlayerId} userTeamId={league.userTeamId} />
 
