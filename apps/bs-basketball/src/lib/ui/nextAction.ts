@@ -50,7 +50,12 @@ export function nextAction(league: LeagueState): NextAction {
   if (draft) {
     // 1) The draft itself, until every pick is in.
     if (!draft.complete) {
-      if (league.userTeamId) return {
+      // STYLE-3: while the lottery is still revealing, the Sim to My Pick /
+      // Sim One Pick / Auto Draft All cluster doesn't make sense yet — there's
+      // nothing to sim against. Show only a Go to Draft button until the
+      // user closes the ceremony, then surface the sim controls.
+      const lotteryLive = draft.lotteryRevealed === false;
+      if (league.userTeamId && !lotteryLive) return {
         phaseLabel: `Draft · Pick ${draft.currentPick + 1}`,
         label: 'Sim to My Pick',
         primary: 'simDraftToUser',
@@ -61,7 +66,7 @@ export function nextAction(league: LeagueState): NextAction {
           { label: 'Go to Draft', key: 'goDraft' },
         ],
       };
-      return { phaseLabel: 'Draft', label: 'Go to Draft', primary: 'goDraft' };
+      return { phaseLabel: lotteryLive ? 'Lottery' : 'Draft', label: 'Go to Draft', primary: 'goDraft' };
     }
     // 2) Re-sign → Free Agency. The offseason stepper is Draft → Re-sign → Free
     //    Agency (BUG-12). The draft object lives for the WHOLE offseason (it's
