@@ -1070,10 +1070,14 @@ function RosterColumn({
 /** Authoring control for a round-1 pick's protection. None → unconditional.
  *  A protected pick can roll up to two further drafts, then settles per the
  *  fallback (expire, or become the original team's second-rounder). */
+// BUG-37: include Top-2 + Top-4 — both are common real-NBA protection levels
+// (and what Tyler was reaching for when the only nearby option was Top-3).
 const PROTECTION_LEVELS: { topN: number; label: string }[] = [
   { topN: 0, label: 'Unprotected' },
   { topN: 1, label: 'Top-1 protected' },
+  { topN: 2, label: 'Top-2 protected' },
   { topN: 3, label: 'Top-3 protected' },
+  { topN: 4, label: 'Top-4 protected' },
   { topN: 5, label: 'Top-5 protected' },
   { topN: 10, label: 'Top-10 protected' },
   { topN: 14, label: 'Lottery protected' },
