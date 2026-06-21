@@ -69,6 +69,10 @@ export default function NewsPage() {
       ) : (
         <NewsFeed league={league} />
       )}
+
+      <footer className="mt-8 rounded-xl border bg-[var(--surface)] p-4 text-xs leading-relaxed text-[var(--text-sec)]" style={{ borderColor: 'var(--border)' }}>
+        🏀 Player ratings are adapted from <span className="font-semibold text-[var(--text)]">AlexNoob</span>&rsquo;s 2025&ndash;26 NBA roster (synced to current overalls). Huge thanks to AlexNoob for the base roster that makes this league possible.
+      </footer>
     </main>
   );
 }
