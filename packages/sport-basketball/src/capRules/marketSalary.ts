@@ -70,12 +70,14 @@ function basePctOfCap(ovr: number): number {
   // ~6-12%, role ~MLE, fringe near the minimum). The prior curve was compressed
   // low — an All-NBA player came out ~$31M instead of ~$42M — so teams could fit
   // far too much talent under the cap and never faced pressure to let anyone go.
-  if (ovr >= 94) return 0.35;  // supermax / generational
-  if (ovr >= 91) return 0.31;  // max
-  if (ovr >= 88) return 0.28;  // All-NBA
-  if (ovr >= 85) return 0.23;  // All-Star
-  if (ovr >= 82) return 0.18;  // high-end starter
-  if (ovr >= 80) return 0.145; // solid starter
+  if (ovr >= 94) return 0.36;  // supermax / generational
+  if (ovr >= 91) return 0.33;  // max
+  if (ovr >= 88) return 0.30;  // All-NBA
+  if (ovr >= 85) return 0.255; // All-Star
+  if (ovr >= 82) return 0.205; // high-end starter — was 0.18, which made every
+                               // star read as "overpaid" vs. their real max
+                               // deal and cratered their trade value.
+  if (ovr >= 80) return 0.155; // solid starter
   if (ovr >= 78) return 0.115; // starter
   if (ovr >= 76) return 0.09;  // sixth man / full MLE
   if (ovr >= 74) return 0.065; // rotation
