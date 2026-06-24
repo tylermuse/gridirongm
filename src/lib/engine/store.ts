@@ -3952,7 +3952,12 @@ export const useGameStore = create<GameStore>()(
               acc[pos] = (t.depthChart[pos] ?? []).filter(id => id !== playerId);
               return acc;
             }, {} as Record<Position, string[]>);
-            return { ...t, roster: newRoster, depthChart: newDepthChart, totalPayroll: Math.max(0, t.totalPayroll - salary) };
+            // bige08676 6/21 retest: an expiring practice-squad player (teamId
+            // set, yearsLeft 1) enters the re-sign queue but lives in
+            // practiceSquad, not roster — so the roster/depthChart prune above
+            // misses them and "let walk" leaves an orphan id with teamId=null.
+            const newPracticeSquad = (t.practiceSquad ?? []).filter(id => id !== playerId);
+            return { ...t, roster: newRoster, depthChart: newDepthChart, practiceSquad: newPracticeSquad, totalPayroll: Math.max(0, t.totalPayroll - salary) };
           }),
           freeAgents: [...state.freeAgents, playerId],
           resigningPlayers: state.resigningPlayers.filter(e => e.playerId !== playerId),
@@ -3991,7 +3996,10 @@ export const useGameStore = create<GameStore>()(
             }, {} as Record<Position, string[]>);
             let payrollDrop = 0;
             for (const id of onUserTeam) payrollDrop += salaryMap.get(id) ?? 0;
-            return { ...t, roster: newRoster, depthChart: newDepthChart, totalPayroll: Math.max(0, t.totalPayroll - payrollDrop) };
+            // bige08676 6/21 retest: prune walked practice-squad players too —
+            // see the single-player passOnResigning above.
+            const newPracticeSquad = (t.practiceSquad ?? []).filter(id => !onUserTeam.has(id));
+            return { ...t, roster: newRoster, depthChart: newDepthChart, practiceSquad: newPracticeSquad, totalPayroll: Math.max(0, t.totalPayroll - payrollDrop) };
           }),
           freeAgents: [...state.freeAgents, ...Array.from(onUserTeam)],
           // Off-team entries get pruned from the queue too — they're stale.
