@@ -26,6 +26,29 @@ export const POSITIONS: Position[] = [
   'K', 'P',
 ];
 
+/** The detailed sub-positions a player at a given broad Position may hold.
+ *  A manual subPositionOverride is only legal if it appears in this player's
+ *  cluster. Positions with a 1:1 broad→detailed mapping have a single entry
+ *  (no meaningful choice). */
+export const SUB_POSITION_CLUSTERS: Record<Position, SubPosition[]> = {
+  QB: ['QB'],
+  RB: ['RB', 'FB'],
+  WR: ['WR'],
+  TE: ['TE'],
+  OL: ['OT', 'OG', 'C'],
+  DL: ['EDGE', 'DT'],
+  LB: ['MLB', 'OLB'],
+  CB: ['CB'],
+  S: ['FS', 'SS'],
+  K: ['K'],
+  P: ['P'],
+};
+
+/** True when `sub` is a legal manual override for a player at `position`. */
+export function isValidSubPositionForPosition(position: Position, sub: SubPosition): boolean {
+  return (SUB_POSITION_CLUSTERS[position] ?? []).includes(sub);
+}
+
 /** Derive a player's detailed sub-position from their broad Position +
  *  ratings. Pure function — used both at generation time (to seed the
  *  Player.subPosition field) and as a backfill for older saves. */
@@ -99,6 +122,7 @@ type SubPosClassifiable = {
   id: string;
   position: Position;
   subPosition?: SubPosition;
+  subPositionOverride?: SubPosition;
   firstName?: string;
   lastName?: string;
   ratings: {
@@ -182,6 +206,13 @@ export function classifyTeamSubPositions(
           const ov = OL_SUBPOSITION_OVERRIDES[key];
           if (ov) { map.set(p.id, ov); pinned.set(p.id, ov); }
         }
+      }
+      // User-pinned overrides always win and leave the proportional split so
+      // the OT/C budget for the remaining linemen is computed correctly.
+      // Applied after name overrides so an explicit user choice takes priority.
+      for (const p of ol) {
+        const ov = p.subPositionOverride;
+        if (ov === 'OT' || ov === 'OG' || ov === 'C') { map.set(p.id, ov); pinned.set(p.id, ov); }
       }
       let pinnedOT = 0, pinnedC = 0;
       for (const v of pinned.values()) { if (v === 'OT') pinnedOT++; else if (v === 'C') pinnedC++; }
@@ -269,6 +300,13 @@ export function backfillTeamSubPositions(
   for (const p of players) {
     const sub = map.get(p.id);
     if (sub) p.subPosition = sub;
+    // A valid user pin always wins over the ratings-derived classification —
+    // this is what makes the override survive every load / roster-mutation
+    // backfill. (For OL the classify split already honored it; this also
+    // covers clusters classify doesn't count-balance.)
+    if (p.subPositionOverride && isValidSubPositionForPosition(p.position, p.subPositionOverride)) {
+      p.subPosition = p.subPositionOverride;
+    }
   }
 }
 
@@ -491,6 +529,11 @@ export interface Player {
   /** Detailed sub-position derived from ratings (Phase 1 — Apr 11 2026).
    *  Optional during the rollout to allow lazy backfill on existing saves. */
   subPosition?: SubPosition;
+  /** User-pinned sub-position. When set (within the player's broad-position
+   *  cluster), it overrides the ratings-derived classification and survives
+   *  the load-time / roster-mutation backfill — see classifyTeamSubPositions.
+   *  Undefined = no override (default; ratings decide). Launch scope: OT/OG. */
+  subPositionOverride?: SubPosition;
   /** OL-specific slot assignment (LT/LG/C/RG/RT). Phase 2 of the depth-chart
    *  work — lets users assign a specific tackle to the LT slot vs the RT slot
    *  rather than treating all OTs as interchangeable. */
