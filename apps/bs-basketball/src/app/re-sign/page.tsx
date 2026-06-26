@@ -131,10 +131,14 @@ export default function ReSignPage() {
     if (count > 0) setWalked(w => [...w, ...names.slice(0, count)]);
   }
   async function startSeason() {
-    // An inaugural (imported) draft tips into the current season with no year
-    // roll, so it finishes via finishInauguralDraft rather than startNextSeason
-    // (which would roll the year and re-age the league). Both route on to FA.
-    if (draft?.inaugural) {
+    // An inaugural (imported) draft — or a post-draft roster import that opened
+    // straight at the re-sign window with no draft state — tips into the CURRENT
+    // season with no year roll, so it finishes via finishInauguralDraft rather
+    // than startNextSeason (which rolls the year, re-ages the league, and demands
+    // a completed draft a post-draft import never had → "Finish the draft before
+    // starting the season."). Both route on to FA.
+    const postDraftImport = (league?.sportData as { postDraftImport?: boolean } | undefined)?.postDraftImport;
+    if (draft?.inaugural || (postDraftImport && !draft)) {
       await store.finishInauguralDraft();
       router.push('/free-agency');
       return;
