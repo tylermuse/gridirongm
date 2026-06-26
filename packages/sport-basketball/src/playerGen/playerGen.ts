@@ -401,7 +401,10 @@ function generatePlayerId(): string {
  *  overall, so second-rounders came out as finished 80-OVR players. Now current
  *  overall and potential both taper down the board.
  *
- *  All prospects are age 19 (basketball eligibility minimum). */
+ *  Prospect ages spread realistically across NBA pathways (one-and-done teens
+ *  vs. college upperclassmen vs. older international/G-League prospects). Top
+ *  picks skew younger (elite talent declares early), late picks skew older
+ *  (seniors, foreign vets). See `pickProspectAge` below. */
 export function generateBasketballDraftClass(_season: number, count = 60): BasketballPlayer[] {
   // _season is unused in v1 — future enhancement could vary class strength
   // by year (some drafts are deeper than others, mirroring real NBA cycles).
@@ -418,7 +421,11 @@ export function generateBasketballDraftClass(_season: number, count = 60): Baske
       ? 76 - (rank * (76 - 67)) / 29        // R1: 76 → 67
       : 64 - ((rank - 30) * (64 - 52)) / 29; // R2: 64 → 52
     const targetOvr = clamp(Math.round(ovrBase + gaussian(0, 3)), 42, 81);
-    const p = generateBasketballPlayer({ age: 19, targetOverall: targetOvr });
+    // BUG-29: realistic prospect-age distribution. Old version hard-coded 19,
+    // which made every draft board look identical (and the league look like
+    // exclusively one-and-dones).
+    const age = pickProspectAge(rank);
+    const p = generateBasketballPlayer({ age, targetOverall: targetOvr });
 
     // Upside tapers too: a top-3 pick can project to a star, a late
     // second-rounder is mostly a finished, fringe product.
@@ -431,4 +438,43 @@ export function generateBasketballDraftClass(_season: number, count = 60): Baske
     prospects.push({ ...p, development: { ...p.development, potential } });
   }
   return prospects;
+}
+
+/**
+ * Pick a prospect's age based on draft rank. Mirrors realistic NBA pathways:
+ *
+ *   - Lottery (ranks 0-13):     mostly 19-20 (one-and-dones + international
+ *                               teens), occasional 21-22.
+ *   - Rest of round 1 (14-29):  even spread 19-22 with a 21 peak (juniors).
+ *   - Round 2 (30-59):          skews 21-23 (seniors + older international /
+ *                               G-League prospects), with a few teen reaches
+ *                               and a tail to 24.
+ *
+ * Probabilistic — uses Math.random for spread. Calls happen at draft-class
+ * generation, which is already non-deterministic, so this matches the existing
+ * model (each fresh class samples a new shape). */
+function pickProspectAge(rank: number): number {
+  const r = Math.random();
+  if (rank < 14) {
+    // Lottery — elite-talent pipeline. Heavy 19-20.
+    if (r < 0.55) return 19;
+    if (r < 0.85) return 20;
+    if (r < 0.96) return 21;
+    return 22;
+  }
+  if (rank < 30) {
+    // Late round 1 — sophomores / juniors dominate.
+    if (r < 0.25) return 19;
+    if (r < 0.55) return 20;
+    if (r < 0.83) return 21;
+    if (r < 0.96) return 22;
+    return 23;
+  }
+  // Round 2 — seniors, internationals, older G-League prospects.
+  if (r < 0.12) return 19;
+  if (r < 0.30) return 20;
+  if (r < 0.55) return 21;
+  if (r < 0.80) return 22;
+  if (r < 0.94) return 23;
+  return 24;
 }

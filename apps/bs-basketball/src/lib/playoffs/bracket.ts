@@ -250,7 +250,14 @@ export function simPlayoffDay(league: LeagueState): SimPlayoffDayResult | null {
       homeTeamId: homeId,
       awayTeamId: awayId,
       status: 'played',
+      // BUG-30: previous version replaced result.sportData wholesale with the
+      // playoff metadata, throwing away quarterScores (and anything else the
+      // sim engine puts there). LiveViewer reads quarterScores from sportData
+      // to synthesize the play-by-play; without it, the events array is empty
+      // and Watch Live freezes at "Tip-off…" Spread the sim's sportData first
+      // so the meta fields layer on top without clobbering the engine output.
       sportData: {
+        ...((result.sportData as Record<string, unknown>) ?? {}),
         dayOfSeason,
         isPlayoff: true,
         round: series.round,

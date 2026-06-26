@@ -15,7 +15,8 @@ import { teamStrategy, getTeamPicks, pickFromId, pickShort, pickValue, protectio
 import { getActiveRumors, rumorAccuracy, rumorPlayerMeta, type TradeRumor } from '@/lib/trade';
 import { computeTradeGrade, getProposalHistory, type TradeGrade, type ProposalRecord } from '@/lib/trade';
 import { tradeWindowClosed, TRADE_DEADLINE_DAY } from '@/lib/sim/simRange';
-import { basketballTradeValue, type BasketballPlayer, type BasketballPosition, type BasketballTeam, type TeamTradeOutcome, type TeamCapStatus } from '@bs/sport-basketball';
+import { basketballTradeValue, type BasketballPlayer, type BasketballPosition, type BasketballStats, type BasketballTeam, type TeamTradeOutcome, type TeamCapStatus } from '@bs/sport-basketball';
+import { regularSeasonStatsByPlayer } from '@/lib/stats/seasonStats';
 
 type League = NonNullable<ReturnType<typeof useLeagueOrHydrate>['league']>;
 
@@ -51,9 +52,14 @@ function TradePage() {
   const searchParams = useSearchParams();
   const initTarget = searchParams.get('target');
   const initGetPlayer = searchParams.get('getPlayer');
+  // FEAT-5: ?give=<playerId> seeds the user's side with that player as an
+  // outgoing asset — invoked from the roster page Trade… menu item, so the
+  // builder opens with that player already on the block instead of dropping
+  // the user into an empty trade screen.
+  const initGivePlayer = searchParams.get('give');
 
   const [targetId, setTargetId] = useState<string>(() => initTarget ?? '');
-  const [mine, setMine] = useState<Set<string>>(new Set());
+  const [mine, setMine] = useState<Set<string>>(() => (initGivePlayer ? new Set([initGivePlayer]) : new Set()));
   const [theirs, setTheirs] = useState<Set<string>>(() => (initTarget && initGetPlayer ? new Set([initGetPlayer]) : new Set()));
   const [myPicks, setMyPicks] = useState<Set<string>>(new Set());
   const [theirPicks, setTheirPicks] = useState<Set<string>>(new Set());
@@ -95,8 +101,18 @@ function TradePage() {
     [league, sides],
   );
 
+  // BUG-26: per-player season stats, computed once at page level and
+  // threaded through to the trade tables for inline PPG/RPG/APG.
+  // Must be declared BEFORE the early returns below — calling useMemo
+  // conditionally is a Rules of Hooks violation, and the previous version
+  // sat after the loading/null checks. That meant the hook ordering shifted
+  // after a successful trade (when the store re-renders this component with
+  // a fresh league), throwing the "client-side exception" Tyler hit on
+  // /trade right after consummating a deal.
+  const statsMap = useMemo(() => (league ? regularSeasonStatsByPlayer(league) : null), [league]);
+
   if (loading) return <Loading />;
-  if (!league) return <NotFound message={error ?? 'No league loaded.'} />;
+  if (!league || !statsMap) return <NotFound message={error ?? 'No league loaded.'} />;
 
   if (!userTeamId) {
     return (
@@ -301,9 +317,9 @@ function TradePage() {
 
       {/* Two offer cards — Your Offer / You Receive */}
       <div className="grid lg:grid-cols-2 gap-5 mb-5">
-        <RosterColumn league={league} team={userTeam} playerById={playerById} season={season} selected={mine} selectedPicks={myPicks} onToggle={id => toggle(mine, setMine, id)} onTogglePick={id => toggle(myPicks, setMyPicks, id)} side="mine" title="Your Offer" pts={sendValue} />
+        <RosterColumn league={league} team={userTeam} playerById={playerById} season={season} selected={mine} selectedPicks={myPicks} onToggle={id => toggle(mine, setMine, id)} onTogglePick={id => toggle(myPicks, setMyPicks, id)} side="mine" title="Your Offer" pts={sendValue} statsMap={statsMap} />
         {targetTeam ? (
-          <RosterColumn league={league} team={targetTeam} playerById={playerById} season={season} selected={theirs} selectedPicks={theirPicks} onToggle={id => toggle(theirs, setTheirs, id)} onTogglePick={id => toggle(theirPicks, setTheirPicks, id)} side="theirs" title="You Receive" pts={receiveValue} />
+          <RosterColumn league={league} team={targetTeam} playerById={playerById} season={season} selected={theirs} selectedPicks={theirPicks} onToggle={id => toggle(theirs, setTheirs, id)} onTogglePick={id => toggle(theirPicks, setTheirPicks, id)} side="theirs" title="You Receive" pts={receiveValue} statsMap={statsMap} />
         ) : (
           <div className="rounded-xl border bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-sec)]" style={{ borderColor: 'var(--border)' }}>
             Select a trade partner to see their roster and picks.
@@ -366,7 +382,11 @@ function TradePage() {
                   {evaluation.summary}
                 </div>
 
-                {userOutcome && <OutcomeBlock label={`${userTeam.city} (You)`} outcome={userOutcome} />}
+                {/* BUG-36: the user's own block is shown with a "your call"
+                    tag instead of accepts/rejects — Tyler is the GM, no AI
+                    veto on what he wants to propose. Cap-compliance flags
+                    still surface so an illegal deal stays blocked. */}
+                {userOutcome && <OutcomeBlock label={`${userTeam.city} (You)`} outcome={userOutcome} forceYourCall />}
                 {targetOutcome && targetTeam && <OutcomeBlock label={targetTeam.city} outcome={targetOutcome} />}
 
                 {evaluation.warnings.map((w, i) => (
@@ -819,6 +839,8 @@ function TradingBlockTab({
 
   const players = userTeam.playerIds.map(id => playerById[id]).filter(Boolean) as BasketballPlayer[];
   const myPicks = useMemo(() => getTeamPicks(league, userTeam.id), [league, userTeam.id]);
+  // BUG-26: per-player season stats for the inline PPG/RPG/APG column.
+  const statsMap = useMemo(() => regularSeasonStatsByPlayer(league), [league]);
 
   function toggleSet<T>(set: Set<T>, setFn: (s: Set<T>) => void, v: T) {
     const n = new Set(set); if (n.has(v)) n.delete(v); else n.add(v); setFn(n); setProposals(null);
@@ -858,7 +880,7 @@ function TradingBlockTab({
       <section className="rounded-xl border bg-[var(--surface)] overflow-hidden self-start" style={{ borderColor: 'var(--border)' }}>
         <h2 className="px-3 py-2 font-bold border-b text-sm" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>Players on the Block</h2>
         <div className="px-2 pt-1">
-          <SortableTradeTable players={players} season={season} selected={block} onToggle={id => toggleSet(block, setBlock, id)} side="mine" />
+          <SortableTradeTable players={players} season={season} selected={block} onToggle={id => toggleSet(block, setBlock, id)} side="mine" statsMap={statsMap} />
         </div>
         {myPicks.length > 0 && (
           <>
@@ -974,7 +996,7 @@ function DealCard({
 // ===========================================================================
 
 function RosterColumn({
-  league, team, playerById, season, selected, selectedPicks, onToggle, onTogglePick, side, title, pts,
+  league, team, playerById, season, selected, selectedPicks, onToggle, onTogglePick, side, title, pts, statsMap,
 }: {
   league: League;
   team: BasketballTeam;
@@ -987,6 +1009,7 @@ function RosterColumn({
   side: 'mine' | 'theirs';
   title?: string;
   pts?: number;
+  statsMap?: Map<string, BasketballStats>;
 }) {
   const players = team.playerIds
     .map(id => playerById[id])
@@ -1002,7 +1025,7 @@ function RosterColumn({
         {pts !== undefined && pts > 0 && <span className="ml-auto text-[11px] font-bold tabular-nums" style={{ color: 'var(--accent)' }}>{pts} pts</span>}
       </h2>
       <div className="px-2 pt-1">
-        <SortableTradeTable players={players} season={season} selected={selected} onToggle={onToggle} side={side} />
+        <SortableTradeTable players={players} season={season} selected={selected} onToggle={onToggle} side={side} statsMap={statsMap} />
       </div>
       {/* Draft picks */}
       {picks.length > 0 && (
@@ -1047,10 +1070,14 @@ function RosterColumn({
 /** Authoring control for a round-1 pick's protection. None → unconditional.
  *  A protected pick can roll up to two further drafts, then settles per the
  *  fallback (expire, or become the original team's second-rounder). */
+// BUG-37: include Top-2 + Top-4 — both are common real-NBA protection levels
+// (and what Tyler was reaching for when the only nearby option was Top-3).
 const PROTECTION_LEVELS: { topN: number; label: string }[] = [
   { topN: 0, label: 'Unprotected' },
   { topN: 1, label: 'Top-1 protected' },
+  { topN: 2, label: 'Top-2 protected' },
   { topN: 3, label: 'Top-3 protected' },
+  { topN: 4, label: 'Top-4 protected' },
   { topN: 5, label: 'Top-5 protected' },
   { topN: 10, label: 'Top-10 protected' },
   { topN: 14, label: 'Lottery protected' },
@@ -1199,14 +1226,24 @@ function Chip({ accent, onRemove, children }: { accent: string; onRemove: () => 
   );
 }
 
-function OutcomeBlock({ label, outcome }: { label: string; outcome: TeamTradeOutcome }) {
+function OutcomeBlock({ label, outcome, forceYourCall }: { label: string; outcome: TeamTradeOutcome; forceYourCall?: boolean }) {
+  // BUG-36: when the block belongs to the user's own team we don't render
+  // the "rejects" verdict — the user is the GM. We still show a cap-fail
+  // marker because that's a hard legal block, not an AI preference.
+  const showVerdict = !forceYourCall;
   return (
     <div className="mb-2 text-xs">
       <div className="flex items-center justify-between">
         <span className="font-bold">{label}{outcome.disposition ? <span className="ml-1.5 font-normal opacity-50">· Strategy: {outcome.disposition}</span> : null}</span>
-        <span style={{ color: outcome.willAccept ? '#10b981' : '#dc2626' }}>
-          {outcome.willAccept ? 'accepts' : 'rejects'}{!outcome.capCompliant ? ' · cap ✗' : ''}
-        </span>
+        {showVerdict ? (
+          <span style={{ color: outcome.willAccept ? '#10b981' : '#dc2626' }}>
+            {outcome.willAccept ? 'accepts' : 'rejects'}{!outcome.capCompliant ? ' · cap ✗' : ''}
+          </span>
+        ) : (
+          <span style={{ color: 'var(--text-sec)' }}>
+            your call{!outcome.capCompliant ? ' · cap ✗' : ''}
+          </span>
+        )}
       </div>
       <div className="text-[var(--text-sec)]">{outcome.reasoning}</div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5 opacity-70">

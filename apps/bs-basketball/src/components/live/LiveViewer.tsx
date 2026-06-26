@@ -108,8 +108,12 @@ export function LiveViewer({
           <ScoreSide team={home} score={score.home} align="right" />
         </div>
 
-        {/* Court canvas */}
-        <div className="max-w-md mx-auto mt-3">
+        {/* Court canvas. EPIC-B: proper half-court markings on both ends
+            (paint, free-throw circle, 3-point arc, backboard, rim) so the
+            ~448×220px element actually reads as a basketball court instead
+            of a hockey strip. MOBILE-3: still hidden below md — phone
+            screen is too narrow for the markings to be legible. */}
+        <div className="hidden md:block max-w-lg mx-auto mt-3">
           <CourtCanvas home={home} away={away} last={last} cursor={cursor} />
         </div>
       </div>
@@ -206,35 +210,79 @@ export function LiveViewer({
   );
 }
 
-/** Minimal broadcast court: possession indicator + a made-shot flash. */
+/**
+ * Broadcast court (EPIC-B): full-court layout with proper basketball markings
+ * on both ends — paint, free-throw circle, 3-point arc, backboard, rim. The
+ * away end is tinted in away.primaryColor, the home end in home.primaryColor,
+ * so possession context is legible at a glance. Possession indicator is the
+ * orange ball; made shots pulse from the scoring rim.
+ *
+ * viewBox is 200×100 (2:1 aspect) — at our max-w-lg wrapper that renders
+ * ~512×256 on desktop, comfortably reading as a court.
+ */
 function CourtCanvas({ home, away, last, cursor }: { home: BasketballTeam; away: BasketballTeam; last: LiveEvent | null; cursor: number }) {
   const possSide = last?.side ?? null;
   const made = !!last?.scoring;
   const scoreColor = last ? (last.side === 'home' ? home.primaryColor : away.primaryColor) : '#fff';
+  // Tint colors for each end's paint.
+  const awayPaint = `color-mix(in srgb, ${away.primaryColor} 22%, transparent)`;
+  const homePaint = `color-mix(in srgb, ${home.primaryColor} 22%, transparent)`;
+  // Court line + accent strokes.
+  const LINE = 'rgba(255,255,255,0.32)';
+  const FAINT = 'rgba(255,255,255,0.18)';
   return (
-    <div className="relative rounded-lg overflow-hidden border border-white/10" style={{ background: 'linear-gradient(180deg,#1a2433,#141c28)' }}>
-      <svg viewBox="0 0 200 70" className="w-full block" style={{ height: 70 }}>
-        <rect x="2" y="2" width="196" height="66" rx="2" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
-        <line x1="100" y1="2" x2="100" y2="68" stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
-        <circle cx="100" cy="35" r="10" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
-        <rect x="2" y="22" width="26" height="26" fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
-        <rect x="172" y="22" width="26" height="26" fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
-        <circle cx="10" cy="35" r="2.5" fill={away.primaryColor} />
-        <circle cx="190" cy="35" r="2.5" fill={home.primaryColor} />
+    <div className="relative rounded-lg overflow-hidden border border-white/10" style={{ background: 'linear-gradient(180deg,#1f2937,#0f172a)' }}>
+      <svg viewBox="0 0 200 100" className="w-full block" preserveAspectRatio="xMidYMid meet" aria-label="Live court">
+        {/* Court boundary */}
+        <rect x="2" y="2" width="196" height="96" rx="3" fill="none" stroke={LINE} strokeWidth="1" />
+        {/* Halfcourt line + center circle */}
+        <line x1="100" y1="2" x2="100" y2="98" stroke={LINE} strokeWidth="1" />
+        <circle cx="100" cy="50" r="11" fill="none" stroke={FAINT} strokeWidth="1" />
+        <circle cx="100" cy="50" r="3" fill="none" stroke={FAINT} strokeWidth="0.8" />
+
+        {/* ===== Left (away) end ===== */}
+        {/* Paint (key) */}
+        <rect x="2" y="34" width="28" height="32" fill={awayPaint} stroke={LINE} strokeWidth="1" />
+        {/* Free-throw line (already the right edge of paint) + circle */}
+        <circle cx="30" cy="50" r="8" fill="none" stroke={FAINT} strokeWidth="1" />
+        {/* Backboard */}
+        <line x1="8" y1="44" x2="8" y2="56" stroke="rgba(255,255,255,0.55)" strokeWidth="1.5" />
+        {/* Rim */}
+        <circle cx="11" cy="50" r="2" fill="none" stroke={away.primaryColor} strokeWidth="1.2" />
+        {/* Restricted-area arc */}
+        <path d="M 11 46 A 4 4 0 0 1 11 54" fill="none" stroke={FAINT} strokeWidth="0.7" />
+        {/* 3-point arc: corner straight lines + outer arc, anchored on the rim. */}
+        <line x1="2" y1="20" x2="11" y2="20" stroke={FAINT} strokeWidth="1" />
+        <line x1="2" y1="80" x2="11" y2="80" stroke={FAINT} strokeWidth="1" />
+        <path d="M 11 20 A 30 30 0 0 1 11 80" fill="none" stroke={FAINT} strokeWidth="1" />
+
+        {/* ===== Right (home) end — mirror ===== */}
+        <rect x="170" y="34" width="28" height="32" fill={homePaint} stroke={LINE} strokeWidth="1" />
+        <circle cx="170" cy="50" r="8" fill="none" stroke={FAINT} strokeWidth="1" />
+        <line x1="192" y1="44" x2="192" y2="56" stroke="rgba(255,255,255,0.55)" strokeWidth="1.5" />
+        <circle cx="189" cy="50" r="2" fill="none" stroke={home.primaryColor} strokeWidth="1.2" />
+        <path d="M 189 46 A 4 4 0 0 0 189 54" fill="none" stroke={FAINT} strokeWidth="0.7" />
+        <line x1="198" y1="20" x2="189" y2="20" stroke={FAINT} strokeWidth="1" />
+        <line x1="198" y1="80" x2="189" y2="80" stroke={FAINT} strokeWidth="1" />
+        <path d="M 189 20 A 30 30 0 0 0 189 80" fill="none" stroke={FAINT} strokeWidth="1" />
+
+        {/* Made-shot pulse on the scoring rim */}
         {made && (
-          <circle key={cursor} cx={last!.side === 'home' ? 190 : 10} cy="35" r="4" fill="none" stroke={scoreColor} strokeWidth="2">
-            <animate attributeName="r" from="4" to="16" dur="0.6s" />
-            <animate attributeName="opacity" from="0.9" to="0" dur="0.6s" />
+          <circle key={cursor} cx={last!.side === 'home' ? 189 : 11} cy="50" r="3" fill="none" stroke={scoreColor} strokeWidth="2.5">
+            <animate attributeName="r" from="3" to="22" dur="0.7s" />
+            <animate attributeName="opacity" from="1" to="0" dur="0.7s" />
           </circle>
         )}
+
+        {/* Possession indicator — orange ball, slides toward the offensive end */}
         {possSide && (
-          <circle cx={possSide === 'home' ? 150 : 50} cy="35" r="3.5" fill="#f59e0b" stroke="#7c3a08" strokeWidth="0.7">
-            <animate attributeName="cx" to={possSide === 'home' ? 150 : 50} dur="0.4s" />
+          <circle cx={possSide === 'home' ? 155 : 45} cy="50" r="4" fill="#f59e0b" stroke="#7c3a08" strokeWidth="0.7">
+            <animate attributeName="cx" to={possSide === 'home' ? 155 : 45} dur="0.4s" />
           </circle>
         )}
       </svg>
-      <div className="absolute top-1 left-2 text-[9px] font-bold" style={{ color: away.primaryColor }}>{away.abbreviation}</div>
-      <div className="absolute top-1 right-2 text-[9px] font-bold" style={{ color: home.primaryColor }}>{home.abbreviation}</div>
+      <div className="absolute top-1.5 left-2 text-[10px] font-bold tracking-wide" style={{ color: away.primaryColor }}>{away.abbreviation}</div>
+      <div className="absolute top-1.5 right-2 text-[10px] font-bold tracking-wide" style={{ color: home.primaryColor }}>{home.abbreviation}</div>
     </div>
   );
 }

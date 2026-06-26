@@ -79,16 +79,32 @@ export function computeHonors(league: LeagueState): SeasonHonors | null {
   const name = (p: BasketballPlayer) => `${p.firstName} ${p.lastName}`;
   const teamOf = (p: BasketballPlayer) => p.rosterSlot?.teamId ?? null;
 
-  const offense = (s: BasketballStats) => {
+  // BUG-35: previously a tanking team's stat-padders could sweep an entire
+  // All-League team (LaMelo + four other Hornets on First Team in Tyler's
+  // 2028 save), because raw counting stats ignored team success. Real-NBA
+  // voters weigh winning heavily — we mirror that with a multiplier on the
+  // base score: a 60-win team's stars get ~1.18x, a 22-win team's ~0.82x.
+  const teamWins = new Map<string, number>();
+  for (const t of league.teams) teamWins.set(t.id, t.record.wins);
+  const winFactor = (p: BasketballPlayer): number => {
+    const w = teamOf(p) ? teamWins.get(teamOf(p)!) ?? 41 : 41;
+    // 41 wins = neutral 1.0; ±20 wins from neutral → ±0.18x. Clamped 0.75-1.25.
+    const factor = 1 + (w - 41) / 110;
+    return Math.max(0.75, Math.min(1.25, factor));
+  };
+
+  const offenseBase = (s: BasketballStats) => {
     const pg = perGame(s);
     const efg = s.fieldGoalsAttempted > 0 ? s.fieldGoalsMade / s.fieldGoalsAttempted : 0;
     return (pg.points ?? 0) * 1.0 + (pg.assists ?? 0) * 0.8 + (pg.totalRebounds ?? 0) * 0.6
       + (s.plusMinus / Math.max(1, s.gamesPlayed)) * 2 + (efg - 0.45) * 20;
   };
+  const offense = (p: BasketballPlayer, s: BasketballStats) => offenseBase(s) * winFactor(p);
   const defense = (p: BasketballPlayer, s: BasketballStats) => {
     const pg = perGame(s);
-    return ((pg.steals ?? 0) + (pg.blocks ?? 0)) * 8 + (pg.defensiveRebounds ?? 0) * 1.5
+    const base = ((pg.steals ?? 0) + (pg.blocks ?? 0)) * 8 + (pg.defensiveRebounds ?? 0) * 1.5
       + (p.ratings.perimeterDefense + p.ratings.interiorDefense) / 2 * 0.18;
+    return base * winFactor(p);
   };
   const offLine = (s: BasketballStats) => {
     const pg = perGame(s);
@@ -117,13 +133,16 @@ export function computeHonors(league: LeagueState): SeasonHonors | null {
     }));
   };
 
-  const allNBA = positionalTeams(eligible, (p, s) => offense(s), offLine, ['All-NBA First Team', 'All-NBA Second Team', 'All-NBA Third Team']);
+  // BUG-35: rename All-NBA → All-League (Tyler's request — the league inside
+  // BS Hoops is "BS Hoops," not the NBA), and pass `offense(p, s)` so the
+  // win-factor multiplier applies. All-Defensive already took (p, s).
+  const allNBA = positionalTeams(eligible, offense, offLine, ['All-League First Team', 'All-League Second Team', 'All-League Third Team']);
   const allDefensive = positionalTeams(eligible, defense, defLine, ['All-Defensive First Team', 'All-Defensive Second Team']);
 
   // All-Rookie: top scorers among first-year players, top-5 / next-5.
   const rookies = players
     .filter(x => x.s.gamesPlayed >= MIN_ROOKIE_GAMES && (x.p.sportData as { yearsInLeague?: number }).yearsInLeague === 0)
-    .sort((a, b) => offense(b.s) - offense(a.s));
+    .sort((a, b) => offense(b.p, b.s) - offense(a.p, a.s));
   const toHonor = (x: { p: BasketballPlayer; s: BasketballStats }): HonorPlayer => ({
     playerId: x.p.id, name: name(x.p), teamId: teamOf(x.p), position: x.p.sportData.position, statline: offLine(x.s),
   });

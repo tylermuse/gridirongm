@@ -684,9 +684,21 @@ export function runAiFreeAgency(league: LeagueState, opts?: { rounds?: number; f
       if (roster.length === 0) continue;
       const posCount: Record<string, number> = {};
       for (const p of roster) posCount[p.sportData.position] = (posCount[p.sportData.position] ?? 0) + 1;
+      // BUG-28: choose the "worst" player by keep value, not raw current OVR.
+      // The old sort dumped freshly-drafted high-potential rookies (a 64-OVR
+      // 92-potential SF reads as worse than a 70-OVR 70-potential bench vet
+      // by overall alone, even though no NBA team waives a 92-upside 20-year-
+      // old). That was the path putting 2026 draftees (and undrafted-prospects
+      // signed off the pool) back in the FA pool the next offseason.
+      const kvWaive = (p: BasketballPlayer): number => {
+        const pot = p.development?.potential ?? 0;
+        const base = Math.max(p.ratings.overall, Math.round(pot * 0.9));
+        const youngUpside = p.age <= 22 && pot >= 75;
+        return youngUpside ? Math.max(base, pot) : base;
+      };
       const worst = [...roster]
         .filter(p => (posCount[p.sportData.position] ?? 0) > 1)
-        .sort((a, b) => ovr(a) - ovr(b))[0];
+        .sort((a, b) => kvWaive(a) - kvWaive(b))[0];
       if (!worst) continue; // can't waive anyone without opening a positional hole
       const budgetAfterWaive = signingBudget(l, teamId) + (worst.contract?.years[0]?.baseSalary ?? 0);
       // Replace like-for-like at the freed position so coverage is preserved.

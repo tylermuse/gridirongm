@@ -31,8 +31,12 @@ import type { BasketballPlayer } from '../types';
 // ===========================================================================
 
 /** League-wide cap reference for the 2026-27 season. Real-NBA cap was
- *  ~$140M in 2024-25 and rising ~7%/year with the new TV deal kicking in. */
-const BASE_CAP_2026 = 140_000_000;
+ *  $140.6M in 2024-25, $154.6M in 2025-26, and the 2026-27 figure is
+ *  $165M with the new TV deal kicking in (BUG-32 — the previous $140M
+ *  anchor was a season behind and read as obviously stale on the Finances
+ *  page). All future seasons scale from here at the historical ~7%
+ *  inflation rate. */
+const BASE_CAP_2026 = 165_000_000;
 
 /** Year-over-year cap inflation. NBA averaged ~7% over the past decade
  *  due to BRI growth. */

@@ -125,10 +125,13 @@ export function DraftBoardCard({
         </details>
       )}
 
-      {/* Table */}
-      <div className="overflow-x-auto">
+      {/* Table — FEAT-3 + STYLE-2: cap the visible window so the board doesn't
+          sprawl, while showing enough prospects to scout meaningfully. 40rem
+          ≈ 14 rows + thead — matches the paired Draft Results card and is
+          tall enough that the lottery range (14 picks) fits without scroll. */}
+      <div className="overflow-auto max-h-[40rem]">
         <table className="w-full text-sm min-w-[480px] sticky-col sticky-action">
-          <thead className="text-[var(--text-sec)] text-[10px] uppercase tracking-wider">
+          <thead className="text-[var(--text-sec)] text-[10px] uppercase tracking-wider sticky top-0 z-10" style={{ background: 'var(--surface)' }}>
             <tr>
               <th className="w-6"></th>
               <th className="w-12 text-center py-2">Proj</th>

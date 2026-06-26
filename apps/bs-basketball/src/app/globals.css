@@ -141,3 +141,43 @@ html, body {
   .sticky-action th:last-child,
   .sticky-action td:last-child { position: static; }
 }
+
+/* MOBILE-7: drop the drag-cursor affordance on touch devices. The roster
+ * lineup is fully tap-buildable (Start / Bench buttons); the `cursor-grab`
+ * just confuses phone users who can't actually drag rows. Mouse users
+ * keep the affordance unchanged. */
+@media (hover: none) and (pointer: coarse) {
+  .cursor-grab { cursor: default; }
+}
+
+/* MOBILE-5: minimum-tappable surface for touch devices. The desktop UI
+ * uses very compact action buttons (e.g. roster Start/Bench at 11px text
+ * and 4px padding) — fine for a mouse, ~20px tall on a phone which is
+ * well under the iOS/Android 44px guideline. The .bs-touch-target class
+ * bumps min-h/min-w on coarse pointers without changing the mouse layout. */
+@media (hover: none) and (pointer: coarse) {
+  .bs-touch-target { min-height: 44px; min-width: 44px; }
+}
+
+/* MOBILE-8: scroll-edge fade on horizontal-scroll containers. Adds a
+ * subtle gradient on the right edge of any overflow-x-auto block so
+ * phone users see there's more content off-screen. Position relative so
+ * the absolute ::after anchors correctly; pointer-events: none keeps
+ * scrolling itself unaffected. */
+.overflow-x-auto { position: relative; }
+.overflow-x-auto::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--surface));
+  opacity: 0.7;
+}
+@media (min-width: 768px) {
+  /* On larger viewports the tables fit, so suppress the hint to avoid a
+   * misleading gradient when there's nothing off-screen. */
+  .overflow-x-auto::after { display: none; }
+}
