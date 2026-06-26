@@ -1,23 +1,23 @@
 'use client';
 
 import { type ReactNode } from 'react';
+import { SubscriptionProvider } from './SubscriptionProvider';
 
 /**
  * BS Hoops app providers.
  *
- * v1 scope (2C-1): pass-through. No analytics yet — we'd need to set up the
- * /api/analytics/track endpoint that @bs/core/analytics' usePageView posts
- * to, which 404s noisily in dev otherwise. Coming in a later 2C slice.
+ * STRIPE port (June 2026): SubscriptionProvider is now mounted. It reads the
+ * authenticated Supabase user from `@bs/core/supabase/client`, joins to
+ * `subscriptions` + `profiles` (shared with bs-football, same project), and
+ * exposes `useSubscription()` for the paywall and AI commentary gates. A
+ * single Premium sub on either sport unlocks Premium on both — the tier
+ * resolver in `@bs/core/billing` collapses every legacy price into 'premium'.
  *
- * Coming in later 2C slices:
- *   - SubscriptionProvider (shares Stripe customer with football — one sub
- *     unlocks both sports per the cross-sport billing decision)
- *   - SupabaseProvider (shares the football Supabase project for ONE user
- *     account across sports)
+ * Coming later:
  *   - SimEngineProvider (basketballAdapter passed through context)
  *   - ThemeProvider (light/dark toggle, persisted to localStorage)
- *   - PageViewTracker once the analytics endpoint exists in this app
+ *   - PageViewTracker once `/api/analytics/track` lands in this app
  */
 export function Providers({ children }: { children: ReactNode }) {
-  return <>{children}</>;
+  return <SubscriptionProvider>{children}</SubscriptionProvider>;
 }
