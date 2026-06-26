@@ -106,6 +106,13 @@ export default function FreeAgencyPage() {
   const offer = { years, salaryPerYear: Math.round(salaryM * 1_000_000) };
   const competing = selected ? bestCompetingOffer(league, selected) : null;
   const acceptPct = selected ? Math.round(acceptanceProbability(selected, offer, competing?.total ?? 0, appeal) * 100) : 0;
+  // The most this player can be offered per year — mirrors resolveUserOffer's cap
+  // gate so the UI and the engine agree. Bird rights let a team exceed the cap to
+  // re-sign its OWN free agent (up to his market price); everyone else is capped
+  // at the signing budget (cap room or the available exception).
+  const isBirdSelected = !!selected && selected.birdRights !== 'none' && selected.lastTeamId === userTeamId;
+  const maxOffer = isBirdSelected ? Math.max(budget, selected!.marketSalary) : budget;
+  const overBudget = !!selected && offer.salaryPerYear > maxOffer + 50_000;
 
   function selectFa(f: FreeAgentInfo) {
     setSelectedId(f.player.id);
@@ -281,11 +288,32 @@ export default function FreeAgencyPage() {
                     🔥 {teamById.get(competing.teamId)?.city ?? 'A rival'} is also interested (~{money(competing.total)} total).
                   </div>
                 )}
-                {offer.salaryPerYear > room && (
-                  <div className="text-xs mb-3" style={{ color: '#dc2626' }}>
-                    Over your cap room ({money(room)}) — allowed in v1, but it&apos;ll matter once the cap is enforced.
-                  </div>
-                )}
+                {/* Cap channel + enforcement. Under the cap you spend room; over
+                    it you sign through an exception (Mid-Level, etc.), capped at
+                    `budget`. resolveUserOffer rejects anything above this. */}
+                {(() => {
+                  if (overBudget) return (
+                    <div className="text-xs mb-3" style={{ color: '#dc2626' }}>
+                      Over budget — most you can offer {selected.player.lastName} is {money(maxOffer)}/yr {isBirdSelected ? '(Bird rights)' : room > 0 ? '(your cap room)' : 'via an exception (Mid-Level)'}. Lower the salary{room <= 0 && !isBirdSelected ? ' or free up cap room' : ''}.
+                    </div>
+                  );
+                  if (isBirdSelected && room <= 0) return (
+                    <div className="text-xs mb-3 text-[var(--text-sec)]">
+                      Bird rights — you can exceed the cap to re-sign your own player.
+                    </div>
+                  );
+                  if (room <= 0) return (
+                    <div className="text-xs mb-3 text-[var(--text-sec)]">
+                      Over the cap — this signs through an exception (up to {money(budget)}/yr).
+                    </div>
+                  );
+                  if (offer.salaryPerYear > room) return (
+                    <div className="text-xs mb-3 text-[var(--text-sec)]">
+                      Uses cap room ({money(room)} available).
+                    </div>
+                  );
+                  return null;
+                })()}
 
                 {rosterFull && (
                   <div className="mb-3">
@@ -329,10 +357,10 @@ export default function FreeAgencyPage() {
                 <Button
                   variant="primary"
                   className="w-full"
-                  disabled={store.loading || (rosterFull && !releaseId)}
+                  disabled={store.loading || (rosterFull && !releaseId) || overBudget}
                   onClick={() => void makeOffer()}
                 >
-                  {store.loading ? 'Submitting…' : counter ? 'Counter Offer' : 'Make Offer'}
+                  {store.loading ? 'Submitting…' : overBudget ? 'Over budget' : counter ? 'Counter Offer' : 'Make Offer'}
                 </Button>
               </div>
             )}

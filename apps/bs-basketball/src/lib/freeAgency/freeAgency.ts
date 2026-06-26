@@ -442,6 +442,27 @@ export function resolveUserOffer(
   const isBird = info.birdRights !== 'none' && info.lastTeamId === userTeamId;
   const threshold = acceptanceThreshold(info, appeal, competingTotal, isBird);
 
+  // Cap / exception enforcement — the user plays by the same budget the AI does
+  // (signingBudget). You CAN sign over the cap, but only through an exception
+  // (the Mid-Level, etc.), so a slightly-over team can still add a mid-priced
+  // free agent — it just can't offer cap space it doesn't have. Bird rights are
+  // the one carve-out: a team may exceed the cap to re-sign ITS OWN free agent,
+  // capped at his market price. (The vet-minimum path is always within budget,
+  // since signingBudget floors at the league minimum.)
+  const budget = signingBudget(league, userTeamId);
+  const maxPerYear = isBird ? Math.max(budget, info.marketSalary) : budget;
+  if (offer.salaryPerYear > maxPerYear + 50_000) {
+    const room = capRoom(league, userTeamId);
+    const max = faMoney(maxPerYear);
+    return {
+      outcome: 'rejected', league, signedTeamId: null,
+      competingTeamId: null, competingOfferTotal: 0,
+      message: room > 0
+        ? `That's above your cap room — the most you can offer ${name} is ${max}/yr. Clear more room or lower the offer.`
+        : `You're over the cap. Without cap space you can only sign through an exception — up to ${max}/yr here. Offer ${max}/yr or less, or free up cap room first.`,
+    };
+  }
+
   // Vet-minimum safety valve (BUG-30): a team with an open roster spot can always
   // sign an UNCONTESTED free agent to a one-year minimum, regardless of his market
   // value — so a short-handed team can always get back to a legal roster off the
