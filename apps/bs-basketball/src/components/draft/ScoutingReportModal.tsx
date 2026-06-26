@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { Chip } from '@/components/ui/Chip';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import { ScoutingReportBody } from '@/components/draft/ScoutingReportBody';
 import type { BasketballPlayer } from '@bs/sport-basketball';
 import type { BasketballScoutingReport, TeamFit } from '@/lib/scouting/scoutingReport';
@@ -37,7 +38,7 @@ export function ScoutingReportModal({
         <div className="shrink-0 px-5 py-4 border-b flex items-start gap-3" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>
           <div className="min-w-0 flex-1">
             <div className="text-[10px] uppercase tracking-widest text-[var(--text-sec)]">Scouting Report</div>
-            <div className="text-xl font-black truncate">{player.firstName} {player.lastName}</div>
+            <PlayerName playerId={player.id} firstName={player.firstName} lastName={player.lastName} className="text-xl font-black truncate" />
             <div className="text-xs text-[var(--text-sec)] flex items-center gap-1.5 mt-0.5">
               <Chip>{player.sportData.position}</Chip> · Age {player.age} · {report.archetype}
             </div>

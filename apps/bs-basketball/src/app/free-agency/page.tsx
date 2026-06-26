@@ -7,6 +7,7 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { FreeAgentTable } from '@/components/freeAgency/FreeAgentTable';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import {
@@ -253,7 +254,7 @@ export default function FreeAgencyPage() {
                 <div className="flex items-center gap-3 mb-4">
                   <PlayerAvatar firstName={selected.player.firstName} lastName={selected.player.lastName} primaryColor="#444" secondaryColor="#fff" photoUrl={selected.player.sportData.photoUrl} size="lg" />
                   <div className="min-w-0 flex-1">
-                    <div className="font-bold truncate">{selected.player.firstName} {selected.player.lastName}</div>
+                    <PlayerName playerId={selected.player.id} firstName={selected.player.firstName} lastName={selected.player.lastName} className="font-bold truncate" />
                     <div className="text-xs text-[var(--text-sec)]">
                       {selected.player.sportData.position} · Age {selected.player.age} · {selected.player.ratings.overall} OVR
                     </div>

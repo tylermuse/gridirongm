@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Chip, type ChipTone } from '@/components/ui/Chip';
 import { PlayerModal } from '@/components/modals/PlayerModal';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import { speakLines, stopSpeech, isSpeechSupported } from '@/lib/ui/speech';
 import { buildSpotlight, SPOTLIGHT_HOSTS, type SpotlightEpisode, type SpotlightExchange, type SpotlightStory, type StoryCategory } from '@/lib/show/spotlight';
 import type { BasketballLeagueState } from '@/lib/persistence/db';
@@ -137,7 +138,7 @@ function SpotlightCard({ episode, stories, compact, league }: { episode: Spotlig
                               <div className="flex items-center gap-2 mb-1.5">
                                 <span className="h-9 w-9 rounded-full grid place-items-center text-base" style={{ background: '#38444d' }} aria-hidden>🏀</span>
                                 <div className="min-w-0">
-                                  <div className="flex items-center gap-1 text-sm font-bold leading-tight">{name}<span style={{ color: '#1d9bf0' }}>✓</span></div>
+                                  <div className="flex items-center gap-1 text-sm font-bold leading-tight"><PlayerName playerId={story.playerId}>{name}</PlayerName><span style={{ color: '#1d9bf0' }}>✓</span></div>
                                   <div className="text-xs text-[#8899a6]">{handle}</div>
                                 </div>
                               </div>
