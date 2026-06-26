@@ -8657,11 +8657,17 @@ export const useGameStore = create<GameStore>()(
           // Advance contractYears: pop index 0, shift everything forward
           // Skip decrement for contracts signed this offseason (offseasonSigned flag)
           let advancedContract = p.contract;
-          if (isOnPracticeSquad) {
+          if (isOnPracticeSquad && p.contract.yearsLeft <= 1) {
             // PS auto-renew: reset to a fresh 1-year league-minimum deal
-            // instead of ticking down toward expiration. Keeps the player
-            // on the team through the rollover so the user doesn't lose
-            // their entire developmental stash every spring.
+            // instead of ticking down toward expiration. Only fires when
+            // the existing contract was about to expire (yearsLeft <= 1) —
+            // multi-year deals (drafted rookies sent to PS, veterans
+            // demoted on a multi-year) keep their original contract and
+            // decrement normally via the else-if branch below. Prevents
+            // the rollover from clobbering a 4-year rookie deal into a
+            // phantom 1-year league-min that then leaks into the re-sign
+            // queue. Reported by bige08676 (#bug-reports 6/11 + 6/18);
+            // see notes/roster-count-divergence-scoping.md.
             advancedContract = {
               salary: LEAGUE_MINIMUM_SALARY,
               yearsLeft: 1,

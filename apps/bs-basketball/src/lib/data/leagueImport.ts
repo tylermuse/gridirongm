@@ -106,6 +106,11 @@ export interface ImportedHoopsLeague {
   /** Draft order (our team ids, worst-first) from the most recent completed
    *  season's reverse standings — the real basis for the upcoming draft. */
   draftOrderTeamIds: TeamId[];
+  /** True when the file is a POST-draft snapshot (BBGM phase ≥ RESIGN_PLAYERS):
+   *  rookies are already on their teams, so the importer skips the inaugural
+   *  draft and starts the league at the re-sign step. Any leftover undrafted
+   *  prospects fall to free agency. */
+  draftComplete: boolean;
 }
 
 // ===========================================================================
@@ -532,6 +537,13 @@ export function convertBbgmLeague(file: BbgmLeagueFile): ImportedHoopsLeague {
     file.startingSeason ??
     2026;
 
+  // BBGM phase tells us where in the calendar the file sits. Phases ≥ 7
+  // (RESIGN_PLAYERS) mean the draft for `season` has already happened, so the
+  // rookies are on their teams and we must NOT run an inaugural draft on import.
+  const PHASE_RESIGN_PLAYERS = 7;
+  const draftComplete =
+    typeof ga.phase === 'number' && ga.phase >= PHASE_RESIGN_PLAYERS;
+
   // --- Map BBGM teams (tid 0–29, non-disabled) onto BS Hoops template slots ---
   const teamMeta = new Map<number, { team: BasketballTeam; players: BasketballPlayer[] }>();
   for (const t of file.teams) {
@@ -661,7 +673,7 @@ export function convertBbgmLeague(file: BbgmLeagueFile): ImportedHoopsLeague {
     draftPickOwnership.push({ season: dp.season, round: dp.round, originalTeamId: original, ownerTeamId: owner });
   }
 
-  return { season, teams, players, freeAgentIds, draftProspectIds, draftPickOwnership, draftOrderTeamIds };
+  return { season, teams, players, freeAgentIds, draftProspectIds, draftPickOwnership, draftOrderTeamIds, draftComplete };
 }
 
 // ===========================================================================

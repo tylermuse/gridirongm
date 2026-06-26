@@ -27,10 +27,10 @@ import type { TeamId } from '@bs/core/adapter';
  */
 
 // Bump `?v=` when the JSON is regenerated to bust the Vercel edge cache.
-const CACHE_BUST = 5;
+const CACHE_BUST = 7;
 const NBA_FILE = '/rosters/BBGM_NBA_Roster_2026_Updated.json';
 const nbaUrl = `${NBA_FILE}?v=${CACHE_BUST}`;
-const LAST_UPDATED = 'June 21, 2026';
+const LAST_UPDATED = 'June 25, 2026';
 const DISCORD_INVITE = 'https://discord.gg/RMtusS2GKW';
 
 /** Collapsible "How to use this roster" panel — BS Hoops + Basketball GM paths. */
@@ -115,7 +115,8 @@ export default function RostersPage() {
     // Imported leagues start in the offseason with their draft pending — go run
     // it first; otherwise straight to the team dashboard.
     const picked = useLeagueStore.getState().league;
-    router.push(picked?.sportData && (picked.sportData as { draft?: unknown }).draft ? '/draft' : '/league');
+    const sd = picked?.sportData as { draft?: unknown; postDraftImport?: boolean } | undefined;
+    router.push(sd?.draft ? '/draft' : sd?.postDraftImport ? '/re-sign' : '/league');
   }
 
   // --- After a successful import: pick your team ---

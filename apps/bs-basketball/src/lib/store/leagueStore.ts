@@ -283,6 +283,27 @@ function leagueFromImport(imported: ImportedHoopsLeague): BasketballLeagueState 
   // Flag custom-roster leagues so they're excluded from the global GM board.
   league = { ...league, sportData: { ...(league.sportData as object), imported: true, pickOwnership } };
 
+  // POST-draft snapshot (file phase ≥ RESIGN_PLAYERS): the rookies are already
+  // on their teams. Skip the inaugural draft entirely and open the league at the
+  // re-sign step of the offseason. Any leftover undrafted prospects fall to free
+  // agency (mirrors finishInauguralDraft). The re-sign page derives each team's
+  // expiring players itself, so no draft state is created.
+  if (imported.draftComplete) {
+    league = {
+      ...league,
+      currentPhase: 'offseason',
+      freeAgentIds: [...league.freeAgentIds, ...imported.draftProspectIds],
+      sportData: {
+        ...(league.sportData as object),
+        postDraftImport: true,
+        // Fresh free-agency window for the offseason (parity with enterOffseason).
+        faDay: 0,
+        seasonStarted: false,
+      },
+    };
+    return league;
+  }
+
   // Imported leagues start with their upcoming draft before free agency — the
   // file is a pre-draft snapshot, so don't skip it. Round 1 uses the real ESPN
   // 2026 order (team that makes each pick, traded picks baked in); round 2 falls
