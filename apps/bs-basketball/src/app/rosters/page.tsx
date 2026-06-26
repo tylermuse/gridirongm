@@ -112,14 +112,11 @@ export default function RostersPage() {
 
   async function choose(teamId: TeamId) {
     await pickUserTeam(teamId);
-    // Route by the imported league's state:
-    //  • pre-draft snapshot  → run the inaugural draft first (/draft)
-    //  • post-draft snapshot → start at the re-sign step (/re-sign)
-    //  • otherwise           → straight to the team dashboard (/league)
+    // Imported leagues start in the offseason with their draft pending — go run
+    // it first; otherwise straight to the team dashboard.
     const picked = useLeagueStore.getState().league;
     const sd = picked?.sportData as { draft?: unknown; postDraftImport?: boolean } | undefined;
-    const dest = sd?.draft ? '/draft' : sd?.postDraftImport ? '/re-sign' : '/league';
-    router.push(dest);
+    router.push(sd?.draft ? '/draft' : sd?.postDraftImport ? '/re-sign' : '/league');
   }
 
   // --- After a successful import: pick your team ---
@@ -197,10 +194,9 @@ export default function RostersPage() {
               <h2 className="text-lg font-black">NBA 2025-26 Roster</h2>
               <p className="text-sm text-[var(--text-sec)] mt-1.5 leading-relaxed">
                 All 30 teams with real rosters, positions, and contracts, re-leveled to current NBA 2K26 overalls.
-                Imports as a full 30-team league in Basketball GM or BS Hoops, starting at the 2026 re-signing phase.
-                Now reflects the completed 2026 NBA Draft — all 60 picks applied with rookies on their correct
-                post-trade teams and rookie-scale contracts (AJ Dybantsa to Washington, Cameron Boozer to Memphis,
-                Koa Peat to Phoenix…).
+                Imports as a full 30-team league in Basketball GM or BS Hoops, starting at the 2026 season. Includes
+                the 2026 draft class with the top of the board curated to real consensus big-board order (AJ Dybantsa,
+                Darryn Peterson, Cameron Boozer, Caleb Wilson…), so the lottery feels true to life.
               </p>
               <p className="text-[11px] text-[var(--text-sec)] mt-2 opacity-70">BBGM-native · 30 teams · 529 players</p>
               <p className="text-xs mt-2 text-[var(--text-sec)] italic">

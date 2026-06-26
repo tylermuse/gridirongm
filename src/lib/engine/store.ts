@@ -10,7 +10,7 @@ import type {
   HoldoutEntry, TradeRumor, Rivalry, RivalryEvent,
   ExpansionTeamConfig, SocialPost, ImportedProspect, ApprovalState,
 } from '@/types';
-import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, backfillTeamSubPositions, assignOlSlots, assignJerseyNumber, reconcileJerseys, isPracticeSquadEligible, PRACTICE_SQUAD_LIMIT, type Position, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
+import { emptyRecord, emptyStats, POSITIONS, ROSTER_LIMITS, DEFAULT_LEAGUE_SETTINGS, calculateDeadCap, calculateCapSavings, generateGuaranteed, getCapHit, getUnamortizedBonus, calculateDeadCapV2, calculateCapSavingsV2, materializeContractYears, deriveSubPosition, backfillTeamSubPositions, isValidSubPositionForPosition, assignOlSlots, assignJerseyNumber, reconcileJerseys, isPracticeSquadEligible, PRACTICE_SQUAD_LIMIT, type Position, type SubPosition, type DeadCapEntry, type ContractYear, type ContractRestructure } from '@/types';
 import { LEAGUE_TEAMS } from '@/lib/data/teams';
 import { loadLeagueFromUrl } from '@/lib/data/leagueImport';
 import { applyEraHeadCoach } from '@/lib/data/eraCoachingStaff';
@@ -37,7 +37,7 @@ import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from 
 import { clearRolloverTickInstrumentation, setAutocutSubstep, recordTickTiming, recordTickRosterSize } from '@/lib/instrumentation/rolloverTickTimings';
 import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
 
-const SAVE_VERSION = 35;
+const SAVE_VERSION = 36;
 
 // Module-local dedup so the Week-1 roster-overflow alert can't infinite-loop
 // when simWeek() is invoked repeatedly from a caller (e.g. handleSimSeason
@@ -179,6 +179,11 @@ interface GameStore extends LeagueState {
   promoteFromPracticeSquad: (playerId: string) => string;
   /** Sign a free-agent to the PS directly (minimum contract). Returns error msg. */
   signToPracticeSquad: (playerId: string) => string;
+  /** Pin a player's detailed sub-position within their broad-position cluster
+   *  (e.g. OL → OT/OG/C). Pass null to clear the pin and fall back to the
+   *  ratings-derived classification. Returns false if the player is missing or
+   *  the sub-position is not legal for their position. */
+  setSubPositionOverride: (playerId: string, sub: SubPosition | null) => boolean;
   startNewSeason: () => void;
   // PRD-04: Trades
   executeTrade: (
@@ -3952,7 +3957,12 @@ export const useGameStore = create<GameStore>()(
               acc[pos] = (t.depthChart[pos] ?? []).filter(id => id !== playerId);
               return acc;
             }, {} as Record<Position, string[]>);
-            return { ...t, roster: newRoster, depthChart: newDepthChart, totalPayroll: Math.max(0, t.totalPayroll - salary) };
+            // bige08676 6/21 retest: an expiring practice-squad player (teamId
+            // set, yearsLeft 1) enters the re-sign queue but lives in
+            // practiceSquad, not roster — so the roster/depthChart prune above
+            // misses them and "let walk" leaves an orphan id with teamId=null.
+            const newPracticeSquad = (t.practiceSquad ?? []).filter(id => id !== playerId);
+            return { ...t, roster: newRoster, depthChart: newDepthChart, practiceSquad: newPracticeSquad, totalPayroll: Math.max(0, t.totalPayroll - salary) };
           }),
           freeAgents: [...state.freeAgents, playerId],
           resigningPlayers: state.resigningPlayers.filter(e => e.playerId !== playerId),
@@ -3991,7 +4001,10 @@ export const useGameStore = create<GameStore>()(
             }, {} as Record<Position, string[]>);
             let payrollDrop = 0;
             for (const id of onUserTeam) payrollDrop += salaryMap.get(id) ?? 0;
-            return { ...t, roster: newRoster, depthChart: newDepthChart, totalPayroll: Math.max(0, t.totalPayroll - payrollDrop) };
+            // bige08676 6/21 retest: prune walked practice-squad players too —
+            // see the single-player passOnResigning above.
+            const newPracticeSquad = (t.practiceSquad ?? []).filter(id => !onUserTeam.has(id));
+            return { ...t, roster: newRoster, depthChart: newDepthChart, practiceSquad: newPracticeSquad, totalPayroll: Math.max(0, t.totalPayroll - payrollDrop) };
           }),
           freeAgents: [...state.freeAgents, ...Array.from(onUserTeam)],
           // Off-team entries get pruned from the queue too — they're stale.
@@ -6385,6 +6398,40 @@ export const useGameStore = create<GameStore>()(
           freeAgents: state.freeAgents.filter(id => id !== playerId),
         });
         return '';
+      },
+
+      // bryangrove/tofftanaut 5/30, launcher_18 6/21: let users re-label a
+      // lineman's detailed sub-position (OT<->OG). subPosition is normally
+      // ratings-derived and re-backfilled on every load, so the pin lives in
+      // the persisted subPositionOverride field, which classify/backfill honor.
+      setSubPositionOverride: (playerId: string, sub: SubPosition | null): boolean => {
+        const state = get();
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return false;
+        if (sub !== null && !isValidSubPositionForPosition(player.position, sub)) return false;
+
+        const teamId = player.teamId;
+        // Clone only the players we touch: the whole team roster (so an OL
+        // re-balance is reflected) or just this player when he's a free agent.
+        const affected = new Set<string>(
+          teamId ? state.players.filter(p => p.teamId === teamId).map(p => p.id) : [playerId],
+        );
+        const newPlayers = state.players.map(p => {
+          if (!affected.has(p.id)) return p;
+          if (p.id === playerId) return { ...p, subPositionOverride: sub ?? undefined };
+          return { ...p };
+        });
+
+        if (teamId) {
+          // Re-derive the team's sub-positions; backfill applies the pin and
+          // re-balances the rest of the line around it.
+          backfillTeamSubPositions(newPlayers.filter(p => affected.has(p.id)), true);
+        } else {
+          const np = newPlayers.find(p => p.id === playerId)!;
+          np.subPosition = sub ?? deriveSubPosition(np);
+        }
+        set({ players: newPlayers });
+        return true;
       },
 
       customizeHeadCoach: (input): string => {
@@ -10814,6 +10861,12 @@ export const useGameStore = create<GameStore>()(
               }
             }
           }
+        }
+        if (version < 36) {
+          // Adds Player.subPositionOverride (user-pinned OT/OG/C etc.). Purely
+          // additive + optional: absent = no override = prior ratings-derived
+          // behavior, so no data transform is needed. The bump just versions
+          // the new field so saves round-trip cleanly.
         }
         return state;
       },
