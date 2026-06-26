@@ -14,6 +14,8 @@ import {
   freeAgentPool,
   capRoom,
   signingBudget,
+  signingChannels,
+  channelForSalary,
   teamAppeal,
   rosterCount,
   acceptanceProbability,
@@ -106,13 +108,19 @@ export default function FreeAgencyPage() {
   const offer = { years, salaryPerYear: Math.round(salaryM * 1_000_000) };
   const competing = selected ? bestCompetingOffer(league, selected) : null;
   const acceptPct = selected ? Math.round(acceptanceProbability(selected, offer, competing?.total ?? 0, appeal) * 100) : 0;
-  // The most this player can be offered per year — mirrors resolveUserOffer's cap
-  // gate so the UI and the engine agree. Bird rights let a team exceed the cap to
-  // re-sign its OWN free agent (up to his market price); everyone else is capped
-  // at the signing budget (cap room or the available exception).
+  // The exception this offer would spend — mirrors resolveUserOffer exactly, so
+  // the UI and the engine agree on which channel (cap room / Mid-Level / minimum /
+  // Bird) covers it, and whether anything covers it at all.
   const isBirdSelected = !!selected && selected.birdRights !== 'none' && selected.lastTeamId === userTeamId;
-  const maxOffer = isBirdSelected ? Math.max(budget, selected!.marketSalary) : budget;
-  const overBudget = !!selected && offer.salaryPerYear > maxOffer + 50_000;
+  const offerChannel = selected && userTeamId
+    ? channelForSalary(league, userTeamId, offer.salaryPerYear, { isBird: isBirdSelected, birdMax: selected.marketSalary })
+    : null;
+  const overBudget = !!selected && !offerChannel;
+  // Exceptions still in hand (the always-on minimum isn't worth listing).
+  const remainingChannels = userTeamId
+    ? signingChannels(league, userTeamId).filter(c => !c.used && c.id !== 'minimum')
+    : [];
+  const bestRemaining = Math.max(room > 0 ? room : 0, ...remainingChannels.map(c => c.max), 0);
 
   function selectFa(f: FreeAgentInfo) {
     setSelectedId(f.player.id);
@@ -291,29 +299,30 @@ export default function FreeAgencyPage() {
                 {/* Cap channel + enforcement. Under the cap you spend room; over
                     it you sign through an exception (Mid-Level, etc.), capped at
                     `budget`. resolveUserOffer rejects anything above this. */}
-                {(() => {
-                  if (overBudget) return (
-                    <div className="text-xs mb-3" style={{ color: '#dc2626' }}>
-                      Over budget — most you can offer {selected.player.lastName} is {money(maxOffer)}/yr {isBirdSelected ? '(Bird rights)' : room > 0 ? '(your cap room)' : 'via an exception (Mid-Level)'}. Lower the salary{room <= 0 && !isBirdSelected ? ' or free up cap room' : ''}.
-                    </div>
-                  );
-                  if (isBirdSelected && room <= 0) return (
-                    <div className="text-xs mb-3 text-[var(--text-sec)]">
-                      Bird rights — you can exceed the cap to re-sign your own player.
-                    </div>
-                  );
-                  if (room <= 0) return (
-                    <div className="text-xs mb-3 text-[var(--text-sec)]">
-                      Over the cap — this signs through an exception (up to {money(budget)}/yr).
-                    </div>
-                  );
-                  if (offer.salaryPerYear > room) return (
-                    <div className="text-xs mb-3 text-[var(--text-sec)]">
-                      Uses cap room ({money(room)} available).
-                    </div>
-                  );
-                  return null;
-                })()}
+                {/* Which exception this signing spends — kept in lockstep with
+                    resolveUserOffer via channelForSalary. */}
+                {overBudget ? (
+                  <div className="text-xs mb-3" style={{ color: '#dc2626' }}>
+                    Over budget — your remaining channels top out at {money(bestRemaining)}/yr for {selected.player.lastName}. Lower the salary{room <= 0 ? ', use cap room,' : ''} or free up room.
+                  </div>
+                ) : offerChannel ? (
+                  <div className="text-xs mb-3 text-[var(--text-sec)]">
+                    Signs via <span className="font-semibold text-[var(--text)]">{offerChannel.label}</span>
+                    {offerChannel.consumable ? ` (${money(offerChannel.max)} max)` : offerChannel.id === 'cap_room' ? ` (${money(room)} room)` : ''}
+                    {offerChannel.hardCaps && <span style={{ color: '#d97706' }}> · hard-caps you at the first apron</span>}
+                  </div>
+                ) : null}
+
+                {/* Exceptions still available this offseason. */}
+                {remainingChannels.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {remainingChannels.map(c => (
+                      <span key={c.id} className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: 'var(--surface-2)', color: 'var(--text-sec)' }}>
+                        {c.label} · {money(c.max)}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 {rosterFull && (
                   <div className="mb-3">
