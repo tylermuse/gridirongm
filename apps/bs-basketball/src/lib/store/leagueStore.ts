@@ -979,6 +979,17 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       return null;
     }
     const draft = getDraft(current);
+    // A post-draft roster import opens straight at the re-sign window with NO
+    // draft state (the rookies are already on their teams). It tips into the
+    // CURRENT season with no year roll — exactly like finishing an inaugural
+    // draft — so it must not demand a completed draft. Without this it threw the
+    // misleading "Finish the draft before starting the season." with no draft to
+    // finish. Delegate to the inaugural-finish path (preseason, no re-age).
+    const postDraftImport = (current.sportData as { postDraftImport?: boolean } | undefined)?.postDraftImport;
+    if (!draft && postDraftImport) {
+      await get().finishInauguralDraft();
+      return get().league?.currentSeason ?? null;
+    }
     if (!draft || !draft.complete) {
       set({ error: 'Finish the draft before starting the season.' });
       return null;
