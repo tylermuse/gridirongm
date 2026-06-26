@@ -52,7 +52,12 @@ export function teamFinances(league: LeagueState, team: BasketballTeam): TeamFin
     .map(id => (league.players as Record<string, BasketballPlayer>)[id])
     .filter((p): p is BasketballPlayer => !!p);
 
-  const cap = basketballTeamCapStatus(players, season);
+  // Dead money counts fully against the cap + luxury tax (NBA rules), so fold it
+  // into the cap status as extra payroll — that makes capRoom, the aprons, and
+  // the tax bill all reflect it. cap.payroll then INCLUDES dead cap; the expense
+  // breakdown below splits it back out so the rows still read cleanly.
+  const deadCap = teamDeadCap(team, season);
+  const cap = basketballTeamCapStatus(players, season, deadCap);
 
   const gp = team.record.wins + team.record.losses;
   const winPct = gp > 0 ? team.record.wins / gp : 0.5;
@@ -66,13 +71,12 @@ export function teamFinances(league: LeagueState, team: BasketballTeam): TeamFin
 
   const hc = getHeadCoach(league, team.id);
   const coaching = hc ? coachSalary(hc) : 0;
-  const deadCap = teamDeadCap(team, season);
   const expenses = {
-    payroll: cap.payroll,
+    payroll: cap.payroll - deadCap, // player salaries only (dead cap is its own row)
     coaching,
     luxuryTax: cap.taxBill,
     deadCap,
-    total: cap.payroll + cap.taxBill + coaching + deadCap,
+    total: cap.payroll + cap.taxBill + coaching, // cap.payroll already includes deadCap
   };
 
   const byPosition: Record<BasketballPosition, number> = { PG: 0, SG: 0, SF: 0, PF: 0, C: 0 };

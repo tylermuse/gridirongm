@@ -195,8 +195,12 @@ export function isLegalBasketballContract(
 export function basketballTeamPayroll(
   players: BasketballPlayer[],
   season: number,
+  /** Dead money (waived-contract cap charges) for the season — counts fully
+   *  against the cap/tax/aprons in the NBA, but lives in app-layer team state,
+   *  so callers thread it in. Defaults to 0 (no behavior change for old callers). */
+  extraPayroll = 0,
 ): number {
-  let total = 0;
+  let total = extraPayroll;
   for (const p of players) {
     if (p.sportData.isTwoWay) continue; // two-way contracts don't hit the cap
     if (!p.contract) continue;
@@ -223,12 +227,14 @@ export interface TeamCapStatus {
   isOverSecondApron: boolean;
 }
 
-/** Compute a team's full cap status for a season. */
+/** Compute a team's full cap status for a season. `extraPayroll` is dead money
+ *  (waived-contract charges) that counts against the cap/tax/aprons. */
 export function basketballTeamCapStatus(
   players: BasketballPlayer[],
   season: number,
+  extraPayroll = 0,
 ): TeamCapStatus {
-  const payroll = basketballTeamPayroll(players, season);
+  const payroll = basketballTeamPayroll(players, season, extraPayroll);
   const cap = basketballSalaryCap(season);
   const taxThreshold = basketballTaxThreshold(season);
   const firstApron = basketballFirstApron(season);

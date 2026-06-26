@@ -71,10 +71,12 @@ export function basketballAvailableCapActions(
   teamId: TeamId,
   players: BasketballPlayer[],
   season: number,
+  /** Dead money on the team's books — counts against the cap/aprons. */
+  extraPayroll = 0,
 ): BasketballCapAction[] {
   // Only count players on THIS team
   const teamPlayers = players.filter(p => p.rosterSlot?.teamId === teamId);
-  const status = basketballTeamCapStatus(teamPlayers, season);
+  const status = basketballTeamCapStatus(teamPlayers, season, extraPayroll);
   const cap = basketballSalaryCap(season);
 
   const actions: BasketballCapAction[] = [];

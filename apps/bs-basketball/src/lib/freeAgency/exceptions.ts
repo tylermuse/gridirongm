@@ -28,6 +28,7 @@ import {
 } from '@bs/sport-basketball';
 import type { BaseLeagueState, TeamId } from '@bs/core/adapter';
 import { upcomingSeason } from '../draft/draft';
+import { teamDeadCap } from '../roster/deadCap';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -103,6 +104,12 @@ function teamPlayers(league: LeagueState, teamId: TeamId): BasketballPlayer[] {
     .filter((p): p is BasketballPlayer => !!p);
 }
 
+/** Dead money on the team's books for `season` — counts against cap/aprons. */
+function deadCapFor(league: LeagueState, teamId: TeamId, season: number): number {
+  const team = league.teams.find(t => t.id === teamId);
+  return team ? teamDeadCap(team as Parameters<typeof teamDeadCap>[0], season) : 0;
+}
+
 /**
  * The signing channels available to a team right now, in spend-priority order
  * (use the cheapest-impact channel that covers a salary). Consumed exceptions
@@ -111,10 +118,11 @@ function teamPlayers(league: LeagueState, teamId: TeamId): BasketballPlayer[] {
 export function signingChannels(league: LeagueState, teamId: TeamId): SigningChannel[] {
   const season = upcomingSeason(league);
   const players = teamPlayers(league, teamId);
-  const status = basketballTeamCapStatus(players, season);
+  const dead = deadCapFor(league, teamId, season);
+  const status = basketballTeamCapStatus(players, season, dead);
   const usage = exceptionUsage(league, teamId);
   // The package enumerates amounts + apron availability; we add usage + hard cap.
-  const actions = basketballAvailableCapActions(teamId, players, season);
+  const actions = basketballAvailableCapActions(teamId, players, season, dead);
   const amountOf = (idPrefix: string): number =>
     actions.find(a => a.id.startsWith(idPrefix) && a.available)?.approxAmount ?? 0;
 
@@ -166,7 +174,8 @@ export function channelForSalary(
   }
   const usage = exceptionUsage(league, teamId);
   const players = teamPlayers(league, teamId);
-  const status = basketballTeamCapStatus(players, upcomingSeason(league));
+  const season = upcomingSeason(league);
+  const status = basketballTeamCapStatus(players, season, deadCapFor(league, teamId, season));
   // Once hard-capped, a signing can't push payroll past the first apron.
   const hardCapHeadroom = usage.hardCapFirstApron
     ? Math.max(0, status.firstApron - status.payroll)

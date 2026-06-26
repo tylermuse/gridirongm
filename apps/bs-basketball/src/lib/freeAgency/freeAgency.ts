@@ -29,6 +29,7 @@ import { appendTransaction } from '../transactions';
 import { upcomingSeason } from '../draft/draft';
 import { channelForSalary, consumeChannel, signingChannels } from './exceptions';
 import { lastSeasonLog } from '../stats/statLine';
+import { teamDeadCap } from '../roster/deadCap';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -195,7 +196,7 @@ export function capRoom(league: LeagueState, teamId: TeamId): number {
   const players = team.playerIds
     .map(id => league.players[id] as BasketballPlayer | undefined)
     .filter((p): p is BasketballPlayer => !!p);
-  const payroll = basketballTeamPayroll(players, season);
+  const payroll = basketballTeamPayroll(players, season, teamDeadCap(team as Parameters<typeof teamDeadCap>[0], season));
   return basketballSalaryCap(season) - payroll;
 }
 
@@ -215,7 +216,7 @@ export function signingBudget(league: LeagueState, teamId: TeamId): number {
   const players = team.playerIds
     .map(id => league.players[id] as BasketballPlayer | undefined)
     .filter((p): p is BasketballPlayer => !!p);
-  const status = basketballTeamCapStatus(players, season);
+  const status = basketballTeamCapStatus(players, season, teamDeadCap(team as Parameters<typeof teamDeadCap>[0], season));
   // Under the cap → that room, but always at least a minimum deal: the minimum
   // exception is always available, so a team a hair under the cap (e.g. $75K of
   // room) must still read as able to sign someone, not "can't afford anyone".
