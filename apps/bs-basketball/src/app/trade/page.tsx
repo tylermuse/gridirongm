@@ -9,6 +9,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { SortableTradeTable } from '@/components/trade/SortableTradeTable';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import { evaluateTrade, isExecutable, type TradeSideInput } from '@/lib/trade';
 import { findDealsForPlayer, findDealsForPick, incomingOffers, type DealSuggestion } from '@/lib/trade/finder';
 import { teamStrategy, getTeamPicks, pickFromId, pickShort, pickValue, protectionShort, type ProtectionTerms } from '@/lib/trade';
@@ -1178,7 +1179,7 @@ function DealHalf({
                 className="flex items-center gap-2 rounded-lg px-2 py-1"
                 style={{ background: `color-mix(in srgb, ${accent} 12%, transparent)` }}
               >
-                <span className="font-semibold text-xs truncate min-w-0 flex-1">{p.firstName} {p.lastName}</span>
+                <PlayerName playerId={id} firstName={p.firstName} lastName={p.lastName} className="font-semibold text-xs truncate min-w-0 flex-1" />
                 <span className="text-[10px] tabular-nums opacity-70 whitespace-nowrap">
                   {p.sportData.position} · {p.ratings.overall} OVR{showPot ? ` (${pot}↑)` : ''} · {p.age}y
                 </span>

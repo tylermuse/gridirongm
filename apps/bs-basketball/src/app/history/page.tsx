@@ -6,6 +6,7 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getSeasonHistory, type SeasonHistoryEntry } from '@/lib/history';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -111,7 +112,7 @@ export default function HistoryPage() {
                 <ul className="p-2">
                   {careerScorers.map(p => (
                     <li key={p.id} className="flex items-center justify-between px-2 py-1 text-sm">
-                      <span className="font-semibold truncate">{p.firstName} {p.lastName}</span>
+                      <PlayerName playerId={p.id} firstName={p.firstName} lastName={p.lastName} className="font-semibold truncate" />
                       <span className="tabular-nums opacity-70">{Math.round(p.careerStats.points).toLocaleString()} pts</span>
                     </li>
                   ))}

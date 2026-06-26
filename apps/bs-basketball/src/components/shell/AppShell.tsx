@@ -11,6 +11,7 @@ import { SimToast } from '@/components/ui/Toast';
 import { WhatsNew } from '@/components/ui/WhatsNew';
 import { GameSounds } from '@/components/ui/GameSounds';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { PlayerModalProvider } from '@/components/modals/PlayerModalProvider';
 import { GameTicker } from '@/components/dashboard/GameTicker';
 import { nextAction, type ActionKey } from '@/lib/ui/nextAction';
 import { getBracket } from '@/lib/playoffs';
@@ -59,6 +60,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
+    <PlayerModalProvider>
     <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
       {/* Desktop sidebar */}
       <div className="hidden md:flex md:sticky md:top-0 md:h-screen">
@@ -88,6 +90,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <GameSounds />
       <ErrorBanner />
     </div>
+    </PlayerModalProvider>
   );
 }
 

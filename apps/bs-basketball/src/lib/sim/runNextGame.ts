@@ -22,7 +22,7 @@ import {
 } from '@bs/sport-basketball';
 import { resolveLineup } from '../lineup';
 import { getHeadCoach } from '../coaching/coaches';
-import { getInjuries, healthyPlayers, applyInjuryRolls, type InjuryMap } from '../injuries';
+import { getInjuries, healthyPlayers, canPlayThrough, applyInjuryRolls, type InjuryMap } from '../injuries';
 import { getDiscipline, isSuspendedOn, applyDisciplineRolls, type DisciplineMap } from '../discipline';
 import type {
   BaseGameResult,
@@ -132,12 +132,21 @@ function buildSnapshot(
   const roster = team.playerIds
     .map((pid: PlayerId) => playerMap[pid])
     .filter((p): p is BasketballPlayer => !!p);
-  let players = healthyPlayers(roster, injuries, day).filter(p => !isSuspendedOn(discipline, p.id, day));
+  const eligible = roster.filter(p => !isSuspendedOn(discipline, p.id, day));
+  let players = healthyPlayers(eligible, injuries, day);
   let lineup = resolveLineup(team, players);
-  // If injuries leave the team unable to field a full five, the walking
-  // wounded suit up for this game rather than crashing the sim.
+  // Short-handed: if injuries leave fewer than five healthy bodies, press the
+  // walking wounded into service — but only those who could realistically gut it
+  // out (day-to-day / minor). A major or season-ending injury never suits up, so
+  // a hurt star isn't auto-started by OVR (the old fallback dumped the WHOLE
+  // roster, which put e.g. a season-ending-injured player back on the floor).
   if (players.length < 5 || lineup.starters.some(id => !id)) {
-    players = roster;
+    const withPlayThroughs = eligible.filter(
+      p => !injuries[p.id] || injuries[p.id].returnDay <= day || canPlayThrough(injuries[p.id]),
+    );
+    // Absolute last resort (still under five even counting playable injuries):
+    // everyone eligible suits up so the sim can field a team rather than crash.
+    players = withPlayThroughs.length >= 5 ? withPlayThroughs : eligible;
     lineup = resolveLineup(team, players);
   }
 
