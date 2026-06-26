@@ -10,7 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ExtendModal } from '@/components/modals/ExtendModal';
-import { PlayerModal } from '@/components/modals/PlayerModal';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import { ConfirmModal } from '@/components/modals/ConfirmModal';
 import { OffseasonStepper } from '@/components/shell/OffseasonStepper';
 import { lastSeasonStatLine } from '@/lib/stats/statLine';
@@ -36,7 +36,6 @@ export default function ReSignPage() {
   const store = useLeagueStore();
   const router = useRouter();
   const [extendId, setExtendId] = useState<string | null>(null);
-  const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
   // Players released this session, for "what I just did" feedback (they're already
   // off the roster, so we keep a local note rather than re-deriving it).
   const [walked, setWalked] = useState<{ id: string; name: string }[]>([]);
@@ -221,7 +220,7 @@ export default function ReSignPage() {
                   <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} photoUrl={p.sportData.photoUrl} size="sm" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
-                      <button onClick={() => setModalPlayerId(p.id)} className="font-semibold truncate hover:underline text-left" style={{ color: 'var(--text)' }}>{p.firstName} {p.lastName}</button>
+                      <PlayerName playerId={p.id} firstName={p.firstName} lastName={p.lastName} className="font-semibold truncate" style={{ color: 'var(--text)' }} />
                       {/* MOBILE-1b: keep the stance chip visible on phone too —
                           previously hidden under sm: so the user couldn't tell
                           if the player even wanted to stay. */}
@@ -261,14 +260,14 @@ export default function ReSignPage() {
             {resigned.map(p => (
               <div key={p.id} className="flex items-center gap-3 px-3 py-2 border-t first:border-t-0 text-sm" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, #10b981 7%, transparent)' }}>
                 <span className="text-[#059669] font-bold">✓</span>
-                <span className="font-semibold flex-1 truncate">{p.firstName} {p.lastName}</span>
+                <PlayerName playerId={p.id} firstName={p.firstName} lastName={p.lastName} className="font-semibold flex-1 truncate" />
                 <span className="text-xs text-[var(--text-sec)] tabular-nums">Re-signed · −{money(salaryForSeason(p, nextSeason))}/yr</span>
               </div>
             ))}
             {walked.map(w => (
               <div key={w.id} className="flex items-center gap-3 px-3 py-2 border-t first:border-t-0 text-sm" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, #dc2626 6%, transparent)' }}>
                 <span className="text-[#dc2626] font-bold">↪</span>
-                <span className="font-semibold flex-1 truncate">{w.name}</span>
+                <PlayerName playerId={w.id} className="font-semibold flex-1 truncate">{w.name}</PlayerName>
                 <span className="text-xs text-[#dc2626]">Released to FA</span>
               </div>
             ))}
@@ -290,7 +289,7 @@ export default function ReSignPage() {
             {roster.slice(0, over + 3).map((p, i) => (
               <div key={p.id} className="flex items-center gap-3 px-2 py-1.5 rounded-lg" style={{ background: i < over ? 'color-mix(in srgb, #dc2626 6%, transparent)' : undefined }}>
                 <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} photoUrl={p.sportData.photoUrl} size="sm" />
-                <span className="font-semibold truncate flex-1">{p.firstName} {p.lastName}</span>
+                <PlayerName playerId={p.id} firstName={p.firstName} lastName={p.lastName} className="font-semibold truncate flex-1" />
                 <Chip>{p.sportData.position}</Chip>
                 <span className={`text-sm font-bold tabular-nums ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
                 <button
@@ -314,7 +313,6 @@ export default function ReSignPage() {
       </section>
 
       <ExtendModal playerId={extendId} onClose={() => setExtendId(null)} />
-      <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
 
       {/* R2-1: themed confirms replacing the prior native window.confirm() calls. */}
       <ConfirmModal

@@ -14,6 +14,7 @@ import { getBracket, isRegularSeasonComplete } from '@/lib/playoffs';
 import { computeSeasonAwards } from '@/lib/awards';
 import type { PlayoffSeries } from '@/lib/playoffs';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
 
 /**
  * /playoffs — the postseason bracket (Phase 2D-1).
@@ -204,7 +205,7 @@ export default function PlayoffsPage() {
             {mvp && (
               <div className="mt-4 text-sm">
                 <span className="opacity-60">MVP: </span>
-                <span className="font-bold">{mvp.firstName} {mvp.lastName}</span>
+                <PlayerName playerId={mvp.id} firstName={mvp.firstName} lastName={mvp.lastName} className="font-bold" />
               </div>
             )}
             <div className="mt-5 flex justify-center gap-2">
