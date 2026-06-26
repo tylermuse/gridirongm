@@ -14,10 +14,12 @@ import { releasePlayer } from '../freeAgency';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
 import type { BaseLeagueState, PlayerId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
+import { teamDeadCapEntries, teamDeadCap, type DeadCapEntry } from './deadCap';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
-export interface DeadCapEntry { season: number; amount: number }
+// Re-export the dead-cap reader so existing importers (Finances) keep working.
+export { teamDeadCap, type DeadCapEntry };
 
 export interface ReleasePreview {
   /** Guaranteed money still owed across the remaining contract years. */
@@ -53,15 +55,6 @@ export function releasePreview(player: BasketballPlayer, season: number): Releas
   };
 }
 
-function deadCapOf(team: BasketballTeam): DeadCapEntry[] {
-  return ((team.sportData as { deadCap?: DeadCapEntry[] }).deadCap) ?? [];
-}
-
-/** Current-season dead-cap charge for a team. */
-export function teamDeadCap(team: BasketballTeam, season: number): number {
-  return deadCapOf(team).filter(d => d.season === season).reduce((s, d) => s + d.amount, 0);
-}
-
 /** Release a player, recording the resulting dead cap (stretched or not). */
 export function applyRelease(league: LeagueState, playerId: string, stretch: boolean): LeagueState {
   const player = (league.players as Record<string, BasketballPlayer>)[playerId];
@@ -84,7 +77,7 @@ export function applyRelease(league: LeagueState, playerId: string, stretch: boo
   const released = releasePlayer(league, playerId as PlayerId);
   const teams = released.teams.map(t =>
     t.id === teamId
-      ? ({ ...t, sportData: { ...(t as BasketballTeam).sportData, deadCap: [...deadCapOf(t as BasketballTeam), ...charges] } } as typeof t)
+      ? ({ ...t, sportData: { ...(t as BasketballTeam).sportData, deadCap: [...teamDeadCapEntries(t as BasketballTeam), ...charges] } } as typeof t)
       : t,
   );
   return { ...released, teams };
