@@ -28,6 +28,7 @@ import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { appendTransaction } from '../transactions';
 import { upcomingSeason } from '../draft/draft';
 import { channelForSalary, consumeChannel, signingChannels } from './exceptions';
+import { lastSeasonLog } from '../stats/statLine';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -125,6 +126,37 @@ function lastTeamMap(league: LeagueState): Record<string, TeamId> {
   return (league.sportData as LeagueSportData | undefined)?.freeAgentLastTeam ?? {};
 }
 
+/**
+ * FA-ASK adjustment, applied ON TOP of basketballMarketSalary for the asking
+ * price only — never to the trade-value benchmark (the trade engine calls
+ * basketballMarketSalary directly, so it's untouched). Two pieces:
+ *
+ *  1. Production: basketballMarketSalary prices on OVR alone, so a low-usage
+ *     role player (a 6.7-ppg center) asked the same as a 20-point scorer at the
+ *     same OVR — which looked absurd on the board. Discount the ask by recent
+ *     box production (PPG-led, with credit for boards + playmaking), neutral for
+ *     real starters and down to ~0.65 for spot players. Small samples (< 15 GP:
+ *     rookies, vets who sat) stay neutral — we can't judge them.
+ *  2. Center premium: basketballMarketSalary gives centers a +8% positional
+ *     premium (C = 1.08). That made bigs the priciest position on the board even
+ *     when their box scores were modest, so the ask drops it back to neutral.
+ */
+const C_ASK_NEUTRALIZER = 1 / 1.08; // undo marketSalary's C=1.08 premium for the ask
+function faAskFactor(player: BasketballPlayer): number {
+  let factor = player.sportData.position === 'C' ? C_ASK_NEUTRALIZER : 1;
+  const s = lastSeasonLog(player);
+  if (s && s.gamesPlayed >= 15) {
+    const box = s.ppg + 0.4 * s.rpg + 0.5 * s.apg; // mirrors trade-value's box weighting
+    let prod: number;
+    if (box >= 24) prod = 1.0;                              // bona fide starter
+    else if (box >= 16) prod = 0.85 + ((box - 16) / 8) * 0.15; // role-starter
+    else if (box >= 10) prod = 0.70 + ((box - 10) / 6) * 0.15; // rotation
+    else prod = Math.max(0.65, 0.70 - (10 - box) * 0.01);  // spot minutes
+    factor *= prod;
+  }
+  return factor;
+}
+
 export function freeAgentInfo(league: LeagueState, playerId: PlayerId): FreeAgentInfo | null {
   const player = league.players[playerId] as BasketballPlayer | undefined;
   if (!player) return null;
@@ -134,7 +166,7 @@ export function freeAgentInfo(league: LeagueState, playerId: PlayerId): FreeAgen
     marketSalary: Math.round(basketballMarketSalary(player, {
       season: league.currentSeason,
       noiseSeed: `fa-${player.id}-${league.currentSeason}`,
-    }) * decay),
+    }) * decay * faAskFactor(player)),
     desiredYears: basketballMarketContractYears(player),
     lastTeamId: lastTeamMap(league)[playerId] ?? null,
     birdRights: (player.sportData as { birdRights: 'full' | 'early' | 'none' }).birdRights,
