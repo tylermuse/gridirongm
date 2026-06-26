@@ -27,10 +27,10 @@ import type { TeamId } from '@bs/core/adapter';
  */
 
 // Bump `?v=` when the JSON is regenerated to bust the Vercel edge cache.
-const CACHE_BUST = 5;
+const CACHE_BUST = 7;
 const NBA_FILE = '/rosters/BBGM_NBA_Roster_2026_Updated.json';
 const nbaUrl = `${NBA_FILE}?v=${CACHE_BUST}`;
-const LAST_UPDATED = 'June 21, 2026';
+const LAST_UPDATED = 'June 25, 2026';
 const DISCORD_INVITE = 'https://discord.gg/RMtusS2GKW';
 
 /** Collapsible "How to use this roster" panel — BS Hoops + Basketball GM paths. */
@@ -112,10 +112,14 @@ export default function RostersPage() {
 
   async function choose(teamId: TeamId) {
     await pickUserTeam(teamId);
-    // Imported leagues start in the offseason with their draft pending — go run
-    // it first; otherwise straight to the team dashboard.
+    // Route by the imported league's state:
+    //  • pre-draft snapshot  → run the inaugural draft first (/draft)
+    //  • post-draft snapshot → start at the re-sign step (/re-sign)
+    //  • otherwise           → straight to the team dashboard (/league)
     const picked = useLeagueStore.getState().league;
-    router.push(picked?.sportData && (picked.sportData as { draft?: unknown }).draft ? '/draft' : '/league');
+    const sd = picked?.sportData as { draft?: unknown; postDraftImport?: boolean } | undefined;
+    const dest = sd?.draft ? '/draft' : sd?.postDraftImport ? '/re-sign' : '/league';
+    router.push(dest);
   }
 
   // --- After a successful import: pick your team ---
@@ -193,9 +197,10 @@ export default function RostersPage() {
               <h2 className="text-lg font-black">NBA 2025-26 Roster</h2>
               <p className="text-sm text-[var(--text-sec)] mt-1.5 leading-relaxed">
                 All 30 teams with real rosters, positions, and contracts, re-leveled to current NBA 2K26 overalls.
-                Imports as a full 30-team league in Basketball GM or BS Hoops, starting at the 2026 season. Includes
-                the 2026 draft class with the top of the board curated to real consensus big-board order (AJ Dybantsa,
-                Darryn Peterson, Cameron Boozer, Caleb Wilson…), so the lottery feels true to life.
+                Imports as a full 30-team league in Basketball GM or BS Hoops, starting at the 2026 re-signing phase.
+                Now reflects the completed 2026 NBA Draft — all 60 picks applied with rookies on their correct
+                post-trade teams and rookie-scale contracts (AJ Dybantsa to Washington, Cameron Boozer to Memphis,
+                Koa Peat to Phoenix…).
               </p>
               <p className="text-[11px] text-[var(--text-sec)] mt-2 opacity-70">BBGM-native · 30 teams · 529 players</p>
               <p className="text-xs mt-2 text-[var(--text-sec)] italic">
