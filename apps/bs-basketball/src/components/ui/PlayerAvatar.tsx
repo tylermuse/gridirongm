@@ -15,6 +15,11 @@ interface PlayerAvatarProps {
   lastName: string;
   primaryColor: string;
   secondaryColor: string;
+  /** Headshot URL (BBGM `imgURL` carried through import). When present we
+   *  render the photo inside the team-tinted frame; the initials sit underneath
+   *  as a fallback so a broken image gracefully degrades to the old badge.
+   *  BUG-31. */
+  photoUrl?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
 }
@@ -31,6 +36,7 @@ export function PlayerAvatar({
   lastName,
   primaryColor,
   secondaryColor,
+  photoUrl,
   size = 'md',
   className = '',
 }: PlayerAvatarProps) {
@@ -64,11 +70,28 @@ export function PlayerAvatar({
       className={`${sizeClass} flex items-center justify-center font-black shrink-0 relative overflow-hidden ${className}`}
       style={containerStyle}
     >
-      <div className="absolute inset-0 pointer-events-none" style={gradientOverlay} />
-      <div className="absolute pointer-events-none" style={glossHighlight} />
-      <span className="relative z-10 tracking-tighter" style={{ fontFamily: 'var(--font-display)' }}>
+      {/* Initials sit underneath — they show through if the photo is missing
+          or broken, so we degrade to the badge without a separate fallback. */}
+      <span className="absolute z-0 tracking-tighter" style={{ fontFamily: 'var(--font-display)' }}>
         {initials}
       </span>
+      {photoUrl && (
+        // Lightweight <img>: Next/Image needs a domain allowlist, but BBGM
+        // photos come from many CDNs (CloudFront, GitHub raw, custom mirrors).
+        // The team-tinted frame is already drawn by the container.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={photoUrl}
+          alt={`${firstName} ${lastName}`}
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover z-10"
+          style={{ borderRadius: 'inherit' }}
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+        />
+      )}
+      <div className="absolute inset-0 pointer-events-none z-20" style={gradientOverlay} />
+      <div className="absolute pointer-events-none z-20" style={glossHighlight} />
     </div>
   );
 }

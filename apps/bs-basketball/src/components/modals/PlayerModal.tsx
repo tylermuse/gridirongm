@@ -15,12 +15,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from './Modal';
 import { isGodMode } from '@/lib/godMode/godMode';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
 import { getInjuries, SEVERITY_LABEL } from '@/lib/injuries';
+import { ratingHex, ratingTier } from '@/lib/ui/ratingColor';
 import {
   basketballUiMetadata,
   type BasketballPlayer,
@@ -91,17 +93,31 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
       ) : (
         <>
           <header className="flex flex-wrap items-center gap-4 mb-5">
-            {team && (
-              <TeamLogo
-                abbreviation={team.abbreviation}
-                primaryColor={team.primaryColor}
-                secondaryColor={team.secondaryColor}
-                size="xl"
-              />
-            )}
+            {/* BUG-38: lead with the player's avatar (real headshot for
+                imported NBA players via sportData.photoUrl, initials badge
+                in the team's colors otherwise). The team logo used to take
+                this slot, which read as a team card instead of a player card. */}
+            <PlayerAvatar
+              firstName={player.firstName}
+              lastName={player.lastName}
+              primaryColor={team?.primaryColor ?? 'var(--accent)'}
+              secondaryColor={team?.secondaryColor ?? '#fff'}
+              photoUrl={(player.sportData as { photoUrl?: string }).photoUrl}
+              size="xl"
+            />
             <div className="min-w-0">
-              <div className="text-2xl font-extrabold">
-                {player.firstName} {player.lastName}
+              <div className="text-2xl font-extrabold flex items-center gap-2 flex-wrap">
+                <span>{player.firstName} {player.lastName}</span>
+                {/* Keep a small team logo next to the name so the team context
+                    isn't lost when the headshot takes the headline slot. */}
+                {team && (
+                  <TeamLogo
+                    abbreviation={team.abbreviation}
+                    primaryColor={team.primaryColor}
+                    secondaryColor={team.secondaryColor}
+                    size="xs"
+                  />
+                )}
               </div>
               <p className="text-sm text-[var(--text-sec)]">
                 {player.sportData.position} · Age {player.age}
@@ -197,13 +213,18 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                   {fields.map(f => {
                     const v = (player.ratings as unknown as Record<string, number>)[f.key];
                     if (typeof v !== 'number') return null;
+                    // EPIC-D: tier label + actual hex color on the bar so a
+                    // new user can read 'ELITE 86' rather than just decode 86.
+                    const tier = ratingTier(v);
+                    const hex = ratingHex(v);
                     return (
-                      <li key={f.key} className="flex items-center gap-3">
-                        <span className="w-14 text-xs text-[var(--text-sec)]">{f.label}</span>
+                      <li key={f.key} className="flex items-center gap-2 sm:gap-3" title={f.label}>
+                        <span className="w-14 text-xs text-[var(--text-sec)] truncate">{f.label}</span>
                         <div className="flex-1 h-2 rounded-full" style={{ background: 'var(--border)' }}>
-                          <div className="h-2 rounded-full" style={{ width: `${v}%`, background: ratingColor(v) }} />
+                          <div className="h-2 rounded-full" style={{ width: `${v}%`, background: hex }} />
                         </div>
-                        <span className="w-8 text-right text-sm font-semibold">{v}</span>
+                        <span className="w-10 text-[10px] uppercase tracking-wide font-bold text-right" style={{ color: hex }}>{tier}</span>
+                        <span className="w-7 text-right text-sm font-semibold tabular-nums">{v}</span>
                       </li>
                     );
                   })}
@@ -323,14 +344,6 @@ function per(total: number, games: number): string {
 function pct(made: number, att: number): string {
   if (!att) return '—';
   return `${Math.round((made / att) * 100)}%`;
-}
-
-function ratingColor(v: number): string {
-  if (v >= 90) return '#10b981';
-  if (v >= 80) return '#84cc16';
-  if (v >= 70) return '#eab308';
-  if (v >= 60) return '#f97316';
-  return '#dc2626';
 }
 
 function trajectoryVariant(t: string): 'green' | 'red' | 'default' {

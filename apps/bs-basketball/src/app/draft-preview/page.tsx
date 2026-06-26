@@ -63,7 +63,7 @@ export default function DraftPreviewPage() {
               >
                 <span className="font-black tabular-nums text-[var(--text-sec)]">{entry.rank}</span>
                 <span className="flex items-center gap-2 min-w-0">
-                  <PlayerAvatar firstName={entry.player.firstName} lastName={entry.player.lastName} primaryColor="#555" secondaryColor="#fff" size="sm" />
+                  <PlayerAvatar firstName={entry.player.firstName} lastName={entry.player.lastName} primaryColor="#555" secondaryColor="#fff" photoUrl={entry.player.sportData.photoUrl} size="sm" />
                   <span className="min-w-0">
                     <span className="font-semibold truncate block">{entry.player.firstName} {entry.player.lastName}</span>
                     <span className="text-xs text-[var(--text-sec)]">{entry.player.sportData.position} · Age {entry.player.age}</span>

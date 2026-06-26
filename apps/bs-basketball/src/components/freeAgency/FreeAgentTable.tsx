@@ -25,11 +25,19 @@ function money(n: number): string {
 function lastLine(f: FreeAgentInfo): { ppg: number; text: string } {
   const log = f.player.sportData.seasonLog;
   const last = log && log.length ? log[log.length - 1] : null;
-  if (last && last.gamesPlayed) return { ppg: last.ppg, text: `${last.ppg}/${last.rpg}/${last.apg}` };
+  // BUG-34: append a games-played suffix so the user can read whether a
+  // line is off a real workload or a tiny sample (the FA pool routinely
+  // mixes both — vet starters and one-game cup-of-coffee deals).
+  if (last && last.gamesPlayed) return { ppg: last.ppg, text: `${last.ppg}/${last.rpg}/${last.apg} · ${last.gamesPlayed} GP` };
   // Fallback: career per-game (BUG-27). Free agents who sat unsigned all year —
   // or imported vets with no in-sim logged season — still show real production
   // from their career totals instead of a bare "—".
-  return careerPerGameLine(f.player) ?? { ppg: 0, text: '—' };
+  const career = careerPerGameLine(f.player);
+  if (career) {
+    const cs = f.player.careerStats;
+    return { ppg: career.ppg, text: `${career.text} · ${cs?.gamesPlayed ?? 0} GP` };
+  }
+  return { ppg: 0, text: '—' };
 }
 
 export function FreeAgentTable({
@@ -78,10 +86,12 @@ export function FreeAgentTable({
             <th className="w-5"></th>
             <th className="text-left pl-1">Player</th>
             <th className="text-center">Pos</th>
-            {th('age', 'Age', 'text-center')}
+            {/* MOBILE-1c: hide Age / POT / Last on phone (drop the densest
+                columns to keep OVR + Ask + Action readable at 390px). */}
+            {th('age', 'Age', 'text-center hidden sm:table-cell')}
             {th('ovr', 'OVR', 'text-center')}
-            {th('pot', 'POT', 'text-center')}
-            {th('ppg', 'Last', 'text-center')}
+            {th('pot', 'POT', 'text-center hidden sm:table-cell')}
+            {th('ppg', 'Last', 'text-center hidden md:table-cell')}
             {th('ask', 'Ask', 'text-right')}
             <th className="text-right pr-3">Action</th>
           </tr>
@@ -104,19 +114,20 @@ export function FreeAgentTable({
                   <td className="pl-2"><svg width="9" height="9" viewBox="0 0 10 10" className={isOpen ? 'rotate-90' : ''} style={{ transition: 'transform .15s', opacity: 0.5 }}><path d="M3 1l4 4-4 4" stroke="currentColor" fill="none" strokeWidth="1.5" /></svg></td>
                   <td className="py-2 pl-1">
                     <div className="flex items-center gap-2">
-                      <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={last?.primaryColor ?? '#555'} secondaryColor={last?.secondaryColor ?? '#fff'} size="sm" />
+                      <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={last?.primaryColor ?? '#555'} secondaryColor={last?.secondaryColor ?? '#fff'} photoUrl={p.sportData.photoUrl} size="sm" />
                       <span className="font-semibold truncate">{p.firstName} {p.lastName}</span>
                       <BirdChip tier={f.birdRights} />
                     </div>
                   </td>
                   <td className="text-center"><Chip>{p.sportData.position}</Chip></td>
-                  <td className="text-center tabular-nums text-[var(--text-sec)]">{p.age}</td>
+                  <td className="text-center tabular-nums text-[var(--text-sec)] hidden sm:table-cell">{p.age}</td>
                   <td className={`text-center font-bold tabular-nums ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
-                  <td className="text-center tabular-nums text-[var(--text-sec)]">{p.development.potential}</td>
-                  <td className="text-center tabular-nums text-[var(--text-sec)]">{ll.text}</td>
+                  <td className="text-center tabular-nums text-[var(--text-sec)] hidden sm:table-cell">{p.development.potential}</td>
+                  <td className="text-center tabular-nums text-[var(--text-sec)] hidden md:table-cell">{ll.text}</td>
                   <td className="text-right tabular-nums">{money(f.marketSalary)}</td>
                   <td className="text-right pr-3">
-                    <button onClick={e => { e.stopPropagation(); onSelect(f); }} className="text-xs font-bold rounded-md px-2.5 py-1 text-white" style={{ background: 'var(--accent)' }}>Offer</button>
+                    {/* MOBILE-5: bumps to 44px min on touch only. */}
+                    <button onClick={e => { e.stopPropagation(); onSelect(f); }} className="bs-touch-target text-xs font-bold rounded-md px-2.5 py-1 text-white" style={{ background: 'var(--accent)' }}>Offer</button>
                   </td>
                 </tr>
                 {isOpen && (
