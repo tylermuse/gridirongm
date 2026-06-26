@@ -27,3 +27,11 @@ export {
   type CounterOffer,
   type AiFreeAgencyResult,
 } from './freeAgency';
+
+export {
+  signingChannels,
+  channelForSalary,
+  exceptionUsage,
+  type SigningChannel,
+  type SigningChannelId,
+} from './exceptions';

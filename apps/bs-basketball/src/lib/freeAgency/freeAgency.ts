@@ -27,6 +27,7 @@ import type { BaseContract, BaseLeagueState, PlayerId, TeamId } from '@bs/core/a
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { appendTransaction } from '../transactions';
 import { upcomingSeason } from '../draft/draft';
+import { channelForSalary, consumeChannel, signingChannels } from './exceptions';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -442,24 +443,25 @@ export function resolveUserOffer(
   const isBird = info.birdRights !== 'none' && info.lastTeamId === userTeamId;
   const threshold = acceptanceThreshold(info, appeal, competingTotal, isBird);
 
-  // Cap / exception enforcement — the user plays by the same budget the AI does
-  // (signingBudget). You CAN sign over the cap, but only through an exception
-  // (the Mid-Level, etc.), so a slightly-over team can still add a mid-priced
-  // free agent — it just can't offer cap space it doesn't have. Bird rights are
-  // the one carve-out: a team may exceed the cap to re-sign ITS OWN free agent,
-  // capped at his market price. (The vet-minimum path is always within budget,
-  // since signingBudget floors at the league minimum.)
-  const budget = signingBudget(league, userTeamId);
-  const maxPerYear = isBird ? Math.max(budget, info.marketSalary) : budget;
-  if (offer.salaryPerYear > maxPerYear + 50_000) {
+  // Cap / exception enforcement — the user plays by the same rules the AI does.
+  // You CAN sign over the cap, but only through a specific, mostly once-per-year
+  // exception (cap room → Room Exception → the right Mid-Level flavor → Bi-Annual
+  // → minimum). channelForSalary picks the cheapest-impact channel that covers
+  // the offer, respecting exceptions already spent this offseason and the first-
+  // apron hard cap. Bird rights are the carve-out: re-sign your OWN free agent
+  // over the cap, capped at his market price.
+  const channel = channelForSalary(league, userTeamId, offer.salaryPerYear, { isBird, birdMax: info.marketSalary });
+  if (!channel) {
     const room = capRoom(league, userTeamId);
-    const max = faMoney(maxPerYear);
+    const best = signingChannels(league, userTeamId)
+      .filter(c => !c.used)
+      .reduce((m, c) => Math.max(m, c.max), 0);
     return {
       outcome: 'rejected', league, signedTeamId: null,
       competingTeamId: null, competingOfferTotal: 0,
       message: room > 0
-        ? `That's above your cap room — the most you can offer ${name} is ${max}/yr. Clear more room or lower the offer.`
-        : `You're over the cap. Without cap space you can only sign through an exception — up to ${max}/yr here. Offer ${max}/yr or less, or free up cap room first.`,
+        ? `That's above your cap room — the most you can offer ${name} is ${faMoney(best)}/yr. Clear more room or lower the offer.`
+        : `Over the cap, your remaining exceptions top out at ${faMoney(best)}/yr for ${name}. Offer that or less, use a different exception, or free up cap room.`,
     };
   }
 
@@ -499,10 +501,14 @@ export function resolveUserOffer(
       l = releasePlayer(l, releaseId);
     }
     l = addToTeam(l, playerId, userTeamId, buildContract(offer, l.currentSeason));
+    // Burn the exception this signing spent (no-op for cap room / minimum / Bird)
+    // and trip the first-apron hard cap if it was the full MLE or the Bi-Annual.
+    l = consumeChannel(l, userTeamId, channel);
+    const tail = channel.consumable ? ` (${channel.label})` : '';
     return {
       outcome: 'signed', league: l, signedTeamId: userTeamId,
       competingTeamId: competing?.teamId ?? null, competingOfferTotal: competingTotal,
-      message: `${name} signed with your team!`,
+      message: `${name} signed with your team!${tail}`,
     };
   }
 
