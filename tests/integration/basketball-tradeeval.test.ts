@@ -6,9 +6,10 @@
  *   - Lopsided trade flagged as rejected
  *   - Over-cap team taking back too much salary fails the 125% rule
  *   - Under-cap team has more flexibility (no 125% rule)
+ *   - Second-apron team is hard-capped at 1:1 matching (enforced, blocking)
  *   - Picks count toward fairness math
  *   - Multi-team (3-team) trade splits flow correctly
- *   - Apron warnings surfaced but non-blocking
+ *   - Crossing the second apron surfaces a (non-blocking) hard-cap warning
  *   - Pick-only trade (no salary) handled
  */
 
@@ -182,6 +183,38 @@ describe('basketball trade evaluator — basic mechanics', () => {
     const teamA = result.perTeam.find(t => t.teamId === 'A')!;
     expect(teamA.capCompliant).toBe(false);
     expect(teamA.reasoning).toMatch(/salary doesn.?t match|exceeds the .* ceiling/i);
+  });
+
+  it('enforces the second-apron hard 1:1 — a take-back-more deal that the 125% rule would allow is now illegal', () => {
+    const cap = basketballSalaryCap(SEASON);
+    // Team A is over the SECOND apron (~1.295× cap). Fill to 200M + a 20M player
+    // = ~220M, comfortably past the 213.7M second apron at a 165M cap.
+    const teamARoster = fillRosterToPayroll(200_000_000);
+    const teamBRoster = fillRosterToPayroll(60_000_000);
+
+    // Team A sends $20M, takes back $25M. Under the standard tier ($7.5M–$29M →
+    // outgoing + $7.5M = $27.5M ceiling) that's LEGAL — but a second-apron team
+    // is hard-capped at 1:1, so $25M > $20M is now illegal.
+    const sent = makePlayerWithSalary(75, 20_000_000, 3);
+    const back = makePlayerWithSalary(80, 25_000_000, 3);
+    teamARoster.push(sent);
+    teamBRoster.push(back);
+
+    const proposal: BasketballTradeProposal = {
+      season: SEASON,
+      sides: [
+        { teamId: 'A' as TeamId, playersSent: [sent.id], picksSent: [] },
+        { teamId: 'B' as TeamId, playersSent: [back.id], picksSent: [] },
+      ],
+    };
+    const ctx = makeContext({ A: teamARoster, B: teamBRoster });
+
+    const result = evaluateBasketballTrade(proposal, ctx);
+    const teamA = result.perTeam.find(t => t.teamId === 'A')!;
+    expect(teamA.capCompliant).toBe(false);
+    expect(result.legal).toBe(false);
+    expect(teamA.reasoning).toMatch(/second apron/i);
+    void cap;
   });
 
   it('lets an under-cap team absorb a big incoming contract', () => {

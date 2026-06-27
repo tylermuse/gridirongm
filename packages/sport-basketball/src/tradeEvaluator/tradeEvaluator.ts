@@ -6,12 +6,16 @@
  *   - "Fair" (value-in vs value-out for each team)
  *   - Accepted by each team's AI (combines fairness + need)
  *
- * NBA salary-matching rules (v1 implementation):
+ * NBA salary-matching rules:
  *   - Teams under the cap: can take back any amount up to (outgoing + capRoom).
- *   - Teams over the cap follow the tiered 125% rule:
+ *   - Over the cap, under the first apron — tiered rule:
  *       - Outgoing salary ≤ $7.5M:  take back ≤ 200% + $250k
  *       - $7.5M < outgoing ≤ $29M:  take back ≤ outgoing + $7.5M
  *       - Outgoing > $29M:           take back ≤ 125% + $250k
+ *   - Over the FIRST apron: reduced 110% + $250k matching (enforced).
+ *   - Over the SECOND apron: hard 1:1 — cannot take back more than sent out
+ *     (enforced). A legal deal that merely CROSSES the second apron is allowed
+ *     but warned (hard-cap territory).
  *
  * Player value model:
  *   - Player's market salary is the base value (computed via marketSalary)
@@ -20,8 +24,8 @@
  *     player.
  *
  * v1 simplifications:
- *   - No apron-specific trade rules (first apron: no aggregation; second
- *     apron: hard 1:1 ceiling). Surfaced via warnings only.
+ *   - First-apron "no aggregation" is approximated by the reduced 110% matching
+ *     cap rather than true per-player matching (v2 refinement).
  *   - No traded-player-exception generation (multi-team trades that net
  *     a team under-paying create a TPE; v2 should track + use).
  *   - No base-year compensation (sign-and-trade BYC math). v2.
@@ -35,7 +39,6 @@
 import type { TeamId, PlayerId, BaseDraftPick } from '@bs/core/adapter';
 import type { BasketballPlayer } from '../types';
 import {
-  basketballSalaryCap,
   basketballTeamCapStatus,
   basketballContractYearForSeason,
   type TeamCapStatus,
@@ -167,14 +170,8 @@ export function evaluateBasketballTrade(
 
     const teamRoster = context.teamRosters.get(side.teamId) ?? [];
     const capStatus = basketballTeamCapStatus(teamRoster, proposal.season);
-    const cap = basketballSalaryCap(proposal.season);
 
-    const isOverCap = capStatus.payroll > cap;
-    const maxIncomingAllowed = computeMaxIncomingSalary(
-      outgoing.salary,
-      capStatus.capRoom,
-      isOverCap,
-    );
+    const maxIncomingAllowed = computeMaxIncomingSalary(outgoing.salary, capStatus);
     const capCompliant = incoming.salary <= maxIncomingAllowed + 1; // +1 for float fuzz
 
     // Post-trade cap status: roster minus outgoing players plus incoming ones.
@@ -195,7 +192,12 @@ export function evaluateBasketballTrade(
 
     let reasoning: string;
     if (!capCompliant) {
-      reasoning = `Salary doesn't match — taking back $${(incoming.salary / 1e6).toFixed(1)}M exceeds the $${(maxIncomingAllowed / 1e6).toFixed(1)}M ceiling for $${(outgoing.salary / 1e6).toFixed(1)}M out.`;
+      const apronNote = capStatus.isOverSecondApron
+        ? ' (over the second apron — hard 1:1 matching)'
+        : capStatus.isOverFirstApron
+        ? ' (over the first apron — reduced 110% matching)'
+        : '';
+      reasoning = `Salary doesn't match — taking back $${(incoming.salary / 1e6).toFixed(1)}M exceeds the $${(maxIncomingAllowed / 1e6).toFixed(1)}M ceiling for $${(outgoing.salary / 1e6).toFixed(1)}M out${apronNote}.`;
     } else if (netValue >= Math.max(150, outgoing.totalValue * 0.05)) {
       reasoning = `${nameOf(side.teamId)} gains ~${Math.round(netValue).toLocaleString()} pts of value — clear win.`;
     } else if (willAccept) {
@@ -217,7 +219,7 @@ export function evaluateBasketballTrade(
         outgoingSalary: outgoing.salary,
         incomingSalary: incoming.salary,
         maxIncomingAllowed,
-        isOverCap,
+        isOverCap: capStatus.payroll > capStatus.cap,
       },
       postCap,
     });
@@ -229,11 +231,10 @@ export function evaluateBasketballTrade(
       context.teamRosters.get(outcome.teamId) ?? [],
       proposal.season,
     );
-    if (status.isOverFirstApron && outcome.capDetail.incomingSalary > outcome.capDetail.outgoingSalary + 1) {
-      warnings.push(
-        `${nameOf(outcome.teamId)} is over the first apron — taking back more salary than they send out may not be permitted under the real CBA (v1 doesn't block it).`,
-      );
-    }
+    // First/second-apron MATCHING limits are now enforced via capCompliant
+    // (an illegal apron deal fails legality with the apron note), so no warning
+    // is needed for the matching rule itself. We still warn when a LEGAL deal
+    // tips a team into hard-cap territory by crossing the second apron.
     if (outcome.postCap.isOverSecondApron && !status.isOverSecondApron) {
       warnings.push(
         `This deal pushes ${nameOf(outcome.teamId)} over the second apron ($${(outcome.postCap.payroll / 1e6).toFixed(1)}M) — hard-cap territory.`,
@@ -263,17 +264,28 @@ export function evaluateBasketballTrade(
 
 function computeMaxIncomingSalary(
   outgoing: number,
-  capRoom: number,
-  isOverCap: boolean,
+  capStatus: TeamCapStatus,
 ): number {
-  if (!isOverCap) {
+  if (capStatus.payroll <= capStatus.cap) {
     // Under cap: outgoing + remaining cap room
-    return outgoing + Math.max(0, capRoom);
+    return outgoing + Math.max(0, capStatus.capRoom);
   }
-  // Over cap — tiered NBA rule (v1 approximation):
-  // outgoing ≤ $7.5M: 200% + $250k
-  // $7.5M < outgoing ≤ $29M: outgoing + $7.5M
-  // > $29M: 125% + $250k
+  // Apron restrictions are TIGHTER than the standard tiers and are now enforced
+  // (they used to be warnings-only). Real CBA:
+  //   - Second apron: hard 1:1 — cannot take back a dollar more than sent out.
+  //   - First apron: reduced 110% + $250k matching (and no aggregation; the
+  //     percentage cap is the enforceable proxy here — true per-player
+  //     no-aggregation is a v2 refinement).
+  if (capStatus.isOverSecondApron) {
+    return outgoing; // caller's +$1 float fuzz allows exact 1:1
+  }
+  if (capStatus.isOverFirstApron) {
+    return outgoing * 1.10 + 250_000;
+  }
+  // Over cap, under the first apron — standard tiered NBA rule (v1 approximation):
+  //   outgoing ≤ $7.5M:            200% + $250k
+  //   $7.5M < outgoing ≤ $29M:     outgoing + $7.5M
+  //   > $29M:                      125% + $250k
   if (outgoing <= 7_500_000) {
     return outgoing * 2 + 250_000;
   }
