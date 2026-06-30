@@ -53,7 +53,7 @@ const RATING_LABELS: Record<keyof Omit<PlayerRatings, 'overall'>, string> = {
 
 export default function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { players, teams, userTeamId, releasePlayer, seasonHistory, restructureContract, phase, setPlayerJerseyNumber } = useGameStore();
+  const { players, teams, userTeamId, releasePlayer, seasonHistory, restructureContract, phase, setPlayerJerseyNumber, setSubPositionOverride } = useGameStore();
   const [confirmRelease, setConfirmRelease] = useState(false);
   // 5/25 (its_camare07 msg 1508330204924215357): inline jersey-number edit.
   // Only owners of the user's team can edit (consistent with releasePlayer,
@@ -120,6 +120,38 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                   <span className="ml-1 text-[10px] font-bold text-[var(--text-sec)]/70">({player.subPosition})</span>
                 )}
               </div>
+              {/* Manual sub-position pin — OT/OG at launch. Owner-only, on the
+                  unified OL group (bryangrove/tofftanaut 5/30, launcher_18 6/21).
+                  Writes subPositionOverride so it survives the load backfill. */}
+              {isOnUserTeam && !player.retired && player.position === 'OL' && (
+                <div className="flex items-center gap-1">
+                  {(['OT', 'OG'] as const).map(sp => (
+                    <button
+                      key={sp}
+                      type="button"
+                      onClick={() => setSubPositionOverride(player.id, sp)}
+                      title={`Set position to ${sp}`}
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        player.subPosition === sp
+                          ? 'bg-blue-600 text-white'
+                          : 'border border-[var(--border)] text-[var(--text-sec)] hover:text-[var(--text)]'
+                      }`}
+                    >
+                      {sp}
+                    </button>
+                  ))}
+                  {player.subPositionOverride && (
+                    <button
+                      type="button"
+                      onClick={() => setSubPositionOverride(player.id, null)}
+                      title="Clear manual position — use ratings"
+                      className="text-[10px] font-bold px-1.5 py-0.5 rounded border border-[var(--border)] text-[var(--text-sec)] hover:text-[var(--text)]"
+                    >
+                      Auto
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex-1">

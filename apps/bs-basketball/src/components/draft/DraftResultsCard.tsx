@@ -54,7 +54,13 @@ export function DraftResultsCard({
         )}
       </div>
 
-      <div className="overflow-x-auto max-h-[34rem] overflow-y-auto">
+      {/* FEAT-3 + STYLE-2: bump the scroll window so a clean number of full
+          rows is visible. The previous 28rem cap clipped the 11th row mid-cell
+          (Tyler's screenshot of the half-visible OKC #12). 40rem now shows ~14
+          clean rows with thead, matches the eyeline of the Draft Board next to
+          it without either table dead-ending the user before the lottery picks
+          finish. */}
+      <div className="overflow-x-auto max-h-[40rem] overflow-y-auto">
         <table className="w-full text-sm sticky-col">
           <thead className="text-[var(--text-sec)] text-[10px] uppercase tracking-wider sticky top-0" style={{ background: 'var(--surface)' }}>
             <tr>
@@ -84,10 +90,21 @@ export function DraftResultsCard({
                 >
                   <td className="text-center tabular-nums text-xs text-[var(--text-sec)] py-2">{p.overall}</td>
                   <td className="py-2">
-                    <span className="flex items-center gap-1.5">
-                      {t && <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="xs" />}
-                      <span className="text-xs font-semibold">{t?.abbreviation}</span>
-                    </span>
+                    {/* FEAT-3: surface the original team for traded picks
+                        with a "via XXX" tag. Mirrors the lottery board treatment
+                        added in #282 — gives the user immediate context for
+                        a pick that doesn't match the team's own seed. */}
+                    {(() => {
+                      const origId = p.originalTeamId ?? p.teamId;
+                      const orig = origId !== p.teamId ? teamById.get(origId) : null;
+                      return (
+                        <span className="flex items-center gap-1.5 flex-wrap">
+                          {t && <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="xs" />}
+                          <span className="text-xs font-semibold">{t?.abbreviation}</span>
+                          {orig && <span className="text-[10px] text-[var(--text-sec)]">(via {orig.abbreviation})</span>}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="py-2">
                     {prospect

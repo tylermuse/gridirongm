@@ -1,6 +1,7 @@
 'use client';
 
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import { getInjuries, getPlayThrough, isPlayingThrough, canPlayThrough, SEVERITY_LABEL, type InjuryRecord } from '@/lib/injuries';
 import { getDiscipline, type DisciplineRecord } from '@/lib/discipline';
 import { useLeagueStore } from '@/lib/store/leagueStore';
@@ -50,7 +51,7 @@ export function InjuryReport({ league, team }: { league: LeagueState; team: Bask
           return (
             <div key={p.id} className="flex items-center gap-2 text-sm">
               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SEVERITY_COLOR[rec.severity] ?? '#dc2626' }} />
-              <span className="font-semibold truncate flex-1">{p.firstName} {p.lastName}</span>
+              <PlayerName playerId={p.id} firstName={p.firstName} lastName={p.lastName} className="font-semibold truncate flex-1" />
               <span className="text-xs text-[var(--text-sec)] capitalize">{rec.bodyPart} · {SEVERITY_LABEL[rec.severity]}</span>
               {canPlayThrough(rec) && (
                 <button
@@ -69,7 +70,7 @@ export function InjuryReport({ league, team }: { league: LeagueState; team: Bask
         {gritty.map(p => (
           <div key={p.id} className="flex items-center gap-2 text-sm">
             <span className="shrink-0" aria-hidden>💪</span>
-            <span className="font-semibold truncate flex-1">{p.firstName} {p.lastName}</span>
+            <PlayerName playerId={p.id} firstName={p.firstName} lastName={p.lastName} className="font-semibold truncate flex-1" />
             <span className="text-xs text-[var(--text-sec)]">Playing through — elevated risk</span>
             <span className="text-xs font-semibold tabular-nums w-20 text-right" style={{ color: '#f59e0b' }}>Active</span>
           </div>
@@ -79,7 +80,7 @@ export function InjuryReport({ league, team }: { league: LeagueState; team: Bask
           return (
             <div key={p.id} className="flex items-center gap-2 text-sm">
               <span className="shrink-0" aria-hidden>🚫</span>
-              <span className="font-semibold truncate flex-1">{p.firstName} {p.lastName}</span>
+              <PlayerName playerId={p.id} firstName={p.firstName} lastName={p.lastName} className="font-semibold truncate flex-1" />
               <span className="text-xs text-[var(--text-sec)] truncate">Suspended</span>
               <span className="text-xs font-semibold tabular-nums w-20 text-right" style={{ color: '#a855f7' }}>{left} game{left === 1 ? '' : 's'}</span>
             </div>

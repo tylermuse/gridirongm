@@ -53,3 +53,5 @@ next-env.d.ts
 /sessions/
 /.discord-mcp-setup/
 .env*.local
+
+.claude/

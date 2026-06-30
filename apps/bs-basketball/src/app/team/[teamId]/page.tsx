@@ -10,6 +10,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import { getTransactions } from '@/lib/transactions';
 import { getInjuries, SEVERITY_LABEL } from '@/lib/injuries';
 import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonStats';
@@ -306,7 +307,7 @@ export default function TeamPage() {
                 const out = inj.returnDay > 90_000 ? 'out for season' : `~${Math.max(1, inj.returnDay - day)}d`;
                 return (
                   <li key={inj.playerId} className="py-1.5 flex items-center gap-2 text-sm">
-                    <span className="font-semibold">{p ? `${p.firstName} ${p.lastName}` : inj.playerId}</span>
+                    <PlayerName playerId={inj.playerId} className="font-semibold">{p ? `${p.firstName} ${p.lastName}` : inj.playerId}</PlayerName>
                     <span className="text-xs text-[var(--text-sec)]">{inj.bodyPart} · {SEVERITY_LABEL[inj.severity]}</span>
                     <span className="ml-auto text-xs font-semibold" style={{ color: '#dc2626' }}>{out}</span>
                   </li>

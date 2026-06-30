@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { getTheme, setTheme, type Theme } from '@/lib/ui/theme';
 import { isSoundEnabled, setSoundEnabled, playSound } from '@/lib/ui/sound';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { isGodMode } from '@/lib/godMode/godMode';
 import { type FranchiseEdit } from '@/lib/godMode/relocate';
 import type { BasketballTeam } from '@bs/sport-basketball';
+import { useSubscription } from '@/components/providers/SubscriptionProvider';
 
 /**
  * /settings — appearance + sound preferences (Tier 3.1 + 3.7).
@@ -52,8 +54,13 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-black tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
           Settings
         </h1>
-        <p className="text-sm text-[var(--text-sec)]">Appearance and sound. Saved on this device.</p>
+        <p className="text-sm text-[var(--text-sec)]">Appearance and sound saved on this device. Account + billing synced to your BS account.</p>
       </header>
+
+      {/* STRIPE-4: account + subscription card — only renders when Supabase is
+          configured. Mirrors the football settings page's AccountCard but slim:
+          email, tier badge, manage-subscription / upgrade button, sign-out. */}
+      <SubscriptionCard />
 
       {/* Appearance */}
       <Section title="Appearance" desc="Switch between the warm light theme and a low-glare dark mode.">
@@ -101,6 +108,108 @@ export default function SettingsPage() {
       {/* Franchise relocation / rebrand (God Mode) */}
       {league && godOn && <RelocatePanel />}
     </main>
+  );
+}
+
+// ===========================================================================
+// STRIPE-4: account + subscription
+// ===========================================================================
+
+function SubscriptionCard() {
+  const { user, tier, isAdmin, isFoundingMember, loading, signOut } = useSubscription();
+  const [portalLoading, setPortalLoading] = useState(false);
+  if (loading) return null;
+
+  const isPremium = tier === 'premium';
+  const complimentary = (isFoundingMember || isAdmin) && !!user;
+
+  async function manage() {
+    setPortalLoading(true);
+    try {
+      const res = await fetch('/api/stripe/portal', { method: 'POST' });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } finally {
+      setPortalLoading(false);
+    }
+  }
+
+  // Signed-out — invite to sign in for billing + leaderboard.
+  if (!user) {
+    return (
+      <Section title="Account" desc="Sign in to manage billing, sync the global leaderboard, and unlock Premium.">
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/login?next=/settings"
+            className="text-sm font-bold rounded-lg px-4 py-2 text-white"
+            style={{ background: 'var(--accent)' }}
+          >
+            Sign in
+          </Link>
+          <Link
+            href="/pricing"
+            className="text-sm font-bold rounded-lg px-4 py-2 border"
+            style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}
+          >
+            See Premium
+          </Link>
+        </div>
+      </Section>
+    );
+  }
+
+  // Signed-in — show tier badge + management actions.
+  const badgeBg = isPremium
+    ? 'color-mix(in srgb, var(--accent) 18%, transparent)'
+    : 'var(--surface-2)';
+  const badgeColor = isPremium ? 'var(--accent)' : 'var(--text-sec)';
+  const badgeLabel = complimentary
+    ? (isAdmin ? 'Admin · Premium' : 'Founding Member · Premium')
+    : isPremium ? 'Premium' : 'Free';
+
+  return (
+    <Section title="Account" desc="Manage your BS Hoops account and Premium subscription.">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold truncate">{user.email}</div>
+          <div className="mt-1 inline-flex items-center gap-1.5">
+            <span
+              className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full"
+              style={{ background: badgeBg, color: badgeColor }}
+            >
+              {badgeLabel}
+            </span>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {complimentary ? null : isPremium ? (
+            <button
+              onClick={() => void manage()}
+              disabled={portalLoading}
+              className="text-sm font-bold rounded-lg px-4 py-2 border disabled:opacity-50"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              {portalLoading ? 'Opening…' : 'Manage subscription'}
+            </button>
+          ) : (
+            <Link
+              href="/pricing"
+              className="text-sm font-bold rounded-lg px-4 py-2 text-white"
+              style={{ background: 'var(--accent)' }}
+            >
+              Upgrade to Premium
+            </Link>
+          )}
+          <button
+            onClick={signOut}
+            className="text-sm font-semibold rounded-lg px-4 py-2 border"
+            style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    </Section>
   );
 }
 

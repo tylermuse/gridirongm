@@ -14,6 +14,7 @@ import { getBracket, isRegularSeasonComplete } from '@/lib/playoffs';
 import { computeSeasonAwards } from '@/lib/awards';
 import type { PlayoffSeries } from '@/lib/playoffs';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
 
 /**
  * /playoffs — the postseason bracket (Phase 2D-1).
@@ -169,20 +170,20 @@ export default function PlayoffsPage() {
       )}
 
       {bracket.playIn && bracket.playIn.length > 0 && (
-        <PlayInSection playIn={bracket.playIn} teamById={teamById} />
+        <PlayInSection playIn={bracket.playIn} teamById={teamById} userTeamId={uid} />
       )}
 
       {/* Symmetric bracket — columns flex to fill the width so the whole tree
           fits on one screen; only very narrow viewports scroll. */}
       <div className="overflow-x-auto pb-4">
         <div className="flex gap-2 items-stretch">
-          <BracketColumn title="First Round" series={eastR1} teamById={teamById} />
-          <BracketColumn title="Semifinals" series={eastSF} teamById={teamById} />
-          <BracketColumn title="Conf Finals" series={eastCF} teamById={teamById} />
-          <BracketColumn title="Finals" series={finals} teamById={teamById} highlight />
-          <BracketColumn title="Conf Finals" series={westCF} teamById={teamById} />
-          <BracketColumn title="Semifinals" series={westSF} teamById={teamById} />
-          <BracketColumn title="First Round" series={westR1} teamById={teamById} />
+          <BracketColumn title="First Round" series={eastR1} teamById={teamById} userTeamId={uid} />
+          <BracketColumn title="Semifinals" series={eastSF} teamById={teamById} userTeamId={uid} />
+          <BracketColumn title="Conf Finals" series={eastCF} teamById={teamById} userTeamId={uid} />
+          <BracketColumn title="Finals" series={finals} teamById={teamById} highlight userTeamId={uid} />
+          <BracketColumn title="Conf Finals" series={westCF} teamById={teamById} userTeamId={uid} />
+          <BracketColumn title="Semifinals" series={westSF} teamById={teamById} userTeamId={uid} />
+          <BracketColumn title="First Round" series={westR1} teamById={teamById} userTeamId={uid} />
         </div>
       </div>
 
@@ -204,7 +205,7 @@ export default function PlayoffsPage() {
             {mvp && (
               <div className="mt-4 text-sm">
                 <span className="opacity-60">MVP: </span>
-                <span className="font-bold">{mvp.firstName} {mvp.lastName}</span>
+                <PlayerName playerId={mvp.id} firstName={mvp.firstName} lastName={mvp.lastName} className="font-bold" />
               </div>
             )}
             <div className="mt-5 flex justify-center gap-2">
@@ -228,10 +229,11 @@ export default function PlayoffsPage() {
 // ===========================================================================
 
 function PlayInSection({
-  playIn, teamById,
+  playIn, teamById, userTeamId,
 }: {
   playIn: PlayoffSeries[];
   teamById: Map<string, BasketballTeam>;
+  userTeamId?: string | null;
 }) {
   return (
     <div className="mb-8">
@@ -246,7 +248,7 @@ function PlayInSection({
               {playIn.filter(s => s.conference === conf).map(s => (
                 <div key={s.id}>
                   <div className="text-[9px] uppercase tracking-wider text-[var(--text-sec)] mb-0.5">{s.roundName}</div>
-                  <SeriesCard series={s} teamById={teamById} />
+                  <SeriesCard series={s} teamById={teamById} userTeamId={userTeamId} />
                 </div>
               ))}
             </div>
@@ -258,12 +260,13 @@ function PlayInSection({
 }
 
 function BracketColumn({
-  title, series, teamById, highlight,
+  title, series, teamById, highlight, userTeamId,
 }: {
   title: string;
   series: PlayoffSeries[];
   teamById: Map<string, BasketballTeam>;
   highlight?: boolean;
+  userTeamId?: string | null;
 }) {
   return (
     <div className="flex flex-col justify-around gap-4 flex-1 min-w-[6.25rem]">
@@ -275,7 +278,7 @@ function BracketColumn({
       </div>
       <div className="flex flex-col justify-around gap-4 flex-1">
         {series.map(s => (
-          <SeriesCard key={s.id} series={s} teamById={teamById} highlight={highlight} />
+          <SeriesCard key={s.id} series={s} teamById={teamById} highlight={highlight} userTeamId={userTeamId} />
         ))}
       </div>
     </div>
@@ -283,16 +286,19 @@ function BracketColumn({
 }
 
 function SeriesCard({
-  series, teamById, highlight,
+  series, teamById, highlight, userTeamId,
 }: {
   series: PlayoffSeries;
   teamById: Map<string, BasketballTeam>;
   highlight?: boolean;
+  userTeamId?: string | null;
 }) {
+  // Outline the whole card too when the user's team is in this series.
+  const userInSeries = !!userTeamId && (series.teamA === userTeamId || series.teamB === userTeamId);
   return (
     <div
       className="rounded-lg border bg-[var(--surface)] overflow-hidden"
-      style={{ borderColor: highlight ? 'var(--accent)' : 'var(--border)' }}
+      style={{ borderColor: highlight || userInSeries ? 'var(--accent)' : 'var(--border)' }}
     >
       <SeriesRow
         teamId={series.teamA}
@@ -301,6 +307,7 @@ function SeriesCard({
         isWinner={series.winnerTeamId != null && series.winnerTeamId === series.teamA}
         decided={series.winnerTeamId != null}
         teamById={teamById}
+        userTeamId={userTeamId}
       />
       <div className="h-px" style={{ background: 'var(--border)' }} />
       <SeriesRow
@@ -310,13 +317,14 @@ function SeriesCard({
         isWinner={series.winnerTeamId != null && series.winnerTeamId === series.teamB}
         decided={series.winnerTeamId != null}
         teamById={teamById}
+        userTeamId={userTeamId}
       />
     </div>
   );
 }
 
 function SeriesRow({
-  teamId, seed, wins, isWinner, decided, teamById,
+  teamId, seed, wins, isWinner, decided, teamById, userTeamId,
 }: {
   teamId: string | null;
   seed: number | null;
@@ -324,6 +332,7 @@ function SeriesRow({
   isWinner: boolean;
   decided: boolean;
   teamById: Map<string, BasketballTeam>;
+  userTeamId?: string | null;
 }) {
   const team = teamId ? teamById.get(teamId) : null;
 
@@ -335,12 +344,18 @@ function SeriesRow({
     );
   }
 
+  // Highlight the user's franchise wherever it lands in the bracket: an accent
+  // tint + left bar + the abbreviation in accent, so it's findable at a glance.
+  const isUser = !!userTeamId && team.id === userTeamId;
+
   return (
     <Link
       href={`/team/${team.id}`}
-      className="flex items-center gap-2 px-2 py-1.5 h-9 hover:bg-[var(--surface-2)] transition-colors"
+      className="flex items-center gap-2 px-2 py-1.5 h-9 transition-colors"
       style={{
         opacity: decided && !isWinner ? 0.55 : 1,
+        background: isUser ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : undefined,
+        boxShadow: isUser ? 'inset 3px 0 0 0 var(--accent)' : undefined,
       }}
     >
       {seed != null && (
@@ -352,8 +367,12 @@ function SeriesRow({
         secondaryColor={team.secondaryColor}
         size="xs"
       />
-      <span className={`text-xs truncate flex-1 ${isWinner ? 'font-bold' : 'font-semibold'}`}>
+      <span
+        className={`text-xs truncate flex-1 ${isWinner || isUser ? 'font-bold' : 'font-semibold'}`}
+        style={isUser ? { color: 'var(--accent)' } : undefined}
+      >
         {team.abbreviation}
+        {isUser && <span className="ml-1 text-[9px] font-bold align-middle">★</span>}
       </span>
       <span
         className="text-sm font-black tabular-nums w-4 text-right"

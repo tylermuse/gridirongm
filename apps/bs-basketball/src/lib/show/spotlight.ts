@@ -231,20 +231,9 @@ const TEMPLATES: Partial<Record<StoryCategory, ExchangeFn[]>> = {
       { voice: 'analyst', line: `I'm enjoying it. I'd just like to see them string it together on the road before we book the parade route — but the foundation is real.` },
     ],
   ],
-  Record: [
-    (h, s) => [
-      { voice: 'analyst', line: lead(MARCUS_OPENERS, `${h}. The point differential lines up with the record, which is the healthy sign — they're not living and dying by close games or luck in the clutch.`, s) },
-      { voice: 'take', line: `The RECORD is the record, Marcus! Wins are wins! Stop trying to find a "but" in a good start and let the fans enjoy it.` },
-      { voice: 'analyst', line: `I'm not finding a but — I'm saying it's sustainable, which is the compliment. A team whose differential matches its record tends to hold its level into the spring.` },
-      { voice: 'take', line: lead(JAX_DISMISSALS, `So you're telling me it's LEGIT?! Then say it louder for the doubters in the back. This team is for real.`, s) },
-    ],
-    (h, s) => [
-      { voice: 'take', line: `${h}! That's the kind of stretch that defines a season. You can feel the confidence building, and confidence is half the battle in this league.` },
-      { voice: 'analyst', line: lead(MARCUS_OPENERS, `the record is what it is, but the schedule matters — the next stretch is a real test, and that's where we find out how high the ceiling is.`, s) },
-      { voice: 'take', line: lead(JAX_OPENERS, `A "test"?! They'll pass it with flying colors! Good teams handle business, and this is a good team. Next question.`, s) },
-      { voice: 'analyst', line: `That's the bet I'd make too, honestly. If they keep the differential where it is, the record is no fluke — it's a reflection of how they play.` },
-    ],
-  ],
+  // Record dialogue is record-aware — see RECORD_VARIANTS / recordExchanges.
+  // A losing team must not get "this team is for real" copy (the differential
+  // and the record agree in the OTHER direction).
   'By the Numbers': [
     (h, s) => [
       { voice: 'analyst', line: lead(MARCUS_OPENERS, `${h}. That's the kind of number that tells you more than the standings do — it speaks to how a team actually generates and prevents points.`, s) },
@@ -343,6 +332,83 @@ function exchangesFor(cat: StoryCategory, headline: string, seed: number): Spotl
     ];
   }
   return pick(pool, seed)(headline, seed);
+}
+
+/**
+ * Record dialogue, keyed to how good the record actually is. The old copy was
+ * hardcoded as a celebration ("this team is for real"), which read as nonsense
+ * over a losing record. Tier off win% and let the point-differential sign nuance
+ * the analyst's read: a bad team with a negative differential is getting earned,
+ * not unlucky; a bad team with a POSITIVE differential has some bad luck hiding
+ * in the close games; and vice-versa for a good record.
+ */
+type RecordTier = 'good' | 'mid' | 'bad';
+function recordTier(winPct: number): RecordTier {
+  if (winPct >= 0.55) return 'good';
+  if (winPct <= 0.45) return 'bad';
+  return 'mid';
+}
+
+const RECORD_VARIANTS: Record<RecordTier, (diffPositive: boolean) => ExchangeFn[]> = {
+  good: (diffPos) => [
+    (h, s) => [
+      { voice: 'analyst', line: lead(MARCUS_OPENERS, diffPos
+        ? `${h}. The point differential lines up with the record, which is the healthy sign — they're not living and dying by close games or luck in the clutch.`
+        : `${h}. The record's strong, but I'll be honest — the point differential is actually negative, which says they've been winning the close ones. Enjoy it, but that's the part I'd watch.`, s) },
+      { voice: 'take', line: `The RECORD is the record, Marcus! Wins are wins! Stop trying to find a "but" in a good start and let the fans enjoy it.` },
+      { voice: 'analyst', line: diffPos
+        ? `I'm not finding a but — I'm saying it's sustainable, which is the compliment. A team whose differential matches its record tends to hold its level into the spring.`
+        : `I'm not raining on it — I'm saying don't be shocked if the record drifts back toward the margins. The wins are banked either way.` },
+      { voice: 'take', line: lead(JAX_DISMISSALS, `So you're telling me it's LEGIT?! Then say it louder for the doubters in the back. This team is for real.`, s) },
+    ],
+    (h, s) => [
+      { voice: 'take', line: `${h}! That's the kind of stretch that defines a season. You can feel the confidence building, and confidence is half the battle in this league.` },
+      { voice: 'analyst', line: lead(MARCUS_OPENERS, `the record is what it is, but the schedule matters — the next stretch is a real test, and that's where we find out how high the ceiling is.`, s) },
+      { voice: 'take', line: lead(JAX_OPENERS, `A "test"?! They'll pass it with flying colors! Good teams handle business, and this is a good team. Next question.`, s) },
+      { voice: 'analyst', line: `That's the bet I'd make too, honestly. If they keep the differential where it is, the record is no fluke — it's a reflection of how they play.` },
+    ],
+  ],
+  mid: (diffPos) => [
+    (h, s) => [
+      { voice: 'analyst', line: lead(MARCUS_OPENERS, diffPos
+        ? `${h}. The differential's a hair on the right side of the ledger — this is a roughly average team that could tip either way over the next month.`
+        : `${h}. The differential's slightly underwater, which tracks — this is a middle-of-the-pack team right now, no more, no less.`, s) },
+      { voice: 'take', line: `Middle of the pack?! That's a PLAYOFF team if the bracket started today, Marcus! A couple of bounces and they're a top-six seed.` },
+      { voice: 'analyst', line: `That's fair — at .500 a soft stretch of schedule and one hot week decide everything. The margin between the six seed and the lottery is razor thin here.` },
+      { voice: 'take', line: lead(JAX_DISMISSALS, `So it's all to play for?! THAT'S the energy. This is the part of the year where the good teams separate from the pretenders.`, s) },
+    ],
+    (h, s) => [
+      { voice: 'take', line: `${h}! A .500 team nobody wants to draw, Marcus. They've got the talent to ruin somebody's spring.` },
+      { voice: 'analyst', line: lead(MARCUS_OPENERS, `there's something to that — an even differential means they're not getting blown out and they're not blowing teams out. The next ten games tell us which way they break.`, s) },
+      { voice: 'take', line: lead(JAX_OPENERS, `Which way they break?! UP, obviously! You don't sit at .500 with this roster and stay there. The ceiling's a lot higher than the floor.`, s) },
+      { voice: 'analyst', line: `Could go either way, honestly. But you're right that the talent says there's another gear if they find some consistency.` },
+    ],
+  ],
+  bad: (diffPos) => [
+    (h, s) => [
+      { voice: 'analyst', line: lead(MARCUS_OPENERS, diffPos
+        ? `${h}. Here's the odd part — the record's rough, but the point differential is actually positive. There's real bad luck in the close games hiding in that record.`
+        : `${h}. The point differential lines up with the record, and that's the uncomfortable read — this isn't a clutch-luck blip, they're getting outplayed over 48 minutes.`, s) },
+      { voice: 'take', line: `Outplayed?! It's a rough patch, Marcus, every team hits one! Don't you dare write off the whole season in the dead of winter.` },
+      { voice: 'analyst', line: diffPos
+        ? `I'm not writing it off — if anything the math says they're better than the record, and some of those close losses should start going the other way.`
+        : `I'm not writing it off — I'm saying the math and the record agree, and that's a harder hole to climb out of than a few late-game collapses.` },
+      { voice: 'take', line: lead(JAX_OPENERS, `One trade, one hot streak, and we're right back in it! That's what the front office is FOR. Have a little faith.`, s) },
+    ],
+    (h, s) => [
+      { voice: 'take', line: `${h}! Alright — it's not pretty, I'll say it out loud. But records turn in a hurry in this league, Marcus, you KNOW that.` },
+      { voice: 'analyst', line: lead(MARCUS_OPENERS, diffPos
+        ? `they can, and the underlying numbers actually give you a thread to pull — the differential says they've been better than the record. That's the optimistic case.`
+        : `they can, but turnarounds usually start with the underlying numbers improving first — and right now the differential says this is closer to who they are than a fluke.`, s) },
+      { voice: 'take', line: lead(JAX_OPENERS, `"Who they are"?! Nobody is who they are in the dead of winter! Talent wins out, and there's talent on this roster. Book the turnaround.`, s) },
+      { voice: 'analyst', line: `I'd love to be wrong. But hope isn't a plan — the margins have to tighten before the record starts to mean something different.` },
+    ],
+  ],
+};
+
+function recordExchanges(headline: string, seed: number, winPct: number, diffPositive: boolean): SpotlightExchange[] {
+  const variants = RECORD_VARIANTS[recordTier(winPct)](diffPositive);
+  return pick(variants, seed)(headline, seed);
 }
 
 /* ─── Episode cold-open / sign-off pools (mirror football's intros/outros) ─── */
@@ -447,8 +513,9 @@ function userTeamTopics(league: BasketballLeagueState, userId: string): Spotligh
     const diff = pointsFor - pointsAgainst;
     const per = (wins + losses) ? (diff / (wins + losses)) : 0;
     const sign = per >= 0 ? '+' : '−';
+    const winPct = wins / (wins + losses);
     const headline = `${cityName} sit at ${wins}–${losses}, ${sign}${Math.abs(per).toFixed(1)} per night on the season`;
-    out.push({ id: `rec-${userId}-${wins}-${losses}`, category: 'Record', headline, exchanges: exchangesFor('Record', headline, hash(`rec-${userId}-${wins}-${losses}`)) });
+    out.push({ id: `rec-${userId}-${wins}-${losses}`, category: 'Record', headline, exchanges: recordExchanges(headline, hash(`rec-${userId}-${wins}-${losses}`), winPct, per >= 0) });
   }
 
   // By the Numbers — first callout that's about the user team's run.

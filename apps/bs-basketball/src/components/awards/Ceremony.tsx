@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import { dropConfetti } from '@/lib/ui/confetti';
 import type { SeasonAwards } from '@/lib/awards';
 import { perGame, emptyBasketballStats, type BasketballPlayer, type BasketballTeam } from '@bs/sport-basketball';
@@ -19,6 +20,7 @@ interface Slide {
   key: string;
   label: string;
   emoji: string;
+  playerId: string;
   name: string;
   subtitle: string;
   statline: { label: string; value: string }[];
@@ -71,6 +73,7 @@ function buildSlides(
       key: def.key,
       label: def.label,
       emoji: def.emoji,
+      playerId: player.id,
       name: `${player.firstName} ${player.lastName}`,
       subtitle: team ? `${team.city} ${team.name} · ${player.sportData.position}` : player.sportData.position,
       statline,
@@ -154,7 +157,7 @@ export function AwardsCeremony({
             <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-3 py-0.5 text-[10px] font-black uppercase tracking-widest text-white">
               Winner
             </div>
-            <div className="text-2xl font-black text-white" style={{ fontFamily: 'var(--font-display)' }}>{slide.name}</div>
+            <PlayerName playerId={slide.playerId} className="text-2xl font-black text-white" style={{ fontFamily: 'var(--font-display)' }}>{slide.name}</PlayerName>
             <div className="text-sm text-white/60">{slide.subtitle}</div>
           </div>
 

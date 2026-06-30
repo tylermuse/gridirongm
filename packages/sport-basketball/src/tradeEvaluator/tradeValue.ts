@@ -22,14 +22,17 @@ import type { BasketballPlayer, BasketballPosition } from '../types';
 import { basketballMarketSalary } from '../capRules/marketSalary';
 import { basketballContractYearForSeason } from '../capRules/capRules';
 
-/** Positional scarcity, mirrors the market-salary model: wings + bigs are
- *  scarcer than guards. Kept modest so OVR/age/contract dominate. */
+/** Positional value. Modern-game neutral: a scoring guard/wing is every bit as
+ *  valuable as a big, so we do NOT discount perimeter players. Centers get no
+ *  premium (the old C/SF = 1.05 vs SG = 0.97 tilt made bigs look ~8% better
+ *  than equal-OVR scorers, which read backwards). Wings keep a hair of scarcity;
+ *  kept tiny so OVR/age/contract dominate. */
 const POSITION_VALUE_MULT: Record<BasketballPosition, number> = {
   PG: 1.0,
-  SG: 0.97,
-  SF: 1.05,
+  SG: 1.0,
+  SF: 1.02,
   PF: 0.99,
-  C: 1.05,
+  C: 1.0,
 };
 
 /** Trade-value age curve. Distinct from the salary age curve: trade value
@@ -118,11 +121,16 @@ export function basketballTradeValue(player: BasketballPlayer, opts: TradeValueO
   let value = Math.max(ovrValue, prodValue);
 
   // Contract adjustment: surplus vs. market lifts value, overpay drags it.
+  // Deliberately gentle: a star on a max deal reads as "overpaid" against this
+  // model, but he's still a star — an overpay should dent his value, not erase
+  // it. A softer slope (0.26) plus a higher floor (0.72) keeps a 20-PPG guard
+  // on a big contract well ahead of a cheap role player, while a dirt-cheap
+  // rookie deal no longer balloons a fringe big past real scorers.
   const market = basketballMarketSalary(player, { season: opts.season });
   const salary = currentSeasonSalary(player, opts.season);
   if (market > 0 && salary > 0) {
     const surplusPct = (market - salary) / market; // +ve underpaid (good), -ve overpaid (bad)
-    value *= clamp(1 + surplusPct * 0.35, 0.55, 1.3);
+    value *= clamp(1 + surplusPct * 0.26, 0.72, 1.25);
   }
 
   // Expiring deals are rentals — a modest discount for the loss of team control.

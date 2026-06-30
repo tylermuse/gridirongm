@@ -27,6 +27,9 @@ import type { BaseContract, BaseLeagueState, PlayerId, TeamId } from '@bs/core/a
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { appendTransaction } from '../transactions';
 import { upcomingSeason } from '../draft/draft';
+import { channelForSalary, consumeChannel, signingChannels } from './exceptions';
+import { lastSeasonLog } from '../stats/statLine';
+import { teamDeadCap } from '../roster/deadCap';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -124,6 +127,37 @@ function lastTeamMap(league: LeagueState): Record<string, TeamId> {
   return (league.sportData as LeagueSportData | undefined)?.freeAgentLastTeam ?? {};
 }
 
+/**
+ * FA-ASK adjustment, applied ON TOP of basketballMarketSalary for the asking
+ * price only — never to the trade-value benchmark (the trade engine calls
+ * basketballMarketSalary directly, so it's untouched). Two pieces:
+ *
+ *  1. Production: basketballMarketSalary prices on OVR alone, so a low-usage
+ *     role player (a 6.7-ppg center) asked the same as a 20-point scorer at the
+ *     same OVR — which looked absurd on the board. Discount the ask by recent
+ *     box production (PPG-led, with credit for boards + playmaking), neutral for
+ *     real starters and down to ~0.65 for spot players. Small samples (< 15 GP:
+ *     rookies, vets who sat) stay neutral — we can't judge them.
+ *  2. Center premium: basketballMarketSalary gives centers a +8% positional
+ *     premium (C = 1.08). That made bigs the priciest position on the board even
+ *     when their box scores were modest, so the ask drops it back to neutral.
+ */
+const C_ASK_NEUTRALIZER = 1 / 1.08; // undo marketSalary's C=1.08 premium for the ask
+function faAskFactor(player: BasketballPlayer): number {
+  let factor = player.sportData.position === 'C' ? C_ASK_NEUTRALIZER : 1;
+  const s = lastSeasonLog(player);
+  if (s && s.gamesPlayed >= 15) {
+    const box = s.ppg + 0.4 * s.rpg + 0.5 * s.apg; // mirrors trade-value's box weighting
+    let prod: number;
+    if (box >= 24) prod = 1.0;                              // bona fide starter
+    else if (box >= 16) prod = 0.85 + ((box - 16) / 8) * 0.15; // role-starter
+    else if (box >= 10) prod = 0.70 + ((box - 10) / 6) * 0.15; // rotation
+    else prod = Math.max(0.65, 0.70 - (10 - box) * 0.01);  // spot minutes
+    factor *= prod;
+  }
+  return factor;
+}
+
 export function freeAgentInfo(league: LeagueState, playerId: PlayerId): FreeAgentInfo | null {
   const player = league.players[playerId] as BasketballPlayer | undefined;
   if (!player) return null;
@@ -133,7 +167,7 @@ export function freeAgentInfo(league: LeagueState, playerId: PlayerId): FreeAgen
     marketSalary: Math.round(basketballMarketSalary(player, {
       season: league.currentSeason,
       noiseSeed: `fa-${player.id}-${league.currentSeason}`,
-    }) * decay),
+    }) * decay * faAskFactor(player)),
     desiredYears: basketballMarketContractYears(player),
     lastTeamId: lastTeamMap(league)[playerId] ?? null,
     birdRights: (player.sportData as { birdRights: 'full' | 'early' | 'none' }).birdRights,
@@ -162,7 +196,7 @@ export function capRoom(league: LeagueState, teamId: TeamId): number {
   const players = team.playerIds
     .map(id => league.players[id] as BasketballPlayer | undefined)
     .filter((p): p is BasketballPlayer => !!p);
-  const payroll = basketballTeamPayroll(players, season);
+  const payroll = basketballTeamPayroll(players, season, teamDeadCap(team as Parameters<typeof teamDeadCap>[0], season));
   return basketballSalaryCap(season) - payroll;
 }
 
@@ -182,7 +216,7 @@ export function signingBudget(league: LeagueState, teamId: TeamId): number {
   const players = team.playerIds
     .map(id => league.players[id] as BasketballPlayer | undefined)
     .filter((p): p is BasketballPlayer => !!p);
-  const status = basketballTeamCapStatus(players, season);
+  const status = basketballTeamCapStatus(players, season, teamDeadCap(team as Parameters<typeof teamDeadCap>[0], season));
   // Under the cap → that room, but always at least a minimum deal: the minimum
   // exception is always available, so a team a hair under the cap (e.g. $75K of
   // room) must still read as able to sign someone, not "can't afford anyone".
@@ -442,6 +476,28 @@ export function resolveUserOffer(
   const isBird = info.birdRights !== 'none' && info.lastTeamId === userTeamId;
   const threshold = acceptanceThreshold(info, appeal, competingTotal, isBird);
 
+  // Cap / exception enforcement — the user plays by the same rules the AI does.
+  // You CAN sign over the cap, but only through a specific, mostly once-per-year
+  // exception (cap room → Room Exception → the right Mid-Level flavor → Bi-Annual
+  // → minimum). channelForSalary picks the cheapest-impact channel that covers
+  // the offer, respecting exceptions already spent this offseason and the first-
+  // apron hard cap. Bird rights are the carve-out: re-sign your OWN free agent
+  // over the cap, capped at his market price.
+  const channel = channelForSalary(league, userTeamId, offer.salaryPerYear, { isBird, birdMax: info.marketSalary });
+  if (!channel) {
+    const room = capRoom(league, userTeamId);
+    const best = signingChannels(league, userTeamId)
+      .filter(c => !c.used)
+      .reduce((m, c) => Math.max(m, c.max), 0);
+    return {
+      outcome: 'rejected', league, signedTeamId: null,
+      competingTeamId: null, competingOfferTotal: 0,
+      message: room > 0
+        ? `That's above your cap room — the most you can offer ${name} is ${faMoney(best)}/yr. Clear more room or lower the offer.`
+        : `Over the cap, your remaining exceptions top out at ${faMoney(best)}/yr for ${name}. Offer that or less, use a different exception, or free up cap room.`,
+    };
+  }
+
   // Vet-minimum safety valve (BUG-30): a team with an open roster spot can always
   // sign an UNCONTESTED free agent to a one-year minimum, regardless of his market
   // value — so a short-handed team can always get back to a legal roster off the
@@ -478,10 +534,14 @@ export function resolveUserOffer(
       l = releasePlayer(l, releaseId);
     }
     l = addToTeam(l, playerId, userTeamId, buildContract(offer, l.currentSeason));
+    // Burn the exception this signing spent (no-op for cap room / minimum / Bird)
+    // and trip the first-apron hard cap if it was the full MLE or the Bi-Annual.
+    l = consumeChannel(l, userTeamId, channel);
+    const tail = channel.consumable ? ` (${channel.label})` : '';
     return {
       outcome: 'signed', league: l, signedTeamId: userTeamId,
       competingTeamId: competing?.teamId ?? null, competingOfferTotal: competingTotal,
-      message: `${name} signed with your team!`,
+      message: `${name} signed with your team!${tail}`,
     };
   }
 

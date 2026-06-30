@@ -7,12 +7,15 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { FreeAgentTable } from '@/components/freeAgency/FreeAgentTable';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import {
   freeAgentPool,
   capRoom,
   signingBudget,
+  signingChannels,
+  channelForSalary,
   teamAppeal,
   rosterCount,
   acceptanceProbability,
@@ -105,6 +108,19 @@ export default function FreeAgencyPage() {
   const offer = { years, salaryPerYear: Math.round(salaryM * 1_000_000) };
   const competing = selected ? bestCompetingOffer(league, selected) : null;
   const acceptPct = selected ? Math.round(acceptanceProbability(selected, offer, competing?.total ?? 0, appeal) * 100) : 0;
+  // The exception this offer would spend — mirrors resolveUserOffer exactly, so
+  // the UI and the engine agree on which channel (cap room / Mid-Level / minimum /
+  // Bird) covers it, and whether anything covers it at all.
+  const isBirdSelected = !!selected && selected.birdRights !== 'none' && selected.lastTeamId === userTeamId;
+  const offerChannel = selected && userTeamId
+    ? channelForSalary(league, userTeamId, offer.salaryPerYear, { isBird: isBirdSelected, birdMax: selected.marketSalary })
+    : null;
+  const overBudget = !!selected && !offerChannel;
+  // Exceptions still in hand (the always-on minimum isn't worth listing).
+  const remainingChannels = userTeamId
+    ? signingChannels(league, userTeamId).filter(c => !c.used && c.id !== 'minimum')
+    : [];
+  const bestRemaining = Math.max(room > 0 ? room : 0, ...remainingChannels.map(c => c.max), 0);
 
   function selectFa(f: FreeAgentInfo) {
     setSelectedId(f.player.id);
@@ -253,7 +269,7 @@ export default function FreeAgencyPage() {
                 <div className="flex items-center gap-3 mb-4">
                   <PlayerAvatar firstName={selected.player.firstName} lastName={selected.player.lastName} primaryColor="#444" secondaryColor="#fff" photoUrl={selected.player.sportData.photoUrl} size="lg" />
                   <div className="min-w-0 flex-1">
-                    <div className="font-bold truncate">{selected.player.firstName} {selected.player.lastName}</div>
+                    <PlayerName playerId={selected.player.id} firstName={selected.player.firstName} lastName={selected.player.lastName} className="font-bold truncate" />
                     <div className="text-xs text-[var(--text-sec)]">
                       {selected.player.sportData.position} · Age {selected.player.age} · {selected.player.ratings.overall} OVR
                     </div>
@@ -280,9 +296,31 @@ export default function FreeAgencyPage() {
                     🔥 {teamById.get(competing.teamId)?.city ?? 'A rival'} is also interested (~{money(competing.total)} total).
                   </div>
                 )}
-                {offer.salaryPerYear > room && (
+                {/* Cap channel + enforcement. Under the cap you spend room; over
+                    it you sign through an exception (Mid-Level, etc.), capped at
+                    `budget`. resolveUserOffer rejects anything above this. */}
+                {/* Which exception this signing spends — kept in lockstep with
+                    resolveUserOffer via channelForSalary. */}
+                {overBudget ? (
                   <div className="text-xs mb-3" style={{ color: '#dc2626' }}>
-                    Over your cap room ({money(room)}) — allowed in v1, but it&apos;ll matter once the cap is enforced.
+                    Over budget — your remaining channels top out at {money(bestRemaining)}/yr for {selected.player.lastName}. Lower the salary{room <= 0 ? ', use cap room,' : ''} or free up room.
+                  </div>
+                ) : offerChannel ? (
+                  <div className="text-xs mb-3 text-[var(--text-sec)]">
+                    Signs via <span className="font-semibold text-[var(--text)]">{offerChannel.label}</span>
+                    {offerChannel.consumable ? ` (${money(offerChannel.max)} max)` : offerChannel.id === 'cap_room' ? ` (${money(room)} room)` : ''}
+                    {offerChannel.hardCaps && <span style={{ color: '#d97706' }}> · hard-caps you at the first apron</span>}
+                  </div>
+                ) : null}
+
+                {/* Exceptions still available this offseason. */}
+                {remainingChannels.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {remainingChannels.map(c => (
+                      <span key={c.id} className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: 'var(--surface-2)', color: 'var(--text-sec)' }}>
+                        {c.label} · {money(c.max)}
+                      </span>
+                    ))}
                   </div>
                 )}
 
@@ -328,10 +366,10 @@ export default function FreeAgencyPage() {
                 <Button
                   variant="primary"
                   className="w-full"
-                  disabled={store.loading || (rosterFull && !releaseId)}
+                  disabled={store.loading || (rosterFull && !releaseId) || overBudget}
                   onClick={() => void makeOffer()}
                 >
-                  {store.loading ? 'Submitting…' : counter ? 'Counter Offer' : 'Make Offer'}
+                  {store.loading ? 'Submitting…' : overBudget ? 'Over budget' : counter ? 'Counter Offer' : 'Make Offer'}
                 </Button>
               </div>
             )}

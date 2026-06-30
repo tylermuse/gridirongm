@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from './Modal';
@@ -92,17 +93,31 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
       ) : (
         <>
           <header className="flex flex-wrap items-center gap-4 mb-5">
-            {team && (
-              <TeamLogo
-                abbreviation={team.abbreviation}
-                primaryColor={team.primaryColor}
-                secondaryColor={team.secondaryColor}
-                size="xl"
-              />
-            )}
+            {/* BUG-38: lead with the player's avatar (real headshot for
+                imported NBA players via sportData.photoUrl, initials badge
+                in the team's colors otherwise). The team logo used to take
+                this slot, which read as a team card instead of a player card. */}
+            <PlayerAvatar
+              firstName={player.firstName}
+              lastName={player.lastName}
+              primaryColor={team?.primaryColor ?? 'var(--accent)'}
+              secondaryColor={team?.secondaryColor ?? '#fff'}
+              photoUrl={(player.sportData as { photoUrl?: string }).photoUrl}
+              size="xl"
+            />
             <div className="min-w-0">
-              <div className="text-2xl font-extrabold">
-                {player.firstName} {player.lastName}
+              <div className="text-2xl font-extrabold flex items-center gap-2 flex-wrap">
+                <span>{player.firstName} {player.lastName}</span>
+                {/* Keep a small team logo next to the name so the team context
+                    isn't lost when the headshot takes the headline slot. */}
+                {team && (
+                  <TeamLogo
+                    abbreviation={team.abbreviation}
+                    primaryColor={team.primaryColor}
+                    secondaryColor={team.secondaryColor}
+                    size="xs"
+                  />
+                )}
               </div>
               <p className="text-sm text-[var(--text-sec)]">
                 {player.sportData.position} · Age {player.age}

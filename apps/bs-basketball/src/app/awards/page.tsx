@@ -9,6 +9,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { computeSeasonAwards, computeHonors, type SeasonAwards, type SeasonHonors, type AllLeagueTeam } from '@/lib/awards';
 import { getBracket } from '@/lib/playoffs';
+import { buildOwnerMessage } from '@/lib/owner/ownerMessage';
+import { OwnerMessageCard } from '@/components/owner/OwnerMessageCard';
 import { perGame, emptyBasketballStats, type BasketballPlayer, type BasketballTeam } from '@bs/sport-basketball';
 import type { AwardResult } from '@bs/sport-basketball';
 
@@ -57,6 +59,13 @@ export default function AwardsPage() {
     () => (league ? computeHonors(league) : null),
     [league],
   );
+  // FEAT-4: pure, deterministic per (team, season) — buildOwnerMessage returns
+  // null when there's no user team (spectator save), so the renderer can just
+  // null-check it once below.
+  const ownerMessage = useMemo(
+    () => (league ? buildOwnerMessage(league, league.currentSeason) : null),
+    [league],
+  );
   const teamById = useMemo(() => {
     const m = new Map<string, BasketballTeam>();
     if (league) for (const t of league.teams) m.set(t.id, t as BasketballTeam);
@@ -74,9 +83,15 @@ export default function AwardsPage() {
       <Link href="/" className="text-sm font-semibold opacity-70 hover:opacity-100">
         ← Home
       </Link>
-      <div className="mt-2">
-        <Link href="/award-race" className="text-sm font-semibold hover:underline" style={{ color: 'var(--accent)' }}>📊 Live Award Race →</Link>
-      </div>
+      {/* STYLE-4: the Live Award Race link only makes sense while a race is
+          still on. Once the playoffs have crowned a champion (bracket.complete)
+          the season is over and the trophies above are final — drop the link
+          so it doesn't dangle as a stale CTA on the awards ceremony page. */}
+      {!bracket?.complete && (
+        <div className="mt-2">
+          <Link href="/award-race" className="text-sm font-semibold hover:underline" style={{ color: 'var(--accent)' }}>📊 Live Award Race →</Link>
+        </div>
+      )}
 
       <header className="flex flex-wrap items-baseline gap-3 mt-2 mb-6">
         <h1 className="text-4xl font-extrabold" style={{ color: 'var(--accent)' }}>
@@ -116,6 +131,13 @@ export default function AwardsPage() {
         </>
       ) : (
         <>
+          {/* FEAT-4: owner message kicks the ceremony off — a note from the
+              user team's owner reacting to the season just played, with a
+              marching order for the offseason. Tone is keyed to playoff
+              result + win delta + job-security tier; only renders when the
+              user actually has a team (skipped during a spectator save). */}
+          {ownerMessage && <OwnerMessageCard message={ownerMessage} />}
+
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {AWARDS.map(def => (
               <AwardCard

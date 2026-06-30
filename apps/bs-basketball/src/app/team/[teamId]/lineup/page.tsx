@@ -7,6 +7,7 @@ import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { Button } from '@/components/ui/Button';
 import { TeamLogo } from '@/components/ui/TeamLogo';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
 import { resolveLineup, validateBasketballLineup, buildDefaultBasketballLineup } from '@/lib/lineup';
 import { basketballPositionGroup } from '@bs/sport-basketball';
 import type { BasketballLineup, BasketballPlayer, BasketballPosition, BasketballTeam } from '@bs/sport-basketball';
@@ -230,7 +231,7 @@ export default function LineupPage() {
               return (
                 <li key={id} className="flex items-center gap-2 px-2 py-1 text-sm">
                   <span className="w-5 text-xs opacity-40 tabular-nums text-right">{i + 1}</span>
-                  <span className="font-semibold truncate flex-1">{p.firstName} {p.lastName}</span>
+                  <PlayerName playerId={p.id} firstName={p.firstName} lastName={p.lastName} className="font-semibold truncate flex-1" />
                   <span className="text-xs opacity-60 w-6">{p.sportData.position}</span>
                   <span className="text-xs tabular-nums w-7 text-right font-bold">{p.ratings.overall}</span>
                   <span className="flex gap-0.5 items-center">

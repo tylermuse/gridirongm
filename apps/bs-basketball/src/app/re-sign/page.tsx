@@ -10,7 +10,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ExtendModal } from '@/components/modals/ExtendModal';
-import { PlayerModal } from '@/components/modals/PlayerModal';
+import { PlayerName } from '@/components/modals/PlayerModalProvider';
+import { ConfirmModal } from '@/components/modals/ConfirmModal';
 import { OffseasonStepper } from '@/components/shell/OffseasonStepper';
 import { lastSeasonStatLine } from '@/lib/stats/statLine';
 import { ratingColor } from '@/lib/ui/ratingColor';
@@ -35,10 +36,15 @@ export default function ReSignPage() {
   const store = useLeagueStore();
   const router = useRouter();
   const [extendId, setExtendId] = useState<string | null>(null);
-  const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
   // Players released this session, for "what I just did" feedback (they're already
   // off the roster, so we keep a local note rather than re-deriving it).
   const [walked, setWalked] = useState<{ id: string; name: string }[]>([]);
+  // R2-1: replace the three native window.confirm() prompts (resign-all,
+  // let-all-walk, let-walk on a 78+ OVR vet) with ConfirmModal so the page
+  // stops thread-blocking and the dialogs are themed like the rest of the app.
+  const [confirmResignAll, setConfirmResignAll] = useState(false);
+  const [confirmLetAllWalk, setConfirmLetAllWalk] = useState(false);
+  const [pendingWalk, setPendingWalk] = useState<BasketballPlayer | null>(null);
 
   const season = league?.currentSeason ?? 0;
   const userTeam = useMemo<BasketballTeam | null>(() => {
@@ -97,30 +103,41 @@ export default function ReSignPage() {
 
   const over = roster.length - MAX_ROSTER;
 
-  async function letWalk(p: BasketballPlayer) {
-    if (p.ratings.overall >= 78 && !window.confirm(`Let ${p.firstName} ${p.lastName} (${p.ratings.overall} OVR) walk to free agency now? This frees the roster spot and his money immediately.`)) return;
+  // R2-1: walk is gated by ConfirmModal for 78+ OVR vets, immediate otherwise.
+  async function performLetWalk(p: BasketballPlayer) {
     const ok = await store.releasePlayer(p.id);
     if (ok) setWalked(w => [...w, { id: p.id, name: `${p.firstName} ${p.lastName}` }]);
   }
-  async function resignAll() {
-    if (!window.confirm(`Re-sign all ${active.length} expiring players at their market ask?`)) return;
-    for (const p of active) {
-      const m = extensionMarket(p, season);
-      await store.extendPlayer(p.id, { years: m.desiredYears, salaryPerYear: m.marketSalary });
-    }
+  function letWalk(p: BasketballPlayer) {
+    if (p.ratings.overall >= 78) { setPendingWalk(p); return; }
+    void performLetWalk(p);
   }
-  async function letAllWalk() {
-    if (!window.confirm(`Let all ${active.length} expiring players walk to free agency now?`)) return;
-    for (const p of [...active]) {
-      const ok = await store.releasePlayer(p.id);
-      if (ok) setWalked(w => [...w, { id: p.id, name: `${p.firstName} ${p.lastName}` }]);
-    }
+  // R2-1: single bulk store call instead of N sequential extendPlayer awaits.
+  // The old loop visibly stalled the page through a class of 8+ expiring deals.
+  async function performResignAll() {
+    setConfirmResignAll(false);
+    const signings = active.map(p => {
+      const m = extensionMarket(p, season);
+      return { playerId: p.id, offer: { years: m.desiredYears, salaryPerYear: m.marketSalary } };
+    });
+    await store.extendPlayersBulk(signings);
+  }
+  async function performLetAllWalk() {
+    setConfirmLetAllWalk(false);
+    const ids = active.map(p => p.id);
+    const names = active.map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}` }));
+    const count = await store.releasePlayersBulk(ids);
+    if (count > 0) setWalked(w => [...w, ...names.slice(0, count)]);
   }
   async function startSeason() {
-    // An inaugural (imported) draft tips into the current season with no year
-    // roll, so it finishes via finishInauguralDraft rather than startNextSeason
-    // (which would roll the year and re-age the league). Both route on to FA.
-    if (draft?.inaugural) {
+    // An inaugural (imported) draft — or a post-draft roster import that opened
+    // straight at the re-sign window with no draft state — tips into the CURRENT
+    // season with no year roll, so it finishes via finishInauguralDraft rather
+    // than startNextSeason (which rolls the year, re-ages the league, and demands
+    // a completed draft a post-draft import never had → "Finish the draft before
+    // starting the season."). Both route on to FA.
+    const postDraftImport = (league?.sportData as { postDraftImport?: boolean } | undefined)?.postDraftImport;
+    if (draft?.inaugural || (postDraftImport && !draft)) {
       await store.finishInauguralDraft();
       router.push('/free-agency');
       return;
@@ -182,8 +199,8 @@ export default function ReSignPage() {
           <p className="text-sm font-semibold mr-auto rounded-lg px-3 py-1.5" style={{ background: 'color-mix(in srgb, #d97706 14%, transparent)', color: '#b45309' }}>
             ⚠ Decide on {active.length} expiring player{active.length === 1 ? '' : 's'} — Let Walk releases them to free agency now.
           </p>
-          <button onClick={() => void resignAll()} disabled={store.loading} className="text-xs font-bold rounded-lg px-3 py-1.5 text-white disabled:opacity-40" style={{ background: 'var(--accent)' }}>Re-sign All ({active.length})</button>
-          <button onClick={() => void letAllWalk()} disabled={store.loading} className="text-xs font-bold rounded-lg px-3 py-1.5 border disabled:opacity-40" style={{ borderColor: '#dc2626', color: '#dc2626' }}>Let All Walk ({active.length})</button>
+          <button onClick={() => setConfirmResignAll(true)} disabled={store.loading} className="text-xs font-bold rounded-lg px-3 py-1.5 text-white disabled:opacity-40" style={{ background: 'var(--accent)' }}>Re-sign All ({active.length})</button>
+          <button onClick={() => setConfirmLetAllWalk(true)} disabled={store.loading} className="text-xs font-bold rounded-lg px-3 py-1.5 border disabled:opacity-40" style={{ borderColor: '#dc2626', color: '#dc2626' }}>Let All Walk ({active.length})</button>
         </div>
       )}
 
@@ -203,7 +220,7 @@ export default function ReSignPage() {
                   <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} photoUrl={p.sportData.photoUrl} size="sm" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
-                      <button onClick={() => setModalPlayerId(p.id)} className="font-semibold truncate hover:underline text-left" style={{ color: 'var(--text)' }}>{p.firstName} {p.lastName}</button>
+                      <PlayerName playerId={p.id} firstName={p.firstName} lastName={p.lastName} className="font-semibold truncate" style={{ color: 'var(--text)' }} />
                       {/* MOBILE-1b: keep the stance chip visible on phone too —
                           previously hidden under sm: so the user couldn't tell
                           if the player even wanted to stay. */}
@@ -243,14 +260,14 @@ export default function ReSignPage() {
             {resigned.map(p => (
               <div key={p.id} className="flex items-center gap-3 px-3 py-2 border-t first:border-t-0 text-sm" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, #10b981 7%, transparent)' }}>
                 <span className="text-[#059669] font-bold">✓</span>
-                <span className="font-semibold flex-1 truncate">{p.firstName} {p.lastName}</span>
+                <PlayerName playerId={p.id} firstName={p.firstName} lastName={p.lastName} className="font-semibold flex-1 truncate" />
                 <span className="text-xs text-[var(--text-sec)] tabular-nums">Re-signed · −{money(salaryForSeason(p, nextSeason))}/yr</span>
               </div>
             ))}
             {walked.map(w => (
               <div key={w.id} className="flex items-center gap-3 px-3 py-2 border-t first:border-t-0 text-sm" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, #dc2626 6%, transparent)' }}>
                 <span className="text-[#dc2626] font-bold">↪</span>
-                <span className="font-semibold flex-1 truncate">{w.name}</span>
+                <PlayerName playerId={w.id} className="font-semibold flex-1 truncate">{w.name}</PlayerName>
                 <span className="text-xs text-[#dc2626]">Released to FA</span>
               </div>
             ))}
@@ -272,7 +289,7 @@ export default function ReSignPage() {
             {roster.slice(0, over + 3).map((p, i) => (
               <div key={p.id} className="flex items-center gap-3 px-2 py-1.5 rounded-lg" style={{ background: i < over ? 'color-mix(in srgb, #dc2626 6%, transparent)' : undefined }}>
                 <PlayerAvatar firstName={p.firstName} lastName={p.lastName} primaryColor={userTeam.primaryColor} secondaryColor={userTeam.secondaryColor} photoUrl={p.sportData.photoUrl} size="sm" />
-                <span className="font-semibold truncate flex-1">{p.firstName} {p.lastName}</span>
+                <PlayerName playerId={p.id} firstName={p.firstName} lastName={p.lastName} className="font-semibold truncate flex-1" />
                 <Chip>{p.sportData.position}</Chip>
                 <span className={`text-sm font-bold tabular-nums ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</span>
                 <button
@@ -289,14 +306,66 @@ export default function ReSignPage() {
         )}
         <div className="flex items-center gap-3 px-4 py-3">
           <Button variant="primary" disabled={over > 0 || store.loading} onClick={() => void startSeason()}>
-            {store.loading ? 'Opening free agency…' : 'Sign Free Agents in the Preseason →'}
+            {store.loading ? 'Opening free agency…' : 'Sign Free Agents →'}
           </Button>
           {over > 0 && <span className="text-sm text-[var(--text-sec)]">Cut {over} more to continue.</span>}
         </div>
       </section>
 
       <ExtendModal playerId={extendId} onClose={() => setExtendId(null)} />
-      <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
+
+      {/* R2-1: themed confirms replacing the prior native window.confirm() calls. */}
+      <ConfirmModal
+        open={confirmResignAll}
+        onClose={() => setConfirmResignAll(false)}
+        title="Re-sign all expiring players?"
+        body={
+          <>
+            All <b>{active.length}</b> expiring players will be re-signed at their
+            market ask. You can still walk individuals afterward.
+          </>
+        }
+        confirmLabel={`Re-sign ${active.length}`}
+        loading={store.loading}
+        onConfirm={() => void performResignAll()}
+      />
+      <ConfirmModal
+        open={confirmLetAllWalk}
+        onClose={() => setConfirmLetAllWalk(false)}
+        title="Let all expiring players walk?"
+        body={
+          <>
+            All <b>{active.length}</b> expiring players will hit free agency
+            immediately. This frees their roster spots and salary.
+          </>
+        }
+        confirmLabel={`Let ${active.length} walk`}
+        tone="danger"
+        loading={store.loading}
+        onConfirm={() => void performLetAllWalk()}
+      />
+      <ConfirmModal
+        open={!!pendingWalk}
+        onClose={() => setPendingWalk(null)}
+        title="Let a starter walk?"
+        body={
+          pendingWalk ? (
+            <>
+              <b>{pendingWalk.firstName} {pendingWalk.lastName}</b> ({pendingWalk.ratings.overall} OVR)
+              {' '}is a starting-caliber player. He goes to free agency immediately —
+              his roster spot and salary clear today.
+            </>
+          ) : null
+        }
+        confirmLabel="Let him walk"
+        tone="danger"
+        loading={store.loading}
+        onConfirm={() => {
+          const p = pendingWalk;
+          setPendingWalk(null);
+          if (p) void performLetWalk(p);
+        }}
+      />
     </Shell>
   );
 }
