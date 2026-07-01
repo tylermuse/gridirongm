@@ -117,8 +117,9 @@ export interface ImportedHoopsLeague {
 // Constants
 // ===========================================================================
 
-/** BS Hoops league minimum (matches capRules.LEAGUE_MINIMUM_SALARY, in $). */
-const LEAGUE_MINIMUM_SALARY = 1_200_000;
+/** BS Hoops rookie-minimum floor for imported salaries (matches
+ *  capRules.LEAGUE_MINIMUM_SALARY, in $). */
+const LEAGUE_MINIMUM_SALARY = 1_350_000;
 
 const STARTER_POSITIONS: BasketballPosition[] = ['PG', 'SG', 'SF', 'PF', 'C'];
 const POS_INDEX: Record<BasketballPosition, number> = { PG: 0, SG: 1, SF: 2, PF: 3, C: 4 };

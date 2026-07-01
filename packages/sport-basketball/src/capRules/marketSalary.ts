@@ -128,7 +128,10 @@ export function basketballMarketSalary(
   const noise = opts.noiseSeed ? noiseFactor(opts.noiseSeed) : 1.0;
   const withNoise = raw * noise;
 
-  // Clamp to league minimum on the low end
+  // Clamp to the generic league minimum on the low end. The player's SERVICE-TIME
+  // minimum (a 10-yr vet's $3.87M floor) is applied in the FA path (freeAgentInfo),
+  // not here — this function also feeds the trade-value benchmark, which must stay
+  // OVR-driven and stable (mirrors how faAskFactor is FA-only).
   const final = Math.max(LEAGUE_MINIMUM_SALARY, Math.round(withNoise / 100_000) * 100_000);
   return final;
 }
@@ -143,9 +146,12 @@ export function basketballMarketContractYears(player: BasketballPlayer): number 
   const age = player.age;
   // Stars want max length (capped at 5 by cap rules)
   if (ovr >= 88) return age >= 33 ? 3 : age >= 30 ? 4 : 5;
-  if (ovr >= 80) return age >= 32 ? 2 : age >= 28 ? 3 : 4;
-  if (ovr >= 73) return age >= 32 ? 1 : age >= 28 ? 2 : 3;
-  // Fringe players: 1-year prove-it deals
+  if (ovr >= 80) return age >= 33 ? 3 : age >= 30 ? 3 : 4;
+  // Rotation players (72–80 OVR) get real term in the real NBA — Grimes (4/$60M)
+  // and Shamet (4/$24M) are ~72–76 OVR types who got the full four years. The old
+  // table capped this band at 1–3; bump it toward 3–4 so useful role players lock in.
+  if (ovr >= 72) return age >= 33 ? 2 : age >= 30 ? 3 : 4;
+  // Fringe players: short prove-it deals
   return age >= 30 ? 1 : 2;
 }
 

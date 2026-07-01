@@ -27,22 +27,22 @@
 
 import type { TeamId } from '@bs/core/adapter';
 import type { BasketballPlayer } from '../types';
-import { basketballTeamCapStatus, basketballSalaryCap } from './capRules';
+import { basketballTeamCapStatus, basketballSalaryCap, minimumSalary } from './capRules';
 
 // ===========================================================================
 // Approximated exception amounts (% of cap)
 // ===========================================================================
 
-/** Non-tax Mid-Level: real-NBA ~$13M for 2024-25 ≈ 9% of cap. */
+/** Non-tax Mid-Level: real 2026-27 $15.04M on a $164.96M cap ≈ 9.1% of cap. */
 const NON_TAX_MLE_PCT = 0.094;
-/** Tax MLE (over tax line, under first apron): ~$5.6M ≈ 4% of cap. */
-const TAX_MLE_PCT = 0.040;
-/** Taxpayer MLE (first apron team): same ~$5.6M, but use blocked by 2nd apron. */
-const TAXPAYER_MLE_PCT = 0.040;
-/** Bi-Annual Exception: ~$4.5M ≈ 3.2% of cap. */
-const BAE_PCT = 0.032;
-/** Room Exception: ~$8M ≈ 5.7% of cap. */
-const ROOM_EXCEPTION_PCT = 0.057;
+/** Tax MLE (over tax line, under first apron): real 2026-27 $6.06M ≈ 3.68% of cap. */
+const TAX_MLE_PCT = 0.0368;
+/** Taxpayer MLE (first apron team): same $6.06M, but use blocked by 2nd apron. */
+const TAXPAYER_MLE_PCT = 0.0368;
+/** Bi-Annual Exception: real 2026-27 $5.48M ≈ 3.32% of cap. */
+const BAE_PCT = 0.0332;
+/** Room Exception: real 2026-27 ~$8.8M ≈ 5.33% of cap. */
+const ROOM_EXCEPTION_PCT = 0.0533;
 
 // ===========================================================================
 // Public types
@@ -164,9 +164,11 @@ export function basketballAvailableCapActions(
   actions.push({
     id: 'sign_minimum',
     label: 'Sign veteran minimum',
-    description: 'Always available — no exception needed.',
+    description: 'Always available — no exception needed. Scales with the signee\'s years of service ($1.35M rookie → $3.87M 10-yr vet).',
     available: true,
-    approxAmount: 1_200_000,
+    // Representative mid-career vet-minimum figure for the affordance display;
+    // the actual charge is the signee's service-time minimum at signing.
+    approxAmount: minimumSalary(4),
   });
 
   // Waive-and-stretch only if the team has at least one releasable contract

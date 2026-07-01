@@ -187,9 +187,9 @@ describe('basketball trade evaluator — basic mechanics', () => {
 
   it('enforces the second-apron hard 1:1 — a take-back-more deal that the 125% rule would allow is now illegal', () => {
     const cap = basketballSalaryCap(SEASON);
-    // Team A is over the SECOND apron (~1.295× cap). Fill to 200M + a 20M player
-    // = ~220M, comfortably past the 213.7M second apron at a 165M cap.
-    const teamARoster = fillRosterToPayroll(200_000_000);
+    // Team A is over the SECOND apron (1.344× cap ≈ $221.8M at a $165M cap).
+    // Fill to 210M + a 20M player = ~230M, comfortably past it.
+    const teamARoster = fillRosterToPayroll(210_000_000);
     const teamBRoster = fillRosterToPayroll(60_000_000);
 
     // Team A sends $20M, takes back $25M. Under the standard tier ($7.5M–$29M →
