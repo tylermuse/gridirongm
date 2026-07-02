@@ -126,6 +126,43 @@ export default function RosterPage() {
     setMoodOpenId(null);
   }
 
+  // Projected minutes per player — mirrors the sim's rotation so the roster can
+  // be ranked by playing time: the 5 starters split ~168 team-minutes weighted
+  // by OVR (stars play more); the top 5 bench split ~72 by a geometric decay
+  // (earlier in the rotation = more run); anyone deeper is out of the rotation
+  // (~0, shown as DNP). A projection off the lineup, not logged MPG.
+  const rosterById = useMemo(() => new Map<string, BasketballPlayer>(roster.map(p => [p.id as string, p])), [roster]);
+  const projMinutes = useMemo(() => {
+    const m = new Map<string, number>();
+    const startPlayers = starters
+      .map(id => (id ? rosterById.get(id) : undefined))
+      .filter((p): p is BasketballPlayer => !!p);
+    const ovrSum = startPlayers.reduce((s, p) => s + p.ratings.overall, 0) || 1;
+    for (const p of startPlayers) m.set(p.id, Math.round((168 * p.ratings.overall) / ovrSum));
+    const W = [1, 0.8, 0.64, 0.512, 0.4096]; // top-5 bench geometric decay
+    const wSum = W.reduce((a, b) => a + b, 0);
+    bench.forEach((id, i) => m.set(id, i < W.length ? Math.round((72 * W[i]) / wSum) : 0));
+    return m;
+  }, [starters, bench, rosterById]);
+
+  // One flat list ranked by projected minutes: any open starting slots first (so
+  // they stay easy to fill by drag), then every player, most minutes to fewest.
+  const sortedRoster = useMemo(() => {
+    const openSlots: number[] = [];
+    starters.forEach((id, slot) => { if (!id) openSlots.push(slot); });
+    const filled: { p: BasketballPlayer; isStarter: boolean; slot: number; min: number }[] = [];
+    starters.forEach((id, slot) => {
+      const p = id ? rosterById.get(id) : undefined;
+      if (p) filled.push({ p, isStarter: true, slot, min: projMinutes.get(id) ?? 0 });
+    });
+    bench.forEach(id => {
+      const p = rosterById.get(id);
+      if (p) filled.push({ p, isStarter: false, slot: -1, min: projMinutes.get(id) ?? 0 });
+    });
+    filled.sort((a, b) => b.min - a.min);
+    return { openSlots, filled };
+  }, [starters, bench, rosterById, projMinutes]);
+
   if (loading) return <Shell><p className="opacity-60">Loading…</p></Shell>;
   if (!league) return <Shell><p>{error ?? 'No league loaded.'}</p></Shell>;
   if (!team) {
@@ -364,67 +401,67 @@ export default function RosterPage() {
       {/* Combined table */}
       <div className="rounded-xl border bg-[var(--surface)] overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
         <div className={`${ROW_GRID} text-[10px] uppercase tracking-wide text-[var(--text-sec)] border-b font-semibold`} style={{ ...ROW_COLS, borderColor: 'var(--border)' }}>
-          <span></span><span>Name</span><span>Pos</span><span className="text-right">Age</span><span className="text-right">OVR</span><span className="text-right">POT</span><span className="text-right">Contract</span><span className="text-right">Acquired</span><span className="text-right">GP</span><span className="text-right">PPG/RPG/APG</span><span className="text-center">Mood</span><span className="text-right">Action</span>
+          <span className="text-center">Min</span><span>Name</span><span>Pos</span><span className="text-right">Age</span><span className="text-right">OVR</span><span className="text-right">POT</span><span className="text-right">Contract</span><span className="text-right">Acquired</span><span className="text-right">GP</span><span className="text-right">PPG/RPG/APG</span><span className="text-center">Mood</span><span className="text-right">Action</span>
         </div>
 
-        {/* Starters */}
-        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>Starters</div>
-        {POSITIONS.map((pos, slot) => {
-          const p = starters[slot] ? playerById[starters[slot]] : null;
-          // BUG-24: amber tint overrides the starter-row accent when expiring.
-          const isPending = !!p && pendingResignIds.has(p.id);
-          const baseBg = dragOverSlot === slot
-            ? 'color-mix(in srgb, var(--accent) 14%, transparent)'
-            : 'color-mix(in srgb, var(--accent) 5%, transparent)';
-          const starterBg = isPending ? 'color-mix(in srgb, #f59e0b 14%, transparent)' : baseBg;
+        {/* One list ranked by projected minutes — starters (most run) down to the
+            deep bench (DNP). The Min column carries the ordering; Start/Bench and
+            drag-to-slot editing are preserved per row. */}
+        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-[var(--text-sec)]" style={{ background: 'var(--surface-2)' }}>Rotation — by projected minutes</div>
+
+        {/* Open starting slots first, so they stay easy to fill by drag. */}
+        {sortedRoster.openSlots.map(slot => {
+          const pos = POSITIONS[slot];
           return (
             <div
-              key={pos}
-              draggable={!!p && !isReadOnly}
-              onDragStart={p && !isReadOnly ? e => { e.dataTransfer.setData('application/json', JSON.stringify({ id: p.id, from: 'starter', slot })); e.dataTransfer.effectAllowed = 'move'; } : undefined}
+              key={`open-${slot}`}
               onDragOver={isReadOnly ? undefined : e => { e.preventDefault(); setDragOverSlot(slot); }}
               onDragLeave={isReadOnly ? undefined : () => setDragOverSlot(s => (s === slot ? null : s))}
               onDrop={isReadOnly ? undefined : e => onDropSlot(slot, e)}
-              className={`${ROW_GRID} border-t ${p && !isReadOnly ? 'cursor-grab' : ''}`}
-              style={{ ...ROW_COLS, borderColor: 'var(--border)', background: starterBg }}
-              title={isPending ? 'Expiring contract — re-sign or this player walks at season start' : undefined}
+              className={`${ROW_GRID} border-t`}
+              style={{ ...ROW_COLS, borderColor: 'var(--border)', background: dragOverSlot === slot ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'color-mix(in srgb, var(--accent) 5%, transparent)' }}
+              title={`Open starting slot (${pos})`}
             >
-              <span className="text-[11px] font-black text-center rounded" style={{ color: POS_COLORS[pos] }} title={`Starting ${pos}`}>{pos}</span>
-              {p ? renderCells(p, true, { id: p.id, from: 'starter', slot }) : <EmptyStarter />}
-              {isReadOnly ? <span /> : (
-                <ActionCell
-                  toggle={p ? { label: 'Bench', onClick: () => benchStarter(slot) } : null}
-                  onMenu={p ? e => setMenu({ id: p.id, x: e.clientX, y: e.clientY }) : undefined}
-                />
-              )}
+              <span className="text-[10px] font-black text-center" style={{ color: POS_COLORS[pos] }} title={`Starting ${pos}`}>{pos}</span>
+              <EmptyStarter />
+              {isReadOnly ? <span /> : <ActionCell toggle={null} />}
             </div>
           );
         })}
 
-        {/* Bench */}
-        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-[var(--text-sec)]" style={{ background: 'var(--surface-2)' }}>Bench</div>
-        {bench.map(id => {
-          const p = playerById[id];
-          if (!p) return null;
-          // BUG-24: amber tint for expiring players during Re-sign phase.
+        {/* Every player, most projected minutes to fewest. */}
+        {sortedRoster.filled.map(({ p, isStarter, slot, min }) => {
+          // BUG-24: amber tint overrides the row background for expiring players.
           const isPending = pendingResignIds.has(p.id);
-          const benchRowStyle = isPending
-            ? { ...ROW_COLS, borderColor: 'var(--border)', background: 'color-mix(in srgb, #f59e0b 10%, transparent)' }
-            : { ...ROW_COLS, borderColor: 'var(--border)' };
+          const dragData = isStarter ? { id: p.id, from: 'starter', slot } : { id: p.id, from: 'bench', slot: -1 };
+          const starterBg = dragOverSlot === slot
+            ? 'color-mix(in srgb, var(--accent) 14%, transparent)'
+            : 'color-mix(in srgb, var(--accent) 5%, transparent)';
+          const rowBg = isPending ? 'color-mix(in srgb, #f59e0b 12%, transparent)' : isStarter ? starterBg : 'transparent';
+          const dnp = min <= 0;
           return (
             <div
-              key={id}
+              key={p.id}
               draggable={!isReadOnly}
-              onDragStart={isReadOnly ? undefined : e => { e.dataTransfer.setData('application/json', JSON.stringify({ id: p.id, from: 'bench', slot: -1 })); e.dataTransfer.effectAllowed = 'move'; }}
-              className={`${ROW_GRID} border-t ${isReadOnly ? '' : 'cursor-grab'}`}
-              style={benchRowStyle}
+              onDragStart={isReadOnly ? undefined : e => { e.dataTransfer.setData('application/json', JSON.stringify(dragData)); e.dataTransfer.effectAllowed = 'move'; }}
+              onDragOver={isReadOnly || !isStarter ? undefined : e => { e.preventDefault(); setDragOverSlot(slot); }}
+              onDragLeave={isReadOnly || !isStarter ? undefined : () => setDragOverSlot(s => (s === slot ? null : s))}
+              onDrop={isReadOnly || !isStarter ? undefined : e => onDropSlot(slot, e)}
+              className={`${ROW_GRID} border-t ${!isReadOnly ? 'cursor-grab' : ''}`}
+              style={{ ...ROW_COLS, borderColor: 'var(--border)', background: rowBg }}
               title={isPending ? 'Expiring contract — re-sign or this player walks at season start' : undefined}
             >
-              <span className="text-xs opacity-30 text-center select-none" aria-hidden>⠿</span>
-              {renderCells(p, false, { id: p.id, from: 'bench', slot: -1 })}
+              <span
+                className="text-[11px] font-bold text-center tabular-nums"
+                style={{ color: dnp ? 'var(--text-sec)' : isStarter ? 'var(--accent)' : 'var(--text)', opacity: dnp ? 0.5 : 1 }}
+                title={dnp ? 'Out of the rotation — projected not to play' : `Projected ~${min} minutes/game`}
+              >
+                {dnp ? 'DNP' : `${min}′`}
+              </span>
+              {renderCells(p, isStarter, dragData)}
               {isReadOnly ? <span /> : (
                 <ActionCell
-                  toggle={{ label: 'Start', onClick: () => startPlayer(id), accent: true }}
+                  toggle={isStarter ? { label: 'Bench', onClick: () => benchStarter(slot) } : { label: 'Start', onClick: () => startPlayer(p.id), accent: true }}
                   onMenu={e => setMenu({ id: p.id, x: e.clientX, y: e.clientY })}
                 />
               )}
