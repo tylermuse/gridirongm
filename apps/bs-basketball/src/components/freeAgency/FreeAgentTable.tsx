@@ -87,11 +87,13 @@ export function FreeAgentTable({
             <th className="text-left pl-1">Player</th>
             <th className="text-center">Pos</th>
             {/* MOBILE-1c: hide Age / POT / Last on phone (drop the densest
-                columns to keep OVR + Ask + Action readable at 390px). */}
+                columns to keep OVR + Ask + Action readable at 390px). Above the
+                phone breakpoint (sm+) the stat line shows inline; on phone it's
+                surfaced in the expanded intel panel instead. */}
             {th('age', 'Age', 'text-center hidden sm:table-cell')}
             {th('ovr', 'OVR', 'text-center')}
             {th('pot', 'POT', 'text-center hidden sm:table-cell')}
-            {th('ppg', 'Last', 'text-center hidden md:table-cell')}
+            {th('ppg', 'Last', 'text-center hidden sm:table-cell')}
             {th('ask', 'Ask', 'text-right')}
             <th className="text-right pr-3">Action</th>
           </tr>
@@ -123,7 +125,7 @@ export function FreeAgentTable({
                   <td className="text-center tabular-nums text-[var(--text-sec)] hidden sm:table-cell">{p.age}</td>
                   <td className={`text-center font-bold tabular-nums ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
                   <td className="text-center tabular-nums text-[var(--text-sec)] hidden sm:table-cell">{p.development.potential}</td>
-                  <td className="text-center tabular-nums text-[var(--text-sec)] hidden md:table-cell">{ll.text}</td>
+                  <td className="text-center tabular-nums text-[var(--text-sec)] hidden sm:table-cell">{ll.text}</td>
                   <td className="text-right tabular-nums">{money(f.marketSalary)}</td>
                   <td className="text-right pr-3">
                     {/* MOBILE-5: bumps to 44px min on touch only. */}
@@ -147,6 +149,7 @@ export function FreeAgentTable({
 }
 
 function FaIntel({ league, info, room, budget, appeal, teamById }: { league: BasketballLeagueState; info: FreeAgentInfo; room: number; budget: number; appeal: number; teamById: Map<string, BasketballTeam> }) {
+  const ll = lastLine(info);
   const offer = { years: info.desiredYears, salaryPerYear: info.marketSalary };
   const competing = bestCompetingOffer(league, info);
   const accept = Math.round(acceptanceProbability(info, offer, competing?.total ?? 0, appeal) * 100);
@@ -168,6 +171,13 @@ function FaIntel({ league, info, room, budget, appeal, teamById }: { league: Bas
         <span className="text-xs font-black px-2 py-0.5 rounded" style={{ background: `color-mix(in srgb, ${recColor} 16%, transparent)`, color: recColor }}>{rec}</span>
         {minDeal && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'color-mix(in srgb, #10b981 16%, transparent)', color: '#059669' }} title="Over the cap, but a roster spot is open — you can still sign him to a minimum deal.">available at vet minimum</span>}
         <span className="text-xs text-[var(--text-sec)]">{info.player.sportData.position} · {info.player.ratings.overall} OVR · {info.player.development.potential} POT · age {info.player.age}</span>
+      </div>
+      {/* Last-season production — always shown here, so phone users (who don't
+          get the inline "Last" column) still see the box line. */}
+      <div className="text-xs">
+        <L>Last season</L>
+        <span className="font-bold tabular-nums">{ll.text}</span>
+        <span className="text-[var(--text-sec)]"> · pts / reb / ast</span>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
         <div><L>Accepts at market</L><div className="font-bold tabular-nums" style={{ color: accept >= 60 ? '#10b981' : accept >= 35 ? '#d97706' : '#dc2626' }}>{accept}%</div></div>
