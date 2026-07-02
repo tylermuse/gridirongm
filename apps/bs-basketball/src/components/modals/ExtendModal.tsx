@@ -20,8 +20,13 @@ export function ExtendModal({ playerId, onClose }: { playerId: string | null; on
   const season = league?.currentSeason ?? 2026;
 
   const market = useMemo(() => (player ? extensionMarket(player, season) : null), [player, season]);
-  const [years, setYears] = useState(2);
-  const [salaryM, setSalaryM] = useState(5);
+  // Inputs are string-backed so mobile users can fully clear + retype the field.
+  // The old code forced the numeric value to a min (1) on every keystroke, which
+  // left a leading "1" you couldn't delete on mobile (no highlight-to-replace) —
+  // e.g. a 31 → 26 edit was impossible. We clamp only for the derived offer/meter
+  // and on blur, never mid-keystroke.
+  const [yearsDraft, setYearsDraft] = useState('2');
+  const [salaryDraft, setSalaryDraft] = useState('5');
   const [result, setResult] = useState<{ accepted: boolean; message: string } | null>(null);
 
   // Seed the inputs to the player's ask — only when a *different* player opens,
@@ -33,8 +38,8 @@ export function ExtendModal({ playerId, onClose }: { playerId: string | null; on
     const p = league.players[playerId as keyof typeof league.players] as BasketballPlayer | undefined;
     if (!p) return;
     const m = extensionMarket(p, season);
-    setYears(m.desiredYears);
-    setSalaryM(Math.round((m.marketSalary / 1e6) * 10) / 10);
+    setYearsDraft(String(m.desiredYears));
+    setSalaryDraft(String(Math.round((m.marketSalary / 1e6) * 10) / 10));
     setResult(null);
     // Intentionally keyed on playerId only — see comment above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -44,6 +49,10 @@ export function ExtendModal({ playerId, onClose }: { playerId: string | null; on
   // closed when the player object changes mid-extension.
   if (!playerId) return null;
 
+  // Clamp only here (for the offer + acceptance meter) and on blur — never on
+  // each keystroke, so the raw input string can be empty/partial while editing.
+  const years = Math.min(5, Math.max(1, Math.round(Number(yearsDraft) || 1)));
+  const salaryM = Math.min(60, Math.max(1, Number(salaryDraft) || 1));
   const offer = { years, salaryPerYear: Math.round(salaryM * 1e6) };
   const acceptPct = player && market ? Math.round(extensionAcceptance(market, offer) * 100) : 0;
   const meterColor = acceptPct >= 50 ? '#10b981' : acceptPct >= 25 ? '#f59e0b' : '#dc2626';
@@ -88,12 +97,14 @@ export function ExtendModal({ playerId, onClose }: { playerId: string | null; on
             <div className="grid grid-cols-2 gap-3">
               <label className="text-sm">
                 <span className="block text-xs uppercase tracking-widest opacity-60 mb-1">Years</span>
-                <input type="number" min={1} max={5} value={years} onChange={e => setYears(Math.max(1, Math.min(5, Number(e.target.value) || 1)))}
+                <input type="number" inputMode="numeric" min={1} max={5} step={1} value={yearsDraft}
+                  onChange={e => setYearsDraft(e.target.value)} onBlur={() => setYearsDraft(String(years))}
                   className="w-full rounded-lg border px-3 py-2 bg-[var(--bg)]" style={{ borderColor: 'var(--border)' }} />
               </label>
               <label className="text-sm">
                 <span className="block text-xs uppercase tracking-widest opacity-60 mb-1">Salary ($M/yr)</span>
-                <input type="number" min={1} max={60} step={0.5} value={salaryM} onChange={e => setSalaryM(Math.max(1, Number(e.target.value) || 1))}
+                <input type="number" inputMode="decimal" min={1} max={60} step={0.5} value={salaryDraft}
+                  onChange={e => setSalaryDraft(e.target.value)} onBlur={() => setSalaryDraft(String(salaryM))}
                   className="w-full rounded-lg border px-3 py-2 bg-[var(--bg)]" style={{ borderColor: 'var(--border)' }} />
               </label>
             </div>
