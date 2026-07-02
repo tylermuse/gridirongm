@@ -75,7 +75,7 @@ interface PlayerModalProps {
 }
 
 export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
-  const { players, teams, userTeamId, releasePlayer, editPlayer, restructureContract, champions, season, phase, week, leagueSettings } = useGameStore();
+  const { players, teams, userTeamId, releasePlayer, editPlayer, restructureContract, champions, season, phase, week, leagueSettings, setSubPositionOverride } = useGameStore();
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const router = useRouter();
   const [confirmRelease, setConfirmRelease] = useState(false);
@@ -179,7 +179,51 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
               )}
             </div>
             {team && <TeamLogo abbreviation={team.abbreviation} primaryColor={team.primaryColor} secondaryColor={team.secondaryColor} logoUrl={team.logoUrl} size="sm" />}
-            <div className="text-[10px] font-black text-[var(--text-sec)]">{player.position}</div>
+            <div className="text-[10px] font-black text-[var(--text-sec)]">
+              {player.position}
+              {player.subPosition && player.subPosition !== player.position && (
+                <span className="ml-1 text-[10px] font-bold text-[var(--text-sec)]/70">({player.subPosition})</span>
+              )}
+            </div>
+            {/* Manual sub-position pin — mirrors /player/[id] treatment (PR #332).
+                Owner-only, OL only. Modal is where launcher_18 was landing when
+                he said "not seeing anything" (msg 1522270257169961180) — the
+                pin never lived on this surface. Writes subPositionOverride so
+                it survives the load backfill. */}
+            {isOnUserTeam && !player.retired && player.position === 'OL' && (
+              <div className="flex items-center gap-1">
+                <span className="text-xs font-bold text-[var(--text-sec)]">Position:</span>
+                {(['OT', 'OG'] as const).map(sp => (
+                  <button
+                    key={sp}
+                    type="button"
+                    onClick={() => setSubPositionOverride(player.id, sp)}
+                    title={`Set position to ${sp}`}
+                    className={`text-xs font-bold px-2 py-1 rounded ${
+                      player.subPosition === sp
+                        ? 'bg-blue-600 text-white'
+                        : 'border border-[var(--border)] text-[var(--text-sec)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    {sp}
+                  </button>
+                ))}
+                {player.subPositionOverride && (
+                  <button
+                    type="button"
+                    onClick={() => setSubPositionOverride(player.id, null)}
+                    title="Clear manual position — use ratings"
+                    className="text-xs font-bold px-2 py-1 rounded border border-[var(--border)] text-[var(--text-sec)] hover:text-[var(--text)]"
+                  >
+                    Auto
+                  </button>
+                )}
+              </div>
+            )}
+            {/* Off-roster viewers see why there's no OT/OG control (owner-only). */}
+            {!isOnUserTeam && !player.retired && player.position === 'OL' && (
+              <div className="text-[10px] text-[var(--text-sec)]/70">(Owner controls only)</div>
+            )}
           </div>
 
           <div className="flex-1 min-w-0">
