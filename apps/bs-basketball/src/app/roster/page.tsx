@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
@@ -59,6 +59,7 @@ export default function RosterPage() {
   const [extendId, setExtendId] = useState<string | null>(null);
   const [releaseId, setReleaseId] = useState<string | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
+  const [dragOverBenchId, setDragOverBenchId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [menu, setMenu] = useState<MenuState | null>(null);
   // FEAT-26: which team's roster we're viewing. Defaults to the user's team;
@@ -250,6 +251,29 @@ export default function RosterPage() {
     } catch { /* ignore */ }
   }
 
+  // Reorder the bench by dropping one bench player onto another — he takes that
+  // rung of the rotation (earlier = more minutes), pushing the rest down. Only
+  // bench→bench moves reorder; a starter dropped here promotes nothing (use his
+  // Bench button instead).
+  function onDropBench(targetId: string, e: React.DragEvent) {
+    e.preventDefault();
+    setDragOverBenchId(null);
+    const raw = e.dataTransfer.getData('application/json');
+    if (!raw) return;
+    try {
+      const { id, from } = JSON.parse(raw) as { id: string; from?: string };
+      if (from !== 'bench' || !id || id === targetId) return;
+      setSaved(false);
+      setBench(prev => {
+        const without = prev.filter(x => x !== id);
+        const ti = without.indexOf(targetId);
+        if (ti < 0) return prev;
+        without.splice(ti, 0, id);
+        return without;
+      });
+    } catch { /* ignore */ }
+  }
+
   async function save() {
     const ok = await store.saveLineup(team!.id, lineup);
     if (ok) setSaved(true);
@@ -407,7 +431,7 @@ export default function RosterPage() {
         {/* One list ranked by projected minutes — starters (most run) down to the
             deep bench (DNP). The Min column carries the ordering; Start/Bench and
             drag-to-slot editing are preserved per row. */}
-        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-[var(--text-sec)]" style={{ background: 'var(--surface-2)' }}>Rotation — by projected minutes</div>
+        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>Starters</div>
 
         {/* Open starting slots first, so they stay easy to fill by drag. */}
         {sortedRoster.openSlots.map(slot => {
@@ -429,45 +453,62 @@ export default function RosterPage() {
           );
         })}
 
-        {/* Every player, most projected minutes to fewest. */}
-        {sortedRoster.filled.map(({ p, isStarter, slot, min }) => {
-          // BUG-24: amber tint overrides the row background for expiring players.
-          const isPending = pendingResignIds.has(p.id);
-          const dragData = isStarter ? { id: p.id, from: 'starter', slot } : { id: p.id, from: 'bench', slot: -1 };
-          const starterBg = dragOverSlot === slot
-            ? 'color-mix(in srgb, var(--accent) 14%, transparent)'
-            : 'color-mix(in srgb, var(--accent) 5%, transparent)';
-          const rowBg = isPending ? 'color-mix(in srgb, #f59e0b 12%, transparent)' : isStarter ? starterBg : 'transparent';
-          const dnp = min <= 0;
-          return (
-            <div
-              key={p.id}
-              draggable={!isReadOnly}
-              onDragStart={isReadOnly ? undefined : e => { e.dataTransfer.setData('application/json', JSON.stringify(dragData)); e.dataTransfer.effectAllowed = 'move'; }}
-              onDragOver={isReadOnly || !isStarter ? undefined : e => { e.preventDefault(); setDragOverSlot(slot); }}
-              onDragLeave={isReadOnly || !isStarter ? undefined : () => setDragOverSlot(s => (s === slot ? null : s))}
-              onDrop={isReadOnly || !isStarter ? undefined : e => onDropSlot(slot, e)}
-              className={`${ROW_GRID} border-t ${!isReadOnly ? 'cursor-grab' : ''}`}
-              style={{ ...ROW_COLS, borderColor: 'var(--border)', background: rowBg }}
-              title={isPending ? 'Expiring contract — re-sign or this player walks at season start' : undefined}
-            >
-              <span
-                className="text-[11px] font-bold text-center tabular-nums"
-                style={{ color: dnp ? 'var(--text-sec)' : isStarter ? 'var(--accent)' : 'var(--text)', opacity: dnp ? 0.5 : 1 }}
-                title={dnp ? 'Out of the rotation — projected not to play' : `Projected ~${min} minutes/game`}
-              >
-                {dnp ? 'DNP' : `${min}′`}
-              </span>
-              {renderCells(p, isStarter, dragData)}
-              {isReadOnly ? <span /> : (
-                <ActionCell
-                  toggle={isStarter ? { label: 'Bench', onClick: () => benchStarter(slot) } : { label: 'Start', onClick: () => startPlayer(p.id), accent: true }}
-                  onMenu={e => setMenu({ id: p.id, x: e.clientX, y: e.clientY })}
-                />
-              )}
-            </div>
-          );
-        })}
+        {/* Every player, most projected minutes to fewest, with clear dividers
+            marking the bench and the out-of-rotation deep bench. */}
+        {(() => {
+          const firstBench = sortedRoster.filled.findIndex(e => !e.isStarter);
+          const firstDnp = sortedRoster.filled.findIndex(e => e.min <= 0);
+          return sortedRoster.filled.map(({ p, isStarter, slot, min }, idx) => {
+            // BUG-24: amber tint overrides the row background for expiring players.
+            const isPending = pendingResignIds.has(p.id);
+            const dragData = isStarter ? { id: p.id, from: 'starter', slot } : { id: p.id, from: 'bench', slot: -1 };
+            const starterBg = dragOverSlot === slot
+              ? 'color-mix(in srgb, var(--accent) 14%, transparent)'
+              : 'color-mix(in srgb, var(--accent) 5%, transparent)';
+            const benchDragBg = !isStarter && dragOverBenchId === p.id ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : null;
+            const rowBg = isPending ? 'color-mix(in srgb, #f59e0b 12%, transparent)' : isStarter ? starterBg : (benchDragBg ?? 'transparent');
+            const dnp = min <= 0;
+            return (
+              <Fragment key={p.id}>
+                {idx === firstBench && idx > 0 && (
+                  <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-sec)', background: 'var(--surface-2)', borderTop: '2px solid var(--accent)' }}>
+                    Bench <span className="font-semibold normal-case tracking-normal opacity-70">— drag a player up onto another to move him up the rotation</span>
+                  </div>
+                )}
+                {idx === firstDnp && firstDnp !== firstBench && (
+                  <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest border-t" style={{ color: 'var(--text-sec)', background: 'var(--surface)', borderColor: 'var(--border)', opacity: 0.75 }}>
+                    Out of rotation · projected DNP
+                  </div>
+                )}
+                <div
+                  draggable={!isReadOnly}
+                  onDragStart={isReadOnly ? undefined : e => { e.dataTransfer.setData('application/json', JSON.stringify(dragData)); e.dataTransfer.effectAllowed = 'move'; }}
+                  onDragOver={isReadOnly ? undefined : isStarter ? e => { e.preventDefault(); setDragOverSlot(slot); } : e => { e.preventDefault(); setDragOverBenchId(p.id); }}
+                  onDragLeave={isReadOnly ? undefined : isStarter ? () => setDragOverSlot(s => (s === slot ? null : s)) : () => setDragOverBenchId(cur => (cur === p.id ? null : cur))}
+                  onDrop={isReadOnly ? undefined : isStarter ? e => onDropSlot(slot, e) : e => onDropBench(p.id, e)}
+                  className={`${ROW_GRID} border-t ${!isReadOnly ? 'cursor-grab' : ''}`}
+                  style={{ ...ROW_COLS, borderColor: 'var(--border)', background: rowBg }}
+                  title={isPending ? 'Expiring contract — re-sign or this player walks at season start' : (!isStarter && !isReadOnly ? 'Drag up onto another bench player to move up the rotation (more minutes)' : undefined)}
+                >
+                  <span
+                    className="text-[11px] font-bold text-center tabular-nums"
+                    style={{ color: dnp ? 'var(--text-sec)' : isStarter ? 'var(--accent)' : 'var(--text)', opacity: dnp ? 0.5 : 1 }}
+                    title={dnp ? 'Out of the rotation — projected not to play' : `Projected ~${min} minutes/game`}
+                  >
+                    {dnp ? 'DNP' : `${min}′`}
+                  </span>
+                  {renderCells(p, isStarter, dragData)}
+                  {isReadOnly ? <span /> : (
+                    <ActionCell
+                      toggle={isStarter ? { label: 'Bench', onClick: () => benchStarter(slot) } : { label: 'Start', onClick: () => startPlayer(p.id), accent: true }}
+                      onMenu={e => setMenu({ id: p.id, x: e.clientX, y: e.clientY })}
+                    />
+                  )}
+                </div>
+              </Fragment>
+            );
+          });
+        })()}
       </div>
 
       {validation.warnings.length > 0 && (
