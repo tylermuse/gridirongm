@@ -1,20 +1,18 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/modals/Modal';
 import { LiveViewer } from '@/components/live/LiveViewer';
 import { dropConfetti } from '@/lib/ui/confetti';
 import { getBracket, isRegularSeasonComplete } from '@/lib/playoffs';
-import { computeSeasonAwards } from '@/lib/awards';
 import type { PlayoffSeries } from '@/lib/playoffs';
-import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
-import { PlayerName } from '@/components/modals/PlayerModalProvider';
+import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
  * /playoffs — the postseason bracket (Phase 2D-1).
@@ -38,24 +36,18 @@ export default function PlayoffsPage() {
     return m;
   }, [league]);
 
-  // Awards modal pops the moment the clinching game is simmed (event-driven,
-  // not an effect — avoids cascading-render setState-in-effect).
-  const [awardsModalOpen, setAwardsModalOpen] = useState(false);
+  const router = useRouter();
+  // When the clinching game is simmed, drop confetti and go straight to the
+  // season awards page — no manual "View all awards" click. Event-driven (fires
+  // once, from the sim action), so revisiting /playoffs later still shows the
+  // bracket + the champion banner's manual awards link rather than bouncing.
   async function runPlayoffSim(fn: () => Promise<{ champion: string | null } | null>) {
     const res = await fn();
     if (res?.champion) {
       dropConfetti();
-      setAwardsModalOpen(true);
+      router.push('/awards');
     }
   }
-
-  // MVP for the finish modal — computed lazily, only when the season is done.
-  const mvp = useMemo<BasketballPlayer | null>(() => {
-    if (!league || !bracket?.complete) return null;
-    const awards = computeSeasonAwards(league);
-    const id = awards?.winners.mvp?.winnerId;
-    return id ? ((league.players as Record<string, BasketballPlayer>)[id] ?? null) : null;
-  }, [league, bracket?.complete]);
 
   if (loading) return <Loading />;
   if (!league) return <NotFound message={error ?? 'No league loaded.'} />;
@@ -187,35 +179,6 @@ export default function PlayoffsPage() {
         </div>
       </div>
 
-      <Modal
-        open={awardsModalOpen && !!champion}
-        onClose={() => setAwardsModalOpen(false)}
-        title="🏆 Champions!"
-        maxWidthClass="max-w-md"
-      >
-        {champion && (
-          <div className="text-center p-2">
-            <div className="text-5xl mb-2">🏆</div>
-            <div className="text-xl font-black" style={{ color: 'var(--accent)' }}>
-              {champion.city} {champion.name}
-            </div>
-            <div className="text-sm text-[var(--text-sec)] mt-1">
-              {bracket.season} BS Hoops Champions
-            </div>
-            {mvp && (
-              <div className="mt-4 text-sm">
-                <span className="opacity-60">MVP: </span>
-                <PlayerName playerId={mvp.id} firstName={mvp.firstName} lastName={mvp.lastName} className="font-bold" />
-              </div>
-            )}
-            <div className="mt-5 flex justify-center gap-2">
-              <Link href="/awards" onClick={() => setAwardsModalOpen(false)}>
-                <Button variant="primary">View all awards →</Button>
-              </Link>
-            </div>
-          </div>
-        )}
-      </Modal>
 
       {watching && (
         <LiveViewer userGameId={watching.userGameId} dayGameIds={watching.dayGameIds} onClose={() => setWatching(null)} />
