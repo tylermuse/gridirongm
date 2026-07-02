@@ -21,7 +21,7 @@
 import {
   basketballAvailableCapActions,
   basketballTeamCapStatus,
-  LEAGUE_MINIMUM_SALARY,
+  minimumSalary,
   type BasketballPlayer,
   type BasketballRatings,
   type BasketballStats,
@@ -32,8 +32,10 @@ import { teamDeadCap } from '../roster/deadCap';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
-/** A free agent can take a touch over the minimum and still count as a min deal. */
-const MIN_DEAL_CEILING = LEAGUE_MINIMUM_SALARY * 1.5;
+/** The minimum-signing channel must cover ANY player's service-scaled minimum,
+ *  up to the 10-yr-vet minimum ($3.87M) — otherwise an over-cap team couldn't
+ *  sign a veteran to his own minimum without burning an exception. */
+const MIN_DEAL_CEILING = minimumSalary(10);
 
 /** Which once-per-year exceptions a team has consumed this offseason, plus
  *  whether it has tripped the hard cap. Keyed to `season` so it self-expires. */

@@ -45,11 +45,13 @@ const CAP_INFLATION_RATE = 0.07;
 /** Luxury tax threshold = cap × this multiplier. Real NBA ratio is ~1.21. */
 const TAX_THRESHOLD_MULT = 1.215;
 
-/** First apron threshold = cap × this multiplier. Real NBA ratio is ~1.245. */
-const FIRST_APRON_MULT = 1.245;
+/** First apron threshold = cap × this multiplier. Calibrated to the real
+ *  2026-27 sheet: $209.02M on a $164.96M cap ≈ 1.267× (was 1.245, ~$3.6M low). */
+const FIRST_APRON_MULT = 1.267;
 
-/** Second apron threshold = cap × this multiplier. Real NBA ratio is ~1.30. */
-const SECOND_APRON_MULT = 1.295;
+/** Second apron threshold = cap × this multiplier. Calibrated to the real
+ *  2026-27 sheet: $221.69M on a $164.96M cap ≈ 1.344× (was 1.295, ~$8M low). */
+const SECOND_APRON_MULT = 1.344;
 
 /** Compute the salary cap for a given season. Anchored on 2026-27 = $140M. */
 export function basketballSalaryCap(season: number): number {
@@ -88,18 +90,52 @@ const MAX_CONTRACT_YEARS = 5;
  *  - 7-9 years: 30% of cap
  *  - 10+ years: 35% of cap
  *  Plus exceptions for Designated Player Extensions (deferred to v2). */
-function maxStartingPctOfCap(yearsInLeague: number): number {
+export function maxStartingPctOfCap(yearsInLeague: number): number {
   if (yearsInLeague >= 10) return 0.35;
   if (yearsInLeague >= 7) return 0.30;
   return 0.25;
+}
+
+/** The hard max starting salary (in $) a player of this service time can sign
+ *  for in `season` — 25% / 30% / 35% of the cap by years of service (0-6 / 7-9 /
+ *  10+). Callers in the signing path clamp offers to this. (Designated-Player
+ *  "supermax" and the Rose-Rule All-NBA bumps remain deferred to a later phase.) */
+export function basketballMaxSalary(yearsInLeague: number, season: number): number {
+  return basketballSalaryCap(season) * maxStartingPctOfCap(yearsInLeague);
 }
 
 /** Maximum year-over-year raise. NBA: 8% for re-signing own player,
  *  5% for signing with a new team. v1 uses 8% as the cap. */
 const MAX_YEARLY_RAISE = 0.08;
 
-/** Minimum salary (rookie minimum + vet minimum approximated). */
-const LEAGUE_MINIMUM_SALARY = 1_200_000;
+/** Minimum salary by years of service, calibrated to the real 2026-27 NBA
+ *  minimum scale: $1.35M (rookie) rising to $3.87M (10+ yr vet). Index by
+ *  yearsInLeague, clamped to [0, 10+]. Replaces the old flat $1.2M, which both
+ *  underpaid every minimum and failed to scale with service time. */
+const MINIMUM_SALARY_TABLE: readonly number[] = [
+  1_350_000, // 0 yrs (rookie minimum)
+  2_170_000, // 1
+  2_440_000, // 2
+  2_530_000, // 3
+  2_610_000, // 4
+  2_830_000, // 5
+  3_040_000, // 6
+  3_260_000, // 7
+  3_480_000, // 8
+  3_500_000, // 9
+  3_870_000, // 10+
+];
+
+/** The league minimum salary for a player with `yearsInLeague` of service. */
+export function minimumSalary(yearsInLeague: number): number {
+  const i = Math.max(0, Math.min(MINIMUM_SALARY_TABLE.length - 1, Math.floor(yearsInLeague)));
+  return MINIMUM_SALARY_TABLE[i];
+}
+
+/** Generic minimum-salary floor (the rookie minimum) for callers that don't
+ *  have a player's service time. Prefer `minimumSalary(yearsInLeague)` when the
+ *  player is known. */
+const LEAGUE_MINIMUM_SALARY = MINIMUM_SALARY_TABLE[0];
 
 export interface ContractValidationResult {
   legal: boolean;
@@ -154,9 +190,10 @@ export function isLegalBasketballContract(
     );
   }
 
-  if (firstYearTotal < LEAGUE_MINIMUM_SALARY) {
+  const minSalary = minimumSalary(yearsInLeague);
+  if (firstYearTotal < minSalary) {
     violations.push(
-      `Year-1 salary $${(firstYearTotal / 1e6).toFixed(2)}M below league minimum $${(LEAGUE_MINIMUM_SALARY / 1e6).toFixed(2)}M`,
+      `Year-1 salary $${(firstYearTotal / 1e6).toFixed(2)}M below league minimum $${(minSalary / 1e6).toFixed(2)}M`,
     );
   }
 

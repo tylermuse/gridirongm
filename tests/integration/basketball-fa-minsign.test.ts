@@ -10,7 +10,7 @@ import { createNewBasketballLeague } from '@/../apps/bs-basketball/src/lib/leagu
 import {
   resolveUserOffer, bestCompetingOffer, freeAgentInfo, LEAGUE_MINIMUM_SALARY,
 } from '@/../apps/bs-basketball/src/lib/freeAgency';
-import { generateBasketballPlayer, type BasketballPlayer } from '@bs/sport-basketball';
+import { generateBasketballPlayer, minimumSalary, type BasketballPlayer } from '@bs/sport-basketball';
 
 type League = ReturnType<typeof createNewBasketballLeague>;
 
@@ -49,7 +49,10 @@ describe('vet-minimum signings (BUG-30)', () => {
     const info = freeAgentInfo(lg, fa.id)!;
     expect(bestCompetingOffer(lg, info)).toBeNull(); // uncontested
 
-    const res = resolveUserOffer(lg, fa.id, { years: 1, salaryPerYear: LEAGUE_MINIMUM_SALARY });
+    // Minimums scale with service time — a 29-year-old is a 10-yr vet, so his
+    // minimum is $3.87M, not the flat rookie floor.
+    const vetMin = minimumSalary(fa.sportData.yearsInLeague);
+    const res = resolveUserOffer(lg, fa.id, { years: 1, salaryPerYear: vetMin });
     expect(res.outcome).toBe('signed');
     expect(res.signedTeamId).toBe(uid);
   });

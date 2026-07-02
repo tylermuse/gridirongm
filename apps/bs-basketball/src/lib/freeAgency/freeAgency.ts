@@ -20,6 +20,8 @@ import {
   basketballSalaryCap,
   basketballTeamPayroll,
   basketballTeamCapStatus,
+  basketballMaxSalary,
+  minimumSalary,
   LEAGUE_MINIMUM_SALARY,
   type BasketballPlayer,
 } from '@bs/sport-basketball';
@@ -162,12 +164,20 @@ export function freeAgentInfo(league: LeagueState, playerId: PlayerId): FreeAgen
   const player = league.players[playerId] as BasketballPlayer | undefined;
   if (!player) return null;
   const decay = faPriceDecay(getFaDay(league));
+  // The FA ask is clamped to the player's service-time band: never below his
+  // league minimum ($1.35M rookie → $3.87M 10-yr vet, even after price decay) and
+  // never above his max salary (25/30/35% of cap). Both are FA-path-only so the
+  // shared trade-value benchmark stays OVR-driven.
+  const yos = player.sportData.yearsInLeague;
+  const maxSalary = basketballMaxSalary(yos, league.currentSeason);
+  const minSalary = minimumSalary(yos);
+  const computed = Math.round(basketballMarketSalary(player, {
+    season: league.currentSeason,
+    noiseSeed: `fa-${player.id}-${league.currentSeason}`,
+  }) * decay * faAskFactor(player));
   return {
     player,
-    marketSalary: Math.round(basketballMarketSalary(player, {
-      season: league.currentSeason,
-      noiseSeed: `fa-${player.id}-${league.currentSeason}`,
-    }) * decay * faAskFactor(player)),
+    marketSalary: Math.min(maxSalary, Math.max(minSalary, computed)),
     desiredYears: basketballMarketContractYears(player),
     lastTeamId: lastTeamMap(league)[playerId] ?? null,
     birdRights: (player.sportData as { birdRights: 'full' | 'early' | 'none' }).birdRights,
@@ -217,21 +227,25 @@ export function signingBudget(league: LeagueState, teamId: TeamId): number {
     .map(id => league.players[id] as BasketballPlayer | undefined)
     .filter((p): p is BasketballPlayer => !!p);
   const status = basketballTeamCapStatus(players, season, teamDeadCap(team as Parameters<typeof teamDeadCap>[0], season));
-  // Under the cap → that room, but always at least a minimum deal: the minimum
-  // exception is always available, so a team a hair under the cap (e.g. $75K of
-  // room) must still read as able to sign someone, not "can't afford anyone".
-  if (status.capRoom > 0) return Math.max(LEAGUE_MINIMUM_SALARY, status.capRoom);
+  // Floor: the minimum exception is always available and covers ANY player's
+  // service-scaled minimum, up to the 10-yr-vet minimum ($3.87M). Flooring at that
+  // (not the rookie minimum) is what lets an over-cap team still read as able to
+  // sign a veteran to his own minimum — otherwise every vet looks unaffordable.
+  const MIN_FLOOR = minimumSalary(10);
+  // Under the cap → that room, but always at least a minimum deal.
+  if (status.capRoom > 0) return Math.max(MIN_FLOOR, status.capRoom);
 
   // Over the cap: largest available exception, scaled by how deep into the tax
   // a team is, and hard-stopped at the second apron.
   const cap = status.cap;
   let exception: number;
   if (status.isOverSecondApron) exception = 0; // only minimum deals remain
-  else if (status.isOverTax || status.isOverFirstApron) exception = cap * 0.04; // taxpayer MLE
-  else exception = cap * 0.094; // full non-tax MLE
-  // Don't let an exception signing punch through the second apron.
+  else if (status.isOverTax || status.isOverFirstApron) exception = cap * 0.0368; // taxpayer MLE (~$6.06M)
+  else exception = cap * 0.094; // full non-tax MLE (~$15.04M)
+  // Don't let an exception signing punch through the second apron — but a minimum
+  // deal is always allowed, so never floor below the vet-minimum ceiling.
   const apronHeadroom = Math.max(0, status.secondApron - status.payroll);
-  return Math.max(LEAGUE_MINIMUM_SALARY, Math.min(exception, apronHeadroom));
+  return Math.max(MIN_FLOOR, Math.min(exception, apronHeadroom));
 }
 
 // ===========================================================================
@@ -476,6 +490,19 @@ export function resolveUserOffer(
   const isBird = info.birdRights !== 'none' && info.lastTeamId === userTeamId;
   const threshold = acceptanceThreshold(info, appeal, competingTotal, isBird);
 
+  // Max-salary ceiling — a contract's starting salary can't exceed 25/30/35% of
+  // the cap by the signee's years of service. The user plays by the same rule the
+  // AI does (its offers come pre-clamped via freeAgentInfo). Tolerate the $100K
+  // offer grid so a value that rounds up to just past the max isn't false-rejected.
+  const maxSalary = basketballMaxSalary(info.player.sportData.yearsInLeague, league.currentSeason);
+  if (offer.salaryPerYear > maxSalary + 100_000) {
+    return {
+      outcome: 'rejected', league, signedTeamId: null,
+      competingTeamId: null, competingOfferTotal: 0,
+      message: `That's above the max salary for ${name} — the most he can start at is ${faMoney(maxSalary)}/yr.`,
+    };
+  }
+
   // Cap / exception enforcement — the user plays by the same rules the AI does.
   // You CAN sign over the cap, but only through a specific, mostly once-per-year
   // exception (cap room → Room Exception → the right Mid-Level flavor → Bi-Annual
@@ -503,9 +530,10 @@ export function resolveUserOffer(
   // value — so a short-handed team can always get back to a legal roster off the
   // available pool. A contested player (someone else is bidding) still won't take
   // the minimum, so this can't be used to poach stars on the cheap.
+  const playerMin = minimumSalary(info.player.sportData.yearsInLeague);
   const isMinOffer = offer.years <= 1
-    && offer.salaryPerYear >= LEAGUE_MINIMUM_SALARY        // a real minimum, not a sub-min lowball
-    && offer.salaryPerYear <= LEAGUE_MINIMUM_SALARY * 1.5;
+    && offer.salaryPerYear >= playerMin        // a real (service-scaled) minimum, not a sub-min lowball
+    && offer.salaryPerYear <= playerMin * 1.5;
   const hasOpenSpot = rosterCount(league, userTeamId) < MAX_ROSTER;
   const minSigning = isMinOffer && hasOpenSpot && competingTotal === 0;
   const userWins = userTotal >= threshold || minSigning;

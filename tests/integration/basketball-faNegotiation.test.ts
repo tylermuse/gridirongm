@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { createNewBasketballLeague } from '@/../apps/bs-basketball/src/lib/league/createLeague';
 import { freeAgentInfo, negotiateOffer, releasePlayer } from '@/../apps/bs-basketball/src/lib/freeAgency';
+import { basketballMaxSalary } from '@bs/sport-basketball';
 import type { PlayerId, TeamId } from '@bs/core/adapter';
 
 function setup() {
@@ -37,9 +38,13 @@ describe('negotiateOffer', () => {
 
   it('signs a strong offer outright', () => {
     const { league, targetId, info } = setup();
+    // A strong-but-LEGAL offer: a big premium, capped at the player's max salary
+    // (25/30/35% of cap). An offer above the max is now rejected outright, so
+    // "double the ask" no longer stands in for "strong" when the ask is near max.
+    const maxPerYear = basketballMaxSalary(info.player.sportData.yearsInLeague, league.currentSeason);
     const neg = negotiateOffer(league, targetId, {
       years: info.desiredYears,
-      salaryPerYear: Math.round(info.marketSalary * 2),
+      salaryPerYear: Math.min(maxPerYear, Math.round(info.marketSalary * 2)),
     });
     expect(neg.kind).toBe('resolved');
     if (neg.kind === 'resolved') expect(neg.result.outcome).toBe('signed');
