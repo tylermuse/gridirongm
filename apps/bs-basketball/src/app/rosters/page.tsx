@@ -30,7 +30,7 @@ import type { TeamId } from '@bs/core/adapter';
 const CACHE_BUST = 11;
 const NBA_FILE = '/rosters/BBGM_NBA_Roster_2026_Updated.json';
 const nbaUrl = `${NBA_FILE}?v=${CACHE_BUST}`;
-const LAST_UPDATED = 'June 25, 2026';
+const LAST_UPDATED = 'July 2, 2026';
 const DISCORD_INVITE = 'https://discord.gg/RMtusS2GKW';
 
 /** Collapsible "How to use this roster" panel — BS Hoops + Basketball GM paths. */
