@@ -155,7 +155,7 @@ export default function ReSignPage() {
       {/* Live cap — what you have to spend on the upcoming season, recomputed every
           render from the actual roster. Drops as you re-sign, frees up as you walk. */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <CapTile label={`Cap space to spend (${nextSeason})`} value={money(proj.projectedSpace)} color={spaceColor} big />
+        <CapTile label={proj.projectedSpace < 0 ? `Over the cap (${proj.nextSeason})` : `Cap space to spend (${proj.nextSeason})`} value={money(proj.projectedSpace)} color={spaceColor} big />
         <CapTile label="Committed payroll" value={money(proj.committed)} color="var(--text)" />
         <CapTile label="Room if all re-signed" value={money(proj.roomIfAllReSigned)} color={proj.roomIfAllReSigned >= 0 ? '#10b981' : '#dc2626'} />
         <CapTile label={proj.apron.text} value={proj.overTaxBy > 0 ? `tax +${money(proj.overTaxBy)}` : '—'} color={proj.apron.color} />

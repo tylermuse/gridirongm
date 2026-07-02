@@ -164,8 +164,19 @@ export default function FreeAgencyPage() {
         </div>
         {userTeam && (
           <div className="text-right">
-            <div className="text-2xl font-black tabular-nums" style={{ color: room > 10_000_000 ? '#10b981' : room > 0 ? '#d97706' : '#dc2626' }}>{money(room)}</div>
-            <div className="text-[10px] uppercase tracking-wide opacity-60">Cap Space</div>
+            {/* Over-the-cap teams have negative "cap space" — that's normal (most
+                rosters are over the cap). Frame it as such and surface what they
+                CAN still spend via exceptions, instead of a bare red minus that
+                reads like an error. */}
+            <div className="text-2xl font-black tabular-nums" style={{ color: room > 10_000_000 ? '#10b981' : room > 0 ? '#d97706' : '#dc2626' }}>{room < 0 ? money(-room) : money(room)}</div>
+            {room < 0 ? (
+              <>
+                <div className="text-[10px] uppercase tracking-wide opacity-60">Over the cap</div>
+                <div className="text-[10px] text-[var(--text-sec)]">~{money(budget)}/yr to spend via exceptions</div>
+              </>
+            ) : (
+              <div className="text-[10px] uppercase tracking-wide opacity-60">Cap Space</div>
+            )}
           </div>
         )}
         <div className="ml-auto flex items-center gap-2">
