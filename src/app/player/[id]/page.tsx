@@ -125,13 +125,14 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                   Writes subPositionOverride so it survives the load backfill. */}
               {isOnUserTeam && !player.retired && player.position === 'OL' && (
                 <div className="flex items-center gap-1">
+                  <span className="text-xs font-bold text-[var(--text-sec)]">Position:</span>
                   {(['OT', 'OG'] as const).map(sp => (
                     <button
                       key={sp}
                       type="button"
                       onClick={() => setSubPositionOverride(player.id, sp)}
                       title={`Set position to ${sp}`}
-                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      className={`text-xs font-bold px-2 py-1 rounded ${
                         player.subPosition === sp
                           ? 'bg-blue-600 text-white'
                           : 'border border-[var(--border)] text-[var(--text-sec)] hover:text-[var(--text)]'
@@ -145,12 +146,18 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                       type="button"
                       onClick={() => setSubPositionOverride(player.id, null)}
                       title="Clear manual position — use ratings"
-                      className="text-[10px] font-bold px-1.5 py-0.5 rounded border border-[var(--border)] text-[var(--text-sec)] hover:text-[var(--text)]"
+                      className="text-xs font-bold px-2 py-1 rounded border border-[var(--border)] text-[var(--text-sec)] hover:text-[var(--text)]"
                     >
                       Auto
                     </button>
                   )}
                 </div>
+              )}
+              {/* Off-roster viewers see why there's no OT/OG control (the pin is
+                  owner-only). Answers "the button is hidden" reports from testers
+                  looking at an OL they don't own. */}
+              {!isOnUserTeam && !player.retired && player.position === 'OL' && (
+                <div className="text-[10px] text-[var(--text-sec)]/70">(Owner controls only)</div>
               )}
             </div>
 
