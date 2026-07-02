@@ -298,11 +298,12 @@ export default function RosterPage() {
   }
   function onExtend(id: string) { setMenu(null); setExtendId(id); }
   function onDetails(id: string) { setMenu(null); setModalPlayerId(id); }
-  // FEAT-5: deep-link the trade builder with this player pre-loaded as one of
-  // the user's outgoing assets. /trade already reads ?give=<playerId> for the
-  // user side (mirrors the existing ?target=...&getPlayer=... seed used by
-  // "Trade for this player" entry points on the team / player pages).
-  function onTrade(id: string) { setMenu(null); router.push(`/trade?give=${id}`); }
+  // Deep-link the Trade Center's Trading Block with this player already on the
+  // block (?block=<playerId>) — the roster "Trade…" action is "shop this guy",
+  // so it opens the block to solicit offers rather than the empty Propose Trade
+  // builder. (/trade still honors ?give=… / ?target=…&getPlayer=… for the
+  // "trade for this player" entry points elsewhere.)
+  function onTrade(id: string) { setMenu(null); router.push(`/trade?block=${id}`); }
 
   // Just the roster count, or "Cut to 15" when over the limit. There used to be a
   // "Sign a free agent" pill when short-handed, but it was a non-interactive span

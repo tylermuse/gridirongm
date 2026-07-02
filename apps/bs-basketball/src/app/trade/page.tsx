@@ -58,6 +58,9 @@ function TradePage() {
   // builder opens with that player already on the block instead of dropping
   // the user into an empty trade screen.
   const initGivePlayer = searchParams.get('give');
+  // ?block=<playerId> opens the Trading Block tab with that player already on the
+  // block — the roster "Trade…" action ("shop this guy").
+  const initBlockPlayer = searchParams.get('block');
 
   const [targetId, setTargetId] = useState<string>(() => initTarget ?? '');
   const [mine, setMine] = useState<Set<string>>(() => (initGivePlayer ? new Set([initGivePlayer]) : new Set()));
@@ -70,7 +73,7 @@ function TradePage() {
   const [resultMsg, setResultMsg] = useState<string | null>(null);
   const [pinnedRumor, setPinnedRumor] = useState<{ headline: string; detail: string } | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [tab, setTab] = useState<'build' | 'finder' | 'offers' | 'block'>('build');
+  const [tab, setTab] = useState<'build' | 'finder' | 'offers' | 'block'>(() => (initBlockPlayer ? 'block' : 'build'));
   const [finderId, setFinderId] = useState('');
 
   const teamById = useMemo(() => {
@@ -260,7 +263,7 @@ function TradePage() {
         <OffersPanel league={league} teamById={teamById} playerById={playerById} season={season} onPropose={proposeDeal} onLoad={loadDeal} loading={store.loading} />
       )}
       {tab === 'block' && (
-        <TradingBlockTab league={league} userTeam={userTeam} teamById={teamById} playerById={playerById} season={season} onPropose={proposeDeal} onLoad={loadDeal} loading={store.loading} />
+        <TradingBlockTab league={league} userTeam={userTeam} teamById={teamById} playerById={playerById} season={season} onPropose={proposeDeal} onLoad={loadDeal} loading={store.loading} initialBlock={initBlockPlayer ?? undefined} />
       )}
 
       {tab === 'build' && (
@@ -821,7 +824,7 @@ function dealMatchesTag(
 }
 
 function TradingBlockTab({
-  league, userTeam, teamById, playerById, season, onPropose, onLoad, loading,
+  league, userTeam, teamById, playerById, season, onPropose, onLoad, loading, initialBlock,
 }: {
   league: League;
   userTeam: BasketballTeam;
@@ -831,8 +834,11 @@ function TradingBlockTab({
   onPropose: (d: DealSuggestion) => void;
   onLoad: (d: DealSuggestion) => void;
   loading: boolean;
+  /** Player to pre-place on the block (from ?block=<playerId>, the roster
+   *  "Trade…" deep-link). */
+  initialBlock?: string;
 }) {
-  const [block, setBlock] = useState<Set<string>>(new Set());
+  const [block, setBlock] = useState<Set<string>>(() => (initialBlock ? new Set([initialBlock]) : new Set()));
   const [blockPicks, setBlockPicks] = useState<Set<string>>(new Set());
   const [seekPos, setSeekPos] = useState<Set<BasketballPosition>>(new Set());
   const [seekTags, setSeekTags] = useState<Set<SeekTag>>(new Set());
