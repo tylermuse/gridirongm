@@ -258,9 +258,13 @@ describe('trade value — productive veterans (BUG-8)', () => {
   }
 
   it('values a productive star vet above a raw teenager and a mid-first pick', () => {
-    // 81-OVR, 34-yo, ~21/4/5 producer (Kyrie-like).
+    // 81-OVR, 34-yo, ~21/4/5 producer (Kyrie-like), on a FAIR-market deal. (An
+    // OVERPAID version is now — correctly — a negative asset per the overhaul;
+    // see the dedicated negative-contract test below. This case isolates the
+    // production floor from the contract so it validates BUG-8's real intent:
+    // production keeps a producing vet ahead of a raw teen at equal contract fit.)
     const vetBase = generateBasketballPlayer({ targetOverall: 81, age: 34 });
-    const vet = withSeasonLog({ ...vetBase, contract: makeContract(39_500_000, 2) }, 21, 4, 5);
+    const vet = withSeasonLog({ ...vetBase, contract: makeContract(21_000_000, 2) }, 21, 4, 5);
     // 69-OVR, 19-yo prospect with upside but no production.
     const teenBase = generateBasketballPlayer({ targetOverall: 69, age: 19 });
     const teen = { ...teenBase, development: { ...teenBase.development, potential: 82 }, contract: makeContract(4_000_000, 3) };
