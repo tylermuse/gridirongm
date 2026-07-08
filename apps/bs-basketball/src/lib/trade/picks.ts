@@ -302,9 +302,31 @@ export function pickValueContext(league: LeagueState): PickValueContext {
   return {
     numTeams: league.teams.length || 30,
     standingsWorstFirst: standingsWorstFirst(league),
+    rosterStrengthWorstFirst: rosterStrengthWorstFirst(league),
     currentSeason: league.currentSeason,
     confidence,
   };
+}
+
+/** Teams ordered weakest roster → strongest (index 0 = weakest = expected
+ *  earliest pick). The prior a future/early-season pick regresses toward, so an
+ *  obviously-bad team's first isn't valued like a midpick. Strength = mean of the
+ *  team's top-8 OVRs (rotation quality), which tracks expected finish far better
+ *  than a thin win-loss sample. */
+export function rosterStrengthWorstFirst(league: LeagueState): TeamId[] {
+  const players = league.players as Record<string, { ratings: { overall: number } } | undefined>;
+  const strengthOf = (teamId: TeamId): number => {
+    const team = league.teams.find(t => t.id === teamId);
+    if (!team) return 0;
+    const top = team.playerIds
+      .map(id => players[id]?.ratings.overall ?? 0)
+      .sort((a, b) => b - a)
+      .slice(0, 8);
+    return top.length ? top.reduce((s, o) => s + o, 0) / top.length : 0;
+  };
+  return league.teams
+    .map(t => t.id)
+    .sort((a, b) => strengthOf(a) - strengthOf(b));
 }
 
 /** Value a pick on the PTS scale. A current-year pick with a known overall is
@@ -315,14 +337,24 @@ function valuePick(pick: BaseDraftPick, ctx: PickValueContext): number {
   return overall ? basketballPickTradeValue(overall) : basketballFuturePickValue(pick, ctx);
 }
 
+/** Discount (0.4..1) for a pick's protection (§B.2): a protected first may never
+ *  convey (or conveys later / as a lesser asset), so it's worth less than an
+ *  outright pick — the more of the round that's protected, the steeper the cut. */
+function pickProtectionDiscount(league: LeagueState, pick: BaseDraftPick): number {
+  const prot = getProtection(league, pick.season, pick.round, pick.originalTeamId);
+  if (!prot || prot.topN <= 0) return 1;
+  const frac = Math.min(1, prot.topN / (league.teams.length || 30));
+  return Math.max(0.4, 1 - frac * 0.9); // top-3/30 → ~0.91; lottery-protected → ~0.58
+}
+
 /** A pick-value function (PTS) for the trade evaluator context. */
 export function pickValueFnFor(league: LeagueState): (p: BaseDraftPick) => number {
   const ctx = pickValueContext(league);
-  return p => valuePick(p, ctx);
+  return p => Math.round(valuePick(p, ctx) * pickProtectionDiscount(league, p));
 }
 
 export function pickValue(league: LeagueState, pick: BaseDraftPick): number {
-  return valuePick(pick, pickValueContext(league));
+  return Math.round(valuePick(pick, pickValueContext(league)) * pickProtectionDiscount(league, pick));
 }
 
 const ABBR_CACHE = new WeakMap<object, Map<TeamId, string>>();

@@ -202,11 +202,18 @@ export interface PickValueContext {
   currentSeason: number;
   /**
    * How much to trust current standings, 0..1 (default 1). Low early in the
-   * season (small sample) regresses the projected slot toward mid-first-round
-   * so a pick's value doesn't swing wildly off an 8-game record. Caller derives
-   * it from games played. Omitted → full trust (legacy behavior).
+   * season (small sample) regresses the projected slot toward the roster-quality
+   * prior (below) so a pick's value doesn't swing wildly off an 8-game record.
+   * Caller derives it from games played. Omitted → full trust (legacy behavior).
    */
   confidence?: number;
+  /**
+   * Teams ordered WORST-roster → best (index 0 = weakest roster = expected
+   * earliest pick). The regression PRIOR when standings are noisy or the pick is
+   * years out: a clearly-bad team's future first should project as an early pick,
+   * not a league-midpoint one (§B.1). Omitted → regress toward mid-round (legacy).
+   */
+  rosterStrengthWorstFirst?: string[];
 }
 
 /**
@@ -223,11 +230,16 @@ export function basketballFuturePickValue(
   const rankSlot = rank >= 0 ? rank : Math.floor(ctx.numTeams / 2);
   const midSlot = (ctx.numTeams - 1) / 2;
 
+  // Regression prior: the team's roster-implied finish when available (so a bad
+  // team's future first stays an early pick), else the league midpoint.
+  const priorRank = ctx.rosterStrengthWorstFirst?.indexOf(pick.originalTeamId) ?? -1;
+  const priorSlot = priorRank >= 0 ? priorRank : midSlot;
+
   const yearsOut = Math.max(0, pick.season - ctx.currentSeason);
-  // Trust shrinks with a small sample (confidence) and with distance: a pick
-  // two drafts out barely tracks today's standings, so it sits near mid-round.
+  // Trust shrinks with a small sample (confidence) and with distance: a pick two
+  // drafts out barely tracks today's standings, so it leans on the roster prior.
   const trust = (ctx.confidence ?? 1) * Math.pow(0.7, yearsOut);
-  const slot = rankSlot * trust + midSlot * (1 - trust);
+  const slot = rankSlot * trust + priorSlot * (1 - trust);
 
   const overall = (pick.round - 1) * ctx.numTeams + slot + 1;
   const base = basketballPickTradeValue(overall);

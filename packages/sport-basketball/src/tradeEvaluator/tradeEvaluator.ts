@@ -218,6 +218,9 @@ export function evaluateBasketballTrade(
     } else {
       reasoning = `${nameOf(side.teamId)} loses ~${Math.round(Math.abs(netValue)).toLocaleString()} pts of value — unlikely to accept.`;
     }
+    // "Why this offer" (§F): surface the non-value factors that swung the call so
+    // the AI's decision reads as reasoning, not a black box.
+    if (capCompliant) reasoning += tradeFactorNote(capFit, fitShift, windowShift);
 
     perTeam.push({
       teamId: side.teamId,
@@ -419,6 +422,21 @@ function capSpaceValue(
     val += Math.max(0, relievedM) * RELIEF_K;
   }
   return Math.round(val);
+}
+
+/** A short "why" clause (§F) built from the non-value factors that moved the
+ *  acceptance bar, appended to a team's reasoning. Only names factors that were
+ *  material (≥150 PTS) so the note stays honest and terse. */
+function tradeFactorNote(capFit: number, fitShift: number, windowShift: number): string {
+  const notes: string[] = [];
+  if (capFit >= 150) notes.push('cap room makes the incoming salary worth absorbing');
+  else if (capFit <= -150) notes.push('the added salary digs into the tax');
+  if (fitShift >= 150) notes.push('the return fills a positional need');
+  else if (fitShift <= -150) notes.push('the return is redundant on this roster');
+  if (windowShift <= -150) notes.push('it clashes with their timeline');
+  if (notes.length === 0) return '';
+  const joined = notes.join('; ');
+  return ` ${joined.charAt(0).toUpperCase()}${joined.slice(1)}.`;
 }
 
 /** Contention-window tilt (PTS) on the acceptance bar (§E.1). Only ever REDUCES
