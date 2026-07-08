@@ -44,6 +44,7 @@ import {
   type TeamCapStatus,
 } from '../capRules';
 import { basketballTradeValue, basketballPickTradeValue } from './tradeValue';
+import { positionalFitShift } from './positionalFit';
 
 /** AI disposition used to weight trade acceptance (see P1.4). */
 export type TeamDisposition = 'Rebuilding' | 'Developing' | 'Contending' | 'Win Now';
@@ -188,11 +189,18 @@ export function evaluateBasketballTrade(
     // user-facing asset totals (valueIn/valueOut) stay pure player+pick PTS.
     const capFit = capSpaceValue(outgoing.salary, incoming.salary, capStatus, postCap, disposition);
     const netValue = incoming.totalValue - outgoing.totalValue + capFit;
-    // Base tolerance: ~12% of outgoing value, floored at 150 PTS. Disposition
-    // shifts the bar — rebuilders are pickier on value-for-value, win-now teams
-    // will pay a premium for proven talent.
+    // Base tolerance: ~12% of outgoing value, floored at 150 PTS. Three fit terms
+    // shift the bar (§E): disposition (value-for-value pickiness), POSITIONAL fit
+    // (a team pays over value for a piece that fills a hole, and balks at a
+    // redundant one), and contention WINDOW (a rebuilder won't pay for aging
+    // win-now vets; a contender is lukewarm on raw projects).
+    const outgoingPlayers = side.playersSent
+      .map(id => allPlayers.get(id))
+      .filter((p): p is BasketballPlayer => !!p);
     const dispShift = dispositionTolerance(disposition, incoming, outgoing);
-    const fairnessTolerance = Math.max(150, outgoing.totalValue * 0.12) + dispShift;
+    const fitShift = positionalFitShift(teamRoster, incomingPlayers, outgoingPlayers, proposal.season);
+    const windowShift = windowTolerance(disposition, incomingPlayers, proposal.season);
+    const fairnessTolerance = Math.max(150, outgoing.totalValue * 0.12) + dispShift + fitShift + windowShift;
     const willAccept = netValue >= -fairnessTolerance;
 
     let reasoning: string;
@@ -411,6 +419,30 @@ function capSpaceValue(
     val += Math.max(0, relievedM) * RELIEF_K;
   }
   return Math.round(val);
+}
+
+/** Contention-window tilt (PTS) on the acceptance bar (§E.1). Only ever REDUCES
+ *  tolerance, for timeline mismatches: a rebuilder won't pay for aging win-now
+ *  vets, and a contender is lukewarm on raw, non-producing projects. Positive
+ *  fit is already rewarded via disposition + positional terms. */
+function windowTolerance(
+  disposition: TeamDisposition | undefined,
+  incomingPlayers: BasketballPlayer[],
+  season: number,
+): number {
+  if (!disposition) return 0;
+  const rebuilding = disposition === 'Rebuilding' || disposition === 'Developing';
+  let shift = 0;
+  for (const p of incomingPlayers) {
+    const v = basketballTradeValue(p, { season });
+    if (v <= 0) continue;
+    if (rebuilding && p.age >= 31) {
+      shift -= v * 0.3; // aging win-now piece doesn't fit a rebuild, even at value
+    } else if (!rebuilding && p.age <= 20) {
+      shift -= v * 0.15; // a win-now team discounts a raw project
+    }
+  }
+  return Math.round(Math.max(-700, shift));
 }
 
 /** Disposition tilt (PTS) on the acceptance bar. A rebuilder leans into youth

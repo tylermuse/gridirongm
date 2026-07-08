@@ -19,3 +19,8 @@ export {
   basketballFuturePickValue,
 } from './tradeValue';
 export type { TradeValueOptions, PickValueContext } from './tradeValue';
+export {
+  positionalNeed,
+  isPositionalSurplus,
+  positionalFitShift,
+} from './positionalFit';
