@@ -667,7 +667,7 @@ export default function SettingsPage() {
         <Card className="mb-4">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <CardTitle>AI Commentary</CardTitle>
+              <CardTitle>AI Recap Podcast</CardTitle>
               <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-300">
                 Claude AI
               </span>
@@ -675,7 +675,7 @@ export default function SettingsPage() {
           </CardHeader>
           <div className="space-y-3">
             <p className="text-xs text-[var(--text-sec)]">
-              Generate unique, dynamic Team Spotlight and Recap commentary using AI instead of template-based dialogue.
+              Post-game AI recap by Tony Blaze &amp; Marcus Cole. Available in Podcast credits after each game.
             </p>
             <button
               onClick={() => setDraft(d => ({ ...d, aiCommentary: !d.aiCommentary }))}
