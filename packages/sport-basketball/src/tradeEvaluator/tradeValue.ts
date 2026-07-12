@@ -50,8 +50,41 @@ function ageTradeMultiplier(age: number): number {
   return 0.25;
 }
 
-function clamp(x: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, x));
+// ---------------------------------------------------------------------------
+// Contract model tuning (trade-value overhaul, Phase 1)
+// ---------------------------------------------------------------------------
+
+/** Underpaid-surplus premium. A player well under his market rate is a coveted
+ *  asset (every rebuild hoards rookie-scale surplus). Slope + cap were widened
+ *  from the old ×1.25 ceiling so a dirt-cheap stud gets a real premium (up to
+ *  ×1.55 at the extreme), matching how the league prices cheap-and-good talent. */
+const SURPLUS_SLOPE = 0.6;
+const SURPLUS_CAP = 1.55;
+
+/** Overpay liability, PTS per $M above market. Unlike the old multiplicative
+ *  floor (0.72×, which could never push a player below zero), overpay is now an
+ *  ADDITIVE drag so a bad contract can become a NET-NEGATIVE asset — the whole
+ *  reason teams attach picks to dump salary. Calibrated so a clearly-overpaid
+ *  non-star (~$15M+ over market) lands negative and needs a sweetener to move,
+ *  while a star on a modest overpay is merely dinged, not erased. */
+const LIABILITY_K = 70;
+
+/** Floor on a single player's trade value. A toxic contract is a liability, but
+ *  bounded — a team can always waive rather than pay a bottomless price to move
+ *  it, and the bound keeps the sweetener needed within "a pick or two" territory. */
+const VALUE_FLOOR = -1200;
+
+/** Production is bought for THIS season, but a 34-yo's box output is worth less
+ *  in TRADE than a 24-yo's identical line (the acquirer buys future seasons too).
+ *  This gently decays the production floor with age so a productive vet can't
+ *  out-value a same-OVR young player — while still keeping him well ahead of a
+ *  washed role player (BUG-8's real intent). */
+function productionAgeFactor(age: number): number {
+  if (age <= 29) return 1.0;
+  if (age <= 31) return 0.9;
+  if (age <= 33) return 0.8;
+  if (age <= 35) return 0.68;
+  return 0.55;
 }
 
 /** Current-season cap hit (base + prorated bonus) for the given season. */
@@ -117,26 +150,35 @@ export function basketballTradeValue(player: BasketballPlayer, opts: TradeValueO
   // Production floor: a still-productive player can't be valued below what his
   // current output is worth to a contender, even if the age curve hammers his
   // OVR-based value. This is what keeps a 21-PPG vet ahead of a raw teenager.
-  const prodValue = recentProductionValue(player) * (POSITION_VALUE_MULT[pos] ?? 1.0);
+  // The floor is decayed with age (productionAgeFactor) so an OLD producer can't
+  // out-value a same-OVR YOUNG player — the trade market pays for future seasons.
+  const prodValue =
+    recentProductionValue(player) * productionAgeFactor(age) * (POSITION_VALUE_MULT[pos] ?? 1.0);
   let value = Math.max(ovrValue, prodValue);
 
-  // Contract adjustment: surplus vs. market lifts value, overpay drags it.
-  // Deliberately gentle: a star on a max deal reads as "overpaid" against this
-  // model, but he's still a star — an overpay should dent his value, not erase
-  // it. A softer slope (0.26) plus a higher floor (0.72) keeps a 20-PPG guard
-  // on a big contract well ahead of a cheap role player, while a dirt-cheap
-  // rookie deal no longer balloons a fringe big past real scorers.
+  // Contract adjustment — ASYMMETRIC (trade-value overhaul):
+  //   - Underpaid → a multiplicative surplus PREMIUM (cheap-and-good is king).
+  //   - Overpaid  → an ADDITIVE liability in PTS that can push value NEGATIVE,
+  //     so a bad contract is a real liability a team pays (in picks) to shed.
+  // Salary MODIFIES value; it is not the value.
   const market = basketballMarketSalary(player, { season: opts.season });
   const salary = currentSeasonSalary(player, opts.season);
   if (market > 0 && salary > 0) {
-    const surplusPct = (market - salary) / market; // +ve underpaid (good), -ve overpaid (bad)
-    value *= clamp(1 + surplusPct * 0.26, 0.72, 1.25);
+    if (salary <= market) {
+      const surplusPct = (market - salary) / market; // 0..1, higher = cheaper
+      value *= Math.min(1 + surplusPct * SURPLUS_SLOPE, SURPLUS_CAP);
+    } else {
+      const overpayM = (salary - market) / 1_000_000;
+      value -= overpayM * LIABILITY_K;
+    }
   }
 
-  // Expiring deals are rentals — a modest discount for the loss of team control.
-  if (contractYearsLeft(player, opts.season) <= 1) value *= 0.9;
+  // Expiring deals are rentals — a modest discount for the loss of team control,
+  // but only for POSITIVE assets. An expiring bad contract is a GOOD thing (cap
+  // relief next summer), so we don't deepen a negative value with a rental haircut.
+  if (contractYearsLeft(player, opts.season) <= 1 && value > 0) value *= 0.9;
 
-  return Math.max(0, Math.round(value));
+  return Math.max(VALUE_FLOOR, Math.round(value));
 }
 
 // ===========================================================================
@@ -160,11 +202,18 @@ export interface PickValueContext {
   currentSeason: number;
   /**
    * How much to trust current standings, 0..1 (default 1). Low early in the
-   * season (small sample) regresses the projected slot toward mid-first-round
-   * so a pick's value doesn't swing wildly off an 8-game record. Caller derives
-   * it from games played. Omitted → full trust (legacy behavior).
+   * season (small sample) regresses the projected slot toward the roster-quality
+   * prior (below) so a pick's value doesn't swing wildly off an 8-game record.
+   * Caller derives it from games played. Omitted → full trust (legacy behavior).
    */
   confidence?: number;
+  /**
+   * Teams ordered WORST-roster → best (index 0 = weakest roster = expected
+   * earliest pick). The regression PRIOR when standings are noisy or the pick is
+   * years out: a clearly-bad team's future first should project as an early pick,
+   * not a league-midpoint one (§B.1). Omitted → regress toward mid-round (legacy).
+   */
+  rosterStrengthWorstFirst?: string[];
 }
 
 /**
@@ -181,11 +230,16 @@ export function basketballFuturePickValue(
   const rankSlot = rank >= 0 ? rank : Math.floor(ctx.numTeams / 2);
   const midSlot = (ctx.numTeams - 1) / 2;
 
+  // Regression prior: the team's roster-implied finish when available (so a bad
+  // team's future first stays an early pick), else the league midpoint.
+  const priorRank = ctx.rosterStrengthWorstFirst?.indexOf(pick.originalTeamId) ?? -1;
+  const priorSlot = priorRank >= 0 ? priorRank : midSlot;
+
   const yearsOut = Math.max(0, pick.season - ctx.currentSeason);
-  // Trust shrinks with a small sample (confidence) and with distance: a pick
-  // two drafts out barely tracks today's standings, so it sits near mid-round.
+  // Trust shrinks with a small sample (confidence) and with distance: a pick two
+  // drafts out barely tracks today's standings, so it leans on the roster prior.
   const trust = (ctx.confidence ?? 1) * Math.pow(0.7, yearsOut);
-  const slot = rankSlot * trust + midSlot * (1 - trust);
+  const slot = rankSlot * trust + priorSlot * (1 - trust);
 
   const overall = (pick.round - 1) * ctx.numTeams + slot + 1;
   const base = basketballPickTradeValue(overall);

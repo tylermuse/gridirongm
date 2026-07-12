@@ -625,18 +625,22 @@ function GradeHeader({ receiveValue, sendValue }: { receiveValue: number; sendVa
 // a red "Send" bar over a green "Get" bar, each scaled to the larger side.
 function TradeValueBar({ receiveValue, sendValue }: { receiveValue: number; sendValue: number }) {
   const maxBar = Math.max(receiveValue, sendValue, 1);
+  // A net-negative package (e.g. a bad contract alone) can make a side total < 0;
+  // clamp the bar width to 0 so it renders empty rather than an invalid width.
+  const sendPct = Math.max(0, (sendValue / maxBar) * 100);
+  const receivePct = Math.max(0, (receiveValue / maxBar) * 100);
   return (
     <div className="mt-2 space-y-1.5">
       <div className="flex items-center gap-2">
         <span className="text-[10px] text-[var(--text-sec)] w-9">Send</span>
         <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
-          <div className="h-full rounded-full" style={{ width: `${(sendValue / maxBar) * 100}%`, background: '#f87171' }} />
+          <div className="h-full rounded-full" style={{ width: `${sendPct}%`, background: '#f87171' }} />
         </div>
       </div>
       <div className="flex items-center gap-2">
         <span className="text-[10px] text-[var(--text-sec)] w-9">Get</span>
         <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
-          <div className="h-full rounded-full" style={{ width: `${(receiveValue / maxBar) * 100}%`, background: '#4ade80' }} />
+          <div className="h-full rounded-full" style={{ width: `${receivePct}%`, background: '#4ade80' }} />
         </div>
       </div>
     </div>

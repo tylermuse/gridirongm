@@ -44,6 +44,7 @@ import {
   type TeamCapStatus,
 } from '../capRules';
 import { basketballTradeValue, basketballPickTradeValue } from './tradeValue';
+import { positionalFitShift } from './positionalFit';
 
 /** AI disposition used to weight trade acceptance (see P1.4). */
 export type TeamDisposition = 'Rebuilding' | 'Developing' | 'Contending' | 'Win Now';
@@ -182,12 +183,24 @@ export function evaluateBasketballTrade(
 
     // Value math is in PTS now (see tradeValue.ts).
     const disposition = context.disposition?.(side.teamId);
-    const netValue = incoming.totalValue - outgoing.totalValue;
-    // Base tolerance: ~12% of outgoing value, floored at 150 PTS. Disposition
-    // shifts the bar — rebuilders are pickier on value-for-value, win-now teams
-    // will pay a premium for proven talent.
+    // Cap space / salary relief is a tradeable asset (trade-value overhaul, §C):
+    // a rebuilder with room is PAID (in picks) to absorb bad money; a tax team
+    // values shedding salary. This fit term tilts the AI decision only — the
+    // user-facing asset totals (valueIn/valueOut) stay pure player+pick PTS.
+    const capFit = capSpaceValue(outgoing.salary, incoming.salary, capStatus, postCap, disposition);
+    const netValue = incoming.totalValue - outgoing.totalValue + capFit;
+    // Base tolerance: ~12% of outgoing value, floored at 150 PTS. Three fit terms
+    // shift the bar (§E): disposition (value-for-value pickiness), POSITIONAL fit
+    // (a team pays over value for a piece that fills a hole, and balks at a
+    // redundant one), and contention WINDOW (a rebuilder won't pay for aging
+    // win-now vets; a contender is lukewarm on raw projects).
+    const outgoingPlayers = side.playersSent
+      .map(id => allPlayers.get(id))
+      .filter((p): p is BasketballPlayer => !!p);
     const dispShift = dispositionTolerance(disposition, incoming, outgoing);
-    const fairnessTolerance = Math.max(150, outgoing.totalValue * 0.12) + dispShift;
+    const fitShift = positionalFitShift(teamRoster, incomingPlayers, outgoingPlayers, proposal.season);
+    const windowShift = windowTolerance(disposition, incomingPlayers, proposal.season);
+    const fairnessTolerance = Math.max(150, outgoing.totalValue * 0.12) + dispShift + fitShift + windowShift;
     const willAccept = netValue >= -fairnessTolerance;
 
     let reasoning: string;
@@ -205,6 +218,9 @@ export function evaluateBasketballTrade(
     } else {
       reasoning = `${nameOf(side.teamId)} loses ~${Math.round(Math.abs(netValue)).toLocaleString()} pts of value — unlikely to accept.`;
     }
+    // "Why this offer" (§F): surface the non-value factors that swung the call so
+    // the AI's decision reads as reasoning, not a black box.
+    if (capCompliant) reasoning += tradeFactorNote(capFit, fitShift, windowShift);
 
     perTeam.push({
       teamId: side.teamId,
@@ -352,6 +368,99 @@ function incomingPlayersFor(
     }
   }
   return players;
+}
+
+// ---------------------------------------------------------------------------
+// Cap space / salary relief as tradeable value (trade-value overhaul, §C)
+// ---------------------------------------------------------------------------
+
+/** PTS per $M of room-backed salary a team absorbs (a rebuilder is paid to use
+ *  its cap room). */
+const ABSORB_K = 8;
+/** PTS per $M shed while over the tax line (relief for a capped/tax team). */
+const RELIEF_K = 5;
+/** PTS per $M of NEW taxable salary a team takes on (going deeper into the tax
+ *  costs money + flexibility). */
+const TAX_PENALTY_K = 6;
+
+/**
+ * Team-specific value (PTS) of the cap consequences of a trade — the currency
+ * that makes a salary-dump-for-picks deal make sense to BOTH sides:
+ *   - A team UNDER the cap that absorbs net incoming salary is "paid" for the
+ *     room it burns (more so for a rebuilder, which has nothing better to do
+ *     with it); this is what lets it profitably take on a bad contract + pick.
+ *   - Taking salary that pushes a team deeper into the tax is a cost.
+ *   - Shedding salary while over the tax is relief (a real motivation to move a
+ *     contract even at a slight talent loss).
+ * Deliberately bounded so it tilts, never dominates, the value math.
+ */
+function capSpaceValue(
+  outgoingSalary: number,
+  incomingSalary: number,
+  capStatus: TeamCapStatus,
+  postCap: TeamCapStatus,
+  disposition: TeamDisposition | undefined,
+): number {
+  const netInM = (incomingSalary - outgoingSalary) / 1e6;
+  const roomM = Math.max(0, capStatus.capRoom) / 1e6;
+  let val = 0;
+
+  if (netInM > 0) {
+    // Absorbing salary: reward the room-backed portion, tilted by disposition.
+    const absorbed = Math.min(netInM, roomM);
+    const dispMult =
+      disposition === 'Rebuilding' ? 1.4 : disposition === 'Developing' ? 1.1 : disposition === 'Win Now' ? 0.5 : 0.7;
+    val += absorbed * ABSORB_K * dispMult;
+    // Penalize the portion that lands in the tax post-trade.
+    if (postCap.isOverTax) {
+      const newTaxableM = Math.min(netInM, (postCap.payroll - capStatus.taxThreshold) / 1e6);
+      val -= Math.max(0, newTaxableM) * TAX_PENALTY_K;
+    }
+  } else if (netInM < 0 && capStatus.isOverTax) {
+    // Shedding salary while over the tax → relief on the taxable portion shed.
+    const relievedM = Math.min(-netInM, (capStatus.payroll - capStatus.taxThreshold) / 1e6);
+    val += Math.max(0, relievedM) * RELIEF_K;
+  }
+  return Math.round(val);
+}
+
+/** A short "why" clause (§F) built from the non-value factors that moved the
+ *  acceptance bar, appended to a team's reasoning. Only names factors that were
+ *  material (≥150 PTS) so the note stays honest and terse. */
+function tradeFactorNote(capFit: number, fitShift: number, windowShift: number): string {
+  const notes: string[] = [];
+  if (capFit >= 150) notes.push('cap room makes the incoming salary worth absorbing');
+  else if (capFit <= -150) notes.push('the added salary digs into the tax');
+  if (fitShift >= 150) notes.push('the return fills a positional need');
+  else if (fitShift <= -150) notes.push('the return is redundant on this roster');
+  if (windowShift <= -150) notes.push('it clashes with their timeline');
+  if (notes.length === 0) return '';
+  const joined = notes.join('; ');
+  return ` ${joined.charAt(0).toUpperCase()}${joined.slice(1)}.`;
+}
+
+/** Contention-window tilt (PTS) on the acceptance bar (§E.1). Only ever REDUCES
+ *  tolerance, for timeline mismatches: a rebuilder won't pay for aging win-now
+ *  vets, and a contender is lukewarm on raw, non-producing projects. Positive
+ *  fit is already rewarded via disposition + positional terms. */
+function windowTolerance(
+  disposition: TeamDisposition | undefined,
+  incomingPlayers: BasketballPlayer[],
+  season: number,
+): number {
+  if (!disposition) return 0;
+  const rebuilding = disposition === 'Rebuilding' || disposition === 'Developing';
+  let shift = 0;
+  for (const p of incomingPlayers) {
+    const v = basketballTradeValue(p, { season });
+    if (v <= 0) continue;
+    if (rebuilding && p.age >= 31) {
+      shift -= v * 0.3; // aging win-now piece doesn't fit a rebuild, even at value
+    } else if (!rebuilding && p.age <= 20) {
+      shift -= v * 0.15; // a win-now team discounts a raw project
+    }
+  }
+  return Math.round(Math.max(-700, shift));
 }
 
 /** Disposition tilt (PTS) on the acceptance bar. A rebuilder leans into youth

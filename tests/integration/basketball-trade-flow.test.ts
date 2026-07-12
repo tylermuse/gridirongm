@@ -32,7 +32,11 @@ describe('trade evaluation + execution', () => {
     const aPlayers = league.teams[0].playerIds as PlayerId[];
     const bPlayers = league.teams[1].playerIds as PlayerId[];
 
-    // Find any 1-for-1 swap both AIs accept (similar value exists across rosters).
+    // Find any 1-for-1 swap BOTH AIs accept (similar value exists across rosters).
+    // Search on allAccept (not isExecutable, which only gates the CPU partner) so
+    // the found pair is mutually fair — otherwise the search could land on a
+    // partner-accepts-but-user-rejects pair and the allAccept assertion below
+    // would spuriously fail depending on global RNG ordering.
     let sides: { teamId: TeamId; playerIds: PlayerId[] }[] | null = null;
     let pa: PlayerId | null = null;
     let pb: PlayerId | null = null;
@@ -42,7 +46,8 @@ describe('trade evaluation + execution', () => {
           { teamId: a, playerIds: [ida] },
           { teamId: b, playerIds: [idb] },
         ];
-        if (isExecutable(evaluateTrade(league, candidate), candidate)) {
+        const ev = evaluateTrade(league, candidate);
+        if (ev.legal && ev.allAccept && isExecutable(ev, candidate)) {
           sides = candidate; pa = ida; pb = idb;
           break outer;
         }
@@ -69,21 +74,24 @@ describe('trade evaluation + execution', () => {
     expect(txns.length).toBe(1);
   });
 
-  it('rejects a lopsided star-for-scrub deal', () => {
+  it('rejects a lopsided deal where the CPU partner would hemorrhage value', () => {
     const league = freshLeague();
-    const a = league.teams[0].id;
-    const b = league.teams[1].id;
-    const star = playerNearOvr(league, a, 99);   // the best player team A has
-    const scrub = playerNearOvr(league, b, 60);  // a weak player on team B
+    const a = league.teams[0].id; // sides[0] is the user
+    const b = league.teams[1].id; // the CPU partner
+    // The user (A) tries to rob the CPU (B): sends a scrub, wants B's star. Only
+    // the partner's acceptance gates executability (BUG-36 — the user is allowed
+    // to overpay themselves), so a deal that guts the PARTNER must not execute.
+    const scrub = playerNearOvr(league, a, 60);  // a weak player the user has
+    const star = playerNearOvr(league, b, 99);   // the CPU's best player
     const sides = [
-      { teamId: a, playerIds: [star.id] as PlayerId[] },
-      { teamId: b, playerIds: [scrub.id] as PlayerId[] },
+      { teamId: a, playerIds: [scrub.id] as PlayerId[] },
+      { teamId: b, playerIds: [star.id] as PlayerId[] },
     ];
 
     const evalr = evaluateTrade(league, sides);
-    // Team A hemorrhages value → its AI rejects.
-    const aOutcome = evalr.perTeam.find(t => t.teamId === a)!;
-    expect(aOutcome.willAccept).toBe(false);
+    // Team B hemorrhages value → its AI rejects → the deal isn't executable.
+    const bOutcome = evalr.perTeam.find(t => t.teamId === b)!;
+    expect(bOutcome.willAccept).toBe(false);
     expect(evalr.allAccept).toBe(false);
     expect(isExecutable(evalr, sides)).toBe(false);
   });
