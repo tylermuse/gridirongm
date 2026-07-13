@@ -337,16 +337,32 @@ export function processOffer(
           type: 'counter',
         });
       } else {
-        const counterSalary = r1(offeredSalary + 0.5);
-        next.askingSalary = counterSalary;
-        next.messages.push({
-          sender: 'player',
-          text: pick([
-            `So close. Bump it to ${fmtSalary(counterSalary)} and I'll sign right now.`,
-            `I'm almost there — ${fmtSalary(counterSalary)} and it's done.`,
-          ]),
-          type: 'counter',
-        });
+        // Proportionate small bump (~5%), gentler than the unhappy ×1.08 — a flat
+        // amount would be trivial for a star and a 60% raise for a min-salary guy.
+        const counterSalary = r1(offeredSalary * 1.05);
+        if (counterSalary <= offeredSalary) {
+          // Bump rounds away (e.g. a near-minimum salary) — he isn't going to
+          // hold out over pocket change, so just sign.
+          next.outcome = 'accepted';
+          next.messages.push({
+            sender: 'player',
+            text: pick([
+              `You know what — that works. Let's do it.`,
+              `Fair enough. I'm in.`,
+            ]),
+            type: 'result',
+          });
+        } else {
+          next.askingSalary = counterSalary;
+          next.messages.push({
+            sender: 'player',
+            text: pick([
+              `So close. Bump it to ${fmtSalary(counterSalary)} and I'll sign right now.`,
+              `I'm almost there — ${fmtSalary(counterSalary)} and it's done.`,
+            ]),
+            type: 'counter',
+          });
+        }
       }
     }
   } else if (satisfaction >= 0.88) {

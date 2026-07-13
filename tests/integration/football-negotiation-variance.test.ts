@@ -51,7 +51,19 @@ describe('negotiation variance — content players (§1.3)', () => {
     expect(accepted / N).toBeLessThan(0.99);
   });
 
-  it('the hold-out is a SMALL sweetener (a bit more term or ≤$0.6M), not a walk', () => {
+  it('Burrow regression: a min-salary content player never asks for a disproportionate raise', () => {
+    // $0.8M ask, offer matches at asking. The old flat +$0.5M bump produced a
+    // $1.3M counter (a 60% raise); the proportionate ~5% bump rounds away at this
+    // salary, so he just signs — never balloons the ask.
+    let maxAsk = 0;
+    for (let i = 0; i < 400; i++) {
+      const r = processOffer(state({ askingSalary: 0.8, askingYears: 2 }), 0.8, 2);
+      maxAsk = Math.max(maxAsk, r.askingSalary);
+    }
+    expect(maxAsk).toBeLessThan(1.0);
+  });
+
+  it('the hold-out is a SMALL sweetener (a bit more term or a proportionate bump), not a walk', () => {
     const holds: NegotiationState[] = [];
     for (let i = 0; i < 800 && holds.length < 6; i++) {
       const r = processOffer(state(), 11, 3); // offered term == asking term → salary-bump path
