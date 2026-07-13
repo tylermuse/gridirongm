@@ -50,70 +50,15 @@ export async function GET(request: NextRequest) {
     const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
     const since = new Date(Date.now() - days * 86400000).toISOString();
 
-    // Check if analytics_events table exists by doing a small query
-    const { error: tableCheck } = await service
-      .from('analytics_events')
-      .select('id', { count: 'exact', head: true })
-      .limit(1);
-
-    if (tableCheck) {
-      // Table doesn't exist — return empty data with a helpful message
-      return NextResponse.json({
-        period,
-        totalUsers: 0,
-        activeUsers: 0,
-        pageViews: 0,
-        conversionRate: 0,
-        totalSubscriptions: 0,
-        signupsByDay: {},
-        topPages: [],
-        recentEvents: [],
-        _warning: `analytics_events table error: ${tableCheck.message}. Run the SQL migration to create it.`,
-      });
-    }
-
-    // Run all queries in parallel
-    const [
-      totalUsersRes,
-      activeUsersRes,
-      pageViewsRes,
-      signupsRes,
-      signupsByDayRes,
-      topPagesRes,
-      recentEventsRes,
-      subscriptionCountRes,
-      sessionStartsRes,
-      deviceTrackingRes,
-    ] = await Promise.all([
-      service.from('analytics_events')
-        .select('user_id')
-        .eq('event', 'signup'),
-
-      service.from('analytics_events')
-        .select('user_id')
-        .gte('created_at', since)
-        .not('user_id', 'is', null),
-
-      service.from('analytics_events')
-        .select('id', { count: 'exact', head: true })
-        .eq('event', 'page_view')
-        .gte('created_at', since),
-
-      service.from('analytics_events')
-        .select('id', { count: 'exact', head: true })
-        .eq('event', 'signup'),
-
-      service.from('analytics_events')
-        .select('created_at')
-        .eq('event', 'signup')
-        .gte('created_at', since)
-        .order('created_at', { ascending: true }),
-
-      service.from('analytics_events')
-        .select('properties')
-        .eq('event', 'page_view')
-        .gte('created_at', since)
-        .limit(5000),
+    // All aggregation happens in Postgres (see
+    // supabase/migrations/20260712_analytics_aggregates.sql).
+    //
+    // Do NOT be tempted to go back to `.select()`-ing rows and tallying them
+    // here: PostgREST caps row-returning requests at `db-max-rows` (1000 on
+    // Supabase hosted), so any JS-side aggregate over a table this size is
+    // computed on an arbitrary truncated slice and silently under-reports.
+    const [summaryRes, recentEventsRes, subscriptionCountRes] = await Promise.all([
+      service.rpc('admin_analytics_summary', { p_since: since }),
 
       service.from('analytics_events')
         .select('event, properties, created_at, user_id')
@@ -123,71 +68,62 @@ export async function GET(request: NextRequest) {
       service.from('subscriptions')
         .select('id', { count: 'exact', head: true })
         .in('status', ['active', 'trialing']),
-
-      // Count session_start events in the period
-      service.from('analytics_events')
-        .select('id', { count: 'exact', head: true })
-        .eq('event', 'session_start')
-        .gte('created_at', since),
-
-      // Get all events with device_id for unique device counting
-      service.from('analytics_events')
-        .select('properties')
-        .gte('created_at', since)
-        .limit(10000),
     ]);
 
-    // Compute active users (distinct user_ids — logged-in only)
-    const activeUserIds = new Set(
-      (activeUsersRes.data ?? []).map((r: { user_id: string }) => r.user_id).filter(Boolean),
-    );
-
-    // Compute unique devices (includes anonymous players)
-    const uniqueDeviceIds = new Set<string>();
-    for (const row of deviceTrackingRes.data ?? []) {
-      const did = (row as { properties: { device_id?: string } }).properties?.device_id;
-      if (did) uniqueDeviceIds.add(did);
+    if (summaryRes.error) {
+      return NextResponse.json({
+        period,
+        totalUsers: 0,
+        activeUsers: 0,
+        uniqueDevices: 0,
+        sessions: 0,
+        pageViews: 0,
+        conversionRate: 0,
+        totalSubscriptions: 0,
+        signupsByDay: {},
+        topPages: [],
+        recentEvents: [],
+        _warning:
+          `admin_analytics_summary RPC failed: ${summaryRes.error.message}. ` +
+          `Run supabase/migrations/20260712_analytics_aggregates.sql.`,
+      });
     }
 
-    // Count total unique signups
-    const totalSignupUserIds = new Set(
-      (totalUsersRes.data ?? []).map((r: { user_id: string }) => r.user_id).filter(Boolean),
-    );
+    const summary = (summaryRes.data ?? {}) as {
+      totalUsers?: number;
+      activeUsers?: number;
+      uniqueDevices?: number;
+      sessions?: number;
+      pageViews?: number;
+      totalSignups?: number;
+      signupsByDay?: Record<string, number>;
+      topPages?: { path: string; count: number }[];
+    };
 
-    // Aggregate signups by day
-    const signupsByDay: Record<string, number> = {};
-    for (const row of signupsByDayRes.data ?? []) {
-      const day = (row as { created_at: string }).created_at.slice(0, 10);
-      signupsByDay[day] = (signupsByDay[day] ?? 0) + 1;
-    }
-
-    // Aggregate top pages
-    const pageCounts: Record<string, number> = {};
-    for (const row of topPagesRes.data ?? []) {
-      const path = (row as { properties: { path?: string } }).properties?.path ?? 'unknown';
-      pageCounts[path] = (pageCounts[path] ?? 0) + 1;
-    }
-    const topPages = Object.entries(pageCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([path, count]) => ({ path, count }));
-
-    // Conversion rate
-    const totalSignups = signupsRes.count ?? 0;
+    // Conversion = subscribers / distinct signed-up PEOPLE.
+    //
+    // Deliberately NOT summary.totalSignups (a raw count of `signup` rows).
+    // supabase re-fires SIGNED_IN on token refresh and tab focus, so historical
+    // data has ~2.6 signup rows per human (544 rows / 207 users as of Jul 2026).
+    // Dividing by the row count understates conversion by that same factor.
+    // trackAuthEvent() dedupes new events, but the old rows are still in there,
+    // so counting distinct user_id is the only denominator that's correct on
+    // both the historical and the go-forward data.
+    const distinctSignups = summary.totalUsers ?? 0;
     const totalSubscriptions = subscriptionCountRes.count ?? 0;
-    const conversionRate = totalSignups > 0 ? totalSubscriptions / totalSignups : 0;
+    const conversionRate = distinctSignups > 0 ? totalSubscriptions / distinctSignups : 0;
 
     return NextResponse.json({
       period,
-      totalUsers: totalSignupUserIds.size,
-      activeUsers: activeUserIds.size,
-      uniqueDevices: uniqueDeviceIds.size,
-      sessions: sessionStartsRes.count ?? 0,
-      pageViews: pageViewsRes.count ?? 0,
+      totalUsers: summary.totalUsers ?? 0,
+      activeUsers: summary.activeUsers ?? 0,
+      uniqueDevices: summary.uniqueDevices ?? 0,
+      sessions: summary.sessions ?? 0,
+      pageViews: summary.pageViews ?? 0,
       conversionRate,
       totalSubscriptions,
-      signupsByDay,
-      topPages,
+      signupsByDay: summary.signupsByDay ?? {},
+      topPages: summary.topPages ?? [],
       recentEvents: recentEventsRes.data ?? [],
     });
   } catch (err) {
