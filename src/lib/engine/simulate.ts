@@ -311,7 +311,9 @@ function simulatePlay(
       ? [...dls, ...lbs].reduce((s, p) => s + p.ratings.tackling + p.ratings.strength * 0.5, 0) / [...dls, ...lbs].length
       : 50;
     const rushSkill = qb.ratings.speed * 0.5 + qb.ratings.agility * 0.3 + qb.ratings.carrying * 0.2;
-    const olBonus = (olPower - 60) / 100 * 2.2;
+    // olPower is avg(blocking*1.2 + strength) — typically 130–175, not 60–100.
+    // Scaled to 1.8 to match actual olPower range.
+    const olBonus = (olPower - 60) / 100 * 1.8;
     const rushRedZoneBonus = fieldPosition >= 80 ? 0.5 : 0;
     let yards = Math.round(
       (rushSkill - defRushPower) / 42 + 2.8 + (Math.random() * 2.4 - 0.7) + olBonus + rushRedZoneBonus,
@@ -564,7 +566,7 @@ function simulatePlay(
     const rushWeights = rushPool.map((r, i) => {
       if (qbScramble && i === 0) return 1.5 * (r.ratings.speed / 70);
       const rbIdx = qbScramble ? i - 1 : i;
-      const starterBonus = rbIdx === 0 ? 5.5 : rbIdx === 1 ? 2.0 : rbIdx === 2 ? 1.0 : 0.5;
+      const starterBonus = rbIdx === 0 ? 4.5 : rbIdx === 1 ? 2.0 : rbIdx === 2 ? 1.0 : 0.5;
       return starterBonus * (r.ratings.carrying / 70);
     });
     const rusher = weightedPick(rushPool, rushWeights);
@@ -573,7 +575,11 @@ function simulatePlay(
       ? [...dls, ...lbs].reduce((s, p) => s + p.ratings.tackling + p.ratings.strength * 0.5, 0) / [...dls, ...lbs].length
       : 50;
     const rushSkill = rusher.ratings.carrying * 0.5 + rusher.ratings.speed * 0.3 + rusher.ratings.agility * 0.2;
-    const olBonus = (olPower - 60) / 100 * 2.2;
+    // olPower is avg(blocking*1.2 + strength) — typically 130–175, not 60–100.
+    // Scaled to 1.8 to match actual olPower range. At 2.2 this was adding ~2.1 yds/carry
+    // for avg teams (should be ~1.4). Combined with possessions revert and RB1 weight
+    // cut this brings season leaders from ~2,250 yds down to ~1,450-1,650 (PR #347).
+    const olBonus = (olPower - 60) / 100 * 1.8;
 
     // Tuned for NFL realism: avg ~4.0-4.3 yds/carry, top RB ~1,200-1,400 yds
     // Compressed rushRatingMult (0.9-1.17) vs original (0.7-1.4) to keep
@@ -808,13 +814,12 @@ export function simulateGame(
 ): GameResult {
   let homeScore = 0;
   let awayScore = 0;
-  // 10 possessions per team per game. Tuned together with the 10-play
-  // drive cap and ~58% pass rate. At ~6.3 plays/drive avg this lands at
-  // ~63 plays/team — matches NFL average. We previously dropped this to
-  // 9 to fight stat inflation, but the inflation was downstream of an
-  // unbalanced RB rotation + over-weighted QB scrambles. Those are fixed
-  // in simulatePlay above, so we can restore NFL play volume here.
-  const possessions = 10;
+  // 9 possessions per team per game. Reverted from 10 (commit 1b2453d) which
+  // compounded with the RB1 weight bump (3.5→5.5, now 4.5) and the olBonus
+  // scale fix (2.2→1.8) to produce season rushing leaders ~2,250 yds (yo46363
+  // report, July 12). At 9 possessions + 4.5 RB1 weight + 1.8 olBonus the
+  // model targets top RB ~1,450-1,650 yds, top QB ~5,200-5,600 yds (PR #347).
+  const possessions = 9;
 
   // BS Mode: Irrational Confidence variance
   const applyIC = (roster: Player[]) => {
