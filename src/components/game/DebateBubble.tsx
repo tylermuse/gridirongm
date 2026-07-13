@@ -154,8 +154,8 @@ export function DebateBubble({
         <div
           className={`rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
             isHotTake
-              ? 'bg-red-50 border border-red-200 rounded-tr-sm'
-              : 'bg-blue-50 border border-blue-200 rounded-tl-sm'
+              ? 'bg-red-50 border border-red-200 rounded-tr-sm text-red-900'
+              : 'bg-blue-50 border border-blue-200 rounded-tl-sm text-blue-900'
           }`}
         >
           &ldquo;{renderText(exchange.text)}&rdquo;
