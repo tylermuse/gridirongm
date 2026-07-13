@@ -272,10 +272,15 @@ export function processOffer(
 
   if (satisfaction >= 0.95) {
     /* ── Very good offer — at or above asking ── */
-    // At or above asking: accept almost always. Unhappy players are slightly harder.
-    const acceptChance = isAngry ? 0.70 : isUnhappy ? 0.85 : 1.0;
-    if (roll < acceptChance || offeredSalary >= state.askingSalary) {
-      // If offering at or above asking salary, always accept
+    // A strong offer is very likely to land, but for a CONTENT player it is no
+    // longer an automatic lock: ~8% of the time he holds out for a small
+    // sweetener instead of rubber-stamping the deal, so re-signing isn't a
+    // deterministic "pay $1 over asking → guaranteed yes" threshold. Unhappy and
+    // angry players are harder on the roll — but paying at or above their asking
+    // price still always brings them back (the overpay lever is preserved).
+    const acceptChance = isAngry ? 0.70 : isUnhappy ? 0.85 : 0.92;
+    const overpayLock = (isAngry || isUnhappy) && offeredSalary >= state.askingSalary;
+    if (roll < acceptChance || overpayLock) {
       next.outcome = 'accepted';
       next.messages.push({
         sender: 'player',
@@ -291,8 +296,8 @@ export function processOffer(
           ]),
         type: 'result',
       });
-    } else {
-      // Unhappy player wants a bump even at asking price
+    } else if (isUnhappy || isAngry) {
+      // Unhappy/angry player wants a bump even at asking price.
       const counterSalary = r1(offeredSalary * 1.08);
       if (counterSalary <= offeredSalary) {
         // Rounding made counter same as offer — just accept
@@ -313,6 +318,32 @@ export function processOffer(
           text: pick([
             `We're getting close, but I need a little more to feel valued here. ${fmtSalary(counterSalary)}.`,
             `Almost there. Make it ${fmtSalary(counterSalary)} and I'll consider it.`,
+          ]),
+          type: 'counter',
+        });
+      }
+    } else {
+      // Content player holds firm for a SMALL sweetener rather than walking: a
+      // touch more term if there's room, otherwise a small salary bump. He isn't
+      // unhappy — just savvy enough not to leave value on the table.
+      if (offeredYears < state.askingYears) {
+        next.askingYears = offeredYears + 1;
+        next.messages.push({
+          sender: 'player',
+          text: pick([
+            `The money's great — give me one more year, ${fmtYears(offeredYears + 1)}, and I'm signing.`,
+            `Love the offer. Make it ${fmtYears(offeredYears + 1)} and we have a deal.`,
+          ]),
+          type: 'counter',
+        });
+      } else {
+        const counterSalary = r1(offeredSalary + 0.5);
+        next.askingSalary = counterSalary;
+        next.messages.push({
+          sender: 'player',
+          text: pick([
+            `So close. Bump it to ${fmtSalary(counterSalary)} and I'll sign right now.`,
+            `I'm almost there — ${fmtSalary(counterSalary)} and it's done.`,
           ]),
           type: 'counter',
         });
