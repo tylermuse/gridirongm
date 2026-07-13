@@ -20,7 +20,7 @@ import {
   PODCAST_CREDITS_PER_MONTH,
 } from '@bs/core/billing';
 import { setCurrentSubscriptionAllocations, setCurrentSubscriptionTier } from '@bs/core/billing';
-import { trackEvent } from '@bs/core/analytics';
+import { trackAuthEvent, clearAuthEventDedupe } from '@bs/core/analytics';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 // Anyone who signed up before this date is a Founding Member forever.
@@ -247,9 +247,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         setUser(newUser);
         if (newUser) {
           if (authEvent === 'SIGNED_IN') {
-            const createdAt = new Date(newUser.created_at).getTime();
-            const isNewUser = Date.now() - createdAt < 60_000; // created < 1 min ago
-            trackEvent(isNewUser ? 'signup' : 'login');
+            // Deduped inside trackAuthEvent — supabase re-fires SIGNED_IN on
+            // token refresh and tab focus, not just on an actual sign-in.
+            trackAuthEvent(newUser);
           }
           await fetchSubscription(newUser);
         } else {
@@ -282,6 +282,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore — localStorage might be restricted */
     }
+    // Signing out ends the sign-in — the next one is a genuinely new `login`.
+    clearAuthEventDedupe();
     setUser(null);
     setTier('free');
     setCurrentSubscriptionTier('free');
