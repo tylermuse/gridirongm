@@ -91,33 +91,39 @@ export async function GET(request: NextRequest) {
 
     const summary = (summaryRes.data ?? {}) as {
       totalUsers?: number;
+      newUsers?: number;
+      grandfatheredUsers?: number;
+      convertibleUsers?: number;
       activeUsers?: number;
       uniqueDevices?: number;
       sessions?: number;
       pageViews?: number;
-      totalSignups?: number;
+      signupEvents?: number;
       signupsByDay?: Record<string, number>;
       topPages?: { path: string; count: number }[];
     };
 
-    // Conversion = subscribers / distinct signed-up PEOPLE.
+    // Conversion = subscribers / users who are actually ABLE to subscribe.
     //
-    // Deliberately NOT summary.totalSignups (a raw count of `signup` rows).
-    // supabase re-fires SIGNED_IN on token refresh and tab focus, so historical
-    // data has ~2.6 signup rows per human (544 rows / 207 users as of Jul 2026).
-    // Dividing by the row count understates conversion by that same factor.
-    // trackAuthEvent() dedupes new events, but the old rows are still in there,
-    // so counting distinct user_id is the only denominator that's correct on
-    // both the historical and the go-forward data.
-    const distinctSignups = summary.totalUsers ?? 0;
+    // Founding Members (signed up before 2026-05-01) get Premium free forever,
+    // so they can never convert. As of Jul 2026 that's 165 of 256 accounts —
+    // dividing by all users would fold a structurally unconvertible 64% into
+    // the denominator and permanently understate the rate.
+    //
+    // Also deliberately NOT the raw `signup` event count: those rows are
+    // duplicated ~2.6x per human by the old supabase SIGNED_IN re-fire bug.
+    const convertibleUsers = summary.convertibleUsers ?? 0;
     const totalSubscriptions = subscriptionCountRes.count ?? 0;
-    const conversionRate = distinctSignups > 0 ? totalSubscriptions / distinctSignups : 0;
+    const conversionRate = convertibleUsers > 0 ? totalSubscriptions / convertibleUsers : 0;
 
     return NextResponse.json({
       period,
-      totalUsers: summary.totalUsers ?? 0,
-      activeUsers: summary.activeUsers ?? 0,
-      uniqueDevices: summary.uniqueDevices ?? 0,
+      totalUsers: summary.totalUsers ?? 0,               // all-time, from auth.users
+      newUsers: summary.newUsers ?? 0,                   // in-window
+      grandfatheredUsers: summary.grandfatheredUsers ?? 0,
+      convertibleUsers,
+      activeUsers: summary.activeUsers ?? 0,             // in-window
+      uniqueDevices: summary.uniqueDevices ?? 0,         // in-window, upper bound on humans
       sessions: summary.sessions ?? 0,
       pageViews: summary.pageViews ?? 0,
       conversionRate,

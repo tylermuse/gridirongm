@@ -7,6 +7,9 @@ import { useSubscription } from '@/components/providers/SubscriptionProvider';
 interface AnalyticsData {
   period: string;
   totalUsers: number;
+  newUsers: number;
+  grandfatheredUsers: number;
+  convertibleUsers: number;
   activeUsers: number;
   uniqueDevices: number;
   sessions: number;
@@ -133,25 +136,50 @@ export default function AdminAnalyticsPage() {
           <div className="text-center py-20 text-gray-400">No data available yet. Events will appear once users start visiting.</div>
         ) : (
           <div className="space-y-8">
-            {/* Overview cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-              <MetricCard label="Total Users" value={data.totalUsers} />
-              <MetricCard label={`Active Users (${period})`} value={data.activeUsers} sub="logged-in only" />
-              <MetricCard label={`Unique Devices (${period})`} value={data.uniqueDevices || '—'} sub="incl. anonymous" />
-              <MetricCard label={`Sessions (${period})`} value={data.sessions} />
-              <MetricCard label={`Page Views (${period})`} value={data.pageViews} />
-              <MetricCard
-                label="Conversion Rate"
-                value={`${(data.conversionRate * 100).toFixed(1)}%`}
-                sub={`${data.totalSubscriptions} subscriptions`}
-              />
+            {/* All-time — these do NOT move with the period selector. */}
+            <div>
+              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">All time</h2>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                <MetricCard label="Registered Accounts" value={data.totalUsers} sub="all time" />
+                <MetricCard
+                  label="Can Convert"
+                  value={data.convertibleUsers}
+                  sub={`${data.grandfatheredUsers} Founders get Premium free`}
+                />
+                <MetricCard
+                  label="Conversion Rate"
+                  value={`${(data.conversionRate * 100).toFixed(1)}%`}
+                  sub={`${data.totalSubscriptions} subs / ${data.convertibleUsers} who can buy`}
+                />
+              </div>
+            </div>
+
+            {/* Windowed — these all respect the period selector. */}
+            <div>
+              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">Last {period}</h2>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                <MetricCard label="New Accounts" value={data.newUsers} sub={`in the last ${period}`} />
+                <MetricCard label="Active Users" value={data.activeUsers} sub="logged-in only" />
+                <MetricCard
+                  label="Unique Devices"
+                  value={data.uniqueDevices || '—'}
+                  sub="incl. anonymous · upper bound"
+                />
+                <MetricCard label="Sessions" value={data.sessions} />
+                <MetricCard label="Page Views" value={data.pageViews} />
+                <MetricCard
+                  label="Views / Session"
+                  value={data.sessions > 0 ? (data.pageViews / data.sessions).toFixed(1) : '—'}
+                  sub="engagement depth"
+                />
+              </div>
             </div>
 
             {/* Signups chart + Top pages side by side */}
             <div className="grid lg:grid-cols-2 gap-6">
               {/* Signups over time */}
               <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <h2 className="text-sm font-bold text-gray-900 mb-4">Signups ({period})</h2>
+                <h2 className="text-sm font-bold text-gray-900 mb-4">New Accounts ({period})</h2>
                 <SignupsChart data={data.signupsByDay} period={period} />
               </div>
 
