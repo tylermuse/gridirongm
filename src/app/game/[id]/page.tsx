@@ -495,6 +495,25 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // Mid-game game-plan adjustment modal (shown via the "Game Plan" button when paused)
   const [showMidGamePlan, setShowMidGamePlan] = useState(false);
 
+  // Persist the confirmed game plan across a mobile back-nav remount. Without it,
+  // gamePlanReady + livePlan (ephemeral React state) reset to the modal's defaults
+  // whenever the user navigates back and the page remounts. Keyed by game id in
+  // sessionStorage; restored on mount. Restoring in an effect (not a lazy useState
+  // initializer) keeps SSR and the first client render identical, so there's no
+  // hydration mismatch — worst case a brief flash of the modal before it restores.
+  const planStorageKey = `bsfb-gameplan-${id}`;
+  useEffect(() => {
+    if (!userInGame || typeof window === 'undefined') return;
+    try {
+      const raw = window.sessionStorage.getItem(planStorageKey);
+      if (raw) {
+        const saved = JSON.parse(raw) as { plan: LiveGamePlan | null };
+        setLivePlan(saved.plan);
+        setGamePlanReady(true);
+      }
+    } catch { /* ignore corrupt / unavailable storage */ }
+  }, [planStorageKey, userInGame]);
+
   const simRef = useRef<LiveGameResult | null>(null);
   if (simRef.current === null && homeTeam && awayTeam && game && !game.played && gamePlanReady && !simError) {
     try {
@@ -1055,15 +1074,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         <GamePlanModal
           opponentName={opponentName}
           onConfirm={(plan) => {
-            if (userTeamSide) {
-              setLivePlan({ ...plan, userTeamSide });
-            }
+            const lp = userTeamSide ? { ...plan, userTeamSide } : null;
+            setLivePlan(lp);
             setGamePlanReady(true);
+            try { window.sessionStorage.setItem(planStorageKey, JSON.stringify({ plan: lp })); } catch { /* storage unavailable */ }
           }}
           onCancel={() => {
             // Skip the plan — sim with default behavior
             setLivePlan(null);
             setGamePlanReady(true);
+            try { window.sessionStorage.setItem(planStorageKey, JSON.stringify({ plan: null })); } catch { /* storage unavailable */ }
           }}
         />
       </GameShell>
