@@ -22,9 +22,10 @@ import type { Player, Position, GameResult } from '@/types';
 // Speed settings
 // ---------------------------------------------------------------------------
 
-type Speed = '1x' | '2x' | '5x' | 'max';
+type Speed = '0.5x' | '1x' | '2x' | '5x' | 'max';
 
 const SPEED_MS: Record<Speed, number> = {
+  '0.5x': 15000,
   '1x': 8000,
   '2x': 3500,
   '5x': 800,
@@ -495,6 +496,25 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // Mid-game game-plan adjustment modal (shown via the "Game Plan" button when paused)
   const [showMidGamePlan, setShowMidGamePlan] = useState(false);
 
+  // Persist the confirmed game plan across a mobile back-nav remount. Without it,
+  // gamePlanReady + livePlan (ephemeral React state) reset to the modal's defaults
+  // whenever the user navigates back and the page remounts. Keyed by game id in
+  // sessionStorage; restored on mount. Restoring in an effect (not a lazy useState
+  // initializer) keeps SSR and the first client render identical, so there's no
+  // hydration mismatch — worst case a brief flash of the modal before it restores.
+  const planStorageKey = `bsfb-gameplan-${id}`;
+  useEffect(() => {
+    if (!userInGame || typeof window === 'undefined') return;
+    try {
+      const raw = window.sessionStorage.getItem(planStorageKey);
+      if (raw) {
+        const saved = JSON.parse(raw) as { plan: LiveGamePlan | null };
+        setLivePlan(saved.plan);
+        setGamePlanReady(true);
+      }
+    } catch { /* ignore corrupt / unavailable storage */ }
+  }, [planStorageKey, userInGame]);
+
   const simRef = useRef<LiveGameResult | null>(null);
   if (simRef.current === null && homeTeam && awayTeam && game && !game.played && gamePlanReady && !simError) {
     try {
@@ -646,7 +666,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       // jarringly fast for an at-a-glance read. Now ~1.98s. 'max' is
       // unchanged (intended to be near-instant).
       const animMs = SPEED_MS[speed] * 0.35;
-      const pauseMs = speed === '1x' ? 3500 : speed === '2x' ? 1200 : speed === '5x' ? 1700 : 0;
+      const pauseMs = speed === '0.5x' ? 6000 : speed === '1x' ? 3500 : speed === '2x' ? 1200 : speed === '5x' ? 1700 : 0;
       // Big moments (turnovers, scores, FGs) get extra dwell time
       const lastEvent = newEvents[newEvents.length - 1];
       const isBigMoment = lastEvent && (
@@ -656,7 +676,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         lastEvent.type === 'punt'
       );
       const bigExtra = isBigMoment
-        ? (speed === '1x' ? 5000 : speed === '2x' ? 3500 : speed === '5x' ? 2000 : 0)
+        ? (speed === '0.5x' ? 8000 : speed === '1x' ? 5000 : speed === '2x' ? 3500 : speed === '5x' ? 2000 : 0)
         : 0;
       const delay = Math.max(300, animMs + pauseMs + bigExtra);
 
@@ -700,10 +720,10 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       return;
     }
     // Post-animation pause — gives time to read the play description before advancing
-    const PAUSE_MS: Record<Speed, number> = { '1x': 3500, '2x': 1200, '5x': 150, 'max': 0 };
+    const PAUSE_MS: Record<Speed, number> = { '0.5x': 6000, '1x': 3500, '2x': 1200, '5x': 150, 'max': 0 };
     // Big-moment extended pause — turnovers and scoring plays deserve extra
     // dwell time so the user actually sees what happened before possession flips.
-    const TURNOVER_EXTRA: Record<Speed, number> = { '1x': 4500, '2x': 3000, '5x': 2000, 'max': 0 };
+    const TURNOVER_EXTRA: Record<Speed, number> = { '0.5x': 7000, '1x': 4500, '2x': 3000, '5x': 2000, 'max': 0 };
     const isBigMoment =
       currentEvent?.type === 'interception' ||
       currentEvent?.type === 'fumble' ||
@@ -1055,15 +1075,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         <GamePlanModal
           opponentName={opponentName}
           onConfirm={(plan) => {
-            if (userTeamSide) {
-              setLivePlan({ ...plan, userTeamSide });
-            }
+            const lp = userTeamSide ? { ...plan, userTeamSide } : null;
+            setLivePlan(lp);
             setGamePlanReady(true);
+            try { window.sessionStorage.setItem(planStorageKey, JSON.stringify({ plan: lp })); } catch { /* storage unavailable */ }
           }}
           onCancel={() => {
             // Skip the plan — sim with default behavior
             setLivePlan(null);
             setGamePlanReady(true);
+            try { window.sessionStorage.setItem(planStorageKey, JSON.stringify({ plan: null })); } catch { /* storage unavailable */ }
           }}
         />
       </GameShell>
@@ -1356,7 +1377,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap">
             <div className="flex items-center gap-1">
               <span className="text-[10px] font-semibold text-[var(--text-sec)] uppercase mr-1">Speed</span>
-              {(['1x', '2x', '5x', 'max'] as Speed[]).map(s => (
+              {(['0.5x', '1x', '2x', '5x', 'max'] as Speed[]).map(s => (
                 <button
                   key={s}
                   onClick={() => setSpeed(s)}
@@ -1377,7 +1398,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             <button
               onClick={() => { if (!isFinished) setIsPlaying(p => !p); }}
               disabled={isFinished}
-              className="px-2 sm:px-4 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] disabled:opacity-40 transition-all"
+              aria-label={isFinished ? 'Game complete' : isPlaying ? 'Pause' : 'Play'}
+              className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-2 sm:px-4 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] disabled:opacity-40 transition-all"
             >
               {isFinished ? '● Complete' : isPlaying ? '⏸' : '▶'}
               <span className="hidden sm:inline ml-1">{isFinished ? '' : isPlaying ? 'Pause' : 'Play'}</span>
