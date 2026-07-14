@@ -6310,6 +6310,11 @@ export const useGameStore = create<GameStore>()(
         const { eligible, reason } = isPracticeSquadEligible(player, psPlayers);
         if (!eligible) return reason;
         set({
+          // A demotion stings — the player takes a mood hit (value-only change;
+          // the mood field already exists on the persisted shape, no schema bump).
+          players: state.players.map(p =>
+            p.id === playerId ? { ...p, mood: Math.max(0, (p.mood ?? 70) - 15) } : p,
+          ),
           teams: state.teams.map(t => {
             if (t.id !== state.userTeamId) return t;
             // Remove from active roster + depth chart, add to PS.
