@@ -1377,7 +1377,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             <button
               onClick={() => { if (!isFinished) setIsPlaying(p => !p); }}
               disabled={isFinished}
-              className="px-2 sm:px-4 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] disabled:opacity-40 transition-all"
+              aria-label={isFinished ? 'Game complete' : isPlaying ? 'Pause' : 'Play'}
+              className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-2 sm:px-4 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] disabled:opacity-40 transition-all"
             >
               {isFinished ? '● Complete' : isPlaying ? '⏸' : '▶'}
               <span className="hidden sm:inline ml-1">{isFinished ? '' : isPlaying ? 'Pause' : 'Play'}</span>
