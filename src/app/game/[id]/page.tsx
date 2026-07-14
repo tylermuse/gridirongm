@@ -22,9 +22,10 @@ import type { Player, Position, GameResult } from '@/types';
 // Speed settings
 // ---------------------------------------------------------------------------
 
-type Speed = '1x' | '2x' | '5x' | 'max';
+type Speed = '0.5x' | '1x' | '2x' | '5x' | 'max';
 
 const SPEED_MS: Record<Speed, number> = {
+  '0.5x': 15000,
   '1x': 8000,
   '2x': 3500,
   '5x': 800,
@@ -665,7 +666,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       // jarringly fast for an at-a-glance read. Now ~1.98s. 'max' is
       // unchanged (intended to be near-instant).
       const animMs = SPEED_MS[speed] * 0.35;
-      const pauseMs = speed === '1x' ? 3500 : speed === '2x' ? 1200 : speed === '5x' ? 1700 : 0;
+      const pauseMs = speed === '0.5x' ? 6000 : speed === '1x' ? 3500 : speed === '2x' ? 1200 : speed === '5x' ? 1700 : 0;
       // Big moments (turnovers, scores, FGs) get extra dwell time
       const lastEvent = newEvents[newEvents.length - 1];
       const isBigMoment = lastEvent && (
@@ -675,7 +676,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         lastEvent.type === 'punt'
       );
       const bigExtra = isBigMoment
-        ? (speed === '1x' ? 5000 : speed === '2x' ? 3500 : speed === '5x' ? 2000 : 0)
+        ? (speed === '0.5x' ? 8000 : speed === '1x' ? 5000 : speed === '2x' ? 3500 : speed === '5x' ? 2000 : 0)
         : 0;
       const delay = Math.max(300, animMs + pauseMs + bigExtra);
 
@@ -719,10 +720,10 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       return;
     }
     // Post-animation pause — gives time to read the play description before advancing
-    const PAUSE_MS: Record<Speed, number> = { '1x': 3500, '2x': 1200, '5x': 150, 'max': 0 };
+    const PAUSE_MS: Record<Speed, number> = { '0.5x': 6000, '1x': 3500, '2x': 1200, '5x': 150, 'max': 0 };
     // Big-moment extended pause — turnovers and scoring plays deserve extra
     // dwell time so the user actually sees what happened before possession flips.
-    const TURNOVER_EXTRA: Record<Speed, number> = { '1x': 4500, '2x': 3000, '5x': 2000, 'max': 0 };
+    const TURNOVER_EXTRA: Record<Speed, number> = { '0.5x': 7000, '1x': 4500, '2x': 3000, '5x': 2000, 'max': 0 };
     const isBigMoment =
       currentEvent?.type === 'interception' ||
       currentEvent?.type === 'fumble' ||
@@ -1376,7 +1377,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap">
             <div className="flex items-center gap-1">
               <span className="text-[10px] font-semibold text-[var(--text-sec)] uppercase mr-1">Speed</span>
-              {(['1x', '2x', '5x', 'max'] as Speed[]).map(s => (
+              {(['0.5x', '1x', '2x', '5x', 'max'] as Speed[]).map(s => (
                 <button
                   key={s}
                   onClick={() => setSpeed(s)}
