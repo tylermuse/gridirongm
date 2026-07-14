@@ -404,7 +404,7 @@ function simulatePlay(
     // Defensive blitz slider: 0 → 0.7x sack rate (rarely blitz), 100 → 1.4x.
     const blitzMult = defGamePlan?.blitzRate !== undefined
       ? 0.7 + (defGamePlan.blitzRate / 100) * 0.7
-      : 1.0;
+      : 0.85; // AI defenses shouldn't behave as if max-blitzing every play
     const sackChance = clamp(((dlPower - olPower) / 600 + 0.04) * blitzMult, 0.015, 0.10);
     if (Math.random() < sackChance) {
       const sackYards = -(3 + Math.floor(Math.random() * 6));
@@ -425,8 +425,8 @@ function simulatePlay(
     // ── Pick receiver with position-based target shares ──
     // Includes backup WRs so every rostered receiver gets some stats
     const eligibleReceivers: { player: Player; baseShare: number }[] = [];
-    if (wrs[0]) eligibleReceivers.push({ player: wrs[0], baseShare: 0.28 });
-    if (wrs[1]) eligibleReceivers.push({ player: wrs[1], baseShare: 0.21 });
+    if (wrs[0]) eligibleReceivers.push({ player: wrs[0], baseShare: 0.25 }); // was 0.28 — WR1 receptions topped the real record (149)
+    if (wrs[1]) eligibleReceivers.push({ player: wrs[1], baseShare: 0.19 }); // was 0.21 (proportional trim)
     if (wrs[2]) eligibleReceivers.push({ player: wrs[2], baseShare: 0.14 });
     if (wrs[3]) eligibleReceivers.push({ player: wrs[3], baseShare: 0.05 });
     if (wrs[4]) eligibleReceivers.push({ player: wrs[4], baseShare: 0.02 });
@@ -463,7 +463,7 @@ function simulatePlay(
     // Factor in QB throwing + awareness heavily to differentiate elite from bad.
     // Aggressive game plan increases INT risk; conservative reduces it.
     const qbIntRating = (qb.ratings.throwing + qb.ratings.awareness) / 2;
-    const baseIntRate = 0.022;
+    const baseIntRate = 0.018; // was 0.022 — trims mid-tier INT volume
     const intAggressivenessMult = gamePlan?.aggressiveness === 'aggressive' ? 1.4 :
                                    gamePlan?.aggressiveness === 'conservative' ? 0.75 : 1.0;
     // Man coverage → more INTs but also more big plays surrendered (below).
@@ -472,7 +472,10 @@ function simulatePlay(
                        defGamePlan?.coverage === 'zone' ? 0.85 : 1.0;
     const intChance = clamp(
       (baseIntRate * (1.3 - qbIntRating / 100) + (coverageRating - qb.ratings.throwing) / 900) * intAggressivenessMult * manIntMult,
-      0.006, 0.05,
+      // Upper bound 0.05→0.028: lowering the base rate alone left the INT LEADER
+      // at ~22/yr (he's a high-volume, pick-prone QB, not base-rate-bound), so we
+      // cap the per-attempt INT probability to pull the leader toward ~15-18.
+      0.006, 0.028,
     );
     if (Math.random() < intChance) {
       const interceptor = coverageDefender ?? (cbs[0] || safeties[0] || allDefenders[0]);
@@ -516,12 +519,13 @@ function simulatePlay(
       if (fieldPosition >= 80 && fieldPosition < 90 && Math.random() < 0.15) {
         yards = 100 - fieldPosition;
       }
-      // Inside the 10: high TD chance on completions
-      if (fieldPosition >= 90 && fieldPosition < 95 && Math.random() < 0.45) {
+      // Inside the 10: high TD chance on completions (bumped 0.45→0.52 to offset
+      // the 10→9 possession cut, which had pushed pass-TD leaders down to ~31)
+      if (fieldPosition >= 90 && fieldPosition < 95 && Math.random() < 0.52) {
         yards = 100 - fieldPosition;
       }
-      // Goal line boost: inside the 5, very high chance of scoring
-      if (fieldPosition >= 95 && Math.random() < 0.65) {
+      // Goal line boost: inside the 5, very high chance of scoring (0.65→0.72)
+      if (fieldPosition >= 95 && Math.random() < 0.72) {
         yards = 100 - fieldPosition; // score!
       }
 
