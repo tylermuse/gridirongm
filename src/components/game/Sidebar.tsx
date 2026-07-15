@@ -342,7 +342,6 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           </div>
           <div className="mt-2 text-xs text-[var(--text-sec)]">
             {formatRecord(userTeam.record)}
-            {userTeam.record.ties > 0 ? `-${userTeam.record.ties}` : ''}
           </div>
         </div>
       )}

@@ -438,17 +438,23 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
           score += 130; // Bad QB — still a priority
         } else if (qbOvr < 75) {
           score += 85; // Below average — "bridge QB" territory
-        } else if (qbOvr < 82) {
-          // Capable starter — still draft if the prospect has real upside.
-          // Potential gates this rather than current OVR.
-          const upsideBonus = prospect.potential >= 85 ? 65 :
-                              prospect.potential >= 80 ? 45 :
-                              prospect.ratings.overall > qbOvr ? 30 : 15;
+        } else if (qbOvr < 78) {
+          // Below-average starter — an upgrade is a real priority.
+          const upsideBonus = prospect.potential >= 85 ? 55 :
+                              prospect.potential >= 80 ? 35 :
+                              prospect.ratings.overall > qbOvr ? 20 : 8;
           score += upsideBonus;
+        } else if (qbOvr < 82) {
+          // Capable starter (Cam Ward range) — only seek a backup if the team
+          // doesn't already have one, so it stops drafting a QB every single year.
+          if (count < 2) {
+            score += prospect.potential >= 88 ? 20 : prospect.potential >= 85 ? 10 : 0;
+          }
         } else {
-          // Elite QB (82+) — still draft a high-potential dev QB in later
-          // rounds; don't crush the score entirely.
-          score += prospect.potential >= 85 ? 35 : prospect.potential >= 80 ? 15 : 0;
+          // Elite QB (82+) — don't chase dev QBs unless truly short-handed.
+          if (count < 2) {
+            score += prospect.potential >= 90 ? 15 : 0;
+          }
         }
       }
 
