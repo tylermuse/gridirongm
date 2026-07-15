@@ -139,7 +139,7 @@ export default function RosterPage() {
     reorderDepthChart, resetDepthChart, restructureContract, extendPlayer,
     solicitTradingBlockProposals, createPlayer,
     autoCutToRosterLimit,
-    demoteToPracticeSquad, promoteFromPracticeSquad,
+    demoteToPracticeSquad, promoteFromPracticeSquad, cutFromPracticeSquad,
     phase, week, seasonHistory, leagueSettings, resigningPlayers,
     schedule,
   } = useGameStore();
@@ -1452,12 +1452,21 @@ export default function RosterPage() {
                             <td className="py-2 text-center">{p.experience}</td>
                             <td className="py-2 text-center">
                               {activeTeamId === userTeamId && (
-                                <Button size="sm" variant="secondary" onClick={() => {
-                                  const err = promoteFromPracticeSquad(p.id);
-                                  if (err) alert(err);
-                                }}>
-                                  Promote
-                                </Button>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <Button size="sm" variant="secondary" onClick={() => {
+                                    const err = promoteFromPracticeSquad(p.id);
+                                    if (err) alert(err);
+                                  }}>
+                                    Promote
+                                  </Button>
+                                  <Button size="sm" variant="danger" onClick={() => {
+                                    if (!confirm(`Cut ${p.firstName} ${p.lastName} from the practice squad? They'll become a free agent.`)) return;
+                                    const err = cutFromPracticeSquad(p.id);
+                                    if (err) alert(err);
+                                  }}>
+                                    Cut
+                                  </Button>
+                                </div>
                               )}
                             </td>
                           </tr>
