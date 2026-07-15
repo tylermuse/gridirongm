@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 
 const PODCAST_LIMIT = 3;
 
@@ -34,7 +35,7 @@ interface SpotlightAudioPlayerProps {
 }
 
 export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerProps) {
-  const [state, setState] = useState<'idle' | 'loading' | 'playing' | 'paused' | 'error' | 'exhausted'>('idle');
+  const [state, setState] = useState<'idle' | 'loading' | 'playing' | 'paused' | 'error' | 'exhausted' | 'locked'>('idle');
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [remaining, setRemaining] = useState(PODCAST_LIMIT);
@@ -98,9 +99,16 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
       });
 
       if (!res.ok) {
-        // Check if it's a credits/quota issue from the API
-        const isCreditsIssue = res.status === 402 || res.status === 429;
-        if (isCreditsIssue) {
+        // 403 = free tier. The server enforces `tier !== 'premium'` (see
+        // packages/core/src/podcast/index.ts) but this component used to only
+        // handle 402/429, so a free user clicking Listen fell through to the
+        // generic red "⚠️ Retry" error — no explanation, no upgrade path.
+        if (res.status === 403) {
+          setState('locked');
+          return;
+        }
+        // Credits/quota issue for a user who IS entitled.
+        if (res.status === 402 || res.status === 429) {
           setState('exhausted');
           return;
         }
@@ -151,6 +159,18 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
     const m = Math.floor(s / 60);
     const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, '0')}`;
+  }
+
+  // Free tier — the server will 403. Sell the upgrade instead of erroring.
+  if (state === 'locked') {
+    return (
+      <Link
+        href="/pricing"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700 hover:bg-purple-600 hover:text-white transition-colors"
+      >
+        <span>🔒</span> Podcasts are Premium — Upgrade
+      </Link>
+    );
   }
 
   // Exhausted state
