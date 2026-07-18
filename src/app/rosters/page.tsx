@@ -37,6 +37,34 @@ const ROSTERS: RosterEntry[] = [
     cacheBust: 13,
   },
   {
+    id: 'nfl-1994-montana-era',
+    title: 'Montana Era — 1994 NFL Season',
+    description:
+      'The NFL\'s first year with a salary cap ($34.6M). Steve Young wins MVP and Super Bowl XXIX, Joe Montana\'s farewell season in Kansas City, Jerry Rice at his statistical peak in San Francisco. 28 teams: Emmitt Smith and Troy Aikman\'s Cowboys go to the SB, Barry Sanders runs wild in Detroit, Dan Marino throwing darts in Miami, Brett Favre\'s first full season in Green Bay with Reggie White and Sterling Sharpe, John Elway and Shannon Sharpe in Denver. Every team\'s 1994 roster stamped with real player identities — Montana, Rice, Steve Young, Emmitt, Michael Irvin, Bruce Smith, Rod Woodson, Derrick Thomas — across all 28 franchises. Cap scaled to era dollars, Los Angeles Raiders and Houston Oilers play in their real 1994 homes.',
+    fileName: 'FBGM_NFL_Roster_MontanaEra_1994.json',
+    lastUpdated: 'July 18, 2026',
+    compatibility: ['Football GM (FBGM)', 'BS Football'],
+    startMode: 'regular',
+    era: 'Era',
+    cacheBust: 1,
+    caveat:
+      'V1 (Jul 18): Head coaches are real 1994 HCs. 28 teams — no Ravens, Jaguars, or Panthers (expansion 1995–1996). Powered by nflverse historical data: ~1,500 real 1994 NFL players on their real 1994 teams. OVRs inherit from 2026 base, not historically tuned. Note: LT (Lawrence Taylor) retired after 1993 — 1994 is the Steve Young/Rice/Montana era, not Lawrence Taylor\'s peak.',
+  },
+  {
+    id: 'nfl-1999-gsot',
+    title: 'Greatest Show on Turf — 1999 NFL Season',
+    description:
+      'Kurt Warner comes out of nowhere to lead the St. Louis Rams to Super Bowl XXXIV — Warner, Marshall Faulk, Isaac Bruce, Torry Holt, Orlando Pace, all stamped on their real 1999 slots. 31 teams: Jeff Fisher\'s Titans go 13-3 and reach the SB (One Yard Short), Peyton Manning\'s year 2 with Edgerrin James rookie, Randy Moss year 2 terrorizing Minnesota, Dan Marino\'s final season in Miami, Brett Favre in Green Bay, Steve McNair and Eddie George in Tennessee, Jevon Kearse\'s monster rookie year, Barry Sanders\' last NFL game in Detroit. Deion Sanders on the Cowboys, Tony Dungy\'s Tampa 2 defense — across all 31 franchises. Cap at 1999 levels ($57.3M), Oakland Raiders and San Diego Chargers in their era-correct homes.',
+    fileName: 'FBGM_NFL_Roster_GSoT_1999.json',
+    lastUpdated: 'July 18, 2026',
+    compatibility: ['Football GM (FBGM)', 'BS Football'],
+    startMode: 'regular',
+    era: 'Era',
+    cacheBust: 1,
+    caveat:
+      'V1 (Jul 18): Head coaches are real 1999 HCs (Dick Vermeil on STL, Jeff Fisher on TEN, Tony Dungy on TB, etc.). Powered by nflverse historical data: ~1,700 real 1999 NFL players on their real 1999 teams. OVRs inherit from 2026 base, not historically tuned. Cleveland Browns are the 1999 expansion team (2-14 in real life).',
+  },
+  {
     id: 'nfl-2007-brady-era',
     title: 'Tom Brady Era — 2007 NFL Season',
     description:
