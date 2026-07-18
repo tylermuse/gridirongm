@@ -16,6 +16,7 @@ import { ScoreBug } from '@/components/game/ScoreBug';
 import { GamePlanModal } from '@/components/game/GamePlanModal';
 import { PlayCallMenu, type PlayCallType } from '@/components/game/PlayCallMenu';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
+import { generateHalftimeBreakdown, COMMENTATORS } from '@/lib/engine/debate';
 import type { Player, Position, GameResult } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -495,6 +496,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const [simError, setSimError] = useState<string | null>(null);
   // Mid-game game-plan adjustment modal (shown via the "Game Plan" button when paused)
   const [showMidGamePlan, setShowMidGamePlan] = useState(false);
+  const [showHalftimeReport, setShowHalftimeReport] = useState(false);
 
   // Persist the confirmed game plan across a mobile back-nav remount. Without it,
   // gamePlanReady + livePlan (ephemeral React state) reset to the modal's defaults
@@ -597,6 +599,24 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const currentEvent = allEvents[revealedCount - 1] ?? null;
   const previousEvent = revealedCount >= 2 ? (allEvents[revealedCount - 2] ?? null) : null;
   const revealedEvents = allEvents.slice(0, revealedCount);
+
+  // Halftime Report (feature #9): a user-opened breakdown of the first half —
+  // leaders + a Cole/Blaze take. Available once playback passes the halftime
+  // whistle. The halftime PlayEvent carries the cumulative first-half stat
+  // snapshot (addEvent attaches it), so we read straight from it.
+  const halftimeEventIdx = useMemo(() => allEvents.findIndex(e => e.type === 'halftime'), [allEvents]);
+  const halftimeReached = halftimeEventIdx >= 0 && revealedCount > halftimeEventIdx;
+  const halftimeBreakdown = useMemo(() => {
+    if (!halftimeReached || !homeTeam || !awayTeam) return null;
+    const ev = allEvents[halftimeEventIdx];
+    if (!ev) return null;
+    const stats = livePlayerStatsAtEvent(ev, homePlayers, awayPlayers);
+    return generateHalftimeBreakdown({
+      homeTeam, awayTeam,
+      homeScore: ev.homeScore, awayScore: ev.awayScore,
+      stats, players: [...homePlayers, ...awayPlayers],
+    });
+  }, [halftimeReached, halftimeEventIdx, allEvents, homeTeam, awayTeam, homePlayers, awayPlayers]);
   const displayEvents = useMemo(() => [...revealedEvents].reverse(), [revealedEvents]);
   const drives = useMemo(() => parseDrives(revealedEvents), [revealedEvents]);
 
@@ -1493,6 +1513,17 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               🎯 Live Coach {liveCoachOn ? 'ON' : 'OFF'}
             </button>
           )}
+          {/* Halftime Report — appears once the game passes the half. Available
+              to spectators too (not gated on userInGame). */}
+          {halftimeReached && (
+            <button
+              onClick={() => { setIsPlaying(false); setShowHalftimeReport(true); }}
+              className="flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-all"
+              title="First-half leaders + the Gridiron Debate take (pauses the game)"
+            >
+              📻 Halftime Report
+            </button>
+          )}
           </div>
         </div>
 
@@ -2135,6 +2166,83 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         </div>
       </div>
       </div>
+
+      {/* Halftime Report modal (feature #9) — first-half leaders + Cole/Blaze
+          take. Text now; the disabled audio button marks the ElevenLabs hook. */}
+      {showHalftimeReport && halftimeBreakdown && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setShowHalftimeReport(false)}
+        >
+          <div
+            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] sticky top-0 bg-[var(--surface)] z-10">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📻</span>
+                <h2 className="text-lg font-black">Halftime Report</h2>
+              </div>
+              <button
+                onClick={() => setShowHalftimeReport(false)}
+                aria-label="Close"
+                className="text-[var(--text-sec)] hover:text-[var(--text)] text-xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-5 space-y-5">
+              <div className="text-center">
+                <div className="text-2xl font-black tabular-nums">
+                  {halftimeBreakdown.awayAbbr} {halftimeBreakdown.awayScore} — {halftimeBreakdown.homeScore} {halftimeBreakdown.homeAbbr}
+                </div>
+                <div className="text-sm text-[var(--text-sec)] mt-1">{halftimeBreakdown.summary}</div>
+              </div>
+
+              {halftimeBreakdown.leaders.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">First-Half Leaders</div>
+                  {halftimeBreakdown.leaders.map(l => (
+                    <div key={l.category} className="flex items-center justify-between gap-3 bg-[var(--surface-2)] rounded-lg px-3 py-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold truncate">
+                          {l.name} <span className="text-[var(--text-sec)] font-normal">{l.teamAbbr}</span>
+                        </div>
+                        <div className="text-xs text-[var(--text-sec)]">{l.category}</div>
+                      </div>
+                      <div className="text-xs font-mono text-right shrink-0">{l.statLine}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">In the Booth</div>
+                {halftimeBreakdown.exchanges.map((ex, i) => {
+                  const c = ex.speakerId === 'stats' ? COMMENTATORS.stats : COMMENTATORS.hottake;
+                  return (
+                    <div key={i} className="flex gap-2.5">
+                      <span className="text-lg shrink-0 leading-none mt-0.5">{c.avatar}</span>
+                      <div>
+                        <div className={`text-xs font-bold ${c.id === 'stats' ? 'text-blue-500' : 'text-red-500'}`}>{c.name}</div>
+                        <div className="text-sm">{ex.text}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <button
+                disabled
+                className="w-full py-2 rounded-lg bg-[var(--surface-2)] text-[var(--text-sec)] text-sm font-semibold opacity-60 cursor-not-allowed"
+                title="Audio broadcast coming soon"
+              >
+                🔊 Audio (coming soon)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </GameShell>
   );
 }

@@ -11,7 +11,7 @@
  * Uses seeded randomization for deterministic output per week.
  */
 
-import type { RecapSegmentData, Team, Player, Position, PlayoffMatchup, DraftSelection } from '@/types';
+import type { RecapSegmentData, Team, Player, Position, PlayoffMatchup, DraftSelection, PlayerStats } from '@/types';
 
 /* ─── Types ─── */
 
@@ -1702,4 +1702,145 @@ export function generateTeamSpotlight(
   }
 
   return topics;
+}
+
+/* ─── Halftime Breakdown ───────────────────────────────────────────────
+ * A user-opened "Halftime Report" for a live game: first-half score, the
+ * standout performers, and a short Cole/Blaze take. Same template-driven,
+ * deterministic, no-LLM approach as the debate engine. Audio is a later
+ * add-on — this returns text the game page renders in a modal.
+ */
+
+export interface HalftimeLeader {
+  playerId: string;
+  name: string;
+  teamAbbr: string;
+  category: 'Passing' | 'Rushing' | 'Receiving';
+  statLine: string;
+}
+
+export interface HalftimeBreakdown {
+  homeAbbr: string;
+  awayAbbr: string;
+  homeScore: number;
+  awayScore: number;
+  /** One-line situation summary (who leads, how much, or tied). */
+  summary: string;
+  leaders: HalftimeLeader[];
+  exchanges: DebateExchange[];
+}
+
+export function generateHalftimeBreakdown(args: {
+  homeTeam: Team;
+  awayTeam: Team;
+  homeScore: number;
+  awayScore: number;
+  /** Cumulative first-half stats keyed by player id (from livePlayerStatsAtEvent). */
+  stats: Record<string, Partial<PlayerStats>>;
+  /** Both teams' players, for name + team lookup. */
+  players: Player[];
+}): HalftimeBreakdown {
+  const { homeTeam, awayTeam, homeScore, awayScore, stats, players } = args;
+  const byId = new Map(players.map(p => [p.id, p]));
+  const abbrFor = (pid: string): string => {
+    const p = byId.get(pid);
+    return p?.teamId === homeTeam.id ? homeTeam.abbreviation
+      : p?.teamId === awayTeam.id ? awayTeam.abbreviation : '';
+  };
+  const nameFor = (pid: string): string => {
+    const p = byId.get(pid);
+    return p ? `${p.firstName} ${p.lastName}` : 'Unknown';
+  };
+
+  const entries = Object.entries(stats);
+  const leaders: HalftimeLeader[] = [];
+
+  const topPass = entries
+    .filter(([, s]) => (s.passYards ?? 0) > 0)
+    .sort((a, b) => (b[1].passYards ?? 0) - (a[1].passYards ?? 0))[0];
+  if (topPass) {
+    const s = topPass[1];
+    leaders.push({
+      playerId: topPass[0], name: nameFor(topPass[0]), teamAbbr: abbrFor(topPass[0]),
+      category: 'Passing',
+      statLine: `${s.passCompletions ?? 0}/${s.passAttempts ?? 0}, ${s.passYards ?? 0} yds, ${s.passTDs ?? 0} TD${(s.interceptions ?? 0) > 0 ? `, ${s.interceptions} INT` : ''}`,
+    });
+  }
+
+  const topRush = entries
+    .filter(([, s]) => (s.rushYards ?? 0) > 0)
+    .sort((a, b) => (b[1].rushYards ?? 0) - (a[1].rushYards ?? 0))[0];
+  if (topRush) {
+    const s = topRush[1];
+    leaders.push({
+      playerId: topRush[0], name: nameFor(topRush[0]), teamAbbr: abbrFor(topRush[0]),
+      category: 'Rushing',
+      statLine: `${s.rushAttempts ?? 0} car, ${s.rushYards ?? 0} yds, ${s.rushTDs ?? 0} TD`,
+    });
+  }
+
+  const topRec = entries
+    .filter(([, s]) => (s.receivingYards ?? 0) > 0)
+    .sort((a, b) => (b[1].receivingYards ?? 0) - (a[1].receivingYards ?? 0))[0];
+  if (topRec) {
+    const s = topRec[1];
+    leaders.push({
+      playerId: topRec[0], name: nameFor(topRec[0]), teamAbbr: abbrFor(topRec[0]),
+      category: 'Receiving',
+      statLine: `${s.receptions ?? 0} rec, ${s.receivingYards ?? 0} yds, ${s.receivingTDs ?? 0} TD`,
+    });
+  }
+
+  const margin = Math.abs(homeScore - awayScore);
+  const leaderAbbr = homeScore === awayScore ? null
+    : homeScore > awayScore ? homeTeam.abbreviation : awayTeam.abbreviation;
+  const summary = leaderAbbr === null
+    ? `All square at ${homeScore}–${awayScore} heading into the break.`
+    : `${leaderAbbr} takes a ${margin}-point lead into halftime, ${Math.max(homeScore, awayScore)}–${Math.min(homeScore, awayScore)}.`;
+
+  // A short two-beat take: Cole frames the numbers, Blaze reacts to the game state.
+  const star = leaders[0];
+  const exchanges: DebateExchange[] = [];
+  if (star) {
+    exchanges.push({
+      speakerId: 'stats',
+      text: `Through two quarters the story is ${star.name} — ${star.statLine.toLowerCase()}. That's the engine of this ${star.teamAbbr} offense right now.`,
+    });
+  } else {
+    exchanges.push({
+      speakerId: 'stats',
+      text: `Defenses are winning this one, Tony. Nobody's cracked the stat sheet open through two quarters.`,
+    });
+  }
+  if (leaderAbbr === null) {
+    exchanges.push({
+      speakerId: 'hottake',
+      text: `Deadlocked at the half! I LOVE it. Whoever blinks first in the third quarter loses this game — mark my words.`,
+    });
+  } else if (margin >= 17) {
+    exchanges.push({
+      speakerId: 'hottake',
+      text: `${leaderAbbr} is running away with it! If the trailing side doesn't come out of that locker room on FIRE, this one's already over.`,
+    });
+  } else if (margin <= 7) {
+    exchanges.push({
+      speakerId: 'hottake',
+      text: `One score game, baby! This is a coin flip and the second half is gonna be a STREET FIGHT. I can't look away.`,
+    });
+  } else {
+    exchanges.push({
+      speakerId: 'hottake',
+      text: `${leaderAbbr}'s got the edge, but two scores is nothing. One stop, one big play, and we've got ourselves a brand new game.`,
+    });
+  }
+
+  return {
+    homeAbbr: homeTeam.abbreviation,
+    awayAbbr: awayTeam.abbreviation,
+    homeScore,
+    awayScore,
+    summary,
+    leaders,
+    exchanges,
+  };
 }
