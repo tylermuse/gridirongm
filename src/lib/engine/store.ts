@@ -906,6 +906,9 @@ export function playerTradeValue(player: Player): number {
     player.age <= 31 ? 0.7 :
     player.age <= 33 ? 0.45 : 0.2;
   const posMultiplier = POSITION_VALUE_MULT[player.position] ?? 1.0;
+  // Blindside-tackle premium (§1.4): a true OT is worth more than an interior
+  // lineman. QB already carries the top positional mult (1.5) in POSITION_VALUE_MULT.
+  const subPosPremium = player.position === 'OL' && player.subPosition === 'OT' ? 1.2 : 1.0;
   // Cubic curve floored at 50 OVR. Calibration follow-up from 305mike +
   // milkytoad (4/27 PM): "50s should max at 5th-rd, 60s should max at 3rd-rd."
   // Anchored to pick-chart values (5th rd ≈ 50, 3rd rd ≈ 250-400).
@@ -913,13 +916,56 @@ export function playerTradeValue(player: Player): number {
   const normalized = Math.max(0, (player.ratings.overall - 50) / 45);
   const base = Math.pow(normalized, 3) * 4500;
   const potBonus = Math.max(0, player.potential - player.ratings.overall) * 5;
-  const rawValue = (base + potBonus) * ageMultiplier * posMultiplier;
+  const rawValue = (base + potBonus) * ageMultiplier * posMultiplier * subPosPremium;
   // Contract multiplier — expiring players are nearly worthless in trades
   let contractMult = 1.0;
   if (player.contract.yearsLeft <= 0) contractMult = 0.10;        // expiring / FA — almost no value
   else if (player.contract.yearsLeft === 1) contractMult = 0.40;  // 1 year left — heavy discount
   else if (player.contract.yearsLeft === 2) contractMult = 0.70;  // 2 years — moderate discount
   return rawValue * contractMult;
+}
+
+/** A team's strength at a position: the average of its top-2 OVRs there (a thin
+ *  or empty position scores low). Used to gauge positional need for trades. */
+function teamPositionalStrength(team: Team, position: Position, playersById: Map<string, Player>): number {
+  const ovrs = team.roster
+    .map(id => playersById.get(id))
+    .filter((p): p is Player => !!p && p.position === position)
+    .map(p => p.ratings.overall)
+    .sort((a, b) => b - a);
+  if (ovrs.length === 0) return 0;
+  return (ovrs[0] + (ovrs[1] ?? Math.max(0, ovrs[0] - 12))) / 2;
+}
+
+/** How much a team values acquiring/keeping a player at `position`, from how its
+ *  positional strength ranks league-wide: STACKED at the spot → ~0.85x (won't
+ *  overpay for a redundant body), in NEED → ~1.25x (bids up to fill a hole).
+ *  §1.4 (yo46363): the Dolphins (#1 LBs) and Rams (#32 LBs) used to value Roquan
+ *  Smith identically. */
+export function positionalNeedMultiplier(
+  team: Team,
+  position: Position,
+  allTeams: Team[],
+  playersById: Map<string, Player>,
+): number {
+  if (allTeams.length <= 1) return 1.0;
+  const mine = teamPositionalStrength(team, position, playersById);
+  const weaker = allTeams.filter(
+    t => t.id !== team.id && teamPositionalStrength(t, position, playersById) < mine,
+  ).length;
+  const pct = weaker / (allTeams.length - 1); // 0 = weakest (need) .. 1 = strongest (stacked)
+  return 1.25 - pct * 0.4; // need 1.25 → stacked 0.85
+}
+
+/** Player trade value from a specific team's perspective — base value scaled by
+ *  that team's positional need. */
+export function playerTradeValueForTeam(
+  player: Player,
+  team: Team,
+  allTeams: Team[],
+  playersById: Map<string, Player>,
+): number {
+  return playerTradeValue(player) * positionalNeedMultiplier(team, player.position, allTeams, playersById);
 }
 
 /** Generates a position-by-position preview grade for the upcoming draft class.
@@ -6768,10 +6814,15 @@ export const useGameStore = create<GameStore>()(
         const aiTeam = state.teams.find(t => t.id === counterpartTeamId);
         if (!userTeam || !aiTeam) return { success: false, reason: 'Team not found' };
 
-        // Evaluate trade values (pick values account for team record)
+        // Evaluate trade values from the AI's perspective (§1.4): it values every
+        // player through its OWN positional need — paying up for a spot it's thin
+        // at (whether acquiring the player or giving one up) and discounting a
+        // redundant one. Pick values account for team record.
+        const playersById = new Map(state.players.map(p => [p.id, p]));
+        const aiValueOf = (p: Player) => playerTradeValueForTeam(p, aiTeam, state.teams, playersById);
         const offeredValue = offeredPlayerIds.reduce((sum, id) => {
           const p = state.players.find(pl => pl.id === id);
-          return sum + (p ? playerTradeValue(p) : 0);
+          return sum + (p ? aiValueOf(p) : 0);
         }, 0) + offeredPickIds.reduce((sum, id) => {
           const pick = userTeam.draftPicks.find(pk => pk.id === id);
           return sum + (pick ? pickTradeValue(pick, state.teams) : 0);
@@ -6779,7 +6830,7 @@ export const useGameStore = create<GameStore>()(
 
         const receivedValue = receivedPlayerIds.reduce((sum, id) => {
           const p = state.players.find(pl => pl.id === id);
-          return sum + (p ? playerTradeValue(p) : 0);
+          return sum + (p ? aiValueOf(p) : 0);
         }, 0) + receivedPickIds.reduce((sum, id) => {
           const pick = aiTeam.draftPicks.find(pk => pk.id === id);
           return sum + (pick ? pickTradeValue(pick, state.teams) : 0);
