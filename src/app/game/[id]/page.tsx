@@ -17,7 +17,14 @@ import { GamePlanModal } from '@/components/game/GamePlanModal';
 import { PlayCallMenu, type PlayCallType } from '@/components/game/PlayCallMenu';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import { generateHalftimeBreakdown, COMMENTATORS } from '@/lib/engine/debate';
+import { buildBroadcastLines, segmentBroadcast } from '@/lib/engine/gameBroadcast';
+import { useGameBroadcast } from '@/lib/engine/useGameBroadcast';
 import type { Player, Position, GameResult } from '@/types';
+
+// Phase 1 spike: audio play-by-play broadcast. Off unless explicitly enabled,
+// so nothing reaches prod until the pipeline (script → ElevenLabs → buffered
+// streaming) has been heard and billing/entitlement gating is wired.
+const GAME_AUDIO_ENABLED = process.env.NEXT_PUBLIC_GAME_AUDIO === '1';
 
 // ---------------------------------------------------------------------------
 // Speed settings
@@ -617,6 +624,18 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       stats, players: [...homePlayers, ...awayPlayers],
     });
   }, [halftimeReached, halftimeEventIdx, allEvents, homeTeam, awayTeam, homePlayers, awayPlayers]);
+
+  // Audio broadcast (Phase 1 spike, flag-gated). Narrates from the current
+  // play forward so the listener doesn't pay to generate a half they skipped.
+  const broadcast = useGameBroadcast();
+  const broadcastOn = broadcast.status !== 'idle';
+  const toggleBroadcast = useCallback(() => {
+    if (broadcastOn) { broadcast.stop(); return; }
+    if (!homeTeam || !awayTeam) return;
+    const fromIndex = Math.max(0, revealedCount - 1);
+    const lines = buildBroadcastLines(allEvents, homeTeam.abbreviation, awayTeam.abbreviation, fromIndex);
+    broadcast.start(segmentBroadcast(lines, 6));
+  }, [broadcastOn, broadcast, homeTeam, awayTeam, allEvents, revealedCount]);
   const displayEvents = useMemo(() => [...revealedEvents].reverse(), [revealedEvents]);
   const drives = useMemo(() => parseDrives(revealedEvents), [revealedEvents]);
 
@@ -1524,8 +1543,37 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               📻 Halftime Report
             </button>
           )}
+          {/* Audio Broadcast — Phase 1 spike, hidden unless the flag is on. */}
+          {GAME_AUDIO_ENABLED && (
+            <button
+              onClick={toggleBroadcast}
+              className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold transition-all ${
+                broadcastOn ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+              }`}
+              title="Audio play-by-play broadcast (beta — listening track, not synced to the field)"
+            >
+              {broadcastOn
+                ? (broadcast.status === 'buffering' ? '🔊 Buffering…'
+                  : broadcast.status === 'blocked' ? '🔊 Tap to Start'
+                  : broadcast.status === 'error' ? '🔊 Error'
+                  : broadcast.status === 'done' ? '🔊 Broadcast ✓'
+                  : `🔊 Broadcast ${broadcast.segmentCount > 0 ? `${broadcast.segmentIndex + 1}/${broadcast.segmentCount}` : ''}`)
+                : '🔊 Broadcast'}
+            </button>
+          )}
           </div>
         </div>
+        {GAME_AUDIO_ENABLED && broadcast.status === 'blocked' && (
+          <button
+            onClick={broadcast.resume}
+            className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-all"
+          >
+            ▶ Tap to start the audio broadcast
+          </button>
+        )}
+        {GAME_AUDIO_ENABLED && broadcast.status === 'error' && broadcast.error && (
+          <div className="text-xs text-red-500 px-1">Broadcast error: {broadcast.error}</div>
+        )}
 
         {/* ================================================================
             CALL THE PLAY — mobile only, between controls and tabs.
