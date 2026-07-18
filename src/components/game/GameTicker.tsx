@@ -238,13 +238,18 @@ export function GameTicker({ onMenuToggle }: { onMenuToggle?: () => void } = {})
                   <span className="hidden sm:inline text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
                     ⭐ Founder
                   </span>
-                ) : (
-                  <span className={`hidden sm:inline text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                    tier === 'premium' ? 'bg-blue-100 text-blue-700' :
-                    'bg-gray-100 text-gray-700'
-                  }`}>
-                    {tier === 'premium' ? 'Premium' : 'Free'}
+                ) : tier === 'premium' ? (
+                  <span className="hidden sm:inline text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                    Premium
                   </span>
+                ) : (
+                  /* Was a dead <span> reading "Free" — now the badge is the CTA. */
+                  <Link
+                    href="/pricing"
+                    className="hidden sm:inline text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-700 hover:bg-blue-600 hover:text-white transition-colors"
+                  >
+                    Free · Upgrade
+                  </Link>
                 )}
               </div>
               <button
