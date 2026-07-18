@@ -316,6 +316,40 @@ function bucketPosition(rawPos) {
   return null;
 }
 
+// OVR overrides for 1999 marquee names whose FBGM slot rated them too low. Keyed
+// like STARTER_OVERRIDES ('TEAM/BUCKET' -> { 'Name': ovr }). The year-shift makes
+// them the TOP at their position, but a couple stayed FBGM-mediocre (Faulk 68,
+// Kearse 76); these pin era-accurate values for the Greatest Show on Turf season.
+const OVR_OVERRIDES = {
+  'LAR/QB': { 'Kurt Warner': 94 },       // 1999 NFL MVP + Super Bowl MVP (LAR = Rams' FBGM abbrev)
+  'LAR/RB': { 'Marshall Faulk': 95 },    // 1999 Offensive Player of the Year, 2,429 total yds
+  'IND/QB': { 'Peyton Manning': 85 },    // 1999 breakout, 26 TD
+  'IND/RB': { 'Edgerrin James': 90 },    // 1999 rushing title as a rookie
+  'MIN/WR': { 'Randy Moss': 93 },        // dominant, prime
+  'TEN/DL': { 'Jevon Kearse': 88 },      // 1999 Defensive ROY, 14.5 sacks
+};
+
+/** Pin a player's latest rating to a target OVR: scale every sub-rating so FBGM's
+ *  computed OVR lands near the target, then set ovr/pot (and the per-pos maps). */
+function applyOvrOverride(player, targetOvr) {
+  if (!Array.isArray(player.ratings) || player.ratings.length === 0) return;
+  let li = 0;
+  for (let k = 1; k < player.ratings.length; k++) {
+    if ((player.ratings[k].season ?? 0) > (player.ratings[li].season ?? 0)) li = k;
+  }
+  const rt = player.ratings[li];
+  const scale = targetOvr / (rt.ovr || 70);
+  const subKeys = ['stre', 'spd', 'endu', 'thv', 'thp', 'tha', 'bsc', 'elu', 'rtr', 'hnd', 'rbk', 'pbk', 'pcv', 'tck', 'prs', 'rns'];
+  for (const key of subKeys) {
+    if (typeof rt[key] === 'number') rt[key] = Math.min(99, Math.max(1, Math.round(rt[key] * scale)));
+  }
+  rt.ovr = targetOvr;
+  rt.pot = Math.max(rt.pot ?? targetOvr, targetOvr);
+  const pos = rt.pos;
+  if (rt.ovrs && rt.ovrs[pos] !== undefined) rt.ovrs[pos] = targetOvr;
+  if (rt.pots && rt.pots[pos] !== undefined) rt.pots[pos] = Math.max(rt.pots[pos], targetOvr);
+}
+
 function latestRating(player) {
   if (!player.ratings || player.ratings.length === 0) return null;
   return player.ratings.reduce((best, current) =>
@@ -522,6 +556,10 @@ for (const [teamAbbrev, team] of teamByAbbrev) {
       const draftNumber = parseInt(csv[colIdx.draft_number], 10);
       if (Number.isFinite(draftNumber) && target.draft) target.draft.pick = draftNumber;
 
+      // Era-accurate OVR for the marquee names (see OVR_OVERRIDES).
+      const overlaidOvr = OVR_OVERRIDES[overrideKey]?.[`${target.firstName} ${target.lastName}`];
+      if (overlaidOvr !== undefined) applyOvrOverride(target, overlaidOvr);
+
       overlaidPids.add(target.pid);
       overlaidCount++;
       if (overlayLog.length < 30) {
@@ -602,6 +640,37 @@ if (Array.isArray(data.draftPicks)) {
   }
   data.draftPicks = data.draftPicks.filter((dp) => (dp.season ?? 0) >= TARGET_SEASON);
 }
+
+// --- 5b. Reframe the authentic-era roster into the engine's forced year ---
+// Everything above builds a true-to-1999 roster (real ages, era ratings + era-cap
+// contracts). But BS Football forces the starting year to the current calendar
+// year, so a 1999-framed save has every contract expired on day 1 (players fall to
+// FA, FBGM backfills fictional bodies) and every player ~27 years too old (age
+// decay). Shift every year-bearing field up by (ENGINE_YEAR - TARGET_SEASON) so the
+// roster lives in the engine's frame — 1999 ages/service map onto 2026 dates — while
+// the era-authentic salary cap and contract *amounts* are left untouched.
+const ENGINE_YEAR = 2026;
+const ERA_TO_ENGINE = ENGINE_YEAR - TARGET_SEASON; // +27 for 1999
+for (const p of data.players) {
+  if (p.born?.year != null) p.born.year += ERA_TO_ENGINE;
+  if (p.draft?.year != null) p.draft.year += ERA_TO_ENGINE;
+  if (p.contract?.exp != null) p.contract.exp += ERA_TO_ENGINE;
+  if (Array.isArray(p.ratings)) {
+    for (const r of p.ratings) if (typeof r.season === 'number') r.season += ERA_TO_ENGINE;
+  }
+  // Era contract *lengths* are FBGM-generated (not authentic), and the year round
+  // trip can leave a rostered player expired/expiring on opening day. Floor any
+  // rostered contract that would lapse by the opening season to a fresh 1-4yr deal,
+  // spread deterministically by pid so the whole roster doesn't hit FA at once.
+  if (p.tid >= 0 && p.contract?.exp != null && p.contract.exp <= ENGINE_YEAR) {
+    p.contract.exp = ENGINE_YEAR + 1 + (p.pid % 4);
+  }
+}
+if (Array.isArray(data.draftPicks)) {
+  for (const dp of data.draftPicks) if (typeof dp.season === 'number') dp.season += ERA_TO_ENGINE;
+}
+data.gameAttributes.season = ENGINE_YEAR;
+data.gameAttributes.startingSeason = ENGINE_YEAR;
 
 // --- 6. Write output ---
 console.log(`Writing ${OUT}...`);
