@@ -57,6 +57,9 @@ function normalizeTtsText(text: string): string {
   t = t.replace(/\bTE\b/g, 'tight end');
   t = t.replace(/\bFG\b/g, 'field goal');
   t = t.replace(/\bXP\b/g, 'extra point');
+  // "PAT" is read as the word "pat" by TTS — say "extra point" instead.
+  t = t.replace(/\bPATs\b/g, 'extra points');
+  t = t.replace(/\bPAT\b/g, 'extra point');
   t = t.replace(/\byd\b/gi, 'yard');
   t = t.replace(/\byds\b/gi, 'yards');
   t = t.replace(/\bvs\.?\b/gi, 'versus');

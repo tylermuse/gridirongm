@@ -17,7 +17,6 @@ import { GamePlanModal } from '@/components/game/GamePlanModal';
 import { PlayCallMenu, type PlayCallType } from '@/components/game/PlayCallMenu';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import { generateHalftimeBreakdown, COMMENTATORS } from '@/lib/engine/debate';
-import { buildBroadcastLines, segmentBroadcast } from '@/lib/engine/gameBroadcast';
 import { useGameBroadcast } from '@/lib/engine/useGameBroadcast';
 import type { Player, Position, GameResult } from '@/types';
 
@@ -497,8 +496,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     : game.awayTeamId === userTeamId ? 'away'
     : null;
 
-  // Game plan modal state — only relevant when the user is in this game
-  const [gamePlanReady, setGamePlanReady] = useState(!userInGame);
+  // Game plan is no longer a gate before the live sim — the sim starts
+  // immediately (default plan) and the user opens the Game Plan modal from the
+  // in-sim button if they want to adjust. Kept as always-true so the sim-init
+  // guard below still reads cleanly.
+  const [gamePlanReady, setGamePlanReady] = useState(true);
   const [livePlan, setLivePlan] = useState<LiveGamePlan | null>(null);
   const [simError, setSimError] = useState<string | null>(null);
   // Mid-game game-plan adjustment modal (shown via the "Game Plan" button when paused)
@@ -625,17 +627,40 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     });
   }, [halftimeReached, halftimeEventIdx, allEvents, homeTeam, awayTeam, homePlayers, awayPlayers]);
 
-  // Audio broadcast (Phase 1 spike, flag-gated). Narrates from the current
-  // play forward so the listener doesn't pay to generate a half they skipped.
+  // Audio broadcast (Phase 2, flag-gated). Per-play, audio-driven: the spoken
+  // call reveals each play and gates the advance, so the voice stays in sync
+  // with the on-screen action. Narrates from the current play forward.
   const broadcast = useGameBroadcast();
   const broadcastOn = broadcast.status !== 'idle';
+  // Live speed ref so the broadcast can read the current speed for inter-call
+  // dwell without restarting. Slower speed = longer gaps; the call is never cut.
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
   const toggleBroadcast = useCallback(() => {
     if (broadcastOn) { broadcast.stop(); return; }
     if (!homeTeam || !awayTeam) return;
+    setIsPlaying(true);
     const fromIndex = Math.max(0, revealedCount - 1);
-    const lines = buildBroadcastLines(allEvents, homeTeam.abbreviation, awayTeam.abbreviation, fromIndex);
-    broadcast.start(segmentBroadcast(lines, 6));
+    const BROADCAST_DWELL: Record<Speed, number> = { '0.5x': 4000, '1x': 2000, '2x': 800, '5x': 200, 'max': 0 };
+    broadcast.start({
+      events: allEvents,
+      fromIndex,
+      homeAbbr: homeTeam.abbreviation,
+      awayAbbr: awayTeam.abbreviation,
+      homeName: homeTeam.city,
+      awayName: awayTeam.city,
+      // The broadcast is the clock — it reveals each play as its call begins.
+      onShowPlay: (i) => setRevealedCount(prev => Math.max(prev, i + 1)),
+      postClipDelayMs: () => BROADCAST_DWELL[speedRef.current] ?? 0,
+    });
   }, [broadcastOn, broadcast, homeTeam, awayTeam, allEvents, revealedCount]);
+
+  // While the broadcast drives the reveal, mirror the game's play/pause onto
+  // the audio so the Pause button stops the call too.
+  useEffect(() => {
+    if (!broadcastOn) return;
+    if (isPlaying) broadcast.resume(); else broadcast.pause();
+  }, [isPlaying, broadcastOn]); // eslint-disable-line react-hooks/exhaustive-deps
   const displayEvents = useMemo(() => [...revealedEvents].reverse(), [revealedEvents]);
   const drives = useMemo(() => parseDrives(revealedEvents), [revealedEvents]);
 
@@ -673,6 +698,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // ── Live Coach: when engine is active, auto-run AI plays as needed ──
   // Fires when we run out of events to reveal AND the engine is still going.
   useEffect(() => {
+    if (broadcastOn) return; // broadcast drives the reveal; don't auto-run plays
     if (liveEngineRef.current === null) return;
     if (liveEngineRef.current.isFinished()) return;
     if (liveCoachPaused) return;
@@ -730,7 +756,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         setAutoRunTick(t => t + 1);
       }, delay);
     }
-  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick]);
+  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick, broadcastOn]);
 
   // ── Live Coach: detect if the NEXT event is a user offensive play snap ──
   // We check after an event reveals and before scheduling the next one.
@@ -752,6 +778,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // When animation completes and we're playing, schedule the next play reveal
   useEffect(() => {
     clearNextPlayTimer();
+    // When the broadcast is driving, the audio gates the advance — skip the
+    // speed-timer path entirely so the two don't race.
+    if (broadcastOn) return;
     if (!animationComplete || !isPlaying || isFinished || speed === 'max') return;
     // Live Coach pause: stop here, surface the play call menu instead of advancing
     if (shouldPauseForLiveCoach) {
@@ -788,7 +817,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       setAnimationComplete(false);
     }, pause);
     return clearNextPlayTimer;
-  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach, currentEvent]);
+  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach, currentEvent, broadcastOn]);
 
   const skipToEnd = useCallback(() => {
     clearNextPlayTimer();
@@ -1103,33 +1132,6 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       </GameShell>
     );
   }
-  // Show the Game Plan modal if user is in this game and hasn't set one yet.
-  // Must run BEFORE the !liveResult guard, because gamePlanReady=false intentionally
-  // blocks sim creation until the user submits a plan.
-  if (userInGame && !gamePlanReady) {
-    const opponentTeam = userTeamSide === 'home' ? awayTeam : homeTeam;
-    const opponentName = opponentTeam ? `${opponentTeam.city} ${opponentTeam.name}` : 'Opponent';
-    return (
-      <GameShell>
-        <GamePlanModal
-          opponentName={opponentName}
-          onConfirm={(plan) => {
-            const lp = userTeamSide ? { ...plan, userTeamSide } : null;
-            setLivePlan(lp);
-            setGamePlanReady(true);
-            try { window.sessionStorage.setItem(planStorageKey, JSON.stringify({ plan: lp })); } catch { /* storage unavailable */ }
-          }}
-          onCancel={() => {
-            // Skip the plan — sim with default behavior
-            setLivePlan(null);
-            setGamePlanReady(true);
-            try { window.sessionStorage.setItem(planStorageKey, JSON.stringify({ plan: null })); } catch { /* storage unavailable */ }
-          }}
-        />
-      </GameShell>
-    );
-  }
-
   if (!liveResult) {
     const reason = simError
       ? simError
@@ -1220,8 +1222,6 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             onConfirm={(plan) => {
               const newPlan: LiveGamePlan = { ...plan, userTeamSide };
               setLivePlan(newPlan);
-              // Persist for the next game too
-              useGameStore.getState().setNextGamePlan(plan);
               // Persist for the next game too
               useGameStore.getState().setNextGamePlan(plan);
               setShowMidGamePlan(false);
@@ -1550,14 +1550,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold transition-all ${
                 broadcastOn ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
               }`}
-              title="Audio play-by-play broadcast (beta — listening track, not synced to the field)"
+              title="Audio play-by-play broadcast (beta — the call drives the play reveal)"
             >
               {broadcastOn
                 ? (broadcast.status === 'buffering' ? '🔊 Buffering…'
                   : broadcast.status === 'blocked' ? '🔊 Tap to Start'
                   : broadcast.status === 'error' ? '🔊 Error'
                   : broadcast.status === 'done' ? '🔊 Broadcast ✓'
-                  : `🔊 Broadcast ${broadcast.segmentCount > 0 ? `${broadcast.segmentIndex + 1}/${broadcast.segmentCount}` : ''}`)
+                  : '🔊 On')
                 : '🔊 Broadcast'}
             </button>
           )}

@@ -41,6 +41,69 @@ function pick(list: string[], seed: number): string {
   return list[seed % list.length];
 }
 
+// Play descriptions tag players as "S. Barkley RB" (playerTag in playByPlay).
+// Read literally by TTS that's "S Barkley RB gets 6" — robotic. We pull the
+// clean last name + position out of the flavor text and rebuild a natural
+// call ("Barkley gets 6 yards on the run") from the event's structured data,
+// leaving the on-screen feed untouched.
+const PLAYER_TAG_RE = /([A-Z])\.\s+([A-Za-zÀ-ÿ'’.\-]+)\s+([A-Z]{1,3})\b/g;
+
+interface TaggedPlayer { last: string; pos: string; }
+
+function extractPlayers(desc: string): TaggedPlayer[] {
+  const out: TaggedPlayer[] = [];
+  let m: RegExpExecArray | null;
+  PLAYER_TAG_RE.lastIndex = 0;
+  while ((m = PLAYER_TAG_RE.exec(desc)) !== null) out.push({ last: m[2], pos: m[3] });
+  return out;
+}
+
+/** Strip player-tag noise + emoji from a description as an audio fallback. */
+function cleanForSpeech(desc: string): string {
+  return desc
+    .replace(PLAYER_TAG_RE, '$2')
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+const RUSH_POS = new Set(['RB', 'FB', 'QB', 'WR']);
+
+/** Build a natural play-by-play line from the event's structured data. */
+function playByPlayLine(ev: PlayEvent): string {
+  const players = extractPlayers(ev.description);
+  const y = ev.yardsGained;
+  const yd = (n: number) => `${n} yard${n !== 1 ? 's' : ''}`;
+
+  if (ev.type === 'run') {
+    const name = (players.find(p => RUSH_POS.has(p.pos)) ?? players[0])?.last ?? 'The back';
+    if (y <= 0) return `${name} is stopped for ${y === 0 ? 'no gain' : `a loss of ${yd(Math.abs(y))}`}.`;
+    if (y >= 15) return `${name} breaks off a ${y}-yard run!`;
+    if (y >= 8) return `${name} picks up ${yd(y)} on the ground.`;
+    return `${name} gets ${yd(y)} on the run.`;
+  }
+
+  if (ev.type === 'pass_complete') {
+    const qb = players.find(p => p.pos === 'QB')?.last;
+    const rec = players.find(p => p.pos !== 'QB')?.last ?? (qb ? undefined : players[1]?.last);
+    if (qb && rec) {
+      if (y >= 25) return `${qb} goes deep to ${rec} for ${yd(y)}!`;
+      if (y >= 12) return `${qb} finds ${rec} over the middle for ${yd(y)}.`;
+      return `${qb} completes it to ${rec} for ${yd(y)}.`;
+    }
+    return cleanForSpeech(ev.description);
+  }
+
+  if (ev.type === 'pass_incomplete') {
+    const qb = players.find(p => p.pos === 'QB')?.last ?? players[0]?.last ?? 'The quarterback';
+    return `${qb}'s pass falls incomplete.`;
+  }
+
+  // Sacks, touchdowns, field goals, punts, INTs, kickoffs — the flavor text is
+  // already dramatic and worth keeping; just strip the tag noise + emoji.
+  return cleanForSpeech(ev.description);
+}
+
 /** Color reaction for a notable play, or null for a routine one. */
 function tonyReaction(ev: PlayEvent): string | null {
   const d = ev.description.toUpperCase();
@@ -91,8 +154,8 @@ export function buildBroadcastLines(
       continue;
     }
 
-    // Play-by-play: Marcus reads the play, Tony reacts to the big ones.
-    lines.push({ speaker: 'marcus', text: ev.description });
+    // Play-by-play: Marcus calls a natural line, Tony reacts to the big ones.
+    lines.push({ speaker: 'marcus', text: playByPlayLine(ev) });
     const color = tonyReaction(ev);
     if (color) lines.push({ speaker: 'tony', text: color });
   }
@@ -107,4 +170,49 @@ export function segmentBroadcast(lines: BroadcastLine[], size = 6): BroadcastLin
     out.push(lines.slice(i, i + size));
   }
   return out;
+}
+
+/**
+ * The commentary lines for a SINGLE play (Phase 2 per-play sync). One clip per
+ * event so the reveal can be gated on the audio. The show intro is folded into
+ * the first play's clip. Returns [] for a play with nothing to say (the caller
+ * still reveals it, just with a brief silent beat).
+ */
+export function broadcastClipLines(
+  events: PlayEvent[],
+  index: number,
+  homeAbbr: string,
+  awayAbbr: string,
+  fromIndex: number,
+  homeName: string,
+  awayName: string,
+): BroadcastLine[] {
+  const ev = events[index];
+  if (!ev) return [];
+  const lines: BroadcastLine[] = [];
+
+  if (index === fromIndex) {
+    lines.push({
+      speaker: 'marcus',
+      text: `Welcome in — Marcus Cole with Tony Blaze for ${awayName} at ${homeName}. Let's get to it.`,
+    });
+    lines.push({ speaker: 'tony', text: `Let's GO!` });
+  }
+
+  if (ev.type === 'halftime') {
+    lines.push({ speaker: 'marcus', text: `That's the half. ${awayName} ${ev.awayScore}, ${homeName} ${ev.homeScore}.` });
+  } else if (ev.type === 'final') {
+    lines.push({ speaker: 'marcus', text: `That's the ballgame. ${awayName} ${ev.awayScore}, ${homeName} ${ev.homeScore}. Thanks for listening.` });
+  } else if (!isSkippable(ev)) {
+    lines.push({ speaker: 'marcus', text: playByPlayLine(ev) });
+    const color = tonyReaction(ev);
+    if (color) lines.push({ speaker: 'tony', text: color });
+  }
+
+  // Say the city, not the abbreviation — descriptions (e.g. "DAL goes for two")
+  // embed the tag, so swap whole-word abbreviations for the team name.
+  const say = (s: string) => s
+    .replace(new RegExp(`\\b${awayAbbr}\\b`, 'g'), awayName)
+    .replace(new RegExp(`\\b${homeAbbr}\\b`, 'g'), homeName);
+  return lines.map(l => ({ ...l, text: say(l.text) }));
 }
