@@ -53,8 +53,27 @@ const FIRST_APRON_MULT = 1.267;
  *  2026-27 sheet: $221.69M on a $164.96M cap ≈ 1.344× (was 1.295, ~$8M low). */
 const SECOND_APRON_MULT = 1.344;
 
-/** Compute the salary cap for a given season. Anchored on 2026-27 = $140M. */
+// Commissioner override (§1.5): a league can set a flat salary cap that replaces
+// the computed one for every season. Module-level (like the tier cache in
+// football) so the pure cap function can honor it without threading league state
+// through every call site — the store sets it on league load / when it changes.
+let salaryCapOverride: number | null = null;
+
+/** Set (or clear, with null) the commissioner's flat salary-cap override. Called
+ *  by the league store on load and whenever the setting changes. */
+export function setSalaryCapOverride(cap: number | null): void {
+  salaryCapOverride = typeof cap === 'number' && cap > 0 ? cap : null;
+}
+
+/** The current override, or null. */
+export function getSalaryCapOverride(): number | null {
+  return salaryCapOverride;
+}
+
+/** Compute the salary cap for a given season. Anchored on 2026-27 = $140M, unless
+ *  a commissioner override is set (then that flat value applies to all seasons). */
 export function basketballSalaryCap(season: number): number {
+  if (salaryCapOverride != null) return salaryCapOverride;
   const yearsFrom2026 = season - 2026;
   const cap = BASE_CAP_2026 * Math.pow(1 + CAP_INFLATION_RATE, yearsFrom2026);
   // Round to nearest $100K for clean numbers
