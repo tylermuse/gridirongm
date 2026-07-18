@@ -105,9 +105,55 @@ export default function SettingsPage() {
         </Section>
       )}
 
+      {/* Commissioner salary-cap override (God Mode) */}
+      {league && godOn && <SalaryCapPanel />}
+
       {/* Franchise relocation / rebrand (God Mode) */}
       {league && godOn && <RelocatePanel />}
     </main>
+  );
+}
+
+// ===========================================================================
+// Commissioner: custom salary cap (§1.5 — feature parity with football)
+// ===========================================================================
+
+function SalaryCapPanel() {
+  const league = useLeagueStore(s => s.league);
+  const setCap = useLeagueStore(s => s.setCommissionerSalaryCap);
+  const current = (league?.sportData as { commissionerSettings?: { salaryCap?: number } } | undefined)
+    ?.commissionerSettings?.salaryCap;
+  const [value, setValue] = useState(current ? String(Math.round(current / 1_000_000)) : '');
+
+  function apply() {
+    const m = parseFloat(value);
+    if (Number.isFinite(m) && m > 0) void setCap(Math.round(m * 1_000_000));
+  }
+  function clear() {
+    void setCap(null);
+    setValue('');
+  }
+
+  return (
+    <Section
+      title="Salary Cap"
+      desc="Commissioner override — set a flat league salary cap in $M (the tax line and aprons scale from it). Clear to use the standard inflation-based cap."
+    >
+      <div className="flex items-end gap-2">
+        <div className="flex-1">
+          <Field label="Cap ($M)" value={value} onChange={setValue} />
+        </div>
+        <button onClick={apply} className="px-3 py-2 rounded bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700">
+          Set
+        </button>
+        <button onClick={clear} className="px-3 py-2 rounded border border-[var(--border)] text-sm font-semibold hover:bg-[var(--surface-2)]">
+          Clear
+        </button>
+      </div>
+      <p className="text-xs text-[var(--text-sec)] mt-2">
+        {current ? `Active override: $${Math.round(current / 1_000_000)}M` : 'Using the standard inflation-based cap.'}
+      </p>
+    </Section>
   );
 }
 

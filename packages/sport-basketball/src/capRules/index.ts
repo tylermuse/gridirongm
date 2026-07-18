@@ -7,6 +7,8 @@
 
 export {
   basketballSalaryCap,
+  setSalaryCapOverride,
+  getSalaryCapOverride,
   basketballTaxThreshold,
   basketballFirstApron,
   basketballSecondApron,

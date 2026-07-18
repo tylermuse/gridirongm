@@ -61,7 +61,7 @@ import {
   type DraftPickSlot,
 } from '../draft';
 import { pickKey, currentOwner } from '../trade/picks';
-import { basketballPickTradeValue, basketballTradeValue } from '@bs/sport-basketball';
+import { basketballPickTradeValue, basketballTradeValue, setSalaryCapOverride } from '@bs/sport-basketball';
 import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, runAiFreeAgency, isSeasonUnderway, FA_DAYS, type Offer, type OfferResult, type Negotiation } from '../freeAgency';
 import { applyRelease } from '../roster/release';
 import { playThroughInjury as playThroughInjuryState } from '../injuries';
@@ -114,6 +114,10 @@ interface LeagueStore {
 
   /** Persist current in-memory league. No-op if none loaded. */
   saveActive: () => Promise<void>;
+
+  /** Commissioner setting: set a flat salary cap for the league (null clears it,
+   *  reverting to the standard inflation-based cap). Persisted on the league. */
+  setCommissionerSalaryCap: (cap: number | null) => Promise<void>;
 
   /** Drop the active league from memory (does NOT delete the save). */
   clearActive: () => void;
@@ -241,6 +245,15 @@ interface LeagueStore {
 
 /** One-line summary for the sim toast: games simmed + the user team's most
  *  recent result. */
+/** Push the league's commissioner salary-cap override into the engine's module
+ *  cache (§1.5). Called on every load/create so the pure basketballSalaryCap()
+ *  honors it, and cleared (null) for a league that hasn't set one. */
+function syncCapOverride(league: BasketballLeagueState | null): void {
+  const cap = (league?.sportData as { commissionerSettings?: { salaryCap?: number } } | undefined)
+    ?.commissionerSettings?.salaryCap;
+  setSalaryCapOverride(typeof cap === 'number' && cap > 0 ? cap : null);
+}
+
 function simSummary(league: BasketballLeagueState, gamesSimmed: number): string {
   const base = `${gamesSimmed} game${gamesSimmed === 1 ? '' : 's'} simmed`;
   const uid = league.userTeamId;
@@ -503,6 +516,20 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       console.error('[bs-hoops] saveActive failed:', err);
       set({ error: err instanceof Error ? err.message : String(err) });
     }
+  },
+
+  async setCommissionerSalaryCap(cap) {
+    const current = get().league;
+    if (!current) return;
+    const sd = (current.sportData ?? {}) as Record<string, unknown>;
+    const commissionerSettings = {
+      ...((sd.commissionerSettings as Record<string, unknown>) ?? {}),
+      salaryCap: typeof cap === 'number' && cap > 0 ? cap : undefined,
+    };
+    const league = { ...current, sportData: { ...sd, commissionerSettings } } as BasketballLeagueState;
+    // The store subscription pushes this into the engine's cap override; save it.
+    set({ league });
+    try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] setCommissionerSalaryCap failed:', err); }
   },
 
   clearActive() {
@@ -1512,3 +1539,9 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
   },
 }));
+
+// Keep the engine's salary-cap override (§1.5) in sync with the active league's
+// commissioner setting on every store update. Cheap + idempotent — reads
+// sportData.commissionerSettings.salaryCap and pushes it into capRules, or clears
+// it for a league that hasn't set one.
+useLeagueStore.subscribe((state) => syncCapOverride(state.league));
