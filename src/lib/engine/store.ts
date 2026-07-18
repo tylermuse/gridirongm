@@ -2494,6 +2494,29 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     ? generateAITradeProposals({ ...state, teams: newTeams, players: injuredPlayers })
     : [];
 
+  // Rivalry mood swing (feature #8): beating a rival lifts the whole roster's
+  // mood, losing to one stings — more so on a blowout. Precompute per-team once so
+  // the per-player loop below is a cheap lookup. Rival = intensity >= 40 (a real
+  // rivalry, matching the approval hook's spirit).
+  const RIVALRY_MOOD_THRESHOLD = 40;
+  const rivalryMoodByTeam = new Map<string, number>();
+  for (const game of updatedGames) {
+    if (!game.played) continue;
+    for (const teamId of [game.homeTeamId, game.awayTeamId]) {
+      const oppId = teamId === game.homeTeamId ? game.awayTeamId : game.homeTeamId;
+      const isRival = (state.rivalries ?? []).some(r => r.intensity >= RIVALRY_MOOD_THRESHOLD &&
+        ((r.team1Id === teamId && r.team2Id === oppId) || (r.team2Id === teamId && r.team1Id === oppId)));
+      if (!isRival) continue;
+      const teamScore = teamId === game.homeTeamId ? game.homeScore : game.awayScore;
+      const oppScore = teamId === game.homeTeamId ? game.awayScore : game.homeScore;
+      const blowout = Math.abs(teamScore - oppScore) >= 21;
+      let delta = 0;
+      if (teamScore > oppScore) delta = blowout ? 5 : 3;       // beat the rival
+      else if (teamScore < oppScore) delta = blowout ? -5 : -3; // lost to the rival
+      rivalryMoodByTeam.set(teamId, delta);
+    }
+  }
+
   const moodUpdatedPlayers = injuredPlayers.map(p => {
     if (!p.teamId) return p;
     const team = newTeams.find(t => t.id === p.teamId);
@@ -2517,6 +2540,7 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     if (p.contract.salary < marketSalary * 0.7) moodDelta -= 1;
     if (team.record.streak >= 3) moodDelta += 1;
     if (team.record.streak <= -3) moodDelta -= 1;
+    moodDelta += rivalryMoodByTeam.get(p.teamId) ?? 0; // rivalry result (feature #8)
     const newMood = Math.max(0, Math.min(100, (p.mood ?? 70) + moodDelta));
     return { ...p, mood: newMood };
   });
