@@ -22,7 +22,7 @@ import { generateTeamSpotlight, COMMENTATORS, type SpotlightContext } from '@/li
 import { getAiSpotlightState, subscribeAiSpotlight, fetchAiSpotlight, detectNarrativeMoment } from '@/lib/engine/aiSpotlight';
 import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
-import { formatRecord } from '@/types';
+import { formatRecord, findRivalry } from '@/types';
 import { ProgressRing } from '@/components/shared/ProgressRing';
 import { AdSlot } from '@/components/AdSlot';
 
@@ -829,7 +829,7 @@ function DraftCapitalCard({ team, season, phase, teams }: { team: { draftPicks: 
 }
 
 function Dashboard() {
-  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements, leagueSettings, firedState } = useGameStore();
+  const { teams, userTeamId, players, schedule, week, season, phase, playoffBracket, playoffSeeds, champions, finalsMvpPlayerId, draftResults, freeAgents, faDay, newsItems, achievements, leagueSettings, firedState, rivalries } = useGameStore();
   const isSpectator = useIsSpectator();
   const { isFoundingMember } = useSubscription();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -1213,15 +1213,21 @@ function Dashboard() {
           }
           const injuredPlayers = roster.filter(p => p.injury && !p.retired).sort((a, b) => (b.injury?.weeksLeft ?? 0) - (a.injury?.weeksLeft ?? 0));
           const oppTeam = nextGame ? teams.find(t => t.id === (nextGame.homeTeamId === userTeamId ? nextGame.awayTeamId : nextGame.homeTeamId)) : null;
+          const nextGameRivalry = nextGame && oppTeam ? findRivalry(rivalries, userTeamId, oppTeam.id) : undefined;
           return (nextGame || injuredPlayers.length > 0) ? (
             <div className={`grid grid-cols-1 ${nextGame && injuredPlayers.length > 0 ? 'md:grid-cols-2' : ''} gap-4`}>
               {nextGame && oppTeam && (
-                <div className="rounded-xl bg-gradient-to-r from-[var(--surface)] to-blue-50 border border-blue-200 overflow-hidden">
+                <div className={`rounded-xl bg-gradient-to-r overflow-hidden ${nextGameRivalry ? 'from-[var(--surface)] to-red-50 border border-red-300' : 'from-[var(--surface)] to-blue-50 border border-blue-200'}`}>
                   <div className="p-5 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <TeamLogo abbreviation={oppTeam.abbreviation} primaryColor={oppTeam.primaryColor} secondaryColor={oppTeam.secondaryColor} logoUrl={oppTeam.logoUrl} size="lg" />
                       <div>
-                        <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider font-medium">{phase === 'playoffs' ? 'Playoffs' : `Week ${week}`} · {nextGame.homeTeamId === userTeamId ? 'Home' : 'Away'}</div>
+                        <div className="text-xs text-[var(--text-sec)] uppercase tracking-wider font-medium flex items-center gap-2">
+                          <span>{phase === 'playoffs' ? 'Playoffs' : `Week ${week}`} · {nextGame.homeTeamId === userTeamId ? 'Home' : 'Away'}</span>
+                          {nextGameRivalry && (
+                            <span className="text-red-600 font-bold normal-case tracking-normal" title={`Rivalry intensity ${nextGameRivalry.intensity}`}>⚔️ Rivalry Week</span>
+                          )}
+                        </div>
                         <div className="text-lg font-black mt-0.5">{nextGame.homeTeamId === userTeamId ? 'vs' : '@'} {oppTeam.city} {oppTeam.name}</div>
                         <div className="text-sm text-[var(--text-sec)] font-medium">{formatRecord(oppTeam.record)}</div>
                       </div>

@@ -1492,6 +1492,24 @@ export interface RivalryEvent {
   type: 'blowout' | 'comeback' | 'upset' | 'playoff_elimination' | 'trade_steal' | 'sweep';
 }
 
+/** Intensity at/above which a matchup is surfaced as a rivalry in the UI. */
+export const RIVALRY_UI_THRESHOLD = 40;
+
+/** Returns the rivalry between two teams if it meets the UI intensity threshold, else undefined. */
+export function findRivalry(
+  rivalries: Rivalry[] | undefined,
+  teamAId: string,
+  teamBId: string,
+  minIntensity: number = RIVALRY_UI_THRESHOLD
+): Rivalry | undefined {
+  return (rivalries ?? []).find(
+    r =>
+      r.intensity >= minIntensity &&
+      ((r.team1Id === teamAId && r.team2Id === teamBId) ||
+        (r.team1Id === teamBId && r.team2Id === teamAId))
+  );
+}
+
 export interface TradeRumor {
   id: string;
   season: number;
