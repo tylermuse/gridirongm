@@ -17,6 +17,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { createClient as createSupabaseServer } from '@bs/core/supabase/server';
+import { readCredits, getServiceClient } from '@bs/core/podcast';
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_BASE = 'https://api.elevenlabs.io/v1';
@@ -103,14 +104,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'segment too large (max 24 lines)' }, { status: 400 });
     }
 
-    // Auth is only enforced when Supabase is configured (i.e. prod / a hydrated
-    // env). Local dev needs nothing but ELEVENLABS_API_KEY + the flag, so the
-    // spike is testable on localhost without logging in. Real credit/entitlement
-    // gating comes with the Phase 2 hardening.
+    // Premium feature. Enforced only when Supabase is configured (prod / a
+    // hydrated env); local dev without Supabase still works with just the
+    // ELEVENLABS_API_KEY + flag so it stays testable on localhost.
     if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
       const authClient = await createSupabaseServer();
       const { data: { user } } = await authClient.auth.getUser();
       if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      // Premium (incl. founders + admins, grandfathered by resolveTier). Free → 403.
+      const { tier } = await readCredits(getServiceClient(), user.id, user.created_at);
+      if (tier !== 'premium') {
+        return NextResponse.json(
+          { error: 'The live audio broadcast is a Premium feature.', code: 'premium_required' },
+          { status: 403 },
+        );
+      }
     }
 
     const hash = contentHash(lines);
