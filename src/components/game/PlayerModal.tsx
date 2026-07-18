@@ -193,7 +193,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
             {isOnUserTeam && !player.retired && player.position === 'OL' && (
               <div className="flex items-center gap-1">
                 <span className="text-xs font-bold text-[var(--text-sec)]">Position:</span>
-                {(['OT', 'OG'] as const).map(sp => (
+                {(['OT', 'OG', 'C'] as const).map(sp => (
                   <button
                     key={sp}
                     type="button"
