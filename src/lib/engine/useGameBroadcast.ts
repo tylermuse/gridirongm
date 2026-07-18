@@ -1,40 +1,62 @@
 /**
- * useGameBroadcast (Phase 1 spike) — buffered audio broadcast playback.
+ * useGameBroadcast (Phase 2) — per-play, audio-driven broadcast.
  *
- * Given a segmented commentary script, this hook fetches each segment's audio
- * from /api/game-audio, plays them back-to-back through a single <audio>
- * element, and prefetches the NEXT segment while the current one plays
- * (generate-ahead) so playback starts fast and rarely stalls.
+ * The audio is the clock. For each play from a starting index, the hook:
+ *   1. reveals that play on screen (via onShowPlay),
+ *   2. plays that play's spoken call, and
+ *   3. only advances to the next play when the call finishes.
  *
- * This is a listening track, not frame-synced to the field animation — that
- * sync is Phase 2. The hook only owns audio; the caller decides when to start.
+ * Clips are fetched generate-ahead (the next couple of plays are prefetched
+ * while the current one plays) so playback stays smooth. Because the reveal is
+ * gated on the audio, the caller must disable its own speed-timer advancement
+ * while a broadcast is running.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { BroadcastLine } from './gameBroadcast';
+import { broadcastClipLines, type BroadcastLine } from './gameBroadcast';
+import type { PlayEvent } from './playByPlay';
 
 export type BroadcastStatus =
-  | 'idle'        // not started
-  | 'buffering'   // fetching the segment we need to play next
+  | 'idle'
+  | 'buffering'   // fetching the clip we need to play next
   | 'playing'
   | 'paused'
   | 'blocked'     // browser blocked autoplay — needs a user tap
   | 'error'
   | 'done';
 
+export interface StartOpts {
+  events: PlayEvent[];
+  fromIndex: number;
+  homeAbbr: string;
+  awayAbbr: string;
+  /** Full city names — spoken instead of the abbreviation ("Dallas", not "DAL"). */
+  homeName: string;
+  awayName: string;
+  /** Reveal the play at this event index on screen. */
+  onShowPlay: (index: number) => void;
+  /** Called once the last play's call has finished. */
+  onDone?: () => void;
+  /** Extra dwell (ms) to hold after each call finishes, before the next play —
+   *  read live so the game's speed control still affects pacing during a
+   *  broadcast (slower speed = longer gaps; the call is never cut off). */
+  postClipDelayMs?: () => number;
+}
+
 export interface GameBroadcast {
   status: BroadcastStatus;
-  segmentIndex: number;
-  segmentCount: number;
+  playIndex: number;
   error: string | null;
-  /** Begin (or restart) playback from segment 0 of the given script. */
-  start: (segments: BroadcastLine[][]) => void;
+  start: (opts: StartOpts) => void;
   pause: () => void;
   resume: () => void;
   stop: () => void;
 }
 
-async function fetchSegmentAudio(lines: BroadcastLine[], signal: AbortSignal): Promise<string> {
+// A play with no audio (structural filler) still gets a brief on-screen beat.
+const SILENT_BEAT_MS = 500;
+
+async function fetchClip(lines: BroadcastLine[], signal: AbortSignal): Promise<string> {
   const res = await fetch('/api/game-audio', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -43,115 +65,111 @@ async function fetchSegmentAudio(lines: BroadcastLine[], signal: AbortSignal): P
   });
   if (!res.ok) {
     let msg = `Audio request failed (${res.status})`;
-    try {
-      const body = await res.json();
-      if (body?.error) msg = body.error;
-    } catch { /* non-JSON error body */ }
+    try { const b = await res.json(); if (b?.error) msg = b.error; } catch { /* non-JSON */ }
     throw new Error(msg);
   }
-  const blob = await res.blob();
-  return URL.createObjectURL(blob);
+  return URL.createObjectURL(await res.blob());
 }
 
 export function useGameBroadcast(): GameBroadcast {
   const [status, setStatus] = useState<BroadcastStatus>('idle');
-  const [segmentIndex, setSegmentIndex] = useState(0);
-  const [segmentCount, setSegmentCount] = useState(0);
+  const [playIndex, setPlayIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const runIdRef = useRef(0);              // bumps on every start/stop to cancel stale loops
-  const urlCacheRef = useRef<Map<number, Promise<string>>>(new Map());
-  const segmentsRef = useRef<BroadcastLine[][]>([]);
+  const runIdRef = useRef(0);
+  const optsRef = useRef<StartOpts | null>(null);
+  // index → promise of blob URL (null = no audio for that play)
+  const clipCacheRef = useRef<Map<number, Promise<string | null>>>(new Map());
 
   const cleanup = useCallback(() => {
     runIdRef.current++;
     abortRef.current?.abort();
     abortRef.current = null;
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = '';
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ''; }
+    for (const p of clipCacheRef.current.values()) {
+      p.then(url => { if (url) URL.revokeObjectURL(url); }).catch(() => {});
     }
-    // Revoke any resolved blob URLs.
-    for (const p of urlCacheRef.current.values()) {
-      p.then(url => URL.revokeObjectURL(url)).catch(() => {});
-    }
-    urlCacheRef.current.clear();
+    clipCacheRef.current.clear();
   }, []);
 
-  useEffect(() => cleanup, [cleanup]); // revoke on unmount
+  useEffect(() => cleanup, [cleanup]);
 
-  const ensureFetched = useCallback((i: number): Promise<string> => {
-    const cache = urlCacheRef.current;
-    const hit = cache.get(i);
+  // Fetch (once) the clip for a given play index; null when it has no audio.
+  const ensureClip = useCallback((index: number): Promise<string | null> => {
+    const cache = clipCacheRef.current;
+    const hit = cache.get(index);
     if (hit) return hit;
-    const signal = abortRef.current!.signal;
-    const p = fetchSegmentAudio(segmentsRef.current[i], signal);
-    cache.set(i, p);
+    const opts = optsRef.current!;
+    const lines = broadcastClipLines(opts.events, index, opts.homeAbbr, opts.awayAbbr, opts.fromIndex, opts.homeName, opts.awayName);
+    const p: Promise<string | null> = lines.length === 0
+      ? Promise.resolve(null)
+      : fetchClip(lines, abortRef.current!.signal);
+    cache.set(index, p);
     return p;
   }, []);
 
   const playUrl = useCallback((url: string): Promise<void> => {
     return new Promise((resolve, reject) => {
       const audio = audioRef.current!;
-      const onEnded = () => { audio.removeEventListener('ended', onEnded); audio.removeEventListener('error', onError); resolve(); };
-      const onError = () => { audio.removeEventListener('ended', onEnded); audio.removeEventListener('error', onError); reject(new Error('playback error')); };
-      audio.addEventListener('ended', onEnded);
-      audio.addEventListener('error', onError);
+      const done = () => { audio.removeEventListener('ended', done); audio.removeEventListener('error', fail); resolve(); };
+      const fail = () => { audio.removeEventListener('ended', done); audio.removeEventListener('error', fail); reject(new Error('playback error')); };
+      audio.addEventListener('ended', done);
+      audio.addEventListener('error', fail);
       audio.src = url;
       audio.play().catch(reject);
     });
   }, []);
 
-  const runLoop = useCallback(async (fromSegment: number) => {
+  const delay = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+  const runLoop = useCallback(async (from: number) => {
     const myRun = runIdRef.current;
-    const segments = segmentsRef.current;
-    for (let i = fromSegment; i < segments.length; i++) {
+    const opts = optsRef.current!;
+    for (let i = from; i < opts.events.length; i++) {
       if (runIdRef.current !== myRun) return;
-      setSegmentIndex(i);
-      setStatus('buffering');
-      let url: string;
+      opts.onShowPlay(i);
+      setPlayIndex(i);
+      // Prefetch the next couple of plays while this one plays.
+      ensureClip(i + 1).catch(() => {});
+      ensureClip(i + 2).catch(() => {});
+      let url: string | null;
       try {
-        url = await ensureFetched(i);
+        setStatus('buffering');
+        url = await ensureClip(i);
       } catch (e) {
-        if (runIdRef.current !== myRun) return;
-        if ((e as Error).name === 'AbortError') return;
-        setError((e as Error).message);
-        setStatus('error');
-        return;
+        if (runIdRef.current !== myRun || (e as Error).name === 'AbortError') return;
+        setError((e as Error).message); setStatus('error'); return;
       }
       if (runIdRef.current !== myRun) return;
-      // Prefetch the next segment while this one plays.
-      if (i + 1 < segments.length) ensureFetched(i + 1).catch(() => {});
+      if (!url) { await delay(SILENT_BEAT_MS); continue; }
       try {
         setStatus('playing');
         await playUrl(url);
       } catch (e) {
         if (runIdRef.current !== myRun) return;
-        // Autoplay rejection — surface a tap-to-start state.
         if ((e as Error).name === 'NotAllowedError' || /play\(\)/.test((e as Error).message)) {
-          setStatus('blocked');
-        } else {
-          setError((e as Error).message);
-          setStatus('error');
+          setStatus('blocked'); return;
         }
-        return;
+        setError((e as Error).message); setStatus('error'); return;
       }
+      // Speed-controlled dwell between calls (call already finished; never cuts it).
+      const dwell = opts.postClipDelayMs?.() ?? 0;
+      if (dwell > 0) await delay(dwell);
     }
-    if (runIdRef.current === myRun) setStatus('done');
-  }, [ensureFetched, playUrl]);
+    if (runIdRef.current === myRun) { setStatus('done'); opts.onDone?.(); }
+  }, [ensureClip, playUrl]);
 
-  const start = useCallback((segments: BroadcastLine[][]) => {
+  const start = useCallback((opts: StartOpts) => {
     cleanup();
-    if (segments.length === 0) return;
+    if (opts.events.length === 0) return;
     if (!audioRef.current) audioRef.current = new Audio();
     abortRef.current = new AbortController();
-    segmentsRef.current = segments;
-    setSegmentCount(segments.length);
-    setSegmentIndex(0);
+    optsRef.current = opts;
     setError(null);
-    runLoop(0);
+    setPlayIndex(opts.fromIndex);
+    runLoop(opts.fromIndex);
   }, [cleanup, runLoop]);
 
   const pause = useCallback(() => {
@@ -161,16 +179,15 @@ export function useGameBroadcast(): GameBroadcast {
 
   const resume = useCallback(() => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || !audio.src) return;
     audio.play().then(() => setStatus('playing')).catch(() => setStatus('blocked'));
   }, []);
 
   const stop = useCallback(() => {
     cleanup();
     setStatus('idle');
-    setSegmentIndex(0);
-    setSegmentCount(0);
+    setPlayIndex(0);
   }, [cleanup]);
 
-  return { status, segmentIndex, segmentCount, error, start, pause, resume, stop };
+  return { status, playIndex, error, start, pause, resume, stop };
 }
