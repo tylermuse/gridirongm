@@ -20,6 +20,7 @@ import {
   PODCAST_CREDITS_PER_MONTH,
 } from '@bs/core/billing';
 import { setCurrentSubscriptionAllocations, setCurrentSubscriptionTier } from '@bs/core/billing';
+import { useGameStore } from '@/lib/engine/store';
 import { trackAuthEvent, clearAuthEventDedupe } from '@bs/core/analytics';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -310,6 +311,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     setCurrentSubscriptionAllocations(
       getScoutingAllocations(effectiveTier, effectiveIsAdmin || effectiveIsFoundingMember),
     );
+    // Now that the real entitlement is known, un-stick any scouting/intel
+    // allocations that were frozen at free-tier values in the save because they
+    // were seeded before this resolved (Zxmis: "upgraded but no extra scouts/intel").
+    useGameStore.getState().syncEntitlementAllocations();
   }, [effectiveTier, effectiveIsAdmin, effectiveIsFoundingMember]);
 
   const value: SubscriptionContextValue = {
