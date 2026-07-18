@@ -18,12 +18,13 @@ import { PlayCallMenu, type PlayCallType } from '@/components/game/PlayCallMenu'
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import { generateHalftimeBreakdown, COMMENTATORS } from '@/lib/engine/debate';
 import { useGameBroadcast } from '@/lib/engine/useGameBroadcast';
+import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import type { Player, Position, GameResult } from '@/types';
 
-// Phase 1 spike: audio play-by-play broadcast. Off unless explicitly enabled,
-// so nothing reaches prod until the pipeline (script → ElevenLabs → buffered
-// streaming) has been heard and billing/entitlement gating is wired.
-const GAME_AUDIO_ENABLED = process.env.NEXT_PUBLIC_GAME_AUDIO === '1';
+// Audio play-by-play broadcast. In prod it's a Premium feature (gated on tier
+// below + server-side in /api/game-audio). This env flag is only a local-dev
+// override so it can be tested on localhost without a premium account.
+const GAME_AUDIO_DEV_OVERRIDE = process.env.NEXT_PUBLIC_GAME_AUDIO === '1';
 
 // ---------------------------------------------------------------------------
 // Speed settings
@@ -630,6 +631,10 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // Audio broadcast (Phase 2, flag-gated). Per-play, audio-driven: the spoken
   // call reveals each play and gates the advance, so the voice stays in sync
   // with the on-screen action. Narrates from the current play forward.
+  // Live audio broadcast is a Premium feature (founders + admins grandfathered).
+  // The dev override lets it be tested on localhost without a premium account.
+  const { tier: subTier, isAdmin: subIsAdmin, isFoundingMember } = useSubscription();
+  const canBroadcast = GAME_AUDIO_DEV_OVERRIDE || subTier === 'premium' || subIsAdmin || isFoundingMember;
   const broadcast = useGameBroadcast();
   const broadcastOn = broadcast.status !== 'idle';
   // Live speed ref so the broadcast can read the current speed for inter-call
@@ -1544,7 +1549,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             </button>
           )}
           {/* Audio Broadcast — Phase 1 spike, hidden unless the flag is on. */}
-          {GAME_AUDIO_ENABLED && (
+          {canBroadcast && (
             <button
               onClick={toggleBroadcast}
               className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold transition-all ${
@@ -1563,7 +1568,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           )}
           </div>
         </div>
-        {GAME_AUDIO_ENABLED && broadcast.status === 'blocked' && (
+        {canBroadcast && broadcast.status === 'blocked' && (
           <button
             onClick={broadcast.resume}
             className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-all"
@@ -1571,7 +1576,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             ▶ Tap to start the audio broadcast
           </button>
         )}
-        {GAME_AUDIO_ENABLED && broadcast.status === 'error' && broadcast.error && (
+        {canBroadcast && broadcast.status === 'error' && broadcast.error && (
           <div className="text-xs text-red-500 px-1">Broadcast error: {broadcast.error}</div>
         )}
 
