@@ -20,9 +20,9 @@ const SRC = path.join('public', 'rosters', 'FBGM_NFL_Roster_2026_PreDraft.json')
 const OUT = path.join('public', 'rosters', 'FBGM_NFL_Roster_MontanaEra_1994.json');
 const CSV = path.join('scripts', 'data', 'nflverse_roster_1994.csv');
 
-const SOURCE_SEASON = 2026;
-const TARGET_SEASON = 1994;
-const YEAR_SHIFT = TARGET_SEASON - SOURCE_SEASON; // -32
+const SOURCE_SEASON = 1994;
+const TARGET_SEASON = 2026;
+const YEAR_SHIFT = TARGET_SEASON - SOURCE_SEASON; // +32
 
 // 1994 was the NFL's first year with a salary cap at $34.608M.
 // 2026 file uses $353.85M.
@@ -386,12 +386,12 @@ data.headToHeads = [];
 data.allStars = [];
 data.trade = [];
 
-// --- 3a. Per-player: shift years, scale contracts ---
+// --- 3a. Per-player: scale contracts, clear history ---
+// Note: born.year, draft.year, contract.exp, ratings.season, retiredYear are NOT shifted here.
+// The base roster is already in 2026 format; those values are valid as-is.
+// CSV overlay (3b) applies shiftYear() to historical CSV years (born, entry_year) only.
 for (const player of data.players) {
-  if (player.born?.year != null) player.born.year = shiftYear(player.born.year);
-  if (player.draft?.year != null) player.draft.year = shiftYear(player.draft.year);
   if (player.contract) {
-    if (player.contract.exp != null) player.contract.exp = shiftYear(player.contract.exp);
     if (player.contract.amount != null) player.contract.amount = scaleContractAmount(player.contract.amount);
   }
   player.awards = [];
@@ -400,13 +400,7 @@ for (const player of data.players) {
   player.stats = [];
   player.salaries = [];
   player.statsTids = player.tid >= 0 ? [player.tid] : [];
-  if (typeof player.retiredYear === 'number') player.retiredYear = shiftYear(player.retiredYear);
   if (player.imgURL) player.imgURL = '';
-  if (Array.isArray(player.ratings)) {
-    for (const r of player.ratings) {
-      if (typeof r.season === 'number') r.season = shiftYear(r.season);
-    }
-  }
 }
 
 // --- 3b. CSV-driven name/college/born/draft overlay ---
@@ -485,10 +479,10 @@ for (const [teamAbbrev, team] of teamByAbbrev) {
       const birthDate = csv[colIdx.birth_date];
       if (birthDate && /^\d{4}-/.test(birthDate)) {
         const birthYear = parseInt(birthDate.slice(0, 4), 10);
-        if (Number.isFinite(birthYear)) target.born = { ...(target.born ?? {}), year: birthYear };
+        if (Number.isFinite(birthYear)) target.born = { ...(target.born ?? {}), year: shiftYear(birthYear) };
       }
       const entryYear = parseInt(csv[colIdx.entry_year], 10);
-      if (Number.isFinite(entryYear) && target.draft) target.draft.year = entryYear;
+      if (Number.isFinite(entryYear) && target.draft) target.draft.year = shiftYear(entryYear);
       // 1994 CSV has no draft_number column — parseInt(undefined, 10) = NaN → isFinite false → skipped.
       const draftNumber = parseInt(csv[colIdx.draft_number], 10);
       if (Number.isFinite(draftNumber) && target.draft) target.draft.pick = draftNumber;
@@ -574,11 +568,8 @@ for (const team of data.teams) {
   }
 }
 
-// --- 5. Draft picks: shift + drop pre-1994 ---
+// --- 5. Draft picks: drop pre-2026 (dp.season is already in 2026 format; no shift needed) ---
 if (Array.isArray(data.draftPicks)) {
-  for (const dp of data.draftPicks) {
-    if (typeof dp.season === 'number') dp.season = shiftYear(dp.season);
-  }
   data.draftPicks = data.draftPicks.filter((dp) => (dp.season ?? 0) >= TARGET_SEASON);
 }
 
