@@ -73,6 +73,21 @@ function getStatValues(p: Player): [string, string] {
   }
 }
 
+/**
+ * Contract salary label. A deal whose future years step up — most commonly a
+ * rookie-deal extension where year 1 stays the cheap rookie number and the new
+ * money kicks in later — reads as a no-op if we only print year-1 salary. When
+ * a later year is higher, surface the peak (new-money) rate as "$7.2M→$45M" so
+ * the extension is visible. Flat contracts render unchanged ("$7.2M").
+ */
+function contractSalaryLabel(c: Player['contract']): string {
+  const cur = c.salary;
+  const peak = (c.contractYears ?? [])
+    .filter(y => !y.isVoidYear)
+    .reduce((m, y) => Math.max(m, y.baseSalary + (y.proratedBonus ?? 0)), cur);
+  return peak > cur + 0.05 ? `$${cur}M→$${Math.round(peak)}M` : `$${cur}M`;
+}
+
 /** Get mood explanation for a player */
 function getMoodReason(p: Player, team: { record: { wins: number; losses: number; streak: number }; salaryCap: number } | undefined, depthIdx: number): string {
   const reasons: string[] = [];
@@ -743,7 +758,7 @@ export default function RosterPage() {
                       </div>
                       <div className="flex items-center gap-3 text-[11px] text-[var(--text-sec)]">
                         <span>Age {p.age}</span>
-                        <span>${p.contract.salary}M/{p.contract.yearsLeft}yr</span>
+                        <span>{contractSalaryLabel(p.contract)}/{p.contract.yearsLeft}yr</span>
                         {depthLabel && <span className="font-medium text-[var(--text)]">{depthLabel}</span>}
                         {p.injury && <span className="text-red-600">{p.injury.type} ({p.injury.weeksLeft}w)</span>}
                       </div>
@@ -940,7 +955,7 @@ export default function RosterPage() {
 
                         {/* Contract */}
                         <td className="py-2 px-2 text-right font-mono text-xs tabular-nums">
-                          <span className="font-semibold">${p.contract.salary}M</span>
+                          <span className="font-semibold">{contractSalaryLabel(p.contract)}</span>
                           <span className={`ml-1 ${p.contract.yearsLeft <= 1 ? 'font-bold text-amber-600' : 'text-[var(--text-sec)]'}`}>
                             {p.contract.yearsLeft <= 1 ? (isStarter ? '⚠️ expiring' : 'expiring') : `${p.contract.yearsLeft}yr left`}
                           </span>
@@ -1511,7 +1526,7 @@ export default function RosterPage() {
                             <td className={`py-2 text-center font-bold ${ratingColor(p.ratings.overall)}`}>{p.ratings.overall}</td>
                             <td className="py-2 text-center">{p.age}</td>
                             <td className="py-2 text-center">{p.experience}</td>
-                            <td className="py-2 text-center">${p.contract.salary}M</td>
+                            <td className="py-2 text-center">{contractSalaryLabel(p.contract)}</td>
                             <td className="py-2 text-center">
                               <Button size="sm" variant="secondary" onClick={() => {
                                 const err = demoteToPracticeSquad(p.id);
@@ -1906,7 +1921,7 @@ export default function RosterPage() {
               <div className="px-5 py-5 space-y-4">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-[var(--text-sec)]">Current deal</span>
-                  <span className="font-bold">${p.contract.salary}M/yr · {p.contract.yearsLeft}yr left</span>
+                  <span className="font-bold">{contractSalaryLabel(p.contract)}/yr · {p.contract.yearsLeft}yr left</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-[var(--text-sec)]">Market value</span>
