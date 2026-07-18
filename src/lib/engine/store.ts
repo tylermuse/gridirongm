@@ -219,6 +219,14 @@ interface GameStore extends LeagueState {
    * the full scouting profile without spending points.
    */
   autoPopulateAllScoutingForPremium: () => void;
+  /** Raise the baked scouting/intel allocations to the current entitlement when
+   *  it's higher. Scout points + intel reports are seeded into the save from a
+   *  module cache that defaults to free and resolves async (SubscriptionProvider),
+   *  so a premium/founder user who seeded before the resolve gets free values
+   *  frozen in. Called on rehydrate and whenever the resolved tier changes.
+   *  Only ever RAISES (server enforces true entitlement), so it can't punish a
+   *  lapsed sub mid-season. */
+  syncEntitlementAllocations: () => void;
   // Free Agency Intel Report
   intelReportFA: (playerId: string) => boolean;
   // Coaching
@@ -7676,6 +7684,28 @@ export const useGameStore = create<GameStore>()(
       // waiting to happen with a 200-prospect draft class. Inline generation
       // here is duplicated from filmReviewPlayer / inPersonEvalPlayer /
       // fullEvalPlayer; if those change, mirror the changes here.
+      syncEntitlementAllocations: () => {
+        const state = get();
+        const alloc = getCurrentSubscriptionAllocations();
+        const patch: { scoutingState?: typeof state.scoutingState; pursuitState?: typeof state.pursuitState } = {};
+
+        // Draft scout points.
+        const ss = state.scoutingState;
+        if (ss && alloc.scoutPoints > ss.maxScoutPoints) {
+          const delta = alloc.scoutPoints - ss.maxScoutPoints;
+          patch.scoutingState = { ...ss, maxScoutPoints: alloc.scoutPoints, scoutPoints: ss.scoutPoints + delta };
+        }
+
+        // Free-agency intel reports (pursuit points).
+        const ps = state.pursuitState;
+        if (ps && alloc.intelReports > ps.maxPursuitPoints) {
+          const delta = alloc.intelReports - ps.maxPursuitPoints;
+          patch.pursuitState = { ...ps, maxPursuitPoints: alloc.intelReports, pursuitPoints: ps.pursuitPoints + delta };
+        }
+
+        if (patch.scoutingState || patch.pursuitState) set(patch);
+      },
+
       autoPopulateAllScoutingForPremium: () => {
         const state = get();
         if (state.phase !== 'draft') return;
@@ -10170,6 +10200,11 @@ export const useGameStore = create<GameStore>()(
         if (state && state.userTeamId && state.teams && state.teams.length > 0) {
           useGameStore.setState({ initialized: true });
         }
+        // Un-stick any scouting/intel allocations that were frozen at free-tier
+        // values before the subscription tier resolved. No-op unless the module
+        // cache already holds a higher entitlement; SubscriptionProvider also
+        // calls this the moment it resolves the tier.
+        useGameStore.getState().syncEntitlementAllocations();
         // Wire the sim-balance telemetry sink. Pushed records go into
         // state.simTelemetry (capped) only when features.devPanels is on;
         // otherwise the sink is a no-op.
