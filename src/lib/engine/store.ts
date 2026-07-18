@@ -6475,6 +6475,20 @@ export const useGameStore = create<GameStore>()(
           return { ...p };
         });
 
+        // Stopgap (OL center protection): re-classifying the line after any OL
+        // pin can sweep an UNPINNED center into a tackle slot when the user pins a
+        // *different* lineman to OT/OG. Auto-pin the team's current center to 'C'
+        // so a manual reorder locks him in place. Skipped when the user is
+        // explicitly setting THIS player's spot (sub is OT/OG only). A future OL
+        // pass should make classifyTeamSubPositions sticky and drop this.
+        if (teamId && player.position === 'OL' && (sub === 'OT' || sub === 'OG')) {
+          const currentCenter = newPlayers.find(
+            p => p.teamId === teamId && p.position === 'OL' && p.id !== playerId
+              && p.subPosition === 'C' && !p.subPositionOverride,
+          );
+          if (currentCenter) currentCenter.subPositionOverride = 'C';
+        }
+
         if (teamId) {
           // Re-derive the team's sub-positions; backfill applies the pin and
           // re-balances the rest of the line around it.
