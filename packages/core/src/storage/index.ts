@@ -51,8 +51,49 @@ export async function getItem(key: string): Promise<string | null> {
   return val ?? null;
 }
 
+/** Total roster size (teams + players) of a serialized persist payload, or 0 if
+ *  it can't be parsed / isn't a game-save shape. Payload is `{state:{…}}` (persist
+ *  middleware) or a raw state object. */
+function rosterCount(serialized: string): number {
+  try {
+    const parsed = JSON.parse(serialized) as { state?: unknown } | Record<string, unknown>;
+    const st = ((parsed as { state?: unknown }).state ?? parsed) as {
+      teams?: unknown[];
+      players?: unknown[];
+    };
+    const t = Array.isArray(st?.teams) ? st.teams.length : 0;
+    const p = Array.isArray(st?.players) ? st.players.length : 0;
+    return t + p;
+  } catch {
+    return 0;
+  }
+}
+
+/** True when a serialized payload carries an EMPTY roster (both teams and players
+ *  empty). Fast substring pre-check so a normal (non-empty) save never pays a
+ *  full JSON.parse. */
+function isEmptyRosterPayload(serialized: string): boolean {
+  return serialized.includes('"teams":[]') && serialized.includes('"players":[]');
+}
+
 export async function setItem(key: string, value: string): Promise<void> {
   const db = await getDB();
+  // Save-wipe guard (vulcan832 — overnight full save loss): a silent auth-token
+  // expiry or hydration failure can reset the store to its initial empty state.
+  // Without this, the persist middleware / flushPersist would then stomp a good
+  // save with empty teams+players. Never let an empty-roster payload overwrite a
+  // save that still has data — bail loudly instead. Fast-pathed on the substring
+  // so normal writes skip both the parse and the extra read.
+  if (isEmptyRosterPayload(value)) {
+    const existing = await db.get(STORE_NAME, key);
+    if (typeof existing === 'string' && rosterCount(existing) > 0) {
+      console.error(
+        `[storage] Blocked an empty-roster write over a non-empty save ("${key}") — save-wipe guard. ` +
+          `The in-memory store was empty (likely a failed load/auth refresh); keeping the existing save.`,
+      );
+      return;
+    }
+  }
   await db.put(STORE_NAME, value, key);
 }
 
@@ -105,6 +146,9 @@ export async function flushPersist(serializedState: string): Promise<void> {
  * over stale IndexedDB data when present.
  */
 export function flushPersistSync(serializedState: string): void {
+  // Same save-wipe guard as setItem: never stash an empty-roster recovery
+  // snapshot (a rehydrate would prefer it over good IndexedDB data).
+  if (isEmptyRosterPayload(serializedState)) return;
   try {
     localStorage.setItem(PERSIST_KEY + '-recovery', serializedState);
   } catch {
