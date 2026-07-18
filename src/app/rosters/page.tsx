@@ -46,7 +46,11 @@ const ROSTERS: RosterEntry[] = [
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
     era: 'Era',
-    cacheBust: 1,
+    // Bumped 1→2: the year-normalization fix (#365, then #371's cleaner
+    // scripts) regenerated this JSON, but the filename was being served stale
+    // from browser + edge cache, so users kept booting the original broken
+    // 1994-season build. Same failure the Brady roster hit — bump on every regen.
+    cacheBust: 2,
     caveat:
       'V1 (Jul 18): Head coaches are real 1994 HCs. 28 teams — no Ravens, Jaguars, or Panthers (expansion 1995–1996). Powered by nflverse historical data: ~1,500 real 1994 NFL players on their real 1994 teams. OVRs inherit from 2026 base, not historically tuned. Note: LT (Lawrence Taylor) retired after 1993 — 1994 is the Steve Young/Rice/Montana era, not Lawrence Taylor\'s peak.',
   },
@@ -60,7 +64,9 @@ const ROSTERS: RosterEntry[] = [
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
     era: 'Era',
-    cacheBust: 1,
+    // Bumped 1→2 — see Montana note above. Same regenerated-but-stale-cached
+    // fix; without this bump the year-normalization correction never reaches users.
+    cacheBust: 2,
     caveat:
       'V1 (Jul 18): Head coaches are real 1999 HCs (Dick Vermeil on STL, Jeff Fisher on TEN, Tony Dungy on TB, etc.). Powered by nflverse historical data: ~1,700 real 1999 NFL players on their real 1999 teams. OVRs inherit from 2026 base, not historically tuned. Cleveland Browns are the 1999 expansion team (2-14 in real life).',
   },

@@ -12,7 +12,7 @@ import { BoxScore } from '@/components/game/BoxScore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
-import type { GameResult, Team } from '@/types';
+import { findRivalry, type GameResult, type Team } from '@/types';
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
 
 type StandingsView = 'division' | 'conference' | 'league';
@@ -379,12 +379,9 @@ export default function StandingsPage() {
                       <span className="font-semibold text-sm">
                         {isHome ? 'vs' : '@'} {teamFullName(opponentId)}
                         {(() => {
-                          const r = (rivalries ?? []).find(rv =>
-                            (rv.team1Id === userTeamId && rv.team2Id === opponentId) ||
-                            (rv.team1Id === opponentId && rv.team2Id === userTeamId)
-                          );
-                          if (!r || r.intensity < 40) return null;
-                          return <span className="ml-1.5" title={`Rivalry (${r.intensity})`} style={{ opacity: Math.min(1, r.intensity / 80) }}>🔥</span>;
+                          const r = findRivalry(rivalries, userTeamId, opponentId);
+                          if (!r) return null;
+                          return <span className="ml-1.5" title={`Rivalry (${r.intensity})`} style={{ opacity: Math.min(1, r.intensity / 80) }}>⚔️</span>;
                         })()}
                       </span>
                     </div>
