@@ -260,9 +260,10 @@ function AccountSection() {
       {/* The only persistent upgrade path in the game. Before this, a free user
           could only reach /pricing by exhausting scout points in the draft or
           intel reports in free agency — which is why just 7% of players had
-          ever seen the pricing page. Founders/admins resolve to 'premium' and
-          never see this. */}
-      {tier === 'free' && (
+          ever seen the pricing page. Gate on entitlement, not raw tier: a
+          founder/admin's tier can resolve to 'free' before fetchSubscription
+          completes (see SubscriptionProvider), so check the flags explicitly. */}
+      {tier === 'free' && !isFoundingMember && !isAdmin && (
         <Link
           href="/pricing"
           className="block text-[10px] text-center py-1.5 mb-1 rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors font-bold"
