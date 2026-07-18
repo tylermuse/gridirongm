@@ -257,6 +257,19 @@ function AccountSection() {
           )}
         </div>
       </div>
+      {/* The only persistent upgrade path in the game. Before this, a free user
+          could only reach /pricing by exhausting scout points in the draft or
+          intel reports in free agency — which is why just 7% of players had
+          ever seen the pricing page. Founders/admins resolve to 'premium' and
+          never see this. */}
+      {tier === 'free' && (
+        <Link
+          href="/pricing"
+          className="block text-[10px] text-center py-1.5 mb-1 rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors font-bold"
+        >
+          ⚡ Upgrade to Premium
+        </Link>
+      )}
       {isAdmin && (
         <Link
           href="/admin/analytics"
@@ -342,7 +355,6 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           </div>
           <div className="mt-2 text-xs text-[var(--text-sec)]">
             {formatRecord(userTeam.record)}
-            {userTeam.record.ties > 0 ? `-${userTeam.record.ties}` : ''}
           </div>
         </div>
       )}

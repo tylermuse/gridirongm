@@ -572,7 +572,7 @@ function TradeFinderContent({
 
   // Cap space
   const capSpace = userTeam ? userTeam.salaryCap - userTeam.totalPayroll : 0;
-  const userPicks = userTeam?.draftPicks.filter(pk => pk.year === upcomingDraftYear && !pk.playerId) ?? [];
+  const userPicks = userTeam?.draftPicks.filter(pk => pk.year >= upcomingDraftYear && !pk.playerId) ?? [];
 
   return (
     <div className="space-y-6">

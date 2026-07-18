@@ -177,6 +177,9 @@ interface GameStore extends LeagueState {
   demoteToPracticeSquad: (playerId: string) => string;
   /** Promote a PS player to the active 53. Returns error msg. */
   promoteFromPracticeSquad: (playerId: string) => string;
+  /** Cut a practice-squad player directly to free agency (no call-up needed).
+   *  Returns error msg. */
+  cutFromPracticeSquad: (playerId: string) => string;
   /** Sign a free-agent to the PS directly (minimum contract). Returns error msg. */
   signToPracticeSquad: (playerId: string) => string;
   /** Pin a player's detailed sub-position within their broad-position cluster
@@ -435,17 +438,23 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
           score += 130; // Bad QB — still a priority
         } else if (qbOvr < 75) {
           score += 85; // Below average — "bridge QB" territory
-        } else if (qbOvr < 82) {
-          // Capable starter — still draft if the prospect has real upside.
-          // Potential gates this rather than current OVR.
-          const upsideBonus = prospect.potential >= 85 ? 65 :
-                              prospect.potential >= 80 ? 45 :
-                              prospect.ratings.overall > qbOvr ? 30 : 15;
+        } else if (qbOvr < 78) {
+          // Below-average starter — an upgrade is a real priority.
+          const upsideBonus = prospect.potential >= 85 ? 55 :
+                              prospect.potential >= 80 ? 35 :
+                              prospect.ratings.overall > qbOvr ? 20 : 8;
           score += upsideBonus;
+        } else if (qbOvr < 82) {
+          // Capable starter (Cam Ward range) — only seek a backup if the team
+          // doesn't already have one, so it stops drafting a QB every single year.
+          if (count < 2) {
+            score += prospect.potential >= 88 ? 20 : prospect.potential >= 85 ? 10 : 0;
+          }
         } else {
-          // Elite QB (82+) — still draft a high-potential dev QB in later
-          // rounds; don't crush the score entirely.
-          score += prospect.potential >= 85 ? 35 : prospect.potential >= 80 ? 15 : 0;
+          // Elite QB (82+) — don't chase dev QBs unless truly short-handed.
+          if (count < 2) {
+            score += prospect.potential >= 90 ? 15 : 0;
+          }
         }
       }
 
@@ -6356,6 +6365,45 @@ export const useGameStore = create<GameStore>()(
               totalPayroll: t.totalPayroll + player.contract.salary,
             };
           }),
+        });
+        return '';
+      },
+
+      cutFromPracticeSquad: (playerId: string): string => {
+        const state = get();
+        if (!state.userTeamId) return 'No user team.';
+        const player = state.players.find(p => p.id === playerId);
+        if (!player || player.teamId !== state.userTeamId) return 'Player not on your team.';
+        const team = state.teams.find(t => t.id === state.userTeamId);
+        if (!team) return 'Team not found.';
+        const currentPs = team.practiceSquad ?? [];
+        if (!currentPs.includes(playerId)) return 'Player is not on your practice squad.';
+
+        // PS players are week-to-week and already off the cap ledger (demote/sign
+        // never added their salary to totalPayroll), so a cut carries no dead cap —
+        // they simply return to free agency. Distinct from releasePlayer, which
+        // only filters the active 53 and would leave a PS ghost + charge dead cap.
+        const cutNews = makeNews({
+          season: state.season,
+          week: state.week,
+          type: 'release',
+          teamId: state.userTeamId,
+          playerIds: [playerId],
+          headline: `You cut ${player.firstName} ${player.lastName} (${player.position}) from the practice squad.`,
+          isUserTeam: true,
+        });
+
+        set({
+          players: state.players.map(p =>
+            p.id === playerId ? { ...p, teamId: null, onIR: false } : p,
+          ),
+          teams: state.teams.map(t =>
+            t.id === state.userTeamId
+              ? { ...t, practiceSquad: currentPs.filter(id => id !== playerId) }
+              : t,
+          ),
+          freeAgents: [...state.freeAgents, playerId],
+          newsItems: [...state.newsItems, cutNews],
         });
         return '';
       },

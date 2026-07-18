@@ -93,11 +93,17 @@ export function AdSlot({ size = 'leaderboard', slotId, className }: AdSlotProps)
     );
   }
 
-  // Placeholder (no AdSense client ID yet, or no slot ID for this placement).
+  // No AdSense client ID yet (or no slot ID for this placement).
+  //
+  // This used to render a grey dashed box reading "Ad Slot · 728×90" — internal
+  // scaffolding that was shipping to every free user on three pages. Instead we
+  // use the reserved space for an actual upgrade prompt: same footprint, so
+  // layouts stay correct and swapping in real ads later shifts nothing, but the
+  // slot now does something useful while AdSense is unconfigured.
   return (
     <div
       data-ad-slot={slotId ?? size}
-      className={`mx-auto my-4 flex items-center justify-center bg-[var(--surface,#f3f4f6)] border border-dashed border-[var(--border,#d1d5db)] rounded-lg text-[10px] text-[var(--text-sec,#6b7280)] ${
+      className={`mx-auto my-4 flex items-center justify-center gap-4 px-4 rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 ${
         className ?? ''
       }`}
       style={{
@@ -106,12 +112,20 @@ export function AdSlot({ size = 'leaderboard', slotId, className }: AdSlotProps)
         height: dims.height,
       }}
     >
-      <div className="flex flex-col items-center gap-1 px-2 text-center">
-        <span className="font-bold uppercase tracking-wider">Ad Slot · {dims.label}</span>
-        <Link href="/pricing" className="text-blue-600 hover:underline">
-          Remove ads — $4.99/mo
-        </Link>
+      <div className="min-w-0 text-left">
+        <div className="text-sm font-bold text-[var(--text,#111827)] truncate">
+          Enjoying BS Football?
+        </div>
+        <p className="text-xs text-[var(--text-sec,#6b7280)] truncate">
+          Premium unlocks AI commentary, 3× scouting, and podcasts.
+        </p>
       </div>
+      <Link
+        href="/pricing"
+        className="shrink-0 px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors whitespace-nowrap"
+      >
+        Go Premium — $4.99/mo
+      </Link>
     </div>
   );
 }
