@@ -20,9 +20,9 @@ const SRC = path.join('public', 'rosters', 'FBGM_NFL_Roster_2026_PreDraft.json')
 const OUT = path.join('public', 'rosters', 'FBGM_NFL_Roster_MontanaEra_1994.json');
 const CSV = path.join('scripts', 'data', 'nflverse_roster_1994.csv');
 
-const SOURCE_SEASON = 2026;
-const TARGET_SEASON = 1994;
-const YEAR_SHIFT = TARGET_SEASON - SOURCE_SEASON; // -32
+const SOURCE_SEASON = 1994;
+const TARGET_SEASON = 2026;
+const YEAR_SHIFT = TARGET_SEASON - SOURCE_SEASON; // +32
 
 // 1994 was the NFL's first year with a salary cap at $34.608M.
 // 2026 file uses $353.85M.
@@ -281,50 +281,6 @@ function bucketPosition(rawPos) {
   return null;
 }
 
-// OVR overrides for real stars whose FBGM slot rated them too low (or a filler
-// too high). Keyed like STARTER_OVERRIDES ('TEAM/BUCKET' -> { 'Name': ovr }). The
-// year-shift makes the stars the TOP at their position, but their absolute OVRs
-// stayed FBGM-mediocre (Rice/Young 71, Marino 59); these pin era-accurate values.
-const OVR_OVERRIDES = {
-  'KC/QB':  { 'Joe Montana': 92 },       // MVP-caliber farewell 1994 season
-  'DAL/RB': { 'Emmitt Smith': 94 },      // rushing title, SB MVP
-  'SF/WR':  { 'Jerry Rice': 98 },        // greatest receiver ever, peak
-  'SF/QB':  { 'Steve Young': 96 },       // 1994 NFL MVP, 112.8 rating
-  'SF/CB':  { 'Deion Sanders': 97 },     // best CB ever
-  'DAL/LB': { 'Charles Haley': 90 },     // elite pass rusher
-  'KC/LB':  { 'Derrick Thomas': 96 },    // all-time sack artist
-  'GB/DL':  { 'Reggie White': 97 },      // Minister of Defense
-  'BUF/DL': { 'Bruce Smith': 94 },       // dominant edge
-  'PIT/CB': { 'Rod Woodson': 96 },       // best DB of the era
-  'LAC/LB': { 'Junior Seau': 94 },       // elite LB
-  'DET/RB': { 'Barry Sanders': 98 },     // greatest runner ever
-  'MIA/QB': { 'Dan Marino': 96 },        // all-time passing legend
-  'IND/RB': { 'Marshall Faulk': 88 },    // elite rookie
-  'MIN/WR': { 'Cris Carter': 91 },       // led NFL in TD catches
-  'PIT/QB': { "Neil O'Donnell": 76 },    // FBGM slot had him ~93 — too high
-};
-
-/** Pin a player's latest rating to a target OVR: scale every sub-rating so FBGM's
- *  computed OVR lands near the target, then set ovr/pot (and the per-pos maps). */
-function applyOvrOverride(player, targetOvr) {
-  if (!Array.isArray(player.ratings) || player.ratings.length === 0) return;
-  let li = 0;
-  for (let k = 1; k < player.ratings.length; k++) {
-    if ((player.ratings[k].season ?? 0) > (player.ratings[li].season ?? 0)) li = k;
-  }
-  const rt = player.ratings[li];
-  const scale = targetOvr / (rt.ovr || 70);
-  const subKeys = ['stre', 'spd', 'endu', 'thv', 'thp', 'tha', 'bsc', 'elu', 'rtr', 'hnd', 'rbk', 'pbk', 'pcv', 'tck', 'prs', 'rns'];
-  for (const key of subKeys) {
-    if (typeof rt[key] === 'number') rt[key] = Math.min(99, Math.max(1, Math.round(rt[key] * scale)));
-  }
-  rt.ovr = targetOvr;
-  rt.pot = Math.max(rt.pot ?? targetOvr, targetOvr);
-  const pos = rt.pos;
-  if (rt.ovrs && rt.ovrs[pos] !== undefined) rt.ovrs[pos] = targetOvr;
-  if (rt.pots && rt.pots[pos] !== undefined) rt.pots[pos] = Math.max(rt.pots[pos], targetOvr);
-}
-
 function latestRating(player) {
   if (!player.ratings || player.ratings.length === 0) return null;
   return player.ratings.reduce((best, current) =>
@@ -430,12 +386,12 @@ data.headToHeads = [];
 data.allStars = [];
 data.trade = [];
 
-// --- 3a. Per-player: shift years, scale contracts ---
+// --- 3a. Per-player: scale contracts, clear history ---
+// Note: born.year, draft.year, contract.exp, ratings.season, retiredYear are NOT shifted here.
+// The base roster is already in 2026 format; those values are valid as-is.
+// CSV overlay (3b) applies shiftYear() to historical CSV years (born, entry_year) only.
 for (const player of data.players) {
-  if (player.born?.year != null) player.born.year = shiftYear(player.born.year);
-  if (player.draft?.year != null) player.draft.year = shiftYear(player.draft.year);
   if (player.contract) {
-    if (player.contract.exp != null) player.contract.exp = shiftYear(player.contract.exp);
     if (player.contract.amount != null) player.contract.amount = scaleContractAmount(player.contract.amount);
   }
   player.awards = [];
@@ -444,13 +400,7 @@ for (const player of data.players) {
   player.stats = [];
   player.salaries = [];
   player.statsTids = player.tid >= 0 ? [player.tid] : [];
-  if (typeof player.retiredYear === 'number') player.retiredYear = shiftYear(player.retiredYear);
   if (player.imgURL) player.imgURL = '';
-  if (Array.isArray(player.ratings)) {
-    for (const r of player.ratings) {
-      if (typeof r.season === 'number') r.season = shiftYear(r.season);
-    }
-  }
 }
 
 // --- 3b. CSV-driven name/college/born/draft overlay ---
@@ -529,17 +479,13 @@ for (const [teamAbbrev, team] of teamByAbbrev) {
       const birthDate = csv[colIdx.birth_date];
       if (birthDate && /^\d{4}-/.test(birthDate)) {
         const birthYear = parseInt(birthDate.slice(0, 4), 10);
-        if (Number.isFinite(birthYear)) target.born = { ...(target.born ?? {}), year: birthYear };
+        if (Number.isFinite(birthYear)) target.born = { ...(target.born ?? {}), year: shiftYear(birthYear) };
       }
       const entryYear = parseInt(csv[colIdx.entry_year], 10);
-      if (Number.isFinite(entryYear) && target.draft) target.draft.year = entryYear;
+      if (Number.isFinite(entryYear) && target.draft) target.draft.year = shiftYear(entryYear);
       // 1994 CSV has no draft_number column — parseInt(undefined, 10) = NaN → isFinite false → skipped.
       const draftNumber = parseInt(csv[colIdx.draft_number], 10);
       if (Number.isFinite(draftNumber) && target.draft) target.draft.pick = draftNumber;
-
-      // Era-accurate OVR for the marquee names (see OVR_OVERRIDES).
-      const overlaidOvr = OVR_OVERRIDES[overrideKey]?.[`${target.firstName} ${target.lastName}`];
-      if (overlaidOvr !== undefined) applyOvrOverride(target, overlaidOvr);
 
       overlaidPids.add(target.pid);
       overlaidCount++;
@@ -622,44 +568,10 @@ for (const team of data.teams) {
   }
 }
 
-// --- 5. Draft picks: shift + drop pre-1994 ---
+// --- 5. Draft picks: drop pre-2026 (dp.season is already in 2026 format; no shift needed) ---
 if (Array.isArray(data.draftPicks)) {
-  for (const dp of data.draftPicks) {
-    if (typeof dp.season === 'number') dp.season = shiftYear(dp.season);
-  }
   data.draftPicks = data.draftPicks.filter((dp) => (dp.season ?? 0) >= TARGET_SEASON);
 }
-
-// --- 5b. Reframe the authentic-era roster into the engine's forced year ---
-// Everything above builds a true-to-1994 roster (real ages, era ratings + era-cap
-// contracts). But BS Football forces the starting year to the current calendar
-// year, so a 1994-framed save has every contract expired on day 1 (players fall to
-// FA, FBGM backfills fictional bodies) and every player ~32 years too old (age
-// decay). Shift every year-bearing field up by (ENGINE_YEAR - TARGET_SEASON) so the
-// roster lives in the engine's frame — 1994 ages/service map onto 2026 dates — while
-// the era-authentic salary cap and contract *amounts* are left untouched.
-const ENGINE_YEAR = 2026;
-const ERA_TO_ENGINE = ENGINE_YEAR - TARGET_SEASON; // +32 for 1994
-for (const p of data.players) {
-  if (p.born?.year != null) p.born.year += ERA_TO_ENGINE;
-  if (p.draft?.year != null) p.draft.year += ERA_TO_ENGINE;
-  if (p.contract?.exp != null) p.contract.exp += ERA_TO_ENGINE;
-  if (Array.isArray(p.ratings)) {
-    for (const r of p.ratings) if (typeof r.season === 'number') r.season += ERA_TO_ENGINE;
-  }
-  // Era contract *lengths* are FBGM-generated (not authentic), and the year round
-  // trip can leave a rostered player expired/expiring on opening day. Floor any
-  // rostered contract that would lapse by the opening season to a fresh 1-4yr deal,
-  // spread deterministically by pid so the whole roster doesn't hit FA at once.
-  if (p.tid >= 0 && p.contract?.exp != null && p.contract.exp <= ENGINE_YEAR) {
-    p.contract.exp = ENGINE_YEAR + 1 + (p.pid % 4);
-  }
-}
-if (Array.isArray(data.draftPicks)) {
-  for (const dp of data.draftPicks) if (typeof dp.season === 'number') dp.season += ERA_TO_ENGINE;
-}
-data.gameAttributes.season = ENGINE_YEAR;
-data.gameAttributes.startingSeason = ENGINE_YEAR;
 
 // --- 6. Write output ---
 console.log(`Writing ${OUT}...`);
