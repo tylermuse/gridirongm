@@ -100,10 +100,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'segment too large (max 24 lines)' }, { status: 400 });
     }
 
-    // Require auth (cache hits are still free — no ElevenLabs cost).
-    const authClient = await createSupabaseServer();
-    const { data: { user } } = await authClient.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    // Auth is only enforced when Supabase is configured (i.e. prod / a hydrated
+    // env). Local dev needs nothing but ELEVENLABS_API_KEY + the flag, so the
+    // spike is testable on localhost without logging in. Real credit/entitlement
+    // gating comes with the Phase 2 hardening.
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      const authClient = await createSupabaseServer();
+      const { data: { user } } = await authClient.auth.getUser();
+      if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
 
     const hash = contentHash(lines);
     const sb = supabaseAdmin();
