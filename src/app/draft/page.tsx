@@ -1573,7 +1573,7 @@ export default function DraftPage() {
         <ImportDraftClassPanel season={season} />
 
         {/* Free-tier ad slot above the draft board. Hidden for premium. */}
-        <AdSlot size="leaderboard" slotId="draft-top" />
+        <AdSlot size="leaderboard" slotId="5378648863" />
 
         <div className="grid grid-cols-12 gap-4">
           {/* Top Prospects */}

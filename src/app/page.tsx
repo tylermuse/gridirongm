@@ -1057,7 +1057,7 @@ function Dashboard() {
         <DiscordBanner />
 
         {/* Free-tier ad slot. Hidden for Premium / Founder / Admin users. */}
-        <AdSlot size="leaderboard" slotId="home-top" />
+        <AdSlot size="leaderboard" slotId="2166730387" />
 
         {/* Approval & Objectives — hidden in spectator mode (no user team to evaluate) */}
         {!isSpectator && userTeam.approval && (
