@@ -493,7 +493,7 @@ export default function FreeAgencyPage() {
         </div>
 
         {/* Free-tier ad slot. Hidden for premium. */}
-        <AdSlot size="leaderboard" slotId="fa-top" />
+        <AdSlot size="leaderboard" slotId="9035391068" />
 
         {/* FA Day progress bar */}
         {phase === 'freeAgency' && (
