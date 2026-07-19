@@ -1457,21 +1457,6 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               ⏭<span className="hidden sm:inline ml-1">End Game</span>
             </button>
 
-            {/* Playback progress — hidden during Live Coach (meaningless once
-                engine is generating new plays). */}
-            {!liveCoachOn && (
-              <div className="flex-1 flex items-center gap-2 sm:ml-2 min-w-[80px]">
-                <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-blue-500 transition-all duration-150"
-                    style={{ width: `${totalEvents > 0 ? (revealedCount / totalEvents) * 100 : 0}%` }}
-                  />
-                </div>
-                <span className="text-[10px] text-[var(--text-sec)] tabular-nums whitespace-nowrap">
-                  {revealedCount}/{totalEvents}
-                </span>
-              </div>
-            )}
           </div>
 
           {/* Row 2 (mobile) / inline-right (desktop): Game Plan + Live Coach.
