@@ -16,7 +16,7 @@ import { ScoreBug } from '@/components/game/ScoreBug';
 import { GamePlanModal } from '@/components/game/GamePlanModal';
 import { PlayCallMenu, type PlayCallType } from '@/components/game/PlayCallMenu';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
-import { generateHalftimeBreakdown, COMMENTATORS } from '@/lib/engine/debate';
+import { generateHalftimeBreakdown, generateHalftimeAudioBreakdown, COMMENTATORS } from '@/lib/engine/debate';
 import { useGameBroadcast } from '@/lib/engine/useGameBroadcast';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import type { Player, Position, GameResult } from '@/types';
@@ -507,6 +507,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // Mid-game game-plan adjustment modal (shown via the "Game Plan" button when paused)
   const [showMidGamePlan, setShowMidGamePlan] = useState(false);
   const [showHalftimeReport, setShowHalftimeReport] = useState(false);
+  // Premium spoken halftime breakdown (Marcus + Tony).
+  const [htAudio, setHtAudio] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle');
+  const htAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Persist the confirmed game plan across a mobile back-nav remount. Without it,
   // gamePlanReady + livePlan (ephemeral React state) reset to the modal's defaults
@@ -627,6 +630,47 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       stats, players: [...homePlayers, ...awayPlayers],
     });
   }, [halftimeReached, halftimeEventIdx, allEvents, homeTeam, awayTeam, homePlayers, awayPlayers]);
+
+  // Auto-open the Halftime Report the moment playback crosses the half (once),
+  // and pause so the user can read/listen instead of having to hunt for the
+  // button. Only fires on the live transition — not when loading a game that's
+  // already past halftime.
+  const prevHalftimeReachedRef = useRef(halftimeReached);
+  useEffect(() => {
+    if (halftimeReached && !prevHalftimeReachedRef.current) {
+      setShowHalftimeReport(true);
+      setIsPlaying(false);
+    }
+    prevHalftimeReachedRef.current = halftimeReached;
+  }, [halftimeReached]);
+
+  // Premium: generate + play the in-depth spoken halftime breakdown.
+  const playHalftimeAudio = useCallback(async () => {
+    if (htAudio === 'playing') { htAudioRef.current?.pause(); setHtAudio('idle'); return; }
+    const ev = allEvents[halftimeEventIdx];
+    if (!ev || !homeTeam || !awayTeam) return;
+    setHtAudio('loading');
+    try {
+      const stats = livePlayerStatsAtEvent(ev, homePlayers, awayPlayers);
+      const lines = generateHalftimeAudioBreakdown({
+        homeTeam, awayTeam,
+        homeScore: ev.homeScore, awayScore: ev.awayScore,
+        stats, players: [...homePlayers, ...awayPlayers],
+      });
+      const res = await fetch('/api/game-audio', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lines }),
+      });
+      if (!res.ok) { setHtAudio('error'); return; }
+      const url = URL.createObjectURL(await res.blob());
+      const audio = htAudioRef.current ?? (htAudioRef.current = new Audio());
+      audio.onended = () => { setHtAudio('idle'); URL.revokeObjectURL(url); };
+      audio.src = url;
+      await audio.play();
+      setHtAudio('playing');
+    } catch { setHtAudio('error'); }
+  }, [htAudio, allEvents, halftimeEventIdx, homeTeam, awayTeam, homePlayers, awayPlayers]);
+  useEffect(() => () => { htAudioRef.current?.pause(); }, []); // stop on unmount
 
   // Audio broadcast (Phase 2, flag-gated). Per-play, audio-driven: the spoken
   // call reveals each play and gates the advance, so the voice stays in sync
@@ -2270,13 +2314,23 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 })}
               </div>
 
-              <button
-                disabled
-                className="w-full py-2 rounded-lg bg-[var(--surface-2)] text-[var(--text-sec)] text-sm font-semibold opacity-60 cursor-not-allowed"
-                title="Audio broadcast coming soon"
-              >
-                🔊 Audio (coming soon)
-              </button>
+              {canBroadcast ? (
+                <button
+                  onClick={playHalftimeAudio}
+                  disabled={htAudio === 'loading'}
+                  className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-60 transition-all"
+                  title="Marcus & Tony break down both teams and the second-half adjustments"
+                >
+                  {htAudio === 'loading' ? '🔊 Generating breakdown…'
+                    : htAudio === 'playing' ? '⏸ Stop breakdown'
+                    : htAudio === 'error' ? '🔊 Retry audio breakdown'
+                    : '🔊 Listen — in-depth breakdown'}
+                </button>
+              ) : (
+                <div className="w-full py-2 rounded-lg bg-[var(--surface-2)] text-[var(--text-sec)] text-sm font-semibold text-center opacity-80">
+                  🔒 In-depth audio breakdown — Premium
+                </div>
+              )}
             </div>
           </div>
         </div>
