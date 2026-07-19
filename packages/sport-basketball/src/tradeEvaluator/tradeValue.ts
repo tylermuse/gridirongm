@@ -169,7 +169,15 @@ export function basketballTradeValue(player: BasketballPlayer, opts: TradeValueO
       value *= Math.min(1 + surplusPct * SURPLUS_SLOPE, SURPLUS_CAP);
     } else {
       const overpayM = (salary - market) / 1_000_000;
-      value -= overpayM * LIABILITY_K;
+      // The toxicity of an overpay is the MULTI-YEAR commitment. An expiring
+      // overpay is a one-year rental and then cap relief — a contender happily
+      // takes a productive star on an expiring max — so scale the liability by
+      // the years of control remaining. Without this, a still-productive vet on
+      // a big expiring deal (e.g. a 21-PPG guard) read as the most toxic asset
+      // on the board, which is backwards.
+      const yearsLeft = contractYearsLeft(player, opts.season);
+      const overpayYearsFactor = yearsLeft <= 1 ? 0.35 : yearsLeft === 2 ? 0.6 : yearsLeft === 3 ? 0.85 : 1.0;
+      value -= overpayM * LIABILITY_K * overpayYearsFactor;
     }
   }
 
