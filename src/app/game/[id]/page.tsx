@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import { use, useRef, useEffect, useState, useCallback, useMemo, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGameStore, flushToStorage, flushToStorageSync } from '@/lib/engine/store';
 import { GameShell } from '@/components/game/GameShell';
@@ -19,7 +19,7 @@ import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import { generateHalftimeBreakdown, generateHalftimeAudioBreakdown, COMMENTATORS } from '@/lib/engine/debate';
 import { useGameBroadcast } from '@/lib/engine/useGameBroadcast';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import type { Player, Position, GameResult } from '@/types';
+import type { Player, Position, GameResult, Team } from '@/types';
 
 // Audio play-by-play broadcast. In prod it's a Premium feature (gated on tier
 // below + server-side in /api/game-audio). This env flag is only a local-dev
@@ -433,6 +433,99 @@ function WinProbabilityChart({
           <span style={{ color: topColor }} className="font-bold">{topAbbr}</span>
           <span style={{ color: botColor }} className="font-bold">{botAbbr}</span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pre-matchup team stat rankings (read-only; reuses standings/stats aggregates)
+// ---------------------------------------------------------------------------
+function ordinalRank(n: number): string {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
+}
+
+/**
+ * Compact pre-game card showing where both teams rank league-wide in a few key
+ * categories. Read-only: it reuses the exact aggregates from the Standings page
+ * (record.pointsFor / record.pointsAgainst) and the Stats page (team offensive
+ * pass + rush yards per game), so ranks match those pages exactly. No engine changes.
+ */
+function MatchupRankings({ homeTeam, awayTeam, teams, players }: {
+  homeTeam: Team;
+  awayTeam: Team;
+  teams: Team[];
+  players: Player[];
+}) {
+  const gp = (t: Team) => Math.max(1, t.record.wins + t.record.losses + t.record.ties);
+  const anyGames = teams.some(t => t.record.wins + t.record.losses + t.record.ties > 0);
+  if (!anyGames) return null;
+
+  // Team offensive yards — same aggregation as the Stats page (pass + rush).
+  const offYards = new Map<string, number>();
+  for (const p of players) {
+    if (!p.teamId) continue;
+    offYards.set(p.teamId, (offYards.get(p.teamId) ?? 0) + (p.stats.passYards ?? 0) + (p.stats.rushYards ?? 0));
+  }
+
+  const metrics: { key: string; label: string; lowerIsBetter?: boolean; value: (t: Team) => number; fmt: (v: number) => string }[] = [
+    { key: 'ppg', label: 'PPG', value: t => t.record.pointsFor / gp(t), fmt: v => v.toFixed(1) },
+    { key: 'ypg', label: 'Yds/G', value: t => (offYards.get(t.id) ?? 0) / gp(t), fmt: v => v.toFixed(0) },
+    { key: 'pa', label: 'Pts Allowed', lowerIsBetter: true, value: t => t.record.pointsAgainst / gp(t), fmt: v => v.toFixed(1) },
+    { key: 'diff', label: 'Pt Diff', value: t => t.record.pointsFor - t.record.pointsAgainst, fmt: v => `${v >= 0 ? '+' : ''}${v.toFixed(0)}` },
+  ];
+
+  const rankOf = (t: Team, m: (typeof metrics)[number]) => {
+    const mine = m.value(t);
+    let better = 0;
+    for (const o of teams) {
+      if (o.id === t.id) continue;
+      const ov = m.value(o);
+      if (m.lowerIsBetter ? ov < mine : ov > mine) better++;
+    }
+    return better + 1;
+  };
+
+  const rankColor = (rank: number) => {
+    const third = teams.length / 3;
+    if (rank <= third) return 'text-green-600';
+    if (rank > teams.length - third) return 'text-red-500';
+    return 'text-[var(--text)]';
+  };
+
+  return (
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-sec)] text-center mb-2">
+        League Ranks
+      </div>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-3 gap-y-1">
+        <div className="text-xs font-bold text-[var(--text)] text-left truncate">{awayTeam.abbreviation}</div>
+        <div />
+        <div className="text-xs font-bold text-[var(--text)] text-right truncate">{homeTeam.abbreviation}</div>
+        {metrics.map(m => {
+          const ar = rankOf(awayTeam, m);
+          const hr = rankOf(homeTeam, m);
+          return (
+            <Fragment key={m.key}>
+              <div className="flex items-baseline justify-start gap-1.5 text-xs">
+                <span className={`tabular-nums font-bold ${rankColor(ar)}`}>{ordinalRank(ar)}</span>
+                <span className="tabular-nums text-[var(--text-sec)]">{m.fmt(m.value(awayTeam))}</span>
+              </div>
+              <div className="text-[10px] text-[var(--text-sec)] whitespace-nowrap text-center px-1">{m.label}</div>
+              <div className="flex items-baseline justify-end gap-1.5 text-xs">
+                <span className="tabular-nums text-[var(--text-sec)]">{m.fmt(m.value(homeTeam))}</span>
+                <span className={`tabular-nums font-bold ${rankColor(hr)}`}>{ordinalRank(hr)}</span>
+              </div>
+            </Fragment>
+          );
+        })}
       </div>
     </div>
   );
@@ -1374,6 +1467,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             return null;
           })()}
         />
+
+        {/* Pre-game league-rank card — shown before kickoff (read-only). */}
+        {revealedCount === 0 && !isFinished && homeTeam && awayTeam && (
+          <MatchupRankings homeTeam={homeTeam} awayTeam={awayTeam} teams={teams} players={players} />
+        )}
 
         {/* Big-play alert banner removed — the overlay chip on the field is
             enough. Having a second banner above the field was pushing the
