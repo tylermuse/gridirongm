@@ -311,7 +311,78 @@ function slotMatchupsIntoWeeks(
 // Fallback: original greedy algorithm for non-32-team leagues
 // ---------------------------------------------------------------------------
 
+/**
+ * Fallback scheduler for leagues that are NOT a clean 32-team, 8x4-division
+ * layout - e.g. historical era rosters (1994 = 28 teams with 2-3 team
+ * divisions, 1999 = 31 teams) and post-expansion leagues (33+ teams).
+ *
+ * The NFL-style generator (tryGenerateNFLSchedule) hard-requires 32 teams in
+ * eight four-team divisions, and the previous greedy fallback hard-required
+ * every team to reach exactly 17 games with 6 division games each - both
+ * impossible for an odd team count (you can't pair everyone every week) or for
+ * divisions smaller than four. When that happened the old code threw "Unable
+ * to generate schedule after multiple attempts", newLeague swallowed the error
+ * in its try/catch, and the app silently generated a fictional stock league
+ * instead of the imported roster (yo46363: era rosters loading as "Minnesota
+ * Frost" / "Dallas Wranglers" - the default template teams).
+ *
+ * This deterministic circle-method round robin never throws and works for any
+ * team count >= 2 and any division layout. Each team plays up to 17 distinct
+ * opponents (min(17, N-1)); in an odd league the team paired with the bye slot
+ * rests that week, so a team plays 16 or 17 games with at most one bye.
+ * Home/away is balanced greedily. Division records still populate because each
+ * division is a subset of the round robin, so playoff seeding by division
+ * winner keeps working.
+ */
+// ---------------------------------------------------------------------------
+// Fallback scheduler (non-standard league sizes)
+// ---------------------------------------------------------------------------
+
+/**
+ * Handles any league that is not a clean 32-team, 8x4-division layout:
+ * historical era rosters (1994 = 28 teams with 2-3 team divisions, 1999 = 31
+ * teams) and post-expansion leagues (33+ teams).
+ *
+ * First tries the greedy NFL-flavored builder (home-and-away division
+ * rivalries, one bye per team across 18 weeks). That builder cannot satisfy
+ * every layout - an odd team count can't pair everyone each week, so exactly
+ * 17 games for all is mathematically impossible - so when it can't converge we
+ * fall back to a deterministic circle-method round robin that never fails for
+ * any N >= 2.
+ *
+ * Previously the greedy builder THREW when it couldn't converge: odd counts,
+ * or divisions smaller than four where the old hardcoded "6 division games"
+ * target was unreachable. newLeague swallowed that throw in its try/catch and
+ * silently generated a fictional stock league instead of the imported roster,
+ * which is why the 1994/1999 era rosters loaded as the default template teams
+ * ("Dallas Wranglers" / "Minnesota Frost") reported by yo46363.
+ */
 function generateScheduleFallback(teams: Team[], season: number): GameResult[] {
+  const greedy = tryGreedyScheduleFallback(teams, season);
+  if (greedy) return greedy;
+  return circleRoundRobinSchedule(teams, season);
+}
+
+/** Number of teams in a team's (conference, division) group. */
+function divisionSize(team: Team, allTeams: Team[]): number {
+  let size = 0;
+  for (const t of allTeams) {
+    if (t.conference === team.conference && t.division === team.division) size++;
+  }
+  return size;
+}
+
+/**
+ * Home-and-away division games a team should get, capped by division size.
+ * A four-team division yields the NFL-standard 6; smaller era divisions (a
+ * two-team 1994 AFC South, say) yield fewer instead of an unreachable quota
+ * that used to deadlock the scheduler.
+ */
+function divisionGameTarget(team: Team, allTeams: Team[]): number {
+  return Math.min(6, 2 * Math.max(0, divisionSize(team, allTeams) - 1));
+}
+
+function tryGreedyScheduleFallback(teams: Team[], season: number): GameResult[] | null {
   for (let attempt = 0; attempt < 200; attempt++) {
     const byeWeekByTeamId = assignByeWeeks(teams);
     const gamesPlayedByTeamId = new Map<string, number>(teams.map((team) => [team.id, 0]));
@@ -346,7 +417,9 @@ function generateScheduleFallback(teams: Team[], season: number): GameResult[] {
     }
   }
 
-  throw new Error('Unable to generate schedule after multiple attempts');
+  // Could not converge (e.g. odd team count) - let the caller use the
+  // guaranteed circle-method builder instead of throwing.
+  return null;
 }
 
 function divGamesPlayed(teamId: string, team: Team, allTeams: Team[], pairCounts: Map<string, number>): number {
@@ -381,8 +454,9 @@ function buildWeekGames(
     // instead of 6 because the greedy slotter never enforced the quota.
     // When the games-left budget is exactly the div-games-still-needed, the
     // team must play a div opponent this week or the quota becomes unfillable.
+    const teamDivTarget = divisionGameTarget(team, allTeams);
     const teamDivPlayed = divGamesPlayed(team.id, team, allTeams, pairCounts);
-    const teamDivNeeded = Math.max(0, 6 - teamDivPlayed);
+    const teamDivNeeded = Math.max(0, teamDivTarget - teamDivPlayed);
     const teamGamesLeft = 17 - (gamesPlayedByTeamId.get(team.id) ?? 0);
     const forceDiv = teamDivNeeded > 0 && teamDivNeeded >= teamGamesLeft - 1;
 
@@ -399,7 +473,7 @@ function buildWeekGames(
 
         const sameDivision = team.conference === candidate.conference && team.division === candidate.division;
 
-        // Division pairs MUST play home-and-away (6 games per team).
+        // Division pairs MUST play home-and-away (up to 6 games per team).
         let score = 0;
         if (sameDivision && pairCount === 0) score += 300;
         else if (sameDivision && pairCount === 1) score += 250;
@@ -408,10 +482,10 @@ function buildWeekGames(
 
         // Extra urgency: candidate's own div quota also pressures the score.
         const candidateDivPlayed = divGamesPlayed(candidate.id, candidate, allTeams, pairCounts);
-        const candidateDivNeeded = Math.max(0, 6 - candidateDivPlayed);
+        const candidateDivNeeded = Math.max(0, divisionGameTarget(candidate, allTeams) - candidateDivPlayed);
         if (sameDivision) score += teamDivNeeded * 10 + candidateDivNeeded * 10;
         // Heavy penalty for non-div opponents when team is at div-quota
-        // pressure — they CAN still be picked if no div opponent is
+        // pressure - they CAN still be picked if no div opponent is
         // available this week (avoids unschedulable weeks), just last resort.
         if (forceDiv && !sameDivision) score -= 500;
         void weeksLeft;
@@ -435,7 +509,7 @@ function buildWeekGames(
     available.splice(selected.index, 1);
 
     // H/A direction. Second meetings between the same pair MUST flip
-    // venues — otherwise division pairs can end up HH or AA, which the
+    // venues - otherwise division pairs can end up HH or AA, which the
     // NFL rotation forbids and which testers (wildbadger5) have flagged.
     // First meetings still use the home-count balance heuristic.
     const pairKey = makePairKey(team.id, opponent.id);
@@ -475,6 +549,66 @@ function assignByeWeeks(teams: Team[]): Map<string, number> {
   return byeWeekByTeamId;
 }
 
+/**
+ * Deterministic circle-method round robin - the guaranteed builder used when
+ * the greedy fallback cannot converge (odd team counts, exotic layouts). Never
+ * throws for any N >= 2. Each team plays up to 17 distinct opponents
+ * (min(17, N-1)); in an odd league the team paired with the bye slot rests
+ * that week, so a team plays 16 or 17 games with at most one bye. Home/away is
+ * balanced greedily. Division records still populate because each division is
+ * a subset of the round robin, so playoff seeding by division winner keeps
+ * working.
+ */
+const BYE_SLOT = '__BYE__';
+
+function circleRoundRobinSchedule(teams: Team[], season: number): GameResult[] {
+  const n = teams.length;
+  if (n < 2) return [];
+
+  const gamesTarget = Math.min(17, n - 1);
+
+  // The circle method needs an even slot count; add a bye placeholder if odd.
+  const slots: string[] = shuffle(teams.map((t) => t.id));
+  if (slots.length % 2 === 1) slots.push(BYE_SLOT);
+  const slotCount = slots.length;
+  const half = slotCount / 2;
+
+  const homeGamesById = new Map<string, number>(teams.map((t) => [t.id, 0]));
+  const schedule: GameResult[] = [];
+
+  // Fix the first slot; rotate the rest. Pair slot i with slot (slotCount-1-i)
+  // each round. Over slotCount-1 rounds this is a complete single round robin,
+  // so taking the first `gamesTarget` rounds yields distinct opponents.
+  const rotating = slots.slice(1);
+  let week = 0;
+  for (let round = 0; round < gamesTarget; round++) {
+    week += 1;
+    const arrangement = [slots[0], ...rotating];
+    for (let i = 0; i < half; i++) {
+      const a = arrangement[i];
+      const b = arrangement[slotCount - 1 - i];
+      if (a === BYE_SLOT || b === BYE_SLOT) continue; // that real team is on bye
+
+      const aHome = homeGamesById.get(a) ?? 0;
+      const bHome = homeGamesById.get(b) ?? 0;
+      let homeTeamId: string;
+      let awayTeamId: string;
+      if (aHome < bHome || (aHome === bHome && (round + i) % 2 === 0)) {
+        homeTeamId = a;
+        awayTeamId = b;
+      } else {
+        homeTeamId = b;
+        awayTeamId = a;
+      }
+      schedule.push(makeGame(homeTeamId, awayTeamId, week, season));
+      homeGamesById.set(homeTeamId, (homeGamesById.get(homeTeamId) ?? 0) + 1);
+    }
+    rotating.unshift(rotating.pop()!);
+  }
+
+  return schedule;
+}
+
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
@@ -482,6 +616,7 @@ function assignByeWeeks(teams: Team[]): Map<string, number> {
 function makePairKey(teamAId: string, teamBId: string): string {
   return [teamAId, teamBId].sort().join('|');
 }
+
 
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr];
