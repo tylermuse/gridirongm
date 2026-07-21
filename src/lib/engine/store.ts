@@ -4861,7 +4861,9 @@ export const useGameStore = create<GameStore>()(
 
         // Rookie salary scale based on draft position (league-style exponential decay)
         // Pick 1: ~$10M, Pick 32: ~$2.8M, Pick 64: ~$1.3M, Pick 128+: ~$0.8M
-        const finalSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * 10) / 10);
+        // Scale with cap growth so rookie deals keep pace with an inflating cap (floor $0.8M kept).
+        const rookieCapFactor = capInflationFactor(state.teams.find(t => t.id === currentPickTeamId)?.salaryCap ?? DEFAULT_LEAGUE_SETTINGS.salaryCap);
+        const finalSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * rookieCapFactor * 10) / 10);
 
         const pickingTeam = state.teams.find(t => t.id === currentPickTeamId);
         if (pickingTeam && currentPickTeamId === state.userTeamId) {
@@ -5037,7 +5039,9 @@ export const useGameStore = create<GameStore>()(
           const round = Math.ceil(overallPick / state.teams.length);
           // Rookie salary scale based on draft position (league-style exponential decay)
           // Pick 1: ~$10M, Pick 32: ~$2.8M, Pick 64: ~$1.3M, Pick 128+: ~$0.8M
-          const rookieSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * 10) / 10);
+          // Scale with cap growth so rookie deals keep pace with an inflating cap (floor $0.8M kept).
+          const rookieCapFactor = capInflationFactor(teams.find(t => t.id === pickTeam)?.salaryCap ?? DEFAULT_LEAGUE_SETTINGS.salaryCap);
+          const rookieSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * rookieCapFactor * 10) / 10);
 
           players = players.map(p =>
             p.id === pid
@@ -5135,7 +5139,9 @@ export const useGameStore = create<GameStore>()(
           const round = Math.ceil(overallPick / state.teams.length);
           // Rookie salary scale based on draft position (league-style exponential decay)
           // Pick 1: ~$10M, Pick 32: ~$2.8M, Pick 64: ~$1.3M, Pick 128+: ~$0.8M
-          const rookieSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * 10) / 10);
+          // Scale with cap growth so rookie deals keep pace with an inflating cap (floor $0.8M kept).
+          const rookieCapFactor = capInflationFactor(teams.find(t => t.id === pickTeam)?.salaryCap ?? DEFAULT_LEAGUE_SETTINGS.salaryCap);
+          const rookieSalary = Math.max(0.8, Math.round((0.7 + 9.3 * Math.exp(-0.04 * (overallPick - 1))) * rookieCapFactor * 10) / 10);
 
           players = players.map(p =>
             p.id === pid
