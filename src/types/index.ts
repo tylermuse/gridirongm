@@ -521,6 +521,26 @@ export interface ImportedProspect {
   ratings?: Partial<PlayerRatings>;
 }
 
+/** An open trade request ("trade me") a disgruntled player has filed — the
+ *  football trade-request / refuse-to-play loop (Phase 1). Absent = content.
+ *  Advanced once per simmed week by `refreshTradeRequests`, stored on the player
+ *  so it persists on the normal save cadence and travels through trades. Kept
+ *  deliberately SEPARATE from the contract `holdout` (a money dispute). Optional
+ *  and defaulted-absent on read, so adding it needs no `SAVE_VERSION` bump. */
+export interface TradeRequest {
+  /** Escalation stage. Phase 1 ships `unhappy` (clock ticking) and `requested`
+   *  (formally filed); `refusing` (refuse-to-play) is reserved for Phase 2. */
+  stage: 'unhappy' | 'requested' | 'refusing';
+  /** Week-of-season the current stage began — the escalation clock. */
+  since: number;
+  /** Week-of-season the formal request was filed (set on reaching `requested`). */
+  requestedWeek?: number;
+  /** Human-readable trigger, derived from the mood model. */
+  reason: string;
+  /** Season the request belongs to; cleared across a season rollover. */
+  season: number;
+}
+
 export interface Player {
   id: string;
   firstName: string;
@@ -582,6 +602,10 @@ export interface Player {
    * Low sentiment → holdouts, locker room problems, unlikely to re-sign.
    */
   mood: number;
+  /** Open trade request ("trade me") / refuse-to-play state. Absent = content.
+   *  Advanced weekly by `refreshTradeRequests`; optional so old saves default it
+   *  absent with no migration. Distinct from the contract `holdout` above. */
+  tradeRequest?: TradeRequest;
   /** Season when the player last had their contract restructured (prevents repeat restructures) */
   lastRestructuredSeason?: number;
   /** Optional photo URL (populated from imported league files) */
