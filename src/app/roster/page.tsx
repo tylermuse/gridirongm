@@ -17,6 +17,7 @@ import { POSITIONS, ROSTER_LIMITS, PRACTICE_SQUAD_LIMIT, isPracticeSquadEligible
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
 import { PositionLink } from '@/components/ui/PositionLink';
 import { LEAGUE_MINIMUM_SALARY, estimateSalary, capInflationFactor } from '@/lib/engine/store';
+import { tradeRequestBadge } from '@/lib/engine/tradeRequests';
 
 function ratingColor(val: number): string {
   if (val >= 85) return 'text-green-600';
@@ -1008,14 +1009,26 @@ export default function RosterPage() {
                             const color = mood >= 85 ? 'text-green-600 bg-green-50' : mood >= 75 ? 'text-blue-600 bg-blue-50' : mood >= 60 ? 'text-gray-600 bg-gray-100' : mood >= 45 ? 'text-orange-600 bg-orange-50' : 'text-red-600 bg-red-50';
                             const depthIdx = getDepthIndex(p);
                             const reason = getMoodReason(p, viewingTeam, depthIdx);
+                            const tradeReq = tradeRequestBadge(p, season);
                             return (
-                              <button
-                                onClick={() => setSelectedPlayerId(p.id)}
-                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded cursor-pointer hover:ring-1 hover:ring-current transition-all ${color}`}
-                                title={reason}
-                              >
-                                {label}
-                              </button>
+                              <span className="inline-flex flex-col items-center gap-0.5">
+                                <button
+                                  onClick={() => setSelectedPlayerId(p.id)}
+                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded cursor-pointer hover:ring-1 hover:ring-current transition-all ${color}`}
+                                  title={reason}
+                                >
+                                  {label}
+                                </button>
+                                {tradeReq && (
+                                  <button
+                                    onClick={() => setSelectedPlayerId(p.id)}
+                                    className={`text-[9px] font-bold px-1 py-0.5 rounded cursor-pointer inline-flex items-center gap-0.5 whitespace-nowrap ${tradeReq.className}`}
+                                    title={`${p.firstName} ${p.lastName}: ${tradeReq.label.toLowerCase()} — ${p.tradeRequest?.reason ?? ''}`}
+                                  >
+                                    <span aria-hidden>{tradeReq.emoji}</span>{tradeReq.label}
+                                  </button>
+                                )}
+                              </span>
                             );
                           })()}
                         </td>

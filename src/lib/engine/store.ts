@@ -33,6 +33,7 @@ import { buildGmSyncPayload, syncGmStats } from './gmSync';
 import { checkDisciplineEvents, disciplineNewsItems, isPlayerSuspended, tickSuspensions } from './discipline';
 import { generateFilmReviewBlurb } from './scoutingReport';
 import { generateSocialPosts } from './social';
+import { refreshTradeRequests, hasActiveTradeRequest } from './tradeRequests';
 import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from './simTelemetry';
 import { clearRolloverTickInstrumentation, setAutocutSubstep, recordTickTiming, recordTickRosterSize } from '@/lib/instrumentation/rolloverTickTimings';
 import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
@@ -1761,10 +1762,20 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
     .filter(p => p.teamId === state.userTeamId && !TRADE_EXCLUDED_POSITIONS.has(p.position));
   if (userPlayers.length === 0) return [];
 
+  // Trade-request loop (Phase 1): a user player who has formally filed a trade
+  // request is "more available" — AI teams circle him first so the request
+  // actually surfaces offers, even if he isn't the top-OVR name. Contained
+  // weighting only (deeper ask-discounting is Phase 2).
+  const requestingUserPlayers = userPlayers
+    .filter(p => hasActiveTradeRequest(p, state.season))
+    .sort((a, b) => b.ratings.overall - a.ratings.overall);
+
   // Each AI team has a 5% chance per week of proposing a trade (15% if active rumor)
   for (const aiTeam of aiTeams) {
     const hasActiveRumor = (state.tradeRumors ?? []).some(r => r.teamId === aiTeam.id && !r.resolved && r._accurate);
-    const tradeChance = hasActiveRumor ? 0.15 : 0.05;
+    // A disgruntled star who wants out draws league-wide calls — bump the odds
+    // this AI team comes knocking so offers actually materialize for him.
+    const tradeChance = requestingUserPlayers.length > 0 ? 0.2 : hasActiveRumor ? 0.15 : 0.05;
     if (Math.random() > tradeChance) continue;
     if (state.tradeProposals.filter(p => p.proposingTeamId === aiTeam.id && p.status === 'pending').length > 0) continue;
 
@@ -1780,7 +1791,14 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
     const aiNeedPos = aiNeeds.length > 0 ? aiNeeds[Math.floor(Math.random() * aiNeeds.length)] : null;
 
     let targetPlayer: Player | undefined;
-    if (aiNeedPos) {
+    // Requesting players are shopped first: prefer one at the AI's need
+    // position, else the most valuable player who has asked out.
+    if (requestingUserPlayers.length > 0 && Math.random() < 0.7) {
+      targetPlayer =
+        (aiNeedPos ? requestingUserPlayers.find(p => p.position === aiNeedPos) : undefined) ??
+        requestingUserPlayers[0];
+    }
+    if (!targetPlayer && aiNeedPos) {
       // Target best user player at that position
       const candidates = userPlayers
         .filter(p => p.position === aiNeedPos)
@@ -2545,8 +2563,20 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     return { ...p, mood: newMood };
   });
 
+  // Trade requests / refuse-to-play (Phase 1): sustained-discontent players
+  // file a formal trade request — persisted on the player, kept separate from
+  // the contract holdout. Newly-filed requests seed the rumor feed below and
+  // (via hasActiveTradeRequest) make the player more available to AI offers.
+  // Pure + deterministic: reads the mood just recomputed above, no RNG.
+  const { players: requestUpdatedPlayers, rumors: requestRumors } = refreshTradeRequests({
+    players: moodUpdatedPlayers,
+    teams: newTeams,
+    season: state.season,
+    week: state.week,
+  });
+
   // Trade rumors
-  const newRumors = generateTradeRumors(state);
+  const newRumors = [...generateTradeRumors(state), ...requestRumors];
   const rumorNews: NewsItem[] = newRumors.map(r => makeNews({
     season: state.season, week: state.week, type: 'rumor',
     headline: r.headline, body: r.detail,
@@ -2567,7 +2597,7 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     patch: {
       schedule: newSchedule,
       teams: newTeams,
-      players: moodUpdatedPlayers,
+      players: requestUpdatedPlayers,
       week: isSeasonOver ? state.week : nextWeek,
       phase: isSeasonOver ? 'playoffs' : 'regular',
       newsItems: [...state.newsItems, ...weekNews, ...ewingNews, ...rumorNews, ...rumorResolutionNews, ...rivalryNews, ...reInjResult.news],
