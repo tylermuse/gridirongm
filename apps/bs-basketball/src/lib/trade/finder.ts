@@ -287,9 +287,25 @@ export function findDealsForPick(
 export function incomingOffers(league: LeagueState, maxOffers = 4): DealSuggestion[] {
   const userTeamId = league.userTeamId;
   if (!userTeamId) return [];
-  const mine = rosterByOvr(league, userTeamId).slice(0, 6);
+  const season = league.currentSeason;
+  const roster = rosterByOvr(league, userTeamId);
+  // A player who has formally filed a trade request (or is holding out) is "more
+  // available" — shop him FIRST so AI offers actually surface for a disgruntled
+  // star, even if he isn't a top-OVR name (Phase 1 of the trade-request loop).
+  // Deterministic: preserves OVR order within each group. Deeper ask-discounting
+  // in the value engine is Phase 2.
+  const wantsOut = (p: BasketballPlayer): boolean => {
+    const r = p.sportData.tradeRequest;
+    return !!r && r.season === season && (r.stage === 'requested' || r.stage === 'holdout');
+  };
+  const requesting = roster.filter(wantsOut);
+  const others = roster.filter(p => !wantsOut(p)).slice(0, 6);
+  const mine = [...requesting, ...others];
   const offers: DealSuggestion[] = [];
+  const seen = new Set<string>();
   for (const p of mine) {
+    if (seen.has(p.id)) continue;
+    seen.add(p.id);
     const deals = findDealsForPlayer(league, p.id, 1);
     if (deals.length) offers.push(deals[0]);
     if (offers.length >= maxOffers) break;

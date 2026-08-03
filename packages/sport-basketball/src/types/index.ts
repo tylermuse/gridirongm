@@ -159,6 +159,25 @@ export const DEFAULT_GAME_PLAN: BasketballGamePlan = {
 // Sport-specific extension data (lives in BasePlayer.sportData)
 // ============================================================================
 
+/** An open trade request / "refuse-to-play" state a player has filed (BS Hoops
+ *  trade-request loop). Absent = content. Derived and advanced once per simmed
+ *  day by `refreshTradeRequests`, stored here so it persists on the normal save
+ *  cadence and travels with the player through trades. Optional + defaulted
+ *  absent on read, so adding it needs no `CURRENT_SAVE_VERSION` bump. */
+export interface BasketballTradeRequest {
+  /** Escalation stage. Phase 1 ships `unhappy` (clock ticking) and `requested`
+   *  (formally filed); `holdout` is reserved for Phase 2. */
+  stage: 'unhappy' | 'requested' | 'holdout';
+  /** Day-of-season the player first turned discontent — the escalation clock. */
+  since: number;
+  /** Day-of-season the formal request was filed (set on reaching `requested`). */
+  requestedOn?: number;
+  /** Human-readable trigger, sourced from the derived mood model. */
+  reason: string;
+  /** Season the request belongs to; ignored/cleared across a season rollover. */
+  season: number;
+}
+
 export interface BasketballPlayerData {
   /** Primary position. Lives here (not on BasePlayer) because position is
    *  a sport-specific concept — football has 11, basketball has 5, soccer
@@ -206,6 +225,10 @@ export interface BasketballPlayerData {
    *  to initials otherwise. Generated players (drafted in-sim, future classes)
    *  never have one. */
   photoUrl?: string;
+  /** Open trade request / holdout (refuse-to-play loop). Absent = content.
+   *  Advanced daily by `refreshTradeRequests`; optional so old saves default it
+   *  absent with no migration. */
+  tradeRequest?: BasketballTradeRequest;
 }
 
 export interface PlayerSeasonLogEntry {

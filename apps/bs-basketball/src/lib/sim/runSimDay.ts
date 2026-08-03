@@ -23,6 +23,7 @@ import { getHeadCoach } from '../coaching/coaches';
 import { getInjuries, healthyPlayers, canPlayThrough, applyInjuryRolls, type InjuryMap } from '../injuries';
 import { getDiscipline, isSuspendedOn, applyDisciplineRolls, type DisciplineMap } from '../discipline';
 import { refreshTradeRumors } from '../trade/rumors';
+import { refreshTradeRequests } from '../roster/tradeRequests';
 import { runAiFreeAgency } from '../freeAgency';
 import type {
   BaseGameResult,
@@ -158,6 +159,9 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
   const withDiscipline = applyDisciplineRolls(withInjuries, playedGames, nextDay, league.currentSeason);
   // Advance the trade-rumor mill (generates + resolves; ramps toward deadline).
   const withRumors = refreshTradeRumors(withDiscipline);
+  // Advance the trade-request / refuse-to-play loop: sustained-discontent
+  // players file requests, which seed the rumor feed and surface AI offers.
+  const withRequests = refreshTradeRequests(withRumors);
 
   // Light in-season free-agency backfill: roughly every two weeks, AI teams that
   // sit below a full roster sign the best available depth (fill-only — no
@@ -165,8 +169,8 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
   // user competing for unsigned veterans instead of hoarding them.
   const withFa =
     nextDay > 0 && nextDay % 14 === 0
-      ? runAiFreeAgency(withRumors, { rounds: 1, fillOnly: true }).league
-      : withRumors;
+      ? runAiFreeAgency(withRequests, { rounds: 1, fillOnly: true }).league
+      : withRequests;
 
   return { league: withFa, day: nextDay, gamesSimmed };
 }
