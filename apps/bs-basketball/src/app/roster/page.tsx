@@ -20,6 +20,7 @@ import { regularSeasonStatsByPlayer, statsForPlayer } from '@/lib/stats/seasonSt
 import { lastSeasonLog } from '@/lib/stats/statLine';
 import { playerMood, moodFactors, type Mood, type MoodFactor } from '@/lib/roster/mood';
 import { contractYearsLeft } from '@/lib/roster/playerActions';
+import { tradeRequestBadge } from '@/lib/roster/tradeRequests';
 import type { BasketballLineup, BasketballPlayer, BasketballPosition, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
 import type { ValidationViolation } from '@bs/core/adapter';
 
@@ -564,6 +565,7 @@ function PlayerCells({
   onName: (id: string) => void;
 }) {
   const gp = stats.gamesPlayed;
+  const tradeReq = tradeRequestBadge(p, season);
   // Before the season tips off (or right after taking over a team) nobody has
   // current-season games, so fall back to last season's line so the inherited
   // roster is still legible (BUG-24).
@@ -630,7 +632,7 @@ function PlayerCells({
           <span className="block">—</span>
         )}
       </span>
-      <span className="relative flex justify-center">
+      <span className="relative flex flex-col items-center gap-0.5">
         {injury ? (
           <span className="text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap" style={{ background: 'color-mix(in srgb, #dc2626 16%, transparent)', color: '#dc2626' }} title="Injured — unavailable">
             🏥 {injury}
@@ -648,6 +650,15 @@ function PlayerCells({
             </button>
             {moodOpen && <MoodPopover mood={mood} factors={moodFactors} onClose={onToggleMood} />}
           </>
+        )}
+        {tradeReq && (
+          <span
+            className="text-[9px] font-bold rounded px-1 py-0.5 whitespace-nowrap inline-flex items-center gap-0.5"
+            style={{ background: 'color-mix(in srgb, #dc2626 16%, transparent)', color: '#dc2626' }}
+            title={`${p.firstName} ${p.lastName} has an open ${tradeReq.label.toLowerCase()}`}
+          >
+            <span aria-hidden>{tradeReq.emoji}</span>{tradeReq.label}
+          </span>
         )}
       </span>
     </>
