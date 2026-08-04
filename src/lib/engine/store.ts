@@ -437,12 +437,30 @@ function autoDraftPlayerId(state: LeagueState, pickingTeamId: string): string | 
       // Previous curve was too stingy once a team had a 78+ OVR starter;
       // real NFL teams still draft dev/bridge QBs behind capable starters.
       if (prospect.position === 'QB') {
-        const bestQB = roster.filter(p => p.position === 'QB').sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
+        const qbs = roster.filter(p => p.position === 'QB');
+        const bestQB = qbs.slice().sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
         const qbOvr = bestQB?.ratings.overall ?? 0;
-        if (count === 0) {
+        // A young, high-potential QB already on the roster satisfies the
+        // future-QB need even while his current OVR is still low. Without this,
+        // a freshly drafted dev rookie keeps reading as "terrible QB, must
+        // upgrade" and the team stacks a second (then third) QB in the SAME
+        // draft. Treat such a QB as addressing the need.
+        const hasDevQB = qbs.some(p => (p.experience ?? 0) <= 1 && (p.potential ?? 0) >= 80);
+        if (count >= 2) {
+          // QB-saturated: two arms is plenty. Suppress the low-OVR upgrade
+          // bonuses entirely so a team never stacks a 3rd QB purely because
+          // current overalls are low. The position-max penalty (count >= max)
+          // still guards the hard roster cap.
+          // (no QB bonus)
+        } else if (count === 0) {
           score += 250; // No QB on roster — must draft one
+        } else if (hasDevQB) {
+          // Already invested a pick in a high-upside young QB — the future is
+          // covered, so don't let his low current OVR re-trigger the QB chase.
+          // Only a genuine blue-chip prospect is worth a modest nudge.
+          score += prospect.potential >= 90 ? 20 : 0;
         } else if (qbOvr < 60) {
-          score += 180; // Terrible QB — strong upgrade motivation
+          score += 180; // Terrible veteran QB — strong upgrade motivation
         } else if (qbOvr < 68) {
           score += 130; // Bad QB — still a priority
         } else if (qbOvr < 75) {
