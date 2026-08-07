@@ -5376,10 +5376,22 @@ export const useGameStore = create<GameStore>()(
               const ci = capInflationFactor(aiTeam.salaryCap);
               const marketSalary = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci);
               const capSpace = aiTeam.salaryCap - aiTeamPayroll;
-              const resignProb = player.ratings.overall >= 85 ? 0.98
+              // Base re-sign probability scales with player quality — elite players almost never walk.
+              let resignProb = player.ratings.overall >= 85 ? 0.98
                 : player.ratings.overall >= 75 ? 0.90
                 : player.ratings.overall >= 65 ? 0.75
                 : 0.55;
+              // Need- and cap-aware retention: a team that can comfortably afford a
+              // starter-caliber expiring player should keep him rather than dump him into FA.
+              // Good starters only reach free agency when the team is genuinely capped out
+              // or already has a surplus at the position (>= roster min).
+              const posMin = ROSTER_LIMITS[player.position]?.min ?? 1;
+              const isPositionOfNeed = currentCount < posMin;
+              const isStarterCaliber = player.ratings.overall >= 65;
+              const comfortablyAffordable = capSpace >= marketSalary;
+              if (comfortablyAffordable && isStarterCaliber) {
+                resignProb = isPositionOfNeed ? 0.99 : Math.max(resignProb, 0.95);
+              }
               // Teams will stretch to keep elite players (up to 15% over cap, like a restructure)
               const canAfford = capSpace >= marketSalary || (player.ratings.overall >= 80 && capSpace >= marketSalary * -0.15);
               if (canAfford && Math.random() < resignProb) {
