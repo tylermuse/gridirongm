@@ -5329,7 +5329,7 @@ export const useGameStore = create<GameStore>()(
           });
 
           // AI teams use franchise tag on their best expiring player (OVR >= 70)
-          const aiTeamsForTag = preTeams.filter(t => t.id !== state.userTeamId && !t.franchiseTagUsed);
+          const aiTeamsForTag = preTeams.filter(t => (state.isSpectator || t.id !== state.userTeamId) && !t.franchiseTagUsed);
           for (const aiTeam of aiTeamsForTag) {
             const expiring = prePlayers
               .filter(p => p.teamId === aiTeam.id && p.contract.yearsLeft === 1 && !p.retired)
@@ -5353,7 +5353,7 @@ export const useGameStore = create<GameStore>()(
 
           // AI teams auto-resign their own expiring players.
           // Re-sign probability scales with player quality — elite players almost never walk.
-          const aiTeams = preTeams.filter(t => t.id !== state.userTeamId);
+          const aiTeams = preTeams.filter(t => state.isSpectator || t.id !== state.userTeamId);
           for (const aiTeam of aiTeams) {
             const expiringFromAI = prePlayers.filter(
               p => p.teamId === aiTeam.id && p.contract.yearsLeft === 1 && !p.retired,
