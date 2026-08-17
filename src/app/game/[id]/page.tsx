@@ -19,7 +19,31 @@ import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import { generateHalftimeBreakdown, generateHalftimeAudioBreakdown, COMMENTATORS } from '@/lib/engine/debate';
 import { useGameBroadcast } from '@/lib/engine/useGameBroadcast';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import type { Player, Position, GameResult, Team } from '@/types';
+import type { Player, Position, GameResult, Team, PlayerStats } from '@/types';
+
+/** Merge two player-stat maps by summing numeric fields. Used to combine the
+ *  pre-pivot bucket stats (plays the pre-sim ran before the user took over)
+ *  with the live engine's own stats (plays the user coached after the pivot).
+ *  The two sources cover disjoint plays, so summation is additive.
+ *  gamesPlayed is pinned to 1 rather than summed. */
+function mergePlayerStats(
+  base: Record<string, Partial<PlayerStats>>,
+  extra: Record<string, Partial<PlayerStats>>,
+): Record<string, Partial<PlayerStats>> {
+  const out: Record<string, Partial<PlayerStats>> = {};
+  for (const [pid, st] of Object.entries(base)) out[pid] = { ...st };
+  for (const [pid, st] of Object.entries(extra)) {
+    const cur = (out[pid] ? { ...out[pid] } : {}) as Record<string, number>;
+    for (const key in st) {
+      const v = (st as Record<string, number>)[key];
+      if (typeof v !== 'number') continue;
+      cur[key] = key === 'gamesPlayed' ? 1 : (cur[key] ?? 0) + v;
+    }
+    cur.gamesPlayed = 1;
+    out[pid] = cur as Partial<PlayerStats>;
+  }
+  return out;
+}
 
 // Audio play-by-play broadcast. In prod it's a Premium feature (gated on tier
 // below + server-side in /api/game-audio). This env flag is only a local-dev
@@ -1100,17 +1124,21 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       const events: PlayEvent[] = pivotIdx !== null
         ? [...(liveResult?.events ?? []).slice(0, pivotIdx), ...liveExtraEvents]
         : (liveResult?.events ?? []);
-      // Per-player stats come from the bucket snapshot on the LAST pre-sim
-      // event before pivot (the playByPlay engine accumulates them there).
-      // Live engine events don't carry bucket snapshots, so plays after
-      // pivot won't appear in the box score — but that's strictly better
-      // than carrying pre-sim ghost plays the user replaced.
+      // Per-player stats = pre-pivot bucket stats (from the last pre-sim event
+      // before the pivot, where the playByPlay engine accumulates them) MERGED
+      // with the live engine's own per-play stats for everything the user
+      // coached after the pivot. Live engine events carry no bucket snapshots,
+      // so previously every coached play was dropped from the box score
+      // (jslusser1945_25790 8/13 + Commish 8/15: live-coached games recorded 0
+      // player stats). Merging fixes that without re-introducing the pre-sim
+      // ghost plays the user replaced (lakerfan21_32127 5/12).
       const lastBucketEvent = pivotIdx !== null && pivotIdx > 0
         ? (liveResult?.events ?? [])[pivotIdx - 1]
         : (liveResult?.events ?? []).slice(-1)[0];
-      const stats = lastBucketEvent
+      const preStats = lastBucketEvent
         ? livePlayerStatsAtEvent(lastBucketEvent, homePlayers, awayPlayers)
         : (liveResult?.playerStats ?? {});
+      const stats = mergePlayerStats(preStats, liveEngineRef.current.getPlayerStats());
       return {
         ...game,
         homeScore: es.homeScore,

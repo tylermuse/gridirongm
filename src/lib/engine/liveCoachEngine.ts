@@ -12,7 +12,7 @@
  * the regular sim later.
  */
 
-import type { Player, Team } from '@/types';
+import type { Player, Team, PlayerStats } from '@/types';
 import type { PlayEvent } from './playByPlay';
 import type { PlayCallType } from '@/components/game/PlayCallMenu';
 import { playerAvailable } from './simulate';
@@ -57,6 +57,11 @@ export interface LiveCoachEngine {
   isUserOffense: () => boolean;
   isFinished: () => boolean;
   getState: () => LiveEngineState;
+  /** Per-player stats the live engine accumulated for the plays IT generated
+   *  after the live pivot. Merged onto the pre-pivot bucket stats in
+   *  buildFinalGameResult so user-coached plays appear in the final box score
+   *  (jslusser1945_25790 8/13: live-coached games recorded an empty box score). */
+  getPlayerStats: () => Record<string, Partial<PlayerStats>>;
 }
 
 // ── Helpers ──
@@ -170,6 +175,23 @@ export function createLiveCoachEngine(
     otPlayRunThisPossession: initialState.otPlayRunThisPossession ?? false,
   };
   let nextEventId = 100000; // start high to avoid colliding with pre-computed event ids
+
+  // Per-player stat accumulator for the plays this engine generates. Merged
+  // onto the pre-pivot bucket stats in buildFinalGameResult so plays the user
+  // actually coaches after the live pivot are reflected in the final box score.
+  // Only offense + named-defender (INT) stats are tracked here; aggregate
+  // defensive stats stay seeded from the pre-pivot bucket snapshot.
+  const playerStats: Record<string, Partial<PlayerStats>> = {};
+  function bump(player: Player | null, updates: Partial<Record<keyof PlayerStats, number>>) {
+    if (!player) return;
+    const cur = (playerStats[player.id] ?? {}) as Record<string, number>;
+    for (const key in updates) {
+      const v = updates[key as keyof PlayerStats];
+      if (typeof v === 'number') cur[key] = (cur[key] ?? 0) + v;
+    }
+    cur.gamesPlayed = 1;
+    playerStats[player.id] = cur as Partial<PlayerStats>;
+  }
 
   // ── Event constructor ──
   function makeEvent(
@@ -350,6 +372,7 @@ export function createLiveCoachEngine(
             : `${prefix}${name} loses ${Math.abs(finalYards)} on the play.`;
 
     events.push(makeEvent('run', desc, finalYards, isTD));
+    bump(rusher, { rushAttempts: 1, rushYards: finalYards, rushTDs: isTD ? 1 : 0 });
 
     if (isTD) {
       handleTouchdown(events, state.possession === userSide);
@@ -392,6 +415,8 @@ export function createLiveCoachEngine(
       const qbName = nameOrFallback(ok.qb, 'the QB');
       const cbName = nameOrFallback(dk.cb1, 'the corner');
       events.push(makeEvent('interception', `${prefix}INTERCEPTED! ${cbName} picks off ${qbName}.`, 0, false));
+      bump(ok.qb, { passAttempts: 1, interceptions: 1 });
+      bump(dk.cb1, { defensiveINTs: 1 });
       const returnPos = clamp(100 - state.fieldPos + Math.floor(Math.random() * 20) - 10, 10, 60);
       switchPossession(returnPos);
       advancePlayClock(8, 0);
@@ -425,6 +450,8 @@ export function createLiveCoachEngine(
           : `${prefix}${qbName} completes to ${recName} for ${finalYards} yard${finalYards !== 1 ? 's' : ''}.`;
 
       events.push(makeEvent('pass_complete', desc, finalYards, isTD));
+      bump(ok.qb, { passAttempts: 1, passCompletions: 1, passYards: finalYards, passTDs: isTD ? 1 : 0 });
+      bump(target, { targets: 1, receptions: 1, receivingYards: finalYards, receivingTDs: isTD ? 1 : 0 });
 
       if (isTD) {
         handleTouchdown(events, state.possession === userSide);
@@ -441,6 +468,8 @@ export function createLiveCoachEngine(
       const qbName = nameOrFallback(ok.qb, 'the QB');
       const recName = nameOrFallback(target, 'the receiver');
       events.push(makeEvent('pass_incomplete', `${prefix}${qbName}'s pass to ${recName} falls incomplete.`, 0, false));
+      bump(ok.qb, { passAttempts: 1 });
+      bump(target, { targets: 1 });
       if (advanceDown() === 'turnover_on_downs') {
         handleTurnoverOnDowns(events);
         return;
@@ -460,6 +489,7 @@ export function createLiveCoachEngine(
       const k = offKey().k;
       const epGood = Math.random() < 0.95;
       if (epGood) addScore(1);
+      bump(k, { extraPointAttempts: 1, extraPointsMade: epGood ? 1 : 0 });
       events.push(makeEvent('extra_point', epGood ? 'Extra point is GOOD.' : 'Extra point is no good!', 0, false));
       doKickoffEvents(events);
     }
@@ -469,6 +499,7 @@ export function createLiveCoachEngine(
     const k = offKey().k;
     const epGood = Math.random() < 0.95;
     if (epGood) addScore(1);
+    bump(k, { extraPointAttempts: 1, extraPointsMade: epGood ? 1 : 0 });
     events.push(makeEvent('extra_point', epGood ? 'Extra point is GOOD.' : 'Extra point is no good!', 0, false));
     state.awaitingXpChoice = false;
     doKickoffEvents(events);
@@ -507,6 +538,7 @@ export function createLiveCoachEngine(
     const kickerRating = rating(k, 'kicking', 70);
     const successProb = clamp(0.95 - Math.max(0, distance - 30) * 0.025 + (kickerRating - 70) / 100 * 0.15, 0.35, 0.98);
     const good = Math.random() < successProb;
+    bump(k, { fieldGoalAttempts: 1, fieldGoalsMade: good ? 1 : 0 });
     const kName = nameOrFallback(k, 'the kicker');
     if (good) {
       events.push(makeEvent('field_goal_good', `🏹 Field Goal — ${kName} drills the ${distance}-yarder! ✅`, 0, true));
@@ -672,6 +704,7 @@ export function createLiveCoachEngine(
       const qbName = nameOrFallback(offKey().qb, 'the QB');
       const loss = 1 + Math.floor(Math.random() * 2); // -1 or -2
       events.push(makeEvent('run', `🧎 ${qbName} takes a knee.`, -loss, false));
+      bump(offKey().qb, { rushAttempts: 1, rushYards: -loss });
       state.fieldPos = Math.max(1, state.fieldPos - loss);
       state.yardsToGo += loss;
       advancePlayClock(40, 0);
@@ -755,5 +788,6 @@ export function createLiveCoachEngine(
     isUserOffense: () => false, // caller knows; this is here for completeness
     isFinished: () => state.isGameOver,
     getState: () => ({ ...state }),
+    getPlayerStats: () => playerStats,
   };
 }
