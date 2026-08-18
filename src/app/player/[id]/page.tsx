@@ -12,7 +12,7 @@ import { generateCoachEvaluation, generateRosterEvaluation, type CoachEvaluation
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { getSubPosition, calcPasserRating } from '@/types';
-import type { Position, PlayerRatings } from '@/types';
+import type { Position, PlayerRatings, SubPosition } from '@/types';
 import { getCapHit, getUnamortizedBonus } from '@/types';
 
 function ratingColor(val: number) {
@@ -51,6 +51,16 @@ const RATING_LABELS: Record<keyof Omit<PlayerRatings, 'overall'>, string> = {
   kicking: 'Kicking',
 };
 
+// Manual sub-position pin options by broad position. OL intentionally exposes
+// only OT/OG (the store auto-pins the team's center via its OL stopgap); DL and
+// LB added per jslusser1945 (8/17) so edges/linebackers can be pinned the same
+// way — EDGE vs DT, MLB vs OLB. Positions absent here have no meaningful choice.
+const SUB_POSITION_PIN_OPTIONS: Partial<Record<Position, readonly SubPosition[]>> = {
+  OL: ['OT', 'OG'],
+  DL: ['EDGE', 'DT'],
+  LB: ['MLB', 'OLB'],
+};
+
 export default function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { players, teams, userTeamId, releasePlayer, seasonHistory, restructureContract, phase, setPlayerJerseyNumber, setSubPositionOverride } = useGameStore();
@@ -69,7 +79,7 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
       <GameShell>
         <div className="max-w-4xl mx-auto text-center py-20">
           <h2 className="text-2xl font-black mb-4">Player Not Found</h2>
-          <p className="text-[var(--text-sec)]">This player doesn't exist or has been removed.</p>
+          <p className="text-[var(--text-sec)]">This player doesn&apos;t exist or has been removed.</p>
         </div>
       </GameShell>
     );
@@ -78,6 +88,8 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
   const team = player.teamId ? teams.find(t => t.id === player.teamId) : null;
   const isOnUserTeam = player.teamId === userTeamId;
   const relevantRatings = POSITION_RELEVANT_RATINGS[player.position] ?? [];
+  // Which detailed sub-positions this player can be manually pinned to (OL/DL/LB).
+  const pinOptions = SUB_POSITION_PIN_OPTIONS[player.position];
 
   // Generate personnel evaluations for rostered players
   const userTeam = teams.find(t => t.id === userTeamId);
@@ -120,13 +132,15 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                   <span className="ml-1 text-[10px] font-bold text-[var(--text-sec)]/70">({player.subPosition})</span>
                 )}
               </div>
-              {/* Manual sub-position pin — OT/OG at launch. Owner-only, on the
-                  unified OL group (bryangrove/tofftanaut 5/30, launcher_18 6/21).
-                  Writes subPositionOverride so it survives the load backfill. */}
-              {isOnUserTeam && !player.retired && player.position === 'OL' && (
+              {/* Manual sub-position pin. Owner-only. OL launched with OT/OG
+                  (bryangrove/tofftanaut 5/30, launcher_18 6/21); DL (EDGE/DT) and
+                  LB (MLB/OLB) added per jslusser1945 8/17. Options come from
+                  SUB_POSITION_PIN_OPTIONS. Writes subPositionOverride so it
+                  survives the load backfill. */}
+              {isOnUserTeam && !player.retired && pinOptions && (
                 <div className="flex items-center gap-1">
                   <span className="text-xs font-bold text-[var(--text-sec)]">Position:</span>
-                  {(['OT', 'OG'] as const).map(sp => (
+                  {pinOptions.map(sp => (
                     <button
                       key={sp}
                       type="button"
@@ -153,10 +167,10 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
                   )}
                 </div>
               )}
-              {/* Off-roster viewers see why there's no OT/OG control (the pin is
-                  owner-only). Answers "the button is hidden" reports from testers
-                  looking at an OL they don't own. */}
-              {!isOnUserTeam && !player.retired && player.position === 'OL' && (
+              {/* Off-roster viewers see why there's no pin control (owner-only).
+                  Answers "the button is hidden" reports from testers looking at a
+                  pinnable player (OL/DL/LB) they don't own. */}
+              {!isOnUserTeam && !player.retired && pinOptions && (
                 <div className="text-[10px] text-[var(--text-sec)]/70">(Owner controls only)</div>
               )}
             </div>
