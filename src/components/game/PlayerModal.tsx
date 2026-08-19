@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { calculateSchemeFit } from '@/lib/engine/coaching';
-import { calculateDeadCap, calculateCapSavings } from '@/types';
+import { calculateDeadCap, calculateCapSavings, SUB_POSITION_PIN_OPTIONS } from '@/types';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { getOvrColor, getOvrBgColor } from '@/lib/ovrColor';
@@ -90,10 +90,20 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
   const offseasonPhases = ['resigning', 'draft', 'freeAgency', 'offseason', 'preseason'];
   const isTradeOpen = offseasonPhases.includes(phase) || (phase === 'regular' && week <= tradeDeadlineWeek + 1);
 
-  // Reset confirm state when player changes
+  // Reset confirm state when a different player is opened. This is an
+  // intentional synchronous reset keyed on playerId — clearing an in-progress
+  // release confirmation and extension negotiation when the modal swaps
+  // players — not a cascading-render smell, so the set-state-in-effect rule is
+  // scoped-off for just this effect. (Surfaced now because this file entered a
+  // changeset for the first time since the rule was added; the DL/LB pin fix
+  // below is the actual change.)
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect --
+       intentional synchronous reset when the modal swaps to a different
+       player; keyed on playerId, not a cascading-render smell. */
     setConfirmRelease(false);
     setExtensionNeg(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [playerId]);
 
   const player = playerId ? players.find(p => p.id === playerId) : null;
@@ -185,15 +195,19 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                 <span className="ml-1 text-[10px] font-bold text-[var(--text-sec)]/70">({player.subPosition})</span>
               )}
             </div>
-            {/* Manual sub-position pin — mirrors /player/[id] treatment (PR #332).
-                Owner-only, OL only. Modal is where launcher_18 was landing when
-                he said "not seeing anything" (msg 1522270257169961180) — the
-                pin never lived on this surface. Writes subPositionOverride so
-                it survives the load backfill. */}
-            {isOnUserTeam && !player.retired && player.position === 'OL' && (
+            {/* Manual sub-position pin — mirrors /player/[id] treatment.
+                Owner-only. Options come from the shared SUB_POSITION_PIN_OPTIONS
+                map (OL: OT/OG, DL: EDGE/DT, LB: MLB/OLB) so this popup and the
+                full player page expose the identical control. The modal is where
+                launcher_18 (msg 1522270257169961180) and, after PR #393 only
+                touched the player page, tofftanaut + jslusser1945 (8/18) were
+                landing when they reported "not there" — the DL/LB pin never
+                lived on this surface. Writes subPositionOverride so it survives
+                the load backfill. */}
+            {isOnUserTeam && !player.retired && SUB_POSITION_PIN_OPTIONS[player.position] && (
               <div className="flex items-center gap-1">
                 <span className="text-xs font-bold text-[var(--text-sec)]">Position:</span>
-                {(['OT', 'OG', 'C'] as const).map(sp => (
+                {(SUB_POSITION_PIN_OPTIONS[player.position] ?? []).map(sp => (
                   <button
                     key={sp}
                     type="button"
@@ -220,8 +234,8 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
                 )}
               </div>
             )}
-            {/* Off-roster viewers see why there's no OT/OG control (owner-only). */}
-            {!isOnUserTeam && !player.retired && player.position === 'OL' && (
+            {/* Off-roster viewers see why there's no pin control (owner-only). */}
+            {!isOnUserTeam && !player.retired && SUB_POSITION_PIN_OPTIONS[player.position] && (
               <div className="text-[10px] text-[var(--text-sec)]/70">(Owner controls only)</div>
             )}
           </div>

@@ -49,6 +49,18 @@ export function isValidSubPositionForPosition(position: Position, sub: SubPositi
   return (SUB_POSITION_CLUSTERS[position] ?? []).includes(sub);
 }
 
+/** Owner-facing manual sub-position pin options, by broad position. A strict
+ *  subset of SUB_POSITION_CLUSTERS: only positions where an owner picks between
+ *  meaningful roles are pinnable. OL intentionally omits C (the store auto-pins
+ *  the team's center via its OL stopgap). DL (EDGE/DT) and LB (MLB/OLB) added
+ *  per jslusser1945 (8/17). Shared by /player/[id] and the roster PlayerModal
+ *  so both surfaces expose the exact same control. */
+export const SUB_POSITION_PIN_OPTIONS: Partial<Record<Position, readonly SubPosition[]>> = {
+  OL: ['OT', 'OG'],
+  DL: ['EDGE', 'DT'],
+  LB: ['MLB', 'OLB'],
+};
+
 /** Derive a player's detailed sub-position from their broad Position +
  *  ratings. Pure function — used both at generation time (to seed the
  *  Player.subPosition field) and as a backfill for older saves. */
