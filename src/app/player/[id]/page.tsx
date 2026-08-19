@@ -11,8 +11,8 @@ import { potentialLabel, potentialColor } from '@/lib/engine/development';
 import { generateCoachEvaluation, generateRosterEvaluation, type CoachEvaluation, type RosterEvaluation } from '@/lib/engine/personnelReport';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { TeamLogo } from '@/components/ui/TeamLogo';
-import { getSubPosition, calcPasserRating } from '@/types';
-import type { Position, PlayerRatings, SubPosition } from '@/types';
+import { getSubPosition, calcPasserRating, SUB_POSITION_PIN_OPTIONS } from '@/types';
+import type { Position, PlayerRatings } from '@/types';
 import { getCapHit, getUnamortizedBonus } from '@/types';
 
 function ratingColor(val: number) {
@@ -49,16 +49,6 @@ const RATING_LABELS: Record<keyof Omit<PlayerRatings, 'overall'>, string> = {
   stamina: 'Stamina', throwing: 'Throwing', catching: 'Catching', carrying: 'Carrying',
   blocking: 'Blocking', tackling: 'Tackling', coverage: 'Coverage', passRush: 'Pass Rush',
   kicking: 'Kicking',
-};
-
-// Manual sub-position pin options by broad position. OL intentionally exposes
-// only OT/OG (the store auto-pins the team's center via its OL stopgap); DL and
-// LB added per jslusser1945 (8/17) so edges/linebackers can be pinned the same
-// way — EDGE vs DT, MLB vs OLB. Positions absent here have no meaningful choice.
-const SUB_POSITION_PIN_OPTIONS: Partial<Record<Position, readonly SubPosition[]>> = {
-  OL: ['OT', 'OG'],
-  DL: ['EDGE', 'DT'],
-  LB: ['MLB', 'OLB'],
 };
 
 export default function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
