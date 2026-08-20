@@ -53,12 +53,14 @@ export function isValidSubPositionForPosition(position: Position, sub: SubPositi
  *  subset of SUB_POSITION_CLUSTERS: only positions where an owner picks between
  *  meaningful roles are pinnable. OL intentionally omits C (the store auto-pins
  *  the team's center via its OL stopgap). DL (EDGE/DT) and LB (MLB/OLB) added
- *  per jslusser1945 (8/17). Shared by /player/[id] and the roster PlayerModal
- *  so both surfaces expose the exact same control. */
+ *  per jslusser1945 (8/17); S (FS/SS) added per jslusser1945 + tofftanaut
+ *  (8/19), completing the position-pin family. Shared by /player/[id] and the
+ *  roster PlayerModal so both surfaces expose the exact same control. */
 export const SUB_POSITION_PIN_OPTIONS: Partial<Record<Position, readonly SubPosition[]>> = {
   OL: ['OT', 'OG'],
   DL: ['EDGE', 'DT'],
   LB: ['MLB', 'OLB'],
+  S: ['FS', 'SS'],
 };
 
 /** Derive a player's detailed sub-position from their broad Position +

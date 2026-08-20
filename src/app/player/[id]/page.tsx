@@ -78,7 +78,7 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
   const team = player.teamId ? teams.find(t => t.id === player.teamId) : null;
   const isOnUserTeam = player.teamId === userTeamId;
   const relevantRatings = POSITION_RELEVANT_RATINGS[player.position] ?? [];
-  // Which detailed sub-positions this player can be manually pinned to (OL/DL/LB).
+  // Which detailed sub-positions this player can be manually pinned to (OL/DL/LB/S).
   const pinOptions = SUB_POSITION_PIN_OPTIONS[player.position];
 
   // Generate personnel evaluations for rostered players
@@ -124,7 +124,7 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
               </div>
               {/* Manual sub-position pin. Owner-only. OL launched with OT/OG
                   (bryangrove/tofftanaut 5/30, launcher_18 6/21); DL (EDGE/DT) and
-                  LB (MLB/OLB) added per jslusser1945 8/17. Options come from
+                  LB (MLB/OLB) added 8/17; S (FS/SS) added 8/19. Options come from
                   SUB_POSITION_PIN_OPTIONS. Writes subPositionOverride so it
                   survives the load backfill. */}
               {isOnUserTeam && !player.retired && pinOptions && (
@@ -159,7 +159,7 @@ export default function PlayerPage({ params }: { params: Promise<{ id: string }>
               )}
               {/* Off-roster viewers see why there's no pin control (owner-only).
                   Answers "the button is hidden" reports from testers looking at a
-                  pinnable player (OL/DL/LB) they don't own. */}
+                  pinnable player (OL/DL/LB/S) they don't own. */}
               {!isOnUserTeam && !player.retired && pinOptions && (
                 <div className="text-[10px] text-[var(--text-sec)]/70">(Owner controls only)</div>
               )}

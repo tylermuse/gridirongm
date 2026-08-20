@@ -197,7 +197,7 @@ export function PlayerModal({ playerId, onClose }: PlayerModalProps) {
             </div>
             {/* Manual sub-position pin — mirrors /player/[id] treatment.
                 Owner-only. Options come from the shared SUB_POSITION_PIN_OPTIONS
-                map (OL: OT/OG, DL: EDGE/DT, LB: MLB/OLB) so this popup and the
+                map (OL: OT/OG, DL: EDGE/DT, LB: MLB/OLB, S: FS/SS) so this popup and the
                 full player page expose the identical control. The modal is where
                 launcher_18 (msg 1522270257169961180) and, after PR #393 only
                 touched the player page, tofftanaut + jslusser1945 (8/18) were
