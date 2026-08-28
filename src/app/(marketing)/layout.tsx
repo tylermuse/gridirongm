@@ -42,6 +42,15 @@ const FOOTER_COLS = [
       { label: 'For Fantasy Players', href: '/for/fantasy-football-players' },
     ],
   },
+  {
+    title: 'Company',
+    links: [
+      { label: 'About', href: '/about' },
+      { label: 'Contact', href: '/contact' },
+      { label: 'Privacy Policy', href: '/privacy' },
+      { label: 'Terms of Service', href: '/terms' },
+    ],
+  },
 ];
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
@@ -84,7 +93,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white mt-16">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8">
             {FOOTER_COLS.map(col => (
               <div key={col.title}>
                 <h3 className="text-sm font-bold text-gray-900 mb-3">{col.title}</h3>
