@@ -20,6 +20,9 @@ export const metadata: Metadata = {
   title: 'BS Football',
   description: 'Build your dynasty. Run the franchise.',
   manifest: '/manifest.json',
+  verification: {
+    google: 'uF0bXo1i4U5gvcZAu6_dmeAl-RzfWExVckUr99OGR-A',
+  },
   appleWebApp: {
     capable: true,
     title: 'BS Football',
