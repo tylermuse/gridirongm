@@ -696,7 +696,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const [activeTab, setActiveTab] = useState<TabId>('gamecast');
   // Live Coach mode — when on, the playback pauses before each user offensive
   // snap and shows the play call menu. Toggleable at any time during the game.
-  const [liveCoachOn, setLiveCoachOn] = useState(false);
+  // Defaults ON only for games the user is actively managing (userTeamSide set);
+  // spectator / sim-past-weeks games start OFF so they simulate without pausing.
+  const [liveCoachOn, setLiveCoachOn] = useState(userTeamSide !== null);
   const [liveCoachPaused, setLiveCoachPaused] = useState(false);
   // Live Coach engine — generates events one-at-a-time after takeover
   const liveEngineRef = useRef<LiveCoachEngine | null>(null);
