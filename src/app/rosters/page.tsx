@@ -26,15 +26,15 @@ interface RosterEntry {
 const ROSTERS: RosterEntry[] = [
   {
     id: 'nfl-2026-updated',
-    title: 'NFL 2026 Roster — Updated July 1, 2026',
+    title: 'NFL 2026 Roster — Updated September 3, 2026',
     description:
-      'Complete NFL roster with real contract data from Spotrac, the full 2026 NFL Draft (all 7 rounds on their real teams), and a comprehensive league-wide reconciliation. July 1 v4: caught up on every post-draft move through July 1 — the June 1 blockbusters (Myles Garrett to the Rams for Jared Verse plus picks, A.J. Brown to the Patriots), the Wanya Morris trade to Atlanta, plus 20+ contract extensions (Patrick Mahomes through 2033, Jeffery Simmons’ record DT deal, Drake London, Jack Campbell, Christian Watson, Kyle Pitts, Derwin James and more), the David Njoku, JuJu Smith-Schuster, Odell Beckham Jr. and Cameron Jordan signings, and Russell Wilson’s retirement. May 9 v3: 2,636 player contracts updated with real AAV and expiration data from Spotrac.com. May 8 v2: every team individually cross-referenced against ESPN.com active rosters with 99%+ match rate. 723 missing roster players added, 65 phantom draft picks removed, 12 wrong-team corrections. Starts at the 2026 regular season.',
+      'Reconciled against real active rosters as of the 2026 season opener — every team’s 53-man roster plus practice squad and injured reserve verified against ESPN. September 3 v5: a full league-wide reconciliation after training camp and the cut to 53, with ~270 team changes, 550+ players released to free agency, and 40+ un-retirements. Headliners: Aaron Donald back with the Rams, Stefon Diggs to the Commanders, Keenan Allen to the Colts, Za’Darius Smith to the Falcons, L’Jarius Sneed to the Chiefs, Bobby Okereke to the Panthers and Deebo Samuel to the 49ers, plus duplicate-record cleanup. July 1 v4: caught up on every post-draft move through July 1 — the June 1 blockbusters (Myles Garrett to the Rams, A.J. Brown to the Patriots), 20+ contract extensions (Mahomes through 2033, Jeffery Simmons, Drake London and more) and Russell Wilson’s retirement. Earlier passes set all 2,636 contracts from Spotrac and reconciled every roster against ESPN with a 99%+ match rate. Starts at the 2026 regular season.',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
-    lastUpdated: 'July 1, 2026',
+    lastUpdated: 'September 3, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
     era: 'Modern',
-    cacheBust: 13,
+    cacheBust: 14,
   },
   {
     id: 'nfl-1994-montana-era',
