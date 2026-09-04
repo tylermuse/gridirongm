@@ -6959,6 +6959,25 @@ export const useGameStore = create<GameStore>()(
         const offeredPickIdsSet = new Set(offeredPickIds);
         const receivedPickIdsSet = new Set(receivedPickIds);
 
+        // Roster-integrity guard (P1, reported by tofftanaut): every player id in
+        // a trade must resolve to exactly ONE player. If a corrupted save contains
+        // two players sharing an id, the id-based roster mutations below would pull
+        // an unrelated rostered player along with the intended one — the reporter's
+        // "put Diggs on the block, lost Milroe instead" bug. Fail safe rather than
+        // silently moving a player the user never agreed to trade.
+        const involvedPlayerIds = [...offeredPlayerIds, ...receivedPlayerIds];
+        if (involvedPlayerIds.length > 0) {
+          const involvedIdSet = new Set(involvedPlayerIds);
+          const idOccurrences = new Map<string, number>();
+          for (const p of state.players) {
+            if (involvedIdSet.has(p.id)) idOccurrences.set(p.id, (idOccurrences.get(p.id) ?? 0) + 1);
+          }
+          const ambiguousId = involvedPlayerIds.find(id => (idOccurrences.get(id) ?? 0) > 1);
+          if (ambiguousId) {
+            return { success: false, reason: 'Roster data error: a player in this trade could not be uniquely identified. Trade blocked to protect your roster.' };
+          }
+        }
+
         // Calculate dead money from restructured players being traded away
         // When trading a restructured player, the sending team eats the unamortized bonus as dead cap
         const userDeadCapEntries: DeadCapEntry[] = [];
