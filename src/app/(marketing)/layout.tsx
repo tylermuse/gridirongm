@@ -27,6 +27,7 @@ const FOOTER_COLS = [
   {
     title: 'Learn',
     links: [
+      { label: '2026 Team Rosters', href: '/rosters/2026' },
       { label: 'Blog', href: '/blog' },
       { label: 'Draft Strategy Guide', href: '/blog/draft-strategy-guide' },
       { label: 'Salary Cap Tips', href: '/blog/salary-cap-management-tips' },

@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { blogPosts } from '@/lib/content/posts';
 import { seoPages } from '@/lib/content/pages';
+import { listEras, getTeams } from '@/lib/data/referenceRosters';
 
 const BASE_URL = 'https://bs-football.com';
 
@@ -11,6 +12,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: BASE_URL, lastModified: now, changeFrequency: 'weekly', priority: 1.0 },
     { url: `${BASE_URL}/blog`, lastModified: now, changeFrequency: 'weekly', priority: 0.8 },
     { url: `${BASE_URL}/pricing`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${BASE_URL}/rosters`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${BASE_URL}/about`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${BASE_URL}/contact`, lastModified: now, changeFrequency: 'yearly', priority: 0.4 },
     { url: `${BASE_URL}/privacy`, lastModified: now, changeFrequency: 'yearly', priority: 0.3 },
@@ -31,5 +33,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: page.section === 'vs' || page.section === 'best' ? 0.8 : 0.6,
   }));
 
-  return [...staticPages, ...blogPages, ...sectionPages];
+  const rosterPages: MetadataRoute.Sitemap = [];
+  for (const e of listEras()) {
+    rosterPages.push({ url: `${BASE_URL}/rosters/${e.slug}`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 });
+    for (const t of getTeams(e.slug)) {
+      rosterPages.push({ url: `${BASE_URL}/rosters/${e.slug}/${t.abbrev.toLowerCase()}`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 });
+    }
+  }
+
+  return [...staticPages, ...blogPages, ...sectionPages, ...rosterPages];
 }
