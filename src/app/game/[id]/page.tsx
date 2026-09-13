@@ -732,6 +732,54 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const previousEvent = revealedCount >= 2 ? (allEvents[revealedCount - 2] ?? null) : null;
   const revealedEvents = allEvents.slice(0, revealedCount);
 
+  // Seed and activate the live-coach engine, pivoting from the pre-computed
+  // sim at the most recently revealed event. Idempotent (no-op once the
+  // engine exists). Previously this logic lived only inline in the toggle
+  // button's onClick, so it only ever ran on a manual OFF→ON click — when
+  // PR #400 made liveCoachOn default to true, the toggle rendered green
+  // but the engine was never created, so the play-call modal (gated on
+  // liveEngineRef.current) never rendered and the pre-computed sim kept
+  // auto-picking every play.
+  const activateLiveEngine = useCallback(() => {
+    if (liveEngineRef.current !== null || !homeTeam || !awayTeam) return;
+    const seedEvent = allEvents[revealedCount - 1] ?? allEvents[0];
+    if (!seedEvent) return;
+    liveEngineRef.current = createLiveCoachEngine(
+      homeTeam, awayTeam, homePlayers, awayPlayers,
+      {
+        quarter: seedEvent.quarter,
+        timeSecs: parseInt(seedEvent.timeStr.split(':')[0], 10) * 60 + parseInt(seedEvent.timeStr.split(':')[1] ?? '0', 10),
+        possession: seedEvent.possession,
+        fieldPos: seedEvent.fieldPos,
+        down: Math.max(1, seedEvent.down),
+        yardsToGo: Math.max(1, seedEvent.yardsToGo),
+        homeScore: seedEvent.homeScore,
+        awayScore: seedEvent.awayScore,
+        isGameOver: false,
+        twoMinWarningQ2Fired: seedEvent.quarter > 2 || (seedEvent.quarter === 2 && seedEvent.timeStr <= '2:00'),
+        twoMinWarningQ4Fired: seedEvent.quarter > 4 || (seedEvent.quarter === 4 && seedEvent.timeStr <= '2:00'),
+        overtime: seedEvent.quarter > 4,
+        awaitingXpChoice: false,
+        awaitingKickoffChoice: false,
+        homeTimeouts: 3,
+        awayTimeouts: 3,
+      },
+      userTeamSide ?? 'home',
+    );
+    setLiveEnginePivotIdx(revealedCount);
+    setLiveExtraEvents([]);
+  }, [homeTeam, awayTeam, homePlayers, awayPlayers, allEvents, revealedCount, userTeamSide]);
+
+  // Auto-activate as soon as the game is ready when Live Coach defaults ON
+  // (managed games) — mirrors what a manual toggle-click already did, so a
+  // default-on toggle actually gates play selection instead of just
+  // showing green.
+  useEffect(() => {
+    if (liveCoachOn && userTeamSide !== null && liveEngineRef.current === null && totalEvents > 0) {
+      activateLiveEngine();
+    }
+  }, [liveCoachOn, userTeamSide, totalEvents, activateLiveEngine]);
+
   // Halftime Report (feature #9): a user-opened breakdown of the first half —
   // leaders + a Cole/Blaze take. Available once playback passes the halftime
   // whistle. The halftime PlayEvent carries the cumulative first-half stat
@@ -1652,37 +1700,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 const turningOn = !liveCoachOn;
                 setLiveCoachOn(turningOn);
                 setLiveCoachPaused(false);
-                // First-time activation: seed the live engine from the current state
-                if (turningOn && liveEngineRef.current === null && homeTeam && awayTeam) {
-                  // Use the LAST revealed event as the starting state, or default kickoff state
-                  const seedEvent = allEvents[revealedCount - 1] ?? allEvents[0];
-                  if (seedEvent) {
-                    liveEngineRef.current = createLiveCoachEngine(
-                      homeTeam, awayTeam, homePlayers, awayPlayers,
-                      {
-                        quarter: seedEvent.quarter,
-                        timeSecs: parseInt(seedEvent.timeStr.split(':')[0], 10) * 60 + parseInt(seedEvent.timeStr.split(':')[1] ?? '0', 10),
-                        possession: seedEvent.possession,
-                        fieldPos: seedEvent.fieldPos,
-                        down: Math.max(1, seedEvent.down),
-                        yardsToGo: Math.max(1, seedEvent.yardsToGo),
-                        homeScore: seedEvent.homeScore,
-                        awayScore: seedEvent.awayScore,
-                        isGameOver: false,
-                        twoMinWarningQ2Fired: seedEvent.quarter > 2 || (seedEvent.quarter === 2 && seedEvent.timeStr <= '2:00'),
-                        twoMinWarningQ4Fired: seedEvent.quarter > 4 || (seedEvent.quarter === 4 && seedEvent.timeStr <= '2:00'),
-                        overtime: seedEvent.quarter > 4,
-                        awaitingXpChoice: false,
-                        awaitingKickoffChoice: false,
-                        homeTimeouts: 3,
-                        awayTimeouts: 3,
-                      },
-                      userTeamSide ?? 'home',
-                    );
-                    setLiveEnginePivotIdx(revealedCount);
-                    setLiveExtraEvents([]);
-                  }
-                }
+                if (turningOn) activateLiveEngine();
               }}
               className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold transition-all ${
                 liveCoachOn
