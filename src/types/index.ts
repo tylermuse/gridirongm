@@ -1333,6 +1333,17 @@ export interface LeagueState {
   teams: Team[];
   players: Player[];
   schedule: GameResult[];
+  /** Transient runtime-only overlay (excluded from persistence): pre-simulated
+   *  results for the non-user games of the week the user is currently playing
+   *  live, plus per-quarter cumulative score splits used by the Around-the-League
+   *  scoreboard + halftime updates. Set on live regular-season game mount;
+   *  consumed and cleared by simulateOneWeek so the live scoreboard's finals
+   *  equal the committed weekly results. */
+  liveScoreboard?: {
+    week: number;
+    results: Record<string, GameResult>;
+    splits: Record<string, { home: number[]; away: number[] }>;
+  } | null;
   /** Preseason schedule (separate from regular season) */
   preseasonSchedule?: GameResult[];
   /** Current preseason game number (1-based, 0 = not in preseason) */
