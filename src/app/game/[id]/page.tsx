@@ -565,6 +565,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
   const {
     schedule, teams, players, phase, userTeamId, commitLiveGame, playoffBracket, season,
+    initLiveScoreboard, liveScoreboard,
   } = useGameStore();
 
   // Try schedule first, then check playoff bracket for unplayed matchups
@@ -579,6 +580,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     };
   }
   const isPlayoffGame = !!playoffMatchup || !!playoffBracket?.find(m => m.id === id);
+
+  // Around-the-League scoreboard: pre-sim the week's other games once on mount
+  // (regular season only) so their scores can progress alongside the user's
+  // live game + surface at halftime. Idempotent per week in the store.
+  useEffect(() => {
+    if (phase === 'regular' && !isPlayoffGame) initLiveScoreboard(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, phase, isPlayoffGame]);
   const homeTeam = game ? teams.find(t => t.id === game.homeTeamId) ?? null : null;
   const awayTeam = game ? teams.find(t => t.id === game.awayTeamId) ?? null : null;
   const homePlayers = useMemo(() => {
@@ -2351,7 +2360,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Around the League</h3>
           <div className="space-y-1.5 max-h-[calc(100vh-6rem)] overflow-y-auto">
-            {schedule
+            {(() => {
+              // Reveal the other games' scores in step with the user's game clock:
+              // by the user's current quarter (or FINAL once their game ends).
+              const sb = liveScoreboard && liveScoreboard.week === game.week ? liveScoreboard : null;
+              const userQ = isFinished ? 4 : Math.min(Math.max(currentEvent?.quarter ?? 1, 1), 4);
+              const qLabel = isFinished ? 'FINAL' : userQ >= 4 ? '4TH QTR' : userQ === 3 ? '3RD QTR' : userQ === 2 ? '2ND QTR' : '1ST QTR';
+              return schedule
               .filter(g => g.week === game.week && g.id !== game.id)
               .map(g => {
                 const ht = teams.find(t => t.id === g.homeTeamId);
@@ -2361,6 +2376,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   && ht.division === teams.find(t => t.id === userTeamId)?.division
                   || at.conference === teams.find(t => t.id === userTeamId)?.conference
                   && at.division === teams.find(t => t.id === userTeamId)?.division;
+                const sp = sb?.splits[g.id];
+                // A stashed game is shown "live" until the real weekly sim marks it played.
+                const showLive = !!sp && !g.played;
+                const awayShown = g.played ? g.awayScore : showLive ? sp!.away[userQ - 1] : null;
+                const homeShown = g.played ? g.homeScore : showLive ? sp!.home[userQ - 1] : null;
                 return (
                   <div key={g.id} className={`rounded-lg border px-3 py-2 text-xs ${
                     isDiv ? 'border-blue-300 bg-blue-50/50' : 'border-[var(--border)] bg-[var(--surface)]'
@@ -2370,26 +2390,31 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                         <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: at.primaryColor }} />
                         <span className="font-medium">{at.abbreviation}</span>
                       </div>
-                      <span className="font-mono font-bold">{g.played ? g.awayScore : ''}</span>
+                      <span className="font-mono font-bold">{awayShown ?? ''}</span>
                     </div>
                     <div className="flex items-center justify-between mt-0.5">
                       <div className="flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: ht.primaryColor }} />
                         <span className="font-medium">{ht.abbreviation}</span>
                       </div>
-                      <span className="font-mono font-bold">{g.played ? g.homeScore : ''}</span>
+                      <span className="font-mono font-bold">{homeShown ?? ''}</span>
                     </div>
-                    {g.played && (
+                    {g.played ? (
                       <div className="text-[10px] text-[var(--text-sec)] mt-0.5 text-center">FINAL</div>
-                    )}
-                    {!g.played && (
+                    ) : showLive ? (
+                      <div className="text-[10px] mt-0.5 text-center flex items-center justify-center gap-1">
+                        {!isFinished && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />}
+                        <span className={isFinished ? 'text-[var(--text-sec)]' : 'text-red-500 font-bold'}>{qLabel}</span>
+                      </div>
+                    ) : (
                       <div className="text-[10px] text-[var(--text-sec)] mt-0.5 text-center">
                         {g.bettingLine ? `${g.bettingLine.spread > 0 ? at.abbreviation : ht.abbreviation} ${Math.abs(g.bettingLine.spread).toFixed(1)}` : '—'}
                       </div>
                     )}
                   </div>
                 );
-              })}
+              });
+            })()}
           </div>
         </div>
       </div>
@@ -2426,6 +2451,36 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 </div>
                 <div className="text-sm text-[var(--text-sec)] mt-1">{halftimeBreakdown.summary}</div>
               </div>
+
+              {liveScoreboard && liveScoreboard.week === game.week && (() => {
+                const others = schedule.filter(g => g.week === game.week && g.id !== game.id && liveScoreboard.splits[g.id]);
+                if (others.length === 0) return null;
+                return (
+                  <div className="space-y-2">
+                    <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">Around the League — At the Half</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {others.map(g => {
+                        const at = teams.find(t => t.id === g.awayTeamId);
+                        const ht = teams.find(t => t.id === g.homeTeamId);
+                        if (!at || !ht) return null;
+                        const sp = liveScoreboard.splits[g.id];
+                        return (
+                          <div key={g.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">{at.abbreviation}</span>
+                              <span className="font-mono font-bold tabular-nums">{sp.away[1]}</span>
+                            </div>
+                            <div className="flex items-center justify-between mt-0.5">
+                              <span className="font-medium">{ht.abbreviation}</span>
+                              <span className="font-mono font-bold tabular-nums">{sp.home[1]}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {halftimeBreakdown.leaders.length > 0 && (
                 <div className="space-y-2">
