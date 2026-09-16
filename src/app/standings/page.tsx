@@ -154,7 +154,8 @@ export default function StandingsPage() {
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const showWinProb = leagueSettings?.showPredictedFavorite !== false;
   const [view, setView] = useState<StandingsView>('division');
-  const [tab, setTab] = useState<'standings' | 'schedule'>('standings');
+  const [tab, setTab] = useState<'standings' | 'schedule' | 'scores'>('standings');
+  const [scoresWeek, setScoresWeek] = useState<number>(week);
   const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -201,6 +202,20 @@ export default function StandingsPage() {
   const teamGames = schedule
     .filter(g => g.homeTeamId === userTeamId || g.awayTeamId === userTeamId)
     .sort((a, b) => a.week - b.week);
+
+  // Around-the-league scoreboard: every regular-season week that has games,
+  // plus the full slate for the currently selected week (user's game first).
+  const availableWeeks = Array.from(
+    new Set(schedule.filter(g => g.week >= 1 && g.week <= 18).map(g => g.week)),
+  ).sort((a, b) => a - b);
+  const scoresWeekGames = schedule
+    .filter(g => g.week === scoresWeek)
+    .sort((a, b) => {
+      const aUser = a.homeTeamId === userTeamId || a.awayTeamId === userTeamId ? 0 : 1;
+      const bUser = b.homeTeamId === userTeamId || b.awayTeamId === userTeamId ? 0 : 1;
+      if (aUser !== bUser) return aUser - bUser;
+      return teamAbbr(a.awayTeamId).localeCompare(teamAbbr(b.awayTeamId));
+    });
 
   function teamAbbr(id: string) {
     return teams.find(t => t.id === id)?.abbreviation ?? '???';
@@ -257,6 +272,14 @@ export default function StandingsPage() {
               }`}
             >
               Schedule
+            </button>
+            <button
+              onClick={() => setTab('scores')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                tab === 'scores' ? 'bg-blue-600 text-white' : 'text-[var(--text-sec)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]'
+              }`}
+            >
+              Scores
             </button>
           </div>
         </div>
@@ -481,6 +504,85 @@ export default function StandingsPage() {
                   </Card>
                 );
               })
+            )}
+          </div>
+        )}
+
+        {tab === 'scores' && (
+          <div className="space-y-4">
+            {/* Week selector */}
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+              <span className="text-xs text-[var(--text-sec)] shrink-0 pr-1">Week</span>
+              {availableWeeks.map(w => (
+                <button
+                  key={w}
+                  onClick={() => setScoresWeek(w)}
+                  className={`shrink-0 px-3 py-1 rounded-md text-xs font-bold transition-colors ${
+                    scoresWeek === w ? 'bg-blue-600 text-white' : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+                  }`}
+                >
+                  {w}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">Week {scoresWeek} — Around the League</h3>
+              <span className="text-xs text-[var(--text-sec)]">
+                {scoresWeekGames.filter(g => g.played).length}/{scoresWeekGames.length} final
+              </span>
+            </div>
+
+            {scoresWeekGames.length === 0 ? (
+              <div className="text-center text-[var(--text-sec)] py-12">No games this week</div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {scoresWeekGames.map(game => {
+                  const isUserGame = game.homeTeamId === userTeamId || game.awayTeamId === userTeamId;
+                  const homeWon = game.played && game.homeScore > game.awayScore;
+                  const awayWon = game.played && game.awayScore > game.homeScore;
+                  const rowClass = (won: boolean) => `flex items-center justify-between ${game.played && !won ? 'opacity-55' : ''}`;
+                  return (
+                    <Card
+                      key={game.id}
+                      className={`py-2.5 px-3 ${isUserGame ? 'ring-1 ring-[var(--accent)]' : ''} ${game.played ? 'cursor-pointer hover:border-[var(--accent)] hover:shadow-md active:scale-[0.98] transition-all' : ''}`}
+                      {...(game.played ? { onClick: () => setSelectedGame(game) } : {})}
+                    >
+                      {/* Away team */}
+                      <div className={rowClass(awayWon)}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-7 h-7 rounded-md flex items-center justify-center text-[9px] font-black text-white shrink-0" style={{ backgroundColor: teamColor(game.awayTeamId) }}>
+                            {teamAbbr(game.awayTeamId)}
+                          </div>
+                          <span className={`text-sm truncate ${awayWon ? 'font-bold' : 'font-medium'} ${game.awayTeamId === userTeamId ? 'text-blue-600' : ''}`}>
+                            {teamFullName(game.awayTeamId)}
+                          </span>
+                        </div>
+                        <span className="font-mono font-bold text-sm ml-2">{game.played ? game.awayScore : ''}</span>
+                      </div>
+                      {/* Home team */}
+                      <div className={`${rowClass(homeWon)} mt-1`}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-7 h-7 rounded-md flex items-center justify-center text-[9px] font-black text-white shrink-0" style={{ backgroundColor: teamColor(game.homeTeamId) }}>
+                            {teamAbbr(game.homeTeamId)}
+                          </div>
+                          <span className={`text-sm truncate ${homeWon ? 'font-bold' : 'font-medium'} ${game.homeTeamId === userTeamId ? 'text-blue-600' : ''}`}>
+                            {teamFullName(game.homeTeamId)}
+                          </span>
+                        </div>
+                        <span className="font-mono font-bold text-sm ml-2">{game.played ? game.homeScore : ''}</span>
+                      </div>
+                      {/* Status footer */}
+                      <div className="mt-1.5 pt-1.5 border-t border-[var(--border)] flex items-center justify-between">
+                        <span className={`text-[10px] font-bold uppercase tracking-wide ${game.played ? 'text-[var(--text-sec)]' : 'text-blue-600'}`}>
+                          {game.played ? 'Final' : 'Scheduled'}
+                        </span>
+                        {game.played && <span className="text-[10px] text-blue-600">Box Score →</span>}
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
