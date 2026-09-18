@@ -1886,32 +1886,36 @@ export function deriveScoringPlaysFromEvents(
   const out: import('@/types').ScoringPlay[] = [];
   let prevHome = 0;
   let prevAway = 0;
+  // The engine snapshots a scoring play's score BEFORE applying its points
+  // (e.g. addEvent('touchdown', …, true) then homeScore += 6), so the point
+  // bump surfaces on the FOLLOWING event. Conversion events (XP / two-point)
+  // bump the score first and are flagged isScoring:false. To handle both
+  // consistently we watch for every positive score delta between consecutive
+  // events and attribute it to the most recent scoring-flagged play (falling
+  // back to the current event). This guarantees the derived points always
+  // reconcile to the final score — the previous version diffed only on the
+  // scoring event itself and therefore recorded nothing for live games.
+  let pending: PlayEvent | null = null;
   for (const ev of events) {
-    if (!ev.isScoring) {
-      // Score still tracks even if event isn't flagged scoring — so the next
-      // scoring event gets the correct delta even if there are skipped flags.
-      prevHome = ev.homeScore;
-      prevAway = ev.awayScore;
-      continue;
-    }
     const homeDelta = ev.homeScore - prevHome;
     const awayDelta = ev.awayScore - prevAway;
     const points = homeDelta + awayDelta;
-    if (points <= 0) {
-      // Defensive guard against duplicate-flagged or zero-delta events.
-      prevHome = ev.homeScore;
-      prevAway = ev.awayScore;
-      continue;
+    if (points > 0) {
+      const src = pending ?? ev;
+      const teamId = homeDelta > 0 ? homeTeamId : awayTeamId;
+      out.push({
+        quarter: src.quarter,
+        timeLeft: src.timeStr,
+        teamId,
+        points,
+        description: src.description,
+        score: [ev.awayScore, ev.homeScore],
+      });
+      pending = null;
+    } else if (ev.isScoring) {
+      // Remember the play that will bump the score on a following event.
+      pending = ev;
     }
-    const teamId = homeDelta > 0 ? homeTeamId : awayTeamId;
-    out.push({
-      quarter: ev.quarter,
-      timeLeft: ev.timeStr,
-      teamId,
-      points,
-      description: ev.description,
-      score: [ev.awayScore, ev.homeScore],
-    });
     prevHome = ev.homeScore;
     prevAway = ev.awayScore;
   }

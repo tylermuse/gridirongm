@@ -5,6 +5,7 @@ import { useGameStore } from '@/lib/engine/store';
 import { Modal } from '@/components/ui/Modal';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import type { GameResult, PlayerStats } from '@/types';
+import { scoringPlayTypeLabel } from '@/lib/scoringSummary';
 
 type Tab = 'scoring' | 'passing' | 'rushing' | 'receiving' | 'defense';
 type SortDir = 'asc' | 'desc';
@@ -271,6 +272,16 @@ export function BoxScoreModal({ game, onClose, onPlayerClick }: BoxScoreModalPro
                           <div className="flex-1 min-w-0">
                             <div className="truncate">{sp.description}</div>
                           </div>
+                          {sp.points > 0 && (
+                            <div className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-[var(--surface)] text-[var(--text-sec)] shrink-0">
+                              {scoringPlayTypeLabel(sp)}
+                            </div>
+                          )}
+                          {sp.points > 0 && (
+                            <div className="text-xs font-mono font-bold shrink-0 w-7 text-right">
+                              +{sp.points}
+                            </div>
+                          )}
                           {sp.timeLeft && (
                             <div className="text-[10px] text-[var(--text-sec)] font-mono shrink-0">
                               {sp.timeLeft}

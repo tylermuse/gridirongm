@@ -1073,6 +1073,27 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     setIsPlaying(false);
   }, [totalEvents, clearNextPlayTimer, liveEnginePivotIdx]);
 
+  // Skip to the start of the next quarter. Community ask (idontknow01754) for a
+  // fast-forward-by-quarter control. Reuses the existing reveal path — it just
+  // jumps revealedCount to the first pre-computed event of a later quarter (or
+  // finalizes the game at Q4/OT end). Only available on the pre-computed event
+  // stream; while the Live Coach engine is generating plays lazily we leave it
+  // to End Game, so there is no new sim path here.
+  const skipToNextQuarter = useCallback(() => {
+    if (isFinished || liveEnginePivotIdx !== null) return;
+    clearNextPlayTimer();
+    const curIdx = Math.max(0, revealedCount - 1);
+    const curQuarter = allEvents[curIdx]?.quarter ?? 1;
+    const nextIdx = allEvents.findIndex(ev => ev.quarter > curQuarter);
+    if (nextIdx === -1) {
+      // No later quarter left in the stream — finalize the game.
+      setRevealedCount(totalEvents);
+    } else {
+      setRevealedCount(nextIdx + 1);
+    }
+    setAnimationComplete(true);
+  }, [isFinished, liveEnginePivotIdx, clearNextPlayTimer, revealedCount, allEvents, totalEvents]);
+
   useEffect(() => {
     if (speed === 'max' && isPlaying && !isFinished) {
       clearNextPlayTimer();
@@ -1677,6 +1698,18 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               {isFinished ? '● Complete' : isPlaying ? '⏸' : '▶'}
               <span className="hidden sm:inline ml-1">{isFinished ? '' : isPlaying ? 'Pause' : 'Play'}</span>
             </button>
+            {/* Skip Quarter — jump to the start of the next quarter. Hidden
+                while the Live Coach engine is generating plays lazily. */}
+            {liveEnginePivotIdx === null && (
+              <button
+                onClick={skipToNextQuarter}
+                disabled={isFinished}
+                title="Skip to the start of the next quarter"
+                className="px-2 sm:px-3 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all"
+              >
+                ⏩<span className="hidden sm:inline ml-1">Skip Qtr</span>
+              </button>
+            )}
             {/* End Game (always paired with row 1 on mobile) */}
             <button
               onClick={skipToEnd}
