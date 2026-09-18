@@ -1080,19 +1080,42 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // stream; while the Live Coach engine is generating plays lazily we leave it
   // to End Game, so there is no new sim path here.
   const skipToNextQuarter = useCallback(() => {
-    if (isFinished || liveEnginePivotIdx !== null) return;
+    if (isFinished) return;
     clearNextPlayTimer();
+
+    // Live Coach engine active: advance it play-by-play (auto-resolving snaps,
+    // exactly like End Game) until the quarter ticks over or the game ends,
+    // then reveal through the opening of the new quarter. Reuses the engine's
+    // existing runOnePlay path — no new sim logic.
+    if (liveEngineRef.current && !liveEngineRef.current.isFinished()) {
+      const startQ = liveEngineRef.current.getState().quarter;
+      const collected: PlayEvent[] = [];
+      let safety = 0;
+      while (!liveEngineRef.current.isFinished() && safety < 500) {
+        collected.push(...liveEngineRef.current.runOnePlay());
+        safety++;
+        if (liveEngineRef.current.getState().quarter > startQ) break;
+      }
+      if (collected.length > 0) {
+        setLiveExtraEvents(prev => {
+          const updated = [...prev, ...collected];
+          setRevealedCount((liveEnginePivotIdx ?? 0) + updated.length);
+          return updated;
+        });
+      }
+      setLiveCoachPaused(false);
+      setAnimationComplete(true);
+      return;
+    }
+
+    // Pre-computed event stream: jump to the first event of a later quarter
+    // (or finalize the game if we are already in the last quarter / OT).
     const curIdx = Math.max(0, revealedCount - 1);
     const curQuarter = allEvents[curIdx]?.quarter ?? 1;
     const nextIdx = allEvents.findIndex(ev => ev.quarter > curQuarter);
-    if (nextIdx === -1) {
-      // No later quarter left in the stream — finalize the game.
-      setRevealedCount(totalEvents);
-    } else {
-      setRevealedCount(nextIdx + 1);
-    }
+    setRevealedCount(nextIdx === -1 ? totalEvents : nextIdx + 1);
     setAnimationComplete(true);
-  }, [isFinished, liveEnginePivotIdx, clearNextPlayTimer, revealedCount, allEvents, totalEvents]);
+  }, [isFinished, clearNextPlayTimer, revealedCount, allEvents, totalEvents, liveEnginePivotIdx]);
 
   useEffect(() => {
     if (speed === 'max' && isPlaying && !isFinished) {
@@ -1698,18 +1721,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               {isFinished ? '● Complete' : isPlaying ? '⏸' : '▶'}
               <span className="hidden sm:inline ml-1">{isFinished ? '' : isPlaying ? 'Pause' : 'Play'}</span>
             </button>
-            {/* Skip Quarter — jump to the start of the next quarter. Hidden
-                while the Live Coach engine is generating plays lazily. */}
-            {liveEnginePivotIdx === null && (
-              <button
-                onClick={skipToNextQuarter}
-                disabled={isFinished}
-                title="Skip to the start of the next quarter"
-                className="px-2 sm:px-3 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all"
-              >
-                ⏩<span className="hidden sm:inline ml-1">Skip Qtr</span>
-              </button>
-            )}
+            {/* Skip Quarter — jump to the start of the next quarter (works in
+                both spectate and Live Coach modes). */}
+            <button
+              onClick={skipToNextQuarter}
+              disabled={isFinished}
+              title="Skip to the start of the next quarter"
+              className="px-2 sm:px-3 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all"
+            >
+              ⏩<span className="hidden sm:inline ml-1">Skip Qtr</span>
+            </button>
             {/* End Game (always paired with row 1 on mobile) */}
             <button
               onClick={skipToEnd}
