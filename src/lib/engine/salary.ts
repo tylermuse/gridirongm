@@ -44,7 +44,7 @@ const POSITION_SALARY_CEILING: Partial<Record<Position, number>> = {
   CB: 32,    // McDuffie $31M top — was 25M (too tight, Tyler flagged)
   OL: 30,    // OT top (Slater $28.5M) — SubPosition override trims OG/C down
   TE: 20,    // Kittle $19.1M top — was 22 (slightly generous)
-  LB: 22,    // Warner $21M off-ball top; real market has a big cliff
+  LB: 23,    // Warner $21M off-ball top; real market has a big cliff
   S: 22,     // Kerby Joseph $21.5M top
   RB: 21,    // Barkley $20.6M top
   K: 6,      // K/P handled by their existing explicit caps below
@@ -291,23 +291,26 @@ export function estimateSalary(overall: number, position?: Position, age?: numbe
     return Math.round(Math.max(LEAGUE_MINIMUM_SALARY, salary) * 10) / 10;
   }
 
-  // LBs: moderate market. Depth $1-3M, starters $5-9M, top LBs $18-22M.
+  // LBs: 2026 market re-cal (Tyler report — asks were too low vs real comps).
+  // Depth $1-3M, backups $2-6M, starters $6-13M, Pro-Bowl tier (Lloyd/Walker/
+  // Dean $12-15M, last year's Bolton/Baun/Sherwood $15-17M) $13-20M, Fred
+  // Warner (the lone $21M off-ball LB) sets the $23M ceiling.
   if (position === 'LB') {
     if (ovr <= 55) {
       const t = (ovr - 40) / 15;
-      baseSalary = LEAGUE_MINIMUM_SALARY + t * (1.5 - LEAGUE_MINIMUM_SALARY);
+      baseSalary = LEAGUE_MINIMUM_SALARY + t * (2.0 - LEAGUE_MINIMUM_SALARY);
     } else if (ovr <= 65) {
       const t = (ovr - 55) / 10;
-      baseSalary = 1.5 + t * 4.0;   // $1.5M → $5.5M
+      baseSalary = 2.0 + t * 4.0;   // $2M → $6M
     } else if (ovr <= 75) {
       const t = (ovr - 65) / 10;
-      baseSalary = 5.5 + t * 5.5;   // $5.5M → $11M
+      baseSalary = 6.0 + t * 7.0;   // $6M → $13M
     } else if (ovr <= 85) {
       const t = (ovr - 75) / 10;
-      baseSalary = 11.0 + t * 9.5;  // $11M → $20.5M
+      baseSalary = 13.0 + t * 7.0;  // $13M → $20M
     } else {
       const t = (ovr - 85) / 14;
-      baseSalary = 20.5 + t * 1.5;  // $20.5M → $22M (ceiling)
+      baseSalary = 20.0 + t * 3.0;  // $20M → $23M (ceiling)
     }
     let salary = baseSalary;
     if (age !== undefined) {

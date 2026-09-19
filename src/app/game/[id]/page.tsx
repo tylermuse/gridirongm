@@ -565,6 +565,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
   const {
     schedule, teams, players, phase, userTeamId, commitLiveGame, playoffBracket, season,
+    initLiveScoreboard, liveScoreboard,
   } = useGameStore();
 
   // Try schedule first, then check playoff bracket for unplayed matchups
@@ -579,6 +580,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     };
   }
   const isPlayoffGame = !!playoffMatchup || !!playoffBracket?.find(m => m.id === id);
+
+  // Around-the-League scoreboard: pre-sim the week's other games once on mount
+  // (regular season only) so their scores can progress alongside the user's
+  // live game + surface at halftime. Idempotent per week in the store.
+  useEffect(() => {
+    if (phase === 'regular' && !isPlayoffGame) initLiveScoreboard(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, phase, isPlayoffGame]);
   const homeTeam = game ? teams.find(t => t.id === game.homeTeamId) ?? null : null;
   const awayTeam = game ? teams.find(t => t.id === game.awayTeamId) ?? null : null;
   const homePlayers = useMemo(() => {
@@ -1063,6 +1072,50 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     setAnimationComplete(true);
     setIsPlaying(false);
   }, [totalEvents, clearNextPlayTimer, liveEnginePivotIdx]);
+
+  // Skip to the start of the next quarter. Community ask (idontknow01754) for a
+  // fast-forward-by-quarter control. Reuses the existing reveal path — it just
+  // jumps revealedCount to the first pre-computed event of a later quarter (or
+  // finalizes the game at Q4/OT end). Only available on the pre-computed event
+  // stream; while the Live Coach engine is generating plays lazily we leave it
+  // to End Game, so there is no new sim path here.
+  const skipToNextQuarter = useCallback(() => {
+    if (isFinished) return;
+    clearNextPlayTimer();
+
+    // Live Coach engine active: advance it play-by-play (auto-resolving snaps,
+    // exactly like End Game) until the quarter ticks over or the game ends,
+    // then reveal through the opening of the new quarter. Reuses the engine's
+    // existing runOnePlay path — no new sim logic.
+    if (liveEngineRef.current && !liveEngineRef.current.isFinished()) {
+      const startQ = liveEngineRef.current.getState().quarter;
+      const collected: PlayEvent[] = [];
+      let safety = 0;
+      while (!liveEngineRef.current.isFinished() && safety < 500) {
+        collected.push(...liveEngineRef.current.runOnePlay());
+        safety++;
+        if (liveEngineRef.current.getState().quarter > startQ) break;
+      }
+      if (collected.length > 0) {
+        setLiveExtraEvents(prev => {
+          const updated = [...prev, ...collected];
+          setRevealedCount((liveEnginePivotIdx ?? 0) + updated.length);
+          return updated;
+        });
+      }
+      setLiveCoachPaused(false);
+      setAnimationComplete(true);
+      return;
+    }
+
+    // Pre-computed event stream: jump to the first event of a later quarter
+    // (or finalize the game if we are already in the last quarter / OT).
+    const curIdx = Math.max(0, revealedCount - 1);
+    const curQuarter = allEvents[curIdx]?.quarter ?? 1;
+    const nextIdx = allEvents.findIndex(ev => ev.quarter > curQuarter);
+    setRevealedCount(nextIdx === -1 ? totalEvents : nextIdx + 1);
+    setAnimationComplete(true);
+  }, [isFinished, clearNextPlayTimer, revealedCount, allEvents, totalEvents, liveEnginePivotIdx]);
 
   useEffect(() => {
     if (speed === 'max' && isPlaying && !isFinished) {
@@ -1668,6 +1721,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               {isFinished ? '● Complete' : isPlaying ? '⏸' : '▶'}
               <span className="hidden sm:inline ml-1">{isFinished ? '' : isPlaying ? 'Pause' : 'Play'}</span>
             </button>
+            {/* Skip Quarter — jump to the start of the next quarter (works in
+                both spectate and Live Coach modes). */}
+            <button
+              onClick={skipToNextQuarter}
+              disabled={isFinished}
+              title="Skip to the start of the next quarter"
+              className="px-2 sm:px-3 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all"
+            >
+              ⏩<span className="hidden sm:inline ml-1">Skip Qtr</span>
+            </button>
             {/* End Game (always paired with row 1 on mobile) */}
             <button
               onClick={skipToEnd}
@@ -2048,7 +2111,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             // simulator's final playerStats (which includes the randomized
             // tackle distribution that the per-event snapshots can't
             // deterministically produce).
-            const isGameFinishedReveal = revealedCount >= totalEvents && totalEvents > 0;
+            // Once Live Coach has taken over (liveEnginePivotIdx set), the
+            // pre-sim's final playerStats reflects a discarded hypothetical
+            // AI continuation of the game, not what the user actually
+            // coached — this is exactly the "QB shows 3 TDs / 2 INTs he
+            // never threw" bug report. Only trust the pre-sim's final bucket
+            // wholesale for pure watch-live games (buildFinalGameResult above
+            // already applies this same guard for the committed box score).
+            const isGameFinishedReveal = liveEnginePivotIdx === null && revealedCount >= totalEvents && totalEvents > 0;
             // Read the running box score from the most-recently-revealed event
             // that carries a bucket snapshot, walking the COMBINED stream
             // (allEvents) — NOT the raw pre-sim array. During a live-coached
@@ -2070,9 +2140,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               const ev = allEvents[i];
               if (ev?.homeBucketSnap && ev?.awayBucketSnap) { lastRevealedEvent = ev; break; }
             }
+            const preStats = livePlayerStatsAtEvent(lastRevealedEvent, homePlayers, awayPlayers);
+            // Once Live Coach is active, merge in the plays it generated —
+            // those carry no bucket snapshot so preStats alone would miss
+            // every coached play (same merge buildFinalGameResult uses).
             const stats = isGameFinishedReveal
               ? liveResult.playerStats
-              : livePlayerStatsAtEvent(lastRevealedEvent, homePlayers, awayPlayers);
+              : liveEngineRef.current
+                ? mergePlayerStats(preStats, liveEngineRef.current.getPlayerStats())
+                : preStats;
             if (!stats || Object.keys(stats).length === 0) {
               return (
                 <div className="text-center py-12 text-[var(--text-sec)]">
@@ -2351,7 +2427,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Around the League</h3>
           <div className="space-y-1.5 max-h-[calc(100vh-6rem)] overflow-y-auto">
-            {schedule
+            {(() => {
+              // Reveal the other games' scores in step with the user's game clock:
+              // by the user's current quarter (or FINAL once their game ends).
+              const sb = liveScoreboard && liveScoreboard.week === game.week ? liveScoreboard : null;
+              const userQ = isFinished ? 4 : Math.min(Math.max(currentEvent?.quarter ?? 1, 1), 4);
+              const qLabel = isFinished ? 'FINAL' : userQ >= 4 ? '4TH QTR' : userQ === 3 ? '3RD QTR' : userQ === 2 ? '2ND QTR' : '1ST QTR';
+              return schedule
               .filter(g => g.week === game.week && g.id !== game.id)
               .map(g => {
                 const ht = teams.find(t => t.id === g.homeTeamId);
@@ -2361,6 +2443,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   && ht.division === teams.find(t => t.id === userTeamId)?.division
                   || at.conference === teams.find(t => t.id === userTeamId)?.conference
                   && at.division === teams.find(t => t.id === userTeamId)?.division;
+                const sp = sb?.splits[g.id];
+                // A stashed game is shown "live" until the real weekly sim marks it played.
+                const showLive = !!sp && !g.played;
+                const awayShown = g.played ? g.awayScore : showLive ? sp!.away[userQ - 1] : null;
+                const homeShown = g.played ? g.homeScore : showLive ? sp!.home[userQ - 1] : null;
                 return (
                   <div key={g.id} className={`rounded-lg border px-3 py-2 text-xs ${
                     isDiv ? 'border-blue-300 bg-blue-50/50' : 'border-[var(--border)] bg-[var(--surface)]'
@@ -2370,26 +2457,31 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                         <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: at.primaryColor }} />
                         <span className="font-medium">{at.abbreviation}</span>
                       </div>
-                      <span className="font-mono font-bold">{g.played ? g.awayScore : ''}</span>
+                      <span className="font-mono font-bold">{awayShown ?? ''}</span>
                     </div>
                     <div className="flex items-center justify-between mt-0.5">
                       <div className="flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: ht.primaryColor }} />
                         <span className="font-medium">{ht.abbreviation}</span>
                       </div>
-                      <span className="font-mono font-bold">{g.played ? g.homeScore : ''}</span>
+                      <span className="font-mono font-bold">{homeShown ?? ''}</span>
                     </div>
-                    {g.played && (
+                    {g.played ? (
                       <div className="text-[10px] text-[var(--text-sec)] mt-0.5 text-center">FINAL</div>
-                    )}
-                    {!g.played && (
+                    ) : showLive ? (
+                      <div className="text-[10px] mt-0.5 text-center flex items-center justify-center gap-1">
+                        {!isFinished && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />}
+                        <span className={isFinished ? 'text-[var(--text-sec)]' : 'text-red-500 font-bold'}>{qLabel}</span>
+                      </div>
+                    ) : (
                       <div className="text-[10px] text-[var(--text-sec)] mt-0.5 text-center">
                         {g.bettingLine ? `${g.bettingLine.spread > 0 ? at.abbreviation : ht.abbreviation} ${Math.abs(g.bettingLine.spread).toFixed(1)}` : '—'}
                       </div>
                     )}
                   </div>
                 );
-              })}
+              });
+            })()}
           </div>
         </div>
       </div>
@@ -2426,6 +2518,36 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 </div>
                 <div className="text-sm text-[var(--text-sec)] mt-1">{halftimeBreakdown.summary}</div>
               </div>
+
+              {liveScoreboard && liveScoreboard.week === game.week && (() => {
+                const others = schedule.filter(g => g.week === game.week && g.id !== game.id && liveScoreboard.splits[g.id]);
+                if (others.length === 0) return null;
+                return (
+                  <div className="space-y-2">
+                    <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">Around the League — At the Half</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {others.map(g => {
+                        const at = teams.find(t => t.id === g.awayTeamId);
+                        const ht = teams.find(t => t.id === g.homeTeamId);
+                        if (!at || !ht) return null;
+                        const sp = liveScoreboard.splits[g.id];
+                        return (
+                          <div key={g.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">{at.abbreviation}</span>
+                              <span className="font-mono font-bold tabular-nums">{sp.away[1]}</span>
+                            </div>
+                            <div className="flex items-center justify-between mt-0.5">
+                              <span className="font-medium">{ht.abbreviation}</span>
+                              <span className="font-mono font-bold tabular-nums">{sp.home[1]}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {halftimeBreakdown.leaders.length > 0 && (
                 <div className="space-y-2">

@@ -123,7 +123,7 @@ export function refreshTradeRequests({ players, teams, season, week }: RefreshIn
         id: `req-${season}-${p.id}`,
         season,
         week,
-        type: 'star_available',
+        type: 'trade_request',
         teamId: team.id,
         playerIds: [p.id],
         headline: `${name} has requested a trade from ${team.city}`,

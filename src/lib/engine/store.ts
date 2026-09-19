@@ -243,6 +243,11 @@ interface GameStore extends LeagueState {
   resetDepthChart: (position: Position) => void;
   simAllStarGame: () => void;
   commitLiveGame: (result: GameResult, matchupId?: string) => void;
+  /** Pre-simulate the non-user games of the current week and stash them for the
+   *  live Around-the-League scoreboard + halftime updates. No-op outside the
+   *  regular season. The stash is consumed + cleared by simulateOneWeek so the
+   *  scoreboard's finals match the committed weekly results. */
+  initLiveScoreboard: (excludeGameId: string) => void;
   updateLeagueSettings: (settings: Partial<LeagueSettings>) => void;
   /** God Mode: edit any player's attributes */
   editPlayer: (playerId: string, updates: Partial<Player>) => void;
@@ -2296,15 +2301,19 @@ function generatePreseasonSchedule(teams: Team[], numGames: number, season: numb
 // Pure function: simulate one week of games (no store dependency)
 // Returns state patch + whether season is over, or null if nothing to sim
 // ---------------------------------------------------------------------------
-function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; isSeasonOver: boolean } | null {
-  if (state.phase !== 'regular') return null;
+// ---------------------------------------------------------------------------
+// Around-the-League scoreboard helpers (feature: live other-game scores +
+// halftime updates). simulateScheduledGame is the single source of truth for
+// simming one scheduled regular-season game, shared by simulateOneWeek and the
+// initLiveScoreboard pre-sim so the live scoreboard's finals equal the
+// committed weekly results.
+// ---------------------------------------------------------------------------
 
-  const weekGames = state.schedule.filter(g => g.week === state.week && !g.played);
-  if (weekGames.length === 0) return null;
-
-  // Auto-resort AI teams' depth charts by OVR each week.
-  // User team depth chart is NOT touched — the user controls it via drag-reorder.
-  const resortedTeams = state.teams.map(t => {
+/** AI teams auto-resort their depth charts by OVR each week; the user's team
+ *  keeps its manual order. Extracted so the live-scoreboard pre-sim uses the
+ *  exact same lineups simulateOneWeek would. */
+function resortAiDepthCharts(state: LeagueState): Team[] {
+  return state.teams.map(t => {
     if (t.id === state.userTeamId) return t; // preserve user's manual depth chart
     const newDepthChart = { ...t.depthChart };
     for (const pos of POSITIONS) {
@@ -2319,7 +2328,11 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
     }
     return { ...t, depthChart: newDepthChart };
   });
-  const updatedGames = weekGames.map(game => {
+}
+
+/** Simulate one scheduled regular-season game and enrich it with the betting
+ *  line + ATS/total results, exactly as simulateOneWeek does per game. */
+export function simulateScheduledGame(state: LeagueState, resortedTeams: Team[], game: GameResult): GameResult {
     const homeTeam = resortedTeams.find(t => t.id === game.homeTeamId);
     const awayTeam = resortedTeams.find(t => t.id === game.awayTeamId);
     // Exclude suspended players from the game roster (shared helper keeps
@@ -2392,8 +2405,102 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       adjustedDiff > 0 ? 'home' : adjustedDiff < 0 ? 'away' : 'push';
     const totalPoints = result.homeScore + result.awayScore;
     const overHit = totalPoints > bettingLine.overUnder;
-
     return { ...result, bettingLine, spreadCover, overHit };
+}
+
+/** Deterministic per-quarter cumulative score split (index 0..3 = end of
+ *  Q1..Q4; index 3 === total). Seeded by the game id so the same game shows a
+ *  stable progression across re-renders. Purely cosmetic — for the live
+ *  scoreboard's in-progress + halftime numbers. */
+export function splitScoreByQuarter(seedStr: string, home: number, away: number): { home: number[]; away: number[] } {
+  let h = 2166136261;
+  for (let i = 0; i < seedStr.length; i++) { h ^= seedStr.charCodeAt(i); h = Math.imul(h, 16777619); }
+  let seed = h >>> 0;
+  const rand = () => {
+    seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  // Decompose a final score into a plausible sequence of real scoring plays
+  // (TD+XP=7, TD no XP=6, FG=3, safety=2) instead of treating the total as an
+  // arbitrary number to slice proportionally. The old approach rounded a
+  // random proportional split of the total, which could land a cumulative
+  // "through Q2" checkpoint on a number like 4 or 5 — a value no real
+  // football score can ever sit at, at ANY point in a game (Tyler report:
+  // Around-the-League halftime scores looked "weird", e.g. "5 to 4").
+  const PLAY_VALUES = [7, 6, 3, 2];
+  const PLAY_WEIGHTS: Record<number, number> = { 7: 5, 3: 3, 6: 1, 2: 0.4 };
+  function decomposeIntoPlays(total: number): number[] {
+    if (total <= 0) return [];
+    const reachable: boolean[] = new Array(total + 1).fill(false);
+    reachable[0] = true;
+    for (let n = 1; n <= total; n++) {
+      for (const v of PLAY_VALUES) if (v <= n && reachable[n - v]) { reachable[n] = true; break; }
+    }
+    if (!reachable[total]) return [total]; // unreachable total (shouldn't happen) — single lump play
+    const plays: number[] = [];
+    let remaining = total;
+    while (remaining > 0) {
+      const options = PLAY_VALUES.filter(v => v <= remaining && reachable[remaining - v]);
+      const wsum = options.reduce((s, v) => s + PLAY_WEIGHTS[v], 0);
+      let r = rand() * wsum;
+      let chosen = options[options.length - 1];
+      for (const v of options) { r -= PLAY_WEIGHTS[v]; if (r <= 0) { chosen = v; break; } }
+      plays.push(chosen);
+      remaining -= chosen;
+    }
+    return plays;
+  }
+  const dist = (total: number): number[] => {
+    const plays = decomposeIntoPlays(total);
+    const cum = [0, 0, 0, 0];
+    if (plays.length === 0) return cum;
+    // One shared per-team weight vector biases which quarters this team
+    // tends to score in; each individual scoring play then lands in a
+    // quarter drawn from that bias, so every cumulative checkpoint below is
+    // a genuine sum of real scoring plays.
+    const w = [rand() + 0.15, rand() + 0.15, rand() + 0.15, rand() + 0.15];
+    const wsum = w[0] + w[1] + w[2] + w[3];
+    for (const pts of plays) {
+      let r = rand() * wsum;
+      let q = 3;
+      for (let i = 0; i < 4; i++) { r -= w[i]; if (r <= 0) { q = i; break; } }
+      cum[q] += pts;
+    }
+    for (let i = 1; i < 4; i++) cum[i] += cum[i - 1];
+    return cum;
+  };
+  return { home: dist(home), away: dist(away) };
+}
+
+/** Return the stashed pre-sim result for a game if the live scoreboard covers
+ *  the current week, else undefined. Keeps simulateOneWeek and its test in
+ *  lockstep on the reuse rule. */
+export function resolveWeekGameResult(
+  liveScoreboard: LeagueState['liveScoreboard'],
+  week: number,
+  gameId: string,
+): GameResult | undefined {
+  if (!liveScoreboard || liveScoreboard.week !== week) return undefined;
+  return liveScoreboard.results[gameId];
+}
+
+// ---------------------------------------------------------------------------
+function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; isSeasonOver: boolean } | null {
+  if (state.phase !== 'regular') return null;
+
+  const weekGames = state.schedule.filter(g => g.week === state.week && !g.played);
+  if (weekGames.length === 0) return null;
+
+  // Auto-resort AI teams' depth charts by OVR each week (user team untouched).
+  const resortedTeams = resortAiDepthCharts(state);
+  const updatedGames = weekGames.map(game => {
+    // Reuse the live Around-the-League pre-sim (if the user just watched this
+    // week live) so the scoreboard's finals equal the committed results.
+    const stashed = resolveWeekGameResult(state.liveScoreboard, state.week, game.id);
+    if (stashed) return stashed;
+    return simulateScheduledGame(state, resortedTeams, game);
   });
 
   const newSchedule = state.schedule.map(g => {
@@ -2623,6 +2730,8 @@ function simulateOneWeek(state: LeagueState): { patch: Record<string, unknown>; 
       tradeRumors: resolvedRumors,
       rivalries: updatedRivalries,
       socialPosts: [...(state.socialPosts ?? []), ...weekSocialPosts],
+      // Live scoreboard consumed — clear the transient overlay.
+      liveScoreboard: null,
     },
     isSeasonOver,
   };
@@ -9816,6 +9925,31 @@ export const useGameStore = create<GameStore>()(
         set({ leagueSettings: newSettings, teams: updatedTeams, players: updatedPlayers });
       },
 
+      initLiveScoreboard: (excludeGameId: string) => {
+        const state = get();
+        if (state.phase !== 'regular') return;
+        const weekGames = state.schedule.filter(
+          g => g.week === state.week && !g.played && g.id !== excludeGameId,
+        );
+        if (weekGames.length === 0) {
+          if (state.liveScoreboard) set({ liveScoreboard: null });
+          return;
+        }
+        // Idempotent: keep an existing stash for this exact week so scores stay
+        // stable while the user watches (don't reshuffle on every re-render).
+        const existing = state.liveScoreboard;
+        if (existing && existing.week === state.week && weekGames.every(g => existing.results[g.id])) return;
+        const resortedTeams = resortAiDepthCharts(state);
+        const results: Record<string, GameResult> = {};
+        const splits: Record<string, { home: number[]; away: number[] }> = {};
+        for (const game of weekGames) {
+          const r = simulateScheduledGame(state, resortedTeams, game);
+          results[game.id] = { ...r, played: true };
+          splits[game.id] = splitScoreByQuarter(game.id, r.homeScore, r.awayScore);
+        }
+        set({ liveScoreboard: { week: state.week, results, splits } });
+      },
+
       commitLiveGame: (result: GameResult, matchupId?: string) => {
         const state = get();
 
@@ -10347,7 +10481,7 @@ export const useGameStore = create<GameStore>()(
         // Drop sim telemetry from the persisted payload — it's runtime-only
         // dev data, not save state, and we don't want it eating IndexedDB.
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { initialized, simTelemetry: _simTelemetry, ...rest } = state;
+        const { initialized, simTelemetry: _simTelemetry, liveScoreboard: _liveScoreboard, ...rest } = state;
         return {
           ...rest,
           schedule: slimSchedule,

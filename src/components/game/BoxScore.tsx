@@ -1,6 +1,7 @@
 'use client';
 
 import type { GameResult, Player, PlayerStats } from '@/types';
+import { scoringPlayTypeLabel } from '@/lib/scoringSummary';
 
 interface BoxScoreProps {
   game: GameResult;
@@ -124,10 +125,12 @@ export function BoxScore({ game, players, homeTeamName, awayTeamName, homeTeamId
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Scoring Plays */}
+          {/* Scoring Summary — itemize each scoring play with its point value so
+              unusual totals (e.g. a FG + safety = 5, or a TD + two-point = 8)
+              explain themselves instead of looking like a bug. */}
           {game.scoringPlays && game.scoringPlays.length > 0 && (
             <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Key Plays</h3>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Scoring Summary</h3>
               <div className="space-y-1">
                 {game.scoringPlays.map((sp, i) => {
                   const isHome = sp.teamId === (homeTeamId ?? game.homeTeamId);
@@ -141,7 +144,17 @@ export function BoxScore({ game, players, homeTeamName, awayTeamName, homeTeamId
                         style={{ backgroundColor: isHome ? homeColor : awayColor }}
                       />
                       <span className="flex-1 text-xs">{sp.description}</span>
-                      <span className="text-[10px] font-mono font-bold text-[var(--text-sec)] shrink-0">
+                      {sp.points > 0 && (
+                        <span className="text-[9px] font-bold uppercase px-1 py-0.5 rounded bg-[var(--surface-2)] text-[var(--text-sec)] shrink-0 mt-0.5">
+                          {scoringPlayTypeLabel(sp)}
+                        </span>
+                      )}
+                      {sp.points > 0 && (
+                        <span className="text-[10px] font-mono font-bold shrink-0 w-7 text-right mt-0.5">
+                          +{sp.points}
+                        </span>
+                      )}
+                      <span className="text-[10px] font-mono font-bold text-[var(--text-sec)] shrink-0 w-12 text-right mt-0.5">
                         {sp.score[0]}-{sp.score[1]}
                       </span>
                     </div>
