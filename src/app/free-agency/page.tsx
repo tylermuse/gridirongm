@@ -327,8 +327,8 @@ export default function FreeAgencyPage() {
         case 'ovr': return dir * (a.ratings.overall - b.ratings.overall);
         case 'pot': return dir * (a.potential - b.potential);
         case 'salary': {
-          const aSal = estimateSalary(a.ratings.overall, a.position, a.age, a.potential, ci) * decay;
-          const bSal = estimateSalary(b.ratings.overall, b.position, b.age, b.potential, ci) * decay;
+          const aSal = estimateSalary(a.ratings.overall, a.position, a.age, a.potential, ci, a.subPosition) * decay;
+          const bSal = estimateSalary(b.ratings.overall, b.position, b.age, b.potential, ci, b.subPosition) * decay;
           return dir * (aSal - bSal);
         }
         default: return 0;
@@ -347,15 +347,15 @@ export default function FreeAgencyPage() {
       ? LEAGUE_MINIMUM_SALARY * 1.5  // tight: only players asking ~$1.1M or less
       : capSpace;
     filteredAgents = filteredAgents.filter(p => {
-      const market = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci) * decay;
+      const market = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci, p.subPosition) * decay;
       return market <= maxAffordable;
     });
     // When over the cap, sort cheapest first so signable players are at the top.
     // When under the cap, keep the user's selected sort order (default: OVR desc).
     if (capSpace <= LEAGUE_MINIMUM_SALARY) {
       filteredAgents.sort((a, b) => {
-        const aM = estimateSalary(a.ratings.overall, a.position, a.age, a.potential, ci) * decay;
-        const bM = estimateSalary(b.ratings.overall, b.position, b.age, b.potential, ci) * decay;
+        const aM = estimateSalary(a.ratings.overall, a.position, a.age, a.potential, ci, a.subPosition) * decay;
+        const bM = estimateSalary(b.ratings.overall, b.position, b.age, b.potential, ci, b.subPosition) * decay;
         return aM - bM;
       });
     }
@@ -366,7 +366,7 @@ export default function FreeAgencyPage() {
 
   function startNegotiation(player: typeof agents[0]) {
     if (faRefusals.includes(player.id)) return;
-    const baseSal = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci);
+    const baseSal = estimateSalary(player.ratings.overall, player.position, player.age, player.potential, ci, player.subPosition);
     const salary = Math.round(baseSal * decay * 10) / 10;
     const hasIntel = !!effectivePursuitState?.intelReports[player.id];
     const userTeamData = teams.find(t => t.id === userTeamId);
@@ -863,7 +863,7 @@ export default function FreeAgencyPage() {
                 </thead>
                 <tbody>
                   {agents.map(p => {
-                    const baseSal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci);
+                    const baseSal = estimateSalary(p.ratings.overall, p.position, p.age, p.potential, ci, p.subPosition);
                     const salary = Math.round(baseSal * decay * 10) / 10;
                     const isRefused = faRefusals.includes(p.id);
                     const isExpanded = expandedPlayerId === p.id;

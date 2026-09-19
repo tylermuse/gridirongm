@@ -229,7 +229,7 @@ function extractKeyPlayers(players: Player[], depthChart?: Record<string, string
 
 /** Pick a player from the pool weighted by a caller-provided score. Higher
  *  score → higher probability. All-zero weights degrade to uniform. */
-function pickWeighted<T>(pool: T[], weight: (p: T) => number): T | null {
+export function pickWeighted<T>(pool: T[], weight: (p: T) => number): T | null {
   if (pool.length === 0) return null;
   if (pool.length === 1) return pool[0];
   const weights = pool.map(p => Math.max(0.01, weight(p)));
@@ -245,7 +245,7 @@ function pickWeighted<T>(pool: T[], weight: (p: T) => number): T | null {
 /** Pick the rusher for a carry. RB1 still gets the lion's share (workhorse
  *  back logic) but RB2/RB3 see real touches. OVR-biased so better backs get
  *  more carries even within the pool. */
-function pickRusher(rbs: Player[]): Player | null {
+export function pickRusher(rbs: Player[]): Player | null {
   return pickWeighted(rbs, (p, i = rbs.indexOf(p)) => {
     const depthWeight = i === 0 ? 1.0 : i === 1 ? 0.35 : i === 2 ? 0.12 : 0.05;
     const ovrScale = 0.5 + p.ratings.overall / 100;
@@ -254,7 +254,7 @@ function pickRusher(rbs: Player[]): Player | null {
 }
 
 /** Pick the sacker. DL disproportionately get pressure, LBs contribute too. */
-function pickSacker(dls: Player[], lbs: Player[]): Player | null {
+export function pickSacker(dls: Player[], lbs: Player[]): Player | null {
   const pool = [...dls, ...lbs];
   return pickWeighted(pool, p => {
     const base = p.position === 'DL' ? 2.5 : 1.0;
@@ -264,7 +264,7 @@ function pickSacker(dls: Player[], lbs: Player[]): Player | null {
 }
 
 /** Pick the interceptor. CBs most likely, safeties second, LBs rare. */
-function pickInterceptor(cbs: Player[], safeties: Player[], lbs: Player[]): Player | null {
+export function pickInterceptor(cbs: Player[], safeties: Player[], lbs: Player[]): Player | null {
   const pool = [...cbs, ...safeties, ...lbs];
   return pickWeighted(pool, p => {
     const base = p.position === 'CB' ? 3.0 : p.position === 'S' ? 1.5 : 0.3;
@@ -277,7 +277,7 @@ function pickInterceptor(cbs: Player[], safeties: Player[], lbs: Player[]): Play
  *  receiving back get a fixed share. Mirrors the slot-percentage logic that
  *  existed before but uses pickWeighted so the exact same player isn't
  *  targeted every single play — variety within the WR pool is now real. */
-function pickReceiver(wrs: Player[], tes: Player[], rbs: Player[]): Player | null {
+export function pickReceiver(wrs: Player[], tes: Player[], rbs: Player[]): Player | null {
   const entries: { p: Player; w: number }[] = [];
   const depthWeights = [1.0, 0.75, 0.50, 0.15];
   wrs.slice(0, 4).forEach((p, i) => {

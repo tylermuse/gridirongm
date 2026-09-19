@@ -2111,7 +2111,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             // simulator's final playerStats (which includes the randomized
             // tackle distribution that the per-event snapshots can't
             // deterministically produce).
-            const isGameFinishedReveal = revealedCount >= totalEvents && totalEvents > 0;
+            // Once Live Coach has taken over (liveEnginePivotIdx set), the
+            // pre-sim's final playerStats reflects a discarded hypothetical
+            // AI continuation of the game, not what the user actually
+            // coached — this is exactly the "QB shows 3 TDs / 2 INTs he
+            // never threw" bug report. Only trust the pre-sim's final bucket
+            // wholesale for pure watch-live games (buildFinalGameResult above
+            // already applies this same guard for the committed box score).
+            const isGameFinishedReveal = liveEnginePivotIdx === null && revealedCount >= totalEvents && totalEvents > 0;
             // Read the running box score from the most-recently-revealed event
             // that carries a bucket snapshot, walking the COMBINED stream
             // (allEvents) — NOT the raw pre-sim array. During a live-coached
@@ -2133,9 +2140,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               const ev = allEvents[i];
               if (ev?.homeBucketSnap && ev?.awayBucketSnap) { lastRevealedEvent = ev; break; }
             }
+            const preStats = livePlayerStatsAtEvent(lastRevealedEvent, homePlayers, awayPlayers);
+            // Once Live Coach is active, merge in the plays it generated —
+            // those carry no bucket snapshot so preStats alone would miss
+            // every coached play (same merge buildFinalGameResult uses).
             const stats = isGameFinishedReveal
               ? liveResult.playerStats
-              : livePlayerStatsAtEvent(lastRevealedEvent, homePlayers, awayPlayers);
+              : liveEngineRef.current
+                ? mergePlayerStats(preStats, liveEngineRef.current.getPlayerStats())
+                : preStats;
             if (!stats || Object.keys(stats).length === 0) {
               return (
                 <div className="text-center py-12 text-[var(--text-sec)]">

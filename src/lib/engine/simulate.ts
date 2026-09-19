@@ -667,6 +667,9 @@ function simulatePlay(
 interface DriveResult {
   points: number;
   plays: PlayResult[];
+  /** True when the offense was tackled/pinned in their own end zone — the
+   *  DEFENSE scores 2, not the offense. `points` stays 0 for the offense. */
+  safety?: boolean;
 }
 
 function simulateDrive(
@@ -753,9 +756,14 @@ function simulateDrive(
       return { points: 0, plays };
     }
 
-    // Safety check
+    // Safety — offense tackled/pinned in their own end zone. Previously this
+    // just ended the drive with 0 points for everyone, silently dropping the
+    // 2 points the DEFENSE should score — the game could never produce a
+    // safety, which left every score a sum of only {3,6,7}: no real low/odd
+    // totals (2, 5, 8, 9, 11, ...) could ever occur (Tyler report: scores
+    // look "weird" / too formulaic).
     if (fieldPosition <= 0) {
-      return { points: 0, plays };
+      return { points: 0, plays, safety: true };
     }
   }
 
@@ -927,6 +935,32 @@ export function simulateGame(
     return { away: runningAway, home: runningHome };
   }
 
+  /** Record a safety — 2 points to the team on DEFENSE (i.e. NOT the team
+   *  that was pinned in its own end zone). */
+  function recordSafety(defenseTeamId: string, quarter: number, runningAway: number, runningHome: number): { away: number; home: number } {
+    const isHomeDefense = defenseTeamId === game.homeTeamId;
+    const runAway = isHomeDefense ? runningAway : runningAway + 2;
+    const runHome = isHomeDefense ? runningHome + 2 : runningHome;
+
+    quarterScoringIndex[quarter] = (quarterScoringIndex[quarter] ?? 0) + 1;
+    const idx = quarterScoringIndex[quarter];
+    const minutesBase = quarter <= 4 ? 15 : 10;
+    const minutesLeft = Math.max(0, minutesBase - Math.floor(idx * (minutesBase / 5) + Math.random() * 3));
+    const secondsLeft = Math.floor(Math.random() * 60);
+    const timeLeft = `${minutesLeft}:${secondsLeft.toString().padStart(2, '0')}`;
+
+    scoringPlays.push({
+      quarter,
+      timeLeft,
+      teamId: defenseTeamId,
+      points: 2,
+      description: 'Safety',
+      score: [runAway, runHome],
+    });
+
+    return { away: runAway, home: runHome };
+  }
+
   let runAway = 0;
   let runHome = 0;
 
@@ -962,9 +996,16 @@ export function simulateGame(
     const homePoints = homeStall > 0 && Math.random() < homeStall ? 0 : homeDrive.points;
     homeScore += homePoints;
     allHomePlays.push(...homeDrive.plays);
-    const afterHome = describeScoring({ ...homeDrive, points: homePoints }, game.homeTeamId, quarter, runAway, runHome);
-    runAway = afterHome.away;
-    runHome = afterHome.home;
+    if (homeDrive.safety) {
+      awayScore += 2;
+      const afterSafety = recordSafety(game.awayTeamId, quarter, runAway, runHome);
+      runAway = afterSafety.away;
+      runHome = afterSafety.home;
+    } else {
+      const afterHome = describeScoring({ ...homeDrive, points: homePoints }, game.homeTeamId, quarter, runAway, runHome);
+      runAway = afterHome.away;
+      runHome = afterHome.home;
+    }
 
     // Away offense drives — same scoring fatigue
     const awayPlan = userGamePlan?.userTeamSide === 'away' ? userGamePlan.plan : undefined;
@@ -974,9 +1015,16 @@ export function simulateGame(
     const awayPoints = awayStall > 0 && Math.random() < awayStall ? 0 : awayDrive.points;
     awayScore += awayPoints;
     allAwayPlays.push(...awayDrive.plays);
-    const afterAway = describeScoring({ ...awayDrive, points: awayPoints }, game.awayTeamId, quarter, runAway, runHome);
-    runAway = afterAway.away;
-    runHome = afterAway.home;
+    if (awayDrive.safety) {
+      homeScore += 2;
+      const afterSafety = recordSafety(game.homeTeamId, quarter, runAway, runHome);
+      runAway = afterSafety.away;
+      runHome = afterSafety.home;
+    } else {
+      const afterAway = describeScoring({ ...awayDrive, points: awayPoints }, game.awayTeamId, quarter, runAway, runHome);
+      runAway = afterAway.away;
+      runHome = afterAway.home;
+    }
   }
 
   // Break ties with OT — rare chance of a tie (~1.5% of all games, ~15% of games that go to OT)

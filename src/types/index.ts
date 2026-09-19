@@ -1566,7 +1566,7 @@ export interface TradeRumor {
   id: string;
   season: number;
   week: number;
-  type: 'star_available' | 'shopping_pick' | 'position_need' | 'blockbuster' | 'deadline_buzz';
+  type: 'star_available' | 'shopping_pick' | 'position_need' | 'blockbuster' | 'deadline_buzz' | 'trade_request';
   teamId: string;
   targetTeamId?: string;
   playerIds: string[];
