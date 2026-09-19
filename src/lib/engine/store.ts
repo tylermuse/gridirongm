@@ -2422,17 +2422,53 @@ export function splitScoreByQuarter(seedStr: string, home: number, away: number)
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+  // Decompose a final score into a plausible sequence of real scoring plays
+  // (TD+XP=7, TD no XP=6, FG=3, safety=2) instead of treating the total as an
+  // arbitrary number to slice proportionally. The old approach rounded a
+  // random proportional split of the total, which could land a cumulative
+  // "through Q2" checkpoint on a number like 4 or 5 — a value no real
+  // football score can ever sit at, at ANY point in a game (Tyler report:
+  // Around-the-League halftime scores looked "weird", e.g. "5 to 4").
+  const PLAY_VALUES = [7, 6, 3, 2];
+  const PLAY_WEIGHTS: Record<number, number> = { 7: 5, 3: 3, 6: 1, 2: 0.4 };
+  function decomposeIntoPlays(total: number): number[] {
+    if (total <= 0) return [];
+    const reachable: boolean[] = new Array(total + 1).fill(false);
+    reachable[0] = true;
+    for (let n = 1; n <= total; n++) {
+      for (const v of PLAY_VALUES) if (v <= n && reachable[n - v]) { reachable[n] = true; break; }
+    }
+    if (!reachable[total]) return [total]; // unreachable total (shouldn't happen) — single lump play
+    const plays: number[] = [];
+    let remaining = total;
+    while (remaining > 0) {
+      const options = PLAY_VALUES.filter(v => v <= remaining && reachable[remaining - v]);
+      const wsum = options.reduce((s, v) => s + PLAY_WEIGHTS[v], 0);
+      let r = rand() * wsum;
+      let chosen = options[options.length - 1];
+      for (const v of options) { r -= PLAY_WEIGHTS[v]; if (r <= 0) { chosen = v; break; } }
+      plays.push(chosen);
+      remaining -= chosen;
+    }
+    return plays;
+  }
   const dist = (total: number): number[] => {
-    if (total <= 0) return [0, 0, 0, 0];
+    const plays = decomposeIntoPlays(total);
+    const cum = [0, 0, 0, 0];
+    if (plays.length === 0) return cum;
+    // One shared per-team weight vector biases which quarters this team
+    // tends to score in; each individual scoring play then lands in a
+    // quarter drawn from that bias, so every cumulative checkpoint below is
+    // a genuine sum of real scoring plays.
     const w = [rand() + 0.15, rand() + 0.15, rand() + 0.15, rand() + 0.15];
     const wsum = w[0] + w[1] + w[2] + w[3];
-    let acc = 0;
-    const cum: number[] = [];
-    for (let i = 0; i < 4; i++) { acc += (w[i] / wsum) * total; cum.push(i === 3 ? total : Math.round(acc)); }
-    for (let i = 1; i < 4; i++) { if (cum[i] < cum[i - 1]) cum[i] = cum[i - 1]; }
-    cum[3] = total;
-    if (cum[2] > total) cum[2] = total;
-    if (cum[1] > total) cum[1] = total;
+    for (const pts of plays) {
+      let r = rand() * wsum;
+      let q = 3;
+      for (let i = 0; i < 4; i++) { r -= w[i]; if (r <= 0) { q = i; break; } }
+      cum[q] += pts;
+    }
+    for (let i = 1; i < 4; i++) cum[i] += cum[i - 1];
     return cum;
   };
   return { home: dist(home), away: dist(away) };

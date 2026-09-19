@@ -971,7 +971,19 @@ export function AnimatedField({
       ref.completeFired = true;
       ref.quarterOverlayActive = false;
     }
-  }, [event, prevEvent, animationSpeed, canvasSize.w, canvasSize.h, homeColor, awayColor]);
+  // canvasSize is intentionally NOT a dependency: it's read via closure above
+  // (confetti spawn position etc.) but including it here meant every
+  // ResizeObserver correction during initial mount — which fires repeatedly
+  // while the game view's layout is still settling (fonts, images, responsive
+  // breakpoints) — reset progress back to 0 and restarted the animation from
+  // scratch. That made the first several plays of a live game appear to snap
+  // straight to their result instead of animating, since each one kept
+  // getting yanked back to frame 0 mid-flight. `render` (below) already
+  // re-derives every pixel position from canvasSize on each frame, so a
+  // resize is reflected on the very next paint without needing to rebuild
+  // the animation state here.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event, prevEvent, animationSpeed, homeColor, awayColor]);
 
   // Main render loop
   const render = useCallback((timestamp: number) => {

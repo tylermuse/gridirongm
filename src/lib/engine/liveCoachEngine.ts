@@ -14,6 +14,7 @@
 
 import type { Player, Team, PlayerStats } from '@/types';
 import type { PlayEvent } from './playByPlay';
+import { pickRusher, pickInterceptor, pickReceiver } from './playByPlay';
 import type { PlayCallType } from '@/components/game/PlayCallMenu';
 import { playerAvailable } from './simulate';
 
@@ -88,11 +89,23 @@ interface KeyOff {
   wr2: Player | null;
   te: Player | null;
   k: Player | null;
+  // Position pools — used to rotate carries/targets across the depth chart
+  // instead of piling everything on the single starter (RB2/WR3/etc. would
+  // otherwise never touch the ball in a live-coached game — Tyler report:
+  // "the same players seem to always make the same plays").
+  rbs: Player[];
+  wrs: Player[];
+  tes: Player[];
 }
 interface KeyDef {
   dl1: Player | null;
   lb1: Player | null;
   cb1: Player | null;
+  // Position pools — used to rotate INTs across the depth chart instead of
+  // always crediting the single starting corner.
+  lbs: Player[];
+  cbs: Player[];
+  safeties: Player[];
 }
 
 // Order players at a position by the team's depth chart (the user's
@@ -121,21 +134,31 @@ function orderedAtPos(players: Player[], pos: string, depthChart?: Record<string
 function extractOff(players: Player[], depthChart?: Record<string, string[]>): KeyOff {
   const wrs = orderedAtPos(players, 'WR', depthChart);
   const rbs = orderedAtPos(players, 'RB', depthChart);
+  const tes = orderedAtPos(players, 'TE', depthChart);
   return {
     qb: orderedAtPos(players, 'QB', depthChart)[0] ?? null,
     rb: rbs[0] ?? null,
     wr1: wrs[0] ?? null,
     wr2: wrs[1] ?? null,
-    te: orderedAtPos(players, 'TE', depthChart)[0] ?? null,
+    te: tes[0] ?? null,
     k: orderedAtPos(players, 'K', depthChart)[0] ?? null,
+    rbs,
+    wrs,
+    tes,
   };
 }
 
 function extractDef(players: Player[], depthChart?: Record<string, string[]>): KeyDef {
+  const lbs = orderedAtPos(players, 'LB', depthChart);
+  const cbs = orderedAtPos(players, 'CB', depthChart);
+  const safeties = orderedAtPos(players, 'S', depthChart);
   return {
     dl1: orderedAtPos(players, 'DL', depthChart)[0] ?? null,
-    lb1: orderedAtPos(players, 'LB', depthChart)[0] ?? null,
-    cb1: orderedAtPos(players, 'CB', depthChart)[0] ?? null,
+    lb1: lbs[0] ?? null,
+    cb1: cbs[0] ?? null,
+    lbs,
+    cbs,
+    safeties,
   };
 }
 
@@ -339,7 +362,7 @@ export function createLiveCoachEngine(
     const ok = offKey();
     const dk = defKey();
     const isQb = rusherOverride === 'qb' || (!rusherOverride && Math.random() < 0.10);
-    const rusher = isQb ? ok.qb : ok.rb;
+    const rusher = isQb ? ok.qb : (pickRusher(ok.rbs) ?? ok.rb);
     const skill = isQb
       ? rating(rusher, 'speed', 60) * 0.5 + rating(rusher, 'agility', 60) * 0.3 + rating(rusher, 'carrying', 50) * 0.2
       : rating(rusher, 'carrying', 70) * 0.5 + rating(rusher, 'speed', 70) * 0.3 + rating(rusher, 'agility', 70) * 0.2;
@@ -390,7 +413,9 @@ export function createLiveCoachEngine(
   function runPassPlay(events: PlayEvent[], depth: 'short' | 'deep' | 'screen' = 'short', callPrefix = '') {
     const ok = offKey();
     const dk = defKey();
-    const target = depth === 'screen' ? ok.rb : (Math.random() < 0.6 ? ok.wr1 : (ok.wr2 ?? ok.te));
+    const target = depth === 'screen'
+      ? (pickRusher(ok.rbs) ?? ok.rb)
+      : (pickReceiver(ok.wrs, ok.tes, ok.rbs) ?? ok.wr1);
 
     // Sack chance based on depth and pass rush
     const sackChance = depth === 'deep' ? 0.10 : depth === 'short' ? 0.05 : 0.02;
@@ -413,10 +438,11 @@ export function createLiveCoachEngine(
     const intChance = depth === 'deep' ? 0.06 : depth === 'short' ? 0.025 : 0.015;
     if (Math.random() < intChance) {
       const qbName = nameOrFallback(ok.qb, 'the QB');
-      const cbName = nameOrFallback(dk.cb1, 'the corner');
+      const interceptor = pickInterceptor(dk.cbs, dk.safeties, dk.lbs) ?? dk.cb1;
+      const cbName = nameOrFallback(interceptor, 'the corner');
       events.push(makeEvent('interception', `${prefix}INTERCEPTED! ${cbName} picks off ${qbName}.`, 0, false));
       bump(ok.qb, { passAttempts: 1, interceptions: 1 });
-      bump(dk.cb1, { defensiveINTs: 1 });
+      bump(interceptor, { defensiveINTs: 1 });
       const returnPos = clamp(100 - state.fieldPos + Math.floor(Math.random() * 20) - 10, 10, 60);
       switchPossession(returnPos);
       advancePlayClock(8, 0);
