@@ -1955,7 +1955,10 @@ export function livePlayerStatsAtEvent(
   function applySide(bucket: StatBucket, sidePlayers: Player[]) {
     const qb = sidePlayers.find(p => p.position === 'QB' && (!p.injury || p.injury.weeksLeft === 0))
       ?? sidePlayers.find(p => p.position === 'QB');
-    if (qb && (bucket.passAttempts > 0 || bucket.qbRushAttempts > 0)) {
+    // Always surface the starting QB's passing line (0/0 before the first
+    // attempt) so the live box-score panel shows it from kickoff rather than
+    // hiding the block until the first pass resolves. (yo46363, 9/20)
+    if (qb) {
       out[qb.id] = {
         gamesPlayed: 1,
         passAttempts: bucket.passAttempts,

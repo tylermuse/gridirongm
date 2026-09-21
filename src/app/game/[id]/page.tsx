@@ -2162,7 +2162,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               const getS = (id: string) => stats[id] ?? {};
 
               // Find key players
-              const qb = teamPlayers.find(p => p.position === 'QB' && (getS(p.id).passAttempts ?? 0) > 0);
+              // Show the starting QB's passing line from kickoff (0/0 before the
+              // first attempt) instead of hiding it until a pass resolves. Prefer
+              // the QB the engine is tracking (has a stats entry), else the healthy
+              // starter. (yo46363, 9/20)
+              const qb = teamPlayers.find(p => p.position === 'QB' && getS(p.id).gamesPlayed)
+                ?? teamPlayers.find(p => p.position === 'QB' && (!p.injury || p.injury.weeksLeft === 0))
+                ?? teamPlayers.find(p => p.position === 'QB');
               const rushers = teamPlayers
                 .filter(p => (getS(p.id).rushAttempts ?? 0) > 0)
                 .sort((a, b) => (getS(b.id).rushYards ?? 0) - (getS(a.id).rushYards ?? 0));
@@ -2189,7 +2195,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                         <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase mb-1">Passing</div>
                         <div className="text-sm font-medium">{qb.firstName[0]}. {qb.lastName}</div>
                         <div className="text-xs text-[var(--text-sec)]">
-                          {s.passCompletions}/{s.passAttempts}, {s.passYards} YDS, {s.passTDs} TD, {s.interceptions} INT
+                          {s.passCompletions ?? 0}/{s.passAttempts ?? 0}, {s.passYards ?? 0} YDS, {s.passTDs ?? 0} TD, {s.interceptions ?? 0} INT
                         </div>
                       </div>
                     );
