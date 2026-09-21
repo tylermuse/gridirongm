@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage, getItem as idbGetItem, setItem as idbSetItem, flushPersist, flushPersistSync } from '@bs/core/storage';
+import { scheduleCloudPush } from '@bs/core/supabase/cloud-saves';
 function uuid(): string {
   return crypto.randomUUID();
 }
@@ -11289,6 +11290,9 @@ export async function flushToStorage(): Promise<void> {
   const partialized = partialize(state);
   const serialized = JSON.stringify({ state: partialized, version: SAVE_VERSION });
   await flushPersist(serialized);
+  // Mirror the autosave to the user's account when cloud sync is on (no-op
+  // otherwise). Fire-and-forget + debounced so it never blocks the local save.
+  scheduleCloudPush('gridiron-gm-autosave', serialized);
 }
 
 /**

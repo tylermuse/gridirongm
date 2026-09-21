@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { DEFAULT_LEAGUE_SETTINGS, type LeagueSettings } from '@/types';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { createClient } from '@bs/core/supabase/client';
+import { isCloudSyncEnabled, setCloudSyncEnabled, getLastSyncedAt, pushCloudSaveNow } from '@bs/core/supabase/cloud-saves';
+import { getItem as idbGetItem } from '@bs/core/storage';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -127,6 +129,76 @@ function SettingRow({ label, description, value, onChange, min, max, step, unit,
         <span className="text-sm font-mono w-20 text-right">{display}</span>
       </div>
     </div>
+  );
+}
+
+function CloudSyncCard() {
+  const { user } = useSubscription();
+  const [enabled, setEnabled] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [lastSynced, setLastSynced] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEnabled(isCloudSyncEnabled());
+    setLastSynced(getLastSyncedAt());
+    setMounted(true);
+  }, []);
+
+  const [pushing, setPushing] = useState(false);
+
+  async function toggle(next: boolean) {
+    setEnabled(next);
+    setCloudSyncEnabled(next);
+    if (next) {
+      // Push the current save right away so there's a row to pull on another
+      // device — don't wait for the next in-game save.
+      setPushing(true);
+      try {
+        const raw = await idbGetItem('gridiron-gm-autosave');
+        if (raw) {
+          await pushCloudSaveNow('gridiron-gm-autosave', raw);
+          setLastSynced(getLastSyncedAt());
+        }
+      } catch { /* best-effort */ }
+      setPushing(false);
+    }
+  }
+
+  const lastSyncedLabel = lastSynced
+    ? new Date(lastSynced).toLocaleString()
+    : 'not synced yet';
+
+  return (
+    <Card className="mb-4">
+      <CardHeader><CardTitle>Cloud Saves</CardTitle></CardHeader>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-sm">Sync saves to my account</div>
+          <div className="text-xs text-[var(--text-sec)] mt-0.5">
+            {user
+              ? 'Mirror your league to your account so you can pick it up on another computer. Your device stays the source of truth; sync runs in the background.'
+              : 'Sign in to sync your saves across devices. Signed-out play stays on this device.'}
+          </div>
+          {user && enabled && (
+            <div className="text-[11px] text-[var(--text-sec)] mt-1">{pushing ? 'Syncing…' : `Last synced: ${lastSyncedLabel}`}</div>
+          )}
+        </div>
+        <button
+          onClick={() => mounted && user && toggle(!enabled)}
+          disabled={!user}
+          aria-label={enabled ? 'Turn off cloud sync' : 'Turn on cloud sync'}
+          className={`shrink-0 relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+            enabled && user ? 'bg-blue-500' : 'bg-gray-300'
+          } ${user ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+              enabled && user ? 'translate-x-6' : 'translate-x-1'
+            }`}
+          />
+        </button>
+      </div>
+    </Card>
   );
 }
 
@@ -304,6 +376,9 @@ export default function SettingsPage() {
 
         {/* Appearance */}
         <AppearanceCard />
+
+        {/* Cloud Saves */}
+        <CloudSyncCard />
 
         {/* Finance Settings */}
         <Card className="mb-4">

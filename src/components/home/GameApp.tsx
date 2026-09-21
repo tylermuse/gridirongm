@@ -8,6 +8,8 @@ import { SpotlightAudioPlayer } from '@/components/game/SpotlightAudioPlayer';
 
 import { useGameStore, computeLuxuryTax } from '@/lib/engine/store';
 import { migrateFromLocalStorage, getItem as idbGetItem } from '@bs/core/storage';
+import { setItem as idbSetItem } from '@bs/core/storage';
+import { pullCloudSave, getDeviceId, setCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import { GameShell } from '@/components/game/GameShell';
@@ -38,6 +40,11 @@ function TeamPicker() {
   const [importedTeams, setImportedTeams] = useState<ImportedLeagueData | null>(null);
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
   const [savedGame, setSavedGame] = useState<{ teamAbbr: string; season: number; wins: number; losses: number; phase: string } | null>(null);
+  // A newer cloud save (from another device / this account) that the user can
+  // pull down. Populated on mount when cloud sync is on and the remote row is
+  // ahead of what's local. null = nothing to offer.
+  const [cloudRestore, setCloudRestore] = useState<{ payload: string; updatedAt: string; fromOtherDevice: boolean } | null>(null);
+  const [cloudRestoring, setCloudRestoring] = useState(false);
   const [importNotice, setImportNotice] = useState<string | null>(null);
   const [resumeLoading, setResumeLoading] = useState(false);
   const [startMode, setStartMode] = useState<'offseason' | 'regular'>(
@@ -115,6 +122,28 @@ function TeamPicker() {
             phase: PHASE_LABELS[state.phase] ?? state.phase ?? 'Unknown',
           });
         }
+
+        // Cloud Saves: whenever the user is signed in, check for a cloud
+        // autosave to restore. pullCloudSave self-guards on signed-in and a row
+        // only exists if the user opted into sync on some device, so users who
+        // never enabled it (or aren't signed in) see nothing. We offer a
+        // restore when there's no local save yet, or the cloud save came from a
+        // different device. We never auto-stomp — the idb write path keeps the
+        // save-wipe guard and the user taps "Load it".
+        try {
+          const remote = await pullCloudSave('gridiron-gm-autosave');
+          if (remote && remote.payload) {
+            const fromOtherDevice = !!remote.device_id && remote.device_id !== getDeviceId();
+            const noLocalSave = !raw;
+            if (noLocalSave || fromOtherDevice) {
+              setCloudRestore({
+                payload: remote.payload,
+                updatedAt: remote.updated_at,
+                fromOtherDevice,
+              });
+            }
+          }
+        } catch { /* cloud pull is best-effort */ }
       } catch {
         // Ignore parse errors
       }
@@ -127,6 +156,22 @@ function TeamPicker() {
     // The store auto-hydrates from localStorage via persist middleware.
     // We just need to set initialized = true.
     useGameStore.setState({ initialized: true });
+  }
+
+  // Pull a newer cloud save down onto this device. We write through the storage
+  // layer (which keeps the save-wipe guard) and reload so the store rehydrates
+  // from the freshly-written autosave.
+  async function handleCloudRestore() {
+    if (!cloudRestore) return;
+    setCloudRestoring(true);
+    try {
+      await idbSetItem('gridiron-gm-autosave', cloudRestore.payload);
+      // Keep this device in sync from now on, so edits here push back up.
+      setCloudSyncEnabled(true);
+      window.location.reload();
+    } catch {
+      setCloudRestoring(false);
+    }
   }
 
   async function handlePick(abbr: string, spectator: boolean = false) {
@@ -245,6 +290,31 @@ function TeamPicker() {
           <p className="flex-1 text-sm text-blue-900 dark:text-blue-200">{importNotice}</p>
           <button
             onClick={() => setImportNotice(null)}
+            className="text-blue-700/60 dark:text-blue-300/60 hover:text-blue-900 dark:hover:text-blue-100 text-sm shrink-0"
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Cloud save available from another device / account */}
+      {cloudRestore && (
+        <div className="mb-6 max-w-2xl w-full rounded-xl border border-blue-400/40 bg-blue-50 dark:bg-blue-950/40 px-4 py-3 flex items-start gap-3">
+          <span className="text-lg leading-none">☁️</span>
+          <div className="flex-1 text-sm text-blue-900 dark:text-blue-200">
+            {cloudRestore.fromOtherDevice
+              ? 'A newer save from another device is available on your account.'
+              : 'A newer cloud save is available on your account.'}
+            {cloudRestore.updatedAt && (
+              <span className="text-blue-700/70 dark:text-blue-300/70"> (updated {new Date(cloudRestore.updatedAt).toLocaleString()})</span>
+            )}
+          </div>
+          <Button size="sm" onClick={handleCloudRestore} disabled={cloudRestoring}>
+            {cloudRestoring ? 'Loading…' : 'Load it'}
+          </Button>
+          <button
+            onClick={() => setCloudRestore(null)}
             className="text-blue-700/60 dark:text-blue-300/60 hover:text-blue-900 dark:hover:text-blue-100 text-sm shrink-0"
             title="Dismiss"
           >
