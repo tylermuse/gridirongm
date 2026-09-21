@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
 import { Barlow_Condensed } from 'next/font/google';
+import { Analytics } from '@vercel/analytics/next';
 import { Providers } from '@/components/providers/Providers';
 import { FeedbackWidget } from '@/components/game/FeedbackWidget';
 import { ServiceWorkerRegister } from '@/components/providers/ServiceWorkerRegister';
@@ -63,6 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <RolloverErrorBeacon />
           <ExpansionTakeoverErrorBeacon />
         </Providers>
+        <Analytics />
         {/* Google AdSense loader — only injected when an AdSense client ID is
             configured. Free-tier users see ads via <AdSlot />; paying tiers
             never render the slots so this script effectively no-ops for them. */}
