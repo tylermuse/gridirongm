@@ -26,15 +26,15 @@ interface RosterEntry {
 const ROSTERS: RosterEntry[] = [
   {
     id: 'nfl-2026-updated',
-    title: 'NFL 2026 Roster — Updated September 19, 2026',
+    title: 'NFL 2026 Roster — Updated September 21, 2026',
     description:
-      'Reconciled against real active rosters as of the 2026 season opener — every team’s 53-man roster plus practice squad and injured reserve verified against ESPN. September 3 v5: a full league-wide reconciliation after training camp and the cut to 53, with ~270 team changes, 550+ players released to free agency, and 40+ un-retirements. Headliners: Aaron Donald back with the Rams, Stefon Diggs to the Commanders, Keenan Allen to the Colts, Za’Darius Smith to the Falcons, L’Jarius Sneed to the Chiefs, Bobby Okereke to the Panthers and Deebo Samuel to the 49ers, plus duplicate-record cleanup. July 1 v4: caught up on every post-draft move through July 1 — the June 1 blockbusters (Myles Garrett to the Rams, A.J. Brown to the Patriots), 20+ contract extensions (Mahomes through 2033, Jeffery Simmons, Drake London and more) and Russell Wilson’s retirement. Earlier passes set all 2,636 contracts from Spotrac and reconciled every roster against ESPN with a 99%+ match rate. Starts at the 2026 regular season. Weekly refresh (through Week 2): rosters + injuries updated; best records so far — Bills 2-0, Cardinals 1-0, Ravens 1-0, Bears 1-0, Bengals 1-0. Sep 15 update: corrected 41 un-retired players’ expired contract years and two erroneous player weights.',
+      'Starts at Week 1 of the 2026 regular season with the real 2026 NFL schedule loaded — no more booting into free agency, and every team plays its actual real-life slate. Reconciled against real active rosters as of the 2026 season opener — every team’s 53-man roster plus practice squad and injured reserve verified against ESPN. September 3 v5: a full league-wide reconciliation after training camp and the cut to 53, with ~270 team changes, 550+ players released to free agency, and 40+ un-retirements. Headliners: Aaron Donald back with the Rams, Stefon Diggs to the Commanders, Keenan Allen to the Colts, Za’Darius Smith to the Falcons, L’Jarius Sneed to the Chiefs, Bobby Okereke to the Panthers and Deebo Samuel to the 49ers, plus duplicate-record cleanup. July 1 v4: caught up on every post-draft move through July 1 — the June 1 blockbusters (Myles Garrett to the Rams, A.J. Brown to the Patriots), 20+ contract extensions (Mahomes through 2033, Jeffery Simmons, Drake London and more) and Russell Wilson’s retirement. Earlier passes set all 2,636 contracts from Spotrac and reconciled every roster against ESPN with a 99%+ match rate. Starts at the 2026 regular season. Weekly refresh (through Week 2): rosters + injuries updated; best records so far — Bills 2-0, Cardinals 1-0, Ravens 1-0, Bears 1-0, Bengals 1-0. Sep 15 update: corrected 41 un-retired players’ expired contract years and two erroneous player weights.',
     fileName: 'FBGM_NFL_Roster_2026_Updated.json',
-    lastUpdated: 'September 19, 2026',
+    lastUpdated: 'September 21, 2026',
     compatibility: ['Football GM (FBGM)', 'BS Football'],
     startMode: 'regular',
     era: 'Modern',
-    cacheBust: 16,
+    cacheBust: 17,
   },
   {
     id: 'nfl-1994-montana-era',
