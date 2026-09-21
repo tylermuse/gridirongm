@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { DEFAULT_LEAGUE_SETTINGS, type LeagueSettings } from '@/types';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { createClient } from '@bs/core/supabase/client';
-import { isCloudSyncEnabled, setCloudSyncEnabled, getLastSyncedAt } from '@bs/core/supabase/cloud-saves';
+import { isCloudSyncEnabled, setCloudSyncEnabled, getLastSyncedAt, pushCloudSaveNow } from '@bs/core/supabase/cloud-saves';
+import { getItem as idbGetItem } from '@bs/core/storage';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -143,9 +144,24 @@ function CloudSyncCard() {
     setMounted(true);
   }, []);
 
-  function toggle(next: boolean) {
+  const [pushing, setPushing] = useState(false);
+
+  async function toggle(next: boolean) {
     setEnabled(next);
     setCloudSyncEnabled(next);
+    if (next) {
+      // Push the current save right away so there's a row to pull on another
+      // device — don't wait for the next in-game save.
+      setPushing(true);
+      try {
+        const raw = await idbGetItem('gridiron-gm-autosave');
+        if (raw) {
+          await pushCloudSaveNow('gridiron-gm-autosave', raw);
+          setLastSynced(getLastSyncedAt());
+        }
+      } catch { /* best-effort */ }
+      setPushing(false);
+    }
   }
 
   const lastSyncedLabel = lastSynced
@@ -164,7 +180,7 @@ function CloudSyncCard() {
               : 'Sign in to sync your saves across devices. Signed-out play stays on this device.'}
           </div>
           {user && enabled && (
-            <div className="text-[11px] text-[var(--text-sec)] mt-1">Last synced: {lastSyncedLabel}</div>
+            <div className="text-[11px] text-[var(--text-sec)] mt-1">{pushing ? 'Syncing…' : `Last synced: ${lastSyncedLabel}`}</div>
           )}
         </div>
         <button

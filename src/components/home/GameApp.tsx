@@ -9,7 +9,7 @@ import { SpotlightAudioPlayer } from '@/components/game/SpotlightAudioPlayer';
 import { useGameStore, computeLuxuryTax } from '@/lib/engine/store';
 import { migrateFromLocalStorage, getItem as idbGetItem } from '@bs/core/storage';
 import { setItem as idbSetItem } from '@bs/core/storage';
-import { pullCloudSave, getDeviceId, isCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
+import { pullCloudSave, getDeviceId, setCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { TeamRosterModal } from '@/components/game/TeamRosterModal';
 import { GameShell } from '@/components/game/GameShell';
@@ -123,30 +123,27 @@ function TeamPicker() {
           });
         }
 
-        // Cloud Saves (opt-in): if a signed-in user has a cloud autosave that's
-        // newer than our last local sync (or we have no local save at all),
-        // surface a one-tap restore. We never auto-stomp a local save — the
-        // idb write path keeps the save-wipe guard, and the user chooses.
-        if (isCloudSyncEnabled()) {
-          try {
-            const remote = await pullCloudSave('gridiron-gm-autosave');
-            if (remote && remote.payload) {
-              const localRaw = raw;
-              const localUpdated = (() => {
-                try { return localRaw ? JSON.parse(localRaw)?.state?.lastSavedAt ?? null : null; } catch { return null; }
-              })();
-              const remoteNewer = !localRaw
-                || (!!remote.updated_at && (!localUpdated || new Date(remote.updated_at) > new Date(localUpdated)));
-              if (remoteNewer) {
-                setCloudRestore({
-                  payload: remote.payload,
-                  updatedAt: remote.updated_at,
-                  fromOtherDevice: !!remote.device_id && remote.device_id !== getDeviceId(),
-                });
-              }
+        // Cloud Saves: whenever the user is signed in, check for a cloud
+        // autosave to restore. pullCloudSave self-guards on signed-in and a row
+        // only exists if the user opted into sync on some device, so users who
+        // never enabled it (or aren't signed in) see nothing. We offer a
+        // restore when there's no local save yet, or the cloud save came from a
+        // different device. We never auto-stomp — the idb write path keeps the
+        // save-wipe guard and the user taps "Load it".
+        try {
+          const remote = await pullCloudSave('gridiron-gm-autosave');
+          if (remote && remote.payload) {
+            const fromOtherDevice = !!remote.device_id && remote.device_id !== getDeviceId();
+            const noLocalSave = !raw;
+            if (noLocalSave || fromOtherDevice) {
+              setCloudRestore({
+                payload: remote.payload,
+                updatedAt: remote.updated_at,
+                fromOtherDevice,
+              });
             }
-          } catch { /* cloud pull is best-effort */ }
-        }
+          }
+        } catch { /* cloud pull is best-effort */ }
       } catch {
         // Ignore parse errors
       }
@@ -169,6 +166,8 @@ function TeamPicker() {
     setCloudRestoring(true);
     try {
       await idbSetItem('gridiron-gm-autosave', cloudRestore.payload);
+      // Keep this device in sync from now on, so edits here push back up.
+      setCloudSyncEnabled(true);
       window.location.reload();
     } catch {
       setCloudRestoring(false);

@@ -139,7 +139,10 @@ export async function pushCloudSave(
 /** Pull the newest cloud row for a slot, or null. Never throws. */
 export async function pullCloudSave(slot: CloudSaveSlot): Promise<CloudSaveRow | null> {
   try {
-    if (!isCloudSyncEnabled()) return null;
+    // NOTE: intentionally not gated on isCloudSyncEnabled() — reading the
+    // signed-in user's own cloud row is how a fresh device discovers a save to
+    // restore. A row only exists if the user opted in on some device, so a
+    // user who never enabled sync sees nothing.
     const client = createClient();
     if (!client) return null;
     const userId = await getUserId();
@@ -175,4 +178,12 @@ export function scheduleCloudPush(slot: CloudSaveSlot, payload: string, debounce
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * Immediately push a slot's current serialized blob, bypassing the debounce.
+ * Used right after the user enables sync so a row exists to pull on device B.
+ */
+export async function pushCloudSaveNow(slot: CloudSaveSlot, payload: string): Promise<{ ok: boolean; reason?: string }> {
+  return pushCloudSave(slot, payload);
 }
