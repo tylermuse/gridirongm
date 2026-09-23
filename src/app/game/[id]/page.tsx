@@ -72,6 +72,92 @@ function clamp(val: number, min: number, max: number) {
   return Math.max(min, Math.min(max, val));
 }
 
+// ---------------------------------------------------------------------------
+// Fatigue-based auto-subs (display-only overlay — closes the gojostyttt
+// live-game bundle). Derives each offensive skill starter's snap/usage load
+// from the cumulative per-play stat bucket already carried on every PlayEvent,
+// converts it to an effective energy (stamina minus usage scaled by position),
+// and — when Auto-subs is ON — rotates in the next depth-chart player once a
+// starter gasses out. Purely presentational: no sim-engine change, no
+// playerStats mutation, no SAVE_VERSION bump.
+// ---------------------------------------------------------------------------
+
+// How fast each skill position drains per unit of usage (carry / target /
+// dropback). RBs take the most punishment, so they gas out first.
+const FATIGUE_RATE: Partial<Record<Position, number>> = {
+  RB: 4.0,
+  WR: 2.4,
+  TE: 2.4,
+  QB: 0.4,
+};
+
+// Skill slots shown on the field, in display order, with how many start.
+const FATIGUE_SLOTS: { pos: Position; starters: number }[] = [
+  { pos: 'QB', starters: 1 },
+  { pos: 'RB', starters: 1 },
+  { pos: 'WR', starters: 2 },
+  { pos: 'TE', starters: 1 },
+];
+
+// Below this effective energy a gassed starter is pulled for the next man up.
+const FATIGUE_SUB_THRESHOLD = 40;
+
+interface FieldSlot {
+  pos: Position;
+  active: Player;
+  resting: Player | null;   // the gassed starter, when a sub is on the field
+  energy: number;           // 0-99 effective energy of the ACTIVE player
+  subbed: boolean;
+}
+
+// Effective energy of a player given their accumulated usage this game.
+function fatigueEnergy(p: Player, load: number): number {
+  const rate = FATIGUE_RATE[p.position] ?? 1.5;
+  return clamp(Math.round((p.ratings?.stamina ?? 70) - load * rate), 0, 99);
+}
+
+// Build the current on-field skill lineup for the possessing offense, applying
+// auto-subs when enabled. `sidePlayers` is expected in depth-chart order.
+function computeFatigueLineup(
+  event: PlayEvent | null,
+  homePlayers: Player[],
+  awayPlayers: Player[],
+  autoSubsOn: boolean,
+): FieldSlot[] {
+  if (!event) return [];
+  const bucket = event.possession === 'home' ? event.homeBucketSnap : event.awayBucketSnap;
+  const sidePlayers = event.possession === 'home' ? homePlayers : awayPlayers;
+  // Usage (a proxy for snaps) per player id, from the cumulative bucket snapshot.
+  const usage: Record<string, number> = {};
+  if (bucket) {
+    for (const [pid, r] of Object.entries(bucket.perRusher)) usage[pid] = (usage[pid] ?? 0) + r.attempts;
+    for (const [pid, rc] of Object.entries(bucket.perReceiver)) usage[pid] = (usage[pid] ?? 0) + rc.targets;
+  }
+  const slots: FieldSlot[] = [];
+  for (const { pos, starters } of FATIGUE_SLOTS) {
+    const depth = sidePlayers.filter(p => p.position === pos);
+    for (let i = 0; i < starters; i++) {
+      const starter = depth[i];
+      if (!starter) continue;
+      const starterEnergy = fatigueEnergy(starter, usage[starter.id] ?? 0);
+      // The QB never rotates on fatigue; only skill runners/receivers do.
+      const backup = pos === 'QB' ? undefined : depth[starters + i];
+      if (autoSubsOn && backup && starterEnergy < FATIGUE_SUB_THRESHOLD) {
+        slots.push({
+          pos,
+          active: backup,
+          resting: starter,
+          energy: fatigueEnergy(backup, usage[backup.id] ?? 0),
+          subbed: true,
+        });
+      } else {
+        slots.push({ pos, active: starter, resting: null, energy: starterEnergy, subbed: false });
+      }
+    }
+  }
+  return slots;
+}
+
 function isSeparator(type: PlayEvent['type']): boolean {
   return ['quarter_end', 'halftime', 'two_minute_warning', 'overtime', 'final', 'timeout'].includes(type);
 }
@@ -701,6 +787,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const [revealedCount, setRevealedCount] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [speed, setSpeed] = useState<Speed>('1x');
+  // Fatigue-based auto-subs — display-only mid-game rotation. Default ON.
+  const [autoSubsOn, setAutoSubsOn] = useState(true);
   const [committed, setCommitted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('gamecast');
   // Live Coach mode — when on, the playback pauses before each user offensive
@@ -888,6 +976,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   }, [isPlaying, broadcastOn]); // eslint-disable-line react-hooks/exhaustive-deps
   const displayEvents = useMemo(() => [...revealedEvents].reverse(), [revealedEvents]);
   const drives = useMemo(() => parseDrives(revealedEvents), [revealedEvents]);
+  // Current on-field skill lineup w/ energy + auto-subs, from the revealed event.
+  const fatigueLineup = useMemo(
+    () => computeFatigueLineup(allEvents[revealedCount - 1] ?? null, homePlayers, awayPlayers, autoSubsOn),
+    [allEvents, revealedCount, homePlayers, awayPlayers, autoSubsOn],
+  );
 
   // Compute current drive stats
   const currentDrive = useMemo(() => {
@@ -1823,6 +1916,21 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               🎯 Live Coach {liveCoachOn ? 'ON' : 'OFF'}
             </button>
           )}
+          {/* Auto-subs (fatigue) toggle — display-only mid-game rotation. Shown
+              for watchers and coaches alike; default ON. */}
+          {!isFinished && (
+            <button
+              onClick={() => setAutoSubsOn(v => !v)}
+              className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold transition-all ${
+                autoSubsOn
+                  ? 'bg-teal-600 text-white hover:bg-teal-700'
+                  : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+              }`}
+              title="Automatically rotate in fresh backups as skill-position starters tire (display only)"
+            >
+              🔄 Auto-subs {autoSubsOn ? 'ON' : 'OFF'}
+            </button>
+          )}
           {/* Halftime Report — appears once the game passes the half. Available
               to spectators too (not gated on userInGame). */}
           {halftimeReached && (
@@ -1991,6 +2099,50 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           {/* GAMECAST TAB */}
           {activeTab === 'gamecast' && (
             <div className="space-y-3">
+
+              {/* On the Field — skill-position stamina + fatigue auto-subs.
+                  Display-only overlay derived from the revealed play stream. */}
+              {!isFinished && fatigueLineup.length > 0 && (
+                <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg overflow-hidden">
+                  <div className="px-4 py-2 border-b border-[var(--border)] bg-[var(--surface-2)] flex items-center justify-between">
+                    <span className="text-xs font-semibold text-[var(--text-sec)] uppercase tracking-wider">
+                      On the Field · {livePoss === 'home' ? homeAbbr : awayAbbr} Offense
+                    </span>
+                    <span className="text-[10px] text-[var(--text-sec)]">
+                      {autoSubsOn ? 'Auto-subs ON' : 'Auto-subs OFF'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-[var(--border)]">
+                    {fatigueLineup.map((slot, idx) => {
+                      const barColor = slot.energy >= 66 ? 'bg-green-500' : slot.energy >= 40 ? 'bg-amber-500' : 'bg-red-500';
+                      return (
+                        <div key={`${slot.pos}-${idx}`} className="bg-[var(--surface)] px-3 py-2">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-sec)]">{slot.pos}</span>
+                            {slot.subbed && (
+                              <span className="text-[9px] font-bold uppercase text-teal-600">🔄 Sub</span>
+                            )}
+                          </div>
+                          <div className="text-xs font-semibold text-[var(--text)] truncate" title={`${slot.active.firstName} ${slot.active.lastName}`}>
+                            {slot.active.firstName?.[0] ?? ''}. {slot.active.lastName}
+                          </div>
+                          <div className="mt-1 h-1.5 w-full rounded-full bg-[var(--surface-2)] overflow-hidden">
+                            <div className={`h-full ${barColor} transition-all`} style={{ width: `${slot.energy}%` }} />
+                          </div>
+                          <div className="mt-0.5 flex items-center justify-between">
+                            <span className="text-[9px] text-[var(--text-sec)] tabular-nums">{slot.energy}%</span>
+                            {slot.resting && (
+                              <span className="text-[9px] text-[var(--text-sec)] truncate" title={`${slot.resting.firstName} ${slot.resting.lastName} resting`}>
+                                {slot.resting.lastName} 💤
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Turnover alert banner */}
               {currentEvent && isTurnover(currentEvent.type) && (
