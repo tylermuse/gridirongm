@@ -31,15 +31,25 @@ export function mvpScore(p: Player, teams: Team[]): number {
 export function dpoyScore(p: Player, teams: Team[]): number {
   const team = teams.find(t => t.id === p.teamId);
   const winBonus = team ? team.record.wins * 3 : 0;
-  return p.stats.tackles * 0.5 + p.stats.sacks * 8 + p.stats.defensiveINTs * 7
-    + (p.stats.tacklesForLoss ?? 0) * 2 + (p.stats.passDeflections ?? 0) * 2
+  // 2026-09-22 (obungaloo, #general): CBs/Ss were near-impossible to win DPOY —
+  // sacks (8 pts) buried INTs (7) and PDs (2), so a 12-sack DL always beat a
+  // shutdown corner. Bump INT 7->12 and PD 2->4 so an 8-INT / 15-PD corner can
+  // match a ~10-sack DL. DLs still win the majority via sacks + TFL + tackles.
+  return p.stats.tackles * 0.5 + p.stats.sacks * 8 + p.stats.defensiveINTs * 12
+    + (p.stats.tacklesForLoss ?? 0) * 2 + (p.stats.passDeflections ?? 0) * 4
     + (p.stats.forcedFumbles ?? 0) * 4 + winBonus;
 }
 
 export function opoyScore(p: Player): number {
-  const yards = p.stats.passYards + p.stats.rushYards + p.stats.receivingYards;
-  const tds = p.stats.passTDs + p.stats.rushTDs + p.stats.receivingTDs;
-  return yards + tds * 30;
+  // 2026-09-22 (obungaloo, #general): WR/TE could effectively never win OPOY —
+  // the old raw total (pass+rush+receiving yards, all TDs x30) let RBs stack
+  // rushing AND receiving yards to beat receivers who only accrue receiving
+  // yards. OPOY excludes QBs (see computeSeasonAwards), so pass stats don't
+  // belong here. Now a pure receiver-vs-runner battle with a slight receiving
+  // boost (1.2x yards, TD 30 vs rush TD 25) so WR/TE get a fair shot while RBs
+  // stay competitive and still win the majority.
+  return p.stats.receivingYards * 1.2 + p.stats.rushYards
+    + p.stats.receivingTDs * 30 + p.stats.rushTDs * 25;
 }
 
 export function droyScore(p: Player): number {

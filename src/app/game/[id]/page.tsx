@@ -1044,6 +1044,48 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     return clearNextPlayTimer;
   }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach, currentEvent, broadcastOn]);
 
+  // ── Live game clock: tick the scorebug clock down between play reveals ──
+  // 2026-09-20/21 spec (gojostyttt, 4 votes on #football-feature-vote). Each
+  // PlayEvent carries the real in-game clock (timeStr, e.g. "12:34"). Between
+  // reveals we tick that value down 1s at a time toward the NEXT event's time
+  // so the scorebug reads Q1 15:00 -> Q4 0:00 like a live broadcast.
+  //
+  // This was pulled from PR #416 because the first attempt interpolated the
+  // clock continuously off a changing events identity and froze it at 15:00 in
+  // watch mode. The fix: key the effect to revealedCount so it RESETS and snaps
+  // to the current event's true time on every reveal, and floor the countdown
+  // at the next event's clock so it can never race ahead of what happened.
+  const [clockSecs, setClockSecs] = useState<number | null>(null);
+  useEffect(() => {
+    const parseClock = (t: string) => {
+      const [m, sec] = t.split(':');
+      return (parseInt(m, 10) || 0) * 60 + (parseInt(sec ?? '0', 10) || 0);
+    };
+    // When Live Coach is paused for user input the scorebug shows the engine's
+    // own exact clock, so don't run the ticking countdown then.
+    if (currentEvent == null || liveCoachPaused) {
+      setClockSecs(null);
+      return;
+    }
+    const startSecs = parseClock(currentEvent.timeStr);
+    setClockSecs(startSecs);
+    // Only tick while actively watching the pre-computed stream.
+    if (!isPlaying || isFinished || speed === 'max' || broadcastOn) return;
+    // Floor at the next event's clock within the same quarter (or 0:00 at a
+    // quarter boundary) so the ticking clock never passes the next real snap.
+    const nextEv = allEvents[revealedCount];
+    const floorSecs = nextEv && nextEv.quarter === currentEvent.quarter
+      ? parseClock(nextEv.timeStr)
+      : 0;
+    if (startSecs <= floorSecs) return;
+    const TICK_MS: Record<Speed, number> = { '0.5x': 1500, '1x': 1000, '2x': 550, '5x': 250, 'max': 0 };
+    const tickMs = TICK_MS[speed] || 1000;
+    const iv = setInterval(() => {
+      setClockSecs(prev => (prev == null || prev <= floorSecs ? prev : prev - 1));
+    }, tickMs);
+    return () => clearInterval(iv);
+  }, [revealedCount, isPlaying, isFinished, speed, liveCoachPaused, broadcastOn, currentEvent, allEvents]);
+
   const skipToEnd = useCallback(() => {
     clearNextPlayTimer();
     // If the live engine is active, run it to completion first
@@ -1469,6 +1511,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const liveTime = engineSnapshot
     ? `${Math.floor(engineSnapshot.timeSecs / 60)}:${String(engineSnapshot.timeSecs % 60).padStart(2, '0')}`
     : currentEvent?.timeStr ?? '15:00';
+  // Ticking scorebug clock (1-sec live countdown, gojostyttt feature). Use the
+  // second-by-second value while watching the pre-computed stream; fall back to
+  // the exact engine/event time when paused for input, finished, or idle.
+  const tickingTime = (!engineSnapshot && clockSecs != null && !isFinished)
+    ? `${Math.floor(clockSecs / 60)}:${String(clockSecs % 60).padStart(2, '0')}`
+    : liveTime;
   const livePoss = engineSnapshot?.possession ?? currentEvent?.possession ?? 'home';
   const liveFieldPos = engineSnapshot?.fieldPos ?? currentEvent?.fieldPos ?? 25;
   const liveDown = engineSnapshot?.down ?? currentEvent?.down ?? 1;
@@ -1574,7 +1622,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           homeScore={liveHomeScore}
           awayScore={liveAwayScore}
           quarter={liveQuarter}
-          timeStr={liveTime}
+          timeStr={tickingTime}
           possession={livePoss}
           down={liveDown}
           yardsToGo={liveYtg}
