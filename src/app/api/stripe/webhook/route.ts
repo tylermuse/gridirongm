@@ -12,6 +12,19 @@ function getServiceClient() {
   );
 }
 
+// Stripe moved `current_period_end` off the Subscription object and onto each
+// subscription item in API version 2025-03-31.basil. Read it from the item
+// first, fall back to the legacy subscription-level field, and guard against
+// missing/invalid values so an unexpected event shape can never throw (a thrown
+// `Date.toISOString()` on NaN was returning HTTP 500 and blocking every event).
+function periodEndIso(sub: Record<string, unknown>): string | null {
+  const item = (sub.items as { data?: Array<Record<string, unknown>> } | undefined)?.data?.[0];
+  const raw = (item?.current_period_end ?? sub.current_period_end) as number | undefined;
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
+  const d = new Date(raw * 1000);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 export async function POST(request: Request) {
   const body = await request.text();
   const signature = request.headers.get('stripe-signature');
@@ -39,12 +52,13 @@ export async function POST(request: Request) {
         const userId = session.metadata?.supabase_user_id;
 
         if (userId && priceId) {
+          const periodEnd = periodEndIso(sub as unknown as Record<string, unknown>);
           await supabase.from('subscriptions').upsert({
             id: sub.id,
             user_id: userId,
             status: sub.status,
             tier: tierFromPriceId(priceId),
-            current_period_end: new Date((sub as unknown as Record<string, unknown>).current_period_end as number * 1000).toISOString(),
+            ...(periodEnd ? { current_period_end: periodEnd } : {}),
             cancel_at_period_end: (sub as unknown as Record<string, unknown>).cancel_at_period_end as boolean,
             updated_at: new Date().toISOString(),
           });
@@ -59,12 +73,13 @@ export async function POST(request: Request) {
       const priceId = items?.data[0]?.price.id;
 
       if (priceId) {
+        const periodEnd = periodEndIso(sub);
         await supabase
           .from('subscriptions')
           .update({
             status: sub.status as string,
             tier: tierFromPriceId(priceId),
-            current_period_end: new Date((sub.current_period_end as number) * 1000).toISOString(),
+            ...(periodEnd ? { current_period_end: periodEnd } : {}),
             cancel_at_period_end: sub.cancel_at_period_end as boolean,
             updated_at: new Date().toISOString(),
           })
