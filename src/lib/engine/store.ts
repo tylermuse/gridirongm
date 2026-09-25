@@ -1930,6 +1930,9 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
       }
     }
 
+    // Floor total offered value — AI should never propose less than 60% of the target's value
+    if (offeredValue < targetValue * 0.60) continue;
+
     // Cap total offered value — AI should never overpay by more than 15%
     if (offeredValue > targetValue * 1.15) continue;
 
@@ -9279,7 +9282,7 @@ export const useGameStore = create<GameStore>()(
             // owner's array but still exist in the league, so we skip regen.
             draftPicks: [
               ...t.draftPicks,
-              ...[newSeason, newSeason + 1].flatMap(yr =>
+              ...[newSeason, newSeason + 1, newSeason + 2].flatMap(yr =>
                 [1, 2, 3, 4, 5, 6, 7]
                   .filter(round => !existingPickKeys.has(`${t.id}|${yr}|${round}`))
                   .map(round => ({
