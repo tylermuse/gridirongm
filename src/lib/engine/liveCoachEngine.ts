@@ -16,7 +16,7 @@ import type { Player, Team, PlayerStats } from '@/types';
 import type { PlayEvent } from './playByPlay';
 import { pickRusher, pickInterceptor, pickReceiver } from './playByPlay';
 import type { PlayCallType } from '@/components/game/PlayCallMenu';
-import { playerAvailable } from './simulate';
+import { playerAvailable, fieldGoalMakeProbability } from './simulate';
 
 export interface LiveEngineState {
   quarter: number;
@@ -562,8 +562,7 @@ export function createLiveCoachEngine(
     const distance = (100 - state.fieldPos) + 17;
     const k = ok.k;
     const kickerRating = rating(k, 'kicking', 70);
-    const successProb = clamp(0.95 - Math.max(0, distance - 30) * 0.025 + (kickerRating - 70) / 100 * 0.15, 0.35, 0.98);
-    const good = Math.random() < successProb;
+    const good = Math.random() < fieldGoalMakeProbability(distance, kickerRating);
     bump(k, { fieldGoalAttempts: 1, fieldGoalsMade: good ? 1 : 0 });
     const kName = nameOrFallback(k, 'the kicker');
     if (good) {
