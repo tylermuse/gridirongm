@@ -578,18 +578,22 @@ function MatchupRankings({ homeTeam, awayTeam, teams, players }: {
   const anyGames = teams.some(t => t.record.wins + t.record.losses + t.record.ties > 0);
   if (!anyGames) return null;
 
-  // Team offensive yards — same aggregation as the Stats page (pass + rush).
-  const offYards = new Map<string, number>();
+  // Team offensive yards — same aggregation as the Stats page, split into
+  // passing and rushing so both show as their own ranked category (yo46363's
+  // 3-vote board request: passing YPG, rushing YPG, PPG offense, PPG defense).
+  const passYards = new Map<string, number>();
+  const rushYards = new Map<string, number>();
   for (const p of players) {
     if (!p.teamId) continue;
-    offYards.set(p.teamId, (offYards.get(p.teamId) ?? 0) + (p.stats.passYards ?? 0) + (p.stats.rushYards ?? 0));
+    passYards.set(p.teamId, (passYards.get(p.teamId) ?? 0) + (p.stats.passYards ?? 0));
+    rushYards.set(p.teamId, (rushYards.get(p.teamId) ?? 0) + (p.stats.rushYards ?? 0));
   }
 
   const metrics: { key: string; label: string; lowerIsBetter?: boolean; value: (t: Team) => number; fmt: (v: number) => string }[] = [
     { key: 'ppg', label: 'PPG', value: t => t.record.pointsFor / gp(t), fmt: v => v.toFixed(1) },
-    { key: 'ypg', label: 'Yds/G', value: t => (offYards.get(t.id) ?? 0) / gp(t), fmt: v => v.toFixed(0) },
+    { key: 'passypg', label: 'Pass Y/G', value: t => (passYards.get(t.id) ?? 0) / gp(t), fmt: v => v.toFixed(0) },
+    { key: 'rushypg', label: 'Rush Y/G', value: t => (rushYards.get(t.id) ?? 0) / gp(t), fmt: v => v.toFixed(0) },
     { key: 'pa', label: 'Pts Allowed', lowerIsBetter: true, value: t => t.record.pointsAgainst / gp(t), fmt: v => v.toFixed(1) },
-    { key: 'diff', label: 'Pt Diff', value: t => t.record.pointsFor - t.record.pointsAgainst, fmt: v => `${v >= 0 ? '+' : ''}${v.toFixed(0)}` },
   ];
 
   const rankOf = (t: Team, m: (typeof metrics)[number]) => {

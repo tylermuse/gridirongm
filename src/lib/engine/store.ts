@@ -10113,6 +10113,14 @@ export const useGameStore = create<GameStore>()(
             if (!playerStats) return p;
             return { ...p, stats: addStats(p.stats, playerStats) };
           });
+          // P1 diagnostic — yo46363 passing stats bug. Remove when resolved.
+          const qbWithStats = newPlayers.find(p => p.position === 'QB' && (result.playerStats?.[p.id]?.passAttempts ?? 0) > 0);
+          if (qbWithStats) {
+            console.log('[commitLiveGame] QB stats committed:', { id: qbWithStats.id, name: `${qbWithStats.firstName} ${qbWithStats.lastName}`, ...result.playerStats?.[qbWithStats.id] });
+          } else {
+            const anyQB = newPlayers.find(p => p.position === 'QB' && (result.homeTeamId === p.teamId || result.awayTeamId === p.teamId));
+            console.warn('[commitLiveGame] No QB passAttempts in playerStats — possible blank stats bug', { gameId: result.id, qbId: anyQB?.id, rawStats: anyQB ? result.playerStats?.[anyQB.id] : undefined });
+          }
           set({ schedule: newSchedule, teams: newTeams, players: newPlayers });
         }
       },
