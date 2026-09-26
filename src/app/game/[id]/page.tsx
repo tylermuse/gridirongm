@@ -14,6 +14,7 @@ import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
 import { ScoreBug } from '@/components/game/ScoreBug';
 import { GamePlanModal } from '@/components/game/GamePlanModal';
+import { buildMatchupMetrics, rankForMetric } from '@/lib/engine/matchupRanks';
 import { PlayCallMenu, type PlayCallType } from '@/components/game/PlayCallMenu';
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import { generateHalftimeBreakdown, generateHalftimeAudioBreakdown, COMMENTATORS } from '@/lib/engine/debate';
@@ -563,10 +564,11 @@ function ordinalRank(n: number): string {
 }
 
 /**
- * Compact pre-game card showing where both teams rank league-wide in a few key
- * categories. Read-only: it reuses the exact aggregates from the Standings page
- * (record.pointsFor / record.pointsAgainst) and the Stats page (team offensive
- * pass + rush yards per game), so ranks match those pages exactly. No engine changes.
+ * Compact pre-game card showing where both teams rank league-wide in four key
+ * categories: points/game, passing yards/game, rushing yards/game, and points
+ * allowed/game. Read-only: it reuses the exact aggregates from the Standings page
+ * (record.pointsFor / record.pointsAgainst) and the Stats page (team passing +
+ * rushing yards per game), so ranks match those pages exactly. No engine changes.
  */
 function MatchupRankings({ homeTeam, awayTeam, teams, players }: {
   homeTeam: Team;
@@ -574,34 +576,14 @@ function MatchupRankings({ homeTeam, awayTeam, teams, players }: {
   teams: Team[];
   players: Player[];
 }) {
-  const gp = (t: Team) => Math.max(1, t.record.wins + t.record.losses + t.record.ties);
   const anyGames = teams.some(t => t.record.wins + t.record.losses + t.record.ties > 0);
   if (!anyGames) return null;
 
-  // Team offensive yards — same aggregation as the Stats page (pass + rush).
-  const offYards = new Map<string, number>();
-  for (const p of players) {
-    if (!p.teamId) continue;
-    offYards.set(p.teamId, (offYards.get(p.teamId) ?? 0) + (p.stats.passYards ?? 0) + (p.stats.rushYards ?? 0));
-  }
-
-  const metrics: { key: string; label: string; lowerIsBetter?: boolean; value: (t: Team) => number; fmt: (v: number) => string }[] = [
-    { key: 'ppg', label: 'PPG', value: t => t.record.pointsFor / gp(t), fmt: v => v.toFixed(1) },
-    { key: 'ypg', label: 'Yds/G', value: t => (offYards.get(t.id) ?? 0) / gp(t), fmt: v => v.toFixed(0) },
-    { key: 'pa', label: 'Pts Allowed', lowerIsBetter: true, value: t => t.record.pointsAgainst / gp(t), fmt: v => v.toFixed(1) },
-    { key: 'diff', label: 'Pt Diff', value: t => t.record.pointsFor - t.record.pointsAgainst, fmt: v => `${v >= 0 ? '+' : ''}${v.toFixed(0)}` },
-  ];
-
-  const rankOf = (t: Team, m: (typeof metrics)[number]) => {
-    const mine = m.value(t);
-    let better = 0;
-    for (const o of teams) {
-      if (o.id === t.id) continue;
-      const ov = m.value(o);
-      if (m.lowerIsBetter ? ov < mine : ov > mine) better++;
-    }
-    return better + 1;
-  };
+  // Four ranked pre-matchup categories (PPG, Pass Y/G, Rush Y/G, Pts Allowed/G),
+  // computed from the same aggregates as the Standings + Stats pages. See
+  // buildMatchupMetrics for the math; kept in a shared util so it's unit-tested.
+  const metrics = buildMatchupMetrics(players);
+  const rankOf = (t: Team, m: (typeof metrics)[number]) => rankForMetric(t, m, teams);
 
   const rankColor = (rank: number) => {
     const third = teams.length / 3;
