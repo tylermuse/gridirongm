@@ -1,5 +1,6 @@
 import type { Player, PlayerStats, GameResult, Team } from '@/types';
 import { computeQBTier, getQBTierModifier } from './qbTierPyramid';
+import { fieldGoalMakeProbability } from './simulate';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -886,9 +887,7 @@ export function simulatePlayByPlay(
   function doFieldGoal(distanceYards: number) {
     const ok = offKey();
     const kickerRating = rating(ok.k, 'kicking', 70);
-    // Success probability: base 95% from 20yd, decreasing by ~2% per yard beyond 30
-    const successProb = clamp(0.95 - Math.max(0, distanceYards - 30) * 0.025 + (kickerRating - 70) / 100 * 0.15, 0.35, 0.98);
-    const good = Math.random() < successProb;
+    const good = Math.random() < fieldGoalMakeProbability(distanceYards, kickerRating);
     offBucket().fieldGoalAttempts += 1;
     if (good) {
       offBucket().fieldGoalsMade += 1;

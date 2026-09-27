@@ -193,7 +193,14 @@ function mapRatings(ratings: FbgmRating): { ratings: PlayerRatings; potential: n
     tackling: clamp(ratings.tck ?? 20),
     coverage: clamp(ratings.pcv ?? 20),
     passRush: clamp(avg([ratings.prs ?? 0, ratings.rns ?? 0], 20)),
-    kicking: clamp(avg([ratings.kpw ?? 0, ratings.kac ?? 0, ratings.ppw ?? 0, ratings.pac ?? 0], 20)),
+    // K uses only kick ratings and P only punt ratings — averaging all four
+    // halved every kicker (their ppw/pac are ~0), e.g. Aubrey 98/98 → 58.
+    kicking: clamp(avg(
+      position === 'K' ? [ratings.kpw ?? 0, ratings.kac ?? 0]
+        : position === 'P' ? [ratings.ppw ?? 0, ratings.pac ?? 0]
+        : [ratings.kpw ?? 0, ratings.kac ?? 0, ratings.ppw ?? 0, ratings.pac ?? 0],
+      20,
+    )),
   };
   return { ratings: mapped, potential, position };
 }
