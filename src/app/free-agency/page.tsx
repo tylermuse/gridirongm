@@ -808,7 +808,7 @@ export default function FreeAgencyPage() {
                               </div>
                             </div>
                             <div className="text-[10px] text-[var(--text-sec)]">
-                              Asking: <span className="text-amber-600 font-medium">${negotiation.askingSalary}M/yr</span>
+                              Asking: <span className="text-amber-600 font-medium">${Math.round(negotiation.askingSalary * 10) / 10}M/yr</span>
                             </div>
                           </div>
                         )}
@@ -1026,7 +1026,7 @@ export default function FreeAgencyPage() {
                                   <div className="grid grid-cols-2 gap-3 text-xs">
                                     <div>
                                       <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase">True Asking Price</div>
-                                      <div className="font-bold">${report.trueAskingSalary}M/yr, {report.trueAskingYears}yr</div>
+                                      <div className="font-bold">${Math.round(report.trueAskingSalary * 10) / 10}M/yr, {report.trueAskingYears}yr</div>
                                     </div>
                                     <div>
                                       <div className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Willingness</div>
