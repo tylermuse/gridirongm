@@ -1220,9 +1220,17 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     // Floor at the next event's clock within the same quarter (or 0:00 at a
     // quarter boundary) so the ticking clock never passes the next real snap.
     const nextEv = allEvents[revealedCount];
-    const floorSecs = nextEv && nextEv.quarter === currentEvent.quarter
+    let floorSecs = nextEv && nextEv.quarter === currentEvent.quarter
       ? parseClock(nextEv.timeStr)
       : 0;
+    // Live Coach engine generates plays lazily, so there's no next event to
+    // floor at. Use the engine's authoritative clock instead: the next snap
+    // happens at timeSecs minus the pending runoff — zero runoff (timeout,
+    // incompletion, out of bounds) means the clock is stopped, so no ticking.
+    if (!nextEv && liveEngineRef.current && !liveEngineRef.current.isFinished()) {
+      const es = liveEngineRef.current.getState();
+      if (es.quarter === currentEvent.quarter) floorSecs = Math.max(0, es.timeSecs - (es.pendingRunoff ?? 0));
+    }
     if (startSecs <= floorSecs) return;
     const TICK_MS: Record<Speed, number> = { '0.5x': 1500, '1x': 1000, '2x': 550, '5x': 250, 'max': 0 };
     const tickMs = TICK_MS[speed] || 1000;
@@ -1662,10 +1670,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const callDefensiveTimeout = () => {
     const eng = liveEngineRef.current;
     if (!eng || !userTeamSide) return;
-    const evs = eng.callTimeoutFor(userTeamSide);
+    // Keep whatever runoff already ticked off the on-screen clock; the engine
+    // cancels the rest, so the clock freezes where the user sees it.
+    const es = eng.getState();
+    const elapsed = clockSecs != null ? Math.max(0, es.timeSecs - clockSecs) : 0;
+    const evs = eng.callTimeoutFor(userTeamSide, elapsed);
     if (evs.length === 0) return;
+    // Reveal through the timeout immediately so the scorebug snaps to it.
+    const newTotal = allEvents.length + evs.length;
     setLiveExtraEvents(prev => [...prev, ...evs]);
-    setRevealedCount(prev => prev + evs.length);
+    setRevealedCount(newTotal);
   };
   const liveHomeScore = engineSnapshot?.homeScore ?? currentEvent?.homeScore ?? 0;
   const liveAwayScore = engineSnapshot?.awayScore ?? currentEvent?.awayScore ?? 0;

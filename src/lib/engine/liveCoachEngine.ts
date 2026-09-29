@@ -55,7 +55,7 @@ export interface LiveCoachEngine {
   /** Run one play (or several if continuation like TD → XP → kickoff). Returns new events. */
   runOnePlay: (userCall?: PlayCallType) => PlayEvent[];
   /** Charge `side` a timeout between plays (used for defensive timeouts). */
-  callTimeoutFor: (side: 'home' | 'away') => PlayEvent[];
+  callTimeoutFor: (side: 'home' | 'away', elapsedRunoffSecs?: number) => PlayEvent[];
   /** True when the user team has the ball on offense AND it's a regular play (not kickoff/XP). */
   isUserOffense: () => boolean;
   isFinished: () => boolean;
@@ -566,11 +566,18 @@ export function createLiveCoachEngine(
 
   /** Timeout by a specific team between plays — e.g. the user on DEFENSE,
    *  which runOnePlay('timeout') can't express (it charges the offense).
-   *  Stops the clock by cancelling the runoff owed by the previous play. */
-  function callTimeoutFor(side: 'home' | 'away'): PlayEvent[] {
+   *  `elapsedRunoffSecs` is how much of the previous play's runoff already
+   *  ticked off the on-screen clock before the call; that part is kept and the
+   *  rest is cancelled, so the clock stops exactly where the user saw it. */
+  function callTimeoutFor(side: 'home' | 'away', elapsedRunoffSecs = 0): PlayEvent[] {
     const events: PlayEvent[] = [];
     if (state.isGameOver || state.awaitingXpChoice || state.awaitingKickoffChoice) return events;
-    if (callTimeout(events, side)) state.pendingRunoff = 0;
+    const left = side === 'home' ? state.homeTimeouts : state.awayTimeouts;
+    if (left <= 0) return events;
+    const elapsed = Math.max(0, Math.min(Math.round(elapsedRunoffSecs), state.pendingRunoff ?? 0, state.timeSecs - 1));
+    advanceClock(elapsed);
+    state.pendingRunoff = 0;
+    callTimeout(events, side);
     return events;
   }
 
