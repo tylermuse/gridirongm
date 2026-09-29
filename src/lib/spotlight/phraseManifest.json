@@ -1,0 +1,536 @@
+[
+ {
+  "id": "marcus_ppg_bad",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "You just can't win in this league when you can't put points on the board.",
+  "src": "/show/phrases/marcus_ppg_bad.mp4",
+  "duration": 4.28,
+  "stat": "ppg",
+  "tone": "bad"
+ },
+ {
+  "id": "marcus_ppg_bad_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "When you're {rank} in scoring, there's no margin for error. None.",
+  "src": "/show/phrases/marcus_ppg_bad_slot.mp4",
+  "duration": 4.88,
+  "stat": "ppg",
+  "tone": "bad",
+  "slot": {
+   "start": 0.741,
+   "end": 1.368
+  }
+ },
+ {
+  "id": "marcus_ppg_good",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "This offense is legit. They're moving the ball and finishing drives.",
+  "src": "/show/phrases/marcus_ppg_good.mp4",
+  "duration": 4.28,
+  "stat": "ppg",
+  "tone": "good"
+ },
+ {
+  "id": "marcus_ppg_good_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in the league in scoring. That's not a fluke. That's a system that works.",
+  "src": "/show/phrases/marcus_ppg_good_slot.mp4",
+  "duration": 5.64,
+  "stat": "ppg",
+  "tone": "good",
+  "slot": {
+   "start": 0.602,
+   "end": 1.031
+  }
+ },
+ {
+  "id": "marcus_pag_bad",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "The defense has to get off the field. They just can't get stops.",
+  "src": "/show/phrases/marcus_pag_bad.mp4",
+  "duration": 3.6,
+  "stat": "pag",
+  "tone": "bad"
+ },
+ {
+  "id": "marcus_pag_bad_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in points allowed. You're asking the offense to win a shootout every week.",
+  "src": "/show/phrases/marcus_pag_bad_slot.mp4",
+  "duration": 5.52,
+  "stat": "pag",
+  "tone": "bad",
+  "slot": {
+   "start": 0.637,
+   "end": 1.507
+  }
+ },
+ {
+  "id": "marcus_pag_good",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "This defense keeps them in every single game. That travels.",
+  "src": "/show/phrases/marcus_pag_good.mp4",
+  "duration": 3.8,
+  "stat": "pag",
+  "tone": "good"
+ },
+ {
+  "id": "marcus_pag_good_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in points allowed. That's the foundation of this whole team.",
+  "src": "/show/phrases/marcus_pag_good_slot.mp4",
+  "duration": 5.28,
+  "stat": "pag",
+  "tone": "good",
+  "slot": {
+   "start": 0.637,
+   "end": 1.159
+  }
+ },
+ {
+  "id": "marcus_pass_bad",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "The passing game just isn't there. Nobody's getting open downfield.",
+  "src": "/show/phrases/marcus_pass_bad.mp4",
+  "duration": 4.28,
+  "stat": "pass",
+  "tone": "bad"
+ },
+ {
+  "id": "marcus_pass_bad_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in passing yards per game. That's a problem at quarterback, or up front, or both.",
+  "src": "/show/phrases/marcus_pass_bad_slot.mp4",
+  "duration": 5.52,
+  "stat": "pass",
+  "tone": "bad",
+  "slot": {
+   "start": 0.567,
+   "end": 1.194
+  }
+ },
+ {
+  "id": "marcus_pass_good",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "When they drop back to throw, good things happen. The timing is there.",
+  "src": "/show/phrases/marcus_pass_good.mp4",
+  "duration": 4.68,
+  "stat": "pass",
+  "tone": "good"
+ },
+ {
+  "id": "marcus_pass_good_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in passing yards per game. Defenses have to respect it.",
+  "src": "/show/phrases/marcus_pass_good_slot.mp4",
+  "duration": 5.0,
+  "stat": "pass",
+  "tone": "good",
+  "slot": {
+   "start": 0.613,
+   "end": 1.101
+  }
+ },
+ {
+  "id": "marcus_rush_bad",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They can't run the ball. And when you can't run it, everything gets harder.",
+  "src": "/show/phrases/marcus_rush_bad.mp4",
+  "duration": 4.4,
+  "stat": "rush",
+  "tone": "bad"
+ },
+ {
+  "id": "marcus_rush_bad_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in rushing. The offensive line has to take that personally.",
+  "src": "/show/phrases/marcus_rush_bad_slot.mp4",
+  "duration": 5.16,
+  "stat": "rush",
+  "tone": "bad",
+  "slot": {
+   "start": 0.59,
+   "end": 1.368
+  }
+ },
+ {
+  "id": "marcus_rush_good",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're winning at the line of scrimmage. That's how you control a football game.",
+  "src": "/show/phrases/marcus_rush_good.mp4",
+  "duration": 5.64,
+  "stat": "rush",
+  "tone": "good"
+ },
+ {
+  "id": "marcus_rush_good_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in rushing yards per game. They're wearing people down.",
+  "src": "/show/phrases/marcus_rush_good_slot.mp4",
+  "duration": 4.88,
+  "stat": "rush",
+  "tone": "good",
+  "slot": {
+   "start": 0.637,
+   "end": 1.136
+  }
+ },
+ {
+  "id": "marcus_record_winning",
+  "host": "marcus",
+  "kind": "record",
+  "text": "Winning cures a lot. This team believes right now.",
+  "src": "/show/phrases/marcus_record_winning.mp4",
+  "duration": 3.44,
+  "tone": "good"
+ },
+ {
+  "id": "marcus_record_losing",
+  "host": "marcus",
+  "kind": "record",
+  "text": "At some point, the record is who you are. And right now, it's not good enough.",
+  "src": "/show/phrases/marcus_record_losing.mp4",
+  "duration": 4.24,
+  "tone": "bad"
+ },
+ {
+  "id": "marcus_record_even",
+  "host": "marcus",
+  "kind": "record",
+  "text": "They're right there. A couple of plays either way, and this is a different conversation.",
+  "src": "/show/phrases/marcus_record_even.mp4",
+  "duration": 4.8,
+  "tone": "mid"
+ },
+ {
+  "id": "marcus_agree_1",
+  "host": "marcus",
+  "kind": "agree",
+  "text": "I'm with you on that, Tony.",
+  "src": "/show/phrases/marcus_agree_1.mp4",
+  "duration": 2.2
+ },
+ {
+  "id": "marcus_agree_2",
+  "host": "marcus",
+  "kind": "agree",
+  "text": "That's fair. The numbers back you up.",
+  "src": "/show/phrases/marcus_agree_2.mp4",
+  "duration": 2.44
+ },
+ {
+  "id": "marcus_disagree_1",
+  "host": "marcus",
+  "kind": "disagree",
+  "text": "Hold on. Let's not overreact here.",
+  "src": "/show/phrases/marcus_disagree_1.mp4",
+  "duration": 2.72
+ },
+ {
+  "id": "marcus_disagree_2",
+  "host": "marcus",
+  "kind": "disagree",
+  "text": "I'll push back on that a little.",
+  "src": "/show/phrases/marcus_disagree_2.mp4",
+  "duration": 2.16
+ },
+ {
+  "id": "marcus_skeptical",
+  "host": "marcus",
+  "kind": "skeptical",
+  "text": "I need to see it for more than a few weeks.",
+  "src": "/show/phrases/marcus_skeptical.mp4",
+  "duration": 2.68
+ },
+ {
+  "id": "marcus_pivot",
+  "host": "marcus",
+  "kind": "pivot",
+  "text": "Let's look at what the numbers actually say.",
+  "src": "/show/phrases/marcus_pivot.mp4",
+  "duration": 2.84
+ },
+ {
+  "id": "tony_ppg_bad",
+  "host": "tony",
+  "kind": "stat",
+  "text": "This offense is unwatchable right now! I can't take it!",
+  "src": "/show/phrases/tony_ppg_bad.mp4",
+  "duration": 3.64,
+  "stat": "ppg",
+  "tone": "bad"
+ },
+ {
+  "id": "tony_ppg_bad_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in scoring?! Are you kidding me? That's embarrassing!",
+  "src": "/show/phrases/tony_ppg_bad_slot.mp4",
+  "duration": 4.28,
+  "stat": "ppg",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 1.182
+  }
+ },
+ {
+  "id": "tony_ppg_good",
+  "host": "tony",
+  "kind": "stat",
+  "text": "This offense is a problem for everybody! Buckle up!",
+  "src": "/show/phrases/tony_ppg_good.mp4",
+  "duration": 3.6,
+  "stat": "ppg",
+  "tone": "good"
+ },
+ {
+  "id": "tony_ppg_good_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in scoring! They're putting up points like it's nothing!",
+  "src": "/show/phrases/tony_ppg_good_slot.mp4",
+  "duration": 4.32,
+  "stat": "ppg",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.962
+  }
+ },
+ {
+  "id": "tony_pag_bad",
+  "host": "tony",
+  "kind": "stat",
+  "text": "This is ridiculous! They have to do a better job on defense!",
+  "src": "/show/phrases/tony_pag_bad.mp4",
+  "duration": 3.88,
+  "stat": "pag",
+  "tone": "bad"
+ },
+ {
+  "id": "tony_pag_bad_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in points allowed! Somebody has to make a tackle!",
+  "src": "/show/phrases/tony_pag_bad_slot.mp4",
+  "duration": 3.88,
+  "stat": "pag",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 0.939
+  }
+ },
+ {
+  "id": "tony_pag_good",
+  "host": "tony",
+  "kind": "stat",
+  "text": "Nobody wants to play this defense! Nobody!",
+  "src": "/show/phrases/tony_pag_good.mp4",
+  "duration": 3.4,
+  "stat": "pag",
+  "tone": "good"
+ },
+ {
+  "id": "tony_pag_good_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in points allowed! That defense is nasty!",
+  "src": "/show/phrases/tony_pag_good_slot.mp4",
+  "duration": 3.52,
+  "stat": "pag",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.857
+  }
+ },
+ {
+  "id": "tony_pass_bad",
+  "host": "tony",
+  "kind": "stat",
+  "text": "Throw the ball downfield! Take a shot! Do something!",
+  "src": "/show/phrases/tony_pass_bad.mp4",
+  "duration": 3.72,
+  "stat": "pass",
+  "tone": "bad"
+ },
+ {
+  "id": "tony_pass_bad_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in passing? That's not an offense, that's a prayer!",
+  "src": "/show/phrases/tony_pass_bad_slot.mp4",
+  "duration": 3.72,
+  "stat": "pass",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 0.892
+  }
+ },
+ {
+  "id": "tony_pass_good",
+  "host": "tony",
+  "kind": "stat",
+  "text": "When this team airs it out, it is fun to watch!",
+  "src": "/show/phrases/tony_pass_good.mp4",
+  "duration": 3.24,
+  "stat": "pass",
+  "tone": "good"
+ },
+ {
+  "id": "tony_pass_good_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in passing yards! Let it fly!",
+  "src": "/show/phrases/tony_pass_good_slot.mp4",
+  "duration": 2.88,
+  "stat": "pass",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.869
+  }
+ },
+ {
+  "id": "tony_rush_bad",
+  "host": "tony",
+  "kind": "stat",
+  "text": "You have to be able to run the football! It's that simple!",
+  "src": "/show/phrases/tony_rush_bad.mp4",
+  "duration": 3.72,
+  "stat": "rush",
+  "tone": "bad"
+ },
+ {
+  "id": "tony_rush_bad_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in rushing?! You can't win like that! You just can't!",
+  "src": "/show/phrases/tony_rush_bad_slot.mp4",
+  "duration": 4.16,
+  "stat": "rush",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 0.962
+  }
+ },
+ {
+  "id": "tony_rush_good",
+  "host": "tony",
+  "kind": "stat",
+  "text": "They're running people over! That's grown-man football!",
+  "src": "/show/phrases/tony_rush_good.mp4",
+  "duration": 3.72,
+  "stat": "rush",
+  "tone": "good"
+ },
+ {
+  "id": "tony_rush_good_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in rushing! They just line up and pound it!",
+  "src": "/show/phrases/tony_rush_good_slot.mp4",
+  "duration": 3.84,
+  "stat": "rush",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.904
+  }
+ },
+ {
+  "id": "tony_record_winning",
+  "host": "tony",
+  "kind": "record",
+  "text": "This team is for real, and I don't want to hear otherwise!",
+  "src": "/show/phrases/tony_record_winning.mp4",
+  "duration": 3.56,
+  "tone": "good"
+ },
+ {
+  "id": "tony_record_losing",
+  "host": "tony",
+  "kind": "record",
+  "text": "Something has got to change, and it has to change now!",
+  "src": "/show/phrases/tony_record_losing.mp4",
+  "duration": 3.64,
+  "tone": "bad"
+ },
+ {
+  "id": "tony_record_even",
+  "host": "tony",
+  "kind": "record",
+  "text": "This season is on a knife's edge, Marcus!",
+  "src": "/show/phrases/tony_record_even.mp4",
+  "duration": 2.92,
+  "tone": "mid"
+ },
+ {
+  "id": "tony_agree_1",
+  "host": "tony",
+  "kind": "agree",
+  "text": "Thank you! That's what I've been saying!",
+  "src": "/show/phrases/tony_agree_1.mp4",
+  "duration": 2.44
+ },
+ {
+  "id": "tony_agree_2",
+  "host": "tony",
+  "kind": "agree",
+  "text": "Exactly! Exactly!",
+  "src": "/show/phrases/tony_agree_2.mp4",
+  "duration": 2.24
+ },
+ {
+  "id": "tony_disagree_1",
+  "host": "tony",
+  "kind": "disagree",
+  "text": "Come on, Marcus! You can't be serious!",
+  "src": "/show/phrases/tony_disagree_1.mp4",
+  "duration": 2.96
+ },
+ {
+  "id": "tony_disagree_2",
+  "host": "tony",
+  "kind": "disagree",
+  "text": "Nah, nah, nah. I'm not buying that.",
+  "src": "/show/phrases/tony_disagree_2.mp4",
+  "duration": 2.6
+ },
+ {
+  "id": "tony_hype",
+  "host": "tony",
+  "kind": "hype",
+  "text": "Let's go!",
+  "src": "/show/phrases/tony_hype.mp4",
+  "duration": 1.64
+ },
+ {
+  "id": "tony_pivot",
+  "host": "tony",
+  "kind": "pivot",
+  "text": "Here's the thing nobody's talking about.",
+  "src": "/show/phrases/tony_pivot.mp4",
+  "duration": 2.84
+ }
+]
