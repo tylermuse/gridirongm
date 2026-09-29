@@ -53,14 +53,19 @@ ANALYSTS:
 - Marcus Cole (speakerId "stats") — analytics guy. Measured, dry wit, cites the numbers he's given.
 - Tony Blaze (speakerId "hottake") — passion guy. CAPS for emphasis, bold calls, vivid metaphors.
 
-Write 8-12 exchanges that feel like a real back-and-forth: they respond to each other, agree, argue.
+Write 12-16 exchanges that feel like a real back-and-forth: they respond to each other, agree, argue.
 Cover, in order: the setup (records, stakes, streaks), the quarterback matchup, the key unit-vs-unit
 matchup (use the league ranks — rank 1 is best), an X-factor player, any injuries, then each analyst's pick.
 Each "text" is 1-3 sentences. Refer to teams by city or nickname, not abbreviations.
 
 RULES:
 - Use ONLY the facts provided. Never invent stats, players, injuries or history.
-- If a stat line is null, talk about the player's rating instead.
+- Go deep on player production. Each player fact has a "statLine" (full season line), "season" (raw +
+  per-game + efficiency numbers: completion %, yards per attempt, passer rating, yards per carry, catch rate,
+  per-game averages, etc.) and "leagueRank" (league rank in his headline stat). Quote those numbers and say
+  what they mean — efficiency, volume, turnovers, trends between the two sides.
+- Mention a player's "ovr" rating ONLY when his statLine is null (no production yet). Never lead with ratings.
+- Cover each team's QB, lead rusher, lead receiver and top defender by name with their numbers.
 - If ranks are null (no games yet), talk about roster talent (starterOvr) instead.
 - homeEdge > 0 favors the home team on paper; Tony may still pick the underdog.
 - Predicted scores should be realistic NFL scores.

@@ -23,8 +23,16 @@ export interface PregamePlayerFact {
   name: string;
   position: Position;
   ovr: number;
-  /** Season stat line, or null before the player has any production. */
+  /** Games this player has appeared in this season. */
+  games: number;
+  /** Full season stat line in broadcast prose, or null before any production. */
   statLine: string | null;
+  /** Short headline stat ("1,640 passing yards"), or null before any production. */
+  headline: string | null;
+  /** League rank in the headline stat among all players (1 = best), when top 15. */
+  leagueRank: number | null;
+  /** Raw + derived season numbers (for the LLM and template comparisons). */
+  season: Record<string, number>;
 }
 
 export interface PregameTeamFacts {
@@ -45,8 +53,10 @@ export interface PregameTeamFacts {
   /** League ranks (1 = best); null before any games are played. */
   ranks: { ppg: number; passYpg: number; rushYpg: number; ptsAllowed: number } | null;
   qb: PregamePlayerFact | null;
-  /** Top non-QB offensive weapon (RB/WR/TE). */
-  weapon: PregamePlayerFact | null;
+  /** Lead rusher (RB). */
+  rusher: PregamePlayerFact | null;
+  /** Lead pass-catcher (WR/TE). */
+  receiver: PregamePlayerFact | null;
   /** Top defender. */
   defender: PregamePlayerFact | null;
   /** Injured starters-quality players ("Name (POS)"). */
@@ -76,40 +86,131 @@ export interface PregameShow {
 /* ─── Fact sheet ─── */
 
 const HOME_FIELD_OVR = 1.5;
-const WEAPON_POS: Position[] = ['RB', 'WR', 'TE'];
+const RECEIVER_POS: Position[] = ['WR', 'TE'];
 const DEF_POS: Position[] = ['DL', 'LB', 'CB', 'S'];
+const RANK_CUTOFF = 15;
 
 function fullName(p: Player): string {
   return `${p.firstName} ${p.lastName}`;
 }
 
-function qbLine(p: Player): string | null {
+const num = (n: number) => Math.round(n).toLocaleString('en-US');
+const one = (n: number) => (Math.round(n * 10) / 10).toFixed(1);
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+/** NFL passer rating (0–158.3). */
+export function passerRating(cmp: number, att: number, yds: number, td: number, int: number): number {
+  if (att <= 0) return 0;
+  const c = (x: number) => Math.max(0, Math.min(2.375, x));
+  const a = c((cmp / att - 0.3) * 5);
+  const b = c((yds / att - 3) * 0.25);
+  const t = c((td / att) * 20);
+  const i = c(2.375 - (int / att) * 25);
+  return Math.round(((a + b + t + i) / 6) * 1000) / 10;
+}
+
+type Line = { statLine: string; headline: string; season: Record<string, number> } | null;
+
+function qbLine(p: Player): Line {
   const s = p.stats;
   if (!s || !(s.passAttempts > 0)) return null;
-  return `${s.passYards} passing yards, ${s.passTDs} TD, ${s.interceptions} INT`;
+  const g = Math.max(1, s.gamesPlayed ?? 1);
+  const pct = (s.passCompletions / s.passAttempts) * 100;
+  const ypa = s.passYards / s.passAttempts;
+  const rating = passerRating(s.passCompletions, s.passAttempts, s.passYards, s.passTDs, s.interceptions);
+  let statLine = `${s.passCompletions}-of-${s.passAttempts} (${one(pct)}%) for ${num(s.passYards)} yards — ${num(s.passYards / g)} a game at ${one(ypa)} yards per attempt — with ${plural(s.passTDs, 'touchdown')}, ${plural(s.interceptions, 'interception')} and a ${one(rating)} passer rating`;
+  if (s.rushYards >= 100) statLine += `, plus ${num(s.rushYards)} yards on the ground`;
+  return {
+    statLine,
+    headline: `${num(s.passYards)} passing yards`,
+    season: {
+      games: g, completions: s.passCompletions, attempts: s.passAttempts, compPct: Math.round(pct * 10) / 10,
+      passYards: s.passYards, passYardsPerGame: Math.round(s.passYards / g), yardsPerAttempt: Math.round(ypa * 10) / 10,
+      passTDs: s.passTDs, interceptions: s.interceptions, passerRating: rating, rushYards: s.rushYards, rushTDs: s.rushTDs,
+    },
+  };
 }
 
-function weaponLine(p: Player): string | null {
+function rusherLine(p: Player): Line {
   const s = p.stats;
-  if (!s) return null;
-  if (p.position === 'RB' && s.rushAttempts > 0) return `${s.rushYards} rushing yards, ${s.rushTDs} TD`;
-  if (s.receptions > 0) return `${s.receptions} catches, ${s.receivingYards} yards, ${s.receivingTDs} TD`;
-  return null;
+  if (!s || !(s.rushAttempts > 0)) return null;
+  const g = Math.max(1, s.gamesPlayed ?? 1);
+  const ypc = s.rushYards / s.rushAttempts;
+  let statLine = `${s.rushAttempts} carries for ${num(s.rushYards)} yards — ${one(ypc)} a carry, ${num(s.rushYards / g)} a game — and ${plural(s.rushTDs, 'touchdown')}`;
+  if (s.receptions > 0) statLine += `, plus ${plural(s.receptions, 'catch').replace('catchs', 'catches')} for ${num(s.receivingYards)} yards out of the backfield`;
+  return {
+    statLine,
+    headline: `${num(s.rushYards)} rushing yards`,
+    season: {
+      games: g, carries: s.rushAttempts, rushYards: s.rushYards, yardsPerCarry: Math.round(ypc * 10) / 10,
+      rushYardsPerGame: Math.round(s.rushYards / g), rushTDs: s.rushTDs, fumbles: s.fumbles ?? 0,
+      receptions: s.receptions, receivingYards: s.receivingYards,
+    },
+  };
 }
 
-function defenderLine(p: Player): string | null {
+function receiverLine(p: Player): Line {
+  const s = p.stats;
+  if (!s || !(s.receptions > 0)) return null;
+  const g = Math.max(1, s.gamesPlayed ?? 1);
+  const ypr = s.receivingYards / s.receptions;
+  const catchRate = s.targets > 0 ? (s.receptions / s.targets) * 100 : 0;
+  const statLine = `${plural(s.receptions, 'catch').replace('catchs', 'catches')}${s.targets > 0 ? ` on ${s.targets} targets` : ''} for ${num(s.receivingYards)} yards — ${one(ypr)} a catch, ${num(s.receivingYards / g)} a game — and ${plural(s.receivingTDs, 'touchdown')}`;
+  return {
+    statLine,
+    headline: `${num(s.receivingYards)} receiving yards`,
+    season: {
+      games: g, targets: s.targets, receptions: s.receptions, catchRatePct: Math.round(catchRate),
+      receivingYards: s.receivingYards, yardsPerCatch: Math.round(ypr * 10) / 10,
+      receivingYardsPerGame: Math.round(s.receivingYards / g), receivingTDs: s.receivingTDs,
+    },
+  };
+}
+
+function defenderLine(p: Player): Line {
   const s = p.stats;
   if (!s) return null;
   const parts: string[] = [];
-  if (s.tackles > 0) parts.push(`${s.tackles} tkl`);
-  if (s.sacks > 0) parts.push(`${s.sacks} sacks`);
-  if (s.defensiveINTs > 0) parts.push(`${s.defensiveINTs} INT`);
-  return parts.length ? parts.join(', ') : null;
+  if (s.tackles > 0) parts.push(plural(s.tackles, 'tackle'));
+  if (s.tacklesForLoss > 0) parts.push(`${s.tacklesForLoss} for loss`);
+  if (s.sacks > 0) parts.push(`${s.sacks} sack${s.sacks === 1 ? '' : 's'}`);
+  if (s.defensiveINTs > 0) parts.push(plural(s.defensiveINTs, 'interception'));
+  if (s.passDeflections > 0) parts.push(`${s.passDeflections} passes defended`);
+  if (s.forcedFumbles > 0) parts.push(`${s.forcedFumbles} forced fumble${s.forcedFumbles === 1 ? '' : 's'}`);
+  if (!parts.length) return null;
+  const statLine = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0];
+  const headline = s.sacks >= 2 ? `${s.sacks} sacks` : s.defensiveINTs >= 2 ? plural(s.defensiveINTs, 'interception') : plural(s.tackles, 'tackle');
+  return {
+    statLine,
+    headline,
+    season: {
+      games: Math.max(1, s.gamesPlayed ?? 1), tackles: s.tackles, tacklesForLoss: s.tacklesForLoss ?? 0, sacks: s.sacks,
+      interceptions: s.defensiveINTs, passesDefended: s.passDeflections ?? 0, forcedFumbles: s.forcedFumbles ?? 0,
+    },
+  };
 }
 
-function fact(p: Player | undefined, line: (p: Player) => string | null): PregamePlayerFact | null {
+/** 1-based rank of `p` among `pool` by `stat`, or null outside the top RANK_CUTOFF / no production. */
+function leagueRank(p: Player, pool: Player[], stat: (q: Player) => number): number | null {
+  const mine = stat(p);
+  if (!(mine > 0)) return null;
+  const rank = pool.filter(q => q.id !== p.id && stat(q) > mine).length + 1;
+  return rank <= RANK_CUTOFF ? rank : null;
+}
+
+function fact(p: Player | undefined, line: (p: Player) => Line, pool: Player[], stat: (q: Player) => number): PregamePlayerFact | null {
   if (!p) return null;
-  return { name: fullName(p), position: p.position, ovr: p.ratings.overall, statLine: line(p) };
+  const l = line(p);
+  return {
+    name: fullName(p),
+    position: p.position,
+    ovr: p.ratings.overall,
+    games: p.stats?.gamesPlayed ?? 0,
+    statLine: l?.statLine ?? null,
+    headline: l?.headline ?? null,
+    leagueRank: l ? leagueRank(p, pool, stat) : null,
+    season: l?.season ?? {},
+  };
 }
 
 /** Starter at a position: the depth chart's first healthy player, else best healthy by OVR. */
@@ -122,22 +223,27 @@ function starterAt(team: Team, roster: Player[], positions: Position[]): Player 
   return [...healthy].sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
 }
 
-function weaponScore(p: Player): number {
-  const s = p.stats;
-  const yds = (s?.rushYards ?? 0) + (s?.receivingYards ?? 0);
-  const tds = (s?.rushTDs ?? 0) + (s?.receivingTDs ?? 0);
-  return yds + tds * 60 + p.ratings.overall; // OVR breaks ties before any games
+/** Best healthy player at `positions` by a season stat (OVR breaks ties / week 1). */
+function leaderAt(roster: Player[], positions: Position[], stat: (p: Player) => number): Player | undefined {
+  return roster
+    .filter(p => positions.includes(p.position) && !p.injury)
+    .sort((a, b) => (stat(b) * 100 + b.ratings.overall) - (stat(a) * 100 + a.ratings.overall))[0];
 }
 
-function defenderScore(p: Player): number {
+const passYds = (p: Player) => p.stats?.passYards ?? 0;
+const rushYds = (p: Player) => p.stats?.rushYards ?? 0;
+const recYds = (p: Player) => p.stats?.receivingYards ?? 0;
+const defImpact = (p: Player) => {
   const s = p.stats;
-  return (s?.sacks ?? 0) * 25 + (s?.defensiveINTs ?? 0) * 30 + (s?.tackles ?? 0) * 2 + p.ratings.overall;
-}
+  return (s?.sacks ?? 0) * 12 + (s?.defensiveINTs ?? 0) * 15 + (s?.forcedFumbles ?? 0) * 10
+    + (s?.tacklesForLoss ?? 0) * 3 + (s?.passDeflections ?? 0) * 2 + (s?.tackles ?? 0);
+};
 
 function teamFacts(
   team: Team,
   roster: Player[],
   teams: Team[],
+  allPlayers: Player[],
   metrics: ReturnType<typeof buildMatchupMetrics>,
 ): PregameTeamFacts {
   const r = team.record;
@@ -151,10 +257,9 @@ function teamFacts(
     ptsAllowed: rankForMetric(team, m('pa'), teams),
   } : null;
 
-  const weapon = [...healthy.filter(p => WEAPON_POS.includes(p.position))]
-    .sort((a, b) => weaponScore(b) - weaponScore(a))[0];
-  const defender = [...healthy.filter(p => DEF_POS.includes(p.position))]
-    .sort((a, b) => defenderScore(b) - defenderScore(a))[0];
+  const defender = leaderAt(roster, DEF_POS, defImpact);
+  const defStat = (q: Player) => (defender && (defender.stats?.sacks ?? 0) >= 2 ? (q.stats?.sacks ?? 0)
+    : defender && (defender.stats?.defensiveINTs ?? 0) >= 2 ? (q.stats?.defensiveINTs ?? 0) : (q.stats?.tackles ?? 0));
 
   // Only mention injuries to players good enough that fans would notice.
   const injuries = roster
@@ -177,9 +282,10 @@ function teamFacts(
     papg: gp > 0 ? Math.round((r.pointsAgainst / gp) * 10) / 10 : 0,
     starterOvr: meanStarterOvr(healthy),
     ranks,
-    qb: fact(starterAt(team, roster, ['QB']), qbLine),
-    weapon: fact(weapon, weaponLine),
-    defender: fact(defender, defenderLine),
+    qb: fact(starterAt(team, roster, ['QB']), qbLine, allPlayers, passYds),
+    rusher: fact(leaderAt(roster, ['RB'], rushYds), rusherLine, allPlayers, rushYds),
+    receiver: fact(leaderAt(roster, RECEIVER_POS, recYds), receiverLine, allPlayers, recYds),
+    defender: fact(defender, defenderLine, allPlayers, defStat),
     injuries,
   };
 }
@@ -198,8 +304,8 @@ export function buildPregameFacts(args: {
   players: Player[];
 }): PregameFacts {
   const metrics = buildMatchupMetrics(args.players);
-  const home = teamFacts(args.homeTeam, args.homePlayers, args.teams, metrics);
-  const away = teamFacts(args.awayTeam, args.awayPlayers, args.teams, metrics);
+  const home = teamFacts(args.homeTeam, args.homePlayers, args.teams, args.players, metrics);
+  const away = teamFacts(args.awayTeam, args.awayPlayers, args.teams, args.players, metrics);
   return {
     gameId: args.gameId,
     season: args.season,
@@ -291,21 +397,49 @@ export function generateTemplatedPregame(f: PregameFacts): PregameShow {
     ], rng));
   }
 
-  // 2) QB duel
+  // Player intro: the full season line when he has one; the rating only before any production.
+  const rankTag = (p: PregamePlayerFact) =>
+    p.leagueRank && p.headline ? ` That's ${p.leagueRank === 1 ? 'the most' : `${ordinal(p.leagueRank)} in the league in`} ${p.headline.replace(/^[\d,.]+ /, '')}${p.leagueRank === 1 ? ' in the league' : ''}.` : '';
+  const intro = (p: PregamePlayerFact, city: string) => p.statLine
+    ? `${city}'s ${p.name} is ${p.statLine} through ${plural(p.games, 'game')}.${rankTag(p)}`
+    : `${city}'s ${p.name} hasn't put numbers on the board yet this season — he comes in rated ${p.ovr}.`;
+
+  // 2) QB duel — a stat breakdown for each side, then Tony's verdict.
   const hq = home.qb, aq = away.qb;
   if (hq && aq) {
+    say('stats', `Let's start under center. ${intro(aq, away.city)}`);
+    say('stats', `On the other side, ${intro(hq, home.city)}`);
+    const hr = hq.season.passerRating ?? 0, ar = aq.season.passerRating ?? 0;
     if (hq.statLine && aq.statLine) {
-      say('stats', `Under center: ${aq.name} has ${aq.statLine} on the year. On the other side, ${hq.name} has ${hq.statLine}.`);
+      const better = hr >= ar ? hq : aq;
+      const worse = better === hq ? aq : hq;
+      const bTd = better.season.passTDs, bInt = better.season.interceptions;
+      const wTd = worse.season.passTDs, wInt = worse.season.interceptions;
+      if (wInt > wTd) {
+        say('hottake', `${worse.name} has thrown MORE picks than touchdowns — ${wInt} to ${wTd}! You can't win like that, Marcus. Meanwhile ${better.name} is sitting at ${bTd} to ${bInt}. That's the whole ballgame right there.`);
+      } else if (Math.abs(hr - ar) < 6) {
+        say('hottake', `A ${one(ar)} rating against a ${one(hr)}? That's a DEAD HEAT. This is a quarterback SHOOTOUT waiting to happen, and I want ${better.name} with the ball last.`);
+      } else {
+        say('hottake', pick([
+          `A ${one(better.season.passerRating)} passer rating versus ${one(worse.season.passerRating)} — it's not close! ${better.name} is in a different ZIP code than ${worse.name} right now.`,
+          `${better.name} has ${bTd} touchdowns at ${one(better.season.yardsPerAttempt)} yards a throw. ${worse.name} is dinking and dunking at ${one(worse.season.yardsPerAttempt)}. Give me the guy who PUSHES the ball downfield!`,
+        ], rng));
+      }
     } else {
-      say('stats', `The quarterback matchup: ${aq.name}, rated ${aq.ovr}, against ${hq.name} at ${hq.ovr}. On paper, that's ${aq.ovr === hq.ovr ? 'dead even' : `an edge to ${aq.ovr > hq.ovr ? away.city : home.city}`}.`);
+      const better = hq.ovr >= aq.ovr ? hq : aq;
+      say('hottake', `No stat sheet yet, so I'm going on gut — and my gut says ${better.name}. He's the most dangerous player on this field.`);
     }
-    const better = hq.ovr >= aq.ovr ? hq : aq;
-    const worse = better === hq ? aq : hq;
-    say('hottake', pick([
-      `Give me ${better.name} in a big spot every day of the week. ${worse.name} has to play the game of his LIFE to keep up.`,
-      `${worse.name} better be ready, because ${better.name} is gonna make him look like a backup today. I said what I said.`,
-      `Quarterback play wins in this league, and ${better.name} is the best player on this field. Period.`,
-    ], rng));
+  }
+
+  // Ground game: the two lead backs.
+  const hrb = home.rusher, arb = away.rusher;
+  if (hrb?.statLine || arb?.statLine) {
+    const lead = (hrb?.season.rushYards ?? 0) >= (arb?.season.rushYards ?? 0) ? { p: hrb!, t: home, o: arb, ot: away } : { p: arb!, t: away, o: hrb, ot: home };
+    say('stats', `In the backfield: ${intro(lead.p, lead.t.city)}${lead.o?.statLine ? ` ${lead.ot.city} counters with ${lead.o.name} — ${lead.o.statLine}.` : ''}`);
+    const ypc = lead.p.season.yardsPerCarry ?? 0;
+    say('hottake', ypc >= 4.5
+      ? `${one(ypc)} a carry! ${lead.p.name} is RIPPING off chunks. If ${lead.ot.city} can't set the edge, he's going for 150 today.`
+      : `Volume over flash with ${lead.p.name}, and I LOVE it. You feed that man ${Math.max(15, Math.round((lead.p.season.carries ?? 0) / Math.max(1, lead.p.games)))} times and let him wear that defense DOWN.`);
   }
 
   // 3) Key matchup: best offense-vs-defense rank clash
@@ -336,22 +470,33 @@ export function generateTemplatedPregame(f: PregameFacts): PregameShow {
     say('stats', `No stats to lean on yet, so I'm looking at roster talent — ${fav.city} grades out about ${Math.max(1, Math.round(edge))} point${Math.round(edge) === 1 ? '' : 's'} better across the starting lineup.`);
   }
 
-  // 4) X-factor + injuries
+  // 4) X-factor (a pass-catcher), the other side's top target, defense, injuries.
   const xTeam = rng() < 0.5 ? dog : fav;
-  const x = xTeam.weapon ?? xTeam.defender;
+  const oTeam = xTeam === fav ? dog : fav;
+  const x = xTeam.receiver;
   if (x) {
     if (ex[ex.length - 1]?.speakerId === 'hottake') say('stats', pick([`Alright Tony, who's your X-factor?`, `Give me one name, Tony. Who swings this game?`], rng));
     say('hottake', x.statLine
-      ? `My X-factor? ${x.name}. ${x.statLine} this year, and he's due for a MONSTER game.`
-      : `My X-factor is ${x.name}. ${x.ovr} overall and nobody's talking about him. They will be after today.`);
+      ? `My X-factor? ${x.name}. ${x.statLine.replace(/^./, c => c.toUpperCase())}.${x.leagueRank ? ` ${ordinal(x.leagueRank).toUpperCase()} in the league!` : ''} He's due for a MONSTER game.`
+      : `My X-factor is ${x.name}. Nobody's talking about him yet. They will be after today.`);
+    const o = oTeam.receiver;
+    if (o?.statLine) {
+      say('stats', `Don't sleep on ${oTeam.city}'s ${o.name} either — ${o.statLine}${o.season.catchRatePct ? `, catching ${o.season.catchRatePct}% of the balls thrown his way` : ''}.`);
+    }
+  }
+  const defs = [home.defender, away.defender].filter((d): d is PregamePlayerFact => !!d?.statLine);
+  if (defs.length) {
+    const d = defs.sort((a, b) => (a.leagueRank ?? 99) - (b.leagueRank ?? 99))[0];
+    const dTeam = d === home.defender ? home : away;
+    say('stats', `Defensively, the name to know is ${dTeam.city}'s ${d.name}: ${d.statLine} in ${plural(d.games, 'game')}.${d.leagueRank && d.headline ? ` His ${d.headline.replace(/^[\d,.]+ /, '')} rank ${ordinal(d.leagueRank)} in the league.` : ''}`);
+    if ((d.season.sacks ?? 0) >= 3) {
+      say('hottake', `${d.name} lives in the backfield! ${d.season.sacks} sacks — somebody better chip him or it's gonna be a LONG day for the quarterback.`);
+    }
   }
   const hurt = [...home.injuries.map(s => ({ s, t: home })), ...away.injuries.map(s => ({ s, t: away }))];
   if (hurt.length) {
     const h = hurt[0];
     say('stats', `One note on the injury report: ${h.t.city} is without ${h.s}. That changes the plan more than people think.`);
-  } else if (fav.defender) {
-    const d = fav.defender;
-    say('stats', `Keep an eye on ${d.name} on the ${fav.city} defense${d.statLine ? ` — ${d.statLine} so far` : ''}. He can wreck a game plan.`);
   }
 
   // 5) Picks — Marcus goes with the numbers, Tony sometimes rides the underdog.
