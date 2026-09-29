@@ -899,14 +899,17 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // and pause so the user can read/listen instead of having to hunt for the
   // button. Only fires on the live transition — not when loading a game that's
   // already past halftime.
+  // Skipped when the crossing lands on a finished game (End Game / max speed
+  // jump straight past the half) — the report would just sit on top of the
+  // final score. The Halftime Report button still opens it on demand.
   const prevHalftimeReachedRef = useRef(halftimeReached);
   useEffect(() => {
-    if (halftimeReached && !prevHalftimeReachedRef.current) {
+    if (halftimeReached && !prevHalftimeReachedRef.current && !isFinished) {
       setShowHalftimeReport(true);
       setIsPlaying(false);
     }
     prevHalftimeReachedRef.current = halftimeReached;
-  }, [halftimeReached]);
+  }, [halftimeReached, isFinished]);
 
   // Premium: generate + play the in-depth spoken halftime breakdown.
   const playHalftimeAudio = useCallback(async () => {
