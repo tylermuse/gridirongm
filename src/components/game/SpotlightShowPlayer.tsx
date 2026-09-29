@@ -23,6 +23,9 @@ type Phase = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'ended' | 'er
 const CLIP_IDS = Object.keys(SHOW_CLIPS) as ShowClipId[];
 const other = (h: Host): Host => (h === 'marcus' ? 'tony' : 'marcus');
 
+// Must match MP3_BYTES_PER_SEC in /api/spotlight-show (mp3_44100_128, CBR).
+const MP3_BYTES_PER_SEC = 128_000 / 8;
+
 export function SpotlightShowPlayer({ topics, teamName }: SpotlightShowPlayerProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [segments, setSegments] = useState<TimedShowSegment[]>([]);
@@ -30,35 +33,50 @@ export function SpotlightShowPlayer({ topics, teamName }: SpotlightShowPlayerPro
   const [lowerThird, setLowerThird] = useState(false);
   const pathname = usePathname();
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioUrlRef = useRef<string | null>(null);
+  // Web Audio: each TTS line is its own decoded buffer, played by an
+  // AudioBufferSourceNode whose `onended` advances the show. No seeking in a
+  // concatenated MP3 (unreliable in Chrome) and no rAF loop (paused in
+  // background tabs), so audio and visuals can't drift apart.
+  const ctxRef = useRef<AudioContext | null>(null);
+  const buffersRef = useRef<Map<number, AudioBuffer>>(new Map());
+  const srcRef = useRef<AudioBufferSourceNode | null>(null);
   const clipRefs = useRef<Partial<Record<ShowClipId, HTMLVideoElement | null>>>({});
   const reactRefs = useRef<Partial<Record<Host, HTMLVideoElement | null>>>({});
-  const rafRef = useRef<number | null>(null);
   const segIdxRef = useRef(0);
   const segmentsRef = useRef<TimedShowSegment[]>([]);
+  const tokenRef = useRef(0); // bumps on every segment start/stop so stale callbacks no-op
   const lowerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (getPodcastCount() >= PODCAST_LIMIT) setPhase('exhausted');
   }, []);
 
-  const stopAll = useCallback(() => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    rafRef.current = null;
-    audioRef.current?.pause();
-    Object.values(clipRefs.current).forEach(v => v?.pause());
-    Object.values(reactRefs.current).forEach(v => v?.pause());
+  const stopSource = useCallback(() => {
+    const src = srcRef.current;
+    if (src) {
+      src.onended = null;
+      try { src.stop(); } catch { /* already stopped */ }
+      src.disconnect();
+    }
+    srcRef.current = null;
   }, []);
+
+  /** Hard stop: kills the current line and all video. */
+  const stopAll = useCallback(() => {
+    tokenRef.current++;
+    stopSource();
+    Object.values(clipRefs.current).forEach(v => { if (v) { v.onended = null; v.pause(); } });
+    Object.values(reactRefs.current).forEach(v => v?.pause());
+  }, [stopSource]);
 
   // Cleanup on unmount; pause on route change.
   useEffect(() => () => {
     stopAll();
-    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+    void ctxRef.current?.close();
     if (lowerTimer.current) clearTimeout(lowerTimer.current);
   }, [stopAll]);
   useEffect(() => {
-    if (phase === 'playing') { stopAll(); setPhase('paused'); }
+    if (phase === 'playing') { void ctxRef.current?.suspend(); Object.values(clipRefs.current).forEach(v => v?.pause()); setPhase('paused'); }
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const showLowerThird = useCallback(() => {
@@ -68,11 +86,11 @@ export function SpotlightShowPlayer({ topics, teamName }: SpotlightShowPlayerPro
   }, []);
 
   // ── Sequencer ──────────────────────────────────────────────────────
-  const playSegment = useCallback((i: number, resume = false) => {
+  const playSegment = useCallback((i: number) => {
     const segs = segmentsRef.current;
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    stopAll();
+    const token = tokenRef.current;
     if (i >= segs.length) {
-      stopAll();
       setPhase('ended');
       return;
     }
@@ -80,44 +98,31 @@ export function SpotlightShowPlayer({ topics, teamName }: SpotlightShowPlayerPro
     const seg = segs[i];
     segIdxRef.current = i;
     setSegIdx(i);
-    if (!resume && seg.kind === 'tts' && (!prev || prev.speaker !== seg.speaker || prev.kind === 'clip')) showLowerThird();
+    const advance = () => { if (tokenRef.current === token) playSegment(i + 1); };
 
     if (seg.kind === 'clip') {
-      audioRef.current?.pause();
-      Object.values(reactRefs.current).forEach(v => v?.pause());
       const v = clipRefs.current[seg.clip];
-      if (!v) return playSegment(i + 1);
-      if (!resume) v.currentTime = 0;
-      v.onended = () => playSegment(segIdxRef.current + 1);
+      if (!v) return advance();
+      v.currentTime = 0;
+      v.onended = advance;
       v.play().catch(() => setPhase('paused'));
       return;
     }
 
-    // TTS line: play its slice of the episode audio; visuals are the topic
-    // graphic or the *listener's* silent reaction loop.
-    const audio = audioRef.current;
-    if (!audio || seg.audioStart == null || seg.audioDuration == null) return playSegment(i + 1);
-    const start = seg.audioStart;
-    const end = start + seg.audioDuration;
-    const contiguous = prev?.kind === 'tts' && Math.abs(audio.currentTime - start) < 0.35 && !audio.paused;
-    if (!resume && !contiguous) audio.currentTime = start;
-    if (audio.paused) audio.play().catch(() => setPhase('paused'));
+    if (!prev || prev.speaker !== seg.speaker || prev.kind === 'clip') showLowerThird();
+    const ctx = ctxRef.current;
+    const buf = buffersRef.current.get(i);
+    if (!ctx || !buf) return advance();
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.onended = advance;
+    srcRef.current = src;
+    src.start();
 
     if (seg.visual === 'reaction') {
-      const r = reactRefs.current[other(seg.speaker)];
-      if (r && r.paused) r.play().catch(() => {});
+      reactRefs.current[other(seg.speaker)]?.play().catch(() => {});
     }
-
-    const tick = () => {
-      if (audio.currentTime >= end - 0.03 || audio.ended) {
-        const next = segs[i + 1];
-        if (!next || next.kind === 'clip') audio.pause();
-        playSegment(i + 1);
-        return;
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
   }, [showLowerThird, stopAll]);
 
   // ── Controls ───────────────────────────────────────────────────────
@@ -138,10 +143,21 @@ export function SpotlightShowPlayer({ topics, teamName }: SpotlightShowPlayerPro
       }
       const { segments: segs, audio } = (await res.json()) as { segments: TimedShowSegment[]; audio: string };
       const bytes = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
-      const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
-      audioUrlRef.current = url;
-      audioRef.current = new Audio(url);
-      audioRef.current.preload = 'auto';
+
+      // Split the concatenated MP3 back into per-line files. The server
+      // derived audioStart/audioDuration as bytes / MP3_BYTES_PER_SEC, so
+      // multiplying back gives exact byte offsets.
+      const ctx = ctxRef.current ?? new AudioContext();
+      ctxRef.current = ctx;
+      const buffers = new Map<number, AudioBuffer>();
+      await Promise.all(segs.map(async (seg, i) => {
+        if (seg.kind !== 'tts' || seg.audioStart == null || seg.audioDuration == null) return;
+        const from = Math.round(seg.audioStart * MP3_BYTES_PER_SEC);
+        const to = Math.round((seg.audioStart + seg.audioDuration) * MP3_BYTES_PER_SEC);
+        const slice = bytes.slice(from, to).buffer;
+        buffers.set(i, await ctx.decodeAudioData(slice));
+      }));
+      buffersRef.current = buffers;
       incrementPodcastCount();
       segmentsRef.current = segs;
       setSegments(segs);
@@ -151,18 +167,31 @@ export function SpotlightShowPlayer({ topics, teamName }: SpotlightShowPlayerPro
     }
   }
 
-  function handleStart() {
+  async function handleStart() {
+    const ctx = ctxRef.current;
+    if (ctx && ctx.state !== 'running') await ctx.resume(); // needs the click gesture
+    if (phase === 'paused') {
+      // Resume in place: suspended audio continues; a clip picks up where it paused.
+      const seg = segmentsRef.current[segIdxRef.current];
+      if (seg?.kind === 'clip') clipRefs.current[seg.clip]?.play().catch(() => {});
+      if (seg?.kind === 'tts' && seg.visual === 'reaction') reactRefs.current[other(seg.speaker)]?.play().catch(() => {});
+      setPhase('playing');
+      return;
+    }
     setPhase('playing');
-    playSegment(phase === 'paused' ? segIdxRef.current : 0, phase === 'paused');
+    playSegment(0);
   }
 
   function handlePause() {
-    stopAll();
+    void ctxRef.current?.suspend();
+    Object.values(clipRefs.current).forEach(v => v?.pause());
+    Object.values(reactRefs.current).forEach(v => v?.pause());
     setPhase('paused');
   }
 
   function handleClose() {
     stopAll();
+    void ctxRef.current?.suspend();
     setPhase('idle');
     setSegIdx(0);
     segIdxRef.current = 0;
@@ -284,7 +313,7 @@ export function SpotlightShowPlayer({ topics, teamName }: SpotlightShowPlayerPro
           {/* Start / resume / replay */}
           {(phase === 'ready' || phase === 'paused' || phase === 'ended') && (
             <button
-              onClick={phase === 'ended' ? () => { setPhase('playing'); playSegment(0); } : handleStart}
+              onClick={handleStart}
               className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#1e3a5f] px-6 py-3 text-sm font-bold text-white shadow-lg hover:bg-[#244873]"
             >
               {phase === 'ready' ? '▶ Start the show' : phase === 'paused' ? '▶ Resume' : '↺ Watch again'}
