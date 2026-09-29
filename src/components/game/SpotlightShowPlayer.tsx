@@ -11,7 +11,6 @@ import {
   type ShowClipId,
   type TimedShowSegment,
 } from '@/lib/spotlight/showScript';
-import { PODCAST_LIMIT, getPodcastCount, incrementPodcastCount } from './SpotlightAudioPlayer';
 
 interface SpotlightShowPlayerProps {
   topics: { headline: string; icon: string; exchanges: { speakerId: string; text: string }[] }[];
@@ -46,10 +45,6 @@ export function SpotlightShowPlayer({ topics, teamName }: SpotlightShowPlayerPro
   const segmentsRef = useRef<TimedShowSegment[]>([]);
   const tokenRef = useRef(0); // bumps on every segment start/stop so stale callbacks no-op
   const lowerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (getPodcastCount() >= PODCAST_LIMIT) setPhase('exhausted');
-  }, []);
 
   const stopSource = useCallback(() => {
     const src = srcRef.current;
@@ -128,7 +123,6 @@ export function SpotlightShowPlayer({ topics, teamName }: SpotlightShowPlayerPro
   // ── Controls ───────────────────────────────────────────────────────
   async function handleOpen() {
     if (segmentsRef.current.length) { setPhase('ready'); return; }
-    if (getPodcastCount() >= PODCAST_LIMIT) { setPhase('exhausted'); return; }
     setPhase('loading');
     try {
       const res = await fetch('/api/spotlight-show', {
@@ -158,7 +152,6 @@ export function SpotlightShowPlayer({ topics, teamName }: SpotlightShowPlayerPro
         buffers.set(i, await ctx.decodeAudioData(slice));
       }));
       buffersRef.current = buffers;
-      incrementPodcastCount();
       segmentsRef.current = segs;
       setSegments(segs);
       setPhase('ready');
