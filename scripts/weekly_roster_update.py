@@ -250,6 +250,7 @@ def main():
     json.dump(d, open(ROSTER,'w'), ensure_ascii=False, allow_nan=False)
     cb = update_page(week, teams, today)
     fn = write_changelog(week, teams, today, moves, unret, cuts, ninj)
+    subprocess.run([sys.executable,"scripts/build_midseason_start.py"],check=True)
     print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"injuries":ninj,"cacheBust":cb,"changelog":fn,"players":n0}))
 
 if __name__=="__main__":
