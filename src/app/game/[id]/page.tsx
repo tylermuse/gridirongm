@@ -19,6 +19,7 @@ import { PlayCallMenu, type PlayCallType } from '@/components/game/PlayCallMenu'
 import type { PlayEvent, LiveGameResult } from '@/lib/engine/playByPlay';
 import { generateHalftimeBreakdown, generateHalftimeAudioBreakdown, COMMENTATORS } from '@/lib/engine/debate';
 import { useGameBroadcast } from '@/lib/engine/useGameBroadcast';
+import { buildPregameFacts, generateTemplatedPregame, type PregameShow } from '@/lib/engine/pregameShow';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import type { Player, Position, GameResult, Team, PlayerStats } from '@/types';
 
@@ -925,6 +926,66 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // The dev override lets it be tested on localhost without a premium account.
   const { tier: subTier, isAdmin: subIsAdmin, isFoundingMember } = useSubscription();
   const canBroadcast = GAME_AUDIO_DEV_OVERRIDE || subTier === 'premium' || subIsAdmin || isFoundingMember;
+  const isPremium = subTier === 'premium' || subIsAdmin || isFoundingMember;
+
+  // Pregame Show: Marcus + Tony break down the matchup before kickoff. Opens
+  // automatically for the user's own games and holds the auto-start until the
+  // user kicks off. Free = templated banter; Premium = LLM-written via
+  // /api/pregame (falls back to the template on any failure). Shown once per
+  // game per session; users can opt out of the auto-open.
+  const pregameSeenKey = `bsfb-pregame-seen-${id}`;
+  const PREGAME_AUTO_OFF_KEY = 'bsfb-pregame-auto-off';
+  const [pregameOpen, setPregameOpen] = useState(userInGame && !!game && !game.played);
+  const [pregameAutoOff, setPregameAutoOff] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const autoOff = window.localStorage.getItem(PREGAME_AUTO_OFF_KEY) === '1';
+      setPregameAutoOff(autoOff);
+      if (autoOff || window.sessionStorage.getItem(pregameSeenKey)) setPregameOpen(false);
+    } catch { /* storage unavailable — keep default */ }
+  }, [pregameSeenKey]);
+  const pregameFacts = useMemo(() => {
+    if (!pregameOpen || !game || !homeTeam || !awayTeam) return null;
+    return buildPregameFacts({
+      gameId: game.id, season: game.season, week: game.week, isPlayoff: isPlayoffGame,
+      homeTeam, awayTeam, homePlayers, awayPlayers, teams, players,
+    });
+    // Built once when the show opens; roster churn mid-show shouldn't reshuffle it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pregameOpen, game?.id]);
+  const templatedPregame = useMemo(() => (pregameFacts ? generateTemplatedPregame(pregameFacts) : null), [pregameFacts]);
+  const [aiPregame, setAiPregame] = useState<PregameShow | null>(null);
+  const [aiPregameLoading, setAiPregameLoading] = useState(false);
+  useEffect(() => {
+    if (!pregameFacts || !isPremium) return;
+    let cancelled = false;
+    setAiPregameLoading(true);
+    fetch('/api/pregame', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ facts: pregameFacts }),
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled && d?.show) setAiPregame(d.show as PregameShow); })
+      .catch(() => { /* template stays up */ })
+      .finally(() => { if (!cancelled) setAiPregameLoading(false); });
+    return () => { cancelled = true; };
+  }, [pregameFacts, isPremium]);
+  const pregameShow = aiPregame ?? templatedPregame;
+  const closePregame = useCallback(() => {
+    setPregameOpen(false);
+    try { window.sessionStorage.setItem(pregameSeenKey, '1'); } catch { /* ignore */ }
+  }, [pregameSeenKey]);
+  const togglePregameAutoOff = useCallback(() => {
+    setPregameAutoOff(prev => {
+      const next = !prev;
+      try {
+        if (next) window.localStorage.setItem(PREGAME_AUTO_OFF_KEY, '1');
+        else window.localStorage.removeItem(PREGAME_AUTO_OFF_KEY);
+      } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
   const broadcast = useGameBroadcast();
   const broadcastOn = broadcast.status !== 'idle';
   // Live speed ref so the broadcast can read the current speed for inter-call
@@ -1318,14 +1379,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     outcomeTimerRef.current = setTimeout(() => setOutcomeChip(null), chipDuration);
   }, [revealedCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-start: reveal first play when game starts
+  // Auto-start: reveal first play when game starts (held while the Pregame
+  // Show is up — "Kick Off" closes it and this fires).
   useEffect(() => {
-    if (liveResult && totalEvents > 0 && revealedCount === 0) {
+    if (liveResult && totalEvents > 0 && revealedCount === 0 && !pregameOpen) {
       setIsPlaying(true);
       setRevealedCount(1);
       setAnimationComplete(false);
     }
-  }, [liveResult, totalEvents, revealedCount]);
+  }, [liveResult, totalEvents, revealedCount, pregameOpen]);
 
   // Build the game result from whichever source has the final score:
   // the live engine if it was active, otherwise the pre-computed sim.
@@ -2674,6 +2736,89 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         </div>
       </div>
       </div>
+
+      {/* Pregame Show modal — Marcus + Tony preview the matchup before kickoff. */}
+      {pregameOpen && pregameShow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] sticky top-0 bg-[var(--surface)] z-10">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xl">🎙️</span>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-black leading-tight">Pregame Show</h2>
+                  <div className="text-xs text-[var(--text-sec)] truncate">{pregameShow.headline}</div>
+                </div>
+              </div>
+              <button
+                onClick={closePregame}
+                aria-label="Skip pregame show"
+                className="text-[var(--text-sec)] hover:text-[var(--text)] text-xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-5 space-y-5">
+              {homeTeam && awayTeam && (
+                <MatchupRankings homeTeam={homeTeam} awayTeam={awayTeam} teams={teams} players={players} />
+              )}
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">In the Booth</div>
+                  {aiPregameLoading && !aiPregame && (
+                    <div className="text-[10px] text-[var(--text-sec)] animate-pulse">Marcus &amp; Tony are going deeper…</div>
+                  )}
+                </div>
+                {pregameShow.exchanges.map((ex, i) => {
+                  const c = ex.speakerId === 'stats' ? COMMENTATORS.stats : COMMENTATORS.hottake;
+                  return (
+                    <div key={`${pregameShow.source}-${i}`} className="flex gap-2.5">
+                      <span className="text-lg shrink-0 leading-none mt-0.5">{c.avatar}</span>
+                      <div>
+                        <div className={`text-xs font-bold ${c.id === 'stats' ? 'text-blue-500' : 'text-red-500'}`}>{c.name}</div>
+                        <div className="text-sm">{ex.text}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {(['stats', 'hottake'] as const).map(k => {
+                  const c = COMMENTATORS[k];
+                  const p = pregameShow.picks[k];
+                  return (
+                    <div key={k} className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2">
+                      <div className={`text-[10px] font-bold uppercase tracking-wider ${k === 'stats' ? 'text-blue-500' : 'text-red-500'}`}>
+                        {c.avatar} {c.name.split(' ')[0]}&apos;s Pick
+                      </div>
+                      <div className="text-sm font-black mt-0.5">{p.abbr}</div>
+                      <div className="text-xs text-[var(--text-sec)] tabular-nums">{p.score}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {!isPremium && (
+                <div className="text-xs text-center text-[var(--text-sec)]">
+                  ✨ Premium: a fully AI-written, game-specific breakdown every week
+                </div>
+              )}
+
+              <button
+                onClick={closePregame}
+                className="w-full py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-all"
+              >
+                🏈 Kick Off
+              </button>
+              <label className="flex items-center justify-center gap-2 text-xs text-[var(--text-sec)] cursor-pointer">
+                <input type="checkbox" checked={pregameAutoOff} onChange={togglePregameAutoOff} />
+                Don&apos;t show the pregame show automatically
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Halftime Report modal (feature #9) — first-half leaders + Cole/Blaze
           take. Text now; the disabled audio button marks the ElevenLabs hook. */}
