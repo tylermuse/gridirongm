@@ -883,17 +883,28 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // snapshot (addEvent attaches it), so we read straight from it.
   const halftimeEventIdx = useMemo(() => allEvents.findIndex(e => e.type === 'halftime'), [allEvents]);
   const halftimeReached = halftimeEventIdx >= 0 && revealedCount > halftimeEventIdx;
+  // First-half player stats. Pre-computed halftime events carry bucket
+  // snapshots; when Live Coach took over before the half, the engine's halftime
+  // event instead carries its own stats, merged onto the pre-pivot stats the
+  // same way buildFinalGameResult builds the final box score.
+  const halftimeStatsFor = useCallback((ev: PlayEvent): Record<string, Partial<PlayerStats>> => {
+    if (!ev.engineStatsSnap) return livePlayerStatsAtEvent(ev, homePlayers, awayPlayers);
+    const pre = liveResult?.events ?? [];
+    const lastBucketEvent = liveEnginePivotIdx !== null && liveEnginePivotIdx > 0 ? pre[liveEnginePivotIdx - 1] : undefined;
+    const preStats = lastBucketEvent ? livePlayerStatsAtEvent(lastBucketEvent, homePlayers, awayPlayers) : {};
+    return mergePlayerStats(preStats, ev.engineStatsSnap);
+  }, [homePlayers, awayPlayers, liveResult, liveEnginePivotIdx]);
   const halftimeBreakdown = useMemo(() => {
     if (!halftimeReached || !homeTeam || !awayTeam) return null;
     const ev = allEvents[halftimeEventIdx];
     if (!ev) return null;
-    const stats = livePlayerStatsAtEvent(ev, homePlayers, awayPlayers);
+    const stats = halftimeStatsFor(ev);
     return generateHalftimeBreakdown({
       homeTeam, awayTeam,
       homeScore: ev.homeScore, awayScore: ev.awayScore,
       stats, players: [...homePlayers, ...awayPlayers],
     });
-  }, [halftimeReached, halftimeEventIdx, allEvents, homeTeam, awayTeam, homePlayers, awayPlayers]);
+  }, [halftimeReached, halftimeEventIdx, allEvents, homeTeam, awayTeam, homePlayers, awayPlayers, halftimeStatsFor]);
 
   // Auto-open the Halftime Report the moment playback crosses the half (once),
   // and pause so the user can read/listen instead of having to hunt for the
@@ -918,7 +929,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     if (!ev || !homeTeam || !awayTeam) return;
     setHtAudio('loading');
     try {
-      const stats = livePlayerStatsAtEvent(ev, homePlayers, awayPlayers);
+      const stats = halftimeStatsFor(ev);
       const lines = generateHalftimeAudioBreakdown({
         homeTeam, awayTeam,
         homeScore: ev.homeScore, awayScore: ev.awayScore,
@@ -936,7 +947,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       await audio.play();
       setHtAudio('playing');
     } catch { setHtAudio('error'); }
-  }, [htAudio, allEvents, halftimeEventIdx, homeTeam, awayTeam, homePlayers, awayPlayers]);
+  }, [htAudio, allEvents, halftimeEventIdx, homeTeam, awayTeam, halftimeStatsFor]);
   useEffect(() => () => { htAudioRef.current?.pause(); }, []); // stop on unmount
 
   // Audio broadcast (Phase 2, flag-gated). Per-play, audio-driven: the spoken

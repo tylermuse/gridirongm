@@ -138,3 +138,36 @@ describe('defensive timeouts (callTimeoutFor)', () => {
     expect(engine.getState().pendingRunoff).toBe(30);
   });
 });
+
+describe('halftime stats snapshot (Halftime Report for live-coached games)', () => {
+  it('the engine halftime event carries a first-half stats snapshot that feeds the report', async () => {
+    const { generateHalftimeBreakdown } = await import('@/lib/engine/debate');
+    const home = makeTeam('home', 'HOM');
+    const away = makeTeam('away', 'AWY');
+    const hr = makeRoster('H'), ar = makeRoster('A');
+    for (const p of hr) (p as { teamId: string }).teamId = 'home';
+    for (const p of ar) (p as { teamId: string }).teamId = 'away';
+    const engine = createLiveCoachEngine(home, away, hr, ar, freshState(), 'home');
+    let ht: ReturnType<typeof engine.runOnePlay>[number] | undefined;
+    let safety = 0;
+    while (!ht && !engine.isFinished() && safety < 3000) {
+      ht = engine.runOnePlay().find(e => e.type === 'halftime');
+      safety++;
+    }
+    expect(ht?.engineStatsSnap).toBeTruthy();
+    const snap = ht!.engineStatsSnap!;
+    const yards = Object.values(snap).reduce((s, p) => s + (p.passYards ?? 0) + (p.rushYards ?? 0), 0);
+    expect(yards).toBeGreaterThan(0);
+
+    // Snapshot is frozen: second-half plays don't leak into it.
+    const before = JSON.stringify(snap);
+    for (let i = 0; i < 40 && !engine.isFinished(); i++) engine.runOnePlay();
+    expect(JSON.stringify(snap)).toBe(before);
+
+    const report = generateHalftimeBreakdown({
+      homeTeam: home, awayTeam: away, homeScore: ht!.homeScore, awayScore: ht!.awayScore,
+      stats: snap, players: [...hr, ...ar],
+    });
+    expect(report.leaders.length).toBeGreaterThan(0);
+  });
+});

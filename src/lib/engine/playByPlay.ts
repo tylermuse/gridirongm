@@ -54,6 +54,11 @@ export interface PlayEvent {
    *  end of game). Optional for backwards compatibility with older saves. */
   homeBucketSnap?: StatBucket;
   awayBucketSnap?: StatBucket;
+  /** Live Coach engine events carry no bucket snapshots; instead the engine
+   *  stamps its own cumulative per-player stats (plays IT ran since the pivot)
+   *  onto the halftime event, so the Halftime Report can show first-half
+   *  numbers for live-coached games. */
+  engineStatsSnap?: Record<string, Partial<PlayerStats>>;
 }
 
 export interface LiveGameResult {
