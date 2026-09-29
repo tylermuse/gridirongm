@@ -31,6 +31,9 @@ type VideoSeg = Extract<TimedShowSegment, { kind: 'clip' | 'phrase' }>;
 const videoKey = (s: VideoSeg) => (s.kind === 'clip' ? `clip:${s.clip}` : `phrase:${s.phraseId}`);
 const videoSrc = (s: VideoSeg) => (s.kind === 'clip' ? SHOW_CLIPS[s.clip].src : s.src);
 
+/** Keep records like "5-6" on one line (non-breaking hyphen). */
+const noBreakRecords = (t: string) => t.replace(/(\d)-(\d)/g, '$1\u2011$2');
+
 function toneClass(st: ShowStat) {
   const t = rankTone(st.rank, st.of);
   return t === 'good' ? 'text-emerald-600' : t === 'bad' ? 'text-red-600' : 'text-slate-500';
@@ -345,7 +348,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
               </div>
               <div className="mt-[1.5%] flex items-center justify-center gap-[1.5%]">
                 <span className="text-[clamp(22px,4.5vw,48px)] leading-none">{tts.icon}</span>
-                <span className="text-[clamp(16px,3.2vw,36px)] font-extrabold leading-tight text-[#1e3a5f]">{tts.headline}</span>
+                <span className="text-[clamp(16px,3.2vw,36px)] font-extrabold leading-tight text-[#1e3a5f] [text-wrap:balance]">{noBreakRecords(tts.headline)}</span>
               </div>
               {tts.visual === 'graphic' && (
                 <div className="mt-[1%] text-[clamp(9px,1.3vw,13px)] font-semibold uppercase tracking-widest text-slate-500">
