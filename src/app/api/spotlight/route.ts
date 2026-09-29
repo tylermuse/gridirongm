@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, type GenerationConfig } from '@google/generative-ai';
 import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import crypto from 'crypto';
@@ -164,6 +164,20 @@ class TopicStreamParser {
   }
 }
 
+// gemini-2.5-flash "thinks" by default and those tokens count against
+// maxOutputTokens. With a large team-data prompt the thinking ate most of the
+// old 3000-token budget, so the JSON was cut off after the first (fast opener)
+// topic — and that one-topic result was cached for 7 days. Thinking off +
+// a real budget. (thinkingConfig isn't in SDK 0.24's types; it's passed through.)
+const GEMINI_GEN_CONFIG = {
+  maxOutputTokens: 8192,
+  responseMimeType: 'application/json',
+  thinkingConfig: { thinkingBudget: 0 },
+} as GenerationConfig;
+
+/** A full spotlight has 4-6 topics; fewer than this means the output was cut off. */
+const MIN_COMPLETE_TOPICS = 3;
+
 type NarrativeMoment = 'preseason' | 'tradeDeadline' | 'playoffsStart' | 'seasonOver' | 'weekly';
 
 function buildNarrativePrompt(narrative: NarrativeMoment): string {
@@ -196,6 +210,7 @@ Generate 4-5 topics.`;
 
 IF playoffStage.winsSoFar >= 1 (the team JUST WON A PLAYOFF GAME):
 - This is a POST-WIN, NEXT-ROUND PREVIEW. Lead with celebrating the win they just got (playoffStage.roundJustWon).
+- The game they just won is in "lastPlayoffWin" (opponent + final score). Name THAT opponent and use THAT score — never guess or substitute a different team.
 - Pivot to the next matchup: use nextPlayoffOpponent.name, .record, .star. Their strengths vs the opponent's weaknesses.
 - Do NOT pretend it's still the wild-card preview. They've moved on.
 - Which players from this team rose to the moment? Who needs to keep producing?
@@ -361,7 +376,7 @@ async function generateTopicsNonStreaming(
       const result = await model.generateContent({
         systemInstruction: systemPrompt,
         contents: [{ role: 'user', parts: [{ text: userContent }] }],
-        generationConfig: { maxOutputTokens: 3000, responseMimeType: 'application/json' },
+        generationConfig: GEMINI_GEN_CONFIG,
       });
       raw = result.response.text();
     } catch (geminiErr) {
@@ -377,7 +392,7 @@ async function generateTopicsNonStreaming(
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
-        max_tokens: 3000,
+        max_tokens: 8000,
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: systemPrompt + GPT_FALLBACK_SUFFIX },
@@ -469,7 +484,7 @@ export async function POST(request: Request) {
             const result = await model.generateContentStream({
               systemInstruction: systemPrompt,
               contents: [{ role: 'user', parts: [{ text: userContent }] }],
-              generationConfig: { maxOutputTokens: 3000, responseMimeType: 'application/json' },
+              generationConfig: GEMINI_GEN_CONFIG,
             });
             const parser = new TopicStreamParser();
             for await (const chunk of result.stream) {
@@ -494,7 +509,7 @@ export async function POST(request: Request) {
             const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
             const stream = await openai.chat.completions.create({
               model: 'gpt-4o-mini',
-              max_tokens: 3000,
+              max_tokens: 8000,
               stream: true,
               response_format: { type: 'json_object' },
               messages: [
@@ -516,6 +531,19 @@ export async function POST(request: Request) {
             const msg = openaiErr instanceof Error ? openaiErr.message : String(openaiErr);
             streamErrors.openai = msg;
             console.warn('Spotlight stream: GPT-4o-mini also failed:', msg);
+          }
+        }
+
+        // 2b) Truncated stream (e.g. token cap hit mid-JSON): the opener
+        // arrived but the rest didn't. Top up from the buffered path, skipping
+        // the topics already shown.
+        if (collected.length > 0 && collected.length < MIN_COMPLETE_TOPICS) {
+          console.warn(`Spotlight stream: only ${collected.length} topic(s) streamed — topping up from non-streaming`);
+          const fb = await generateTopicsNonStreaming(systemPrompt, userContent);
+          for (const topic of (fb.topics ?? []).slice(collected.length)) {
+            const scrubbed = scrubTopicSignoffs(topic);
+            collected.push(scrubbed);
+            emit({ type: 'topic', data: scrubbed });
           }
         }
 
@@ -551,7 +579,9 @@ export async function POST(request: Request) {
           return;
         }
         emit({ type: 'done' });
-        // Cache the full result so subsequent (streaming or not) calls return instantly.
+        // Cache the full result so subsequent (streaming or not) calls return
+        // instantly — but never cache a cut-off show, or it sticks for 7 days.
+        if (collected.length < MIN_COMPLETE_TOPICS) return;
         try {
           await setCache(key, collected);
         } catch (cacheErr) {
@@ -572,9 +602,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Cache the result persistently
+    // Cache the result persistently (complete shows only)
     const scrubbedTopics = topics.map(scrubTopicSignoffs);
-    await setCache(key, scrubbedTopics);
+    if (scrubbedTopics.length >= MIN_COMPLETE_TOPICS) await setCache(key, scrubbedTopics);
 
     return NextResponse.json({ topics: scrubbedTopics });
   } catch (err) {

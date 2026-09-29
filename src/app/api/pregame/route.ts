@@ -11,7 +11,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, type GenerationConfig } from '@google/generative-ai';
 import OpenAI from 'openai';
 import crypto from 'crypto';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
@@ -118,7 +118,9 @@ export async function POST(request: Request) {
         const result = await model.generateContent({
           systemInstruction: SYSTEM_PROMPT,
           contents: [{ role: 'user', parts: [{ text: userContent }] }],
-          generationConfig: { maxOutputTokens: 2500, responseMimeType: 'application/json' },
+          // Thinking off: gemini-2.5-flash's thinking tokens count against
+          // maxOutputTokens and can truncate the JSON.
+          generationConfig: { maxOutputTokens: 6000, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } } as GenerationConfig,
         });
         raw = result.response.text();
       } catch (err) {
