@@ -284,7 +284,11 @@ export function createLiveCoachEngine(
     if (state.timeSecs > 0 || state.overtime) return;
     if (state.quarter === 2) {
       events.push(makeEvent('quarter_end', 'End of the second quarter.', 0, false));
-      events.push(makeEvent('halftime', `Halftime — ${homeTeam.abbreviation} ${state.homeScore}, ${awayTeam.abbreviation} ${state.awayScore}.`, 0, false));
+      const ht = makeEvent('halftime', `Halftime — ${homeTeam.abbreviation} ${state.homeScore}, ${awayTeam.abbreviation} ${state.awayScore}.`, 0, false);
+      // Snapshot (deep copy) so the Halftime Report shows first-half numbers
+      // even when opened later in the game.
+      ht.engineStatsSnap = Object.fromEntries(Object.entries(playerStats).map(([id, st]) => [id, { ...st }]));
+      events.push(ht);
       state.quarter = 3;
       state.timeSecs = 900;
       state.twoMinWarningQ2Fired = false;
