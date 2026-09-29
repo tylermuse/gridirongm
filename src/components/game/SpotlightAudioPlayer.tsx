@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 
-const PODCAST_LIMIT = 3;
+export const PODCAST_LIMIT = 3;
 
 /** Storage key is namespaced by current year-month, so credits reset
  *  automatically on the 1st of every month — everyone gets 3 fresh
@@ -16,14 +16,14 @@ function currentMonthKey(): string {
   return `gg-podcast-credits-${year}-${month}`;
 }
 
-function getPodcastCount(): number {
+export function getPodcastCount(): number {
   try {
     const raw = localStorage.getItem(currentMonthKey());
     return parseInt(raw ?? '0', 10) || 0;
   } catch { return 0; }
 }
 
-function incrementPodcastCount(): void {
+export function incrementPodcastCount(): void {
   try {
     localStorage.setItem(currentMonthKey(), String(getPodcastCount() + 1));
   } catch { /* noop */ }

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { SpotlightAudioPlayer } from '@/components/game/SpotlightAudioPlayer';
+import { SpotlightShowPlayer } from '@/components/game/SpotlightShowPlayer';
 
 import { useGameStore, computeLuxuryTax } from '@/lib/engine/store';
 import { migrateFromLocalStorage, getItem as idbGetItem } from '@bs/core/storage';
@@ -707,10 +708,16 @@ function TeamSpotlightSection({
                 </button>
               )}
               {topics.length > 0 && podcastReady && (
-                <SpotlightAudioPlayer
-                  topics={topics}
-                  teamName={`${team.city} ${team.name}`}
-                />
+                <>
+                  <SpotlightShowPlayer
+                    topics={topics}
+                    teamName={`${team.city} ${team.name}`}
+                  />
+                  <SpotlightAudioPlayer
+                    topics={topics}
+                    teamName={`${team.city} ${team.name}`}
+                  />
+                </>
               )}
             </div>
           </div>
