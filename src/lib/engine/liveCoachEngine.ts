@@ -54,6 +54,8 @@ export interface LiveEngineState {
 export interface LiveCoachEngine {
   /** Run one play (or several if continuation like TD → XP → kickoff). Returns new events. */
   runOnePlay: (userCall?: PlayCallType) => PlayEvent[];
+  /** Charge `side` a timeout between plays (used for defensive timeouts). */
+  callTimeoutFor: (side: 'home' | 'away') => PlayEvent[];
   /** True when the user team has the ball on offense AND it's a regular play (not kickoff/XP). */
   isUserOffense: () => boolean;
   isFinished: () => boolean;
@@ -546,15 +548,30 @@ export function createLiveCoachEngine(
     doKickoffEvents(events);
   }
 
-  function callTimeout(events: PlayEvent[]) {
-    const isUser = state.possession === (initialState as LiveEngineState).possession; // approximate
-    if (state.possession === 'home' && state.homeTimeouts > 0) {
+  /** Charge `side` a timeout (defaults to the offense). Returns false when
+   *  that team has none left. Callers zero the pending runoff (stops the clock). */
+  function callTimeout(events: PlayEvent[], side: 'home' | 'away' = state.possession): boolean {
+    if (side === 'home' && state.homeTimeouts > 0) {
       state.homeTimeouts--;
       events.push(makeEvent('run', `⏱️ Timeout called by ${homeTeam.abbreviation}. (${state.homeTimeouts} remaining)`, 0, false));
-    } else if (state.possession === 'away' && state.awayTimeouts > 0) {
+      return true;
+    }
+    if (side === 'away' && state.awayTimeouts > 0) {
       state.awayTimeouts--;
       events.push(makeEvent('run', `⏱️ Timeout called by ${awayTeam.abbreviation}. (${state.awayTimeouts} remaining)`, 0, false));
+      return true;
     }
+    return false;
+  }
+
+  /** Timeout by a specific team between plays — e.g. the user on DEFENSE,
+   *  which runOnePlay('timeout') can't express (it charges the offense).
+   *  Stops the clock by cancelling the runoff owed by the previous play. */
+  function callTimeoutFor(side: 'home' | 'away'): PlayEvent[] {
+    const events: PlayEvent[] = [];
+    if (state.isGameOver || state.awaitingXpChoice || state.awaitingKickoffChoice) return events;
+    if (callTimeout(events, side)) state.pendingRunoff = 0;
+    return events;
   }
 
   function runFieldGoal(events: PlayEvent[]) {
@@ -810,6 +827,7 @@ export function createLiveCoachEngine(
 
   return {
     runOnePlay,
+    callTimeoutFor,
     isUserOffense: () => false, // caller knows; this is here for completeness
     isFinished: () => state.isGameOver,
     getState: () => ({ ...state }),

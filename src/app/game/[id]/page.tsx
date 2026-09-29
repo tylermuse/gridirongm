@@ -1645,6 +1645,25 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // When Live Coach is paused for user input, show the ENGINE state on the
   // field/scorebug (which is ahead of the last revealed pre-computed event).
   const engineSnapshot = liveCoachPaused && liveEngineRef.current ? liveEngineRef.current.getState() : null;
+
+  // Defensive timeout: while Live Coach runs and the opponent has the ball, the
+  // user can stop the clock between the AI's snaps (offensive timeouts live in
+  // the play-call menu). Read fresh engine state each render — every reveal re-renders.
+  const liveEngineState = liveCoachOn && liveEngineRef.current && !isFinished ? liveEngineRef.current.getState() : null;
+  const userOnDefense = !!liveEngineState && !!userTeamSide && !liveEngineState.isGameOver
+    && liveEngineState.possession !== userTeamSide
+    && !liveEngineState.awaitingXpChoice && !liveEngineState.awaitingKickoffChoice;
+  const userTimeoutsLeft = liveEngineState && userTeamSide
+    ? (userTeamSide === 'home' ? liveEngineState.homeTimeouts : liveEngineState.awayTimeouts) : 0;
+  const defensiveTimeoutSaves = liveEngineState?.pendingRunoff ?? 0;
+  const callDefensiveTimeout = () => {
+    const eng = liveEngineRef.current;
+    if (!eng || !userTeamSide) return;
+    const evs = eng.callTimeoutFor(userTeamSide);
+    if (evs.length === 0) return;
+    setLiveExtraEvents(prev => [...prev, ...evs]);
+    setRevealedCount(prev => prev + evs.length);
+  };
   const liveHomeScore = engineSnapshot?.homeScore ?? currentEvent?.homeScore ?? 0;
   const liveAwayScore = engineSnapshot?.awayScore ?? currentEvent?.awayScore ?? 0;
   // Derive effective quarter — if the engine is in overtime but its quarter
@@ -1665,8 +1684,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const liveFieldPos = engineSnapshot?.fieldPos ?? currentEvent?.fieldPos ?? 25;
   const liveDown = engineSnapshot?.down ?? currentEvent?.down ?? 1;
   const liveYtg = engineSnapshot?.yardsToGo ?? currentEvent?.yardsToGo ?? 10;
-  const liveHomeTimeouts = engineSnapshot?.homeTimeouts ?? currentEvent?.homeTimeouts ?? 3;
-  const liveAwayTimeouts = engineSnapshot?.awayTimeouts ?? currentEvent?.awayTimeouts ?? 3;
+  const liveHomeTimeouts = engineSnapshot?.homeTimeouts ?? liveEngineState?.homeTimeouts ?? currentEvent?.homeTimeouts ?? 3;
+  const liveAwayTimeouts = engineSnapshot?.awayTimeouts ?? liveEngineState?.awayTimeouts ?? currentEvent?.awayTimeouts ?? 3;
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'gamecast', label: 'Gamecast' },
@@ -1965,6 +1984,19 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               title="Take control of every user offensive snap"
             >
               🎯 Live Coach {liveCoachOn ? 'ON' : 'OFF'}
+            </button>
+          )}
+          {/* Defensive timeout — Live Coach on, opponent has the ball. */}
+          {userOnDefense && (
+            <button
+              onClick={callDefensiveTimeout}
+              disabled={userTimeoutsLeft <= 0}
+              className="flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-all"
+              title={userTimeoutsLeft <= 0 ? 'No timeouts left this half'
+                : defensiveTimeoutSaves > 0 ? `Stop the clock — saves ${defensiveTimeoutSaves}s of runoff`
+                : 'Clock is already stopped — a timeout won\'t save time right now'}
+            >
+              ⏱️ Timeout ({userTimeoutsLeft})
             </button>
           )}
           {/* Auto-subs (fatigue) toggle — display-only mid-game rotation. Shown
