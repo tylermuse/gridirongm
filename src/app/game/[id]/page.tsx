@@ -2979,9 +2979,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                     : '🔊 Listen — in-depth breakdown'}
                 </button>
               ) : (
-                <div className="w-full py-2 rounded-lg bg-[var(--surface-2)] text-[var(--text-sec)] text-sm font-semibold text-center opacity-80">
-                  🔒 In-depth audio breakdown — Premium
-                </div>
+                <Link
+                  href="/pricing"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-purple-500/40 bg-purple-500/10 px-4 py-2.5 hover:bg-purple-500/20 transition-colors"
+                >
+                  <span className="text-xs sm:text-sm text-[var(--text)]">
+                    🔊 <span className="font-bold">Go Premium</span> to hear Marcus &amp; Tony break down both teams and the second-half adjustments — plus the live audio broadcast.
+                  </span>
+                  <span className="shrink-0 text-xs font-bold text-purple-500 whitespace-nowrap">Upgrade →</span>
+                </Link>
               )}
             </div>
           </div>
