@@ -1409,6 +1409,8 @@ function computeResigningEntry(player: Player, team: Team, teamRoster?: Player[]
   // K/P salary caps — scale with cap inflation
   if (player.position === 'K') askingSalary = Math.min(askingSalary, 4.0 * ci);
   if (player.position === 'P') askingSalary = Math.min(askingSalary, 2.5 * ci);
+  // Re-round after the K/P caps: 2.5 * 1.07 = 2.6750000000000003 leaked into the UI.
+  askingSalary = Math.round(askingSalary * 10) / 10;
   // Players want long-term security — asking for multi-year deals
   // makes the 1-year franchise tag a meaningful strategic trade-off
   const askingYears = player.age >= 34 ? 2

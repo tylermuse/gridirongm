@@ -155,16 +155,16 @@ export default function ReSignPage() {
 
     if (mode === 'extend') {
       // Extension: player wants askingSalary for askingYears
-      const neg = initNegotiation(player, entry.askingSalary, 'resigning');
+      const neg = initNegotiation(player, Math.round(entry.askingSalary * 10) / 10, 'resigning');
       // Override asking years from the entry
       neg.askingYears = entry.askingYears;
       neg.messages = [{
         sender: 'player',
-        text: `I'm looking for around $${entry.askingSalary}M/yr for ${entry.askingYears} year${entry.askingYears > 1 ? 's' : ''}. What can you offer?`,
+        text: `I'm looking for around $${Math.round(entry.askingSalary * 10) / 10}M/yr for ${entry.askingYears} year${entry.askingYears > 1 ? 's' : ''}. What can you offer?`,
         type: 'neutral',
       }];
       setNegotiation(neg);
-      setOfferSalary(entry.askingSalary);
+      setOfferSalary(Math.round(entry.askingSalary * 10) / 10);
       setOfferYears(entry.askingYears);
     } else {
       // Restructure: converts salary to signing bonus prorated over more years.
@@ -255,7 +255,7 @@ export default function ReSignPage() {
                         passOnResigning(entry.playerId);
                         newResults[entry.playerId] = 'passed';
                       } else {
-                        resignPlayer(entry.playerId, entry.askingSalary, entry.askingYears);
+                        resignPlayer(entry.playerId, Math.round(entry.askingSalary * 10) / 10, entry.askingYears);
                         newResults[entry.playerId] = 'accepted';
                       }
                     }
@@ -467,7 +467,7 @@ export default function ReSignPage() {
                       </div>
                     </div>
                     <div className="text-[10px] text-[var(--text-sec)] mt-1">
-                      Asking: <span className="text-amber-600 font-medium">${negotiation.askingSalary}M/yr</span>
+                      Asking: <span className="text-amber-600 font-medium">${Math.round(negotiation.askingSalary * 10) / 10}M/yr</span>
                     </div>
                   </div>
 
@@ -632,7 +632,7 @@ export default function ReSignPage() {
                         <div className="mt-1.5 px-2 py-1 bg-[var(--surface-2)] rounded inline-flex items-center gap-2">
                           <span className="text-xs text-[var(--text-sec)]">Asking:</span>
                           <span className="text-sm font-bold text-amber-600">
-                            ${entry.askingSalary}M/yr × {entry.askingYears}yr
+                            ${Math.round(entry.askingSalary * 10) / 10}M/yr × {entry.askingYears}yr
                           </span>
                         </div>
                       )}

@@ -1928,34 +1928,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         {/* ================================================================
             CONTROLS BAR (speed + play/pause)
         ================================================================ */}
-        <div className="flex flex-col sm:flex-row sm:items-center bg-[var(--surface)] border border-[var(--border)] rounded-xl px-2 sm:px-4 py-2 sm:py-2.5 gap-2 sm:gap-3">
-          {/* Row 1 (mobile) / left group (desktop): speed + play/pause + end */}
-          <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap">
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] font-semibold text-[var(--text-sec)] uppercase mr-1">Speed</span>
-              {(['0.5x', '1x', '2x', '5x', 'max'] as Speed[]).map(s => (
-                <button
-                  key={s}
-                  onClick={() => setSpeed(s)}
-                  className={`px-2 sm:px-3 py-1 rounded-md text-xs font-semibold transition-all ${
-                    speed === s
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-
-            <div className="hidden sm:block w-px h-6 bg-[var(--border)]" />
-
-            {/* Play/Pause */}
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-2 sm:px-4 py-2 sm:py-2.5 space-y-2">
+          {/* Row 1: transport (play / skip / end) on the left, speed on the right.
+              Uniform h-8 buttons on desktop; 44px touch target for Play on phones. */}
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <button
               onClick={() => { if (!isFinished) setIsPlaying(p => !p); }}
               disabled={isFinished}
               aria-label={isFinished ? 'Game complete' : isPlaying ? 'Pause' : 'Play'}
-              className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-2 sm:px-4 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)] disabled:opacity-40 transition-all"
+              className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] sm:min-h-0 sm:h-8 sm:min-w-[5.5rem] px-2 sm:px-4 rounded-md text-xs font-bold bg-[var(--text)] text-[var(--surface)] hover:opacity-90 disabled:opacity-40 transition-all"
             >
               {isFinished ? '● Complete' : isPlaying ? '⏸' : '▶'}
               <span className="hidden sm:inline ml-1">{isFinished ? '' : isPlaying ? 'Pause' : 'Play'}</span>
@@ -1966,30 +1947,48 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               onClick={skipToNextQuarter}
               disabled={isFinished}
               title="Skip to the start of the next quarter"
-              className="px-2 sm:px-3 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all"
+              className="inline-flex items-center h-8 px-2 sm:px-3 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all"
             >
               ⏩<span className="hidden sm:inline ml-1">Skip Qtr</span>
             </button>
-            {/* End Game (always paired with row 1 on mobile) */}
             <button
               onClick={skipToEnd}
               disabled={isFinished}
-              className="px-2 sm:px-3 py-1 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all sm:order-last"
+              className="inline-flex items-center h-8 px-2 sm:px-3 rounded-md text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)] disabled:opacity-40 transition-all"
             >
               ⏭<span className="hidden sm:inline ml-1">End Game</span>
             </button>
 
+            {/* Speed — one segmented control, pushed right. */}
+            <div className="flex items-center gap-1.5 ml-auto">
+              <span className="hidden sm:inline text-[10px] font-semibold text-[var(--text-sec)] uppercase">Speed</span>
+              <div className="inline-flex items-center rounded-lg bg-[var(--surface-2)] p-0.5">
+                {(['0.5x', '1x', '2x', '5x', 'max'] as Speed[]).map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setSpeed(s)}
+                    aria-pressed={speed === s}
+                    className={`h-7 px-2 sm:px-2.5 rounded-md text-xs font-semibold transition-all ${
+                      speed === s
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-[var(--text-sec)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
-          {/* Row 2 (mobile) / inline-right (desktop): Game Plan + Live Coach.
-              Text labels visible on both viewports — two-row layout gives
-              enough width on phones to show them instead of bare icons. */}
-          <div className="flex items-center gap-2 sm:contents">
+          {/* Row 2: game toggles, left-aligned under a divider. Full-width
+              buttons on phones, natural width on desktop. Hidden when empty. */}
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--border)] empty:hidden">
           {/* Game Plan — only when user is in this game and game isn't done */}
           {userInGame && !isFinished && (
             <button
               onClick={() => { setIsPlaying(false); setShowMidGamePlan(true); }}
-              className="flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-all"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center h-8 px-3 rounded-md text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-all"
               title="Adjust your game plan (pauses the game)"
             >
               📋 Game Plan
@@ -2004,7 +2003,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 setLiveCoachPaused(false);
                 if (turningOn) activateLiveEngine();
               }}
-              className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold transition-all ${
+              className={`flex-1 sm:flex-none inline-flex items-center justify-center h-8 px-3 rounded-md text-xs font-semibold transition-all ${
                 liveCoachOn
                   ? 'bg-green-600 text-white hover:bg-green-700'
                   : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
@@ -2019,7 +2018,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             <button
               onClick={callDefensiveTimeout}
               disabled={userTimeoutsLeft <= 0}
-              className="flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-all"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center h-8 px-3 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-all"
               title={userTimeoutsLeft <= 0 ? 'No timeouts left this half'
                 : defensiveTimeoutSaves > 0 ? `Stop the clock — saves ${defensiveTimeoutSaves}s of runoff`
                 : 'Clock is already stopped — a timeout won\'t save time right now'}
@@ -2032,7 +2031,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           {!isFinished && (
             <button
               onClick={() => setAutoSubsOn(v => !v)}
-              className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold transition-all ${
+              className={`flex-1 sm:flex-none inline-flex items-center justify-center h-8 px-3 rounded-md text-xs font-semibold transition-all ${
                 autoSubsOn
                   ? 'bg-teal-600 text-white hover:bg-teal-700'
                   : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
@@ -2047,7 +2046,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           {halftimeReached && (
             <button
               onClick={() => { setIsPlaying(false); setShowHalftimeReport(true); }}
-              className="flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-all"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center h-8 px-3 rounded-md text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-all"
               title="First-half leaders + the Gridiron Debate take (pauses the game)"
             >
               📻 Halftime Report
@@ -2057,7 +2056,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           {canBroadcast && (
             <button
               onClick={toggleBroadcast}
-              className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded-md text-xs font-semibold transition-all ${
+              className={`flex-1 sm:flex-none inline-flex items-center justify-center h-8 px-3 rounded-md text-xs font-semibold transition-all ${
                 broadcastOn ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
               }`}
               title="Audio play-by-play broadcast (beta — the call drives the play reveal)"
