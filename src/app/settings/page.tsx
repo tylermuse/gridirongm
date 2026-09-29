@@ -73,6 +73,38 @@ interface SettingRowProps {
   formatValue?: (val: number) => string;
 }
 
+// Device-level preference (same key the game page reads) — lets users who
+// ticked "don't show automatically" on the Pregame Show turn it back on.
+const PREGAME_AUTO_OFF_KEY = 'bsfb-pregame-auto-off';
+
+function PregameShowCard() {
+  const [on, setOn] = useState(true);
+  useEffect(() => {
+    try {
+      const autoOff = localStorage.getItem(PREGAME_AUTO_OFF_KEY) === '1';
+      setOn(!autoOff);
+    } catch { /* storage unavailable — keep default */ }
+  }, []);
+  function set(v: boolean) {
+    setOn(v);
+    try {
+      if (v) localStorage.removeItem(PREGAME_AUTO_OFF_KEY);
+      else localStorage.setItem(PREGAME_AUTO_OFF_KEY, '1');
+    } catch { /* ignore */ }
+  }
+  return (
+    <Card className="mb-4">
+      <CardHeader><CardTitle>Pregame Show</CardTitle></CardHeader>
+      <ToggleRow
+        label="Show before my games"
+        description="Marcus Cole & Tony Blaze preview each of your games before kickoff. Premium gets a fully AI-written breakdown."
+        value={on}
+        onChange={set}
+      />
+    </Card>
+  );
+}
+
 function ToggleRow({
   label, description, value, onChange, disabled, activeColor = 'bg-blue-500',
 }: {
@@ -696,6 +728,8 @@ export default function SettingsPage() {
             </span>
           </div>
         </Card>
+
+        <PregameShowCard />
 
         {/* Switch Team */}
         <Card className="mb-4">

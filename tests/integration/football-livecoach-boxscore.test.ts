@@ -91,3 +91,50 @@ describe('live coach engine accumulates a box score', () => {
     expect(sum(stats, 'passYards') + sum(stats, 'rushYards')).toBeGreaterThan(0);
   });
 });
+
+describe('defensive timeouts (callTimeoutFor)', () => {
+  it('charges the named team, not the offense, and stops the clock', () => {
+    const engine = createLiveCoachEngine(
+      makeTeam('home', 'HOM'), makeTeam('away', 'AWY'), makeRoster('H'), makeRoster('A'),
+      { ...freshState(), possession: 'away', pendingRunoff: 30 }, 'home',
+    );
+    // User (home) is on defense while the away team has the ball.
+    const evs = engine.callTimeoutFor('home');
+    expect(evs).toHaveLength(1);
+    expect(evs[0].description).toContain('HOM');
+    const st = engine.getState();
+    expect(st.homeTimeouts).toBe(2);
+    expect(st.awayTimeouts).toBe(3);
+    expect(st.pendingRunoff).toBe(0);
+    expect(st.timeSecs).toBe(900); // a timeout never burns clock
+  });
+
+  it('freezes the clock where it was shown: keeps elapsed runoff, cancels the rest', () => {
+    const engine = createLiveCoachEngine(
+      makeTeam('home', 'HOM'), makeTeam('away', 'AWY'), makeRoster('H'), makeRoster('A'),
+      { ...freshState(), possession: 'away', timeSecs: 300, pendingRunoff: 30 }, 'home',
+    );
+    // 12s of the 30s runoff had already ticked off the scorebug (5:00 -> 4:48).
+    const evs = engine.callTimeoutFor('home', 12);
+    expect(evs[0].timeStr).toBe('4:48');
+    const st = engine.getState();
+    expect(st.timeSecs).toBe(288);
+    expect(st.pendingRunoff).toBe(0);
+    // Elapsed can never exceed the runoff actually owed.
+    const e2 = createLiveCoachEngine(
+      makeTeam('home', 'HOM'), makeTeam('away', 'AWY'), makeRoster('H'), makeRoster('A'),
+      { ...freshState(), possession: 'away', timeSecs: 300, pendingRunoff: 5 }, 'home',
+    );
+    e2.callTimeoutFor('home', 40);
+    expect(e2.getState().timeSecs).toBe(295);
+  });
+
+  it('does nothing when the team is out of timeouts', () => {
+    const engine = createLiveCoachEngine(
+      makeTeam('home', 'HOM'), makeTeam('away', 'AWY'), makeRoster('H'), makeRoster('A'),
+      { ...freshState(), possession: 'away', homeTimeouts: 0, pendingRunoff: 30 }, 'home',
+    );
+    expect(engine.callTimeoutFor('home')).toHaveLength(0);
+    expect(engine.getState().pendingRunoff).toBe(30);
+  });
+});
