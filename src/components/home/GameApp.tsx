@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { SpotlightAudioPlayer } from '@/components/game/SpotlightAudioPlayer';
 import { SpotlightShowPlayer } from '@/components/game/SpotlightShowPlayer';
+import { computeShowStatLine } from '@/lib/spotlight/teamStats';
 
 import { useGameStore, computeLuxuryTax } from '@/lib/engine/store';
 import { migrateFromLocalStorage, getItem as idbGetItem } from '@bs/core/storage';
@@ -504,6 +505,12 @@ function TeamSpotlightSection({
     [newsItems, season, team.id],
   );
 
+  // Real numbers + league ranks for the video show's on-screen graphics.
+  const showStats = React.useMemo(
+    () => computeShowStatLine(team, allTeams, allPlayers),
+    [team, allTeams, allPlayers],
+  );
+
   const templateTopics = React.useMemo(
     () => generateTeamSpotlight(team, roster, allTeams, allPlayers, season, week, { ...(ctx ?? {}), newsItems: recentReInjuryNews }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -712,6 +719,7 @@ function TeamSpotlightSection({
                   <SpotlightShowPlayer
                     topics={topics}
                     teamName={`${team.city} ${team.name}`}
+                    stats={showStats}
                   />
                   <SpotlightAudioPlayer
                     topics={topics}

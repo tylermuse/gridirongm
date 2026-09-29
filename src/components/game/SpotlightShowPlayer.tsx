@@ -11,10 +11,13 @@ import {
   type ShowClipId,
   type TimedShowSegment,
 } from '@/lib/spotlight/showScript';
+import { ordinal, rankTone, statsMentioned, type ShowStatLine } from '@/lib/spotlight/teamStats';
 
 interface SpotlightShowPlayerProps {
   topics: { headline: string; icon: string; exchanges: { speakerId: string; text: string }[] }[];
   teamName: string;
+  /** Real numbers for on-screen graphics; null before any games are played. */
+  stats?: ShowStatLine | null;
 }
 
 type Phase = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'ended' | 'error' | 'exhausted' | 'locked';
@@ -25,7 +28,7 @@ const other = (h: Host): Host => (h === 'marcus' ? 'tony' : 'marcus');
 // Must match MP3_BYTES_PER_SEC in /api/spotlight-show (mp3_44100_128, CBR).
 const MP3_BYTES_PER_SEC = 128_000 / 8;
 
-export function SpotlightShowPlayer({ topics, teamName }: SpotlightShowPlayerProps) {
+export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPlayerProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [segments, setSegments] = useState<TimedShowSegment[]>([]);
   const [segIdx, setSegIdx] = useState(0);
@@ -232,6 +235,8 @@ export function SpotlightShowPlayer({ topics, teamName }: SpotlightShowPlayerPro
   const isClip = seg?.kind === 'clip';
   const tts = seg?.kind === 'tts' ? seg : null;
   const listener = tts ? other(tts.speaker) : null;
+  const mentioned = tts ? statsMentioned(tts.text) : [];
+  const bugStat = stats && mentioned.length ? stats.stats.find(st => st.key === mentioned[0]) ?? null : null;
   const progressPct = segments.length ? ((segIdx + (phase === 'ended' ? 1 : 0)) / segments.length) * 100 : 0;
 
   return (
@@ -266,20 +271,58 @@ export function SpotlightShowPlayer({ topics, teamName }: SpotlightShowPlayerPro
             />
           ))}
 
-          {/* Title / topic graphic */}
+          {/* Title / topic graphic — with the team's real stat line */}
           {tts && tts.visual !== 'reaction' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-slate-50 to-slate-200 px-[8%] text-center">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-slate-50 to-slate-200 px-[6%] pb-[12%] text-center">
               <div className="absolute inset-x-0 top-0 h-[1.5%] bg-orange-600" />
-              <div className="text-[clamp(10px,1.6vw,15px)] font-bold tracking-[0.3em] text-slate-500">
+              <div className="text-[clamp(10px,1.5vw,14px)] font-bold tracking-[0.3em] text-slate-500">
                 {tts.visual === 'title' ? 'TEAM SPOTLIGHT' : 'THE BREAKDOWN'}
               </div>
-              <div className="mt-[2%] text-[clamp(28px,6vw,64px)] leading-none">{tts.icon}</div>
-              <div className="mt-[2%] text-[clamp(18px,3.6vw,40px)] font-extrabold leading-tight text-[#1e3a5f]">
-                {tts.headline}
+              <div className="mt-[1.5%] flex items-center justify-center gap-[1.5%]">
+                <span className="text-[clamp(22px,4.5vw,48px)] leading-none">{tts.icon}</span>
+                <span className="text-[clamp(16px,3.2vw,36px)] font-extrabold leading-tight text-[#1e3a5f]">{tts.headline}</span>
               </div>
               {tts.visual === 'graphic' && (
-                <div className="mt-[1.5%] text-[clamp(10px,1.5vw,14px)] font-semibold uppercase tracking-widest text-slate-500">{teamName}</div>
+                <div className="mt-[1%] text-[clamp(9px,1.3vw,13px)] font-semibold uppercase tracking-widest text-slate-500">
+                  {teamName}{stats ? ` · ${stats.record}` : ''}
+                </div>
               )}
+              {tts.visual === 'title' && stats && (
+                <div className="mt-[1%] text-[clamp(12px,2vw,20px)] font-bold text-slate-600">{stats.record}</div>
+              )}
+              {stats && (
+                <div className="mt-[3%] grid w-full max-w-[92%] grid-cols-5 gap-[1.2%]">
+                  {stats.stats.map(st => {
+                    const hot = mentioned.includes(st.key);
+                    const tone = rankTone(st.rank, st.of);
+                    return (
+                      <div
+                        key={st.key}
+                        className={`rounded-lg border bg-white px-[4%] py-[6%] shadow-sm transition-all duration-300 ${hot ? 'scale-105 border-orange-500 ring-2 ring-orange-500/60' : 'border-slate-200'}`}
+                      >
+                        <div className="text-[clamp(8px,1.1vw,11px)] font-bold uppercase tracking-wider text-slate-500">{st.label}</div>
+                        <div className="text-[clamp(16px,3vw,34px)] font-extrabold leading-tight text-[#1e3a5f] tabular-nums">{st.value}</div>
+                        <div className={`text-[clamp(8px,1.1vw,12px)] font-bold ${tone === 'good' ? 'text-emerald-600' : tone === 'bad' ? 'text-red-600' : 'text-slate-500'}`}>
+                          {ordinal(st.rank)} of {st.of}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Stat bug over reaction shots when the line cites a stat */}
+          {tts && tts.visual === 'reaction' && stats && bugStat && (
+            <div className="absolute right-[3%] top-[5%] rounded-md border-l-[5px] border-orange-600 bg-white/95 px-3 py-1.5 text-right shadow-md">
+              <div className="text-[clamp(8px,1.1vw,11px)] font-bold uppercase tracking-wider text-slate-500">{teamName} · {bugStat.label}</div>
+              <div className="flex items-baseline justify-end gap-2">
+                <span className="text-[clamp(16px,2.8vw,30px)] font-extrabold tabular-nums text-[#1e3a5f]">{bugStat.value}</span>
+                <span className={`text-[clamp(9px,1.3vw,13px)] font-bold ${rankTone(bugStat.rank, bugStat.of) === 'good' ? 'text-emerald-600' : rankTone(bugStat.rank, bugStat.of) === 'bad' ? 'text-red-600' : 'text-slate-500'}`}>
+                  {ordinal(bugStat.rank)}
+                </span>
+              </div>
             </div>
           )}
 
