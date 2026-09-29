@@ -2607,17 +2607,19 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           column above; this sidebar still shows the feed + around-the-league. */}
       <div className="w-full lg:w-72 shrink-0 space-y-2">
         <div className="lg:sticky lg:top-20 space-y-3">
-          {/* Desktop-only Live Coach play call. Min-height reservation
-              prevents content below from shifting between plays. */}
+          {/* Desktop-only Live Coach play call. It shares one fixed-height
+              slot with the Live Feed below: the menu shows on the user's snap,
+              the feed fills the slot otherwise — no layout shift between
+              plays and no empty reserved gap while the opponent has the ball. */}
           <div className="hidden lg:block">
-          {liveEngineRef.current && (() => {
+          {liveEngineRef.current && liveCoachPaused && (() => {
             const es = liveEngineRef.current!.getState();
             const homeAbbr2 = homeTeam?.abbreviation || 'HOME';
             const awayAbbr2 = awayTeam?.abbreviation || 'AWAY';
             const fp = es.fieldPos;
             const fieldDescription = fp === 50 ? '50' : fp < 50 ? `OWN ${fp}` : `OPP ${100 - fp}`;
             return (
-              <div className={`min-h-[22rem] ${liveCoachPaused ? '' : 'invisible pointer-events-none'}`}>
+              <div className="min-h-[22rem]">
               <PlayCallMenu
                 state={{
                   quarter: es.overtime && es.quarter < 5 ? 5 : es.quarter,
@@ -2689,11 +2691,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             );
           })()}
           </div>
-          {/* Live play-by-play feed — visible alongside the field */}
+          {/* Live play-by-play feed — visible alongside the field. On desktop
+              with Live Coach active it occupies the play-call slot (same
+              height) and yields it to the menu on the user's snap. */}
           {displayEvents.length > 0 && (
-            <div className="mb-3">
+            <div className={`mb-3 ${liveEngineRef.current ? (liveCoachPaused ? 'lg:hidden' : 'lg:min-h-[22rem]') : ''}`}>
               <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)] mb-2">Live Feed</h3>
-              <div className="space-y-1 max-h-64 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+              <div className={`space-y-1 max-h-64 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] ${liveEngineRef.current ? 'lg:max-h-[20rem]' : ''}`}>
                 {displayEvents.slice(0, 15).map(ev => (
                   !isSeparator(ev.type) ? (
                     <div key={ev.id} className={`px-2.5 py-1.5 text-[10px] border-b border-[var(--border)] last:border-0 ${ev.isScoring ? 'bg-amber-50' : isTurnover(ev.type) ? 'bg-red-50' : ''}`}>
