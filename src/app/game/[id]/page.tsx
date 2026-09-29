@@ -718,6 +718,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // Mid-game game-plan adjustment modal (shown via the "Game Plan" button when paused)
   const [showMidGamePlan, setShowMidGamePlan] = useState(false);
   const [showHalftimeReport, setShowHalftimeReport] = useState(false);
+  // Whether closing the Halftime Report should resume playback (true when it
+  // auto-opened mid-game or was opened while the game was playing).
+  const resumeAfterHalftimeRef = useRef(false);
   // Premium spoken halftime breakdown (Marcus + Tony).
   const [htAudio, setHtAudio] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle');
   const htAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -862,7 +865,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       },
       userTeamSide ?? 'home',
     );
-    setLiveEnginePivotIdx(revealedCount);
+    // Pivot right AFTER the seed event so the kept pre-sim slice always
+    // includes it. When this runs at kickoff (revealedCount 0) the auto-start
+    // reveals event 1 in the same commit; pivoting at 0 left revealedCount one
+    // past the end of the event list, so currentEvent was undefined and the
+    // field/clock sat frozen for the opening plays until something resynced.
+    setLiveEnginePivotIdx(Math.max(1, revealedCount));
     setLiveExtraEvents([]);
   }, [homeTeam, awayTeam, homePlayers, awayPlayers, allEvents, revealedCount, userTeamSide]);
 
@@ -916,6 +924,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const prevHalftimeReachedRef = useRef(halftimeReached);
   useEffect(() => {
     if (halftimeReached && !prevHalftimeReachedRef.current && !isFinished) {
+      resumeAfterHalftimeRef.current = true;
       setShowHalftimeReport(true);
       setIsPlaying(false);
     }
@@ -949,6 +958,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     } catch { setHtAudio('error'); }
   }, [htAudio, allEvents, halftimeEventIdx, homeTeam, awayTeam, halftimeStatsFor]);
   useEffect(() => () => { htAudioRef.current?.pause(); }, []); // stop on unmount
+  const closeHalftimeReport = () => {
+    setShowHalftimeReport(false);
+    if (htAudio === 'playing') { htAudioRef.current?.pause(); setHtAudio('idle'); }
+    if (resumeAfterHalftimeRef.current && !isFinished) setIsPlaying(true);
+    resumeAfterHalftimeRef.current = false;
+  };
 
   // Audio broadcast (Phase 2, flag-gated). Per-play, audio-driven: the spoken
   // call reveals each play and gates the advance, so the voice stays in sync
@@ -1090,6 +1105,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     const isUserOffenseNow = !!userTeamSide && engineState.possession === userTeamSide && !engineState.isGameOver;
     const needsUserInput = isUserOffenseNow || engineState.awaitingXpChoice || engineState.awaitingKickoffChoice;
     if (liveCoachOn && needsUserInput) {
+      // Let the play that was just revealed finish animating first. Pausing
+      // swaps the field to the static engine snapshot (id -1), which cancelled
+      // every user-called play's animation mid-flight — the whole opening drive
+      // looked frozen until the opponent got the ball.
+      // (Only when a revealed play is actually on the field — at kickoff the
+      // engine pivots before anything is shown, and nothing would ever report
+      // completion.)
+      if (!animationComplete && speed !== 'max' && allEvents[revealedCount - 1]) return;
       setLiveCoachPaused(true);
       setIsPlaying(false);
       return;
@@ -1137,7 +1160,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         setAutoRunTick(t => t + 1);
       }, delay);
     }
-  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick, broadcastOn, pregameOpen]);
+  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick, broadcastOn, pregameOpen, animationComplete, allEvents]);
 
   // ── Live Coach: detect if the NEXT event is a user offensive play snap ──
   // We check after an event reveals and before scheduling the next one.
@@ -2045,7 +2068,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               to spectators too (not gated on userInGame). */}
           {halftimeReached && (
             <button
-              onClick={() => { setIsPlaying(false); setShowHalftimeReport(true); }}
+              onClick={() => { resumeAfterHalftimeRef.current = isPlaying; setIsPlaying(false); setShowHalftimeReport(true); }}
               className="flex-1 sm:flex-none inline-flex items-center justify-center h-8 px-3 rounded-md text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-all"
               title="First-half leaders + the Gridiron Debate take (pauses the game)"
             >
@@ -2907,7 +2930,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       {showHalftimeReport && halftimeBreakdown && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onClick={() => setShowHalftimeReport(false)}
+          onClick={closeHalftimeReport}
         >
           <div
             className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-2xl"
@@ -2919,7 +2942,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 <h2 className="text-lg font-black">Halftime Report</h2>
               </div>
               <button
-                onClick={() => setShowHalftimeReport(false)}
+                onClick={closeHalftimeReport}
                 aria-label="Close"
                 className="text-[var(--text-sec)] hover:text-[var(--text)] text-xl leading-none"
               >
