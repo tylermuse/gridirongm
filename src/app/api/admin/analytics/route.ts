@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     // here: PostgREST caps row-returning requests at `db-max-rows` (1000 on
     // Supabase hosted), so any JS-side aggregate over a table this size is
     // computed on an arbitrary truncated slice and silently under-reports.
-    const [summaryRes, recentEventsRes, subscriptionCountRes] = await Promise.all([
+    const [summaryRes, recentEventsRes, subscriptionCountRes, activeRes, hoopsActiveRes] = await Promise.all([
       service.rpc('admin_analytics_summary', { p_since: since }),
 
       service.from('analytics_events')
@@ -68,6 +68,11 @@ export async function GET(request: NextRequest) {
       service.from('subscriptions')
         .select('id', { count: 'exact', head: true })
         .in('status', ['active', 'trialing']),
+
+      // DAU / WAU / MAU — rolling windows, independent of `period`.
+      // See supabase/migrations/20260930_active_user_metrics.sql.
+      service.rpc('admin_active_users', { p_app: 'bs-football' }),
+      service.rpc('admin_active_users', { p_app: 'bs-hoops' }),
     ]);
 
     if (summaryRes.error) {
@@ -131,6 +136,9 @@ export async function GET(request: NextRequest) {
       signupsByDay: summary.signupsByDay ?? {},
       topPages: summary.topPages ?? [],
       recentEvents: recentEventsRes.data ?? [],
+      // null if the migration hasn't been applied yet — the page hides the row.
+      activeUsersRolling: activeRes.error ? null : (activeRes.data ?? null),
+      hoopsActiveUsersRolling: hoopsActiveRes.error ? null : (hoopsActiveRes.data ?? null),
     });
   } catch (err) {
     console.error('Analytics API error:', err);
