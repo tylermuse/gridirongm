@@ -1281,6 +1281,208 @@ export const blogPosts: BlogPost[] = [
 <p>The NFL offseason does not have to be a football desert. BS Football turns the wait for real football into an opportunity to build something of your own — a franchise shaped by your decisions, your strategy, and your scouting. No downloads, no cost, no console required. Just open your browser and start building. <a href="/">Launch BS Football</a> and make this the most productive offseason you have ever had.</p>
 `,
   },
+  // ─── Trade Deadline Strategy: When to Buy, When to Se ───
+  {
+    slug: "trade-deadline-strategy",
+    title: "Trade Deadline Strategy: When to Buy, When to Sell, and When to Stand Pat",
+    seoTitle: "Trade Deadline Strategy for Football GM Games \u2014 Buy, Sell, or Hold",
+    metaDescription:
+      "Master the BS Football trade deadline with a clear framework: when to buy as a contender, when to sell as a rebuilder, and when standing pat is the smartest move.",
+    keywords: [
+      "football gm trade deadline",
+      "when to sell football gm",
+      "football management trade strategy",
+    ],
+    publishDate: "2026-09-26",
+    category: "strategy",
+    readingTime: 8,
+    schema: "HowTo",
+    internalLinks: [
+      { label: "How to Build a Dynasty", href: "/blog/how-to-build-a-dynasty" },
+      { label: "Why Your Rebuild Keeps Failing", href: "/blog/football-gm-rebuild-tips" },
+      { label: "Building Around a Rookie-Contract Quarterback", href: "/blog/rookie-quarterback-window" },
+      { label: "Free Agency Strategy", href: "/blog/free-agency-strategy" },
+      { label: "Salary Cap Management Tips", href: "/blog/salary-cap-management-tips" },
+    ],
+    content: `
+<p>The trade deadline is the most misunderstood moment of a BS Football season. It is also the most revealing. A team's record tells you how you have done so far; the deadline tells you what kind of general manager you actually are. Buyers who overpay for a rental, sellers who panic and gut a contender, GMs who freeze and do nothing while a window closes — the deadline exposes all of them.</p>
+<p>This guide is a decision framework. Not a list of "trade for a star" platitudes, but a way to figure out, from where you actually sit in the standings and on the cap sheet, whether you should be buying, selling, or standing pat — and how to avoid the mistakes that quietly cost you seasons.</p>
+<h2>First, Diagnose Your Team Honestly</h2>
+<p>Before you make a single offer, you have to answer one question truthfully: is this a team that can win it all this year? Not "can it make the playoffs." Not "is it fun to watch." Can it win the Super Bowl.</p>
+<p>Most teams are not true contenders, and the deadline punishes GMs who pretend otherwise. Run the honest checklist:</p>
+<ul>
+<li><strong>Do you have a quarterback who can win a playoff game on the road?</strong> If the answer is no, you are almost never a deadline buyer, regardless of your record.</li>
+<li><strong>Is your point differential strong, or is your record propped up by close wins and a soft schedule?</strong> A 6–2 team that has won five one-score games is not the same as a 6–2 team blowing people out. Differential predicts the back half of the season far better than record does.</li>
+<li><strong>Are your best players healthy and signed beyond this year, or are you looking at a roster that will be gutted by free agency anyway?</strong></li>
+</ul>
+<p>Your honest answer puts you in one of three lanes: contender, hopeful-but-not-there, or rebuilder. Each lane has a completely different deadline playbook.</p>
+<h2>If You Are a True Contender: Buy, But Buy the Right Thing</h2>
+<p>When you genuinely have a shot, the deadline is when you press your advantage. But contenders lose more value at the deadline by buying the wrong thing than by standing pat.</p>
+<h3>Buy the position that actually loses you playoff games</h3>
+<p>Do not buy the best player available. Buy the player who fixes the specific weakness that will get you eliminated. If your pass rush cannot get home, a 78 OVR edge rusher is worth more to you than an 84 OVR wide receiver you do not need. Playoff games are won in the trenches and on defense. Spend your deadline capital there first.</p>
+<h3>Understand what a "rental" is really worth</h3>
+<p>A player on an expiring contract is a rental — you get him for this run and then he walks. Rentals are worth a real price, but not a franchise-altering one. A good rule: pay for a rental with picks and players you can afford to lose, never with a young starter on a cheap contract who is part of your next three windows. The championship is worth overpaying for. It is not worth mortgaging the three seasons after it.</p>
+<h3>Do not touch your cap flexibility if it ends the window early</h3>
+<p>Every contract you take on has a tail. Trading for a player with two years left at a big number can turn a one-year rental into a two-year cap problem that ends your window prematurely. Before you accept salary, look one and two seasons ahead on your cap sheet. If the incoming deal forces you to cut a starter next offseason, you may be trading a better 2027 for a marginally better 2026.</p>
+<h2>If You Are Hopeful But Not There: Stand Pat (Usually)</h2>
+<p>This is the hardest lane, and it is where most seasons get quietly wrecked. You are 5–3, you are in the hunt, and every instinct says do something. Resist it.</p>
+<p>The "almost there" team is the classic trap. You are good enough to talk yourself into buying, but not good enough for buying to matter. Trading a second-round pick to go from a fringe wild card to a slightly-less-fringe wild card is how you end up mediocre for a decade — never bad enough to draft a franchise-changer, never good enough to actually contend.</p>
+<p>Standing pat is a real, disciplined choice. It says: I like my young core, I am going to let it develop, and I will be a buyer next year when I am actually a contender. The GMs who build dynasties are usually the ones who had the discipline to <em>not</em> trade in the years they were merely good.</p>
+<p>The exception: if you can make a cheap, low-risk move that addresses a genuine hole — a depth signing, a backup-quality player for a late pick — do it. Small moves that do not cost future value are fine. It is the medium-sized "go for it" trade that burns hopeful teams.</p>
+<h2>If You Are Rebuilding: Sell, and Sell Early</h2>
+<p>If you are not contending and you have veterans on expiring or expensive deals, the deadline is your best market of the year. And the single biggest mistake sellers make is waiting too long.</p>
+<h3>Sell before the player's value drops</h3>
+<p>A 30-year-old veteran on a good contract is a depreciating asset. His trade value will never be higher than it is right now. Every week you hold him, he ages, risks injury, and moves closer to free agency — where you get nothing for him. If you know you are selling, sell at the deadline, not "when a great offer comes," because the great offer rarely comes to the team that waits.</p>
+<h3>Sell veterans to buy picks and youth</h3>
+<p>The return you want as a seller is draft capital and young players on cheap contracts. You are trading present value (a good veteran on a bad team) for future value (picks that become your next core). Do not accept another team's overpriced veteran in a "hockey trade" unless he is meaningfully younger and cheaper. The goal of a sell-off is to get younger and to stockpile picks, not to shuffle veterans.</p>
+<h3>Do not sell your foundation</h3>
+<p>Selling does not mean a fire sale. Your young franchise quarterback, your 24-year-old ascending edge rusher, your cheap cornerstone left tackle — those are not for sale at any price, because they are the players your rebuild is built around. Sell the veterans whose best years will not align with your next contending window. Keep the ones who will still be in their prime when you are ready.</p>
+<h2>The Standing-Pat Discipline Most GMs Lack</h2>
+<p>The deadline creates pressure to act, and action feels like progress. But in BS Football, as in real roster building, the best move is frequently no move. A GM who makes one disciplined trade a year and nails it will out-build a GM who makes five deadline deals chasing the feeling of "doing something."</p>
+<p>Before you confirm any trade, ask three questions:</p>
+<ol>
+<li><strong>Does this move change my actual ceiling this season, or does it just make me feel active?</strong></li>
+<li><strong>What does this deal cost me in the seasons <em>after</em> this one?</strong></li>
+<li><strong>If I do nothing, is my team still on track?</strong></li>
+</ol>
+<p>If the honest answers are "it doesn't change my ceiling," "it costs me future value," and "I'm fine standing pat," then close the trade window and get back to coaching. The deadline rewards conviction, not activity.</p>
+<h2>The Bottom Line</h2>
+<p>The trade deadline is a test of self-awareness. Contenders should buy the position that wins playoff games, without mortgaging their future for a rental. Hopeful teams should almost always stand pat and trust their young core. Rebuilders should sell veterans early, bank picks and youth, and protect their foundation. Diagnose which team you actually are — honestly, using point differential and your quarterback situation, not your record or your hopes — and the right move usually becomes obvious.</p>
+<p>The GMs who win championships in BS Football are not the ones who make the most trades. They are the ones who make the <em>right</em> trade at the right moment, and have the discipline to sit on their hands the rest of the time.</p>
+<p>Ready to put it into practice? <a href="/">Play BS Football free in your browser</a> and see how your roster holds up when the deadline pressure hits.</p>
+`,
+  },
+  // ─── Building Around a Rookie-Contract Quarterback: Y ───
+  {
+    slug: "rookie-quarterback-window",
+    title: "Building Around a Rookie-Contract Quarterback: Your Cheapest Window to Win",
+    seoTitle: "Rookie QB Contract Strategy \u2014 Build a Contender While Your QB Is Cheap",
+    metaDescription:
+      "A franchise quarterback on a rookie deal is the biggest edge in BS Football. Learn how to spend the cap savings, time your window, and plan for the extension.",
+    keywords: [
+      "rookie quarterback contract strategy",
+      "football gm salary cap quarterback",
+      "building around a cheap qb",
+    ],
+    publishDate: "2026-09-28",
+    category: "salary-cap",
+    readingTime: 8,
+    schema: "HowTo",
+    internalLinks: [
+      { label: "Salary Cap Management Tips", href: "/blog/salary-cap-management-tips" },
+      { label: "How to Build a Dynasty", href: "/blog/how-to-build-a-dynasty" },
+      { label: "Free Agency Strategy", href: "/blog/free-agency-strategy" },
+      { label: "Player Development Guide", href: "/blog/player-development-guide" },
+      { label: "Draft Strategy Guide", href: "/blog/draft-strategy-guide" },
+    ],
+    content: `
+<p>There is a window in every franchise's life that is worth more than any other, and most BS Football players let it slip by without realizing it was open. It starts the moment you draft a quarterback who can play, and it closes the day you have to pay him. In between, you have the single biggest competitive advantage the salary cap allows: a franchise quarterback on a rookie contract.</p>
+<p>Understanding this window — why it exists, how long it lasts, and how to exploit it — is the difference between building one good team and building a sustained contender. This guide covers how to make the most of the cheapest, most powerful phase of any rebuild.</p>
+<h2>Why the Rookie-QB Window Is So Powerful</h2>
+<p>Quarterback is the most expensive position in football. A top veteran QB can eat up a massive share of your salary cap by himself — often enough to be the difference between fielding a complete roster and fielding a quarterback surrounded by replacement-level players.</p>
+<p>A rookie-contract quarterback breaks this math entirely. You get the most important, most expensive position on the field at a fraction of its market cost. That gap — between what your quarterback produces and what you pay him — is free money. And you can spend that free money on everything else: pass rushers, corners, receivers, offensive line. You can build a genuinely complete roster <em>because</em> your best player is underpaid.</p>
+<p>This is why teams built around young quarterbacks so often punch above their weight. It is not luck. It is cap structure. The rookie deal lets you be elite at quarterback and deep everywhere else at the same time — something you simply cannot do once that quarterback gets his second contract.</p>
+<h2>Know Exactly How Long Your Window Is</h2>
+<p>The window is not open forever, and the mistake that ruins franchises is failing to count the years.</p>
+<p>From the moment your quarterback proves he can play, you have a limited number of seasons before his rookie deal expires and you have to either pay him top-of-market money or move on. Those seasons are your championship window in its purest form. Treat them like a countdown, because that is what they are.</p>
+<p>The practical implication: <strong>the clock changes how aggressive you should be.</strong> A GM with a cheap franchise quarterback and three years of control left should be pushing chips in — drafting for immediate contribution, spending in free agency, and trading for win-now help. A GM who treats those years like a casual rebuild is wasting the most valuable asset in the game.</p>
+<h2>How to Spend the Savings</h2>
+<p>Having cap room is not the same as using it well. Here is where the money should go while your quarterback is cheap.</p>
+<h3>Pay for premium defense</h3>
+<p>The fastest way to convert QB savings into wins is an elite defense. Specifically, invest in the pass rush and the secondary — the two positions that decide playoff games. A dominant defense paired with a cheap, capable quarterback is the most reliable championship formula in football. You can afford the expensive edge rusher precisely because you are not paying your quarterback yet.</p>
+<h3>Build the offensive line before the skill positions</h3>
+<p>It is tempting to surround a young quarterback with flashy weapons. Resist it, at least at first. A young quarterback behind a bad line develops slower, gets hurt more, and plays scared. Protect him first. A clean pocket makes an average quarterback look good and a good quarterback look great — and it extends the career of the most important player on your roster.</p>
+<h3>Add veterans on short, front-loaded deals</h3>
+<p>While you have cap space, you can absorb veteran contracts other teams cannot. Target proven players on short deals that expire around the same time your quarterback needs his extension. You get their prime years during your window, and their contracts come off the books right when you need the room to pay your QB. Timing your veteran spending to your quarterback's clock is advanced cap management, and it works.</p>
+<h2>Plan for the Payment Before It Arrives</h2>
+<p>The window closes when you extend your quarterback, and that extension is a cap earthquake. The GMs who survive it are the ones who saw it coming.</p>
+<h3>Draft your future starters now</h3>
+<p>Every year of the rookie window, draft players who will become cheap starters by the time your quarterback gets expensive. When the QB extension eats your cap room, you will need young, cheap contributors to fill out the roster. The time to draft and develop them is <em>before</em> you need them — during the window, while you can still afford to be patient with a rookie who is not ready yet.</p>
+<h3>Do not hand out contracts that collide with the extension</h3>
+<p>Be careful signing other players to big long-term deals that will still be on the books when the quarterback extension hits. Two or three premium contracts overlapping with a new top-of-market quarterback deal is how teams end up in cap hell. Stagger your commitments. Know which veterans you will let walk to make room.</p>
+<h3>Decide early whether he is worth the second contract</h3>
+<p>The hardest decision in franchise management is whether to pay your quarterback his second contract or move on. A great quarterback is worth almost any price — you pay him and rebuild the roster around a more expensive core. But a merely good quarterback on a top-of-market deal can trap you: too good to replace easily, too expensive to build around. Make this evaluation honestly and early, because it determines your entire strategy for the back half of the window.</p>
+<h2>The Trap: Wasting the Window</h2>
+<p>The most painful way to play BS Football is to draft a good young quarterback and then waste his cheap years. It happens constantly:</p>
+<ul>
+<li>The GM who "takes it slow" and treats a contending-caliber roster like a multi-year rebuild, letting prime cheap seasons evaporate.</li>
+<li>The GM who hoards cap space instead of spending it, sitting on room while the window ticks down.</li>
+<li>The GM who spends the savings on the wrong things — skill-position depth instead of premium defense and protection.</li>
+</ul>
+<p>Each of these turns the biggest advantage in the game into nothing. By the time they finally build a real roster, the quarterback needs his extension, the cap room is gone, and the window has closed.</p>
+<h2>The Bottom Line</h2>
+<p>A franchise quarterback on a rookie contract is the most valuable asset in BS Football, and the advantage has an expiration date. Count your years. Spend the savings on premium defense and pass protection, not flashy weapons. Draft your future cheap starters before you need them. Time your veteran signings to expire alongside the rookie deal. And decide early and honestly whether your quarterback is worth the second contract that will close the window.</p>
+<p>Play the window right and you do not just build one contender — you set up the extension years with a roster young enough and cheap enough to keep competing. Play it wrong and you will look up one day to find the cheapest seasons of your franchise's life gone, with nothing to show for them.</p>
+<p>Want to test the theory? <a href="/">Start a franchise in BS Football</a> — it's free and runs in your browser — and see how far a cheap quarterback can take you.</p>
+`,
+  },
+  // ─── Player Development: How Young Players Grow, Stal ───
+  {
+    slug: "player-development-guide",
+    title: "Player Development: How Young Players Grow, Stall, and Bust in BS Football",
+    seoTitle: "Player Development Guide \u2014 OVR vs Potential, Age & Growth in Football GM",
+    metaDescription:
+      "Why do some prospects become stars and others bust? Learn how overall, potential, age, and playing time drive player development in BS Football.",
+    keywords: [
+      "football gm player development",
+      "ovr vs potential football gm",
+      "how players develop football management game",
+    ],
+    publishDate: "2026-09-30",
+    category: "draft",
+    readingTime: 8,
+    schema: "Article",
+    internalLinks: [
+      { label: "The Complete Guide to Football GM Scouting", href: "/blog/football-gm-scouting-guide" },
+      { label: "Draft Strategy Guide", href: "/blog/draft-strategy-guide" },
+      { label: "Best Draft Picks by Position", href: "/blog/best-draft-picks-by-position" },
+      { label: "Building Around a Rookie-Contract Quarterback", href: "/blog/rookie-quarterback-window" },
+      { label: "How to Build a Dynasty", href: "/blog/how-to-build-a-dynasty" },
+    ],
+    content: `
+<p>Drafting a player is the beginning of the story, not the end. The rookie you take at pick 18 is not a finished product — he is a bet on what he might become. Some of those bets turn into franchise cornerstones. Some stall out as career backups. And some, despite every scouting report saying otherwise, simply never develop. Understanding <em>why</em> is one of the deepest and most rewarding parts of BS Football.</p>
+<p>This guide breaks down how young players grow, what separates the risers from the busts, and how you as a GM can tilt the odds in your favor.</p>
+<h2>Overall vs. Potential: The Two Numbers That Matter</h2>
+<p>Every young player in BS Football has two ratings that define his trajectory, and confusing them is the most common rookie-GM mistake.</p>
+<p><strong>Overall (OVR)</strong> is who the player is <em>right now</em> — his current ability to help your team win this week. A rookie with a 68 OVR is a below-average starter today, full stop.</p>
+<p><strong>Potential</strong> is who the player <em>could become</em> — the ceiling his development might reach over the coming seasons. That same 68 OVR rookie might have the potential to become an 88 OVR star, or he might be close to maxed out already.</p>
+<p>The gap between those two numbers is where development lives. A 68 OVR player with 88 potential is a project worth investing in. A 68 OVR player with 71 potential is roughly what he will always be. Two players with identical current ratings can have completely different futures, and reading that difference correctly is what separates good drafting from lucky drafting.</p>
+<p>This is also why scouting matters so much. Potential is the hardest thing to see clearly, and it is exactly what your scouting resources — including Deep Scout — are for. Knowing a prospect's real ceiling before you draft him is the whole game.</p>
+<h2>Age Is the Hidden Variable</h2>
+<p>Two rookies with the same overall and the same potential are not equally valuable if one is younger than the other. Age is the quiet multiplier on development, and most players ignore it.</p>
+<p>Younger players have more runway to reach their potential. They develop faster, they have more seasons of growth ahead of them, and the same ceiling is worth more when the player has extra years to climb toward it. An older prospect with a high ceiling is a riskier bet — he has less time to get there, and his prime years will be shorter once he does.</p>
+<p>When you are choosing between two similar prospects, let age break the tie. The younger player is almost always the better long-term asset, because development is a race against the clock and he has more of it.</p>
+<h2>Why Players Grow</h2>
+<p>Development is not automatic. A young player with high potential will not magically become a star sitting on your bench. Growth is driven by a few factors you can actually influence.</p>
+<h3>Playing time accelerates development</h3>
+<p>Young players develop faster when they play. Game reps are the engine of growth — a rookie getting real snaps improves more quickly than one buried on the depth chart. This creates a genuine tension: your best short-term lineup might not be your best long-term one. Sometimes you start the promising rookie over the steady veteran precisely because the reps are worth more to your franchise than the marginal wins.</p>
+<h3>The window between draft and prime is where the growth happens</h3>
+<p>Most of a player's development occurs in the seasons after you draft him, as he climbs from his rookie overall toward his potential. This is why patience pays. The GM who cuts a raw 66 OVR rookie because he is not helping yet often cuts the exact player who would have become an 85 OVR starter two seasons later. Give high-potential young players time to develop before you give up on them.</p>
+<h3>Prime, plateau, and decline</h3>
+<p>Every player eventually reaches his ceiling, holds there through his prime, and then begins to decline with age. Recognizing where a player sits on that curve is essential roster management. A 27-year-old at his peak is a different asset than a 24-year-old still climbing or a 31-year-old starting to slip — even if they share the same overall today. Build your roster around players who are ascending or in their prime, and move veterans before the decline erases their value.</p>
+<h2>Why Players Bust</h2>
+<p>Not every high-potential prospect pays off, and understanding the failure modes helps you manage risk.</p>
+<h3>The ceiling was never that high</h3>
+<p>The most common "bust" is not really a bust — it is a scouting miss. You thought the ceiling was higher than it was. This is why precise scouting before the draft is so valuable, and why spending Deep Scout on your early picks is worth it. The better you read potential on draft day, the fewer "busts" you will have, because you will have drafted players whose real ceilings you actually understood.</p>
+<h3>He never got the reps</h3>
+<p>A high-potential player who sits on the bench for two years will not develop the way one who plays does. Sometimes GMs bust their own prospects by blocking them with veterans and never giving them the snaps they needed to grow. If you draft for the future, you have to be willing to play for the future.</p>
+<h3>Age caught up with the climb</h3>
+<p>A prospect who was already older when you drafted him has a narrower path. If he does not develop quickly, his prime arrives late and short. Older high-ceiling prospects are the highest-variance bets in the draft — huge if they hit, wasted if they do not.</p>
+<h2>How to Manage Development as a GM</h2>
+<p>Put it all together and a clear approach emerges:</p>
+<ol>
+<li><strong>Draft for potential and age, not just current overall.</strong> The best long-term picks are young players with a wide gap between their overall and their ceiling. A polished but low-ceiling prospect helps you today and never again.</li>
+<li><strong>Scout the ceiling before you draft.</strong> Use your best scouting resources on the picks that matter. The clearer your read on potential, the fewer misses you make.</li>
+<li><strong>Give young players real snaps.</strong> Development needs reps. Be willing to trade a little present performance for the growth of a high-potential player.</li>
+<li><strong>Be patient through the raw years.</strong> Most growth happens in the seasons after the draft. Do not cut the project before the project has had time to develop.</li>
+<li><strong>Sell before the decline.</strong> Once a player crests his prime, his value only falls. Move veterans while they still have trade value and reinvest in youth.</li>
+</ol>
+<h2>The Bottom Line</h2>
+<p>Player development is the long game of BS Football, and it rewards GMs who think in seasons, not weeks. The overall tells you who a player is today; the potential tells you who he might become; and age tells you how much time he has to get there. Draft young players with real ceilings, scout those ceilings carefully before you spend the pick, give your projects the snaps they need to grow, and have the patience to let development happen — and the discipline to sell before it reverses.</p>
+<p>Master this, and you stop drafting names and start drafting <em>futures</em>. That is how rosters go from good for a season to great for a decade.</p>
+<p>Ready to draft some futures of your own? <a href="/">Play BS Football free in your browser</a> and build a roster from the ground up.</p>
+`,
+  },
 ];
 
 export function getPublishedPosts(): BlogPost[] {
