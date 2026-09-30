@@ -32,15 +32,19 @@ export type ShowClipId =
   | 'tony_transition_next_one'
   | 'tony_outro';
 
-export const SHOW_CLIPS: Record<ShowClipId, { src: string; speaker: Host; text: string }> = {
-  marcus_intro: { src: '/show/marcus_intro.mp4', speaker: 'marcus', text: "Welcome back to the Team Spotlight. I'm Marcus Cole, alongside Tony Blaze." },
-  marcus_transition_move_on: { src: '/show/marcus_transition_move_on.mp4', speaker: 'marcus', text: "Alright, let's move on. Next topic." },
-  marcus_transition_shifting_gears: { src: '/show/marcus_transition_shifting_gears.mp4', speaker: 'marcus', text: 'Okay, shifting gears here.' },
-  marcus_transition_keep_moving: { src: '/show/marcus_transition_keep_moving.mp4', speaker: 'marcus', text: "Let's keep it moving, Tony." },
-  marcus_outro: { src: '/show/marcus_outro.mp4', speaker: 'marcus', text: "And that's the show. Thanks for tuning in to the Team Spotlight. We'll see you next time." },
-  tony_intro: { src: '/show/tony_intro.mp4', speaker: 'tony', text: "Let's go! I've got a lot to say about this team. Let's not waste any time." },
-  tony_transition_next_one: { src: '/show/tony_transition_next_one.mp4', speaker: 'tony', text: "Next one. Let's go." },
-  tony_outro: { src: '/show/tony_outro.mp4', speaker: 'tony', text: "Stay loud, stay passionate, and keep grinding. This is Tony Blaze, we're out!" },
+/** `speech`: where the words start/end inside the file (s). Playback trims
+ *  the silence around them so the conversation doesn't stall between shots. */
+export type SpeechSpan = { start: number; end: number };
+
+export const SHOW_CLIPS: Record<ShowClipId, { src: string; speaker: Host; text: string; speech: SpeechSpan }> = {
+  marcus_intro: { src: '/show/marcus_intro.mp4', speaker: 'marcus', text: "Welcome back to the Team Spotlight. I'm Marcus Cole, alongside Tony Blaze.", speech: { start: 0.06, end: 4.0 } },
+  marcus_transition_move_on: { src: '/show/marcus_transition_move_on.mp4', speaker: 'marcus', text: "Alright, let's move on. Next topic.", speech: { start: 0.0, end: 2.42 } },
+  marcus_transition_shifting_gears: { src: '/show/marcus_transition_shifting_gears.mp4', speaker: 'marcus', text: 'Okay, shifting gears here.', speech: { start: 0.02, end: 1.08 } },
+  marcus_transition_keep_moving: { src: '/show/marcus_transition_keep_moving.mp4', speaker: 'marcus', text: "Let's keep it moving, Tony.", speech: { start: 0.0, end: 1.1 } },
+  marcus_outro: { src: '/show/marcus_outro.mp4', speaker: 'marcus', text: "And that's the show. Thanks for tuning in to the Team Spotlight. We'll see you next time.", speech: { start: 0.0, end: 3.56 } },
+  tony_intro: { src: '/show/tony_intro.mp4', speaker: 'tony', text: "Let's go! I've got a lot to say about this team. Let's not waste any time.", speech: { start: 0.2, end: 3.38 } },
+  tony_transition_next_one: { src: '/show/tony_transition_next_one.mp4', speaker: 'tony', text: "Next one. Let's go.", speech: { start: 0.0, end: 1.06 } },
+  tony_outro: { src: '/show/tony_outro.mp4', speaker: 'tony', text: "Stay loud, stay passionate, and keep grinding. This is Tony Blaze, we're out!", speech: { start: 0.0, end: 3.68 } },
 };
 
 export const HOSTS: Record<Host, { name: string; title: string }> = {
@@ -49,7 +53,16 @@ export const HOSTS: Record<Host, { name: string; title: string }> = {
 };
 
 export type ShowSegment =
-  | { kind: 'clip'; clip: ShowClipId; speaker: Host; text: string }
+  | {
+      kind: 'clip';
+      clip: ShowClipId;
+      speaker: Host;
+      text: string;
+      speech: SpeechSpan;
+      /** Play only the clip's audio, over this topic's graphic (topic
+       *  transitions: no 1-second shot of a host, the new topic wipes in). */
+      voiceover?: { topicIdx: number; headline: string; icon: string };
+    }
   | {
       kind: 'phrase';
       phraseId: string;
@@ -60,6 +73,7 @@ export type ShowSegment =
       /** Stat this phrase is about → on-screen stat bug. */
       stat?: ShowStatKey;
       slot?: { start: number; end: number; rank: number };
+      speech: SpeechSpan;
     }
   | {
       kind: 'tts';
@@ -92,9 +106,9 @@ const MAX_PHRASES_PER_TOPIC = 1;
 
 const other = (h: Host): Host => (h === 'marcus' ? 'tony' : 'marcus');
 
-function clip(id: ShowClipId): ShowSegment {
+function clip(id: ShowClipId): Extract<ShowSegment, { kind: 'clip' }> {
   const c = SHOW_CLIPS[id];
-  return { kind: 'clip', clip: id, speaker: c.speaker, text: c.text };
+  return { kind: 'clip', clip: id, speaker: c.speaker, text: c.text, speech: c.speech };
 }
 
 function ordinalText(n: number): string {
@@ -113,6 +127,7 @@ function phraseSegment(p: Phrase, rank?: number): ShowSegment {
     text: withRank.charAt(0).toUpperCase() + withRank.slice(1),
     stat: p.stat,
     slot: p.slot && rank != null ? { ...p.slot, rank } : undefined,
+    speech: p.speech,
   };
 }
 
@@ -183,13 +198,20 @@ export function buildShowScript(
     visual: 'title', topicIdx: -1, headline: teamName, icon: '🎬',
   });
   segs.push(clip('tony_intro'));
-  const record = picker.record('tony');
+  // Marcus answers Tony's intro (never two shots of the same host back to
+  // back — that's a jump cut).
+  const record = picker.record('marcus');
   if (record) segs.push(record);
 
   topics.forEach((topic, i) => {
     const debate = topic.exchanges.filter(e => e.speakerId === 'stats' || e.speakerId === 'hottake');
     if (debate.length === 0) return;
-    if (i > 0) segs.push(clip(TRANSITIONS[i % TRANSITIONS.length]));
+    if (i > 0) {
+      segs.push({
+        ...clip(TRANSITIONS[i % TRANSITIONS.length]),
+        voiceover: { topicIdx: i, headline: topic.headline, icon: topic.icon },
+      });
+    }
 
     let onCamera = 0;
     let lastSpeaker: Host = 'marcus';
@@ -215,8 +237,10 @@ export function buildShowScript(
     });
     // No stat reaction? Close a real back-and-forth with a short on-camera
     // reaction from whoever didn't have the last word.
-    if (onCamera === 0 && debate.length >= 2) {
-      const respondent = other(lastSpeaker);
+    const respondent = other(lastSpeaker);
+    // …but not Marcus right before his own on-camera outro.
+    const lastTopic = topics.slice(i + 1).every(t => !t.exchanges.some(e => e.speakerId === 'stats' || e.speakerId === 'hottake'));
+    if (onCamera === 0 && debate.length >= 2 && !(lastTopic && respondent === 'marcus')) {
       const glue = picker.glue(respondent, spoke.has(respondent));
       if (glue) segs.push(glue);
     }

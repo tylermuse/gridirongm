@@ -26,6 +26,8 @@ export interface Phrase {
   duration: number;
   /** Seconds from clip start. */
   slot?: { start: number; end: number };
+  /** Where the words are (s); the clip has ~0.35s lead-in and ~0.6s tail. */
+  speech: { start: number; end: number };
 }
 
 export const PHRASES = manifest as Phrase[];

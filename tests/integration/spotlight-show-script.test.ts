@@ -38,7 +38,7 @@ describe('buildShowScript', () => {
     expect(segs[0]).toMatchObject({ kind: 'clip', clip: 'marcus_intro' });
     expect(segs[1]).toMatchObject({ kind: 'tts', visual: 'title', text: "And today we're breaking down the Las Vegas Raiders." });
     expect(segs[2]).toMatchObject({ kind: 'clip', clip: 'tony_intro' });
-    expect(segs[3]).toMatchObject({ kind: 'phrase', phraseId: 'tony_record_losing' });
+    expect(segs[3]).toMatchObject({ kind: 'phrase', phraseId: 'marcus_record_losing' });
   });
 
   it('never shows a listener: generated lines are graphics, phrases are the speaker on camera', () => {
@@ -63,6 +63,8 @@ describe('buildShowScript', () => {
   });
 
   it('a back-and-forth with no stat reaction closes on a glue reaction', () => {
+    const more = [...topics, { headline: 'Coaching', icon: '🧢', exchanges: [{ speakerId: 'hottake', text: 'Fire him.' }] }];
+    const segs = buildShowScript(more, 'Las Vegas Raiders', stats);
     const i = segs.findIndex(s => s.kind === 'tts' && s.text === 'Bring it on.');
     expect(segs[i + 1]).toMatchObject({ kind: 'phrase', speaker: 'marcus' });
     expect((segs[i + 1] as { stat?: string }).stat).toBeUndefined();
@@ -75,6 +77,21 @@ describe('buildShowScript', () => {
     expect(new Set(ids).size).toBe(ids.length);
     const firstTopic = segs.slice(4, segs.findIndex((s, k) => k > 4 && s.kind === 'clip'));
     expect(phrases(firstTopic).length).toBeLessThanOrEqual(1);
+  });
+
+  it('never cuts between two on-camera shots of the same host (jump cut)', () => {
+    const more = [...topics, { headline: 'Last', icon: '🏁', exchanges: [{ speakerId: 'hottake', text: 'We ride.' }, { speakerId: 'stats', text: 'Fine.' }] }];
+    for (const ss of [segs, buildShowScript(more, 'X', stats), buildShowScript(topics, 'X', null)]) {
+      const cam = (x: ShowSegment) => x.kind === 'phrase' || (x.kind === 'clip' && !x.voiceover);
+      ss.forEach((x, k) => { if (k > 0 && cam(x) && cam(ss[k - 1])) expect(x.speaker).not.toBe(ss[k - 1].speaker); });
+    }
+  });
+
+  it('topic transitions are voiceover over the new topic graphic; every clip has a speech span', () => {
+    for (const x of segs) {
+      if (x.kind === 'clip' && x.clip.includes('transition')) expect(x.voiceover).toBeDefined();
+      if (x.kind !== 'tts') expect(x.speech.end).toBeGreaterThan(x.speech.start);
+    }
   });
 
   it('keeps transitions (skipping empty topics) and closes with both outros', () => {

@@ -10,6 +10,17 @@ import json, os, shutil, subprocess, sys
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PRE, POST = 0.30, 0.40   # padding around each phrase (gaps are 0.9s)
 
+def speech_span(f):
+    """First/last 20ms window within 32 dB of the loudest: where the words are.
+    The player trims the clip's lead-in/tail silence to this."""
+    import numpy as np
+    raw = subprocess.check_output(["ffmpeg", "-v", "error", "-i", f, "-ac", "1", "-ar", "16000", "-f", "s16le", "-"])
+    x = np.frombuffer(raw, np.int16).astype(np.float32) / 32768
+    hop = 320; n = len(x) // hop
+    db = 20 * np.log10(np.sqrt((x[:n * hop].reshape(n, hop) ** 2).mean(1) + 1e-12))
+    idx = np.where(db > db.max() - 32)[0]
+    return {"start": round(idx[0] * 0.02, 2), "end": round((idx[-1] + 1) * 0.02, 2)}
+
 def dur(f):
     return float(subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f]))
 
@@ -39,7 +50,8 @@ def main(wt):
             p = bank[e["id"]]
             kind = p.get("kind") or "stat"
             m = {"id": e["id"], "host": p["host"], "kind": kind, "text": p["text"],
-                 "src": f"/show/phrases/{e['id']}.mp4", "duration": round(dur(dst), 3)}
+                 "src": f"/show/phrases/{e['id']}.mp4", "duration": round(dur(dst), 3),
+                 "speech": speech_span(dst)}
             if "stat" in p: m["stat"] = p["stat"]
             if "tone" in p: m["tone"] = p["tone"]
             if "slot" in e:

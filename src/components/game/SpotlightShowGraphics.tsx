@@ -46,6 +46,9 @@ interface GraphicProps {
   mentioned: ShowStatKey[];
   speaker: Host;
   blockMs: number;
+  /** Since this topic came up. The panel and tiles stay put across topics
+   *  (same team, same numbers); only the headline swaps. */
+  topicMs: number;
   lineMs: number;
   /** Since this speaker took over (chip slides in on a change of speaker). */
   speakerMs: number;
@@ -160,14 +163,14 @@ export function ShowGraphic(p: GraphicProps) {
       ) : (
         <>
           <div className="absolute inset-0 bg-gradient-to-b from-white/55 via-white/35 to-white/60" />
-          <div className="absolute inset-x-0 top-0 h-[1.2%] bg-orange-600" style={{ transformOrigin: 'left', transform: `scaleX(${anim(blockMs, 0, 600)})` }} />
+          <div className="absolute inset-x-0 top-0 h-[1.2%] bg-orange-600" style={{ transformOrigin: 'left', transform: `scaleX(${anim(p.topicMs, 0, 600)})` }} />
           <div
             className="absolute inset-x-[5%] top-[9%] bottom-[19%] flex flex-col rounded-[1em] border border-white/70 bg-white/70 px-[3.5%] py-[3%] shadow-2xl backdrop-blur-md"
             style={{ opacity: anim(blockMs, 0, 350), transform: `translateY(${(1 - anim(blockMs, 0, 450)) * 2}em)` }}
           >
             <div
               className="flex items-center gap-[0.5em]"
-              style={{ opacity: anim(blockMs, 150, 450), transform: `translateX(${(1 - anim(blockMs, 150, 450)) * -1.5}em)` }}
+              style={{ opacity: anim(p.topicMs, 150, 450), transform: `translateX(${(1 - anim(p.topicMs, 150, 450)) * -1.5}em)` }}
             >
               <span className="text-[2em] leading-none">{p.icon}</span>
               <div className="min-w-0">
@@ -180,11 +183,11 @@ export function ShowGraphic(p: GraphicProps) {
               </div>
             </div>
             <div
-              key={p.text}
+              key={p.text || 'empty'}
               className="my-auto py-[0.6em] text-[1.45em] font-bold leading-snug text-[#0f1f35] [text-wrap:balance]"
               style={{ opacity: anim(p.lineMs, 120, 380), transform: `translateY(${(1 - anim(p.lineMs, 120, 380)) * 0.5}em)` }}
             >
-              <span className="mr-[0.15em] text-orange-600">&ldquo;</span>{p.text}<span className="text-orange-600">&rdquo;</span>
+              {p.text && <><span className="mr-[0.15em] text-orange-600">&ldquo;</span>{p.text}<span className="text-orange-600">&rdquo;</span></>}
             </div>
             {p.stats ? (
               <div className="grid grid-cols-5 gap-[0.8em]">

@@ -7,7 +7,11 @@
   "src": "/show/phrases/marcus_ppg_bad.mp4",
   "duration": 4.28,
   "stat": "ppg",
-  "tone": "bad"
+  "tone": "bad",
+  "speech": {
+   "start": 0.3,
+   "end": 3.54
+  }
  },
  {
   "id": "marcus_ppg_bad_slot",
@@ -21,6 +25,10 @@
   "slot": {
    "start": 0.741,
    "end": 1.368
+  },
+  "speech": {
+   "start": 0.36,
+   "end": 4.22
   }
  },
  {
@@ -31,7 +39,11 @@
   "src": "/show/phrases/marcus_ppg_good.mp4",
   "duration": 4.28,
   "stat": "ppg",
-  "tone": "good"
+  "tone": "good",
+  "speech": {
+   "start": 0.38,
+   "end": 3.58
+  }
  },
  {
   "id": "marcus_ppg_good_slot",
@@ -45,6 +57,10 @@
   "slot": {
    "start": 0.602,
    "end": 1.031
+  },
+  "speech": {
+   "start": 0.4,
+   "end": 4.96
   }
  },
  {
@@ -55,7 +71,11 @@
   "src": "/show/phrases/marcus_pag_bad.mp4",
   "duration": 3.6,
   "stat": "pag",
-  "tone": "bad"
+  "tone": "bad",
+  "speech": {
+   "start": 0.36,
+   "end": 2.94
+  }
  },
  {
   "id": "marcus_pag_bad_slot",
@@ -69,6 +89,10 @@
   "slot": {
    "start": 0.637,
    "end": 1.507
+  },
+  "speech": {
+   "start": 0.4,
+   "end": 4.68
   }
  },
  {
@@ -79,7 +103,11 @@
   "src": "/show/phrases/marcus_pag_good.mp4",
   "duration": 3.8,
   "stat": "pag",
-  "tone": "good"
+  "tone": "good",
+  "speech": {
+   "start": 0.34,
+   "end": 3.26
+  }
  },
  {
   "id": "marcus_pag_good_slot",
@@ -93,6 +121,10 @@
   "slot": {
    "start": 0.637,
    "end": 1.159
+  },
+  "speech": {
+   "start": 0.34,
+   "end": 4.48
   }
  },
  {
@@ -103,7 +135,11 @@
   "src": "/show/phrases/marcus_pass_bad.mp4",
   "duration": 4.28,
   "stat": "pass",
-  "tone": "bad"
+  "tone": "bad",
+  "speech": {
+   "start": 0.36,
+   "end": 3.6
+  }
  },
  {
   "id": "marcus_pass_bad_slot",
@@ -117,6 +153,10 @@
   "slot": {
    "start": 0.567,
    "end": 1.194
+  },
+  "speech": {
+   "start": 0.34,
+   "end": 4.96
   }
  },
  {
@@ -127,7 +167,11 @@
   "src": "/show/phrases/marcus_pass_good.mp4",
   "duration": 4.68,
   "stat": "pass",
-  "tone": "good"
+  "tone": "good",
+  "speech": {
+   "start": 0.34,
+   "end": 4.04
+  }
  },
  {
   "id": "marcus_pass_good_slot",
@@ -141,6 +185,10 @@
   "slot": {
    "start": 0.613,
    "end": 1.101
+  },
+  "speech": {
+   "start": 0.42,
+   "end": 4.22
   }
  },
  {
@@ -151,7 +199,11 @@
   "src": "/show/phrases/marcus_rush_bad.mp4",
   "duration": 4.4,
   "stat": "rush",
-  "tone": "bad"
+  "tone": "bad",
+  "speech": {
+   "start": 0.4,
+   "end": 3.62
+  }
  },
  {
   "id": "marcus_rush_bad_slot",
@@ -165,6 +217,10 @@
   "slot": {
    "start": 0.59,
    "end": 1.368
+  },
+  "speech": {
+   "start": 0.38,
+   "end": 4.4
   }
  },
  {
@@ -175,7 +231,11 @@
   "src": "/show/phrases/marcus_rush_good.mp4",
   "duration": 5.64,
   "stat": "rush",
-  "tone": "good"
+  "tone": "good",
+  "speech": {
+   "start": 0.36,
+   "end": 4.8
+  }
  },
  {
   "id": "marcus_rush_good_slot",
@@ -189,6 +249,10 @@
   "slot": {
    "start": 0.637,
    "end": 1.136
+  },
+  "speech": {
+   "start": 0.34,
+   "end": 4.14
   }
  },
  {
@@ -198,7 +262,11 @@
   "text": "Winning cures a lot. This team believes right now.",
   "src": "/show/phrases/marcus_record_winning.mp4",
   "duration": 3.44,
-  "tone": "good"
+  "tone": "good",
+  "speech": {
+   "start": 0.3,
+   "end": 2.72
+  }
  },
  {
   "id": "marcus_record_losing",
@@ -207,7 +275,11 @@
   "text": "At some point, the record is who you are. And right now, it's not good enough.",
   "src": "/show/phrases/marcus_record_losing.mp4",
   "duration": 4.24,
-  "tone": "bad"
+  "tone": "bad",
+  "speech": {
+   "start": 0.34,
+   "end": 3.5
+  }
  },
  {
   "id": "marcus_record_even",
@@ -216,7 +288,11 @@
   "text": "They're right there. A couple of plays either way, and this is a different conversation.",
   "src": "/show/phrases/marcus_record_even.mp4",
   "duration": 4.8,
-  "tone": "mid"
+  "tone": "mid",
+  "speech": {
+   "start": 0.42,
+   "end": 3.98
+  }
  },
  {
   "id": "marcus_agree_1",
@@ -224,7 +300,11 @@
   "kind": "agree",
   "text": "I'm with you on that, Tony.",
   "src": "/show/phrases/marcus_agree_1.mp4",
-  "duration": 2.2
+  "duration": 2.2,
+  "speech": {
+   "start": 0.34,
+   "end": 1.54
+  }
  },
  {
   "id": "marcus_agree_2",
@@ -232,7 +312,11 @@
   "kind": "agree",
   "text": "That's fair. The numbers back you up.",
   "src": "/show/phrases/marcus_agree_2.mp4",
-  "duration": 2.44
+  "duration": 2.44,
+  "speech": {
+   "start": 0.38,
+   "end": 1.86
+  }
  },
  {
   "id": "marcus_disagree_1",
@@ -240,7 +324,11 @@
   "kind": "disagree",
   "text": "Hold on. Let's not overreact here.",
   "src": "/show/phrases/marcus_disagree_1.mp4",
-  "duration": 2.72
+  "duration": 2.72,
+  "speech": {
+   "start": 0.38,
+   "end": 2.0
+  }
  },
  {
   "id": "marcus_disagree_2",
@@ -248,7 +336,11 @@
   "kind": "disagree",
   "text": "I'll push back on that a little.",
   "src": "/show/phrases/marcus_disagree_2.mp4",
-  "duration": 2.16
+  "duration": 2.16,
+  "speech": {
+   "start": 0.34,
+   "end": 1.44
+  }
  },
  {
   "id": "marcus_skeptical",
@@ -256,7 +348,11 @@
   "kind": "skeptical",
   "text": "I need to see it for more than a few weeks.",
   "src": "/show/phrases/marcus_skeptical.mp4",
-  "duration": 2.68
+  "duration": 2.68,
+  "speech": {
+   "start": 0.36,
+   "end": 2.0
+  }
  },
  {
   "id": "marcus_pivot",
@@ -264,7 +360,11 @@
   "kind": "pivot",
   "text": "Let's look at what the numbers actually say.",
   "src": "/show/phrases/marcus_pivot.mp4",
-  "duration": 2.84
+  "duration": 2.84,
+  "speech": {
+   "start": 0.36,
+   "end": 2.18
+  }
  },
  {
   "id": "tony_ppg_bad",
@@ -274,7 +374,11 @@
   "src": "/show/phrases/tony_ppg_bad.mp4",
   "duration": 3.64,
   "stat": "ppg",
-  "tone": "bad"
+  "tone": "bad",
+  "speech": {
+   "start": 0.46,
+   "end": 2.92
+  }
  },
  {
   "id": "tony_ppg_bad_slot",
@@ -288,6 +392,10 @@
   "slot": {
    "start": 0.3,
    "end": 1.182
+  },
+  "speech": {
+   "start": 0.32,
+   "end": 3.78
   }
  },
  {
@@ -298,7 +406,11 @@
   "src": "/show/phrases/tony_ppg_good.mp4",
   "duration": 3.6,
   "stat": "ppg",
-  "tone": "good"
+  "tone": "good",
+  "speech": {
+   "start": 0.44,
+   "end": 2.88
+  }
  },
  {
   "id": "tony_ppg_good_slot",
@@ -312,6 +424,10 @@
   "slot": {
    "start": 0.3,
    "end": 0.962
+  },
+  "speech": {
+   "start": 0.48,
+   "end": 3.6
   }
  },
  {
@@ -322,7 +438,11 @@
   "src": "/show/phrases/tony_pag_bad.mp4",
   "duration": 3.88,
   "stat": "pag",
-  "tone": "bad"
+  "tone": "bad",
+  "speech": {
+   "start": 0.46,
+   "end": 3.2
+  }
  },
  {
   "id": "tony_pag_bad_slot",
@@ -336,6 +456,10 @@
   "slot": {
    "start": 0.3,
    "end": 0.939
+  },
+  "speech": {
+   "start": 0.32,
+   "end": 3.24
   }
  },
  {
@@ -346,7 +470,11 @@
   "src": "/show/phrases/tony_pag_good.mp4",
   "duration": 3.4,
   "stat": "pag",
-  "tone": "good"
+  "tone": "good",
+  "speech": {
+   "start": 0.46,
+   "end": 2.74
+  }
  },
  {
   "id": "tony_pag_good_slot",
@@ -360,6 +488,10 @@
   "slot": {
    "start": 0.3,
    "end": 0.857
+  },
+  "speech": {
+   "start": 0.46,
+   "end": 2.84
   }
  },
  {
@@ -370,7 +502,11 @@
   "src": "/show/phrases/tony_pass_bad.mp4",
   "duration": 3.72,
   "stat": "pass",
-  "tone": "bad"
+  "tone": "bad",
+  "speech": {
+   "start": 0.46,
+   "end": 3.02
+  }
  },
  {
   "id": "tony_pass_bad_slot",
@@ -384,6 +520,10 @@
   "slot": {
    "start": 0.3,
    "end": 0.892
+  },
+  "speech": {
+   "start": 0.38,
+   "end": 3.22
   }
  },
  {
@@ -394,7 +534,11 @@
   "src": "/show/phrases/tony_pass_good.mp4",
   "duration": 3.24,
   "stat": "pass",
-  "tone": "good"
+  "tone": "good",
+  "speech": {
+   "start": 0.38,
+   "end": 2.64
+  }
  },
  {
   "id": "tony_pass_good_slot",
@@ -408,6 +552,10 @@
   "slot": {
    "start": 0.3,
    "end": 0.869
+  },
+  "speech": {
+   "start": 0.46,
+   "end": 2.2
   }
  },
  {
@@ -418,7 +566,11 @@
   "src": "/show/phrases/tony_rush_bad.mp4",
   "duration": 3.72,
   "stat": "rush",
-  "tone": "bad"
+  "tone": "bad",
+  "speech": {
+   "start": 0.48,
+   "end": 3.02
+  }
  },
  {
   "id": "tony_rush_bad_slot",
@@ -432,6 +584,10 @@
   "slot": {
    "start": 0.3,
    "end": 0.962
+  },
+  "speech": {
+   "start": 0.42,
+   "end": 3.42
   }
  },
  {
@@ -442,7 +598,11 @@
   "src": "/show/phrases/tony_rush_good.mp4",
   "duration": 3.72,
   "stat": "rush",
-  "tone": "good"
+  "tone": "good",
+  "speech": {
+   "start": 0.48,
+   "end": 3.02
+  }
  },
  {
   "id": "tony_rush_good_slot",
@@ -456,6 +616,10 @@
   "slot": {
    "start": 0.3,
    "end": 0.904
+  },
+  "speech": {
+   "start": 0.3,
+   "end": 3.12
   }
  },
  {
@@ -465,7 +629,11 @@
   "text": "This team is for real, and I don't want to hear otherwise!",
   "src": "/show/phrases/tony_record_winning.mp4",
   "duration": 3.56,
-  "tone": "good"
+  "tone": "good",
+  "speech": {
+   "start": 0.46,
+   "end": 2.9
+  }
  },
  {
   "id": "tony_record_losing",
@@ -474,7 +642,11 @@
   "text": "Something has got to change, and it has to change now!",
   "src": "/show/phrases/tony_record_losing.mp4",
   "duration": 3.64,
-  "tone": "bad"
+  "tone": "bad",
+  "speech": {
+   "start": 0.3,
+   "end": 2.96
+  }
  },
  {
   "id": "tony_record_even",
@@ -483,7 +655,11 @@
   "text": "This season is on a knife's edge, Marcus!",
   "src": "/show/phrases/tony_record_even.mp4",
   "duration": 2.92,
-  "tone": "mid"
+  "tone": "mid",
+  "speech": {
+   "start": 0.48,
+   "end": 2.22
+  }
  },
  {
   "id": "tony_agree_1",
@@ -491,7 +667,11 @@
   "kind": "agree",
   "text": "Thank you! That's what I've been saying!",
   "src": "/show/phrases/tony_agree_1.mp4",
-  "duration": 2.44
+  "duration": 2.44,
+  "speech": {
+   "start": 0.32,
+   "end": 1.78
+  }
  },
  {
   "id": "tony_agree_2",
@@ -499,7 +679,11 @@
   "kind": "agree",
   "text": "Exactly! Exactly!",
   "src": "/show/phrases/tony_agree_2.mp4",
-  "duration": 2.24
+  "duration": 2.24,
+  "speech": {
+   "start": 0.46,
+   "end": 1.54
+  }
  },
  {
   "id": "tony_disagree_1",
@@ -507,7 +691,11 @@
   "kind": "disagree",
   "text": "Come on, Marcus! You can't be serious!",
   "src": "/show/phrases/tony_disagree_1.mp4",
-  "duration": 2.96
+  "duration": 2.96,
+  "speech": {
+   "start": 0.34,
+   "end": 2.3
+  }
  },
  {
   "id": "tony_disagree_2",
@@ -515,7 +703,11 @@
   "kind": "disagree",
   "text": "Nah, nah, nah. I'm not buying that.",
   "src": "/show/phrases/tony_disagree_2.mp4",
-  "duration": 2.6
+  "duration": 2.6,
+  "speech": {
+   "start": 0.46,
+   "end": 2.02
+  }
  },
  {
   "id": "tony_hype",
@@ -523,7 +715,11 @@
   "kind": "hype",
   "text": "Let's go!",
   "src": "/show/phrases/tony_hype.mp4",
-  "duration": 1.64
+  "duration": 1.64,
+  "speech": {
+   "start": 0.46,
+   "end": 1.0
+  }
  },
  {
   "id": "tony_pivot",
@@ -531,7 +727,11 @@
   "kind": "pivot",
   "text": "Here's the thing nobody's talking about.",
   "src": "/show/phrases/tony_pivot.mp4",
-  "duration": 2.84
+  "duration": 2.84,
+  "speech": {
+   "start": 0.46,
+   "end": 2.18
+  }
  },
  {
   "id": "marcus_ppg_mid_slot",
@@ -545,6 +745,10 @@
   "slot": {
    "start": 0.637,
    "end": 1.089
+  },
+  "speech": {
+   "start": 0.44,
+   "end": 3.96
   }
  },
  {
@@ -559,6 +763,10 @@
   "slot": {
    "start": 0.59,
    "end": 1.031
+  },
+  "speech": {
+   "start": 0.36,
+   "end": 4.64
   }
  },
  {
@@ -573,6 +781,10 @@
   "slot": {
    "start": 0.59,
    "end": 1.124
+  },
+  "speech": {
+   "start": 0.4,
+   "end": 4.32
   }
  },
  {
@@ -587,6 +799,10 @@
   "slot": {
    "start": 0.579,
    "end": 1.031
+  },
+  "speech": {
+   "start": 0.4,
+   "end": 4.0
   }
  },
  {
@@ -601,6 +817,10 @@
   "slot": {
    "start": 0.625,
    "end": 1.136
+  },
+  "speech": {
+   "start": 0.36,
+   "end": 3.14
   }
  },
  {
@@ -615,6 +835,10 @@
   "slot": {
    "start": 0.567,
    "end": 0.915
+  },
+  "speech": {
+   "start": 0.4,
+   "end": 3.06
   }
  },
  {
@@ -629,6 +853,10 @@
   "slot": {
    "start": 0.555,
    "end": 1.264
+  },
+  "speech": {
+   "start": 0.38,
+   "end": 3.76
   }
  },
  {
@@ -637,7 +865,11 @@
   "kind": "agree",
   "text": "Tony's right about this one.",
   "src": "/show/phrases/marcus_agree_3.mp4",
-  "duration": 2.08
+  "duration": 2.08,
+  "speech": {
+   "start": 0.36,
+   "end": 1.4
+  }
  },
  {
   "id": "marcus_disagree_3",
@@ -645,7 +877,11 @@
   "kind": "disagree",
   "text": "I just don't see it that way.",
   "src": "/show/phrases/marcus_disagree_3.mp4",
-  "duration": 2.04
+  "duration": 2.04,
+  "speech": {
+   "start": 0.34,
+   "end": 1.34
+  }
  },
  {
   "id": "marcus_skeptical_3",
@@ -653,7 +889,11 @@
   "kind": "skeptical",
   "text": "Is that sustainable, though? I'm not so sure.",
   "src": "/show/phrases/marcus_skeptical_3.mp4",
-  "duration": 2.84
+  "duration": 2.84,
+  "speech": {
+   "start": 0.36,
+   "end": 2.2
+  }
  },
  {
   "id": "marcus_pivot_3",
@@ -661,7 +901,11 @@
   "kind": "pivot",
   "text": "Here's what jumps off the page for me.",
   "src": "/show/phrases/marcus_pivot_3.mp4",
-  "duration": 2.64
+  "duration": 2.64,
+  "speech": {
+   "start": 0.38,
+   "end": 1.92
+  }
  },
  {
   "id": "marcus_agree_4",
@@ -669,7 +913,11 @@
   "kind": "agree",
   "text": "No argument from me.",
   "src": "/show/phrases/marcus_agree_4.mp4",
-  "duration": 1.96
+  "duration": 1.96,
+  "speech": {
+   "start": 0.3,
+   "end": 1.2
+  }
  },
  {
   "id": "tony_ppg_mid_slot",
@@ -683,6 +931,10 @@
   "slot": {
    "start": 0.3,
    "end": 0.973
+  },
+  "speech": {
+   "start": 0.42,
+   "end": 3.18
   }
  },
  {
@@ -697,6 +949,10 @@
   "slot": {
    "start": 0.3,
    "end": 0.869
+  },
+  "speech": {
+   "start": 0.44,
+   "end": 4.72
   }
  },
  {
@@ -711,6 +967,10 @@
   "slot": {
    "start": 0.3,
    "end": 0.973
+  },
+  "speech": {
+   "start": 0.42,
+   "end": 2.66
   }
  },
  {
@@ -725,6 +985,10 @@
   "slot": {
    "start": 0.3,
    "end": 0.985
+  },
+  "speech": {
+   "start": 0.44,
+   "end": 2.78
   }
  },
  {
@@ -739,6 +1003,10 @@
   "slot": {
    "start": 0.3,
    "end": 0.799
+  },
+  "speech": {
+   "start": 0.3,
+   "end": 3.24
   }
  },
  {
@@ -753,6 +1021,10 @@
   "slot": {
    "start": 0.3,
    "end": 0.88
+  },
+  "speech": {
+   "start": 0.46,
+   "end": 2.74
   }
  },
  {
@@ -767,6 +1039,10 @@
   "slot": {
    "start": 0.3,
    "end": 1.066
+  },
+  "speech": {
+   "start": 0.42,
+   "end": 3.22
   }
  },
  {
@@ -775,7 +1051,11 @@
   "kind": "agree",
   "text": "You know what? You're right.",
   "src": "/show/phrases/tony_agree_3.mp4",
-  "duration": 2.04
+  "duration": 2.04,
+  "speech": {
+   "start": 0.46,
+   "end": 1.36
+  }
  },
  {
   "id": "tony_disagree_3",
@@ -783,7 +1063,11 @@
   "kind": "disagree",
   "text": "Marcus, stop it. Stop it!",
   "src": "/show/phrases/tony_disagree_3.mp4",
-  "duration": 2.44
+  "duration": 2.44,
+  "speech": {
+   "start": 0.46,
+   "end": 1.72
+  }
  },
  {
   "id": "tony_hype_3",
@@ -791,7 +1075,11 @@
   "kind": "hype",
   "text": "Oh, I love this!",
   "src": "/show/phrases/tony_hype_3.mp4",
-  "duration": 2.0
+  "duration": 2.0,
+  "speech": {
+   "start": 0.48,
+   "end": 1.42
+  }
  },
  {
   "id": "tony_pivot_3",
@@ -799,7 +1087,11 @@
   "kind": "pivot",
   "text": "But let me tell you something.",
   "src": "/show/phrases/tony_pivot_3.mp4",
-  "duration": 2.36
+  "duration": 2.36,
+  "speech": {
+   "start": 0.3,
+   "end": 1.68
+  }
  },
  {
   "id": "tony_skeptical_3",
@@ -807,6 +1099,10 @@
   "kind": "skeptical",
   "text": "I don't trust it. Not yet.",
   "src": "/show/phrases/tony_skeptical_3.mp4",
-  "duration": 2.28
+  "duration": 2.28,
+  "speech": {
+   "start": 0.46,
+   "end": 1.64
+  }
  }
 ]

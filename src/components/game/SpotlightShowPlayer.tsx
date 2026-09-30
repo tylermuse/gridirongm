@@ -28,6 +28,35 @@ const CLIP_IDS = Object.keys(SHOW_CLIPS) as ShowClipId[];
 // Must match MP3_BYTES_PER_SEC in /api/spotlight-show (mp3_44100_128, CBR).
 const MP3_BYTES_PER_SEC = 128_000 / 8;
 
+// Silence kept around each piece of speech. Clips and TTS lines all carry
+// padding (clips ~0.35s in / ~0.6s out); trimming it to this keeps the
+// conversation moving instead of stalling at every cut.
+const LEAD_PAD = 0.05;
+const TAIL_PAD = 0.12;
+
+/** Where the speech is inside a decoded TTS line (s): first/last 10ms
+ *  window within 32 dB of the loudest one. */
+function speechSpan(buf: AudioBuffer): { start: number; end: number } {
+  const x = buf.getChannelData(0);
+  const hop = Math.max(1, Math.round(buf.sampleRate / 100));
+  const n = Math.floor(x.length / hop);
+  const rms = new Float32Array(n);
+  let max = 0;
+  for (let k = 0; k < n; k++) {
+    let acc = 0;
+    for (let j = k * hop; j < (k + 1) * hop; j++) acc += x[j] * x[j];
+    rms[k] = Math.sqrt(acc / hop);
+    if (rms[k] > max) max = rms[k];
+  }
+  const thr = max * 0.025; // -32 dB
+  let a = 0;
+  let b = n - 1;
+  while (a < n && rms[a] < thr) a++;
+  while (b > a && rms[b] < thr) b--;
+  if (a >= n) return { start: 0, end: buf.duration };
+  return { start: (a * hop) / buf.sampleRate, end: ((b + 1) * hop) / buf.sampleRate };
+}
+
 type VideoSeg = Extract<TimedShowSegment, { kind: 'clip' | 'phrase' }>;
 const videoKey = (s: VideoSeg) => (s.kind === 'clip' ? `clip:${s.clip}` : `phrase:${s.phraseId}`);
 const videoSrc = (s: VideoSeg) => (s.kind === 'clip' ? SHOW_CLIPS[s.clip].src : s.src);
@@ -66,6 +95,11 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
   const blockStart = useRef(0);
   const lineStart = useRef(0);
   const speakerStart = useRef(0);
+  const blockKey = useRef('');
+  const panelKey = useRef('');
+  const topicStart = useRef(0);
+  const endTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const spansRef = useRef<Map<number, { start: number; end: number }>>(new Map());
 
   // Only mount <video> elements for clips this episode actually uses.
   const videoSegs = useMemo(() => {
@@ -74,7 +108,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
     // Keep the fixed clips mounted even before load so the intro starts instantly.
     for (const id of CLIP_IDS) {
       const k = `clip:${id}`;
-      if (!seen.has(k)) seen.set(k, { kind: 'clip', clip: id, speaker: SHOW_CLIPS[id].speaker, text: SHOW_CLIPS[id].text });
+      if (!seen.has(k)) seen.set(k, { kind: 'clip', clip: id, speaker: SHOW_CLIPS[id].speaker, text: SHOW_CLIPS[id].text, speech: SHOW_CLIPS[id].speech });
     }
     return [...seen.entries()];
   }, [segments]);
@@ -96,6 +130,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
   /** Hard stop: kills the current line and all video. */
   const stopAll = useCallback(() => {
     tokenRef.current++;
+    if (endTimer.current) { clearTimeout(endTimer.current); endTimer.current = null; }
     stopSources();
     for (const v of videoRefs.current.values()) { v.onended = null; v.pause(); }
   }, [stopSources]);
@@ -109,6 +144,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
   useEffect(() => {
     if (phase === 'playing') {
       pausedAt.current = performance.now();
+      if (endTimer.current) { clearTimeout(endTimer.current); endTimer.current = null; }
       void ctxRef.current?.suspend();
       for (const v of videoRefs.current.values()) v.pause();
       setPhase('paused');
@@ -143,6 +179,28 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
     return g;
   }, []);
 
+  /** Cut away when the clip's speech (plus a hair) is done, not at the end
+   *  of the file. Re-armed on resume. */
+  const armClipEnd = useCallback((v: HTMLVideoElement, until: number, advance: () => void) => {
+    if (endTimer.current) clearTimeout(endTimer.current);
+    endTimer.current = setTimeout(advance, Math.max(0, until - v.currentTime) * 1000);
+  }, []);
+  const resumeClip = useRef<(() => void) | null>(null);
+
+  /** Start (or continue) the graphic: consecutive lines of one topic — and
+   *  returns to it after a cutaway — are one continuous shot, and a new
+   *  topic only swaps the headline (the panel and tiles stay put). */
+  const enterGraphic = useCallback((key: string, speakerChanged: boolean) => {
+    const now = performance.now() - pausedTotal.current;
+    const panel = key.split(':')[0];
+    if (panelKey.current !== panel) { panelKey.current = panel; blockStart.current = now; }
+    const same = blockKey.current === key;
+    if (!same) { blockKey.current = key; topicStart.current = now; }
+    if (!same || speakerChanged) speakerStart.current = now;
+    lineStart.current = now;
+    setClock(now);
+  }, []);
+
   // ── Sequencer ──────────────────────────────────────────────────────
   const playSegment = useCallback((i: number) => {
     const segs = segmentsRef.current;
@@ -165,8 +223,17 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
       const key = videoKey(seg);
       const v = videoRefs.current.get(key);
       if (!v) return advance();
-      v.currentTime = 0;
-      v.onended = advance;
+      const from = Math.max(0, seg.speech.start - LEAD_PAD);
+      const until = Math.min(v.duration || Infinity, seg.speech.end + TAIL_PAD);
+      v.currentTime = from;
+      v.onended = advance; // fallback
+      resumeClip.current = () => armClipEnd(v, until, advance);
+      v.addEventListener('playing', () => { if (tokenRef.current === token) armClipEnd(v, until, advance); }, { once: true });
+      if (seg.kind === 'clip' && seg.voiceover) {
+        // Topic transition: the host's line plays over the new topic's
+        // graphic wiping in, rather than as a one-second shot of a host.
+        enterGraphic(`graphic:${seg.voiceover.topicIdx}`, true);
+      }
       if (seg.kind === 'phrase') {
         if (!prev || prev.speaker !== seg.speaker || prev.kind === 'tts') showLowerThird();
         const g = gainFor(key, v);
@@ -180,7 +247,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
           const rate = Math.min(1.3, Math.max(1, buf.duration / Math.max(0.2, win)));
           const hold = Math.max(win, buf.duration / rate);
           g.gain.cancelScheduledValues(ctx.currentTime);
-          g.gain.setValueAtTime(slot.start < 0.08 ? 0 : 1, ctx.currentTime);
+          g.gain.setValueAtTime(slot.start - from < 0.08 ? 0 : 1, ctx.currentTime);
           const schedule = () => {
             if (tokenRef.current !== token) return;
             const at = ctx.currentTime + Math.max(0, slot.start - v.currentTime);
@@ -202,26 +269,22 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
       return;
     }
 
-    // Generated line: voiceover over the animated graphic. Consecutive lines
-    // of a topic are one continuous shot — the graphic doesn't re-enter.
-    const now = performance.now() - pausedTotal.current;
-    // Returning from a cutaway to the same topic's graphic continues it too.
-    let lastTts: TimedShowSegment | undefined;
-    for (let k = i - 1; k >= 0 && !lastTts; k--) if (segs[k].kind === 'tts') lastTts = segs[k];
-    const sameBlock = lastTts?.kind === 'tts' && lastTts.visual === seg.visual && lastTts.topicIdx === seg.topicIdx;
-    if (!sameBlock) blockStart.current = now;
-    if (!sameBlock || prev?.kind !== 'tts' || prev.speaker !== seg.speaker) speakerStart.current = now;
-    lineStart.current = now;
-    setClock(now);
+    // Generated line: voiceover over the animated graphic.
+    resumeClip.current = null;
+    const onGraphic = prev && (prev.kind === 'tts' || (prev.kind === 'clip' && !!prev.voiceover));
+    enterGraphic(`${seg.visual}:${seg.topicIdx}`, !onGraphic || prev.speaker !== seg.speaker);
     const buf = buffersRef.current.get(i);
     if (!ctx || !buf) return advance();
+    const span = spansRef.current.get(i) ?? { start: 0, end: buf.duration };
+    const from = Math.max(0, span.start - LEAD_PAD);
+    const to = Math.min(buf.duration, span.end + TAIL_PAD);
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.connect(ctx.destination);
     src.onended = advance;
     srcRef.current = src;
-    src.start();
-  }, [gainFor, showLowerThird, stopAll]);
+    src.start(0, from, to - from);
+  }, [armClipEnd, enterGraphic, gainFor, showLowerThird, stopAll]);
 
   // ── Controls ───────────────────────────────────────────────────────
   async function handleOpen() {
@@ -270,6 +333,9 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
         im.src = src;
         return im.decode().catch(() => {});
       }));
+      const spans = new Map<number, { start: number; end: number }>();
+      for (const [i, b] of buffers) spans.set(i, speechSpan(b));
+      spansRef.current = spans;
       buffersRef.current = buffers;
       ordinalBufs.current = ordinals;
       segmentsRef.current = segs;
@@ -287,7 +353,10 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
     if (phase === 'paused') {
       // Resume in place: suspended audio continues; a clip picks up where it paused.
       const seg = segmentsRef.current[segIdxRef.current];
-      if (seg && seg.kind !== 'tts') videoRefs.current.get(videoKey(seg))?.play().catch(() => {});
+      if (seg && seg.kind !== 'tts') {
+        videoRefs.current.get(videoKey(seg))?.play().catch(() => {});
+        resumeClip.current?.();
+      }
       setPhase('playing');
       return;
     }
@@ -297,6 +366,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
 
   function handlePause() {
     pausedAt.current = performance.now();
+    if (endTimer.current) { clearTimeout(endTimer.current); endTimer.current = null; }
     void ctxRef.current?.suspend();
     for (const v of videoRefs.current.values()) v.pause();
     setPhase('paused');
@@ -349,11 +419,20 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
 
   // ── Stage ──────────────────────────────────────────────────────────
   const seg = segments[segIdx];
-  const activeVideo = seg && seg.kind !== 'tts' ? videoKey(seg) : null;
+  const vo = seg?.kind === 'clip' && seg.voiceover ? seg : null;
+  const activeVideo = seg && seg.kind !== 'tts' && !vo ? videoKey(seg) : null;
   const tts = seg?.kind === 'tts' ? seg : null;
-  // Last voiceover graphic up to now (kept mounted to dissolve in and out).
-  let gfx: Extract<TimedShowSegment, { kind: 'tts' }> | null = tts;
-  for (let k = segIdx; !gfx && k >= 0; k--) { const x = segments[k]; if (x?.kind === 'tts') gfx = x; }
+  // What the graphic layer shows: the current voiceover (a line, or a topic
+  // transition wiping in), else the last one — kept mounted to dissolve.
+  type Gfx = { visual: 'title' | 'graphic'; headline: string; icon: string; speaker: Host; text: string };
+  const gfxOf = (x: TimedShowSegment | undefined): Gfx | null =>
+    !x ? null
+      : x.kind === 'tts' ? x
+      : x.kind === 'clip' && x.voiceover ? { visual: 'graphic', ...x.voiceover, speaker: x.speaker, text: '' }
+      : null;
+  let gfx: Gfx | null = null;
+  for (let k = segIdx; !gfx && k >= 0; k--) gfx = gfxOf(segments[k]);
+  const onGfx = !!(tts || vo);
   const mentioned = tts ? statsMentioned(tts.text) : [];
   const phraseStat = seg?.kind === 'phrase' && seg.stat && stats ? stats.stats.find(s => s.key === seg.stat) ?? null : null;
   const speaker: Host | null = seg ? seg.speaker : null;
@@ -367,7 +446,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
           {/* Voiceover lines: animated graphic over the studio two-shot. Stays
               mounted (faded out) during on-camera shots so cuts dissolve. */}
           {gfx && (
-            <div className="absolute inset-0 transition-opacity duration-200" style={{ opacity: tts ? 1 : 0 }}>
+            <div className="absolute inset-0 transition-opacity duration-200" style={{ opacity: onGfx ? 1 : 0 }}>
               <ShowGraphic
                 variant={gfx.visual === 'title' ? 'title' : 'topic'}
                 teamName={teamName}
@@ -376,9 +455,10 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
                 stats={stats}
                 mentioned={mentioned}
                 speaker={gfx.speaker}
-                blockMs={tts ? clock - blockStart.current : 60_000}
-                lineMs={tts ? clock - lineStart.current : 60_000}
-                speakerMs={tts ? clock - speakerStart.current : 60_000}
+                blockMs={onGfx ? clock - blockStart.current : 60_000}
+                topicMs={onGfx ? clock - topicStart.current : 60_000}
+                lineMs={onGfx ? clock - lineStart.current : 60_000}
+                speakerMs={onGfx ? clock - speakerStart.current : 60_000}
                 text={gfx.text}
               />
             </div>
@@ -423,7 +503,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
           )}
 
           {/* Captions (topic graphics carry the line as a pull quote instead) */}
-          {seg && phase !== 'ended' && !(tts && tts.visual === 'graphic') && <ShowCaption text={seg.text} />}
+          {seg && phase !== 'ended' && !(tts && tts.visual === 'graphic') && !vo && <ShowCaption text={seg.text} />}
 
           {/* Start / resume / replay */}
           {(phase === 'ready' || phase === 'paused' || phase === 'ended') && (
