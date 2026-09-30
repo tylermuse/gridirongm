@@ -2,6 +2,7 @@
 
 import { type ReactNode } from 'react';
 import { SubscriptionProvider } from './SubscriptionProvider';
+import { usePageView } from '@bs/core/analytics';
 
 /**
  * BS Hoops app providers.
@@ -16,8 +17,21 @@ import { SubscriptionProvider } from './SubscriptionProvider';
  * Coming later:
  *   - SimEngineProvider (basketballAdapter passed through context)
  *   - ThemeProvider (light/dark toggle, persisted to localStorage)
- *   - PageViewTracker once `/api/analytics/track` lands in this app
+ *
+ * PageViewTracker: page_view + session_start beacons to /api/analytics/track
+ * (rows tagged app = 'bs-hoops'). Also makes trackAuthEvent's signup/login
+ * beacons land — they were 404ing before this route existed.
  */
+function PageViewTracker() {
+  usePageView();
+  return null;
+}
+
 export function Providers({ children }: { children: ReactNode }) {
-  return <SubscriptionProvider>{children}</SubscriptionProvider>;
+  return (
+    <SubscriptionProvider>
+      <PageViewTracker />
+      {children}
+    </SubscriptionProvider>
+  );
 }

@@ -1,3 +1,9 @@
+/**
+ * BS Hoops analytics beacon sink. Same Supabase project + analytics_events
+ * table as football; rows are tagged properties.app = 'bs-hoops' so the
+ * football admin summary can filter them out (see
+ * supabase/migrations/20260930_active_user_metrics.sql).
+ */
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@bs/core/supabase/server';
@@ -48,7 +54,7 @@ export async function POST(request: Request) {
     const enrichedProperties = {
       ...(properties ?? {}),
       ...(deviceId ? { device_id: deviceId } : {}),
-      app: 'bs-football',
+      app: 'bs-hoops',
     };
 
     await service.from('analytics_events').insert({
