@@ -6,6 +6,8 @@
  *             lip-synced clips in /public/show, played with their own audio.
  *  - `phrase` reusable on-camera reactions from the phrase bank, chosen from
  *             the team's real stats (optionally with a spoken rank slot).
+ *             At most one per topic, so each topic plays as one long
+ *             graphic shot with a single cut to a host.
  *  - `tts`    the episode's generated lines, voiced per episode with
  *             ElevenLabs and played over a stat graphic (voiceover).
  *
@@ -84,8 +86,9 @@ const TRANSITIONS: ShowClipId[] = [
   'tony_transition_next_one',
 ];
 
-/** Max on-camera bank phrases after the lines of a single topic. */
-const MAX_PHRASES_PER_TOPIC = 2;
+/** Max on-camera bank phrases per topic. One keeps the topic's graphic on
+ *  screen as a long, continuous shot instead of cutting every line. */
+const MAX_PHRASES_PER_TOPIC = 1;
 
 const other = (h: Host): Host => (h === 'marcus' ? 'tony' : 'marcus');
 
@@ -130,7 +133,6 @@ class PhrasePicker {
     const st = this.stats?.stats.find(s => s.key === key);
     if (!st) return null;
     const tone = rankTone(st.rank, st.of);
-    if (tone === 'mid') return null;
     const slotted = this.pick(p => p.host === host && p.stat === key && p.tone === tone && !!p.slot);
     if (slotted) return phraseSegment(slotted, st.rank);
     const plain = this.pick(p => p.host === host && p.stat === key && p.tone === tone && !p.slot);
@@ -146,11 +148,15 @@ class PhrasePicker {
     return p ? phraseSegment(p) : null;
   }
 
-  /** Short connective reaction, rotated so episodes vary line to line. */
-  glue(host: Host): ShowSegment | null {
-    const order: PhraseKind[] = host === 'tony'
-      ? ['agree', 'disagree', 'hype', 'agree', 'pivot', 'disagree']
-      : ['agree', 'skeptical', 'disagree', 'agree', 'pivot', 'disagree'];
+  /** Short connective reaction, rotated so episodes vary line to line.
+   *  `rebut`: the host already made a point this topic and just got
+   *  answered, so they push back rather than agree. */
+  glue(host: Host, rebut = false): ShowSegment | null {
+    const order: PhraseKind[] = rebut
+      ? ['disagree', 'skeptical', 'disagree', 'pivot']
+      : host === 'tony'
+        ? ['agree', 'hype', 'pivot', 'agree', 'hype', 'skeptical']
+        : ['agree', 'pivot', 'skeptical', 'agree', 'pivot'];
     for (let k = 0; k < order.length; k++) {
       const kind = order[(this.glueTurn + k) % order.length];
       const p = this.pick(x => x.host === host && x.kind === kind);
@@ -186,27 +192,34 @@ export function buildShowScript(
     if (i > 0) segs.push(clip(TRANSITIONS[i % TRANSITIONS.length]));
 
     let onCamera = 0;
-    debate.forEach((ex, j) => {
+    let lastSpeaker: Host = 'marcus';
+    const spoke = new Set<Host>();
+    debate.forEach(ex => {
       const speaker: Host = ex.speakerId === 'stats' ? 'marcus' : 'tony';
+      lastSpeaker = speaker;
+      spoke.add(speaker);
       segs.push({
         kind: 'tts', speaker, text: ex.text, visual: 'graphic',
         topicIdx: i, headline: topic.headline, icon: topic.icon,
       });
       if (onCamera >= MAX_PHRASES_PER_TOPIC) return;
 
-      // The other host reacts on camera — to the stat just cited if it's
-      // notably good/bad and not yet covered this episode, else a short
-      // glue line on every other exchange.
+      // The other host reacts on camera to the stat just cited (saying the
+      // real rank) if it hasn't been covered yet this episode.
       const respondent = other(speaker);
-      let reaction: ShowSegment | null = null;
       for (const key of statsMentioned(ex.text)) {
         if (coveredStats.has(key)) continue;
-        reaction = picker.stat(respondent, key);
-        if (reaction) { coveredStats.add(key); break; }
+        const reaction = picker.stat(respondent, key);
+        if (reaction) { coveredStats.add(key); segs.push(reaction); onCamera++; break; }
       }
-      if (!reaction && j % 2 === 1) reaction = picker.glue(respondent);
-      if (reaction) { segs.push(reaction); onCamera++; }
     });
+    // No stat reaction? Close a real back-and-forth with a short on-camera
+    // reaction from whoever didn't have the last word.
+    if (onCamera === 0 && debate.length >= 2) {
+      const respondent = other(lastSpeaker);
+      const glue = picker.glue(respondent, spoke.has(respondent));
+      if (glue) segs.push(glue);
+    }
   });
 
   segs.push(clip('marcus_outro'));

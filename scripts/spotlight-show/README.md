@@ -15,3 +15,10 @@ Working files go to the gitignored `<repo>/show-assets/`.
 
 Adding a phrase = add it to `phrases.json`, then rerun 1–4 (only new phrases are voiced; you
 can render just a small take for the new ones).
+
+## Adding phrases later
+
+Give new entries in `phrases.json` a `"take": "<host>_c"` (or `_d`, …) field.
+`build_takes.py` packs each tagged group into its own take and leaves the
+original a/b takes untouched, so only the new take needs an Aurora render.
+`slice_phrases.py` skips clips that already exist (pass `--force` to recut).

@@ -1,23 +1,20 @@
 """Cut rendered Aurora takes into per-phrase clips + write the app manifest.
 
-Usage: python3 slice_phrases.py <worktree>
+Usage: python3 slice_phrases.py <worktree> [--force]   (existing clips are kept unless --force)
 Expects show-assets/takes/<take>.mp4 (Aurora output for <take>.wav).
 Writes <worktree>/public/show/phrases/<id>.mp4, <worktree>/public/show/ordinals/<host>/<n>.mp3
 and <worktree>/src/lib/spotlight/phraseManifest.json.
 """
 import json, os, shutil, subprocess, sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-# Working files (audio, takes, renders) live in the gitignored <repo>/show-assets/.
-ROOT = os.path.join(HERE, '..', '..', 'show-assets')
-os.makedirs(ROOT, exist_ok=True)
+ROOT = os.path.dirname(os.path.abspath(__file__))
 PRE, POST = 0.30, 0.40   # padding around each phrase (gaps are 0.9s)
 
 def dur(f):
     return float(subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f]))
 
 def main(wt):
-    bank = {p["id"]: p for p in json.load(open(os.path.join(HERE, "phrases.json")))["phrases"]}
+    bank = {p["id"]: p for p in json.load(open(os.path.join(ROOT, "phrases.json")))["phrases"]}
     takes = json.load(open(os.path.join(ROOT, "takes", "takes.json")))
     out = os.path.join(wt, "public", "show", "phrases")
     os.makedirs(out, exist_ok=True)
@@ -33,7 +30,10 @@ def main(wt):
             a = max(0.0, e["start"] - PRE)
             b = min(vd, e["end"] + POST)
             dst = os.path.join(out, e["id"] + ".mp4")
-            subprocess.check_call(["ffmpeg", "-v", "error", "-y", "-ss", f"{a:.3f}", "-to", f"{b:.3f}", "-i", vid,
+            if os.path.exists(dst) and "--force" not in sys.argv:
+                pass  # already cut (keeps committed clips byte-stable)
+            else:
+              subprocess.check_call(["ffmpeg", "-v", "error", "-y", "-ss", f"{a:.3f}", "-to", f"{b:.3f}", "-i", vid,
                                    "-vf", "scale=960:-2", "-c:v", "libx264", "-preset", "slow", "-crf", "26",
                                    "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", dst])
             p = bank[e["id"]]

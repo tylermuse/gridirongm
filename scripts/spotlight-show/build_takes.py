@@ -2,10 +2,7 @@
 and trim rank ordinals. Writes show-assets/takes/<take>.wav + takes.json."""
 import json, os, subprocess, wave
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-# Working files (audio, takes, renders) live in the gitignored <repo>/show-assets/.
-ROOT = os.path.join(HERE, '..', '..', 'show-assets')
-os.makedirs(ROOT, exist_ok=True)
+ROOT = os.path.dirname(os.path.abspath(__file__))
 TTS = os.path.join(ROOT, "tts")
 OUT = os.path.join(ROOT, "takes")
 SR = 44100
@@ -16,11 +13,15 @@ def decode(mp3):
     return subprocess.check_output(["ffmpeg", "-v", "error", "-i", mp3, "-ac", "1", "-ar", str(SR), "-f", "s16le", "-"])
 
 def main():
-    bank = json.load(open(os.path.join(HERE, "phrases.json")))["phrases"]
+    bank = json.load(open(os.path.join(ROOT, "phrases.json")))["phrases"]
     os.makedirs(OUT, exist_ok=True)
     takes = {}
+    for p in bank:
+        if "take" in p:
+            takes.setdefault(p["take"], []).append(p)
     for host in ("marcus", "tony"):
-        ps = [p for p in bank if p["host"] == host]
+        # Original bank (no "take" field) is split into two takes, a/b.
+        ps = [p for p in bank if p["host"] == host and "take" not in p]
         half = (len(ps) + 1) // 2
         takes[f"{host}_a"] = ps[:half]
         takes[f"{host}_b"] = ps[half:]

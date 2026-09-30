@@ -68,8 +68,9 @@ const KEYWORDS: [ShowStatKey, RegExp][] = [
   ['rush', /\brush(ing|es|ed)?\b|\bground game\b|\brun game\b|\brunning game\b/i],
   ['pass', /\bpass(ing|es)?\b|\baerial\b|\bair attack\b|\bthrowing\b/i],
   ['pag', /\bdefen[cs]e\b|\ballow(ing|s|ed)?\b|\bgiving up\b|\bpoints against\b|\bopp(onent)?s? (are )?scor/i],
-  ['ppg', /\boffen[cs]e\b|\bppg\b|\bpoints per game\b|\bscoring\b|\bputting up\b/i],
-  ['yds', /\btotal yards\b|\byards per game\b/i],
+  ['ppg', /(?<!total )\boffen[cs]e\b|\bppg\b|\bpoints per game\b|\bscoring\b|\bputting up\b/i],
+  // Only explicit total-offense talk: "51 rushing yards per game" is about rushing.
+  ['yds', /\btotal (yards|offense)\b|\byards of (total )?offense\b/i],
 ];
 
 /** Stats a line of commentary is talking about, in the order they're said. */

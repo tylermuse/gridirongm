@@ -28,7 +28,8 @@ describe('computeShowStatLine', () => {
 describe('statsMentioned', () => {
   it('orders stats by where they appear in the line', () => {
     expect(statsMentioned('29th in offense?! 27th in defense?!')).toEqual(['ppg', 'pag']);
-    expect(statsMentioned('The 51 rushing yards per game is concerning')).toEqual(['rush', 'yds']);
+    expect(statsMentioned('The 51 rushing yards per game is concerning')).toEqual(['rush']);
+    expect(statsMentioned('They are 29th in total offense')).toEqual(['yds']);
     expect(statsMentioned('Their passing attack carries them')).toEqual(['pass']);
     expect(statsMentioned('Great locker room vibes')).toEqual([]);
   });

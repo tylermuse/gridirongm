@@ -50,15 +50,31 @@ describe('buildShowScript', () => {
     const i = segs.findIndex(s => s.kind === 'tts' && s.text.startsWith('Their offense'));
     expect(segs[i + 1]).toMatchObject({ kind: 'phrase', speaker: 'tony', stat: 'ppg', slot: { rank: 29 } });
     expect((segs[i + 1] as { text: string }).text).toMatch(/^29th in scoring/);
+    // One reaction per topic: the rest of the topic stays on the graphic.
     const j = segs.findIndex(s => s.kind === 'tts' && s.text.startsWith('And the defense'));
-    expect(segs[j + 1]).toMatchObject({ kind: 'phrase', speaker: 'marcus', stat: 'pag', slot: { rank: 30 } });
+    expect(segs[j + 1]).toMatchObject({ kind: 'tts' });
+  });
+
+  it('mid-table stats get the "middle of the pack" take', () => {
+    const t = [{ headline: 'Air it out', icon: '🏈', exchanges: [{ speakerId: 'stats', text: 'The passing game is fine.' }] }];
+    const p = phrases(buildShowScript(t, 'X', stats));
+    expect(p.find(x => x.stat === 'pass')).toMatchObject({ speaker: 'tony', slot: { rank: 12 } });
+    expect(PHRASES.find(x => x.id === p.find(y => y.stat === 'pass')!.phraseId)!.tone).toBe('mid');
+  });
+
+  it('a back-and-forth with no stat reaction closes on a glue reaction', () => {
+    const i = segs.findIndex(s => s.kind === 'tts' && s.text === 'Bring it on.');
+    expect(segs[i + 1]).toMatchObject({ kind: 'phrase', speaker: 'marcus' });
+    expect((segs[i + 1] as { stat?: string }).stat).toBeUndefined();
+    // Marcus already spoke in this topic and got answered → he pushes back.
+    expect(['disagree', 'skeptical', 'pivot']).toContain(PHRASES.find(x => x.id === (segs[i + 1] as { phraseId: string }).phraseId)!.kind);
   });
 
   it('caps on-camera phrases per topic and never repeats a phrase', () => {
     const ids = phrases(segs).map(p => p.phraseId);
     expect(new Set(ids).size).toBe(ids.length);
     const firstTopic = segs.slice(4, segs.findIndex((s, k) => k > 4 && s.kind === 'clip'));
-    expect(phrases(firstTopic).length).toBeLessThanOrEqual(2);
+    expect(phrases(firstTopic).length).toBeLessThanOrEqual(1);
   });
 
   it('keeps transitions (skipping empty topics) and closes with both outros', () => {

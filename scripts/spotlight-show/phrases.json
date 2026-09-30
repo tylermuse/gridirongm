@@ -1,57 +1,530 @@
 {
-  "_note": "Source script for the Spotlight phrase bank. {rank} is a slot filled at runtime with a pre-voiced ordinal; 'placeholder' is what gets spoken when rendering the lip-synced clip. Tones: good = top third of league, bad = bottom third.",
-  "placeholders": { "bad": "twenty-seventh", "good": "eleventh" },
-  "phrases": [
-    { "id": "marcus_ppg_bad",       "host": "marcus", "stat": "ppg",  "tone": "bad",  "text": "You just can't win in this league when you can't put points on the board." },
-    { "id": "marcus_ppg_bad_slot",  "host": "marcus", "stat": "ppg",  "tone": "bad",  "text": "When you're {rank} in scoring, there's no margin for error. None." },
-    { "id": "marcus_ppg_good",      "host": "marcus", "stat": "ppg",  "tone": "good", "text": "This offense is legit. They're moving the ball and finishing drives." },
-    { "id": "marcus_ppg_good_slot", "host": "marcus", "stat": "ppg",  "tone": "good", "text": "They're {rank} in the league in scoring. That's not a fluke. That's a system that works." },
-    { "id": "marcus_pag_bad",       "host": "marcus", "stat": "pag",  "tone": "bad",  "text": "The defense has to get off the field. They just can't get stops." },
-    { "id": "marcus_pag_bad_slot",  "host": "marcus", "stat": "pag",  "tone": "bad",  "text": "They're {rank} in points allowed. You're asking the offense to win a shootout every week." },
-    { "id": "marcus_pag_good",      "host": "marcus", "stat": "pag",  "tone": "good", "text": "This defense keeps them in every single game. That travels." },
-    { "id": "marcus_pag_good_slot", "host": "marcus", "stat": "pag",  "tone": "good", "text": "They're {rank} in points allowed. That's the foundation of this whole team." },
-    { "id": "marcus_pass_bad",      "host": "marcus", "stat": "pass", "tone": "bad",  "text": "The passing game just isn't there. Nobody's getting open downfield." },
-    { "id": "marcus_pass_bad_slot", "host": "marcus", "stat": "pass", "tone": "bad",  "text": "They're {rank} in passing yards per game. That's a problem at quarterback, or up front, or both." },
-    { "id": "marcus_pass_good",     "host": "marcus", "stat": "pass", "tone": "good", "text": "When they drop back to throw, good things happen. The timing is there." },
-    { "id": "marcus_pass_good_slot","host": "marcus", "stat": "pass", "tone": "good", "text": "They're {rank} in passing yards per game. Defenses have to respect it." },
-    { "id": "marcus_rush_bad",      "host": "marcus", "stat": "rush", "tone": "bad",  "text": "They can't run the ball. And when you can't run it, everything gets harder." },
-    { "id": "marcus_rush_bad_slot", "host": "marcus", "stat": "rush", "tone": "bad",  "text": "They're {rank} in rushing. The offensive line has to take that personally." },
-    { "id": "marcus_rush_good",     "host": "marcus", "stat": "rush", "tone": "good", "text": "They're winning at the line of scrimmage. That's how you control a football game." },
-    { "id": "marcus_rush_good_slot","host": "marcus", "stat": "rush", "tone": "good", "text": "They're {rank} in rushing yards per game. They're wearing people down." },
-    { "id": "marcus_record_winning","host": "marcus", "kind": "record", "tone": "good", "text": "Winning cures a lot. This team believes right now." },
-    { "id": "marcus_record_losing", "host": "marcus", "kind": "record", "tone": "bad",  "text": "At some point, the record is who you are. And right now, it's not good enough." },
-    { "id": "marcus_record_even",   "host": "marcus", "kind": "record", "tone": "mid",  "text": "They're right there. A couple of plays either way, and this is a different conversation." },
-    { "id": "marcus_agree_1",       "host": "marcus", "kind": "agree",      "text": "I'm with you on that, Tony." },
-    { "id": "marcus_agree_2",       "host": "marcus", "kind": "agree",      "text": "That's fair. The numbers back you up." },
-    { "id": "marcus_disagree_1",    "host": "marcus", "kind": "disagree",   "text": "Hold on. Let's not overreact here." },
-    { "id": "marcus_disagree_2",    "host": "marcus", "kind": "disagree",   "text": "I'll push back on that a little." },
-    { "id": "marcus_skeptical",     "host": "marcus", "kind": "skeptical",  "text": "I need to see it for more than a few weeks." },
-    { "id": "marcus_pivot",         "host": "marcus", "kind": "pivot",      "text": "Let's look at what the numbers actually say." },
-
-    { "id": "tony_ppg_bad",         "host": "tony", "stat": "ppg",  "tone": "bad",  "text": "This offense is unwatchable right now! I can't take it!" },
-    { "id": "tony_ppg_bad_slot",    "host": "tony", "stat": "ppg",  "tone": "bad",  "text": "{rank} in scoring?! Are you kidding me? That's embarrassing!" },
-    { "id": "tony_ppg_good",        "host": "tony", "stat": "ppg",  "tone": "good", "text": "This offense is a problem for everybody! Buckle up!" },
-    { "id": "tony_ppg_good_slot",   "host": "tony", "stat": "ppg",  "tone": "good", "text": "{rank} in scoring! They're putting up points like it's nothing!" },
-    { "id": "tony_pag_bad",         "host": "tony", "stat": "pag",  "tone": "bad",  "text": "This is ridiculous! They have to do a better job on defense!" },
-    { "id": "tony_pag_bad_slot",    "host": "tony", "stat": "pag",  "tone": "bad",  "text": "{rank} in points allowed! Somebody has to make a tackle!" },
-    { "id": "tony_pag_good",        "host": "tony", "stat": "pag",  "tone": "good", "text": "Nobody wants to play this defense! Nobody!" },
-    { "id": "tony_pag_good_slot",   "host": "tony", "stat": "pag",  "tone": "good", "text": "{rank} in points allowed! That defense is nasty!" },
-    { "id": "tony_pass_bad",        "host": "tony", "stat": "pass", "tone": "bad",  "text": "Throw the ball downfield! Take a shot! Do something!" },
-    { "id": "tony_pass_bad_slot",   "host": "tony", "stat": "pass", "tone": "bad",  "text": "{rank} in passing? That's not an offense, that's a prayer!" },
-    { "id": "tony_pass_good",       "host": "tony", "stat": "pass", "tone": "good", "text": "When this team airs it out, it is fun to watch!" },
-    { "id": "tony_pass_good_slot",  "host": "tony", "stat": "pass", "tone": "good", "text": "{rank} in passing yards! Let it fly!" },
-    { "id": "tony_rush_bad",        "host": "tony", "stat": "rush", "tone": "bad",  "text": "You have to be able to run the football! It's that simple!" },
-    { "id": "tony_rush_bad_slot",   "host": "tony", "stat": "rush", "tone": "bad",  "text": "{rank} in rushing?! You can't win like that! You just can't!" },
-    { "id": "tony_rush_good",       "host": "tony", "stat": "rush", "tone": "good", "text": "They're running people over! That's grown-man football!" },
-    { "id": "tony_rush_good_slot",  "host": "tony", "stat": "rush", "tone": "good", "text": "{rank} in rushing! They just line up and pound it!" },
-    { "id": "tony_record_winning",  "host": "tony", "kind": "record", "tone": "good", "text": "This team is for real, and I don't want to hear otherwise!" },
-    { "id": "tony_record_losing",   "host": "tony", "kind": "record", "tone": "bad",  "text": "Something has got to change, and it has to change now!" },
-    { "id": "tony_record_even",     "host": "tony", "kind": "record", "tone": "mid",  "text": "This season is on a knife's edge, Marcus!" },
-    { "id": "tony_agree_1",         "host": "tony", "kind": "agree",      "text": "Thank you! That's what I've been saying!" },
-    { "id": "tony_agree_2",         "host": "tony", "kind": "agree",      "text": "Exactly! Exactly!" },
-    { "id": "tony_disagree_1",      "host": "tony", "kind": "disagree",   "text": "Come on, Marcus! You can't be serious!" },
-    { "id": "tony_disagree_2",      "host": "tony", "kind": "disagree",   "text": "Nah, nah, nah. I'm not buying that." },
-    { "id": "tony_hype",            "host": "tony", "kind": "hype",       "text": "Let's go!" },
-    { "id": "tony_pivot",           "host": "tony", "kind": "pivot",      "text": "Here's the thing nobody's talking about." }
-  ]
+ "_note": "Source script for the Spotlight phrase bank. {rank} is a slot filled at runtime with a pre-voiced ordinal; 'placeholder' is what gets spoken when rendering the lip-synced clip. Tones: good = top third of league, bad = bottom third.",
+ "placeholders": {
+  "bad": "twenty-seventh",
+  "good": "eleventh",
+  "mid": "sixteenth"
+ },
+ "phrases": [
+  {
+   "id": "marcus_ppg_bad",
+   "host": "marcus",
+   "stat": "ppg",
+   "tone": "bad",
+   "text": "You just can't win in this league when you can't put points on the board."
+  },
+  {
+   "id": "marcus_ppg_bad_slot",
+   "host": "marcus",
+   "stat": "ppg",
+   "tone": "bad",
+   "text": "When you're {rank} in scoring, there's no margin for error. None."
+  },
+  {
+   "id": "marcus_ppg_good",
+   "host": "marcus",
+   "stat": "ppg",
+   "tone": "good",
+   "text": "This offense is legit. They're moving the ball and finishing drives."
+  },
+  {
+   "id": "marcus_ppg_good_slot",
+   "host": "marcus",
+   "stat": "ppg",
+   "tone": "good",
+   "text": "They're {rank} in the league in scoring. That's not a fluke. That's a system that works."
+  },
+  {
+   "id": "marcus_pag_bad",
+   "host": "marcus",
+   "stat": "pag",
+   "tone": "bad",
+   "text": "The defense has to get off the field. They just can't get stops."
+  },
+  {
+   "id": "marcus_pag_bad_slot",
+   "host": "marcus",
+   "stat": "pag",
+   "tone": "bad",
+   "text": "They're {rank} in points allowed. You're asking the offense to win a shootout every week."
+  },
+  {
+   "id": "marcus_pag_good",
+   "host": "marcus",
+   "stat": "pag",
+   "tone": "good",
+   "text": "This defense keeps them in every single game. That travels."
+  },
+  {
+   "id": "marcus_pag_good_slot",
+   "host": "marcus",
+   "stat": "pag",
+   "tone": "good",
+   "text": "They're {rank} in points allowed. That's the foundation of this whole team."
+  },
+  {
+   "id": "marcus_pass_bad",
+   "host": "marcus",
+   "stat": "pass",
+   "tone": "bad",
+   "text": "The passing game just isn't there. Nobody's getting open downfield."
+  },
+  {
+   "id": "marcus_pass_bad_slot",
+   "host": "marcus",
+   "stat": "pass",
+   "tone": "bad",
+   "text": "They're {rank} in passing yards per game. That's a problem at quarterback, or up front, or both."
+  },
+  {
+   "id": "marcus_pass_good",
+   "host": "marcus",
+   "stat": "pass",
+   "tone": "good",
+   "text": "When they drop back to throw, good things happen. The timing is there."
+  },
+  {
+   "id": "marcus_pass_good_slot",
+   "host": "marcus",
+   "stat": "pass",
+   "tone": "good",
+   "text": "They're {rank} in passing yards per game. Defenses have to respect it."
+  },
+  {
+   "id": "marcus_rush_bad",
+   "host": "marcus",
+   "stat": "rush",
+   "tone": "bad",
+   "text": "They can't run the ball. And when you can't run it, everything gets harder."
+  },
+  {
+   "id": "marcus_rush_bad_slot",
+   "host": "marcus",
+   "stat": "rush",
+   "tone": "bad",
+   "text": "They're {rank} in rushing. The offensive line has to take that personally."
+  },
+  {
+   "id": "marcus_rush_good",
+   "host": "marcus",
+   "stat": "rush",
+   "tone": "good",
+   "text": "They're winning at the line of scrimmage. That's how you control a football game."
+  },
+  {
+   "id": "marcus_rush_good_slot",
+   "host": "marcus",
+   "stat": "rush",
+   "tone": "good",
+   "text": "They're {rank} in rushing yards per game. They're wearing people down."
+  },
+  {
+   "id": "marcus_record_winning",
+   "host": "marcus",
+   "kind": "record",
+   "tone": "good",
+   "text": "Winning cures a lot. This team believes right now."
+  },
+  {
+   "id": "marcus_record_losing",
+   "host": "marcus",
+   "kind": "record",
+   "tone": "bad",
+   "text": "At some point, the record is who you are. And right now, it's not good enough."
+  },
+  {
+   "id": "marcus_record_even",
+   "host": "marcus",
+   "kind": "record",
+   "tone": "mid",
+   "text": "They're right there. A couple of plays either way, and this is a different conversation."
+  },
+  {
+   "id": "marcus_agree_1",
+   "host": "marcus",
+   "kind": "agree",
+   "text": "I'm with you on that, Tony."
+  },
+  {
+   "id": "marcus_agree_2",
+   "host": "marcus",
+   "kind": "agree",
+   "text": "That's fair. The numbers back you up."
+  },
+  {
+   "id": "marcus_disagree_1",
+   "host": "marcus",
+   "kind": "disagree",
+   "text": "Hold on. Let's not overreact here."
+  },
+  {
+   "id": "marcus_disagree_2",
+   "host": "marcus",
+   "kind": "disagree",
+   "text": "I'll push back on that a little."
+  },
+  {
+   "id": "marcus_skeptical",
+   "host": "marcus",
+   "kind": "skeptical",
+   "text": "I need to see it for more than a few weeks."
+  },
+  {
+   "id": "marcus_pivot",
+   "host": "marcus",
+   "kind": "pivot",
+   "text": "Let's look at what the numbers actually say."
+  },
+  {
+   "id": "tony_ppg_bad",
+   "host": "tony",
+   "stat": "ppg",
+   "tone": "bad",
+   "text": "This offense is unwatchable right now! I can't take it!"
+  },
+  {
+   "id": "tony_ppg_bad_slot",
+   "host": "tony",
+   "stat": "ppg",
+   "tone": "bad",
+   "text": "{rank} in scoring?! Are you kidding me? That's embarrassing!"
+  },
+  {
+   "id": "tony_ppg_good",
+   "host": "tony",
+   "stat": "ppg",
+   "tone": "good",
+   "text": "This offense is a problem for everybody! Buckle up!"
+  },
+  {
+   "id": "tony_ppg_good_slot",
+   "host": "tony",
+   "stat": "ppg",
+   "tone": "good",
+   "text": "{rank} in scoring! They're putting up points like it's nothing!"
+  },
+  {
+   "id": "tony_pag_bad",
+   "host": "tony",
+   "stat": "pag",
+   "tone": "bad",
+   "text": "This is ridiculous! They have to do a better job on defense!"
+  },
+  {
+   "id": "tony_pag_bad_slot",
+   "host": "tony",
+   "stat": "pag",
+   "tone": "bad",
+   "text": "{rank} in points allowed! Somebody has to make a tackle!"
+  },
+  {
+   "id": "tony_pag_good",
+   "host": "tony",
+   "stat": "pag",
+   "tone": "good",
+   "text": "Nobody wants to play this defense! Nobody!"
+  },
+  {
+   "id": "tony_pag_good_slot",
+   "host": "tony",
+   "stat": "pag",
+   "tone": "good",
+   "text": "{rank} in points allowed! That defense is nasty!"
+  },
+  {
+   "id": "tony_pass_bad",
+   "host": "tony",
+   "stat": "pass",
+   "tone": "bad",
+   "text": "Throw the ball downfield! Take a shot! Do something!"
+  },
+  {
+   "id": "tony_pass_bad_slot",
+   "host": "tony",
+   "stat": "pass",
+   "tone": "bad",
+   "text": "{rank} in passing? That's not an offense, that's a prayer!"
+  },
+  {
+   "id": "tony_pass_good",
+   "host": "tony",
+   "stat": "pass",
+   "tone": "good",
+   "text": "When this team airs it out, it is fun to watch!"
+  },
+  {
+   "id": "tony_pass_good_slot",
+   "host": "tony",
+   "stat": "pass",
+   "tone": "good",
+   "text": "{rank} in passing yards! Let it fly!"
+  },
+  {
+   "id": "tony_rush_bad",
+   "host": "tony",
+   "stat": "rush",
+   "tone": "bad",
+   "text": "You have to be able to run the football! It's that simple!"
+  },
+  {
+   "id": "tony_rush_bad_slot",
+   "host": "tony",
+   "stat": "rush",
+   "tone": "bad",
+   "text": "{rank} in rushing?! You can't win like that! You just can't!"
+  },
+  {
+   "id": "tony_rush_good",
+   "host": "tony",
+   "stat": "rush",
+   "tone": "good",
+   "text": "They're running people over! That's grown-man football!"
+  },
+  {
+   "id": "tony_rush_good_slot",
+   "host": "tony",
+   "stat": "rush",
+   "tone": "good",
+   "text": "{rank} in rushing! They just line up and pound it!"
+  },
+  {
+   "id": "tony_record_winning",
+   "host": "tony",
+   "kind": "record",
+   "tone": "good",
+   "text": "This team is for real, and I don't want to hear otherwise!"
+  },
+  {
+   "id": "tony_record_losing",
+   "host": "tony",
+   "kind": "record",
+   "tone": "bad",
+   "text": "Something has got to change, and it has to change now!"
+  },
+  {
+   "id": "tony_record_even",
+   "host": "tony",
+   "kind": "record",
+   "tone": "mid",
+   "text": "This season is on a knife's edge, Marcus!"
+  },
+  {
+   "id": "tony_agree_1",
+   "host": "tony",
+   "kind": "agree",
+   "text": "Thank you! That's what I've been saying!"
+  },
+  {
+   "id": "tony_agree_2",
+   "host": "tony",
+   "kind": "agree",
+   "text": "Exactly! Exactly!"
+  },
+  {
+   "id": "tony_disagree_1",
+   "host": "tony",
+   "kind": "disagree",
+   "text": "Come on, Marcus! You can't be serious!"
+  },
+  {
+   "id": "tony_disagree_2",
+   "host": "tony",
+   "kind": "disagree",
+   "text": "Nah, nah, nah. I'm not buying that."
+  },
+  {
+   "id": "tony_hype",
+   "host": "tony",
+   "kind": "hype",
+   "text": "Let's go!"
+  },
+  {
+   "id": "tony_pivot",
+   "host": "tony",
+   "kind": "pivot",
+   "text": "Here's the thing nobody's talking about."
+  },
+  {
+   "id": "marcus_ppg_mid_slot",
+   "host": "marcus",
+   "stat": "ppg",
+   "tone": "mid",
+   "text": "They're {rank} in scoring. Middle of the pack. Not bad, not great.",
+   "take": "marcus_c"
+  },
+  {
+   "id": "marcus_pag_mid_slot",
+   "host": "marcus",
+   "stat": "pag",
+   "tone": "mid",
+   "text": "They're {rank} in points allowed. That's average, and average doesn't win you a division.",
+   "take": "marcus_c"
+  },
+  {
+   "id": "marcus_pass_mid_slot",
+   "host": "marcus",
+   "stat": "pass",
+   "tone": "mid",
+   "text": "They're {rank} in passing yards. It's fine. But fine isn't going to scare anybody.",
+   "take": "marcus_c"
+  },
+  {
+   "id": "marcus_rush_mid_slot",
+   "host": "marcus",
+   "stat": "rush",
+   "tone": "mid",
+   "text": "They're {rank} in rushing. Middle of the league. There's room to lean on it more.",
+   "take": "marcus_c"
+  },
+  {
+   "id": "marcus_yds_mid_slot",
+   "host": "marcus",
+   "stat": "yds",
+   "tone": "mid",
+   "text": "They're {rank} in total offense. Right down the middle.",
+   "take": "marcus_c"
+  },
+  {
+   "id": "marcus_yds_good_slot",
+   "host": "marcus",
+   "stat": "yds",
+   "tone": "good",
+   "text": "They're {rank} in total yards. They move the ball on everybody.",
+   "take": "marcus_c"
+  },
+  {
+   "id": "marcus_yds_bad_slot",
+   "host": "marcus",
+   "stat": "yds",
+   "tone": "bad",
+   "text": "They're {rank} in total offense. That is hard to overcome.",
+   "take": "marcus_c"
+  },
+  {
+   "id": "marcus_agree_3",
+   "host": "marcus",
+   "kind": "agree",
+   "text": "Tony's right about this one.",
+   "take": "marcus_c"
+  },
+  {
+   "id": "marcus_disagree_3",
+   "host": "marcus",
+   "kind": "disagree",
+   "text": "I just don't see it that way.",
+   "take": "marcus_c"
+  },
+  {
+   "id": "marcus_skeptical_3",
+   "host": "marcus",
+   "kind": "skeptical",
+   "text": "Is that sustainable, though? I'm not so sure.",
+   "take": "marcus_c"
+  },
+  {
+   "id": "marcus_pivot_3",
+   "host": "marcus",
+   "kind": "pivot",
+   "text": "Here's what jumps off the page for me.",
+   "take": "marcus_c"
+  },
+  {
+   "id": "marcus_agree_4",
+   "host": "marcus",
+   "kind": "agree",
+   "text": "No argument from me.",
+   "take": "marcus_c"
+  },
+  {
+   "id": "tony_ppg_mid_slot",
+   "host": "tony",
+   "stat": "ppg",
+   "tone": "mid",
+   "text": "{rank} in scoring? That's vanilla, Marcus! I want more!",
+   "take": "tony_c"
+  },
+  {
+   "id": "tony_pag_mid_slot",
+   "host": "tony",
+   "stat": "pag",
+   "tone": "mid",
+   "text": "{rank} in points allowed. That's just okay. Okay doesn't win championships!",
+   "take": "tony_c"
+  },
+  {
+   "id": "tony_pass_mid_slot",
+   "host": "tony",
+   "stat": "pass",
+   "tone": "mid",
+   "text": "{rank} in passing. Stuck in the middle. Wake up!",
+   "take": "tony_c"
+  },
+  {
+   "id": "tony_rush_mid_slot",
+   "host": "tony",
+   "stat": "rush",
+   "tone": "mid",
+   "text": "{rank} in rushing. That's not good enough for me!",
+   "take": "tony_c"
+  },
+  {
+   "id": "tony_yds_mid_slot",
+   "host": "tony",
+   "stat": "yds",
+   "tone": "mid",
+   "text": "{rank} in total offense. Mediocre! Just mediocre!",
+   "take": "tony_c"
+  },
+  {
+   "id": "tony_yds_good_slot",
+   "host": "tony",
+   "stat": "yds",
+   "tone": "good",
+   "text": "{rank} in total offense! These guys can move it!",
+   "take": "tony_c"
+  },
+  {
+   "id": "tony_yds_bad_slot",
+   "host": "tony",
+   "stat": "yds",
+   "tone": "bad",
+   "text": "{rank} in total yards?! Nobody is moving the chains!",
+   "take": "tony_c"
+  },
+  {
+   "id": "tony_agree_3",
+   "host": "tony",
+   "kind": "agree",
+   "text": "You know what? You're right.",
+   "take": "tony_c"
+  },
+  {
+   "id": "tony_disagree_3",
+   "host": "tony",
+   "kind": "disagree",
+   "text": "Marcus, stop it. Stop it!",
+   "take": "tony_c"
+  },
+  {
+   "id": "tony_hype_3",
+   "host": "tony",
+   "kind": "hype",
+   "text": "Oh, I love this!",
+   "take": "tony_c"
+  },
+  {
+   "id": "tony_pivot_3",
+   "host": "tony",
+   "kind": "pivot",
+   "text": "But let me tell you something.",
+   "take": "tony_c"
+  },
+  {
+   "id": "tony_skeptical_3",
+   "host": "tony",
+   "kind": "skeptical",
+   "text": "I don't trust it. Not yet.",
+   "take": "tony_c"
+  }
+ ]
 }

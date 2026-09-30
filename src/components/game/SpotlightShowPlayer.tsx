@@ -12,6 +12,7 @@ import {
 } from '@/lib/spotlight/showScript';
 import { ordinalSrc } from '@/lib/spotlight/phrases';
 import { ordinal, rankTone, statsMentioned, type ShowStat, type ShowStatLine } from '@/lib/spotlight/teamStats';
+import { ShowCaption, ShowGraphic, TWO_SHOT_SRC, avatarSrc } from './SpotlightShowGraphics';
 
 interface SpotlightShowPlayerProps {
   topics: { headline: string; icon: string; exchanges: { speakerId: string; text: string }[] }[];
@@ -30,9 +31,6 @@ const MP3_BYTES_PER_SEC = 128_000 / 8;
 type VideoSeg = Extract<TimedShowSegment, { kind: 'clip' | 'phrase' }>;
 const videoKey = (s: VideoSeg) => (s.kind === 'clip' ? `clip:${s.clip}` : `phrase:${s.phraseId}`);
 const videoSrc = (s: VideoSeg) => (s.kind === 'clip' ? SHOW_CLIPS[s.clip].src : s.src);
-
-/** Keep records like "5-6" on one line (non-breaking hyphen). */
-const noBreakRecords = (t: string) => t.replace(/(\d)-(\d)/g, '$1\u2011$2');
 
 function toneClass(st: ShowStat) {
   const t = rankTone(st.rank, st.of);
@@ -60,6 +58,14 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
   const segmentsRef = useRef<TimedShowSegment[]>([]);
   const tokenRef = useRef(0); // bumps on every segment start/stop so stale callbacks no-op
   const lowerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Show clock for the animated graphics (ms, frozen while paused).
+  const [clock, setClock] = useState(0);
+  const pausedTotal = useRef(0);
+  const pausedAt = useRef<number | null>(null);
+  const blockStart = useRef(0);
+  const lineStart = useRef(0);
+  const speakerStart = useRef(0);
 
   // Only mount <video> elements for clips this episode actually uses.
   const videoSegs = useMemo(() => {
@@ -102,11 +108,20 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
   }, [stopAll]);
   useEffect(() => {
     if (phase === 'playing') {
+      pausedAt.current = performance.now();
       void ctxRef.current?.suspend();
       for (const v of videoRefs.current.values()) v.pause();
       setPhase('paused');
     }
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (phase !== 'playing') return;
+    let raf = 0;
+    const tick = () => { setClock(performance.now() - pausedTotal.current); raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [phase]);
 
   const showLowerThird = useCallback(() => {
     setLowerThird(true);
@@ -145,6 +160,8 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
     const ctx = ctxRef.current;
 
     if (seg.kind === 'clip' || seg.kind === 'phrase') {
+      if (lowerTimer.current) clearTimeout(lowerTimer.current);
+      setLowerThird(false);
       const key = videoKey(seg);
       const v = videoRefs.current.get(key);
       if (!v) return advance();
@@ -185,8 +202,17 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
       return;
     }
 
-    // Generated line: voiceover over the stat graphic.
-    if (!prev || prev.speaker !== seg.speaker || prev.kind !== 'tts') showLowerThird();
+    // Generated line: voiceover over the animated graphic. Consecutive lines
+    // of a topic are one continuous shot — the graphic doesn't re-enter.
+    const now = performance.now() - pausedTotal.current;
+    // Returning from a cutaway to the same topic's graphic continues it too.
+    let lastTts: TimedShowSegment | undefined;
+    for (let k = i - 1; k >= 0 && !lastTts; k--) if (segs[k].kind === 'tts') lastTts = segs[k];
+    const sameBlock = lastTts?.kind === 'tts' && lastTts.visual === seg.visual && lastTts.topicIdx === seg.topicIdx;
+    if (!sameBlock) blockStart.current = now;
+    if (!sameBlock || prev?.kind !== 'tts' || prev.speaker !== seg.speaker) speakerStart.current = now;
+    lineStart.current = now;
+    setClock(now);
     const buf = buffersRef.current.get(i);
     if (!ctx || !buf) return advance();
     const src = ctx.createBufferSource();
@@ -238,6 +264,12 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
           if (r.ok) ordinals.set(k, await ctx.decodeAudioData(await r.arrayBuffer()));
         }),
       ]);
+      // Graphics artwork, decoded up front so the first frame isn't blank.
+      await Promise.all([TWO_SHOT_SRC, avatarSrc('marcus'), avatarSrc('tony')].map(src => {
+        const im = new Image();
+        im.src = src;
+        return im.decode().catch(() => {});
+      }));
       buffersRef.current = buffers;
       ordinalBufs.current = ordinals;
       segmentsRef.current = segs;
@@ -251,6 +283,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
   async function handleStart() {
     const ctx = ctxRef.current;
     if (ctx && ctx.state !== 'running') await ctx.resume(); // needs the click gesture
+    if (pausedAt.current != null) { pausedTotal.current += performance.now() - pausedAt.current; pausedAt.current = null; }
     if (phase === 'paused') {
       // Resume in place: suspended audio continues; a clip picks up where it paused.
       const seg = segmentsRef.current[segIdxRef.current];
@@ -263,6 +296,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
   }
 
   function handlePause() {
+    pausedAt.current = performance.now();
     void ctxRef.current?.suspend();
     for (const v of videoRefs.current.values()) v.pause();
     setPhase('paused');
@@ -317,6 +351,9 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
   const seg = segments[segIdx];
   const activeVideo = seg && seg.kind !== 'tts' ? videoKey(seg) : null;
   const tts = seg?.kind === 'tts' ? seg : null;
+  // Last voiceover graphic up to now (kept mounted to dissolve in and out).
+  let gfx: Extract<TimedShowSegment, { kind: 'tts' }> | null = tts;
+  for (let k = segIdx; !gfx && k >= 0; k--) { const x = segments[k]; if (x?.kind === 'tts') gfx = x; }
   const mentioned = tts ? statsMentioned(tts.text) : [];
   const phraseStat = seg?.kind === 'phrase' && seg.stat && stats ? stats.stats.find(s => s.key === seg.stat) ?? null : null;
   const speaker: Host | null = seg ? seg.speaker : null;
@@ -325,7 +362,28 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-white/80 backdrop-blur-sm p-4" role="dialog" aria-label={`Team Spotlight — ${teamName}`}>
       <div className="w-full max-w-4xl">
-        <div className="relative w-full aspect-video overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-xl">
+        <style>{'@keyframes spotlight-bug{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}'}</style>
+        <div className="relative w-full aspect-video overflow-hidden rounded-xl border border-slate-200 bg-slate-800 shadow-xl">
+          {/* Voiceover lines: animated graphic over the studio two-shot. Stays
+              mounted (faded out) during on-camera shots so cuts dissolve. */}
+          {gfx && (
+            <div className="absolute inset-0 transition-opacity duration-200" style={{ opacity: tts ? 1 : 0 }}>
+              <ShowGraphic
+                variant={gfx.visual === 'title' ? 'title' : 'topic'}
+                teamName={teamName}
+                headline={gfx.headline}
+                icon={gfx.icon}
+                stats={stats}
+                mentioned={mentioned}
+                speaker={gfx.speaker}
+                blockMs={tts ? clock - blockStart.current : 60_000}
+                lineMs={tts ? clock - lineStart.current : 60_000}
+                speakerMs={tts ? clock - speakerStart.current : 60_000}
+                text={gfx.text}
+              />
+            </div>
+          )}
+
           {/* Lip-synced clips: fixed lines + this episode's phrases */}
           {videoSegs.map(([key, vs]) => (
             <video
@@ -334,65 +392,29 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
               src={videoSrc(vs)}
               preload="auto"
               playsInline
-              className="absolute inset-0 h-full w-full object-cover"
+              className="absolute inset-0 h-full w-full object-cover transition-opacity duration-200"
               style={{ opacity: activeVideo === key ? 1 : 0 }}
             />
           ))}
 
-          {/* Voiceover lines: title card / topic graphic with the real stat line */}
-          {tts && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-slate-50 to-slate-200 px-[6%] pb-[12%] text-center">
-              <div className="absolute inset-x-0 top-0 h-[1.5%] bg-orange-600" />
-              <div className="text-[clamp(10px,1.5vw,14px)] font-bold tracking-[0.3em] text-slate-500">
-                {tts.visual === 'title' ? 'TEAM SPOTLIGHT' : 'THE BREAKDOWN'}
-              </div>
-              <div className="mt-[1.5%] flex items-center justify-center gap-[1.5%]">
-                <span className="text-[clamp(22px,4.5vw,48px)] leading-none">{tts.icon}</span>
-                <span className="text-[clamp(16px,3.2vw,36px)] font-extrabold leading-tight text-[#1e3a5f] [text-wrap:balance]">{noBreakRecords(tts.headline)}</span>
-              </div>
-              {tts.visual === 'graphic' && (
-                <div className="mt-[1%] text-[clamp(9px,1.3vw,13px)] font-semibold uppercase tracking-widest text-slate-500">
-                  {teamName}{stats ? ` · ${stats.record}` : ''}
-                </div>
-              )}
-              {tts.visual === 'title' && stats && (
-                <div className="mt-[1%] text-[clamp(12px,2vw,20px)] font-bold text-slate-600">{stats.record}</div>
-              )}
-              {stats && (
-                <div className="mt-[3%] grid w-full max-w-[92%] grid-cols-5 gap-[1.2%]">
-                  {stats.stats.map(st => {
-                    const hot = mentioned.includes(st.key);
-                    return (
-                      <div
-                        key={st.key}
-                        className={`rounded-lg border bg-white px-[4%] py-[6%] shadow-sm transition-all duration-300 ${hot ? 'scale-105 border-orange-500 ring-2 ring-orange-500/60' : 'border-slate-200'}`}
-                      >
-                        <div className="text-[clamp(8px,1.1vw,11px)] font-bold uppercase tracking-wider text-slate-500">{st.label}</div>
-                        <div className="text-[clamp(16px,3vw,34px)] font-extrabold leading-tight text-[#1e3a5f] tabular-nums">{st.value}</div>
-                        <div className={`text-[clamp(8px,1.1vw,12px)] font-bold ${toneClass(st)}`}>{ordinal(st.rank)} of {st.of}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Stat bug over on-camera stat reactions */}
           {phraseStat && (
-            <div className="absolute right-[3%] top-[5%] rounded-md border-l-[5px] border-orange-600 bg-white/95 px-3 py-1.5 text-right shadow-md">
+            <div
+              key={seg?.kind === 'phrase' ? seg.phraseId : 'bug'}
+              className="absolute right-[3%] top-[5%] animate-[spotlight-bug_450ms_cubic-bezier(0.2,0.8,0.2,1)_both] rounded-md border-l-[5px] border-orange-600 bg-white/95 px-3 py-1.5 text-right shadow-md"
+            >
               <div className="text-[clamp(8px,1.1vw,11px)] font-bold uppercase tracking-wider text-slate-500">{teamName} · {phraseStat.label}</div>
               <div className="flex items-baseline justify-end gap-2">
                 <span className="text-[clamp(16px,2.8vw,30px)] font-extrabold tabular-nums text-[#1e3a5f]">{phraseStat.value}</span>
-                <span className={`text-[clamp(9px,1.3vw,13px)] font-bold ${toneClass(phraseStat)}`}>{ordinal(phraseStat.rank)}</span>
+                <span className={`text-[clamp(9px,1.3vw,13px)] font-bold ${toneClass(phraseStat)}`}>{ordinal(phraseStat.rank)} of {phraseStat.of}</span>
               </div>
             </div>
           )}
 
-          {/* Lower third: who's talking (voiceover or on camera) */}
-          {speaker && seg?.kind !== 'clip' && (
+          {/* Lower third: who's on camera for a reaction */}
+          {speaker && seg?.kind === 'phrase' && (
             <div
-              className="absolute left-[4%] bottom-[20%] rounded border-l-[5px] border-orange-600 bg-white px-3 py-1.5 shadow-md transition-all duration-300"
+              className="absolute left-[4%] bottom-[18%] rounded border-l-[5px] border-orange-600 bg-white px-3 py-1.5 shadow-md transition-all duration-300"
               style={{ opacity: lowerThird ? 1 : 0, transform: lowerThird ? 'none' : 'translateX(-10px)' }}
             >
               <div className="text-[clamp(11px,1.8vw,17px)] font-extrabold text-[#1e3a5f]">{HOSTS[speaker].name}</div>
@@ -400,14 +422,8 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
             </div>
           )}
 
-          {/* Captions */}
-          {seg && phase !== 'ended' && (
-            <div className="absolute inset-x-[7%] bottom-[5%] text-center">
-              <span className="rounded bg-white/90 px-2 py-0.5 text-[clamp(11px,1.8vw,17px)] font-semibold leading-snug text-slate-800 [box-decoration-break:clone]">
-                {seg.text}
-              </span>
-            </div>
-          )}
+          {/* Captions (topic graphics carry the line as a pull quote instead) */}
+          {seg && phase !== 'ended' && !(tts && tts.visual === 'graphic') && <ShowCaption text={seg.text} />}
 
           {/* Start / resume / replay */}
           {(phase === 'ready' || phase === 'paused' || phase === 'ended') && (
