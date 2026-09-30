@@ -167,6 +167,7 @@ function OnTheClockSection({
   onDraft,
   onPlayerClick,
   onTradePick,
+  onStartSeason,
 }: {
   currentTeam: Team | undefined;
   currentRound: number;
@@ -191,6 +192,7 @@ function OnTheClockSection({
   onDraft?: (playerId: string) => void;
   onPlayerClick?: (playerId: string) => void;
   onTradePick?: () => void;
+  onStartSeason?: () => void;
 }) {
   const canSimulate = !draftComplete;
 
@@ -416,6 +418,19 @@ function OnTheClockSection({
         <div className="rounded-b-xl border border-[var(--border)] px-5 py-4 bg-[var(--surface)]">
           <div className="text-center flex flex-wrap items-center justify-center gap-3">
             <span className="font-bold text-green-600">Draft Complete!</span>
+            {/* Escape hatch: if a user is stuck on the draft page after the draft
+                completes (e.g. prospect pool exhausted mid-draft), give them a
+                direct 'Start Season' action so they can always advance to the
+                next season instead of being trapped. rossthehunted, #bug-reports
+                2026-09-29. */}
+            {onStartSeason && (
+              <button
+                onClick={onStartSeason}
+                className="text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg px-4 py-1.5"
+              >
+                Start Season →
+              </button>
+            )}
             <Link href="/draft-recap" className="text-sm font-medium text-blue-600 hover:underline">
               View Draft Recap →
             </Link>
@@ -1107,6 +1122,7 @@ export default function DraftPage() {
     nflMockDraft,
     importDraftClass,
     currentDraftYear,
+    startNewSeason,
   } = useGameStore();
   const isSpectator = useGameStore(s => s.isSpectator ?? false);
   const draftYear = currentDraftYear ?? season;
@@ -1517,6 +1533,24 @@ export default function DraftPage() {
           onDraft={(playerId) => draftPlayer(playerId)}
           onPlayerClick={(playerId) => setExpandedProspectId(playerId)}
           onTradePick={() => setShowTradeModal(true)}
+          onStartSeason={phase === 'draft' ? async () => {
+            // Mirror the vetted draft-recap flow: over-53 rosters route through
+            // post-draft-cuts; otherwise roll the season over defensively and
+            // land on /roster even if startNewSeason throws.
+            const userTeam = teams.find(t => t.id === userTeamId);
+            const overCap = (userTeam?.roster.length ?? 0) > 53;
+            if (overCap) {
+              router.push('/post-draft-cuts');
+              return;
+            }
+            try {
+              startNewSeason();
+            } catch (err) {
+              console.error('[draft] startNewSeason escaped its own catch:', err);
+            }
+            try { await flushToStorage(); } catch (err) { console.error('[draft] flushToStorage failed', err); }
+            router.push('/roster');
+          } : undefined}
         />
 
         {/* Mock Draft button + dropdown */}

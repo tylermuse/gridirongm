@@ -1475,6 +1475,8 @@ export interface LeagueState {
   expansionDraft: ExpansionDraftState | null;
   /** Number of contract extensions used this season (max 3) */
   extensionsUsedThisSeason?: number;
+  /** Number of retired players un-retired this season (max 1) */
+  retiredSigningsThisSeason?: number;
   /** Free agency intel report pursuit state */
   pursuitState?: {
     pursuitPoints: number;
