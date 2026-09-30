@@ -10592,6 +10592,24 @@ export const useGameStore = create<GameStore>()(
         if (state && state.userTeamId && state.teams && state.teams.length > 0) {
           useGameStore.setState({ initialized: true });
         }
+        // Heal legacy saves whose imported players carried a non-string
+        // injury.type — some FBGM/ESPN exports store it as a status object
+        // ({id,name,description,abbreviation}). Rendering that object as a React
+        // child crashes the dashboard (React #31), which stranded users who
+        // started a league from such a roster. Coerce to a readable string in
+        // place. Idempotent; runs every rehydrate; no save-version bump.
+        if (state && Array.isArray(state.players)) {
+          let healed = false;
+          for (const p of state.players) {
+            const rawType: unknown = p?.injury?.type;
+            if (rawType && typeof rawType === 'object') {
+              const o = rawType as { description?: string; name?: string; abbreviation?: string };
+              p.injury!.type = String(o.description ?? o.name ?? o.abbreviation ?? 'Injured');
+              healed = true;
+            }
+          }
+          if (healed) useGameStore.setState({ players: state.players });
+        }
         // Un-stick any scouting/intel allocations that were frozen at free-tier
         // values before the subscription tier resolved. No-op unless the module
         // cache already holds a higher entitlement; SubscriptionProvider also
