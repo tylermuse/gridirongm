@@ -118,6 +118,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
   const playerStart = useRef(0);
   const playerKey = useRef<string | null>(null);
   // Per-player stat lines, recomputed whenever the league's players change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- a fresh cache per players array is the point
   const playerTiles = useMemo(() => ({ current: new Map<string, TileStat[] | null>() }), [players]);
   const panelKey = useRef('');
   const topicStart = useRef(0);
