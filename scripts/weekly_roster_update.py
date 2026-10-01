@@ -20,6 +20,19 @@ from collections import defaultdict, Counter
 
 ROSTER = "public/rosters/FBGM_NFL_Roster_2026_Updated.json"
 PAGE   = "src/app/rosters/page.tsx"
+# Trades ESPN's team-roster feed hasn't reflected yet. normalized "first last" -> tid.
+# Forced every run so an ESPN lag can't flip the player back; harmless once ESPN catches up.
+MANUAL_OVERRIDES = {"joey porter jr": 8}  # Joey Porter Jr. -> Cowboys (Oct 2026)
+def _rawkey(p):
+    import re as _re
+    return _re.sub(r'[^a-z0-9 ]','',((p.get('firstName') or '')+' '+(p.get('lastName') or '')).lower()).strip()
+def apply_overrides(d):
+    n=0
+    for p in d['players']:
+        k=_rawkey(p)  # keeps the Jr./Sr. suffix so we don't hit the wrong player
+        if k in MANUAL_OVERRIDES and p.get('tid')!=MANUAL_OVERRIDES[k]:
+            p['tid']=MANUAL_OVERRIDES[k]; n+=1
+    return n
 TID_ABBR = {0:'ari',1:'atl',2:'bal',3:'buf',4:'car',5:'chi',6:'cin',7:'cle',8:'dal',9:'den',10:'det',11:'gb',12:'hou',13:'ind',14:'jax',15:'kc',16:'lv',17:'lac',18:'lar',19:'mia',20:'min',21:'ne',22:'no',23:'nyg',24:'nyj',25:'phi',26:'pit',27:'sf',28:'sea',29:'tb',30:'ten',31:'wsh'}
 TEAM_NAME = {0:'Cardinals',1:'Falcons',2:'Ravens',3:'Bills',4:'Panthers',5:'Bears',6:'Bengals',7:'Browns',8:'Cowboys',9:'Broncos',10:'Lions',11:'Packers',12:'Texans',13:'Colts',14:'Jaguars',15:'Chiefs',16:'Raiders',17:'Chargers',18:'Rams',19:'Dolphins',20:'Vikings',21:'Patriots',22:'Saints',23:'Giants',24:'Jets',25:'Eagles',26:'Steelers',27:'49ers',28:'Seahawks',29:'Buccaneers',30:'Titans',31:'Commanders'}
 
@@ -250,13 +263,14 @@ def main():
     d=json.load(open(ROSTER))
     n0=len(d['players'])
     moves,unret,cuts,jset = reconcile(d, teams, ok)
+    nov = apply_overrides(d)
     ninj = apply_injuries(d, injured)
     assert len(d['players'])==n0
     json.dump(d, open(ROSTER,'w'), ensure_ascii=False, allow_nan=False)
     cb = update_page(week, teams, today)
     fn = write_changelog(week, teams, today, moves, unret, cuts, ninj)
     subprocess.run([sys.executable,"scripts/build_midseason_start.py"],check=True)
-    print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"jerseys":jset,"injuries":ninj,"cacheBust":cb,"changelog":fn,"players":n0}))
+    print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"jerseys":jset,"overrides":nov,"injuries":ninj,"cacheBust":cb,"changelog":fn,"players":n0}))
 
 if __name__=="__main__":
     main()
