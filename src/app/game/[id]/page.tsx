@@ -1443,12 +1443,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       // (jslusser1945_25790 8/13 + Commish 8/15: live-coached games recorded 0
       // player stats). Merging fixes that without re-introducing the pre-sim
       // ghost plays the user replaced (lakerfan21_32127 5/12).
+      // Coached from the first play (pivot 0 — Live Coach defaults on for
+      // managed games): nothing from the pre-sim counts. Falling back to the
+      // pre-sim's final bucket here added a whole simulated game on top of
+      // the coached one, doubling every stat line (62/87, 702 yds).
       const lastBucketEvent = pivotIdx !== null && pivotIdx > 0
         ? (liveResult?.events ?? [])[pivotIdx - 1]
-        : (liveResult?.events ?? []).slice(-1)[0];
+        : undefined;
       const preStats = lastBucketEvent
         ? livePlayerStatsAtEvent(lastBucketEvent, homePlayers, awayPlayers)
-        : (liveResult?.playerStats ?? {});
+        : {};
       const stats = mergePlayerStats(preStats, liveEngineRef.current.getPlayerStats());
       return {
         ...game,
