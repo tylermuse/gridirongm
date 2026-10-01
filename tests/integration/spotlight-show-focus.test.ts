@@ -59,3 +59,34 @@ describe('computeUnitLine', () => {
     expect(computeUnitLine('oline', nyg, [dal, nyg], players)![0]).toMatchObject({ value: '4', rank: 1 });
   });
 });
+
+describe('focusForLine in a game breakdown', () => {
+  const line = [{ key: 'passYds', label: 'Pass YDS', value: '287', rank: 0, of: 0, note: 'This game' }];
+  const box = [{ key: 'to', label: 'Turnovers', value: '2', rank: 0, of: 0, note: 'NYG 3' }];
+  const topic = { playerIds: ['starter'], gameLines: { starter: line }, gameTeam: box, gameLabel: 'Championship · DAL vs NYG' };
+  const gctx = { ...ctx, topic, earlier: ['starterson was dealing.'] };
+
+  it('a player shows his line from that game, not his season', () => {
+    const f = focusForLine('starterson was dealing all night.', gctx);
+    expect(f.kind === 'player' && f.tiles).toEqual(line);
+  });
+
+  it('a player with no line from the game shows no season numbers', () => {
+    const f = focusForLine('Even backupson got a series.', gctx);
+    expect(f.kind === 'player' && f.tiles).toBeNull();
+  });
+
+  it('a line about the game (no player) is the box score — no carried-over player', () => {
+    const f = focusForLine('They turned it over three times, Dallas twice.', gctx);
+    expect(f).toEqual({ kind: 'team', mentioned: ['to'] });
+  });
+});
+
+describe('kicker', () => {
+  it('"held them to field goals" is not about the kicker', () => {
+    const k = pl('k', 'dal', 'K', { fieldGoalAttempts: 30, fieldGoalsMade: 27 });
+    const f = focusForLine('The defense held them to two field goals.', { ...ctx, players: [...players, k] });
+    expect(f.kind === 'player' && f.player.id === 'k').toBe(false);
+    expect(focusForLine('The kicker was perfect.', { ...ctx, players: [...players, k] })).toMatchObject({ kind: 'player' });
+  });
+});

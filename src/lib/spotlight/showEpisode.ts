@@ -12,13 +12,13 @@
 import crypto from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { VOICES, normalizeTtsText, generateDialogue, stripCues } from './tts';
-import { hasDebate, writeConversation, WRITER_MODEL } from './showWriter';
+import { writeConversation, WRITER_MODEL } from './showWriter';
 import { buildShowScript, type ShowSegment, type ShowTopicInput, type TimedShowSegment } from './showScript';
 import type { ShowStatLine } from './teamStats';
 
 export const CACHE_BUCKET = 'spotlight-audio';
 /** Bump when the episode format or the composer changes. */
-export const SHOW_VERSION = 'show-v7';
+export const SHOW_VERSION = 'show-v8';
 
 export interface EpisodeInput {
   topics: ShowTopicInput[];
@@ -101,17 +101,34 @@ export function getScript(sb: SupabaseClient | null, e: EpisodeInput): Promise<S
   return job;
 }
 
-/** Voiced blocks of generated lines: the title line, then one per topic. */
-export function blocksOf(segments: ShowSegment[]): number[][] {
-  const blocks = new Map<number, number[]>();
+/** Lines per voiced block: a topic's first block is short so it's ready
+ *  fast; the rest are a few lines each (one dialogue pass per block). */
+const BLOCK_SIZES = [2, 3];
+const blockSize = (k: number) => BLOCK_SIZES[Math.min(k, BLOCK_SIZES.length - 1)];
+
+export interface Block { idxs: number[]; topicIdx: number; full: boolean }
+
+/** Voiced blocks of generated lines: the title line, then each topic's
+ *  lines in runs of 2, 3, 3… Purely positional, so the blocks of a script
+ *  that's still growing are the same as in the finished one. */
+export function blockList(segments: ShowSegment[]): Block[] {
+  const byTopic = new Map<number, number[]>();
   segments.forEach((seg, i) => {
     if (seg.kind !== 'tts') return;
-    const list = blocks.get(seg.topicIdx) ?? [];
-    list.push(i);
-    blocks.set(seg.topicIdx, list);
+    byTopic.set(seg.topicIdx, [...(byTopic.get(seg.topicIdx) ?? []), i]);
   });
-  return [...blocks.values()];
+  const out: Block[] = [];
+  for (const [topicIdx, idxs] of byTopic) {
+    for (let at = 0, k = 0; at < idxs.length; k++) {
+      const size = blockSize(k);
+      out.push({ idxs: idxs.slice(at, at + size), topicIdx, full: idxs.length - at >= size });
+      at += size;
+    }
+  }
+  return out;
 }
+
+export const blocksOf = (segments: ShowSegment[]): number[][] => blockList(segments).map(b => b.idxs);
 
 /** On-screen text never shows the [laughs]-style performance cues. */
 export const displaySegments = (segments: ShowSegment[]): TimedShowSegment[] =>
@@ -133,10 +150,11 @@ export type EpisodeMessage =
 
 /**
  * Produce a fresh episode as a stream the player can start on immediately:
- *  - the opening (intro clips + the title line) right away, and its voice
- *    within a couple of seconds;
- *  - then each topic the moment the writer finishes it, voiced right away,
- *    while the next topics are still being written.
+ *  - the opening (intro clips + the title line) right away, voiced within a
+ *    couple of seconds;
+ *  - then the conversation as the writer writes it, line by line, each run
+ *    of lines voiced the moment it's complete — so the first lines are ready
+ *    while the intro is still playing.
  * If the script was written ahead of time, it all goes out at once.
  * Returns the complete episode for the cache.
  */
@@ -146,19 +164,23 @@ export async function streamEpisode(sb: SupabaseClient | null, e: EpisodeInput, 
   const voiced: VoicedBlock[] = [];
   const voicing: Promise<void>[] = [];
   const started = new Set<number>(); // blocks whose voicing has begun
+  let sentLen = -1;
 
-  /** Send a script (a prefix, or the final one) and start voicing every
-   *  block that is new in it. Each prefix ends on a whole topic, so its
-   *  blocks are complete. */
-  const publish = (segments: ShowSegment[], final: boolean) => {
-    send({ type: 'script', segments: displaySegments(segments), final });
-    blocksOf(segments).forEach((idxs, index) => {
+  /** Send the script so far (if it grew) and voice every block that's
+   *  complete and not voiced yet. */
+  const publish = (segments: ShowSegment[], final: boolean, doneTopics?: Set<number>) => {
+    if (final || segments.length !== sentLen) {
+      send({ type: 'script', segments: displaySegments(segments), final });
+      sentLen = segments.length;
+    }
+    blockList(segments).forEach((b, index) => {
       if (started.has(index)) return;
+      if (!final && !b.full && !(b.topicIdx < 0 || doneTopics?.has(b.topicIdx))) return;
       started.add(index);
-      voicing.push(voiceBlock(segments, idxs, index).then(b => {
-        voiced[index] = b;
-        send({ type: 'block', ...b });
-        log(`block ${index} voiced`);
+      voicing.push(voiceBlock(segments, b.idxs, index).then(v => {
+        voiced[index] = v;
+        send({ type: 'block', ...v });
+        log(`block ${index} voiced (${b.idxs.length} lines)`);
       }));
     });
   };
@@ -172,14 +194,14 @@ export async function streamEpisode(sb: SupabaseClient | null, e: EpisodeInput, 
   } else {
     // The opening needs nothing from the writer.
     publish(buildShowScript([], e.teamName, e.stats, { written: true, partial: true }), false);
-    const done: ShowTopicInput[] = [];
-    const ep = await writeConversation(e.topics, e.teamName, e.stats, (i, topic) => {
-      done[i] = topic;
-      const upTo = e.topics.slice(0, i + 1).map((t, k) => done[k] ?? { ...t, exchanges: [] });
-      const last = e.topics.every((t, k) => k <= i || !hasDebate(t));
-      log(`topic ${i} written`);
-      if (!last) publish(buildShowScript(upTo, e.teamName, e.stats, { written: true, partial: true }), false);
+    let first = true;
+    const ep = await writeConversation(e.topics, e.teamName, e.stats, (sofar, done) => {
+      if (first) { log('first line written'); first = false; }
+      // Only the topics the writer has reached.
+      const reached = sofar.map((t, i) => (done.has(i) || t !== e.topics[i] ? i : -1)).reduce((m, i) => Math.max(m, i), -1);
+      publish(buildShowScript(sofar.slice(0, reached + 1), e.teamName, e.stats, { written: true, partial: true }), false, done);
     });
+    log('script written');
     if (ep.written) {
       final = buildShowScript(ep.topics, e.teamName, e.stats, { written: true });
       await writeJson(sb, scriptPath(e), { segments: final });
@@ -203,11 +225,33 @@ async function readCachedScript(sb: SupabaseClient | null, e: EpisodeInput): Pro
   return cached?.segments?.length ? cached.segments : null;
 }
 
+// ElevenLabs caps concurrent requests per account: voice a few blocks at a
+// time, in order (the next lines to play go first), retrying when throttled.
+const MAX_VOICING = 4;
+let active = 0;
+const waiting: (() => void)[] = [];
+async function slot<T>(job: () => Promise<T>): Promise<T> {
+  if (active >= MAX_VOICING) await new Promise<void>(r => waiting.push(r));
+  active++;
+  try { return await job(); } finally { active--; waiting.shift()?.(); }
+}
+
 async function voiceBlock(segments: ShowSegment[], idxs: number[], index: number): Promise<VoicedBlock> {
-  const voiced = await generateDialogue(idxs.map(i => {
+  const lines = idxs.map(i => {
     const seg = segments[i] as Extract<ShowSegment, { kind: 'tts' }>;
     return { voiceId: VOICES[seg.speaker], text: normalizeTtsText(seg.text) };
-  }));
+  });
+  const voiced = await slot(async () => {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await generateDialogue(lines);
+      } catch (err) {
+        const throttled = /\(429\)|concurrent|too_many/i.test(err instanceof Error ? err.message : '');
+        if (!throttled || attempt >= 4) throw err;
+        await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+      }
+    }
+  });
   return {
     index,
     audio: voiced.audio.toString('base64'),

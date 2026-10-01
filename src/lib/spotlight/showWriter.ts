@@ -66,7 +66,7 @@ PERFORMANCE CUES
 Voiced with ElevenLabs v3, which performs bracketed cues. Use them only where a person really would, at most one in four lines: [laughs], [chuckles], [sighs], [scoffs], [exhales], [pause].
 
 FACTS
-Use only facts, names and numbers in the notes and team numbers. You may reason about football in general, but don't invent stats, injuries, trades, quotes or events for this team. Teams are "they" or their name, never "we". When a player or position group comes up, name it plainly (the show puts his or its numbers on screen when it hears the name).
+Use only facts, names and numbers in the notes and team numbers. Never claim a "first", a record or a streak ("their first title", "first time since…") unless the notes state it. You may reason about football in general, but don't invent stats, injuries, trades, quotes or events for this team. Teams are "they" or their name, never "we". When a player or position group comes up, name it plainly (the show puts his or its numbers on screen when it hears the name).
 
 ON-CAMERA CLIPS
 The hosts have pre-recorded on-camera lines, listed with the notes as CLIPS (all already true for this team). Using one cuts to a real shot of the host, which makes the show feel live, so use them — but only where it is exactly what that host would say next. Write {"speaker":"tony","clip":"<id>"} instead of a text line.
@@ -76,9 +76,10 @@ The hosts have pre-recorded on-camera lines, listed with the notes as CLIPS (all
 - Aim for two or three clips in each topic of five or more lines, one in shorter topics.
 
 OUTPUT
-One JSON object per topic, each on its own single line (no array around them, no other text), in the same order as the notes — the show starts playing the first topic while you write the rest:
-{"lines":[{"speaker":"marcus"|"tony","text":"..."} or {"speaker":"marcus"|"tony","clip":"<id>"}, ...]}
-- Exactly one line per topic in the notes.
+One JSON object per spoken line, each on its own single line, nothing else (no array, no prose) — the show starts playing while you write, so write the lines in order:
+{"t":<topic number, from 1>,"speaker":"marcus"|"tony","text":"..."}
+{"t":<topic number>,"speaker":"marcus"|"tony","clip":"<id>"}
+- Cover every topic in the notes, in order; "t" is its position in the notes (the first topic is 1).
 - The first topic comes right after the hosts' intros: get straight into it, no greeting. If it's a regular topic, keep it a quick cold open (2–4 lines).
 - Topics marked "depth":"deep" are the game they just played. Go deep, the way a real postgame show does: 10–16 lines each. Walk through how the game was won or lost (the flow, the turning points, the deciding drive), argue about what decided it, and put the real stat lines in the hosts' mouths — specific players, specific numbers, said the way people say them ("three touchdowns, no picks", "a hundred and twelve on the ground"). Here, numbers are welcome: one per line is fine.
 - Other topics: 5–9 lines.`;
@@ -126,36 +127,31 @@ export function clipCatalog(stats?: ShowStatLine | null): { phrase: Phrase; word
   return out;
 }
 
-interface TopicLines { lines: WriterLine[] }
-
-const topicOk = (o: unknown): o is TopicLines =>
-  !!o && Array.isArray((o as TopicLines).lines) && (o as TopicLines).lines.length > 0
-  && (o as TopicLines).lines.every(l => !!l && typeof l === 'object' && typeof l.speaker === 'string');
-
 export interface WrittenEpisode {
   topics: ShowTopicInput[];
   /** True when the writer produced the conversation (else: original notes). */
   written: boolean;
 }
 
-/** Calls back with each topic as soon as the writer finishes it: the topic's
- *  index in `topics` and its rewritten version. */
-export type OnTopic = (index: number, topic: ShowTopicInput) => void;
+/** Progress while the writer streams: called after every line it writes
+ *  with the episode so far — topics it has started carry their rewritten
+ *  lines; `done` = the topics (indexes into `topics`) it has finished. */
+export type OnProgress = (sofar: ShowTopicInput[], done: Set<number>) => void;
 
 const debateOf = (t: ShowTopicInput) => t.exchanges.filter(e => e.speakerId === 'stats' || e.speakerId === 'hottake');
 export const hasDebate = (t: ShowTopicInput) => debateOf(t).length > 0;
 
 /**
  * Rewrite the topics' Marcus/Tony lines as one natural conversation,
- * streamed: each topic is handed to `onTopic` the moment it's written, so
- * the show can voice and play the first topics while the rest are written.
+ * streamed line by line: `onProgress` fires after every line, so the show
+ * can voice and play the start while the rest is still being written.
  * Topics the writer doesn't deliver keep their original lines.
  */
 export async function writeConversation(
   topics: ShowTopicInput[],
   teamName: string,
   stats?: ShowStatLine | null,
-  onTopic?: OnTopic,
+  onProgress?: OnProgress,
 ): Promise<WrittenEpisode> {
   const original = { topics, written: false };
   if (!ANTHROPIC_API_KEY) return original;
@@ -170,41 +166,41 @@ export async function writeConversation(
     notes: debateOf(topics[i]).map(e => `${e.speakerId === 'stats' ? 'Marcus' : 'Tony'}: ${e.text}`),
   }));
   const clipList = catalog.map(c => `${c.phrase.id} (${c.phrase.host}): ${c.words}`).join('\n');
-  const user = `Team numbers: ${teamNumbers(teamName, stats)}\n\nProducer's notes for this episode:\n${JSON.stringify(notes, null, 1)}`
+  const user = `Team numbers: ${teamNumbers(teamName, stats)}\n\nProducer's notes for this episode (topics 1–${liveIdx.length}):\n${JSON.stringify(notes, null, 1)}`
     + (clipList ? `\n\nCLIPS (id (host): words):\n${clipList}` : '');
 
-  const lineOk = (l: WriterLine): boolean => {
-    if (l.speaker !== 'marcus' && l.speaker !== 'tony') return false;
-    if (typeof l.clip === 'string') return clipById.get(l.clip)?.phrase.host === l.speaker;
-    return typeof l.text === 'string' && l.text.trim().length > 0;
-  };
-  const toTopic = (t: ShowTopicInput, o: TopicLines): ShowTopicInput | null => {
-    // Drop any line that doesn't check out (unknown clip, wrong host).
-    const lines = o.lines.filter(lineOk);
-    if (!lines.length) return null;
-    return {
-      ...t,
-      exchanges: lines.map(l => {
-        const speakerId = l.speaker === 'marcus' ? 'stats' : 'hottake';
-        const clip = l.clip ? clipById.get(l.clip) : undefined;
-        return clip ? { speakerId, text: clip.words, clipId: clip.phrase.id } : { speakerId, text: (l.text ?? '').trim() };
-      }),
-    };
-  };
+  // The episode as written so far.
+  const written = new Map<number, ShowTopicInput['exchanges']>(); // topic index → lines
+  const done = new Set<number>();
+  let current = -1; // position in liveIdx being written
+  const sofar = () => topics.map((t, i) => (written.has(i) ? { ...t, exchanges: written.get(i)! } : t));
 
-  const out = [...topics];
-  let got = 0;
   const take = (jsonLine: string) => {
-    if (got >= liveIdx.length) return;
     const start = jsonLine.indexOf('{');
     if (start < 0) return;
-    let o: unknown;
-    try { o = JSON.parse(jsonLine.slice(start, jsonLine.lastIndexOf('}') + 1)); } catch { return; }
-    if (!topicOk(o)) return;
-    const i = liveIdx[got++];
-    const t = toTopic(topics[i], o);
-    if (t) out[i] = t;
-    onTopic?.(i, out[i]);
+    let l: WriterLine & { t?: unknown };
+    try { l = JSON.parse(jsonLine.slice(start, jsonLine.lastIndexOf('}') + 1)); } catch { return; }
+    const pos = typeof l.t === 'number' ? l.t - 1 : -1;
+    if (pos < 0 || pos >= liveIdx.length || pos < current) return; // out of order: skip
+    if (l.speaker !== 'marcus' && l.speaker !== 'tony') return;
+    const clip = typeof l.clip === 'string' ? clipById.get(l.clip) : undefined;
+    if (l.clip && clip?.phrase.host !== l.speaker) return;
+    const text = clip ? clip.words : typeof l.text === 'string' ? l.text.trim() : '';
+    if (!text) return;
+    // Moving on: every topic before this one is finished.
+    for (let k = Math.max(0, current); k < pos; k++) done.add(liveIdx[k]);
+    current = pos;
+    const i = liveIdx[pos];
+    const speakerId = l.speaker === 'marcus' ? 'stats' : 'hottake';
+    written.set(i, [...(written.get(i) ?? []), clip ? { speakerId, text, clipId: clip.phrase.id } : { speakerId, text }]);
+    onProgress?.(sofar(), done);
+  };
+
+  const finish = (): WrittenEpisode => {
+    for (const i of liveIdx) done.add(i);
+    const out = sofar();
+    onProgress?.(out, done);
+    return { topics: out, written: true };
   };
 
   try {
@@ -221,15 +217,15 @@ export async function writeConversation(
       }),
     });
     if (!res.ok || !res.body) throw new Error(`writer ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    // Server-sent events → text deltas → one topic per completed line.
+    // Server-sent events → text deltas → one spoken line per completed line.
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     let sse = '';
     let text = '';
     try {
       for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
+        const { value, done: end } = await reader.read();
+        if (end) break;
         sse += dec.decode(value, { stream: true });
         let nl: number;
         while ((nl = sse.indexOf('\n')) >= 0) {
@@ -249,14 +245,11 @@ export async function writeConversation(
       clearTimeout(timer);
     }
     take(text);
-    if (!got) throw new Error('writer returned no topics');
-    // Any topic it didn't get to keeps its original lines.
-    for (let k = got; k < liveIdx.length; k++) onTopic?.(liveIdx[k], out[liveIdx[k]]);
-    return { topics: out, written: true };
+    if (!written.size) throw new Error('writer returned no lines');
+    return finish();
   } catch (err) {
     console.warn('Spotlight show writer failed:', err instanceof Error ? err.message : err);
-    if (!got) return original;
-    for (let k = got; k < liveIdx.length; k++) onTopic?.(liveIdx[k], out[liveIdx[k]]);
-    return { topics: out, written: true };
+    // Keep whatever it wrote; the rest keeps the original lines.
+    return written.size ? finish() : original;
   }
 }

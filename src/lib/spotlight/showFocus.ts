@@ -29,7 +29,8 @@ const ROLE_WORDS: [PositionRole, RegExp][] = [
   ['qb', /\bquarterbacks?\b|\bQBs?\b|\bunder center\b|\bsignal[- ]callers?\b/i],
   ['rb', /\brunning backs?\b|\bRBs?\b|\bhalfbacks?\b|\bbell ?cow\b/i],
   ['wr', /\breceivers?\b|\bwideouts?\b|\bWRs?\b|\btight ends?\b|\bpass[- ]catchers?\b/i],
-  ['k', /\bkicker\b|\bfield goals?\b/i],
+  // Only the kicker himself: "held them to field goals" is about the defense.
+  ['k', /\bkicker\b/i],
 ];
 
 const UNIT_WORDS: [Unit, RegExp][] = [
@@ -155,6 +156,7 @@ export interface FocusContext {
     headline?: string;
     /** A postgame topic: that game's stat lines replace the season's. */
     gameLines?: Record<string, TileStat[]>;
+    gameTeam?: TileStat[];
     gameLabel?: string;
   };
   team: Team;
@@ -166,7 +168,9 @@ export interface FocusContext {
 
 function playerFocus(p: Player, text: string, players: Player[], topic?: FocusContext['topic']): Focus {
   const game = topic?.gameLines?.[p.id];
-  const tiles = game ?? computePlayerStatLine(p, players);
+  // In a game breakdown, a player without a line from that game shows no
+  // tiles of his own (the game's box score stays up) — never season numbers.
+  const tiles = game ?? (topic?.gameLines ? null : computePlayerStatLine(p, players));
   return {
     kind: 'player', player: p, tiles,
     label: game ? `${p.firstName} ${p.lastName} · ${topic?.gameLabel ?? 'this game'}` : `${p.firstName} ${p.lastName} · ${p.position} ranks`,
@@ -174,10 +178,27 @@ function playerFocus(p: Player, text: string, players: Player[], topic?: FocusCo
   };
 }
 
+const GAME_WORDS: [string, RegExp][] = [
+  ['pts', /\bpoints?\b|\bscor/i],
+  ['passYds', /\bpass|\bthrow|\bthrew|\bthrown|\bthrough the air/i],
+  ['rushYds', /\brush|\bran\b|\brun\b|\bon the ground\b|\bcarr/i],
+  ['to', /\bturn(ed|s)? (it|the ball) over|\bturnovers?\b|\bgave it away|\bpicks?\b|\bintercept|\bfumbl/i],
+  ['sacks', /\bsack/i],
+];
+
 /** Focus from one piece of text alone (no carry-over). */
 function focusOf(text: string, c: FocusContext): Focus | null {
   const named = playerNamedIn(text, c.topic, c.players, [c.team.id, ...(c.topic?.teamIds ?? [])]);
   if (named) return playerFocus(named, text, c.players, c.topic);
+  // A game breakdown: the game's box score, not season unit or team ranks.
+  if (c.topic?.gameTeam) {
+    for (const [role, re] of ROLE_WORDS) {
+      if (!re.test(text)) continue;
+      const p = starter(role, c.team, c.players);
+      if (p) return playerFocus(p, text, c.players, c.topic);
+    }
+    return { kind: 'team', mentioned: GAME_WORDS.filter(([, re]) => re.test(text)).map(([k]) => k) };
+  }
   for (const [unit, re] of UNIT_WORDS) {
     if (!re.test(text)) continue;
     const tiles = computeUnitLine(unit, c.team, c.teams, c.players);

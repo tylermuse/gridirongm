@@ -128,8 +128,10 @@ export function buildGameTopics(c: GameContext): GameTopic[] {
   const top = (teamId: string, k: number) => lines.filter(l => l.p.teamId === teamId).sort((a, b) => b.score - a.score).slice(0, k);
   const ours = top(c.team.id, 4);
   const theirs = top(opp.id, 2);
+  // Every player who did something in this game gets that game's line on
+  // screen when he's discussed (never his season numbers here).
   const gameLines: Record<string, TileStat[]> = {};
-  for (const l of [...ours, ...theirs]) gameLines[l.p.id] = gameTiles(l.p, l.s);
+  for (const l of lines) if (l.score > 0) gameLines[l.p.id] = gameTiles(l.p, l.s);
 
   // Team numbers, us vs them.
   const a = teamTotals(g, c.team.id, c.players);

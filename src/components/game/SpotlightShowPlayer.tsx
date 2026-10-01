@@ -305,8 +305,9 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     stopAll();
     const token = tokenRef.current;
     if (i >= segs.length) {
-      // Still being written: hold on the last shot until the next topic lands.
-      if (!streamDone.current) { waitingFor.current = i; setBuffering(true); return; }
+      // Still being written: hold on the episode's graphic (never a frozen
+      // host) until the next lines land.
+      if (!streamDone.current) { waitingFor.current = i; setBuffering(true); setVisibleVideo(null); return; }
       setPhase('ended');
       return;
     }
@@ -713,7 +714,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   // In the postgame topics, team numbers are that game's box score.
   const gfxTopic = gfx ? topics[gfx.topicIdx] : undefined;
   const tiles: TileStat[] | null =
-    focus?.kind === 'player' ? focus.tiles ?? null
+    focus?.kind === 'player' ? focus.tiles ?? gfxTopic?.gameTeam ?? null
       : focus?.kind === 'unit' ? focus.tiles
         : focus?.kind === 'team' ? gfxTopic?.gameTeam ?? stats?.stats ?? null
           : gfxTopic?.gameTeam ?? null;
