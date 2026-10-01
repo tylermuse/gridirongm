@@ -1483,6 +1483,323 @@ export const blogPosts: BlogPost[] = [
 <p>Ready to draft some futures of your own? <a href="/">Play BS Football free in your browser</a> and build a roster from the ground up.</p>
 `,
   },
+  // ─── bs-football-vs-madden-franchise ───
+  {
+    slug: "bs-football-vs-madden-franchise",
+    title: "BS Football vs. Madden Franchise Mode: Which Is the Better GM Experience?",
+    seoTitle: "BS Football vs Madden Franchise Mode \u2014 Best Football GM Experience",
+    metaDescription:
+      "Madden Franchise or a dedicated GM sim? An honest comparison of depth, speed, cost, and focus for players who care most about running a football franchise.",
+    keywords: [
+      "bs football vs madden franchise",
+      "best football gm experience",
+      "madden franchise alternative",
+    ],
+    publishDate: "2026-10-02",
+    category: "comparison",
+    readingTime: 7,
+    schema: "Article",
+    internalLinks: [
+      { label: "I Played Football GM and BS Football for 30 Days", href: "/blog/football-gm-vs-gridiron-gm-review" },
+      { label: "The Best Free Football GM Games in 2026", href: "/blog/best-free-football-gm-games-2026" },
+      { label: "What Real NFL GMs Do Differently", href: "/blog/real-nfl-gm-vs-games" },
+      { label: "Free Football Games in Your Browser", href: "/blog/free-football-games-browser" },
+      { label: "How to Build a Dynasty", href: "/blog/how-to-build-a-dynasty" },
+    ],
+    content: `
+<p>If what you love about football video games is the <em>building</em> — the drafting, the cap math, the multi-year roster puzzle — then you have probably felt the same frustration with Madden's Franchise mode that a lot of players do. It is bolted onto a game that is fundamentally about playing on the field, and the management layer, while improved over the years, has never been the main event. BS Football takes the opposite approach: the GM experience <em>is</em> the game. This comparison breaks down how the two stack up for players who care most about running a franchise.</p>
+<h2>The Core Difference: Focus</h2>
+<p>Madden is a football-playing game with a franchise mode attached. Its budget, its marketing, and most of its development go into on-field gameplay — animations, physics, the moment-to-moment experience of controlling players. Franchise mode benefits from that polish but is never the priority, which is why it can go years between meaningful upgrades.</p>
+<p>BS Football is a football-managing game, full stop. There is no on-field stick-skill layer competing for attention. Every design decision serves the GM fantasy: scouting, drafting, the salary cap, contract negotiation, roster construction across seasons. If those systems are what you actually enjoy, a game built entirely around them will almost always feel deeper than the same systems living as a side mode elsewhere.</p>
+<p>Neither focus is "better" in the abstract. They are built for different players. The question is which player you are.</p>
+<h2>Depth of Roster Management</h2>
+<p>This is where a dedicated GM sim tends to pull ahead. In BS Football, the roster-building systems are the whole product, so they get room to breathe: a real scouting progression, meaningful potential-versus-overall decisions, contract structures that force trade-offs, and cap management that actually constrains you across multiple seasons.</p>
+<p>Madden's Franchise mode covers similar ground at a higher level, but the systems are often simplified so they do not overwhelm players who are mostly there to play games. For a lot of people, that is the right call. For the player who wants to agonize over a fourth-round pick or thread the needle on a cap-strapped extension, the extra depth of a focused sim is the entire appeal.</p>
+<h2>Speed and Accessibility</h2>
+<p>Here BS Football has a structural advantage that is easy to underrate: it runs in your browser. No console, no purchase, no download, no annual release cycle. You open a tab and you are managing a franchise in under a minute.</p>
+<p>That changes how you play. A Madden franchise is a commitment — you boot the console, you play out games, a season takes real time. A browser GM sim fits into the cracks of a day. You can advance a week on a lunch break, make a couple of roster moves, and close the tab. For busy adults who love football strategy but cannot sink hours into playing every game, the accessibility is not a minor perk. It is often the deciding factor.</p>
+<p>There is also the cost difference. Madden is a full-priced annual release. BS Football is free. If the management layer is what you want, paying full price for a game whose management layer is a secondary mode is a hard sell.</p>
+<h2>Playing the Games vs. Simulating Them</h2>
+<p>The honest trade-off cuts the other way here. If part of what you want from a football franchise is to actually <em>play</em> the games — to drop back and throw the deep ball, to feel the wins you earned on the sticks — Madden delivers something a browser GM sim does not. BS Football simulates the games; you set the strategy and watch the outcome, you do not control players in real time.</p>
+<p>For some players that is a dealbreaker. For others it is a relief. Simulating the games is what lets you run a full season in a fraction of the time and keeps the focus on decisions rather than execution. If you have ever restarted a Madden franchise because you fell behind on actually playing the games, a sim-based GM experience removes that friction entirely.</p>
+<h2>Which One Is Right for You?</h2>
+<p>Choose Madden Franchise mode if playing the games on the field is central to your enjoyment, you want the presentation and polish of a AAA release, and you do not mind that the management systems are a bit shallow in service of accessibility.</p>
+<p>Choose BS Football if the general manager role is the whole reason you play, you want deeper roster and cap systems than a side mode usually offers, and you value being able to jump in instantly for free without a console or a time commitment.</p>
+<p>Plenty of people play both, and for a clear reason: they scratch different itches. Madden is for the nights you want to play football. A dedicated GM sim is for the everyday stretches when you want to <em>build</em> a football team and do not have two hours to spare.</p>
+<h2>The Bottom Line</h2>
+<p>The "better" GM experience depends entirely on what you are looking for. Madden gives you a competent management layer wrapped around a great on-field game. BS Football gives you a deeper, faster, free management experience with no on-field play at all. If you came to football games for the drafting and the cap sheet rather than the touchdowns, a purpose-built GM sim is going to feel like it was made for you — because it was.</p>
+<p>Curious how it feels? <a href="/">Play BS Football free in your browser</a> and run a franchise your way — no console, no download, no cost.</p>
+`,
+  },
+  // ─── best-free-football-gm-games-2026 ───
+  {
+    slug: "best-free-football-gm-games-2026",
+    title: "The 7 Best Free Online Football GM Games in 2026",
+    seoTitle: "7 Best Free Online Football GM Games in 2026 (Ranked)",
+    metaDescription:
+      "The best free football management games you can play in your browser in 2026, ranked and compared \u2014 from deep GM sims to quick draft simulators.",
+    keywords: [
+      "best free football gm games",
+      "free football management games 2026",
+      "online football gm game",
+    ],
+    publishDate: "2026-10-05",
+    category: "comparison",
+    readingTime: 8,
+    schema: "ItemList",
+    internalLinks: [
+      { label: "Free Football Games in Your Browser", href: "/blog/free-football-games-browser" },
+      { label: "Football GM vs BS Football: 30-Day Review", href: "/blog/football-gm-vs-gridiron-gm-review" },
+      { label: "BS Football vs. Madden Franchise Mode", href: "/blog/bs-football-vs-madden-franchise" },
+      { label: "Draft Strategy Guide", href: "/blog/draft-strategy-guide" },
+      { label: "How to Build a Dynasty", href: "/blog/how-to-build-a-dynasty" },
+    ],
+    content: `
+<p>You do not need a console or a credit card to run a football franchise anymore. The best football management games in 2026 live in your browser, load in seconds, and cost nothing. But "free football GM game" covers a wide range — from deep multi-season simulators to lightweight clickers — and not all of them are worth your time. This is an honest ranking of the free online football GM games worth playing this year, and who each one is for.</p>
+<h2>What Makes a Great Free GM Game</h2>
+<p>Before the list, it helps to know what actually separates a great football management game from a forgettable one. The best ones share a few traits:</p>
+<ul>
+<li><strong>Meaningful decisions.</strong> Every draft pick, trade, and contract should involve a real trade-off. If the "right" move is always obvious, there is no game.</li>
+<li><strong>Depth that rewards learning.</strong> You should be a better GM in your tenth season than your first, because you understand the systems better.</li>
+<li><strong>Respect for your time.</strong> A good browser sim lets you advance quickly and jump in and out without a huge commitment.</li>
+<li><strong>No paywall on the fun.</strong> "Free" should mean free to actually play and enjoy, not a demo that gates the good parts behind purchases.</li>
+</ul>
+<p>With that lens, here is the ranking.</p>
+<h2>1. BS Football</h2>
+<p>The most complete browser-based NFL GM experience available for free in 2026. BS Football is built entirely around the general manager role — scouting, drafting, the salary cap, contracts, and multi-season roster building — with no on-field play to dilute the focus. It runs instantly in the browser, plays as a guest with no account required, and offers genuine strategic depth: potential-versus-overall draft decisions, a tiered scouting system, and cap management that constrains you across seasons. If the management layer is what you love about football games, this is the one to start with.</p>
+<p><strong>Best for:</strong> Players who want deep, focused GM gameplay with zero friction and no cost.</p>
+<h2>2. Front Office Football-Style Text Sims</h2>
+<p>The classic text-based football management simulators remain a gold standard for depth. These games strip away graphics almost entirely and pour everything into simulation fidelity — detailed player ratings, realistic contract and cap logic, and draft classes that reward serious scouting. The trade-off is a steeper learning curve and a spreadsheet-like presentation that is not for everyone.</p>
+<p><strong>Best for:</strong> Hardcore strategy players who prioritize simulation depth over presentation.</p>
+<h2>3. Browser Draft Simulators</h2>
+<p>Pure draft simulators focus on one slice of the GM experience: nailing the draft. They are excellent for practicing draft strategy, testing how a specific class might fall, and scratching the itch quickly. What they do not offer is the long game — there is no multi-season roster to build or cap to manage over time.</p>
+<p><strong>Best for:</strong> Draft junkies who want to run mock drafts and test strategies fast.</p>
+<h2>4. Mobile Football Manager Games</h2>
+<p>Several free mobile football management games bring the GM fantasy to your phone with polished interfaces and card-collection mechanics. They are genuinely fun in short bursts, but many lean on energy systems, timers, or microtransactions that can interrupt the experience. The management depth is usually lighter than a dedicated sim.</p>
+<p><strong>Best for:</strong> Casual players who want something glossy to tap through on the go.</p>
+<h2>5. Fantasy-Football-Meets-GM Hybrids</h2>
+<p>A growing category blends fantasy football's draft-and-manage loop with deeper GM systems. These can be a great entry point if you already play fantasy and want more roster-building control than a standard fantasy league offers. Depth varies widely between titles.</p>
+<p><strong>Best for:</strong> Fantasy football players looking to graduate to full roster management.</p>
+<h2>6. Retro and Open-Source GM Sims</h2>
+<p>There is a small but dedicated ecosystem of open-source and retro-style football management games, often built by passionate communities. They can be surprisingly deep and are completely free, but they vary in polish and may require more setup than a browser game that just loads.</p>
+<p><strong>Best for:</strong> Tinkerers who enjoy community-built games and do not mind rough edges.</p>
+<h2>7. Arcade-Style Team Builders</h2>
+<p>At the lighter end, arcade-style team builders let you assemble a roster and run through seasons quickly with simplified systems. They are approachable and fast, making them a fine gateway for newcomers, though experienced GMs will likely want more depth before long.</p>
+<p><strong>Best for:</strong> Complete beginners easing into the genre.</p>
+<h2>How to Choose</h2>
+<p>If you want the deepest free GM experience with the least friction, start at the top of the list. If you have a specific itch — just the draft, just a quick mobile session, maximum simulation realism — the rest of the list points you to the right fit. The good news in 2026 is that "free" no longer means "shallow." There are genuinely excellent football management games you can play right now without spending a dollar.</p>
+<h2>The Bottom Line</h2>
+<p>The best free football GM game for you depends on what you want out of the genre, but for a deep, focused, instantly-accessible NFL management experience, BS Football leads the pack in 2026. Whatever you choose, the barrier to entry has never been lower — you are one browser tab away from running a franchise.</p>
+<p>Ready to start? <a href="/">Play BS Football free</a> — no download, no account, drafting in 60 seconds.</p>
+`,
+  },
+  // ─── slow-gaming-football-gm ───
+  {
+    slug: "slow-gaming-football-gm",
+    title: "Slow Gaming: Why a Football GM Sim Beats Doomscrolling",
+    seoTitle: "Slow Gaming \u2014 Why a Football GM Sim Beats Doomscrolling",
+    metaDescription:
+      "A case for self-paced, goal-oriented gaming: why spending your downtime building a football franchise beats endless scrolling, and leaves you better off.",
+    keywords: [
+      "slow gaming",
+      "football gm sim relaxing",
+      "games instead of scrolling",
+    ],
+    publishDate: "2026-10-07",
+    category: "lifestyle",
+    readingTime: 6,
+    schema: "Article",
+    internalLinks: [
+      { label: "The Best Time to Play BS Football", href: "/blog/play-during-nfl-offseason" },
+      { label: "Free Football Games in Your Browser", href: "/blog/free-football-games-browser" },
+      { label: "The Best Free Football GM Games in 2026", href: "/blog/best-free-football-gm-games-2026" },
+      { label: "How to Build a Dynasty", href: "/blog/how-to-build-a-dynasty" },
+    ],
+    content: `
+<p>There is a certain kind of tired that scrolling makes worse. You sit down with fifteen minutes to yourself, open your phone, and surface twenty minutes later feeling more frazzled than when you started, with nothing to show for it. A lot of us reach for that scroll by default. This is a case for reaching for something else — a football GM sim — and why the kind of "slow gaming" it offers is a genuinely better way to spend the small pockets of downtime in a day.</p>
+<h2>The Problem With the Scroll</h2>
+<p>Infinite feeds are engineered to be frictionless and endless, which sounds relaxing and usually is not. There is no goal, no stopping point, and no sense of having built anything. You consume, you react, and you close the app slightly more agitated than before. The design works — it keeps you there — but it rarely leaves you better off.</p>
+<p>The antidote is not "no screens." For most people that is unrealistic, and it treats a nuanced problem as a moral failing. The better antidote is a <em>different kind</em> of screen time: something with a goal, a stopping point, and a sense of progress. That is exactly what a good management sim provides.</p>
+<h2>What "Slow Gaming" Actually Means</h2>
+<p>Slow gaming is not slow as in boring. It is slow as in unhurried and self-paced. There is no timer counting down, no opponent forcing your hand, no loss condition if you set it down for three days. You make a few thoughtful decisions, you advance the world a little, and you stop whenever you want.</p>
+<p>A football GM sim is close to the ideal version of this. You are not mashing buttons or racing a clock. You are scouting a draft class, weighing a trade, deciding whether to extend a veteran or let him walk. Each session asks you to <em>think</em>, not to react — and thinking, it turns out, is far more restorative than reacting.</p>
+<h2>Why It Fits the Cracks of a Day</h2>
+<p>The real advantage of a browser GM sim is how cleanly it fits into the spare fifteen minutes that would otherwise go to the scroll. Because it runs in a tab and advances at your pace, you can:</p>
+<ul>
+<li>Advance a week over a coffee break and check how your rookies are developing.</li>
+<li>Make one trade-deadline decision, close the tab, and pick it back up tomorrow.</li>
+<li>Run a draft on a slow evening and then not touch it for a week without consequence.</li>
+</ul>
+<p>There is no punishment for stepping away, which paradoxically makes it easier to step away. You are never "in the middle" of anything you cannot pause. Compare that to a game with live matches or an app designed to pull you back every few hours, and the difference in how it sits in your life is significant.</p>
+<h2>The Quiet Satisfaction of Building Something</h2>
+<p>The deeper reason a GM sim beats the scroll is that it is <em>generative</em> rather than consumptive. When you close the app, something exists that did not before: a franchise you are shaping, a young core you drafted, a plan unfolding across seasons. That sense of building — of small decisions compounding into something that is yours — is the opposite of the empty feeling a feed leaves behind.</p>
+<p>It is a low-stakes version of the satisfaction we get from any long project. You are not just passing time; you are cultivating something over weeks and months. The rookie you drafted and developed into a star three seasons ago is a small story you authored. Feeds do not give you stories you authored. They give you other people's.</p>
+<h2>A Healthier Default</h2>
+<p>None of this is an argument that a football sim is productive in some grand sense — it is a game, and that is fine. Games are a good and healthy use of downtime. The argument is narrower and more useful: <em>if you are going to spend fifteen minutes on a screen anyway</em>, a self-paced, goal-oriented, buildable game is a better default than an endless feed. You will come away calmer, you will have made a few satisfying decisions, and you will have something to show for the time.</p>
+<p>The next time you catch yourself reaching for the scroll out of habit, try opening a franchise instead. Advance a week. Make a trade. See how your draft class is panning out. Fifteen minutes later, notice how you feel compared to how the scroll usually leaves you. For a lot of people, that comparison is the whole argument.</p>
+<h2>The Bottom Line</h2>
+<p>Slow gaming is not about doing less — it is about spending your downtime on something that gives back instead of draining. A football GM sim offers goals without pressure, progress without commitment, and the quiet satisfaction of building a team that is yours. It fits the same spare minutes the scroll eats, and it leaves you in a better place. As defaults go, that is an easy upgrade.</p>
+<p>Give your next break a better default. <a href="/">Play BS Football free in your browser</a> — build something instead of scrolling.</p>
+`,
+  },
+  // ─── game-planning-scheme ───
+  {
+    slug: "game-planning-scheme",
+    title: "Game Planning 101: Building a Scheme That Fits Your Roster",
+    seoTitle: "Game Planning Guide \u2014 Build a Scheme That Fits Your Roster",
+    metaDescription:
+      "Scheme is a multiplier on talent, not a substitute for it. Learn to build a game plan around your roster's strengths and adjust it to beat any opponent.",
+    keywords: [
+      "football gm scheme strategy",
+      "game planning football game",
+      "how to build a scheme",
+    ],
+    publishDate: "2026-10-09",
+    category: "strategy",
+    readingTime: 7,
+    schema: "HowTo",
+    internalLinks: [
+      { label: "How to Build a Dynasty", href: "/blog/how-to-build-a-dynasty" },
+      { label: "Why Your Rebuild Keeps Failing", href: "/blog/football-gm-rebuild-tips" },
+      { label: "Trade Deadline Strategy", href: "/blog/trade-deadline-strategy" },
+      { label: "Salary Cap Management Tips", href: "/blog/salary-cap-management-tips" },
+    ],
+    content: `
+<p>Most BS Football players build their roster and their scheme in the wrong order. They pick a scheme they like — a heavy passing attack, an aggressive blitzing defense — and then try to force their players into it. The best GMs do the opposite: they look honestly at the talent they have and build a scheme that amplifies it. Your scheme should be a frame that shows off your best players, not a costume you make them wear. This guide covers how to match scheme to roster, and how to adjust when the matchup demands it.</p>
+<h2>Start With Your Talent, Not Your Preference</h2>
+<p>The single most common scheme mistake is ideological: deciding you are a "run-first team" or a "spread offense" before you have the players to run it. Scheme is a multiplier, not a foundation. A brilliant passing scheme with a mediocre quarterback and no receivers still loses. A simple, sound scheme built around genuine strengths wins.</p>
+<p>So the first step is an honest inventory. Where is your talent concentrated? If your strength is a dominant offensive line and a bruising back, you are a run-first team whether you find that exciting or not — and leaning into it will win you more games than forcing a pass-heavy identity your personnel cannot support. If your quarterback is your best asset and you have weapons outside, build around the pass and protect that investment. Let the roster tell you who you are.</p>
+<h2>Identify Your Strength and Build Outward</h2>
+<p>Once you know where your talent lives, design the scheme to feature it and hide your weaknesses.</p>
+<h3>On offense</h3>
+<p>If your strength is the line and the run game, commit to it. A strong rushing identity controls the clock, keeps your defense rested, and makes your play-action passing more dangerous because defenses have to respect the run. You do not need an elite quarterback to win this way — you need him to be efficient and avoid mistakes.</p>
+<p>If your strength is at quarterback and receiver, build a scheme that gets the ball to your playmakers in space and prioritize protection. Your offensive line's job shifts from run-blocking to pass protection, and that should shape how you allocate resources.</p>
+<h3>On defense</h3>
+<p>Match your pressure scheme to your personnel. If you have elite edge rushers, you can generate pressure with four and drop seven into coverage — the safest, most sustainable way to defend. If your strength is in the secondary but your rush is average, you may need to scheme pressure with blitzes, accepting more risk to compensate. If your talent is thin up front and in the back, keep it simple and sound rather than exotic and leaky.</p>
+<p>The principle is the same on both sides: feature what you are good at, and do not ask players to do things they cannot.</p>
+<h2>Adjusting to the Matchup</h2>
+<p>A scheme that fits your roster is the baseline. Winning the individual game often comes down to adjusting that baseline to exploit the specific opponent in front of you.</p>
+<h3>Attack their weakness</h3>
+<p>Before a game, look at where the opponent is vulnerable. A defense thin at cornerback should see more of your passing attack, even if you are a run-first team by identity. A defense that struggles to stop the run should see a heavier dose of it. Your identity is the default; the matchup is the adjustment.</p>
+<h3>Protect against their strength</h3>
+<p>The flip side: know what the opponent does well and take it away. If they have a dominant pass rush, lean on quicker throws and the run to neutralize it. If they have a shutdown corner, avoid throwing into his coverage and attack the other side. You do not have to abandon your identity — you have to bend it around the threat.</p>
+<h3>Do not over-adjust</h3>
+<p>The trap is abandoning what makes you good to chase a matchup. A great run team that goes pass-heavy against a strong run defense often just becomes a bad pass team. Usually the better move is to keep doing what you do well and simply pick your spots more carefully. Adjust at the margins; do not reinvent yourself weekly.</p>
+<h2>Evolving Your Scheme as the Roster Changes</h2>
+<p>Your scheme should not be static across seasons, because your roster is not. As you draft and develop players, your strengths shift, and your scheme should shift with them. The run-first team that drafts a franchise quarterback should gradually open up the offense as he develops. The blitz-heavy defense that lands two elite edge rushers can transition to a safer four-man rush.</p>
+<p>Revisit your identity every offseason. Ask the same question you asked at the start: given the talent I have <em>now</em>, what scheme best amplifies it? The answer will change over the life of a franchise, and the GMs who keep their scheme aligned with their evolving roster consistently outperform the ones who lock into an identity and never revisit it.</p>
+<h2>The Bottom Line</h2>
+<p>Scheme is a multiplier on talent, not a substitute for it. Build your roster first, take an honest inventory of where your strength lives, and design a scheme that features it and hides your weaknesses. Keep that identity as your default, then adjust around each opponent — attack what they do poorly, take away what they do well, and resist the urge to abandon your strengths to chase a matchup. And as your roster evolves, let your scheme evolve with it. Fit the scheme to the players, and the players will make the scheme look smart.</p>
+<p>Put a plan together and see it play out — <a href="/">start a franchise in BS Football</a>, free in your browser.</p>
+`,
+  },
+  // ─── late-round-draft-steals ───
+  {
+    slug: "late-round-draft-steals",
+    title: "Finding Late-Round Steals: Value Drafting After Round 3",
+    seoTitle: "Late-Round Draft Steals \u2014 Value Drafting After Round 3",
+    metaDescription:
+      "Dynasties are built after Round 3. Learn how to find late-round steals in BS Football: where to spend scouting, what to look for, and how to develop the picks.",
+    keywords: [
+      "late round draft steals",
+      "value drafting football gm",
+      "finding draft sleepers",
+    ],
+    publishDate: "2026-10-12",
+    category: "draft",
+    readingTime: 7,
+    schema: "HowTo",
+    internalLinks: [
+      { label: "The Complete Guide to Football GM Scouting", href: "/blog/football-gm-scouting-guide" },
+      { label: "Draft Strategy Guide", href: "/blog/draft-strategy-guide" },
+      { label: "Best Draft Picks by Position", href: "/blog/best-draft-picks-by-position" },
+      { label: "Player Development Guide", href: "/blog/player-development-guide" },
+      { label: "How to Build a Dynasty", href: "/blog/how-to-build-a-dynasty" },
+    ],
+    content: `
+<p>Championship rosters are not built in the first round. First-round picks are expensive, obvious, and easy — everyone knows the blue-chip prospect is good. The GMs who build sustained contenders separate themselves after Round 3, in the rounds where information is scarce, boards are thin, and one good scouting report turns a throwaway pick into a decade-long starter. This guide is about value drafting: how to consistently find steals in the late rounds of a BS Football draft.</p>
+<h2>Why Late Rounds Decide Dynasties</h2>
+<p>The math is simple. Early picks cost you the most and deliver players everyone expected to be good — you are paying full price for known value. Late picks cost almost nothing, and most of them do not pan out. But the few that <em>do</em> pan out are pure profit: a cheap contract, years of team control, and production far above what you paid.</p>
+<p>A roster built only through early picks is expensive and capped in how good it can be. A roster that <em>also</em> hits on late-round players is deeper, cheaper, and more flexible — because those cheap contributors let you spend your cap elsewhere. Late-round hits are the compounding interest of roster building. This is where you separate from GMs who only know how to draft the obvious guy.</p>
+<h2>Shift Your Scouting Resources Down the Board</h2>
+<p>Most players spend their best scouting on the top of the board, where they need it least. The consensus top prospects are already well-understood — you do not need an elite scouting report to know the top quarterback is good. That scouting is largely wasted confirming what everyone knows.</p>
+<p>The highest-value use of your scouting resources is the murky middle and late rounds, where the difference between a bust and a steal is one report. A Deep Scout on a Day 3 prospect that reveals a hidden high ceiling is worth far more than one spent on a lottery-pick lock. Reallocate your scouting downward: spend just enough at the top to confirm the obvious, and pour your resources into the rounds where information actually changes your decisions.</p>
+<h2>What to Look For in a Late-Round Steal</h2>
+<p>Not all late-round prospects are equal. The ones most likely to become steals share a few traits.</p>
+<h3>A wide potential range</h3>
+<p>A late prospect with a high ceiling relative to his current overall is a lottery ticket worth buying. His consensus grade is low because his floor is low — but if the ceiling is real, you are getting star upside for a throwaway pick. These are exactly the players worth spending a Deep Scout on: the scouting either confirms the upside is real or tells you to pass.</p>
+<h3>Youth</h3>
+<p>A younger late-round prospect has more runway to develop into his ceiling. Two players with the same late-round grade are not equal if one is meaningfully younger — the younger one has more time to grow and a longer prime once he gets there. Let age break ties, especially late.</p>
+<h3>Premium positions</h3>
+<p>A late-round flier on a premium position — edge rusher, cornerback, quarterback, tackle — is worth more than a safe pick at a low-value position. If you are going to gamble, gamble where a hit changes your franchise. A seventh-round edge rusher who becomes a starter is a franchise-altering steal; a seventh-round running back who becomes a starter is nice but replaceable.</p>
+<h2>Develop the Picks You Steal</h2>
+<p>Finding the steal is only half the job. A high-potential late-round pick who never plays will never become the steal you drafted. Development requires reps, and late-round projects need patience most of all.</p>
+<p>Give your high-upside late picks real opportunities to develop — special teams, rotational snaps, spot starts. Do not cut a raw Day 3 prospect after one season because he is not contributing yet; that is the exact player who was supposed to take time. The GMs who hit on late-round steals are the ones who draft for upside <em>and</em> have the patience to let that upside materialize over a couple of seasons.</p>
+<h2>Manage the Risk Like a Portfolio</h2>
+<p>The reality of late-round drafting is that most of your picks will not hit, and that is fine. Value drafting is a numbers game. You are not trying to nail every pick — you are trying to give yourself enough high-upside lottery tickets that a few pay off.</p>
+<p>So take swings. Use your late picks on high-ceiling, young players at premium positions rather than safe, low-ceiling depth pieces. A roster full of safe late-round "solid backup" types has no upside. A roster that swings on upside late will miss often — and hit just enough to build a cheap, deep, championship-caliber core. Draft the late rounds like a portfolio of lottery tickets, not a series of safe bets.</p>
+<h2>The Bottom Line</h2>
+<p>Value drafting after Round 3 is where good GMs become great ones. Move your best scouting resources down the board to the rounds where information actually matters. Target young, high-ceiling prospects at premium positions, and use Deep Scout to confirm the upside is real. Then be patient — give your late-round swings the reps and the seasons they need to develop. You will miss on most of them, and the few you hit will be the cheap, homegrown cornerstones that turn a good roster into a dynasty.</p>
+<p>Test your eye for talent — <a href="/">play BS Football free</a> and see how many late-round steals you can find.</p>
+`,
+  },
+  // ─── advanced-cap-management ───
+  {
+    slug: "advanced-cap-management",
+    title: "Dead Money, Restructures, and Extensions: Advanced Salary Cap Management",
+    seoTitle: "Advanced Salary Cap Management \u2014 Dead Money, Restructures, Extensions",
+    metaDescription:
+      "Go beyond staying under the cap. Learn to use dead money, restructures, and extension timing as tools to build and sustain a contender in BS Football.",
+    keywords: [
+      "advanced salary cap management",
+      "dead money football gm",
+      "restructure extension strategy",
+    ],
+    publishDate: "2026-10-14",
+    category: "salary-cap",
+    readingTime: 8,
+    schema: "HowTo",
+    internalLinks: [
+      { label: "Salary Cap Management Tips", href: "/blog/salary-cap-management-tips" },
+      { label: "Free Agency Strategy", href: "/blog/free-agency-strategy" },
+      { label: "Building Around a Rookie-Contract Quarterback", href: "/blog/rookie-quarterback-window" },
+      { label: "How to Build a Dynasty", href: "/blog/how-to-build-a-dynasty" },
+      { label: "Trade Deadline Strategy", href: "/blog/trade-deadline-strategy" },
+    ],
+    content: `
+<p>Basic cap management is staying under the number. Advanced cap management is using the cap as a tool — buying yourself room when you need it, avoiding the traps that sink franchises, and understanding the long-term cost of every move before you make it. If you have got the fundamentals down and want to operate the cap like a real front office, this guide covers the mechanics that separate good cap managers from great ones in BS Football: dead money, restructures, and extension timing.</p>
+<h2>Dead Money: The Cost of Being Wrong</h2>
+<p>Dead money is cap space you are paying for a player who is no longer on your roster — the leftover charge when you cut or trade a player before his contract is up. It is the single most misunderstood concept in cap management, and misunderstanding it is how GMs get trapped.</p>
+<p>The key insight: <strong>dead money is the price of a mistake, and the question is when to pay it, not whether.</strong> When you sign a player to a big contract and it does not work out, you will eventually eat dead money to move on. Cutting him sooner means paying it sooner; holding him means paying his full salary for production you are not getting. Neither is free.</p>
+<p>Two practical rules:</p>
+<ul>
+<li><strong>Do not let dead money scare you into keeping a bad contract.</strong> GMs often cling to an underperforming veteran because cutting him creates dead money. But paying dead money for a player who is gone is frequently cheaper than paying full price for a player who is hurting your team. Rip the bandage off.</li>
+<li><strong>Factor future dead money into every signing.</strong> Before you hand out a big deal, ask what it costs to get out of it in two years if it goes wrong. A contract that is impossible to escape is a contract that can trap your franchise. Structure matters as much as total value.</li>
+</ul>
+<h2>Restructures: Borrowing From Your Future</h2>
+<p>A restructure converts a chunk of a player's current salary into a form that spreads the cap hit over future years — lowering this year's number in exchange for raising future ones. It is a way to create immediate cap space without cutting anyone.</p>
+<p>Used well, a restructure is a powerful tool. Used carelessly, it is a payday loan against your cap.</p>
+<h3>When a restructure makes sense</h3>
+<p>Restructure to create room when you are a genuine contender making a win-now push, and the player is someone you are committed to keeping anyway. If you know you are keeping him through the life of the deal, spreading his cap hit to free up space for a championship run is smart aggression. You were going to pay him regardless; you are just changing <em>when</em>.</p>
+<h3>When a restructure is a trap</h3>
+<p>Restructuring to escape a cap crunch you created by overspending is how franchises spiral. Each restructure pushes money into future years, and if you keep doing it to stay afloat, you pile up future cap hits and dead money until the bill comes due all at once. The classic death spiral is restructure after restructure to remain competitive, until the roster is old, expensive, and impossible to fix. Restructure from strength, not from desperation.</p>
+<p>The test: are you restructuring to <em>add</em> to a contender, or to <em>survive</em> a mess? The first is a tool. The second is a warning sign.</p>
+<h2>Extensions: Timing Is Everything</h2>
+<p>Extending a good player before his contract expires can lock in value — but the timing determines whether you got a bargain or overpaid.</p>
+<h3>Extend ascending players early</h3>
+<p>The best extensions are signed before a player has fully proven himself, when you have strong reason to believe he will be worth more than his current price. A young player on the rise, extended a year early, often costs less than he will after another strong season. You are taking on some risk in exchange for a discount. When your scouting and your eyes agree a player is about to break out, paying early is how you capture that value.</p>
+<h3>Be careful extending players at their peak</h3>
+<p>Extending a player coming off his best season, at the top of the market, is where GMs overpay. You are paying peak price for production that may already be as good as it will get — and if age is a factor, you are buying the decline years at premium rates. A great player is often still worth it; a merely good one at peak price is how you end up cap-strapped with an underperforming contract.</p>
+<h3>Stagger your big commitments</h3>
+<p>The advanced move is to time your extensions so your biggest contracts do not all hit their peak cap numbers in the same season. If your quarterback, your edge rusher, and your top receiver all have massive cap hits landing the same year, you will not be able to field a complete roster around them. Stagger the deals so the big numbers come in different seasons, and you keep the flexibility to stay competitive throughout.</p>
+<h2>Thinking in Multiple Seasons</h2>
+<p>The thread running through all of this is the same: advanced cap management is about <em>time</em>. Dead money is deciding when to pay for a mistake. Restructures move money between seasons. Extensions are bets on future value at today's price. Every one of them is a decision about the future, not just the present.</p>
+<p>The GMs who master the cap keep a running picture of their cap sheet two and three seasons out, not just this year. They know which contracts come off the books and when, which players will need extensions, and where the dead money and restructure charges land. That forward view is what lets them make aggressive win-now moves without mortgaging the franchise — because they can see exactly what each move costs down the line.</p>
+<h2>The Bottom Line</h2>
+<p>Advanced cap management turns the salary cap from a constraint into a tool. Do not fear dead money — treat it as the price of moving on from a mistake, and pay it when holding on costs more. Restructure from strength to fuel a contender, never from desperation to survive overspending. Extend ascending players early to capture value, be wary of paying peak price, and stagger your big deals so they do not all come due at once. Above all, think in multiple seasons: keep a live picture of your future cap, and every move gets easier. Master this, and the cap stops limiting your franchise and starts building it.</p>
+<p>Ready to run a front office? <a href="/">Play BS Football free in your browser</a> and manage the cap your way.</p>
+`,
+  },
 ];
 
 export function getPublishedPosts(): BlogPost[] {
