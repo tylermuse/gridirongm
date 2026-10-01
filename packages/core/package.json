@@ -13,7 +13,8 @@
     "./supabase/client": "./src/supabase/client.ts",
     "./supabase/server": "./src/supabase/server.ts",
     "./billing": "./src/billing/index.ts",
-    "./podcast": "./src/podcast/index.ts"
+    "./podcast": "./src/podcast/index.ts",
+    "./supabase/cloud-saves": "./src/supabase/cloudSaves.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
