@@ -90,3 +90,14 @@ describe('kicker', () => {
     expect(focusForLine('The kicker was perfect.', { ...ctx, players: [...players, k] })).toMatchObject({ kind: 'player' });
   });
 });
+
+describe('carry-over', () => {
+  it('"his completion rate" stays on the player being discussed', () => {
+    const f = focusForLine("His completion rate is above league average.", { ...ctx, earlier: ['Bench starterson. I said what I said.'] });
+    expect(f.kind === 'player' && f.player.id).toBe('starter');
+  });
+  it('a line with nothing measurable keeps the topic’s last numbers up', () => {
+    const f = focusForLine('Predictable. That is the nice word for it.', { ...ctx, earlier: ['The offensive line keeps giving up sacks.'] });
+    expect(f.kind).toBe('unit');
+  });
+});

@@ -142,6 +142,10 @@ export function ShowGraphic(p: GraphicProps) {
   // Slow push-in on the studio two-shot for the whole block — never static.
   const push = 1.03 + 0.05 * clamp01(blockMs / 24000);
   const anyHot = p.tiles ? p.tiles.some(s => p.mentioned.includes(s.key)) : false;
+  // Beside a player card there's room for one row of three: the stats the
+  // line mentions first, then the rest in order.
+  const shown = !p.tiles ? null : !p.player ? p.tiles
+    : [...p.tiles.filter(t => p.mentioned.includes(t.key)), ...p.tiles.filter(t => !p.mentioned.includes(t.key))].slice(0, 3);
 
   return (
     // Sized off the stage itself (container units), so the layout is the
@@ -217,52 +221,81 @@ export function ShowGraphic(p: GraphicProps) {
                 <div className="h-[2em] w-[2em] shrink-0">{p.logo}</div>
               </div>
             </div>
-            <div className="my-auto flex min-h-0 items-center gap-[1.1em] py-[0.5em]">
-              {p.player && (
-                <div
-                  key={p.player.key}
-                  className="flex shrink-0 items-center gap-[0.6em] rounded-[0.8em] bg-white py-[0.45em] pl-[0.45em] pr-[0.9em] shadow-[0_6px_18px_rgba(15,23,42,0.12)]"
-                  style={{ opacity: anim(p.playerMs, 0, 350), transform: `translateX(${(1 - anim(p.playerMs, 0, 400)) * -1.2}em)` }}
-                >
-                  <div className="h-[3.6em] w-[3.6em] shrink-0 overflow-hidden rounded-full border-[0.12em] border-orange-500 bg-slate-100">{p.player.art}</div>
-                  <div className="leading-tight">
-                    <div className="text-[1em] font-extrabold text-[#1e3a5f]">{p.player.name}</div>
-                    <div className="text-[0.62em] font-bold uppercase tracking-[0.14em] text-slate-500">{p.player.detail}</div>
+            {p.tiles?.length ? (
+              // Stats lead: the player (or unit/team) and the numbers fill the
+              // panel; what's being said is only a small caption underneath.
+              <>
+                <div className="my-auto flex min-h-0 items-center gap-[1.4em] overflow-hidden py-[0.4em]">
+                  {p.player && (
+                    <div
+                      key={p.player.key}
+                      className="flex w-[11em] shrink-0 flex-col items-center rounded-[0.9em] bg-white px-[0.6em] pb-[0.7em] pt-[0.8em] text-center shadow-[0_6px_18px_rgba(15,23,42,0.12)]"
+                      style={{ opacity: anim(p.playerMs, 0, 350), transform: `translateX(${(1 - anim(p.playerMs, 0, 400)) * -1.2}em)` }}
+                    >
+                      <div className="h-[5.6em] w-[5.6em] overflow-hidden rounded-full border-[0.14em] border-orange-500 bg-slate-100">{p.player.art}</div>
+                      <div className="mt-[0.45em] text-[1.05em] font-extrabold leading-tight text-[#1e3a5f]">{p.player.name}</div>
+                      <div className="text-[0.6em] font-bold uppercase tracking-[0.14em] text-slate-500">{p.player.detail}</div>
+                    </div>
+                  )}
+                  <div key={p.tilesLabel} className="min-w-0 flex-1">
+                    {p.tilesLabel && (
+                      <div className="mb-[0.45em] text-[0.62em] font-bold uppercase tracking-[0.22em] text-slate-500" style={{ opacity: anim(p.tilesMs, 0, 300) }}>
+                        {p.tilesLabel}
+                      </div>
+                    )}
+                    <div
+                      className="grid gap-[0.8em]"
+                      style={{ gridTemplateColumns: `repeat(${shown!.length}, minmax(0, 1fr))` }}
+                    >
+                      {shown!.map((st, i) => (
+                        <StatTile
+                          key={st.key}
+                          st={st}
+                          i={i}
+                          blockMs={p.tilesMs}
+                          lineMs={p.lineMs}
+                          hot={p.mentioned.includes(st.key)}
+                          dim={anyHot && !p.mentioned.includes(st.key)}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </div>
-              )}
-              <div
-                key={p.text || 'empty'}
-                className="line-clamp-4 min-w-0 font-bold leading-snug text-[#0f1f35] [text-wrap:balance]"
-                style={{
-                  // Long lines get smaller type so the tiles always fit.
-                  fontSize: p.text.length > 150 ? '1em' : p.text.length > 95 ? '1.2em' : '1.45em', opacity: anim(p.lineMs, 120, 380), transform: `translateY(${(1 - anim(p.lineMs, 120, 380)) * 0.5}em)` }}
-              >
-                {p.text && <><span className="mr-[0.15em] text-orange-600">&ldquo;</span>{p.text}<span className="text-orange-600">&rdquo;</span></>}
-              </div>
-            </div>
-            {p.tiles?.length ? (
-              <div key={p.tilesLabel}>
-                {p.tilesLabel && (
-                  <div className="mb-[0.4em] text-[0.6em] font-bold uppercase tracking-[0.22em] text-slate-500" style={{ opacity: anim(p.tilesMs, 0, 300) }}>
-                    {p.tilesLabel}
+                {p.text && (
+                  <div
+                    key={p.text}
+                    className="line-clamp-2 text-[0.78em] font-semibold leading-snug text-slate-500"
+                    style={{ opacity: anim(p.lineMs, 120, 380) }}
+                  >
+                    {p.text}
                   </div>
                 )}
-              <div className="grid gap-[0.8em]" style={{ gridTemplateColumns: `repeat(${p.tiles.length}, minmax(0, 1fr))` }}>
-                {p.tiles.map((st, i) => (
-                  <StatTile
-                    key={st.key}
-                    st={st}
-                    i={i}
-                    blockMs={p.tilesMs}
-                    lineMs={p.lineMs}
-                    hot={p.mentioned.includes(st.key)}
-                    dim={anyHot && !p.mentioned.includes(st.key)}
-                  />
-                ))}
+              </>
+            ) : (
+              <div className="my-auto flex min-h-0 items-center gap-[1.1em] py-[0.5em]">
+                {p.player && (
+                  <div
+                    key={p.player.key}
+                    className="flex shrink-0 items-center gap-[0.6em] rounded-[0.8em] bg-white py-[0.45em] pl-[0.45em] pr-[0.9em] shadow-[0_6px_18px_rgba(15,23,42,0.12)]"
+                    style={{ opacity: anim(p.playerMs, 0, 350), transform: `translateX(${(1 - anim(p.playerMs, 0, 400)) * -1.2}em)` }}
+                  >
+                    <div className="h-[3.6em] w-[3.6em] shrink-0 overflow-hidden rounded-full border-[0.12em] border-orange-500 bg-slate-100">{p.player.art}</div>
+                    <div className="leading-tight">
+                      <div className="text-[1em] font-extrabold text-[#1e3a5f]">{p.player.name}</div>
+                      <div className="text-[0.62em] font-bold uppercase tracking-[0.14em] text-slate-500">{p.player.detail}</div>
+                    </div>
+                  </div>
+                )}
+                <div
+                  key={p.text || 'empty'}
+                  className="line-clamp-4 min-w-0 font-bold leading-snug text-[#0f1f35] [text-wrap:balance]"
+                  style={{
+                    fontSize: p.text.length > 150 ? '1em' : p.text.length > 95 ? '1.2em' : '1.45em', opacity: anim(p.lineMs, 120, 380), transform: `translateY(${(1 - anim(p.lineMs, 120, 380)) * 0.5}em)` }}
+                >
+                  {p.text && <><span className="mr-[0.15em] text-orange-600">&ldquo;</span>{p.text}<span className="text-orange-600">&rdquo;</span></>}
+                </div>
               </div>
-              </div>
-            ) : null}
+            )}
           </div>
           {/* Below the panel, clear of the tiles (no captions on this shot). */}
           <div className="absolute left-[5%] bottom-[6%]">

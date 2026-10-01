@@ -27,9 +27,12 @@ export function playerNamedIn(text: string, topic: VisualTopic | undefined, play
   const inTopic = (topic?.playerIds ?? []).map(id => players.find(p => p.id === id)).filter((p): p is Player => !!p);
   const onTeams = teamIds.length ? players.filter(p => p.teamId && teamIds.includes(p.teamId) && !inTopic.includes(p)) : [];
   const word = (w: string) => w.length >= 3 && new RegExp(`(^|[^A-Za-z])${escapeRe(w)}(?![A-Za-z])`).test(text);
-  for (const pool of [inTopic, onTeams]) {
-    for (const p of pool) if (text.includes(`${p.firstName} ${p.lastName}`)) return p;
-  }
+  // Full names: whoever the line names first.
+  const full = [...inTopic, ...onTeams]
+    .map(p => ({ p, at: text.indexOf(`${p.firstName} ${p.lastName}`) }))
+    .filter(x => x.at >= 0)
+    .sort((a, b) => a.at - b.at)[0];
+  if (full) return full.p;
   for (const pool of [inTopic, onTeams]) {
     const last = pool.filter(p => word(p.lastName));
     if (last.length === 1 || (pool === inTopic && last.length)) return last[0];

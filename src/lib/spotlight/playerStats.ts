@@ -94,24 +94,41 @@ const GROUP: Record<Position, string> = {
   QB: 'QB', RB: 'RB', WR: 'WR', TE: 'WR', OL: 'OL', DL: 'DEF', LB: 'DEF', CB: 'DEF', S: 'DEF', K: 'K', P: 'P',
 };
 
+/**
+ * The stat line the show talks about: this season's, or — between seasons,
+ * when this season's are still empty — the last season he played.
+ */
+export function showSeasonStats(p: Player): PlayerStats | null {
+  if (p.stats && p.stats.gamesPlayed > 0) return p.stats;
+  const log = (p as Player & { seasonLog?: { season: number; stats: PlayerStats }[] }).seasonLog;
+  const last = log?.length ? [...log].sort((a, b) => b.season - a.season)[0] : null;
+  return last && last.stats.gamesPlayed > 0 ? last.stats : null;
+}
+
 /** Null until the player has played. */
 export function computePlayerStatLine(player: Player, allPlayers: Player[]): TileStat[] | null {
-  if (!player.stats || player.stats.gamesPlayed <= 0) return null;
+  const own = showSeasonStats(player);
+  if (!own) return null;
   const group = GROUP[player.position];
   const defs = DEFS[group];
   if (!defs) return null;
-  // Rank against everyone at the same position (TE with TE, CB with CB).
-  const peers = allPlayers.filter(p => p.position === player.position && p.stats && p.stats.gamesPlayed > 0);
+  // Rank against everyone at the same position (TE with TE, CB with CB),
+  // on the same footing (this season, or last season between seasons).
+  const peers = allPlayers.flatMap(p => {
+    if (p.position !== player.position) return [];
+    const s = p.id === player.id ? own : showSeasonStats(p);
+    return s ? [{ id: p.id, s }] : [];
+  });
   return defs.map(d => {
     let pool = peers;
     if (d.volume) {
       // Rate stats: only players with at least a third of the top volume.
-      const max = Math.max(0, ...peers.map(p => d.volume!(p.stats)));
-      pool = peers.filter(p => d.volume!(p.stats) >= max / 3);
-      if (!pool.some(p => p.id === player.id)) pool = [...pool, player];
+      const max = Math.max(0, ...peers.map(p => d.volume!(p.s)));
+      pool = peers.filter(p => d.volume!(p.s) >= max / 3);
+      if (!pool.some(p => p.id === player.id)) pool = [...pool, { id: player.id, s: own }];
     }
-    const mine = d.get(player.stats);
-    const better = pool.filter(p => (d.lowerIsBetter ? d.get(p.stats) < mine : d.get(p.stats) > mine)).length;
+    const mine = d.get(own);
+    const better = pool.filter(p => (d.lowerIsBetter ? d.get(p.s) < mine : d.get(p.s) > mine)).length;
     return { key: d.key, label: d.label, value: d.format(mine), rank: better + 1, of: pool.length };
   });
 }

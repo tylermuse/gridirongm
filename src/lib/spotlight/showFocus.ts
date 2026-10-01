@@ -11,7 +11,7 @@
  *    cuts to the wide shot of the hosts instead of a wall of numbers.
  */
 import type { Player, Team } from '@/types';
-import { computePlayerStatLine, playerStatsMentioned, type TileStat } from './playerStats';
+import { computePlayerStatLine, playerStatsMentioned, showSeasonStats, type TileStat } from './playerStats';
 import { statsMentioned } from './teamStats';
 import { playerNamedIn, type VisualTopic } from './showVisuals';
 
@@ -51,7 +51,7 @@ const UNIT_LABEL: Record<Unit, string> = {
 function starter(role: PositionRole, team: Team, players: Player[]): Player | null {
   const pos = { qb: ['QB'], rb: ['RB'], wr: ['WR', 'TE'], k: ['K'] }[role];
   const vol = (p: Player) => {
-    const s = p.stats;
+    const s = showSeasonStats(p);
     if (!s) return 0;
     return role === 'qb' ? s.passAttempts : role === 'rb' ? s.rushAttempts : role === 'wr' ? s.receivingYards : s.fieldGoalAttempts;
   };
@@ -65,11 +65,12 @@ interface UnitRow { id: string; v: Record<string, number> }
 /** Unit numbers for every team (from its players' stats), per game. */
 function unitRows(teams: Team[], players: Player[]): UnitRow[] {
   return teams.map(t => {
-    const gp = Math.max(1, t.record.wins + t.record.losses + (t.record.ties ?? 0));
+    let gp = t.record.wins + t.record.losses + (t.record.ties ?? 0);
     const sum = { sacksAllowed: 0, rushYds: 0, rushAtt: 0, rushTd: 0, passYds: 0, sacks: 0, tfl: 0, ff: 0, ints: 0, pd: 0 };
     for (const p of players) {
-      if (p.teamId !== t.id || !p.stats) continue;
-      const s = p.stats;
+      if (p.teamId !== t.id) continue;
+      const s = showSeasonStats(p);
+      if (!s) continue;
       sum.sacksAllowed += s.sacksAllowed;
       sum.rushYds += s.rushYards;
       sum.rushAtt += s.rushAttempts;
@@ -80,7 +81,10 @@ function unitRows(teams: Team[], players: Player[]): UnitRow[] {
       sum.ff += s.forcedFumbles;
       sum.ints += s.defensiveINTs;
       sum.pd += s.passDeflections;
+      // Between seasons the record is reset: use games played instead.
+      if (!(t.record.wins + t.record.losses)) gp = Math.max(gp, s.gamesPlayed);
     }
+    gp = Math.max(1, gp);
     return {
       id: t.id,
       v: {
@@ -216,12 +220,20 @@ function focusOf(text: string, c: FocusContext): Focus | null {
 
 export function focusForLine(text: string, c: FocusContext): Focus {
   const own = focusOf(text, c);
+  // What the conversation was just on (the latest line in this topic that
+  // was about something measurable).
+  let prev: Focus | null = null;
+  for (let k = c.earlier.length - 1; k >= 0 && !prev; k--) prev = focusOf(c.earlier[k], c);
+  // "His completion rate…" — still the player they were talking about, even
+  // though the line also mentions a team stat.
+  const aboutHim = /\b(he|he's|his|him)\b/i.test(text);
+  if (prev?.kind === 'player' && aboutHim && own?.kind !== 'player') return playerFocus(prev.player, text, c.players, c.topic);
   if (own) return own;
-  // A topic about a player stays on him ("Bench him. I said what I said.").
-  for (let k = c.earlier.length - 1; k >= 0; k--) {
-    const f = focusOf(c.earlier[k], c);
-    if (f?.kind === 'player') return playerFocus(f.player, text, c.players, c.topic);
-  }
+  // Nothing measurable in this line: stay on what they were just discussing,
+  // so the numbers stay up rather than just the words.
+  if (prev?.kind === 'player') return playerFocus(prev.player, text, c.players, c.topic);
+  if (prev?.kind === 'unit') return { ...prev, mentioned: unitMentioned(text, prev.tiles) };
+  if (prev?.kind === 'team') return { kind: 'team', mentioned: [] };
   // The headline sets the subject ("QB Watch", "Trenches trouble").
   if (c.topic?.headline) {
     const f = focusOf(c.topic.headline, c);
