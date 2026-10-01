@@ -43,3 +43,11 @@ describe('player pictures', () => {
     expect(playerForLine(['No names here.'], 0, topic, players)).toBeNull();
   });
 });
+
+describe('team names vs player names', () => {
+  const dallasWilson = { id: 'dw', firstName: 'Dallas', lastName: 'Wilson', position: 'WR', teamId: 'ne' } as Player;
+  it('"the Dallas defense" is the team, not Dallas Wilson', () => {
+    expect(playerNamedIn('the Dallas defense held twice', undefined, [dallasWilson], ['ne'], new Set(['dallas', 'cowboys']))).toBeNull();
+    expect(playerNamedIn('Dallas Wilson had four catches', undefined, [dallasWilson], ['ne'], new Set(['dallas', 'cowboys']))).toBe(dallasWilson);
+  });
+});

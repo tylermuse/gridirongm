@@ -211,9 +211,21 @@ function profileTiles(p: Player): TileStat[] {
   ];
 }
 
+/** Words that name a team (city, nickname, abbreviation): never read as a
+ *  player's first or last name ("the Dallas defense" isn't Dallas Wilson). */
+const teamWordCache = new WeakMap<Team[], Set<string>>();
+function teamWords(teams: Team[]): Set<string> {
+  let w = teamWordCache.get(teams);
+  if (!w) {
+    w = new Set(teams.flatMap(t => [...`${t.city} ${t.name}`.toLowerCase().split(/\s+/), t.abbreviation.toLowerCase()]));
+    teamWordCache.set(teams, w);
+  }
+  return w;
+}
+
 /** Focus from one piece of text alone (no carry-over). */
 function focusOf(text: string, c: FocusContext): Focus | null {
-  const named = playerNamedIn(text, c.topic, c.players, [c.team.id, ...(c.topic?.teamIds ?? [])]);
+  const named = playerNamedIn(text, c.topic, c.players, [c.team.id, ...(c.topic?.teamIds ?? [])], teamWords(c.teams));
   if (named) return playerFocus(named, text, c.players, c.topic);
   // A game breakdown: the game's box score, not season unit or team ranks.
   if (c.topic?.gameTeam) {

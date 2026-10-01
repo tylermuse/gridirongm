@@ -23,10 +23,11 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  *  rosters of `teamIds` (the spotlight team, the opponent). Full name, then
  *  last name, then a first name ("Dak") — a partial name only when it points
  *  to exactly one player in that group. */
-export function playerNamedIn(text: string, topic: VisualTopic | undefined, players: Player[], teamIds: string[] = []): Player | null {
+export function playerNamedIn(text: string, topic: VisualTopic | undefined, players: Player[], teamIds: string[] = [], notNames: Set<string> = new Set()): Player | null {
   const inTopic = (topic?.playerIds ?? []).map(id => players.find(p => p.id === id)).filter((p): p is Player => !!p);
   const onTeams = teamIds.length ? players.filter(p => p.teamId && teamIds.includes(p.teamId) && !inTopic.includes(p)) : [];
-  const word = (w: string) => w.length >= 3 && new RegExp(`(^|[^A-Za-z])${escapeRe(w)}(?![A-Za-z])`).test(text);
+  // A partial name that's also a team's city or nickname ("Dallas") is the team.
+  const word = (w: string) => w.length >= 3 && !notNames.has(w.toLowerCase()) && new RegExp(`(^|[^A-Za-z])${escapeRe(w)}(?![A-Za-z])`).test(text);
   // Full names: whoever the line names first.
   const full = [...inTopic, ...onTeams]
     .map(p => ({ p, at: text.indexOf(`${p.firstName} ${p.lastName}`) }))
