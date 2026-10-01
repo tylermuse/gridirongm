@@ -84,6 +84,8 @@ export type ShowSegment =
       topicIdx: number;
       headline: string;
       icon: string;
+      /** The game's nth score this line is about (postgame breakdown). */
+      play?: number;
     };
 
 export interface ShowTopicInput {
@@ -93,7 +95,7 @@ export interface ShowTopicInput {
   depth?: 'deep';
   /** `clipId`: the writer chose a pre-recorded on-camera line (a topical
    *  phrase) for this turn; `text` is that phrase's words. */
-  exchanges: { speakerId: string; text: string; clipId?: string }[];
+  exchanges: { speakerId: string; text: string; clipId?: string; /** The game's nth score, when the line is about it. */ play?: number }[];
 }
 
 // Mirrors the transition rotation in /api/spotlight-audio's buildPodcastScript.
@@ -378,6 +380,7 @@ export function buildShowScript(
       segs.push({
         kind: 'tts', speaker, text: ex.text, visual: 'graphic',
         topicIdx: i, headline: topic.headline, icon: topic.icon,
+        ...(ex.play ? { play: ex.play } : {}),
       });
       if (written) return;
       const before = segs.length;

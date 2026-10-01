@@ -107,3 +107,33 @@ describe('carry-over', () => {
     expect(f.kind).toBe('unit');
   });
 });
+
+describe('key moments in a game breakdown', () => {
+  const line = [{ key: 'passYds', label: 'Pass YDS', value: '287', rank: 0, of: 0, note: 'This game' }];
+  const box = [{ key: 'to', label: 'Turnovers', value: '2', rank: 0, of: 0, note: 'NYG 3' }];
+  const mk = (n: number, quarter: number, ours: boolean, us: number, them: number, ids: string[] = []) =>
+    ({ n, quarter, at: (quarter - 1) * 15 + 7, ours, points: 7, kind: 'td' as const, description: `play ${n}`, us, them, swing: 'go-ahead' as const, playerIds: ids, title: `play ${n}` });
+  const gameFlow = {
+    us: { teamId: 'dal', abbreviation: 'DAL', color: '#002244' }, them: { teamId: 'nyg', abbreviation: 'NYG', color: '#a71930' },
+    plays: [mk(1, 1, false, 0, 7), mk(2, 2, true, 7, 7, ['starter']), mk(3, 4, true, 14, 7, ['starter'])],
+    quarters: 4, lowPoint: 1, highPoint: 3,
+  };
+  const topic = { playerIds: ['starter'], gameLines: { starter: line }, gameTeam: box, gameLabel: 'Championship · DAL vs NYG', gameFlow };
+  const c = { ...ctx, topic, earlier: [] as string[] };
+
+  it('the writer\'s marked score goes on screen', () => {
+    expect(focusForLine('And then that drive.', { ...c, play: 2 })).toEqual({ kind: 'moment', play: 2 });
+  });
+  it('a player\'s one play → his score on the timeline; his numbers → his line', () => {
+    expect(focusForLine('starterson\'s touchdown in the fourth quarter put it away.', c)).toEqual({ kind: 'moment', play: 3 });
+    expect(focusForLine('starterson threw for 287 yards.', c)).toMatchObject({ kind: 'player' });
+  });
+  it('"down seven" → the low point; a box-score number → the box score', () => {
+    expect(focusForLine('People forget they were down seven in this game.', c)).toEqual({ kind: 'moment', play: 1 });
+    expect(focusForLine('They turned it over twice.', c)).toEqual({ kind: 'team', mentioned: ['to'] });
+  });
+  it('the game as a whole → the flow; a marked moment carries to the next line', () => {
+    expect(focusForLine('What a game.', c)).toEqual({ kind: 'moment', play: null });
+    expect(focusForLine('Unreal.', { ...c, earlier: ['x'], earlierPlays: [3] })).toEqual({ kind: 'moment', play: 3 });
+  });
+});

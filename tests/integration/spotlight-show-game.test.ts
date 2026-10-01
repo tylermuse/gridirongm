@@ -63,3 +63,45 @@ describe('postgame topics', () => {
     expect(buildGameTopics({ team: ne, teams: [ne, buf], players, schedule: [], season: 2026 })).toEqual([]);
   });
 });
+
+describe('game flow (key moments)', () => {
+  const g2: GameResult = {
+    ...game,
+    scoringPlays: [
+      { quarter: 1, timeLeft: '9:12', teamId: 'buf', points: 7, description: 'S. Lowe 20 yd pass to S. Lowe (XP good)', score: [7, 0] },
+      { quarter: 2, timeLeft: '3:05', teamId: 'ne', points: 7, description: 'D. Callahan 34 yd pass to M. Brooks (XP good)', score: [7, 7] },
+      { quarter: 3, timeLeft: '8:40', teamId: 'ne', points: 3, description: 'field goal', score: [7, 10] },
+      { quarter: 4, timeLeft: '2:00', teamId: 'buf', points: 7, description: '12 yd touchdown (XP good)', score: [14, 10] },
+      { quarter: 4, timeLeft: '0:41', teamId: 'ne', points: 7, description: 'D. Callahan 3 yd rush (XP good)', score: [14, 17] },
+    ],
+  };
+  const [t] = buildGameTopics({ team: ne, teams: [ne, buf, kc], players, schedule: [g2], season: 2026, playoffBracket: bracket });
+  const f = t.gameFlow!;
+
+  it('puts every score on a timeline from the team\'s side', () => {
+    expect(f.plays.map(p => [p.us, p.them])).toEqual([[0, 7], [7, 7], [10, 7], [10, 14], [17, 14]]);
+    expect(f.plays.map(p => p.swing)).toEqual(['opens', 'ties', 'go-ahead', 'go-ahead', 'go-ahead']);
+    expect(f.plays[1]).toMatchObject({ kind: 'td', title: 'Callahan to Brooks · 34-yd TD pass', playerIds: ['wr', 'qb'] });
+    expect(f.plays[4].title).toBe('Callahan · 3-yd TD run');
+    expect(f.plays[4].playerIds).toEqual(['qb']);
+    expect(f.lowPoint).toBe(1); // first deficit of 7 (ties with the 4th: earliest)
+    expect(f.plays.every((p, i) => i === 0 || p.at >= f.plays[i - 1].at)).toBe(true);
+    expect(f.plays[4].at).toBeCloseTo(45 + 15 - 41 / 60, 3);
+  });
+
+  it('numbers the scores for the writer', () => {
+    const notes = t.exchanges.map(e => e.text).join('\n');
+    expect(notes).toMatch(/#2 Q2 3:05, NE: Callahan to Brooks · 34-yd TD pass \(NE 7-7\)/);
+    expect(notes).toMatch(/#5 Q4 0:41, NE: Callahan · 3-yd TD run \(NE 17-14\)/);
+  });
+
+  it('reads the live feed\'s descriptions, and folds a separate extra point into its touchdown', () => {
+    const live: GameResult = { ...game, scoringPlays: [
+      { quarter: 2, timeLeft: '4:10', teamId: 'ne', points: 6, description: '🏈 TOUCHDOWN! D. Callahan QB hits M. Brooks WR for the 22-yard score!', score: [0, 6] },
+      { quarter: 2, timeLeft: '4:10', teamId: 'ne', points: 1, description: 'Extra point is good.', score: [0, 7] },
+    ] };
+    const [lt] = buildGameTopics({ team: ne, teams: [ne, buf, kc], players, schedule: [live], season: 2026, playoffBracket: bracket });
+    expect(lt.gameFlow!.plays).toHaveLength(1);
+    expect(lt.gameFlow!.plays[0]).toMatchObject({ us: 7, them: 0, points: 7, kind: 'td', title: 'Callahan to Brooks · 22-yd TD pass', playerIds: ['wr', 'qb'] });
+  });
+});

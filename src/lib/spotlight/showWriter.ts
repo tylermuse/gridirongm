@@ -79,6 +79,7 @@ OUTPUT
 One JSON object per spoken line, each on its own single line, nothing else (no array, no prose) — the show starts playing while you write, so write the lines in order:
 {"t":<topic number, from 1>,"speaker":"marcus"|"tony","text":"..."}
 {"t":<topic number>,"speaker":"marcus"|"tony","clip":"<id>"}
+- In the game breakdown, when a line is about one specific score from the numbered list of scores (the drive, the throw, the kick, what it did to the game), add "play":<its number> to that line: {"t":1,"speaker":"tony","text":"...","play":4}. The show puts that moment on screen. Walk through the game's key moments in order, the way a highlight package would.
 - Cover every topic in the notes, in order; "t" is its position in the notes (the first topic is 1).
 - The first topic comes right after the hosts' intros: get straight into it, no greeting. If it's a regular topic, keep it a quick cold open (2–4 lines).
 - Topics marked "depth":"deep" are the game they just played. Go deep, the way a real postgame show does: 10–16 lines each. Walk through how the game was won or lost (the flow, the turning points, the deciding drive), argue about what decided it, and put the real stat lines in the hosts' mouths — specific players, specific numbers, said the way people say them ("three touchdowns, no picks", "a hundred and twelve on the ground"). Here, numbers are welcome: one per line is fine.
@@ -90,7 +91,7 @@ function teamNumbers(teamName: string, stats?: ShowStatLine | null): string {
   return `${teamName}, record ${stats.record}. ${parts.join('; ')}.`;
 }
 
-interface WriterLine { speaker: string; text?: string; clip?: string }
+interface WriterLine { speaker: string; text?: string; clip?: string; play?: unknown }
 
 function recordTone(stats?: ShowStatLine | null): PhraseTone | null {
   if (!stats) return null;
@@ -192,7 +193,8 @@ export async function writeConversation(
     current = pos;
     const i = liveIdx[pos];
     const speakerId = l.speaker === 'marcus' ? 'stats' : 'hottake';
-    written.set(i, [...(written.get(i) ?? []), clip ? { speakerId, text, clipId: clip.phrase.id } : { speakerId, text }]);
+    const play = typeof l.play === 'number' && Number.isInteger(l.play) && l.play > 0 ? l.play : undefined;
+    written.set(i, [...(written.get(i) ?? []), clip ? { speakerId, text, clipId: clip.phrase.id } : { speakerId, text, ...(play ? { play } : {}) }]);
     onProgress?.(sofar(), done);
   };
 

@@ -13,6 +13,7 @@ import { HOSTS, type Host } from '@/lib/spotlight/showScript';
 import { ordinal, rankTone, type ShowStatLine } from '@/lib/spotlight/teamStats';
 import type { TileStat } from '@/lib/spotlight/playerStats';
 import type { StandingsRow } from '@/lib/spotlight/showStandings';
+import type { GameFlow } from '@/lib/spotlight/showGame';
 
 export const TWO_SHOT_SRC = '/show/two_shot.jpg';
 export const avatarSrc = (h: Host) => `/show/avatars/${h}.jpg`;
@@ -74,6 +75,9 @@ interface GraphicProps {
   compare?: { left: { abbreviation: string; art: ReactNode }; right: { abbreviation: string; art: ReactNode }; rows: { key: string; label: string; left: string; right: string; edge: 'left' | 'right' | null }[] } | null;
   /** Standings (playoff race / division) — shown instead of tiles. */
   board?: { title: string; cutAfter: number | null; rows: (StandingsRow & { art: ReactNode })[] } | null;
+  /** A game's scores on a timeline, one called out (the key moment being
+   *  discussed) — shown instead of tiles. */
+  flow?: FlowView | null;
   /** Player this line is about → photo card beside the quote. */
   player?: { art: ReactNode; name: string; detail: string; key: string } | null;
   /** Since that player came on screen. */
@@ -142,6 +146,151 @@ function SpeakerChip({ speaker, speakerMs, lineMs }: { speaker: Host; speakerMs:
 }
 
 /** Full-frame graphic shown while a host's generated line plays as voiceover. */
+export type FlowView = GameFlow & {
+  /** The score being discussed (1-based), or null for the whole game. */
+  play: number | null;
+  /** A quarter being discussed (shaded). */
+  quarter: number | null;
+  label?: string;
+  usArt: ReactNode;
+  themArt: ReactNode;
+  /** Who scored on the called-out play. */
+  scorer: { key: string; name: string; pos: string; art: ReactNode } | null;
+};
+
+const KIND_LABEL = { td: 'Touchdown', fg: 'Field goal', safety: 'Safety', other: 'Score' } as const;
+const SWING_LABEL = { 'go-ahead': 'Go-ahead', ties: 'Ties it', extends: 'Extends lead', cuts: 'Cuts the lead', opens: 'Opens scoring' } as const;
+
+/** The game as a margin chart: above the line, the team leads; below, the
+ *  opponent. Every score is a dot; the one being discussed is called out
+ *  under it with the score it made. */
+function FlowBoard({ f, blockMs, lineMs, text }: { f: FlowView; blockMs: number; lineMs: number; text: string }) {
+  const total = f.quarters > 4 ? 70 : 60;
+  const peak = Math.max(7, ...f.plays.map(x => Math.abs(x.us - x.them)));
+  const span = Math.ceil(peak / 7) * 7;
+  const X = (at: number) => (at / total) * 1000;
+  const Y = (m: number) => 100 - (m / span) * 92;
+  // Step path of the margin: flat until a score, then a jump.
+  let d = `M0 ${Y(0)}`;
+  for (const x of f.plays) d += ` H${X(x.at)} V${Y(x.us - x.them)}`;
+  d += ` H1000`;
+  const area = `${d} V${Y(0)} H0 Z`;
+  const draw = anim(blockMs, 150, 1100);
+  const hi = f.play != null ? f.plays[f.play - 1] : undefined;
+  const qs = Array.from({ length: f.quarters }, (_, i) => i + 1);
+  const qx = (q: number) => [X((q - 1) * 15), X(q <= 4 ? q * 15 : total)];
+  const leadChanges = f.plays.filter(x => x.swing === 'go-ahead').length;
+  const last = f.plays[f.plays.length - 1];
+  const low = f.lowPoint != null ? f.plays[f.lowPoint - 1] : undefined;
+  const high = f.highPoint != null ? f.plays[f.highPoint - 1] : undefined;
+  const callIn = anim(lineMs, 0, 380);
+  const prev = hi ? (hi.n > 1 ? f.plays[hi.n - 2] : { us: 0, them: 0 }) : undefined;
+  return (
+    <>
+      <div className="my-auto min-h-0 py-[0.2em]">
+        <div className="mb-[0.3em] flex items-center text-[0.62em] font-bold uppercase tracking-[0.22em] text-slate-500" style={{ opacity: anim(blockMs, 0, 300) }}>
+          <span>{f.label ? `${f.label} · ` : ''}Game flow</span>
+          <span className="ml-auto flex items-center gap-[1.2em] normal-case tracking-normal">
+            <span className="flex items-center gap-[0.35em]"><span className="h-[0.8em] w-[0.8em] rounded-full" style={{ background: f.us.color }} />{f.us.abbreviation} score</span>
+            <span className="flex items-center gap-[0.35em]"><span className="h-[0.8em] w-[0.8em] rounded-full" style={{ background: f.them.color }} />{f.them.abbreviation} score</span>
+          </span>
+        </div>
+        <div className="rounded-[0.7em] bg-white px-[0.8em] pb-[0.3em] pt-[0.5em] shadow-[0_6px_18px_rgba(15,23,42,0.12)]">
+          <div className="relative h-[6.6em]">
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-[5.4em] whitespace-nowrap text-right text-[0.55em] font-bold uppercase leading-none tracking-[0.06em]">
+              <div className="absolute right-[0.6em] top-[0.2em]" style={{ color: f.us.color }}>{f.us.abbreviation} +{span}</div>
+              <div className="absolute right-[0.6em] -translate-y-1/2 text-slate-400" style={{ top: `${Y(0) / 2}%` }}>Tied</div>
+              <div className="absolute bottom-[0.2em] right-[0.6em]" style={{ color: f.them.color }}>{f.them.abbreviation} +{span}</div>
+            </div>
+            <div className="absolute inset-y-0 left-[3.2em] right-[0.4em]">
+            <svg viewBox="0 0 1000 200" preserveAspectRatio="none" className="absolute inset-0 h-full w-full overflow-visible">
+              <defs>
+                <clipPath id="flow-draw"><rect x="0" y="-20" width={1000 * draw} height="240" /></clipPath>
+                <clipPath id="flow-up"><rect x="0" y="-20" width="1000" height={Y(0) + 20} /></clipPath>
+                <clipPath id="flow-down"><rect x="0" y={Y(0)} width="1000" height={220 - Y(0)} /></clipPath>
+              </defs>
+              {f.quarter != null && f.quarter <= f.quarters && (
+                <rect x={qx(f.quarter)[0]} y="0" width={qx(f.quarter)[1] - qx(f.quarter)[0]} height="200" fill="#fff7ed" />
+              )}
+              {qs.slice(1).map(q => (
+                <line key={q} x1={qx(q)[0]} x2={qx(q)[0]} y1="0" y2="200" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
+              ))}
+              <line x1="0" x2="1000" y1={Y(0)} y2={Y(0)} stroke="#94a3b8" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+              <g clipPath="url(#flow-draw)">
+                <path d={area} fill={f.us.color} opacity="0.16" clipPath="url(#flow-up)" />
+                <path d={area} fill={f.them.color} opacity="0.16" clipPath="url(#flow-down)" />
+                <path d={d} fill="none" stroke="#1e293b" strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+              </g>
+              {hi && <line x1={X(hi.at)} x2={X(hi.at)} y1="0" y2="200" stroke="#ea580c" strokeWidth="1.5" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" opacity={callIn} />}
+            </svg>
+            {f.plays.map(x => {
+              const on = hi?.n === x.n;
+              const shown = draw >= x.at / total;
+              return (
+                <div
+                  key={x.n}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-white transition-[width,height,box-shadow] duration-300"
+                  style={{
+                    left: `${(X(x.at) / 10)}%`,
+                    top: `${Y(x.us - x.them) / 2}%`,
+                    width: on ? '1.15em' : '0.62em',
+                    height: on ? '1.15em' : '0.62em',
+                    borderWidth: on ? '0.16em' : '0.1em',
+                    background: x.ours ? f.us.color : f.them.color,
+                    boxShadow: on ? '0 0 0 0.28em rgba(234,88,12,0.35)' : undefined,
+                    opacity: shown ? 1 : 0,
+                    zIndex: on ? 2 : 1,
+                  }}
+                />
+              );
+            })}
+            </div>
+          </div>
+          <div className="ml-[5.8em] mr-[0.7em] mt-[0.15em] flex text-[0.55em] font-bold uppercase tracking-[0.18em] text-slate-400">
+            {qs.map(q => (
+              <div key={q} className={`text-center ${f.quarter === q ? 'text-orange-600' : ''}`} style={{ width: `${(qx(q)[1] - qx(q)[0]) / 10}%` }}>{q === 5 ? 'OT' : `Q${q}`}</div>
+            ))}
+          </div>
+        </div>
+        {hi ? (
+          <div key={hi.n} className="mt-[0.45em] flex items-center gap-[0.7em] rounded-[0.7em] bg-white px-[0.8em] py-[0.35em] shadow-[0_6px_18px_rgba(15,23,42,0.12)]" style={{ opacity: callIn, transform: `translateY(${(1 - callIn) * 0.6}em)` }}>
+            {f.scorer && <div key={f.scorer.key} className="h-[2.8em] w-[2.8em] shrink-0 overflow-hidden rounded-full bg-slate-100 ring-[0.12em] ring-white shadow">{f.scorer.art}</div>}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-[0.4em] text-[0.55em] font-extrabold uppercase tracking-[0.16em]">
+                <span className="rounded bg-[#1e3a5f] px-[0.5em] py-[0.1em] text-white">{hi.quarter === 5 ? 'OT' : `Q${hi.quarter}`}{hi.timeLeft ? ` · ${hi.timeLeft}` : ''}</span>
+                <span className="rounded px-[0.5em] py-[0.1em] text-white" style={{ background: hi.ours ? f.us.color : f.them.color }}>{hi.ours ? f.us.abbreviation : f.them.abbreviation} {KIND_LABEL[hi.kind]}</span>
+                {hi.swing !== 'extends' && <span className="rounded bg-orange-100 px-[0.5em] py-[0.1em] text-orange-700">{SWING_LABEL[hi.swing]}</span>}
+              </div>
+              <div className="mt-[0.1em] truncate text-[1em] font-extrabold text-[#0f1f35]">{hi.title}</div>
+            </div>
+            <div className="flex shrink-0 items-center gap-[0.4em] tabular-nums">
+              <span className="h-[1.6em] w-[1.6em]">{f.usArt}</span>
+              <span className={`text-[1.5em] font-extrabold ${hi.ours ? 'text-orange-600' : 'text-[#0f1f35]'}`}>{hi.us}</span>
+              <span className="text-[1em] font-bold text-slate-300">–</span>
+              <span className={`text-[1.5em] font-extrabold ${!hi.ours ? 'text-orange-600' : 'text-[#0f1f35]'}`}>{hi.them}</span>
+              <span className="h-[1.6em] w-[1.6em]">{f.themArt}</span>
+              {prev && <span className="ml-[0.2em] text-[0.55em] font-bold uppercase leading-tight tracking-[0.1em] text-slate-400">was<br />{prev.us}–{prev.them}</span>}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-[0.45em] flex flex-wrap gap-[0.5em] text-[0.7em] font-bold text-[#1e3a5f]" style={{ opacity: anim(blockMs, 900, 400) }}>
+            {last && <span className="rounded-full bg-white px-[0.8em] py-[0.2em] shadow">Final: {f.us.abbreviation} {last.us}, {f.them.abbreviation} {last.them}</span>}
+            {low && <span className="rounded-full bg-white px-[0.8em] py-[0.2em] shadow">Trailed by {low.them - low.us} ({low.quarter === 5 ? 'OT' : `Q${low.quarter}`})</span>}
+            {high && <span className="rounded-full bg-white px-[0.8em] py-[0.2em] shadow">Led by {high.us - high.them} ({high.quarter === 5 ? 'OT' : `Q${high.quarter}`})</span>}
+            {leadChanges > 0 && <span className="rounded-full bg-white px-[0.8em] py-[0.2em] shadow">{leadChanges} lead change{leadChanges === 1 ? '' : 's'}</span>}
+            <span className="rounded-full bg-white px-[0.8em] py-[0.2em] shadow">{f.plays.length} scores</span>
+          </div>
+        )}
+      </div>
+      {text && (
+        <div key={text} className="line-clamp-1 text-[0.72em] font-semibold leading-snug text-slate-500" style={{ opacity: anim(lineMs, 120, 380) }}>
+          {text}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function ShowGraphic(p: GraphicProps) {
   const { variant, blockMs } = p;
   // Slow push-in on the studio two-shot for the whole block — never static.
@@ -226,7 +375,9 @@ export function ShowGraphic(p: GraphicProps) {
                 <div className="h-[2em] w-[2em] shrink-0">{p.logo}</div>
               </div>
             </div>
-            {p.compare ? (
+            {p.flow ? (
+              <FlowBoard f={p.flow} blockMs={p.tilesMs} lineMs={p.lineMs} text={p.text} />
+            ) : p.compare ? (
               <>
                 <div className="my-auto min-h-0 overflow-hidden py-[0.3em]">
                   {p.tilesLabel && (

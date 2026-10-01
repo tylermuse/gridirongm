@@ -14,6 +14,7 @@ import type { Player, Team } from '@/types';
 import { computePlayerStatLine, playerStatsMentioned, showSeasonStats, type TileStat } from './playerStats';
 import { statsMentioned } from './teamStats';
 import { playerNamedIn, type VisualTopic } from './showVisuals';
+import type { GameFlow } from './showGame';
 
 export type Unit = 'oline' | 'run' | 'front' | 'secondary';
 
@@ -22,6 +23,9 @@ export type Focus =
   | { kind: 'unit'; unit: Unit; tiles: TileStat[]; label: string; mentioned: string[] }
   | { kind: 'team'; mentioned: string[] }
   | { kind: 'standings'; scope: 'conference' | 'division' }
+  /** The game's flow (every score on a timeline), with one score called
+   *  out — or none, when the line is about the game as a whole. */
+  | { kind: 'moment'; play: number | null; quarter?: number }
   | { kind: 'none' };
 
 /** Playoff-race / standings talk → the standings board. */
@@ -168,7 +172,12 @@ export interface FocusContext {
     gameLines?: Record<string, TileStat[]>;
     gameTeam?: TileStat[];
     gameLabel?: string;
+    gameFlow?: GameFlow;
   };
+  /** The score the writer said this line is about. */
+  play?: number;
+  /** The same for each of `earlier`. */
+  earlierPlays?: (number | undefined)[];
   team: Team;
   teams: Team[];
   players: Player[];
@@ -200,6 +209,49 @@ const GAME_WORDS: [string, RegExp][] = [
   ['sacks', /\bsack/i],
 ];
 
+/** A line about a score: the touchdown, the kick, the drive, the lead. */
+const SCORE_WORDS = /\btouchdowns?\b|\bTDs?\b|\bscor(e|ed|es|ing)\b|\bfield goals?\b|\bkick(ed|s)?\b|\bend zone\b|\bthe drive\b|\b(go-ahead|game-winning|game-winner)\b|\btook the lead\b|\btie[ds]? it\b|\banswer(ed|s)?\b|\bthe (catch|throw|run)\b|\b(found|hit) (him|\w+) for\b|\b\d+[- ]yard(er)?\b|\byarder\b|\bpunched it\b|\bwalk-off\b|\bsafety\b/i;
+/** One play, not a stat line ("his touchdown", "the 34-yarder") — vs "two
+ *  touchdowns and 140 yards", which is his numbers. */
+const ONE_PLAY = /(\b(the|that|his|a|this)|'s) (touchdown|TD|score|field goal|kick|catch|throw|run|strike|play)\b|\b\d+[- ]yard(er)?\b|\byarder\b|\b(go-ahead|game-winning|game-winner)\b|\btook the lead\b|\btie[ds]? it\b|\bend zone\b|\bpunched it\b|\bwalk-off\b|\bthe drive\b/i;
+/** A line about how the game went: who led, when, by how much. */
+const BEHIND = /\b(were|was|got|being|fell) down\b|\bdown (seven|eight|ten|fourteen|three|four|six|eleven|twelve|thirteen|\d+)\b|\btrail(ed|ing)?\b|\bbehind\b|\bin a hole\b|\bcome-?back\b|\bcame back\b|\brall(y|ied)\b|\bdug out\b/i;
+const AHEAD = /\bup (seven|eight|ten|fourteen|three|four|six|\d+)\b|\bpulled away\b|\bran away\b|\bbiggest lead\b|\bblew (it|the lead)\b|\bcomfortable lead\b/i;
+const FLOW = /\bquarter\b|\bhalf(time)?\b|\bovertime\b|\blead changes?\b|\bback and forth\b|\bseesaw\b|\bmomentum\b|\bwire[- ]to[- ]wire\b|\bthe lead\b|\bthe flow\b|\bhow (this|that|the) game\b|\bthe finish\b|\blate\b|\bearly\b|\bthe final\b|\bthe game\b/i;
+const QUARTER: [number, RegExp][] = [
+  [1, /\bfirst quarter\b|\bopening (drive|quarter)\b/i],
+  [2, /\bsecond quarter\b|\bbefore (the )?half(time)?\b|\bend of the (first )?half\b/i],
+  [3, /\bthird quarter\b|\bout of (the )?half(time)?\b|\bsecond half\b/i],
+  [4, /\bfourth quarter\b|\bthe fourth\b|\blate in the game\b|\bthe final (minutes|drive)\b/i],
+  [5, /\bovertime\b|\bOT\b/],
+];
+
+/** The score a line is about, if it names one of the players in it. */
+function momentOf(text: string, flow: GameFlow, named: Player | null): Focus | null {
+  const quarter = QUARTER.find(([, re]) => re.test(text))?.[0];
+  const inQ = (n: number) => quarter == null || flow.plays[n - 1]?.quarter === quarter;
+  if (named && ONE_PLAY.test(text)) {
+    const his = flow.plays.filter(p => p.playerIds.includes(named.id));
+    if (his.length) {
+      // "the 34-yarder" → that one; else the one in the quarter named; else his last.
+      const yards = [...text.matchAll(/\b(\d+)[- ]yard/gi)].map(m => m[1]);
+      const pick = his.find(p => yards.some(y => new RegExp(`\\b${y}\\b`).test(p.description)))
+        ?? his.filter(p => inQ(p.n)).at(-1) ?? his.at(-1)!;
+      return { kind: 'moment', play: pick.n };
+    }
+  }
+  if (named) return null;
+  if (BEHIND.test(text) && flow.lowPoint) return { kind: 'moment', play: flow.lowPoint };
+  if (AHEAD.test(text) && flow.highPoint) return { kind: 'moment', play: flow.highPoint };
+  if (quarter != null && SCORE_WORDS.test(text)) {
+    const q = flow.plays.filter(p => p.quarter === quarter);
+    if (q.length) return { kind: 'moment', play: q.at(-1)!.n, quarter };
+  }
+  if (quarter != null) return { kind: 'moment', play: null, quarter };
+  if (FLOW.test(text) || SCORE_WORDS.test(text)) return { kind: 'moment', play: null };
+  return null;
+}
+
 /** A player's profile when there are no stats to show. */
 function profileTiles(p: Player): TileStat[] {
   const t = (key: string, label: string, value: string, note: string): TileStat => ({ key, label, value, rank: 0, of: 0, note });
@@ -226,6 +278,12 @@ function teamWords(teams: Team[]): Set<string> {
 /** Focus from one piece of text alone (no carry-over). */
 function focusOf(text: string, c: FocusContext): Focus | null {
   const named = playerNamedIn(text, c.topic, c.players, [c.team.id, ...(c.topic?.teamIds ?? [])], teamWords(c.teams));
+  // A game breakdown: a score that's being described goes on the timeline.
+  const flow = c.topic?.gameFlow;
+  if (flow) {
+    const m = momentOf(text, flow, named);
+    if (m) return m;
+  }
   if (named) return playerFocus(named, text, c.players, c.topic);
   // A game breakdown: the game's box score, not season unit or team ranks.
   if (c.topic?.gameTeam) {
@@ -234,7 +292,10 @@ function focusOf(text: string, c: FocusContext): Focus | null {
       const p = starter(role, c.team, c.players);
       if (p) return playerFocus(p, text, c.players, c.topic);
     }
-    return { kind: 'team', mentioned: GAME_WORDS.filter(([, re]) => re.test(text)).map(([k]) => k) };
+    const mentioned = GAME_WORDS.filter(([, re]) => re.test(text)).map(([k]) => k);
+    // With the flow on hand, the box score only for the box-score numbers.
+    if (flow && !mentioned.some(k => k !== 'pts')) return null;
+    return { kind: 'team', mentioned };
   }
   const race = standingsOf(text);
   if (race) return race;
@@ -254,11 +315,22 @@ function focusOf(text: string, c: FocusContext): Focus | null {
 }
 
 export function focusForLine(text: string, c: FocusContext): Focus {
+  const flow = c.topic?.gameFlow;
+  // The writer marked the score this line is about.
+  if (flow && c.play && flow.plays[c.play - 1]) {
+    // …unless the line is really about a player's numbers or the box score.
+    const own = focusOf(text, c);
+    if (!own || own.kind === 'moment' || (own.kind === 'player' && !own.mentioned.length)) return { kind: 'moment', play: c.play };
+    return own;
+  }
   const own = focusOf(text, c);
   // What the conversation was just on (the latest line in this topic that
   // was about something measurable).
   let prev: Focus | null = null;
-  for (let k = c.earlier.length - 1; k >= 0 && !prev; k--) prev = focusOf(c.earlier[k], c);
+  for (let k = c.earlier.length - 1; k >= 0 && !prev; k--) {
+    const tagged = flow && c.earlierPlays?.[k];
+    prev = tagged && flow.plays[tagged - 1] ? { kind: 'moment', play: tagged } : focusOf(c.earlier[k], c);
+  }
   // "His completion rate…" — still the player they were talking about, even
   // though the line also mentions a team stat.
   const aboutHim = /\b(he|he's|his|him)\b/i.test(text);
@@ -270,6 +342,7 @@ export function focusForLine(text: string, c: FocusContext): Focus {
   if (prev?.kind === 'unit') return { ...prev, mentioned: unitMentioned(text, prev.tiles) };
   if (prev?.kind === 'team') return { kind: 'team', mentioned: [] };
   if (prev?.kind === 'standings') return prev;
+  if (prev?.kind === 'moment') return prev;
   // The headline sets the subject ("QB Watch", "Trenches trouble").
   if (c.topic?.headline) {
     const f = focusOf(c.topic.headline, c);
@@ -277,6 +350,7 @@ export function focusForLine(text: string, c: FocusContext): Focus {
     const race = standingsOf(c.topic.headline);
     if (race) return race;
   }
+  if (flow) return { kind: 'moment', play: null };
   // A topic about exactly one player.
   const ids = c.topic?.playerIds ?? [];
   if (ids.length === 1) {

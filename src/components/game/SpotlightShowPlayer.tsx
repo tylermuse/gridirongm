@@ -28,7 +28,7 @@ type ShowTopic = {
   exchanges: { speakerId: string; text: string }[];
   teamIds?: string[];
   playerIds?: string[];
-} & Partial<Pick<GameTopic, 'depth' | 'gameLines' | 'gameTeam' | 'gameCompare' | 'gameLabel'>>;
+} & Partial<Pick<GameTopic, 'depth' | 'gameLines' | 'gameTeam' | 'gameCompare' | 'gameLabel' | 'gameFlow'>>;
 
 interface SpotlightShowPlayerProps {
   topics: ShowTopic[];
@@ -268,8 +268,9 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       f = { kind: 'team', mentioned: s0?.kind === 'tts' ? statsMentioned(s0.text) : [] };
     } else {
       const earlier: string[] = [];
-      for (let k = 0; k < i; k++) { const x = segs[k]; if (x.kind === 'tts' && x.topicIdx === t) earlier.push(x.text); }
-      f = focusForLine(s0.kind === 'tts' ? s0.text : '', { topic: topics[t], team, teams, players, earlier });
+      const earlierPlays: (number | undefined)[] = [];
+      for (let k = 0; k < i; k++) { const x = segs[k]; if (x.kind === 'tts' && x.topicIdx === t) { earlier.push(x.text); earlierPlays.push(x.play); } }
+      f = focusForLine(s0.kind === 'tts' ? s0.text : '', { topic: topics[t], team, teams, players, earlier, earlierPlays, play: s0.kind === 'tts' ? s0.play : undefined });
       // A topic transition always shows the panel (the new headline wipes in).
       if (s0.kind === 'clip' && f.kind === 'none') f = { kind: 'team', mentioned: [] };
     }
@@ -721,13 +722,30 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     focus?.kind === 'player' ? focus.tiles ?? gfxTopic?.gameTeam ?? null
       : focus?.kind === 'unit' ? focus.tiles
         : focus?.kind === 'team' ? gfxTopic?.gameTeam ?? stats?.stats ?? null
-          : gfxTopic?.gameTeam ?? null;
+          : focus?.kind === 'moment' ? null
+            : gfxTopic?.gameTeam ?? null;
   const tilesLabel =
     focus?.kind === 'player' && focus.tiles ? focus.label
       : focus?.kind === 'unit' ? focus.label
         : gfxTopic?.gameTeam ? gfxTopic.gameLabel
           : stats ? `${team?.abbreviation ?? teamName} · League ranks` : undefined;
-  const mentioned: string[] = !tts || !focus || focus.kind === 'none' || focus.kind === 'standings' ? [] : focus.mentioned;
+  const mentioned: string[] = !tts || !focus || focus.kind === 'none' || focus.kind === 'standings' || focus.kind === 'moment' ? [] : focus.mentioned;
+  // Game breakdown: the scores on a timeline, the one being discussed called out.
+  const flowData = focus?.kind === 'moment' ? gfxTopic?.gameFlow ?? null : null;
+  const flow = flowData && focus?.kind === 'moment' ? (() => {
+    const hi = focus.play != null ? flowData.plays[focus.play - 1] : undefined;
+    const scorer = hi?.playerIds[0] ? players.find(x => x.id === hi.playerIds[0]) : undefined;
+    const t = (id: string) => teams.find(x => x.id === id);
+    return {
+      ...flowData,
+      play: hi?.n ?? null,
+      quarter: focus.quarter ?? null,
+      label: gfxTopic?.gameLabel,
+      usArt: t(flowData.us.teamId) ? logoOf(t(flowData.us.teamId)!) : null,
+      themArt: t(flowData.them.teamId) ? logoOf(t(flowData.them.teamId)!) : null,
+      scorer: scorer ? { key: scorer.id, name: `${scorer.firstName} ${scorer.lastName}`, pos: scorer.position, art: <PlayerAvatar player={scorer} size="fill" teamColor={scorer.teamId ? t(scorer.teamId)?.primaryColor : undefined} /> } : null,
+    };
+  })() : null;
   // A game's team box score reads as a side-by-side: us left, them right.
   const cmpData = gfxTopic?.gameCompare && tiles && tiles === gfxTopic.gameTeam ? gfxTopic.gameCompare : null;
   const teamOf = (id: string) => teams.find(x => x.id === id);
@@ -793,6 +811,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
                 tiles={tiles}
                 board={board}
                 compare={compare}
+                flow={flow}
                 tilesLabel={tilesLabel}
                 tilesMs={onGfx ? clock - Math.max(blockStart.current, playerStart.current) : 60_000}
                 mentioned={mentioned}
