@@ -320,11 +320,15 @@ function stripPlayerSignoff(text: string): string {
   // capitalized name (1-3 tokens), with optional trailing emojis/whitespace.
   // Examples matched:
   //   "...next grind! — Jordan Love"        -> "...next grind!"
-  //   "Built different. -- Mike Smith 🔥"  -> "Built different. 🔥"
+  //   "Built different. -- Mike Smith 🔥"   -> "Built different."
   // Examples NOT matched (mid-sentence dashes):
-  //   "Tough night — but we'll bounce back" (no name follows the dash at end)
-  const trailingEmojis = '(?:[\s\p{Extended_Pictographic}\p{Emoji_Presentation}]*)';
-  const re = new RegExp(`\s*[—-]{1,2}\s+[A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){0,2}${trailingEmojis}\s*$`, 'u');
+  //   "Tough night — but we'll bounce back" (lowercase word after dash, not a name)
+  //
+  // IMPORTANT: this MUST be a regex literal, not `new RegExp(\`...\`)`. In a
+  // template string every "\s" / "\p{...}" collapses to a bare "s" / "p{...}"
+  // (invalid-escape rule), which silently produced a regex that matched nothing
+  // — that's the bug that let sign-offs leak back into player posts (2026-10-01).
+  const re = /\s*[—-]{1,2}\s+[A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){0,2}[\s\p{Extended_Pictographic}\p{Emoji_Presentation}]*$/u;
   return text.replace(re, '').trim();
 }
 

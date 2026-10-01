@@ -15,9 +15,15 @@ export function mvpScore(p: Player, teams: Team[]): number {
   const winBonus = wins * 8 + (winPct >= 0.65 ? 50 : winPct >= 0.5 ? 20 : -40);
 
   if (p.position === 'QB') {
+    // OVR tie-breaker (2026-10-01, obungaloo via Commish): mvpScore was purely
+    // stat-based, so mid-70 OVR QBs with the irrational_confidence trait rode
+    // hero-game stat spikes past genuinely better 80+ OVR passers. allLeagueScore
+    // already blends ~20% OVR; mirror that here so talent breaks ties without
+    // overriding legitimate stat dominance (80 OVR * 0.3 = 24 pts on a ~600-pt score).
     return p.stats.passYards * 0.05 + p.stats.passTDs * 8 - p.stats.interceptions * 6
       + p.stats.rushTDs * 4 + p.stats.rushYards * 0.02
-      + winBonus * 1.2;
+      + winBonus * 1.2
+      + p.ratings.overall * 0.3;
   }
   if (p.position === 'RB') {
     return p.stats.rushYards * 0.06 + p.stats.rushTDs * 6 + p.stats.receivingYards * 0.02 + winBonus;
