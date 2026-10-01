@@ -157,7 +157,7 @@ export default function RosterPage() {
     autoCutToRosterLimit,
     demoteToPracticeSquad, promoteFromPracticeSquad, cutFromPracticeSquad,
     phase, week, seasonHistory, leagueSettings, resigningPlayers,
-    schedule,
+    schedule, playoffBracket,
   } = useGameStore();
   const godMode = leagueSettings?.godMode ?? false;
   const [showCreatePlayer, setShowCreatePlayer] = useState(false);
@@ -632,10 +632,16 @@ export default function RosterPage() {
                   team and only when an unplayed game exists for the current
                   week — hidden during preseason/playoffs/offseason and when
                   viewing another team's roster. */}
-              {!isSpectator && phase === 'regular' && activeTeamId === userTeamId && (() => {
-                const userGameThisWeek = schedule.find(g =>
-                  g.week === week && !g.played &&
-                  (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId));
+              {!isSpectator && (phase === 'regular' || phase === 'playoffs') && activeTeamId === userTeamId && (() => {
+                // Regular season: this week's game. Playoffs: the user's next
+                // matchup once both teams are set.
+                const userGameThisWeek = phase === 'regular'
+                  ? schedule.find(g =>
+                    g.week === week && !g.played &&
+                    (g.homeTeamId === userTeamId || g.awayTeamId === userTeamId))
+                  : playoffBracket?.find(m =>
+                    !m.winnerId && m.homeTeamId && m.awayTeamId &&
+                    (m.homeTeamId === userTeamId || m.awayTeamId === userTeamId));
                 if (!userGameThisWeek) return null;
                 return (
                   <button
