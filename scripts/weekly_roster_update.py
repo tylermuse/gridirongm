@@ -126,6 +126,7 @@ def reconcile(d, espn, ok):
     def urank(u):
         try: return order.index(u)
         except: return 9
+    jersey_by_pid={}
     for tid in range(32):
         for ep in sorted(espn[tid]['players'], key=lambda x: urank(x.get('unit'))):
             ej=ep.get('jersey') or ''; eg=grp(ep.get('pos'))
@@ -140,6 +141,7 @@ def reconcile(d, espn, ok):
             def st(c): return (3 if ej and c['jersey']==ej else 0)+(2 if eg and grp(c['pos'])==eg else 0)+(2 if c['tid']==tid else 0)
             ch=max(elig,key=lambda c:(st(c),c['ovr'],1 if c['pid'] in exact else 0))
             claimed.add(ch['pid']); assign[ch['pid']]=tid
+            if ej: jersey_by_pid[ch['pid']]=ej
     # dedup-swap: keep higher-rated of same-person duplicates on a team
     def same(a,b):
         fa,fb=recs[a]['first'],recs[b]['first']
@@ -154,7 +156,7 @@ def reconcile(d, espn, ok):
             if yp!=xp and same(xp,yp) and recs[xp]['ovr']>recs[yp]['ovr']:
                 assign[xp]=xt; del assign[yp]; abt[(xt,ln)].remove(yp); abt[(xt,ln)].append(xp); break
     # apply: assigned -> team (un-retire if needed); on-team-not-assigned & ovr<65 -> FA
-    moves=0; unret=0; cuts=0
+    moves=0; unret=0; cuts=0; jset=0
     for p in P:
         pid=p['pid']; cur=p.get('tid')
         if pid in assign:
@@ -162,9 +164,12 @@ def reconcile(d, espn, ok):
             if cur!=nt:
                 if cur==-3: p['retiredYear']=None; unret+=1
                 p['tid']=nt; moves+=1
+            j=jersey_by_pid.get(pid)
+            if j and str(p.get('jerseyNumber') or '').lstrip('#')!=j:
+                p['jerseyNumber']=j; jset+=1
         elif isinstance(cur,int) and 0<=cur<=31 and cur in ok and latest_ovr(p)<65:
             p['tid']=-1; cuts+=1
-    return moves,unret,cuts
+    return moves,unret,cuts,jset
 
 def lastn_by_pid(P,pid):
     for p in P:
@@ -244,13 +249,14 @@ def main():
         print(json.dumps({"error":f"only {len(ok)}/32 team rosters fetched; aborting"})); sys.exit(1)
     d=json.load(open(ROSTER))
     n0=len(d['players'])
-    moves,unret,cuts = reconcile(d, teams, ok)
+    moves,unret,cuts,jset = reconcile(d, teams, ok)
     ninj = apply_injuries(d, injured)
     assert len(d['players'])==n0
     json.dump(d, open(ROSTER,'w'), ensure_ascii=False, allow_nan=False)
     cb = update_page(week, teams, today)
     fn = write_changelog(week, teams, today, moves, unret, cuts, ninj)
-    print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"injuries":ninj,"cacheBust":cb,"changelog":fn,"players":n0}))
+    subprocess.run([sys.executable,"scripts/build_midseason_start.py"],check=True)
+    print(json.dumps({"week":week,"moves":moves,"unretired":unret,"cuts":cuts,"jerseys":jset,"injuries":ninj,"cacheBust":cb,"changelog":fn,"players":n0}))
 
 if __name__=="__main__":
     main()

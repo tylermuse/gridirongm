@@ -86,7 +86,7 @@ interface FbgmPlayer {
   born?: { year?: number };
   draft?: { year?: number; pick?: number; round?: number; tid?: number; originalTid?: number };
   contract?: { amount?: number; exp?: number };
-  injury?: { type?: string; gamesRemaining?: number };
+  injury?: { type?: string | { description?: string; name?: string; abbreviation?: string }; gamesRemaining?: number };
   ratings?: FbgmRating[];
   /** Set of every team-id the player has accumulated stats for (career history). */
   statsTids?: number[];
@@ -193,7 +193,14 @@ function mapRatings(ratings: FbgmRating): { ratings: PlayerRatings; potential: n
     tackling: clamp(ratings.tck ?? 20),
     coverage: clamp(ratings.pcv ?? 20),
     passRush: clamp(avg([ratings.prs ?? 0, ratings.rns ?? 0], 20)),
-    kicking: clamp(avg([ratings.kpw ?? 0, ratings.kac ?? 0, ratings.ppw ?? 0, ratings.pac ?? 0], 20)),
+    // K uses only kick ratings and P only punt ratings — averaging all four
+    // halved every kicker (their ppw/pac are ~0), e.g. Aubrey 98/98 → 58.
+    kicking: clamp(avg(
+      position === 'K' ? [ratings.kpw ?? 0, ratings.kac ?? 0]
+        : position === 'P' ? [ratings.ppw ?? 0, ratings.pac ?? 0]
+        : [ratings.kpw ?? 0, ratings.kac ?? 0, ratings.ppw ?? 0, ratings.pac ?? 0],
+      20,
+    )),
   };
   return { ratings: mapped, potential, position };
 }
@@ -394,9 +401,26 @@ export function convertFbgmLeague(league: FbgmLeagueFile): ImportedLeagueData {
       draftRound: player.draft?.round,
       draftTeamId: player.draft?.tid != null ? teamByTid.get(player.draft.tid) : undefined,
       retired: false,
-      injury: player.injury?.type && player.injury.type !== 'Healthy'
-        ? { type: player.injury.type, weeksLeft: Math.max(1, player.injury.gamesRemaining ?? 1) }
-        : null,
+      // Some source exports (FBGM/ESPN) carry injury.type as a status *object*
+      // ({id,name,description,abbreviation}) rather than a plain string. Rendering
+      // that object as a React child crashes the dashboard (React #31). Coerce to
+      // a readable string here so imported rosters are always safe to render.
+      injury: (() => {
+        const rawType: unknown = player.injury?.type;
+        const injuryType = typeof rawType === 'string'
+          ? rawType
+          : rawType && typeof rawType === 'object'
+            ? String(
+                (rawType as { description?: string }).description
+                ?? (rawType as { name?: string }).name
+                ?? (rawType as { abbreviation?: string }).abbreviation
+                ?? 'Injured',
+              )
+            : undefined;
+        return injuryType && injuryType !== 'Healthy'
+          ? { type: injuryType, weeksLeft: Math.max(1, player.injury?.gamesRemaining ?? 1) }
+          : null;
+      })(),
       ratingHistory: [],
       onIR: false,
       mood: 60 + Math.floor(Math.random() * 30),

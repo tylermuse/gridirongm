@@ -890,7 +890,7 @@ export default function RosterPage() {
 
                         {/* Position */}
                         <td className="py-2 px-2 text-center">
-                          <span className="text-xs font-bold text-[var(--text-sec)]">{getSubPosition(p)}</span>
+                          <span className="text-xs font-bold text-[var(--text)]">{getSubPosition(p)}</span>
                         </td>
 
                         {/* Age */}
@@ -1288,7 +1288,7 @@ export default function RosterPage() {
                       <div key={pos} className="border-t border-[var(--border)] first:border-t-0">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 py-2 px-2">
                           <div className="flex sm:flex-col items-center sm:items-start gap-1 shrink-0 sm:w-12">
-                            <span className="text-xs font-bold text-[var(--text-sec)]">{pos}</span>
+                            <span className="text-xs font-bold text-[var(--text)]">{pos}</span>
                             <ResetButton pos={pos} />
                           </div>
                           <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">

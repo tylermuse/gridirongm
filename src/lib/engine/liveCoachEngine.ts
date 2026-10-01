@@ -16,7 +16,7 @@ import type { Player, Team, PlayerStats } from '@/types';
 import type { PlayEvent } from './playByPlay';
 import { pickRusher, pickInterceptor, pickReceiver } from './playByPlay';
 import type { PlayCallType } from '@/components/game/PlayCallMenu';
-import { playerAvailable } from './simulate';
+import { playerAvailable, fieldGoalMakeProbability } from './simulate';
 
 export interface LiveEngineState {
   quarter: number;
@@ -54,6 +54,8 @@ export interface LiveEngineState {
 export interface LiveCoachEngine {
   /** Run one play (or several if continuation like TD → XP → kickoff). Returns new events. */
   runOnePlay: (userCall?: PlayCallType) => PlayEvent[];
+  /** Charge `side` a timeout between plays (used for defensive timeouts). */
+  callTimeoutFor: (side: 'home' | 'away', elapsedRunoffSecs?: number) => PlayEvent[];
   /** True when the user team has the ball on offense AND it's a regular play (not kickoff/XP). */
   isUserOffense: () => boolean;
   isFinished: () => boolean;
@@ -282,7 +284,11 @@ export function createLiveCoachEngine(
     if (state.timeSecs > 0 || state.overtime) return;
     if (state.quarter === 2) {
       events.push(makeEvent('quarter_end', 'End of the second quarter.', 0, false));
-      events.push(makeEvent('halftime', `Halftime — ${homeTeam.abbreviation} ${state.homeScore}, ${awayTeam.abbreviation} ${state.awayScore}.`, 0, false));
+      const ht = makeEvent('halftime', `Halftime — ${homeTeam.abbreviation} ${state.homeScore}, ${awayTeam.abbreviation} ${state.awayScore}.`, 0, false);
+      // Snapshot (deep copy) so the Halftime Report shows first-half numbers
+      // even when opened later in the game.
+      ht.engineStatsSnap = Object.fromEntries(Object.entries(playerStats).map(([id, st]) => [id, { ...st }]));
+      events.push(ht);
       state.quarter = 3;
       state.timeSecs = 900;
       state.twoMinWarningQ2Fired = false;
@@ -546,15 +552,37 @@ export function createLiveCoachEngine(
     doKickoffEvents(events);
   }
 
-  function callTimeout(events: PlayEvent[]) {
-    const isUser = state.possession === (initialState as LiveEngineState).possession; // approximate
-    if (state.possession === 'home' && state.homeTimeouts > 0) {
+  /** Charge `side` a timeout (defaults to the offense). Returns false when
+   *  that team has none left. Callers zero the pending runoff (stops the clock). */
+  function callTimeout(events: PlayEvent[], side: 'home' | 'away' = state.possession): boolean {
+    if (side === 'home' && state.homeTimeouts > 0) {
       state.homeTimeouts--;
       events.push(makeEvent('run', `⏱️ Timeout called by ${homeTeam.abbreviation}. (${state.homeTimeouts} remaining)`, 0, false));
-    } else if (state.possession === 'away' && state.awayTimeouts > 0) {
+      return true;
+    }
+    if (side === 'away' && state.awayTimeouts > 0) {
       state.awayTimeouts--;
       events.push(makeEvent('run', `⏱️ Timeout called by ${awayTeam.abbreviation}. (${state.awayTimeouts} remaining)`, 0, false));
+      return true;
     }
+    return false;
+  }
+
+  /** Timeout by a specific team between plays — e.g. the user on DEFENSE,
+   *  which runOnePlay('timeout') can't express (it charges the offense).
+   *  `elapsedRunoffSecs` is how much of the previous play's runoff already
+   *  ticked off the on-screen clock before the call; that part is kept and the
+   *  rest is cancelled, so the clock stops exactly where the user saw it. */
+  function callTimeoutFor(side: 'home' | 'away', elapsedRunoffSecs = 0): PlayEvent[] {
+    const events: PlayEvent[] = [];
+    if (state.isGameOver || state.awaitingXpChoice || state.awaitingKickoffChoice) return events;
+    const left = side === 'home' ? state.homeTimeouts : state.awayTimeouts;
+    if (left <= 0) return events;
+    const elapsed = Math.max(0, Math.min(Math.round(elapsedRunoffSecs), state.pendingRunoff ?? 0, state.timeSecs - 1));
+    advanceClock(elapsed);
+    state.pendingRunoff = 0;
+    callTimeout(events, side);
+    return events;
   }
 
   function runFieldGoal(events: PlayEvent[]) {
@@ -562,8 +590,7 @@ export function createLiveCoachEngine(
     const distance = (100 - state.fieldPos) + 17;
     const k = ok.k;
     const kickerRating = rating(k, 'kicking', 70);
-    const successProb = clamp(0.95 - Math.max(0, distance - 30) * 0.025 + (kickerRating - 70) / 100 * 0.15, 0.35, 0.98);
-    const good = Math.random() < successProb;
+    const good = Math.random() < fieldGoalMakeProbability(distance, kickerRating);
     bump(k, { fieldGoalAttempts: 1, fieldGoalsMade: good ? 1 : 0 });
     const kName = nameOrFallback(k, 'the kicker');
     if (good) {
@@ -811,6 +838,7 @@ export function createLiveCoachEngine(
 
   return {
     runOnePlay,
+    callTimeoutFor,
     isUserOffense: () => false, // caller knows; this is here for completeness
     isFinished: () => state.isGameOver,
     getState: () => ({ ...state }),

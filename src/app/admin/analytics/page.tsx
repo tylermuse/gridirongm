@@ -19,6 +19,19 @@ interface AnalyticsData {
   signupsByDay: Record<string, number>;
   topPages: { path: string; count: number }[];
   recentEvents: { event: string; properties: Record<string, unknown>; created_at: string; user_id: string | null }[];
+  activeUsersRolling: ActiveUsersRolling | null;
+  hoopsActiveUsersRolling: ActiveUsersRolling | null;
+}
+
+interface ActiveUsersRolling {
+  dau: number;
+  wau: number;
+  mau: number;
+  engagedDau: number;
+  engagedWau: number;
+  engagedMau: number;
+  returningMau: number;
+  dailyActive: { day: string; all: number; engaged: number }[];
 }
 
 type Period = '7d' | '30d' | '90d';
@@ -154,6 +167,14 @@ export default function AdminAnalyticsPage() {
               </div>
             </div>
 
+            {/* Rolling DAU/WAU/MAU — fixed windows, ignore the period selector. */}
+            {data.activeUsersRolling && (
+              <ActiveUsersSection title="BS Football" a={data.activeUsersRolling} />
+            )}
+            {data.hoopsActiveUsersRolling && data.hoopsActiveUsersRolling.mau > 0 && (
+              <ActiveUsersSection title="BS Hoops" a={data.hoopsActiveUsersRolling} />
+            )}
+
             {/* Windowed — these all respect the period selector. */}
             <div>
               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">Last {period}</h2>
@@ -163,7 +184,7 @@ export default function AdminAnalyticsPage() {
                 <MetricCard
                   label="Unique Devices"
                   value={data.uniqueDevices || '—'}
-                  sub="incl. anonymous · upper bound"
+                  sub="any event · incl. crawlers · upper bound"
                 />
                 <MetricCard label="Sessions" value={data.sessions} />
                 <MetricCard label="Page Views" value={data.pageViews} />
@@ -277,6 +298,53 @@ export default function AdminAnalyticsPage() {
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+function ActiveUsersSection({ title, a }: { title: string; a: ActiveUsersRolling }) {
+  const stickiness = a.engagedMau > 0 ? a.engagedDau / a.engagedMau : 0;
+  const series = a.dailyActive.slice(-30);
+  const max = Math.max(1, ...series.map((d) => d.all));
+  return (
+    <div>
+      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{title} · active users · rolling</h2>
+      <p className="text-xs text-gray-400 mb-3">
+        Engaged = device with 2+ page views in the window. Raw device counts include crawlers and one-page bounces.
+      </p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard label="DAU (24h)" value={a.engagedDau} sub={`${a.dau.toLocaleString()} raw devices`} />
+        <MetricCard label="WAU (7d)" value={a.engagedWau} sub={`${a.wau.toLocaleString()} raw devices`} />
+        <MetricCard label="MAU (30d)" value={a.engagedMau} sub={`${a.returningMau.toLocaleString()} returned on 2+ days · ${a.mau.toLocaleString()} raw`} />
+        <MetricCard label="Stickiness" value={`${(stickiness * 100).toFixed(0)}%`} sub="engaged DAU / MAU" />
+      </div>
+      {series.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-gray-900">{title} daily active devices (30d)</h3>
+            <div className="flex gap-4 text-xs text-gray-500">
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-blue-600" />Engaged</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-blue-100" />Raw</span>
+            </div>
+          </div>
+          <div className="flex items-end gap-[3px] h-32">
+            {series.map((d) => (
+              <div
+                key={d.day}
+                className="relative flex-1 h-full flex items-end"
+                title={`${d.day}: ${d.engaged} engaged / ${d.all} raw`}
+              >
+                <div className="absolute bottom-0 w-full rounded-t-sm bg-blue-100" style={{ height: `${(d.all / max) * 100}%` }} />
+                <div className="relative w-full rounded-t-sm bg-blue-600" style={{ height: `${(d.engaged / max) * 100}%` }} />
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-between mt-1.5 text-[10px] text-gray-400">
+            <span>{series[0].day.slice(5)}</span>
+            <span>{series[series.length - 1].day.slice(5)}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -134,6 +134,10 @@ interface GameStore extends LeagueState {
   /** Returns empty string on success, or a specific error reason. Use `!!result`
    *  to check for failure; the string contents are suitable for display. */
   signFreeAgent: (playerId: string, salary: number, years: number) => string;
+  /** Bring a retired player back onto the user's roster on a minimum deal.
+   *  Returns empty string on success, or a display-suitable error reason.
+   *  Capped at 1 un-retire per season. */
+  unretirePlayer: (playerId: string) => string;
   aiSignFreeAgents: () => void;
   releasePlayer: (playerId: string) => void;
   /** Cut all teams (or one team if id supplied) down to the 53-man roster
@@ -278,7 +282,12 @@ interface GameStore extends LeagueState {
 // ---------------------------------------------------------------------------
 
 function addStats(target: PlayerStats, source: Partial<PlayerStats>): PlayerStats {
-  const result = { ...target };
+  // Baseline every field to a numeric 0 before accumulation. Old saves created
+  // before newer stat keys were added lack those keys on target; without this
+  // `undefined += n` yields NaN, which fails the `> 0` display guard and blanks
+  // out passing stats on the player profile / box score. Purely additive; no
+  // save-version bump needed.
+  const result = { ...emptyStats(), ...target };
   for (const key of Object.keys(source) as (keyof PlayerStats)[]) {
     (result[key] as number) += (source[key] as number) ?? 0;
   }
@@ -1410,6 +1419,8 @@ function computeResigningEntry(player: Player, team: Team, teamRoster?: Player[]
   // K/P salary caps — scale with cap inflation
   if (player.position === 'K') askingSalary = Math.min(askingSalary, 4.0 * ci);
   if (player.position === 'P') askingSalary = Math.min(askingSalary, 2.5 * ci);
+  // Re-round after the K/P caps: 2.5 * 1.07 = 2.6750000000000003 leaked into the UI.
+  askingSalary = Math.round(askingSalary * 10) / 10;
   // Players want long-term security — asking for multi-year deals
   // makes the 1-year franchise tag a meaningful strategic trade-off
   const askingYears = player.age >= 34 ? 2
@@ -1931,6 +1942,9 @@ function generateAITradeProposals(state: LeagueState): TradeProposal[] {
       }
     }
 
+    // Floor total offered value — AI should never propose less than 60% of the target's value
+    if (offeredValue < targetValue * 0.60) continue;
+
     // Cap total offered value — AI should never overpay by more than 15%
     if (offeredValue > targetValue * 1.15) continue;
 
@@ -2030,6 +2044,7 @@ const EMPTY_LEAGUE_STATE: LeagueState = {
   firedState: null,
   expansionDraft: null,
   extensionsUsedThisSeason: 0,
+  retiredSigningsThisSeason: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -2942,6 +2957,7 @@ export const useGameStore = create<GameStore>()(
             firedState: null,
             expansionDraft: null,
             extensionsUsedThisSeason: 0,
+            retiredSigningsThisSeason: 0,
           });
           // Retrofit cut + cap-compliance for imported FBGM rosters. The
           // raw JSON snapshots ship with ~90-player rosters and team
@@ -3112,6 +3128,7 @@ export const useGameStore = create<GameStore>()(
           firedState: null,
           expansionDraft: null,
           extensionsUsedThisSeason: 0,
+          retiredSigningsThisSeason: 0,
         });
         // Trim AI teams to 53 + enforce cap-compliance for synthetic
         // generation too. generateRoster intentionally over-builds so
@@ -6069,6 +6086,78 @@ export const useGameStore = create<GameStore>()(
         if (state.phase === 'freeAgency') {
           get().advanceFADay();
         }
+
+        return ''; // success
+      },
+
+      /** Bring a retired player back onto the user's roster (feature: un-retire
+       *  a player, 3 votes on the football feature board). Retired players have
+       *  retired: true and teamId: null and are invisible in free agency. This
+       *  signs one back on a 1-year minimum deal. Capped at 1 per season. */
+      unretirePlayer: (playerId: string) => {
+        const state = get();
+        const userTeam = state.teams.find(t => t.id === state.userTeamId);
+        if (!userTeam) return 'No active team.';
+
+        if ((state.retiredSigningsThisSeason ?? 0) >= 1) {
+          return 'You can only un-retire one player per season. Try again next season.';
+        }
+
+        const player = state.players.find(p => p.id === playerId);
+        if (!player) return 'Player not found.';
+        if (!player.retired) return `${player.firstName} ${player.lastName} is not retired.`;
+
+        // Roster-space guard: don't let a position blow past its max.
+        const posCount = state.players.filter(
+          p => p.teamId === state.userTeamId && !p.retired && p.position === player.position,
+        ).length;
+        if (posCount >= ROSTER_LIMITS[player.position].max) {
+          return `Your roster is full at ${player.position} (${posCount}/${ROSTER_LIMITS[player.position].max}). Cut someone first.`;
+        }
+
+        const salary = LEAGUE_MINIMUM_SALARY;
+        const years = 1;
+        const isOffseason = state.phase === 'freeAgency' || state.phase === 'resigning' || state.phase === 'draft';
+
+        const currentPlayers = state.players.map(p =>
+          p.id === playerId
+            ? {
+                ...p,
+                retired: false,
+                teamId: state.userTeamId,
+                acquiredVia: 'free-agency' as const,
+                acquiredSeason: state.season,
+                contract: {
+                  salary,
+                  yearsLeft: years,
+                  guaranteed: generateGuaranteed(salary, years),
+                  totalYears: years,
+                  ...(isOffseason ? { offseasonSigned: true } : {}),
+                },
+                jerseyNumber: pickJerseyFor(p.position, state.userTeamId, state.players, state.teams),
+              }
+            : p,
+        );
+
+        const currentTeams = state.teams.map(t => {
+          if (t.id !== state.userTeamId) return t;
+          const chart = insertIntoDepthChart(t.depthChart, player.position, playerId, currentPlayers);
+          return { ...t, roster: [...t.roster, playerId], totalPayroll: t.totalPayroll + salary, depthChart: chart };
+        });
+
+        const news = makeNews({
+          season: state.season, week: state.week, type: 'signing',
+          teamId: state.userTeamId, playerIds: [playerId],
+          headline: `You brought ${player.firstName} ${player.lastName} (${player.position}, ${player.ratings.overall} OVR) out of retirement on a 1-year, $${salary}M deal.`,
+          isUserTeam: true,
+        });
+
+        set({
+          players: currentPlayers,
+          teams: currentTeams,
+          newsItems: [...state.newsItems, news],
+          retiredSigningsThisSeason: (state.retiredSigningsThisSeason ?? 0) + 1,
+        });
 
         return ''; // success
       },
@@ -9280,7 +9369,7 @@ export const useGameStore = create<GameStore>()(
             // owner's array but still exist in the league, so we skip regen.
             draftPicks: [
               ...t.draftPicks,
-              ...[newSeason, newSeason + 1].flatMap(yr =>
+              ...[newSeason, newSeason + 1, newSeason + 2].flatMap(yr =>
                 [1, 2, 3, 4, 5, 6, 7]
                   .filter(round => !existingPickKeys.has(`${t.id}|${yr}|${round}`))
                   .map(round => ({
@@ -9622,6 +9711,7 @@ export const useGameStore = create<GameStore>()(
           socialPosts: (state.socialPosts ?? []).filter(p => state.season - p.timestamp.season <= 2),
           rivalries: decayRivalries(state.rivalries ?? []),
           extensionsUsedThisSeason: 0,
+          retiredSigningsThisSeason: 0,
           // BS Mode: compute QB tiers at season start
           ...(state.leagueSettings?.bsMode ? {
             qbTiers: computeLeagueQBTiers(grownTeams, allPlayersForNewSeason),
@@ -10111,6 +10201,14 @@ export const useGameStore = create<GameStore>()(
             if (!playerStats) return p;
             return { ...p, stats: addStats(p.stats, playerStats) };
           });
+          // P1 diagnostic — yo46363 passing stats bug. Remove when resolved.
+          const qbWithStats = newPlayers.find(p => p.position === 'QB' && (result.playerStats?.[p.id]?.passAttempts ?? 0) > 0);
+          if (qbWithStats) {
+            console.log('[commitLiveGame] QB stats committed:', { id: qbWithStats.id, name: `${qbWithStats.firstName} ${qbWithStats.lastName}`, ...result.playerStats?.[qbWithStats.id] });
+          } else {
+            const anyQB = newPlayers.find(p => p.position === 'QB' && (result.homeTeamId === p.teamId || result.awayTeamId === p.teamId));
+            console.warn('[commitLiveGame] No QB passAttempts in playerStats — possible blank stats bug', { gameId: result.id, qbId: anyQB?.id, rawStats: anyQB ? result.playerStats?.[anyQB.id] : undefined });
+          }
           set({ schedule: newSchedule, teams: newTeams, players: newPlayers });
         }
       },
@@ -10494,6 +10592,24 @@ export const useGameStore = create<GameStore>()(
         // Auto-set initialized if we have a saved game
         if (state && state.userTeamId && state.teams && state.teams.length > 0) {
           useGameStore.setState({ initialized: true });
+        }
+        // Heal legacy saves whose imported players carried a non-string
+        // injury.type — some FBGM/ESPN exports store it as a status object
+        // ({id,name,description,abbreviation}). Rendering that object as a React
+        // child crashes the dashboard (React #31), which stranded users who
+        // started a league from such a roster. Coerce to a readable string in
+        // place. Idempotent; runs every rehydrate; no save-version bump.
+        if (state && Array.isArray(state.players)) {
+          let healed = false;
+          for (const p of state.players) {
+            const rawType: unknown = p?.injury?.type;
+            if (rawType && typeof rawType === 'object') {
+              const o = rawType as { description?: string; name?: string; abbreviation?: string };
+              p.injury!.type = String(o.description ?? o.name ?? o.abbreviation ?? 'Injured');
+              healed = true;
+            }
+          }
+          if (healed) useGameStore.setState({ players: state.players });
         }
         // Un-stick any scouting/intel allocations that were frozen at free-tier
         // values before the subscription tier resolved. No-op unless the module

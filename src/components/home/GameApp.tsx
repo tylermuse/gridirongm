@@ -838,7 +838,7 @@ function TeamSpotlightSection({
 
 function DraftCapitalCard({ team, season, phase, teams }: { team: { draftPicks: { id: string; year: number; round: number; originalTeamId: string; ownerTeamId: string; playerId?: string }[] }; season: number; phase: string; teams: { id: string; abbreviation: string }[] }) {
   const [showFuture, setShowFuture] = useState(false);
-  const nextDraftYear = phase === 'draft' ? season : season + 1;
+  const nextDraftYear = (phase === 'draft' || phase === 'resigning' || phase === 'freeAgency') ? season : season + 1;
   const currentPicks = team.draftPicks
     .filter(pk => pk.year === nextDraftYear && !pk.playerId)
     .sort((a, b) => a.round - b.round);

@@ -11,8 +11,18 @@ function getServiceClient() {
   );
 }
 
+// Crawlers that execute JS (Googlebot renders our SSR roster pages) get a
+// fresh localStorage every visit, so each render minted a new device_id and
+// inflated Unique Devices. Drop them at the door.
+const BOT_UA = /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|preview|facebookexternalhit|embedly|quora link|vercel-screenshot|python-requests|curl|wget/i;
+
 export async function POST(request: Request) {
   try {
+    const ua = request.headers.get('user-agent') ?? '';
+    if (!ua || BOT_UA.test(ua)) {
+      return NextResponse.json({ ok: true });
+    }
+
     const { event, properties, deviceId } = await request.json();
 
     if (!event || typeof event !== 'string') {
@@ -38,6 +48,7 @@ export async function POST(request: Request) {
     const enrichedProperties = {
       ...(properties ?? {}),
       ...(deviceId ? { device_id: deviceId } : {}),
+      app: 'bs-football',
     };
 
     await service.from('analytics_events').insert({
