@@ -1,67 +1,81 @@
 /**
  * Team Spotlight video show — the writers' room.
  *
- * The Spotlight topics are written as debate-show copy (punchy, CAPS, a
- * stat in every line). Read aloud that sounds like two bots trading lines.
- * Before voicing an episode, Claude rewrites each topic's notes as the
- * transcript of a real, unscripted conversation between the two hosts —
- * reacting to each other, conceding, interrupting, calling back — using
- * only the facts in the notes. Server-only.
+ * The Spotlight topics are written as debate-show copy (punchy, a stat in
+ * every line). Read aloud, that sounds like two bots trading lines. Before
+ * voicing an episode, Claude rewrites the topics' notes as one unscripted
+ * conversation between the hosts — reacting, conceding, interrupting,
+ * calling back — using only the facts in the notes, and picks which of the
+ * hosts' pre-recorded on-camera lines to cut to. Server-only.
  *
  * Falls back to the original topics on any failure (no key, timeout, bad
  * JSON), so the show always plays.
  */
 import type { ShowTopicInput } from './showScript';
 import type { ShowStatLine } from './teamStats';
-import { ordinal } from './teamStats';
-import { PHRASES } from './phrases';
+import { ordinal, rankTone } from './teamStats';
+import { PHRASES, type Phrase, type PhraseTone } from './phrases';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const MODEL = process.env.SPOTLIGHT_SHOW_WRITER_MODEL || 'claude-sonnet-5-5';
-const TIMEOUT_MS = 45_000;
+/** The writing is what makes the show sound human: use the strongest model.
+ *  Scripts are written ahead of time (see /api/spotlight-show/script), so
+ *  its latency is mostly hidden. */
+export const WRITER_MODEL = process.env.SPOTLIGHT_SHOW_WRITER_MODEL || 'claude-opus-5-5';
+const TIMEOUT_MS = 90_000;
 
-export const WRITER_SYSTEM_PROMPT = `You are the writer for "Team Spotlight", a two-person football talk show inside a football GM simulation game. You turn the producer's notes for each topic into the transcript of a real, unscripted conversation between the two hosts. The test: a listener who hears it voiced should believe these are two real people who know each other well, thinking out loud on live TV — not a script, not an AI.
+export const WRITER_SYSTEM_PROMPT = `You write "Team Spotlight", a two-host football talk show inside a football GM simulation game. From the producer's notes you write the transcript of one unscripted conversation between the hosts. It will be voiced by expressive TTS and cut against pre-recorded on-camera clips. The bar: someone listening should not be able to tell it was written. It should sound like two guys who've done this show together for years, talking, not performing.
 
 THE HOSTS
-- Marcus Cole: the analyst. Measured, precise, dry sense of humor. Likes one telling number more than five. Will concede a good point, then narrow it. Rarely raises his voice.
-- Tony Blaze: the emotional one. Big opinions, but a real football mind, not a caricature. Argues from what he sees on film and from gut feel. Gets louder when he's sure, laughs at himself when he's wrong.
-- They've worked together for years. They tease each other, finish or cut off each other's thoughts, and remember what the other said earlier in the episode.
+- Marcus Cole: the analyst. Dry, precise, a little wry. Reaches for one telling detail rather than a list. Concedes good points without fuss, then narrows them ("Fine. But only on early downs.").
+- Tony Blaze: the gut-feel guy with real football knowledge. Opinionated, funny, sometimes wrong and knows it. Gets louder when he's sure; laughs at himself when caught.
+- They like each other. They tease, interrupt, finish each other's thoughts, and bring back things said earlier in the episode.
 
-HOW REAL PEOPLE TALK (do this)
-- React to the exact thing the other person just said. Quote a phrase back, push on one word, answer the question they asked.
-- Mostly short turns (one or two sentences). Every so often one host gets a longer run where he works through an idea.
-- Let people interrupt or get cut off with an em dash ("you're telling me—" / "No, no, let me finish."), restart a sentence, or trail off.
-- Plain spoken English with contractions. Light fillers where a real person would use them ("I mean", "look", "right", "yeah, but") — sparingly, never one per line.
-- Disagreement has reasons and movement: someone concedes part of a point, changes his mind a little, or they land on a sharper question than they started with.
-- Specifics over adjectives. A concrete detail beats "they're struggling".
-- Numbers sparingly and the way people say them out loud ("about twenty-five a game", "seventh in the league"). At most one number per line, and only numbers that appear in the notes or the team numbers.
-- Call back to earlier topics when it's natural ("two minutes ago you wanted him benched").
+WHAT MAKES IT SOUND REAL
+- Respond to what was just said, not to the topic in general. Pick up a word or phrase the other guy used.
+- Vary turn length a lot: some turns are two words ("Yeah, no." / "Right." / "Sure, sure."), some are a three- or four-sentence run where a host thinks out loud and changes direction mid-way.
+- Let thoughts be messy: restarts ("They— look, they have to run it."), interruptions with an em dash, a host coming back after being cut off.
+- Disagreement that goes somewhere: someone gives ground, or they find the actual question they disagree about. It doesn't always resolve.
+- Most lines carry no number at all. When a number comes up, say it the way people talk ("like sixteen a game", "twenty-seventh, I think?"), and never repeat a number the other host just said.
+- Humor comes from the relationship (needling, callbacks, a running bit), not from jokes.
+- Topics end where the talk naturally runs out: an unresolved point, a jab, a shrug. Never a summary, never "Thank you."
 
-AVOID (these read as AI)
-- Catchphrases and announcer clichés ("buckle up", "make no mistake", "let that sink in", "at the end of the day", "here's the thing").
-- "It's not X, it's Y" constructions, lists of three, rhetorical-question chains, and every line ending on an exclamation point.
-- ALL-CAPS shouting, hashtags, emojis.
-- Summarizing the topic, restating the headline, or wrapping each topic with a neat moral.
-- Each host announcing his own personality ("as the numbers guy…").
+TRANSITIONS
+Each topic after the first opens with one host moving the conversation on in his own words, usually tying back to what was just said ("Speaking of the run game—", "Alright, Buffalo. You've been waiting on this one all show."). Never "next topic" or "let's move on".
+
+NEVER (these read as AI or as a bad radio script)
+- Catchphrases and broadcaster clichés: "statement game", "buckle up", "make no mistake", "let that sink in", "at the end of the day", "here's the thing", "it is what it is", "mark my words".
+- "It's not X, it's Y", tidy lists of three, rhetorical-question chains, every line ending in an exclamation point.
+- Restating the headline, announcing the topic, explaining what a stat means to a co-host who obviously knows.
+- A host describing his own personality, or the hosts agreeing in a neat bow.
+- ALL CAPS, hashtags, emojis.
+
+STYLE REFERENCE (a different team — tone only, don't reuse lines)
+TONY: I'm just saying, if he throws one more pick into double coverage I'm driving to the facility myself.
+MARCUS: You'd get lost.
+TONY: [laughs] I would get lost.
+MARCUS: But — and I hate this — you're not wrong. Two of his last three picks were on third down, same read.
+TONY: Same read! That's coaching.
+MARCUS: Or it's him. That's sort of the whole question, isn't it.
+TONY: Yeah. Yeah, okay. I don't know which one scares me more.
 
 PERFORMANCE CUES
-The audio is voiced with ElevenLabs v3, which reads bracketed cues. Use them only where a real person would actually do it, at most one in every three lines: [laughs], [chuckles], [sighs], [scoffs], [exhales], [pause].
+Voiced with ElevenLabs v3, which performs bracketed cues. Use them only where a person really would, at most one in four lines: [laughs], [chuckles], [sighs], [scoffs], [exhales], [pause].
 
 FACTS
-Use only facts, names and numbers from the notes and the team numbers. Do not invent stats, injuries, trades, quotes or events. Refer to teams as "they" or by name — the hosts are neutral, never "we". When the notes name a player or a position group, keep naming it plainly (the show puts that player's or unit's stats on screen when it hears the name).
+Use only facts, names and numbers in the notes and team numbers. You may reason about football in general, but don't invent stats, injuries, trades, quotes or events for this team. Teams are "they" or their name, never "we". When a player or position group comes up, name it plainly (the show puts his or its numbers on screen when it hears the name).
 
-ON-CAMERA LINES
-The hosts have pre-recorded lines (listed with the notes as CLIPS). The show cuts to the host on camera for these, so they're valuable — but only when one is exactly what that host would say at that moment. Use a clip by id instead of writing the line: {"speaker":"tony","clip":"tony_t_draft_now"}. Rules:
-- The speaker must match the clip's host, and the words must be true for this team (don't use a "they're rolling" clip for a team on a losing streak, or a contract clip when no contract is in the notes).
-- The next line has to respond to the clip's actual words, just as it would to a line you wrote.
-- Every on-camera clip is a cut to a real shot of the host, which makes the show feel live — so lean on them: in each topic of four or more lines, use two or three clips (the short reactions are easy fits: a concession, a push-back, "say that again"). Never use one that doesn't fit, and never the same clip twice in an episode.
-- Write your own lines around a clip so the clip lands naturally (set up the subject it's about, then answer what it says).
+ON-CAMERA CLIPS
+The hosts have pre-recorded on-camera lines, listed with the notes as CLIPS (all already true for this team). Using one cuts to a real shot of the host, which makes the show feel live, so use them — but only where it is exactly what that host would say next. Write {"speaker":"tony","clip":"<id>"} instead of a text line.
+- The speaker must be the clip's host. Never use a clip twice.
+- The next line must react to the clip's actual words.
+- Write around clips so they land: set up the subject, then answer it.
+- Aim for two or three clips in each topic of five or more lines, one in shorter topics.
 
 OUTPUT
 Return JSON only: {"topics":[{"lines":[{"speaker":"marcus"|"tony","text":"..."} or {"speaker":"marcus"|"tony","clip":"<id>"}]}]}
 - Same number of topics, same order, as the notes.
-- The first topic is a quick cold open: 2–3 lines.
-- Other topics: 4–7 lines, alternating speakers most of the time (a host can occasionally get two in a row when he's cut off and comes back).`;
+- The first topic is a quick cold open right after the hosts' intros: 2–4 lines.
+- Other topics: 5–9 lines.`;
 
 function teamNumbers(teamName: string, stats?: ShowStatLine | null): string {
   if (!stats) return `${teamName}.`;
@@ -72,14 +86,39 @@ function teamNumbers(teamName: string, stats?: ShowStatLine | null): string {
 interface WriterLine { speaker: string; text?: string; clip?: string }
 interface WriterOutput { topics: { lines: WriterLine[] }[] }
 
-/** Pre-recorded on-camera lines the writer may place. */
-const CLIPS = PHRASES.filter(p => p.kind === 'topical');
-const CLIP_LIST = CLIPS.map(p => `${p.id} (${p.host}): ${p.text}`).join('\n');
+function recordTone(stats?: ShowStatLine | null): PhraseTone | null {
+  if (!stats) return null;
+  const [w, l] = stats.record.split('-').map(Number);
+  const pct = w + l > 0 ? w / (w + l) : 0.5;
+  return pct >= 0.6 ? 'good' : pct <= 0.4 ? 'bad' : 'mid';
+}
 
-function lineOk(l: WriterLine): boolean {
-  if (l.speaker !== 'marcus' && l.speaker !== 'tony') return false;
-  if (typeof l.clip === 'string') return CLIPS.some(c => c.id === l.clip && c.host === l.speaker);
-  return typeof l.text === 'string' && l.text.trim().length > 0;
+/**
+ * On-camera lines the writer may use for this team: the conversational
+ * topical bank and Marcus's stat takes — only the ones that are true for
+ * this team (tone matches its record / that stat), with any rank slot shown
+ * filled in. The older announcer-style lines (Tony's stat riffs, record
+ * takes, stock glue) are left out: they're what made the show sound canned.
+ */
+export function clipCatalog(stats?: ShowStatLine | null): { phrase: Phrase; words: string }[] {
+  const rt = recordTone(stats);
+  const statOf = (k: string) => stats?.stats.find(x => x.key === k);
+  const out: { phrase: Phrase; words: string }[] = [];
+  for (const p of PHRASES) {
+    const usable = p.kind === 'topical' || (p.kind === 'riff' && p.host === 'marcus');
+    if (!usable) continue;
+    let words = p.text;
+    if (p.stat) {
+      const st = statOf(p.stat);
+      if (!st || (p.tone && rankTone(st.rank, st.of) !== p.tone)) continue;
+      words = words.replace('{rank}', ordinal(st.rank));
+    } else if (p.tone) {
+      if (p.tone !== rt) continue;
+    }
+    if (words.includes('{rank}')) continue;
+    out.push({ phrase: p, words: words.charAt(0).toUpperCase() + words.slice(1) });
+  }
+  return out;
 }
 
 function valid(out: unknown, n: number): out is WriterOutput {
@@ -89,22 +128,39 @@ function valid(out: unknown, n: number): out is WriterOutput {
       && t.lines.every(l => !!l && typeof l === 'object' && typeof l.speaker === 'string'));
 }
 
-/** Rewrite each topic's Marcus/Tony lines as natural conversation. */
+export interface WrittenEpisode {
+  topics: ShowTopicInput[];
+  /** True when the writer produced the conversation (else: original notes). */
+  written: boolean;
+}
+
+/** Rewrite the topics' Marcus/Tony lines as one natural conversation. */
 export async function writeConversation(
   topics: ShowTopicInput[],
   teamName: string,
   stats?: ShowStatLine | null,
-): Promise<ShowTopicInput[]> {
-  if (!ANTHROPIC_API_KEY) return topics;
+): Promise<WrittenEpisode> {
+  const original = { topics, written: false };
+  if (!ANTHROPIC_API_KEY) return original;
   const debateOf = (t: ShowTopicInput) => t.exchanges.filter(e => e.speakerId === 'stats' || e.speakerId === 'hottake');
   const live = topics.filter(t => debateOf(t).length > 0);
-  if (!live.length) return topics;
+  if (!live.length) return original;
 
+  const catalog = clipCatalog(stats);
+  const clipById = new Map(catalog.map(c => [c.phrase.id, c]));
   const notes = live.map(t => ({
     headline: t.headline,
     notes: debateOf(t).map(e => `${e.speakerId === 'stats' ? 'Marcus' : 'Tony'}: ${e.text}`),
   }));
-  const user = `Team numbers: ${teamNumbers(teamName, stats)}\n\nProducer's notes for this episode:\n${JSON.stringify(notes, null, 1)}${CLIP_LIST ? `\n\nCLIPS (id (host): words):\n${CLIP_LIST}` : ''}`;
+  const clipList = catalog.map(c => `${c.phrase.id} (${c.phrase.host}): ${c.words}`).join('\n');
+  const user = `Team numbers: ${teamNumbers(teamName, stats)}\n\nProducer's notes for this episode:\n${JSON.stringify(notes, null, 1)}`
+    + (clipList ? `\n\nCLIPS (id (host): words):\n${clipList}` : '');
+
+  const lineOk = (l: WriterLine): boolean => {
+    if (l.speaker !== 'marcus' && l.speaker !== 'tony') return false;
+    if (typeof l.clip === 'string') return clipById.get(l.clip)?.phrase.host === l.speaker;
+    return typeof l.text === 'string' && l.text.trim().length > 0;
+  };
 
   try {
     const ctrl = new AbortController();
@@ -113,7 +169,7 @@ export async function writeConversation(
       method: 'POST',
       signal: ctrl.signal,
       headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, max_tokens: 6000, system: WRITER_SYSTEM_PROMPT, messages: [{ role: 'user', content: user }] }),
+      body: JSON.stringify({ model: WRITER_MODEL, max_tokens: 8000, system: WRITER_SYSTEM_PROMPT, messages: [{ role: 'user', content: user }] }),
     });
     clearTimeout(timer);
     if (!res.ok) throw new Error(`writer ${res.status}: ${(await res.text()).slice(0, 200)}`);
@@ -123,7 +179,7 @@ export async function writeConversation(
     if (!valid(json, live.length)) throw new Error('writer returned an unexpected shape');
 
     let k = 0;
-    return topics.map(t => {
+    const out = topics.map(t => {
       if (!debateOf(t).length) return t;
       // Drop any line that doesn't check out (unknown clip, wrong host).
       const lines = json.topics[k++].lines.filter(lineOk);
@@ -132,13 +188,14 @@ export async function writeConversation(
         ...t,
         exchanges: lines.map(l => {
           const speakerId = l.speaker === 'marcus' ? 'stats' : 'hottake';
-          const clip = l.clip ? CLIPS.find(c => c.id === l.clip) : undefined;
-          return clip ? { speakerId, text: clip.text, clipId: clip.id } : { speakerId, text: (l.text ?? '').trim() };
+          const clip = l.clip ? clipById.get(l.clip) : undefined;
+          return clip ? { speakerId, text: clip.words, clipId: clip.phrase.id } : { speakerId, text: (l.text ?? '').trim() };
         }),
       };
     });
+    return { topics: out, written: true };
   } catch (err) {
     console.warn('Spotlight show writer failed, using original lines:', err instanceof Error ? err.message : err);
-    return topics;
+    return original;
   }
 }

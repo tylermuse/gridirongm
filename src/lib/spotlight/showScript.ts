@@ -191,13 +191,16 @@ class PhrasePicker {
     return p ? phraseSegment(p) : null;
   }
 
-  /** A specific phrase the writer chose (once per episode, right host). */
+  /** A specific phrase the writer chose (once per episode, right host);
+   *  a rank slot is filled with the team's real rank. */
   byId(host: Host, id: string): Extract<ShowSegment, { kind: 'phrase' }> | null {
     if (this.used.has(id)) return null;
     const p = PHRASES.find(x => x.id === id && x.host === host);
     if (!p) return null;
+    const rank = p.stat ? this.statLine(p.stat)?.st.rank : undefined;
+    if (p.text.includes('{rank}') && rank == null) return null;
     this.used.add(id);
-    return phraseSegment(p);
+    return phraseSegment(p, rank);
   }
 
   /** A topical line on one of these subjects, true for this team: its tone
@@ -269,11 +272,20 @@ function removeJumpCuts(segs: ShowSegment[]): ShowSegment[] {
   return out;
 }
 
+export interface BuildOptions {
+  /** The episode writer produced the conversation (and chose its on-camera
+   *  clips and its own topic hand-offs): play it as written — no stock
+   *  stat exchanges, glue, record take or "next topic" clips. */
+  written?: boolean;
+}
+
 export function buildShowScript(
   topics: ShowTopicInput[],
   teamName: string,
   stats?: ShowStatLine | null,
+  opts: BuildOptions = {},
 ): ShowSegment[] {
+  const written = !!opts.written;
   const segs: ShowSegment[] = [];
   const picker = new PhrasePicker(stats, seededRandom(JSON.stringify([teamName, stats?.record, topics.map(t => t.headline)])));
   const coveredStats = new Set<ShowStatKey>();
@@ -289,7 +301,7 @@ export function buildShowScript(
   segs.push(clip('tony_intro'));
   // Marcus answers Tony's intro (never two shots of the same host back to
   // back — that's a jump cut).
-  const record = picker.record('marcus');
+  const record = written ? null : picker.record('marcus');
   if (record) segs.push(record);
 
   /** An on-camera back-and-forth (~10–14s): `a` takes the stat (long riff,
@@ -317,12 +329,13 @@ export function buildShowScript(
   // When the writer placed pre-recorded lines itself, trust its choices;
   // otherwise drop in one topical line per topic where a line's subject
   // matches (the draft, trades, the coaching…).
-  const writerClips = topics.some(t => t.exchanges.some(e => !!e.clipId));
+  let lastTopic: { i: number; topic: ShowTopicInput } | null = null;
+  const writerClips = written || topics.some(t => t.exchanges.some(e => !!e.clipId));
 
   topics.forEach((topic, i) => {
     const debate = topic.exchanges.filter(e => e.speakerId === 'stats' || e.speakerId === 'hottake');
     if (debate.length === 0) return;
-    if (i > 0) {
+    if (i > 0 && !written) {
       segs.push({
         ...clip(TRANSITIONS[i % TRANSITIONS.length]),
         voiceover: { topicIdx: i, headline: topic.headline, icon: topic.icon },
@@ -350,13 +363,18 @@ export function buildShowScript(
     debate.forEach(ex => {
       const speaker: Host = ex.speakerId === 'stats' ? 'marcus' : 'tony';
       if (ex.clipId) {
-        const chosen = picker.byId(speaker, ex.clipId);
-        if (chosen) { segs.push(chosen); return; }
+        // Never two shots of the same host back to back (a jump cut): the
+        // line is voiced over the graphic instead.
+        const last = segs[segs.length - 1];
+        const chosen = last && onCamera(last) && last.speaker === speaker ? null : picker.byId(speaker, ex.clipId);
+        if (chosen) { segs.push(chosen); lastTopic = { i, topic }; return; }
       }
+      lastTopic = { i, topic };
       segs.push({
         kind: 'tts', speaker, text: ex.text, visual: 'graphic',
         topicIdx: i, headline: topic.headline, icon: topic.icon,
       });
+      if (written) return;
       const before = segs.length;
       tryExchange(ex.text, speaker);
       if (segs.length === before && !topicalDone) {
@@ -366,6 +384,17 @@ export function buildShowScript(
     });
   });
 
+  // A written episode's last word on camera by Marcus would jump-cut into
+  // his outro: voice it over the graphic instead.
+  const tail = segs[segs.length - 1];
+  // (assigned inside the forEach callback above, which TS can't see)
+  const lt = lastTopic as { i: number; topic: ShowTopicInput } | null;
+  if (written && tail?.kind === 'phrase' && tail.speaker === 'marcus' && lt) {
+    segs[segs.length - 1] = {
+      kind: 'tts', speaker: 'marcus', text: tail.text, visual: 'graphic',
+      topicIdx: lt.i, headline: lt.topic.headline, icon: lt.topic.icon,
+    };
+  }
   segs.push(clip('marcus_outro'));
   segs.push(clip('tony_outro'));
   return removeJumpCuts(segs);

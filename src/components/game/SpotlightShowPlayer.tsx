@@ -48,6 +48,15 @@ type Phase = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'ended' | 'er
 
 const CLIP_IDS = Object.keys(SHOW_CLIPS) as ShowClipId[];
 
+/** Clips fetched into memory before the Start button appears; the rest
+ *  stream in behind playback, in the order they're needed. */
+const CLIPS_BEFORE_START = 6;
+
+/** Episodes whose script has been requested ahead of time (per page load). */
+const prefetched = new Set<string>();
+
+interface BlockMsg { index: number; audio: string; lines: { seg: number; start: number; duration: number }[] }
+
 
 // Silence kept around each piece of speech. Clips and TTS lines all carry
 // padding (clips ~0.35s in / ~0.6s out); trimming it to this keeps the
@@ -94,9 +103,18 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
   // The clip actually on screen: switched only once the next clip is really
   // playing, so a cut never flashes a stale frame or an empty stage.
   const [visibleVideo, setVisibleVideo] = useState<string | null>(null);
-  // Every clip this episode uses, fetched into memory before Start so
-  // playback never stalls on the network mid-show.
-  const [clipUrls, setClipUrls] = useState<Map<string, string>>(new Map());
+  // Clips fetched into memory (src → blob URL): the first few before Start,
+  // the rest during playback. An element keeps whatever source it was first
+  // given, so a clip never reloads under the viewer.
+  const blobUrls = useRef<Map<string, string>>(new Map());
+  const lockedSrc = useRef<Map<string, string>>(new Map());
+  const [, setClipVersion] = useState(0);
+  // The episode's voices arrive block by block (NDJSON); a line whose block
+  // hasn't landed yet waits for it.
+  const streamDone = useRef(true);
+  const waitingFor = useRef<number | null>(null);
+  const [buffering, setBuffering] = useState(false);
+  const [, setAudioVersion] = useState(0);
   const [lowerThird, setLowerThird] = useState(false);
   const pathname = usePathname();
 
@@ -170,7 +188,23 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
     for (const v of videoRefs.current.values()) { v.onended = null; v.pause(); }
   }, [stopSources]);
 
-  useEffect(() => () => { for (const u of clipUrls.values()) URL.revokeObjectURL(u); }, [clipUrls]);
+  useEffect(() => {
+    const urls = blobUrls.current;
+    return () => { for (const u of urls.values()) URL.revokeObjectURL(u); };
+  }, []);
+
+  // Write the script ahead of time, once the Spotlight's topics settle, so
+  // Watch Show starts right away (server-side it's writing only — no voices,
+  // no credit — and only for viewers who can watch).
+  const requestBody = useMemo(() => JSON.stringify({ topics, teamName, stats }), [topics, teamName, stats]);
+  useEffect(() => {
+    if (!topics.length || prefetched.has(requestBody)) return;
+    const t = setTimeout(() => {
+      prefetched.add(requestBody);
+      void fetch('/api/spotlight-show/script', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: requestBody }).catch(() => {});
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [requestBody, topics.length]);
 
   // Play only the wide loop that's on screen.
   useEffect(() => {
@@ -294,6 +328,11 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
       const key = videoKey(seg);
       const v = videoRefs.current.get(key);
       if (!v) return advance();
+      if (!v.getAttribute('src')) {
+        // Jumped ahead of the clip fetches: stream this one from the network.
+        lockedSrc.current.set(key, videoSrc(seg));
+        v.src = videoSrc(seg);
+      }
       const from = Math.max(0, seg.speech.start - LEAD_PAD);
       const until = Math.min(v.duration || Infinity, seg.speech.end + TAIL_PAD);
       v.currentTime = from;
@@ -352,7 +391,14 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
     const onGraphic = prev && (prev.kind === 'tts' || (prev.kind === 'clip' && !!prev.voiceover));
     enterGraphic(`${seg.visual}:${seg.topicIdx}`, !onGraphic || prev.speaker !== seg.speaker);
     const buf = buffersRef.current.get(i);
-    if (!ctx || !buf) return advance();
+    if (!ctx) return advance();
+    if (!buf) {
+      // Its voices are still being produced: hold on the graphic.
+      if (!streamDone.current) { waitingFor.current = i; setBuffering(true); return; }
+      return advance();
+    }
+    waitingFor.current = null;
+    setBuffering(false);
     const span = spansRef.current.get(i) ?? { start: 0, end: buf.duration };
     const from = Math.max(0, span.start - LEAD_PAD);
     const to = Math.min(buf.duration, span.end + TAIL_PAD);
@@ -363,6 +409,85 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
     srcRef.current = src;
     src.start(0, from, to - from);
   }, [armClipEnd, enterGraphic, gainFor, showLowerThird, stopAll]);
+  // Latest sequencer and phase for callbacks that outlive a render (voices
+  // arriving from the stream).
+  const playSegmentRef = useRef(playSegment);
+  const phaseRef = useRef<Phase>(phase);
+  useEffect(() => { playSegmentRef.current = playSegment; }, [playSegment]);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+
+  // ── Controls ───────────────────────────────────────────────────────
+  /** Decode one voiced block and cut each of its lines out by the server's
+   *  timestamps; resumes a line that was waiting for it. */
+  async function addBlock(ctx: AudioContext, msg: BlockMsg) {
+    const bytes = Uint8Array.from(atob(msg.audio), c => c.charCodeAt(0));
+    const block = await ctx.decodeAudioData(bytes.buffer);
+    const sr = block.sampleRate;
+    for (const l of msg.lines) {
+      const from = Math.max(0, Math.floor((l.start - 0.03) * sr));
+      const to = Math.min(block.length, Math.ceil((l.start + l.duration + 0.08) * sr));
+      if (to <= from) continue;
+      const line = ctx.createBuffer(block.numberOfChannels, to - from, sr);
+      for (let c = 0; c < block.numberOfChannels; c++) line.copyToChannel(block.getChannelData(c).subarray(from, to), c);
+      buffersRef.current.set(l.seg, line);
+      spansRef.current.set(l.seg, speechSpan(line));
+    }
+    setAudioVersion(v => v + 1);
+    resumeWaiting();
+  }
+
+  /** A line was waiting for voices that just arrived (or never will). */
+  function resumeWaiting() {
+    const k = waitingFor.current;
+    if (k == null || phaseRef.current !== 'playing') return;
+    if (!buffersRef.current.has(k) && !streamDone.current) return;
+    waitingFor.current = null;
+    setBuffering(false);
+    playSegmentRef.current(k);
+  }
+
+  /** Lay out the episode and fetch what the first moments need. */
+  async function prepare(ctx: AudioContext, segs: TimedShowSegment[]) {
+    segmentsRef.current = segs;
+    setSegments(segs);
+    // Rank ordinals for slot phrases (tiny).
+    const ordinals = new Map<string, AudioBuffer>();
+    await Promise.all(segs.map(async seg => {
+      if (seg.kind !== 'phrase' || !seg.slot) return;
+      const k = `${seg.speaker}/${seg.slot.rank}`;
+      if (ordinals.has(k)) return;
+      const r = await fetch(ordinalSrc(seg.speaker, seg.slot.rank));
+      if (r.ok) ordinals.set(k, await ctx.decodeAudioData(await r.arrayBuffer()));
+    }));
+    ordinalBufs.current = ordinals;
+    // Clips in the order they play; the wide loops right after the first few.
+    const order: string[] = [];
+    for (const sg of segs) if (sg.kind !== 'tts' && !order.includes(videoSrc(sg))) order.push(videoSrc(sg));
+    const first = order.slice(0, CLIPS_BEFORE_START);
+    const later = [...Object.values(WIDE_LOOPS).flat(), ...order.slice(CLIPS_BEFORE_START)];
+    const fetchClip = async (src: string) => {
+      if (blobUrls.current.has(src)) return;
+      try {
+        const r = await fetch(src);
+        if (!r.ok) return;
+        blobUrls.current.set(src, URL.createObjectURL(await r.blob()));
+        setClipVersion(v => v + 1);
+      } catch { /* the element falls back to the network */ }
+    };
+    await Promise.all([
+      ...first.map(fetchClip),
+      ...[TWO_SHOT_SRC, avatarSrc('marcus'), avatarSrc('tony')].map(src => {
+        const im = new Image();
+        im.src = src;
+        return im.decode().catch(() => {});
+      }),
+    ]);
+    // The rest: three at a time, in play order, behind playback.
+    void (async () => {
+      const queue = [...later];
+      await Promise.all([0, 1, 2].map(async () => { for (let src = queue.shift(); src; src = queue.shift()) await fetchClip(src); }));
+    })();
+  }
 
   // ── Controls ───────────────────────────────────────────────────────
   async function handleOpen() {
@@ -372,71 +497,70 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
       const res = await fetch('/api/spotlight-show', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topics, teamName, stats }),
+        body: requestBody,
       });
       if (!res.ok) {
         if (res.status === 403) return setPhase('locked');
         if (res.status === 402 || res.status === 429) return setPhase('exhausted');
         throw new Error('Failed to generate show');
       }
-      const { segments: segs, audios } = (await res.json()) as { segments: TimedShowSegment[]; audios: string[] };
-
       const ctx = ctxRef.current ?? new AudioContext();
       ctxRef.current = ctx;
+      buffersRef.current = new Map();
+      spansRef.current = new Map();
 
-      // Each topic's conversation arrives as one voiced block; cut each line
-      // out of its block by the timestamps the server sent.
-      const blocks = await Promise.all(audios.map(b64 => {
-        const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-        return ctx.decodeAudioData(bytes.buffer);
-      }));
-      const buffers = new Map<number, AudioBuffer>();
-      segs.forEach((seg, i) => {
-        if (seg.kind !== 'tts' || seg.audioIndex == null || seg.audioStart == null || seg.audioDuration == null) return;
-        const block = blocks[seg.audioIndex];
-        if (!block) return;
-        const sr = block.sampleRate;
-        const from = Math.max(0, Math.floor((seg.audioStart - 0.03) * sr));
-        const to = Math.min(block.length, Math.ceil((seg.audioStart + seg.audioDuration + 0.08) * sr));
-        if (to <= from) return;
-        const line = ctx.createBuffer(block.numberOfChannels, to - from, sr);
-        for (let c = 0; c < block.numberOfChannels; c++) line.copyToChannel(block.getChannelData(c).subarray(from, to), c);
-        buffers.set(i, line);
-      });
-      const ordinals = new Map<string, AudioBuffer>();
-      await Promise.all([
-        ...segs.map(async seg => {
-          if (seg.kind !== 'phrase' || !seg.slot) return;
-          const k = `${seg.speaker}/${seg.slot.rank}`;
-          if (ordinals.has(k)) return;
-          const r = await fetch(ordinalSrc(seg.speaker, seg.slot.rank));
-          if (r.ok) ordinals.set(k, await ctx.decodeAudioData(await r.arrayBuffer()));
-        }),
-      ]);
-      // Clips: fetch every one this episode plays into memory up front.
-      const clipSrcs = new Set<string>();
-      for (const sg of segs) if (sg.kind !== 'tts') clipSrcs.add(videoSrc(sg));
-      for (const loops of Object.values(WIDE_LOOPS)) for (const src of loops) clipSrcs.add(src);
-      const urls = new Map<string, string>();
-      await Promise.all([...clipSrcs].map(async src => {
-        const r = await fetch(src);
-        if (r.ok) urls.set(src, URL.createObjectURL(await r.blob()));
-      }));
-      setClipUrls(urls);
-      // Graphics artwork, decoded up front so the first frame isn't blank.
-      await Promise.all([TWO_SHOT_SRC, avatarSrc('marcus'), avatarSrc('tony')].map(src => {
-        const im = new Image();
-        im.src = src;
-        return im.decode().catch(() => {});
-      }));
-      const spans = new Map<number, { start: number; end: number }>();
-      for (const [i, b] of buffers) spans.set(i, speechSpan(b));
-      spansRef.current = spans;
-      buffersRef.current = buffers;
-      ordinalBufs.current = ordinals;
-      segmentsRef.current = segs;
-      setSegments(segs);
-      setPhase('ready');
+      if (!(res.headers.get('content-type') ?? '').includes('ndjson')) {
+        // A cached episode: everything at once.
+        const { segments: segs, audios } = (await res.json()) as { segments: TimedShowSegment[]; audios: string[] };
+        streamDone.current = true;
+        const blocks: BlockMsg[] = audios.map((audio, index) => ({ index, audio, lines: [] }));
+        segs.forEach((sg, i) => {
+          if (sg.kind === 'tts' && sg.audioIndex != null && sg.audioStart != null && sg.audioDuration != null) {
+            blocks[sg.audioIndex]?.lines.push({ seg: i, start: sg.audioStart, duration: sg.audioDuration });
+          }
+        });
+        await Promise.all([prepare(ctx, segs), ...blocks.map(b => addBlock(ctx, b))]);
+        setPhase('ready');
+        return;
+      }
+
+      // A fresh episode: the script first, then each topic's voices as
+      // they're produced. Start is offered as soon as the opening is ready.
+      streamDone.current = false;
+      const reader = res.body!.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      let gotScript = false;
+      const pending: Promise<void>[] = [];
+      const finish = () => { streamDone.current = true; resumeWaiting(); };
+      void (async () => {
+        try {
+          for (;;) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buf += dec.decode(value, { stream: true });
+            let nl: number;
+            while ((nl = buf.indexOf('\n')) >= 0) {
+              const line = buf.slice(0, nl).trim();
+              buf = buf.slice(nl + 1);
+              if (!line) continue;
+              const msg = JSON.parse(line) as { type: string; segments?: TimedShowSegment[]; message?: string } & Partial<BlockMsg>;
+              if (msg.type === 'script' && msg.segments) {
+                gotScript = true;
+                void prepare(ctx, msg.segments).then(() => setPhase(p => (p === 'loading' ? 'ready' : p)), () => setPhase('error'));
+              } else if (msg.type === 'block' && msg.audio && msg.lines) {
+                pending.push(addBlock(ctx, msg as BlockMsg).catch(() => {}));
+              } else if (msg.type === 'error' && !gotScript) {
+                setPhase('error');
+              }
+            }
+          }
+        } catch {
+          if (!gotScript) setPhase('error');
+        }
+        await Promise.all(pending);
+        finish();
+      })();
     } catch {
       setPhase('error');
     }
@@ -453,9 +577,12 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
         videoRefs.current.get(videoKey(seg))?.play().catch(() => {});
         resumeClip.current?.();
       }
+      phaseRef.current = 'playing';
       setPhase('playing');
+      resumeWaiting();
       return;
     }
+    phaseRef.current = 'playing';
     setPhase('playing');
     playSegment(0);
   }
@@ -494,6 +621,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
     // Jumping into a topic mid-way: let its graphic come in fresh.
     blockKey.current = '';
     panelKey.current = '';
+    phaseRef.current = 'playing';
     setPhase('playing');
     playSegment(k);
   }
@@ -583,10 +711,23 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
     segments.forEach((sg, i) => {
       starts.push(t);
       const sp = sg.kind === 'tts' ? spansRef.current.get(i) : sg.speech;
-      t += sp ? sp.end - sp.start + LEAD_PAD + TAIL_PAD : 2;
+      // Lines still being voiced: estimate from their length (~2.7 words/s).
+      t += sp ? sp.end - sp.start + LEAD_PAD + TAIL_PAD : sg.kind === 'tts' ? sg.text.split(/\s+/).length / 2.7 + 0.2 : 2;
     });
     return { starts, total: t || 1 };
   })();
+  // A clip element's source: its in-memory copy once fetched; the network
+  // if it's about to play and isn't fetched yet; nothing until then. Fixed
+  // once chosen, so an element never reloads mid-show.
+  const firstIdx = new Map<string, number>();
+  segments.forEach((sg, i) => { if (sg.kind !== 'tts' && !firstIdx.has(videoKey(sg))) firstIdx.set(videoKey(sg), i); });
+  const srcFor = (key: string, src: string): string | undefined => {
+    const locked = lockedSrc.current.get(key);
+    if (locked) return locked;
+    const chosen = blobUrls.current.get(src) ?? ((firstIdx.get(key) ?? 0) <= segIdx + 2 ? src : undefined);
+    if (chosen) lockedSrc.current.set(key, chosen);
+    return chosen;
+  };
   const segLen = (i: number) => (timeline.starts[i + 1] ?? timeline.total) - (timeline.starts[i] ?? 0);
   const elapsed = phase === 'ended'
     ? timeline.total
@@ -638,7 +779,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
               return (
                 <video
                   key={src}
-                  src={clipUrls.get(src) ?? src}
+                  src={blobUrls.current.get(src) ?? src}
                   muted
                   loop
                   playsInline
@@ -674,7 +815,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
             <video
               key={key}
               ref={el => { if (el) videoRefs.current.set(key, el); else videoRefs.current.delete(key); }}
-              src={clipUrls.get(videoSrc(vs)) ?? videoSrc(vs)}
+              src={srcFor(key, videoSrc(vs))}
               preload="auto"
               playsInline
               className="absolute inset-0 h-full w-full object-cover transition-opacity duration-200"
@@ -712,6 +853,13 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
 
           {/* Captions (topic graphics carry the line as a pull quote instead) */}
           {seg && phase !== 'ended' && !(tts && tts.visual === 'graphic') && !vo && <ShowCaption text={seg.text} />}
+
+          {/* Waiting on a line's voices (rare: they stream in during the open) */}
+          {buffering && phase === 'playing' && (
+            <div className="absolute right-[3%] bottom-[16%] flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-[clamp(9px,1.2vw,12px)] font-semibold text-slate-600 shadow">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-purple-600" /> Loading…
+            </div>
+          )}
 
           {/* Start / resume / replay */}
           {(phase === 'ready' || phase === 'paused' || phase === 'ended') && (
