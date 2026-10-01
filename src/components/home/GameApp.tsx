@@ -1349,6 +1349,12 @@ function Dashboard() {
             unfiltered league view. */}
         {!isSpectator && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Draft capital — mounted here so it's visible on the dashboard
+              year-round, including the offseason draft-prep window. The card
+              self-hides when the team has no unplayed picks, and grounds the
+              draft year in actual pick data (fixes the BS-Mode "2028 in a 2027
+              season" display). Was shipped in PR #431 but never mounted. */}
+          <DraftCapitalCard team={userTeam} season={season} phase={phase} teams={teams} />
           {/* Conference standings with GB */}
           <Card>
             <CardHeader><CardTitle>{userTeam.conference} Standings</CardTitle></CardHeader>

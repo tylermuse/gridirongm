@@ -7,7 +7,7 @@ import { GameShell } from '@/components/game/GameShell';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { TeamLogo } from '@/components/ui/TeamLogo';
-import type { SeasonSummary, AllLeagueEntry } from '@/types';
+import type { SeasonSummary, AllLeagueEntry, Player, PlayerStats } from '@/types';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 function WinLossSparkline({ seasonHistory, userTeamId }: { seasonHistory: SeasonSummary[]; userTeamId: string }) {
@@ -94,6 +94,67 @@ function AllLeagueList({
         ))}
       </div>
     </Card>
+  );
+}
+
+// All-time career-stat leaderboards. careerStats accumulate across a player's
+// whole career and persist on retired players (they stay in state.players with
+// retired=true), so this works on existing saves with no engine changes.
+const RECORD_CATEGORIES: { label: string; value: (s: PlayerStats) => number }[] = [
+  { label: 'Passing Yards', value: s => s.passYards },
+  { label: 'Passing TDs', value: s => s.passTDs },
+  { label: 'Rushing Yards', value: s => s.rushYards },
+  { label: 'Receiving Yards', value: s => s.receivingYards },
+  { label: 'Total TDs', value: s => s.passTDs + s.rushTDs + s.receivingTDs },
+  { label: 'Sacks', value: s => s.sacks },
+  { label: 'Tackles', value: s => s.tackles },
+];
+
+function FranchiseRecords({
+  players,
+  teamAbbr,
+  onSelectPlayer,
+}: {
+  players: Player[];
+  teamAbbr: (teamId: string) => string;
+  onSelectPlayer: (id: string) => void;
+}) {
+  const boards = RECORD_CATEGORIES.map(cat => ({
+    cat,
+    leaders: players
+      .map(p => ({ p, v: cat.value(p.careerStats) }))
+      .filter(x => x.v > 0)
+      .sort((a, b) => b.v - a.v)
+      .slice(0, 10),
+  })).filter(b => b.leaders.length > 0);
+
+  if (boards.length === 0) return null;
+
+  return (
+    <div className="mt-10">
+      <h3 className="text-lg font-black mb-1">Franchise Records</h3>
+      <p className="text-[var(--text-sec)] text-xs mb-4">All-time career leaders across your league.</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {boards.map(({ cat, leaders }) => (
+          <Card key={cat.label}>
+            <CardHeader><CardTitle>{cat.label}</CardTitle></CardHeader>
+            <div className="space-y-1">
+              {leaders.map((x, i) => (
+                <div key={x.p.id} className="flex items-center gap-2 text-sm border-t border-[var(--border)] pt-1.5 first:border-t-0 first:pt-0">
+                  <span className="text-[var(--text-sec)] w-5 shrink-0 font-mono text-xs">{i + 1}</span>
+                  <span className="text-[var(--text-sec)] w-8 shrink-0 font-mono text-[10px]">{x.p.position}</span>
+                  <PlayerLink playerId={x.p.id} onSelect={onSelectPlayer}>
+                    <span className="truncate">{x.p.firstName} {x.p.lastName}</span>
+                  </PlayerLink>
+                  <span className="text-xs text-[var(--text-sec)]">{x.p.teamId ? teamAbbr(x.p.teamId) : '—'}</span>
+                  <span className="ml-auto font-bold tabular-nums">{Math.round(x.v).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -244,6 +305,8 @@ export default function HistoryPage() {
             </div>
           </div>
         )}
+
+        <FranchiseRecords players={players} teamAbbr={teamAbbr} onSelectPlayer={setSelectedPlayerId} />
       </div>
       <PlayerModal playerId={selectedPlayerId} onClose={() => setSelectedPlayerId(null)} />
     </GameShell>
