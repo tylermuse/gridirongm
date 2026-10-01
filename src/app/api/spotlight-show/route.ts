@@ -22,7 +22,7 @@ import type { ShowStatLine } from '@/lib/spotlight/teamStats';
 // ElevenLabs `mp3_44100_128` is CBR 128 kbps → duration = bytes * 8 / 128000.
 const MP3_BYTES_PER_SEC = 128_000 / 8;
 const CACHE_BUCKET = 'spotlight-audio';
-const CACHE_VERSION = 'show-v2';
+const CACHE_VERSION = 'show-v3';
 
 interface ShowPayload {
   segments: TimedShowSegment[];
