@@ -720,6 +720,9 @@ function TeamSpotlightSection({
                     topics={topics}
                     teamName={`${team.city} ${team.name}`}
                     stats={showStats}
+                    team={team}
+                    teams={allTeams}
+                    players={allPlayers}
                   />
                   <SpotlightAudioPlayer
                     topics={topics}

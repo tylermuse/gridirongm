@@ -22,3 +22,15 @@ Give new entries in `phrases.json` a `"take": "<host>_c"` (or `_d`, …) field.
 `build_takes.py` packs each tagged group into its own take and leaves the
 original a/b takes untouched, so only the new take needs an Aurora render.
 `slice_phrases.py` skips clips that already exist (pass `--force` to recut).
+
+## Rendering (current setup)
+
+- Lip sync: **HeyGen Avatar 4** (1080p, talking style *Expressive*) on each
+  host's portrait in ElevenLabs Image & Video. Takes a–c were Creatify
+  Aurora (720p); everything new uses HeyGen.
+- `slice_phrases.py` runs `freeze_bg.py` on every take first: the
+  generators animate the football player on the studio TVs, so those two
+  screen regions are replaced with the take's first frame (feathered mask
+  that stays clear of the host). Clips are cut at 1280px, CRF 23.
+- `ONLY=take1,take2 python3 slice_phrases.py <worktree> --force` re-cuts
+  just those takes.

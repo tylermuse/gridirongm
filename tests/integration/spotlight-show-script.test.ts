@@ -62,21 +62,31 @@ describe('buildShowScript', () => {
     expect(PHRASES.find(x => x.id === p.find(y => y.stat === 'pass')!.phraseId)!.tone).toBe('mid');
   });
 
-  it('a back-and-forth with no stat reaction closes on a glue reaction', () => {
-    const more = [...topics, { headline: 'Coaching', icon: '🧢', exchanges: [{ speakerId: 'hottake', text: 'Fire him.' }] }];
-    const segs = buildShowScript(more, 'Las Vegas Raiders', stats);
-    const i = segs.findIndex(s => s.kind === 'tts' && s.text === 'Bring it on.');
-    expect(segs[i + 1]).toMatchObject({ kind: 'phrase', speaker: 'marcus' });
-    expect((segs[i + 1] as { stat?: string }).stat).toBeUndefined();
-    // Marcus already spoke in this topic and got answered → he pushes back.
-    expect(['disagree', 'skeptical', 'pivot']).toContain(PHRASES.find(x => x.id === (segs[i + 1] as { phraseId: string }).phraseId)!.kind);
+  it('a stat cited on air turns into an on-camera exchange: riff with the real rank, reply, sign-off', () => {
+    const i = segs.findIndex(s => s.kind === 'tts' && s.text.startsWith('Their offense'));
+    const run = segs.slice(i + 1, i + 4);
+    const kinds = run.map(x => (x.kind === 'phrase' ? PHRASES.find(p => p.id === x.phraseId)!.kind : x.kind));
+    expect(kinds[0]).toBe('riff');
+    expect(run.map(x => x.speaker)).toEqual(['tony', 'marcus', 'tony']);
+    expect(['reply_agree', 'reply_push', 'agree', 'disagree', 'skeptical']).toContain(kinds[1]);
+    expect(kinds[2]).toBe('button');
   });
 
-  it('caps on-camera phrases per topic and never repeats a phrase', () => {
-    const ids = phrases(segs).map(p => p.phraseId);
-    expect(new Set(ids).size).toBe(ids.length);
-    const firstTopic = segs.slice(4, segs.findIndex((s, k) => k > 4 && s.kind === 'clip'));
-    expect(phrases(firstTopic).length).toBeLessThanOrEqual(1);
+  it('a topic with no stats gets Tony’s take and Marcus’s answer on camera', () => {
+    const t = [{ headline: 'Big trade', icon: '🔁', exchanges: [{ speakerId: 'hottake', text: 'They made a move.' }, { speakerId: 'stats', text: 'It was a fair price.' }] },
+      { headline: 'Next', icon: '📅', exchanges: [{ speakerId: 'stats', text: 'Tough stretch ahead.' }] }];
+    const ss = buildShowScript(t, 'X', stats);
+    // …right after Marcus's line, so Tony is answering him.
+    const i = ss.findIndex(s => s.kind === 'tts' && s.text === 'It was a fair price.');
+    const kinds = ss.slice(i + 1, i + 3).map(x => (x.kind === 'phrase' ? PHRASES.find(p => p.id === x.phraseId)!.kind : x.kind));
+    expect(kinds).toEqual(['open', 'answer']);
+  });
+
+  it('is deterministic for a given episode (cache-stable) but varies across episodes', () => {
+    const ids = (ss: ShowSegment[]) => phrases(ss).map(p => p.phraseId).join();
+    expect(ids(buildShowScript(topics, 'Las Vegas Raiders', stats))).toBe(ids(segs));
+    const other = ['A', 'B', 'C', 'D', 'E'].map(n => ids(buildShowScript(topics, n, stats)));
+    expect(new Set(other).size).toBeGreaterThan(1);
   });
 
   it('never cuts between two on-camera shots of the same host (jump cut)', () => {

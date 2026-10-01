@@ -12,14 +12,32 @@ import {
 } from '@/lib/spotlight/showScript';
 import { ordinalSrc } from '@/lib/spotlight/phrases';
 import { ordinal, rankTone, statsMentioned, type ShowStat, type ShowStatLine } from '@/lib/spotlight/teamStats';
+import { playerForLine, topicTeam } from '@/lib/spotlight/showVisuals';
+import type { Player, Team } from '@/types';
+import { TeamLogo } from '@/components/ui/TeamLogo';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { ShowCaption, ShowGraphic, TWO_SHOT_SRC, avatarSrc } from './SpotlightShowGraphics';
 
 interface SpotlightShowPlayerProps {
-  topics: { headline: string; icon: string; exchanges: { speakerId: string; text: string }[] }[];
+  topics: {
+    headline: string;
+    icon: string;
+    exchanges: { speakerId: string; text: string }[];
+    teamIds?: string[];
+    playerIds?: string[];
+  }[];
   teamName: string;
   /** Real numbers for on-screen graphics; null before any games are played. */
   stats?: ShowStatLine | null;
+  /** For logos and player photos on the graphics. */
+  team?: Team;
+  teams?: Team[];
+  players?: Player[];
 }
+
+const logoOf = (t: Team) => (
+  <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} logoUrl={t.logoUrl} size="fill" />
+);
 
 type Phase = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'ended' | 'error' | 'exhausted' | 'locked';
 
@@ -66,7 +84,7 @@ function toneClass(st: ShowStat) {
   return t === 'good' ? 'text-emerald-600' : t === 'bad' ? 'text-red-600' : 'text-slate-500';
 }
 
-export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPlayerProps) {
+export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [], players = [] }: SpotlightShowPlayerProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [segments, setSegments] = useState<TimedShowSegment[]>([]);
   const [segIdx, setSegIdx] = useState(0);
@@ -96,6 +114,8 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
   const lineStart = useRef(0);
   const speakerStart = useRef(0);
   const blockKey = useRef('');
+  const playerStart = useRef(0);
+  const playerKey = useRef<string | null>(null);
   const panelKey = useRef('');
   const topicStart = useRef(0);
   const endTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -179,6 +199,17 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
     return g;
   }, []);
 
+  /** Player pictured for the voiceover at segment `i`: the latest one named
+   *  so far in its topic (see playerForLine). */
+  const playerAt = useCallback((segs: TimedShowSegment[], i: number): Player | null => {
+    const s = segs[i];
+    const t = s?.kind === 'tts' ? s.topicIdx : s?.kind === 'clip' && s.voiceover ? s.voiceover.topicIdx : -1;
+    if (t < 0 || !players.length) return null;
+    const lines: string[] = [];
+    for (let k = 0; k <= i; k++) { const x = segs[k]; if (x.kind === 'tts' && x.topicIdx === t) lines.push(x.text); }
+    return playerForLine(lines, lines.length - 1, topics[t], players);
+  }, [players, topics]);
+
   /** Cut away when the clip's speech (plus a hair) is done, not at the end
    *  of the file. Re-armed on resume. */
   const armClipEnd = useCallback((v: HTMLVideoElement, until: number, advance: () => void) => {
@@ -198,8 +229,10 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
     if (!same) { blockKey.current = key; topicStart.current = now; }
     if (!same || speakerChanged) speakerStart.current = now;
     lineStart.current = now;
+    const p = playerAt(segmentsRef.current, segIdxRef.current);
+    if ((p?.id ?? null) !== playerKey.current) { playerKey.current = p?.id ?? null; playerStart.current = now; }
     setClock(now);
-  }, []);
+  }, [playerAt]);
 
   // ── Sequencer ──────────────────────────────────────────────────────
   const playSegment = useCallback((i: number) => {
@@ -424,14 +457,18 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
   const tts = seg?.kind === 'tts' ? seg : null;
   // What the graphic layer shows: the current voiceover (a line, or a topic
   // transition wiping in), else the last one — kept mounted to dissolve.
-  type Gfx = { visual: 'title' | 'graphic'; headline: string; icon: string; speaker: Host; text: string };
+  type Gfx = { visual: 'title' | 'graphic'; headline: string; icon: string; speaker: Host; text: string; topicIdx: number };
   const gfxOf = (x: TimedShowSegment | undefined): Gfx | null =>
     !x ? null
       : x.kind === 'tts' ? x
       : x.kind === 'clip' && x.voiceover ? { visual: 'graphic', ...x.voiceover, speaker: x.speaker, text: '' }
       : null;
   let gfx: Gfx | null = null;
-  for (let k = segIdx; !gfx && k >= 0; k--) gfx = gfxOf(segments[k]);
+  let gfxIdx = segIdx;
+  for (; !gfx && gfxIdx >= 0; gfxIdx--) gfx = gfxOf(segments[gfxIdx]);
+  gfxIdx++;
+  const linePlayer = gfx ? playerAt(segments, gfxIdx) : null;
+  const artTeam = team ? topicTeam(gfx ? topics[gfx.topicIdx] : undefined, team, teams) : null;
   const onGfx = !!(tts || vo);
   const mentioned = tts ? statsMentioned(tts.text) : [];
   const phraseStat = seg?.kind === 'phrase' && seg.stat && stats ? stats.stats.find(s => s.key === seg.stat) ?? null : null;
@@ -460,6 +497,15 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
                 lineMs={onGfx ? clock - lineStart.current : 60_000}
                 speakerMs={onGfx ? clock - speakerStart.current : 60_000}
                 text={gfx.text}
+                logo={team ? logoOf(team) : null}
+                topicArt={artTeam ? logoOf(artTeam) : <span className="flex h-full w-full items-center justify-center text-[2em] leading-none">{gfx.icon}</span>}
+                player={linePlayer && {
+                  key: linePlayer.id,
+                  art: <PlayerAvatar player={linePlayer} size="fill" teamColor={team?.primaryColor} />,
+                  name: `${linePlayer.firstName} ${linePlayer.lastName}`,
+                  detail: [linePlayer.position, teams.find(t => t.id === linePlayer.teamId)?.abbreviation].filter(Boolean).join(' · '),
+                }}
+                playerMs={onGfx ? clock - playerStart.current : 60_000}
               />
             </div>
           )}
@@ -483,7 +529,10 @@ export function SpotlightShowPlayer({ topics, teamName, stats }: SpotlightShowPl
               key={seg?.kind === 'phrase' ? seg.phraseId : 'bug'}
               className="absolute right-[3%] top-[5%] animate-[spotlight-bug_450ms_cubic-bezier(0.2,0.8,0.2,1)_both] rounded-md border-l-[5px] border-orange-600 bg-white/95 px-3 py-1.5 text-right shadow-md"
             >
-              <div className="text-[clamp(8px,1.1vw,11px)] font-bold uppercase tracking-wider text-slate-500">{teamName} · {phraseStat.label}</div>
+              <div className="flex items-center justify-end gap-1.5 text-[clamp(8px,1.1vw,11px)] font-bold uppercase tracking-wider text-slate-500">
+                {team && <span className="inline-block h-[1.6em] w-[1.6em]">{logoOf(team)}</span>}
+                {teamName} · {phraseStat.label}
+              </div>
               <div className="flex items-baseline justify-end gap-2">
                 <span className="text-[clamp(16px,2.8vw,30px)] font-extrabold tabular-nums text-[#1e3a5f]">{phraseStat.value}</span>
                 <span className={`text-[clamp(9px,1.3vw,13px)] font-bold ${toneClass(phraseStat)}`}>{ordinal(phraseStat.rank)} of {phraseStat.of}</span>

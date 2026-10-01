@@ -4,10 +4,10 @@
  * Three kinds of segments:
  *  - `clip`   fixed lines (intro / transitions / outro): pre-rendered,
  *             lip-synced clips in /public/show, played with their own audio.
- *  - `phrase` reusable on-camera reactions from the phrase bank, chosen from
+ *  - `phrase` reusable on-camera lines from the phrase bank, chosen from
  *             the team's real stats (optionally with a spoken rank slot).
- *             At most one per topic, so each topic plays as one long
- *             graphic shot with a single cut to a host.
+ *             Each topic gets one on-camera back-and-forth (~10–14s): a
+ *             host's stat riff, the other's reply, a sign-off.
  *  - `tts`    the episode's generated lines, voiced per episode with
  *             ElevenLabs and played over a stat graphic (voiceover).
  *
@@ -102,7 +102,6 @@ const TRANSITIONS: ShowClipId[] = [
 
 /** Max on-camera bank phrases per topic. One keeps the topic's graphic on
  *  screen as a long, continuous shot instead of cutting every line. */
-const MAX_PHRASES_PER_TOPIC = 1;
 
 const other = (h: Host): Host => (h === 'marcus' ? 'tony' : 'marcus');
 
@@ -117,7 +116,7 @@ function ordinalText(n: number): string {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-function phraseSegment(p: Phrase, rank?: number): ShowSegment {
+function phraseSegment(p: Phrase, rank?: number): Extract<ShowSegment, { kind: 'phrase' }> {
   const withRank = rank != null ? p.text.replace('{rank}', ordinalText(rank)) : p.text.replace('{rank}', '');
   return {
     kind: 'phrase',
@@ -131,26 +130,55 @@ function phraseSegment(p: Phrase, rank?: number): ShowSegment {
   };
 }
 
+/** Small deterministic PRNG so an episode's picks vary with its content but
+ *  stay stable for caching. */
+function seededRandom(seedText: string): () => number {
+  let h = 2166136261;
+  for (let i = 0; i < seedText.length; i++) { h ^= seedText.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return () => {
+    h += 0x6d2b79f5;
+    let t = h;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 class PhrasePicker {
   private used = new Set<string>();
   private glueTurn = 0;
 
-  constructor(private stats: ShowStatLine | null | undefined) {}
+  constructor(private stats: ShowStatLine | null | undefined, private rand: () => number = Math.random) {}
 
   private pick(pred: (p: Phrase) => boolean): Phrase | null {
-    const p = PHRASES.find(x => !this.used.has(x.id) && pred(x));
-    if (p) this.used.add(p.id);
-    return p ?? null;
+    const pool = PHRASES.filter(x => !this.used.has(x.id) && pred(x));
+    if (!pool.length) return null;
+    const p = pool[Math.floor(this.rand() * pool.length)];
+    this.used.add(p.id);
+    return p;
   }
 
-  /** A host reacting on camera to a stat: prefer the slot version (says the rank). */
-  stat(host: Host, key: ShowStatKey): ShowSegment | null {
+  private statLine(key: ShowStatKey) {
     const st = this.stats?.stats.find(s => s.key === key);
-    if (!st) return null;
-    const tone = rankTone(st.rank, st.of);
-    const slotted = this.pick(p => p.host === host && p.stat === key && p.tone === tone && !!p.slot);
-    if (slotted) return phraseSegment(slotted, st.rank);
-    const plain = this.pick(p => p.host === host && p.stat === key && p.tone === tone && !p.slot);
+    return st ? { st, tone: rankTone(st.rank, st.of) } : null;
+  }
+
+  /** Long on-camera take on a stat (6–8s), saying the real rank. */
+  riff(host: Host, key: ShowStatKey): Extract<ShowSegment, { kind: 'phrase' }> | null {
+    const s = this.statLine(key);
+    if (!s) return null;
+    const p = this.pick(x => x.host === host && x.kind === 'riff' && x.stat === key && x.tone === s.tone);
+    return p ? phraseSegment(p, s.st.rank) : null;
+  }
+
+  /** Short on-camera reaction to a stat: prefer the slot version (says the rank). */
+  stat(host: Host, key: ShowStatKey): Extract<ShowSegment, { kind: 'phrase' }> | null {
+    const s = this.statLine(key);
+    if (!s) return null;
+    const base = (x: Phrase) => x.host === host && x.kind === 'stat' && x.stat === key && x.tone === s.tone;
+    const slotted = this.pick(x => base(x) && !!x.slot);
+    if (slotted) return phraseSegment(slotted, s.st.rank);
+    const plain = this.pick(x => base(x) && !x.slot);
     return plain ? phraseSegment(plain) : null;
   }
 
@@ -161,6 +189,15 @@ class PhrasePicker {
     const tone = pct >= 0.6 ? 'good' : pct <= 0.4 ? 'bad' : 'mid';
     const p = this.pick(x => x.host === host && x.kind === 'record' && x.tone === tone);
     return p ? phraseSegment(p) : null;
+  }
+
+  /** First available phrase of these kinds, in order. */
+  kinds(host: Host, kinds: PhraseKind[]): ShowSegment | null {
+    for (const k of kinds) {
+      const p = this.pick(x => x.host === host && x.kind === k);
+      if (p) return phraseSegment(p);
+    }
+    return null;
   }
 
   /** Short connective reaction, rotated so episodes vary line to line.
@@ -181,14 +218,34 @@ class PhrasePicker {
   }
 }
 
+const onCamera = (x: ShowSegment) => x.kind === 'phrase' || (x.kind === 'clip' && !x.voiceover);
+
+/** Drop any on-camera phrase that would sit next to another on-camera shot
+ *  of the same host (a jump cut): a sign-off goes first, else the later
+ *  phrase; a fixed clip (intro/outro) always stays. */
+function removeJumpCuts(segs: ShowSegment[]): ShowSegment[] {
+  const out = [...segs];
+  for (let k = 1; k < out.length; k++) {
+    const a = out[k - 1], b = out[k];
+    if (!onCamera(a) || !onCamera(b) || a.speaker !== b.speaker) continue;
+    const aButton = a.kind === 'phrase' && PHRASES.find(p => p.id === a.phraseId)?.kind === 'button';
+    if (b.kind === 'phrase' && !aButton) out.splice(k, 1);
+    else if (a.kind === 'phrase') out.splice(k - 1, 1);
+    else continue; // two fixed clips — never generated back to back
+    k = Math.max(0, k - 2);
+  }
+  return out;
+}
+
 export function buildShowScript(
   topics: ShowTopicInput[],
   teamName: string,
   stats?: ShowStatLine | null,
 ): ShowSegment[] {
   const segs: ShowSegment[] = [];
-  const picker = new PhrasePicker(stats);
+  const picker = new PhrasePicker(stats, seededRandom(JSON.stringify([teamName, stats?.record, topics.map(t => t.headline)])));
   const coveredStats = new Set<ShowStatKey>();
+  let exchangeNo = 0;
 
   segs.push(clip('marcus_intro'));
   // The team name changes every episode, so this half of the original intro
@@ -203,6 +260,28 @@ export function buildShowScript(
   const record = picker.record('marcus');
   if (record) segs.push(record);
 
+  /** An on-camera back-and-forth (~10–14s): `a` takes the stat (long riff,
+   *  real rank), `b` replies, `a` gets the last word. */
+  const statExchange = (a: Host, key: ShowStatKey): ShowSegment[] => {
+    const take = picker.riff(a, key) ?? picker.stat(a, key);
+    if (!take) return [];
+    const b = other(a);
+    const tone = stats?.stats.find(s => s.key === key);
+    // Marcus mostly agrees with a bad-stat rant and pushes back on hype;
+    // Tony mostly agrees with bad news and pushes back on caution.
+    const agree = (tone && rankTone(tone.rank, tone.of) === 'bad') !== (exchangeNo++ % 3 === 2);
+    const reply = picker.kinds(b, agree ? ['reply_agree', 'agree'] : ['reply_push', 'disagree', 'skeptical']);
+    const button = reply ? picker.kinds(a, ['button']) : null;
+    return [take, reply, button].filter((x): x is ShowSegment => !!x);
+  };
+
+  /** For a topic with no stat to riff on: Tony's take, Marcus's answer. */
+  const debateExchange = (): ShowSegment[] => {
+    const open = picker.kinds('tony', ['open']);
+    const answer = open ? picker.kinds('marcus', ['answer', 'skeptical']) : null;
+    return [open, answer].filter((x): x is ShowSegment => !!x);
+  };
+
   topics.forEach((topic, i) => {
     const debate = topic.exchanges.filter(e => e.speakerId === 'stats' || e.speakerId === 'hottake');
     if (debate.length === 0) return;
@@ -213,42 +292,33 @@ export function buildShowScript(
       });
     }
 
-    let onCamera = 0;
-    let lastSpeaker: Host = 'marcus';
-    const spoke = new Set<Host>();
+    let exchanged = false;
     debate.forEach(ex => {
       const speaker: Host = ex.speakerId === 'stats' ? 'marcus' : 'tony';
-      lastSpeaker = speaker;
-      spoke.add(speaker);
       segs.push({
         kind: 'tts', speaker, text: ex.text, visual: 'graphic',
         topicIdx: i, headline: topic.headline, icon: topic.icon,
       });
-      if (onCamera >= MAX_PHRASES_PER_TOPIC) return;
-
-      // The other host reacts on camera to the stat just cited (saying the
-      // real rank) if it hasn't been covered yet this episode.
-      const respondent = other(speaker);
+      if (exchanged) return;
+      // The other host takes the stat just cited (if not covered yet this
+      // episode) and the two go back and forth on camera.
       for (const key of statsMentioned(ex.text)) {
         if (coveredStats.has(key)) continue;
-        const reaction = picker.stat(respondent, key);
-        if (reaction) { coveredStats.add(key); segs.push(reaction); onCamera++; break; }
+        const run = statExchange(other(speaker), key);
+        if (run.length) { coveredStats.add(key); segs.push(...run); exchanged = true; break; }
+      }
+      // No stat in play? After Marcus's first line, Tony takes the topic on
+      // camera and Marcus answers.
+      if (!exchanged && speaker === 'marcus' && !debate.some(d => statsMentioned(d.text).some(k => !coveredStats.has(k)))) {
+        const run = debateExchange();
+        if (run.length) { segs.push(...run); exchanged = true; }
       }
     });
-    // No stat reaction? Close a real back-and-forth with a short on-camera
-    // reaction from whoever didn't have the last word.
-    const respondent = other(lastSpeaker);
-    // …but not Marcus right before his own on-camera outro.
-    const lastTopic = topics.slice(i + 1).every(t => !t.exchanges.some(e => e.speakerId === 'stats' || e.speakerId === 'hottake'));
-    if (onCamera === 0 && debate.length >= 2 && !(lastTopic && respondent === 'marcus')) {
-      const glue = picker.glue(respondent, spoke.has(respondent));
-      if (glue) segs.push(glue);
-    }
   });
 
   segs.push(clip('marcus_outro'));
   segs.push(clip('tony_outro'));
-  return segs;
+  return removeJumpCuts(segs);
 }
 
 /** Timeline entry returned by /api/spotlight-show: TTS segments carry their

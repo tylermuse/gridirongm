@@ -6,12 +6,12 @@
   "text": "You just can't win in this league when you can't put points on the board.",
   "src": "/show/phrases/marcus_ppg_bad.mp4",
   "duration": 4.28,
-  "stat": "ppg",
-  "tone": "bad",
   "speech": {
    "start": 0.3,
    "end": 3.54
-  }
+  },
+  "stat": "ppg",
+  "tone": "bad"
  },
  {
   "id": "marcus_ppg_bad_slot",
@@ -20,15 +20,15 @@
   "text": "When you're {rank} in scoring, there's no margin for error. None.",
   "src": "/show/phrases/marcus_ppg_bad_slot.mp4",
   "duration": 4.88,
+  "speech": {
+   "start": 0.36,
+   "end": 4.22
+  },
   "stat": "ppg",
   "tone": "bad",
   "slot": {
    "start": 0.741,
    "end": 1.368
-  },
-  "speech": {
-   "start": 0.36,
-   "end": 4.22
   }
  },
  {
@@ -38,12 +38,12 @@
   "text": "This offense is legit. They're moving the ball and finishing drives.",
   "src": "/show/phrases/marcus_ppg_good.mp4",
   "duration": 4.28,
-  "stat": "ppg",
-  "tone": "good",
   "speech": {
    "start": 0.38,
    "end": 3.58
-  }
+  },
+  "stat": "ppg",
+  "tone": "good"
  },
  {
   "id": "marcus_ppg_good_slot",
@@ -52,15 +52,15 @@
   "text": "They're {rank} in the league in scoring. That's not a fluke. That's a system that works.",
   "src": "/show/phrases/marcus_ppg_good_slot.mp4",
   "duration": 5.64,
+  "speech": {
+   "start": 0.4,
+   "end": 4.96
+  },
   "stat": "ppg",
   "tone": "good",
   "slot": {
    "start": 0.602,
    "end": 1.031
-  },
-  "speech": {
-   "start": 0.4,
-   "end": 4.96
   }
  },
  {
@@ -70,12 +70,12 @@
   "text": "The defense has to get off the field. They just can't get stops.",
   "src": "/show/phrases/marcus_pag_bad.mp4",
   "duration": 3.6,
-  "stat": "pag",
-  "tone": "bad",
   "speech": {
    "start": 0.36,
    "end": 2.94
-  }
+  },
+  "stat": "pag",
+  "tone": "bad"
  },
  {
   "id": "marcus_pag_bad_slot",
@@ -84,15 +84,15 @@
   "text": "They're {rank} in points allowed. You're asking the offense to win a shootout every week.",
   "src": "/show/phrases/marcus_pag_bad_slot.mp4",
   "duration": 5.52,
+  "speech": {
+   "start": 0.4,
+   "end": 4.68
+  },
   "stat": "pag",
   "tone": "bad",
   "slot": {
    "start": 0.637,
    "end": 1.507
-  },
-  "speech": {
-   "start": 0.4,
-   "end": 4.68
   }
  },
  {
@@ -102,12 +102,12 @@
   "text": "This defense keeps them in every single game. That travels.",
   "src": "/show/phrases/marcus_pag_good.mp4",
   "duration": 3.8,
-  "stat": "pag",
-  "tone": "good",
   "speech": {
    "start": 0.34,
    "end": 3.26
-  }
+  },
+  "stat": "pag",
+  "tone": "good"
  },
  {
   "id": "marcus_pag_good_slot",
@@ -116,15 +116,15 @@
   "text": "They're {rank} in points allowed. That's the foundation of this whole team.",
   "src": "/show/phrases/marcus_pag_good_slot.mp4",
   "duration": 5.28,
+  "speech": {
+   "start": 0.34,
+   "end": 4.48
+  },
   "stat": "pag",
   "tone": "good",
   "slot": {
    "start": 0.637,
    "end": 1.159
-  },
-  "speech": {
-   "start": 0.34,
-   "end": 4.48
   }
  },
  {
@@ -134,12 +134,12 @@
   "text": "The passing game just isn't there. Nobody's getting open downfield.",
   "src": "/show/phrases/marcus_pass_bad.mp4",
   "duration": 4.28,
-  "stat": "pass",
-  "tone": "bad",
   "speech": {
    "start": 0.36,
    "end": 3.6
-  }
+  },
+  "stat": "pass",
+  "tone": "bad"
  },
  {
   "id": "marcus_pass_bad_slot",
@@ -148,15 +148,15 @@
   "text": "They're {rank} in passing yards per game. That's a problem at quarterback, or up front, or both.",
   "src": "/show/phrases/marcus_pass_bad_slot.mp4",
   "duration": 5.52,
+  "speech": {
+   "start": 0.34,
+   "end": 4.96
+  },
   "stat": "pass",
   "tone": "bad",
   "slot": {
    "start": 0.567,
    "end": 1.194
-  },
-  "speech": {
-   "start": 0.34,
-   "end": 4.96
   }
  },
  {
@@ -166,12 +166,12 @@
   "text": "When they drop back to throw, good things happen. The timing is there.",
   "src": "/show/phrases/marcus_pass_good.mp4",
   "duration": 4.68,
-  "stat": "pass",
-  "tone": "good",
   "speech": {
    "start": 0.34,
    "end": 4.04
-  }
+  },
+  "stat": "pass",
+  "tone": "good"
  },
  {
   "id": "marcus_pass_good_slot",
@@ -180,15 +180,15 @@
   "text": "They're {rank} in passing yards per game. Defenses have to respect it.",
   "src": "/show/phrases/marcus_pass_good_slot.mp4",
   "duration": 5.0,
+  "speech": {
+   "start": 0.42,
+   "end": 4.22
+  },
   "stat": "pass",
   "tone": "good",
   "slot": {
    "start": 0.613,
    "end": 1.101
-  },
-  "speech": {
-   "start": 0.42,
-   "end": 4.22
   }
  },
  {
@@ -197,13 +197,13 @@
   "kind": "stat",
   "text": "They can't run the ball. And when you can't run it, everything gets harder.",
   "src": "/show/phrases/marcus_rush_bad.mp4",
-  "duration": 4.4,
-  "stat": "rush",
-  "tone": "bad",
+  "duration": 4.322,
   "speech": {
    "start": 0.4,
    "end": 3.62
-  }
+  },
+  "stat": "rush",
+  "tone": "bad"
  },
  {
   "id": "marcus_rush_bad_slot",
@@ -212,15 +212,15 @@
   "text": "They're {rank} in rushing. The offensive line has to take that personally.",
   "src": "/show/phrases/marcus_rush_bad_slot.mp4",
   "duration": 5.16,
+  "speech": {
+   "start": 0.38,
+   "end": 4.4
+  },
   "stat": "rush",
   "tone": "bad",
   "slot": {
    "start": 0.59,
    "end": 1.368
-  },
-  "speech": {
-   "start": 0.38,
-   "end": 4.4
   }
  },
  {
@@ -230,12 +230,12 @@
   "text": "They're winning at the line of scrimmage. That's how you control a football game.",
   "src": "/show/phrases/marcus_rush_good.mp4",
   "duration": 5.64,
-  "stat": "rush",
-  "tone": "good",
   "speech": {
    "start": 0.36,
    "end": 4.8
-  }
+  },
+  "stat": "rush",
+  "tone": "good"
  },
  {
   "id": "marcus_rush_good_slot",
@@ -244,15 +244,15 @@
   "text": "They're {rank} in rushing yards per game. They're wearing people down.",
   "src": "/show/phrases/marcus_rush_good_slot.mp4",
   "duration": 4.88,
+  "speech": {
+   "start": 0.34,
+   "end": 4.14
+  },
   "stat": "rush",
   "tone": "good",
   "slot": {
    "start": 0.637,
    "end": 1.136
-  },
-  "speech": {
-   "start": 0.34,
-   "end": 4.14
   }
  },
  {
@@ -262,11 +262,11 @@
   "text": "Winning cures a lot. This team believes right now.",
   "src": "/show/phrases/marcus_record_winning.mp4",
   "duration": 3.44,
-  "tone": "good",
   "speech": {
    "start": 0.3,
    "end": 2.72
-  }
+  },
+  "tone": "good"
  },
  {
   "id": "marcus_record_losing",
@@ -275,11 +275,11 @@
   "text": "At some point, the record is who you are. And right now, it's not good enough.",
   "src": "/show/phrases/marcus_record_losing.mp4",
   "duration": 4.24,
-  "tone": "bad",
   "speech": {
    "start": 0.34,
    "end": 3.5
-  }
+  },
+  "tone": "bad"
  },
  {
   "id": "marcus_record_even",
@@ -288,11 +288,11 @@
   "text": "They're right there. A couple of plays either way, and this is a different conversation.",
   "src": "/show/phrases/marcus_record_even.mp4",
   "duration": 4.8,
-  "tone": "mid",
   "speech": {
    "start": 0.42,
    "end": 3.98
-  }
+  },
+  "tone": "mid"
  },
  {
   "id": "marcus_agree_1",
@@ -360,7 +360,7 @@
   "kind": "pivot",
   "text": "Let's look at what the numbers actually say.",
   "src": "/show/phrases/marcus_pivot.mp4",
-  "duration": 2.84,
+  "duration": 2.837,
   "speech": {
    "start": 0.36,
    "end": 2.18
@@ -373,12 +373,12 @@
   "text": "This offense is unwatchable right now! I can't take it!",
   "src": "/show/phrases/tony_ppg_bad.mp4",
   "duration": 3.64,
-  "stat": "ppg",
-  "tone": "bad",
   "speech": {
    "start": 0.46,
    "end": 2.92
-  }
+  },
+  "stat": "ppg",
+  "tone": "bad"
  },
  {
   "id": "tony_ppg_bad_slot",
@@ -387,15 +387,15 @@
   "text": "{rank} in scoring?! Are you kidding me? That's embarrassing!",
   "src": "/show/phrases/tony_ppg_bad_slot.mp4",
   "duration": 4.28,
+  "speech": {
+   "start": 0.32,
+   "end": 3.78
+  },
   "stat": "ppg",
   "tone": "bad",
   "slot": {
    "start": 0.3,
    "end": 1.182
-  },
-  "speech": {
-   "start": 0.32,
-   "end": 3.78
   }
  },
  {
@@ -405,12 +405,12 @@
   "text": "This offense is a problem for everybody! Buckle up!",
   "src": "/show/phrases/tony_ppg_good.mp4",
   "duration": 3.6,
-  "stat": "ppg",
-  "tone": "good",
   "speech": {
    "start": 0.44,
    "end": 2.88
-  }
+  },
+  "stat": "ppg",
+  "tone": "good"
  },
  {
   "id": "tony_ppg_good_slot",
@@ -419,15 +419,15 @@
   "text": "{rank} in scoring! They're putting up points like it's nothing!",
   "src": "/show/phrases/tony_ppg_good_slot.mp4",
   "duration": 4.32,
+  "speech": {
+   "start": 0.48,
+   "end": 3.6
+  },
   "stat": "ppg",
   "tone": "good",
   "slot": {
    "start": 0.3,
    "end": 0.962
-  },
-  "speech": {
-   "start": 0.48,
-   "end": 3.6
   }
  },
  {
@@ -437,12 +437,12 @@
   "text": "This is ridiculous! They have to do a better job on defense!",
   "src": "/show/phrases/tony_pag_bad.mp4",
   "duration": 3.88,
-  "stat": "pag",
-  "tone": "bad",
   "speech": {
    "start": 0.46,
    "end": 3.2
-  }
+  },
+  "stat": "pag",
+  "tone": "bad"
  },
  {
   "id": "tony_pag_bad_slot",
@@ -451,15 +451,15 @@
   "text": "{rank} in points allowed! Somebody has to make a tackle!",
   "src": "/show/phrases/tony_pag_bad_slot.mp4",
   "duration": 3.88,
+  "speech": {
+   "start": 0.32,
+   "end": 3.24
+  },
   "stat": "pag",
   "tone": "bad",
   "slot": {
    "start": 0.3,
    "end": 0.939
-  },
-  "speech": {
-   "start": 0.32,
-   "end": 3.24
   }
  },
  {
@@ -469,12 +469,12 @@
   "text": "Nobody wants to play this defense! Nobody!",
   "src": "/show/phrases/tony_pag_good.mp4",
   "duration": 3.4,
-  "stat": "pag",
-  "tone": "good",
   "speech": {
    "start": 0.46,
    "end": 2.74
-  }
+  },
+  "stat": "pag",
+  "tone": "good"
  },
  {
   "id": "tony_pag_good_slot",
@@ -483,15 +483,15 @@
   "text": "{rank} in points allowed! That defense is nasty!",
   "src": "/show/phrases/tony_pag_good_slot.mp4",
   "duration": 3.52,
+  "speech": {
+   "start": 0.46,
+   "end": 2.84
+  },
   "stat": "pag",
   "tone": "good",
   "slot": {
    "start": 0.3,
    "end": 0.857
-  },
-  "speech": {
-   "start": 0.46,
-   "end": 2.84
   }
  },
  {
@@ -501,12 +501,12 @@
   "text": "Throw the ball downfield! Take a shot! Do something!",
   "src": "/show/phrases/tony_pass_bad.mp4",
   "duration": 3.72,
-  "stat": "pass",
-  "tone": "bad",
   "speech": {
    "start": 0.46,
    "end": 3.02
-  }
+  },
+  "stat": "pass",
+  "tone": "bad"
  },
  {
   "id": "tony_pass_bad_slot",
@@ -515,15 +515,15 @@
   "text": "{rank} in passing? That's not an offense, that's a prayer!",
   "src": "/show/phrases/tony_pass_bad_slot.mp4",
   "duration": 3.72,
+  "speech": {
+   "start": 0.38,
+   "end": 3.22
+  },
   "stat": "pass",
   "tone": "bad",
   "slot": {
    "start": 0.3,
    "end": 0.892
-  },
-  "speech": {
-   "start": 0.38,
-   "end": 3.22
   }
  },
  {
@@ -533,12 +533,12 @@
   "text": "When this team airs it out, it is fun to watch!",
   "src": "/show/phrases/tony_pass_good.mp4",
   "duration": 3.24,
-  "stat": "pass",
-  "tone": "good",
   "speech": {
    "start": 0.38,
    "end": 2.64
-  }
+  },
+  "stat": "pass",
+  "tone": "good"
  },
  {
   "id": "tony_pass_good_slot",
@@ -547,15 +547,15 @@
   "text": "{rank} in passing yards! Let it fly!",
   "src": "/show/phrases/tony_pass_good_slot.mp4",
   "duration": 2.88,
+  "speech": {
+   "start": 0.46,
+   "end": 2.2
+  },
   "stat": "pass",
   "tone": "good",
   "slot": {
    "start": 0.3,
    "end": 0.869
-  },
-  "speech": {
-   "start": 0.46,
-   "end": 2.2
   }
  },
  {
@@ -564,13 +564,13 @@
   "kind": "stat",
   "text": "You have to be able to run the football! It's that simple!",
   "src": "/show/phrases/tony_rush_bad.mp4",
-  "duration": 3.72,
-  "stat": "rush",
-  "tone": "bad",
+  "duration": 3.672,
   "speech": {
    "start": 0.48,
    "end": 3.02
-  }
+  },
+  "stat": "rush",
+  "tone": "bad"
  },
  {
   "id": "tony_rush_bad_slot",
@@ -579,15 +579,15 @@
   "text": "{rank} in rushing?! You can't win like that! You just can't!",
   "src": "/show/phrases/tony_rush_bad_slot.mp4",
   "duration": 4.16,
+  "speech": {
+   "start": 0.42,
+   "end": 3.42
+  },
   "stat": "rush",
   "tone": "bad",
   "slot": {
    "start": 0.3,
    "end": 0.962
-  },
-  "speech": {
-   "start": 0.42,
-   "end": 3.42
   }
  },
  {
@@ -597,12 +597,12 @@
   "text": "They're running people over! That's grown-man football!",
   "src": "/show/phrases/tony_rush_good.mp4",
   "duration": 3.72,
-  "stat": "rush",
-  "tone": "good",
   "speech": {
    "start": 0.48,
    "end": 3.02
-  }
+  },
+  "stat": "rush",
+  "tone": "good"
  },
  {
   "id": "tony_rush_good_slot",
@@ -611,15 +611,15 @@
   "text": "{rank} in rushing! They just line up and pound it!",
   "src": "/show/phrases/tony_rush_good_slot.mp4",
   "duration": 3.84,
+  "speech": {
+   "start": 0.3,
+   "end": 3.12
+  },
   "stat": "rush",
   "tone": "good",
   "slot": {
    "start": 0.3,
    "end": 0.904
-  },
-  "speech": {
-   "start": 0.3,
-   "end": 3.12
   }
  },
  {
@@ -629,11 +629,11 @@
   "text": "This team is for real, and I don't want to hear otherwise!",
   "src": "/show/phrases/tony_record_winning.mp4",
   "duration": 3.56,
-  "tone": "good",
   "speech": {
    "start": 0.46,
    "end": 2.9
-  }
+  },
+  "tone": "good"
  },
  {
   "id": "tony_record_losing",
@@ -642,11 +642,11 @@
   "text": "Something has got to change, and it has to change now!",
   "src": "/show/phrases/tony_record_losing.mp4",
   "duration": 3.64,
-  "tone": "bad",
   "speech": {
    "start": 0.3,
    "end": 2.96
-  }
+  },
+  "tone": "bad"
  },
  {
   "id": "tony_record_even",
@@ -655,11 +655,11 @@
   "text": "This season is on a knife's edge, Marcus!",
   "src": "/show/phrases/tony_record_even.mp4",
   "duration": 2.92,
-  "tone": "mid",
   "speech": {
    "start": 0.48,
    "end": 2.22
-  }
+  },
+  "tone": "mid"
  },
  {
   "id": "tony_agree_1",
@@ -727,7 +727,7 @@
   "kind": "pivot",
   "text": "Here's the thing nobody's talking about.",
   "src": "/show/phrases/tony_pivot.mp4",
-  "duration": 2.84,
+  "duration": 2.838,
   "speech": {
    "start": 0.46,
    "end": 2.18
@@ -740,15 +740,15 @@
   "text": "They're {rank} in scoring. Middle of the pack. Not bad, not great.",
   "src": "/show/phrases/marcus_ppg_mid_slot.mp4",
   "duration": 4.68,
+  "speech": {
+   "start": 0.44,
+   "end": 3.96
+  },
   "stat": "ppg",
   "tone": "mid",
   "slot": {
    "start": 0.637,
    "end": 1.089
-  },
-  "speech": {
-   "start": 0.44,
-   "end": 3.96
   }
  },
  {
@@ -758,15 +758,15 @@
   "text": "They're {rank} in points allowed. That's average, and average doesn't win you a division.",
   "src": "/show/phrases/marcus_pag_mid_slot.mp4",
   "duration": 5.24,
+  "speech": {
+   "start": 0.36,
+   "end": 4.64
+  },
   "stat": "pag",
   "tone": "mid",
   "slot": {
    "start": 0.59,
    "end": 1.031
-  },
-  "speech": {
-   "start": 0.36,
-   "end": 4.64
   }
  },
  {
@@ -776,15 +776,15 @@
   "text": "They're {rank} in passing yards. It's fine. But fine isn't going to scare anybody.",
   "src": "/show/phrases/marcus_pass_mid_slot.mp4",
   "duration": 5.04,
+  "speech": {
+   "start": 0.4,
+   "end": 4.32
+  },
   "stat": "pass",
   "tone": "mid",
   "slot": {
    "start": 0.59,
    "end": 1.124
-  },
-  "speech": {
-   "start": 0.4,
-   "end": 4.32
   }
  },
  {
@@ -794,15 +794,15 @@
   "text": "They're {rank} in rushing. Middle of the league. There's room to lean on it more.",
   "src": "/show/phrases/marcus_rush_mid_slot.mp4",
   "duration": 4.72,
+  "speech": {
+   "start": 0.4,
+   "end": 4.0
+  },
   "stat": "rush",
   "tone": "mid",
   "slot": {
    "start": 0.579,
    "end": 1.031
-  },
-  "speech": {
-   "start": 0.4,
-   "end": 4.0
   }
  },
  {
@@ -812,15 +812,15 @@
   "text": "They're {rank} in total offense. Right down the middle.",
   "src": "/show/phrases/marcus_yds_mid_slot.mp4",
   "duration": 3.88,
+  "speech": {
+   "start": 0.36,
+   "end": 3.14
+  },
   "stat": "yds",
   "tone": "mid",
   "slot": {
    "start": 0.625,
    "end": 1.136
-  },
-  "speech": {
-   "start": 0.36,
-   "end": 3.14
   }
  },
  {
@@ -830,15 +830,15 @@
   "text": "They're {rank} in total yards. They move the ball on everybody.",
   "src": "/show/phrases/marcus_yds_good_slot.mp4",
   "duration": 3.72,
+  "speech": {
+   "start": 0.4,
+   "end": 3.06
+  },
   "stat": "yds",
   "tone": "good",
   "slot": {
    "start": 0.567,
    "end": 0.915
-  },
-  "speech": {
-   "start": 0.4,
-   "end": 3.06
   }
  },
  {
@@ -848,15 +848,15 @@
   "text": "They're {rank} in total offense. That is hard to overcome.",
   "src": "/show/phrases/marcus_yds_bad_slot.mp4",
   "duration": 4.44,
+  "speech": {
+   "start": 0.38,
+   "end": 3.76
+  },
   "stat": "yds",
   "tone": "bad",
   "slot": {
    "start": 0.555,
    "end": 1.264
-  },
-  "speech": {
-   "start": 0.38,
-   "end": 3.76
   }
  },
  {
@@ -913,7 +913,7 @@
   "kind": "agree",
   "text": "No argument from me.",
   "src": "/show/phrases/marcus_agree_4.mp4",
-  "duration": 1.96,
+  "duration": 1.954,
   "speech": {
    "start": 0.3,
    "end": 1.2
@@ -926,15 +926,15 @@
   "text": "{rank} in scoring? That's vanilla, Marcus! I want more!",
   "src": "/show/phrases/tony_ppg_mid_slot.mp4",
   "duration": 3.88,
+  "speech": {
+   "start": 0.42,
+   "end": 3.18
+  },
   "stat": "ppg",
   "tone": "mid",
   "slot": {
    "start": 0.3,
    "end": 0.973
-  },
-  "speech": {
-   "start": 0.42,
-   "end": 3.18
   }
  },
  {
@@ -944,15 +944,15 @@
   "text": "{rank} in points allowed. That's just okay. Okay doesn't win championships!",
   "src": "/show/phrases/tony_pag_mid_slot.mp4",
   "duration": 5.36,
+  "speech": {
+   "start": 0.44,
+   "end": 4.72
+  },
   "stat": "pag",
   "tone": "mid",
   "slot": {
    "start": 0.3,
    "end": 0.869
-  },
-  "speech": {
-   "start": 0.44,
-   "end": 4.72
   }
  },
  {
@@ -962,15 +962,15 @@
   "text": "{rank} in passing. Stuck in the middle. Wake up!",
   "src": "/show/phrases/tony_pass_mid_slot.mp4",
   "duration": 3.36,
+  "speech": {
+   "start": 0.42,
+   "end": 2.66
+  },
   "stat": "pass",
   "tone": "mid",
   "slot": {
    "start": 0.3,
    "end": 0.973
-  },
-  "speech": {
-   "start": 0.42,
-   "end": 2.66
   }
  },
  {
@@ -980,15 +980,15 @@
   "text": "{rank} in rushing. That's not good enough for me!",
   "src": "/show/phrases/tony_rush_mid_slot.mp4",
   "duration": 3.44,
+  "speech": {
+   "start": 0.44,
+   "end": 2.78
+  },
   "stat": "rush",
   "tone": "mid",
   "slot": {
    "start": 0.3,
    "end": 0.985
-  },
-  "speech": {
-   "start": 0.44,
-   "end": 2.78
   }
  },
  {
@@ -998,15 +998,15 @@
   "text": "{rank} in total offense. Mediocre! Just mediocre!",
   "src": "/show/phrases/tony_yds_mid_slot.mp4",
   "duration": 3.8,
+  "speech": {
+   "start": 0.3,
+   "end": 3.24
+  },
   "stat": "yds",
   "tone": "mid",
   "slot": {
    "start": 0.3,
    "end": 0.799
-  },
-  "speech": {
-   "start": 0.3,
-   "end": 3.24
   }
  },
  {
@@ -1016,15 +1016,15 @@
   "text": "{rank} in total offense! These guys can move it!",
   "src": "/show/phrases/tony_yds_good_slot.mp4",
   "duration": 3.44,
+  "speech": {
+   "start": 0.46,
+   "end": 2.74
+  },
   "stat": "yds",
   "tone": "good",
   "slot": {
    "start": 0.3,
    "end": 0.88
-  },
-  "speech": {
-   "start": 0.46,
-   "end": 2.74
   }
  },
  {
@@ -1034,15 +1034,15 @@
   "text": "{rank} in total yards?! Nobody is moving the chains!",
   "src": "/show/phrases/tony_yds_bad_slot.mp4",
   "duration": 3.88,
+  "speech": {
+   "start": 0.42,
+   "end": 3.22
+  },
   "stat": "yds",
   "tone": "bad",
   "slot": {
    "start": 0.3,
    "end": 1.066
-  },
-  "speech": {
-   "start": 0.42,
-   "end": 3.22
   }
  },
  {
@@ -1103,6 +1103,726 @@
   "speech": {
    "start": 0.46,
    "end": 1.64
+  }
+ },
+ {
+  "id": "tony_ppg_bad_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in scoring? Come on! You can't win in this league putting up nothing every Sunday. Somebody has to fix this offense, and fast!",
+  "src": "/show/phrases/tony_ppg_bad_riff.mp4",
+  "duration": 8.88,
+  "speech": {
+   "start": 0.44,
+   "end": 8.2
+  },
+  "stat": "ppg",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 1.043
+  }
+ },
+ {
+  "id": "tony_ppg_good_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in scoring! This offense is a problem, Marcus. They're putting up points on everybody, and nobody has an answer!",
+  "src": "/show/phrases/tony_ppg_good_riff.mp4",
+  "duration": 6.72,
+  "speech": {
+   "start": 0.46,
+   "end": 6.2
+  },
+  "stat": "ppg",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.915
+  }
+ },
+ {
+  "id": "tony_ppg_mid_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in scoring. That's just okay, and okay isn't good enough for me. I want this offense to go get it!",
+  "src": "/show/phrases/tony_ppg_mid_riff.mp4",
+  "duration": 6.32,
+  "speech": {
+   "start": 0.3,
+   "end": 5.7
+  },
+  "stat": "ppg",
+  "tone": "mid",
+  "slot": {
+   "start": 0.3,
+   "end": 0.88
+  }
+ },
+ {
+  "id": "tony_pag_bad_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in points allowed! That defense is getting pushed around every single week. Somebody has to step up and make a tackle!",
+  "src": "/show/phrases/tony_pag_bad_riff.mp4",
+  "duration": 7.6,
+  "speech": {
+   "start": 0.32,
+   "end": 6.9
+  },
+  "stat": "pag",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 1.136
+  }
+ },
+ {
+  "id": "tony_pag_good_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in points allowed! That defense is nasty, Marcus. Nobody wants to line up against them right now. Nobody!",
+  "src": "/show/phrases/tony_pag_good_riff.mp4",
+  "duration": 6.88,
+  "speech": {
+   "start": 0.46,
+   "end": 6.12
+  },
+  "stat": "pag",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.939
+  }
+ },
+ {
+  "id": "tony_pag_mid_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in points allowed. Middle of the pack. That's not a defense that scares anybody, and it needs to be.",
+  "src": "/show/phrases/tony_pag_mid_riff.mp4",
+  "duration": 6.04,
+  "speech": {
+   "start": 0.44,
+   "end": 5.62
+  },
+  "stat": "pag",
+  "tone": "mid",
+  "slot": {
+   "start": 0.3,
+   "end": 1.055
+  }
+ },
+ {
+  "id": "tony_pass_bad_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in passing? You're telling me they can't throw the football? Take a shot downfield! Do something!",
+  "src": "/show/phrases/tony_pass_bad_riff.mp4",
+  "duration": 6.72,
+  "speech": {
+   "start": 0.42,
+   "end": 6.0
+  },
+  "stat": "pass",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 1.171
+  }
+ },
+ {
+  "id": "tony_pass_good_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in passing yards! When this team airs it out, it is must-see TV. Let it fly!",
+  "src": "/show/phrases/tony_pass_good_riff.mp4",
+  "duration": 5.36,
+  "speech": {
+   "start": 0.32,
+   "end": 4.7
+  },
+  "stat": "pass",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.706
+  }
+ },
+ {
+  "id": "tony_pass_mid_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in passing. It's not bad, it's not great, it's just there. I want to see them open it up!",
+  "src": "/show/phrases/tony_pass_mid_riff.mp4",
+  "duration": 5.92,
+  "speech": {
+   "start": 0.42,
+   "end": 5.16
+  },
+  "stat": "pass",
+  "tone": "mid",
+  "slot": {
+   "start": 0.3,
+   "end": 0.927
+  }
+ },
+ {
+  "id": "tony_rush_bad_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in rushing! You have to be able to run the football. It's that simple. It is that simple!",
+  "src": "/show/phrases/tony_rush_bad_riff.mp4",
+  "duration": 5.68,
+  "speech": {
+   "start": 0.34,
+   "end": 5.02
+  },
+  "stat": "rush",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 0.962
+  }
+ },
+ {
+  "id": "tony_rush_good_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in rushing! They line up, they run it right at you, and they dare you to stop it. I love it!",
+  "src": "/show/phrases/tony_rush_good_riff.mp4",
+  "duration": 6.0,
+  "speech": {
+   "start": 0.46,
+   "end": 5.22
+  },
+  "stat": "rush",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.892
+  }
+ },
+ {
+  "id": "tony_rush_mid_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in rushing. That's not physical enough for me. Run the ball, set the tone, own the line!",
+  "src": "/show/phrases/tony_rush_mid_riff.mp4",
+  "duration": 6.458,
+  "speech": {
+   "start": 0.44,
+   "end": 6.04
+  },
+  "stat": "rush",
+  "tone": "mid",
+  "slot": {
+   "start": 0.3,
+   "end": 1.089
+  }
+ },
+ {
+  "id": "marcus_ppg_bad_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in scoring. And when you look closer, it's the red zone. They move the ball, then they stall. That has to change.",
+  "src": "/show/phrases/marcus_ppg_bad_riff.mp4",
+  "duration": 7.28,
+  "speech": {
+   "start": 0.36,
+   "end": 6.52
+  },
+  "stat": "ppg",
+  "tone": "bad",
+  "slot": {
+   "start": 0.59,
+   "end": 1.229
+  }
+ },
+ {
+  "id": "marcus_ppg_good_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in scoring, and it's not a fluke. They're efficient on early downs, and they finish drives. That's a real offense.",
+  "src": "/show/phrases/marcus_ppg_good_riff.mp4",
+  "duration": 7.64,
+  "speech": {
+   "start": 0.4,
+   "end": 6.98
+  },
+  "stat": "ppg",
+  "tone": "good",
+  "slot": {
+   "start": 0.555,
+   "end": 0.904
+  }
+ },
+ {
+  "id": "marcus_ppg_mid_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in scoring. Right in the middle. The question is whether this offense has another gear, and I'm not sure it does.",
+  "src": "/show/phrases/marcus_ppg_mid_riff.mp4",
+  "duration": 8.04,
+  "speech": {
+   "start": 0.4,
+   "end": 7.32
+  },
+  "stat": "ppg",
+  "tone": "mid",
+  "slot": {
+   "start": 0.625,
+   "end": 1.206
+  }
+ },
+ {
+  "id": "marcus_pag_bad_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in points allowed. The issue is third down. They get teams in long yardage, and they still can't get off the field.",
+  "src": "/show/phrases/marcus_pag_bad_riff.mp4",
+  "duration": 7.6,
+  "speech": {
+   "start": 0.36,
+   "end": 6.86
+  },
+  "stat": "pag",
+  "tone": "bad",
+  "slot": {
+   "start": 0.579,
+   "end": 1.159
+  }
+ },
+ {
+  "id": "marcus_pag_good_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in points allowed. This defense keeps them in every game, and that's a foundation you can build a season on.",
+  "src": "/show/phrases/marcus_pag_good_riff.mp4",
+  "duration": 6.8,
+  "speech": {
+   "start": 0.42,
+   "end": 6.08
+  },
+  "stat": "pag",
+  "tone": "good",
+  "slot": {
+   "start": 0.567,
+   "end": 0.95
+  }
+ },
+ {
+  "id": "marcus_pag_mid_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in points allowed. Average. Not a liability, not a strength. The offense is going to have to carry them.",
+  "src": "/show/phrases/marcus_pag_mid_riff.mp4",
+  "duration": 7.202,
+  "speech": {
+   "start": 0.36,
+   "end": 6.42
+  },
+  "stat": "pag",
+  "tone": "mid",
+  "slot": {
+   "start": 0.567,
+   "end": 1.008
+  }
+ },
+ {
+  "id": "marcus_pass_bad_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in passing yards. The protection breaks down, the timing is off, and it all shows up in the numbers.",
+  "src": "/show/phrases/marcus_pass_bad_riff.mp4",
+  "duration": 7.72,
+  "speech": {
+   "start": 0.4,
+   "end": 7.0
+  },
+  "stat": "pass",
+  "tone": "bad",
+  "slot": {
+   "start": 0.59,
+   "end": 1.357
+  }
+ },
+ {
+  "id": "marcus_pass_good_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in passing yards. The quarterback is seeing the field, and the receivers are winning their matchups.",
+  "src": "/show/phrases/marcus_pass_good_riff.mp4",
+  "duration": 6.2,
+  "speech": {
+   "start": 0.4,
+   "end": 5.62
+  },
+  "stat": "pass",
+  "tone": "good",
+  "slot": {
+   "start": 0.602,
+   "end": 1.043
+  }
+ },
+ {
+  "id": "marcus_pass_mid_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in passing. It's functional. But functional doesn't scare defensive coordinators in this league.",
+  "src": "/show/phrases/marcus_pass_mid_riff.mp4",
+  "duration": 6.76,
+  "speech": {
+   "start": 0.4,
+   "end": 6.02
+  },
+  "stat": "pass",
+  "tone": "mid",
+  "slot": {
+   "start": 0.602,
+   "end": 1.066
+  }
+ },
+ {
+  "id": "marcus_rush_bad_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in rushing. When you can't run the ball, play action dies, and the whole offense gets predictable.",
+  "src": "/show/phrases/marcus_rush_bad_riff.mp4",
+  "duration": 6.88,
+  "speech": {
+   "start": 0.4,
+   "end": 6.18
+  },
+  "stat": "rush",
+  "tone": "bad",
+  "slot": {
+   "start": 0.555,
+   "end": 1.182
+  }
+ },
+ {
+  "id": "marcus_rush_good_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in rushing. They're winning at the line of scrimmage, and it's wearing defenses down late in games.",
+  "src": "/show/phrases/marcus_rush_good_riff.mp4",
+  "duration": 6.68,
+  "speech": {
+   "start": 0.34,
+   "end": 5.98
+  },
+  "stat": "rush",
+  "tone": "good",
+  "slot": {
+   "start": 0.625,
+   "end": 1.136
+  }
+ },
+ {
+  "id": "marcus_rush_mid_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in rushing. Serviceable. But there's an opportunity here to lean on the run game a lot more.",
+  "src": "/show/phrases/marcus_rush_mid_riff.mp4",
+  "duration": 6.319,
+  "speech": {
+   "start": 0.4,
+   "end": 5.64
+  },
+  "stat": "rush",
+  "tone": "mid",
+  "slot": {
+   "start": 0.567,
+   "end": 1.02
+  }
+ },
+ {
+  "id": "marcus_reply_agree_1",
+  "host": "marcus",
+  "kind": "reply_agree",
+  "text": "I don't disagree, Tony. The numbers back you up on this one.",
+  "src": "/show/phrases/marcus_reply_agree_1.mp4",
+  "duration": 3.76,
+  "speech": {
+   "start": 0.32,
+   "end": 3.06
+  }
+ },
+ {
+  "id": "marcus_reply_agree_2",
+  "host": "marcus",
+  "kind": "reply_agree",
+  "text": "For once, Tony, I'm right there with you. That's a fair point.",
+  "src": "/show/phrases/marcus_reply_agree_2.mp4",
+  "duration": 3.68,
+  "speech": {
+   "start": 0.48,
+   "end": 3.0
+  }
+ },
+ {
+  "id": "marcus_reply_push_1",
+  "host": "marcus",
+  "kind": "reply_push",
+  "text": "Okay, easy. I get the emotion, but let's not overreact to one number.",
+  "src": "/show/phrases/marcus_reply_push_1.mp4",
+  "duration": 4.44,
+  "speech": {
+   "start": 0.34,
+   "end": 3.7
+  }
+ },
+ {
+  "id": "marcus_reply_push_2",
+  "host": "marcus",
+  "kind": "reply_push",
+  "text": "That's a little much, Tony. There's more context here than one stat.",
+  "src": "/show/phrases/marcus_reply_push_2.mp4",
+  "duration": 4.84,
+  "speech": {
+   "start": 0.46,
+   "end": 4.1
+  }
+ },
+ {
+  "id": "marcus_reply_push_3",
+  "host": "marcus",
+  "kind": "reply_push",
+  "text": "I hear you. But I want to see a bigger sample before I buy in completely.",
+  "src": "/show/phrases/marcus_reply_push_3.mp4",
+  "duration": 4.56,
+  "speech": {
+   "start": 0.32,
+   "end": 3.88
+  }
+ },
+ {
+  "id": "marcus_button_1",
+  "host": "marcus",
+  "kind": "button",
+  "text": "We'll see. The numbers will tell the story.",
+  "src": "/show/phrases/marcus_button_1.mp4",
+  "duration": 2.48,
+  "speech": {
+   "start": 0.38,
+   "end": 1.94
+  }
+ },
+ {
+  "id": "marcus_button_2",
+  "host": "marcus",
+  "kind": "button",
+  "text": "That's the one to watch going forward.",
+  "src": "/show/phrases/marcus_button_2.mp4",
+  "duration": 2.72,
+  "speech": {
+   "start": 0.46,
+   "end": 2.0
+  }
+ },
+ {
+  "id": "marcus_button_3",
+  "host": "marcus",
+  "kind": "button",
+  "text": "Fair enough. Let's see how it plays out.",
+  "src": "/show/phrases/marcus_button_3.mp4",
+  "duration": 2.56,
+  "speech": {
+   "start": 0.38,
+   "end": 1.88
+  }
+ },
+ {
+  "id": "marcus_answer_1",
+  "host": "marcus",
+  "kind": "answer",
+  "text": "Let's pump the brakes. It's a long season, and one storyline doesn't define it.",
+  "src": "/show/phrases/marcus_answer_1.mp4",
+  "duration": 4.8,
+  "speech": {
+   "start": 0.34,
+   "end": 4.08
+  }
+ },
+ {
+  "id": "marcus_answer_2",
+  "host": "marcus",
+  "kind": "answer",
+  "text": "It makes sense on paper. The execution is what matters now.",
+  "src": "/show/phrases/marcus_answer_2.mp4",
+  "duration": 4.0,
+  "speech": {
+   "start": 0.36,
+   "end": 3.24
+  }
+ },
+ {
+  "id": "marcus_answer_3",
+  "host": "marcus",
+  "kind": "answer",
+  "text": "I understand the excitement, but the details matter here, and there are real questions.",
+  "src": "/show/phrases/marcus_answer_3.mp4",
+  "duration": 5.2,
+  "speech": {
+   "start": 0.32,
+   "end": 4.5
+  }
+ },
+ {
+  "id": "marcus_answer_4",
+  "host": "marcus",
+  "kind": "answer",
+  "text": "I'd be patient. The smart teams don't make panic decisions.",
+  "src": "/show/phrases/marcus_answer_4.mp4",
+  "duration": 3.672,
+  "speech": {
+   "start": 0.3,
+   "end": 3.06
+  }
+ },
+ {
+  "id": "tony_reply_agree_1",
+  "host": "tony",
+  "kind": "reply_agree",
+  "text": "See, that's what I'm talking about! Even Marcus sees it!",
+  "src": "/show/phrases/tony_reply_agree_1.mp4",
+  "duration": 3.4,
+  "speech": {
+   "start": 0.42,
+   "end": 2.68
+  }
+ },
+ {
+  "id": "tony_reply_agree_2",
+  "host": "tony",
+  "kind": "reply_agree",
+  "text": "Thank you! Finally, Marcus, we agree on something!",
+  "src": "/show/phrases/tony_reply_agree_2.mp4",
+  "duration": 3.68,
+  "speech": {
+   "start": 0.46,
+   "end": 2.98
+  }
+ },
+ {
+  "id": "tony_reply_push_1",
+  "host": "tony",
+  "kind": "reply_push",
+  "text": "Marcus, you're overthinking it! Just watch the games, man!",
+  "src": "/show/phrases/tony_reply_push_1.mp4",
+  "duration": 4.12,
+  "speech": {
+   "start": 0.3,
+   "end": 3.44
+  }
+ },
+ {
+  "id": "tony_reply_push_2",
+  "host": "tony",
+  "kind": "reply_push",
+  "text": "Come on! Numbers don't tell you everything. I trust what I see!",
+  "src": "/show/phrases/tony_reply_push_2.mp4",
+  "duration": 3.96,
+  "speech": {
+   "start": 0.44,
+   "end": 3.46
+  }
+ },
+ {
+  "id": "tony_reply_push_3",
+  "host": "tony",
+  "kind": "reply_push",
+  "text": "Nah. I've seen this movie before, and I know how it ends.",
+  "src": "/show/phrases/tony_reply_push_3.mp4",
+  "duration": 3.6,
+  "speech": {
+   "start": 0.48,
+   "end": 2.94
+  }
+ },
+ {
+  "id": "tony_button_1",
+  "host": "tony",
+  "kind": "button",
+  "text": "Mark my words. Mark my words!",
+  "src": "/show/phrases/tony_button_1.mp4",
+  "duration": 2.48,
+  "speech": {
+   "start": 0.46,
+   "end": 1.76
+  }
+ },
+ {
+  "id": "tony_button_2",
+  "host": "tony",
+  "kind": "button",
+  "text": "That's all I'm saying!",
+  "src": "/show/phrases/tony_button_2.mp4",
+  "duration": 2.16,
+  "speech": {
+   "start": 0.48,
+   "end": 1.42
+  }
+ },
+ {
+  "id": "tony_button_3",
+  "host": "tony",
+  "kind": "button",
+  "text": "I said what I said.",
+  "src": "/show/phrases/tony_button_3.mp4",
+  "duration": 2.0,
+  "speech": {
+   "start": 0.44,
+   "end": 1.3
+  }
+ },
+ {
+  "id": "tony_open_1",
+  "host": "tony",
+  "kind": "open",
+  "text": "I'll say it. This is a big moment for this franchise, and they cannot get it wrong!",
+  "src": "/show/phrases/tony_open_1.mp4",
+  "duration": 5.08,
+  "speech": {
+   "start": 0.36,
+   "end": 4.5
+  }
+ },
+ {
+  "id": "tony_open_2",
+  "host": "tony",
+  "kind": "open",
+  "text": "Everybody's talking about this, and they should be. This one matters!",
+  "src": "/show/phrases/tony_open_2.mp4",
+  "duration": 3.8,
+  "speech": {
+   "start": 0.34,
+   "end": 3.14
+  }
+ },
+ {
+  "id": "tony_open_3",
+  "host": "tony",
+  "kind": "open",
+  "text": "I'm not buying it. Not yet. Show me on Sunday, then we'll talk!",
+  "src": "/show/phrases/tony_open_3.mp4",
+  "duration": 4.0,
+  "speech": {
+   "start": 0.46,
+   "end": 3.42
+  }
+ },
+ {
+  "id": "tony_open_4",
+  "host": "tony",
+  "kind": "open",
+  "text": "Let me tell you something. This is the storyline of the season right now!",
+  "src": "/show/phrases/tony_open_4.mp4",
+  "duration": 3.811,
+  "speech": {
+   "start": 0.48,
+   "end": 3.22
   }
  }
 ]

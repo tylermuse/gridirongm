@@ -8,6 +8,7 @@
  * player drives it from a rAF clock and the demo renderer can draw any
  * frame deterministically.
  */
+import type { ReactNode } from 'react';
 import { HOSTS, type Host } from '@/lib/spotlight/showScript';
 import { ordinal, rankTone, type ShowStat, type ShowStatKey, type ShowStatLine } from '@/lib/spotlight/teamStats';
 
@@ -54,6 +55,14 @@ interface GraphicProps {
   speakerMs: number;
   /** The line being spoken — shown as the panel's pull quote. */
   text: string;
+  /** The spotlight team's logo (title card, panel corner). */
+  logo: ReactNode;
+  /** Header art for this topic: the logo of the team it's about. */
+  topicArt: ReactNode;
+  /** Player this line is about → photo card beside the quote. */
+  player?: { art: ReactNode; name: string; detail: string; key: string } | null;
+  /** Since that player came on screen. */
+  playerMs: number;
 }
 
 function StatTile({ st, i, blockMs, lineMs, hot, dim }: {
@@ -144,10 +153,16 @@ export function ShowGraphic(p: GraphicProps) {
               TEAM SPOTLIGHT
             </div>
             <div
-              className="mt-[0.2em] text-[2.6em] font-extrabold leading-[1.05] [text-shadow:0_2px_12px_rgba(0,0,0,0.4)]"
+              className="mt-[0.35em] flex items-center gap-[0.45em]"
               style={{ opacity: anim(blockMs, 200, 500), transform: `translateY(${(1 - anim(blockMs, 200, 500)) * 0.6}em)` }}
             >
-              {p.teamName}
+              <div
+                className="h-[3.4em] w-[3.4em] shrink-0 [font-size:1em]"
+                style={{ transform: `scale(${0.6 + 0.4 * anim(blockMs, 150, 450)})` }}
+              >
+                {p.logo}
+              </div>
+              <div className="text-[2.6em] font-extrabold leading-[1.05] [text-shadow:0_2px_12px_rgba(0,0,0,0.4)]">{p.teamName}</div>
             </div>
             {p.stats && (
               <div
@@ -172,22 +187,40 @@ export function ShowGraphic(p: GraphicProps) {
               className="flex items-center gap-[0.5em]"
               style={{ opacity: anim(p.topicMs, 150, 450), transform: `translateX(${(1 - anim(p.topicMs, 150, 450)) * -1.5}em)` }}
             >
-              <span className="text-[2em] leading-none">{p.icon}</span>
+              <div key={p.headline} className="h-[2.6em] w-[2.6em] shrink-0">{p.topicArt}</div>
               <div className="min-w-0">
                 <div className="text-[0.62em] font-bold uppercase tracking-[0.28em] text-orange-600">The Breakdown</div>
                 <div className="text-[1.55em] font-extrabold leading-[1.1] text-[#1e3a5f] [text-wrap:balance]">{noBreak(p.headline)}</div>
               </div>
-              <div className="ml-auto shrink-0 text-right">
-                <div className="text-[0.62em] font-bold uppercase tracking-[0.18em] text-slate-500">{p.teamName}</div>
-                {p.stats && <div className="text-[1.2em] font-extrabold tabular-nums text-[#1e3a5f]">{noBreak(p.stats.record)}</div>}
+              <div className="ml-auto flex shrink-0 items-center gap-[0.5em] text-right">
+                <div>
+                  <div className="text-[0.62em] font-bold uppercase tracking-[0.18em] text-slate-500">{p.teamName}</div>
+                  {p.stats && <div className="text-[1.2em] font-extrabold tabular-nums text-[#1e3a5f]">{noBreak(p.stats.record)}</div>}
+                </div>
+                <div className="h-[2em] w-[2em] shrink-0">{p.logo}</div>
               </div>
             </div>
-            <div
-              key={p.text || 'empty'}
-              className="my-auto py-[0.6em] text-[1.45em] font-bold leading-snug text-[#0f1f35] [text-wrap:balance]"
-              style={{ opacity: anim(p.lineMs, 120, 380), transform: `translateY(${(1 - anim(p.lineMs, 120, 380)) * 0.5}em)` }}
-            >
-              {p.text && <><span className="mr-[0.15em] text-orange-600">&ldquo;</span>{p.text}<span className="text-orange-600">&rdquo;</span></>}
+            <div className="my-auto flex items-center gap-[1.1em] py-[0.6em]">
+              {p.player && (
+                <div
+                  key={p.player.key}
+                  className="flex shrink-0 items-center gap-[0.6em] rounded-[0.8em] bg-white py-[0.45em] pl-[0.45em] pr-[0.9em] shadow-[0_6px_18px_rgba(15,23,42,0.12)]"
+                  style={{ opacity: anim(p.playerMs, 0, 350), transform: `translateX(${(1 - anim(p.playerMs, 0, 400)) * -1.2}em)` }}
+                >
+                  <div className="h-[3.6em] w-[3.6em] shrink-0 overflow-hidden rounded-full border-[0.12em] border-orange-500 bg-slate-100">{p.player.art}</div>
+                  <div className="leading-tight">
+                    <div className="text-[1em] font-extrabold text-[#1e3a5f]">{p.player.name}</div>
+                    <div className="text-[0.62em] font-bold uppercase tracking-[0.14em] text-slate-500">{p.player.detail}</div>
+                  </div>
+                </div>
+              )}
+              <div
+                key={p.text || 'empty'}
+                className="min-w-0 text-[1.45em] font-bold leading-snug text-[#0f1f35] [text-wrap:balance]"
+                style={{ opacity: anim(p.lineMs, 120, 380), transform: `translateY(${(1 - anim(p.lineMs, 120, 380)) * 0.5}em)` }}
+              >
+                {p.text && <><span className="mr-[0.15em] text-orange-600">&ldquo;</span>{p.text}<span className="text-orange-600">&rdquo;</span></>}
+              </div>
             </div>
             {p.stats ? (
               <div className="grid grid-cols-5 gap-[0.8em]">

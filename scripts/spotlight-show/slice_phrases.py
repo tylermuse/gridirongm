@@ -6,6 +6,7 @@ Writes <worktree>/public/show/phrases/<id>.mp4, <worktree>/public/show/ordinals/
 and <worktree>/src/lib/spotlight/phraseManifest.json.
 """
 import json, os, shutil, subprocess, sys
+from freeze_bg import freeze
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PRE, POST = 0.30, 0.40   # padding around each phrase (gaps are 0.9s)
@@ -31,7 +32,20 @@ def main(wt):
     os.makedirs(out, exist_ok=True)
     manifest = []
     for take, t in takes.items():
-        vid = os.path.join(ROOT, "takes", take + ".mp4")
+        if os.environ.get("ONLY") and take not in os.environ["ONLY"].split(","):
+            force_this = False
+        else:
+            force_this = "--force" in sys.argv
+        raw = os.path.join(ROOT, "takes", take + ".mp4")
+        if not os.path.exists(raw):
+            print(f"{take}: no render yet — skipped (its phrases stay out of the manifest)")
+            continue
+        # The generators animate the football player on the studio TVs;
+        # freeze those screens to the first frame before cutting.
+        vid = os.path.join(ROOT, "takes", take + ".frozen.mp4")
+        if not os.path.exists(vid):
+            print("freezing studio screens in", take, flush=True)
+            freeze(raw, vid)
         vd = dur(vid)
         drift = vd - t["duration"]
         print(f"{take}: video {vd:.2f}s vs audio {t['duration']:.2f}s (drift {drift:+.2f}s)")
@@ -41,11 +55,11 @@ def main(wt):
             a = max(0.0, e["start"] - PRE)
             b = min(vd, e["end"] + POST)
             dst = os.path.join(out, e["id"] + ".mp4")
-            if os.path.exists(dst) and "--force" not in sys.argv:
+            if os.path.exists(dst) and not force_this:
                 pass  # already cut (keeps committed clips byte-stable)
             else:
               subprocess.check_call(["ffmpeg", "-v", "error", "-y", "-ss", f"{a:.3f}", "-to", f"{b:.3f}", "-i", vid,
-                                   "-vf", "scale=960:-2", "-c:v", "libx264", "-preset", "slow", "-crf", "26",
+                                   "-vf", "scale=1280:-2", "-c:v", "libx264", "-preset", "medium", "-crf", "23",
                                    "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", dst])
             p = bank[e["id"]]
             kind = p.get("kind") or "stat"

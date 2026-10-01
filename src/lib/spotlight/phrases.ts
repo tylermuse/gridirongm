@@ -11,7 +11,11 @@ import manifest from './phraseManifest.json';
 import type { ShowStatKey } from './teamStats';
 
 export type PhraseHost = 'marcus' | 'tony';
-export type PhraseKind = 'stat' | 'record' | 'agree' | 'disagree' | 'skeptical' | 'pivot' | 'hype';
+export type PhraseKind =
+  | 'stat' | 'record' | 'agree' | 'disagree' | 'skeptical' | 'pivot' | 'hype'
+  // Longer on-camera dialogue: stat riffs (6–8s, rank slot), replies to the
+  // other host, sign-offs, and a take/answer pair for stat-less topics.
+  | 'riff' | 'reply_agree' | 'reply_push' | 'button' | 'open' | 'answer';
 export type PhraseTone = 'good' | 'bad' | 'mid';
 
 export interface Phrase {

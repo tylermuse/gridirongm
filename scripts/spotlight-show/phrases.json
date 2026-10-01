@@ -525,6 +525,390 @@
    "kind": "skeptical",
    "text": "I don't trust it. Not yet.",
    "take": "tony_c"
+  },
+  {
+   "id": "tony_ppg_bad_riff",
+   "host": "tony",
+   "kind": "riff",
+   "stat": "ppg",
+   "tone": "bad",
+   "text": "{rank} in scoring? Come on! You can't win in this league putting up nothing every Sunday. Somebody has to fix this offense, and fast!",
+   "take": "tony_d"
+  },
+  {
+   "id": "tony_ppg_good_riff",
+   "host": "tony",
+   "kind": "riff",
+   "stat": "ppg",
+   "tone": "good",
+   "text": "{rank} in scoring! This offense is a problem, Marcus. They're putting up points on everybody, and nobody has an answer!",
+   "take": "tony_d"
+  },
+  {
+   "id": "tony_ppg_mid_riff",
+   "host": "tony",
+   "kind": "riff",
+   "stat": "ppg",
+   "tone": "mid",
+   "text": "{rank} in scoring. That's just okay, and okay isn't good enough for me. I want this offense to go get it!",
+   "take": "tony_d"
+  },
+  {
+   "id": "tony_pag_bad_riff",
+   "host": "tony",
+   "kind": "riff",
+   "stat": "pag",
+   "tone": "bad",
+   "text": "{rank} in points allowed! That defense is getting pushed around every single week. Somebody has to step up and make a tackle!",
+   "take": "tony_d"
+  },
+  {
+   "id": "tony_pag_good_riff",
+   "host": "tony",
+   "kind": "riff",
+   "stat": "pag",
+   "tone": "good",
+   "text": "{rank} in points allowed! That defense is nasty, Marcus. Nobody wants to line up against them right now. Nobody!",
+   "take": "tony_d"
+  },
+  {
+   "id": "tony_pag_mid_riff",
+   "host": "tony",
+   "kind": "riff",
+   "stat": "pag",
+   "tone": "mid",
+   "text": "{rank} in points allowed. Middle of the pack. That's not a defense that scares anybody, and it needs to be.",
+   "take": "tony_d"
+  },
+  {
+   "id": "tony_pass_bad_riff",
+   "host": "tony",
+   "kind": "riff",
+   "stat": "pass",
+   "tone": "bad",
+   "text": "{rank} in passing? You're telling me they can't throw the football? Take a shot downfield! Do something!",
+   "take": "tony_e"
+  },
+  {
+   "id": "tony_pass_good_riff",
+   "host": "tony",
+   "kind": "riff",
+   "stat": "pass",
+   "tone": "good",
+   "text": "{rank} in passing yards! When this team airs it out, it is must-see TV. Let it fly!",
+   "take": "tony_e"
+  },
+  {
+   "id": "tony_pass_mid_riff",
+   "host": "tony",
+   "kind": "riff",
+   "stat": "pass",
+   "tone": "mid",
+   "text": "{rank} in passing. It's not bad, it's not great, it's just there. I want to see them open it up!",
+   "take": "tony_e"
+  },
+  {
+   "id": "tony_rush_bad_riff",
+   "host": "tony",
+   "kind": "riff",
+   "stat": "rush",
+   "tone": "bad",
+   "text": "{rank} in rushing! You have to be able to run the football. It's that simple. It is that simple!",
+   "take": "tony_e"
+  },
+  {
+   "id": "tony_rush_good_riff",
+   "host": "tony",
+   "kind": "riff",
+   "stat": "rush",
+   "tone": "good",
+   "text": "{rank} in rushing! They line up, they run it right at you, and they dare you to stop it. I love it!",
+   "take": "tony_e"
+  },
+  {
+   "id": "tony_rush_mid_riff",
+   "host": "tony",
+   "kind": "riff",
+   "stat": "rush",
+   "tone": "mid",
+   "text": "{rank} in rushing. That's not physical enough for me. Run the ball, set the tone, own the line!",
+   "take": "tony_e"
+  },
+  {
+   "id": "marcus_ppg_bad_riff",
+   "host": "marcus",
+   "kind": "riff",
+   "stat": "ppg",
+   "tone": "bad",
+   "text": "They're {rank} in scoring. And when you look closer, it's the red zone. They move the ball, then they stall. That has to change.",
+   "take": "marcus_d"
+  },
+  {
+   "id": "marcus_ppg_good_riff",
+   "host": "marcus",
+   "kind": "riff",
+   "stat": "ppg",
+   "tone": "good",
+   "text": "They're {rank} in scoring, and it's not a fluke. They're efficient on early downs, and they finish drives. That's a real offense.",
+   "take": "marcus_d"
+  },
+  {
+   "id": "marcus_ppg_mid_riff",
+   "host": "marcus",
+   "kind": "riff",
+   "stat": "ppg",
+   "tone": "mid",
+   "text": "They're {rank} in scoring. Right in the middle. The question is whether this offense has another gear, and I'm not sure it does.",
+   "take": "marcus_d"
+  },
+  {
+   "id": "marcus_pag_bad_riff",
+   "host": "marcus",
+   "kind": "riff",
+   "stat": "pag",
+   "tone": "bad",
+   "text": "They're {rank} in points allowed. The issue is third down. They get teams in long yardage, and they still can't get off the field.",
+   "take": "marcus_d"
+  },
+  {
+   "id": "marcus_pag_good_riff",
+   "host": "marcus",
+   "kind": "riff",
+   "stat": "pag",
+   "tone": "good",
+   "text": "They're {rank} in points allowed. This defense keeps them in every game, and that's a foundation you can build a season on.",
+   "take": "marcus_d"
+  },
+  {
+   "id": "marcus_pag_mid_riff",
+   "host": "marcus",
+   "kind": "riff",
+   "stat": "pag",
+   "tone": "mid",
+   "text": "They're {rank} in points allowed. Average. Not a liability, not a strength. The offense is going to have to carry them.",
+   "take": "marcus_d"
+  },
+  {
+   "id": "marcus_pass_bad_riff",
+   "host": "marcus",
+   "kind": "riff",
+   "stat": "pass",
+   "tone": "bad",
+   "text": "They're {rank} in passing yards. The protection breaks down, the timing is off, and it all shows up in the numbers.",
+   "take": "marcus_e"
+  },
+  {
+   "id": "marcus_pass_good_riff",
+   "host": "marcus",
+   "kind": "riff",
+   "stat": "pass",
+   "tone": "good",
+   "text": "They're {rank} in passing yards. The quarterback is seeing the field, and the receivers are winning their matchups.",
+   "take": "marcus_e"
+  },
+  {
+   "id": "marcus_pass_mid_riff",
+   "host": "marcus",
+   "kind": "riff",
+   "stat": "pass",
+   "tone": "mid",
+   "text": "They're {rank} in passing. It's functional. But functional doesn't scare defensive coordinators in this league.",
+   "take": "marcus_e"
+  },
+  {
+   "id": "marcus_rush_bad_riff",
+   "host": "marcus",
+   "kind": "riff",
+   "stat": "rush",
+   "tone": "bad",
+   "text": "They're {rank} in rushing. When you can't run the ball, play action dies, and the whole offense gets predictable.",
+   "take": "marcus_e"
+  },
+  {
+   "id": "marcus_rush_good_riff",
+   "host": "marcus",
+   "kind": "riff",
+   "stat": "rush",
+   "tone": "good",
+   "text": "They're {rank} in rushing. They're winning at the line of scrimmage, and it's wearing defenses down late in games.",
+   "take": "marcus_e"
+  },
+  {
+   "id": "marcus_rush_mid_riff",
+   "host": "marcus",
+   "kind": "riff",
+   "stat": "rush",
+   "tone": "mid",
+   "text": "They're {rank} in rushing. Serviceable. But there's an opportunity here to lean on the run game a lot more.",
+   "take": "marcus_e"
+  },
+  {
+   "id": "marcus_reply_agree_1",
+   "host": "marcus",
+   "kind": "reply_agree",
+   "text": "I don't disagree, Tony. The numbers back you up on this one.",
+   "take": "marcus_f"
+  },
+  {
+   "id": "marcus_reply_agree_2",
+   "host": "marcus",
+   "kind": "reply_agree",
+   "text": "For once, Tony, I'm right there with you. That's a fair point.",
+   "take": "marcus_f"
+  },
+  {
+   "id": "marcus_reply_push_1",
+   "host": "marcus",
+   "kind": "reply_push",
+   "text": "Okay, easy. I get the emotion, but let's not overreact to one number.",
+   "take": "marcus_f"
+  },
+  {
+   "id": "marcus_reply_push_2",
+   "host": "marcus",
+   "kind": "reply_push",
+   "text": "That's a little much, Tony. There's more context here than one stat.",
+   "take": "marcus_f"
+  },
+  {
+   "id": "marcus_reply_push_3",
+   "host": "marcus",
+   "kind": "reply_push",
+   "text": "I hear you. But I want to see a bigger sample before I buy in completely.",
+   "take": "marcus_f"
+  },
+  {
+   "id": "marcus_button_1",
+   "host": "marcus",
+   "kind": "button",
+   "text": "We'll see. The numbers will tell the story.",
+   "take": "marcus_f"
+  },
+  {
+   "id": "marcus_button_2",
+   "host": "marcus",
+   "kind": "button",
+   "text": "That's the one to watch going forward.",
+   "take": "marcus_f"
+  },
+  {
+   "id": "marcus_button_3",
+   "host": "marcus",
+   "kind": "button",
+   "text": "Fair enough. Let's see how it plays out.",
+   "take": "marcus_f"
+  },
+  {
+   "id": "marcus_answer_1",
+   "host": "marcus",
+   "kind": "answer",
+   "text": "Let's pump the brakes. It's a long season, and one storyline doesn't define it.",
+   "take": "marcus_f"
+  },
+  {
+   "id": "marcus_answer_2",
+   "host": "marcus",
+   "kind": "answer",
+   "text": "It makes sense on paper. The execution is what matters now.",
+   "take": "marcus_f"
+  },
+  {
+   "id": "marcus_answer_3",
+   "host": "marcus",
+   "kind": "answer",
+   "text": "I understand the excitement, but the details matter here, and there are real questions.",
+   "take": "marcus_f"
+  },
+  {
+   "id": "marcus_answer_4",
+   "host": "marcus",
+   "kind": "answer",
+   "text": "I'd be patient. The smart teams don't make panic decisions.",
+   "take": "marcus_f"
+  },
+  {
+   "id": "tony_reply_agree_1",
+   "host": "tony",
+   "kind": "reply_agree",
+   "text": "See, that's what I'm talking about! Even Marcus sees it!",
+   "take": "tony_f"
+  },
+  {
+   "id": "tony_reply_agree_2",
+   "host": "tony",
+   "kind": "reply_agree",
+   "text": "Thank you! Finally, Marcus, we agree on something!",
+   "take": "tony_f"
+  },
+  {
+   "id": "tony_reply_push_1",
+   "host": "tony",
+   "kind": "reply_push",
+   "text": "Marcus, you're overthinking it! Just watch the games, man!",
+   "take": "tony_f"
+  },
+  {
+   "id": "tony_reply_push_2",
+   "host": "tony",
+   "kind": "reply_push",
+   "text": "Come on! Numbers don't tell you everything. I trust what I see!",
+   "take": "tony_f"
+  },
+  {
+   "id": "tony_reply_push_3",
+   "host": "tony",
+   "kind": "reply_push",
+   "text": "Nah. I've seen this movie before, and I know how it ends.",
+   "take": "tony_f"
+  },
+  {
+   "id": "tony_button_1",
+   "host": "tony",
+   "kind": "button",
+   "text": "Mark my words. Mark my words!",
+   "take": "tony_f"
+  },
+  {
+   "id": "tony_button_2",
+   "host": "tony",
+   "kind": "button",
+   "text": "That's all I'm saying!",
+   "take": "tony_f"
+  },
+  {
+   "id": "tony_button_3",
+   "host": "tony",
+   "kind": "button",
+   "text": "I said what I said.",
+   "take": "tony_f"
+  },
+  {
+   "id": "tony_open_1",
+   "host": "tony",
+   "kind": "open",
+   "text": "I'll say it. This is a big moment for this franchise, and they cannot get it wrong!",
+   "take": "tony_f"
+  },
+  {
+   "id": "tony_open_2",
+   "host": "tony",
+   "kind": "open",
+   "text": "Everybody's talking about this, and they should be. This one matters!",
+   "take": "tony_f"
+  },
+  {
+   "id": "tony_open_3",
+   "host": "tony",
+   "kind": "open",
+   "text": "I'm not buying it. Not yet. Show me on Sunday, then we'll talk!",
+   "take": "tony_f"
+  },
+  {
+   "id": "tony_open_4",
+   "host": "tony",
+   "kind": "open",
+   "text": "Let me tell you something. This is the storyline of the season right now!",
+   "take": "tony_f"
   }
  ]
 }
