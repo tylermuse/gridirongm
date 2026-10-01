@@ -1751,6 +1751,1077 @@
    "text": "I don't know, Tony. I just don't know.",
    "take": "marcus_i",
    "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_t_def_sitting",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "defense"
+   ],
+   "text": "Can we talk about the defense, though? Because I've been sitting on this one.",
+   "take": "tony_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_t_off_thoughts",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "offense"
+   ],
+   "text": "Okay, let's talk about the offense, because I have thoughts.",
+   "take": "tony_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_t_qb_waiting",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "qb"
+   ],
+   "text": "Let's get to the quarterback. You know I've been waiting for this.",
+   "take": "tony_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_t_coach_second",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "coaching"
+   ],
+   "text": "I want to talk about the coaching staff for a second.",
+   "take": "tony_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_t_draft_fun",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "draft"
+   ],
+   "text": "Let's talk draft, because this is where it gets fun.",
+   "take": "tony_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_t_fa_decisions",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "free_agency"
+   ],
+   "text": "Free agency. Let's go there, because they've got some decisions to make.",
+   "take": "tony_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_t_run_off",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "offense"
+   ],
+   "text": "Can we talk about the run game? Because something's off.",
+   "writerOnly": true,
+   "take": "tony_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_t_oline_have_to",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "oline"
+   ],
+   "text": "We have to talk about the offensive line. We have to.",
+   "take": "tony_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_t_next_big",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "schedule"
+   ],
+   "text": "Let's look ahead, because this next one is a big one.",
+   "take": "tony_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_t_playoffs_only",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "playoffs"
+   ],
+   "text": "Let's talk playoffs, because that's the only thing that matters now.",
+   "writerOnly": true,
+   "take": "tony_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_t_injury_changes",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "injury"
+   ],
+   "text": "Let's talk about the injury, because it changes everything.",
+   "writerOnly": true,
+   "take": "tony_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_t_everybody_asking",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Okay. Let's get to the thing everybody's been asking me about.",
+   "take": "tony_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_back_up",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Wait, wait, wait. Back up a second.",
+   "take": "tony_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_cant_move_on",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "No, hold on. You can't just say that and move on.",
+   "take": "tony_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_exactly_talking",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "That's exactly what I'm talking about!",
+   "take": "tony_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_love_that",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I love that. I really do.",
+   "take": "tony_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_respect_disagree",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I respect it. I just don't agree with it.",
+   "take": "tony_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_watched_games",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I don't need the numbers for this one. I watched the games.",
+   "take": "tony_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_listen",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Listen to me. Listen to me.",
+   "take": "tony_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_serious",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I'm being serious right now.",
+   "take": "tony_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_know_better",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Come on, man. You know better than that.",
+   "take": "tony_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_believe_that",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "You really believe that? Okay.",
+   "take": "tony_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_fair_fair",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "That's fair. That's fair.",
+   "take": "tony_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_half_right",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "You're half right, and I'll tell you which half.",
+   "take": "tony_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_what_do_they_do",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "So what do they do? Seriously, what do they do?",
+   "take": "tony_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_cant_argue",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I can't even argue with that.",
+   "take": "tony_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_told_you",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I told you. I told you weeks ago.",
+   "writerOnly": true,
+   "take": "tony_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_nope",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Nope. Not buying it.",
+   "take": "tony_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_ahead",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Slow down. We're getting ahead of ourselves.",
+   "take": "tony_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_r_not_enough",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "That's a big deal. People aren't talking about that enough.",
+   "take": "tony_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_k_believer",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I'm a believer. I'll say it right now, I'm a believer.",
+   "take": "tony_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_k_show_me",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I'm not there yet. Show me more.",
+   "take": "tony_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_k_ceiling",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "This team's ceiling is a lot higher than people think.",
+   "writerOnly": true,
+   "take": "tony_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_k_worried",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I'm worried. I'm not going to pretend I'm not.",
+   "take": "tony_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_k_fun",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "This team is fun to watch right now. That matters.",
+   "tone": "good",
+   "take": "tony_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_k_frustrating",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "It's frustrating, because the talent is there.",
+   "tone": "bad",
+   "take": "tony_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_k_no_excuses",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "The pressure is on now. No more excuses.",
+   "take": "tony_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_k_have_to",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "schedule"
+   ],
+   "text": "They have to win this one. Not want to. Have to.",
+   "take": "tony_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_k_young_play",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "young"
+   ],
+   "text": "Give the young guys a chance. Let them play.",
+   "take": "tony_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_k_vets_earn",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "veteran"
+   ],
+   "text": "This is where your veterans earn their money.",
+   "take": "tony_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_k_best_player",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "When your best player plays like that, you're tough to beat.",
+   "writerOnly": true,
+   "take": "tony_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_k_trust",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Trust the guy. He's earned that much.",
+   "writerOnly": true,
+   "take": "tony_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_c_know_what_i_think",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "We'll see. But I know what I think.",
+   "take": "tony_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_c_remember",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Remember I said this.",
+   "take": "tony_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_c_all_im_saying",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "And that's all I'm going to say about that.",
+   "take": "tony_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_c_put_money",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I'd put money on them. I really would.",
+   "take": "tony_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_c_nobody_knows",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "That's the question nobody can answer yet.",
+   "take": "tony_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_c_c_go_ahead",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Alright, I'm done. Go ahead.",
+   "take": "tony_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_t_def_decided",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "defense"
+   ],
+   "text": "Let's turn to the defense, because that's where this gets decided.",
+   "take": "marcus_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_t_off_minute",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "offense"
+   ],
+   "text": "Let's talk about the offense for a minute.",
+   "take": "marcus_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_t_qb_runs",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "qb"
+   ],
+   "text": "Let's get to the quarterback, because everything runs through him.",
+   "take": "marcus_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_t_coach_overlooked",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "coaching"
+   ],
+   "text": "I want to talk about the coaching, because it's been overlooked.",
+   "writerOnly": true,
+   "take": "marcus_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_t_draft_big",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "draft"
+   ],
+   "text": "Let's talk about the draft, because this is a big one for them.",
+   "take": "marcus_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_t_fa_start",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "free_agency"
+   ],
+   "text": "Let's look at free agency, because the decisions start now.",
+   "take": "marcus_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_t_run_game",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "offense"
+   ],
+   "text": "Let's talk about the run game.",
+   "take": "marcus_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_t_oline",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "oline"
+   ],
+   "text": "We should talk about the offensive line.",
+   "take": "marcus_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_t_next_one",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "schedule"
+   ],
+   "text": "Let's look ahead to the next one.",
+   "take": "marcus_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_t_playoff_picture",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "playoffs"
+   ],
+   "text": "Let's talk about the playoff picture.",
+   "take": "marcus_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_t_one_number",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Let me give you one number that explains a lot of this.",
+   "take": "marcus_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_t_zoom_out",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I want to zoom out for a second.",
+   "take": "marcus_j",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_give_you",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "That's a fair point. I'll give you that.",
+   "take": "marcus_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_not_sure",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I'm not sure I agree with that.",
+   "take": "marcus_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_walk_me",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Explain that to me. Walk me through it.",
+   "take": "marcus_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_whats_changed",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Why, though? What's changed?",
+   "take": "marcus_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_careful",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I'd be careful with that.",
+   "take": "marcus_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_both_true",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Both things can be true.",
+   "take": "marcus_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_small_sample",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "It's a small sample. I want to see more.",
+   "take": "marcus_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_interesting",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "That's interesting. I hadn't thought about it that way.",
+   "take": "marcus_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_say_more",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Say more about that.",
+   "take": "marcus_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_energy",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Tony, I love the energy. I'm just not there.",
+   "take": "marcus_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_right_about_that",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "You're right. You're right about that.",
+   "take": "marcus_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_partly",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Partly. I'd say partly.",
+   "take": "marcus_k",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_context",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "There's some context missing there.",
+   "take": "marcus_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_whole_story",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Sure. But that's not the whole story.",
+   "take": "marcus_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_dignify",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I'm not going to dignify that.",
+   "take": "marcus_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_agree_rare",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I agree with you, which doesn't happen often.",
+   "take": "marcus_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_one_game",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Let's not overreact to one game.",
+   "take": "marcus_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_r_one_to_watch",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "That's the one to watch, for me.",
+   "take": "marcus_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_k_impressed",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I've been impressed. I'll say that.",
+   "take": "marcus_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_k_concerned",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I'm concerned. Not panicking. Concerned.",
+   "take": "marcus_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_k_process",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I like the process here, even when the results don't show it.",
+   "writerOnly": true,
+   "take": "marcus_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_k_identity",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "They need an identity. Right now I'm not sure what it is.",
+   "tone": "bad",
+   "take": "marcus_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_k_well_built",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "This is a well-built roster. It shows.",
+   "writerOnly": true,
+   "take": "marcus_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_k_details",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "It's the details. Penalties, third downs, turnovers.",
+   "take": "marcus_l",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_k_red_zone",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "offense"
+   ],
+   "text": "Red zone efficiency is the difference for me.",
+   "take": "marcus_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_k_turnovers",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Win the turnover battle and most of this takes care of itself.",
+   "take": "marcus_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_k_trenches",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "oline"
+   ],
+   "text": "It comes down to the trenches. It usually does.",
+   "take": "marcus_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_k_depth",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "injury"
+   ],
+   "text": "Depth is going to matter the rest of the way.",
+   "take": "marcus_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_k_patience",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "rebuild"
+   ],
+   "text": "Patience. That's the word for this team right now.",
+   "tone": "bad",
+   "take": "marcus_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_k_window",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "playoffs"
+   ],
+   "text": "Their window is open. You have to take advantage of it.",
+   "tone": "good",
+   "take": "marcus_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_c_plays_out",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "We'll see how it plays out.",
+   "take": "marcus_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_c_watching",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "That's what I'll be watching.",
+   "take": "marcus_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_c_land",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "That's where I land on it.",
+   "take": "marcus_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_c_question",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "That's the question for me.",
+   "take": "marcus_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_c_keep_going",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Let's keep going.",
+   "take": "marcus_m",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_c_c_leave_it",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I'll leave it there.",
+   "take": "marcus_m",
+   "model": "eleven_v3"
   }
  ]
 }

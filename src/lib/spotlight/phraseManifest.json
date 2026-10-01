@@ -2954,5 +2954,1460 @@
   "tags": [
    "reaction"
   ]
+ },
+ {
+  "id": "tony_c_t_def_sitting",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Can we talk about the defense, though? Because I've been sitting on this one.",
+  "src": "/show/phrases/tony_c_t_def_sitting.mp4",
+  "duration": 3.8,
+  "speech": {
+   "start": 0.32,
+   "end": 3.3
+  },
+  "tags": [
+   "defense"
+  ]
+ },
+ {
+  "id": "tony_c_t_off_thoughts",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Okay, let's talk about the offense, because I have thoughts.",
+  "src": "/show/phrases/tony_c_t_off_thoughts.mp4",
+  "duration": 3.76,
+  "speech": {
+   "start": 0.32,
+   "end": 3.34
+  },
+  "tags": [
+   "offense"
+  ]
+ },
+ {
+  "id": "tony_c_t_qb_waiting",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Let's get to the quarterback. You know I've been waiting for this.",
+  "src": "/show/phrases/tony_c_t_qb_waiting.mp4",
+  "duration": 3.48,
+  "speech": {
+   "start": 0.34,
+   "end": 3.02
+  },
+  "tags": [
+   "qb"
+  ]
+ },
+ {
+  "id": "tony_c_t_coach_second",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I want to talk about the coaching staff for a second.",
+  "src": "/show/phrases/tony_c_t_coach_second.mp4",
+  "duration": 3.12,
+  "speech": {
+   "start": 0.4,
+   "end": 2.66
+  },
+  "tags": [
+   "coaching"
+  ]
+ },
+ {
+  "id": "tony_c_t_draft_fun",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Let's talk draft, because this is where it gets fun.",
+  "src": "/show/phrases/tony_c_t_draft_fun.mp4",
+  "duration": 3.56,
+  "speech": {
+   "start": 0.36,
+   "end": 3.12
+  },
+  "tags": [
+   "draft"
+  ]
+ },
+ {
+  "id": "tony_c_t_fa_decisions",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Free agency. Let's go there, because they've got some decisions to make.",
+  "src": "/show/phrases/tony_c_t_fa_decisions.mp4",
+  "duration": 4.64,
+  "speech": {
+   "start": 0.38,
+   "end": 4.04
+  },
+  "tags": [
+   "free_agency"
+  ]
+ },
+ {
+  "id": "tony_c_t_run_off",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Can we talk about the run game? Because something's off.",
+  "src": "/show/phrases/tony_c_t_run_off.mp4",
+  "duration": 3.48,
+  "speech": {
+   "start": 0.36,
+   "end": 3.02
+  },
+  "tags": [
+   "offense"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_c_t_oline_have_to",
+  "host": "tony",
+  "kind": "topical",
+  "text": "We have to talk about the offensive line. We have to.",
+  "src": "/show/phrases/tony_c_t_oline_have_to.mp4",
+  "duration": 3.84,
+  "speech": {
+   "start": 0.36,
+   "end": 3.24
+  },
+  "tags": [
+   "oline"
+  ]
+ },
+ {
+  "id": "tony_c_t_next_big",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Let's look ahead, because this next one is a big one.",
+  "src": "/show/phrases/tony_c_t_next_big.mp4",
+  "duration": 4.04,
+  "speech": {
+   "start": 0.34,
+   "end": 3.5
+  },
+  "tags": [
+   "schedule"
+  ]
+ },
+ {
+  "id": "tony_c_t_playoffs_only",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Let's talk playoffs, because that's the only thing that matters now.",
+  "src": "/show/phrases/tony_c_t_playoffs_only.mp4",
+  "duration": 3.92,
+  "speech": {
+   "start": 0.38,
+   "end": 3.5
+  },
+  "tags": [
+   "playoffs"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_c_t_injury_changes",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Let's talk about the injury, because it changes everything.",
+  "src": "/show/phrases/tony_c_t_injury_changes.mp4",
+  "duration": 3.56,
+  "speech": {
+   "start": 0.38,
+   "end": 3.08
+  },
+  "tags": [
+   "injury"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_c_t_everybody_asking",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Okay. Let's get to the thing everybody's been asking me about.",
+  "src": "/show/phrases/tony_c_t_everybody_asking.mp4",
+  "duration": 3.98,
+  "speech": {
+   "start": 0.34,
+   "end": 3.56
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_back_up",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Wait, wait, wait. Back up a second.",
+  "src": "/show/phrases/tony_c_r_back_up.mp4",
+  "duration": 2.28,
+  "speech": {
+   "start": 0.36,
+   "end": 1.76
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_cant_move_on",
+  "host": "tony",
+  "kind": "topical",
+  "text": "No, hold on. You can't just say that and move on.",
+  "src": "/show/phrases/tony_c_r_cant_move_on.mp4",
+  "duration": 3.04,
+  "speech": {
+   "start": 0.36,
+   "end": 2.62
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_exactly_talking",
+  "host": "tony",
+  "kind": "topical",
+  "text": "That's exactly what I'm talking about!",
+  "src": "/show/phrases/tony_c_r_exactly_talking.mp4",
+  "duration": 2.36,
+  "speech": {
+   "start": 0.38,
+   "end": 1.9
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_love_that",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I love that. I really do.",
+  "src": "/show/phrases/tony_c_r_love_that.mp4",
+  "duration": 2.56,
+  "speech": {
+   "start": 0.34,
+   "end": 2.14
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_respect_disagree",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I respect it. I just don't agree with it.",
+  "src": "/show/phrases/tony_c_r_respect_disagree.mp4",
+  "duration": 3.24,
+  "speech": {
+   "start": 0.36,
+   "end": 2.78
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_watched_games",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I don't need the numbers for this one. I watched the games.",
+  "src": "/show/phrases/tony_c_r_watched_games.mp4",
+  "duration": 3.92,
+  "speech": {
+   "start": 0.36,
+   "end": 3.48
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_listen",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Listen to me. Listen to me.",
+  "src": "/show/phrases/tony_c_r_listen.mp4",
+  "duration": 2.36,
+  "speech": {
+   "start": 0.38,
+   "end": 1.88
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_serious",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I'm being serious right now.",
+  "src": "/show/phrases/tony_c_r_serious.mp4",
+  "duration": 2.0,
+  "speech": {
+   "start": 0.4,
+   "end": 1.5
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_know_better",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Come on, man. You know better than that.",
+  "src": "/show/phrases/tony_c_r_know_better.mp4",
+  "duration": 2.84,
+  "speech": {
+   "start": 0.4,
+   "end": 2.38
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_believe_that",
+  "host": "tony",
+  "kind": "topical",
+  "text": "You really believe that? Okay.",
+  "src": "/show/phrases/tony_c_r_believe_that.mp4",
+  "duration": 2.24,
+  "speech": {
+   "start": 0.44,
+   "end": 1.8
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_fair_fair",
+  "host": "tony",
+  "kind": "topical",
+  "text": "That's fair. That's fair.",
+  "src": "/show/phrases/tony_c_r_fair_fair.mp4",
+  "duration": 2.2,
+  "speech": {
+   "start": 0.46,
+   "end": 1.58
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_half_right",
+  "host": "tony",
+  "kind": "topical",
+  "text": "You're half right, and I'll tell you which half.",
+  "src": "/show/phrases/tony_c_r_half_right.mp4",
+  "duration": 2.7,
+  "speech": {
+   "start": 0.38,
+   "end": 2.3
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_what_do_they_do",
+  "host": "tony",
+  "kind": "topical",
+  "text": "So what do they do? Seriously, what do they do?",
+  "src": "/show/phrases/tony_c_r_what_do_they_do.mp4",
+  "duration": 4.6,
+  "speech": {
+   "start": 0.32,
+   "end": 4.14
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_cant_argue",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I can't even argue with that.",
+  "src": "/show/phrases/tony_c_r_cant_argue.mp4",
+  "duration": 2.16,
+  "speech": {
+   "start": 0.34,
+   "end": 1.74
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_told_you",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I told you. I told you weeks ago.",
+  "src": "/show/phrases/tony_c_r_told_you.mp4",
+  "duration": 3.08,
+  "speech": {
+   "start": 0.38,
+   "end": 2.6
+  },
+  "tags": [
+   "reaction"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_c_r_nope",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Nope. Not buying it.",
+  "src": "/show/phrases/tony_c_r_nope.mp4",
+  "duration": 2.32,
+  "speech": {
+   "start": 0.32,
+   "end": 1.9
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_ahead",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Slow down. We're getting ahead of ourselves.",
+  "src": "/show/phrases/tony_c_r_ahead.mp4",
+  "duration": 3.32,
+  "speech": {
+   "start": 0.3,
+   "end": 2.84
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_not_enough",
+  "host": "tony",
+  "kind": "topical",
+  "text": "That's a big deal. People aren't talking about that enough.",
+  "src": "/show/phrases/tony_c_r_not_enough.mp4",
+  "duration": 3.84,
+  "speech": {
+   "start": 0.34,
+   "end": 3.42
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_k_believer",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I'm a believer. I'll say it right now, I'm a believer.",
+  "src": "/show/phrases/tony_c_k_believer.mp4",
+  "duration": 3.56,
+  "speech": {
+   "start": 0.34,
+   "end": 3.08
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_k_show_me",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I'm not there yet. Show me more.",
+  "src": "/show/phrases/tony_c_k_show_me.mp4",
+  "duration": 2.72,
+  "speech": {
+   "start": 0.38,
+   "end": 2.24
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_k_ceiling",
+  "host": "tony",
+  "kind": "topical",
+  "text": "This team's ceiling is a lot higher than people think.",
+  "src": "/show/phrases/tony_c_k_ceiling.mp4",
+  "duration": 3.48,
+  "speech": {
+   "start": 0.4,
+   "end": 2.92
+  },
+  "tags": [
+   "reaction"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_c_k_worried",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I'm worried. I'm not going to pretend I'm not.",
+  "src": "/show/phrases/tony_c_k_worried.mp4",
+  "duration": 2.96,
+  "speech": {
+   "start": 0.38,
+   "end": 2.54
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_k_fun",
+  "host": "tony",
+  "kind": "topical",
+  "text": "This team is fun to watch right now. That matters.",
+  "src": "/show/phrases/tony_c_k_fun.mp4",
+  "duration": 3.4,
+  "speech": {
+   "start": 0.38,
+   "end": 2.9
+  },
+  "tone": "good",
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_k_frustrating",
+  "host": "tony",
+  "kind": "topical",
+  "text": "It's frustrating, because the talent is there.",
+  "src": "/show/phrases/tony_c_k_frustrating.mp4",
+  "duration": 3.42,
+  "speech": {
+   "start": 0.42,
+   "end": 3.0
+  },
+  "tone": "bad",
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_k_no_excuses",
+  "host": "tony",
+  "kind": "topical",
+  "text": "The pressure is on now. No more excuses.",
+  "src": "/show/phrases/tony_c_k_no_excuses.mp4",
+  "duration": 3.56,
+  "speech": {
+   "start": 0.38,
+   "end": 3.1
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_k_have_to",
+  "host": "tony",
+  "kind": "topical",
+  "text": "They have to win this one. Not want to. Have to.",
+  "src": "/show/phrases/tony_c_k_have_to.mp4",
+  "duration": 3.92,
+  "speech": {
+   "start": 0.4,
+   "end": 3.48
+  },
+  "tags": [
+   "schedule"
+  ]
+ },
+ {
+  "id": "tony_c_k_young_play",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Give the young guys a chance. Let them play.",
+  "src": "/show/phrases/tony_c_k_young_play.mp4",
+  "duration": 3.48,
+  "speech": {
+   "start": 0.38,
+   "end": 3.02
+  },
+  "tags": [
+   "young"
+  ]
+ },
+ {
+  "id": "tony_c_k_vets_earn",
+  "host": "tony",
+  "kind": "topical",
+  "text": "This is where your veterans earn their money.",
+  "src": "/show/phrases/tony_c_k_vets_earn.mp4",
+  "duration": 3.12,
+  "speech": {
+   "start": 0.34,
+   "end": 2.7
+  },
+  "tags": [
+   "veteran"
+  ]
+ },
+ {
+  "id": "tony_c_k_best_player",
+  "host": "tony",
+  "kind": "topical",
+  "text": "When your best player plays like that, you're tough to beat.",
+  "src": "/show/phrases/tony_c_k_best_player.mp4",
+  "duration": 5.08,
+  "speech": {
+   "start": 0.38,
+   "end": 4.46
+  },
+  "tags": [
+   "reaction"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_c_k_trust",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Trust the guy. He's earned that much.",
+  "src": "/show/phrases/tony_c_k_trust.mp4",
+  "duration": 3.2,
+  "speech": {
+   "start": 0.34,
+   "end": 2.78
+  },
+  "tags": [
+   "reaction"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_c_c_know_what_i_think",
+  "host": "tony",
+  "kind": "topical",
+  "text": "We'll see. But I know what I think.",
+  "src": "/show/phrases/tony_c_c_know_what_i_think.mp4",
+  "duration": 3.0,
+  "speech": {
+   "start": 0.36,
+   "end": 2.48
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_c_remember",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Remember I said this.",
+  "src": "/show/phrases/tony_c_c_remember.mp4",
+  "duration": 2.4,
+  "speech": {
+   "start": 0.42,
+   "end": 1.64
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_c_all_im_saying",
+  "host": "tony",
+  "kind": "topical",
+  "text": "And that's all I'm going to say about that.",
+  "src": "/show/phrases/tony_c_c_all_im_saying.mp4",
+  "duration": 2.44,
+  "speech": {
+   "start": 0.34,
+   "end": 1.88
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_c_put_money",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I'd put money on them. I really would.",
+  "src": "/show/phrases/tony_c_c_put_money.mp4",
+  "duration": 2.4,
+  "speech": {
+   "start": 0.38,
+   "end": 1.86
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_c_nobody_knows",
+  "host": "tony",
+  "kind": "topical",
+  "text": "That's the question nobody can answer yet.",
+  "src": "/show/phrases/tony_c_c_nobody_knows.mp4",
+  "duration": 3.08,
+  "speech": {
+   "start": 0.34,
+   "end": 2.62
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_c_go_ahead",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Alright, I'm done. Go ahead.",
+  "src": "/show/phrases/tony_c_c_go_ahead.mp4",
+  "duration": 1.82,
+  "speech": {
+   "start": 0.42,
+   "end": 1.42
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_t_def_decided",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's turn to the defense, because that's where this gets decided.",
+  "src": "/show/phrases/marcus_c_t_def_decided.mp4",
+  "duration": 3.88,
+  "speech": {
+   "start": 0.36,
+   "end": 3.42
+  },
+  "tags": [
+   "defense"
+  ]
+ },
+ {
+  "id": "marcus_c_t_off_minute",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's talk about the offense for a minute.",
+  "src": "/show/phrases/marcus_c_t_off_minute.mp4",
+  "duration": 2.56,
+  "speech": {
+   "start": 0.34,
+   "end": 1.98
+  },
+  "tags": [
+   "offense"
+  ]
+ },
+ {
+  "id": "marcus_c_t_qb_runs",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's get to the quarterback, because everything runs through him.",
+  "src": "/show/phrases/marcus_c_t_qb_runs.mp4",
+  "duration": 4.2,
+  "speech": {
+   "start": 0.38,
+   "end": 3.56
+  },
+  "tags": [
+   "qb"
+  ]
+ },
+ {
+  "id": "marcus_c_t_coach_overlooked",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I want to talk about the coaching, because it's been overlooked.",
+  "src": "/show/phrases/marcus_c_t_coach_overlooked.mp4",
+  "duration": 3.76,
+  "speech": {
+   "start": 0.42,
+   "end": 3.28
+  },
+  "tags": [
+   "coaching"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_c_t_draft_big",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's talk about the draft, because this is a big one for them.",
+  "src": "/show/phrases/marcus_c_t_draft_big.mp4",
+  "duration": 3.4,
+  "speech": {
+   "start": 0.38,
+   "end": 2.94
+  },
+  "tags": [
+   "draft"
+  ]
+ },
+ {
+  "id": "marcus_c_t_fa_start",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's look at free agency, because the decisions start now.",
+  "src": "/show/phrases/marcus_c_t_fa_start.mp4",
+  "duration": 4.56,
+  "speech": {
+   "start": 0.46,
+   "end": 3.98
+  },
+  "tags": [
+   "free_agency"
+  ]
+ },
+ {
+  "id": "marcus_c_t_run_game",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's talk about the run game.",
+  "src": "/show/phrases/marcus_c_t_run_game.mp4",
+  "duration": 2.2,
+  "speech": {
+   "start": 0.36,
+   "end": 1.6
+  },
+  "tags": [
+   "offense"
+  ]
+ },
+ {
+  "id": "marcus_c_t_oline",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "We should talk about the offensive line.",
+  "src": "/show/phrases/marcus_c_t_oline.mp4",
+  "duration": 2.56,
+  "speech": {
+   "start": 0.36,
+   "end": 2.08
+  },
+  "tags": [
+   "oline"
+  ]
+ },
+ {
+  "id": "marcus_c_t_next_one",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's look ahead to the next one.",
+  "src": "/show/phrases/marcus_c_t_next_one.mp4",
+  "duration": 2.36,
+  "speech": {
+   "start": 0.44,
+   "end": 1.9
+  },
+  "tags": [
+   "schedule"
+  ]
+ },
+ {
+  "id": "marcus_c_t_playoff_picture",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's talk about the playoff picture.",
+  "src": "/show/phrases/marcus_c_t_playoff_picture.mp4",
+  "duration": 2.88,
+  "speech": {
+   "start": 0.34,
+   "end": 2.46
+  },
+  "tags": [
+   "playoffs"
+  ]
+ },
+ {
+  "id": "marcus_c_t_one_number",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let me give you one number that explains a lot of this.",
+  "src": "/show/phrases/marcus_c_t_one_number.mp4",
+  "duration": 4.36,
+  "speech": {
+   "start": 0.46,
+   "end": 3.74
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_t_zoom_out",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I want to zoom out for a second.",
+  "src": "/show/phrases/marcus_c_t_zoom_out.mp4",
+  "duration": 2.46,
+  "speech": {
+   "start": 0.52,
+   "end": 2.04
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_give_you",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's a fair point. I'll give you that.",
+  "src": "/show/phrases/marcus_c_r_give_you.mp4",
+  "duration": 2.36,
+  "speech": {
+   "start": 0.42,
+   "end": 1.88
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_not_sure",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'm not sure I agree with that.",
+  "src": "/show/phrases/marcus_c_r_not_sure.mp4",
+  "duration": 2.96,
+  "speech": {
+   "start": 0.4,
+   "end": 2.38
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_walk_me",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Explain that to me. Walk me through it.",
+  "src": "/show/phrases/marcus_c_r_walk_me.mp4",
+  "duration": 2.68,
+  "speech": {
+   "start": 0.38,
+   "end": 2.22
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_whats_changed",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Why, though? What's changed?",
+  "src": "/show/phrases/marcus_c_r_whats_changed.mp4",
+  "duration": 2.72,
+  "speech": {
+   "start": 0.3,
+   "end": 2.3
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_careful",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'd be careful with that.",
+  "src": "/show/phrases/marcus_c_r_careful.mp4",
+  "duration": 2.04,
+  "speech": {
+   "start": 0.4,
+   "end": 1.36
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_both_true",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Both things can be true.",
+  "src": "/show/phrases/marcus_c_r_both_true.mp4",
+  "duration": 2.32,
+  "speech": {
+   "start": 0.36,
+   "end": 1.9
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_small_sample",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "It's a small sample. I want to see more.",
+  "src": "/show/phrases/marcus_c_r_small_sample.mp4",
+  "duration": 3.16,
+  "speech": {
+   "start": 0.38,
+   "end": 2.7
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_interesting",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's interesting. I hadn't thought about it that way.",
+  "src": "/show/phrases/marcus_c_r_interesting.mp4",
+  "duration": 2.88,
+  "speech": {
+   "start": 0.4,
+   "end": 2.46
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_say_more",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Say more about that.",
+  "src": "/show/phrases/marcus_c_r_say_more.mp4",
+  "duration": 1.72,
+  "speech": {
+   "start": 0.4,
+   "end": 1.26
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_energy",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Tony, I love the energy. I'm just not there.",
+  "src": "/show/phrases/marcus_c_r_energy.mp4",
+  "duration": 3.84,
+  "speech": {
+   "start": 0.42,
+   "end": 3.42
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_right_about_that",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "You're right. You're right about that.",
+  "src": "/show/phrases/marcus_c_r_right_about_that.mp4",
+  "duration": 2.44,
+  "speech": {
+   "start": 0.4,
+   "end": 1.98
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_partly",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Partly. I'd say partly.",
+  "src": "/show/phrases/marcus_c_r_partly.mp4",
+  "duration": 2.3,
+  "speech": {
+   "start": 0.4,
+   "end": 1.84
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_context",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "There's some context missing there.",
+  "src": "/show/phrases/marcus_c_r_context.mp4",
+  "duration": 2.6,
+  "speech": {
+   "start": 0.44,
+   "end": 2.04
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_whole_story",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Sure. But that's not the whole story.",
+  "src": "/show/phrases/marcus_c_r_whole_story.mp4",
+  "duration": 2.88,
+  "speech": {
+   "start": 0.4,
+   "end": 2.46
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_dignify",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'm not going to dignify that.",
+  "src": "/show/phrases/marcus_c_r_dignify.mp4",
+  "duration": 2.92,
+  "speech": {
+   "start": 0.42,
+   "end": 2.46
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_agree_rare",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I agree with you, which doesn't happen often.",
+  "src": "/show/phrases/marcus_c_r_agree_rare.mp4",
+  "duration": 3.12,
+  "speech": {
+   "start": 0.42,
+   "end": 2.64
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_one_game",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's not overreact to one game.",
+  "src": "/show/phrases/marcus_c_r_one_game.mp4",
+  "duration": 3.16,
+  "speech": {
+   "start": 0.34,
+   "end": 2.7
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_one_to_watch",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's the one to watch, for me.",
+  "src": "/show/phrases/marcus_c_r_one_to_watch.mp4",
+  "duration": 2.48,
+  "speech": {
+   "start": 0.42,
+   "end": 2.02
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_k_impressed",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I've been impressed. I'll say that.",
+  "src": "/show/phrases/marcus_c_k_impressed.mp4",
+  "duration": 2.6,
+  "speech": {
+   "start": 0.44,
+   "end": 1.94
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_k_concerned",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'm concerned. Not panicking. Concerned.",
+  "src": "/show/phrases/marcus_c_k_concerned.mp4",
+  "duration": 3.52,
+  "speech": {
+   "start": 0.42,
+   "end": 3.1
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_k_process",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I like the process here, even when the results don't show it.",
+  "src": "/show/phrases/marcus_c_k_process.mp4",
+  "duration": 3.88,
+  "speech": {
+   "start": 0.38,
+   "end": 3.34
+  },
+  "tags": [
+   "reaction"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_c_k_identity",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "They need an identity. Right now I'm not sure what it is.",
+  "src": "/show/phrases/marcus_c_k_identity.mp4",
+  "duration": 4.64,
+  "speech": {
+   "start": 0.38,
+   "end": 4.08
+  },
+  "tone": "bad",
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_k_well_built",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "This is a well-built roster. It shows.",
+  "src": "/show/phrases/marcus_c_k_well_built.mp4",
+  "duration": 3.48,
+  "speech": {
+   "start": 0.4,
+   "end": 2.94
+  },
+  "tags": [
+   "reaction"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_c_k_details",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "It's the details. Penalties, third downs, turnovers.",
+  "src": "/show/phrases/marcus_c_k_details.mp4",
+  "duration": 4.7,
+  "speech": {
+   "start": 0.34,
+   "end": 4.28
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_k_red_zone",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Red zone efficiency is the difference for me.",
+  "src": "/show/phrases/marcus_c_k_red_zone.mp4",
+  "duration": 2.84,
+  "speech": {
+   "start": 0.34,
+   "end": 2.38
+  },
+  "tags": [
+   "offense"
+  ]
+ },
+ {
+  "id": "marcus_c_k_turnovers",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Win the turnover battle and most of this takes care of itself.",
+  "src": "/show/phrases/marcus_c_k_turnovers.mp4",
+  "duration": 3.92,
+  "speech": {
+   "start": 0.34,
+   "end": 3.5
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_k_trenches",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "It comes down to the trenches. It usually does.",
+  "src": "/show/phrases/marcus_c_k_trenches.mp4",
+  "duration": 3.56,
+  "speech": {
+   "start": 0.4,
+   "end": 2.92
+  },
+  "tags": [
+   "oline"
+  ]
+ },
+ {
+  "id": "marcus_c_k_depth",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Depth is going to matter the rest of the way.",
+  "src": "/show/phrases/marcus_c_k_depth.mp4",
+  "duration": 3.28,
+  "speech": {
+   "start": 0.3,
+   "end": 2.86
+  },
+  "tags": [
+   "injury"
+  ]
+ },
+ {
+  "id": "marcus_c_k_patience",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Patience. That's the word for this team right now.",
+  "src": "/show/phrases/marcus_c_k_patience.mp4",
+  "duration": 3.4,
+  "speech": {
+   "start": 0.38,
+   "end": 2.9
+  },
+  "tone": "bad",
+  "tags": [
+   "rebuild"
+  ]
+ },
+ {
+  "id": "marcus_c_k_window",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Their window is open. You have to take advantage of it.",
+  "src": "/show/phrases/marcus_c_k_window.mp4",
+  "duration": 3.92,
+  "speech": {
+   "start": 0.36,
+   "end": 3.32
+  },
+  "tone": "good",
+  "tags": [
+   "playoffs"
+  ]
+ },
+ {
+  "id": "marcus_c_c_plays_out",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "We'll see how it plays out.",
+  "src": "/show/phrases/marcus_c_c_plays_out.mp4",
+  "duration": 2.12,
+  "speech": {
+   "start": 0.38,
+   "end": 1.48
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_c_watching",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's what I'll be watching.",
+  "src": "/show/phrases/marcus_c_c_watching.mp4",
+  "duration": 2.0,
+  "speech": {
+   "start": 0.4,
+   "end": 1.4
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_c_land",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's where I land on it.",
+  "src": "/show/phrases/marcus_c_c_land.mp4",
+  "duration": 2.2,
+  "speech": {
+   "start": 0.38,
+   "end": 1.52
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_c_question",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's the question for me.",
+  "src": "/show/phrases/marcus_c_c_question.mp4",
+  "duration": 2.0,
+  "speech": {
+   "start": 0.36,
+   "end": 1.42
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_c_keep_going",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's keep going.",
+  "src": "/show/phrases/marcus_c_c_keep_going.mp4",
+  "duration": 1.72,
+  "speech": {
+   "start": 0.36,
+   "end": 1.26
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_c_leave_it",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'll leave it there.",
+  "src": "/show/phrases/marcus_c_c_leave_it.mp4",
+  "duration": 1.66,
+  "speech": {
+   "start": 0.4,
+   "end": 1.26
+  },
+  "tags": [
+   "reaction"
+  ]
  }
 ]
