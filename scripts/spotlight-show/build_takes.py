@@ -1,6 +1,6 @@
 """Assemble phrase audio into long takes for Aurora (fixed gaps → exact cut points),
 and trim rank ordinals. Writes show-assets/takes/<take>.wav + takes.json."""
-import json, os, subprocess, wave
+import json, os, subprocess, sys, wave
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 TTS = os.path.join(ROOT, "tts")
@@ -47,6 +47,10 @@ def main():
         print(name, len(ps), "phrases", manifest[name]["duration"], "s")
     json.dump(manifest, open(os.path.join(OUT, "takes.json"), "w"), indent=1)
 
+    # Standalone ordinals (superseded by produce_ordinals_ctx.py, which cuts
+    # each rank out of a spoken sentence so it carries natural pitch).
+    if "--ordinals" not in sys.argv:
+        return
     # Trim ordinals to the spoken word (keeps a hair of tail).
     for host in ("marcus", "tony"):
         d = os.path.join(TTS, "ordinals", host)

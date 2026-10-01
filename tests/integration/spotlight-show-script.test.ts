@@ -50,9 +50,16 @@ describe('buildShowScript', () => {
     const i = segs.findIndex(s => s.kind === 'tts' && s.text.startsWith('Their offense'));
     expect(segs[i + 1]).toMatchObject({ kind: 'phrase', speaker: 'tony', stat: 'ppg', slot: { rank: 29 } });
     expect((segs[i + 1] as { text: string }).text).toMatch(/^29th in scoring/);
-    // One reaction per topic: the rest of the topic stays on the graphic.
+    // One stat exchange per topic; a later line can still draw one topical
+    // take from the other host ("the defense is giving up everything").
     const j = segs.findIndex(s => s.kind === 'tts' && s.text.startsWith('And the defense'));
-    expect(segs[j + 1]).toMatchObject({ kind: 'tts' });
+    const next = segs[j + 1];
+    if (next.kind === 'phrase') {
+      expect(PHRASES.find(x => x.id === next.phraseId)).toMatchObject({ kind: 'topical', host: 'marcus' });
+      expect(segs[j + 2]).toMatchObject({ kind: 'tts' });
+    } else {
+      expect(next).toMatchObject({ kind: 'tts' });
+    }
   });
 
   it('mid-table stats get the "middle of the pack" take', () => {

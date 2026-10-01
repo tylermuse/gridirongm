@@ -68,6 +68,8 @@ def main(wt):
                  "speech": speech_span(dst)}
             if "stat" in p: m["stat"] = p["stat"]
             if "tone" in p: m["tone"] = p["tone"]
+            if "tags" in p: m["tags"] = p["tags"]
+            if p.get("writerOnly"): m["writerOnly"] = True
             if "slot" in e:
                 m["slot"] = {"start": round(e["slot"]["start"] - a, 3), "end": round(e["slot"]["end"] - a, 3)}
             manifest.append(m)

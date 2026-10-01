@@ -17,7 +17,7 @@
  * Shared by the API route (which voices `tts` segments) and the client
  * player. Deterministic for a given input so cached episodes are stable.
  */
-import { PHRASES, type Phrase, type PhraseKind } from './phrases';
+import { PHRASES, topicTagsIn, type Phrase, type PhraseKind, type PhraseTone } from './phrases';
 import { rankTone, statsMentioned, type ShowStatKey, type ShowStatLine } from './teamStats';
 
 export type Host = 'marcus' | 'tony';
@@ -89,7 +89,9 @@ export type ShowSegment =
 export interface ShowTopicInput {
   headline: string;
   icon: string;
-  exchanges: { speakerId: string; text: string }[];
+  /** `clipId`: the writer chose a pre-recorded on-camera line (a topical
+   *  phrase) for this turn; `text` is that phrase's words. */
+  exchanges: { speakerId: string; text: string; clipId?: string }[];
 }
 
 // Mirrors the transition rotation in /api/spotlight-audio's buildPodcastScript.
@@ -183,12 +185,42 @@ class PhrasePicker {
   }
 
   record(host: Host): ShowSegment | null {
+    const tone = this.recordTone();
+    if (!tone) return null;
+    const p = this.pick(x => x.host === host && x.kind === 'record' && x.tone === tone);
+    return p ? phraseSegment(p) : null;
+  }
+
+  /** A specific phrase the writer chose (once per episode, right host). */
+  byId(host: Host, id: string): Extract<ShowSegment, { kind: 'phrase' }> | null {
+    if (this.used.has(id)) return null;
+    const p = PHRASES.find(x => x.id === id && x.host === host);
+    if (!p) return null;
+    this.used.add(id);
+    return phraseSegment(p);
+  }
+
+  /** A topical line on one of these subjects, true for this team: its tone
+   *  matches the team's record (or the stat it's about). */
+  topical(host: Host, tags: string[]): Extract<ShowSegment, { kind: 'phrase' }> | null {
+    if (!tags.length) return null;
+    const recordTone = this.recordTone();
+    const p = this.pick(x => {
+      if (x.host !== host || x.kind !== 'topical' || x.writerOnly || !x.tags?.some(t => tags.includes(t))) return false;
+      if (x.stat) {
+        const s = this.statLine(x.stat);
+        return !!s && (!x.tone || s.tone === x.tone);
+      }
+      return !x.tone || x.tone === recordTone;
+    });
+    return p ? phraseSegment(p) : null;
+  }
+
+  private recordTone(): PhraseTone | null {
     if (!this.stats) return null;
     const [w, l] = this.stats.record.split('-').map(Number);
     const pct = w + l > 0 ? w / (w + l) : 0.5;
-    const tone = pct >= 0.6 ? 'good' : pct <= 0.4 ? 'bad' : 'mid';
-    const p = this.pick(x => x.host === host && x.kind === 'record' && x.tone === tone);
-    return p ? phraseSegment(p) : null;
+    return pct >= 0.6 ? 'good' : pct <= 0.4 ? 'bad' : 'mid';
   }
 
   /** First available phrase of these kinds, in order. */
@@ -282,6 +314,11 @@ export function buildShowScript(
     return [open, answer].filter((x): x is ShowSegment => !!x);
   };
 
+  // When the writer placed pre-recorded lines itself, trust its choices;
+  // otherwise drop in one topical line per topic where a line's subject
+  // matches (the draft, trades, the coaching…).
+  const writerClips = topics.some(t => t.exchanges.some(e => !!e.clipId));
+
   topics.forEach((topic, i) => {
     const debate = topic.exchanges.filter(e => e.speakerId === 'stats' || e.speakerId === 'hottake');
     if (debate.length === 0) return;
@@ -293,16 +330,12 @@ export function buildShowScript(
     }
 
     let exchanged = false;
-    debate.forEach(ex => {
-      const speaker: Host = ex.speakerId === 'stats' ? 'marcus' : 'tony';
-      segs.push({
-        kind: 'tts', speaker, text: ex.text, visual: 'graphic',
-        topicIdx: i, headline: topic.headline, icon: topic.icon,
-      });
+    let topicalDone = writerClips;
+    const tryExchange = (text: string, speaker: Host) => {
       if (exchanged) return;
       // The other host takes the stat just cited (if not covered yet this
       // episode) and the two go back and forth on camera.
-      for (const key of statsMentioned(ex.text)) {
+      for (const key of statsMentioned(text)) {
         if (coveredStats.has(key)) continue;
         const run = statExchange(other(speaker), key);
         if (run.length) { coveredStats.add(key); segs.push(...run); exchanged = true; break; }
@@ -312,6 +345,23 @@ export function buildShowScript(
       if (!exchanged && speaker === 'marcus' && !debate.some(d => statsMentioned(d.text).some(k => !coveredStats.has(k)))) {
         const run = debateExchange();
         if (run.length) { segs.push(...run); exchanged = true; }
+      }
+    };
+    debate.forEach(ex => {
+      const speaker: Host = ex.speakerId === 'stats' ? 'marcus' : 'tony';
+      if (ex.clipId) {
+        const chosen = picker.byId(speaker, ex.clipId);
+        if (chosen) { segs.push(chosen); return; }
+      }
+      segs.push({
+        kind: 'tts', speaker, text: ex.text, visual: 'graphic',
+        topicIdx: i, headline: topic.headline, icon: topic.icon,
+      });
+      const before = segs.length;
+      tryExchange(ex.text, speaker);
+      if (segs.length === before && !topicalDone) {
+        const line = picker.topical(other(speaker), topicTagsIn(ex.text));
+        if (line) { segs.push(line); topicalDone = true; }
       }
     });
   });
@@ -323,4 +373,10 @@ export function buildShowScript(
 
 /** Timeline entry returned by /api/spotlight-show: TTS segments carry their
  *  slice of the concatenated episode audio. */
-export type TimedShowSegment = ShowSegment & { audioStart?: number; audioDuration?: number };
+export type TimedShowSegment = ShowSegment & {
+  /** Which voiced block (title, then one per topic) holds this line. */
+  audioIndex?: number;
+  /** Seconds inside that block. */
+  audioStart?: number;
+  audioDuration?: number;
+};

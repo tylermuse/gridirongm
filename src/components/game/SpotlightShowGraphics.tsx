@@ -210,7 +210,7 @@ export function ShowGraphic(p: GraphicProps) {
                 <div className="h-[2em] w-[2em] shrink-0">{p.logo}</div>
               </div>
             </div>
-            <div className="my-auto flex items-center gap-[1.1em] py-[0.6em]">
+            <div className="my-auto flex min-h-0 items-center gap-[1.1em] py-[0.5em]">
               {p.player && (
                 <div
                   key={p.player.key}
@@ -226,8 +226,10 @@ export function ShowGraphic(p: GraphicProps) {
               )}
               <div
                 key={p.text || 'empty'}
-                className="min-w-0 text-[1.45em] font-bold leading-snug text-[#0f1f35] [text-wrap:balance]"
-                style={{ opacity: anim(p.lineMs, 120, 380), transform: `translateY(${(1 - anim(p.lineMs, 120, 380)) * 0.5}em)` }}
+                className="line-clamp-4 min-w-0 font-bold leading-snug text-[#0f1f35] [text-wrap:balance]"
+                style={{
+                  // Long lines get smaller type so the tiles always fit.
+                  fontSize: p.text.length > 150 ? '1em' : p.text.length > 95 ? '1.2em' : '1.45em', opacity: anim(p.lineMs, 120, 380), transform: `translateY(${(1 - anim(p.lineMs, 120, 380)) * 0.5}em)` }}
               >
                 {p.text && <><span className="mr-[0.15em] text-orange-600">&ldquo;</span>{p.text}<span className="text-orange-600">&rdquo;</span></>}
               </div>
@@ -255,7 +257,8 @@ export function ShowGraphic(p: GraphicProps) {
               </div>
             ) : null}
           </div>
-          <div className="absolute left-[5%] bottom-[18.5%] translate-y-1/2">
+          {/* Below the panel, clear of the tiles (no captions on this shot). */}
+          <div className="absolute left-[5%] bottom-[6%]">
             <SpeakerChip speaker={p.speaker} speakerMs={p.speakerMs} lineMs={p.lineMs} />
           </div>
         </>
@@ -272,6 +275,64 @@ export function ShowCaption({ text }: { text: string }) {
       <span className="rounded bg-[#0f1f35]/85 px-2 py-0.5 text-[clamp(11px,1.8vw,17px)] font-semibold leading-snug text-white [box-decoration-break:clone]">
         {text}
       </span>
+    </div>
+  );
+}
+
+/** Wide conversation shot of both hosts turned toward each other, used under
+ *  lines with nothing measurable. Loops per speaker (that host is the one
+ *  talking/gesturing); at this distance nobody reads lips. */
+export const WIDE_LOOPS: Record<Host, string[]> = {
+  marcus: ['/show/wide/marcus_1.mp4', '/show/wide/marcus_2.mp4'],
+  tony: ['/show/wide/tony_1.mp4', '/show/wide/tony_2.mp4'],
+};
+
+/** Overlay on the wide shot: a small topic tag, who's talking, captions. */
+export function WideOverlay({ headline, topicArt, speaker, speakerMs, lineMs, topicMs, text, player, playerMs = 60_000 }: {
+  headline: string;
+  topicArt: ReactNode;
+  speaker: Host;
+  speakerMs: number;
+  lineMs: number;
+  topicMs: number;
+  text: string;
+  /** The player the line is about: a small chip under the topic tag. */
+  player?: { art: ReactNode; name: string; detail?: string } | null;
+  playerMs?: number;
+}) {
+  const tagIn = anim(Math.min(topicMs, 60_000), 0, 400);
+  const chipIn = anim(Math.min(playerMs, 60_000), 0, 350);
+  return (
+    <div className="absolute inset-0 [container-type:size]">
+      <div className="absolute inset-0 [font-size:1.85cqw]">
+        <div className="absolute inset-x-0 bottom-0 h-[38%] bg-gradient-to-t from-[#0f1f35]/70 to-transparent" />
+        <div
+          className="absolute left-[4%] top-[5%] flex items-center gap-[0.5em] rounded-[0.6em] bg-white/90 py-[0.3em] pl-[0.35em] pr-[0.8em] shadow-lg"
+          style={{ opacity: tagIn, transform: `translateX(${(1 - tagIn) * -1}em)` }}
+        >
+          <div className="h-[1.9em] w-[1.9em] shrink-0">{topicArt}</div>
+          <div className="leading-tight">
+            <div className="text-[0.55em] font-bold uppercase tracking-[0.24em] text-orange-600">The Breakdown</div>
+            <div className="max-w-[24em] truncate text-[0.95em] font-extrabold text-[#1e3a5f]">{noBreak(headline)}</div>
+          </div>
+        </div>
+        {player && (
+          <div
+            className="absolute left-[4%] top-[16%] flex items-center gap-[0.5em] rounded-full bg-[#1e3a5f]/90 py-[0.25em] pl-[0.25em] pr-[0.9em] shadow-lg"
+            style={{ opacity: chipIn, transform: `translateY(${(1 - chipIn) * -0.5}em)` }}
+          >
+            <div className="h-[2em] w-[2em] shrink-0 overflow-hidden rounded-full bg-white">{player.art}</div>
+            <div className="leading-tight text-white">
+              <div className="text-[0.85em] font-bold">{noBreak(player.name)}</div>
+              {player.detail && <div className="text-[0.6em] uppercase tracking-[0.18em] text-white/70">{player.detail}</div>}
+            </div>
+          </div>
+        )}
+        <div className="absolute bottom-[15%] left-[4%]">
+          <SpeakerChip speaker={speaker} speakerMs={speakerMs} lineMs={lineMs} />
+        </div>
+        {text && <ShowCaption text={text} />}
+      </div>
     </div>
   );
 }

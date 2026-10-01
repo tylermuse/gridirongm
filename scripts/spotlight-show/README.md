@@ -34,3 +34,23 @@ original a/b takes untouched, so only the new take needs an Aurora render.
   that stays clear of the host). Clips are cut at 1280px, CRF 23.
 - `ONLY=take1,take2 python3 slice_phrases.py <worktree> --force` re-cuts
   just those takes.
+
+## Topical lines (`kind: "topical"`)
+
+Subject lines (draft, trades, free agency, coaching, injuries, playoffs,
+contracts, rebuild, QB, units, streaks) plus short conversational reactions,
+tagged with `tags` (see `TOPIC_TAGS` in `src/lib/spotlight/phrases.ts`).
+The episode writer (`showWriter.ts`) may place any of them by id; without the
+writer, the composer drops in one per topic when a line's subject matches.
+`tone`/`stat` keep a line true for the team (no "they're rolling" for a 2-9
+team); `writerOnly` marks lines that make a specific claim only the writer can
+vouch for. They're voiced with `eleven_v3` (`"model"` per phrase).
+
+Scripts are run from a copy inside `<repo>/show-assets/` (they use their own
+folder as the working root). `build_takes.py` no longer re-trims ordinals
+unless passed `--ordinals` — the in-context ordinals from
+`show-assets/produce_ordinals_ctx.py` are the ones that ship.
+
+Wide conversation loops (`public/show/wide/`): Veo 3.1 Lite, 8s, start frame =
+end frame = the wide two-shot, audio off; TV screens frozen with
+`show-assets/wide/freeze_wide.py`.

@@ -8,8 +8,8 @@ VOICES = {"marcus": "NKI4WPSf2OjKR4G4fadW", "tony": "aGw6gMq5DRXPll7WVlNn"}
 MODEL = "eleven_multilingual_v2"
 HERE = os.path.dirname(os.path.abspath(__file__))
 # Working files (audio, takes, renders) live in the gitignored <repo>/show-assets/.
-ROOT = os.path.join(HERE, '..', '..', 'show-assets')
-os.makedirs(ROOT, exist_ok=True)
+# Run from a copy inside <repo>/show-assets/ (like the other scripts).
+ROOT = HERE
 OUT = os.path.join(ROOT, "tts")
 
 ORD = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",
@@ -19,10 +19,10 @@ ORD = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eight
        "twenty-ninth", "thirtieth", "thirty-first", "thirty-second"]
 
 
-def tts(voice, text):
+def tts(voice, text, model=MODEL):
     req = urllib.request.Request(
         f"https://api.elevenlabs.io/v1/text-to-speech/{voice}/with-timestamps?output_format=mp3_44100_128",
-        data=json.dumps({"text": text, "model_id": MODEL}).encode(),
+        data=json.dumps({"text": text, "model_id": model}).encode(),
         headers={"xi-api-key": KEY, "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=60) as r:
         j = json.load(r)
@@ -45,7 +45,7 @@ def main():
                 ph = ph[0].upper() + ph[1:]
             text = text.replace("{rank}", ph)
             slot = (i, i + len(ph))
-        audio, al = tts(VOICES[p["host"]], text)
+        audio, al = tts(VOICES[p["host"]], text, p.get("model", MODEL))
         meta = {"id": p["id"], "spoken": text, "alignment": al}
         if slot:
             meta["slot"] = {"start": al["character_start_times_seconds"][slot[0]],

@@ -3,30 +3,33 @@ import crypto from 'crypto';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { createClient as createSupabaseServer } from '@bs/core/supabase/server';
 import { consumePodcastCredit, getServiceClient } from '@bs/core/podcast';
-import { ELEVENLABS_API_KEY, VOICES, normalizeTtsText, generateSpeech } from '@/lib/spotlight/tts';
+import { ELEVENLABS_API_KEY, VOICES, normalizeTtsText, generateDialogue, stripCues } from '@/lib/spotlight/tts';
+import { writeConversation } from '@/lib/spotlight/showWriter';
 import { buildShowScript, type ShowTopicInput, type TimedShowSegment } from '@/lib/spotlight/showScript';
 import type { ShowStatLine } from '@/lib/spotlight/teamStats';
 
 /**
  * Team Spotlight *video* show.
  *
- * Returns { segments, audio } where `audio` is base64 MP3 of every TTS line
- * concatenated in order, and each TTS segment carries its [audioStart,
- * audioDuration] slice. Fixed lines are `clip` segments the client plays
- * from /public/show with their own audio — no TTS spent on them.
+ * 1. Claude rewrites the topics' lines as a natural conversation
+ *    (showWriter), 2. the composer lays out the episode, 3. each topic's
+ *    conversation is voiced in one ElevenLabs v3 dialogue pass.
+ *
+ * Returns { segments, audios }: `audios` is one base64 MP3 per voiced block
+ * (the title line, then each topic), and each TTS segment carries
+ * audioIndex + [audioStart, audioDuration] (seconds) inside its block.
+ * Fixed lines and phrases are clips the client plays from /public/show.
  *
  * Same gating as /api/spotlight-audio: cache hits are free; fresh
  * generations require auth and consume one podcast credit.
  */
 
-// ElevenLabs `mp3_44100_128` is CBR 128 kbps → duration = bytes * 8 / 128000.
-const MP3_BYTES_PER_SEC = 128_000 / 8;
 const CACHE_BUCKET = 'spotlight-audio';
-const CACHE_VERSION = 'show-v3';
+const CACHE_VERSION = 'show-v5';
 
 interface ShowPayload {
   segments: TimedShowSegment[];
-  audio: string; // base64 mp3
+  audios: string[]; // base64 mp3 per voiced block
 }
 
 function supabaseAdmin() {
@@ -99,26 +102,36 @@ export async function POST(request: Request) {
       );
     }
 
-    const script = buildShowScript(topics, teamName, stats);
-    const buffers: Buffer[] = [];
-    const segments: TimedShowSegment[] = [];
-    let cursor = 0;
+    const written = await writeConversation(topics, teamName, stats);
+    const script = buildShowScript(written, teamName, stats);
 
-    for (const seg of script) {
-      if (seg.kind !== 'tts') {
-        segments.push(seg);
-        continue;
-      }
-      const buf = await generateSpeech(normalizeTtsText(seg.text), VOICES[seg.speaker]);
-      const dur = buf.length / MP3_BYTES_PER_SEC;
-      buffers.push(buf);
-      segments.push({ ...seg, audioStart: cursor, audioDuration: dur });
-      cursor += dur;
-    }
+    // One v3 dialogue pass per block of generated lines (title, then each
+    // topic), all blocks in parallel.
+    const blocks = new Map<number, number[]>();
+    script.forEach((seg, i) => {
+      if (seg.kind !== 'tts') return;
+      const list = blocks.get(seg.topicIdx) ?? [];
+      list.push(i);
+      blocks.set(seg.topicIdx, list);
+    });
+    const order = [...blocks.keys()];
+    const voiced = await Promise.all(order.map(t => generateDialogue(blocks.get(t)!.map(i => {
+      const seg = script[i] as Extract<(typeof script)[number], { kind: 'tts' }>;
+      return { voiceId: VOICES[seg.speaker], text: normalizeTtsText(seg.text) };
+    }))));
+
+    // On-screen text never shows the [laughs]-style performance cues.
+    const segments: TimedShowSegment[] = script.map(seg => (seg.kind === 'tts' ? { ...seg, text: stripCues(seg.text) } : seg));
+    order.forEach((t, b) => {
+      blocks.get(t)!.forEach((i, k) => {
+        const span = voiced[b].lines[k];
+        segments[i] = { ...segments[i], audioIndex: b, audioStart: span.start, audioDuration: Math.max(0, span.end - span.start) };
+      });
+    });
 
     const payload: ShowPayload = {
       segments,
-      audio: Buffer.concat(buffers).toString('base64'),
+      audios: voiced.map(v => v.audio.toString('base64')),
     };
     const body = JSON.stringify(payload);
 

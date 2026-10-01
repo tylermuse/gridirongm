@@ -114,3 +114,55 @@ export async function generateSpeech(text: string, voiceId: string): Promise<Buf
   return Buffer.from(await res.arrayBuffer());
 }
 
+
+// ── Dialogue (ElevenLabs v3) ──────────────────────────────────────────
+// The show voices each topic's conversation in one pass with v3's
+// text-to-dialogue, so turn-taking, pace and reactions sound like two
+// people talking to each other instead of separately read lines.
+export const DIALOGUE_MODEL_ID = 'eleven_v3';
+
+export interface DialogueLine { voiceId: string; text: string }
+export interface VoicedDialogue {
+  audio: Buffer;
+  /** Where each input line sits in `audio` (seconds), in input order. */
+  lines: { start: number; end: number }[];
+}
+
+export async function generateDialogue(lines: DialogueLine[]): Promise<VoicedDialogue> {
+  const res = await fetch(`${ELEVENLABS_BASE}/text-to-dialogue/with-timestamps?output_format=mp3_44100_128`, {
+    method: 'POST',
+    headers: { 'xi-api-key': ELEVENLABS_API_KEY!, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model_id: DIALOGUE_MODEL_ID,
+      inputs: lines.map(l => ({ text: l.text, voice_id: l.voiceId })),
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    if (res.status === 401 || res.status === 402 || res.status === 429) {
+      const error = new Error(`ElevenLabs quota exceeded (${res.status}): ${err}`);
+      (error as Error & { status: number }).status = 402;
+      throw error;
+    }
+    throw new Error(`ElevenLabs dialogue failed (${res.status}): ${err}`);
+  }
+  const j = (await res.json()) as {
+    audio_base64: string;
+    voice_segments: { dialogue_input_index: number; start_time_seconds: number; end_time_seconds: number }[];
+  };
+  const spans = lines.map(() => ({ start: Infinity, end: 0 }));
+  for (const s of j.voice_segments) {
+    const span = spans[s.dialogue_input_index];
+    if (!span) continue;
+    span.start = Math.min(span.start, s.start_time_seconds);
+    span.end = Math.max(span.end, s.end_time_seconds);
+  }
+  return {
+    audio: Buffer.from(j.audio_base64, 'base64'),
+    lines: spans.map(s => (Number.isFinite(s.start) ? s : { start: 0, end: 0 })),
+  };
+}
+
+/** v3 performance cues ([laughs], [sighs]…) are spoken direction, not words:
+ *  strip them from anything shown on screen. */
+export const stripCues = (s: string) => s.replace(/\[[^\]]*\]\s*/g, '').replace(/\s{2,}/g, ' ').trim();

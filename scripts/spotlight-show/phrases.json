@@ -909,6 +909,848 @@
    "kind": "open",
    "text": "Let me tell you something. This is the storyline of the season right now!",
    "take": "tony_f"
+  },
+  {
+   "id": "tony_t_draft_now",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "draft"
+   ],
+   "text": "They need to get somebody in this draft who can make an impact right now. Not in three years. Now.",
+   "take": "tony_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_draft_project",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "draft"
+   ],
+   "text": "I don't want a project with that pick. Give me a guy who can play on Sunday.",
+   "take": "tony_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_draft_miss",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "draft"
+   ],
+   "text": "If they miss on this pick, man, that sets them back for years.",
+   "take": "tony_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_trade_call",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "trade"
+   ],
+   "text": "Pick up the phone! If there's a deal out there, you go make it.",
+   "take": "tony_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_trade_tomorrow",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "trade"
+   ],
+   "text": "I'd make that trade tomorrow. I don't even have to think about it.",
+   "writerOnly": true,
+   "take": "tony_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_trade_too_much",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "trade"
+   ],
+   "text": "You don't give up that much for one player. I'm sorry, you just don't.",
+   "writerOnly": true,
+   "take": "tony_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_fa_pay",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "free_agency"
+   ],
+   "text": "Somebody's going to pay that man, and it better be them.",
+   "writerOnly": true,
+   "take": "tony_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_fa_spend",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "free_agency"
+   ],
+   "text": "This is what free agency is for. Go spend the money.",
+   "take": "tony_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_coach_look",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "coaching"
+   ],
+   "text": "At some point you've got to look at the coaching. The players can only do so much.",
+   "tone": "bad",
+   "take": "tony_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_coach_playcall",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "coaching"
+   ],
+   "text": "That's on the play-calling. I'm watching the same games you are.",
+   "writerOnly": true,
+   "take": "tony_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_coach_believe",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "coaching"
+   ],
+   "text": "That locker room still believes in the coach. You can see it in how they play.",
+   "writerOnly": true,
+   "take": "tony_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_injury_hurts",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "injury"
+   ],
+   "text": "Losing him hurts. There's no other way to say it.",
+   "writerOnly": true,
+   "take": "tony_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_injury_next",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "injury"
+   ],
+   "text": "Next man up. That's the league. Nobody's feeling sorry for you.",
+   "take": "tony_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_playoffs_january",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "playoffs"
+   ],
+   "text": "This team is playing in January. Write it down.",
+   "tone": "good",
+   "take": "tony_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_playoffs_trust",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "playoffs"
+   ],
+   "text": "I don't care what the record says, I don't trust them in a playoff game yet.",
+   "tone": "good",
+   "take": "tony_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_playoffs_every_game",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "playoffs"
+   ],
+   "text": "Every game from here on out is a playoff game for them.",
+   "tone": "mid",
+   "take": "tony_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_contract_pay",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "contract"
+   ],
+   "text": "Pay the man! He's earned every dollar of it.",
+   "writerOnly": true,
+   "take": "tony_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_contract_bad",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "contract"
+   ],
+   "text": "That contract's going to look bad in two years, and everybody knows it.",
+   "writerOnly": true,
+   "take": "tony_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_rebuild_blow_up",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "rebuild"
+   ],
+   "text": "Blow it up. Start over. I'm serious.",
+   "tone": "bad",
+   "take": "tony_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_rebuild_patient",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "rebuild",
+    "young"
+   ],
+   "text": "Be patient with these young guys. This thing is a couple of years away.",
+   "tone": "bad",
+   "take": "tony_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_qb_starts",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "qb"
+   ],
+   "text": "It all starts with the quarterback. Every single time.",
+   "take": "tony_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_qb_best_player",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "qb"
+   ],
+   "text": "If your quarterback isn't your best player, you've got a problem.",
+   "writerOnly": true,
+   "take": "tony_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_defense_flying",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "defense"
+   ],
+   "text": "That defense is flying around right now. It's fun to watch.",
+   "stat": "pag",
+   "tone": "good",
+   "take": "tony_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_defense_big_plays",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "defense"
+   ],
+   "text": "You can't win giving up big plays like that. You just can't.",
+   "stat": "pag",
+   "tone": "bad",
+   "take": "tony_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_offense_weapons",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "offense"
+   ],
+   "text": "They've got too many weapons to be scoring this few points.",
+   "stat": "ppg",
+   "tone": "bad",
+   "take": "tony_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_oline_up_front",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "oline"
+   ],
+   "text": "It starts up front. If you can't block, nothing else matters.",
+   "take": "tony_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_young_real_deal",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "young"
+   ],
+   "text": "That kid is the real deal. Keep an eye on him.",
+   "writerOnly": true,
+   "take": "tony_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_vet_still_got_it",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "veteran"
+   ],
+   "text": "He's still got it. People wrote him off way too early.",
+   "writerOnly": true,
+   "take": "tony_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_streak_rolling",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "streak_win"
+   ],
+   "text": "They're rolling right now. Nobody wants to see them.",
+   "tone": "good",
+   "take": "tony_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_streak_change",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "streak_loss"
+   ],
+   "text": "Something's got to change, because this isn't working.",
+   "tone": "bad",
+   "take": "tony_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_react_come_on",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Come on. You know that's not true.",
+   "take": "tony_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_react_give_you",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Okay, okay. I'll give you that one.",
+   "take": "tony_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_react_been_saying",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "See, that's what I've been saying all year!",
+   "take": "tony_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_react_say_again",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Wait, hold on. Say that again.",
+   "take": "tony_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_react_not_buying",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I hear you, but I'm not buying it.",
+   "take": "tony_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_t_react_look_bad",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "You're going to make me look bad on this one, I can feel it.",
+   "take": "tony_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_draft_bpa",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "draft"
+   ],
+   "text": "With that pick, I take the best player on the board. You don't reach for need.",
+   "take": "marcus_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_draft_not_one_year",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "draft",
+    "rebuild"
+   ],
+   "text": "The draft is where they fix this. But it's not a one-year fix.",
+   "take": "marcus_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_draft_lineman",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "draft",
+    "oline"
+   ],
+   "text": "If I'm running that draft room, I'm taking an offensive lineman early.",
+   "take": "marcus_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_trade_future",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "trade"
+   ],
+   "text": "I understand the urge to make a move, but you don't sell the future for one season.",
+   "take": "marcus_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_trade_price",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "trade"
+   ],
+   "text": "If the price is right, you make that call. I just don't think the price is right.",
+   "writerOnly": true,
+   "take": "marcus_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_fa_bandaid",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "free_agency"
+   ],
+   "text": "Free agency is a band-aid. You build through the draft.",
+   "take": "marcus_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_fa_cap_space",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "free_agency"
+   ],
+   "text": "They have the cap space. The question is whether anybody good wants to come.",
+   "writerOnly": true,
+   "take": "marcus_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_coach_scheme",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "coaching"
+   ],
+   "text": "I'd look at the scheme before I'd blame the players.",
+   "take": "marcus_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_coach_credit",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "coaching"
+   ],
+   "text": "The coaching staff deserves credit. They've adjusted week to week.",
+   "tone": "good",
+   "take": "marcus_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_coach_hot_seat",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "coaching"
+   ],
+   "text": "Fair or not, that coach is on the hot seat.",
+   "tone": "bad",
+   "take": "marcus_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_injury_depth",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "injury"
+   ],
+   "text": "Depth gets tested over a long season, and theirs is being tested right now.",
+   "take": "marcus_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_injury_build",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "injury"
+   ],
+   "text": "You can't plan around injuries, but you can build a roster that survives them.",
+   "take": "marcus_g",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_playoffs_today",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "playoffs"
+   ],
+   "text": "If the season ended today, they'd be in. But it doesn't end today.",
+   "tone": "good",
+   "take": "marcus_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_playoffs_schedule",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "playoffs"
+   ],
+   "text": "The schedule gets harder from here. That's what concerns me.",
+   "take": "marcus_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_playoffs_three",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "playoffs"
+   ],
+   "text": "They're good enough to win a playoff game. I'm not sure they're good enough to win three.",
+   "tone": "good",
+   "take": "marcus_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_contract_position",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "contract"
+   ],
+   "text": "That's a lot of money for a player at that position.",
+   "writerOnly": true,
+   "take": "marcus_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_contract_pay_qb",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "contract",
+    "qb"
+   ],
+   "text": "You pay your quarterback. You figure out the rest later.",
+   "take": "marcus_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_rebuild_call_it",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "rebuild"
+   ],
+   "text": "This is a rebuild, whether they want to call it that or not.",
+   "tone": "bad",
+   "take": "marcus_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_rebuild_plan",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "rebuild"
+   ],
+   "text": "There's a plan here. You can see it if you look past the record.",
+   "tone": "bad",
+   "take": "marcus_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_qb_difference",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "qb"
+   ],
+   "text": "Quarterback play has been the difference, for better or worse.",
+   "take": "marcus_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_qb_ball_security",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "qb"
+   ],
+   "text": "I'd like to see him take care of the football first.",
+   "writerOnly": true,
+   "take": "marcus_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_defense_sustainable",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "defense"
+   ],
+   "text": "The defense is keeping them in games. That's not sustainable forever.",
+   "stat": "pag",
+   "tone": "good",
+   "take": "marcus_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_defense_third_down",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "defense"
+   ],
+   "text": "Third down is where this defense has to get better.",
+   "stat": "pag",
+   "tone": "bad",
+   "take": "marcus_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_offense_red_zone",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "offense"
+   ],
+   "text": "The offense moves the ball fine. It stalls in the red zone.",
+   "stat": "ppg",
+   "tone": "mid",
+   "take": "marcus_h",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_offense_balance",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "offense"
+   ],
+   "text": "They need more balance. You can't be one-dimensional in this league.",
+   "take": "marcus_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_oline_quiet_story",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "oline"
+   ],
+   "text": "The offensive line is the quiet story here. Nobody talks about them, but they're a big reason why.",
+   "writerOnly": true,
+   "take": "marcus_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_young_bumps",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "young"
+   ],
+   "text": "He's young. There are going to be bumps. The talent is obvious.",
+   "writerOnly": true,
+   "take": "marcus_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_vet_experience",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "veteran"
+   ],
+   "text": "Experience matters this time of year, and they've got plenty of it.",
+   "writerOnly": true,
+   "take": "marcus_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_streak_confidence",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "streak_win"
+   ],
+   "text": "Winning breeds confidence, and they're playing with a lot of it right now.",
+   "tone": "good",
+   "take": "marcus_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_streak_feeding",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "streak_loss"
+   ],
+   "text": "Losing streaks have a way of feeding on themselves.",
+   "tone": "bad",
+   "take": "marcus_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_react_fair",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "That's fair. I'll give you that.",
+   "take": "marcus_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_react_early",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I'm not saying you're wrong. I'm saying it's early.",
+   "take": "marcus_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_react_carried_away",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Let's not get carried away here.",
+   "take": "marcus_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_react_last_week",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "You said the exact same thing last week.",
+   "take": "marcus_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_react_numbers",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Hold on. That's not what the numbers say.",
+   "take": "marcus_i",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_t_react_dont_know",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I don't know, Tony. I just don't know.",
+   "take": "marcus_i",
+   "model": "eleven_v3"
   }
  ]
 }
