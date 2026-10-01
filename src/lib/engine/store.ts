@@ -8935,6 +8935,16 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         const newSeason = state.season + 1;
         const previouslyRetiredIds = new Set(state.players.filter(p => p.retired).map(p => p.id));
+        // Players the user (or AI) just signed this offseason must not retire
+        // in this same rollover — they were signed FOR the upcoming season, so
+        // retiring them before they play a down is the "I sign players just
+        // for them to leave" bug (jslusser1945_25790). The offseasonSigned
+        // flag is cleared during contract-advancement below, so capture the
+        // ids now; the exemption lasts exactly one season, after which normal
+        // age-based retirement resumes.
+        const freshlySignedIds = new Set(
+          state.players.filter(p => p.contract?.offseasonSigned && p.teamId !== null).map(p => p.id),
+        );
 
         setStep("awards-stamping");
         // Prefer the awards already written by advanceToResigning for this
@@ -9200,6 +9210,13 @@ export const useGameStore = create<GameStore>()(
           devSettings.progressionRate / 100,
           devSettings.regressionRate / 100,
           coachDevMultipliers,
+        ).map(p =>
+          // Guard: a just-signed free agent should survive to week 1 of the
+          // season they were signed for. If this rollover's aging pass retired
+          // one, reverse it (only for players not already retired coming in).
+          p.retired && !previouslyRetiredIds.has(p.id) && freshlySignedIds.has(p.id)
+            ? { ...p, retired: false }
+            : p,
         );
 
         const retirementNews: NewsItem[] = developedPlayers
