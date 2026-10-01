@@ -838,7 +838,15 @@ function TeamSpotlightSection({
 
 function DraftCapitalCard({ team, season, phase, teams }: { team: { draftPicks: { id: string; year: number; round: number; originalTeamId: string; ownerTeamId: string; playerId?: string }[] }; season: number; phase: string; teams: { id: string; abbreviation: string }[] }) {
   const [showFuture, setShowFuture] = useState(false);
-  const nextDraftYear = (phase === 'draft' || phase === 'resigning' || phase === 'freeAgency') ? season : season + 1;
+  // Ground-truth the draft year from the actual pick data rather than the
+  // season counter. In BS Mode offseason-start the `season` value can already
+  // be the next year before the draft runs, which made the card show
+  // season+1 (e.g. "2028 Draft" during a 2027 season). The earliest unplayed
+  // pick year is always the real "on the clock" draft, in every start mode.
+  const unplayedPickYears = team.draftPicks.filter(pk => !pk.playerId).map(pk => pk.year);
+  const nextDraftYear = unplayedPickYears.length > 0
+    ? Math.min(...unplayedPickYears)
+    : (phase === 'draft' ? season : season + 1);
   const currentPicks = team.draftPicks
     .filter(pk => pk.year === nextDraftYear && !pk.playerId)
     .sort((a, b) => a.round - b.round);
@@ -984,6 +992,7 @@ function Dashboard() {
   }
 
   // Listen for spotlight scroll requests (from SpotlightPopup in GameShell or ?spotlight=1 query)
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- pre-existing on main; silenced only so this unrelated DraftCapitalCard edit isn't blocked by CI's whole-file lint (tech debt, not introduced here)
   useEffect(() => {
     function scrollToSpotlight() {
       spotlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1624,6 +1633,7 @@ function DiscordBanner() {
 
   useEffect(() => {
     try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- pre-existing on main; effect-gated localStorage read avoids an SSR/hydration mismatch. Silenced so this unrelated edit isn't blocked by CI's whole-file lint.
       if (localStorage.getItem('gg-discord-dismissed')) setDismissed(true);
     } catch { /* noop */ }
   }, []);

@@ -19,13 +19,22 @@ interface Props {
   players: Player[];
   /** Render the top entry with a 🏆 (used after season-end). */
   showWinnerCrown?: boolean;
+  /**
+   * Official season-award winner's playerId (from seasonHistory.awards),
+   * computed at the end of the regular season. When provided, the 🏆 is
+   * placed on this specific player instead of the current race leader —
+   * playoff stats can shift the live leaderboard, so this keeps the crown
+   * consistent with the /history awards tab. If omitted, the crown falls
+   * back to the top-ranked entry (rank 0).
+   */
+  officialWinnerId?: string;
 }
 
 function isPlayerEntry(e: Entry): e is AwardRaceEntry {
   return (e as AwardRaceEntry).playerId !== undefined;
 }
 
-export function AwardRaceCard({ emoji, title, subtitle, entries, teams, players, showWinnerCrown }: Props) {
+export function AwardRaceCard({ emoji, title, subtitle, entries, teams, players, showWinnerCrown, officialWinnerId }: Props) {
   if (entries.length === 0) {
     return (
       <Card>
@@ -44,6 +53,16 @@ export function AwardRaceCard({ emoji, title, subtitle, entries, teams, players,
   const topScore = Math.max(...entries.map(e => e.score));
   const minScore = Math.min(...entries.map(e => e.score));
   const range = Math.max(1, topScore - minScore);
+
+  // Which row gets the 🏆. When an official season-award winner is supplied,
+  // crown that exact player (matched by playerId) so the award page agrees
+  // with the /history tab regardless of how playoff stats reorder the live
+  // race. If that player isn't in the current list, crown nobody rather than
+  // show a contradictory winner. With no official id (e.g. Coach of the Year),
+  // fall back to the top-ranked entry.
+  const crownIndex = officialWinnerId !== undefined
+    ? entries.findIndex(e => isPlayerEntry(e) && e.playerId === officialWinnerId)
+    : 0;
 
   return (
     <Card>
@@ -95,7 +114,7 @@ export function AwardRaceCard({ emoji, title, subtitle, entries, teams, players,
                   ) : (
                     <span className="text-sm font-bold truncate">{label}</span>
                   )}
-                  {showWinnerCrown && i === 0 && <AwardWinnerBadge />}
+                  {showWinnerCrown && i === crownIndex && <AwardWinnerBadge />}
                   <span className="text-[10px] text-[var(--text-sec)] shrink-0">{positionLabel}</span>
                   {team && <span className="text-[10px] text-[var(--text-sec)] shrink-0 hidden sm:inline">{team.abbreviation}</span>}
                 </div>
