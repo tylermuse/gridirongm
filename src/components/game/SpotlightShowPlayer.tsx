@@ -13,6 +13,7 @@ import {
 import { ordinalSrc } from '@/lib/spotlight/phrases';
 import { ordinal, rankTone, statsMentioned, type ShowStat, type ShowStatLine } from '@/lib/spotlight/teamStats';
 import { playerForLine, topicTeam } from '@/lib/spotlight/showVisuals';
+import { computePlayerStatLine, playerStatsMentioned, type TileStat } from '@/lib/spotlight/playerStats';
 import type { Player, Team } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
@@ -116,6 +117,8 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
   const blockKey = useRef('');
   const playerStart = useRef(0);
   const playerKey = useRef<string | null>(null);
+  // Per-player stat lines, recomputed whenever the league's players change.
+  const playerTiles = useMemo(() => ({ current: new Map<string, TileStat[] | null>() }), [players]);
   const panelKey = useRef('');
   const topicStart = useRef(0);
   const endTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -470,7 +473,18 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
   const linePlayer = gfx ? playerAt(segments, gfxIdx) : null;
   const artTeam = team ? topicTeam(gfx ? topics[gfx.topicIdx] : undefined, team, teams) : null;
   const onGfx = !!(tts || vo);
-  const mentioned = tts ? statsMentioned(tts.text) : [];
+  // Tiles: the pictured player's numbers (ranked at their position) when a
+  // line is about a player, else the team's.
+  let ptiles: TileStat[] | null = null;
+  if (linePlayer) {
+    if (!playerTiles.current.has(linePlayer.id)) playerTiles.current.set(linePlayer.id, computePlayerStatLine(linePlayer, players));
+    ptiles = playerTiles.current.get(linePlayer.id) ?? null;
+  }
+  const tiles: TileStat[] | null = ptiles ?? stats?.stats ?? null;
+  const tilesLabel = ptiles && linePlayer
+    ? `${linePlayer.firstName} ${linePlayer.lastName} · ${linePlayer.position} ranks`
+    : stats ? `${team?.abbreviation ?? teamName} · League ranks` : undefined;
+  const mentioned: string[] = !tts ? [] : ptiles ? playerStatsMentioned(tts.text, ptiles) : statsMentioned(tts.text);
   const phraseStat = seg?.kind === 'phrase' && seg.stat && stats ? stats.stats.find(s => s.key === seg.stat) ?? null : null;
   const speaker: Host | null = seg ? seg.speaker : null;
   const progressPct = segments.length ? ((segIdx + (phase === 'ended' ? 1 : 0)) / segments.length) * 100 : 0;
@@ -490,6 +504,9 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
                 headline={gfx.headline}
                 icon={gfx.icon}
                 stats={stats}
+                tiles={tiles}
+                tilesLabel={tilesLabel}
+                tilesMs={onGfx ? clock - Math.max(blockStart.current, playerStart.current) : 60_000}
                 mentioned={mentioned}
                 speaker={gfx.speaker}
                 blockMs={onGfx ? clock - blockStart.current : 60_000}

@@ -10,7 +10,8 @@
  */
 import type { ReactNode } from 'react';
 import { HOSTS, type Host } from '@/lib/spotlight/showScript';
-import { ordinal, rankTone, type ShowStat, type ShowStatKey, type ShowStatLine } from '@/lib/spotlight/teamStats';
+import { ordinal, rankTone, type ShowStatLine } from '@/lib/spotlight/teamStats';
+import type { TileStat } from '@/lib/spotlight/playerStats';
 
 export const TWO_SHOT_SRC = '/show/two_shot.jpg';
 export const avatarSrc = (h: Host) => `/show/avatars/${h}.jpg`;
@@ -42,9 +43,18 @@ interface GraphicProps {
   teamName: string;
   headline: string;
   icon: string;
+  /** Team stat line (record on the title card and panel corner). */
   stats?: ShowStatLine | null;
+  /** The tiles under the quote: the team's numbers, or the pictured
+   *  player's when a line is about a player. */
+  tiles?: TileStat[] | null;
+  /** Small label over the tiles ("League ranks", "QB ranks"…). */
+  tilesLabel?: string;
+  /** Since this set of tiles came on screen (they count up again when the
+   *  graphic switches between team and player numbers). */
+  tilesMs: number;
   /** Stats the current line talks about → highlighted tiles. */
-  mentioned: ShowStatKey[];
+  mentioned: string[];
   speaker: Host;
   blockMs: number;
   /** Since this topic came up. The panel and tiles stay put across topics
@@ -66,7 +76,7 @@ interface GraphicProps {
 }
 
 function StatTile({ st, i, blockMs, lineMs, hot, dim }: {
-  st: ShowStat; i: number; blockMs: number; lineMs: number; hot: boolean; dim: boolean;
+  st: TileStat; i: number; blockMs: number; lineMs: number; hot: boolean; dim: boolean;
 }) {
   const tone = TONE[rankTone(st.rank, st.of)];
   const enter = anim(blockMs, 350 + i * 90, 450);
@@ -124,7 +134,7 @@ export function ShowGraphic(p: GraphicProps) {
   const { variant, blockMs } = p;
   // Slow push-in on the studio two-shot for the whole block — never static.
   const push = 1.03 + 0.05 * clamp01(blockMs / 24000);
-  const anyHot = p.stats ? p.stats.stats.some(s => p.mentioned.includes(s.key)) : false;
+  const anyHot = p.tiles ? p.tiles.some(s => p.mentioned.includes(s.key)) : false;
 
   return (
     // Sized off the stage itself (container units), so the layout is the
@@ -222,19 +232,26 @@ export function ShowGraphic(p: GraphicProps) {
                 {p.text && <><span className="mr-[0.15em] text-orange-600">&ldquo;</span>{p.text}<span className="text-orange-600">&rdquo;</span></>}
               </div>
             </div>
-            {p.stats ? (
-              <div className="grid grid-cols-5 gap-[0.8em]">
-                {p.stats.stats.map((st, i) => (
+            {p.tiles?.length ? (
+              <div key={p.tilesLabel}>
+                {p.tilesLabel && (
+                  <div className="mb-[0.4em] text-[0.6em] font-bold uppercase tracking-[0.22em] text-slate-500" style={{ opacity: anim(p.tilesMs, 0, 300) }}>
+                    {p.tilesLabel}
+                  </div>
+                )}
+              <div className="grid gap-[0.8em]" style={{ gridTemplateColumns: `repeat(${p.tiles.length}, minmax(0, 1fr))` }}>
+                {p.tiles.map((st, i) => (
                   <StatTile
                     key={st.key}
                     st={st}
                     i={i}
-                    blockMs={blockMs}
+                    blockMs={p.tilesMs}
                     lineMs={p.lineMs}
                     hot={p.mentioned.includes(st.key)}
                     dim={anyHot && !p.mentioned.includes(st.key)}
                   />
                 ))}
+              </div>
               </div>
             ) : null}
           </div>
