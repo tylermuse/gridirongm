@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { SpotlightAudioPlayer } from '@/components/game/SpotlightAudioPlayer';
 import { SpotlightShowPlayer } from '@/components/game/SpotlightShowPlayer';
+import { buildGameTopics } from '@/lib/spotlight/showGame';
 import { computeShowStatLine } from '@/lib/spotlight/teamStats';
 
 import { useGameStore, computeLuxuryTax } from '@/lib/engine/store';
@@ -490,7 +491,7 @@ function TeamSpotlightSection({
   ctx?: SpotlightContext;
   onPlayerClick: (id: string) => void;
 }) {
-  const { leagueSettings, newsItems, draftResults, playoffBracket, playoffSeeds, champions, players: allPlayersFromStore } = useGameStore();
+  const { leagueSettings, newsItems, draftResults, playoffBracket, playoffSeeds, champions, players: allPlayersFromStore, schedule } = useGameStore();
   const aiCommentary = leagueSettings?.aiCommentary ?? false;
 
   // Filter news to this season's re-injury items so the spotlight can surface
@@ -509,6 +510,12 @@ function TeamSpotlightSection({
   const showStats = React.useMemo(
     () => computeShowStatLine(team, allTeams, allPlayers),
     [team, allTeams, allPlayers],
+  );
+  // The show opens on a breakdown of the team's last game (box score,
+  // scoring flow, standouts, what's next).
+  const showGame = React.useMemo(
+    () => buildGameTopics({ team, teams: allTeams, players: allPlayers, schedule, season, playoffBracket }),
+    [team, allTeams, allPlayers, schedule, season, playoffBracket],
   );
 
   const templateTopics = React.useMemo(
@@ -718,6 +725,7 @@ function TeamSpotlightSection({
                 <>
                   <SpotlightShowPlayer
                     topics={topics}
+                    game={showGame}
                     teamName={`${team.city} ${team.name}`}
                     stats={showStats}
                     team={team}

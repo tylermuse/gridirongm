@@ -19,12 +19,23 @@ export function topicTeam(topic: VisualTopic | undefined, team: Team, teams: Tea
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** The player a line names, among the topic's players (full name first,
- *  then last name as a whole word). */
-export function playerNamedIn(text: string, topic: VisualTopic | undefined, players: Player[]): Player | null {
-  const pool = (topic?.playerIds ?? []).map(id => players.find(p => p.id === id)).filter((p): p is Player => !!p);
-  for (const p of pool) if (text.includes(`${p.firstName} ${p.lastName}`)) return p;
-  for (const p of pool) if (new RegExp(`\\b${escapeRe(p.lastName)}\\b`).test(text)) return p;
+/** The player a line names: the topic's players first, then anyone on the
+ *  rosters of `teamIds` (the spotlight team, the opponent). Full name, then
+ *  last name, then a first name ("Dak") — a partial name only when it points
+ *  to exactly one player in that group. */
+export function playerNamedIn(text: string, topic: VisualTopic | undefined, players: Player[], teamIds: string[] = []): Player | null {
+  const inTopic = (topic?.playerIds ?? []).map(id => players.find(p => p.id === id)).filter((p): p is Player => !!p);
+  const onTeams = teamIds.length ? players.filter(p => p.teamId && teamIds.includes(p.teamId) && !inTopic.includes(p)) : [];
+  const word = (w: string) => w.length >= 3 && new RegExp(`(^|[^A-Za-z])${escapeRe(w)}(?![A-Za-z])`).test(text);
+  for (const pool of [inTopic, onTeams]) {
+    for (const p of pool) if (text.includes(`${p.firstName} ${p.lastName}`)) return p;
+  }
+  for (const pool of [inTopic, onTeams]) {
+    const last = pool.filter(p => word(p.lastName));
+    if (last.length === 1 || (pool === inTopic && last.length)) return last[0];
+    const first = pool.filter(p => word(p.firstName));
+    if (first.length === 1) return first[0];
+  }
   return null;
 }
 

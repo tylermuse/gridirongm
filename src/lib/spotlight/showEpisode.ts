@@ -12,13 +12,13 @@
 import crypto from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { VOICES, normalizeTtsText, generateDialogue, stripCues } from './tts';
-import { writeConversation, WRITER_MODEL } from './showWriter';
+import { hasDebate, writeConversation, WRITER_MODEL } from './showWriter';
 import { buildShowScript, type ShowSegment, type ShowTopicInput, type TimedShowSegment } from './showScript';
 import type { ShowStatLine } from './teamStats';
 
 export const CACHE_BUCKET = 'spotlight-audio';
 /** Bump when the episode format or the composer changes. */
-export const SHOW_VERSION = 'show-v6';
+export const SHOW_VERSION = 'show-v7';
 
 export interface EpisodeInput {
   topics: ShowTopicInput[];
@@ -43,7 +43,7 @@ function hash(data: unknown): string {
 }
 
 export const episodeKey = (e: EpisodeInput) => hash({ v: SHOW_VERSION, topics: e.topics, teamName: e.teamName, stats: e.stats });
-const scriptPath = (e: EpisodeInput) => `show/script-${hash({ v: SHOW_VERSION, m: WRITER_MODEL, topics: e.topics, teamName: e.teamName, stats: e.stats })}.json`;
+export const scriptPath = (e: EpisodeInput) => `show/script-${hash({ v: SHOW_VERSION, m: WRITER_MODEL, topics: e.topics, teamName: e.teamName, stats: e.stats })}.json`;
 export const payloadPath = (e: EpisodeInput) => `show/${episodeKey(e)}.json`;
 
 async function readJson<T>(sb: SupabaseClient | null, path: string): Promise<T | null> {
@@ -117,29 +117,6 @@ export function blocksOf(segments: ShowSegment[]): number[][] {
 export const displaySegments = (segments: ShowSegment[]): TimedShowSegment[] =>
   segments.map(seg => (seg.kind === 'tts' ? { ...seg, text: stripCues(seg.text) } : seg));
 
-/**
- * Voice every block (all in parallel) and hand each one over as soon as it
- * is done — the short title block first, typically within a second or two.
- */
-export async function voiceBlocks(segments: ShowSegment[], onBlock: (b: VoicedBlock) => void): Promise<VoicedBlock[]> {
-  const blocks = blocksOf(segments);
-  const out: VoicedBlock[] = [];
-  await Promise.all(blocks.map(async (idxs, index) => {
-    const voiced = await generateDialogue(idxs.map(i => {
-      const seg = segments[i] as Extract<ShowSegment, { kind: 'tts' }>;
-      return { voiceId: VOICES[seg.speaker], text: normalizeTtsText(seg.text) };
-    }));
-    const block: VoicedBlock = {
-      index,
-      audio: voiced.audio.toString('base64'),
-      lines: idxs.map((seg, k) => ({ seg, start: voiced.lines[k].start, duration: Math.max(0, voiced.lines[k].end - voiced.lines[k].start) })),
-    };
-    out[index] = block;
-    onBlock(block);
-  }));
-  return out;
-}
-
 /** The complete episode (what the cache stores and a cache hit returns). */
 export function assemble(segments: ShowSegment[], blocks: VoicedBlock[]): ShowPayload {
   const timed = displaySegments(segments);
@@ -147,4 +124,93 @@ export function assemble(segments: ShowSegment[], blocks: VoicedBlock[]): ShowPa
     timed[l.seg] = { ...timed[l.seg], audioIndex: b.index, audioStart: l.start, audioDuration: l.duration };
   }
   return { segments: timed, audios: blocks.map(b => b.audio) };
+}
+
+/** What the episode stream sends the player. */
+export type EpisodeMessage =
+  | { type: 'script'; segments: TimedShowSegment[]; final: boolean }
+  | ({ type: 'block' } & VoicedBlock);
+
+/**
+ * Produce a fresh episode as a stream the player can start on immediately:
+ *  - the opening (intro clips + the title line) right away, and its voice
+ *    within a couple of seconds;
+ *  - then each topic the moment the writer finishes it, voiced right away,
+ *    while the next topics are still being written.
+ * If the script was written ahead of time, it all goes out at once.
+ * Returns the complete episode for the cache.
+ */
+export async function streamEpisode(sb: SupabaseClient | null, e: EpisodeInput, send: (m: EpisodeMessage) => void): Promise<ShowPayload> {
+  const t0 = Date.now();
+  const log = (what: string) => console.info(`[spotlight-show] ${what} +${Date.now() - t0}ms`);
+  const voiced: VoicedBlock[] = [];
+  const voicing: Promise<void>[] = [];
+  const started = new Set<number>(); // blocks whose voicing has begun
+
+  /** Send a script (a prefix, or the final one) and start voicing every
+   *  block that is new in it. Each prefix ends on a whole topic, so its
+   *  blocks are complete. */
+  const publish = (segments: ShowSegment[], final: boolean) => {
+    send({ type: 'script', segments: displaySegments(segments), final });
+    blocksOf(segments).forEach((idxs, index) => {
+      if (started.has(index)) return;
+      started.add(index);
+      voicing.push(voiceBlock(segments, idxs, index).then(b => {
+        voiced[index] = b;
+        send({ type: 'block', ...b });
+        log(`block ${index} voiced`);
+      }));
+    });
+  };
+
+  const cachedScript = await readCachedScript(sb, e);
+  let final: ShowSegment[];
+  if (cachedScript) {
+    log('script from cache');
+    final = cachedScript;
+    publish(final, true);
+  } else {
+    // The opening needs nothing from the writer.
+    publish(buildShowScript([], e.teamName, e.stats, { written: true, partial: true }), false);
+    const done: ShowTopicInput[] = [];
+    const ep = await writeConversation(e.topics, e.teamName, e.stats, (i, topic) => {
+      done[i] = topic;
+      const upTo = e.topics.slice(0, i + 1).map((t, k) => done[k] ?? { ...t, exchanges: [] });
+      const last = e.topics.every((t, k) => k <= i || !hasDebate(t));
+      log(`topic ${i} written`);
+      if (!last) publish(buildShowScript(upTo, e.teamName, e.stats, { written: true, partial: true }), false);
+    });
+    if (ep.written) {
+      final = buildShowScript(ep.topics, e.teamName, e.stats, { written: true });
+      await writeJson(sb, scriptPath(e), { segments: final });
+    } else {
+      // Writer unavailable: the original notes, composed the classic way
+      // (its opening is the same intro, so what's playing stays valid).
+      final = buildShowScript(e.topics, e.teamName, e.stats);
+    }
+    publish(final, true);
+  }
+  await Promise.all(voicing);
+  log('all voiced');
+  return assemble(final, blocksOf(final).map((_, i) => voiced[i]));
+}
+
+async function readCachedScript(sb: SupabaseClient | null, e: EpisodeInput): Promise<ShowSegment[] | null> {
+  const path = scriptPath(e);
+  const running = inflight.get(path);
+  if (running) return running; // being written ahead of time right now
+  const cached = await readJson<{ segments: ShowSegment[] }>(sb, path);
+  return cached?.segments?.length ? cached.segments : null;
+}
+
+async function voiceBlock(segments: ShowSegment[], idxs: number[], index: number): Promise<VoicedBlock> {
+  const voiced = await generateDialogue(idxs.map(i => {
+    const seg = segments[i] as Extract<ShowSegment, { kind: 'tts' }>;
+    return { voiceId: VOICES[seg.speaker], text: normalizeTtsText(seg.text) };
+  }));
+  return {
+    index,
+    audio: voiced.audio.toString('base64'),
+    lines: idxs.map((seg, k) => ({ seg, start: voiced.lines[k].start, duration: Math.max(0, voiced.lines[k].end - voiced.lines[k].start) })),
+  };
 }

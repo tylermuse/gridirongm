@@ -89,6 +89,8 @@ export type ShowSegment =
 export interface ShowTopicInput {
   headline: string;
   icon: string;
+  /** 'deep': a postgame breakdown the writer should spend real time on. */
+  depth?: 'deep';
   /** `clipId`: the writer chose a pre-recorded on-camera line (a topical
    *  phrase) for this turn; `text` is that phrase's words. */
   exchanges: { speakerId: string; text: string; clipId?: string }[];
@@ -277,6 +279,9 @@ export interface BuildOptions {
    *  clips and its own topic hand-offs): play it as written — no stock
    *  stat exchanges, glue, record take or "next topic" clips. */
   written?: boolean;
+  /** The topics so far of an episode still being written: no outro yet.
+   *  Each partial script is a prefix of the next (and of the final one). */
+  partial?: boolean;
 }
 
 export function buildShowScript(
@@ -386,6 +391,7 @@ export function buildShowScript(
 
   // A written episode's last word on camera by Marcus would jump-cut into
   // his outro: voice it over the graphic instead.
+  if (opts.partial) return removeJumpCuts(segs);
   const tail = segs[segs.length - 1];
   // (assigned inside the forEach callback above, which TS can't see)
   const lt = lastTopic as { i: number; topic: ShowTopicInput } | null;

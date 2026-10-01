@@ -151,7 +151,12 @@ function unitMentioned(text: string, tiles: TileStat[]): string[] {
 }
 
 export interface FocusContext {
-  topic?: VisualTopic & { headline?: string };
+  topic?: VisualTopic & {
+    headline?: string;
+    /** A postgame topic: that game's stat lines replace the season's. */
+    gameLines?: Record<string, TileStat[]>;
+    gameLabel?: string;
+  };
   team: Team;
   teams: Team[];
   players: Player[];
@@ -159,19 +164,20 @@ export interface FocusContext {
   earlier: string[];
 }
 
-function playerFocus(p: Player, text: string, players: Player[]): Focus {
-  const tiles = computePlayerStatLine(p, players);
+function playerFocus(p: Player, text: string, players: Player[], topic?: FocusContext['topic']): Focus {
+  const game = topic?.gameLines?.[p.id];
+  const tiles = game ?? computePlayerStatLine(p, players);
   return {
     kind: 'player', player: p, tiles,
-    label: `${p.firstName} ${p.lastName} · ${p.position} ranks`,
+    label: game ? `${p.firstName} ${p.lastName} · ${topic?.gameLabel ?? 'this game'}` : `${p.firstName} ${p.lastName} · ${p.position} ranks`,
     mentioned: tiles ? playerStatsMentioned(text, tiles) : [],
   };
 }
 
 /** Focus from one piece of text alone (no carry-over). */
 function focusOf(text: string, c: FocusContext): Focus | null {
-  const named = playerNamedIn(text, c.topic, c.players);
-  if (named) return playerFocus(named, text, c.players);
+  const named = playerNamedIn(text, c.topic, c.players, [c.team.id, ...(c.topic?.teamIds ?? [])]);
+  if (named) return playerFocus(named, text, c.players, c.topic);
   for (const [unit, re] of UNIT_WORDS) {
     if (!re.test(text)) continue;
     const tiles = computeUnitLine(unit, c.team, c.teams, c.players);
@@ -180,7 +186,7 @@ function focusOf(text: string, c: FocusContext): Focus | null {
   for (const [role, re] of ROLE_WORDS) {
     if (!re.test(text)) continue;
     const p = starter(role, c.team, c.players);
-    if (p) return playerFocus(p, text, c.players);
+    if (p) return playerFocus(p, text, c.players, c.topic);
   }
   const team = statsMentioned(text);
   if (team.length) return { kind: 'team', mentioned: team };
@@ -193,18 +199,18 @@ export function focusForLine(text: string, c: FocusContext): Focus {
   // A topic about a player stays on him ("Bench him. I said what I said.").
   for (let k = c.earlier.length - 1; k >= 0; k--) {
     const f = focusOf(c.earlier[k], c);
-    if (f?.kind === 'player') return playerFocus(f.player, text, c.players);
+    if (f?.kind === 'player') return playerFocus(f.player, text, c.players, c.topic);
   }
   // The headline sets the subject ("QB Watch", "Trenches trouble").
   if (c.topic?.headline) {
     const f = focusOf(c.topic.headline, c);
-    if (f && f.kind !== 'team') return f.kind === 'player' ? playerFocus(f.player, text, c.players) : f;
+    if (f && f.kind !== 'team') return f.kind === 'player' ? playerFocus(f.player, text, c.players, c.topic) : f;
   }
   // A topic about exactly one player.
   const ids = c.topic?.playerIds ?? [];
   if (ids.length === 1) {
     const p = c.players.find(x => x.id === ids[0]);
-    if (p) return playerFocus(p, text, c.players);
+    if (p) return playerFocus(p, text, c.players, c.topic);
   }
   return { kind: 'none' };
 }

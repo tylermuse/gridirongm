@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient as createSupabaseServer } from '@bs/core/supabase/server';
 import { consumePodcastCredit, getServiceClient } from '@bs/core/podcast';
 import { ELEVENLABS_API_KEY } from '@/lib/spotlight/tts';
-import { assemble, displaySegments, getScript, payloadPath, readPayload, voiceBlocks, writeJson } from '@/lib/spotlight/showEpisode';
+import { payloadPath, readPayload, streamEpisode, writeJson } from '@/lib/spotlight/showEpisode';
 import { parseEpisode, supabaseAdmin } from '@/lib/spotlight/showRequest';
 
 /**
@@ -11,8 +11,10 @@ import { parseEpisode, supabaseAdmin } from '@/lib/spotlight/showRequest';
  * Cache hit → the whole episode as JSON ({ segments, audios }), free.
  * Otherwise (one podcast credit) → an NDJSON stream so the player can start
  * right away:
- *   {"type":"script","segments":[…]}   the laid-out episode (usually already
- *                                       written ahead of time, see ./script)
+ *   {"type":"script","segments":[…],"final":bool}
+ *                                       the episode so far: the opening at once,
+ *                                       then again as each topic is written
+ *                                       (all at once if written ahead, ./script)
  *   {"type":"block","index":n,"audio":"<b64 mp3>","lines":[{seg,start,duration}]}
  *                                       one per voiced block, as each finishes
  *   {"type":"done"} | {"type":"error","message":…}
@@ -61,11 +63,9 @@ export async function POST(request: Request) {
       async start(controller) {
         const send = (o: unknown) => controller.enqueue(enc.encode(JSON.stringify(o) + '\n'));
         try {
-          const segments = await getScript(sb, episode);
-          send({ type: 'script', segments: displaySegments(segments) });
-          const blocks = await voiceBlocks(segments, b => send({ type: 'block', ...b }));
+          const payload = await streamEpisode(sb, episode, send);
           send({ type: 'done' });
-          await writeJson(sb, payloadPath(episode), assemble(segments, blocks));
+          await writeJson(sb, payloadPath(episode), payload);
         } catch (err) {
           console.error('Spotlight Show stream error:', err);
           send({ type: 'error', message: err instanceof Error ? err.message : 'Unknown error' });

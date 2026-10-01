@@ -78,13 +78,14 @@ interface GraphicProps {
 function StatTile({ st, i, blockMs, lineMs, hot, dim }: {
   st: TileStat; i: number; blockMs: number; lineMs: number; hot: boolean; dim: boolean;
 }) {
-  const tone = TONE[rankTone(st.rank, st.of)];
+  const ranked = st.rank > 0 && st.of > 0;
+  const tone = TONE[ranked ? rankTone(st.rank, st.of) : 'mid'];
   const enter = anim(blockMs, 350 + i * 90, 450);
   const count = anim(blockMs, 450 + i * 90, 900);
   const bar = anim(blockMs, 650 + i * 90, 800);
   const rankIn = anim(blockMs, 1150 + i * 90, 300);
   const emph = anim(lineMs, 0, 350);
-  const fill = (st.of - st.rank + 1) / st.of;
+  const fill = ranked ? (st.of - st.rank + 1) / st.of : 0;
   return (
     <div
       className="relative rounded-[0.6em] bg-white px-[0.9em] pb-[0.8em] pt-[0.7em] text-left shadow-[0_6px_18px_rgba(15,23,42,0.12)]"
@@ -97,12 +98,18 @@ function StatTile({ st, i, blockMs, lineMs, hot, dim }: {
     >
       <div className="text-[0.62em] font-bold uppercase tracking-[0.12em] text-slate-500">{st.label}</div>
       <div className="text-[1.9em] font-extrabold leading-[1.05] tabular-nums text-[#1e3a5f]">{countUp(st.value, count)}</div>
-      <div className="mt-[0.45em] h-[0.32em] overflow-hidden rounded-full bg-slate-200">
-        <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${fill * bar * 100}%` }} />
-      </div>
-      <div className={`mt-[0.35em] text-[0.66em] font-bold ${tone.text}`} style={{ opacity: rankIn }}>
-        {ordinal(st.rank)} of {st.of}
-      </div>
+      {ranked ? (
+        <>
+          <div className="mt-[0.45em] h-[0.32em] overflow-hidden rounded-full bg-slate-200">
+            <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${fill * bar * 100}%` }} />
+          </div>
+          <div className={`mt-[0.35em] text-[0.66em] font-bold ${tone.text}`} style={{ opacity: rankIn }}>
+            {ordinal(st.rank)} of {st.of}
+          </div>
+        </>
+      ) : (
+        <div className="mt-[0.55em] text-[0.66em] font-bold text-slate-500" style={{ opacity: rankIn }}>{st.note}</div>
+      )}
     </div>
   );
 }
@@ -275,64 +282,6 @@ export function ShowCaption({ text }: { text: string }) {
       <span className="rounded bg-[#0f1f35]/85 px-2 py-0.5 text-[clamp(11px,1.8vw,17px)] font-semibold leading-snug text-white [box-decoration-break:clone]">
         {text}
       </span>
-    </div>
-  );
-}
-
-/** Wide conversation shot of both hosts turned toward each other, used under
- *  lines with nothing measurable. Loops per speaker (that host is the one
- *  talking/gesturing); at this distance nobody reads lips. */
-export const WIDE_LOOPS: Record<Host, string[]> = {
-  marcus: ['/show/wide/marcus_1.mp4', '/show/wide/marcus_2.mp4'],
-  tony: ['/show/wide/tony_1.mp4', '/show/wide/tony_2.mp4'],
-};
-
-/** Overlay on the wide shot: a small topic tag, who's talking, captions. */
-export function WideOverlay({ headline, topicArt, speaker, speakerMs, lineMs, topicMs, text, player, playerMs = 60_000 }: {
-  headline: string;
-  topicArt: ReactNode;
-  speaker: Host;
-  speakerMs: number;
-  lineMs: number;
-  topicMs: number;
-  text: string;
-  /** The player the line is about: a small chip under the topic tag. */
-  player?: { art: ReactNode; name: string; detail?: string } | null;
-  playerMs?: number;
-}) {
-  const tagIn = anim(Math.min(topicMs, 60_000), 0, 400);
-  const chipIn = anim(Math.min(playerMs, 60_000), 0, 350);
-  return (
-    <div className="absolute inset-0 [container-type:size]">
-      <div className="absolute inset-0 [font-size:1.85cqw]">
-        <div className="absolute inset-x-0 bottom-0 h-[38%] bg-gradient-to-t from-[#0f1f35]/70 to-transparent" />
-        <div
-          className="absolute left-[4%] top-[5%] flex items-center gap-[0.5em] rounded-[0.6em] bg-white/90 py-[0.3em] pl-[0.35em] pr-[0.8em] shadow-lg"
-          style={{ opacity: tagIn, transform: `translateX(${(1 - tagIn) * -1}em)` }}
-        >
-          <div className="h-[1.9em] w-[1.9em] shrink-0">{topicArt}</div>
-          <div className="leading-tight">
-            <div className="text-[0.55em] font-bold uppercase tracking-[0.24em] text-orange-600">The Breakdown</div>
-            <div className="max-w-[24em] truncate text-[0.95em] font-extrabold text-[#1e3a5f]">{noBreak(headline)}</div>
-          </div>
-        </div>
-        {player && (
-          <div
-            className="absolute left-[4%] top-[16%] flex items-center gap-[0.5em] rounded-full bg-[#1e3a5f]/90 py-[0.25em] pl-[0.25em] pr-[0.9em] shadow-lg"
-            style={{ opacity: chipIn, transform: `translateY(${(1 - chipIn) * -0.5}em)` }}
-          >
-            <div className="h-[2em] w-[2em] shrink-0 overflow-hidden rounded-full bg-white">{player.art}</div>
-            <div className="leading-tight text-white">
-              <div className="text-[0.85em] font-bold">{noBreak(player.name)}</div>
-              {player.detail && <div className="text-[0.6em] uppercase tracking-[0.18em] text-white/70">{player.detail}</div>}
-            </div>
-          </div>
-        )}
-        <div className="absolute bottom-[15%] left-[4%]">
-          <SpeakerChip speaker={speaker} speakerMs={speakerMs} lineMs={lineMs} />
-        </div>
-        {text && <ShowCaption text={text} />}
-      </div>
     </div>
   );
 }

@@ -15,19 +15,24 @@ import { ordinal, rankTone, statsMentioned, type ShowStat, type ShowStatLine } f
 import { topicTeam } from '@/lib/spotlight/showVisuals';
 import { focusForLine, type Focus } from '@/lib/spotlight/showFocus';
 import type { TileStat } from '@/lib/spotlight/playerStats';
+import type { GameTopic } from '@/lib/spotlight/showGame';
 import type { Player, Team } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
-import { ShowCaption, ShowGraphic, TWO_SHOT_SRC, WIDE_LOOPS, WideOverlay, avatarSrc } from './SpotlightShowGraphics';
+import { ShowCaption, ShowGraphic, TWO_SHOT_SRC, avatarSrc } from './SpotlightShowGraphics';
+
+type ShowTopic = {
+  headline: string;
+  icon: string;
+  exchanges: { speakerId: string; text: string }[];
+  teamIds?: string[];
+  playerIds?: string[];
+} & Partial<Pick<GameTopic, 'depth' | 'gameLines' | 'gameTeam' | 'gameLabel'>>;
 
 interface SpotlightShowPlayerProps {
-  topics: {
-    headline: string;
-    icon: string;
-    exchanges: { speakerId: string; text: string }[];
-    teamIds?: string[];
-    playerIds?: string[];
-  }[];
+  topics: ShowTopic[];
+  /** The postgame breakdown of the team's last game (goes first). */
+  game?: GameTopic[];
   teamName: string;
   /** Real numbers for on-screen graphics; null before any games are played. */
   stats?: ShowStatLine | null;
@@ -40,9 +45,6 @@ interface SpotlightShowPlayerProps {
 const logoOf = (t: Team) => (
   <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} logoUrl={t.logoUrl} size="fill" />
 );
-
-/** A line that quotes a number, a rank or a measurable stat. */
-const NUMBERISH = /\d|\b(last|ranks?|ranked|average|yards|points|percent|a game|per game)\b|\b\w+(st|nd|rd|th) in (the )?(league|scoring|passing|rushing)/i;
 
 type Phase = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'ended' | 'error' | 'exhausted' | 'locked';
 
@@ -96,7 +98,9 @@ function toneClass(st: ShowStat) {
   return t === 'good' ? 'text-emerald-600' : t === 'bad' ? 'text-red-600' : 'text-slate-500';
 }
 
-export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [], players = [] }: SpotlightShowPlayerProps) {
+export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats, team, teams = [], players = [] }: SpotlightShowPlayerProps) {
+  // The episode: the last game broken down first, then the storylines.
+  const topics: ShowTopic[] = useMemo(() => [...(game ?? []), ...storyTopics], [game, storyTopics]);
   const [phase, setPhase] = useState<Phase>('idle');
   const [segments, setSegments] = useState<TimedShowSegment[]>([]);
   const [segIdx, setSegIdx] = useState(0);
@@ -146,7 +150,6 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
   const playerStart = useRef(0);
   const playerKey = useRef<string | null>(null);
   // Focus per segment, recomputed when the episode or league data changes.
-  const wideRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   // eslint-disable-next-line react-hooks/exhaustive-deps -- a fresh cache per input is the point
   const focusCache = useMemo(() => new Map<number, Focus>(), [segments, players, teams, team, topics]);
   const panelKey = useRef('');
@@ -205,15 +208,6 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
     }, 4000);
     return () => clearTimeout(t);
   }, [requestBody, topics.length]);
-
-  // Play only the wide loop that's on screen.
-  useEffect(() => {
-    for (const v of wideRefs.current.values()) {
-      const want = v.dataset.on === '1' && phase === 'playing';
-      if (want && v.paused) void v.play().catch(() => {});
-      else if (!want && !v.paused) v.pause();
-    }
-  });
 
   // Cleanup on unmount; pause on route change.
   useEffect(() => () => {
@@ -311,6 +305,8 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
     stopAll();
     const token = tokenRef.current;
     if (i >= segs.length) {
+      // Still being written: hold on the last shot until the next topic lands.
+      if (!streamDone.current) { waitingFor.current = i; setBuffering(true); return; }
       setPhase('ended');
       return;
     }
@@ -440,53 +436,75 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
   function resumeWaiting() {
     const k = waitingFor.current;
     if (k == null || phaseRef.current !== 'playing') return;
-    if (!buffersRef.current.has(k) && !streamDone.current) return;
+    const seg = segmentsRef.current[k];
+    const ready = !!seg && (seg.kind !== 'tts' || buffersRef.current.has(k));
+    if (!ready && !streamDone.current) return;
     waitingFor.current = null;
     setBuffering(false);
     playSegmentRef.current(k);
   }
 
-  /** Lay out the episode and fetch what the first moments need. */
-  async function prepare(ctx: AudioContext, segs: TimedShowSegment[]) {
-    segmentsRef.current = segs;
-    setSegments(segs);
-    // Rank ordinals for slot phrases (tiny).
-    const ordinals = new Map<string, AudioBuffer>();
+  const clipQueue = useRef<string[]>([]);
+  const queued = useRef<Set<string>>(new Set());
+  const fetchers = useRef(0);
+
+  async function fetchClip(src: string) {
+    if (blobUrls.current.has(src)) return;
+    try {
+      const r = await fetch(src);
+      if (!r.ok) return;
+      blobUrls.current.set(src, URL.createObjectURL(await r.blob()));
+      setClipVersion(v => v + 1);
+    } catch { /* the element falls back to the network */ }
+  }
+
+  /** Fetch what a (possibly grown) script needs: rank ordinals for slot
+   *  phrases, and its clips — queued in play order, three at a time. */
+  async function loadAssets(ctx: AudioContext, segs: TimedShowSegment[]) {
     await Promise.all(segs.map(async seg => {
       if (seg.kind !== 'phrase' || !seg.slot) return;
       const k = `${seg.speaker}/${seg.slot.rank}`;
-      if (ordinals.has(k)) return;
+      if (ordinalBufs.current.has(k)) return;
       const r = await fetch(ordinalSrc(seg.speaker, seg.slot.rank));
-      if (r.ok) ordinals.set(k, await ctx.decodeAudioData(await r.arrayBuffer()));
+      if (r.ok) ordinalBufs.current.set(k, await ctx.decodeAudioData(await r.arrayBuffer()));
     }));
-    ordinalBufs.current = ordinals;
-    // Clips in the order they play; the wide loops right after the first few.
-    const order: string[] = [];
-    for (const sg of segs) if (sg.kind !== 'tts' && !order.includes(videoSrc(sg))) order.push(videoSrc(sg));
-    const first = order.slice(0, CLIPS_BEFORE_START);
-    const later = [...Object.values(WIDE_LOOPS).flat(), ...order.slice(CLIPS_BEFORE_START)];
-    const fetchClip = async (src: string) => {
-      if (blobUrls.current.has(src)) return;
-      try {
-        const r = await fetch(src);
-        if (!r.ok) return;
-        blobUrls.current.set(src, URL.createObjectURL(await r.blob()));
-        setClipVersion(v => v + 1);
-      } catch { /* the element falls back to the network */ }
-    };
+    for (const sg of segs) {
+      if (sg.kind === 'tts') continue;
+      const src = videoSrc(sg);
+      if (queued.current.has(src)) continue;
+      queued.current.add(src);
+      clipQueue.current.push(src);
+    }
+    while (fetchers.current < 3 && clipQueue.current.length) {
+      fetchers.current++;
+      void (async () => {
+        for (let src = clipQueue.current.shift(); src; src = clipQueue.current.shift()) await fetchClip(src);
+        fetchers.current--;
+      })();
+    }
+  }
+
+  /** Lay out the episode and fetch what the first moments need. */
+  async function prepare(ctx: AudioContext, segs: TimedShowSegment[]) {
+    updateScript(ctx, segs);
+    const first: string[] = [];
+    for (const sg of segs) if (sg.kind !== 'tts' && !first.includes(videoSrc(sg))) first.push(videoSrc(sg));
     await Promise.all([
-      ...first.map(fetchClip),
+      ...first.slice(0, CLIPS_BEFORE_START).map(fetchClip),
       ...[TWO_SHOT_SRC, avatarSrc('marcus'), avatarSrc('tony')].map(src => {
         const im = new Image();
         im.src = src;
         return im.decode().catch(() => {});
       }),
     ]);
-    // The rest: three at a time, in play order, behind playback.
-    void (async () => {
-      const queue = [...later];
-      await Promise.all([0, 1, 2].map(async () => { for (let src = queue.shift(); src; src = queue.shift()) await fetchClip(src); }));
-    })();
+  }
+
+  /** The script grew (the next topic was written): play on into it. */
+  function updateScript(ctx: AudioContext, segs: TimedShowSegment[]) {
+    segmentsRef.current = segs;
+    setSegments(segs);
+    void loadAssets(ctx, segs);
+    resumeWaiting();
   }
 
   // ── Controls ───────────────────────────────────────────────────────
@@ -508,6 +526,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
       ctxRef.current = ctx;
       buffersRef.current = new Map();
       spansRef.current = new Map();
+      ordinalBufs.current = new Map();
 
       if (!(res.headers.get('content-type') ?? '').includes('ndjson')) {
         // A cached episode: everything at once.
@@ -546,8 +565,12 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
               if (!line) continue;
               const msg = JSON.parse(line) as { type: string; segments?: TimedShowSegment[]; message?: string } & Partial<BlockMsg>;
               if (msg.type === 'script' && msg.segments) {
-                gotScript = true;
-                void prepare(ctx, msg.segments).then(() => setPhase(p => (p === 'loading' ? 'ready' : p)), () => setPhase('error'));
+                if (!gotScript) {
+                  gotScript = true;
+                  void prepare(ctx, msg.segments).then(() => setPhase(p => (p === 'loading' ? 'ready' : p)), () => setPhase('error'));
+                } else {
+                  updateScript(ctx, msg.segments);
+                }
               } else if (msg.type === 'block' && msg.audio && msg.lines) {
                 pending.push(addBlock(ctx, msg as BlockMsg).catch(() => {}));
               } else if (msg.type === 'error' && !gotScript) {
@@ -684,22 +707,21 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
   const linePlayer = focus?.kind === 'player' ? focus.player : null;
   const artTeam = team ? topicTeam(gfx ? topics[gfx.topicIdx] : undefined, team, teams) : null;
   const onGfx = !!(tts || vo);
-  // The stat panel is for lines that cite something measurable. Everything
-  // else — opinions, reactions, nothing to measure — plays over the wide
-  // shot of the hosts talking to each other (with the player's chip when
-  // the line is about one), not over a wall of numbers.
-  const citesNumbers = !!tts && (
-    (!!focus && focus.kind !== 'none' && focus.mentioned.length > 0) || NUMBERISH.test(tts.text)
-  );
-  const wide = !!(tts && tts.visual === 'graphic' && (focus?.kind === 'none' || !citesNumbers));
+  // Tiles only when they match what's being said: the player's or the
+  // unit's numbers, the team's when a team stat comes up — and none for a
+  // line with nothing measurable (just the quote).
+  // In the postgame topics, team numbers are that game's box score.
+  const gfxTopic = gfx ? topics[gfx.topicIdx] : undefined;
   const tiles: TileStat[] | null =
-    focus?.kind === 'player' ? focus.tiles ?? stats?.stats ?? null
+    focus?.kind === 'player' ? focus.tiles ?? null
       : focus?.kind === 'unit' ? focus.tiles
-        : stats?.stats ?? null;
+        : focus?.kind === 'team' ? gfxTopic?.gameTeam ?? stats?.stats ?? null
+          : gfxTopic?.gameTeam ?? null;
   const tilesLabel =
     focus?.kind === 'player' && focus.tiles ? focus.label
       : focus?.kind === 'unit' ? focus.label
-        : stats ? `${team?.abbreviation ?? teamName} · League ranks` : undefined;
+        : gfxTopic?.gameTeam ? gfxTopic.gameLabel
+          : stats ? `${team?.abbreviation ?? teamName} · League ranks` : undefined;
   const mentioned: string[] = !tts || !focus || focus.kind === 'none' ? [] : focus.mentioned;
   const phraseStat = seg?.kind === 'phrase' && seg.stat && stats ? stats.stats.find(s => s.key === seg.stat) ?? null : null;
   const speaker: Host | null = seg ? seg.speaker : null;
@@ -742,7 +764,7 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
           {/* Voiceover lines: animated graphic over the studio two-shot. Stays
               mounted (faded out) during on-camera shots so cuts dissolve. */}
           {gfx && (
-            <div className="absolute inset-0 transition-opacity duration-200" style={{ opacity: onGfx && !wide ? 1 : 0 }}>
+            <div className="absolute inset-0 transition-opacity duration-200" style={{ opacity: onGfx ? 1 : 0 }}>
               <ShowGraphic
                 variant={gfx.visual === 'title' ? 'title' : 'topic'}
                 teamName={teamName}
@@ -771,44 +793,6 @@ export function SpotlightShowPlayer({ topics, teamName, stats, team, teams = [],
               />
             </div>
           )}
-
-          {/* Wide shot of the hosts in conversation (lines with no stats). */}
-          <div className="absolute inset-0 transition-opacity duration-300" style={{ opacity: wide ? 1 : 0 }}>
-            {(['marcus', 'tony'] as Host[]).flatMap(h => WIDE_LOOPS[h].map((src, n) => {
-              const on = wide && tts?.speaker === h && n === (tts?.topicIdx ?? 0) % WIDE_LOOPS[h].length;
-              return (
-                <video
-                  key={src}
-                  src={blobUrls.current.get(src) ?? src}
-                  muted
-                  loop
-                  playsInline
-                  preload="auto"
-                  data-on={on ? '1' : '0'}
-                  ref={el => { if (el) wideRefs.current.set(src, el); else wideRefs.current.delete(src); }}
-                  className="absolute inset-0 h-full w-full object-cover transition-opacity duration-300"
-                  style={{ opacity: on ? 1 : 0 }}
-                />
-              );
-            }))}
-            {wide && tts && (
-              <WideOverlay
-                headline={tts.headline}
-                topicArt={artTeam ? logoOf(artTeam) : <span className="flex h-full w-full items-center justify-center text-[1.4em]">{tts.icon}</span>}
-                speaker={tts.speaker}
-                speakerMs={clock - speakerStart.current}
-                lineMs={clock - lineStart.current}
-                topicMs={clock - topicStart.current}
-                text={tts.text}
-                player={linePlayer && {
-                  art: <PlayerAvatar player={linePlayer} size="fill" teamColor={team?.primaryColor} />,
-                  name: `${linePlayer.firstName} ${linePlayer.lastName}`,
-                  detail: [linePlayer.position, teams.find(t => t.id === linePlayer.teamId)?.abbreviation].filter(Boolean).join(' · '),
-                }}
-                playerMs={clock - playerStart.current}
-              />
-            )}
-          </div>
 
           {/* Lip-synced clips: fixed lines + this episode's phrases */}
           {videoSegs.map(([key, vs]) => (

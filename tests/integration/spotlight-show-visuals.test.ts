@@ -25,8 +25,15 @@ describe('player pictures', () => {
     expect(playerNamedIn('The Brooksville crowd', topic, players)).toBeNull();
   });
 
-  it('only considers the topic’s players', () => {
+  it('only considers the topic’s players, unless given rosters to search', () => {
     expect(playerNamedIn('Bench Callahan', { playerIds: ['wr'] }, players)).toBeNull();
+    expect(playerNamedIn('Bench Callahan', { playerIds: ['wr'] }, players, ['ne'])).toBe(qb);
+  });
+
+  it('knows a player by a unique first name on the roster', () => {
+    expect(playerNamedIn("Since we're on Drew, look at the line", undefined, players, ['ne'])).toBe(qb);
+    expect(playerNamedIn('Malik Brooks, lights get bright', undefined, players, ['ne'])).toBe(wr);
+    expect(playerNamedIn('Andrew is not Drew-ish', undefined, players, ['buf'])).toBeNull();
   });
 
   it('keeps the last player named in the topic; falls back to a single-player topic', () => {

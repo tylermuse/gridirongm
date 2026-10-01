@@ -35,6 +35,15 @@ describe('written episodes', () => {
     expect(phrases).toEqual(['tony_t_draft_now']);
   });
 
+  it('each partial script (topics as they are written) is a prefix of the final one', () => {
+    const open = buildShowScript([], 'X', stats, { written: true, partial: true });
+    const first = buildShowScript(written.slice(0, 1), 'X', stats, { written: true, partial: true });
+    for (const part of [open, first]) expect(segs.slice(0, part.length)).toEqual(part);
+    expect(open.map(s => s.kind)).toEqual(['clip', 'tts', 'clip']);
+    // Blocks keep their index as the script grows.
+    expect(blocksOf(first)).toEqual(blocksOf(segs).slice(0, 2));
+  });
+
   it('groups voiced lines into blocks (title, then each topic) and maps them back', () => {
     const blocks = blocksOf(segs);
     expect(blocks.map(b => b.length)).toEqual([1, 2, 2]);

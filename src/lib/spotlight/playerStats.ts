@@ -9,9 +9,11 @@ export interface TileStat {
   key: string;
   label: string;
   value: string;
-  /** 1 = best in the league at this position. */
+  /** 1 = best in the league at this position (0 = not ranked: a single
+   *  game's number, shown with `note` instead of a rank). */
   rank: number;
   of: number;
+  note?: string;
 }
 
 interface Def {

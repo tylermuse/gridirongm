@@ -22,6 +22,10 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
  *  its latency is mostly hidden. */
 export const WRITER_MODEL = process.env.SPOTLIGHT_SHOW_WRITER_MODEL || 'claude-opus-5-5';
 const TIMEOUT_MS = 90_000;
+/** How long the model deliberates before writing (it thinks adaptively).
+ *  Low keeps the first topic arriving in seconds: the show is already
+ *  playing while it writes. */
+const WRITER_EFFORT = process.env.SPOTLIGHT_SHOW_WRITER_EFFORT || 'low';
 
 export const WRITER_SYSTEM_PROMPT = `You write "Team Spotlight", a two-host football talk show inside a football GM simulation game. From the producer's notes you write the transcript of one unscripted conversation between the hosts. It will be voiced by expressive TTS and cut against pre-recorded on-camera clips. The bar: someone listening should not be able to tell it was written. It should sound like two guys who've done this show together for years, talking, not performing.
 
@@ -35,7 +39,7 @@ WHAT MAKES IT SOUND REAL
 - Vary turn length a lot: some turns are two words ("Yeah, no." / "Right." / "Sure, sure."), some are a three- or four-sentence run where a host thinks out loud and changes direction mid-way.
 - Let thoughts be messy: restarts ("They— look, they have to run it."), interruptions with an em dash, a host coming back after being cut off.
 - Disagreement that goes somewhere: someone gives ground, or they find the actual question they disagree about. It doesn't always resolve.
-- Most lines carry no number at all. When a number comes up, say it the way people talk ("like sixteen a game", "twenty-seventh, I think?"), and never repeat a number the other host just said.
+- Outside the game breakdown, most lines carry no number at all. When a number comes up, say it the way people talk ("like sixteen a game", "twenty-seventh, I think?"), and never repeat a number the other host just said.
 - Humor comes from the relationship (needling, callbacks, a running bit), not from jokes.
 - Topics end where the talk naturally runs out: an unresolved point, a jab, a shrug. Never a summary, never "Thank you."
 
@@ -72,9 +76,11 @@ The hosts have pre-recorded on-camera lines, listed with the notes as CLIPS (all
 - Aim for two or three clips in each topic of five or more lines, one in shorter topics.
 
 OUTPUT
-Return JSON only: {"topics":[{"lines":[{"speaker":"marcus"|"tony","text":"..."} or {"speaker":"marcus"|"tony","clip":"<id>"}]}]}
-- Same number of topics, same order, as the notes.
-- The first topic is a quick cold open right after the hosts' intros: 2–4 lines.
+One JSON object per topic, each on its own single line (no array around them, no other text), in the same order as the notes — the show starts playing the first topic while you write the rest:
+{"lines":[{"speaker":"marcus"|"tony","text":"..."} or {"speaker":"marcus"|"tony","clip":"<id>"}, ...]}
+- Exactly one line per topic in the notes.
+- The first topic comes right after the hosts' intros: get straight into it, no greeting. If it's a regular topic, keep it a quick cold open (2–4 lines).
+- Topics marked "depth":"deep" are the game they just played. Go deep, the way a real postgame show does: 10–16 lines each. Walk through how the game was won or lost (the flow, the turning points, the deciding drive), argue about what decided it, and put the real stat lines in the hosts' mouths — specific players, specific numbers, said the way people say them ("three touchdowns, no picks", "a hundred and twelve on the ground"). Here, numbers are welcome: one per line is fine.
 - Other topics: 5–9 lines.`;
 
 function teamNumbers(teamName: string, stats?: ShowStatLine | null): string {
@@ -84,7 +90,6 @@ function teamNumbers(teamName: string, stats?: ShowStatLine | null): string {
 }
 
 interface WriterLine { speaker: string; text?: string; clip?: string }
-interface WriterOutput { topics: { lines: WriterLine[] }[] }
 
 function recordTone(stats?: ShowStatLine | null): PhraseTone | null {
   if (!stats) return null;
@@ -121,12 +126,11 @@ export function clipCatalog(stats?: ShowStatLine | null): { phrase: Phrase; word
   return out;
 }
 
-function valid(out: unknown, n: number): out is WriterOutput {
-  const o = out as WriterOutput;
-  return !!o && Array.isArray(o.topics) && o.topics.length === n
-    && o.topics.every(t => Array.isArray(t.lines) && t.lines.length > 0
-      && t.lines.every(l => !!l && typeof l === 'object' && typeof l.speaker === 'string'));
-}
+interface TopicLines { lines: WriterLine[] }
+
+const topicOk = (o: unknown): o is TopicLines =>
+  !!o && Array.isArray((o as TopicLines).lines) && (o as TopicLines).lines.length > 0
+  && (o as TopicLines).lines.every(l => !!l && typeof l === 'object' && typeof l.speaker === 'string');
 
 export interface WrittenEpisode {
   topics: ShowTopicInput[];
@@ -134,23 +138,36 @@ export interface WrittenEpisode {
   written: boolean;
 }
 
-/** Rewrite the topics' Marcus/Tony lines as one natural conversation. */
+/** Calls back with each topic as soon as the writer finishes it: the topic's
+ *  index in `topics` and its rewritten version. */
+export type OnTopic = (index: number, topic: ShowTopicInput) => void;
+
+const debateOf = (t: ShowTopicInput) => t.exchanges.filter(e => e.speakerId === 'stats' || e.speakerId === 'hottake');
+export const hasDebate = (t: ShowTopicInput) => debateOf(t).length > 0;
+
+/**
+ * Rewrite the topics' Marcus/Tony lines as one natural conversation,
+ * streamed: each topic is handed to `onTopic` the moment it's written, so
+ * the show can voice and play the first topics while the rest are written.
+ * Topics the writer doesn't deliver keep their original lines.
+ */
 export async function writeConversation(
   topics: ShowTopicInput[],
   teamName: string,
   stats?: ShowStatLine | null,
+  onTopic?: OnTopic,
 ): Promise<WrittenEpisode> {
   const original = { topics, written: false };
   if (!ANTHROPIC_API_KEY) return original;
-  const debateOf = (t: ShowTopicInput) => t.exchanges.filter(e => e.speakerId === 'stats' || e.speakerId === 'hottake');
-  const live = topics.filter(t => debateOf(t).length > 0);
-  if (!live.length) return original;
+  const liveIdx = topics.flatMap((t, i) => (hasDebate(t) ? [i] : []));
+  if (!liveIdx.length) return original;
 
   const catalog = clipCatalog(stats);
   const clipById = new Map(catalog.map(c => [c.phrase.id, c]));
-  const notes = live.map(t => ({
-    headline: t.headline,
-    notes: debateOf(t).map(e => `${e.speakerId === 'stats' ? 'Marcus' : 'Tony'}: ${e.text}`),
+  const notes = liveIdx.map(i => ({
+    headline: topics[i].headline,
+    ...(topics[i].depth === 'deep' ? { depth: 'deep' } : {}),
+    notes: debateOf(topics[i]).map(e => `${e.speakerId === 'stats' ? 'Marcus' : 'Tony'}: ${e.text}`),
   }));
   const clipList = catalog.map(c => `${c.phrase.id} (${c.phrase.host}): ${c.words}`).join('\n');
   const user = `Team numbers: ${teamNumbers(teamName, stats)}\n\nProducer's notes for this episode:\n${JSON.stringify(notes, null, 1)}`
@@ -161,6 +178,34 @@ export async function writeConversation(
     if (typeof l.clip === 'string') return clipById.get(l.clip)?.phrase.host === l.speaker;
     return typeof l.text === 'string' && l.text.trim().length > 0;
   };
+  const toTopic = (t: ShowTopicInput, o: TopicLines): ShowTopicInput | null => {
+    // Drop any line that doesn't check out (unknown clip, wrong host).
+    const lines = o.lines.filter(lineOk);
+    if (!lines.length) return null;
+    return {
+      ...t,
+      exchanges: lines.map(l => {
+        const speakerId = l.speaker === 'marcus' ? 'stats' : 'hottake';
+        const clip = l.clip ? clipById.get(l.clip) : undefined;
+        return clip ? { speakerId, text: clip.words, clipId: clip.phrase.id } : { speakerId, text: (l.text ?? '').trim() };
+      }),
+    };
+  };
+
+  const out = [...topics];
+  let got = 0;
+  const take = (jsonLine: string) => {
+    if (got >= liveIdx.length) return;
+    const start = jsonLine.indexOf('{');
+    if (start < 0) return;
+    let o: unknown;
+    try { o = JSON.parse(jsonLine.slice(start, jsonLine.lastIndexOf('}') + 1)); } catch { return; }
+    if (!topicOk(o)) return;
+    const i = liveIdx[got++];
+    const t = toTopic(topics[i], o);
+    if (t) out[i] = t;
+    onTopic?.(i, out[i]);
+  };
 
   try {
     const ctrl = new AbortController();
@@ -169,33 +214,49 @@ export async function writeConversation(
       method: 'POST',
       signal: ctrl.signal,
       headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: WRITER_MODEL, max_tokens: 8000, system: WRITER_SYSTEM_PROMPT, messages: [{ role: 'user', content: user }] }),
+      body: JSON.stringify({
+        model: WRITER_MODEL, max_tokens: 8000, stream: true,
+        output_config: { effort: WRITER_EFFORT },
+        system: WRITER_SYSTEM_PROMPT, messages: [{ role: 'user', content: user }],
+      }),
     });
-    clearTimeout(timer);
-    if (!res.ok) throw new Error(`writer ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    const j = (await res.json()) as { content: { type: string; text?: string }[] };
-    const text = j.content.filter(b => b.type === 'text').map(b => b.text ?? '').join('');
-    const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
-    if (!valid(json, live.length)) throw new Error('writer returned an unexpected shape');
-
-    let k = 0;
-    const out = topics.map(t => {
-      if (!debateOf(t).length) return t;
-      // Drop any line that doesn't check out (unknown clip, wrong host).
-      const lines = json.topics[k++].lines.filter(lineOk);
-      if (!lines.length) return t;
-      return {
-        ...t,
-        exchanges: lines.map(l => {
-          const speakerId = l.speaker === 'marcus' ? 'stats' : 'hottake';
-          const clip = l.clip ? clipById.get(l.clip) : undefined;
-          return clip ? { speakerId, text: clip.words, clipId: clip.phrase.id } : { speakerId, text: (l.text ?? '').trim() };
-        }),
-      };
-    });
+    if (!res.ok || !res.body) throw new Error(`writer ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    // Server-sent events → text deltas → one topic per completed line.
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let sse = '';
+    let text = '';
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        sse += dec.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = sse.indexOf('\n')) >= 0) {
+          const ev = sse.slice(0, nl).trim();
+          sse = sse.slice(nl + 1);
+          if (!ev.startsWith('data:')) continue;
+          let data: { type?: string; delta?: { type?: string; text?: string }; error?: { message?: string } };
+          try { data = JSON.parse(ev.slice(5)); } catch { continue; }
+          if (data.type === 'error') throw new Error(data.error?.message ?? 'stream error');
+          if (data.type !== 'content_block_delta' || data.delta?.type !== 'text_delta') continue;
+          text += data.delta.text ?? '';
+          let cut: number;
+          while ((cut = text.indexOf('\n')) >= 0) { take(text.slice(0, cut)); text = text.slice(cut + 1); }
+        }
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+    take(text);
+    if (!got) throw new Error('writer returned no topics');
+    // Any topic it didn't get to keeps its original lines.
+    for (let k = got; k < liveIdx.length; k++) onTopic?.(liveIdx[k], out[liveIdx[k]]);
     return { topics: out, written: true };
   } catch (err) {
-    console.warn('Spotlight show writer failed, using original lines:', err instanceof Error ? err.message : err);
-    return original;
+    console.warn('Spotlight show writer failed:', err instanceof Error ? err.message : err);
+    if (!got) return original;
+    for (let k = got; k < liveIdx.length; k++) onTopic?.(liveIdx[k], out[liveIdx[k]]);
+    return { topics: out, written: true };
   }
 }
