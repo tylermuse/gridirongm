@@ -118,6 +118,8 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const streamDone = useRef(true);
   const waitingFor = useRef<number | null>(null);
   const [buffering, setBuffering] = useState(false);
+  // Holding at the end of what's written so far: keep the last graphic up.
+  const [holding, setHolding] = useState(false);
   const [, setAudioVersion] = useState(0);
   const [lowerThird, setLowerThird] = useState(false);
   const pathname = usePathname();
@@ -307,12 +309,13 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     if (i >= segs.length) {
       // Still being written: hold on the episode's graphic (never a frozen
       // host) until the next lines land.
-      if (!streamDone.current) { waitingFor.current = i; setBuffering(true); setVisibleVideo(null); return; }
+      if (!streamDone.current) { waitingFor.current = i; setBuffering(true); setHolding(true); setVisibleVideo(null); return; }
       setPhase('ended');
       return;
     }
     const prev = segs[i - 1];
     const seg = segs[i];
+    setHolding(false);
     segIdxRef.current = i;
     segStart.current = performance.now() - pausedTotal.current;
     setSegIdx(i);
@@ -707,7 +710,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const focus: Focus | null = gfx ? focusAt(segments, gfxIdx) : null;
   const linePlayer = focus?.kind === 'player' ? focus.player : null;
   const artTeam = team ? topicTeam(gfx ? topics[gfx.topicIdx] : undefined, team, teams) : null;
-  const onGfx = !!(tts || vo);
+  const onGfx = !!(tts || vo || (holding && phase === 'playing'));
   // Tiles only when they match what's being said: the player's or the
   // unit's numbers, the team's when a team stat comes up — and none for a
   // line with nothing measurable (just the quote).

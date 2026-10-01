@@ -64,41 +64,45 @@ export async function readPayload(sb: SupabaseClient | null, e: EpisodeInput): P
   return data ? data.text() : null;
 }
 
-// One write per script per server instance, even when the prefetch and
-// Watch Show race each other.
-const inflight = new Map<string, Promise<ShowSegment[]>>();
-const PENDING_MS = 75_000;
-
 /**
- * The episode's script: from the cache, or written now (and cached). If
- * another instance is already writing it (a recent pending marker), wait
- * for that instead of paying for a second write.
+ * A script being written (one per episode per server instance). Both the
+ * ahead-of-time prefetch and Watch Show attach to the same session, and
+ * Watch Show follows it line by line — so clicking while the prefetch is
+ * still writing never waits for the whole script.
  */
-export function getScript(sb: SupabaseClient | null, e: EpisodeInput): Promise<ShowSegment[]> {
+interface Writing {
+  last: { sofar: ShowTopicInput[]; done: Set<number> } | null;
+  listeners: Set<(sofar: ShowTopicInput[], done: Set<number>) => void>;
+  result: Promise<{ segments: ShowSegment[]; written: boolean }>;
+}
+const writing = new Map<string, Writing>();
+
+function startWriting(sb: SupabaseClient | null, e: EpisodeInput): Writing {
   const path = scriptPath(e);
-  const running = inflight.get(path);
+  const running = writing.get(path);
   if (running) return running;
-  const job = (async () => {
-    const cached = await readJson<{ segments: ShowSegment[] }>(sb, path);
-    if (cached?.segments?.length) return cached.segments;
-    const pending = await readJson<{ at: number }>(sb, `${path}.pending`);
-    if (pending && Date.now() - pending.at < PENDING_MS) {
-      for (let waited = 0; waited < PENDING_MS; waited += 1500) {
-        await new Promise(r => setTimeout(r, 1500));
-        const done = await readJson<{ segments: ShowSegment[] }>(sb, path);
-        if (done?.segments?.length) return done.segments;
-      }
-    }
-    await writeJson(sb, `${path}.pending`, { at: Date.now() });
-    const ep = await writeConversation(e.topics, e.teamName, e.stats);
+  const w: Writing = { last: null, listeners: new Set(), result: null as unknown as Writing['result'] };
+  w.result = (async () => {
+    const ep = await writeConversation(e.topics, e.teamName, e.stats, (sofar, done) => {
+      w.last = { sofar, done: new Set(done) };
+      for (const l of w.listeners) l(sofar, done);
+    });
     const segments = buildShowScript(ep.topics, e.teamName, e.stats, { written: ep.written });
     // Only cache a written script: a fallback (writer down) gets retried.
     if (ep.written) await writeJson(sb, path, { segments });
-    return segments;
+    return { segments, written: ep.written };
   })();
-  inflight.set(path, job);
-  job.finally(() => setTimeout(() => inflight.delete(path), 60_000)).catch(() => {});
-  return job;
+  writing.set(path, w);
+  w.result.finally(() => setTimeout(() => writing.delete(path), 120_000)).catch(() => {});
+  return w;
+}
+
+/** The episode's script, written ahead of time (the prefetch): from the
+ *  cache, or written now and cached. */
+export async function getScript(sb: SupabaseClient | null, e: EpisodeInput): Promise<ShowSegment[]> {
+  const cached = await readJson<{ segments: ShowSegment[] }>(sb, scriptPath(e));
+  if (cached?.segments?.length) return cached.segments;
+  return (await startWriting(sb, e).result).segments;
 }
 
 /** Lines per voiced block: a topic's first block is short so it's ready
@@ -185,44 +189,41 @@ export async function streamEpisode(sb: SupabaseClient | null, e: EpisodeInput, 
     });
   };
 
-  const cachedScript = await readCachedScript(sb, e);
+  const cached = await readJson<{ segments: ShowSegment[] }>(sb, scriptPath(e));
   let final: ShowSegment[];
-  if (cachedScript) {
+  if (cached?.segments?.length) {
     log('script from cache');
-    final = cachedScript;
+    final = cached.segments;
     publish(final, true);
   } else {
     // The opening needs nothing from the writer.
     publish(buildShowScript([], e.teamName, e.stats, { written: true, partial: true }), false);
     let first = true;
-    const ep = await writeConversation(e.topics, e.teamName, e.stats, (sofar, done) => {
+    const onProgress = (sofar: ShowTopicInput[], done: Set<number>) => {
       if (first) { log('first line written'); first = false; }
       // Only the topics the writer has reached.
       const reached = sofar.map((t, i) => (done.has(i) || t !== e.topics[i] ? i : -1)).reduce((m, i) => Math.max(m, i), -1);
       publish(buildShowScript(sofar.slice(0, reached + 1), e.teamName, e.stats, { written: true, partial: true }), false, done);
-    });
-    log('script written');
-    if (ep.written) {
-      final = buildShowScript(ep.topics, e.teamName, e.stats, { written: true });
-      await writeJson(sb, scriptPath(e), { segments: final });
-    } else {
-      // Writer unavailable: the original notes, composed the classic way
-      // (its opening is the same intro, so what's playing stays valid).
-      final = buildShowScript(e.topics, e.teamName, e.stats);
+    };
+    // Join the writing session (maybe already started by the prefetch):
+    // catch up on what's written so far, then follow it.
+    const w = startWriting(sb, e);
+    if (w.last) onProgress(w.last.sofar, w.last.done);
+    w.listeners.add(onProgress);
+    try {
+      const out = await w.result;
+      log('script written');
+      // Written: the final script. Writer unavailable: the original notes,
+      // composed the classic way (same intro, so what's playing stays valid).
+      final = out.written ? out.segments : buildShowScript(e.topics, e.teamName, e.stats);
+    } finally {
+      w.listeners.delete(onProgress);
     }
     publish(final, true);
   }
   await Promise.all(voicing);
   log('all voiced');
   return assemble(final, blocksOf(final).map((_, i) => voiced[i]));
-}
-
-async function readCachedScript(sb: SupabaseClient | null, e: EpisodeInput): Promise<ShowSegment[] | null> {
-  const path = scriptPath(e);
-  const running = inflight.get(path);
-  if (running) return running; // being written ahead of time right now
-  const cached = await readJson<{ segments: ShowSegment[] }>(sb, path);
-  return cached?.segments?.length ? cached.segments : null;
 }
 
 // ElevenLabs caps concurrent requests per account: voice a few blocks at a
