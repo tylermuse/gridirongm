@@ -21,7 +21,13 @@ export type Focus =
   | { kind: 'player'; player: Player; tiles: TileStat[] | null; label: string; mentioned: string[] }
   | { kind: 'unit'; unit: Unit; tiles: TileStat[]; label: string; mentioned: string[] }
   | { kind: 'team'; mentioned: string[] }
+  | { kind: 'standings'; scope: 'conference' | 'division' }
   | { kind: 'none' };
+
+/** Playoff-race / standings talk → the standings board. */
+const STANDINGS = /\bplayoff (picture|race|spot|hunt|chances|line|push)|\bwild ?card|\bseeds?\b|\bseeding\b|\bgames? (back|out)\b|\bhalf (a )?game\b|\b(and a half|a half) back\b|\bstandings\b|\bin the hunt\b|\bclinch|\bdivision (lead|race|title|crown)|\bwin the division\b|\bthe division\b/i;
+const standingsOf = (text: string): Focus | null =>
+  STANDINGS.test(text) ? { kind: 'standings', scope: /\bdivision\b/i.test(text) ? 'division' : 'conference' } : null;
 
 type PositionRole = 'qb' | 'rb' | 'wr' | 'k';
 
@@ -174,10 +180,14 @@ function playerFocus(p: Player, text: string, players: Player[], topic?: FocusCo
   const game = topic?.gameLines?.[p.id];
   // In a game breakdown, a player without a line from that game shows no
   // tiles of his own (the game's box score stays up) — never season numbers.
-  const tiles = game ?? (topic?.gameLines ? null : computePlayerStatLine(p, players));
+  const season = game ? null : topic?.gameLines ? null : computePlayerStatLine(p, players);
+  // No numbers yet (a rookie, a new signing, between seasons): his profile.
+  const bio = !game && !season && !topic?.gameLines ? profileTiles(p) : null;
+  const tiles = game ?? season ?? bio;
   return {
     kind: 'player', player: p, tiles,
-    label: game ? `${p.firstName} ${p.lastName} · ${topic?.gameLabel ?? 'this game'}` : `${p.firstName} ${p.lastName} · ${p.position} ranks`,
+    label: game ? `${p.firstName} ${p.lastName} · ${topic?.gameLabel ?? 'this game'}`
+      : bio ? `${p.firstName} ${p.lastName} · Profile` : `${p.firstName} ${p.lastName} · ${p.position} ranks`,
     mentioned: tiles ? playerStatsMentioned(text, tiles) : [],
   };
 }
@@ -189,6 +199,17 @@ const GAME_WORDS: [string, RegExp][] = [
   ['to', /\bturn(ed|s)? (it|the ball) over|\bturnovers?\b|\bgave it away|\bpicks?\b|\bintercept|\bfumbl/i],
   ['sacks', /\bsack/i],
 ];
+
+/** A player's profile when there are no stats to show. */
+function profileTiles(p: Player): TileStat[] {
+  const t = (key: string, label: string, value: string, note: string): TileStat => ({ key, label, value, rank: 0, of: 0, note });
+  const c = p.contract;
+  return [
+    t('ovr', 'Overall', String(Math.round(p.ratings.overall)), `Potential ${Math.round(p.potential)}`),
+    t('age', 'Age', String(p.age), p.position),
+    ...(c ? [t('salary', 'Contract', `$${c.salary.toFixed(1)}M`, `${c.yearsLeft} yr${c.yearsLeft === 1 ? '' : 's'} left`)] : []),
+  ];
+}
 
 /** Focus from one piece of text alone (no carry-over). */
 function focusOf(text: string, c: FocusContext): Focus | null {
@@ -203,6 +224,8 @@ function focusOf(text: string, c: FocusContext): Focus | null {
     }
     return { kind: 'team', mentioned: GAME_WORDS.filter(([, re]) => re.test(text)).map(([k]) => k) };
   }
+  const race = standingsOf(text);
+  if (race) return race;
   for (const [unit, re] of UNIT_WORDS) {
     if (!re.test(text)) continue;
     const tiles = computeUnitLine(unit, c.team, c.teams, c.players);
@@ -234,10 +257,13 @@ export function focusForLine(text: string, c: FocusContext): Focus {
   if (prev?.kind === 'player') return playerFocus(prev.player, text, c.players, c.topic);
   if (prev?.kind === 'unit') return { ...prev, mentioned: unitMentioned(text, prev.tiles) };
   if (prev?.kind === 'team') return { kind: 'team', mentioned: [] };
+  if (prev?.kind === 'standings') return prev;
   // The headline sets the subject ("QB Watch", "Trenches trouble").
   if (c.topic?.headline) {
     const f = focusOf(c.topic.headline, c);
     if (f && f.kind !== 'team') return f.kind === 'player' ? playerFocus(f.player, text, c.players, c.topic) : f;
+    const race = standingsOf(c.topic.headline);
+    if (race) return race;
   }
   // A topic about exactly one player.
   const ids = c.topic?.playerIds ?? [];
@@ -245,5 +271,6 @@ export function focusForLine(text: string, c: FocusContext): Focus {
     const p = c.players.find(x => x.id === ids[0]);
     if (p) return playerFocus(p, text, c.players, c.topic);
   }
-  return { kind: 'none' };
+  // Never a quote on its own: the team's numbers.
+  return { kind: 'team', mentioned: [] };
 }

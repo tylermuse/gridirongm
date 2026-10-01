@@ -43,9 +43,15 @@ describe('focusForLine', () => {
     }
   });
 
-  it('team stat talk keeps the team line; nothing measurable → no stats', () => {
+  it('team stat talk keeps the team line; nothing measurable still shows the team numbers (never a bare quote)', () => {
     expect(focusForLine('The offense ranks 7th in points per game.', ctx)).toMatchObject({ kind: 'team', mentioned: ['ppg'] });
-    expect(focusForLine("They can't just stand pat! It's time to make a move!", ctx)).toEqual({ kind: 'none' });
+    expect(focusForLine("They can't just stand pat! It's time to make a move!", ctx)).toEqual({ kind: 'team', mentioned: [] });
+  });
+
+  it('playoff-race talk shows the standings', () => {
+    expect(focusForLine('Three and a half back. Doable.', ctx)).toEqual({ kind: 'standings', scope: 'conference' });
+    expect(focusForLine('They can still win the division.', ctx)).toEqual({ kind: 'standings', scope: 'division' });
+    expect(focusForLine('No room to drop another one.', { ...ctx, topic: { headline: 'Playoff Picture' } })).toEqual({ kind: 'standings', scope: 'conference' });
   });
 
   it('stays on a player for the rest of his topic, or follows the headline', () => {

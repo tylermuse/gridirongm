@@ -16,6 +16,7 @@ import { topicTeam } from '@/lib/spotlight/showVisuals';
 import { focusForLine, type Focus } from '@/lib/spotlight/showFocus';
 import type { TileStat } from '@/lib/spotlight/playerStats';
 import type { GameTopic } from '@/lib/spotlight/showGame';
+import { conferenceRace, divisionTable } from '@/lib/spotlight/showStandings';
 import type { Player, Team } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
@@ -27,7 +28,7 @@ type ShowTopic = {
   exchanges: { speakerId: string; text: string }[];
   teamIds?: string[];
   playerIds?: string[];
-} & Partial<Pick<GameTopic, 'depth' | 'gameLines' | 'gameTeam' | 'gameLabel'>>;
+} & Partial<Pick<GameTopic, 'depth' | 'gameLines' | 'gameTeam' | 'gameCompare' | 'gameLabel'>>;
 
 interface SpotlightShowPlayerProps {
   topics: ShowTopic[];
@@ -726,7 +727,21 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       : focus?.kind === 'unit' ? focus.label
         : gfxTopic?.gameTeam ? gfxTopic.gameLabel
           : stats ? `${team?.abbreviation ?? teamName} · League ranks` : undefined;
-  const mentioned: string[] = !tts || !focus || focus.kind === 'none' ? [] : focus.mentioned;
+  const mentioned: string[] = !tts || !focus || focus.kind === 'none' || focus.kind === 'standings' ? [] : focus.mentioned;
+  // A game's team box score reads as a side-by-side: us left, them right.
+  const cmpData = gfxTopic?.gameCompare && tiles && tiles === gfxTopic.gameTeam ? gfxTopic.gameCompare : null;
+  const teamOf = (id: string) => teams.find(x => x.id === id);
+  const compare = cmpData ? {
+    left: { abbreviation: cmpData.left.abbreviation, art: teamOf(cmpData.left.teamId) ? logoOf(teamOf(cmpData.left.teamId)!) : null },
+    right: { abbreviation: cmpData.right.abbreviation, art: teamOf(cmpData.right.teamId) ? logoOf(teamOf(cmpData.right.teamId)!) : null },
+    rows: cmpData.rows,
+  } : null;
+  const board = focus?.kind === 'standings' && team && teams.length
+    ? (() => {
+      const b = focus.scope === 'division' ? divisionTable(team, teams) : conferenceRace(team, teams);
+      return { ...b, rows: b.rows.map(r => { const t = teams.find(x => x.id === r.teamId)!; return { ...r, art: logoOf(t) }; }) };
+    })()
+    : null;
   const phraseStat = seg?.kind === 'phrase' && seg.stat && stats ? stats.stats.find(s => s.key === seg.stat) ?? null : null;
   const speaker: Host | null = seg ? seg.speaker : null;
   // Seconds each segment plays for (speech span + padding), so the bar is
@@ -776,6 +791,8 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
                 icon={gfx.icon}
                 stats={stats}
                 tiles={tiles}
+                board={board}
+                compare={compare}
                 tilesLabel={tilesLabel}
                 tilesMs={onGfx ? clock - Math.max(blockStart.current, playerStart.current) : 60_000}
                 mentioned={mentioned}

@@ -24,8 +24,16 @@ export interface GameTopic {
   gameLines?: Record<string, TileStat[]>;
   /** Team box-score tiles for this game. */
   gameTeam?: TileStat[];
+  /** The same box score as a side-by-side: us (left) vs them (right). */
+  gameCompare?: GameCompare;
   /** Short label for the tiles ("Wild Card · NE vs BUF"). */
   gameLabel?: string;
+}
+
+export interface GameCompare {
+  left: { teamId: string; abbreviation: string };
+  right: { teamId: string; abbreviation: string };
+  rows: { key: string; label: string; left: string; right: string; /** Which side won the row (lower is better for turnovers). */ edge: 'left' | 'right' | null }[];
 }
 
 const ROUND = ['', 'Wild Card', 'Divisional Round', 'Conference Championship', 'Championship'];
@@ -137,6 +145,19 @@ export function buildGameTopics(c: GameContext): GameTopic[] {
   const a = teamTotals(g, c.team.id, c.players);
   const b = teamTotals(g, opp.id, c.players);
   const vs = (x: number) => `${opp.abbreviation} ${x}`;
+  const cmp = (key: string, label: string, l: number, r: number, lowerBetter = false) =>
+    ({ key, label, left: String(l), right: String(r), edge: l === r ? null : (l > r) !== lowerBetter ? 'left' as const : 'right' as const });
+  const gameCompare: GameCompare = {
+    left: { teamId: c.team.id, abbreviation: ab },
+    right: { teamId: opp.id, abbreviation: opp.abbreviation },
+    rows: [
+      cmp('pts', 'Points', us, them),
+      cmp('passYds', 'Pass YDS', a.pass, b.pass),
+      cmp('rushYds', 'Rush YDS', a.rush, b.rush),
+      cmp('to', 'Turnovers', a.ints + a.fum, b.ints + b.fum, true),
+      cmp('sacks', 'Sacks', a.sacks, b.sacks),
+    ],
+  };
   const gameTeam: TileStat[] = [
     { key: 'pts', label: 'Points', value: String(us), rank: 0, of: 0, note: vs(them) },
     { key: 'passYds', label: 'Pass YDS', value: String(a.pass), rank: 0, of: 0, note: vs(b.pass) },
@@ -186,6 +207,7 @@ export function buildGameTopics(c: GameContext): GameTopic[] {
     depth: 'deep',
     gameLines,
     gameTeam,
+    gameCompare,
     gameLabel: `${label} · ${ab} vs ${opp.abbreviation}`,
   }];
 

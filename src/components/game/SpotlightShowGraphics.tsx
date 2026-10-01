@@ -12,6 +12,7 @@ import type { ReactNode } from 'react';
 import { HOSTS, type Host } from '@/lib/spotlight/showScript';
 import { ordinal, rankTone, type ShowStatLine } from '@/lib/spotlight/teamStats';
 import type { TileStat } from '@/lib/spotlight/playerStats';
+import type { StandingsRow } from '@/lib/spotlight/showStandings';
 
 export const TWO_SHOT_SRC = '/show/two_shot.jpg';
 export const avatarSrc = (h: Host) => `/show/avatars/${h}.jpg`;
@@ -69,6 +70,10 @@ interface GraphicProps {
   logo: ReactNode;
   /** Header art for this topic: the logo of the team it's about. */
   topicArt: ReactNode;
+  /** Two teams side by side (a game's box score): left vs right. */
+  compare?: { left: { abbreviation: string; art: ReactNode }; right: { abbreviation: string; art: ReactNode }; rows: { key: string; label: string; left: string; right: string; edge: 'left' | 'right' | null }[] } | null;
+  /** Standings (playoff race / division) — shown instead of tiles. */
+  board?: { title: string; cutAfter: number | null; rows: (StandingsRow & { art: ReactNode })[] } | null;
   /** Player this line is about → photo card beside the quote. */
   player?: { art: ReactNode; name: string; detail: string; key: string } | null;
   /** Since that player came on screen. */
@@ -221,7 +226,79 @@ export function ShowGraphic(p: GraphicProps) {
                 <div className="h-[2em] w-[2em] shrink-0">{p.logo}</div>
               </div>
             </div>
-            {p.tiles?.length ? (
+            {p.compare ? (
+              <>
+                <div className="my-auto min-h-0 overflow-hidden py-[0.3em]">
+                  {p.tilesLabel && (
+                    <div className="mb-[0.35em] text-[0.62em] font-bold uppercase tracking-[0.22em] text-slate-500" style={{ opacity: anim(p.tilesMs, 0, 300) }}>{p.tilesLabel}</div>
+                  )}
+                  <div className="overflow-hidden rounded-[0.7em] bg-white shadow-[0_6px_18px_rgba(15,23,42,0.12)]">
+                    <div className="grid grid-cols-[1fr_1.3fr_1fr] items-center border-b border-slate-100 px-[1em] py-[0.25em]">
+                      <div className="flex items-center gap-[0.45em]"><span className="h-[1.8em] w-[1.8em]">{p.compare.left.art}</span><span className="text-[1em] font-extrabold text-[#1e3a5f]">{p.compare.left.abbreviation}</span></div>
+                      <div />
+                      <div className="flex items-center justify-end gap-[0.45em]"><span className="text-[1em] font-extrabold text-[#1e3a5f]">{p.compare.right.abbreviation}</span><span className="h-[1.8em] w-[1.8em]">{p.compare.right.art}</span></div>
+                    </div>
+                    {p.compare.rows.map((r, i) => {
+                      const enter = anim(p.tilesMs, 200 + i * 80, 350);
+                      const hot = p.mentioned.includes(r.key);
+                      return (
+                        <div
+                          key={r.key}
+                          className={`grid grid-cols-[1fr_1.3fr_1fr] items-center px-[1em] py-[0.08em] ${hot ? 'bg-orange-50' : i % 2 ? 'bg-slate-50' : ''}`}
+                          style={{ opacity: enter, boxShadow: hot ? 'inset 0 0 0 0.12em #ea580c' : undefined }}
+                        >
+                          <div className={`text-[1.05em] tabular-nums ${r.edge === 'left' ? 'font-extrabold text-[#0f1f35]' : 'font-semibold text-slate-400'}`}>{countUp(r.left, anim(p.tilesMs, 300 + i * 80, 700))}</div>
+                          <div className={`text-center text-[0.6em] font-bold uppercase tracking-[0.16em] ${hot ? 'text-orange-600' : 'text-slate-500'}`}>{r.label}</div>
+                          <div className={`text-right text-[1.05em] tabular-nums ${r.edge === 'right' ? 'font-extrabold text-[#0f1f35]' : 'font-semibold text-slate-400'}`}>{countUp(r.right, anim(p.tilesMs, 300 + i * 80, 700))}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {p.text && (
+                  <div key={p.text} className="line-clamp-2 text-[0.78em] font-semibold leading-snug text-slate-500" style={{ opacity: anim(p.lineMs, 120, 380) }}>
+                    {p.text}
+                  </div>
+                )}
+              </>
+            ) : p.board ? (
+              <>
+                <div className="my-auto min-h-0 overflow-hidden py-[0.3em]" key={p.board.title}>
+                  <div className="mb-[0.35em] text-[0.62em] font-bold uppercase tracking-[0.22em] text-slate-500" style={{ opacity: anim(p.tilesMs, 0, 300) }}>
+                    {p.board.title}
+                  </div>
+                  <div className="overflow-hidden rounded-[0.7em] bg-white shadow-[0_6px_18px_rgba(15,23,42,0.12)]">
+                    {p.board.rows.map((r, i) => {
+                      const enter = anim(p.tilesMs, 200 + i * 70, 350);
+                      return (
+                        <div key={r.teamId}>
+                          {p.board!.cutAfter === i && (
+                            <div className="flex items-center gap-[0.5em] bg-orange-50 px-[0.8em] py-0 text-[0.45em] font-bold uppercase tracking-[0.2em] text-orange-600">
+                              <span className="h-px flex-1 bg-orange-400" /> Playoff line <span className="h-px flex-1 bg-orange-400" />
+                            </div>
+                          )}
+                          <div
+                            className={`flex items-center gap-[0.6em] px-[0.8em] py-[0.06em] text-[0.7em] ${r.isUser ? 'bg-orange-100 font-extrabold text-[#0f1f35]' : i % 2 ? 'bg-slate-50 text-slate-700' : 'text-slate-700'}`}
+                            style={{ opacity: enter, transform: `translateX(${(1 - enter) * -1}em)` }}
+                          >
+                            <span className="w-[1.6em] text-center text-[0.85em] font-bold text-slate-400">{r.seed ?? '–'}</span>
+                            <span className="h-[1.4em] w-[1.4em] shrink-0">{r.art}</span>
+                            <span className="min-w-0 flex-1 truncate font-semibold">{r.name}</span>
+                            <span className="w-[3.5em] text-right tabular-nums font-bold">{r.record}</span>
+                            <span className="w-[4.2em] whitespace-nowrap text-right tabular-nums text-slate-500">{r.gb ? `${r.gb} GB` : r.seed ? 'In' : '—'}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {p.text && (
+                  <div key={p.text} className="line-clamp-2 text-[0.78em] font-semibold leading-snug text-slate-500" style={{ opacity: anim(p.lineMs, 120, 380) }}>
+                    {p.text}
+                  </div>
+                )}
+              </>
+            ) : p.tiles?.length ? (
               // Stats lead: the player (or unit/team) and the numbers fill the
               // panel; what's being said is only a small caption underneath.
               <>
