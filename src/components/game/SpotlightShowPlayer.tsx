@@ -13,7 +13,7 @@ import {
 import { ordinalSrc } from '@/lib/spotlight/phrases';
 import { ordinal, rankTone, statsMentioned, type ShowStat, type ShowStatLine } from '@/lib/spotlight/teamStats';
 import { topicTeam } from '@/lib/spotlight/showVisuals';
-import { focusForLine, type Focus } from '@/lib/spotlight/showFocus';
+import { focusForLine, measurableIn, type Focus } from '@/lib/spotlight/showFocus';
 import type { TileStat } from '@/lib/spotlight/playerStats';
 import type { GameTopic } from '@/lib/spotlight/showGame';
 import { conferenceRace, divisionTable } from '@/lib/spotlight/showStandings';
@@ -21,6 +21,10 @@ import type { Player, Team } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { ShowCaption, ShowGraphic, TWO_SHOT_SRC, avatarSrc } from './SpotlightShowGraphics';
+
+/** Over-the-shoulder listening loops: `${listener}_listen_${n}`. */
+const OTS_SRC = (listener: Host, n: number) => `/show/ots/${listener}_listen_${n + 1}.mp4`;
+const OTS_ALL = (['marcus', 'tony'] as const).flatMap(h => [OTS_SRC(h, 0), OTS_SRC(h, 1)]);
 
 type ShowTopic = {
   headline: string;
@@ -155,6 +159,10 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   // Focus per segment, recomputed when the episode or league data changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- a fresh cache per input is the point
   const focusCache = useMemo(() => new Map<number, Focus>(), [segments, players, teams, team, topics]);
+  // Lines with nothing to show play over an over-the-shoulder shot instead.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- a fresh cache per input is the point
+  const otsCache = useMemo(() => new Map<number, boolean>(), [segments, players, teams, team, topics]);
+  const otsRefs = useRef(new Map<string, HTMLVideoElement>());
   const panelKey = useRef('');
   const topicStart = useRef(0);
   const endTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -228,6 +236,14 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     }
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The listening shots run whenever the show does.
+  useEffect(() => {
+    for (const v of otsRefs.current.values()) {
+      if (phase === 'playing') void v.play().catch(() => {});
+      else v.pause();
+    }
+  }, [phase]);
+
   useEffect(() => {
     if (phase !== 'playing') return;
     let raf = 0;
@@ -277,6 +293,23 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     focusCache.set(i, f);
     return f;
   }, [focusCache, team, teams, players, topics]);
+
+  /** A line with nothing on it to show (banter, a reaction, a joke) cuts to
+   *  the over-the-shoulder shot: the speaker from behind, the other host
+   *  facing camera, listening. Never a topic's first line (its graphic
+   *  comes up with the headline). */
+  const otsAt = useCallback((segs: TimedShowSegment[], i: number): boolean => {
+    const hit = otsCache.get(i);
+    if (hit != null) return hit;
+    const s = segs[i];
+    let r = false;
+    if (s?.kind === 'tts' && s.visual === 'graphic' && s.topicIdx >= 0 && team) {
+      const first = !segs.slice(0, i).some(x => x.kind === 'tts' && x.topicIdx === s.topicIdx);
+      r = !first && !measurableIn(s.text, { topic: topics[s.topicIdx], team, teams, players, earlier: [], play: s.play });
+    }
+    otsCache.set(i, r);
+    return r;
+  }, [otsCache, team, teams, players, topics]);
 
   /** Cut away when the clip's speech (plus a hair) is done, not at the end
    *  of the file. Re-armed on resume. */
@@ -712,7 +745,9 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const focus: Focus | null = gfx ? focusAt(segments, gfxIdx) : null;
   const linePlayer = focus?.kind === 'player' ? focus.player : null;
   const artTeam = team ? topicTeam(gfx ? topics[gfx.topicIdx] : undefined, team, teams) : null;
-  const onGfx = !!(tts || vo || (holding && phase === 'playing'));
+  const ots = !!tts && phase !== 'ended' && otsAt(segments, segIdx);
+  const otsSrc = ots && tts ? OTS_SRC(tts.speaker === 'marcus' ? 'tony' : 'marcus', segIdx % 2) : null;
+  const onGfx = !!(tts || vo || (holding && phase === 'playing')) && !ots;
   // Tiles only when they match what's being said: the player's or the
   // unit's numbers, the team's when a team stat comes up — and none for a
   // line with nothing measurable (just the quote).
@@ -834,6 +869,21 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
             </div>
           )}
 
+          {/* Over-the-shoulder: the listener facing camera (looping, silent). */}
+          {OTS_ALL.map(src => (
+            <video
+              key={src}
+              ref={el => { if (el) otsRefs.current.set(src, el); else otsRefs.current.delete(src); }}
+              src={src}
+              muted
+              loop
+              playsInline
+              preload="auto"
+              className="absolute inset-0 h-full w-full object-cover transition-opacity duration-200"
+              style={{ opacity: otsSrc === src ? 1 : 0 }}
+            />
+          ))}
+
           {/* Lip-synced clips: fixed lines + this episode's phrases */}
           {videoSegs.map(([key, vs]) => (
             <video
@@ -876,7 +926,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
           )}
 
           {/* Captions (topic graphics carry the line as a pull quote instead) */}
-          {seg && phase !== 'ended' && !(tts && tts.visual === 'graphic') && !vo && <ShowCaption text={seg.text} />}
+          {seg && phase !== 'ended' && !(tts && tts.visual === 'graphic' && !ots) && !vo && <ShowCaption text={seg.text} />}
 
           {/* Waiting on a line's voices (rare: they stream in during the open) */}
           {buffering && phase === 'playing' && (

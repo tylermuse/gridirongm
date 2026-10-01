@@ -314,6 +314,13 @@ function focusOf(text: string, c: FocusContext): Focus | null {
   return null;
 }
 
+/** Whether the line itself names something to show (a player, a unit, a
+ *  stat, a score…) — vs talk that only carries the conversation ("Right.",
+ *  "You'd get lost."), which plays as a shot of the hosts instead. */
+export function measurableIn(text: string, c: FocusContext): boolean {
+  return !!(c.play && c.topic?.gameFlow?.plays[c.play - 1]) || focusOf(text, c) != null;
+}
+
 export function focusForLine(text: string, c: FocusContext): Focus {
   const flow = c.topic?.gameFlow;
   // The writer marked the score this line is about.

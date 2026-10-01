@@ -137,3 +137,12 @@ describe('key moments in a game breakdown', () => {
     expect(focusForLine('Unreal.', { ...c, earlier: ['x'], earlierPlays: [3] })).toEqual({ kind: 'moment', play: 3 });
   });
 });
+
+describe('measurableIn', () => {
+  it('banter has nothing to show; a player or a stat does', async () => {
+    const { measurableIn } = await import('@/lib/spotlight/showFocus');
+    expect(measurableIn('You\'d get lost.', ctx)).toBe(false);
+    expect(measurableIn('The quarterback has to be better.', ctx)).toBe(true);
+    expect(measurableIn('The offense ranks 7th in points per game.', ctx)).toBe(true);
+  });
+});
