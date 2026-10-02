@@ -73,7 +73,7 @@ The hosts have pre-recorded on-camera lines, listed with the notes as CLIPS (all
 - The speaker must be the clip's host. Never use a clip twice.
 - The next line must react to the clip's actual words.
 - Write around clips so they land: set up the subject, then answer it.
-- Aim for two or three clips in each topic of five or more lines, one in shorter topics.
+- Clips are optional. Most topics need none or one; never more than two in a topic, never two in a row. A clip that only roughly fits is worse than a written line — when in doubt, write the line.
 - Clips marked "said to his co-host" are quick replies across the desk: use them right after the other host makes a point, as the answer to it.
 
 PRE-RECORDED EXCHANGES
@@ -136,7 +136,9 @@ export function clipCatalog(stats?: ShowStatLine | null): { phrase: Phrase; word
   const statOf = (k: string) => stats?.stats.find(x => x.key === k);
   const out: { phrase: Phrase; words: string }[] = [];
   for (const p of PHRASES) {
-    const usable = p.kind === 'topical' || (p.kind === 'riff' && p.host === 'marcus');
+    // Topical lines only: the stat riffs ("They're 15th in rushing.
+    // Serviceable…") read as canned next to the writer's own numbers.
+    const usable = p.kind === 'topical';
     if (!usable) continue;
     // A one-second cut to a host and back reads as choppy: only offer clips
     // with enough speech to hold the shot.
@@ -196,7 +198,7 @@ export async function writeConversation(
   // No writer at all: the notes are voiced as they are, toned down
   // (no shouted ALL-CAPS words, no exclamation pile-ups).
   const original = { topics: topics.map(t => ({ ...t, exchanges: t.exchanges.map(e => ({ ...e, text: calm(e.text) })) })), written: false };
-  if (!ANTHROPIC_API_KEY) return original;
+  if (!ANTHROPIC_API_KEY) { console.warn('Spotlight show writer skipped: ANTHROPIC_API_KEY not set'); return original; }
   const liveIdx = topics.flatMap((t, i) => (hasDebate(t) ? [i] : []));
   if (!liveIdx.length) return original;
 

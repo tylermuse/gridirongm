@@ -46,47 +46,14 @@ describe('buildShowScript', () => {
     for (const p of phrases(segs)) expect(PHRASES.find(x => x.id === p.phraseId)!.host).toBe(p.speaker);
   });
 
-  it('the other host reacts to a cited bad stat, saying the real rank', () => {
-    const i = segs.findIndex(s => s.kind === 'tts' && s.text.startsWith('Their offense'));
-    expect(segs[i + 1]).toMatchObject({ kind: 'phrase', speaker: 'tony', stat: 'ppg', slot: { rank: 29 } });
-    expect((segs[i + 1] as { text: string }).text).toMatch(/^29th in scoring/);
-    // One stat exchange per topic; a later line can still draw one topical
-    // take from the other host ("the defense is giving up everything").
-    const j = segs.findIndex(s => s.kind === 'tts' && s.text.startsWith('And the defense'));
-    const next = segs[j + 1];
-    if (next.kind === 'phrase') {
-      expect(PHRASES.find(x => x.id === next.phraseId)).toMatchObject({ kind: 'topical', host: 'marcus' });
-      expect(segs[j + 2]).toMatchObject({ kind: 'tts' });
-    } else {
-      expect(next).toMatchObject({ kind: 'tts' });
-    }
-  });
-
-  it('mid-table stats get the "middle of the pack" take', () => {
-    const t = [{ headline: 'Air it out', icon: '🏈', exchanges: [{ speakerId: 'stats', text: 'The passing game is fine.' }] }];
-    const p = phrases(buildShowScript(t, 'X', stats));
-    expect(p.find(x => x.stat === 'pass')).toMatchObject({ speaker: 'tony', slot: { rank: 12 } });
-    expect(PHRASES.find(x => x.id === p.find(y => y.stat === 'pass')!.phraseId)!.tone).toBe('mid');
-  });
-
-  it('a stat cited on air turns into an on-camera exchange: riff with the real rank, reply, sign-off', () => {
-    const i = segs.findIndex(s => s.kind === 'tts' && s.text.startsWith('Their offense'));
-    const run = segs.slice(i + 1, i + 4);
-    const kinds = run.map(x => (x.kind === 'phrase' ? PHRASES.find(p => p.id === x.phraseId)!.kind : x.kind));
-    expect(kinds[0]).toBe('riff');
-    expect(run.map(x => x.speaker)).toEqual(['tony', 'marcus', 'tony']);
-    expect(['reply_agree', 'reply_push', 'agree', 'disagree', 'skeptical']).toContain(kinds[1]);
-    expect(kinds[2]).toBe('button');
-  });
-
-  it('a topic with no stats gets Tony’s take and Marcus’s answer on camera', () => {
-    const t = [{ headline: 'Big trade', icon: '🔁', exchanges: [{ speakerId: 'hottake', text: 'They made a move.' }, { speakerId: 'stats', text: 'It was a fair price.' }] },
-      { headline: 'Next', icon: '📅', exchanges: [{ speakerId: 'stats', text: 'Tough stretch ahead.' }] }];
-    const ss = buildShowScript(t, 'X', stats);
-    // …right after Marcus's line, so Tony is answering him.
-    const i = ss.findIndex(s => s.kind === 'tts' && s.text === 'It was a fair price.');
-    const kinds = ss.slice(i + 1, i + 3).map(x => (x.kind === 'phrase' ? PHRASES.find(p => p.id === x.phraseId)!.kind : x.kind));
-    expect(kinds).toEqual(['open', 'answer']);
+  it('unwritten (writer failed): voices the notes, at most one canned line per topic, never two in a row', () => {
+    // No on-camera stat riff / reply / sign-off chains: those played as runs
+    // of canned lines with no conversation around them.
+    const body = segs.slice(4, -2);
+    for (let k = 1; k < body.length; k++) expect(body[k - 1].kind === 'phrase' && body[k].kind === 'phrase').toBe(false);
+    const kinds = phrases(body).map(x => PHRASES.find(p => p.id === x.phraseId)!.kind);
+    expect(kinds.every(k => k === 'topical')).toBe(true);
+    expect(segs.some(s => s.kind === 'tts' && s.text.startsWith('Their offense'))).toBe(true);
   });
 
   it('is deterministic for a given episode (cache-stable) but varies across episodes', () => {

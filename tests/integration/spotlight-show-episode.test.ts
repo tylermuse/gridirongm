@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { assemble, blocksOf, displaySegments } from '@/lib/spotlight/showEpisode';
 import { buildShowScript } from '@/lib/spotlight/showScript';
-import { clipCatalog } from '@/lib/spotlight/showWriter';
+import { clipCatalog, MIN_CLIP_SPEECH } from '@/lib/spotlight/showWriter';
 import { PHRASES } from '@/lib/spotlight/phrases';
 import type { ShowStatLine } from '@/lib/spotlight/teamStats';
 
@@ -64,8 +64,10 @@ describe('written episodes', () => {
       if (!phrase.stat && phrase.tone) expect(phrase.tone).toBe('bad');
     }
     expect(cat.some(c => c.phrase.id === 'tony_t_streak_rolling')).toBe(false);
-    const riff = cat.find(c => c.phrase.kind === 'riff' && c.phrase.stat === 'rush');
-    expect(riff?.words).toMatch(/^They're 32nd in rushing/);
+    // Topical lines only (no stat riffs, no exchange lines), and none so short
+    // that cutting to it reads as a flicker.
+    expect(cat.every(c => c.phrase.kind === 'topical')).toBe(true);
+    expect(cat.every(c => c.phrase.speech.end - c.phrase.speech.start >= MIN_CLIP_SPEECH)).toBe(true);
     expect(cat.every(c => PHRASES.includes(c.phrase))).toBe(true);
   });
 });

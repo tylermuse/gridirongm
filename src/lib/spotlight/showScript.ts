@@ -351,7 +351,10 @@ export function buildShowScript(
       });
     }
 
-    let exchanged = false;
+    // Unwritten (the writer failed): voice the notes, with at most one
+    // topical clip per topic — no on-camera stat/debate chains, which played
+    // as runs of canned lines with no conversation around them.
+    let exchanged = !written;
     let topicalDone = writerClips;
     const tryExchange = (text: string, speaker: Host) => {
       if (exchanged) return;
