@@ -304,10 +304,17 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     : { kind: 'other' as const, speaker: sg.speaker, topicIdx: -1, words: 0, bare: false })), [segments, team, teams, players, topics]);
 
   /** Cut away when the clip's speech (plus a hair) is done, not at the end
-   *  of the file. Re-armed on resume. */
+   *  of the file. Watches the video's own playhead rather than a wall-clock
+   *  timer, so a clip that stalls to buffer (phones) isn't cut off before its
+   *  last words. Re-armed on resume. */
   const armClipEnd = useCallback((v: HTMLVideoElement, until: number, advance: () => void) => {
     if (endTimer.current) clearTimeout(endTimer.current);
-    endTimer.current = setTimeout(advance, Math.max(0, until - v.currentTime) * 1000);
+    const check = () => {
+      if (v.ended || (!v.seeking && v.currentTime >= until - 0.02)) { endTimer.current = null; advance(); return; }
+      const left = (until - v.currentTime) / (v.playbackRate || 1);
+      endTimer.current = setTimeout(check, Math.min(250, Math.max(15, left * 1000)));
+    };
+    check();
   }, []);
   const resumeClip = useRef<(() => void) | null>(null);
 
