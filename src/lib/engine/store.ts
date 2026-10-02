@@ -1495,11 +1495,12 @@ function pointDiff(t: Team): number {
   return t.record.pointsFor - t.record.pointsAgainst;
 }
 
-function teamCompareFn(a: Team, b: Team): number {
+export function teamCompareFn(a: Team, b: Team): number {
   return winPct(b) - winPct(a) || pointDiff(b) - pointDiff(a);
 }
 
-function computePlayoffSeeds(teams: Team[]): { AC: string[]; NC: string[] } {
+/** Seeds 1–4 are division winners, 5–7 wild cards (also the live projection mid-season). */
+export function computePlayoffSeeds(teams: Team[]): { AC: string[]; NC: string[] } {
   const result: { AC: string[]; NC: string[] } = { AC: [], NC: [] };
   const divisions = ['North', 'South', 'East', 'West'] as const;
 

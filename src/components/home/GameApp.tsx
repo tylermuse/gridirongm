@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { SpotlightAudioPlayer } from '@/components/game/SpotlightAudioPlayer';
 
-import { useGameStore, computeLuxuryTax } from '@/lib/engine/store';
+import { useGameStore, computeLuxuryTax, computePlayoffSeeds, teamCompareFn } from '@/lib/engine/store';
 import { migrateFromLocalStorage, getItem as idbGetItem } from '@bs/core/storage';
 import { setItem as idbSetItem } from '@bs/core/storage';
 import { pullCloudSave, getDeviceId, setCloudSyncEnabled } from '@bs/core/supabase/cloud-saves';
@@ -1010,28 +1010,33 @@ function Dashboard() {
     return () => window.removeEventListener('scroll-to-spotlight', scrollToSpotlight);
   }, []);
 
-  // Conference standings sorted by win pct, then wins
-  const conferenceTeams = teams
-    .filter(t => t.conference === userTeam.conference)
-    .sort((a, b) => {
-      const aGp = a.record.wins + a.record.losses;
-      const bGp = b.record.wins + b.record.losses;
-      const aWp = aGp > 0 ? a.record.wins / aGp : 0;
-      const bWp = bGp > 0 ? b.record.wins / bGp : 0;
-      if (bWp !== aWp) return bWp - aWp;
-      return b.record.wins - a.record.wins;
-    });
+  // Conference standings in playoff order: the 7 seeds (division winners
+  // 1–4, wild cards 5–7 — the actual bracket once it's set, the live
+  // projection before), then everyone else. Sorting by record alone put a
+  // 9-8 non-division-winner "6th" while he'd missed the playoffs.
+  const confSeeds = (playoffSeeds?.[userTeam.conference] as string[] | undefined) ?? computePlayoffSeeds(teams)[userTeam.conference];
+  const seedOf = (id: string) => { const i = confSeeds.indexOf(id); return i >= 0 ? i + 1 : null; };
+  const confAll = teams.filter(t => t.conference === userTeam.conference);
+  const conferenceTeams = [
+    ...confSeeds.map(id => confAll.find(t => t.id === id)).filter((t): t is NonNullable<typeof t> => !!t),
+    ...confAll.filter(t => seedOf(t.id) == null).sort(teamCompareFn),
+  ];
+  // Top 10, always including the user's team.
+  const standingsRows = (() => {
+    const top = conferenceTeams.slice(0, 10);
+    if (top.some(t => t.id === userTeamId)) return top;
+    const mine = conferenceTeams.find(t => t.id === userTeamId);
+    return mine ? [...top.slice(0, 9), mine] : top;
+  })();
+  const lastIn = conferenceTeams[confSeeds.length - 1];
 
-  // Find the leader (first team)
-  const leader = conferenceTeams[0];
-  const leaderGp = leader ? leader.record.wins + leader.record.losses : 0;
-  const leaderWp = leaderGp > 0 ? leader.record.wins / leaderGp : 0;
-
-  function getGB(t: typeof leader) {
-    if (!leader || t.id === leader.id) return '-';
-    const gp = t.record.wins + t.record.losses;
-    const gb = ((leader.record.wins - t.record.wins) + (t.record.losses - leader.record.losses)) / 2;
-    return gb === 0 ? '-' : gb.toFixed(1).replace(/\.0$/, '');
+  /** Seeds: how they're in. Everyone else: games back of the last seed. */
+  function getGB(t: (typeof conferenceTeams)[number]) {
+    const seed = seedOf(t.id);
+    if (seed != null) return seed <= 4 ? 'Div' : 'WC';
+    if (!lastIn) return '-';
+    const gb = ((lastIn.record.wins - t.record.wins) + (t.record.losses - lastIn.record.losses)) / 2;
+    return gb <= 0 ? 'TB' : gb.toFixed(1).replace(/\.0$/, '');
   }
 
   const capPct = userTeam.totalPayroll / userTeam.salaryCap;
@@ -1368,14 +1373,17 @@ function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {conferenceTeams.slice(0, 10).map((t, i) => (
+                {standingsRows.map((t, i) => (
+                  <React.Fragment key={t.id}>
+                  {i === confSeeds.length && (
+                    <tr><td colSpan={4} className="py-0.5 text-center text-[10px] font-semibold uppercase tracking-wider text-orange-600 border-t border-orange-300">Playoff line</td></tr>
+                  )}
                   <tr
-                    key={t.id}
                     className={`border-t border-[var(--border)] ${t.id === userTeamId ? 'text-blue-600 font-semibold' : ''} cursor-pointer hover:bg-[var(--surface-2)]`}
                     onClick={() => setViewTeamId(t.id)}
                   >
                     <td className="py-1 text-left flex items-center gap-1.5">
-                      <span className="text-[10px] text-[var(--text-sec)] w-4">{i + 1}</span>
+                      <span className="text-[10px] text-[var(--text-sec)] w-4">{seedOf(t.id) ?? ''}</span>
                       <div
                         className="w-3 h-3 rounded-sm shrink-0"
                         style={{ backgroundColor: t.primaryColor }}
@@ -1386,6 +1394,7 @@ function Dashboard() {
                     <td className="py-1 text-center">{t.record.losses}</td>
                     <td className="py-1 text-right text-[var(--text-sec)]">{getGB(t)}</td>
                   </tr>
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
