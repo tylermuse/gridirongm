@@ -2822,6 +2822,694 @@
    "text": "I'll leave it there.",
    "take": "marcus_m",
    "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_g_win_process",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "I keep coming back to how they won this one. Nothing flashy. They just kept doing the same thing until the other side broke, and that's what a well-coached team looks like.",
+   "take": "marcus_n",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "marcus_d_g_loss_details",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "When you watch it back, it's not one play. It's four or five little things. A missed assignment here, a penalty there. That's what loses you a game like this.",
+   "take": "marcus_n",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "marcus_d_g_comeback",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "Being down in that game and not panicking, that tells you something. Nobody pressed. They stayed with the plan and let the game come back to them.",
+   "take": "marcus_n",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "marcus_d_g_turnovers",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "You can out-gain somebody all day long. If you give them the ball back short of midfield, none of it matters. The turnovers decided this one.",
+   "take": "marcus_n",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "marcus_d_g_late_drive",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "That last drive is the one I'll remember. Clock running, everybody knows they have to throw it, and they still found a way to move the ball. That's poise.",
+   "take": "marcus_n",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "marcus_d_g_defense_won",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "The defense won this game. They got off the field on third down when it mattered, and they made the offense go the long way every single time.",
+   "take": "marcus_n",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "marcus_d_g_close",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "Games like this come down to a handful of snaps. Win most of those and you're happy on the flight home. Lose them, and you spend all week wondering.",
+   "take": "marcus_o",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "marcus_d_g_blowout_win",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "There's not much to nitpick. When you're up big early, the other team has to get one-dimensional, and then your pass rush gets to have some fun.",
+   "take": "marcus_o",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "marcus_d_g_blowout_loss",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "I don't want to overreact to one game. But that was a bad one. They were out-coached and out-played, and I didn't see a lot of fight in the second half.",
+   "take": "marcus_o",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "marcus_d_g_halftime",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "The halftime adjustments were the story. They came out of the locker room doing something different, and the other sideline never really answered it.",
+   "take": "marcus_o",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "marcus_d_g_red_zone",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "They moved the ball fine between the twenties. The red zone is where it fell apart. You settle for field goals in a game like this, you're asking for trouble.",
+   "take": "marcus_o",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "marcus_d_g_trenches",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "Go back and watch the line of scrimmage. That's where this game was won. They pushed people around for four quarters, and it showed up late.",
+   "take": "marcus_o",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "marcus_d_g_star",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "When your best player plays like your best player, this is what it looks like. He made the plays that changed the game, and he made them at the right time.",
+   "take": "marcus_p",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "marcus_d_g_next_week",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "Enjoy it tonight. But the film from this one is going to show some things they can't get away with next week against a better team.",
+   "take": "marcus_p",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "marcus_d_t_sample",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I'd be careful drawing big conclusions here. It's a handful of games. The underlying numbers say they're a little better than the record, but only a little.",
+   "take": "marcus_p",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_t_identity",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "offense"
+   ],
+   "text": "What I like is that they know who they are now. Early in the year they were trying to be everything. Now there's an identity, and you can see it on tape.",
+   "take": "marcus_p",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_t_qb_steady",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "qb"
+   ],
+   "text": "The quarterback play has been steadier than people give him credit for. He's not winning games by himself, but he's not losing them either, and that matters.",
+   "take": "marcus_p",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_t_oline_concern",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "oline"
+   ],
+   "text": "My concern is up front. If the line can't hold up for three seconds, it doesn't matter who's throwing the ball or who's catching it.",
+   "take": "marcus_p",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_t_depth",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "injury"
+   ],
+   "text": "This is where depth shows up. Everybody looks good in September. By now you find out who your fifth defensive back is, and whether he can play.",
+   "take": "marcus_q",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_t_staff_adjusted",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "coaching"
+   ],
+   "text": "I'll give the staff credit. They've adjusted. The early-season stuff that wasn't working, they've moved away from, and that's not always easy to do.",
+   "take": "marcus_q",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_t_playoff_math",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "playoffs"
+   ],
+   "text": "The math isn't complicated. They have to win the games they're supposed to win and steal one they're not. Do that, and they're in.",
+   "take": "marcus_q",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_t_young_speed",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "young"
+   ],
+   "text": "The young guys are the most interesting part of this team. They're making mistakes, sure. But they're making them at full speed, and that's what you want.",
+   "take": "marcus_q",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_t_cant_pay_all",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "contract"
+   ],
+   "text": "This is the part of team building nobody enjoys. You can't pay everybody. At some point you have to decide who's part of the next four years and who isn't.",
+   "take": "marcus_q",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_t_best_available",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "draft"
+   ],
+   "text": "I'd take the best player on the board. You don't draft for need that early. You take the guy who's going to be good, and you figure out the rest.",
+   "take": "marcus_q",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_t_close_wins",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Some of this is going to even out. Teams that win this many close games usually don't keep doing it. That's not a knock on them. It's just how it tends to go.",
+   "take": "marcus_r",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_r_fair_but",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "That's fair. That's fair. I'd just say the same game could have gone the other way, and then we're having a completely different conversation.",
+   "take": "marcus_r",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_r_why",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I don't totally disagree. I think you're right about the result. I just think you're wrong about why it happened.",
+   "take": "marcus_r",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_r_trophies",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Hold on. Before we hand out trophies, let's at least wait until they do it against somebody with a winning record.",
+   "take": "marcus_r",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_r_sustainable",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "That's my point, though. You're describing a team that needs everything to go right. That's not a sustainable way to win football games.",
+   "take": "marcus_r",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_d_r_was_wrong",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I'll say this. I was wrong about them a month ago. I thought it was a mirage. It's not. They're better than I thought.",
+   "take": "marcus_r",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_g_loved_it",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "I loved that game. I loved everything about it. That's the kind of win where you walk out of the stadium with no voice left, and you don't even care.",
+   "take": "tony_n",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "tony_d_g_ugly_win",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "Was it pretty? No. Was it ugly? A little. Do I care? Not one bit. A win's a win, and they'll take that every single time.",
+   "take": "tony_n",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "tony_d_g_loss_mad",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "I'm mad about this one. I'm not going to lie to you. They had it. They had that game in their hands, and they let it get away.",
+   "take": "tony_n",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "tony_d_g_comeback",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "When they got down, I'll be honest, I turned it off. I did! And then my phone starts blowing up, and I'm sitting there like, what did I miss?",
+   "take": "tony_n",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "tony_d_g_defense",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "That defense showed up. Flying around, hitting people, and talking about it after. That's what I want to see. That's football.",
+   "take": "tony_n",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "tony_d_g_turnovers",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "You cannot turn it over like that. You can't! You give a team extra possessions in a game like this, you deserve whatever happens to you.",
+   "take": "tony_n",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "tony_d_g_last_drive",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "That last drive, Marcus. Come on. Everybody in the building knows what's coming, and they still can't stop it. That's a grown-up drive.",
+   "take": "tony_o",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "tony_d_g_blowout_win",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "This one was over at halftime. The second half was a formality. You could have sent everybody home early and saved some gas.",
+   "take": "tony_o",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "tony_d_g_blowout_loss",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "I'm not going to sugarcoat it. That was embarrassing. Everybody in that building, coaches included, should be watching that film with their head down.",
+   "take": "tony_o",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "tony_d_g_star",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "Give that man the ball. Give him the ball! Every time he touched it, something happened. I don't understand why it's not every single play.",
+   "take": "tony_o",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "tony_d_g_close",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "My heart can't take games like this, man. I'm too old. Every week it's down to the last two minutes. Win one by twenty for me, please.",
+   "take": "tony_o",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "tony_d_g_play_calling",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "I've got a problem with the play-calling. When you've got them on the ropes, you go for it. You don't get conservative and hand the ball off three times.",
+   "take": "tony_o",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "tony_d_g_flip",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "There was a moment in that game where you could feel it flip. The sideline got loud, the crowd got loud, and from there it was over.",
+   "take": "tony_p",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "tony_d_g_one_night",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "game"
+   ],
+   "text": "Okay, enjoy it for one night. One night. Because next week is a different animal, and if they come out flat like that, they're getting run off the field.",
+   "take": "tony_p",
+   "model": "eleven_v3",
+   "writerOnly": true
+  },
+  {
+   "id": "tony_d_t_believe",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I believe in this team. I'm saying it right now, on the record. You can play this clip back to me in January. I don't care.",
+   "take": "tony_p",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_t_worried",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "I'm starting to get worried, and I don't worry. Ask Marcus, I'm never worried. But something about this team right now doesn't feel right.",
+   "take": "tony_p",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_t_qb_everything",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "qb"
+   ],
+   "text": "It all comes back to the quarterback. It always does. If he plays well, they're dangerous. If he doesn't, nothing else really matters.",
+   "take": "tony_p",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_t_nasty",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "defense"
+   ],
+   "text": "This defense is nasty, and I mean that as a compliment. Nobody wants to line up across from them. You can see it in how offenses play them.",
+   "take": "tony_p",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_t_block_somebody",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "oline"
+   ],
+   "text": "Somebody block somebody! I'm tired of watching the quarterback run for his life. Get him some help up front. It's not complicated.",
+   "take": "tony_q",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_t_coach_worried",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "coaching"
+   ],
+   "text": "I'm not saying the coach should be worried. I'm saying if I'm the coach, I'm a little worried. There's a difference. Kind of.",
+   "take": "tony_q",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_t_make_a_move",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "trade"
+   ],
+   "text": "Make a move. Pick up the phone and make a move. Teams that sit on their hands this time of year are the ones watching in January.",
+   "take": "tony_q",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_t_not_scared",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "young"
+   ],
+   "text": "I love the young guys. They play like they don't know they're supposed to be scared yet. You can't teach that. You just can't.",
+   "take": "tony_q",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_t_theyre_in",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "playoffs"
+   ],
+   "text": "Playoffs. I'm saying it. They're getting in. I don't care what the standings say right now. I've seen enough. They're in.",
+   "take": "tony_q",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_t_no_rebuild",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "rebuild"
+   ],
+   "text": "I don't want to hear the word rebuild. The fans don't want to hear rebuild. You've got good players. Go win some football games.",
+   "take": "tony_q",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_t_pay_him",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "contract"
+   ],
+   "text": "Pay the man. He's earned it. You don't let a guy like that walk out the door and then spend three years trying to replace him.",
+   "take": "tony_r",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_r_watch_game",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Oh, come on. You're doing the thing again, Marcus. The numbers, the numbers. Sometimes you just have to watch the game.",
+   "take": "tony_r",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_r_fine",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Okay, fine. Fine! You're right. I hate it, but you're right. Don't get used to it, though.",
+   "take": "tony_r",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_r_listen",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "Listen to me. Listen. I've been doing this a long time, and when a team plays like that, you don't overthink it. They're good.",
+   "take": "tony_r",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_r_walked_into",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "[laughs] You know what, I walked right into that one. I did. I'll give you that one. That's yours.",
+   "take": "tony_r",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_d_r_not_having_it",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "text": "No. No, I'm not having that. That's just not what happened. Go back and watch the tape, and then come back and tell me that.",
+   "take": "tony_r",
+   "model": "eleven_v3"
   }
  ]
 }

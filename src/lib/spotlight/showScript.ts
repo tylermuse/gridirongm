@@ -123,7 +123,9 @@ function ordinalText(n: number): string {
 }
 
 function phraseSegment(p: Phrase, rank?: number): Extract<ShowSegment, { kind: 'phrase' }> {
-  const withRank = rank != null ? p.text.replace('{rank}', ordinalText(rank)) : p.text.replace('{rank}', '');
+  // Performance cues ("[laughs]") are for the voice, not the caption.
+  const spoken = p.text.replace(/\[[a-z ]+\]\s*/gi, '');
+  const withRank = rank != null ? spoken.replace('{rank}', ordinalText(rank)) : spoken.replace('{rank}', '');
   return {
     kind: 'phrase',
     phraseId: p.id,

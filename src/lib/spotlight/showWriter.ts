@@ -114,7 +114,7 @@ export function clipCatalog(stats?: ShowStatLine | null): { phrase: Phrase; word
   for (const p of PHRASES) {
     const usable = p.kind === 'topical' || (p.kind === 'riff' && p.host === 'marcus');
     if (!usable) continue;
-    let words = p.text;
+    let words = p.text.replace(/\[[a-z ]+\]\s*/gi, '');
     if (p.stat) {
       const st = statOf(p.stat);
       if (!st || (p.tone && rankTone(st.rank, st.of) !== p.tone)) continue;

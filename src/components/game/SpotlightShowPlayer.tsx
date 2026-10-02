@@ -23,9 +23,10 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { ShowCaption, ShowGraphic, TWO_SHOT_SRC, avatarSrc } from './SpotlightShowGraphics';
 
-/** Over-the-shoulder listening loops: `${listener}_listen_${n}`. */
-const OTS_SRC = (listener: Host, n: number) => `/show/ots/${listener}_listen_${n + 1}.mp4`;
-const OTS_ALL = (['marcus', 'tony'] as const).flatMap(h => [OTS_SRC(h, 0), OTS_SRC(h, 1)]);
+/** Over-the-shoulder listening loops (studio screens frozen, so the
+ *  footage on them doesn't run backward on the loop). */
+const OTS_SRC = (listener: Host) => `/show/ots/${listener}_listen.mp4`;
+const OTS_ALL = [OTS_SRC('marcus'), OTS_SRC('tony')];
 
 type ShowTopic = {
   headline: string;
@@ -738,7 +739,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const artTeam = team ? topicTeam(gfx ? topics[gfx.topicIdx] : undefined, team, teams) : null;
   const shot = tts && phase !== 'ended' ? shots[segIdx] : undefined;
   const ots = shot?.kind === 'ots';
-  const otsSrc = shot?.kind === 'ots' ? OTS_SRC(shot.listener, shot.take) : null;
+  const otsSrc = shot?.kind === 'ots' ? OTS_SRC(shot.listener) : null;
   const onGfx = !!(tts || vo || (holding && phase === 'playing')) && !ots;
   // Tiles only when they match what's being said: the player's or the
   // unit's numbers, the team's when a team stat comes up — and none for a
