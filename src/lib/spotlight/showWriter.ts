@@ -108,6 +108,9 @@ function recordTone(stats?: ShowStatLine | null): PhraseTone | null {
  * filled in. The older announcer-style lines (Tony's stat riffs, record
  * takes, stock glue) are left out: they're what made the show sound canned.
  */
+/** Seconds of speech a clip needs before the writer may cut to it. */
+export const MIN_CLIP_SPEECH = 2.5;
+
 export function clipCatalog(stats?: ShowStatLine | null): { phrase: Phrase; words: string }[] {
   const rt = recordTone(stats);
   const statOf = (k: string) => stats?.stats.find(x => x.key === k);
@@ -115,6 +118,9 @@ export function clipCatalog(stats?: ShowStatLine | null): { phrase: Phrase; word
   for (const p of PHRASES) {
     const usable = p.kind === 'topical' || (p.kind === 'riff' && p.host === 'marcus');
     if (!usable) continue;
+    // A one-second cut to a host and back reads as choppy: only offer clips
+    // with enough speech to hold the shot.
+    if (p.speech.end - p.speech.start < MIN_CLIP_SPEECH) continue;
     let words = p.text.replace(/\[[a-z ]+\]\s*/gi, '');
     if (p.stat) {
       const st = statOf(p.stat);

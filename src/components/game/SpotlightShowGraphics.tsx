@@ -69,8 +69,9 @@ interface GraphicProps {
   text: string;
   /** The spotlight team's logo (title card, panel corner). */
   logo: ReactNode;
-  /** Header art for this topic: the logo of the team it's about. */
-  topicArt: ReactNode;
+  /** The team in the panel's top-right corner, when it isn't the spotlight
+   *  team: a line about the opponent (or one of his players) shows theirs. */
+  corner?: { name: string; record: string; logo: ReactNode } | null;
   /** Two teams side by side (a game's box score): left vs right. */
   compare?: { left: { abbreviation: string; art: ReactNode }; right: { abbreviation: string; art: ReactNode }; rows: { key: string; label: string; left: string; right: string; edge: 'left' | 'right' | null }[] } | null;
   /** Standings (playoff race / division) — shown instead of tiles. */
@@ -362,17 +363,16 @@ export function ShowGraphic(p: GraphicProps) {
               className="flex items-center gap-[0.5em]"
               style={{ opacity: anim(p.topicMs, 150, 450), transform: `translateX(${(1 - anim(p.topicMs, 150, 450)) * -1.5}em)` }}
             >
-              <div key={p.headline} className="h-[2.6em] w-[2.6em] shrink-0">{p.topicArt}</div>
               <div className="min-w-0">
                 <div className="text-[0.62em] font-bold uppercase tracking-[0.28em] text-orange-600">The Breakdown</div>
                 <div className="text-[1.55em] font-extrabold leading-[1.1] text-[#1e3a5f] [text-wrap:balance]">{noBreak(p.headline)}</div>
               </div>
               <div className="ml-auto flex shrink-0 items-center gap-[0.5em] text-right">
-                <div>
-                  <div className="text-[0.62em] font-bold uppercase tracking-[0.18em] text-slate-500">{p.teamName}</div>
-                  {p.stats && <div className="text-[1.2em] font-extrabold tabular-nums text-[#1e3a5f]">{noBreak(p.stats.record)}</div>}
+                <div key={p.corner?.name ?? 'team'} style={{ animation: 'spotlight-bug 300ms ease-out' }}>
+                  <div className="text-[0.62em] font-bold uppercase tracking-[0.18em] text-slate-500">{p.corner?.name ?? p.teamName}</div>
+                  {(p.corner?.record ?? p.stats?.record) && <div className="text-[1.2em] font-extrabold tabular-nums text-[#1e3a5f]">{noBreak(p.corner?.record ?? p.stats!.record)}</div>}
                 </div>
-                <div className="h-[2em] w-[2em] shrink-0">{p.logo}</div>
+                <div key={`logo-${p.corner?.name ?? 'team'}`} className="h-[2em] w-[2em] shrink-0">{p.corner?.logo ?? p.logo}</div>
               </div>
             </div>
             {p.flow ? (

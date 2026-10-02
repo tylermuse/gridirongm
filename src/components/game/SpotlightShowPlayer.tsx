@@ -813,7 +813,14 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   gfxIdx++;
   const focus: Focus | null = gfx ? focusAt(segments, gfxIdx) : null;
   const linePlayer = focus?.kind === 'player' ? focus.player : null;
-  const artTeam = team ? topicTeam(gfx ? topics[gfx.topicIdx] : undefined, team, teams) : null;
+  // The panel's corner shows the spotlight team — or the other team while a
+  // line is about them: one of their players, or the team itself by name.
+  const cornerTeam = (() => {
+    if (!team || !gfx) return null;
+    if (linePlayer) return linePlayer.teamId && linePlayer.teamId !== team.id ? teams.find(t => t.id === linePlayer.teamId) ?? null : null;
+    const other = topicTeam(topics[gfx.topicIdx], team, teams);
+    return other.id !== team.id && namesTeam(gfx.text, other) ? other : null;
+  })();
   const shot = tts && phase !== 'ended' ? shots[segIdx] : undefined;
   const ots = shot?.kind === 'ots';
   const otsSrc = shot?.kind === 'ots' ? OTS_SRC(shot.listener) : null;
@@ -941,7 +948,11 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
                 speakerMs={onGfx ? clock - speakerStart.current : 60_000}
                 text={gfx.text}
                 logo={team ? logoOf(team) : null}
-                topicArt={artTeam ? logoOf(artTeam) : <span className="flex h-full w-full items-center justify-center text-[2em] leading-none">{gfx.icon}</span>}
+                corner={cornerTeam && {
+                  name: `${cornerTeam.city} ${cornerTeam.name}`,
+                  record: `${cornerTeam.record.wins}-${cornerTeam.record.losses}${cornerTeam.record.ties ? `-${cornerTeam.record.ties}` : ''}`,
+                  logo: logoOf(cornerTeam),
+                }}
                 player={linePlayer && {
                   key: linePlayer.id,
                   art: <PlayerAvatar player={linePlayer} size="fill" teamColor={team?.primaryColor} />,
@@ -1097,4 +1108,9 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
 function fullscreenElement(): Element | null {
   const doc = document as Document & { webkitFullscreenElement?: Element | null };
   return doc.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+}
+
+/** Does a line name this team (city, nickname or abbreviation)? */
+function namesTeam(text: string, t: Team): boolean {
+  return [t.city, t.name, t.abbreviation].some(w => !!w && new RegExp(`(^|[^A-Za-z])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Za-z])`).test(text));
 }
