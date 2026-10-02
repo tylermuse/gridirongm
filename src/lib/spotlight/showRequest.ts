@@ -35,3 +35,10 @@ export async function parseEpisode(request: Request): Promise<EpisodeInput | nul
   return { topics: input.topics, teamName: input.teamName, stats: sanitizeStats(input.stats) };
 }
 
+
+/**
+ * Vercel preview deployments let anyone watch the show — no sign-in, premium
+ * or podcast credit — so builds can be tested on a phone. Production is
+ * unaffected (VERCEL_ENV is 'production' there, unset locally).
+ */
+export const openPreview = (): boolean => process.env.VERCEL_ENV === 'preview';

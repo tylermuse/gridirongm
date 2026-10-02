@@ -697,8 +697,8 @@ function TeamSpotlightSection({
     <div className="mt-6">
       <Card>
         <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <div className="min-w-0">
               <CardTitle>
                 <span className="flex items-center gap-2"><span>🎬</span> Team Spotlight</span>
               </CardTitle>
@@ -709,7 +709,7 @@ function TeamSpotlightSection({
                 )}
               </p>
             </div>
-            <div className="flex items-center gap-3 shrink-0 pt-0.5">
+            <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3 sm:pt-0.5">
               {topics.length > 1 && (
                 <button
                   onClick={() => {

@@ -3,7 +3,7 @@ import { createClient as createSupabaseServer } from '@bs/core/supabase/server';
 import { consumePodcastCredit, getServiceClient } from '@bs/core/podcast';
 import { ELEVENLABS_API_KEY } from '@/lib/spotlight/tts';
 import { payloadPath, readPayload, streamEpisode, writeJson } from '@/lib/spotlight/showEpisode';
-import { parseEpisode, supabaseAdmin } from '@/lib/spotlight/showRequest';
+import { openPreview, parseEpisode, supabaseAdmin } from '@/lib/spotlight/showRequest';
 
 /**
  * Team Spotlight *video* show.
@@ -34,9 +34,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'topics (array) and teamName (string) required' }, { status: 400 });
     }
 
+    const open = openPreview();
     const authClient = await createSupabaseServer();
     const { data: { user } } = await authClient.auth.getUser();
-    if (!user) {
+    if (!user && !open) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
@@ -50,12 +51,15 @@ export async function POST(request: Request) {
     }
 
     // Fresh episode → one podcast credit (402 exhausted / 403 free tier).
-    const consumeResult = await consumePodcastCredit(getServiceClient(), user.id, user.created_at);
-    if (!consumeResult.ok) {
-      return NextResponse.json(
-        { error: consumeResult.error, state: consumeResult.state },
-        { status: consumeResult.status },
-      );
+    // (Preview deployments skip this — see openPreview.)
+    if (!open && user) {
+      const consumeResult = await consumePodcastCredit(getServiceClient(), user.id, user.created_at);
+      if (!consumeResult.ok) {
+        return NextResponse.json(
+          { error: consumeResult.error, state: consumeResult.state },
+          { status: consumeResult.status },
+        );
+      }
     }
 
     const enc = new TextEncoder();

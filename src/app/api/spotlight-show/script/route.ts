@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient as createSupabaseServer } from '@bs/core/supabase/server';
 import { getServiceClient, readCredits } from '@bs/core/podcast';
 import { getScript, readPayload } from '@/lib/spotlight/showEpisode';
-import { parseEpisode, supabaseAdmin } from '@/lib/spotlight/showRequest';
+import { openPreview, parseEpisode, supabaseAdmin } from '@/lib/spotlight/showRequest';
 
 /**
  * Write a Spotlight show's script ahead of time (called when the Spotlight
@@ -17,13 +17,15 @@ export async function POST(request: Request) {
     const episode = await parseEpisode(request);
     if (!episode) return NextResponse.json({ error: 'topics (array) and teamName (string) required' }, { status: 400 });
 
-    const authClient = await createSupabaseServer();
-    const { data: { user } } = await authClient.auth.getUser();
-    if (!user) return NextResponse.json({ skipped: 'auth' });
+    if (!openPreview()) {
+      const authClient = await createSupabaseServer();
+      const { data: { user } } = await authClient.auth.getUser();
+      if (!user) return NextResponse.json({ skipped: 'auth' });
 
-    const credits = await readCredits(getServiceClient(), user.id, user.created_at);
-    if (!credits.isAdmin && (credits.tier !== 'premium' || credits.remaining === 0)) {
-      return NextResponse.json({ skipped: 'not eligible' });
+      const credits = await readCredits(getServiceClient(), user.id, user.created_at);
+      if (!credits.isAdmin && (credits.tier !== 'premium' || credits.remaining === 0)) {
+        return NextResponse.json({ skipped: 'not eligible' });
+      }
     }
 
     const sb = supabaseAdmin();
