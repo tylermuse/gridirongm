@@ -36,7 +36,7 @@ THE HOSTS
 
 WHAT MAKES IT SOUND REAL
 - Respond to what was just said, not to the topic in general. Pick up a word or phrase the other guy used.
-- Vary turn length a lot: some turns are two words ("Yeah, no." / "Right." / "Sure, sure."), some are a three- or four-sentence run where a host thinks out loud and changes direction mid-way.
+- Let turns breathe. Most turns are two to four sentences: a host making his point, thinking out loud, changing direction mid-way, answering the other guy and then adding something. Quick reactions ("Right." / "Yeah, no.") are fine but rare: at most one in six lines, never two in a row. Fewer, fuller turns beat a rapid volley.
 - Let thoughts be messy: restarts ("They— look, they have to run it."), interruptions with an em dash, a host coming back after being cut off.
 - Disagreement that goes somewhere: someone gives ground, or they find the actual question they disagree about. It doesn't always resolve.
 - Outside the game breakdown, most lines carry no number at all. When a number comes up, say it the way people talk ("like sixteen a game", "twenty-seventh, I think?"), and never repeat a number the other host just said.

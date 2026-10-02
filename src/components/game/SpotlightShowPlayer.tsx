@@ -14,6 +14,7 @@ import { ordinalSrc } from '@/lib/spotlight/phrases';
 import { ordinal, rankTone, statsMentioned, type ShowStat, type ShowStatLine } from '@/lib/spotlight/teamStats';
 import { topicTeam } from '@/lib/spotlight/showVisuals';
 import { focusForLine, measurableIn, type Focus } from '@/lib/spotlight/showFocus';
+import { planShots } from '@/lib/spotlight/showShots';
 import type { TileStat } from '@/lib/spotlight/playerStats';
 import type { GameTopic } from '@/lib/spotlight/showGame';
 import { conferenceRace, divisionTable } from '@/lib/spotlight/showStandings';
@@ -159,9 +160,6 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   // Focus per segment, recomputed when the episode or league data changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- a fresh cache per input is the point
   const focusCache = useMemo(() => new Map<number, Focus>(), [segments, players, teams, team, topics]);
-  // Lines with nothing to show play over an over-the-shoulder shot instead.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- a fresh cache per input is the point
-  const otsCache = useMemo(() => new Map<number, boolean>(), [segments, players, teams, team, topics]);
   const otsRefs = useRef(new Map<string, HTMLVideoElement>());
   const panelKey = useRef('');
   const topicStart = useRef(0);
@@ -294,22 +292,15 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     return f;
   }, [focusCache, team, teams, players, topics]);
 
-  /** A line with nothing on it to show (banter, a reaction, a joke) cuts to
-   *  the over-the-shoulder shot: the speaker from behind, the other host
-   *  facing camera, listening. Never a topic's first line (its graphic
-   *  comes up with the headline). */
-  const otsAt = useCallback((segs: TimedShowSegment[], i: number): boolean => {
-    const hit = otsCache.get(i);
-    if (hit != null) return hit;
-    const s = segs[i];
-    let r = false;
-    if (s?.kind === 'tts' && s.visual === 'graphic' && s.topicIdx >= 0 && team) {
-      const first = !segs.slice(0, i).some(x => x.kind === 'tts' && x.topicIdx === s.topicIdx);
-      r = !first && !measurableIn(s.text, { topic: topics[s.topicIdx], team, teams, players, earlier: [], play: s.play });
+  /** Which shot each voiced line plays over (the graphic or the
+   *  over-the-shoulder listening shot), planned over the whole run of lines
+   *  so short lines and asides don't cut back and forth. */
+  const shots = useMemo(() => planShots(segments.map(sg => sg.kind === 'tts' && sg.visual === 'graphic' && sg.topicIdx >= 0
+    ? {
+      kind: 'tts' as const, speaker: sg.speaker, topicIdx: sg.topicIdx, words: sg.text.split(/\s+/).length,
+      bare: !!team && !measurableIn(sg.text, { topic: topics[sg.topicIdx], team, teams, players, earlier: [], play: sg.play }),
     }
-    otsCache.set(i, r);
-    return r;
-  }, [otsCache, team, teams, players, topics]);
+    : { kind: 'other' as const, speaker: sg.speaker, topicIdx: -1, words: 0, bare: false })), [segments, team, teams, players, topics]);
 
   /** Cut away when the clip's speech (plus a hair) is done, not at the end
    *  of the file. Re-armed on resume. */
@@ -745,8 +736,9 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const focus: Focus | null = gfx ? focusAt(segments, gfxIdx) : null;
   const linePlayer = focus?.kind === 'player' ? focus.player : null;
   const artTeam = team ? topicTeam(gfx ? topics[gfx.topicIdx] : undefined, team, teams) : null;
-  const ots = !!tts && phase !== 'ended' && otsAt(segments, segIdx);
-  const otsSrc = ots && tts ? OTS_SRC(tts.speaker === 'marcus' ? 'tony' : 'marcus', segIdx % 2) : null;
+  const shot = tts && phase !== 'ended' ? shots[segIdx] : undefined;
+  const ots = shot?.kind === 'ots';
+  const otsSrc = shot?.kind === 'ots' ? OTS_SRC(shot.listener, shot.take) : null;
   const onGfx = !!(tts || vo || (holding && phase === 'playing')) && !ots;
   // Tiles only when they match what's being said: the player's or the
   // unit's numbers, the team's when a team stat comes up — and none for a
