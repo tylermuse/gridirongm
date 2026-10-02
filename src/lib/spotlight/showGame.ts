@@ -120,7 +120,7 @@ function gameTiles(p: Player, s: S): TileStat[] {
   switch (p.position) {
     case 'QB': return [t('cmp', 'CMP / ATT', `${n(s.passCompletions)}/${n(s.passAttempts)}`), t('passYds', 'Pass YDS', n(s.passYards)), t('passTd', 'Pass TD', n(s.passTDs)), t('int', 'INT', n(s.interceptions)), t('rushYds', 'Rush YDS', n(s.rushYards))];
     case 'RB': return [t('rushAtt', 'Carries', n(s.rushAttempts)), t('rushYds', 'Rush YDS', n(s.rushYards)), t('ypc', 'YDS / Carry', n(s.rushAttempts) ? (n(s.rushYards) / n(s.rushAttempts)).toFixed(1) : '0.0'), t('rushTd', 'Rush TD', n(s.rushTDs)), t('recYds', 'Rec YDS', n(s.receivingYards))];
-    case 'WR': case 'TE': return [t('rec', 'Catches', n(s.receptions)), t('tgt', 'Targets', n(s.targets)), t('recYds', 'Rec YDS', n(s.receivingYards)), t('recTd', 'Rec TD', n(s.receivingTDs))];
+    case 'WR': case 'TE': return [t('rec', 'Catches', n(s.receptions)), t('recYds', 'Rec YDS', n(s.receivingYards)), t('recTd', 'Rec TD', n(s.receivingTDs)), t('tgt', 'Targets', n(s.targets))];
     case 'K': return [t('fg', 'FG', `${n(s.fieldGoalsMade)}/${n(s.fieldGoalAttempts)}`), t('xp', 'XP', `${n(s.extraPointsMade)}/${n(s.extraPointAttempts)}`)];
     default: return [t('tackles', 'Tackles', n(s.tackles)), t('sacks', 'Sacks', n(s.sacks)), t('tfl', 'TFL', n(s.tacklesForLoss)), t('defInt', 'INT', n(s.defensiveINTs)), t('ff', 'Forced Fum', n(s.forcedFumbles))];
   }

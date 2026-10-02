@@ -1033,19 +1033,20 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
         {/* Controls */}
         <div
           className={full
-            ? `absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/70 to-transparent px-4 pt-8 pb-[max(12px,env(safe-area-inset-bottom))] transition-opacity duration-300 ${chromeShown ? 'opacity-100' : 'pointer-events-none opacity-0'}`
+            ? `absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/50 to-transparent px-4 pt-4 pb-[max(8px,env(safe-area-inset-bottom))] transition-opacity duration-300 ${chromeShown ? 'opacity-100' : 'pointer-events-none opacity-0'}`
             : 'mt-3 flex items-center gap-3'}
         >
           <button
             onClick={phase === 'playing' ? handlePause : handleStart}
             disabled={phase === 'ended'}
-            className="h-9 w-9 shrink-0 rounded-full bg-purple-600 text-sm text-white hover:bg-purple-700 disabled:opacity-40"
+            className={`shrink-0 rounded-full bg-purple-600 text-sm text-white hover:bg-purple-700 disabled:opacity-40 ${full ? 'order-2 h-8 w-8' : 'h-9 w-9'}`}
             aria-label={phase === 'playing' ? 'Pause' : 'Play'}
           >
             {phase === 'playing' ? '⏸' : '▶'}
           </button>
           <div className="min-w-0 flex-1">
-            <div className={`truncate text-xs font-medium ${full ? 'text-white/90' : 'text-slate-600'}`}>📺 Team Spotlight — {teamName}</div>
+            {/* Fullscreen keeps only the scrubber down here, clear of the speaker chip. */}
+            {!full && <div className="truncate text-xs font-medium text-slate-600">📺 Team Spotlight — {teamName}</div>}
             {/* Scrubber: drag or tap to jump to the line at that point. */}
             <div
               role="slider"
@@ -1075,7 +1076,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
           </div>
           <button
             onClick={e => { e.stopPropagation(); void (full ? leaveFull() : enterFull()); }}
-            className={`shrink-0 rounded-md p-1.5 ${full ? 'text-white/90 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}
+            className={`shrink-0 rounded-md p-1.5 ${full ? 'order-3 text-white/90 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}
             aria-label={full ? 'Exit full screen' : 'Full screen'}
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -1084,7 +1085,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
                 : <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />}
             </svg>
           </button>
-          <button onClick={handleClose} className={`shrink-0 px-2 py-1 text-sm ${full ? 'text-white/90 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`} aria-label="Close show">
+          <button onClick={handleClose} className={`shrink-0 px-2 py-1 text-sm ${full ? 'order-3 text-white/90 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`} aria-label="Close show">
             ✕
           </button>
         </div>
