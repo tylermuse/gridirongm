@@ -650,6 +650,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   }
 
   function handleClose() {
+    void leaveFull();
     stopAll();
     void ctxRef.current?.suspend();
     setPhase('idle');
@@ -678,6 +679,48 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     phaseRef.current = 'playing';
     setPhase('playing');
     playSegment(k);
+  }
+
+  // ── Full screen ────────────────────────────────────────────────────
+  // Native Fullscreen API where the browser has it for elements (Android,
+  // desktop, iPad); iPhone Safari only allows it on <video>, so there the
+  // stage just fills the viewport (turn the phone sideways). Controls float
+  // over the picture and fade while it plays; tap to bring them back.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const [full, setFull] = useState(false);
+  const [chromeShown, setChromeShown] = useState(true);
+  const [poked, setPoked] = useState(0);
+  const poke = useCallback(() => { setChromeShown(true); setPoked(n => n + 1); }, []);
+  useEffect(() => {
+    if (!full || phase !== 'playing') return;
+    const t = setTimeout(() => setChromeShown(false), 3000);
+    return () => clearTimeout(t);
+  }, [full, phase, poked]);
+  useEffect(() => {
+    const onChange = () => { if (!fullscreenElement()) setFull(false); };
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('webkitfullscreenchange', onChange);
+    };
+  }, []);
+  async function enterFull() {
+    setFull(true);
+    poke();
+    const el = dialogRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> }) | null;
+    const request = el?.requestFullscreen ?? el?.webkitRequestFullscreen;
+    try {
+      await request?.call(el);
+      await (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> })?.lock?.('landscape');
+    } catch { /* CSS full-viewport fallback is already showing */ }
+  }
+  async function leaveFull() {
+    setFull(false);
+    setChromeShown(true);
+    if (!fullscreenElement()) return;
+    const doc = document as Document & { webkitExitFullscreen?: () => Promise<void> };
+    try { await (doc.exitFullscreen ?? doc.webkitExitFullscreen)?.call(doc); } catch { /* already out */ }
   }
 
   // ── Button states (match SpotlightAudioPlayer styling) ─────────────
@@ -822,10 +865,23 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const progressPct = scrub != null ? scrub * 100 : (elapsed / timeline.total) * 100;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-white/80 backdrop-blur-sm p-4" role="dialog" aria-label={`Team Spotlight — ${teamName}`}>
-      <div className="w-full max-w-4xl">
+    <div
+      ref={dialogRef}
+      className={full
+        ? 'fixed inset-0 z-[110] flex items-center justify-center bg-black'
+        : 'fixed inset-0 z-[110] flex items-center justify-center bg-white/80 backdrop-blur-sm p-4'}
+      role="dialog"
+      aria-label={`Team Spotlight — ${teamName}`}
+    >
+      <div
+        className={full ? 'relative' : 'w-full max-w-4xl'}
+        style={full ? { width: 'min(100vw, calc(100dvh * 16 / 9))' } : undefined}
+        onClick={full ? poke : undefined}
+      >
         <style>{'@keyframes spotlight-bug{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}'}</style>
-        <div className="relative w-full aspect-video overflow-hidden rounded-xl border border-slate-200 bg-slate-800 shadow-xl">
+        <div className={full
+          ? 'relative w-full aspect-video overflow-hidden bg-slate-800'
+          : 'relative w-full aspect-video overflow-hidden rounded-xl border border-slate-200 bg-slate-800 shadow-xl'}>
           {/* Voiceover lines: animated graphic over the studio two-shot. Stays
               mounted (faded out) during on-camera shots so cuts dissolve. */}
           {gfx && (
@@ -940,7 +996,11 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
         </div>
 
         {/* Controls */}
-        <div className="mt-3 flex items-center gap-3">
+        <div
+          className={full
+            ? `absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/70 to-transparent px-4 pt-8 pb-[max(12px,env(safe-area-inset-bottom))] transition-opacity duration-300 ${chromeShown ? 'opacity-100' : 'pointer-events-none opacity-0'}`
+            : 'mt-3 flex items-center gap-3'}
+        >
           <button
             onClick={phase === 'playing' ? handlePause : handleStart}
             disabled={phase === 'ended'}
@@ -950,7 +1010,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
             {phase === 'playing' ? '⏸' : '▶'}
           </button>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-xs font-medium text-slate-600">📺 Team Spotlight — {teamName}</div>
+            <div className={`truncate text-xs font-medium ${full ? 'text-white/90' : 'text-slate-600'}`}>📺 Team Spotlight — {teamName}</div>
             {/* Scrubber: drag or tap to jump to the line at that point. */}
             <div
               role="slider"
@@ -978,11 +1038,27 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
               />
             </div>
           </div>
-          <button onClick={handleClose} className="shrink-0 px-2 py-1 text-sm text-slate-500 hover:text-slate-800" aria-label="Close show">
+          <button
+            onClick={e => { e.stopPropagation(); void (full ? leaveFull() : enterFull()); }}
+            className={`shrink-0 rounded-md p-1.5 ${full ? 'text-white/90 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}
+            aria-label={full ? 'Exit full screen' : 'Full screen'}
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              {full
+                ? <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+                : <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />}
+            </svg>
+          </button>
+          <button onClick={handleClose} className={`shrink-0 px-2 py-1 text-sm ${full ? 'text-white/90 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`} aria-label="Close show">
             ✕
           </button>
         </div>
       </div>
     </div>
   );
+}
+
+function fullscreenElement(): Element | null {
+  const doc = document as Document & { webkitFullscreenElement?: Element | null };
+  return doc.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
 }
