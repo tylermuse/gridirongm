@@ -68,3 +68,12 @@ describe('topical on-camera lines', () => {
     expect(segs.filter(s => s.kind === 'tts' && s.text === clip.text)).toHaveLength(1);
   });
 });
+
+describe('calm', () => {
+  it('tones down promo copy', async () => {
+    const { calm } = await import('@/lib/spotlight/showWriter');
+    expect(calm("THEY NEED TO GATHER ALL THEIR RESOURCES AND MAKE A MOVE! The window can't start CLOSING just yet, but they must act NOW!"))
+      .toBe("They need to gather all their resources and make a move. The window can't start closing just yet, but they must act now!");
+    expect(calm('The QB is 3rd in the NFL. DAL wins.')).toBe('The QB is 3rd in the NFL. DAL wins.');
+  });
+});

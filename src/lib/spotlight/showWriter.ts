@@ -21,7 +21,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
  *  Scripts are written ahead of time (see /api/spotlight-show/script), so
  *  its latency is mostly hidden. */
 export const WRITER_MODEL = process.env.SPOTLIGHT_SHOW_WRITER_MODEL || 'claude-opus-5-5';
-const TIMEOUT_MS = 90_000;
+const TIMEOUT_MS = 110_000;
 /** How long the model deliberates before writing (it thinks adaptively).
  *  Low keeps the first topic arriving in seconds: the show is already
  *  playing while it writes. */
@@ -139,6 +139,18 @@ export interface WrittenEpisode {
  *  lines; `done` = the topics (indexes into `topics`) it has finished. */
 export type OnProgress = (sofar: ShowTopicInput[], done: Set<number>) => void;
 
+/** "MAKE A MOVE! They must act NOW!" → "Make a move. They must act now." (acronyms like QB, NFL, DAL stay). */
+export function calm(text: string): string {
+  const SHOUT = new Set(['NOW', 'YES', 'WOW', 'BIG', 'ALL', 'AND', 'THE', 'OUT', 'NOT', 'WIN', 'WON', 'GO', 'NO', 'SO', 'IS', 'IT']);
+  // Runs of shouted words, long shouted words, and shouted short words (not acronyms like QB, NFL, DAL).
+  let out = text.replace(/\b[A-Z][A-Z']*(?:\s+[A-Z][A-Z']*)+\b/g, run => (run.split(/\s+/).some(w => w.length >= 4 || SHOUT.has(w)) ? run.toLowerCase() : run));
+  out = out.replace(/\b[A-Z][A-Z']{3,}\b/g, w => w.toLowerCase()).replace(/\b[A-Z]{2,3}\b/g, w => (SHOUT.has(w) ? w.toLowerCase() : w));
+  out = out.replace(/(^|[.!?]\s+)([a-z])/g, (_, a, b) => a + b.toUpperCase());
+  const bangs = (out.match(/!/g) ?? []).length;
+  if (bangs > 1) { let k = 0; out = out.replace(/!/g, () => (++k === bangs ? '!' : '.')); }
+  return out;
+}
+
 const debateOf = (t: ShowTopicInput) => t.exchanges.filter(e => e.speakerId === 'stats' || e.speakerId === 'hottake');
 export const hasDebate = (t: ShowTopicInput) => debateOf(t).length > 0;
 
@@ -154,7 +166,9 @@ export async function writeConversation(
   stats?: ShowStatLine | null,
   onProgress?: OnProgress,
 ): Promise<WrittenEpisode> {
-  const original = { topics, written: false };
+  // No writer at all: the notes are voiced as they are, toned down
+  // (no shouted ALL-CAPS words, no exclamation pile-ups).
+  const original = { topics: topics.map(t => ({ ...t, exchanges: t.exchanges.map(e => ({ ...e, text: calm(e.text) })) })), written: false };
   if (!ANTHROPIC_API_KEY) return original;
   const liveIdx = topics.flatMap((t, i) => (hasDebate(t) ? [i] : []));
   if (!liveIdx.length) return original;
@@ -200,7 +214,9 @@ export async function writeConversation(
 
   const finish = (): WrittenEpisode => {
     for (const i of liveIdx) done.add(i);
-    const out = sofar();
+    // A topic the writer never got to (cut off, skipped) is dropped rather
+    // than voiced from the producer's notes — those read like a promo.
+    const out = sofar().map((t, i) => (liveIdx.includes(i) && !written.has(i) ? { ...t, exchanges: t.exchanges.filter(e => !debateOf({ ...t, exchanges: [e] }).length) } : t));
     onProgress?.(out, done);
     return { topics: out, written: true };
   };
