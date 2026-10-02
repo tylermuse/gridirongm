@@ -37,14 +37,14 @@ export type ShowClipId =
 export type SpeechSpan = { start: number; end: number };
 
 export const SHOW_CLIPS: Record<ShowClipId, { src: string; speaker: Host; text: string; speech: SpeechSpan }> = {
-  marcus_intro: { src: '/show/marcus_intro.mp4', speaker: 'marcus', text: "Welcome back to the Team Spotlight. I'm Marcus Cole, alongside Tony Blaze.", speech: { start: 0.06, end: 4.0 } },
+  marcus_intro: { src: '/show/marcus_intro_v2.mp4', speaker: 'marcus', text: "Welcome back to Team Spotlight. I'm Marcus Cole, and as always, I've got Tony Blaze with me.", speech: { start: 0.18, end: 5.3 } },
   marcus_transition_move_on: { src: '/show/marcus_transition_move_on.mp4', speaker: 'marcus', text: "Alright, let's move on. Next topic.", speech: { start: 0.0, end: 2.42 } },
   marcus_transition_shifting_gears: { src: '/show/marcus_transition_shifting_gears.mp4', speaker: 'marcus', text: 'Okay, shifting gears here.', speech: { start: 0.02, end: 1.08 } },
   marcus_transition_keep_moving: { src: '/show/marcus_transition_keep_moving.mp4', speaker: 'marcus', text: "Let's keep it moving, Tony.", speech: { start: 0.0, end: 1.1 } },
-  marcus_outro: { src: '/show/marcus_outro.mp4', speaker: 'marcus', text: "And that's the show. Thanks for tuning in to the Team Spotlight. We'll see you next time.", speech: { start: 0.0, end: 3.56 } },
-  tony_intro: { src: '/show/tony_intro.mp4', speaker: 'tony', text: "Let's go! I've got a lot to say about this team. Let's not waste any time.", speech: { start: 0.2, end: 3.38 } },
+  marcus_outro: { src: '/show/marcus_outro_v2.mp4', speaker: 'marcus', text: "And that's the show. Thanks for spending some time with us on Team Spotlight. We'll see you next week.", speech: { start: 0.18, end: 5.44 } },
+  tony_intro: { src: '/show/tony_intro_v2.mp4', speaker: 'tony', text: "Good to be here, Marcus. And I've got a lot to say about this team, so let's not waste any time.", speech: { start: 0.32, end: 6.42 } },
   tony_transition_next_one: { src: '/show/tony_transition_next_one.mp4', speaker: 'tony', text: "Next one. Let's go.", speech: { start: 0.0, end: 1.06 } },
-  tony_outro: { src: '/show/tony_outro.mp4', speaker: 'tony', text: "Stay loud, stay passionate, and keep grinding. This is Tony Blaze, we're out!", speech: { start: 0.0, end: 3.68 } },
+  tony_outro: { src: '/show/tony_outro_v2.mp4', speaker: 'tony', text: "Stay loud, keep grinding, and we'll talk to you next time. I'm Tony Blaze. We're out.", speech: { start: 0.16, end: 5.84 } },
 };
 
 export const HOSTS: Record<Host, { name: string; title: string }> = {

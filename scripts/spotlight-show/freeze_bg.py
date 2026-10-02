@@ -13,22 +13,22 @@ def probe(f):
     w, h = map(int, out.split(','))
     return w, h
 
-def make_mask(w, h, path):
+def make_mask(w, h, path, screens=None):
     m = Image.new('L', (w, h), 0)
     px = np.zeros((h, w), np.uint8)
-    for x0, y0, x1, y1 in SCREENS:
+    for x0, y0, x1, y1 in (screens or SCREENS):
         px[int(y0 * h):int(y1 * h), int(x0 * w):int(x1 * w)] = 255
     m = Image.fromarray(px).filter(ImageFilter.GaussianBlur(radius=max(2, w // 320)))
     m.save(path)
 
-def freeze(src, dst, extra_vf=None, extra_args=()):
+def freeze(src, dst, extra_vf=None, extra_args=(), screens=None):
     w, h = probe(src)
     tmp = dst + '.parts'
     os.makedirs(tmp, exist_ok=True)
     plate, mask = os.path.join(tmp, 'plate.png'), os.path.join(tmp, 'mask.png')
     subprocess.check_call(['ffmpeg', '-v', 'error', '-y', '-i', src, '-frames:v', '1', plate])
-    make_mask(w, h, mask)
-    fc = ('[1:v]format=yuv444p[p];[2:v]format=gray,scale=%d:%d[m];[0:v]format=yuv444p[v];'
+    make_mask(w, h, mask, screens)
+    fc = ('[1:v]format=yuv444p[p];[2:v]format=gray,scale=%d:%d,lut=c0=min(255\\,val*255/235)[m];[0:v]format=yuv444p[v];'
           '[v][p][m]maskedmerge,format=yuv420p' % (w, h))
     if extra_vf:
         fc += ',' + extra_vf
