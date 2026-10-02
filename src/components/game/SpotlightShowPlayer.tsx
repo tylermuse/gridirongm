@@ -110,6 +110,8 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const topics: ShowTopic[] = useMemo(() => [...(game ?? []), ...storyTopics], [game, storyTopics]);
   const [phase, setPhase] = useState<Phase>('idle');
   const [segments, setSegments] = useState<TimedShowSegment[]>([]);
+  /** The request (topics + stats) the loaded episode was made for. */
+  const loadedFor = useRef<string | null>(null);
   const [segIdx, setSegIdx] = useState(0);
   // The clip actually on screen: switched only once the next clip is really
   // playing, so a cut never flashes a stale frame or an empty stage.
@@ -562,7 +564,15 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
 
   // ── Controls ───────────────────────────────────────────────────────
   async function handleOpen() {
-    if (segmentsRef.current.length) { setPhase('ready'); return; }
+    // The player stays mounted on the dashboard across sims: reuse the
+    // loaded episode only if it's for this same Spotlight.
+    if (segmentsRef.current.length && loadedFor.current === requestBody) { setPhase('ready'); return; }
+    const episode = requestBody;
+    loadedFor.current = episode;
+    segmentsRef.current = [];
+    setSegments([]);
+    segIdxRef.current = 0;
+    setSegIdx(0);
     setPhase('loading');
     try {
       const res = await fetch('/api/spotlight-show', {
@@ -610,6 +620,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
           for (;;) {
             const { value, done } = await reader.read();
             if (done) break;
+            if (loadedFor.current !== episode) { void reader.cancel(); return; } // a newer episode took over
             buf += dec.decode(value, { stream: true });
             let nl: number;
             while ((nl = buf.indexOf('\n')) >= 0) {
