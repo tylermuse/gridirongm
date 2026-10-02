@@ -11,6 +11,13 @@ from freeze_bg import freeze
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PRE, POST = 0.30, 0.40   # padding around each phrase (gaps are 0.9s)
 
+# Side-angle takes (host turned toward his co-host) are framed differently:
+# their studio screens sit elsewhere in the frame.
+SIDE_SCREENS = {
+    "marcus": [(0.0, 0.0, 0.09, 0.62), (0.68, 0.0, 1.0, 0.60)],
+    "tony": [(0.0, 0.0, 0.28, 0.64), (0.86, 0.0, 1.0, 0.64)],
+}
+
 def speech_span(f):
     """First/last 20ms window within 32 dB of the loudest: where the words are.
     The player trims the clip's lead-in/tail silence to this."""
@@ -45,7 +52,8 @@ def main(wt):
         vid = os.path.join(ROOT, "takes", take + ".frozen.mp4")
         if not os.path.exists(vid):
             print("freezing studio screens in", take, flush=True)
-            freeze(raw, vid)
+            side = take.endswith("_side")
+            freeze(raw, vid, screens=SIDE_SCREENS[take.split("_")[0]] if side else None)
         vd = dur(vid)
         drift = vd - t["duration"]
         print(f"{take}: video {vd:.2f}s vs audio {t['duration']:.2f}s (drift {drift:+.2f}s)")
@@ -70,6 +78,7 @@ def main(wt):
             if "tone" in p: m["tone"] = p["tone"]
             if "tags" in p: m["tags"] = p["tags"]
             if p.get("writerOnly"): m["writerOnly"] = True
+            if p.get("angle"): m["angle"] = p["angle"]
             if "slot" in e:
                 m["slot"] = {"start": round(e["slot"]["start"] - a, 3), "end": round(e["slot"]["end"] - a, 3)}
             manifest.append(m)

@@ -5337,5 +5337,69 @@
   "tags": [
    "reaction"
   ]
+ },
+ {
+  "id": "marcus_s_take_plan",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Okay, fine. I'll take that as a plan.",
+  "src": "/show/phrases/marcus_s_take_plan.mp4",
+  "duration": 2.52,
+  "speech": {
+   "start": 0.4,
+   "end": 2.06
+  },
+  "tags": [
+   "reaction"
+  ],
+  "angle": "side"
+ },
+ {
+  "id": "marcus_s_not_wrong",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "You're not wrong. I just don't love where that leads.",
+  "src": "/show/phrases/marcus_s_not_wrong.mp4",
+  "duration": 3.82,
+  "speech": {
+   "start": 0.36,
+   "end": 3.38
+  },
+  "tags": [
+   "reaction"
+  ],
+  "angle": "side"
+ },
+ {
+  "id": "tony_s_give_you",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Alright, alright. I'll give you that one, Marcus.",
+  "src": "/show/phrases/tony_s_give_you.mp4",
+  "duration": 3.64,
+  "speech": {
+   "start": 0.38,
+   "end": 3.16
+  },
+  "tags": [
+   "reaction"
+  ],
+  "angle": "side"
+ },
+ {
+  "id": "tony_s_come_on",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Come on, Marcus. You know that's not the whole story.",
+  "src": "/show/phrases/tony_s_come_on.mp4",
+  "duration": 2.78,
+  "speech": {
+   "start": 0.38,
+   "end": 2.38
+  },
+  "tags": [
+   "reaction"
+  ],
+  "angle": "side"
  }
 ]

@@ -74,6 +74,7 @@ The hosts have pre-recorded on-camera lines, listed with the notes as CLIPS (all
 - The next line must react to the clip's actual words.
 - Write around clips so they land: set up the subject, then answer it.
 - Aim for two or three clips in each topic of five or more lines, one in shorter topics.
+- Clips marked "said to his co-host" are quick replies across the desk: use them right after the other host makes a point, as the answer to it.
 
 OUTPUT
 One JSON object per spoken line, each on its own single line, nothing else (no array, no prose) — the show starts playing while you write, so write the lines in order:
@@ -180,7 +181,7 @@ export async function writeConversation(
     ...(topics[i].depth === 'deep' ? { depth: 'deep' } : {}),
     notes: debateOf(topics[i]).map(e => `${e.speakerId === 'stats' ? 'Marcus' : 'Tony'}: ${e.text}`),
   }));
-  const clipList = catalog.map(c => `${c.phrase.id} (${c.phrase.host}): ${c.words}`).join('\n');
+  const clipList = catalog.map(c => `${c.phrase.id} (${c.phrase.host}${c.phrase.angle === 'side' ? ', said to his co-host' : ''}): ${c.words}`).join('\n');
   const user = `Team numbers: ${teamNumbers(teamName, stats)}\n\nProducer's notes for this episode (topics 1–${liveIdx.length}):\n${JSON.stringify(notes, null, 1)}`
     + (clipList ? `\n\nCLIPS (id (host): words):\n${clipList}` : '');
 

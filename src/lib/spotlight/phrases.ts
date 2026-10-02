@@ -40,6 +40,9 @@ export interface Phrase {
   /** Makes a specific claim (about a player, a coach, a contract) that only
    *  the writer, who knows the facts, may use. */
   writerOnly?: boolean;
+  /** 'side': shot from a three-quarter angle with the host turned toward his
+   *  co-host (a reply in conversation) rather than talking to camera. */
+  angle?: 'side';
 }
 
 export const PHRASES = manifest as Phrase[];
