@@ -3608,6 +3608,156 @@
    "text": "Mostly right gets you a home loss in the wild card round. Teams on a roll go get the piece. They don't stand around admiring themselves.",
    "take": "tony_ex_side",
    "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_rebuild_1",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "rebuild",
+   "angle": "side",
+   "text": "I'll say it. Blow it up. Trade anybody over twenty-eight who isn't nailed down.",
+   "take": "tony_ex2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_rebuild_2",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "rebuild",
+   "angle": "side",
+   "text": "And then what? You've shipped out the guys who show the young players how to do it, and you're bad for three years instead of one.",
+   "take": "marcus_ex2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_rebuild_3",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "rebuild",
+   "angle": "side",
+   "text": "They're bad now, Marcus! At least if you tear it down, there's a plan behind the losing.",
+   "take": "tony_ex2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_rebuild_4",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "rebuild",
+   "angle": "side",
+   "text": "There's a difference between a plan and a fire sale. You keep the core, you sell the parts that won't be here when this team is good again, and you draft like your jobs depend on it.",
+   "take": "marcus_ex2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_rebuild_5",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "rebuild",
+   "angle": "side",
+   "text": "Fine. That's a rebuild with better manners. I'll take it, as long as somebody actually picks up the phone.",
+   "take": "tony_ex2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_qb_1",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "qb",
+   "angle": "side",
+   "text": "So let's settle it. Is he the guy, or is he a guy?",
+   "take": "marcus_ex2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_qb_2",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "qb",
+   "angle": "side",
+   "text": "He's the guy. You don't find that arm and that poise in the pocket, and then walk away from it because of a couple of bad Sundays.",
+   "take": "tony_ex2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_qb_3",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "qb",
+   "angle": "side",
+   "text": "I'm not asking about a couple of Sundays. I'm asking what he looks like in January, against a defense that's seen him on film four times.",
+   "take": "marcus_ex2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_qb_4",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "qb",
+   "angle": "side",
+   "text": "Then give him something to work with! You can't judge a quarterback who's running for his life every third snap.",
+   "take": "tony_ex2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_qb_5",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "qb",
+   "angle": "side",
+   "text": "That's fair. But the great ones make the line look better than it is. That's the part I haven't seen yet.",
+   "take": "marcus_ex2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_hot_1",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "hot",
+   "angle": "side",
+   "text": "I'm saying it on the record. This team is for real.",
+   "take": "tony_ex2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_hot_2",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "hot",
+   "angle": "side",
+   "text": "A few good weeks doesn't make them for real. It makes them hot. And hot teams cool off.",
+   "take": "marcus_ex2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_hot_3",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "hot",
+   "angle": "side",
+   "text": "Hot? They're beating good teams, and they're doing it a different way every week. That's not luck, that's a roster.",
+   "take": "tony_ex2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_hot_4",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "hot",
+   "angle": "side",
+   "text": "Or it's a soft stretch of the schedule and a couple of bounces going their way. Show me they can win ugly, on the road, in the cold, and I'll buy in.",
+   "take": "marcus_ex2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_hot_5",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "hot",
+   "angle": "side",
+   "text": "Write it down, Marcus. When they do it, I want to hear you say it, right here at this desk.",
+   "take": "tony_ex2_side",
+   "model": "eleven_v3"
   }
  ]
 }

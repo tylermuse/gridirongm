@@ -5471,5 +5471,215 @@
   },
   "angle": "side",
   "exchange": "buyer"
+ },
+ {
+  "id": "tony_x_rebuild_1",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "I'll say it. Blow it up. Trade anybody over twenty-eight who isn't nailed down.",
+  "src": "/show/phrases/tony_x_rebuild_1.mp4",
+  "duration": 5.96,
+  "speech": {
+   "start": 0.38,
+   "end": 5.48
+  },
+  "angle": "side",
+  "exchange": "rebuild"
+ },
+ {
+  "id": "marcus_x_rebuild_2",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "And then what? You've shipped out the guys who show the young players how to do it, and you're bad for three years instead of one.",
+  "src": "/show/phrases/marcus_x_rebuild_2.mp4",
+  "duration": 7.24,
+  "speech": {
+   "start": 0.36,
+   "end": 6.72
+  },
+  "angle": "side",
+  "exchange": "rebuild"
+ },
+ {
+  "id": "tony_x_rebuild_3",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "They're bad now, Marcus! At least if you tear it down, there's a plan behind the losing.",
+  "src": "/show/phrases/tony_x_rebuild_3.mp4",
+  "duration": 6.88,
+  "speech": {
+   "start": 0.4,
+   "end": 6.36
+  },
+  "angle": "side",
+  "exchange": "rebuild"
+ },
+ {
+  "id": "marcus_x_rebuild_4",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "There's a difference between a plan and a fire sale. You keep the core, you sell the parts that won't be here when this team is good again, and you draft like your jobs depend on it.",
+  "src": "/show/phrases/marcus_x_rebuild_4.mp4",
+  "duration": 10.64,
+  "speech": {
+   "start": 0.4,
+   "end": 10.22
+  },
+  "angle": "side",
+  "exchange": "rebuild"
+ },
+ {
+  "id": "tony_x_rebuild_5",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "Fine. That's a rebuild with better manners. I'll take it, as long as somebody actually picks up the phone.",
+  "src": "/show/phrases/tony_x_rebuild_5.mp4",
+  "duration": 6.92,
+  "speech": {
+   "start": 0.36,
+   "end": 6.46
+  },
+  "angle": "side",
+  "exchange": "rebuild"
+ },
+ {
+  "id": "marcus_x_qb_1",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "So let's settle it. Is he the guy, or is he a guy?",
+  "src": "/show/phrases/marcus_x_qb_1.mp4",
+  "duration": 4.68,
+  "speech": {
+   "start": 0.38,
+   "end": 4.22
+  },
+  "angle": "side",
+  "exchange": "qb"
+ },
+ {
+  "id": "tony_x_qb_2",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "He's the guy. You don't find that arm and that poise in the pocket, and then walk away from it because of a couple of bad Sundays.",
+  "src": "/show/phrases/tony_x_qb_2.mp4",
+  "duration": 9.04,
+  "speech": {
+   "start": 0.34,
+   "end": 8.6
+  },
+  "angle": "side",
+  "exchange": "qb"
+ },
+ {
+  "id": "marcus_x_qb_3",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "I'm not asking about a couple of Sundays. I'm asking what he looks like in January, against a defense that's seen him on film four times.",
+  "src": "/show/phrases/marcus_x_qb_3.mp4",
+  "duration": 9.04,
+  "speech": {
+   "start": 0.4,
+   "end": 8.52
+  },
+  "angle": "side",
+  "exchange": "qb"
+ },
+ {
+  "id": "tony_x_qb_4",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "Then give him something to work with! You can't judge a quarterback who's running for his life every third snap.",
+  "src": "/show/phrases/tony_x_qb_4.mp4",
+  "duration": 7.24,
+  "speech": {
+   "start": 0.36,
+   "end": 6.58
+  },
+  "angle": "side",
+  "exchange": "qb"
+ },
+ {
+  "id": "marcus_x_qb_5",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "That's fair. But the great ones make the line look better than it is. That's the part I haven't seen yet.",
+  "src": "/show/phrases/marcus_x_qb_5.mp4",
+  "duration": 6.12,
+  "speech": {
+   "start": 0.38,
+   "end": 5.62
+  },
+  "angle": "side",
+  "exchange": "qb"
+ },
+ {
+  "id": "tony_x_hot_1",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "I'm saying it on the record. This team is for real.",
+  "src": "/show/phrases/tony_x_hot_1.mp4",
+  "duration": 3.36,
+  "speech": {
+   "start": 0.34,
+   "end": 2.92
+  },
+  "angle": "side",
+  "exchange": "hot"
+ },
+ {
+  "id": "marcus_x_hot_2",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "A few good weeks doesn't make them for real. It makes them hot. And hot teams cool off.",
+  "src": "/show/phrases/marcus_x_hot_2.mp4",
+  "duration": 5.92,
+  "speech": {
+   "start": 0.36,
+   "end": 5.24
+  },
+  "angle": "side",
+  "exchange": "hot"
+ },
+ {
+  "id": "tony_x_hot_3",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "Hot? They're beating good teams, and they're doing it a different way every week. That's not luck, that's a roster.",
+  "src": "/show/phrases/tony_x_hot_3.mp4",
+  "duration": 7.96,
+  "speech": {
+   "start": 0.34,
+   "end": 7.48
+  },
+  "angle": "side",
+  "exchange": "hot"
+ },
+ {
+  "id": "marcus_x_hot_4",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "Or it's a soft stretch of the schedule and a couple of bounces going their way. Show me they can win ugly, on the road, in the cold, and I'll buy in.",
+  "src": "/show/phrases/marcus_x_hot_4.mp4",
+  "duration": 9.42,
+  "speech": {
+   "start": 0.36,
+   "end": 8.88
+  },
+  "angle": "side",
+  "exchange": "hot"
+ },
+ {
+  "id": "tony_x_hot_5",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "Write it down, Marcus. When they do it, I want to hear you say it, right here at this desk.",
+  "src": "/show/phrases/tony_x_hot_5.mp4",
+  "duration": 5.42,
+  "speech": {
+   "start": 0.38,
+   "end": 5.02
+  },
+  "angle": "side",
+  "exchange": "hot"
  }
 ]

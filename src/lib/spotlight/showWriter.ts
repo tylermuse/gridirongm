@@ -104,9 +104,29 @@ const EXCHANGES: { id: string; when: string; fits: (stats?: ShowStatLine | null)
   {
     id: 'buyer',
     when: 'Trade-deadline / trades topic, only if the team has a winning record AND the notes say it has made no trades this season. Tony opens "See, now you\'re buying", so set it up with Marcus saying he\'d add one specific piece at the right price.',
-    fits: stats => { const [w, l] = (stats?.record ?? '').split('-').map(Number); return w > l; },
+    fits: stats => { const [w, l] = recordOf(stats); return w > l; },
+  },
+  {
+    id: 'rebuild',
+    when: 'A topic about where a losing team goes from here (selling, rebuilding, the future). Tony opens "Blow it up", so set it up with Marcus asking what they do now.',
+    fits: stats => { const [w, l] = recordOf(stats); return w < l; },
+  },
+  {
+    id: 'qb',
+    when: 'A topic questioning whether their starting quarterback is the long-term answer, after he has had some rough games and the line has struggled to protect him. Marcus opens "So let\'s settle it. Is he the guy, or is he a guy?", so it follows naturally from a line about the quarterback.',
+    fits: () => true,
+  },
+  {
+    id: 'hot',
+    when: 'Only when the notes say they have won several games in a row or are on a hot stretch, in a topic about whether they are for real. Tony opens "This team is for real."',
+    fits: stats => { const [w, l] = recordOf(stats); return w >= l; },
   },
 ];
+
+const recordOf = (stats?: ShowStatLine | null): [number, number] => {
+  const [w, l] = (stats?.record ?? '').split('-').map(Number);
+  return [w || 0, l || 0];
+};
 
 export function exchangesFor(stats?: ShowStatLine | null): { id: string; when: string; lines: Phrase[] }[] {
   return EXCHANGES.filter(x => x.fits(stats))
