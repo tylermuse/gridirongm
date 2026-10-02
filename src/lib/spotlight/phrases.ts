@@ -18,7 +18,10 @@ export type PhraseKind =
   | 'riff' | 'reply_agree' | 'reply_push' | 'button' | 'open' | 'answer'
   // Subject lines (the draft, trades, coaching, injuries…) and
   // conversational reactions, placed by the writer or by topic keywords.
-  | 'topical';
+  | 'topical'
+  // A line of a pre-recorded back-and-forth (see `exchange`), played only as
+  // part of the whole exchange.
+  | 'exchange';
 export type PhraseTone = 'good' | 'bad' | 'mid';
 
 export interface Phrase {
@@ -43,6 +46,8 @@ export interface Phrase {
   /** 'side': shot from a three-quarter angle with the host turned toward his
    *  co-host (a reply in conversation) rather than talking to camera. */
   angle?: 'side';
+  /** Exchange this line belongs to (lines play in manifest order). */
+  exchange?: string;
 }
 
 export const PHRASES = manifest as Phrase[];

@@ -18,7 +18,7 @@ import type { ShowStatLine } from './teamStats';
 
 export const CACHE_BUCKET = 'spotlight-audio';
 /** Bump when the episode format or the composer changes. */
-export const SHOW_VERSION = 'show-v12';
+export const SHOW_VERSION = 'show-v13';
 
 export interface EpisodeInput {
   topics: ShowTopicInput[];

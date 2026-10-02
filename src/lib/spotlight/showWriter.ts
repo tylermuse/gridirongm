@@ -76,6 +76,9 @@ The hosts have pre-recorded on-camera lines, listed with the notes as CLIPS (all
 - Aim for two or three clips in each topic of five or more lines, one in shorter topics.
 - Clips marked "said to his co-host" are quick replies across the desk: use them right after the other host makes a point, as the answer to it.
 
+PRE-RECORDED EXCHANGES
+Some whole back-and-forths are pre-recorded, shot with the hosts facing each other, listed as EXCHANGES with when each one fits. Write {"t":<topic>,"exchange":"<id>"} to play one: it stands in for all its lines, in order. Use one only when its condition is true for this team and topic, set it up so its first line follows naturally, and make your next line follow from its last line. Never more than one exchange per episode, and never repeat its lines in your own words.
+
 OUTPUT
 One JSON object per spoken line, each on its own single line, nothing else (no array, no prose) — the show starts playing while you write, so write the lines in order:
 {"t":<topic number, from 1>,"speaker":"marcus"|"tony","text":"..."}
@@ -92,7 +95,24 @@ function teamNumbers(teamName: string, stats?: ShowStatLine | null): string {
   return `${teamName}, record ${stats.record}. ${parts.join('; ')}.`;
 }
 
-interface WriterLine { speaker: string; text?: string; clip?: string; play?: unknown }
+interface WriterLine { speaker: string; text?: string; clip?: string; play?: unknown; exchange?: unknown }
+
+/** Pre-recorded back-and-forths (lines are the manifest's `exchange` phrases,
+ *  in order): when the writer may use each, and whether it's true for the
+ *  team at all. */
+const EXCHANGES: { id: string; when: string; fits: (stats?: ShowStatLine | null) => boolean }[] = [
+  {
+    id: 'buyer',
+    when: 'Trade-deadline / trades topic, only if the team has a winning record AND the notes say it has made no trades this season. Tony opens "See, now you\'re buying", so set it up with Marcus saying he\'d add one specific piece at the right price.',
+    fits: stats => { const [w, l] = (stats?.record ?? '').split('-').map(Number); return w > l; },
+  },
+];
+
+export function exchangesFor(stats?: ShowStatLine | null): { id: string; when: string; lines: Phrase[] }[] {
+  return EXCHANGES.filter(x => x.fits(stats))
+    .map(x => ({ id: x.id, when: x.when, lines: PHRASES.filter(p => p.exchange === x.id) }))
+    .filter(x => x.lines.length >= 2);
+}
 
 function recordTone(stats?: ShowStatLine | null): PhraseTone | null {
   if (!stats) return null;
@@ -182,6 +202,8 @@ export async function writeConversation(
 
   const catalog = clipCatalog(stats);
   const clipById = new Map(catalog.map(c => [c.phrase.id, c]));
+  const exchanges = new Map(exchangesFor(stats).map(x => [x.id, x]));
+  let exchangeUsed = false;
   const notes = liveIdx.map(i => ({
     headline: topics[i].headline,
     ...(topics[i].depth === 'deep' ? { depth: 'deep' } : {}),
@@ -189,7 +211,8 @@ export async function writeConversation(
   }));
   const clipList = catalog.map(c => `${c.phrase.id} (${c.phrase.host}${c.phrase.angle === 'side' ? ', said to his co-host' : ''}): ${c.words}`).join('\n');
   const user = `Team numbers: ${teamNumbers(teamName, stats)}\n\nProducer's notes for this episode (topics 1–${liveIdx.length}):\n${JSON.stringify(notes, null, 1)}`
-    + (clipList ? `\n\nCLIPS (id (host): words):\n${clipList}` : '');
+    + (clipList ? `\n\nCLIPS (id (host): words):\n${clipList}` : '')
+    + (exchanges.size ? `\n\nEXCHANGES (id — when — lines):\n${[...exchanges.values()].map(x => `${x.id} — ${x.when}\n${x.lines.map(p => `  ${p.host === 'marcus' ? 'MARCUS' : 'TONY'}: ${p.text}`).join('\n')}`).join('\n')}` : '');
 
   // The episode as written so far.
   const written = new Map<number, ShowTopicInput['exchanges']>(); // topic index → lines
@@ -204,6 +227,17 @@ export async function writeConversation(
     try { l = JSON.parse(jsonLine.slice(start, jsonLine.lastIndexOf('}') + 1)); } catch { return; }
     const pos = typeof l.t === 'number' ? l.t - 1 : -1;
     if (pos < 0 || pos >= liveIdx.length || pos < current) return; // out of order: skip
+    if (typeof l.exchange === 'string') {
+      const x = exchanges.get(l.exchange);
+      if (!x || exchangeUsed) return;
+      exchangeUsed = true;
+      for (let k = Math.max(0, current); k < pos; k++) done.add(liveIdx[k]);
+      current = pos;
+      const i = liveIdx[pos];
+      written.set(i, [...(written.get(i) ?? []), ...x.lines.map(p => ({ speakerId: (p.host === 'marcus' ? 'stats' : 'hottake') as 'stats' | 'hottake', text: p.text, clipId: p.id }))]);
+      onProgress?.(sofar(), done);
+      return;
+    }
     if (l.speaker !== 'marcus' && l.speaker !== 'tony') return;
     const clip = typeof l.clip === 'string' ? clipById.get(l.clip) : undefined;
     if (l.clip && clip?.phrase.host !== l.speaker) return;

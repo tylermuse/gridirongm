@@ -5401,5 +5401,75 @@
    "reaction"
   ],
   "angle": "side"
+ },
+ {
+  "id": "tony_x_buyer_1",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "See, now you're buying. You're a buyer, Marcus. Admit it.",
+  "src": "/show/phrases/tony_x_buyer_1.mp4",
+  "duration": 3.56,
+  "speech": {
+   "start": 0.34,
+   "end": 3.0
+  },
+  "angle": "side",
+  "exchange": "buyer"
+ },
+ {
+  "id": "marcus_x_buyer_2",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "I'm a buyer of one specific thing, at one specific price. That's a much smaller store than the one you're shopping in.",
+  "src": "/show/phrases/marcus_x_buyer_2.mp4",
+  "duration": 8.52,
+  "speech": {
+   "start": 0.38,
+   "end": 7.92
+  },
+  "angle": "side",
+  "exchange": "buyer"
+ },
+ {
+  "id": "tony_x_buyer_3",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "And that smaller store hasn't been open all year, because they haven't made a single trade.",
+  "src": "/show/phrases/tony_x_buyer_3.mp4",
+  "duration": 6.4,
+  "speech": {
+   "start": 0.34,
+   "end": 5.96
+  },
+  "angle": "side",
+  "exchange": "buyer"
+ },
+ {
+  "id": "marcus_x_buyer_4",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "Not one. Which, honestly, I'm not sure is a flaw. You get to this winning record without moving anybody, it tells you the roster they built in the spring was mostly right.",
+  "src": "/show/phrases/marcus_x_buyer_4.mp4",
+  "duration": 11.26,
+  "speech": {
+   "start": 0.36,
+   "end": 10.7
+  },
+  "angle": "side",
+  "exchange": "buyer"
+ },
+ {
+  "id": "tony_x_buyer_5",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "Mostly right gets you a home loss in the wild card round. Teams on a roll go get the piece. They don't stand around admiring themselves.",
+  "src": "/show/phrases/tony_x_buyer_5.mp4",
+  "duration": 8.86,
+  "speech": {
+   "start": 0.34,
+   "end": 8.44
+  },
+  "angle": "side",
+  "exchange": "buyer"
  }
 ]

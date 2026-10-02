@@ -3558,6 +3558,56 @@
    "text": "Come on, Marcus. You know that's not the whole story. You watched the same game I did, and that is not what it looked like from where I was sitting.",
    "take": "tony_side",
    "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_buyer_1",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "buyer",
+   "angle": "side",
+   "text": "See, now you're buying. You're a buyer, Marcus. Admit it.",
+   "take": "tony_ex_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_buyer_2",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "buyer",
+   "angle": "side",
+   "text": "I'm a buyer of one specific thing, at one specific price. That's a much smaller store than the one you're shopping in.",
+   "take": "marcus_ex_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_buyer_3",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "buyer",
+   "angle": "side",
+   "text": "And that smaller store hasn't been open all year, because they haven't made a single trade.",
+   "take": "tony_ex_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_buyer_4",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "buyer",
+   "angle": "side",
+   "text": "Not one. Which, honestly, I'm not sure is a flaw. You get to this winning record without moving anybody, it tells you the roster they built in the spring was mostly right.",
+   "take": "marcus_ex_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_buyer_5",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "buyer",
+   "angle": "side",
+   "text": "Mostly right gets you a home loss in the wild card round. Teams on a roll go get the piece. They don't stand around admiring themselves.",
+   "take": "tony_ex_side",
+   "model": "eleven_v3"
   }
  ]
 }

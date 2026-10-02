@@ -79,6 +79,7 @@ def main(wt):
             if "tags" in p: m["tags"] = p["tags"]
             if p.get("writerOnly"): m["writerOnly"] = True
             if p.get("angle"): m["angle"] = p["angle"]
+            if p.get("exchange"): m["exchange"] = p["exchange"]
             if "slot" in e:
                 m["slot"] = {"start": round(e["slot"]["start"] - a, 3), "end": round(e["slot"]["end"] - a, 3)}
             manifest.append(m)
