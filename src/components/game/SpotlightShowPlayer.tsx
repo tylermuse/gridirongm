@@ -11,7 +11,7 @@ import {
   type TimedShowSegment,
 } from '@/lib/spotlight/showScript';
 import { ordinalSrc } from '@/lib/spotlight/phrases';
-import { ordinal, rankTone, statsMentioned, type ShowStat, type ShowStatLine } from '@/lib/spotlight/teamStats';
+import { computeShowStatLine, ordinal, rankTone, statsMentioned, type ShowStat, type ShowStatLine } from '@/lib/spotlight/teamStats';
 import { topicTeam } from '@/lib/spotlight/showVisuals';
 import { focusForLine, measurableIn, type Focus } from '@/lib/spotlight/showFocus';
 import { planShots } from '@/lib/spotlight/showShots';
@@ -121,6 +121,8 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   // given, so a clip never reloads under the viewer.
   const blobUrls = useRef<Map<string, string>>(new Map());
   const lockedSrc = useRef<Map<string, string>>(new Map());
+  /** Other teams' league ranks, computed once each (lines about the opponent). */
+  const teamStatCache = useRef<Map<string, ShowStatLine | null>>(new Map());
   const [, setClipVersion] = useState(0);
   // The episode's voices arrive block by block (NDJSON); a line whose block
   // hasn't landed yet waits for it.
@@ -813,10 +815,20 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   gfxIdx++;
   const focus: Focus | null = gfx ? focusAt(segments, gfxIdx) : null;
   const linePlayer = focus?.kind === 'player' ? focus.player : null;
+  // A line about another team: its numbers (and its name in the corner).
+  const focusTeam = focus?.kind === 'team' && focus.teamId ? teams.find(t => t.id === focus.teamId) ?? null : null;
+  let focusTeamStats: ShowStatLine | null = null;
+  if (focusTeam) {
+    // Keyed by record too: the player stays mounted across sims.
+    const key = `${focusTeam.id}:${focusTeam.record.wins}-${focusTeam.record.losses}`;
+    if (!teamStatCache.current.has(key)) teamStatCache.current.set(key, computeShowStatLine(focusTeam, teams, players));
+    focusTeamStats = teamStatCache.current.get(key) ?? null;
+  }
   // The panel's corner shows the spotlight team — or the other team while a
   // line is about them: one of their players, or the team itself by name.
   const cornerTeam = (() => {
     if (!team || !gfx) return null;
+    if (focusTeam) return focusTeam;
     if (linePlayer) return linePlayer.teamId && linePlayer.teamId !== team.id ? teams.find(t => t.id === linePlayer.teamId) ?? null : null;
     const other = topicTeam(topics[gfx.topicIdx], team, teams);
     return other.id !== team.id && namesTeam(gfx.text, other) ? other : null;
@@ -833,14 +845,15 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const tiles: TileStat[] | null =
     focus?.kind === 'player' ? focus.tiles ?? gfxTopic?.gameTeam ?? null
       : focus?.kind === 'unit' ? focus.tiles
-        : focus?.kind === 'team' ? gfxTopic?.gameTeam ?? stats?.stats ?? null
+        : focus?.kind === 'team' ? (focusTeam ? focusTeamStats?.stats ?? null : gfxTopic?.gameTeam ?? stats?.stats ?? null)
           : focus?.kind === 'moment' ? null
             : gfxTopic?.gameTeam ?? null;
   const tilesLabel =
     focus?.kind === 'player' && focus.tiles ? focus.label
       : focus?.kind === 'unit' ? focus.label
-        : gfxTopic?.gameTeam ? gfxTopic.gameLabel
-          : stats ? `${team?.abbreviation ?? teamName} · League ranks` : undefined;
+        : focusTeam ? `${focusTeam.abbreviation} · League ranks`
+          : gfxTopic?.gameTeam ? gfxTopic.gameLabel
+            : stats ? `${team?.abbreviation ?? teamName} · League ranks` : undefined;
   const mentioned: string[] = !tts || !focus || focus.kind === 'none' || focus.kind === 'standings' || focus.kind === 'moment' ? [] : focus.mentioned;
   // Game breakdown: the scores on a timeline, the one being discussed called out.
   const flowData = focus?.kind === 'moment' ? gfxTopic?.gameFlow ?? null : null;

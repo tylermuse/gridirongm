@@ -34,9 +34,13 @@ export function playerNamedIn(text: string, topic: VisualTopic | undefined, play
     .filter(x => x.at >= 0)
     .sort((a, b) => a.at - b.at)[0];
   if (full) return full.p;
+  // Where a partial name first appears, so with two named ("McMillan… Mensah")
+  // the one mentioned first wins.
+  const at = (w: string) => text.search(new RegExp(`(^|[^A-Za-z])${escapeRe(w)}(?![A-Za-z])`));
   for (const pool of [inTopic, onTeams]) {
-    const last = pool.filter(p => word(p.lastName));
-    if (last.length === 1 || (pool === inTopic && last.length)) return last[0];
+    const last = pool.filter(p => word(p.lastName)).sort((a, b) => at(a.lastName) - at(b.lastName));
+    const firstNamed = last.filter(p => p.lastName === last[0]?.lastName);
+    if (firstNamed.length === 1 || (pool === inTopic && last.length)) return last[0];
     const first = pool.filter(p => word(p.firstName));
     if (first.length === 1) return first[0];
   }

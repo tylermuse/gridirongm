@@ -21,7 +21,9 @@ export type Unit = 'oline' | 'run' | 'front' | 'secondary';
 export type Focus =
   | { kind: 'player'; player: Player; tiles: TileStat[] | null; label: string; mentioned: string[] }
   | { kind: 'unit'; unit: Unit; tiles: TileStat[]; label: string; mentioned: string[] }
-  | { kind: 'team'; mentioned: string[] }
+  /** A team's league ranks: the spotlight team, or `teamId` — another team
+   *  the line is about (the next opponent, a rival). */
+  | { kind: 'team'; mentioned: string[]; teamId?: string }
   | { kind: 'standings'; scope: 'conference' | 'division' }
   /** The game's flow (every score on a timeline), with one score called
    *  out — or none, when the line is about the game as a whole. */
@@ -276,8 +278,20 @@ function teamWords(teams: Team[]): Set<string> {
 }
 
 /** Focus from one piece of text alone (no carry-over). */
+/** Other teams a line names (city, nickname or abbreviation), first-named first. */
+export function otherTeamsNamedIn(text: string, team: Team, teams: Team[]): Team[] {
+  const at = (t: Team) => {
+    const hits = [t.city, t.name, t.abbreviation]
+      .map(w => (w ? text.search(new RegExp(`(^|[^A-Za-z])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Za-z])`)) : -1))
+      .filter(i => i >= 0);
+    return hits.length ? Math.min(...hits) : -1;
+  };
+  return teams.filter(t => t.id !== team.id).map(t => ({ t, i: at(t) })).filter(x => x.i >= 0).sort((a, b) => a.i - b.i).map(x => x.t);
+}
+
 function focusOf(text: string, c: FocusContext): Focus | null {
-  const named = playerNamedIn(text, c.topic, c.players, [c.team.id, ...(c.topic?.teamIds ?? [])], teamWords(c.teams));
+  const others = otherTeamsNamedIn(text, c.team, c.teams);
+  const named = playerNamedIn(text, c.topic, c.players, [c.team.id, ...(c.topic?.teamIds ?? []), ...others.map(t => t.id)], teamWords(c.teams));
   // A game breakdown: a score that's being described goes on the timeline.
   const flow = c.topic?.gameFlow;
   if (flow) {
@@ -299,6 +313,8 @@ function focusOf(text: string, c: FocusContext): Focus | null {
   }
   const race = standingsOf(text);
   if (race) return race;
+  // A line about another team (the next opponent, a rival): their numbers.
+  if (others.length) return { kind: 'team', teamId: others[0].id, mentioned: statsMentioned(text) };
   for (const [unit, re] of UNIT_WORDS) {
     if (!re.test(text)) continue;
     const tiles = computeUnitLine(unit, c.team, c.teams, c.players);
@@ -347,7 +363,7 @@ export function focusForLine(text: string, c: FocusContext): Focus {
   // so the numbers stay up rather than just the words.
   if (prev?.kind === 'player') return playerFocus(prev.player, text, c.players, c.topic);
   if (prev?.kind === 'unit') return { ...prev, mentioned: unitMentioned(text, prev.tiles) };
-  if (prev?.kind === 'team') return { kind: 'team', mentioned: [] };
+  if (prev?.kind === 'team') return { kind: 'team', mentioned: [], ...(prev.teamId ? { teamId: prev.teamId } : {}) };
   if (prev?.kind === 'standings') return prev;
   if (prev?.kind === 'moment') return prev;
   // The headline sets the subject ("QB Watch", "Trenches trouble").

@@ -146,3 +146,23 @@ describe('measurableIn', () => {
     expect(measurableIn('The offense ranks 7th in points per game.', ctx)).toBe(true);
   });
 });
+
+describe('focusForLine — the other team', () => {
+  const ari = { ...team('ari'), city: 'Arizona', name: 'Cardinals' } as Team;
+  const car = { ...team('car'), city: 'Carolina', name: 'Panthers' } as Team;
+  const mcm = { ...pl('mcm', 'car', 'WR', { receptions: 80, receivingYards: 1200, targets: 120 }), firstName: 'Tetairoa', lastName: 'McMillan' } as Player;
+  const qb = { ...pl('qb', 'ari', 'QB', { passAttempts: 500, passCompletions: 340, passYards: 4500 }), firstName: 'Darian', lastName: 'Mensah' } as Player;
+  const c2 = { team: ari, teams: [ari, car], players: [mcm, qb], earlier: [] as string[] };
+
+  it('a line about the next opponent shows their numbers, not ours', () => {
+    expect(focusForLine('Carolina. Nine and eight, and they rank third in points per game.', c2)).toMatchObject({ kind: 'team', teamId: 'car', mentioned: ['ppg'] });
+    expect(focusForLine('And they just keep winning.', { ...c2, earlier: ['The Panthers are hot.'] })).toMatchObject({ kind: 'team', teamId: 'car' });
+  });
+
+  it("finds the opponent's player by last name, and the first one named wins", () => {
+    const f = focusForLine("Carolina's got McMillan, who's been making the big play all year.", c2);
+    expect(f).toMatchObject({ kind: 'player', player: { id: 'mcm' } });
+    const g = focusForLine("I respect McMillan, I do, but Mensah's going to throw on them all afternoon.", { ...c2, topic: { teamIds: ['car'] } });
+    expect(g).toMatchObject({ kind: 'player', player: { id: 'mcm' } });
+  });
+});
