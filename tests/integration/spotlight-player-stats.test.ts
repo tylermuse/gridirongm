@@ -40,3 +40,15 @@ describe('computePlayerStatLine', () => {
     expect(playerStatsMentioned("Callahan's completion rate is above average.", line)).toEqual(['cmp']);
   });
 });
+
+describe('defensive backs', () => {
+  const cb = (id: string, gp: number, s: Partial<PlayerStats>) => ({ id, firstName: id, lastName: id, position: 'CB', teamId: 't', stats: { ...zero, gamesPlayed: gp, ...s } }) as unknown as Player;
+  const me = cb('me', 16, { tackles: 40, defensiveINTs: 3, passDeflections: 11 });
+  const others = [cb('o1', 17, { tackles: 60, defensiveINTs: 5, passDeflections: 15, sacks: 1 }), cb('o2', 15, { tackles: 30, defensiveINTs: 1 }), cb('backup', 2, { tackles: 3 })];
+  it('a corner is shown on picks and breakups, ranked among corners who played; none of a stat is unranked', () => {
+    const line = computePlayerStatLine(me, [me, ...others])!;
+    expect(line.map(t => t.key)).toEqual(['defInt', 'pd', 'tackles', 'ff']);
+    expect(line[0]).toMatchObject({ value: '3', rank: 2, of: 3 }); // the 2-game backup isn't in the pool
+    expect(line[3]).toMatchObject({ value: '0', rank: 0, note: 'None' });
+  });
+});

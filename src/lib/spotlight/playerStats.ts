@@ -65,12 +65,26 @@ const DEFS: Record<string, Def[]> = {
     { key: 'recTd', label: 'Rec TD', get: s => s.receivingTDs, format: int },
     { key: 'catchPct', label: 'Catch %', get: s => safe(s.receptions, s.targets) * 100, format: pct, volume: s => s.targets },
   ],
-  DEF: [
-    { key: 'tackles', label: 'Tackles', get: s => s.tackles, format: int },
+  // Defenders: the numbers that define the job (a corner's season is
+  // picks and pass breakups, not sacks).
+  DL: [
     { key: 'sacks', label: 'Sacks', get: s => s.sacks, format: one },
     { key: 'tfl', label: 'TFL', get: s => s.tacklesForLoss, format: int },
+    { key: 'tackles', label: 'Tackles', get: s => s.tackles, format: int },
+    { key: 'ff', label: 'Forced Fum', get: s => s.forcedFumbles, format: int },
+  ],
+  LB: [
+    { key: 'tackles', label: 'Tackles', get: s => s.tackles, format: int },
+    { key: 'tfl', label: 'TFL', get: s => s.tacklesForLoss, format: int },
+    { key: 'sacks', label: 'Sacks', get: s => s.sacks, format: one },
     { key: 'defInt', label: 'INT', get: s => s.defensiveINTs, format: int },
     { key: 'pd', label: 'Pass Def', get: s => s.passDeflections, format: int },
+  ],
+  DB: [
+    { key: 'defInt', label: 'INT', get: s => s.defensiveINTs, format: int },
+    { key: 'pd', label: 'Pass Def', get: s => s.passDeflections, format: int },
+    { key: 'tackles', label: 'Tackles', get: s => s.tackles, format: int },
+    { key: 'ff', label: 'Forced Fum', get: s => s.forcedFumbles, format: int },
   ],
   OL: [
     { key: 'snaps', label: 'Snaps', get: s => s.snaps, format: int },
@@ -91,7 +105,7 @@ const DEFS: Record<string, Def[]> = {
 };
 
 const GROUP: Record<Position, string> = {
-  QB: 'QB', RB: 'RB', WR: 'WR', TE: 'WR', OL: 'OL', DL: 'DEF', LB: 'DEF', CB: 'DEF', S: 'DEF', K: 'K', P: 'P',
+  QB: 'QB', RB: 'RB', WR: 'WR', TE: 'WR', OL: 'OL', DL: 'DL', LB: 'LB', CB: 'DB', S: 'DB', K: 'K', P: 'P',
 };
 
 /**
@@ -113,12 +127,16 @@ export function computePlayerStatLine(player: Player, allPlayers: Player[]): Til
   const defs = DEFS[group];
   if (!defs) return null;
   // Rank against everyone at the same position (TE with TE, CB with CB),
-  // on the same footing (this season, or last season between seasons).
-  const peers = allPlayers.flatMap(p => {
+  // on the same footing (this season, or last season between seasons) —
+  // and only players who actually played (a third of the most games), so
+  // it reads "12th of 70 corners", not "84th of 275" with every backup.
+  const all = allPlayers.flatMap(p => {
     if (p.position !== player.position) return [];
     const s = p.id === player.id ? own : showSeasonStats(p);
     return s ? [{ id: p.id, s }] : [];
   });
+  const maxGp = Math.max(0, ...all.map(p => p.s.gamesPlayed));
+  const peers = all.filter(p => p.id === player.id || p.s.gamesPlayed >= maxGp / 3);
   return defs.map(d => {
     let pool = peers;
     if (d.volume) {
@@ -128,9 +146,21 @@ export function computePlayerStatLine(player: Player, allPlayers: Player[]): Til
       if (!pool.some(p => p.id === player.id)) pool = [...pool, { id: player.id, s: own }];
     }
     const mine = d.get(own);
+    // None of a counting stat isn't a ranking ("0 sacks, 3rd of 275" when
+    // only two corners had one): shown unranked.
+    if (mine === 0 && !d.lowerIsBetter && !d.volume) return { key: d.key, label: d.label, value: d.format(mine), rank: 0, of: 0, note: 'None' };
     const better = pool.filter(p => (d.lowerIsBetter ? d.get(p.s) < mine : d.get(p.s) > mine)).length;
     return { key: d.key, label: d.label, value: d.format(mine), rank: better + 1, of: pool.length };
   });
+}
+
+/** What a player's tiles cover: "2030 season · 9 games" (or last season's,
+ *  between seasons). */
+export function statSpanLabel(p: Player): string | null {
+  const s = showSeasonStats(p);
+  if (!s) return null;
+  const current = p.stats && p.stats.gamesPlayed > 0;
+  return `${current ? 'This season' : 'Last season'} · ${s.gamesPlayed} game${s.gamesPlayed === 1 ? '' : 's'}`;
 }
 
 const KEYWORDS: [string, RegExp][] = [
@@ -150,6 +180,7 @@ const KEYWORDS: [string, RegExp][] = [
   ['sacks', /\bsacks?\b/i],
   ['defInt', /\bintercept|\bpicks?\b/i],
   ['pd', /\bpass(es)? defended\b|\bdeflect|\bbreakups?\b/i],
+  ['ff', /\bforced fumbles?\b|\bstrip(ped)?\b/i],
   ['fgPct', /\bfield goals?\b|\bkick(ing|er)\b/i],
 ];
 

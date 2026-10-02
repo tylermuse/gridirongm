@@ -11,7 +11,7 @@
  *    cuts to the wide shot of the hosts instead of a wall of numbers.
  */
 import type { Player, Team } from '@/types';
-import { computePlayerStatLine, playerStatsMentioned, showSeasonStats, type TileStat } from './playerStats';
+import { computePlayerStatLine, playerStatsMentioned, showSeasonStats, statSpanLabel, type TileStat } from './playerStats';
 import { statsMentioned } from './teamStats';
 import { playerNamedIn, type VisualTopic } from './showVisuals';
 import type { GameFlow } from './showGame';
@@ -196,7 +196,7 @@ function playerFocus(p: Player, text: string, players: Player[], topic?: FocusCo
   return {
     kind: 'player', player: p, tiles,
     label: game ? `${p.firstName} ${p.lastName} · ${topic?.gameLabel ?? 'this game'}`
-      : bio ? `${p.firstName} ${p.lastName} · Profile` : `${p.firstName} ${p.lastName} · ${p.position} ranks`,
+      : bio ? `${p.firstName} ${p.lastName} · Profile` : `${p.firstName} ${p.lastName} · ${statSpanLabel(p) ?? 'Season'} · ranks among ${p.position}s`,
     mentioned: tiles ? playerStatsMentioned(text, tiles) : [],
   };
 }
