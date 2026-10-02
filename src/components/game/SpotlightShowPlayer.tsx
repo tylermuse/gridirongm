@@ -258,6 +258,21 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   }, []);
 
   /** Route a phrase clip's audio through a gain node (once per element). */
+  /** iPhone Safari only lets a <video> with sound start on its own once it
+   *  has been played inside a tap. Every clip is its own element, so without
+   *  this each first on-camera shot stalled on "Resume". Play-and-pause each
+   *  idle clip during the tap (Start/Resume, or any tap on the player) —
+   *  silent, since nothing renders before the pause. */
+  const primed = useRef(new WeakSet<HTMLVideoElement>());
+  const primeVideos = useCallback(() => {
+    for (const v of videoRefs.current.values()) {
+      if (primed.current.has(v) || !v.paused) continue;
+      primed.current.add(v);
+      v.play().catch(() => {});
+      v.pause();
+    }
+  }, []);
+
   const gainFor = useCallback((key: string, v: HTMLVideoElement) => {
     const ctx = ctxRef.current;
     if (!ctx) return null;
@@ -628,6 +643,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   }
 
   async function handleStart() {
+    primeVideos(); // before any await: it needs the tap
     const ctx = ctxRef.current;
     if (ctx && ctx.state !== 'running') await ctx.resume(); // needs the click gesture
     if (pausedAt.current != null) { pausedTotal.current += performance.now() - pausedAt.current; pausedAt.current = null; }
@@ -874,6 +890,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   return (
     <div
       ref={dialogRef}
+      onPointerDown={primeVideos}
       className={full
         ? 'fixed inset-0 z-[110] flex items-center justify-center bg-black'
         : 'fixed inset-0 z-[110] flex items-center justify-center bg-white/80 backdrop-blur-sm p-4'}
