@@ -14,8 +14,8 @@ PRE, POST = 0.30, 0.40   # padding around each phrase (gaps are 0.9s)
 # Side-angle takes (host turned toward his co-host) are framed differently:
 # their studio screens sit elsewhere in the frame.
 SIDE_SCREENS = {
-    "marcus": [(0.0, 0.0, 0.09, 0.62), (0.68, 0.0, 1.0, 0.60)],
-    "tony": [(0.0, 0.0, 0.28, 0.64), (0.86, 0.0, 1.0, 0.64)],
+    "marcus": [(0.0, 0.0, 0.30, 0.46), (0.72, 0.0, 1.0, 0.46)],
+    "tony": [(0.0, 0.0, 0.33, 0.47), (0.71, 0.0, 1.0, 0.47)],
 }
 
 def speech_span(f):

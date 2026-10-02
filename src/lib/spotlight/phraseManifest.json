@@ -5339,15 +5339,15 @@
   ]
  },
  {
-  "id": "marcus_s_take_plan",
+  "id": "marcus_s_one_afternoon",
   "host": "marcus",
   "kind": "topical",
-  "text": "Okay, fine. I'll take that as a plan.",
-  "src": "/show/phrases/marcus_s_take_plan.mp4",
-  "duration": 2.52,
+  "text": "Okay, I hear you, and that's fair. But you can't build a whole season around one good afternoon. Show me it again next week, and then we'll talk.",
+  "src": "/show/phrases/marcus_s_one_afternoon.mp4",
+  "duration": 9.0,
   "speech": {
-   "start": 0.4,
-   "end": 2.06
+   "start": 0.42,
+   "end": 8.54
   },
   "tags": [
    "reaction"
@@ -5355,15 +5355,31 @@
   "angle": "side"
  },
  {
-  "id": "marcus_s_not_wrong",
+  "id": "marcus_s_same_page",
   "host": "marcus",
   "kind": "topical",
-  "text": "You're not wrong. I just don't love where that leads.",
-  "src": "/show/phrases/marcus_s_not_wrong.mp4",
-  "duration": 3.82,
+  "text": "Fine. I'll take that as a plan. I'm just not convinced everybody else in that building is on the same page yet, and that's what worries me.",
+  "src": "/show/phrases/marcus_s_same_page.mp4",
+  "duration": 7.74,
+  "speech": {
+   "start": 0.5,
+   "end": 7.3
+  },
+  "tags": [
+   "reaction"
+  ],
+  "angle": "side"
+ },
+ {
+  "id": "tony_s_real_point",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Alright, I'll give you that one, Marcus. That's a real point. But you're leaving out the part where they actually showed up when it mattered.",
+  "src": "/show/phrases/tony_s_real_point.mp4",
+  "duration": 8.2,
   "speech": {
    "start": 0.36,
-   "end": 3.38
+   "end": 7.74
   },
   "tags": [
    "reaction"
@@ -5371,31 +5387,15 @@
   "angle": "side"
  },
  {
-  "id": "tony_s_give_you",
+  "id": "tony_s_whole_story",
   "host": "tony",
   "kind": "topical",
-  "text": "Alright, alright. I'll give you that one, Marcus.",
-  "src": "/show/phrases/tony_s_give_you.mp4",
-  "duration": 3.64,
+  "text": "Come on, Marcus. You know that's not the whole story. You watched the same game I did, and that is not what it looked like from where I was sitting.",
+  "src": "/show/phrases/tony_s_whole_story.mp4",
+  "duration": 8.3,
   "speech": {
-   "start": 0.38,
-   "end": 3.16
-  },
-  "tags": [
-   "reaction"
-  ],
-  "angle": "side"
- },
- {
-  "id": "tony_s_come_on",
-  "host": "tony",
-  "kind": "topical",
-  "text": "Come on, Marcus. You know that's not the whole story.",
-  "src": "/show/phrases/tony_s_come_on.mp4",
-  "duration": 2.78,
-  "speech": {
-   "start": 0.38,
-   "end": 2.38
+   "start": 0.36,
+   "end": 7.72
   },
   "tags": [
    "reaction"
