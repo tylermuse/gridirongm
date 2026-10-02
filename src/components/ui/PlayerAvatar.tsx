@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { portraitFor } from '@/lib/portraits/portraitPool';
 
 // Switched from DiceBear's "adventurer" style to "avataaars". The adventurer
 // style has intentionally oversized heads + small features that read as
@@ -39,7 +40,10 @@ export function PlayerAvatar({ player, size = 'md', teamColor = '#555', classNam
   const [imgError, setImgError] = useState(false);
 
   const seed = player.portraitSeedOverride ?? player.id;
-  const imgSrc = player.photoUrl || (seed ? getDiceBearUrl(seed) : null);
+  // Real players: their photo. Fictional players: a photoreal headshot from
+  // the pool (by position), falling back to the DiceBear cartoon.
+  const pooled = !player.photoUrl && seed ? portraitFor(seed, player.position) : null;
+  const imgSrc = player.photoUrl || pooled || (seed ? getDiceBearUrl(seed) : null);
 
   if (imgSrc && !imgError) {
     return (
