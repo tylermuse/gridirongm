@@ -38,6 +38,7 @@ import { refreshTradeRequests, hasActiveTradeRequest } from './tradeRequests';
 import { setSimTelemetrySink, SIM_TELEMETRY_CAP, type SimTelemetryRecord } from './simTelemetry';
 import { clearRolloverTickInstrumentation, setAutocutSubstep, recordTickTiming, recordTickRosterSize } from '@/lib/instrumentation/rolloverTickTimings';
 import { getCurrentSubscriptionAllocations } from '@bs/core/billing';
+import { trackEvent } from '@bs/core/analytics/track';
 
 const SAVE_VERSION = 36;
 
@@ -2964,6 +2965,13 @@ export const useGameStore = create<GameStore>()(
           // payrolls well above cap; without this call every AI team
           // would carry that overage into Week 1 (.akrav 5/10).
           get().initializeFreshLeagueRosters();
+          trackEvent('league_created', {
+            source: 'import',
+            roster_file: leagueFileUrl.split('/').pop()?.split('?')[0] ?? null,
+            team: isSpectator ? null : userTeam.abbreviation,
+            start_mode: isSpectator ? 'spectator' : isRegularStart ? 'regular' : 'offseason',
+            season: imported.season,
+          });
           return;
         } catch (error) {
           console.warn('Failed to import league data, falling back to generated league.', error);
@@ -3135,6 +3143,15 @@ export const useGameStore = create<GameStore>()(
         // teams have draft-class flex; without this call AI teams would
         // hit Week 1 still padded.
         get().initializeFreshLeagueRosters();
+        trackEvent('league_created', {
+          source: 'generated',
+          // Generated leagues are only reached when the import above threw.
+          import_failed: !!leagueFileUrl,
+          roster_file: leagueFileUrl?.split('/').pop()?.split('?')[0] ?? null,
+          team: isSpectator ? null : userTeam.abbreviation,
+          start_mode: isSpectator ? 'spectator' : 'offseason',
+          season: 2026,
+        });
       },
 
       resetLeague: () => {
@@ -3226,6 +3243,17 @@ export const useGameStore = create<GameStore>()(
         const weekGames = (result.patch.schedule as GameResult[]).filter(g => g.week === simmedWeek && g.played);
         const recap = generateWeeklyRecap(weekGames, result.patch.teams as Team[], result.patch.players as Player[], state.season, simmedWeek, result.patch.newsItems as import('@/types').NewsItem[]);
         const weeklyRecaps = [...state.weeklyRecaps, recap];
+
+        // Main-loop telemetry. seasons_completed === 0 && week === 1 is the
+        // "first sim" onboarding milestone — no separate event needed.
+        trackEvent('week_simmed', {
+          mode: 'week',
+          season: state.season,
+          week: simmedWeek,
+          weeks: 1,
+          seasons_completed: state.seasonHistory.length,
+          spectator: !!state.isSpectator,
+        });
 
         if (result.isSeasonOver) {
           const teams = result.patch.teams as Team[];
@@ -3418,6 +3446,18 @@ export const useGameStore = create<GameStore>()(
             isSeasonOver = true;
             break;
           }
+        }
+
+        if (week > current.week) {
+          trackEvent('week_simmed', {
+            mode: 'to_week',
+            season: current.season,
+            week: current.week,
+            to_week: week,
+            weeks: week - current.week,
+            seasons_completed: current.seasonHistory.length,
+            spectator: !!current.isSpectator,
+          });
         }
 
         if (isSeasonOver) {
@@ -3849,6 +3889,7 @@ export const useGameStore = create<GameStore>()(
         // started making offseason decisions.
         const userApprovalVal = userTeam?.approval?.ownerApproval ?? 50;
         if (userApprovalVal <= 0) {
+          trackEvent('gm_fired', { season: state.season, seasons_completed: state.seasonHistory.length });
           set({
             firedState: {
               fired: true,
@@ -4047,6 +4088,14 @@ export const useGameStore = create<GameStore>()(
           };
 
           updatedSeasonHistory = [...state.seasonHistory, seasonSummary];
+          trackEvent('season_completed', {
+            season: state.season,
+            seasons_completed: updatedSeasonHistory.length,
+            wins: seasonSummary.userRecord.wins,
+            losses: seasonSummary.userRecord.losses,
+            playoff_result: seasonSummary.userPlayoffResult,
+            spectator: !!state.isSpectator,
+          });
         }
 
         // Process end-of-season approval for user team
@@ -4106,6 +4155,7 @@ export const useGameStore = create<GameStore>()(
         });
 
         if (postUpdateFiredApproval) {
+          trackEvent('gm_fired', { season: state.season, seasons_completed: updatedSeasonHistory.length });
           set({
             firedState: {
               fired: true,
