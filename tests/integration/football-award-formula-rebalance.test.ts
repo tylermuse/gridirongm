@@ -68,16 +68,54 @@ describe('OPOY formula rebalance', () => {
 });
 
 describe('DPOY formula rebalance', () => {
-  it('lets a shutdown CB match/beat a sack-heavy DL', () => {
+  // NOTE: the 2026-09-22 flat INT/PD bump is SUPERSEDED by the 2026-10-02
+  // position-aware rewrite (obungaloo via Commish). Under position branches a
+  // sack-heavy DL reclaims the mid-range from a comparable shutdown CB; a CB
+  // now needs a genuinely elite ball-production season to win (see the
+  // position-aware describe block below).
+  it('lets a sack-heavy DL edge a comparable shutdown CB', () => {
     // 8 INT / 15 PD / 60 TKL CB vs 10-sack / 55-TKL / 12-TFL DL.
     const cb = makePlayer('cb', 'CB', { defensiveINTs: 8, passDeflections: 15, tackles: 60 });
     const dl = makePlayer('dl', 'DL', { sacks: 10, tackles: 55, tacklesForLoss: 12, forcedFumbles: 2 });
-    expect(dpoyScore(cb, teams)).toBeGreaterThanOrEqual(dpoyScore(dl, teams));
+    expect(dpoyScore(dl, teams)).toBeGreaterThan(dpoyScore(cb, teams));
   });
 
   it('still lets a monster pass-rusher win over an average CB', () => {
     const eliteDl = makePlayer('dl', 'DL', { sacks: 18, tackles: 65, tacklesForLoss: 22, forcedFumbles: 5 });
     const avgCb = makePlayer('cb', 'CB', { defensiveINTs: 3, passDeflections: 8, tackles: 55 });
     expect(dpoyScore(eliteDl, teams)).toBeGreaterThan(dpoyScore(avgCb, teams));
+  });
+});
+
+/**
+ * DPOY position-aware scoring (P1 — 2026-10-02, obungaloo via Commish).
+ *
+ * Reported: "now that DPOY shows correctly, why does a CB with 4 INTs win it
+ * over a DL with 17 sacks?" Root cause: dpoyScore() used one flat formula for
+ * all defensive positions. Fix: position branches mirroring droyScore() —
+ *   DL/LB: sacks*10 + TFL*3 + tackles*0.4 + FF*4 + winBonus
+ *   CB/S:  INTs*9 + PD*3 + tackles*0.3 + FF*4 + winBonus
+ */
+describe('DPOY position-aware scoring', () => {
+  it('always ranks a 17-sack DL above a 4-INT CB, all else equal', () => {
+    const dl = makePlayer('dl', 'DL', { sacks: 17, tackles: 50, tacklesForLoss: 15, forcedFumbles: 3 });
+    const cb = makePlayer('cb', 'CB', { defensiveINTs: 4, passDeflections: 12, tackles: 50, forcedFumbles: 3 });
+    expect(dpoyScore(dl, teams)).toBeGreaterThan(dpoyScore(cb, teams));
+  });
+
+  it('lets a genuinely elite ball-hawk CB beat a modest DL', () => {
+    // Historic corner season (9 INT / 20 PD) still takes it over a so-so rusher.
+    const eliteCb = makePlayer('cb', 'CB', { defensiveINTs: 9, passDeflections: 20, tackles: 65, forcedFumbles: 3 });
+    const modestDl = makePlayer('dl', 'DL', { sacks: 6, tackles: 45, tacklesForLoss: 8, forcedFumbles: 1 });
+    expect(dpoyScore(eliteCb, teams)).toBeGreaterThan(dpoyScore(modestDl, teams));
+  });
+
+  it('scores identical raw stat lines differently by position (tie-breaker)', () => {
+    // Same stat bag, different position: DL is credited for the sacks, the CB
+    // is credited for the INTs/PDs — the formula must not treat them alike.
+    const bag = { sacks: 8, defensiveINTs: 5, passDeflections: 10, tackles: 55, tacklesForLoss: 9, forcedFumbles: 2 };
+    const dl = makePlayer('dl', 'DL', bag);
+    const cb = makePlayer('cb', 'CB', bag);
+    expect(dpoyScore(dl, teams)).not.toBe(dpoyScore(cb, teams));
   });
 });

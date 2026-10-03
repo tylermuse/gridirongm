@@ -14,7 +14,7 @@
 
 import type { Player, Team, PlayerStats } from '@/types';
 import type { PlayEvent } from './playByPlay';
-import { pickRusher, pickInterceptor, pickReceiver } from './playByPlay';
+import { pickRusher, pickInterceptor, pickReceiver, pickSacker, pickWeighted } from './playByPlay';
 import type { PlayCallType } from '@/components/game/PlayCallMenu';
 import { playerAvailable, fieldGoalMakeProbability } from './simulate';
 
@@ -103,8 +103,9 @@ interface KeyDef {
   dl1: Player | null;
   lb1: Player | null;
   cb1: Player | null;
-  // Position pools — used to rotate INTs across the depth chart instead of
-  // always crediting the single starting corner.
+  // Position pools — used to rotate sacks/INTs/tackles across the depth chart
+  // instead of always crediting the single starting lineman/corner.
+  dls: Player[];
   lbs: Player[];
   cbs: Player[];
   safeties: Player[];
@@ -151,17 +152,31 @@ function extractOff(players: Player[], depthChart?: Record<string, string[]>): K
 }
 
 function extractDef(players: Player[], depthChart?: Record<string, string[]>): KeyDef {
+  const dls = orderedAtPos(players, 'DL', depthChart);
   const lbs = orderedAtPos(players, 'LB', depthChart);
   const cbs = orderedAtPos(players, 'CB', depthChart);
   const safeties = orderedAtPos(players, 'S', depthChart);
   return {
-    dl1: orderedAtPos(players, 'DL', depthChart)[0] ?? null,
+    dl1: dls[0] ?? null,
     lb1: lbs[0] ?? null,
     cb1: cbs[0] ?? null,
+    dls,
     lbs,
     cbs,
     safeties,
   };
+}
+
+/** Pick the tackler on a run or short completion. LBs lead, DL and safeties
+ *  contribute, corners least — weighted by tackling rating so the live-coach
+ *  box score spreads tackles the way the full sim's team tackle bucket does. */
+function pickTackler(dk: KeyDef): Player | null {
+  const pool = [...dk.lbs, ...dk.dls, ...dk.safeties, ...dk.cbs];
+  return pickWeighted(pool, p => {
+    const base = p.position === 'LB' ? 3.0 : p.position === 'DL' ? 2.0
+      : p.position === 'S' ? 1.5 : 0.6;
+    return base * (p.ratings.tackling ?? 60);
+  });
 }
 
 function rating(p: Player | null, key: keyof Player['ratings'], fallback = 70): number {
@@ -204,8 +219,11 @@ export function createLiveCoachEngine(
   // Per-player stat accumulator for the plays this engine generates. Merged
   // onto the pre-pivot bucket stats in buildFinalGameResult so plays the user
   // actually coaches after the live pivot are reflected in the final box score.
-  // Only offense + named-defender (INT) stats are tracked here; aggregate
-  // defensive stats stay seeded from the pre-pivot bucket snapshot.
+  // Offense + defense are both tracked: sacks (on sack events), defensive INTs
+  // (on picks), and tackles (on run stops + short completions) so live-coached
+  // defenders show up in the box score and leaderboards the same as simmed ones
+  // (diprionidian 2026-09-30: "defense stats are barely recorded when playing
+  // vs simming").
   const playerStats: Record<string, Partial<PlayerStats>> = {};
   function bump(player: Player | null, updates: Partial<Record<keyof PlayerStats, number>>) {
     if (!player) return;
@@ -402,6 +420,9 @@ export function createLiveCoachEngine(
 
     events.push(makeEvent('run', desc, finalYards, isTD));
     bump(rusher, { rushAttempts: 1, rushYards: finalYards, rushTDs: isTD ? 1 : 0 });
+    // A runner who isn't scoring got tackled — credit a front-seven/secondary
+    // defender (mirrors the full sim's team tackle on every non-TD carry).
+    if (!isTD) bump(pickTackler(dk), { tackles: 1 });
 
     if (isTD) {
       handleTouchdown(events, state.possession === userSide);
@@ -430,6 +451,13 @@ export function createLiveCoachEngine(
       const sackYards = -(3 + Math.floor(Math.random() * 5));
       const qbName = nameOrFallback(ok.qb, 'the QB');
       events.push(makeEvent('sack', `${prefix}${qbName} is sacked for a loss of ${Math.abs(sackYards)}.`, sackYards, false));
+      // Credit the sack to a pass rusher (DL-weighted, LBs contribute) so
+      // live-coached sacks reach the box score + DPOY/sack leaderboards.
+      // Sacks are tracked separately from tackles here, matching the full sim
+      // (which increments sacks, not tackles, on a sack) so simmed and
+      // live-coached box scores stay consistent.
+      const sacker = pickSacker(dk.dls, dk.lbs) ?? dk.dl1;
+      bump(sacker, { sacks: 1 });
       state.fieldPos = clamp(state.fieldPos + sackYards, 1, 99);
       state.yardsToGo -= sackYards;
       if (advanceDown() === 'turnover_on_downs') {
@@ -484,6 +512,8 @@ export function createLiveCoachEngine(
       events.push(makeEvent('pass_complete', desc, finalYards, isTD));
       bump(ok.qb, { passAttempts: 1, passCompletions: 1, passYards: finalYards, passTDs: isTD ? 1 : 0 });
       bump(target, { targets: 1, receptions: 1, receivingYards: finalYards, receivingTDs: isTD ? 1 : 0 });
+      // Receiver brought down short of the end zone — credit the tackle.
+      if (!isTD) bump(pickTackler(dk), { tackles: 1 });
 
       if (isTD) {
         handleTouchdown(events, state.possession === userSide);
