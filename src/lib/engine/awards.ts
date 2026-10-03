@@ -37,13 +37,38 @@ export function mvpScore(p: Player, teams: Team[]): number {
 export function dpoyScore(p: Player, teams: Team[]): number {
   const team = teams.find(t => t.id === p.teamId);
   const winBonus = team ? team.record.wins * 3 : 0;
-  // 2026-09-22 (obungaloo, #general): CBs/Ss were near-impossible to win DPOY —
-  // sacks (8 pts) buried INTs (7) and PDs (2), so a 12-sack DL always beat a
-  // shutdown corner. Bump INT 7->12 and PD 2->4 so an 8-INT / 15-PD corner can
-  // match a ~10-sack DL. DLs still win the majority via sacks + TFL + tackles.
-  return p.stats.tackles * 0.5 + p.stats.sacks * 8 + p.stats.defensiveINTs * 12
-    + (p.stats.tacklesForLoss ?? 0) * 2 + (p.stats.passDeflections ?? 0) * 4
-    + (p.stats.forcedFumbles ?? 0) * 4 + winBonus;
+  const s = p.stats;
+  // 2026-10-02 (obungaloo via Commish): the 2026-09-22 flat INT/PD bump
+  // over-corrected. Because every defensive position shared one formula, a CB
+  // with ~4 INTs could out-score a DL with 17 sacks ("why does a CB with 4 INTs
+  // win DPOY over a DL with 17 sacks?"). droyScore() already splits DL/LB vs
+  // CB/S; mirror that here so disruption (sacks/TFL) drives DL/LB scoring and
+  // ball production (INTs/PDs) drives CB/S scoring. A sack-rich DL reclaims the
+  // mid-range while a genuinely elite ball-hawk corner can still take it.
+  let statPts = 0;
+  switch (p.position) {
+    case 'DL':
+    case 'LB':
+      statPts = s.sacks * 10
+        + (s.tacklesForLoss ?? 0) * 3
+        + s.tackles * 0.4
+        + (s.forcedFumbles ?? 0) * 4;
+      break;
+    case 'CB':
+    case 'S':
+      statPts = s.defensiveINTs * 9
+        + (s.passDeflections ?? 0) * 3
+        + s.tackles * 0.3
+        + (s.forcedFumbles ?? 0) * 4;
+      break;
+    default:
+      // Safety net for any other defensive alignment — blend both axes so no
+      // position is zeroed out.
+      statPts = s.sacks * 10 + (s.tacklesForLoss ?? 0) * 3 + s.defensiveINTs * 9
+        + (s.passDeflections ?? 0) * 3 + s.tackles * 0.4 + (s.forcedFumbles ?? 0) * 4;
+      break;
+  }
+  return statPts + winBonus;
 }
 
 export function opoyScore(p: Player): number {

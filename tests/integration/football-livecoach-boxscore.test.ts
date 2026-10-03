@@ -90,6 +90,37 @@ describe('live coach engine accumulates a box score', () => {
     expect(sum(stats, 'passAttempts') + sum(stats, 'rushAttempts')).toBeGreaterThan(0);
     expect(sum(stats, 'passYards') + sum(stats, 'rushYards')).toBeGreaterThan(0);
   });
+
+  it('records defensive stats (sacks, tackles, INTs) and attributes them correctly', () => {
+    // Guards diprionidian 2026-09-30 (Commish-approved 2026-10-02): "defense
+    // stats are barely recorded when playing vs simming." Live-coached games
+    // now credit sacks (DL/LB) and tackles the way INTs already were. Several
+    // games are run so the probabilistic sack/INT events are reliably sampled.
+    let totalTackles = 0, totalSacks = 0, totalInts = 0;
+    const sackers = new Set<string>();
+    for (let g = 0; g < 6; g++) {
+      const engine = createLiveCoachEngine(
+        makeTeam('home', 'HOM'), makeTeam('away', 'AWY'),
+        makeRoster('H'), makeRoster('A'), freshState(), 'home',
+      );
+      let safety = 0;
+      while (!engine.isFinished() && safety < 5000) { engine.runOnePlay(); safety++; }
+      const stats = engine.getPlayerStats() as Record<string, Partial<Record<string, number>>>;
+      totalTackles += sum(stats, 'tackles');
+      totalSacks += sum(stats, 'sacks');
+      totalInts += sum(stats, 'defensiveINTs');
+      for (const [id, line] of Object.entries(stats)) {
+        if ((line.sacks ?? 0) > 0) sackers.add(id);
+      }
+    }
+    expect(totalTackles).toBeGreaterThan(0);
+    expect(totalSacks).toBeGreaterThan(0);
+    expect(totalInts).toBeGreaterThan(0);
+    // Sacks must land on front-seven defenders (roster ids encode position).
+    for (const id of sackers) {
+      expect(/-(DL|LB)$/.test(id)).toBe(true);
+    }
+  });
 });
 
 describe('defensive timeouts (callTimeoutFor)', () => {
