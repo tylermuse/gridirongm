@@ -47,6 +47,12 @@ describe('postgame topics', () => {
     expect(topics[0].gameTeam?.find(t => t.key === 'pts')).toMatchObject({ value: '27', note: 'BUF 24' });
   });
 
+  it('every topic with the game box score also carries it as a side-by-side', () => {
+    const withBox = topics.filter(t => t.gameTeam);
+    expect(withBox.length).toBeGreaterThan(1);
+    for (const t of withBox) expect(t.gameCompare?.rows.find(r => r.key === 'pts')).toMatchObject({ left: '27', right: '24' });
+  });
+
   it('gives the standouts with real stat lines, and that game\'s tiles', () => {
     const notes = topics[1].exchanges.map(e => e.text).join('\n');
     expect(notes).toContain('Drew Callahan (QB): 24 of 31 for 287 yards, 3 TD, 0 INT');

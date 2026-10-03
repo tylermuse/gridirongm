@@ -366,6 +366,9 @@ export function buildGameTopics(c: GameContext): GameTopic[] {
       depth: 'deep',
       gameLines,
       gameTeam,
+      // The box score as a side-by-side (us | stat | them), never tiles with
+      // the other team's number tucked under ours.
+      gameCompare,
       gameLabel: `${label} · ${ab} vs ${opp.abbreviation}`,
       ...(gameFlow ? { gameFlow } : {}),
     });
