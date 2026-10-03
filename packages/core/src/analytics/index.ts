@@ -7,7 +7,11 @@
  *
  * Consumers must provide:
  *   - A React-compatible context (this is a 'use client' module)
- *   - A POST handler at /api/analytics/track that accepts the beacon payload
+ *   - A POST handler at /api/analytics/track — use createTrackHandler() from
+ *     @bs/core/analytics/server, which accepts the batched payload
+ *
+ * Non-React code (stores, engines) should import from @bs/core/analytics/track
+ * instead, which has no React / next/navigation dependency.
  *
  * The hook + function are sport-agnostic, which is why they live here rather
  * than in @bs/sport-football.
@@ -16,32 +20,9 @@
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 
-const DEVICE_ID_KEY = 'gg-device-id';
+import { trackEvent } from './track';
 
-/** Stable anonymous device ID — persists across sessions via localStorage */
-function getDeviceId(): string | null {
-  try {
-    let id = localStorage.getItem(DEVICE_ID_KEY);
-    if (!id) {
-      id = crypto.randomUUID();
-      localStorage.setItem(DEVICE_ID_KEY, id);
-    }
-    return id;
-  } catch { return null; }
-}
-
-/** Fire-and-forget event tracking. Safe to call anywhere on the client. */
-export function trackEvent(event: string, properties?: Record<string, unknown>) {
-  try {
-    const deviceId = getDeviceId();
-    navigator.sendBeacon(
-      '/api/analytics/track',
-      JSON.stringify({ event, properties, deviceId }),
-    );
-  } catch {
-    // Silently fail — analytics should never break the app
-  }
-}
+export { trackEvent, flushEvents } from './track';
 
 const AUTH_EVENT_KEY = 'gg-auth-event';
 /** Collapse repeated SIGNED_IN callbacks for the same user into one event. */

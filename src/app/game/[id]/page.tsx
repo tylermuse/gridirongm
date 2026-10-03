@@ -22,6 +22,7 @@ import { generateHalftimeBreakdown, generateHalftimeAudioBreakdown, COMMENTATORS
 import { useGameBroadcast } from '@/lib/engine/useGameBroadcast';
 import { buildPregameFacts, generateTemplatedPregame, type PregameShow } from '@/lib/engine/pregameShow';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { trackEvent } from '@bs/core/analytics/track';
 import type { Player, Position, GameResult, Team, PlayerStats } from '@/types';
 
 /** Merge two player-stat maps by summing numeric fields. Used to combine the
@@ -839,7 +840,46 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // but the engine was never created, so the play-call modal (gated on
   // liveEngineRef.current) never rendered and the pre-computed sim kept
   // auto-picking every play.
-  const activateLiveEngine = useCallback(() => {
+  // Live Coach telemetry — one record per game-page mount. Answers "do people
+  // actually call plays, and how many before they bail?" Events:
+  //   live_coach_started        engine created (trigger: default | toggle)
+  //   live_coach_play_called    one per user snap decision
+  //   live_coach_auto_sim       "Auto-sim rest" from the play-call menu
+  //   live_coach_off / _on      toggled from the menu or toolbar
+  //   live_coach_game_finished  game reached final with Live Coach having been used
+  // A started game with no _finished row = the user left mid-game.
+  const lcTelemetryRef = useRef({
+    started: false,
+    finishedSent: false,
+    playsCalled: 0,
+    quartersSkipped: 0,
+    endedBy: null as null | 'auto_sim' | 'off' | 'end_game',
+  });
+  const trackLiveCoach = useCallback((event: string, extra?: Record<string, unknown>) => {
+    const es = liveEngineRef.current?.getState();
+    const userScore = es ? (userTeamSide === 'away' ? es.awayScore : es.homeScore) : null;
+    const oppScore = es ? (userTeamSide === 'away' ? es.homeScore : es.awayScore) : null;
+    trackEvent(event, {
+      game_id: id,
+      playoff: isPlayoffGame,
+      plays_called: lcTelemetryRef.current.playsCalled,
+      quarter: es ? (es.overtime && es.quarter < 5 ? 5 : es.quarter) : null,
+      score_diff: userScore !== null && oppScore !== null ? userScore - oppScore : null,
+      ...extra,
+    });
+  }, [id, isPlayoffGame, userTeamSide]);
+  const trackPlayCall = useCallback((playCall: PlayCallType) => {
+    const es = liveEngineRef.current?.getState();
+    lcTelemetryRef.current.playsCalled += 1;
+    trackLiveCoach('live_coach_play_called', {
+      play: playCall,
+      down: es?.down ?? null,
+      distance: es?.yardsToGo ?? null,
+      field_pos: es?.fieldPos ?? null,
+    });
+  }, [trackLiveCoach]);
+
+  const activateLiveEngine = useCallback((trigger: 'default' | 'toggle') => {
     if (liveEngineRef.current !== null || !homeTeam || !awayTeam) return;
     const seedEvent = allEvents[revealedCount - 1] ?? allEvents[0];
     if (!seedEvent) return;
@@ -872,7 +912,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     // field/clock sat frozen for the opening plays until something resynced.
     setLiveEnginePivotIdx(Math.max(1, revealedCount));
     setLiveExtraEvents([]);
-  }, [homeTeam, awayTeam, homePlayers, awayPlayers, allEvents, revealedCount, userTeamSide]);
+    if (!lcTelemetryRef.current.started) {
+      lcTelemetryRef.current.started = true;
+      trackLiveCoach('live_coach_started', { trigger });
+    }
+  }, [homeTeam, awayTeam, homePlayers, awayPlayers, allEvents, revealedCount, userTeamSide, trackLiveCoach]);
 
   // Auto-activate as soon as the game is ready when Live Coach defaults ON
   // (managed games) — mirrors what a manual toggle-click already did, so a
@@ -881,9 +925,20 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   useEffect(() => {
     if (pregameOpen) return; // hold until Kick Off
     if (liveCoachOn && userTeamSide !== null && liveEngineRef.current === null && totalEvents > 0) {
-      activateLiveEngine();
+      activateLiveEngine('default');
     }
   }, [liveCoachOn, userTeamSide, totalEvents, activateLiveEngine, pregameOpen]);
+
+  // Close out the Live Coach record once the game reaches its final.
+  useEffect(() => {
+    const t = lcTelemetryRef.current;
+    if (!isFinished || !t.started || t.finishedSent) return;
+    t.finishedSent = true;
+    trackLiveCoach('live_coach_game_finished', {
+      ended_by: t.endedBy ?? 'played',
+      quarters_skipped: t.quartersSkipped,
+    });
+  }, [isFinished, trackLiveCoach]);
 
   // Halftime Report (feature #9): a user-opened breakdown of the first half —
   // leaders + a Cole/Blaze take. Available once playback passes the halftime
@@ -1278,6 +1333,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     clearNextPlayTimer();
     // If the live engine is active, run it to completion first
     if (liveEngineRef.current && !liveEngineRef.current.isFinished()) {
+      lcTelemetryRef.current.endedBy = 'end_game';
       const allRest: PlayEvent[] = [];
       let safety = 0;
       while (!liveEngineRef.current.isFinished() && safety < 500) {
@@ -1318,6 +1374,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     // then reveal through the opening of the new quarter. Reuses the engine's
     // existing runOnePlay path — no new sim logic.
     if (liveEngineRef.current && !liveEngineRef.current.isFinished()) {
+      lcTelemetryRef.current.quartersSkipped += 1;
       const startQ = liveEngineRef.current.getState().quarter;
       const collected: PlayEvent[] = [];
       let safety = 0;
@@ -2024,7 +2081,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 const turningOn = !liveCoachOn;
                 setLiveCoachOn(turningOn);
                 setLiveCoachPaused(false);
-                if (turningOn) activateLiveEngine();
+                if (turningOn && liveEngineRef.current) {
+                  lcTelemetryRef.current.endedBy = null;
+                  trackLiveCoach('live_coach_on', { source: 'toolbar' });
+                } else if (turningOn) {
+                  activateLiveEngine('toggle');
+                } else if (liveEngineRef.current) {
+                  lcTelemetryRef.current.endedBy = 'off';
+                  trackLiveCoach('live_coach_off', { source: 'toolbar' });
+                }
               }}
               className={`flex-1 sm:flex-none inline-flex items-center justify-center h-8 px-3 rounded-md text-xs font-semibold transition-all ${
                 liveCoachOn
@@ -2138,6 +2203,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 timeoutsRemaining={userTeamSide === "home" ? es.homeTimeouts : es.awayTimeouts}
                 pendingRunoff={es.pendingRunoff ?? 0}
                 onPlayCall={(playCall) => {
+                  trackPlayCall(playCall);
                   setOutcomeChip(null);
                   if (liveEngineRef.current) {
                     const newEvents = liveEngineRef.current.runOnePlay(playCall);
@@ -2166,6 +2232,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   setIsPlaying(true);
                 }}
                 onAutoSimRest={() => {
+                  lcTelemetryRef.current.endedBy = 'auto_sim';
+                  trackLiveCoach('live_coach_auto_sim');
                   if (liveEngineRef.current) {
                     const allRest: PlayEvent[] = [];
                     let safety = 0;
@@ -2182,6 +2250,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   setLiveCoachPaused(false);
                 }}
                 onToggleOff={() => {
+                  lcTelemetryRef.current.endedBy = 'off';
+                  trackLiveCoach('live_coach_off', { source: 'menu' });
                   setLiveCoachOn(false);
                   setLiveCoachPaused(false);
                 }}
@@ -2686,6 +2756,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 timeoutsRemaining={userTeamSide === "home" ? es.homeTimeouts : es.awayTimeouts}
                 pendingRunoff={es.pendingRunoff ?? 0}
                 onPlayCall={(playCall) => {
+                  trackPlayCall(playCall);
                   setOutcomeChip(null);
                   if (liveEngineRef.current) {
                     const newEvents = liveEngineRef.current.runOnePlay(playCall);
@@ -2714,6 +2785,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   setIsPlaying(true);
                 }}
                 onAutoSimRest={() => {
+                  lcTelemetryRef.current.endedBy = 'auto_sim';
+                  trackLiveCoach('live_coach_auto_sim');
                   if (liveEngineRef.current) {
                     const allRest: PlayEvent[] = [];
                     let safety = 0;
@@ -2730,6 +2803,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   setLiveCoachPaused(false);
                 }}
                 onToggleOff={() => {
+                  lcTelemetryRef.current.endedBy = 'off';
+                  trackLiveCoach('live_coach_off', { source: 'menu' });
                   setLiveCoachOn(false);
                   setLiveCoachPaused(false);
                 }}

@@ -9,6 +9,8 @@
     ".": "./src/index.ts",
     "./adapter": "./src/adapter/index.ts",
     "./analytics": "./src/analytics/index.ts",
+    "./analytics/track": "./src/analytics/track.ts",
+    "./analytics/server": "./src/analytics/server.ts",
     "./storage": "./src/storage/index.ts",
     "./supabase/client": "./src/supabase/client.ts",
     "./supabase/server": "./src/supabase/server.ts",
