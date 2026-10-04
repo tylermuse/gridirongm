@@ -276,11 +276,58 @@ function TeamPicker() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl sm:text-5xl font-black tracking-tight mb-3">
+      {/* First-visit hero — orients cold traffic (ChatGPT/Google) and drives
+          straight to team selection. Only the TeamPicker renders this, so it is
+          shown to new/guest visitors; returning players with a save land in the
+          Dashboard instead and never see it. */}
+      <div className="w-full max-w-3xl mx-auto text-center mb-10">
+        <div className="text-base font-black tracking-tight mb-4">
           <span className="text-blue-600">BS</span> Football
+        </div>
+        <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-[1.05] mb-4">
+          You&apos;re the GM. Build a dynasty.
         </h1>
-        <p className="text-[var(--text-sec)] text-sm sm:text-lg">Choose your franchise. Build your dynasty.</p>
+        <p className="text-[var(--text-sec)] text-base sm:text-lg max-w-2xl mx-auto mb-6">
+          Draft rookies, scout hidden talent, manage a real salary cap, make trades, and sim
+          season after season. Free, in your browser &mdash; no download, no account needed to start.
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
+          <button
+            onClick={() => document.getElementById('team-picker')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-base
+                       px-7 py-3.5 rounded-xl shadow-lg shadow-blue-600/25 transition-colors"
+          >
+            Pick your team &mdash; play free <span aria-hidden>&rarr;</span>
+          </button>
+          {savedGame && (
+            <button
+              onClick={handleResume}
+              disabled={resumeLoading}
+              className="inline-flex items-center gap-2 bg-[var(--surface)] border border-[var(--border)] hover:border-blue-400
+                         text-[var(--text)] font-semibold text-sm px-5 py-3.5 rounded-xl transition-colors disabled:opacity-60"
+            >
+              Continue your league <span aria-hidden>&rarr;</span>
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-sm font-semibold text-[var(--text-sec)] mb-7">
+          <span>Deep scouting &amp; the draft</span><span aria-hidden className="opacity-40">&middot;</span>
+          <span>A real salary cap</span><span aria-hidden className="opacity-40">&middot;</span>
+          <span>Trades &amp; free agency</span><span aria-hidden className="opacity-40">&middot;</span>
+          <span>Multi-season dynasties</span>
+        </div>
+        <div className="max-w-2xl mx-auto rounded-xl overflow-hidden border border-[var(--border)] shadow-xl">
+          <img
+            src="/images/hero-dashboard.jpg"
+            alt="BS Football game dashboard showing a team's record, owner objectives, upcoming matchup, injury report, draft capital, standings and finances"
+            width={1200}
+            height={593}
+            className="w-full h-auto block"
+          />
+        </div>
+        <p className="mt-4 text-xs text-[var(--text-sec)]">
+          Play free as a guest. Create a free account to save your franchise across devices.
+        </p>
       </div>
 
       {/* Native-save URL-import notice (§1.3) */}
@@ -491,11 +538,12 @@ function TeamPicker() {
         )}
 
         <input
+          id="team-picker"
           type="text"
           placeholder="Search teams..."
           value={teamSearch}
           onChange={e => setTeamSearch(e.target.value)}
-          className="w-full max-w-md mb-4 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm"
+          className="w-full max-w-md mb-4 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm scroll-mt-24"
         />
         {/* Spectator card — observe-only league with no user team. */}
         <button
