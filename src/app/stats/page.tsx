@@ -11,7 +11,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { TeamQuickNav } from '@/components/game/TeamQuickNav';
 import { EmptyState } from '@/components/ui/EmptyState';
 
-type StatCategory = 'passYards' | 'rushYards' | 'receivingYards' | 'passTDs' | 'rushTDs' | 'sacks' | 'defensiveINTs' | 'tackles' | 'tacklesForLoss' | 'passDeflections' | 'receptions' | 'forcedFumbles';
+type StatCategory = 'passYards' | 'rushYards' | 'receivingYards' | 'passTDs' | 'rushTDs' | 'interceptions' | 'sacks' | 'defensiveINTs' | 'tackles' | 'tacklesForLoss' | 'passDeflections' | 'receptions' | 'forcedFumbles';
 type Tab = 'leaders' | 'teams' | 'power';
 
 const STAT_OPTIONS: { key: StatCategory; label: string }[] = [
@@ -20,6 +20,7 @@ const STAT_OPTIONS: { key: StatCategory; label: string }[] = [
   { key: 'receivingYards', label: 'Receiving Yards' },
   { key: 'receptions', label: 'Receptions' },
   { key: 'passTDs', label: 'Passing TDs' },
+  { key: 'interceptions', label: 'QB Interceptions' },
   { key: 'rushTDs', label: 'Rushing TDs' },
   { key: 'tackles', label: 'Tackles' },
   { key: 'tacklesForLoss', label: 'Tackles for Loss' },

@@ -198,6 +198,10 @@ export function createLiveCoachEngine(
   initialState: LiveEngineState,
   /** Which side the user controls — needed to determine user TDs for XP choice */
   userSide: 'home' | 'away' = 'home',
+  /** True for playoff games. A playoff game must produce a winner, so when an
+   *  OT period expires still tied we start another sudden-death OT period
+   *  instead of ending the game in a tie. Regular-season ties stand. */
+  isPlayoff: boolean = false,
 ): LiveCoachEngine {
   const homeOff = extractOff(homePlayers, homeTeam.depthChart);
   const awayOff = extractOff(awayPlayers, awayTeam.depthChart);
@@ -343,6 +347,21 @@ export function createLiveCoachEngine(
       0,
       false,
     ));
+  }
+
+  // An OT period expired with the score still tied. In the regular season a
+  // tie is a legitimate final; in the playoffs we must keep playing, so we
+  // reset the OT clock and start another sudden-death period.
+  function endTiedOvertime(events: PlayEvent[]) {
+    if (!isPlayoff) {
+      endGame(events);
+      return;
+    }
+    state.timeSecs = 600;
+    state.otPossessionsCompleted = 0;
+    state.otPlayRunThisPossession = false;
+    events.push(makeEvent('overtime', 'Still tied — another overtime period. Both teams get a possession.', 0, false));
+    doKickoffEvents(events);
   }
 
   function doKickoffEvents(events: PlayEvent[]) {
@@ -798,7 +817,7 @@ export function createLiveCoachEngine(
       // OT end checks — sudden-death ending only after both teams completed a
       // possession (real NFL playoff OT rules).
       if (state.overtime && state.homeScore !== state.awayScore && (state.otPossessionsCompleted ?? 0) >= 2) endGame(events);
-      if (state.overtime && state.timeSecs <= 0 && state.homeScore === state.awayScore) endGame(events);
+      if (state.overtime && state.timeSecs <= 0 && state.homeScore === state.awayScore) endTiedOvertime(events);
       if (!state.overtime && !state.isGameOver && state.quarter === 4 && state.timeSecs <= 0 && state.homeScore === state.awayScore) {
         state.overtime = true; state.timeSecs = 600; state.quarter = 5;
         state.otPossessionsCompleted = 0;
@@ -849,8 +868,8 @@ export function createLiveCoachEngine(
       endGame(events);
     }
     if (state.overtime && state.timeSecs <= 0 && state.homeScore === state.awayScore) {
-      // Regular season tie after OT
-      endGame(events);
+      // OT period expired tied: regular-season tie stands, playoff game continues.
+      endTiedOvertime(events);
     }
 
     // Safety: if Q4 is over with tied score and OT wasn't triggered, force it

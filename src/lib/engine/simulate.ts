@@ -623,8 +623,9 @@ function simulatePlay(
       yards += 7 + Math.floor(Math.random() * 10);
     }
 
-    // Negative play chance (~17% of rushes go for loss)
-    const isNegative = Math.random() < 0.17;
+    // Negative play chance (~12% of rushes go for loss). Tuned down from 17%
+    // — users felt the run game was too punishing (#football-strategy, #general).
+    const isNegative = Math.random() < 0.12;
     if (isNegative) {
       yards = -(1 + Math.floor(Math.random() * 4));
     }
