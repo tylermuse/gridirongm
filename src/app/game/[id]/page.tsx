@@ -904,6 +904,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         awayTimeouts: 3,
       },
       userTeamSide ?? 'home',
+      isPlayoffGame,
     );
     // Pivot right AFTER the seed event so the kept pre-sim slice always
     // includes it. When this runs at kickoff (revealedCount 0) the auto-start
@@ -916,7 +917,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       lcTelemetryRef.current.started = true;
       trackLiveCoach('live_coach_started', { trigger });
     }
-  }, [homeTeam, awayTeam, homePlayers, awayPlayers, allEvents, revealedCount, userTeamSide, trackLiveCoach]);
+  }, [homeTeam, awayTeam, homePlayers, awayPlayers, allEvents, revealedCount, userTeamSide, isPlayoffGame, trackLiveCoach]);
 
   // Auto-activate as soon as the game is ready when Live Coach defaults ON
   // (managed games) — mirrors what a manual toggle-click already did, so a
