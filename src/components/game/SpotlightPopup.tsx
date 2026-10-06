@@ -6,17 +6,18 @@ import { useGameStore } from '@/lib/engine/store';
 import { COMMENTATORS } from '@/lib/engine/debate';
 import { fetchAiSpotlight, detectNarrativeMoment } from '@/lib/engine/aiSpotlight';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { useAiCommentary } from '@/components/providers/useAiCommentary';
+import { shouldShowSpotlightPopup } from '@/lib/engine/spotlightAccess';
 
 /**
  * Floating corner popup that nudges the user to check the Team Spotlight.
  * Rendered inside GameShell so it appears on every page.
  *
- * Triggers at specific moments only (not every render):
- *  - After regular season game sim (week changes)
- *  - After playoff game IF user team is involved
- *  - After re-signing ends (phase → draft)
- *  - After draft completes (phase → freeAgency)
- *  - After free agency ends (phase → preseason)
+ * Triggers at narrative moments only, identically for Free and Premium
+ * (see shouldShowSpotlightPopup): preseason / week 1, trade deadline, season
+ * over + offseason transitions, and each playoff game. Premium additionally
+ * pre-fetches the AI topics; Free gets the template spotlight plus a
+ * one-line note about what Premium adds.
  *
  * Uses sessionStorage to avoid showing twice for the same state.
  */
@@ -32,9 +33,6 @@ function computeSpotlightKey(
   return `s${season}-w${week}-${phase}-pg${playoffGamesPlayed}`;
 }
 
-/** Phases that should trigger the popup when entered */
-const TRIGGER_PHASES = new Set(['resigning', 'draft', 'freeAgency', 'preseason']);
-
 export function SpotlightPopup() {
   const router = useRouter();
   const pathname = usePathname();
@@ -42,8 +40,9 @@ export function SpotlightPopup() {
     teams, userTeamId, season, week, phase, playoffBracket, playoffSeeds,
     players, leagueSettings, newsItems, draftResults, champions,
   } = useGameStore();
-  const { hasFeature } = useSubscription();
-  const aiCommentaryEntitled = hasFeature('ai_commentary');
+  const aiOn = useAiCommentary();
+  const { hasFeature, loading: subLoading } = useSubscription();
+  const isPremium = subLoading || hasFeature('ai_commentary');
 
   const [dismissed, setDismissed] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -52,8 +51,6 @@ export function SpotlightPopup() {
   const mountedRef = useRef(false);
 
   const userTeam = teams.find(t => t.id === userTeamId);
-  const gamesPlayed = userTeam ? userTeam.record.wins + userTeam.record.losses : 0;
-
   // Count playoff games the user's team has played
   const playoffGamesPlayed = playoffBracket && userTeamId
     ? playoffBracket.filter(m => m.winnerId && (m.homeTeamId === userTeamId || m.awayTeamId === userTeamId)).length
@@ -62,88 +59,44 @@ export function SpotlightPopup() {
   const currentKey = computeSpotlightKey(season, week, phase, playoffGamesPlayed);
 
   useEffect(() => {
-    // Skip if no team selected
-    if (!userTeamId) return;
+    if (!userTeamId || !userTeam) return;
 
     const lastShownKey = sessionStorage.getItem(STORAGE_KEY) ?? '';
+    const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
+    const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id, playoffSeeds);
+    const isMoment = shouldShowSpotlightPopup(narrative);
 
-    // First mount — skip for weekly moments (prevents popup on every refresh).
-    // But DO trigger for special narrative moments (preseason, seasonOver, etc.)
-    // so they aren't silently consumed on initial load.
+    // First mount: record the state; only a narrative moment can show on load.
     if (!mountedRef.current) {
       mountedRef.current = true;
       prevKeyRef.current = currentKey;
       if (!lastShownKey) sessionStorage.setItem(STORAGE_KEY, currentKey);
-      const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
-      const narrative = userTeam
-        ? detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id, playoffSeeds)
-        : 'weekly';
-      if (narrative === 'weekly') return; // skip on refresh for weekly
-      // Fall through for special moments — let them trigger below
+      if (!isMoment) return;
+    } else {
+      if (currentKey === prevKeyRef.current) return;
+      prevKeyRef.current = currentKey;
     }
 
-    // Nothing changed
-    if (currentKey === prevKeyRef.current) return;
-    prevKeyRef.current = currentKey;
+    // Same rule for every tier: ordinary weeks never pop up.
+    if (!isMoment) return;
 
-    // Already shown for this state — but still allow AI fetch for special moments
-    // (the popup won't show again but the content will be in the cache for the dashboard)
-    if (lastShownKey === currentKey) {
-      if (leagueSettings?.aiCommentary && aiCommentaryEntitled && userTeam) {
-        const tradeDeadlineWeek = leagueSettings.tradeDeadlineWeek ?? 12;
-        const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id, playoffSeeds);
-        if (narrative !== 'weekly') {
-          const rosterForFetch = players.filter(p => p.teamId === userTeam.id);
-          fetchAiSpotlight({ team: userTeam, roster: rosterForFetch, allTeams: teams, allPlayers: players, season, week, phase, narrative, newsItems, draftResults, playoffBracket, playoffSeeds, champions, tradeDeadlineWeek });
-        }
-      }
-      return;
+    // Premium: warm the shared AI cache so the dashboard has topics ready.
+    if (aiOn) {
+      const roster = players.filter(p => p.teamId === userTeam.id);
+      fetchAiSpotlight({
+        team: userTeam, roster, allTeams: teams, allPlayers: players,
+        season, week, phase, narrative,
+        newsItems, draftResults, playoffBracket, playoffSeeds, champions,
+        tradeDeadlineWeek,
+      }).catch(() => { /* errors handled via cache.error subscribers */ });
     }
 
-    // Determine if this is a trigger moment
-    const isRegularSeasonSim = phase === 'regular' && (gamesPlayed > 0 || week === 1);
-    const isPlayoffUpdate = phase === 'playoffs' && playoffGamesPlayed >= 0;
-    const isPhaseTransition = TRIGGER_PHASES.has(phase);
-
-    if (isRegularSeasonSim || isPlayoffUpdate || isPhaseTransition) {
-      sessionStorage.setItem(STORAGE_KEY, currentKey);
-
-      // If AI commentary is on, kick off generation for special narrative
-      // moments only. Weekly recaps use the template engine.
-      if (leagueSettings?.aiCommentary && aiCommentaryEntitled && userTeam) {
-        const tradeDeadlineWeek = leagueSettings.tradeDeadlineWeek ?? 12;
-        const narrative = detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, userTeam.id, playoffSeeds);
-
-        // Weekly with AI on: no popup (no content to show on dashboard)
-        if (narrative === 'weekly') return;
-
-        // Fire the fetch in the background — the dashboard subscribes to the
-        // shared cache and renders topics as they stream in. Don't await
-        // the first-topic gate before showing the popup; first-topic latency
-        // is 15-30s for verbose multi-exchange topics, which makes the
-        // popup feel broken. Showing the invite immediately is fine — by
-        // the time the user taps through and the dashboard mounts, the
-        // first topic is usually already cached.
-        const roster = players.filter(p => p.teamId === userTeam.id);
-        fetchAiSpotlight({
-          team: userTeam,
-          roster,
-          allTeams: teams,
-          allPlayers: players,
-          season, week, phase, narrative,
-          newsItems,
-          draftResults,
-          playoffBracket,
-          playoffSeeds,
-          champions,
-          tradeDeadlineWeek,
-        }).catch(() => { /* errors handled via cache.error subscribers */ });
-      }
-
-      setShouldShow(true);
-      setDismissed(false);
-    }
-  }, [currentKey, userTeamId, gamesPlayed, phase, playoffGamesPlayed]);
+    if (lastShownKey === currentKey) return; // already shown this state
+    sessionStorage.setItem(STORAGE_KEY, currentKey);
+    setShouldShow(true);
+    setDismissed(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentKey, userTeamId, phase, playoffGamesPlayed, aiOn]);
 
   // Slide-in animation
   useEffect(() => {
@@ -203,6 +156,9 @@ export function SpotlightPopup() {
             <span>Watch Now</span>
             <span>→</span>
           </div>
+          {!isPremium && (
+            <p className="mt-1 text-[10px] text-purple-600">Premium adds an AI-written breakdown of this moment.</p>
+          )}
         </button>
       </div>
     </div>

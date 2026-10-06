@@ -3,31 +3,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-
-const PODCAST_LIMIT = 3;
-
-/** Storage key is namespaced by current year-month, so credits reset
- *  automatically on the 1st of every month — everyone gets 3 fresh
- *  podcasts each month with no manual intervention. */
-function currentMonthKey(): string {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  return `gg-podcast-credits-${year}-${month}`;
-}
-
-function getPodcastCount(): number {
-  try {
-    const raw = localStorage.getItem(currentMonthKey());
-    return parseInt(raw ?? '0', 10) || 0;
-  } catch { return 0; }
-}
-
-function incrementPodcastCount(): void {
-  try {
-    localStorage.setItem(currentMonthKey(), String(getPodcastCount() + 1));
-  } catch { /* noop */ }
-}
+import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { listenState, nextCreditReset, formatResetDate } from '@/lib/engine/spotlightAccess';
 
 interface SpotlightAudioPlayerProps {
   topics: { headline: string; icon: string; exchanges: { speakerId: string; text: string }[] }[];
@@ -35,20 +12,21 @@ interface SpotlightAudioPlayerProps {
 }
 
 export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerProps) {
-  const [state, setState] = useState<'idle' | 'loading' | 'playing' | 'paused' | 'error' | 'exhausted' | 'locked'>('idle');
+  const [state, setState] = useState<'idle' | 'loading' | 'playing' | 'paused' | 'error' | 'exhausted' | 'locked' | 'signedOut'>('idle');
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [remaining, setRemaining] = useState(PODCAST_LIMIT);
+  // Server credits are the only counter (profiles.podcast_credits_*).
+  const { user, loading, hasFeature, podcastCredits, refreshPodcastCredits } = useSubscription();
+  const access = listenState({
+    loading,
+    signedIn: !!user,
+    premium: hasFeature('podcast_credits'),
+    remaining: podcastCredits.remaining,
+  });
+  const resetLabel = formatResetDate(nextCreditReset(podcastCredits.resetAt));
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const blobUrlRef = useRef<string | null>(null);
   const pathname = usePathname();
-
-  // Check remaining on mount
-  useEffect(() => {
-    const used = getPodcastCount();
-    setRemaining(Math.max(0, PODCAST_LIMIT - used));
-    if (used >= PODCAST_LIMIT) setState('exhausted');
-  }, []);
 
   // Stop audio and clean up on unmount
   useEffect(() => {
@@ -84,12 +62,6 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
       return;
     }
 
-    // Check limit before making API call
-    if (getPodcastCount() >= PODCAST_LIMIT) {
-      setState('exhausted');
-      return;
-    }
-
     setState('loading');
     try {
       const res = await fetch('/api/spotlight-audio', {
@@ -99,10 +71,11 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
       });
 
       if (!res.ok) {
-        // 403 = free tier. The server enforces `tier !== 'premium'` (see
-        // packages/core/src/podcast/index.ts) but this component used to only
-        // handle 402/429, so a free user clicking Listen fell through to the
-        // generic red "⚠️ Retry" error — no explanation, no upgrade path.
+        // Server is the authority; map each refusal to its own state.
+        if (res.status === 401) {
+          setState('signedOut');
+          return;
+        }
         if (res.status === 403) {
           setState('locked');
           return;
@@ -110,6 +83,7 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
         // Credits/quota issue for a user who IS entitled.
         if (res.status === 402 || res.status === 429) {
           setState('exhausted');
+          void refreshPodcastCredits();
           return;
         }
         throw new Error('Failed to generate audio');
@@ -119,9 +93,8 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
       const url = URL.createObjectURL(blob);
       blobUrlRef.current = url;
 
-      // Count this successful generation
-      incrementPodcastCount();
-      setRemaining(Math.max(0, PODCAST_LIMIT - getPodcastCount()));
+      // Server charged a credit on a cache miss (cache hits are free) — re-read it.
+      void refreshPodcastCredits();
 
       const audio = new Audio(url);
       audioRef.current = audio;
@@ -161,23 +134,49 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
     return `${m}:${sec.toString().padStart(2, '0')}`;
   }
 
-  // Free tier — the server will 403. Sell the upgrade instead of erroring.
-  if (state === 'locked') {
+  // Nothing generated yet this session → the button reflects entitlement up front.
+  const fresh = !blobUrlRef.current;
+  const view = state === 'signedOut' || state === 'locked' || state === 'exhausted'
+    ? state
+    : fresh && state === 'idle' && access !== 'ready' ? access : state;
+
+  if (view === 'checking') {
+    return (
+      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-50 text-purple-400">
+        <span>🎧</span> Podcast
+      </div>
+    );
+  }
+
+  if (view === 'signedOut') {
+    return (
+      <Link
+        href="/login"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700 hover:bg-purple-600 hover:text-white transition-colors"
+      >
+        <span>🎧</span> Sign in to listen
+      </Link>
+    );
+  }
+
+  if (view === 'locked') {
     return (
       <Link
         href="/pricing"
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700 hover:bg-purple-600 hover:text-white transition-colors"
       >
-        <span>🔒</span> Podcasts are Premium — Upgrade
+        <span>🔒</span> Podcast · Premium
       </Link>
     );
   }
 
-  // Exhausted state
-  if (state === 'exhausted') {
+  if (view === 'exhausted') {
     return (
-      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-500">
-        <span>🎧</span> Podcast credits exhausted
+      <div
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-500"
+        title={`You've used this month's ${podcastCredits.limit} podcast episodes`}
+      >
+        <span>🎧</span> Out of episodes · resets {resetLabel}
       </div>
     );
   }
@@ -189,19 +188,24 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
         onClick={() => { setState('idle'); blobUrlRef.current = null; audioRef.current = null; }}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
       >
-        ⚠️ Retry
+        ⚠️ Couldn&apos;t make the podcast — retry
       </button>
     );
   }
 
-  // Idle state — just a button
-  if (state === 'idle' && !blobUrlRef.current) {
+  // Idle — ready to generate (or replay this session's episode for free)
+  if (state === 'idle') {
+    const uncapped = podcastCredits.remaining < 0;
+    const suffix = !fresh
+      ? ' (replay)'
+      : uncapped ? '' : ` (uses 1 of ${podcastCredits.remaining} left)`;
     return (
       <button
         onClick={handlePlay}
+        title={fresh && !uncapped ? `${podcastCredits.remaining} of ${podcastCredits.limit} left this month · resets ${resetLabel}` : undefined}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-colors active:scale-[0.98]"
       >
-        <span>🎧</span> Listen to Podcast{remaining < PODCAST_LIMIT ? ` (${remaining} left)` : ''}
+        <span>🎧</span> Listen{suffix}
       </button>
     );
   }

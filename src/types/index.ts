@@ -1266,7 +1266,7 @@ export interface LeagueSettings {
   mcafeeMode: boolean;       // McAfee Mode: special teams matter
   /** Chaos Draft mode: top picks bust, late picks boom (JaMarcus Russell / Brock Purdy League) */
   chaosDraft: boolean;
-  /** Use Claude AI to generate unique Team Spotlight commentary */
+  /** AI-written Spotlight + weekly recap (Premium only; see spotlightAccess.aiCommentaryEnabled). Missing = ON. */
   aiCommentary: boolean;
   /** God Mode: full commissioner control — edit players, force trades, etc. */
   godMode: boolean;
