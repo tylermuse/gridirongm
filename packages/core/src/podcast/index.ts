@@ -128,7 +128,7 @@ export async function readCredits(
  * a status code when the user is ineligible (free tier) or out of credits.
  *
  * Admins bypass the cap entirely. Founders are charged credits but at the
- * Premium limit (3/month).
+ * Premium limit (5/month).
  */
 export async function consumePodcastCredit(
   service: SupabaseClient,

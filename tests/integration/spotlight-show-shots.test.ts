@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { planShots, type ShotLine } from '@/lib/spotlight/showShots';
 
-const L = (speaker: 'marcus' | 'tony', words: number, bare: boolean, topicIdx = 0): ShotLine => ({ kind: 'tts', speaker, words, bare, topicIdx });
+// A line with something to show gets its own graphic (a new look); bare lines show the topic panel.
+let n = 0;
+const L = (speaker: 'marcus' | 'tony', words: number, bare: boolean, topicIdx = 0): ShotLine => ({ kind: 'tts', speaker, words, bare, topicIdx, look: bare ? 'none' : `look-${n++}` });
 const clip: ShotLine = { kind: 'other', speaker: 'tony', words: 0, bare: false, topicIdx: -1 };
 
 describe('planShots', () => {

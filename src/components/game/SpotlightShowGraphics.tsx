@@ -270,7 +270,8 @@ function FlowBoard({ f, blockMs, lineMs, text }: { f: FlowView; blockMs: number;
               <span className="text-[1em] font-bold text-slate-300">–</span>
               <span className={`text-[1.5em] font-extrabold ${!hi.ours ? 'text-orange-600' : 'text-[#0f1f35]'}`}>{hi.them}</span>
               <span className="h-[1.6em] w-[1.6em]">{f.themArt}</span>
-              {prev && <span className="ml-[0.2em] text-[0.55em] font-bold uppercase leading-tight tracking-[0.1em] text-slate-400">was<br />{prev.us}–{prev.them}</span>}
+              {/* The score before this play. Not uppercase: "WAS 13–6" read as Washington. */}
+              {prev && <span className="ml-[0.2em] text-[0.55em] font-semibold leading-tight text-slate-400">from<br />{prev.us}–{prev.them}</span>}
             </div>
           </div>
         ) : (

@@ -63,7 +63,8 @@ export function getScoutingAllocations(tier: Tier, isFounder: boolean): Scouting
 /** How many monthly Spotlight podcast credits the tier gets. */
 export const PODCAST_CREDITS_PER_MONTH: Record<Tier, number> = {
   free: 0,
-  premium: 3,
+  // ~$0.30–0.40 per new episode (ElevenLabs v3 + script writer); replays are free.
+  premium: 5,
 };
 
 /**

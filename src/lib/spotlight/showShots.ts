@@ -10,7 +10,10 @@
  *  - lines with nothing to show go to the listening shot only when there's
  *    enough of them to hold it (a quick aside stays on the graphic);
  *  - in the listening shot the camera faces whoever isn't talking (shot /
- *    reverse shot), but a short interjection doesn't flip it.
+ *    reverse shot), but a short interjection doesn't flip it;
+ *  - nothing holds too long: once the same picture (same graphic, or the
+ *    same listening angle) has run ~MAX_HOLD words (~9s), the next full
+ *    line cuts to the other shot.
  */
 import type { Host } from './showScript';
 
@@ -22,6 +25,9 @@ export interface ShotLine {
   topicIdx: number;
   /** Nothing in the line to put on screen (banter, a reaction). */
   bare: boolean;
+  /** What the graphic would show for this line (player, unit, standings…);
+   *  a new look on the graphic counts as a new picture. */
+  look?: string;
 }
 
 export type Shot =
@@ -33,6 +39,8 @@ export type Shot =
 export const SHORT_LINE = 7;
 /** Words of back-and-forth needed before cutting to the hosts. */
 export const OTS_MIN_RUN = 18;
+/** Words one picture may hold before the next full line cuts away (~9s). */
+export const MAX_HOLD = 25;
 
 const other = (h: Host): Host => (h === 'marcus' ? 'tony' : 'marcus');
 
@@ -40,6 +48,8 @@ export function planShots(lines: ShotLine[]): Shot[] {
   const out: Shot[] = [];
   const seenTopic = new Set<number>();
   let prev: Shot | null = null;
+  let prevLook: string | undefined;
+  let held = 0; // words the current picture has been up
   let takes = 0;
   lines.forEach((l, i) => {
     let shot: Shot;
@@ -61,7 +71,22 @@ export function planShots(lines: ShotLine[]): Shot[] {
         shot = prev?.kind === 'ots' && prev.listener === listener ? prev : { kind: 'ots', listener, take: takes++ % 2 };
       }
     }
-    if (l.kind === 'tts') seenTopic.add(l.topicIdx);
+    if (l.kind === 'tts') {
+      const samePicture = (s: Shot) => !!prev && s.kind === prev.kind
+        && (s.kind !== 'gfx' || l.look === prevLook)
+        && (s.kind !== 'ots' || (prev.kind === 'ots' && s.listener === prev.listener));
+      const opening = !seenTopic.has(l.topicIdx);
+      if (!opening && l.words >= SHORT_LINE && samePicture(shot) && held + l.words > MAX_HOLD) {
+        shot = shot.kind === 'gfx'
+          ? { kind: 'ots', listener: other(l.speaker), take: takes++ % 2 }
+          : { kind: 'gfx' };
+      }
+      held = samePicture(shot) ? held + l.words : l.words;
+      if (shot.kind === 'gfx') prevLook = l.look;
+      seenTopic.add(l.topicIdx);
+    } else {
+      held = 0;
+    }
     out.push(shot);
     prev = shot;
   });

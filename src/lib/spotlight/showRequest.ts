@@ -3,6 +3,7 @@ import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import type { EpisodeInput } from './showEpisode';
 import type { ShowTopicInput } from './showScript';
 import type { ShowStatLine } from './teamStats';
+import { sanitizeMoment } from './showMoment';
 
 export function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -30,9 +31,9 @@ export function sanitizeStats(raw: unknown): ShowStatLine | null {
 }
 
 export async function parseEpisode(request: Request): Promise<EpisodeInput | null> {
-  const input = (await request.json()) as { topics?: ShowTopicInput[]; teamName?: string; stats?: unknown };
+  const input = (await request.json()) as { topics?: ShowTopicInput[]; teamName?: string; stats?: unknown; moment?: unknown };
   if (!input.topics || !Array.isArray(input.topics) || !input.teamName) return null;
-  return { topics: input.topics, teamName: input.teamName, stats: sanitizeStats(input.stats) };
+  return { topics: input.topics, teamName: input.teamName, stats: sanitizeStats(input.stats), moment: sanitizeMoment(input.moment) };
 }
 
 
