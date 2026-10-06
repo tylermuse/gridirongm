@@ -3,12 +3,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import { PREMIUM_PRICE_ID } from '@bs/core/billing';
+import { PREMIUM_PRICE_ID, PODCAST_CREDITS_PER_MONTH } from '@bs/core/billing';
 
 const PREMIUM_FEATURES = [
   'Ad-free experience',
   'AI commentary on every game',
-  '3 audio podcast credits per month',
+  `${PODCAST_CREDITS_PER_MONTH.premium} Team Spotlight episodes a month (video show or podcast)`,
   '30 scout points per draft (3× the free allotment)',
   '9 free-agent intel reports (3× the free allotment)',
   'Cancel anytime — Stripe Customer Portal',
