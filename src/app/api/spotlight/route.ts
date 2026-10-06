@@ -231,7 +231,8 @@ Generate 4-5 topics.`;
 
     case 'seasonOver':
       return `This is the END OF SEASON episode — the season is OVER. Focus on:
-- If they won the championship: celebrate it! Dynasty talk if multiple titles. MVP performance. How the roster was built — which acquisitions (drafts, trades, FA signings) were the key moves?
+- If they won the championship: celebrate it! Dynasty talk if multiple titles. MVP performance.
+- seasonResult.championshipCount counts titles won in THIS league only (it includes this season). Don't call it the franchise's "first title" or put a year on its history ("first title in 2028") — real-world history doesn't apply here. If championshipCount > 1, it's a repeat / back-to-back / dynasty. How the roster was built — which acquisitions (drafts, trades, FA signings) were the key moves?
 - If they were eliminated: what went wrong in the loss? Was it a successful season despite the ending? Grade the season overall.
 - Looking ahead: key free agents who might leave (short contract years), draft needs, whether the window is open or closing
 - Grade the key acquisitions — did drafted/traded/signed players live up to expectations?
