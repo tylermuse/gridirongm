@@ -902,8 +902,32 @@ export function generateTeamSpotlight(
   });
   const confRank = confSorted.findIndex(t => t.id === team.id) + 1;
 
+  // Offseason (re-signing → free agency): the record is last season's final
+  // mark, but player season stats have already rolled over (zeros). Talk
+  // about the season that ended — never in-season stats, standings races,
+  // streaks or "the rest of the way".
+  const offseasonPhase = ctx.phase === 'resigning' || ctx.phase === 'draft' || ctx.phase === 'freeAgency';
+  if (offseasonPhase && gamesPlayed > 0) {
+    const finish = winPct >= 0.6 ? 'a winning season' : winPct <= 0.4 ? 'a losing season' : 'a .500-ish season';
+    const diff = `${pointDiff > 0 ? '+' : ''}${pointDiff}`;
+    topics.push({
+      headline: `Last Season: ${team.record.wins}-${team.record.losses}${team.record.ties ? `-${team.record.ties}` : ''}`,
+      icon: '📼',
+      exchanges: [
+        { speakerId: 'stats', text: `The ${team.city} ${team.name} finished last season ${team.record.wins}-${team.record.losses}, ${ordinal(confRank)} in the conference, with a ${diff} point differential. That's ${finish}, and it's in the books.` },
+        { speakerId: 'hottake', text: winPct >= 0.6
+          ? `Good isn't the goal. The window is OPEN — this offseason is about turning good into a TITLE!`
+          : winPct <= 0.4
+          ? `That can't happen again. This offseason has to change the roster, not just the coaching speeches!`
+          : `Stuck in the middle is the WORST place to be. Pick a direction this offseason!` },
+      ],
+      teamIds: [team.id],
+      playerIds: [],
+    });
+  }
+
   // ─── 1. Team Overview / Record Reaction (stats-heavy) ───
-  if (gamesPlayed > 0) {
+  if (gamesPlayed > 0 && !offseasonPhase) {
     const offenseTier = ppgRank <= 8 ? 'top-tier' : ppgRank <= 16 ? 'middle-of-the-pack' : 'bottom-third';
     const defenseTier = defRank <= 8 ? 'elite' : defRank <= 16 ? 'average' : 'struggling';
 
@@ -964,7 +988,7 @@ export function generateTeamSpotlight(
   }
 
   // ─── 2. Offensive / Defensive Deep Dive (stats-first) ───
-  if (gamesPlayed > 0) {
+  if (gamesPlayed > 0 && !offseasonPhase) {
     const offenseGood = ppgRank <= totalTeams / 2;
     const defenseGood = defRank <= totalTeams / 2;
     // Find team's stat leaders for context
@@ -1084,7 +1108,7 @@ export function generateTeamSpotlight(
 
   // ─── 3. Star Player Spotlight (stats-driven) ───
   const star = [...activeRoster].sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
-  if (star && gamesPlayed > 0) {
+  if (star && gamesPlayed > 0 && !offseasonPhase) {
     const statFn = primaryStatForPosition(star);
     const posFilter = star.position === 'QB' ? allActive.filter(p => p.position === 'QB')
       : ['WR', 'TE'].includes(star.position) ? allActive.filter(p => ['WR', 'TE'].includes(p.position))
@@ -1180,7 +1204,7 @@ export function generateTeamSpotlight(
   }
 
   // ─── 6. Playoff Outlook (regular season, week 4+) ───
-  if (gamesPlayed >= 4) {
+  if (gamesPlayed >= 4 && !offseasonPhase) {
     const confLeader = confSorted[0];
     const gamesBack = confLeader && confLeader.id !== team.id
       ? ((confLeader.record.wins - team.record.wins) + (team.record.losses - confLeader.record.losses)) / 2
@@ -1217,7 +1241,7 @@ export function generateTeamSpotlight(
   }
 
   // ─── 7. Injury Report ───
-  if (injuredPlayers.length > 0) {
+  if (injuredPlayers.length > 0 && !offseasonPhase) {
     const worst = injuredPlayers[0];
     const worstStatLine = getPlayerStatLine(worst);
     const weeksOut = worst.injury?.weeksLeft ?? 0;
@@ -1296,7 +1320,7 @@ export function generateTeamSpotlight(
   // When the user elects to start an injured player, it's a strategic risk
   // worth debating — the reduced ceiling + elevated re-injury chance.
   const playThroughPlayers = activeRoster.filter(p => p.playingThroughInjury && p.injury && p.injury.weeksLeft > 0);
-  if (playThroughPlayers.length > 0) {
+  if (playThroughPlayers.length > 0 && !offseasonPhase) {
     const top = playThroughPlayers.sort((a, b) => b.ratings.overall - a.ratings.overall)[0];
     const w = top.injury!.weeksLeft;
     const penalty = w >= 3 ? 20 : w === 2 ? 12 : 5;
@@ -1332,7 +1356,7 @@ export function generateTeamSpotlight(
     n.season === season &&
     n.headline.includes('re-injured playing through')
   );
-  if (recentReInjNews.length > 0) {
+  if (recentReInjNews.length > 0 && !offseasonPhase) {
     const reInj = recentReInjNews[0];
     const player = reInj.playerIds && reInj.playerIds.length > 0
       ? allPlayers.find(p => p.id === reInj.playerIds![0])
@@ -1379,7 +1403,7 @@ export function generateTeamSpotlight(
 
   // ─── 9. Streak / Momentum ───
   const streak = team.record.streak;
-  if (streak >= 3 || streak <= -3) {
+  if ((streak >= 3 || streak <= -3) && !offseasonPhase) {
     const isWin = streak > 0;
     topics.push({
       headline: isWin ? `${streak}-Game Win Streak` : `${Math.abs(streak)}-Game Losing Streak`,
@@ -1436,7 +1460,7 @@ export function generateTeamSpotlight(
       { speakerId: 'stats' as const, text: `But you don't win them by mortgaging your future either. Balance.` },
     ],
   ];
-  topics.push({
+  if (!offseasonPhase) topics.push({
     headline: 'The Burning Question',
     icon: '🔥',
     exchanges: pick(burningQs, rng)(),

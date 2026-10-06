@@ -13,6 +13,7 @@
  */
 import type { ShowTopicInput } from './showScript';
 import type { ShowStatLine } from './teamStats';
+import { momentNote, type EpisodeMoment } from './showMoment';
 import { ordinal, rankTone } from './teamStats';
 import { PHRASES, type Phrase, type PhraseTone } from './phrases';
 
@@ -65,6 +66,9 @@ TONY: Yeah. Yeah, okay. I don't know which one scares me more.
 PERFORMANCE CUES
 Voiced with ElevenLabs v3, which performs bracketed cues. Use them only where a person really would, at most one in four lines: [laughs], [chuckles], [sighs], [scoffs], [exhales], [pause].
 
+THE MOMENT
+The user message starts with MOMENT: where the season is right now. Everything the hosts say must fit it. In the offseason the record is last season's final mark and there are no games left to play; at the deadline they talk buying and selling; before week one there are no results yet. If a producer's note assumes a different moment, drop that part of the note.
+
 FACTS
 Use only facts, names and numbers in the notes and team numbers. Never claim a "first", a record or a streak ("their first title", "first time since…") unless the notes state it. You may reason about football in general, but don't invent stats, injuries, trades, quotes or events for this team. Teams are "they" or their name, never "we". When a player or position group comes up, name it plainly (the show puts his or its numbers on screen when it hears the name).
 
@@ -85,9 +89,9 @@ One JSON object per spoken line, each on its own single line, nothing else (no a
 {"t":<topic number>,"speaker":"marcus"|"tony","clip":"<id>"}
 - In the game breakdown, when a line is about one specific score from the numbered list of scores (the drive, the throw, the kick, what it did to the game), add "play":<its number> to that line: {"t":1,"speaker":"tony","text":"...","play":4}. The show puts that moment on screen. Walk through the game's key moments in order, the way a highlight package would.
 - Cover every topic in the notes, in order; "t" is its position in the notes (the first topic is 1).
-- The first topic comes right after the hosts' intros: get straight into it, no greeting. If it's a regular topic, keep it a quick cold open (2–4 lines).
-- Topics marked "depth":"deep" are the game they just played. Go deep, the way a real postgame show does: 10–16 lines each. Walk through how the game was won or lost (the flow, the turning points, the deciding drive), argue about what decided it, and put the real stat lines in the hosts' mouths — specific players, specific numbers, said the way people say them ("three touchdowns, no picks", "a hundred and twelve on the ground"). Here, numbers are welcome: one per line is fine.
-- Other topics: 5–9 lines.`;
+- The first topic comes right after the hosts' intros and Marcus's one-line hook (already written): get straight into it, no greeting, no restating the record. If it's a regular topic, keep it quick (2–4 lines).
+- Topics marked "depth":"deep" are the game they just played. Go deep, the way a real postgame show does: 8–12 lines each. Walk through how the game was won or lost (the flow, the turning points, the deciding drive), argue about what decided it, and put the real stat lines in the hosts' mouths — specific players, specific numbers, said the way people say them ("three touchdowns, no picks", "a hundred and twelve on the ground"). Here, numbers are welcome: one per line is fine.
+- Other topics: 4–6 lines. Keep the whole episode tight — about two minutes of talk outside the game breakdown. A topic with little to say can be three lines.`;
 
 function teamNumbers(teamName: string, stats?: ShowStatLine | null): string {
   if (!stats) return `${teamName}.`;
@@ -213,6 +217,7 @@ export async function writeConversation(
   topics: ShowTopicInput[],
   teamName: string,
   stats?: ShowStatLine | null,
+  moment?: EpisodeMoment,
   onProgress?: OnProgress,
 ): Promise<WrittenEpisode> {
   // No writer at all: the notes are voiced as they are, toned down
@@ -232,7 +237,7 @@ export async function writeConversation(
     notes: debateOf(topics[i]).map(e => `${e.speakerId === 'stats' ? 'Marcus' : 'Tony'}: ${e.text}`),
   }));
   const clipList = catalog.map(c => `${c.phrase.id} (${c.phrase.host}${c.phrase.angle === 'side' ? ', said to his co-host' : ''}): ${c.words}`).join('\n');
-  const user = `Team numbers: ${teamNumbers(teamName, stats)}\n\nProducer's notes for this episode (topics 1–${liveIdx.length}):\n${JSON.stringify(notes, null, 1)}`
+  const user = `MOMENT: ${momentNote(moment, stats?.record)}\n\nTeam numbers: ${teamNumbers(teamName, stats)}\n\nProducer's notes for this episode (topics 1–${liveIdx.length}):\n${JSON.stringify(notes, null, 1)}`
     + (clipList ? `\n\nCLIPS (id (host): words):\n${clipList}` : '')
     + (exchanges.size ? `\n\nEXCHANGES (id — when — lines):\n${[...exchanges.values()].map(x => `${x.id} — ${x.when}\n${x.lines.map(p => `  ${p.host === 'marcus' ? 'MARCUS' : 'TONY'}: ${p.text}`).join('\n')}`).join('\n')}` : '');
 

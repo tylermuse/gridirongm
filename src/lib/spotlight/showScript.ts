@@ -19,6 +19,7 @@
  */
 import { PHRASES, topicTagsIn, type Phrase, type PhraseKind, type PhraseTone } from './phrases';
 import { rankTone, statsMentioned, type ShowStatKey, type ShowStatLine } from './teamStats';
+import { hookLine, type EpisodeMoment } from './showMoment';
 
 export type Host = 'marcus' | 'tony';
 
@@ -286,6 +287,8 @@ export interface BuildOptions {
   /** The topics so far of an episode still being written: no outro yet.
    *  Each partial script is a prefix of the next (and of the final one). */
   partial?: boolean;
+  /** Where the season is: the cold-open line is built from it. */
+  moment?: EpisodeMoment;
 }
 
 export function buildShowScript(
@@ -304,7 +307,7 @@ export function buildShowScript(
   // The team name changes every episode, so this half of the original intro
   // is TTS over a title card instead of part of the lip-synced clip.
   segs.push({
-    kind: 'tts', speaker: 'marcus', text: `And today we're breaking down the ${teamName}.`,
+    kind: 'tts', speaker: 'marcus', text: hookLine(teamName, stats?.record, opts.moment),
     visual: 'title', topicIdx: -1, headline: teamName, icon: '🎬',
   });
   segs.push(clip('tony_intro'));
