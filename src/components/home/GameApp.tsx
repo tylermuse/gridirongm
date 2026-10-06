@@ -747,6 +747,8 @@ function TeamSpotlightSection({
   // prior round still live in cache.topics until cache key advances; render
   // a transition placeholder instead.
   const phase = ctx?.phase ?? 'regular';
+  // Stable identity so the show's request (and its cache key) only changes with the moment.
+  const showMoment = React.useMemo(() => ({ phase, narrative: currentNarrative }), [phase, currentNarrative]);
   if (phase === 'playoffs' && !playoffsState.bracketReady) {
     return (
       <div className="mt-6">
@@ -865,6 +867,7 @@ function TeamSpotlightSection({
                 teams={allTeams}
                 players={allPlayers}
                 poster={{ episodeLabel: episodeLabelFor(currentNarrative, phase, week), ready: podcastReady }}
+                moment={showMoment}
               />
             </div>
           )}

@@ -15,15 +15,18 @@ import { VOICES, normalizeTtsText, generateDialogue, stripCues } from './tts';
 import { writeConversation, WRITER_MODEL } from './showWriter';
 import { buildShowScript, type ShowSegment, type ShowTopicInput, type TimedShowSegment } from './showScript';
 import type { ShowStatLine } from './teamStats';
+import type { EpisodeMoment } from './showMoment';
 
 export const CACHE_BUCKET = 'spotlight-audio';
 /** Bump when the episode format or the composer changes. */
-export const SHOW_VERSION = 'show-v15';
+export const SHOW_VERSION = 'show-v16';
 
 export interface EpisodeInput {
   topics: ShowTopicInput[];
   teamName: string;
   stats: ShowStatLine | null;
+  /** Where the season is (offseason, deadline…) — shapes the writing and the cold open. */
+  moment?: EpisodeMoment;
 }
 
 export interface ShowPayload {
@@ -42,8 +45,8 @@ function hash(data: unknown): string {
   return crypto.createHash('md5').update(JSON.stringify(data)).digest('hex');
 }
 
-export const episodeKey = (e: EpisodeInput) => hash({ v: SHOW_VERSION, topics: e.topics, teamName: e.teamName, stats: e.stats });
-export const scriptPath = (e: EpisodeInput) => `show/script-${hash({ v: SHOW_VERSION, m: WRITER_MODEL, topics: e.topics, teamName: e.teamName, stats: e.stats })}.json`;
+export const episodeKey = (e: EpisodeInput) => hash({ v: SHOW_VERSION, topics: e.topics, teamName: e.teamName, stats: e.stats, moment: e.moment ?? null });
+export const scriptPath = (e: EpisodeInput) => `show/script-${hash({ v: SHOW_VERSION, m: WRITER_MODEL, topics: e.topics, teamName: e.teamName, stats: e.stats, moment: e.moment ?? null })}.json`;
 export const payloadPath = (e: EpisodeInput) => `show/${episodeKey(e)}.json`;
 
 async function readJson<T>(sb: SupabaseClient | null, path: string): Promise<T | null> {
@@ -83,11 +86,11 @@ function startWriting(sb: SupabaseClient | null, e: EpisodeInput): Writing {
   if (running) return running;
   const w: Writing = { last: null, listeners: new Set(), result: null as unknown as Writing['result'] };
   w.result = (async () => {
-    const ep = await writeConversation(e.topics, e.teamName, e.stats, (sofar, done) => {
+    const ep = await writeConversation(e.topics, e.teamName, e.stats, e.moment, (sofar, done) => {
       w.last = { sofar, done: new Set(done) };
       for (const l of w.listeners) l(sofar, done);
     });
-    const segments = buildShowScript(ep.topics, e.teamName, e.stats, { written: ep.written });
+    const segments = buildShowScript(ep.topics, e.teamName, e.stats, { written: ep.written, moment: e.moment });
     // Only cache a written script: a fallback (writer down) gets retried.
     if (ep.written) await writeJson(sb, path, { segments });
     return { segments, written: ep.written };
@@ -197,13 +200,13 @@ export async function streamEpisode(sb: SupabaseClient | null, e: EpisodeInput, 
     publish(final, true);
   } else {
     // The opening needs nothing from the writer.
-    publish(buildShowScript([], e.teamName, e.stats, { written: true, partial: true }), false);
+    publish(buildShowScript([], e.teamName, e.stats, { written: true, partial: true, moment: e.moment }), false);
     let first = true;
     const onProgress = (sofar: ShowTopicInput[], done: Set<number>) => {
       if (first) { log('first line written'); first = false; }
       // Only the topics the writer has reached.
       const reached = sofar.map((t, i) => (done.has(i) || t !== e.topics[i] ? i : -1)).reduce((m, i) => Math.max(m, i), -1);
-      publish(buildShowScript(sofar.slice(0, reached + 1), e.teamName, e.stats, { written: true, partial: true }), false, done);
+      publish(buildShowScript(sofar.slice(0, reached + 1), e.teamName, e.stats, { written: true, partial: true, moment: e.moment }), false, done);
     };
     // Join the writing session (maybe already started by the prefetch):
     // catch up on what's written so far, then follow it.
@@ -215,7 +218,7 @@ export async function streamEpisode(sb: SupabaseClient | null, e: EpisodeInput, 
       log('script written');
       // Written: the final script. Writer unavailable: the original notes,
       // composed the classic way (same intro, so what's playing stays valid).
-      final = out.written ? out.segments : buildShowScript(e.topics, e.teamName, e.stats);
+      final = out.written ? out.segments : buildShowScript(e.topics, e.teamName, e.stats, { moment: e.moment });
     } finally {
       w.listeners.delete(onProgress);
     }

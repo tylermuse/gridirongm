@@ -52,6 +52,8 @@ interface SpotlightShowPlayerProps {
   players?: Player[];
   /** Render as the big broadcast poster (dashboard) instead of a small button. */
   poster?: { episodeLabel: string; ready: boolean };
+  /** Where the season is ({phase, narrative}); validated server-side. */
+  moment?: { phase: string; narrative: string };
 }
 
 const logoOf = (t: Team) => (
@@ -110,7 +112,7 @@ function toneClass(st: ShowStat) {
   return t === 'good' ? 'text-emerald-600' : t === 'bad' ? 'text-red-600' : 'text-slate-500';
 }
 
-export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats, team, teams = [], players = [], poster }: SpotlightShowPlayerProps) {
+export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats, team, teams = [], players = [], poster, moment }: SpotlightShowPlayerProps) {
   const sub = useSubscription();
   const access = listenState({
     loading: sub.loading,
@@ -225,7 +227,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   // Write the script ahead of time, once the Spotlight's topics settle, so
   // Watch Show starts right away (server-side it's writing only — no voices,
   // no credit — and only for viewers who can watch).
-  const requestBody = useMemo(() => JSON.stringify({ topics, teamName, stats }), [topics, teamName, stats]);
+  const requestBody = useMemo(() => JSON.stringify({ topics, teamName, stats, moment }), [topics, teamName, stats, moment]);
   useEffect(() => {
     if (!topics.length || prefetched.has(requestBody)) return;
     const t = setTimeout(() => {
@@ -327,12 +329,13 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   /** Which shot each voiced line plays over (the graphic or the
    *  over-the-shoulder listening shot), planned over the whole run of lines
    *  so short lines and asides don't cut back and forth. */
-  const shots = useMemo(() => planShots(segments.map(sg => sg.kind === 'tts' && sg.visual === 'graphic' && sg.topicIdx >= 0
+  const shots = useMemo(() => planShots(segments.map((sg, i) => sg.kind === 'tts' && sg.visual === 'graphic' && sg.topicIdx >= 0
     ? {
       kind: 'tts' as const, speaker: sg.speaker, topicIdx: sg.topicIdx, words: sg.text.split(/\s+/).length,
       bare: !!team && !measurableIn(sg.text, { topic: topics[sg.topicIdx], team, teams, players, earlier: [], play: sg.play }),
+      look: lookOf(focusAt(segments, i)),
     }
-    : { kind: 'other' as const, speaker: sg.speaker, topicIdx: -1, words: 0, bare: false })), [segments, team, teams, players, topics]);
+    : { kind: 'other' as const, speaker: sg.speaker, topicIdx: -1, words: 0, bare: false })), [segments, team, teams, players, topics, focusAt]);
 
   /** Cut away when the clip's speech (plus a hair) is done, not at the end
    *  of the file. Watches the video's own playhead rather than a wall-clock
@@ -969,6 +972,10 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
         <div className={full
           ? 'relative w-full aspect-video overflow-hidden bg-slate-800'
           : 'relative w-full aspect-video overflow-hidden rounded-xl border border-slate-200 bg-slate-800 shadow-xl'}>
+          {/* Studio still underneath everything: a clip that hasn't decoded
+              yet shows the desk, never an empty slate. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={TWO_SHOT_SRC} alt="" className="absolute inset-0 h-full w-full object-cover" />
           {/* Voiceover lines: animated graphic over the studio two-shot. Stays
               mounted (faded out) during on-camera shots so cuts dissolve. */}
           {gfx && (
@@ -1149,6 +1156,18 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     </div>
     </>
   );
+}
+
+/** Identity of what the graphic shows for a focus (a new one = a new picture). */
+function lookOf(f: Focus): string {
+  switch (f.kind) {
+    case 'player': return `player:${f.player.id}`;
+    case 'unit': return `unit:${f.unit}`;
+    case 'team': return `team:${f.teamId ?? ''}`;
+    case 'standings': return `standings:${f.scope}`;
+    case 'moment': return `moment:${f.play ?? ''}`;
+    default: return 'none';
+  }
 }
 
 function fullscreenElement(): Element | null {
