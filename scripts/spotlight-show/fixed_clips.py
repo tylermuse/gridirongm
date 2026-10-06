@@ -45,8 +45,8 @@ def cut(wt):
         for e in t["clips"]:
             a, b = max(0, e["start"] - PRE), min(vd, e["end"] + POST)
             dst = os.path.join(wt, "public", "show", e["id"] + ".mp4")
-            subprocess.check_call(["ffmpeg", "-v", "error", "-y", "-ss", f"{a:.3f}", "-to", f"{b:.3f}", "-i", vid, "-vf", "scale=1280:-2",
-                                   "-c:v", "libx264", "-preset", "medium", "-crf", "23", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", dst])
+            subprocess.check_call(["ffmpeg", "-v", "error", "-y", "-ss", f"{a:.3f}", "-to", f"{b:.3f}", "-i", vid, "-vf", "scale=1920:-2",
+                                   "-c:v", "libx264", "-preset", "slow", "-crf", "20", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", dst])
             print(json.dumps({"id": e["id"], "text": e["text"], "speech": speech_span(dst), "dur": round(dur(dst), 2)}))
 
 if __name__ == "__main__":

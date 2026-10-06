@@ -360,7 +360,7 @@
   "kind": "pivot",
   "text": "Let's look at what the numbers actually say.",
   "src": "/show/phrases/marcus_pivot.mp4",
-  "duration": 2.837,
+  "duration": 2.836,
   "speech": {
    "start": 0.36,
    "end": 2.18
@@ -727,7 +727,7 @@
   "kind": "pivot",
   "text": "Here's the thing nobody's talking about.",
   "src": "/show/phrases/tony_pivot.mp4",
-  "duration": 2.838,
+  "duration": 2.837,
   "speech": {
    "start": 0.46,
    "end": 2.18
@@ -1099,7 +1099,7 @@
   "kind": "skeptical",
   "text": "I don't trust it. Not yet.",
   "src": "/show/phrases/tony_skeptical_3.mp4",
-  "duration": 2.28,
+  "duration": 2.279,
   "speech": {
    "start": 0.46,
    "end": 1.64
