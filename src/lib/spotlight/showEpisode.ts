@@ -19,7 +19,7 @@ import type { EpisodeMoment } from './showMoment';
 
 export const CACHE_BUCKET = 'spotlight-audio';
 /** Bump when the episode format or the composer changes. */
-export const SHOW_VERSION = 'show-v16';
+export const SHOW_VERSION = 'show-v17';
 
 export interface EpisodeInput {
   topics: ShowTopicInput[];

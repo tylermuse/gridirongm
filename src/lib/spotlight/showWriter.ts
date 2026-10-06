@@ -78,7 +78,8 @@ The hosts have pre-recorded on-camera lines, listed with the notes as CLIPS (all
 - The next line must react to the clip's actual words.
 - Write around clips so they land: set up the subject, then answer it.
 - Clips are optional. Most topics need none or one; never more than two in a topic, never two in a row. A clip that only roughly fits is worse than a written line — when in doubt, write the line.
-- Clips marked "said to his co-host" are quick replies across the desk: use them right after the other host makes a point, as the answer to it.
+- Clips marked "said to his co-host" are replies across the desk: use them right after the other host makes a point, as the answer to it. Many are long (15–20 seconds) and carry a whole turn: let the clip be that host's full answer, then have the other host respond to what it actually said.
+- A clip marked ONLY IF is true only in that situation: use it only when the notes show the situation is true for this game or team.
 
 PRE-RECORDED EXCHANGES
 Some whole back-and-forths are pre-recorded, shot with the hosts facing each other, listed as EXCHANGES with when each one fits. Write {"t":<topic>,"exchange":"<id>"} to play one: it stands in for all its lines, in order. Use one only when its condition is true for this team and topic, set it up so its first line follows naturally, and make your next line follow from its last line. Never more than one exchange per episode, and never repeat its lines in your own words.
@@ -236,7 +237,7 @@ export async function writeConversation(
     ...(topics[i].depth === 'deep' ? { depth: 'deep' } : {}),
     notes: debateOf(topics[i]).map(e => `${e.speakerId === 'stats' ? 'Marcus' : 'Tony'}: ${e.text}`),
   }));
-  const clipList = catalog.map(c => `${c.phrase.id} (${c.phrase.host}${c.phrase.angle === 'side' ? ', said to his co-host' : ''}): ${c.words}`).join('\n');
+  const clipList = catalog.map(c => `${c.phrase.id} (${c.phrase.host}${c.phrase.angle === 'side' ? ', said to his co-host' : ''}${c.phrase.when ? `; ONLY IF: ${c.phrase.when}` : ''}): ${c.words}`).join('\n');
   const user = `MOMENT: ${momentNote(moment, stats?.record)}\n\nTeam numbers: ${teamNumbers(teamName, stats)}\n\nProducer's notes for this episode (topics 1–${liveIdx.length}):\n${JSON.stringify(notes, null, 1)}`
     + (clipList ? `\n\nCLIPS (id (host): words):\n${clipList}` : '')
     + (exchanges.size ? `\n\nEXCHANGES (id — when — lines):\n${[...exchanges.values()].map(x => `${x.id} — ${x.when}\n${x.lines.map(p => `  ${p.host === 'marcus' ? 'MARCUS' : 'TONY'}: ${p.text}`).join('\n')}`).join('\n')}` : '');

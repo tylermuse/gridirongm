@@ -59,6 +59,7 @@ def main(wt):
         print(f"{take}: video {vd:.2f}s vs audio {t['duration']:.2f}s (drift {drift:+.2f}s)")
         if abs(drift) > 0.5:
             raise SystemExit(f"{take}: video/audio length mismatch — cut points unsafe")
+        HD = take.startswith(("marcus_r", "tony_r")) or os.environ.get("HD") == "1"
         for e in t["phrases"]:
             a = max(0.0, e["start"] - PRE)
             b = min(vd, e["end"] + POST)
@@ -67,8 +68,10 @@ def main(wt):
                 pass  # already cut (keeps committed clips byte-stable)
             else:
               subprocess.check_call(["ffmpeg", "-v", "error", "-y", "-ss", f"{a:.3f}", "-to", f"{b:.3f}", "-i", vid,
-                                   "-vf", "scale=1280:-2", "-c:v", "libx264", "-preset", "medium", "-crf", "23",
-                                   "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", dst])
+                                   # HD takes (HeyGen, 1080p) keep full resolution; older 720p takes stay at 1280.
+                                   "-vf", "scale=1920:-2" if HD else "scale=1280:-2", "-c:v", "libx264",
+                                   "-preset", "slow" if HD else "medium", "-crf", "20" if HD else "23",
+                                   "-c:a", "aac", "-b:a", "128k" if HD else "96k", "-movflags", "+faststart", dst])
             p = bank[e["id"]]
             kind = p.get("kind") or "stat"
             m = {"id": e["id"], "host": p["host"], "kind": kind, "text": p["text"],
@@ -77,7 +80,8 @@ def main(wt):
             if "stat" in p: m["stat"] = p["stat"]
             if "tone" in p: m["tone"] = p["tone"]
             if "tags" in p: m["tags"] = p["tags"]
-            if p.get("writerOnly"): m["writerOnly"] = True
+            if p.get("writerOnly") or p.get("when"): m["writerOnly"] = True
+            if p.get("when"): m["when"] = p["when"]
             if p.get("angle"): m["angle"] = p["angle"]
             if p.get("exchange"): m["exchange"] = p["exchange"]
             if "slot" in e:
