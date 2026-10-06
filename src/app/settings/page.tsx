@@ -107,6 +107,38 @@ function PregameShowCard() {
   );
 }
 
+function AiCommentaryCard({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  const { hasFeature, loading } = useSubscription();
+  const entitled = hasFeature('ai_commentary');
+  return (
+    <Card className="mb-4">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <CardTitle>AI Spotlight Commentary</CardTitle>
+          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-300">
+            Premium
+          </span>
+        </div>
+      </CardHeader>
+      <ToggleRow
+        label="AI-written Spotlight & weekly recap"
+        description={entitled || loading
+          ? 'Marcus Cole & Tony Blaze write a fresh AI breakdown at big moments (preseason, trade deadline, playoffs, season end) and for the weekly recap. Off = the standard Spotlight.'
+          : 'Premium unlocks an AI-written Spotlight and weekly recap from Marcus Cole & Tony Blaze. Free leagues get the standard Spotlight.'}
+        value={entitled && value}
+        onChange={onChange}
+        disabled={!entitled}
+        activeColor="bg-purple-500"
+      />
+      {!entitled && !loading && (
+        <Link href="/pricing" className="inline-block mt-3 text-xs font-semibold text-purple-600 hover:underline">
+          Upgrade to Premium →
+        </Link>
+      )}
+    </Card>
+  );
+}
+
 function ToggleRow({
   label, description, value, onChange, disabled, activeColor = 'bg-blue-500',
 }: {
@@ -770,39 +802,11 @@ export default function SettingsPage() {
           </div>
         </Card>
 
-        {/* AI Commentary */}
-        <Card className="mb-4">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <CardTitle>AI Recap Podcast</CardTitle>
-              <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-300">
-                Claude AI
-              </span>
-            </div>
-          </CardHeader>
-          <div className="space-y-3">
-            <p className="text-xs text-[var(--text-sec)]">
-              Post-game AI recap by Tony Blaze &amp; Marcus Cole. Available in Podcast credits after each game.
-            </p>
-            <button
-              onClick={() => setDraft(d => ({ ...d, aiCommentary: !d.aiCommentary }))}
-              className={`
-                relative inline-flex h-7 w-12 items-center rounded-full transition-colors
-                ${draft.aiCommentary ? 'bg-purple-500' : 'bg-gray-300'}
-              `}
-            >
-              <span
-                className={`
-                  inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform
-                  ${draft.aiCommentary ? 'translate-x-6' : 'translate-x-1'}
-                `}
-              />
-            </button>
-            <span className={`ml-2 text-sm font-semibold ${draft.aiCommentary ? 'text-purple-600' : 'text-[var(--text-sec)]'}`}>
-              {draft.aiCommentary ? 'ON' : 'OFF'}
-            </span>
-          </div>
-        </Card>
+        {/* AI Spotlight commentary — Premium */}
+        <AiCommentaryCard
+          value={draft.aiCommentary !== false}
+          onChange={v => setDraft(d => ({ ...d, aiCommentary: v }))}
+        />
 
         <PregameShowCard />
 

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { SpotlightAudioPlayer } from '@/components/game/SpotlightAudioPlayer';
+import { useAiCommentary } from '@/components/providers/useAiCommentary';
 
 import { useGameStore, computeLuxuryTax } from '@/lib/engine/store';
 import { migrateFromLocalStorage, getItem as idbGetItem } from '@bs/core/storage';
@@ -607,7 +608,7 @@ function TeamSpotlightSection({
   onPlayerClick: (id: string) => void;
 }) {
   const { leagueSettings, newsItems, draftResults, playoffBracket, playoffSeeds, champions, players: allPlayersFromStore } = useGameStore();
-  const aiCommentary = leagueSettings?.aiCommentary ?? false;
+  const aiCommentary = useAiCommentary();
 
   // Filter news to this season's re-injury items so the spotlight can surface
   // front-office blowback without pulling in the full feed each render.

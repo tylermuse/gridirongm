@@ -3,6 +3,7 @@ import { GoogleGenerativeAI, type GenerationConfig } from '@google/generative-ai
 import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { requirePremium } from '@/lib/server/requirePremium';
 
 // ── Persistent cache via Supabase ──────────────────────────────────────────
 // Falls back to in-memory Map if Supabase isn't configured.
@@ -450,6 +451,10 @@ export async function POST(request: Request) {
     if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
       return NextResponse.json({ error: 'No AI API key configured (need GEMINI_API_KEY or OPENAI_API_KEY)' }, { status: 500 });
     }
+
+    // Premium only — checked before the cache so free users can't read paid output.
+    const denied = await requirePremium('AI Spotlight commentary');
+    if (denied) return denied;
 
     const url = new URL(request.url);
     const wantStream = url.searchParams.get('stream') === '1';

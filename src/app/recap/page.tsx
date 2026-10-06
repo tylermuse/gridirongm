@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useGameStore } from '@/lib/engine/store';
+import { useAiCommentary } from '@/components/providers/useAiCommentary';
 import { PlayerModal } from '@/components/game/PlayerModal';
 import { GameShell } from '@/components/game/GameShell';
 import { NewsTabs } from '@/components/news/NewsTabs';
@@ -192,11 +193,11 @@ function useAiRecap(
 /* ─── Main Page ─── */
 
 export default function RecapPage() {
-  const { weeklyRecaps, teams, players, season, week, playoffBracket, schedule, leagueSettings, userTeamId } = useGameStore();
+  const { weeklyRecaps, teams, players, season, week, playoffBracket, schedule, userTeamId } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('show');
-  const aiCommentary = leagueSettings?.aiCommentary ?? false;
+  const aiCommentary = useAiCommentary();
 
   // Generate playoff recaps on the fly if they're missing from weeklyRecaps
   const allRecaps = useMemo(() => {
