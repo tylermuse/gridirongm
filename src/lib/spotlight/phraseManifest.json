@@ -1,0 +1,5685 @@
+[
+ {
+  "id": "marcus_ppg_bad",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "You just can't win in this league when you can't put points on the board.",
+  "src": "/show/phrases/marcus_ppg_bad.mp4",
+  "duration": 4.28,
+  "speech": {
+   "start": 0.3,
+   "end": 3.54
+  },
+  "stat": "ppg",
+  "tone": "bad"
+ },
+ {
+  "id": "marcus_ppg_bad_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "When you're {rank} in scoring, there's no margin for error. None.",
+  "src": "/show/phrases/marcus_ppg_bad_slot.mp4",
+  "duration": 4.88,
+  "speech": {
+   "start": 0.36,
+   "end": 4.22
+  },
+  "stat": "ppg",
+  "tone": "bad",
+  "slot": {
+   "start": 0.741,
+   "end": 1.368
+  }
+ },
+ {
+  "id": "marcus_ppg_good",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "This offense is legit. They're moving the ball and finishing drives.",
+  "src": "/show/phrases/marcus_ppg_good.mp4",
+  "duration": 4.28,
+  "speech": {
+   "start": 0.38,
+   "end": 3.58
+  },
+  "stat": "ppg",
+  "tone": "good"
+ },
+ {
+  "id": "marcus_ppg_good_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in the league in scoring. That's not a fluke. That's a system that works.",
+  "src": "/show/phrases/marcus_ppg_good_slot.mp4",
+  "duration": 5.64,
+  "speech": {
+   "start": 0.4,
+   "end": 4.96
+  },
+  "stat": "ppg",
+  "tone": "good",
+  "slot": {
+   "start": 0.602,
+   "end": 1.031
+  }
+ },
+ {
+  "id": "marcus_pag_bad",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "The defense has to get off the field. They just can't get stops.",
+  "src": "/show/phrases/marcus_pag_bad.mp4",
+  "duration": 3.6,
+  "speech": {
+   "start": 0.36,
+   "end": 2.94
+  },
+  "stat": "pag",
+  "tone": "bad"
+ },
+ {
+  "id": "marcus_pag_bad_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in points allowed. You're asking the offense to win a shootout every week.",
+  "src": "/show/phrases/marcus_pag_bad_slot.mp4",
+  "duration": 5.52,
+  "speech": {
+   "start": 0.4,
+   "end": 4.68
+  },
+  "stat": "pag",
+  "tone": "bad",
+  "slot": {
+   "start": 0.637,
+   "end": 1.507
+  }
+ },
+ {
+  "id": "marcus_pag_good",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "This defense keeps them in every single game. That travels.",
+  "src": "/show/phrases/marcus_pag_good.mp4",
+  "duration": 3.8,
+  "speech": {
+   "start": 0.34,
+   "end": 3.26
+  },
+  "stat": "pag",
+  "tone": "good"
+ },
+ {
+  "id": "marcus_pag_good_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in points allowed. That's the foundation of this whole team.",
+  "src": "/show/phrases/marcus_pag_good_slot.mp4",
+  "duration": 5.28,
+  "speech": {
+   "start": 0.34,
+   "end": 4.48
+  },
+  "stat": "pag",
+  "tone": "good",
+  "slot": {
+   "start": 0.637,
+   "end": 1.159
+  }
+ },
+ {
+  "id": "marcus_pass_bad",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "The passing game just isn't there. Nobody's getting open downfield.",
+  "src": "/show/phrases/marcus_pass_bad.mp4",
+  "duration": 4.28,
+  "speech": {
+   "start": 0.36,
+   "end": 3.6
+  },
+  "stat": "pass",
+  "tone": "bad"
+ },
+ {
+  "id": "marcus_pass_bad_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in passing yards per game. That's a problem at quarterback, or up front, or both.",
+  "src": "/show/phrases/marcus_pass_bad_slot.mp4",
+  "duration": 5.52,
+  "speech": {
+   "start": 0.34,
+   "end": 4.96
+  },
+  "stat": "pass",
+  "tone": "bad",
+  "slot": {
+   "start": 0.567,
+   "end": 1.194
+  }
+ },
+ {
+  "id": "marcus_pass_good",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "When they drop back to throw, good things happen. The timing is there.",
+  "src": "/show/phrases/marcus_pass_good.mp4",
+  "duration": 4.68,
+  "speech": {
+   "start": 0.34,
+   "end": 4.04
+  },
+  "stat": "pass",
+  "tone": "good"
+ },
+ {
+  "id": "marcus_pass_good_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in passing yards per game. Defenses have to respect it.",
+  "src": "/show/phrases/marcus_pass_good_slot.mp4",
+  "duration": 5.0,
+  "speech": {
+   "start": 0.42,
+   "end": 4.22
+  },
+  "stat": "pass",
+  "tone": "good",
+  "slot": {
+   "start": 0.613,
+   "end": 1.101
+  }
+ },
+ {
+  "id": "marcus_rush_bad",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They can't run the ball. And when you can't run it, everything gets harder.",
+  "src": "/show/phrases/marcus_rush_bad.mp4",
+  "duration": 4.322,
+  "speech": {
+   "start": 0.4,
+   "end": 3.62
+  },
+  "stat": "rush",
+  "tone": "bad"
+ },
+ {
+  "id": "marcus_rush_bad_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in rushing. The offensive line has to take that personally.",
+  "src": "/show/phrases/marcus_rush_bad_slot.mp4",
+  "duration": 5.16,
+  "speech": {
+   "start": 0.38,
+   "end": 4.4
+  },
+  "stat": "rush",
+  "tone": "bad",
+  "slot": {
+   "start": 0.59,
+   "end": 1.368
+  }
+ },
+ {
+  "id": "marcus_rush_good",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're winning at the line of scrimmage. That's how you control a football game.",
+  "src": "/show/phrases/marcus_rush_good.mp4",
+  "duration": 5.64,
+  "speech": {
+   "start": 0.36,
+   "end": 4.8
+  },
+  "stat": "rush",
+  "tone": "good"
+ },
+ {
+  "id": "marcus_rush_good_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in rushing yards per game. They're wearing people down.",
+  "src": "/show/phrases/marcus_rush_good_slot.mp4",
+  "duration": 4.88,
+  "speech": {
+   "start": 0.34,
+   "end": 4.14
+  },
+  "stat": "rush",
+  "tone": "good",
+  "slot": {
+   "start": 0.637,
+   "end": 1.136
+  }
+ },
+ {
+  "id": "marcus_record_winning",
+  "host": "marcus",
+  "kind": "record",
+  "text": "Winning cures a lot. This team believes right now.",
+  "src": "/show/phrases/marcus_record_winning.mp4",
+  "duration": 3.44,
+  "speech": {
+   "start": 0.3,
+   "end": 2.72
+  },
+  "tone": "good"
+ },
+ {
+  "id": "marcus_record_losing",
+  "host": "marcus",
+  "kind": "record",
+  "text": "At some point, the record is who you are. And right now, it's not good enough.",
+  "src": "/show/phrases/marcus_record_losing.mp4",
+  "duration": 4.24,
+  "speech": {
+   "start": 0.34,
+   "end": 3.5
+  },
+  "tone": "bad"
+ },
+ {
+  "id": "marcus_record_even",
+  "host": "marcus",
+  "kind": "record",
+  "text": "They're right there. A couple of plays either way, and this is a different conversation.",
+  "src": "/show/phrases/marcus_record_even.mp4",
+  "duration": 4.8,
+  "speech": {
+   "start": 0.42,
+   "end": 3.98
+  },
+  "tone": "mid"
+ },
+ {
+  "id": "marcus_agree_1",
+  "host": "marcus",
+  "kind": "agree",
+  "text": "I'm with you on that, Tony.",
+  "src": "/show/phrases/marcus_agree_1.mp4",
+  "duration": 2.2,
+  "speech": {
+   "start": 0.34,
+   "end": 1.54
+  }
+ },
+ {
+  "id": "marcus_agree_2",
+  "host": "marcus",
+  "kind": "agree",
+  "text": "That's fair. The numbers back you up.",
+  "src": "/show/phrases/marcus_agree_2.mp4",
+  "duration": 2.44,
+  "speech": {
+   "start": 0.38,
+   "end": 1.86
+  }
+ },
+ {
+  "id": "marcus_disagree_1",
+  "host": "marcus",
+  "kind": "disagree",
+  "text": "Hold on. Let's not overreact here.",
+  "src": "/show/phrases/marcus_disagree_1.mp4",
+  "duration": 2.72,
+  "speech": {
+   "start": 0.38,
+   "end": 2.0
+  }
+ },
+ {
+  "id": "marcus_disagree_2",
+  "host": "marcus",
+  "kind": "disagree",
+  "text": "I'll push back on that a little.",
+  "src": "/show/phrases/marcus_disagree_2.mp4",
+  "duration": 2.16,
+  "speech": {
+   "start": 0.34,
+   "end": 1.44
+  }
+ },
+ {
+  "id": "marcus_skeptical",
+  "host": "marcus",
+  "kind": "skeptical",
+  "text": "I need to see it for more than a few weeks.",
+  "src": "/show/phrases/marcus_skeptical.mp4",
+  "duration": 2.68,
+  "speech": {
+   "start": 0.36,
+   "end": 2.0
+  }
+ },
+ {
+  "id": "marcus_pivot",
+  "host": "marcus",
+  "kind": "pivot",
+  "text": "Let's look at what the numbers actually say.",
+  "src": "/show/phrases/marcus_pivot.mp4",
+  "duration": 2.837,
+  "speech": {
+   "start": 0.36,
+   "end": 2.18
+  }
+ },
+ {
+  "id": "tony_ppg_bad",
+  "host": "tony",
+  "kind": "stat",
+  "text": "This offense is unwatchable right now! I can't take it!",
+  "src": "/show/phrases/tony_ppg_bad.mp4",
+  "duration": 3.64,
+  "speech": {
+   "start": 0.46,
+   "end": 2.92
+  },
+  "stat": "ppg",
+  "tone": "bad"
+ },
+ {
+  "id": "tony_ppg_bad_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in scoring?! Are you kidding me? That's embarrassing!",
+  "src": "/show/phrases/tony_ppg_bad_slot.mp4",
+  "duration": 4.28,
+  "speech": {
+   "start": 0.32,
+   "end": 3.78
+  },
+  "stat": "ppg",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 1.182
+  }
+ },
+ {
+  "id": "tony_ppg_good",
+  "host": "tony",
+  "kind": "stat",
+  "text": "This offense is a problem for everybody! Buckle up!",
+  "src": "/show/phrases/tony_ppg_good.mp4",
+  "duration": 3.6,
+  "speech": {
+   "start": 0.44,
+   "end": 2.88
+  },
+  "stat": "ppg",
+  "tone": "good"
+ },
+ {
+  "id": "tony_ppg_good_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in scoring! They're putting up points like it's nothing!",
+  "src": "/show/phrases/tony_ppg_good_slot.mp4",
+  "duration": 4.32,
+  "speech": {
+   "start": 0.48,
+   "end": 3.6
+  },
+  "stat": "ppg",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.962
+  }
+ },
+ {
+  "id": "tony_pag_bad",
+  "host": "tony",
+  "kind": "stat",
+  "text": "This is ridiculous! They have to do a better job on defense!",
+  "src": "/show/phrases/tony_pag_bad.mp4",
+  "duration": 3.88,
+  "speech": {
+   "start": 0.46,
+   "end": 3.2
+  },
+  "stat": "pag",
+  "tone": "bad"
+ },
+ {
+  "id": "tony_pag_bad_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in points allowed! Somebody has to make a tackle!",
+  "src": "/show/phrases/tony_pag_bad_slot.mp4",
+  "duration": 3.88,
+  "speech": {
+   "start": 0.32,
+   "end": 3.24
+  },
+  "stat": "pag",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 0.939
+  }
+ },
+ {
+  "id": "tony_pag_good",
+  "host": "tony",
+  "kind": "stat",
+  "text": "Nobody wants to play this defense! Nobody!",
+  "src": "/show/phrases/tony_pag_good.mp4",
+  "duration": 3.4,
+  "speech": {
+   "start": 0.46,
+   "end": 2.74
+  },
+  "stat": "pag",
+  "tone": "good"
+ },
+ {
+  "id": "tony_pag_good_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in points allowed! That defense is nasty!",
+  "src": "/show/phrases/tony_pag_good_slot.mp4",
+  "duration": 3.52,
+  "speech": {
+   "start": 0.46,
+   "end": 2.84
+  },
+  "stat": "pag",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.857
+  }
+ },
+ {
+  "id": "tony_pass_bad",
+  "host": "tony",
+  "kind": "stat",
+  "text": "Throw the ball downfield! Take a shot! Do something!",
+  "src": "/show/phrases/tony_pass_bad.mp4",
+  "duration": 3.72,
+  "speech": {
+   "start": 0.46,
+   "end": 3.02
+  },
+  "stat": "pass",
+  "tone": "bad"
+ },
+ {
+  "id": "tony_pass_bad_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in passing? That's not an offense, that's a prayer!",
+  "src": "/show/phrases/tony_pass_bad_slot.mp4",
+  "duration": 3.72,
+  "speech": {
+   "start": 0.38,
+   "end": 3.22
+  },
+  "stat": "pass",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 0.892
+  }
+ },
+ {
+  "id": "tony_pass_good",
+  "host": "tony",
+  "kind": "stat",
+  "text": "When this team airs it out, it is fun to watch!",
+  "src": "/show/phrases/tony_pass_good.mp4",
+  "duration": 3.24,
+  "speech": {
+   "start": 0.38,
+   "end": 2.64
+  },
+  "stat": "pass",
+  "tone": "good"
+ },
+ {
+  "id": "tony_pass_good_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in passing yards! Let it fly!",
+  "src": "/show/phrases/tony_pass_good_slot.mp4",
+  "duration": 2.88,
+  "speech": {
+   "start": 0.46,
+   "end": 2.2
+  },
+  "stat": "pass",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.869
+  }
+ },
+ {
+  "id": "tony_rush_bad",
+  "host": "tony",
+  "kind": "stat",
+  "text": "You have to be able to run the football! It's that simple!",
+  "src": "/show/phrases/tony_rush_bad.mp4",
+  "duration": 3.672,
+  "speech": {
+   "start": 0.48,
+   "end": 3.02
+  },
+  "stat": "rush",
+  "tone": "bad"
+ },
+ {
+  "id": "tony_rush_bad_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in rushing?! You can't win like that! You just can't!",
+  "src": "/show/phrases/tony_rush_bad_slot.mp4",
+  "duration": 4.16,
+  "speech": {
+   "start": 0.42,
+   "end": 3.42
+  },
+  "stat": "rush",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 0.962
+  }
+ },
+ {
+  "id": "tony_rush_good",
+  "host": "tony",
+  "kind": "stat",
+  "text": "They're running people over! That's grown-man football!",
+  "src": "/show/phrases/tony_rush_good.mp4",
+  "duration": 3.72,
+  "speech": {
+   "start": 0.48,
+   "end": 3.02
+  },
+  "stat": "rush",
+  "tone": "good"
+ },
+ {
+  "id": "tony_rush_good_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in rushing! They just line up and pound it!",
+  "src": "/show/phrases/tony_rush_good_slot.mp4",
+  "duration": 3.84,
+  "speech": {
+   "start": 0.3,
+   "end": 3.12
+  },
+  "stat": "rush",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.904
+  }
+ },
+ {
+  "id": "tony_record_winning",
+  "host": "tony",
+  "kind": "record",
+  "text": "This team is for real, and I don't want to hear otherwise!",
+  "src": "/show/phrases/tony_record_winning.mp4",
+  "duration": 3.56,
+  "speech": {
+   "start": 0.46,
+   "end": 2.9
+  },
+  "tone": "good"
+ },
+ {
+  "id": "tony_record_losing",
+  "host": "tony",
+  "kind": "record",
+  "text": "Something has got to change, and it has to change now!",
+  "src": "/show/phrases/tony_record_losing.mp4",
+  "duration": 3.64,
+  "speech": {
+   "start": 0.3,
+   "end": 2.96
+  },
+  "tone": "bad"
+ },
+ {
+  "id": "tony_record_even",
+  "host": "tony",
+  "kind": "record",
+  "text": "This season is on a knife's edge, Marcus!",
+  "src": "/show/phrases/tony_record_even.mp4",
+  "duration": 2.92,
+  "speech": {
+   "start": 0.48,
+   "end": 2.22
+  },
+  "tone": "mid"
+ },
+ {
+  "id": "tony_agree_1",
+  "host": "tony",
+  "kind": "agree",
+  "text": "Thank you! That's what I've been saying!",
+  "src": "/show/phrases/tony_agree_1.mp4",
+  "duration": 2.44,
+  "speech": {
+   "start": 0.32,
+   "end": 1.78
+  }
+ },
+ {
+  "id": "tony_agree_2",
+  "host": "tony",
+  "kind": "agree",
+  "text": "Exactly! Exactly!",
+  "src": "/show/phrases/tony_agree_2.mp4",
+  "duration": 2.24,
+  "speech": {
+   "start": 0.46,
+   "end": 1.54
+  }
+ },
+ {
+  "id": "tony_disagree_1",
+  "host": "tony",
+  "kind": "disagree",
+  "text": "Come on, Marcus! You can't be serious!",
+  "src": "/show/phrases/tony_disagree_1.mp4",
+  "duration": 2.96,
+  "speech": {
+   "start": 0.34,
+   "end": 2.3
+  }
+ },
+ {
+  "id": "tony_disagree_2",
+  "host": "tony",
+  "kind": "disagree",
+  "text": "Nah, nah, nah. I'm not buying that.",
+  "src": "/show/phrases/tony_disagree_2.mp4",
+  "duration": 2.6,
+  "speech": {
+   "start": 0.46,
+   "end": 2.02
+  }
+ },
+ {
+  "id": "tony_hype",
+  "host": "tony",
+  "kind": "hype",
+  "text": "Let's go!",
+  "src": "/show/phrases/tony_hype.mp4",
+  "duration": 1.64,
+  "speech": {
+   "start": 0.46,
+   "end": 1.0
+  }
+ },
+ {
+  "id": "tony_pivot",
+  "host": "tony",
+  "kind": "pivot",
+  "text": "Here's the thing nobody's talking about.",
+  "src": "/show/phrases/tony_pivot.mp4",
+  "duration": 2.838,
+  "speech": {
+   "start": 0.46,
+   "end": 2.18
+  }
+ },
+ {
+  "id": "marcus_ppg_mid_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in scoring. Middle of the pack. Not bad, not great.",
+  "src": "/show/phrases/marcus_ppg_mid_slot.mp4",
+  "duration": 4.68,
+  "speech": {
+   "start": 0.44,
+   "end": 3.96
+  },
+  "stat": "ppg",
+  "tone": "mid",
+  "slot": {
+   "start": 0.637,
+   "end": 1.089
+  }
+ },
+ {
+  "id": "marcus_pag_mid_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in points allowed. That's average, and average doesn't win you a division.",
+  "src": "/show/phrases/marcus_pag_mid_slot.mp4",
+  "duration": 5.24,
+  "speech": {
+   "start": 0.36,
+   "end": 4.64
+  },
+  "stat": "pag",
+  "tone": "mid",
+  "slot": {
+   "start": 0.59,
+   "end": 1.031
+  }
+ },
+ {
+  "id": "marcus_pass_mid_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in passing yards. It's fine. But fine isn't going to scare anybody.",
+  "src": "/show/phrases/marcus_pass_mid_slot.mp4",
+  "duration": 5.04,
+  "speech": {
+   "start": 0.4,
+   "end": 4.32
+  },
+  "stat": "pass",
+  "tone": "mid",
+  "slot": {
+   "start": 0.59,
+   "end": 1.124
+  }
+ },
+ {
+  "id": "marcus_rush_mid_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in rushing. Middle of the league. There's room to lean on it more.",
+  "src": "/show/phrases/marcus_rush_mid_slot.mp4",
+  "duration": 4.72,
+  "speech": {
+   "start": 0.4,
+   "end": 4.0
+  },
+  "stat": "rush",
+  "tone": "mid",
+  "slot": {
+   "start": 0.579,
+   "end": 1.031
+  }
+ },
+ {
+  "id": "marcus_yds_mid_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in total offense. Right down the middle.",
+  "src": "/show/phrases/marcus_yds_mid_slot.mp4",
+  "duration": 3.88,
+  "speech": {
+   "start": 0.36,
+   "end": 3.14
+  },
+  "stat": "yds",
+  "tone": "mid",
+  "slot": {
+   "start": 0.625,
+   "end": 1.136
+  }
+ },
+ {
+  "id": "marcus_yds_good_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in total yards. They move the ball on everybody.",
+  "src": "/show/phrases/marcus_yds_good_slot.mp4",
+  "duration": 3.72,
+  "speech": {
+   "start": 0.4,
+   "end": 3.06
+  },
+  "stat": "yds",
+  "tone": "good",
+  "slot": {
+   "start": 0.567,
+   "end": 0.915
+  }
+ },
+ {
+  "id": "marcus_yds_bad_slot",
+  "host": "marcus",
+  "kind": "stat",
+  "text": "They're {rank} in total offense. That is hard to overcome.",
+  "src": "/show/phrases/marcus_yds_bad_slot.mp4",
+  "duration": 4.44,
+  "speech": {
+   "start": 0.38,
+   "end": 3.76
+  },
+  "stat": "yds",
+  "tone": "bad",
+  "slot": {
+   "start": 0.555,
+   "end": 1.264
+  }
+ },
+ {
+  "id": "marcus_agree_3",
+  "host": "marcus",
+  "kind": "agree",
+  "text": "Tony's right about this one.",
+  "src": "/show/phrases/marcus_agree_3.mp4",
+  "duration": 2.08,
+  "speech": {
+   "start": 0.36,
+   "end": 1.4
+  }
+ },
+ {
+  "id": "marcus_disagree_3",
+  "host": "marcus",
+  "kind": "disagree",
+  "text": "I just don't see it that way.",
+  "src": "/show/phrases/marcus_disagree_3.mp4",
+  "duration": 2.04,
+  "speech": {
+   "start": 0.34,
+   "end": 1.34
+  }
+ },
+ {
+  "id": "marcus_skeptical_3",
+  "host": "marcus",
+  "kind": "skeptical",
+  "text": "Is that sustainable, though? I'm not so sure.",
+  "src": "/show/phrases/marcus_skeptical_3.mp4",
+  "duration": 2.84,
+  "speech": {
+   "start": 0.36,
+   "end": 2.2
+  }
+ },
+ {
+  "id": "marcus_pivot_3",
+  "host": "marcus",
+  "kind": "pivot",
+  "text": "Here's what jumps off the page for me.",
+  "src": "/show/phrases/marcus_pivot_3.mp4",
+  "duration": 2.64,
+  "speech": {
+   "start": 0.38,
+   "end": 1.92
+  }
+ },
+ {
+  "id": "marcus_agree_4",
+  "host": "marcus",
+  "kind": "agree",
+  "text": "No argument from me.",
+  "src": "/show/phrases/marcus_agree_4.mp4",
+  "duration": 1.954,
+  "speech": {
+   "start": 0.3,
+   "end": 1.2
+  }
+ },
+ {
+  "id": "tony_ppg_mid_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in scoring? That's vanilla, Marcus! I want more!",
+  "src": "/show/phrases/tony_ppg_mid_slot.mp4",
+  "duration": 3.88,
+  "speech": {
+   "start": 0.42,
+   "end": 3.18
+  },
+  "stat": "ppg",
+  "tone": "mid",
+  "slot": {
+   "start": 0.3,
+   "end": 0.973
+  }
+ },
+ {
+  "id": "tony_pag_mid_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in points allowed. That's just okay. Okay doesn't win championships!",
+  "src": "/show/phrases/tony_pag_mid_slot.mp4",
+  "duration": 5.36,
+  "speech": {
+   "start": 0.44,
+   "end": 4.72
+  },
+  "stat": "pag",
+  "tone": "mid",
+  "slot": {
+   "start": 0.3,
+   "end": 0.869
+  }
+ },
+ {
+  "id": "tony_pass_mid_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in passing. Stuck in the middle. Wake up!",
+  "src": "/show/phrases/tony_pass_mid_slot.mp4",
+  "duration": 3.36,
+  "speech": {
+   "start": 0.42,
+   "end": 2.66
+  },
+  "stat": "pass",
+  "tone": "mid",
+  "slot": {
+   "start": 0.3,
+   "end": 0.973
+  }
+ },
+ {
+  "id": "tony_rush_mid_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in rushing. That's not good enough for me!",
+  "src": "/show/phrases/tony_rush_mid_slot.mp4",
+  "duration": 3.44,
+  "speech": {
+   "start": 0.44,
+   "end": 2.78
+  },
+  "stat": "rush",
+  "tone": "mid",
+  "slot": {
+   "start": 0.3,
+   "end": 0.985
+  }
+ },
+ {
+  "id": "tony_yds_mid_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in total offense. Mediocre! Just mediocre!",
+  "src": "/show/phrases/tony_yds_mid_slot.mp4",
+  "duration": 3.8,
+  "speech": {
+   "start": 0.3,
+   "end": 3.24
+  },
+  "stat": "yds",
+  "tone": "mid",
+  "slot": {
+   "start": 0.3,
+   "end": 0.799
+  }
+ },
+ {
+  "id": "tony_yds_good_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in total offense! These guys can move it!",
+  "src": "/show/phrases/tony_yds_good_slot.mp4",
+  "duration": 3.44,
+  "speech": {
+   "start": 0.46,
+   "end": 2.74
+  },
+  "stat": "yds",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.88
+  }
+ },
+ {
+  "id": "tony_yds_bad_slot",
+  "host": "tony",
+  "kind": "stat",
+  "text": "{rank} in total yards?! Nobody is moving the chains!",
+  "src": "/show/phrases/tony_yds_bad_slot.mp4",
+  "duration": 3.88,
+  "speech": {
+   "start": 0.42,
+   "end": 3.22
+  },
+  "stat": "yds",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 1.066
+  }
+ },
+ {
+  "id": "tony_agree_3",
+  "host": "tony",
+  "kind": "agree",
+  "text": "You know what? You're right.",
+  "src": "/show/phrases/tony_agree_3.mp4",
+  "duration": 2.04,
+  "speech": {
+   "start": 0.46,
+   "end": 1.36
+  }
+ },
+ {
+  "id": "tony_disagree_3",
+  "host": "tony",
+  "kind": "disagree",
+  "text": "Marcus, stop it. Stop it!",
+  "src": "/show/phrases/tony_disagree_3.mp4",
+  "duration": 2.44,
+  "speech": {
+   "start": 0.46,
+   "end": 1.72
+  }
+ },
+ {
+  "id": "tony_hype_3",
+  "host": "tony",
+  "kind": "hype",
+  "text": "Oh, I love this!",
+  "src": "/show/phrases/tony_hype_3.mp4",
+  "duration": 2.0,
+  "speech": {
+   "start": 0.48,
+   "end": 1.42
+  }
+ },
+ {
+  "id": "tony_pivot_3",
+  "host": "tony",
+  "kind": "pivot",
+  "text": "But let me tell you something.",
+  "src": "/show/phrases/tony_pivot_3.mp4",
+  "duration": 2.36,
+  "speech": {
+   "start": 0.3,
+   "end": 1.68
+  }
+ },
+ {
+  "id": "tony_skeptical_3",
+  "host": "tony",
+  "kind": "skeptical",
+  "text": "I don't trust it. Not yet.",
+  "src": "/show/phrases/tony_skeptical_3.mp4",
+  "duration": 2.28,
+  "speech": {
+   "start": 0.46,
+   "end": 1.64
+  }
+ },
+ {
+  "id": "tony_ppg_bad_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in scoring? Come on! You can't win in this league putting up nothing every Sunday. Somebody has to fix this offense, and fast!",
+  "src": "/show/phrases/tony_ppg_bad_riff.mp4",
+  "duration": 8.88,
+  "speech": {
+   "start": 0.44,
+   "end": 8.2
+  },
+  "stat": "ppg",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 1.043
+  }
+ },
+ {
+  "id": "tony_ppg_good_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in scoring! This offense is a problem, Marcus. They're putting up points on everybody, and nobody has an answer!",
+  "src": "/show/phrases/tony_ppg_good_riff.mp4",
+  "duration": 6.72,
+  "speech": {
+   "start": 0.46,
+   "end": 6.2
+  },
+  "stat": "ppg",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.915
+  }
+ },
+ {
+  "id": "tony_ppg_mid_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in scoring. That's just okay, and okay isn't good enough for me. I want this offense to go get it!",
+  "src": "/show/phrases/tony_ppg_mid_riff.mp4",
+  "duration": 6.32,
+  "speech": {
+   "start": 0.3,
+   "end": 5.7
+  },
+  "stat": "ppg",
+  "tone": "mid",
+  "slot": {
+   "start": 0.3,
+   "end": 0.88
+  }
+ },
+ {
+  "id": "tony_pag_bad_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in points allowed! That defense is getting pushed around every single week. Somebody has to step up and make a tackle!",
+  "src": "/show/phrases/tony_pag_bad_riff.mp4",
+  "duration": 7.6,
+  "speech": {
+   "start": 0.32,
+   "end": 6.9
+  },
+  "stat": "pag",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 1.136
+  }
+ },
+ {
+  "id": "tony_pag_good_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in points allowed! That defense is nasty, Marcus. Nobody wants to line up against them right now. Nobody!",
+  "src": "/show/phrases/tony_pag_good_riff.mp4",
+  "duration": 6.88,
+  "speech": {
+   "start": 0.46,
+   "end": 6.12
+  },
+  "stat": "pag",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.939
+  }
+ },
+ {
+  "id": "tony_pag_mid_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in points allowed. Middle of the pack. That's not a defense that scares anybody, and it needs to be.",
+  "src": "/show/phrases/tony_pag_mid_riff.mp4",
+  "duration": 6.04,
+  "speech": {
+   "start": 0.44,
+   "end": 5.62
+  },
+  "stat": "pag",
+  "tone": "mid",
+  "slot": {
+   "start": 0.3,
+   "end": 1.055
+  }
+ },
+ {
+  "id": "tony_pass_bad_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in passing? You're telling me they can't throw the football? Take a shot downfield! Do something!",
+  "src": "/show/phrases/tony_pass_bad_riff.mp4",
+  "duration": 6.72,
+  "speech": {
+   "start": 0.42,
+   "end": 6.0
+  },
+  "stat": "pass",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 1.171
+  }
+ },
+ {
+  "id": "tony_pass_good_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in passing yards! When this team airs it out, it is must-see TV. Let it fly!",
+  "src": "/show/phrases/tony_pass_good_riff.mp4",
+  "duration": 5.36,
+  "speech": {
+   "start": 0.32,
+   "end": 4.7
+  },
+  "stat": "pass",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.706
+  }
+ },
+ {
+  "id": "tony_pass_mid_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in passing. It's not bad, it's not great, it's just there. I want to see them open it up!",
+  "src": "/show/phrases/tony_pass_mid_riff.mp4",
+  "duration": 5.92,
+  "speech": {
+   "start": 0.42,
+   "end": 5.16
+  },
+  "stat": "pass",
+  "tone": "mid",
+  "slot": {
+   "start": 0.3,
+   "end": 0.927
+  }
+ },
+ {
+  "id": "tony_rush_bad_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in rushing! You have to be able to run the football. It's that simple. It is that simple!",
+  "src": "/show/phrases/tony_rush_bad_riff.mp4",
+  "duration": 5.68,
+  "speech": {
+   "start": 0.34,
+   "end": 5.02
+  },
+  "stat": "rush",
+  "tone": "bad",
+  "slot": {
+   "start": 0.3,
+   "end": 0.962
+  }
+ },
+ {
+  "id": "tony_rush_good_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in rushing! They line up, they run it right at you, and they dare you to stop it. I love it!",
+  "src": "/show/phrases/tony_rush_good_riff.mp4",
+  "duration": 6.0,
+  "speech": {
+   "start": 0.46,
+   "end": 5.22
+  },
+  "stat": "rush",
+  "tone": "good",
+  "slot": {
+   "start": 0.3,
+   "end": 0.892
+  }
+ },
+ {
+  "id": "tony_rush_mid_riff",
+  "host": "tony",
+  "kind": "riff",
+  "text": "{rank} in rushing. That's not physical enough for me. Run the ball, set the tone, own the line!",
+  "src": "/show/phrases/tony_rush_mid_riff.mp4",
+  "duration": 6.458,
+  "speech": {
+   "start": 0.44,
+   "end": 6.04
+  },
+  "stat": "rush",
+  "tone": "mid",
+  "slot": {
+   "start": 0.3,
+   "end": 1.089
+  }
+ },
+ {
+  "id": "marcus_ppg_bad_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in scoring. And when you look closer, it's the red zone. They move the ball, then they stall. That has to change.",
+  "src": "/show/phrases/marcus_ppg_bad_riff.mp4",
+  "duration": 7.28,
+  "speech": {
+   "start": 0.36,
+   "end": 6.52
+  },
+  "stat": "ppg",
+  "tone": "bad",
+  "slot": {
+   "start": 0.59,
+   "end": 1.229
+  }
+ },
+ {
+  "id": "marcus_ppg_good_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in scoring, and it's not a fluke. They're efficient on early downs, and they finish drives. That's a real offense.",
+  "src": "/show/phrases/marcus_ppg_good_riff.mp4",
+  "duration": 7.64,
+  "speech": {
+   "start": 0.4,
+   "end": 6.98
+  },
+  "stat": "ppg",
+  "tone": "good",
+  "slot": {
+   "start": 0.555,
+   "end": 0.904
+  }
+ },
+ {
+  "id": "marcus_ppg_mid_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in scoring. Right in the middle. The question is whether this offense has another gear, and I'm not sure it does.",
+  "src": "/show/phrases/marcus_ppg_mid_riff.mp4",
+  "duration": 8.04,
+  "speech": {
+   "start": 0.4,
+   "end": 7.32
+  },
+  "stat": "ppg",
+  "tone": "mid",
+  "slot": {
+   "start": 0.625,
+   "end": 1.206
+  }
+ },
+ {
+  "id": "marcus_pag_bad_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in points allowed. The issue is third down. They get teams in long yardage, and they still can't get off the field.",
+  "src": "/show/phrases/marcus_pag_bad_riff.mp4",
+  "duration": 7.6,
+  "speech": {
+   "start": 0.36,
+   "end": 6.86
+  },
+  "stat": "pag",
+  "tone": "bad",
+  "slot": {
+   "start": 0.579,
+   "end": 1.159
+  }
+ },
+ {
+  "id": "marcus_pag_good_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in points allowed. This defense keeps them in every game, and that's a foundation you can build a season on.",
+  "src": "/show/phrases/marcus_pag_good_riff.mp4",
+  "duration": 6.8,
+  "speech": {
+   "start": 0.42,
+   "end": 6.08
+  },
+  "stat": "pag",
+  "tone": "good",
+  "slot": {
+   "start": 0.567,
+   "end": 0.95
+  }
+ },
+ {
+  "id": "marcus_pag_mid_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in points allowed. Average. Not a liability, not a strength. The offense is going to have to carry them.",
+  "src": "/show/phrases/marcus_pag_mid_riff.mp4",
+  "duration": 7.202,
+  "speech": {
+   "start": 0.36,
+   "end": 6.42
+  },
+  "stat": "pag",
+  "tone": "mid",
+  "slot": {
+   "start": 0.567,
+   "end": 1.008
+  }
+ },
+ {
+  "id": "marcus_pass_bad_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in passing yards. The protection breaks down, the timing is off, and it all shows up in the numbers.",
+  "src": "/show/phrases/marcus_pass_bad_riff.mp4",
+  "duration": 7.72,
+  "speech": {
+   "start": 0.4,
+   "end": 7.0
+  },
+  "stat": "pass",
+  "tone": "bad",
+  "slot": {
+   "start": 0.59,
+   "end": 1.357
+  }
+ },
+ {
+  "id": "marcus_pass_good_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in passing yards. The quarterback is seeing the field, and the receivers are winning their matchups.",
+  "src": "/show/phrases/marcus_pass_good_riff.mp4",
+  "duration": 6.2,
+  "speech": {
+   "start": 0.4,
+   "end": 5.62
+  },
+  "stat": "pass",
+  "tone": "good",
+  "slot": {
+   "start": 0.602,
+   "end": 1.043
+  }
+ },
+ {
+  "id": "marcus_pass_mid_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in passing. It's functional. But functional doesn't scare defensive coordinators in this league.",
+  "src": "/show/phrases/marcus_pass_mid_riff.mp4",
+  "duration": 6.76,
+  "speech": {
+   "start": 0.4,
+   "end": 6.02
+  },
+  "stat": "pass",
+  "tone": "mid",
+  "slot": {
+   "start": 0.602,
+   "end": 1.066
+  }
+ },
+ {
+  "id": "marcus_rush_bad_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in rushing. When you can't run the ball, play action dies, and the whole offense gets predictable.",
+  "src": "/show/phrases/marcus_rush_bad_riff.mp4",
+  "duration": 6.88,
+  "speech": {
+   "start": 0.4,
+   "end": 6.18
+  },
+  "stat": "rush",
+  "tone": "bad",
+  "slot": {
+   "start": 0.555,
+   "end": 1.182
+  }
+ },
+ {
+  "id": "marcus_rush_good_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in rushing. They're winning at the line of scrimmage, and it's wearing defenses down late in games.",
+  "src": "/show/phrases/marcus_rush_good_riff.mp4",
+  "duration": 6.68,
+  "speech": {
+   "start": 0.34,
+   "end": 5.98
+  },
+  "stat": "rush",
+  "tone": "good",
+  "slot": {
+   "start": 0.625,
+   "end": 1.136
+  }
+ },
+ {
+  "id": "marcus_rush_mid_riff",
+  "host": "marcus",
+  "kind": "riff",
+  "text": "They're {rank} in rushing. Serviceable. But there's an opportunity here to lean on the run game a lot more.",
+  "src": "/show/phrases/marcus_rush_mid_riff.mp4",
+  "duration": 6.319,
+  "speech": {
+   "start": 0.4,
+   "end": 5.64
+  },
+  "stat": "rush",
+  "tone": "mid",
+  "slot": {
+   "start": 0.567,
+   "end": 1.02
+  }
+ },
+ {
+  "id": "marcus_reply_agree_1",
+  "host": "marcus",
+  "kind": "reply_agree",
+  "text": "I don't disagree, Tony. The numbers back you up on this one.",
+  "src": "/show/phrases/marcus_reply_agree_1.mp4",
+  "duration": 3.76,
+  "speech": {
+   "start": 0.32,
+   "end": 3.06
+  }
+ },
+ {
+  "id": "marcus_reply_agree_2",
+  "host": "marcus",
+  "kind": "reply_agree",
+  "text": "For once, Tony, I'm right there with you. That's a fair point.",
+  "src": "/show/phrases/marcus_reply_agree_2.mp4",
+  "duration": 3.68,
+  "speech": {
+   "start": 0.48,
+   "end": 3.0
+  }
+ },
+ {
+  "id": "marcus_reply_push_1",
+  "host": "marcus",
+  "kind": "reply_push",
+  "text": "Okay, easy. I get the emotion, but let's not overreact to one number.",
+  "src": "/show/phrases/marcus_reply_push_1.mp4",
+  "duration": 4.44,
+  "speech": {
+   "start": 0.34,
+   "end": 3.7
+  }
+ },
+ {
+  "id": "marcus_reply_push_2",
+  "host": "marcus",
+  "kind": "reply_push",
+  "text": "That's a little much, Tony. There's more context here than one stat.",
+  "src": "/show/phrases/marcus_reply_push_2.mp4",
+  "duration": 4.84,
+  "speech": {
+   "start": 0.46,
+   "end": 4.1
+  }
+ },
+ {
+  "id": "marcus_reply_push_3",
+  "host": "marcus",
+  "kind": "reply_push",
+  "text": "I hear you. But I want to see a bigger sample before I buy in completely.",
+  "src": "/show/phrases/marcus_reply_push_3.mp4",
+  "duration": 4.56,
+  "speech": {
+   "start": 0.32,
+   "end": 3.88
+  }
+ },
+ {
+  "id": "marcus_button_1",
+  "host": "marcus",
+  "kind": "button",
+  "text": "We'll see. The numbers will tell the story.",
+  "src": "/show/phrases/marcus_button_1.mp4",
+  "duration": 2.48,
+  "speech": {
+   "start": 0.38,
+   "end": 1.94
+  }
+ },
+ {
+  "id": "marcus_button_2",
+  "host": "marcus",
+  "kind": "button",
+  "text": "That's the one to watch going forward.",
+  "src": "/show/phrases/marcus_button_2.mp4",
+  "duration": 2.72,
+  "speech": {
+   "start": 0.46,
+   "end": 2.0
+  }
+ },
+ {
+  "id": "marcus_button_3",
+  "host": "marcus",
+  "kind": "button",
+  "text": "Fair enough. Let's see how it plays out.",
+  "src": "/show/phrases/marcus_button_3.mp4",
+  "duration": 2.56,
+  "speech": {
+   "start": 0.38,
+   "end": 1.88
+  }
+ },
+ {
+  "id": "marcus_answer_1",
+  "host": "marcus",
+  "kind": "answer",
+  "text": "Let's pump the brakes. It's a long season, and one storyline doesn't define it.",
+  "src": "/show/phrases/marcus_answer_1.mp4",
+  "duration": 4.8,
+  "speech": {
+   "start": 0.34,
+   "end": 4.08
+  }
+ },
+ {
+  "id": "marcus_answer_2",
+  "host": "marcus",
+  "kind": "answer",
+  "text": "It makes sense on paper. The execution is what matters now.",
+  "src": "/show/phrases/marcus_answer_2.mp4",
+  "duration": 4.0,
+  "speech": {
+   "start": 0.36,
+   "end": 3.24
+  }
+ },
+ {
+  "id": "marcus_answer_3",
+  "host": "marcus",
+  "kind": "answer",
+  "text": "I understand the excitement, but the details matter here, and there are real questions.",
+  "src": "/show/phrases/marcus_answer_3.mp4",
+  "duration": 5.2,
+  "speech": {
+   "start": 0.32,
+   "end": 4.5
+  }
+ },
+ {
+  "id": "marcus_answer_4",
+  "host": "marcus",
+  "kind": "answer",
+  "text": "I'd be patient. The smart teams don't make panic decisions.",
+  "src": "/show/phrases/marcus_answer_4.mp4",
+  "duration": 3.672,
+  "speech": {
+   "start": 0.3,
+   "end": 3.06
+  }
+ },
+ {
+  "id": "tony_reply_agree_1",
+  "host": "tony",
+  "kind": "reply_agree",
+  "text": "See, that's what I'm talking about! Even Marcus sees it!",
+  "src": "/show/phrases/tony_reply_agree_1.mp4",
+  "duration": 3.4,
+  "speech": {
+   "start": 0.42,
+   "end": 2.68
+  }
+ },
+ {
+  "id": "tony_reply_agree_2",
+  "host": "tony",
+  "kind": "reply_agree",
+  "text": "Thank you! Finally, Marcus, we agree on something!",
+  "src": "/show/phrases/tony_reply_agree_2.mp4",
+  "duration": 3.68,
+  "speech": {
+   "start": 0.46,
+   "end": 2.98
+  }
+ },
+ {
+  "id": "tony_reply_push_1",
+  "host": "tony",
+  "kind": "reply_push",
+  "text": "Marcus, you're overthinking it! Just watch the games, man!",
+  "src": "/show/phrases/tony_reply_push_1.mp4",
+  "duration": 4.12,
+  "speech": {
+   "start": 0.3,
+   "end": 3.44
+  }
+ },
+ {
+  "id": "tony_reply_push_2",
+  "host": "tony",
+  "kind": "reply_push",
+  "text": "Come on! Numbers don't tell you everything. I trust what I see!",
+  "src": "/show/phrases/tony_reply_push_2.mp4",
+  "duration": 3.96,
+  "speech": {
+   "start": 0.44,
+   "end": 3.46
+  }
+ },
+ {
+  "id": "tony_reply_push_3",
+  "host": "tony",
+  "kind": "reply_push",
+  "text": "Nah. I've seen this movie before, and I know how it ends.",
+  "src": "/show/phrases/tony_reply_push_3.mp4",
+  "duration": 3.6,
+  "speech": {
+   "start": 0.48,
+   "end": 2.94
+  }
+ },
+ {
+  "id": "tony_button_1",
+  "host": "tony",
+  "kind": "button",
+  "text": "Mark my words. Mark my words!",
+  "src": "/show/phrases/tony_button_1.mp4",
+  "duration": 2.48,
+  "speech": {
+   "start": 0.46,
+   "end": 1.76
+  }
+ },
+ {
+  "id": "tony_button_2",
+  "host": "tony",
+  "kind": "button",
+  "text": "That's all I'm saying!",
+  "src": "/show/phrases/tony_button_2.mp4",
+  "duration": 2.16,
+  "speech": {
+   "start": 0.48,
+   "end": 1.42
+  }
+ },
+ {
+  "id": "tony_button_3",
+  "host": "tony",
+  "kind": "button",
+  "text": "I said what I said.",
+  "src": "/show/phrases/tony_button_3.mp4",
+  "duration": 2.0,
+  "speech": {
+   "start": 0.44,
+   "end": 1.3
+  }
+ },
+ {
+  "id": "tony_open_1",
+  "host": "tony",
+  "kind": "open",
+  "text": "I'll say it. This is a big moment for this franchise, and they cannot get it wrong!",
+  "src": "/show/phrases/tony_open_1.mp4",
+  "duration": 5.08,
+  "speech": {
+   "start": 0.36,
+   "end": 4.5
+  }
+ },
+ {
+  "id": "tony_open_2",
+  "host": "tony",
+  "kind": "open",
+  "text": "Everybody's talking about this, and they should be. This one matters!",
+  "src": "/show/phrases/tony_open_2.mp4",
+  "duration": 3.8,
+  "speech": {
+   "start": 0.34,
+   "end": 3.14
+  }
+ },
+ {
+  "id": "tony_open_3",
+  "host": "tony",
+  "kind": "open",
+  "text": "I'm not buying it. Not yet. Show me on Sunday, then we'll talk!",
+  "src": "/show/phrases/tony_open_3.mp4",
+  "duration": 4.0,
+  "speech": {
+   "start": 0.46,
+   "end": 3.42
+  }
+ },
+ {
+  "id": "tony_open_4",
+  "host": "tony",
+  "kind": "open",
+  "text": "Let me tell you something. This is the storyline of the season right now!",
+  "src": "/show/phrases/tony_open_4.mp4",
+  "duration": 3.811,
+  "speech": {
+   "start": 0.48,
+   "end": 3.22
+  }
+ },
+ {
+  "id": "tony_t_draft_now",
+  "host": "tony",
+  "kind": "topical",
+  "text": "They need to get somebody in this draft who can make an impact right now. Not in three years. Now.",
+  "src": "/show/phrases/tony_t_draft_now.mp4",
+  "duration": 6.92,
+  "speech": {
+   "start": 0.34,
+   "end": 6.46
+  },
+  "tags": [
+   "draft"
+  ]
+ },
+ {
+  "id": "tony_t_draft_project",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I don't want a project with that pick. Give me a guy who can play on Sunday.",
+  "src": "/show/phrases/tony_t_draft_project.mp4",
+  "duration": 5.36,
+  "speech": {
+   "start": 0.34,
+   "end": 4.9
+  },
+  "tags": [
+   "draft"
+  ]
+ },
+ {
+  "id": "tony_t_draft_miss",
+  "host": "tony",
+  "kind": "topical",
+  "text": "If they miss on this pick, man, that sets them back for years.",
+  "src": "/show/phrases/tony_t_draft_miss.mp4",
+  "duration": 4.68,
+  "speech": {
+   "start": 0.34,
+   "end": 4.22
+  },
+  "tags": [
+   "draft"
+  ]
+ },
+ {
+  "id": "tony_t_trade_call",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Pick up the phone! If there's a deal out there, you go make it.",
+  "src": "/show/phrases/tony_t_trade_call.mp4",
+  "duration": 4.72,
+  "speech": {
+   "start": 0.36,
+   "end": 4.28
+  },
+  "tags": [
+   "trade"
+  ]
+ },
+ {
+  "id": "tony_t_trade_tomorrow",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I'd make that trade tomorrow. I don't even have to think about it.",
+  "src": "/show/phrases/tony_t_trade_tomorrow.mp4",
+  "duration": 3.24,
+  "speech": {
+   "start": 0.34,
+   "end": 2.7
+  },
+  "tags": [
+   "trade"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_t_trade_too_much",
+  "host": "tony",
+  "kind": "topical",
+  "text": "You don't give up that much for one player. I'm sorry, you just don't.",
+  "src": "/show/phrases/tony_t_trade_too_much.mp4",
+  "duration": 5.28,
+  "speech": {
+   "start": 0.34,
+   "end": 4.82
+  },
+  "tags": [
+   "trade"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_t_fa_pay",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Somebody's going to pay that man, and it better be them.",
+  "src": "/show/phrases/tony_t_fa_pay.mp4",
+  "duration": 3.32,
+  "speech": {
+   "start": 0.3,
+   "end": 2.86
+  },
+  "tags": [
+   "free_agency"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_t_fa_spend",
+  "host": "tony",
+  "kind": "topical",
+  "text": "This is what free agency is for. Go spend the money.",
+  "src": "/show/phrases/tony_t_fa_spend.mp4",
+  "duration": 3.68,
+  "speech": {
+   "start": 0.36,
+   "end": 3.22
+  },
+  "tags": [
+   "free_agency"
+  ]
+ },
+ {
+  "id": "tony_t_coach_look",
+  "host": "tony",
+  "kind": "topical",
+  "text": "At some point you've got to look at the coaching. The players can only do so much.",
+  "src": "/show/phrases/tony_t_coach_look.mp4",
+  "duration": 4.68,
+  "speech": {
+   "start": 0.36,
+   "end": 4.18
+  },
+  "tone": "bad",
+  "tags": [
+   "coaching"
+  ]
+ },
+ {
+  "id": "tony_t_coach_playcall",
+  "host": "tony",
+  "kind": "topical",
+  "text": "That's on the play-calling. I'm watching the same games you are.",
+  "src": "/show/phrases/tony_t_coach_playcall.mp4",
+  "duration": 3.92,
+  "speech": {
+   "start": 0.36,
+   "end": 3.5
+  },
+  "tags": [
+   "coaching"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_t_coach_believe",
+  "host": "tony",
+  "kind": "topical",
+  "text": "That locker room still believes in the coach. You can see it in how they play.",
+  "src": "/show/phrases/tony_t_coach_believe.mp4",
+  "duration": 5.08,
+  "speech": {
+   "start": 0.4,
+   "end": 4.6
+  },
+  "tags": [
+   "coaching"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_t_injury_hurts",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Losing him hurts. There's no other way to say it.",
+  "src": "/show/phrases/tony_t_injury_hurts.mp4",
+  "duration": 3.26,
+  "speech": {
+   "start": 0.34,
+   "end": 2.86
+  },
+  "tags": [
+   "injury"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_t_injury_next",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Next man up. That's the league. Nobody's feeling sorry for you.",
+  "src": "/show/phrases/tony_t_injury_next.mp4",
+  "duration": 5.24,
+  "speech": {
+   "start": 0.36,
+   "end": 4.42
+  },
+  "tags": [
+   "injury"
+  ]
+ },
+ {
+  "id": "tony_t_playoffs_january",
+  "host": "tony",
+  "kind": "topical",
+  "text": "This team is playing in January. Write it down.",
+  "src": "/show/phrases/tony_t_playoffs_january.mp4",
+  "duration": 3.68,
+  "speech": {
+   "start": 0.34,
+   "end": 3.26
+  },
+  "tone": "good",
+  "tags": [
+   "playoffs"
+  ]
+ },
+ {
+  "id": "tony_t_playoffs_trust",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I don't care what the record says, I don't trust them in a playoff game yet.",
+  "src": "/show/phrases/tony_t_playoffs_trust.mp4",
+  "duration": 5.16,
+  "speech": {
+   "start": 0.38,
+   "end": 4.64
+  },
+  "tone": "good",
+  "tags": [
+   "playoffs"
+  ]
+ },
+ {
+  "id": "tony_t_playoffs_every_game",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Every game from here on out is a playoff game for them.",
+  "src": "/show/phrases/tony_t_playoffs_every_game.mp4",
+  "duration": 4.08,
+  "speech": {
+   "start": 0.32,
+   "end": 3.66
+  },
+  "tone": "mid",
+  "tags": [
+   "playoffs"
+  ]
+ },
+ {
+  "id": "tony_t_contract_pay",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Pay the man! He's earned every dollar of it.",
+  "src": "/show/phrases/tony_t_contract_pay.mp4",
+  "duration": 4.76,
+  "speech": {
+   "start": 0.34,
+   "end": 4.3
+  },
+  "tags": [
+   "contract"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_t_contract_bad",
+  "host": "tony",
+  "kind": "topical",
+  "text": "That contract's going to look bad in two years, and everybody knows it.",
+  "src": "/show/phrases/tony_t_contract_bad.mp4",
+  "duration": 4.32,
+  "speech": {
+   "start": 0.4,
+   "end": 3.9
+  },
+  "tags": [
+   "contract"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_t_rebuild_blow_up",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Blow it up. Start over. I'm serious.",
+  "src": "/show/phrases/tony_t_rebuild_blow_up.mp4",
+  "duration": 3.56,
+  "speech": {
+   "start": 0.4,
+   "end": 3.08
+  },
+  "tone": "bad",
+  "tags": [
+   "rebuild"
+  ]
+ },
+ {
+  "id": "tony_t_rebuild_patient",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Be patient with these young guys. This thing is a couple of years away.",
+  "src": "/show/phrases/tony_t_rebuild_patient.mp4",
+  "duration": 4.32,
+  "speech": {
+   "start": 0.4,
+   "end": 3.88
+  },
+  "tone": "bad",
+  "tags": [
+   "rebuild",
+   "young"
+  ]
+ },
+ {
+  "id": "tony_t_qb_starts",
+  "host": "tony",
+  "kind": "topical",
+  "text": "It all starts with the quarterback. Every single time.",
+  "src": "/show/phrases/tony_t_qb_starts.mp4",
+  "duration": 3.96,
+  "speech": {
+   "start": 0.32,
+   "end": 3.5
+  },
+  "tags": [
+   "qb"
+  ]
+ },
+ {
+  "id": "tony_t_qb_best_player",
+  "host": "tony",
+  "kind": "topical",
+  "text": "If your quarterback isn't your best player, you've got a problem.",
+  "src": "/show/phrases/tony_t_qb_best_player.mp4",
+  "duration": 4.16,
+  "speech": {
+   "start": 0.32,
+   "end": 3.74
+  },
+  "tags": [
+   "qb"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_t_defense_flying",
+  "host": "tony",
+  "kind": "topical",
+  "text": "That defense is flying around right now. It's fun to watch.",
+  "src": "/show/phrases/tony_t_defense_flying.mp4",
+  "duration": 3.56,
+  "speech": {
+   "start": 0.4,
+   "end": 3.1
+  },
+  "stat": "pag",
+  "tone": "good",
+  "tags": [
+   "defense"
+  ]
+ },
+ {
+  "id": "tony_t_defense_big_plays",
+  "host": "tony",
+  "kind": "topical",
+  "text": "You can't win giving up big plays like that. You just can't.",
+  "src": "/show/phrases/tony_t_defense_big_plays.mp4",
+  "duration": 4.14,
+  "speech": {
+   "start": 0.36,
+   "end": 3.74
+  },
+  "stat": "pag",
+  "tone": "bad",
+  "tags": [
+   "defense"
+  ]
+ },
+ {
+  "id": "tony_t_offense_weapons",
+  "host": "tony",
+  "kind": "topical",
+  "text": "They've got too many weapons to be scoring this few points.",
+  "src": "/show/phrases/tony_t_offense_weapons.mp4",
+  "duration": 4.28,
+  "speech": {
+   "start": 0.36,
+   "end": 3.8
+  },
+  "stat": "ppg",
+  "tone": "bad",
+  "tags": [
+   "offense"
+  ]
+ },
+ {
+  "id": "tony_t_oline_up_front",
+  "host": "tony",
+  "kind": "topical",
+  "text": "It starts up front. If you can't block, nothing else matters.",
+  "src": "/show/phrases/tony_t_oline_up_front.mp4",
+  "duration": 4.8,
+  "speech": {
+   "start": 0.34,
+   "end": 4.36
+  },
+  "tags": [
+   "oline"
+  ]
+ },
+ {
+  "id": "tony_t_young_real_deal",
+  "host": "tony",
+  "kind": "topical",
+  "text": "That kid is the real deal. Keep an eye on him.",
+  "src": "/show/phrases/tony_t_young_real_deal.mp4",
+  "duration": 3.32,
+  "speech": {
+   "start": 0.4,
+   "end": 2.86
+  },
+  "tags": [
+   "young"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_t_vet_still_got_it",
+  "host": "tony",
+  "kind": "topical",
+  "text": "He's still got it. People wrote him off way too early.",
+  "src": "/show/phrases/tony_t_vet_still_got_it.mp4",
+  "duration": 4.4,
+  "speech": {
+   "start": 0.36,
+   "end": 3.82
+  },
+  "tags": [
+   "veteran"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_t_streak_rolling",
+  "host": "tony",
+  "kind": "topical",
+  "text": "They're rolling right now. Nobody wants to see them.",
+  "src": "/show/phrases/tony_t_streak_rolling.mp4",
+  "duration": 3.48,
+  "speech": {
+   "start": 0.36,
+   "end": 3.02
+  },
+  "tone": "good",
+  "tags": [
+   "streak_win"
+  ]
+ },
+ {
+  "id": "tony_t_streak_change",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Something's got to change, because this isn't working.",
+  "src": "/show/phrases/tony_t_streak_change.mp4",
+  "duration": 2.96,
+  "speech": {
+   "start": 0.32,
+   "end": 2.54
+  },
+  "tone": "bad",
+  "tags": [
+   "streak_loss"
+  ]
+ },
+ {
+  "id": "tony_t_react_come_on",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Come on. You know that's not true.",
+  "src": "/show/phrases/tony_t_react_come_on.mp4",
+  "duration": 2.6,
+  "speech": {
+   "start": 0.32,
+   "end": 2.14
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_t_react_give_you",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Okay, okay. I'll give you that one.",
+  "src": "/show/phrases/tony_t_react_give_you.mp4",
+  "duration": 2.48,
+  "speech": {
+   "start": 0.38,
+   "end": 2.08
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_t_react_been_saying",
+  "host": "tony",
+  "kind": "topical",
+  "text": "See, that's what I've been saying all year!",
+  "src": "/show/phrases/tony_t_react_been_saying.mp4",
+  "duration": 2.68,
+  "speech": {
+   "start": 0.34,
+   "end": 2.22
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_t_react_say_again",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Wait, hold on. Say that again.",
+  "src": "/show/phrases/tony_t_react_say_again.mp4",
+  "duration": 2.16,
+  "speech": {
+   "start": 0.42,
+   "end": 1.54
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_t_react_not_buying",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I hear you, but I'm not buying it.",
+  "src": "/show/phrases/tony_t_react_not_buying.mp4",
+  "duration": 2.76,
+  "speech": {
+   "start": 0.36,
+   "end": 2.3
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_t_react_look_bad",
+  "host": "tony",
+  "kind": "topical",
+  "text": "You're going to make me look bad on this one, I can feel it.",
+  "src": "/show/phrases/tony_t_react_look_bad.mp4",
+  "duration": 2.86,
+  "speech": {
+   "start": 0.38,
+   "end": 2.46
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_t_draft_bpa",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "With that pick, I take the best player on the board. You don't reach for need.",
+  "src": "/show/phrases/marcus_t_draft_bpa.mp4",
+  "duration": 4.68,
+  "speech": {
+   "start": 0.4,
+   "end": 4.22
+  },
+  "tags": [
+   "draft"
+  ]
+ },
+ {
+  "id": "marcus_t_draft_not_one_year",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "The draft is where they fix this. But it's not a one-year fix.",
+  "src": "/show/phrases/marcus_t_draft_not_one_year.mp4",
+  "duration": 4.32,
+  "speech": {
+   "start": 0.38,
+   "end": 3.86
+  },
+  "tags": [
+   "draft",
+   "rebuild"
+  ]
+ },
+ {
+  "id": "marcus_t_draft_lineman",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "If I'm running that draft room, I'm taking an offensive lineman early.",
+  "src": "/show/phrases/marcus_t_draft_lineman.mp4",
+  "duration": 4.12,
+  "speech": {
+   "start": 0.4,
+   "end": 3.66
+  },
+  "tags": [
+   "draft",
+   "oline"
+  ]
+ },
+ {
+  "id": "marcus_t_trade_future",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I understand the urge to make a move, but you don't sell the future for one season.",
+  "src": "/show/phrases/marcus_t_trade_future.mp4",
+  "duration": 5.76,
+  "speech": {
+   "start": 0.4,
+   "end": 5.28
+  },
+  "tags": [
+   "trade"
+  ]
+ },
+ {
+  "id": "marcus_t_trade_price",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "If the price is right, you make that call. I just don't think the price is right.",
+  "src": "/show/phrases/marcus_t_trade_price.mp4",
+  "duration": 4.84,
+  "speech": {
+   "start": 0.36,
+   "end": 4.26
+  },
+  "tags": [
+   "trade"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_t_fa_bandaid",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Free agency is a band-aid. You build through the draft.",
+  "src": "/show/phrases/marcus_t_fa_bandaid.mp4",
+  "duration": 4.24,
+  "speech": {
+   "start": 0.3,
+   "end": 3.6
+  },
+  "tags": [
+   "free_agency"
+  ]
+ },
+ {
+  "id": "marcus_t_fa_cap_space",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "They have the cap space. The question is whether anybody good wants to come.",
+  "src": "/show/phrases/marcus_t_fa_cap_space.mp4",
+  "duration": 5.16,
+  "speech": {
+   "start": 0.46,
+   "end": 4.66
+  },
+  "tags": [
+   "free_agency"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_t_coach_scheme",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'd look at the scheme before I'd blame the players.",
+  "src": "/show/phrases/marcus_t_coach_scheme.mp4",
+  "duration": 3.44,
+  "speech": {
+   "start": 0.38,
+   "end": 2.86
+  },
+  "tags": [
+   "coaching"
+  ]
+ },
+ {
+  "id": "marcus_t_coach_credit",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "The coaching staff deserves credit. They've adjusted week to week.",
+  "src": "/show/phrases/marcus_t_coach_credit.mp4",
+  "duration": 3.96,
+  "speech": {
+   "start": 0.4,
+   "end": 3.28
+  },
+  "tone": "good",
+  "tags": [
+   "coaching"
+  ]
+ },
+ {
+  "id": "marcus_t_coach_hot_seat",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Fair or not, that coach is on the hot seat.",
+  "src": "/show/phrases/marcus_t_coach_hot_seat.mp4",
+  "duration": 2.88,
+  "speech": {
+   "start": 0.38,
+   "end": 2.3
+  },
+  "tone": "bad",
+  "tags": [
+   "coaching"
+  ]
+ },
+ {
+  "id": "marcus_t_injury_depth",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Depth gets tested over a long season, and theirs is being tested right now.",
+  "src": "/show/phrases/marcus_t_injury_depth.mp4",
+  "duration": 5.32,
+  "speech": {
+   "start": 0.34,
+   "end": 4.7
+  },
+  "tags": [
+   "injury"
+  ]
+ },
+ {
+  "id": "marcus_t_injury_build",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "You can't plan around injuries, but you can build a roster that survives them.",
+  "src": "/show/phrases/marcus_t_injury_build.mp4",
+  "duration": 4.62,
+  "speech": {
+   "start": 0.42,
+   "end": 4.18
+  },
+  "tags": [
+   "injury"
+  ]
+ },
+ {
+  "id": "marcus_t_playoffs_today",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "If the season ended today, they'd be in. But it doesn't end today.",
+  "src": "/show/phrases/marcus_t_playoffs_today.mp4",
+  "duration": 5.4,
+  "speech": {
+   "start": 0.36,
+   "end": 4.5
+  },
+  "tone": "good",
+  "tags": [
+   "playoffs"
+  ]
+ },
+ {
+  "id": "marcus_t_playoffs_schedule",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "The schedule gets harder from here. That's what concerns me.",
+  "src": "/show/phrases/marcus_t_playoffs_schedule.mp4",
+  "duration": 4.0,
+  "speech": {
+   "start": 0.4,
+   "end": 3.54
+  },
+  "tags": [
+   "playoffs"
+  ]
+ },
+ {
+  "id": "marcus_t_playoffs_three",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "They're good enough to win a playoff game. I'm not sure they're good enough to win three.",
+  "src": "/show/phrases/marcus_t_playoffs_three.mp4",
+  "duration": 5.0,
+  "speech": {
+   "start": 0.44,
+   "end": 4.26
+  },
+  "tone": "good",
+  "tags": [
+   "playoffs"
+  ]
+ },
+ {
+  "id": "marcus_t_contract_position",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's a lot of money for a player at that position.",
+  "src": "/show/phrases/marcus_t_contract_position.mp4",
+  "duration": 3.28,
+  "speech": {
+   "start": 0.4,
+   "end": 2.86
+  },
+  "tags": [
+   "contract"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_t_contract_pay_qb",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "You pay your quarterback. You figure out the rest later.",
+  "src": "/show/phrases/marcus_t_contract_pay_qb.mp4",
+  "duration": 3.08,
+  "speech": {
+   "start": 0.42,
+   "end": 2.6
+  },
+  "tags": [
+   "contract",
+   "qb"
+  ]
+ },
+ {
+  "id": "marcus_t_rebuild_call_it",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "This is a rebuild, whether they want to call it that or not.",
+  "src": "/show/phrases/marcus_t_rebuild_call_it.mp4",
+  "duration": 3.6,
+  "speech": {
+   "start": 0.36,
+   "end": 3.18
+  },
+  "tone": "bad",
+  "tags": [
+   "rebuild"
+  ]
+ },
+ {
+  "id": "marcus_t_rebuild_plan",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "There's a plan here. You can see it if you look past the record.",
+  "src": "/show/phrases/marcus_t_rebuild_plan.mp4",
+  "duration": 4.52,
+  "speech": {
+   "start": 0.42,
+   "end": 4.06
+  },
+  "tone": "bad",
+  "tags": [
+   "rebuild"
+  ]
+ },
+ {
+  "id": "marcus_t_qb_difference",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Quarterback play has been the difference, for better or worse.",
+  "src": "/show/phrases/marcus_t_qb_difference.mp4",
+  "duration": 4.0,
+  "speech": {
+   "start": 0.4,
+   "end": 3.58
+  },
+  "tags": [
+   "qb"
+  ]
+ },
+ {
+  "id": "marcus_t_qb_ball_security",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'd like to see him take care of the football first.",
+  "src": "/show/phrases/marcus_t_qb_ball_security.mp4",
+  "duration": 3.08,
+  "speech": {
+   "start": 0.36,
+   "end": 2.58
+  },
+  "tags": [
+   "qb"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_t_defense_sustainable",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "The defense is keeping them in games. That's not sustainable forever.",
+  "src": "/show/phrases/marcus_t_defense_sustainable.mp4",
+  "duration": 4.32,
+  "speech": {
+   "start": 0.38,
+   "end": 3.9
+  },
+  "stat": "pag",
+  "tone": "good",
+  "tags": [
+   "defense"
+  ]
+ },
+ {
+  "id": "marcus_t_defense_third_down",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Third down is where this defense has to get better.",
+  "src": "/show/phrases/marcus_t_defense_third_down.mp4",
+  "duration": 3.4,
+  "speech": {
+   "start": 0.46,
+   "end": 2.94
+  },
+  "stat": "pag",
+  "tone": "bad",
+  "tags": [
+   "defense"
+  ]
+ },
+ {
+  "id": "marcus_t_offense_red_zone",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "The offense moves the ball fine. It stalls in the red zone.",
+  "src": "/show/phrases/marcus_t_offense_red_zone.mp4",
+  "duration": 3.82,
+  "speech": {
+   "start": 0.36,
+   "end": 3.38
+  },
+  "stat": "ppg",
+  "tone": "mid",
+  "tags": [
+   "offense"
+  ]
+ },
+ {
+  "id": "marcus_t_offense_balance",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "They need more balance. You can't be one-dimensional in this league.",
+  "src": "/show/phrases/marcus_t_offense_balance.mp4",
+  "duration": 3.96,
+  "speech": {
+   "start": 0.42,
+   "end": 3.5
+  },
+  "tags": [
+   "offense"
+  ]
+ },
+ {
+  "id": "marcus_t_oline_quiet_story",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "The offensive line is the quiet story here. Nobody talks about them, but they're a big reason why.",
+  "src": "/show/phrases/marcus_t_oline_quiet_story.mp4",
+  "duration": 6.96,
+  "speech": {
+   "start": 0.38,
+   "end": 6.36
+  },
+  "tags": [
+   "oline"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_t_young_bumps",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "He's young. There are going to be bumps. The talent is obvious.",
+  "src": "/show/phrases/marcus_t_young_bumps.mp4",
+  "duration": 5.16,
+  "speech": {
+   "start": 0.42,
+   "end": 4.52
+  },
+  "tags": [
+   "young"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_t_vet_experience",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Experience matters this time of year, and they've got plenty of it.",
+  "src": "/show/phrases/marcus_t_vet_experience.mp4",
+  "duration": 4.24,
+  "speech": {
+   "start": 0.34,
+   "end": 3.58
+  },
+  "tags": [
+   "veteran"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_t_streak_confidence",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Winning breeds confidence, and they're playing with a lot of it right now.",
+  "src": "/show/phrases/marcus_t_streak_confidence.mp4",
+  "duration": 4.04,
+  "speech": {
+   "start": 0.38,
+   "end": 3.56
+  },
+  "tone": "good",
+  "tags": [
+   "streak_win"
+  ]
+ },
+ {
+  "id": "marcus_t_streak_feeding",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Losing streaks have a way of feeding on themselves.",
+  "src": "/show/phrases/marcus_t_streak_feeding.mp4",
+  "duration": 3.92,
+  "speech": {
+   "start": 0.42,
+   "end": 3.42
+  },
+  "tone": "bad",
+  "tags": [
+   "streak_loss"
+  ]
+ },
+ {
+  "id": "marcus_t_react_fair",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's fair. I'll give you that.",
+  "src": "/show/phrases/marcus_t_react_fair.mp4",
+  "duration": 2.2,
+  "speech": {
+   "start": 0.34,
+   "end": 1.56
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_t_react_early",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'm not saying you're wrong. I'm saying it's early.",
+  "src": "/show/phrases/marcus_t_react_early.mp4",
+  "duration": 3.12,
+  "speech": {
+   "start": 0.38,
+   "end": 2.7
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_t_react_carried_away",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's not get carried away here.",
+  "src": "/show/phrases/marcus_t_react_carried_away.mp4",
+  "duration": 2.36,
+  "speech": {
+   "start": 0.36,
+   "end": 1.8
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_t_react_last_week",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "You said the exact same thing last week.",
+  "src": "/show/phrases/marcus_t_react_last_week.mp4",
+  "duration": 2.8,
+  "speech": {
+   "start": 0.34,
+   "end": 2.38
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_t_react_numbers",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Hold on. That's not what the numbers say.",
+  "src": "/show/phrases/marcus_t_react_numbers.mp4",
+  "duration": 2.92,
+  "speech": {
+   "start": 0.44,
+   "end": 2.46
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_t_react_dont_know",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I don't know, Tony. I just don't know.",
+  "src": "/show/phrases/marcus_t_react_dont_know.mp4",
+  "duration": 2.86,
+  "speech": {
+   "start": 0.36,
+   "end": 2.46
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_t_def_sitting",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Can we talk about the defense, though? Because I've been sitting on this one.",
+  "src": "/show/phrases/tony_c_t_def_sitting.mp4",
+  "duration": 3.8,
+  "speech": {
+   "start": 0.32,
+   "end": 3.3
+  },
+  "tags": [
+   "defense"
+  ]
+ },
+ {
+  "id": "tony_c_t_off_thoughts",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Okay, let's talk about the offense, because I have thoughts.",
+  "src": "/show/phrases/tony_c_t_off_thoughts.mp4",
+  "duration": 3.76,
+  "speech": {
+   "start": 0.32,
+   "end": 3.34
+  },
+  "tags": [
+   "offense"
+  ]
+ },
+ {
+  "id": "tony_c_t_qb_waiting",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Let's get to the quarterback. You know I've been waiting for this.",
+  "src": "/show/phrases/tony_c_t_qb_waiting.mp4",
+  "duration": 3.48,
+  "speech": {
+   "start": 0.34,
+   "end": 3.02
+  },
+  "tags": [
+   "qb"
+  ]
+ },
+ {
+  "id": "tony_c_t_coach_second",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I want to talk about the coaching staff for a second.",
+  "src": "/show/phrases/tony_c_t_coach_second.mp4",
+  "duration": 3.12,
+  "speech": {
+   "start": 0.4,
+   "end": 2.66
+  },
+  "tags": [
+   "coaching"
+  ]
+ },
+ {
+  "id": "tony_c_t_draft_fun",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Let's talk draft, because this is where it gets fun.",
+  "src": "/show/phrases/tony_c_t_draft_fun.mp4",
+  "duration": 3.56,
+  "speech": {
+   "start": 0.36,
+   "end": 3.12
+  },
+  "tags": [
+   "draft"
+  ]
+ },
+ {
+  "id": "tony_c_t_fa_decisions",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Free agency. Let's go there, because they've got some decisions to make.",
+  "src": "/show/phrases/tony_c_t_fa_decisions.mp4",
+  "duration": 4.64,
+  "speech": {
+   "start": 0.38,
+   "end": 4.04
+  },
+  "tags": [
+   "free_agency"
+  ]
+ },
+ {
+  "id": "tony_c_t_run_off",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Can we talk about the run game? Because something's off.",
+  "src": "/show/phrases/tony_c_t_run_off.mp4",
+  "duration": 3.48,
+  "speech": {
+   "start": 0.36,
+   "end": 3.02
+  },
+  "tags": [
+   "offense"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_c_t_oline_have_to",
+  "host": "tony",
+  "kind": "topical",
+  "text": "We have to talk about the offensive line. We have to.",
+  "src": "/show/phrases/tony_c_t_oline_have_to.mp4",
+  "duration": 3.84,
+  "speech": {
+   "start": 0.36,
+   "end": 3.24
+  },
+  "tags": [
+   "oline"
+  ]
+ },
+ {
+  "id": "tony_c_t_next_big",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Let's look ahead, because this next one is a big one.",
+  "src": "/show/phrases/tony_c_t_next_big.mp4",
+  "duration": 4.04,
+  "speech": {
+   "start": 0.34,
+   "end": 3.5
+  },
+  "tags": [
+   "schedule"
+  ]
+ },
+ {
+  "id": "tony_c_t_playoffs_only",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Let's talk playoffs, because that's the only thing that matters now.",
+  "src": "/show/phrases/tony_c_t_playoffs_only.mp4",
+  "duration": 3.92,
+  "speech": {
+   "start": 0.38,
+   "end": 3.5
+  },
+  "tags": [
+   "playoffs"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_c_t_injury_changes",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Let's talk about the injury, because it changes everything.",
+  "src": "/show/phrases/tony_c_t_injury_changes.mp4",
+  "duration": 3.56,
+  "speech": {
+   "start": 0.38,
+   "end": 3.08
+  },
+  "tags": [
+   "injury"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_c_t_everybody_asking",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Okay. Let's get to the thing everybody's been asking me about.",
+  "src": "/show/phrases/tony_c_t_everybody_asking.mp4",
+  "duration": 3.98,
+  "speech": {
+   "start": 0.34,
+   "end": 3.56
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_back_up",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Wait, wait, wait. Back up a second.",
+  "src": "/show/phrases/tony_c_r_back_up.mp4",
+  "duration": 2.28,
+  "speech": {
+   "start": 0.36,
+   "end": 1.76
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_cant_move_on",
+  "host": "tony",
+  "kind": "topical",
+  "text": "No, hold on. You can't just say that and move on.",
+  "src": "/show/phrases/tony_c_r_cant_move_on.mp4",
+  "duration": 3.04,
+  "speech": {
+   "start": 0.36,
+   "end": 2.62
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_exactly_talking",
+  "host": "tony",
+  "kind": "topical",
+  "text": "That's exactly what I'm talking about!",
+  "src": "/show/phrases/tony_c_r_exactly_talking.mp4",
+  "duration": 2.36,
+  "speech": {
+   "start": 0.38,
+   "end": 1.9
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_love_that",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I love that. I really do.",
+  "src": "/show/phrases/tony_c_r_love_that.mp4",
+  "duration": 2.56,
+  "speech": {
+   "start": 0.34,
+   "end": 2.14
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_respect_disagree",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I respect it. I just don't agree with it.",
+  "src": "/show/phrases/tony_c_r_respect_disagree.mp4",
+  "duration": 3.24,
+  "speech": {
+   "start": 0.36,
+   "end": 2.78
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_watched_games",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I don't need the numbers for this one. I watched the games.",
+  "src": "/show/phrases/tony_c_r_watched_games.mp4",
+  "duration": 3.92,
+  "speech": {
+   "start": 0.36,
+   "end": 3.48
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_listen",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Listen to me. Listen to me.",
+  "src": "/show/phrases/tony_c_r_listen.mp4",
+  "duration": 2.36,
+  "speech": {
+   "start": 0.38,
+   "end": 1.88
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_serious",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I'm being serious right now.",
+  "src": "/show/phrases/tony_c_r_serious.mp4",
+  "duration": 2.0,
+  "speech": {
+   "start": 0.4,
+   "end": 1.5
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_know_better",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Come on, man. You know better than that.",
+  "src": "/show/phrases/tony_c_r_know_better.mp4",
+  "duration": 2.84,
+  "speech": {
+   "start": 0.4,
+   "end": 2.38
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_believe_that",
+  "host": "tony",
+  "kind": "topical",
+  "text": "You really believe that? Okay.",
+  "src": "/show/phrases/tony_c_r_believe_that.mp4",
+  "duration": 2.24,
+  "speech": {
+   "start": 0.44,
+   "end": 1.8
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_fair_fair",
+  "host": "tony",
+  "kind": "topical",
+  "text": "That's fair. That's fair.",
+  "src": "/show/phrases/tony_c_r_fair_fair.mp4",
+  "duration": 2.2,
+  "speech": {
+   "start": 0.46,
+   "end": 1.58
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_half_right",
+  "host": "tony",
+  "kind": "topical",
+  "text": "You're half right, and I'll tell you which half.",
+  "src": "/show/phrases/tony_c_r_half_right.mp4",
+  "duration": 2.7,
+  "speech": {
+   "start": 0.38,
+   "end": 2.3
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_what_do_they_do",
+  "host": "tony",
+  "kind": "topical",
+  "text": "So what do they do? Seriously, what do they do?",
+  "src": "/show/phrases/tony_c_r_what_do_they_do.mp4",
+  "duration": 4.6,
+  "speech": {
+   "start": 0.32,
+   "end": 4.14
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_cant_argue",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I can't even argue with that.",
+  "src": "/show/phrases/tony_c_r_cant_argue.mp4",
+  "duration": 2.16,
+  "speech": {
+   "start": 0.34,
+   "end": 1.74
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_told_you",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I told you. I told you weeks ago.",
+  "src": "/show/phrases/tony_c_r_told_you.mp4",
+  "duration": 3.08,
+  "speech": {
+   "start": 0.38,
+   "end": 2.6
+  },
+  "tags": [
+   "reaction"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_c_r_nope",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Nope. Not buying it.",
+  "src": "/show/phrases/tony_c_r_nope.mp4",
+  "duration": 2.32,
+  "speech": {
+   "start": 0.32,
+   "end": 1.9
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_ahead",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Slow down. We're getting ahead of ourselves.",
+  "src": "/show/phrases/tony_c_r_ahead.mp4",
+  "duration": 3.32,
+  "speech": {
+   "start": 0.3,
+   "end": 2.84
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_r_not_enough",
+  "host": "tony",
+  "kind": "topical",
+  "text": "That's a big deal. People aren't talking about that enough.",
+  "src": "/show/phrases/tony_c_r_not_enough.mp4",
+  "duration": 3.84,
+  "speech": {
+   "start": 0.34,
+   "end": 3.42
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_k_believer",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I'm a believer. I'll say it right now, I'm a believer.",
+  "src": "/show/phrases/tony_c_k_believer.mp4",
+  "duration": 3.56,
+  "speech": {
+   "start": 0.34,
+   "end": 3.08
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_k_show_me",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I'm not there yet. Show me more.",
+  "src": "/show/phrases/tony_c_k_show_me.mp4",
+  "duration": 2.72,
+  "speech": {
+   "start": 0.38,
+   "end": 2.24
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_k_ceiling",
+  "host": "tony",
+  "kind": "topical",
+  "text": "This team's ceiling is a lot higher than people think.",
+  "src": "/show/phrases/tony_c_k_ceiling.mp4",
+  "duration": 3.48,
+  "speech": {
+   "start": 0.4,
+   "end": 2.92
+  },
+  "tags": [
+   "reaction"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_c_k_worried",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I'm worried. I'm not going to pretend I'm not.",
+  "src": "/show/phrases/tony_c_k_worried.mp4",
+  "duration": 2.96,
+  "speech": {
+   "start": 0.38,
+   "end": 2.54
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_k_fun",
+  "host": "tony",
+  "kind": "topical",
+  "text": "This team is fun to watch right now. That matters.",
+  "src": "/show/phrases/tony_c_k_fun.mp4",
+  "duration": 3.4,
+  "speech": {
+   "start": 0.38,
+   "end": 2.9
+  },
+  "tone": "good",
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_k_frustrating",
+  "host": "tony",
+  "kind": "topical",
+  "text": "It's frustrating, because the talent is there.",
+  "src": "/show/phrases/tony_c_k_frustrating.mp4",
+  "duration": 3.42,
+  "speech": {
+   "start": 0.42,
+   "end": 3.0
+  },
+  "tone": "bad",
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_k_no_excuses",
+  "host": "tony",
+  "kind": "topical",
+  "text": "The pressure is on now. No more excuses.",
+  "src": "/show/phrases/tony_c_k_no_excuses.mp4",
+  "duration": 3.56,
+  "speech": {
+   "start": 0.38,
+   "end": 3.1
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_k_have_to",
+  "host": "tony",
+  "kind": "topical",
+  "text": "They have to win this one. Not want to. Have to.",
+  "src": "/show/phrases/tony_c_k_have_to.mp4",
+  "duration": 3.92,
+  "speech": {
+   "start": 0.4,
+   "end": 3.48
+  },
+  "tags": [
+   "schedule"
+  ]
+ },
+ {
+  "id": "tony_c_k_young_play",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Give the young guys a chance. Let them play.",
+  "src": "/show/phrases/tony_c_k_young_play.mp4",
+  "duration": 3.48,
+  "speech": {
+   "start": 0.38,
+   "end": 3.02
+  },
+  "tags": [
+   "young"
+  ]
+ },
+ {
+  "id": "tony_c_k_vets_earn",
+  "host": "tony",
+  "kind": "topical",
+  "text": "This is where your veterans earn their money.",
+  "src": "/show/phrases/tony_c_k_vets_earn.mp4",
+  "duration": 3.12,
+  "speech": {
+   "start": 0.34,
+   "end": 2.7
+  },
+  "tags": [
+   "veteran"
+  ]
+ },
+ {
+  "id": "tony_c_k_best_player",
+  "host": "tony",
+  "kind": "topical",
+  "text": "When your best player plays like that, you're tough to beat.",
+  "src": "/show/phrases/tony_c_k_best_player.mp4",
+  "duration": 5.08,
+  "speech": {
+   "start": 0.38,
+   "end": 4.46
+  },
+  "tags": [
+   "reaction"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_c_k_trust",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Trust the guy. He's earned that much.",
+  "src": "/show/phrases/tony_c_k_trust.mp4",
+  "duration": 3.2,
+  "speech": {
+   "start": 0.34,
+   "end": 2.78
+  },
+  "tags": [
+   "reaction"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_c_c_know_what_i_think",
+  "host": "tony",
+  "kind": "topical",
+  "text": "We'll see. But I know what I think.",
+  "src": "/show/phrases/tony_c_c_know_what_i_think.mp4",
+  "duration": 3.0,
+  "speech": {
+   "start": 0.36,
+   "end": 2.48
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_c_remember",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Remember I said this.",
+  "src": "/show/phrases/tony_c_c_remember.mp4",
+  "duration": 2.4,
+  "speech": {
+   "start": 0.42,
+   "end": 1.64
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_c_all_im_saying",
+  "host": "tony",
+  "kind": "topical",
+  "text": "And that's all I'm going to say about that.",
+  "src": "/show/phrases/tony_c_c_all_im_saying.mp4",
+  "duration": 2.44,
+  "speech": {
+   "start": 0.34,
+   "end": 1.88
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_c_put_money",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I'd put money on them. I really would.",
+  "src": "/show/phrases/tony_c_c_put_money.mp4",
+  "duration": 2.4,
+  "speech": {
+   "start": 0.38,
+   "end": 1.86
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_c_nobody_knows",
+  "host": "tony",
+  "kind": "topical",
+  "text": "That's the question nobody can answer yet.",
+  "src": "/show/phrases/tony_c_c_nobody_knows.mp4",
+  "duration": 3.08,
+  "speech": {
+   "start": 0.34,
+   "end": 2.62
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_c_c_go_ahead",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Alright, I'm done. Go ahead.",
+  "src": "/show/phrases/tony_c_c_go_ahead.mp4",
+  "duration": 1.82,
+  "speech": {
+   "start": 0.42,
+   "end": 1.42
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_t_def_decided",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's turn to the defense, because that's where this gets decided.",
+  "src": "/show/phrases/marcus_c_t_def_decided.mp4",
+  "duration": 3.88,
+  "speech": {
+   "start": 0.36,
+   "end": 3.42
+  },
+  "tags": [
+   "defense"
+  ]
+ },
+ {
+  "id": "marcus_c_t_off_minute",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's talk about the offense for a minute.",
+  "src": "/show/phrases/marcus_c_t_off_minute.mp4",
+  "duration": 2.56,
+  "speech": {
+   "start": 0.34,
+   "end": 1.98
+  },
+  "tags": [
+   "offense"
+  ]
+ },
+ {
+  "id": "marcus_c_t_qb_runs",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's get to the quarterback, because everything runs through him.",
+  "src": "/show/phrases/marcus_c_t_qb_runs.mp4",
+  "duration": 4.2,
+  "speech": {
+   "start": 0.38,
+   "end": 3.56
+  },
+  "tags": [
+   "qb"
+  ]
+ },
+ {
+  "id": "marcus_c_t_coach_overlooked",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I want to talk about the coaching, because it's been overlooked.",
+  "src": "/show/phrases/marcus_c_t_coach_overlooked.mp4",
+  "duration": 3.76,
+  "speech": {
+   "start": 0.42,
+   "end": 3.28
+  },
+  "tags": [
+   "coaching"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_c_t_draft_big",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's talk about the draft, because this is a big one for them.",
+  "src": "/show/phrases/marcus_c_t_draft_big.mp4",
+  "duration": 3.4,
+  "speech": {
+   "start": 0.38,
+   "end": 2.94
+  },
+  "tags": [
+   "draft"
+  ]
+ },
+ {
+  "id": "marcus_c_t_fa_start",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's look at free agency, because the decisions start now.",
+  "src": "/show/phrases/marcus_c_t_fa_start.mp4",
+  "duration": 4.56,
+  "speech": {
+   "start": 0.46,
+   "end": 3.98
+  },
+  "tags": [
+   "free_agency"
+  ]
+ },
+ {
+  "id": "marcus_c_t_run_game",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's talk about the run game.",
+  "src": "/show/phrases/marcus_c_t_run_game.mp4",
+  "duration": 2.2,
+  "speech": {
+   "start": 0.36,
+   "end": 1.6
+  },
+  "tags": [
+   "offense"
+  ]
+ },
+ {
+  "id": "marcus_c_t_oline",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "We should talk about the offensive line.",
+  "src": "/show/phrases/marcus_c_t_oline.mp4",
+  "duration": 2.56,
+  "speech": {
+   "start": 0.36,
+   "end": 2.08
+  },
+  "tags": [
+   "oline"
+  ]
+ },
+ {
+  "id": "marcus_c_t_next_one",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's look ahead to the next one.",
+  "src": "/show/phrases/marcus_c_t_next_one.mp4",
+  "duration": 2.36,
+  "speech": {
+   "start": 0.44,
+   "end": 1.9
+  },
+  "tags": [
+   "schedule"
+  ]
+ },
+ {
+  "id": "marcus_c_t_playoff_picture",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's talk about the playoff picture.",
+  "src": "/show/phrases/marcus_c_t_playoff_picture.mp4",
+  "duration": 2.88,
+  "speech": {
+   "start": 0.34,
+   "end": 2.46
+  },
+  "tags": [
+   "playoffs"
+  ]
+ },
+ {
+  "id": "marcus_c_t_one_number",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let me give you one number that explains a lot of this.",
+  "src": "/show/phrases/marcus_c_t_one_number.mp4",
+  "duration": 4.36,
+  "speech": {
+   "start": 0.46,
+   "end": 3.74
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_t_zoom_out",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I want to zoom out for a second.",
+  "src": "/show/phrases/marcus_c_t_zoom_out.mp4",
+  "duration": 2.46,
+  "speech": {
+   "start": 0.52,
+   "end": 2.04
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_give_you",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's a fair point. I'll give you that.",
+  "src": "/show/phrases/marcus_c_r_give_you.mp4",
+  "duration": 2.36,
+  "speech": {
+   "start": 0.42,
+   "end": 1.88
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_not_sure",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'm not sure I agree with that.",
+  "src": "/show/phrases/marcus_c_r_not_sure.mp4",
+  "duration": 2.96,
+  "speech": {
+   "start": 0.4,
+   "end": 2.38
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_walk_me",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Explain that to me. Walk me through it.",
+  "src": "/show/phrases/marcus_c_r_walk_me.mp4",
+  "duration": 2.68,
+  "speech": {
+   "start": 0.38,
+   "end": 2.22
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_whats_changed",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Why, though? What's changed?",
+  "src": "/show/phrases/marcus_c_r_whats_changed.mp4",
+  "duration": 2.72,
+  "speech": {
+   "start": 0.3,
+   "end": 2.3
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_careful",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'd be careful with that.",
+  "src": "/show/phrases/marcus_c_r_careful.mp4",
+  "duration": 2.04,
+  "speech": {
+   "start": 0.4,
+   "end": 1.36
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_both_true",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Both things can be true.",
+  "src": "/show/phrases/marcus_c_r_both_true.mp4",
+  "duration": 2.32,
+  "speech": {
+   "start": 0.36,
+   "end": 1.9
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_small_sample",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "It's a small sample. I want to see more.",
+  "src": "/show/phrases/marcus_c_r_small_sample.mp4",
+  "duration": 3.16,
+  "speech": {
+   "start": 0.38,
+   "end": 2.7
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_interesting",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's interesting. I hadn't thought about it that way.",
+  "src": "/show/phrases/marcus_c_r_interesting.mp4",
+  "duration": 2.88,
+  "speech": {
+   "start": 0.4,
+   "end": 2.46
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_say_more",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Say more about that.",
+  "src": "/show/phrases/marcus_c_r_say_more.mp4",
+  "duration": 1.72,
+  "speech": {
+   "start": 0.4,
+   "end": 1.26
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_energy",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Tony, I love the energy. I'm just not there.",
+  "src": "/show/phrases/marcus_c_r_energy.mp4",
+  "duration": 3.84,
+  "speech": {
+   "start": 0.42,
+   "end": 3.42
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_right_about_that",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "You're right. You're right about that.",
+  "src": "/show/phrases/marcus_c_r_right_about_that.mp4",
+  "duration": 2.44,
+  "speech": {
+   "start": 0.4,
+   "end": 1.98
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_partly",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Partly. I'd say partly.",
+  "src": "/show/phrases/marcus_c_r_partly.mp4",
+  "duration": 2.3,
+  "speech": {
+   "start": 0.4,
+   "end": 1.84
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_context",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "There's some context missing there.",
+  "src": "/show/phrases/marcus_c_r_context.mp4",
+  "duration": 2.6,
+  "speech": {
+   "start": 0.44,
+   "end": 2.04
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_whole_story",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Sure. But that's not the whole story.",
+  "src": "/show/phrases/marcus_c_r_whole_story.mp4",
+  "duration": 2.88,
+  "speech": {
+   "start": 0.4,
+   "end": 2.46
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_dignify",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'm not going to dignify that.",
+  "src": "/show/phrases/marcus_c_r_dignify.mp4",
+  "duration": 2.92,
+  "speech": {
+   "start": 0.42,
+   "end": 2.46
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_agree_rare",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I agree with you, which doesn't happen often.",
+  "src": "/show/phrases/marcus_c_r_agree_rare.mp4",
+  "duration": 3.12,
+  "speech": {
+   "start": 0.42,
+   "end": 2.64
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_one_game",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's not overreact to one game.",
+  "src": "/show/phrases/marcus_c_r_one_game.mp4",
+  "duration": 3.16,
+  "speech": {
+   "start": 0.34,
+   "end": 2.7
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_r_one_to_watch",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's the one to watch, for me.",
+  "src": "/show/phrases/marcus_c_r_one_to_watch.mp4",
+  "duration": 2.48,
+  "speech": {
+   "start": 0.42,
+   "end": 2.02
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_k_impressed",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I've been impressed. I'll say that.",
+  "src": "/show/phrases/marcus_c_k_impressed.mp4",
+  "duration": 2.6,
+  "speech": {
+   "start": 0.44,
+   "end": 1.94
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_k_concerned",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'm concerned. Not panicking. Concerned.",
+  "src": "/show/phrases/marcus_c_k_concerned.mp4",
+  "duration": 3.52,
+  "speech": {
+   "start": 0.42,
+   "end": 3.1
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_k_process",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I like the process here, even when the results don't show it.",
+  "src": "/show/phrases/marcus_c_k_process.mp4",
+  "duration": 3.88,
+  "speech": {
+   "start": 0.38,
+   "end": 3.34
+  },
+  "tags": [
+   "reaction"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_c_k_identity",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "They need an identity. Right now I'm not sure what it is.",
+  "src": "/show/phrases/marcus_c_k_identity.mp4",
+  "duration": 4.64,
+  "speech": {
+   "start": 0.38,
+   "end": 4.08
+  },
+  "tone": "bad",
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_k_well_built",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "This is a well-built roster. It shows.",
+  "src": "/show/phrases/marcus_c_k_well_built.mp4",
+  "duration": 3.48,
+  "speech": {
+   "start": 0.4,
+   "end": 2.94
+  },
+  "tags": [
+   "reaction"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_c_k_details",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "It's the details. Penalties, third downs, turnovers.",
+  "src": "/show/phrases/marcus_c_k_details.mp4",
+  "duration": 4.7,
+  "speech": {
+   "start": 0.34,
+   "end": 4.28
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_k_red_zone",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Red zone efficiency is the difference for me.",
+  "src": "/show/phrases/marcus_c_k_red_zone.mp4",
+  "duration": 2.84,
+  "speech": {
+   "start": 0.34,
+   "end": 2.38
+  },
+  "tags": [
+   "offense"
+  ]
+ },
+ {
+  "id": "marcus_c_k_turnovers",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Win the turnover battle and most of this takes care of itself.",
+  "src": "/show/phrases/marcus_c_k_turnovers.mp4",
+  "duration": 3.92,
+  "speech": {
+   "start": 0.34,
+   "end": 3.5
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_k_trenches",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "It comes down to the trenches. It usually does.",
+  "src": "/show/phrases/marcus_c_k_trenches.mp4",
+  "duration": 3.56,
+  "speech": {
+   "start": 0.4,
+   "end": 2.92
+  },
+  "tags": [
+   "oline"
+  ]
+ },
+ {
+  "id": "marcus_c_k_depth",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Depth is going to matter the rest of the way.",
+  "src": "/show/phrases/marcus_c_k_depth.mp4",
+  "duration": 3.28,
+  "speech": {
+   "start": 0.3,
+   "end": 2.86
+  },
+  "tags": [
+   "injury"
+  ]
+ },
+ {
+  "id": "marcus_c_k_patience",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Patience. That's the word for this team right now.",
+  "src": "/show/phrases/marcus_c_k_patience.mp4",
+  "duration": 3.4,
+  "speech": {
+   "start": 0.38,
+   "end": 2.9
+  },
+  "tone": "bad",
+  "tags": [
+   "rebuild"
+  ]
+ },
+ {
+  "id": "marcus_c_k_window",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Their window is open. You have to take advantage of it.",
+  "src": "/show/phrases/marcus_c_k_window.mp4",
+  "duration": 3.92,
+  "speech": {
+   "start": 0.36,
+   "end": 3.32
+  },
+  "tone": "good",
+  "tags": [
+   "playoffs"
+  ]
+ },
+ {
+  "id": "marcus_c_c_plays_out",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "We'll see how it plays out.",
+  "src": "/show/phrases/marcus_c_c_plays_out.mp4",
+  "duration": 2.12,
+  "speech": {
+   "start": 0.38,
+   "end": 1.48
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_c_watching",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's what I'll be watching.",
+  "src": "/show/phrases/marcus_c_c_watching.mp4",
+  "duration": 2.0,
+  "speech": {
+   "start": 0.4,
+   "end": 1.4
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_c_land",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's where I land on it.",
+  "src": "/show/phrases/marcus_c_c_land.mp4",
+  "duration": 2.2,
+  "speech": {
+   "start": 0.38,
+   "end": 1.52
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_c_question",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's the question for me.",
+  "src": "/show/phrases/marcus_c_c_question.mp4",
+  "duration": 2.0,
+  "speech": {
+   "start": 0.36,
+   "end": 1.42
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_c_keep_going",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Let's keep going.",
+  "src": "/show/phrases/marcus_c_c_keep_going.mp4",
+  "duration": 1.72,
+  "speech": {
+   "start": 0.36,
+   "end": 1.26
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_c_c_leave_it",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'll leave it there.",
+  "src": "/show/phrases/marcus_c_c_leave_it.mp4",
+  "duration": 1.66,
+  "speech": {
+   "start": 0.4,
+   "end": 1.26
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_d_g_win_process",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I keep coming back to how they won this one. Nothing flashy. They just kept doing the same thing until the other side broke, and that's what a well-coached team looks like.",
+  "src": "/show/phrases/marcus_d_g_win_process.mp4",
+  "duration": 10.04,
+  "speech": {
+   "start": 0.4,
+   "end": 9.4
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_d_g_loss_details",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "When you watch it back, it's not one play. It's four or five little things. A missed assignment here, a penalty there. That's what loses you a game like this.",
+  "src": "/show/phrases/marcus_d_g_loss_details.mp4",
+  "duration": 10.0,
+  "speech": {
+   "start": 0.34,
+   "end": 9.46
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_d_g_comeback",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Being down in that game and not panicking, that tells you something. Nobody pressed. They stayed with the plan and let the game come back to them.",
+  "src": "/show/phrases/marcus_d_g_comeback.mp4",
+  "duration": 8.76,
+  "speech": {
+   "start": 0.34,
+   "end": 7.76
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_d_g_turnovers",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "You can out-gain somebody all day long. If you give them the ball back short of midfield, none of it matters. The turnovers decided this one.",
+  "src": "/show/phrases/marcus_d_g_turnovers.mp4",
+  "duration": 8.8,
+  "speech": {
+   "start": 0.34,
+   "end": 8.3
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_d_g_late_drive",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That last drive is the one I'll remember. Clock running, everybody knows they have to throw it, and they still found a way to move the ball. That's poise.",
+  "src": "/show/phrases/marcus_d_g_late_drive.mp4",
+  "duration": 8.52,
+  "speech": {
+   "start": 0.4,
+   "end": 7.94
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_d_g_defense_won",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "The defense won this game. They got off the field on third down when it mattered, and they made the offense go the long way every single time.",
+  "src": "/show/phrases/marcus_d_g_defense_won.mp4",
+  "duration": 8.7,
+  "speech": {
+   "start": 0.4,
+   "end": 8.06
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_d_g_close",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Games like this come down to a handful of snaps. Win most of those and you're happy on the flight home. Lose them, and you spend all week wondering.",
+  "src": "/show/phrases/marcus_d_g_close.mp4",
+  "duration": 9.08,
+  "speech": {
+   "start": 0.42,
+   "end": 8.36
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_d_g_blowout_win",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "There's not much to nitpick. When you're up big early, the other team has to get one-dimensional, and then your pass rush gets to have some fun.",
+  "src": "/show/phrases/marcus_d_g_blowout_win.mp4",
+  "duration": 8.0,
+  "speech": {
+   "start": 0.42,
+   "end": 7.58
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_d_g_blowout_loss",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I don't want to overreact to one game. But that was a bad one. They were out-coached and out-played, and I didn't see a lot of fight in the second half.",
+  "src": "/show/phrases/marcus_d_g_blowout_loss.mp4",
+  "duration": 8.2,
+  "speech": {
+   "start": 0.36,
+   "end": 7.74
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_d_g_halftime",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "The halftime adjustments were the story. They came out of the locker room doing something different, and the other sideline never really answered it.",
+  "src": "/show/phrases/marcus_d_g_halftime.mp4",
+  "duration": 7.76,
+  "speech": {
+   "start": 0.4,
+   "end": 7.2
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_d_g_red_zone",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "They moved the ball fine between the twenties. The red zone is where it fell apart. You settle for field goals in a game like this, you're asking for trouble.",
+  "src": "/show/phrases/marcus_d_g_red_zone.mp4",
+  "duration": 9.16,
+  "speech": {
+   "start": 0.38,
+   "end": 8.66
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_d_g_trenches",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Go back and watch the line of scrimmage. That's where this game was won. They pushed people around for four quarters, and it showed up late.",
+  "src": "/show/phrases/marcus_d_g_trenches.mp4",
+  "duration": 8.78,
+  "speech": {
+   "start": 0.4,
+   "end": 8.34
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_d_g_star",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "When your best player plays like your best player, this is what it looks like. He made the plays that changed the game, and he made them at the right time.",
+  "src": "/show/phrases/marcus_d_g_star.mp4",
+  "duration": 8.92,
+  "speech": {
+   "start": 0.42,
+   "end": 8.22
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_d_g_next_week",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Enjoy it tonight. But the film from this one is going to show some things they can't get away with next week against a better team.",
+  "src": "/show/phrases/marcus_d_g_next_week.mp4",
+  "duration": 7.04,
+  "speech": {
+   "start": 0.34,
+   "end": 6.6
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "marcus_d_t_sample",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'd be careful drawing big conclusions here. It's a handful of games. The underlying numbers say they're a little better than the record, but only a little.",
+  "src": "/show/phrases/marcus_d_t_sample.mp4",
+  "duration": 8.52,
+  "speech": {
+   "start": 0.4,
+   "end": 7.98
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_d_t_identity",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "What I like is that they know who they are now. Early in the year they were trying to be everything. Now there's an identity, and you can see it on tape.",
+  "src": "/show/phrases/marcus_d_t_identity.mp4",
+  "duration": 8.48,
+  "speech": {
+   "start": 0.4,
+   "end": 7.84
+  },
+  "tags": [
+   "offense"
+  ]
+ },
+ {
+  "id": "marcus_d_t_qb_steady",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "The quarterback play has been steadier than people give him credit for. He's not winning games by himself, but he's not losing them either, and that matters.",
+  "src": "/show/phrases/marcus_d_t_qb_steady.mp4",
+  "duration": 9.0,
+  "speech": {
+   "start": 0.42,
+   "end": 8.48
+  },
+  "tags": [
+   "qb"
+  ]
+ },
+ {
+  "id": "marcus_d_t_oline_concern",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "My concern is up front. If the line can't hold up for three seconds, it doesn't matter who's throwing the ball or who's catching it.",
+  "src": "/show/phrases/marcus_d_t_oline_concern.mp4",
+  "duration": 7.74,
+  "speech": {
+   "start": 0.38,
+   "end": 7.16
+  },
+  "tags": [
+   "oline"
+  ]
+ },
+ {
+  "id": "marcus_d_t_depth",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "This is where depth shows up. Everybody looks good in September. By now you find out who your fifth defensive back is, and whether he can play.",
+  "src": "/show/phrases/marcus_d_t_depth.mp4",
+  "duration": 9.24,
+  "speech": {
+   "start": 0.38,
+   "end": 8.7
+  },
+  "tags": [
+   "injury"
+  ]
+ },
+ {
+  "id": "marcus_d_t_staff_adjusted",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'll give the staff credit. They've adjusted. The early-season stuff that wasn't working, they've moved away from, and that's not always easy to do.",
+  "src": "/show/phrases/marcus_d_t_staff_adjusted.mp4",
+  "duration": 7.92,
+  "speech": {
+   "start": 0.4,
+   "end": 7.5
+  },
+  "tags": [
+   "coaching"
+  ]
+ },
+ {
+  "id": "marcus_d_t_playoff_math",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "The math isn't complicated. They have to win the games they're supposed to win and steal one they're not. Do that, and they're in.",
+  "src": "/show/phrases/marcus_d_t_playoff_math.mp4",
+  "duration": 7.56,
+  "speech": {
+   "start": 0.38,
+   "end": 7.1
+  },
+  "tags": [
+   "playoffs"
+  ]
+ },
+ {
+  "id": "marcus_d_t_young_speed",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "The young guys are the most interesting part of this team. They're making mistakes, sure. But they're making them at full speed, and that's what you want.",
+  "src": "/show/phrases/marcus_d_t_young_speed.mp4",
+  "duration": 7.2,
+  "speech": {
+   "start": 0.38,
+   "end": 6.78
+  },
+  "tags": [
+   "young"
+  ]
+ },
+ {
+  "id": "marcus_d_t_cant_pay_all",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "This is the part of team building nobody enjoys. You can't pay everybody. At some point you have to decide who's part of the next four years and who isn't.",
+  "src": "/show/phrases/marcus_d_t_cant_pay_all.mp4",
+  "duration": 10.04,
+  "speech": {
+   "start": 0.34,
+   "end": 9.52
+  },
+  "tags": [
+   "contract"
+  ]
+ },
+ {
+  "id": "marcus_d_t_best_available",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'd take the best player on the board. You don't draft for need that early. You take the guy who's going to be good, and you figure out the rest.",
+  "src": "/show/phrases/marcus_d_t_best_available.mp4",
+  "duration": 7.82,
+  "speech": {
+   "start": 0.38,
+   "end": 7.36
+  },
+  "tags": [
+   "draft"
+  ]
+ },
+ {
+  "id": "marcus_d_t_close_wins",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Some of this is going to even out. Teams that win this many close games usually don't keep doing it. That's not a knock on them. It's just how it tends to go.",
+  "src": "/show/phrases/marcus_d_t_close_wins.mp4",
+  "duration": 10.12,
+  "speech": {
+   "start": 0.32,
+   "end": 9.66
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_d_r_fair_but",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's fair. That's fair. I'd just say the same game could have gone the other way, and then we're having a completely different conversation.",
+  "src": "/show/phrases/marcus_d_r_fair_but.mp4",
+  "duration": 6.48,
+  "speech": {
+   "start": 0.44,
+   "end": 6.04
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_d_r_why",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I don't totally disagree. I think you're right about the result. I just think you're wrong about why it happened.",
+  "src": "/show/phrases/marcus_d_r_why.mp4",
+  "duration": 7.4,
+  "speech": {
+   "start": 0.38,
+   "end": 6.76
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_d_r_trophies",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Hold on. Before we hand out trophies, let's at least wait until they do it against somebody with a winning record.",
+  "src": "/show/phrases/marcus_d_r_trophies.mp4",
+  "duration": 6.72,
+  "speech": {
+   "start": 0.42,
+   "end": 6.12
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_d_r_sustainable",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "That's my point, though. You're describing a team that needs everything to go right. That's not a sustainable way to win football games.",
+  "src": "/show/phrases/marcus_d_r_sustainable.mp4",
+  "duration": 7.8,
+  "speech": {
+   "start": 0.38,
+   "end": 7.3
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_d_r_was_wrong",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "I'll say this. I was wrong about them a month ago. I thought it was a mirage. It's not. They're better than I thought.",
+  "src": "/show/phrases/marcus_d_r_was_wrong.mp4",
+  "duration": 7.82,
+  "speech": {
+   "start": 0.38,
+   "end": 7.2
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_d_g_loved_it",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I loved that game. I loved everything about it. That's the kind of win where you walk out of the stadium with no voice left, and you don't even care.",
+  "src": "/show/phrases/tony_d_g_loved_it.mp4",
+  "duration": 9.08,
+  "speech": {
+   "start": 0.34,
+   "end": 8.6
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_d_g_ugly_win",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Was it pretty? No. Was it ugly? A little. Do I care? Not one bit. A win's a win, and they'll take that every single time.",
+  "src": "/show/phrases/tony_d_g_ugly_win.mp4",
+  "duration": 9.28,
+  "speech": {
+   "start": 0.36,
+   "end": 8.84
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_d_g_loss_mad",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I'm mad about this one. I'm not going to lie to you. They had it. They had that game in their hands, and they let it get away.",
+  "src": "/show/phrases/tony_d_g_loss_mad.mp4",
+  "duration": 7.64,
+  "speech": {
+   "start": 0.38,
+   "end": 7.18
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_d_g_comeback",
+  "host": "tony",
+  "kind": "topical",
+  "text": "When they got down, I'll be honest, I turned it off. I did! And then my phone starts blowing up, and I'm sitting there like, what did I miss?",
+  "src": "/show/phrases/tony_d_g_comeback.mp4",
+  "duration": 8.72,
+  "speech": {
+   "start": 0.36,
+   "end": 8.3
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_d_g_defense",
+  "host": "tony",
+  "kind": "topical",
+  "text": "That defense showed up. Flying around, hitting people, and talking about it after. That's what I want to see. That's football.",
+  "src": "/show/phrases/tony_d_g_defense.mp4",
+  "duration": 7.32,
+  "speech": {
+   "start": 0.38,
+   "end": 6.86
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_d_g_turnovers",
+  "host": "tony",
+  "kind": "topical",
+  "text": "You cannot turn it over like that. You can't! You give a team extra possessions in a game like this, you deserve whatever happens to you.",
+  "src": "/show/phrases/tony_d_g_turnovers.mp4",
+  "duration": 9.26,
+  "speech": {
+   "start": 0.42,
+   "end": 8.84
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_d_g_last_drive",
+  "host": "tony",
+  "kind": "topical",
+  "text": "That last drive, Marcus. Come on. Everybody in the building knows what's coming, and they still can't stop it. That's a grown-up drive.",
+  "src": "/show/phrases/tony_d_g_last_drive.mp4",
+  "duration": 9.96,
+  "speech": {
+   "start": 0.4,
+   "end": 9.5
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_d_g_blowout_win",
+  "host": "tony",
+  "kind": "topical",
+  "text": "This one was over at halftime. The second half was a formality. You could have sent everybody home early and saved some gas.",
+  "src": "/show/phrases/tony_d_g_blowout_win.mp4",
+  "duration": 7.2,
+  "speech": {
+   "start": 0.42,
+   "end": 6.7
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_d_g_blowout_loss",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I'm not going to sugarcoat it. That was embarrassing. Everybody in that building, coaches included, should be watching that film with their head down.",
+  "src": "/show/phrases/tony_d_g_blowout_loss.mp4",
+  "duration": 10.52,
+  "speech": {
+   "start": 0.38,
+   "end": 10.06
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_d_g_star",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Give that man the ball. Give him the ball! Every time he touched it, something happened. I don't understand why it's not every single play.",
+  "src": "/show/phrases/tony_d_g_star.mp4",
+  "duration": 10.32,
+  "speech": {
+   "start": 0.34,
+   "end": 9.9
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_d_g_close",
+  "host": "tony",
+  "kind": "topical",
+  "text": "My heart can't take games like this, man. I'm too old. Every week it's down to the last two minutes. Win one by twenty for me, please.",
+  "src": "/show/phrases/tony_d_g_close.mp4",
+  "duration": 9.96,
+  "speech": {
+   "start": 0.36,
+   "end": 9.5
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_d_g_play_calling",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I've got a problem with the play-calling. When you've got them on the ropes, you go for it. You don't get conservative and hand the ball off three times.",
+  "src": "/show/phrases/tony_d_g_play_calling.mp4",
+  "duration": 8.54,
+  "speech": {
+   "start": 0.36,
+   "end": 8.14
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_d_g_flip",
+  "host": "tony",
+  "kind": "topical",
+  "text": "There was a moment in that game where you could feel it flip. The sideline got loud, the crowd got loud, and from there it was over.",
+  "src": "/show/phrases/tony_d_g_flip.mp4",
+  "duration": 8.04,
+  "speech": {
+   "start": 0.4,
+   "end": 7.5
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_d_g_one_night",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Okay, enjoy it for one night. One night. Because next week is a different animal, and if they come out flat like that, they're getting run off the field.",
+  "src": "/show/phrases/tony_d_g_one_night.mp4",
+  "duration": 10.48,
+  "speech": {
+   "start": 0.32,
+   "end": 10.02
+  },
+  "tags": [
+   "game"
+  ],
+  "writerOnly": true
+ },
+ {
+  "id": "tony_d_t_believe",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I believe in this team. I'm saying it right now, on the record. You can play this clip back to me in January. I don't care.",
+  "src": "/show/phrases/tony_d_t_believe.mp4",
+  "duration": 8.52,
+  "speech": {
+   "start": 0.4,
+   "end": 8.06
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_d_t_worried",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I'm starting to get worried, and I don't worry. Ask Marcus, I'm never worried. But something about this team right now doesn't feel right.",
+  "src": "/show/phrases/tony_d_t_worried.mp4",
+  "duration": 8.32,
+  "speech": {
+   "start": 0.4,
+   "end": 7.8
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_d_t_qb_everything",
+  "host": "tony",
+  "kind": "topical",
+  "text": "It all comes back to the quarterback. It always does. If he plays well, they're dangerous. If he doesn't, nothing else really matters.",
+  "src": "/show/phrases/tony_d_t_qb_everything.mp4",
+  "duration": 8.2,
+  "speech": {
+   "start": 0.34,
+   "end": 7.72
+  },
+  "tags": [
+   "qb"
+  ]
+ },
+ {
+  "id": "tony_d_t_nasty",
+  "host": "tony",
+  "kind": "topical",
+  "text": "This defense is nasty, and I mean that as a compliment. Nobody wants to line up across from them. You can see it in how offenses play them.",
+  "src": "/show/phrases/tony_d_t_nasty.mp4",
+  "duration": 9.5,
+  "speech": {
+   "start": 0.38,
+   "end": 9.08
+  },
+  "tags": [
+   "defense"
+  ]
+ },
+ {
+  "id": "tony_d_t_block_somebody",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Somebody block somebody! I'm tired of watching the quarterback run for his life. Get him some help up front. It's not complicated.",
+  "src": "/show/phrases/tony_d_t_block_somebody.mp4",
+  "duration": 8.44,
+  "speech": {
+   "start": 0.32,
+   "end": 7.96
+  },
+  "tags": [
+   "oline"
+  ]
+ },
+ {
+  "id": "tony_d_t_coach_worried",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I'm not saying the coach should be worried. I'm saying if I'm the coach, I'm a little worried. There's a difference. Kind of.",
+  "src": "/show/phrases/tony_d_t_coach_worried.mp4",
+  "duration": 9.44,
+  "speech": {
+   "start": 0.38,
+   "end": 7.42
+  },
+  "tags": [
+   "coaching"
+  ]
+ },
+ {
+  "id": "tony_d_t_make_a_move",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Make a move. Pick up the phone and make a move. Teams that sit on their hands this time of year are the ones watching in January.",
+  "src": "/show/phrases/tony_d_t_make_a_move.mp4",
+  "duration": 8.92,
+  "speech": {
+   "start": 0.32,
+   "end": 8.46
+  },
+  "tags": [
+   "trade"
+  ]
+ },
+ {
+  "id": "tony_d_t_not_scared",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I love the young guys. They play like they don't know they're supposed to be scared yet. You can't teach that. You just can't.",
+  "src": "/show/phrases/tony_d_t_not_scared.mp4",
+  "duration": 7.84,
+  "speech": {
+   "start": 0.34,
+   "end": 7.42
+  },
+  "tags": [
+   "young"
+  ]
+ },
+ {
+  "id": "tony_d_t_theyre_in",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Playoffs. I'm saying it. They're getting in. I don't care what the standings say right now. I've seen enough. They're in.",
+  "src": "/show/phrases/tony_d_t_theyre_in.mp4",
+  "duration": 7.96,
+  "speech": {
+   "start": 0.38,
+   "end": 7.5
+  },
+  "tags": [
+   "playoffs"
+  ]
+ },
+ {
+  "id": "tony_d_t_no_rebuild",
+  "host": "tony",
+  "kind": "topical",
+  "text": "I don't want to hear the word rebuild. The fans don't want to hear rebuild. You've got good players. Go win some football games.",
+  "src": "/show/phrases/tony_d_t_no_rebuild.mp4",
+  "duration": 8.14,
+  "speech": {
+   "start": 0.34,
+   "end": 7.66
+  },
+  "tags": [
+   "rebuild"
+  ]
+ },
+ {
+  "id": "tony_d_t_pay_him",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Pay the man. He's earned it. You don't let a guy like that walk out the door and then spend three years trying to replace him.",
+  "src": "/show/phrases/tony_d_t_pay_him.mp4",
+  "duration": 7.72,
+  "speech": {
+   "start": 0.36,
+   "end": 7.2
+  },
+  "tags": [
+   "contract"
+  ]
+ },
+ {
+  "id": "tony_d_r_watch_game",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Oh, come on. You're doing the thing again, Marcus. The numbers, the numbers. Sometimes you just have to watch the game.",
+  "src": "/show/phrases/tony_d_r_watch_game.mp4",
+  "duration": 6.48,
+  "speech": {
+   "start": 0.32,
+   "end": 6.06
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_d_r_fine",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Okay, fine. Fine! You're right. I hate it, but you're right. Don't get used to it, though.",
+  "src": "/show/phrases/tony_d_r_fine.mp4",
+  "duration": 6.52,
+  "speech": {
+   "start": 0.36,
+   "end": 6.06
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_d_r_listen",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Listen to me. Listen. I've been doing this a long time, and when a team plays like that, you don't overthink it. They're good.",
+  "src": "/show/phrases/tony_d_r_listen.mp4",
+  "duration": 8.48,
+  "speech": {
+   "start": 0.36,
+   "end": 8.06
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_d_r_walked_into",
+  "host": "tony",
+  "kind": "topical",
+  "text": "[laughs] You know what, I walked right into that one. I did. I'll give you that one. That's yours.",
+  "src": "/show/phrases/tony_d_r_walked_into.mp4",
+  "duration": 6.04,
+  "speech": {
+   "start": 0.38,
+   "end": 5.58
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "tony_d_r_not_having_it",
+  "host": "tony",
+  "kind": "topical",
+  "text": "No. No, I'm not having that. That's just not what happened. Go back and watch the tape, and then come back and tell me that.",
+  "src": "/show/phrases/tony_d_r_not_having_it.mp4",
+  "duration": 8.14,
+  "speech": {
+   "start": 0.36,
+   "end": 7.74
+  },
+  "tags": [
+   "reaction"
+  ]
+ },
+ {
+  "id": "marcus_s_one_afternoon",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Okay, I hear you, and that's fair. But you can't build a whole season around one good afternoon. Show me it again next week, and then we'll talk.",
+  "src": "/show/phrases/marcus_s_one_afternoon.mp4",
+  "duration": 9.0,
+  "speech": {
+   "start": 0.42,
+   "end": 8.54
+  },
+  "tags": [
+   "reaction"
+  ],
+  "angle": "side"
+ },
+ {
+  "id": "marcus_s_same_page",
+  "host": "marcus",
+  "kind": "topical",
+  "text": "Fine. I'll take that as a plan. I'm just not convinced everybody else in that building is on the same page yet, and that's what worries me.",
+  "src": "/show/phrases/marcus_s_same_page.mp4",
+  "duration": 7.74,
+  "speech": {
+   "start": 0.5,
+   "end": 7.3
+  },
+  "tags": [
+   "reaction"
+  ],
+  "angle": "side"
+ },
+ {
+  "id": "tony_s_real_point",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Alright, I'll give you that one, Marcus. That's a real point. But you're leaving out the part where they actually showed up when it mattered.",
+  "src": "/show/phrases/tony_s_real_point.mp4",
+  "duration": 8.2,
+  "speech": {
+   "start": 0.36,
+   "end": 7.74
+  },
+  "tags": [
+   "reaction"
+  ],
+  "angle": "side"
+ },
+ {
+  "id": "tony_s_whole_story",
+  "host": "tony",
+  "kind": "topical",
+  "text": "Come on, Marcus. You know that's not the whole story. You watched the same game I did, and that is not what it looked like from where I was sitting.",
+  "src": "/show/phrases/tony_s_whole_story.mp4",
+  "duration": 8.3,
+  "speech": {
+   "start": 0.36,
+   "end": 7.72
+  },
+  "tags": [
+   "reaction"
+  ],
+  "angle": "side"
+ },
+ {
+  "id": "tony_x_buyer_1",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "See, now you're buying. You're a buyer, Marcus. Admit it.",
+  "src": "/show/phrases/tony_x_buyer_1.mp4",
+  "duration": 3.56,
+  "speech": {
+   "start": 0.34,
+   "end": 3.0
+  },
+  "angle": "side",
+  "exchange": "buyer"
+ },
+ {
+  "id": "marcus_x_buyer_2",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "I'm a buyer of one specific thing, at one specific price. That's a much smaller store than the one you're shopping in.",
+  "src": "/show/phrases/marcus_x_buyer_2.mp4",
+  "duration": 8.52,
+  "speech": {
+   "start": 0.38,
+   "end": 7.92
+  },
+  "angle": "side",
+  "exchange": "buyer"
+ },
+ {
+  "id": "tony_x_buyer_3",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "And that smaller store hasn't been open all year, because they haven't made a single trade.",
+  "src": "/show/phrases/tony_x_buyer_3.mp4",
+  "duration": 6.4,
+  "speech": {
+   "start": 0.34,
+   "end": 5.96
+  },
+  "angle": "side",
+  "exchange": "buyer"
+ },
+ {
+  "id": "marcus_x_buyer_4",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "Not one. Which, honestly, I'm not sure is a flaw. You get to this winning record without moving anybody, it tells you the roster they built in the spring was mostly right.",
+  "src": "/show/phrases/marcus_x_buyer_4.mp4",
+  "duration": 11.26,
+  "speech": {
+   "start": 0.36,
+   "end": 10.7
+  },
+  "angle": "side",
+  "exchange": "buyer"
+ },
+ {
+  "id": "tony_x_buyer_5",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "Mostly right gets you a home loss in the wild card round. Teams on a roll go get the piece. They don't stand around admiring themselves.",
+  "src": "/show/phrases/tony_x_buyer_5.mp4",
+  "duration": 8.86,
+  "speech": {
+   "start": 0.34,
+   "end": 8.44
+  },
+  "angle": "side",
+  "exchange": "buyer"
+ },
+ {
+  "id": "tony_x_rebuild_1",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "I'll say it. Blow it up. Trade anybody over twenty-eight who isn't nailed down.",
+  "src": "/show/phrases/tony_x_rebuild_1.mp4",
+  "duration": 5.96,
+  "speech": {
+   "start": 0.38,
+   "end": 5.48
+  },
+  "angle": "side",
+  "exchange": "rebuild"
+ },
+ {
+  "id": "marcus_x_rebuild_2",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "And then what? You've shipped out the guys who show the young players how to do it, and you're bad for three years instead of one.",
+  "src": "/show/phrases/marcus_x_rebuild_2.mp4",
+  "duration": 7.24,
+  "speech": {
+   "start": 0.36,
+   "end": 6.72
+  },
+  "angle": "side",
+  "exchange": "rebuild"
+ },
+ {
+  "id": "tony_x_rebuild_3",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "They're bad now, Marcus! At least if you tear it down, there's a plan behind the losing.",
+  "src": "/show/phrases/tony_x_rebuild_3.mp4",
+  "duration": 6.88,
+  "speech": {
+   "start": 0.4,
+   "end": 6.36
+  },
+  "angle": "side",
+  "exchange": "rebuild"
+ },
+ {
+  "id": "marcus_x_rebuild_4",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "There's a difference between a plan and a fire sale. You keep the core, you sell the parts that won't be here when this team is good again, and you draft like your jobs depend on it.",
+  "src": "/show/phrases/marcus_x_rebuild_4.mp4",
+  "duration": 10.64,
+  "speech": {
+   "start": 0.4,
+   "end": 10.22
+  },
+  "angle": "side",
+  "exchange": "rebuild"
+ },
+ {
+  "id": "tony_x_rebuild_5",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "Fine. That's a rebuild with better manners. I'll take it, as long as somebody actually picks up the phone.",
+  "src": "/show/phrases/tony_x_rebuild_5.mp4",
+  "duration": 6.92,
+  "speech": {
+   "start": 0.36,
+   "end": 6.46
+  },
+  "angle": "side",
+  "exchange": "rebuild"
+ },
+ {
+  "id": "marcus_x_qb_1",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "So let's settle it. Is he the guy, or is he a guy?",
+  "src": "/show/phrases/marcus_x_qb_1.mp4",
+  "duration": 4.68,
+  "speech": {
+   "start": 0.38,
+   "end": 4.22
+  },
+  "angle": "side",
+  "exchange": "qb"
+ },
+ {
+  "id": "tony_x_qb_2",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "He's the guy. You don't find that arm and that poise in the pocket, and then walk away from it because of a couple of bad Sundays.",
+  "src": "/show/phrases/tony_x_qb_2.mp4",
+  "duration": 9.04,
+  "speech": {
+   "start": 0.34,
+   "end": 8.6
+  },
+  "angle": "side",
+  "exchange": "qb"
+ },
+ {
+  "id": "marcus_x_qb_3",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "I'm not asking about a couple of Sundays. I'm asking what he looks like in January, against a defense that's seen him on film four times.",
+  "src": "/show/phrases/marcus_x_qb_3.mp4",
+  "duration": 9.04,
+  "speech": {
+   "start": 0.4,
+   "end": 8.52
+  },
+  "angle": "side",
+  "exchange": "qb"
+ },
+ {
+  "id": "tony_x_qb_4",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "Then give him something to work with! You can't judge a quarterback who's running for his life every third snap.",
+  "src": "/show/phrases/tony_x_qb_4.mp4",
+  "duration": 7.24,
+  "speech": {
+   "start": 0.36,
+   "end": 6.58
+  },
+  "angle": "side",
+  "exchange": "qb"
+ },
+ {
+  "id": "marcus_x_qb_5",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "That's fair. But the great ones make the line look better than it is. That's the part I haven't seen yet.",
+  "src": "/show/phrases/marcus_x_qb_5.mp4",
+  "duration": 6.12,
+  "speech": {
+   "start": 0.38,
+   "end": 5.62
+  },
+  "angle": "side",
+  "exchange": "qb"
+ },
+ {
+  "id": "tony_x_hot_1",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "I'm saying it on the record. This team is for real.",
+  "src": "/show/phrases/tony_x_hot_1.mp4",
+  "duration": 3.36,
+  "speech": {
+   "start": 0.34,
+   "end": 2.92
+  },
+  "angle": "side",
+  "exchange": "hot"
+ },
+ {
+  "id": "marcus_x_hot_2",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "A few good weeks doesn't make them for real. It makes them hot. And hot teams cool off.",
+  "src": "/show/phrases/marcus_x_hot_2.mp4",
+  "duration": 5.92,
+  "speech": {
+   "start": 0.36,
+   "end": 5.24
+  },
+  "angle": "side",
+  "exchange": "hot"
+ },
+ {
+  "id": "tony_x_hot_3",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "Hot? They're beating good teams, and they're doing it a different way every week. That's not luck, that's a roster.",
+  "src": "/show/phrases/tony_x_hot_3.mp4",
+  "duration": 7.96,
+  "speech": {
+   "start": 0.34,
+   "end": 7.48
+  },
+  "angle": "side",
+  "exchange": "hot"
+ },
+ {
+  "id": "marcus_x_hot_4",
+  "host": "marcus",
+  "kind": "exchange",
+  "text": "Or it's a soft stretch of the schedule and a couple of bounces going their way. Show me they can win ugly, on the road, in the cold, and I'll buy in.",
+  "src": "/show/phrases/marcus_x_hot_4.mp4",
+  "duration": 9.42,
+  "speech": {
+   "start": 0.36,
+   "end": 8.88
+  },
+  "angle": "side",
+  "exchange": "hot"
+ },
+ {
+  "id": "tony_x_hot_5",
+  "host": "tony",
+  "kind": "exchange",
+  "text": "Write it down, Marcus. When they do it, I want to hear you say it, right here at this desk.",
+  "src": "/show/phrases/tony_x_hot_5.mp4",
+  "duration": 5.42,
+  "speech": {
+   "start": 0.38,
+   "end": 5.02
+  },
+  "angle": "side",
+  "exchange": "hot"
+ }
+]

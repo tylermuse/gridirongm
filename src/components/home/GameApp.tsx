@@ -5,6 +5,10 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { SpotlightAudioPlayer } from '@/components/game/SpotlightAudioPlayer';
+import { SpotlightShowPlayer } from '@/components/game/SpotlightShowPlayer';
+import { episodeLabelFor } from '@/components/game/SpotlightShowPoster';
+import { buildGameTopics } from '@/lib/spotlight/showGame';
+import { computeShowStatLine } from '@/lib/spotlight/teamStats';
 import { useAiCommentary } from '@/components/providers/useAiCommentary';
 
 import { useGameStore, computeLuxuryTax } from '@/lib/engine/store';
@@ -607,7 +611,7 @@ function TeamSpotlightSection({
   ctx?: SpotlightContext;
   onPlayerClick: (id: string) => void;
 }) {
-  const { leagueSettings, newsItems, draftResults, playoffBracket, playoffSeeds, champions, players: allPlayersFromStore } = useGameStore();
+  const { leagueSettings, newsItems, draftResults, playoffBracket, playoffSeeds, champions, players: allPlayersFromStore, schedule } = useGameStore();
   const aiCommentary = useAiCommentary();
 
   // Filter news to this season's re-injury items so the spotlight can surface
@@ -620,6 +624,18 @@ function TeamSpotlightSection({
       n.headline.includes('re-injured playing through')
     ).slice(-5),
     [newsItems, season, team.id],
+  );
+
+  // Real numbers + league ranks for the video show's on-screen graphics.
+  const showStats = React.useMemo(
+    () => computeShowStatLine(team, allTeams, allPlayers),
+    [team, allTeams, allPlayers],
+  );
+  // The show opens on a breakdown of the team's last game (box score,
+  // scoring flow, standouts, what's next).
+  const showGame = React.useMemo(
+    () => buildGameTopics({ team, teams: allTeams, players: allPlayers, schedule, season, playoffBracket }),
+    [team, allTeams, allPlayers, schedule, season, playoffBracket],
   );
 
   const templateTopics = React.useMemo(
@@ -801,8 +817,8 @@ function TeamSpotlightSection({
     <div className="mt-6">
       <Card>
         <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <div className="min-w-0">
               <CardTitle>
                 <span className="flex items-center gap-2"><span>🎬</span> Team Spotlight</span>
               </CardTitle>
@@ -813,7 +829,7 @@ function TeamSpotlightSection({
                 )}
               </p>
             </div>
-            <div className="flex items-center gap-3 shrink-0 pt-0.5">
+            <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3 sm:pt-0.5">
               {topics.length > 1 && (
                 <button
                   onClick={() => {
@@ -835,6 +851,23 @@ function TeamSpotlightSection({
           </div>
         </CardHeader>
         <div className="px-4 pb-4">
+          {/* The show is the front door: everyone lands here from the popup;
+              Premium plays the episode, Free gets the studio open + upgrade,
+              and the written recap is right below. */}
+          {topics.length > 0 && (
+            <div className="mb-4">
+              <SpotlightShowPlayer
+                topics={topics}
+                game={showGame}
+                teamName={`${team.city} ${team.name}`}
+                stats={showStats}
+                team={team}
+                teams={allTeams}
+                players={allPlayers}
+                poster={{ episodeLabel: episodeLabelFor(currentNarrative, phase, week), ready: podcastReady }}
+              />
+            </div>
+          )}
           <div className="space-y-2">
             {topics.map((topic, topicIdx) => {
               const isExpanded = expandedTopics.has(topicIdx);
