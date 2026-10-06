@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
-import type { Feature } from '@bs/core/billing';
+import { PODCAST_CREDITS_PER_MONTH, type Feature } from '@bs/core/billing';
 
 interface PremiumGateProps {
   /** What the user is trying to access — drives the upsell copy. */
@@ -43,7 +43,7 @@ const FEATURE_COPY: Record<Feature, { title: string; description: string }> = {
   podcast_credits: {
     title: 'Podcasts are a Premium Feature',
     description:
-      'Premium subscribers get 3 audio podcast credits every month plus access to the full feed.',
+      `Premium subscribers get ${PODCAST_CREDITS_PER_MONTH.premium} Team Spotlight episodes (video show or podcast) every month plus access to the full feed.`,
   },
 };
 
