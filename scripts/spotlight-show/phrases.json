@@ -3758,6 +3758,257 @@
    "text": "Write it down, Marcus. When they do it, I want to hear you say it, right here at this desk.",
    "take": "tony_ex2_side",
    "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_r_concede",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "Okay, that's fair. I'll give you that one, and I'm not going to pretend I didn't hear it. But I've been around this league long enough to know one good point doesn't change who a team is. You are what your record and your film say you are, and right now, I don't think that's moved much.",
+   "take": "marcus_r1_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_r_one_game",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "It's one game, Tony. You of all people know how fast one game turns into a whole story that isn't true. Time and time again, we see a team look like world-beaters on a Sunday and then come back down to earth the next week. Give me three more like it, and I'll start believing it with you.",
+   "take": "marcus_r1_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_r_push_back",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "I'd push back on that a little. That's not really what the tape says, and I think you know it. You're remembering the highlight, not the other forty plays around it. Football is a game of consistency, play after play, snap after snap, and what I saw was a lot less consistent than that one moment.",
+   "take": "marcus_r1_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_r_show_me",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "Show me they can do it against a good team, and I'll get on board with you. I mean that. Everybody looks good against the bottom of the league. The great teams prove it in the big spots, on the road, in bad weather, when the other guys are just as good as they are. I just want to see it once.",
+   "take": "marcus_r1_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_r_whole_point",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "Thank you! That's my whole point. That's what I've been saying this entire show, Marcus, and you've been sitting there shaking your head at me the whole time. Some things you don't need a spreadsheet for. You watch the games, you see who wants it more, and you just know. And I knew.",
+   "take": "tony_r1_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_r_carried_away",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "I'm not getting carried away! I'm getting exactly the right amount of carried away. There's a difference. When a team plays like this, week in and week out, you're allowed to enjoy it. Winning in this league is hard. Really hard. So when it happens, I'm not going to sit here and pretend I'm not excited.",
+   "take": "tony_r1_side",
+   "model": "eleven_v3",
+   "tone": "good"
+  },
+  {
+   "id": "tony_r_kills_me",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "That's what kills me. They had that game in their hands, and they just let it get away. You can't do that in this league, not this time of year, not against anybody. Good teams close. They get the lead, and they put their foot on the gas. That one's going to sting for a while.",
+   "take": "tony_r1_side",
+   "model": "eleven_v3",
+   "when": "Only right after the team blew a lead and lost the game being discussed."
+  },
+  {
+   "id": "tony_r_somebody",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction",
+    "coaching"
+   ],
+   "angle": "side",
+   "text": "Then what? You just sit there and hope it fixes itself? That's not a plan, Marcus, that's a wish. In this league, nothing fixes itself. You have to go out and do something about it. Somebody in that building has to get it cleaned up. I don't care if it's the coach, the GM, the water boy... SOMEBODY!",
+   "take": "tony_r1_side",
+   "model": "eleven_v3",
+   "when": "Only when a problem has been dragging on and the talk is about who will fix it."
+  },
+  {
+   "id": "marcus_r_thats_game",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "And that's the game, right there. Everything after that was just the clock running out. Good teams find a way to make that play when it matters, and you could feel the whole building know it, too. That's the difference between winning a close one and talking about one on Monday.",
+   "take": "marcus_r2_side",
+   "model": "eleven_v3",
+   "when": "Only in a game breakdown, right after the play that decided a game the team won."
+  },
+  {
+   "id": "marcus_r_bugs_me",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "Here's what bugs me, though, and I keep coming back to it. It isn't one bad week. It keeps showing up, in different ways, against different opponents. In this league, the problems you don't fix in October are the ones that end your season in January. And I haven't seen anyone in that building act like they're in a hurry.",
+   "take": "marcus_r2_side",
+   "model": "eleven_v3",
+   "when": "Only about a problem that has shown up repeatedly this season."
+  },
+  {
+   "id": "marcus_r_agree",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "So we agree. Somebody write that down, because it doesn't happen very often at this desk. And honestly, when the two of us land in the same place, it usually means the answer is pretty obvious to everybody watching. Enjoy it, Tony. I promise you it won't last past the next segment.",
+   "take": "marcus_r2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_r_then_what",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction",
+    "trade",
+    "rebuild"
+   ],
+   "angle": "side",
+   "text": "Okay. And then what? Walk me through what actually happens the week after that, because that's the part nobody ever wants to talk about. Every big move sounds great in the moment. The hard part is living with it for the next three years, and that's where good front offices separate themselves.",
+   "take": "marcus_r2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_r_price",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "trade"
+   ],
+   "angle": "side",
+   "text": "I'm not against making a move. I'm against paying whatever it costs just to say you did something. The teams that win year after year are disciplined about this. They know what a player is worth to them, and they walk away when the number's wrong. At the right price, sure, make the call.",
+   "take": "marcus_r2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_r_parade",
+   "host": "marcus",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "I like what I'm seeing too, I really do. I'm just not ready to plan the parade off of a couple of good weeks. This league has a way of humbling everybody, usually right when they start believing their own press. Let's see what it looks like in the cold, in the big games. Then we'll talk.",
+   "take": "marcus_r2_side",
+   "model": "eleven_v3",
+   "tone": "good"
+  },
+  {
+   "id": "tony_r_sound_like_me",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "See, now you sound like me. I like this version of you. Can we keep this guy around for the rest of the show? Because honestly, that's what this game is about. Heart, belief, showing up for each other. You can put all the numbers you want on the screen, but that's what wins in this league.",
+   "take": "tony_r2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_r_not_calm",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "I'll be honest with you, I was not calm watching that fourth quarter. Not even a little bit. I was up, I was pacing, I was yelling at a television like it could hear me. But that's football. That's why we love it. Those are the games that tell you what a team is really made of.",
+   "take": "tony_r2_side",
+   "model": "eleven_v3",
+   "when": "Only about a game that was close in the fourth quarter."
+  },
+  {
+   "id": "tony_r_annoyed",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "I'm still annoyed about this one. Honestly, I'm going to be annoyed about it all week. It's a game you look back on in January, when you're counting the wins you left out there, and it stings. Every game matters in this league. Every single one. And they let that one slip.",
+   "take": "tony_r2_side",
+   "model": "eleven_v3",
+   "when": "Only right after discussing a game the team lost."
+  },
+  {
+   "id": "tony_r_price",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "trade"
+   ],
+   "angle": "side",
+   "text": "You don't even know the price yet! How do you say no to a price you haven't seen? Pick up the phone, listen, and then tell me it's too much. The teams that win championships are aggressive. They see the window, and they go for it. Nobody hangs a banner for playing it safe.",
+   "take": "tony_r2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_r_hold_on",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "Wait, hold on. Hold on. You can't just skip past that like it didn't happen. That's the whole thing, Marcus. That's the part I want to talk about. Because games turn on moments like that, and the teams that make those plays are the ones still playing when it counts.",
+   "take": "tony_r2_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_r_walked_into",
+   "host": "tony",
+   "kind": "topical",
+   "tags": [
+    "reaction"
+   ],
+   "angle": "side",
+   "text": "Fine, fine. I walked right into that one, and you know what, I deserve it. Go ahead, enjoy it, you earned it. But I'll tell you what. When this team proves me right, and they will, I'm going to remind you about this conversation. Every single week. My turn's coming.",
+   "take": "tony_r2_side",
+   "model": "eleven_v3"
   }
  ]
 }

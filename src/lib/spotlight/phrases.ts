@@ -48,6 +48,9 @@ export interface Phrase {
   angle?: 'side';
   /** Exchange this line belongs to (lines play in manifest order). */
   exchange?: string;
+  /** Only true in a specific situation (a blown lead, a close game…): shown
+   *  to the writer as a condition. Implies writerOnly. */
+  when?: string;
 }
 
 export const PHRASES = manifest as Phrase[];
