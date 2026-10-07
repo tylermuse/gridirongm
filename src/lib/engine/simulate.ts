@@ -615,7 +615,7 @@ function simulatePlay(
     const rushRatingMult = 0.9 + (rusher.ratings.carrying / 100) * 0.3;
     const rushRedZoneBonus = fieldPosition >= 80 ? 0.5 : 0;
     let yards = Math.round(
-      ((rushSkill - defRushPower) / 42 + 3.0 + (Math.random() * 2.4 - 0.7) + olBonus + rushRedZoneBonus) * rushRatingMult,
+      ((rushSkill - defRushPower) / 42 + 3.2 + (Math.random() * 2.4 - 0.7) + olBonus + rushRedZoneBonus) * rushRatingMult,
     );
 
     // Big rush chance (~1.5%) — breakaway runs

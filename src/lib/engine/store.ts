@@ -3534,7 +3534,7 @@ export const useGameStore = create<GameStore>()(
         }
 
         const winnerId =
-          result.homeScore >= result.awayScore ? matchup.homeTeamId : matchup.awayTeamId;
+          result.homeScore > result.awayScore ? matchup.homeTeamId : matchup.awayTeamId;
 
         let updatedBracket = state.playoffBracket.map(m =>
           m.id === matchupId
