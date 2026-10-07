@@ -108,6 +108,9 @@ const RECORD_CATEGORIES: { label: string; value: (s: PlayerStats) => number }[] 
   { label: 'Total TDs', value: s => s.passTDs + s.rushTDs + s.receivingTDs },
   { label: 'Sacks', value: s => s.sacks },
   { label: 'Tackles', value: s => s.tackles },
+  { label: 'Tackles for Loss', value: s => s.tacklesForLoss },
+  { label: 'Def. Interceptions', value: s => s.defensiveINTs },
+  { label: 'Pass Deflections', value: s => s.passDeflections },
 ];
 
 function FranchiseRecords({
