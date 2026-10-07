@@ -681,7 +681,12 @@ export function createLiveCoachEngine(
   }
 
   function handleTurnoverOnDowns(events: PlayEvent[]) {
-    const newFieldPos = Math.max(20, 100 - state.fieldPos);
+    // Defense takes over at the exact spot — flip the field. The old `20` floor
+    // (correct for kickoffs/punts) wrongly bumped a goal-line stand out to the
+    // 20; a turnover on downs respects the actual line of scrimmage, so floor at
+    // 1 only to keep the spot inside the field. (diprionidian: fail at the
+    // opponent's 5 should give the defense the ball at their own 5, not the 20.)
+    const newFieldPos = Math.max(1, 100 - state.fieldPos);
     events.push(makeEvent('run', 'Turnover on downs! The defense takes over.', 0, false));
     switchPossession(newFieldPos);
   }
@@ -763,6 +768,35 @@ export function createLiveCoachEngine(
       checkTwoMinWarning(events);
       checkQuarterEnd(events);
       return events;
+    }
+
+    // CPU auto-timeout: a trailing CPU defense late in Q4 burns its timeouts to
+    // stop the clock when the user (on offense) is running it out — e.g. the
+    // user kneeling with a lead. The engine knows the user's side, so the CPU is
+    // the other team. Previously `callTimeout()` was only reachable via the user
+    // (`userCall === 'timeout'`), so the CPU never called one. (yo46363.)
+    // Fire between plays — before the pending runoff drains below — so zeroing
+    // it actually preserves the clock for the next snap.
+    {
+      const cpuSide: 'home' | 'away' = userSide === 'home' ? 'away' : 'home';
+      const cpuTimeouts = cpuSide === 'home' ? state.homeTimeouts : state.awayTimeouts;
+      const cpuScore = cpuSide === 'home' ? state.homeScore : state.awayScore;
+      const oppScore = cpuSide === 'home' ? state.awayScore : state.homeScore;
+      if (
+        !state.overtime &&
+        state.quarter === 4 &&
+        state.timeSecs <= 90 &&
+        (state.pendingRunoff ?? 0) > 0 && // only if there's clock to save
+        state.possession !== cpuSide &&   // the user (CPU's opponent) has the ball
+        cpuScore <= oppScore &&           // CPU trailing or tied — never stop the clock while leading
+        cpuTimeouts > 0
+      ) {
+        // callTimeout zeroes nothing by itself; zero the runoff here so the
+        // drain below is a no-op and the between-plays clock is preserved.
+        if (callTimeout(events, cpuSide)) {
+          state.pendingRunoff = 0;
+        }
+      }
     }
 
     // Consume the runoff owed by the previous play before running this one.
