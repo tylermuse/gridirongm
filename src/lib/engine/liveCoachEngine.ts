@@ -411,11 +411,9 @@ export function createLiveCoachEngine(
       : rating(rusher, 'carrying', 70) * 0.5 + rating(rusher, 'speed', 70) * 0.3 + rating(rusher, 'agility', 70) * 0.2;
     const defStop = rating(dk.lb1, 'tackling', 70) * 0.5 + rating(dk.dl1, 'strength', 70) * 0.5;
 
-    let yards = Math.round((skill - defStop) / 12 + gaussian(3, 2));
+    let yards = Math.round((skill - defStop) / 12 + gaussian(4, 3));
     // Big run chance
     if (Math.random() < 0.06) yards += 8 + Math.floor(Math.random() * 12);
-    // Loss chance
-    if (Math.random() < 0.12 && yards > 0) yards = -(1 + Math.floor(Math.random() * 3));
     yards = clamp(yards, -5, 60);
 
     // Goal line
@@ -806,6 +804,36 @@ export function createLiveCoachEngine(
       state.pendingRunoff = 0;
       checkTwoMinWarning(events);
       if (state.timeSecs <= 0) {
+        checkQuarterEnd(events);
+        return events;
+      }
+    }
+
+    // End-of-half / end-of-game field goal awareness for auto (CPU) decisions.
+    // Ported from the sim engine (playByPlay.ts): when the clock is about to
+    // expire and the possessing team is in FG range while tied or trailing,
+    // kick the field goal instead of going for it or punting. Runs regardless
+    // of down and only when there is no explicit user call. (#1 voted football
+    // feature — AI 4th-down clock awareness.)
+    if (!userCall) {
+      const distToGoal = 100 - state.fieldPos;
+      const fgDist = distToGoal + 17;
+      const inFGRange = fgDist <= 58; // reasonable FG range
+      const offScoreDiff = state.possession === 'home'
+        ? state.homeScore - state.awayScore
+        : state.awayScore - state.homeScore;
+      const isEndOfHalf = (state.quarter === 2 && state.timeSecs <= 10) ||
+                          (state.quarter >= 4 && state.timeSecs <= 10);
+      const isLateAndClose = state.quarter >= 4 && state.timeSecs <= 30 && state.down >= 2;
+      // Kick if: in range AND (time expiring, tied/trailing) OR (late Q4, within a FG of tying/winning)
+      const shouldKickNow = inFGRange && (
+        (isEndOfHalf && offScoreDiff <= 0) ||
+        (isLateAndClose && offScoreDiff >= -3 && offScoreDiff <= 0)
+      );
+      if (shouldKickNow) {
+        runFieldGoal(events);
+        if (state.overtime) state.otPlayRunThisPossession = true;
+        checkTwoMinWarning(events);
         checkQuarterEnd(events);
         return events;
       }
