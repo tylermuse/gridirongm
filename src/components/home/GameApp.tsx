@@ -7,7 +7,7 @@ import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { SpotlightAudioPlayer } from '@/components/game/SpotlightAudioPlayer';
 import { SpotlightShowPlayer } from '@/components/game/SpotlightShowPlayer';
 import { episodeLabelFor } from '@/components/game/SpotlightShowPoster';
-import { buildGameTopics } from '@/lib/spotlight/showGame';
+import { buildGameTopics, gameTopicsForMoment } from '@/lib/spotlight/showGame';
 import { computeShowStatLine } from '@/lib/spotlight/teamStats';
 import { useAiCommentary } from '@/components/providers/useAiCommentary';
 
@@ -656,6 +656,9 @@ function TeamSpotlightSection({
     const tradeDeadlineWeek = leagueSettings?.tradeDeadlineWeek ?? 12;
     return detectNarrativeMoment(phase, week, tradeDeadlineWeek, playoffBracket, team.id, playoffSeeds);
   }, [ctx?.phase, week, leagueSettings?.tradeDeadlineWeek, playoffBracket, team.id]);
+  // At the deadline the episode is about needs and targets; the last game
+  // shrinks to one quick topic.
+  const showGameForMoment = React.useMemo(() => gameTopicsForMoment(showGame, currentNarrative), [showGame, currentNarrative]);
 
   // 5/22 stale-opponent fix (Marcus Cole / Tony Blaze hallucinating PHI when
   // next opponent was actually NE). Compute three pieces of bracket state
@@ -860,7 +863,7 @@ function TeamSpotlightSection({
             <div className="mb-4">
               <SpotlightShowPlayer
                 topics={topics}
-                game={showGame}
+                game={showGameForMoment}
                 teamName={`${team.city} ${team.name}`}
                 stats={showStats}
                 team={team}

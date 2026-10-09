@@ -393,5 +393,25 @@ export function buildGameTopics(c: GameContext): GameTopic[] {
   return topics;
 }
 
+/**
+ * The game segment for this point of the season. At the trade deadline the
+ * episode is about needs and targets, so the last game shrinks to one quick
+ * topic: the result and what it showed, no walkthrough, no standouts list.
+ */
+export function gameTopicsForMoment(topics: GameTopic[], narrative?: string): GameTopic[] {
+  if (narrative !== 'tradeDeadline' || topics.length === 0) return topics;
+  const [g] = topics;
+  const keep = g.exchanges.filter(e => !/^Every score, in order|^Scoring by quarter/.test(e.text));
+  return [{
+    ...g,
+    depth: undefined,
+    gameFlow: undefined,
+    exchanges: [
+      ...keep,
+      { speakerId: 'hottake', text: 'Trade deadline week: two or three lines on this result — what it says about what they need — then on to the deadline.' },
+    ],
+  }];
+}
+
 /** Stable identity of the game a set of game topics is about (cache key). */
 export const gameTopicsKey = (t: GameTopic[]) => t.map(x => x.headline).join('|');

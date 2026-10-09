@@ -195,16 +195,21 @@ Reference how players were acquired naturally, e.g. "They signed [player] in fre
 Generate 4-5 topics.`;
 
     case 'tradeDeadline':
-      return `This is the TRADE DEADLINE episode — a critical midseason inflection point. Focus on:
-- Midseason assessment: are they buyers, sellers, or standing pat? Use their record and rankings to make the case
-- If they've made trades this season, evaluate them — were they worth it?
-- Identify 1-2 position groups that are holding the team back (use the position group strength data)
-- What kind of player should they target? Be specific about positions and role
-- Cap space implications of any potential moves
+      return `This is the TRADE DEADLINE episode. It is about what this team needs and who they should go get — NOT about the game they just played (the show covers that separately in one quick segment). Do not recap last week's game or any single game.
 
-Reference how existing players were acquired where relevant, e.g. "The trade for [player] earlier this season is already paying dividends" or "That free agency signing hasn't lived up to the contract."
+Use "tradeNeeds" — it is the real data for this episode:
+- tradeNeeds.stance: buyer, seller, or bubble (from the record). Make the call on what they should do and defend it.
+- tradeNeeds.needs: the starting groups that rank worst in the league (rank of N), and the weakest starter at each. Name the hole and the guy a move would replace.
+- tradeNeeds.needs[].targets: real players on teams that are out of it — name them, with OVR, age, contract, and whether they're a rental (expiring) or have term left, and whether the salary fits tradeNeeds.capSpace.
+- tradeNeeds.strengths: what NOT to spend on.
+- tradeNeeds.sellCandidates (sellers): veterans a contender would pay for.
+- tradesThisSeason: grade any trade they already made.
 
-Generate 4-5 topics.`;
+Topics (4-5), each about needs and moves:
+1. Buy, sell, or stand pat — the call, using the record and stance.
+2-3. One topic per biggest need: why that group holds them back, the PROFILE of player they need (position, role — e.g. "a true X receiver who wins outside", "an edge rusher, not another run-stuffer" — age, rental vs. long-term piece, price), then the specific names from targets.
+4. The cost: cap space, what they'd give up, whether it's worth it for this team's window. For sellers: who goes and what they should ask for.
+Marcus and Tony should disagree on at least one move (which target, or whether to buy at all).`;
 
     case 'playoffsStart':
       return `Check the "playoffStage" and "nextPlayoffOpponent" fields FIRST — they tell you exactly where in the playoffs the team is.
