@@ -1,6 +1,8 @@
 """Freeze the studio TV screens behind the host (the generators animate the
 football player on them). Replaces those regions of every frame with the
-first frame, through a feathered mask that stays clear of the host."""
+first frame (or a fixed plate image, so every take of a host shows the same
+picture on the TVs and cuts between takes don't jump), through a feathered
+mask that stays clear of the host."""
 import subprocess, sys, os, numpy as np
 from PIL import Image, ImageFilter
 
@@ -21,12 +23,15 @@ def make_mask(w, h, path, screens=None):
     m = Image.fromarray(px).filter(ImageFilter.GaussianBlur(radius=max(2, w // 320)))
     m.save(path)
 
-def freeze(src, dst, extra_vf=None, extra_args=(), screens=None):
+def freeze(src, dst, extra_vf=None, extra_args=(), screens=None, plate_img=None):
     w, h = probe(src)
     tmp = dst + '.parts'
     os.makedirs(tmp, exist_ok=True)
     plate, mask = os.path.join(tmp, 'plate.png'), os.path.join(tmp, 'mask.png')
-    subprocess.check_call(['ffmpeg', '-v', 'error', '-y', '-i', src, '-frames:v', '1', plate])
+    if plate_img:
+        subprocess.check_call(['ffmpeg', '-v', 'error', '-y', '-i', plate_img, '-vf', 'scale=%d:%d' % (w, h), plate])
+    else:
+        subprocess.check_call(['ffmpeg', '-v', 'error', '-y', '-i', src, '-frames:v', '1', plate])
     make_mask(w, h, mask, screens)
     fc = ('[1:v]format=yuv444p[p];[2:v]format=gray,scale=%d:%d,lut=c0=min(255\\,val*255/235)[m];[0:v]format=yuv444p[v];'
           '[v][p][m]maskedmerge,format=yuv420p' % (w, h))

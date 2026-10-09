@@ -4009,6 +4009,306 @@
    "text": "Fine, fine. I walked right into that one, and you know what, I deserve it. Go ahead, enjoy it, you earned it. But I'll tell you what. When this team proves me right, and they will, I'm going to remind you about this conversation. Every single week. My turn's coming.",
    "take": "tony_r2_side",
    "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_weak_link_1",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "weak_link",
+   "angle": "side",
+   "text": "Alright, let's be honest about it. Every team has one spot that keeps showing up on the tape for the wrong reasons. For this team, it's not hard to find.",
+   "take": "marcus_ex3_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_weak_link_2",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "weak_link",
+   "angle": "side",
+   "text": "It's not hard at all! I could pick it out with the sound off. You can't win in this league with a hole like that, Marcus. Teams find it, and they attack it every single week.",
+   "take": "tony_ex3_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_weak_link_3",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "weak_link",
+   "angle": "side",
+   "text": "And they do. But I'd be careful about blaming one group for everything. Sometimes that weak spot gets exposed because the guys around it aren't doing their jobs either.",
+   "take": "marcus_ex3_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_weak_link_4",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "weak_link",
+   "angle": "side",
+   "text": "That's a coach's answer. Sometimes the guy just isn't good enough! You fix that with a person, not a scheme. Go get somebody who can actually play.",
+   "take": "tony_ex3_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_weak_link_5",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "weak_link",
+   "angle": "side",
+   "text": "Fine. Then that's the offseason priority, ahead of everything else. Because if that spot looks the same next year, we're going to be having this exact conversation again.",
+   "take": "marcus_ex3_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_trade_grade_1",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "trade_grade",
+   "angle": "side",
+   "text": "Let's talk about the trade, because I've been waiting all week to say it. I loved it. I loved it the day they made it, and I love it even more now.",
+   "take": "tony_ex3_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_trade_grade_2",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "trade_grade",
+   "angle": "side",
+   "text": "You love every trade the day it happens. That's not a grade, Tony, that's a mood. Ask me again in a year, when we actually see what they gave up turns into.",
+   "take": "marcus_ex3_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_trade_grade_3",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "trade_grade",
+   "angle": "side",
+   "text": "In a year? Marcus, the season is happening right now! You make that move to win games this year, and that's exactly what it's doing.",
+   "take": "tony_ex3_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_trade_grade_4",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "trade_grade",
+   "angle": "side",
+   "text": "Some of it, sure. I'll give you that it filled a real need. But the price matters, and the bill always comes due eventually. It just doesn't show up in this week's box score.",
+   "take": "marcus_ex3_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_trade_grade_5",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "trade_grade",
+   "angle": "side",
+   "text": "Then I'll pay the bill when it comes. Banners don't care what you gave up to get them. Nobody remembers the price of a championship.",
+   "take": "tony_ex3_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_window_1",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "window",
+   "angle": "side",
+   "text": "Here's the question I keep coming back to. How long is this window actually open? Because good rosters don't stay together forever in this league. They get old, and they get expensive.",
+   "take": "marcus_ex4_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_window_2",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "window",
+   "angle": "side",
+   "text": "That's exactly why you push your chips in right now! You don't get a lot of shots at this. When you've got a real team, you go for it, every single year.",
+   "take": "tony_ex4_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_window_3",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "window",
+   "angle": "side",
+   "text": "Every single year is how you end up old, capped out, and out of draft picks. The best organizations keep the window open by being disciplined, not desperate.",
+   "take": "marcus_ex4_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_window_4",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "window",
+   "angle": "side",
+   "text": "Disciplined is a nice word for scared. I've watched too many good teams play it safe, and then sit there five years later wondering where all the time went.",
+   "take": "tony_ex4_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_window_5",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "window",
+   "angle": "side",
+   "text": "Fair enough. Maybe the answer is somewhere in the middle. Be aggressive this year, absolutely. Just don't mortgage the next three years to do it.",
+   "take": "marcus_ex4_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_january_1",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "january",
+   "angle": "side",
+   "text": "I'll say it right now. This team can win in January. They've got the toughness, they've got the playmakers, they've got everything you need this time of year.",
+   "take": "tony_ex4_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_january_2",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "january",
+   "angle": "side",
+   "text": "They've got a lot of it. But January football is a different sport. The windows get smaller, the weather gets worse, and every single mistake gets magnified.",
+   "take": "marcus_ex4_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_january_3",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "january",
+   "angle": "side",
+   "text": "And they've already won the ugly ones! You don't win like this all year by accident. That's a team that knows how to close out a game.",
+   "take": "tony_ex4_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_january_4",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "january",
+   "angle": "side",
+   "text": "Closing out a regular season game and closing out a playoff game against a team just as good as you are not the same thing. I need to see them do it on that stage.",
+   "take": "marcus_ex4_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_january_5",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "january",
+   "angle": "side",
+   "text": "Then pull up a chair, because you're about to see it. Write it down. I'm not backing off this one, not even a little bit.",
+   "take": "tony_ex4_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_close_game_1",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "close_game",
+   "angle": "side",
+   "text": "Close games are funny. People want to treat them like proof of something. Good teams win them, bad teams lose them. Most of the time, it's closer to a coin flip than anybody wants to admit.",
+   "take": "marcus_ex5_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_close_game_2",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "close_game",
+   "angle": "side",
+   "text": "A coin flip? Come on. Winning close games is a skill. It's poise, it's execution, it's your quarterback making the throw when everybody in the building knows it's coming.",
+   "take": "tony_ex5_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_close_game_3",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "close_game",
+   "angle": "side",
+   "text": "Some of it is skill. But over a whole season, those games tend to even out. A team that wins all of them one year usually gives a few of them back the next.",
+   "take": "marcus_ex5_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_close_game_4",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "close_game",
+   "angle": "side",
+   "text": "Not if you've got the right guys. Some teams just have it. They don't panic, they don't beat themselves, and they find a way. Every time.",
+   "take": "tony_ex5_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_close_game_5",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "close_game",
+   "angle": "side",
+   "text": "I'll meet you halfway. Finding a way is real. I just wouldn't build my whole opinion of a team on three or four plays at the end of a game.",
+   "take": "marcus_ex5_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_defense_qb_1",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "defense_qb",
+   "angle": "side",
+   "text": "You want to know what wins in this league? Defense. It's always been defense. You can score all the points you want, but in a big game, you need stops.",
+   "take": "tony_ex5_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_defense_qb_2",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "defense_qb",
+   "angle": "side",
+   "text": "That used to be true. The game has changed, though. The rules favor the offense now, and the teams that win it all usually have a quarterback who can carry them.",
+   "take": "marcus_ex5_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_defense_qb_3",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "defense_qb",
+   "angle": "side",
+   "text": "Carry them until the fourth quarter, when the other team won't let him breathe. That's when you find out real quick who's tough and who isn't.",
+   "take": "tony_ex5_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "marcus_x_defense_qb_4",
+   "host": "marcus",
+   "kind": "exchange",
+   "exchange": "defense_qb",
+   "angle": "side",
+   "text": "Look, you need both. [pause] But if I had to pick one side of the ball to be great? I'm picking the one with the quarterback. That's where the margin is.",
+   "take": "marcus_ex5_side",
+   "model": "eleven_v3"
+  },
+  {
+   "id": "tony_x_defense_qb_5",
+   "host": "tony",
+   "kind": "exchange",
+   "exchange": "defense_qb",
+   "angle": "side",
+   "text": "And I'd pick the guys who put that quarterback on his back. We'll agree to disagree, which, at this desk, is a pretty normal day at the office.",
+   "take": "tony_ex5_side",
+   "model": "eleven_v3"
   }
  ]
 }
