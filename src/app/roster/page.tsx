@@ -154,7 +154,7 @@ export default function RosterPage() {
     setBaseFormation,
     reorderDepthChart, resetDepthChart, restructureContract, extendPlayer,
     solicitTradingBlockProposals, createPlayer,
-    autoCutToRosterLimit,
+    autoCutToRosterLimit, renameTeam,
     demoteToPracticeSquad, promoteFromPracticeSquad, cutFromPracticeSquad,
     phase, week, seasonHistory, leagueSettings, resigningPlayers,
     schedule, playoffBracket,
@@ -180,6 +180,12 @@ export default function RosterPage() {
   const [extendError, setExtendError] = useState<string | null>(null);
   const [viewingTeamId, setViewingTeamId] = useState<string | null>(null);
 
+  // Team relocation MVP (kodak6lack / bitter__pill): offseason-gated modal to
+  // rename/relocate the user's team — city, name, abbreviation, colors.
+  const [showRelocate, setShowRelocate] = useState(false);
+  const [relocateForm, setRelocateForm] = useState({ city: '', name: '', abbreviation: '', primaryColor: '#1e3a8a', secondaryColor: '#f59e0b' });
+  const [relocateError, setRelocateError] = useState<string | null>(null);
+
   // Sort state for the Practice Squad view. Separate from the main roster
   // sort so navigating between tabs keeps each view's sort intact.
   type PsSortKey = 'name' | 'pos' | 'ovr' | 'age' | 'yrs' | 'salary';
@@ -197,6 +203,10 @@ export default function RosterPage() {
 
   // Whether we're in an offseason phase where restructuring makes sense
   const isOffseason = phase !== 'regular';
+
+  // Team relocation is only offered during true offseason personnel phases
+  // (matches renameTeam's gating in the store). Hidden in regular/playoffs/preseason.
+  const canRelocate = (['resigning', 'draft', 'freeAgency', 'offseason'] as string[]).includes(phase);
 
   // Current season champion team (for ring indicators)
   const currentChamp = champions?.find(c => c.season === season);
@@ -621,6 +631,19 @@ export default function RosterPage() {
                   className="text-xs font-bold text-yellow-600 hover:text-yellow-700 flex items-center gap-1"
                 >
                   + Create Player
+                </button>
+              )}
+              {!isSpectator && activeTeamId === userTeamId && canRelocate && (
+                <button
+                  onClick={() => {
+                    const t = teams.find(tm => tm.id === userTeamId);
+                    if (t) setRelocateForm({ city: t.city, name: t.name, abbreviation: t.abbreviation, primaryColor: t.primaryColor, secondaryColor: t.secondaryColor });
+                    setRelocateError(null);
+                    setShowRelocate(true);
+                  }}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 px-2 py-0.5 rounded border border-blue-300 bg-blue-50"
+                >
+                  🏟️ Rename / Relocate Team
                 </button>
               )}
               <span className={capSpace > 10 ? 'text-green-600' : capSpace > 0 ? 'text-amber-600' : 'text-red-600'}>
@@ -1912,6 +1935,127 @@ export default function RosterPage() {
                   }}
                 >
                   Confirm Restructure
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      {/* Rename / Relocate Team Modal */}
+      {showRelocate && (() => {
+        const t = teams.find(tm => tm.id === userTeamId);
+        if (!t) return null;
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowRelocate(false)}>
+            <div className="bg-[var(--surface)] rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="p-5 border-b border-[var(--border)]">
+                <h2 className="text-lg font-bold">Rename / Relocate Team</h2>
+                <p className="text-sm text-[var(--text-sec)] mt-0.5">Currently: {t.abbreviation} — {t.city} {t.name}</p>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">City</label>
+                    <input
+                      type="text"
+                      value={relocateForm.city}
+                      maxLength={24}
+                      onChange={e => setRelocateForm(f => ({ ...f, city: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Team Name</label>
+                    <input
+                      type="text"
+                      value={relocateForm.name}
+                      maxLength={24}
+                      onChange={e => setRelocateForm(f => ({ ...f, name: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Abbreviation</label>
+                  <input
+                    type="text"
+                    value={relocateForm.abbreviation}
+                    maxLength={4}
+                    onChange={e => setRelocateForm(f => ({ ...f, abbreviation: e.target.value.toUpperCase() }))}
+                    className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm uppercase"
+                  />
+                  <div className="text-xs text-[var(--text-sec)] mt-0.5">2–4 letters, e.g. LV, KC, SF</div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Primary Color</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={/^#[0-9a-fA-F]{6}$/.test(relocateForm.primaryColor) ? relocateForm.primaryColor : '#1e3a8a'}
+                        onChange={e => setRelocateForm(f => ({ ...f, primaryColor: e.target.value }))}
+                        className="h-9 w-12 rounded border border-[var(--border)] bg-transparent cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={relocateForm.primaryColor}
+                        maxLength={7}
+                        onChange={e => setRelocateForm(f => ({ ...f, primaryColor: e.target.value }))}
+                        className="flex-1 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm font-mono"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Secondary Color</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={/^#[0-9a-fA-F]{6}$/.test(relocateForm.secondaryColor) ? relocateForm.secondaryColor : '#f59e0b'}
+                        onChange={e => setRelocateForm(f => ({ ...f, secondaryColor: e.target.value }))}
+                        className="h-9 w-12 rounded border border-[var(--border)] bg-transparent cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={relocateForm.secondaryColor}
+                        maxLength={7}
+                        onChange={e => setRelocateForm(f => ({ ...f, secondaryColor: e.target.value }))}
+                        className="flex-1 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live preview */}
+                <div
+                  className="rounded-lg p-3 flex items-center gap-3"
+                  style={{ background: relocateForm.primaryColor, color: relocateForm.secondaryColor }}
+                >
+                  <span className="font-black text-lg">{relocateForm.abbreviation || '—'}</span>
+                  <span className="font-bold">{relocateForm.city || 'City'} {relocateForm.name || 'Name'}</span>
+                </div>
+
+                {relocateError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{relocateError}</div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="p-5 border-t border-[var(--border)] flex justify-end gap-2">
+                <Button size="sm" variant="secondary" onClick={() => setShowRelocate(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const err = renameTeam(userTeamId, relocateForm);
+                    if (err) { setRelocateError(err); return; }
+                    setShowRelocate(false);
+                  }}
+                >
+                  Confirm
                 </Button>
               </div>
             </div>
