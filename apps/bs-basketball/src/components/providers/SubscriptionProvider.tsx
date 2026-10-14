@@ -71,6 +71,31 @@ const SubscriptionContext = createContext<SubscriptionContextValue>({
 
 export const useSubscription = () => useContext(SubscriptionContext);
 
+/**
+ * When Stripe Checkout redirects back (?subscription=success&session_id=…),
+ * write the new subscription to Supabase right away so the user sees Premium
+ * immediately instead of a paywall that invites them to pay again.
+ */
+async function syncCheckoutReturn(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get('session_id');
+  if (params.get('subscription') !== 'success' || !sessionId) return;
+  try {
+    await fetch('/api/stripe/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    });
+  } catch (err) {
+    console.error('[SubscriptionProvider] checkout sync failed:', err);
+  } finally {
+    params.delete('session_id');
+    const qs = params.toString();
+    window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
+  }
+}
+
 interface ProfileRow {
   is_admin: boolean | null;
   podcast_credits_used: number | null;
@@ -228,7 +253,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         clearTimeout(authTimeout);
         setUser(currentUser);
         if (currentUser) {
-          fetchSubscription(currentUser).finally(() => setLoading(false));
+          syncCheckoutReturn()
+            .then(() => fetchSubscription(currentUser))
+            .finally(() => setLoading(false));
         } else {
           setLoading(false);
         }
