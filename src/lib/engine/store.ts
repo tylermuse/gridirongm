@@ -103,6 +103,11 @@ interface GameStore extends LeagueState {
     coverage?: 'man' | 'zone' | 'balanced';
     tempo?: 'fast' | 'normal' | 'slow';
   } | null) => void;
+  /** Rename / relocate an existing team's identity — city, name, abbreviation,
+   *  and colors — updating the team in place. Offseason-gated. Returns '' on
+   *  success or a human-readable error reason. No SAVE_VERSION bump: every
+   *  field already exists on the Team shape. */
+  renameTeam: (teamId: string, config: { city: string; name: string; abbreviation: string; primaryColor: string; secondaryColor: string }) => string;
   /** Generate the draft class preview if it doesn't already exist for the current season. */
   ensureDraftClassPreview: () => void;
   simWeek: () => void;
@@ -3160,6 +3165,45 @@ export const useGameStore = create<GameStore>()(
 
       setNextGamePlan: (plan) => {
         set({ nextGamePlan: plan ?? undefined });
+      },
+
+      renameTeam: (teamId, config) => {
+        const state = get();
+        // Only allowed in true offseason personnel phases — relocating a team
+        // mid-season (or during playoffs) would be disruptive. Matches the
+        // button gating on the roster page.
+        const OFFSEASON_PHASES = ['resigning', 'draft', 'freeAgency', 'offseason'];
+        if (!OFFSEASON_PHASES.includes(state.phase)) {
+          return 'Team relocation is only available during the offseason.';
+        }
+        const team = state.teams.find(t => t.id === teamId);
+        if (!team) return 'Team not found.';
+
+        const city = config.city.trim();
+        const name = config.name.trim();
+        const abbreviation = config.abbreviation.trim().toUpperCase();
+        const primaryColor = config.primaryColor.trim();
+        const secondaryColor = config.secondaryColor.trim();
+
+        if (city.length < 2 || city.length > 24) return 'City must be 2–24 characters.';
+        if (name.length < 2 || name.length > 24) return 'Team name must be 2–24 characters.';
+        if (!/^[A-Z]{2,4}$/.test(abbreviation)) return 'Abbreviation must be 2–4 letters (A–Z).';
+        const hex = /^#[0-9a-fA-F]{6}$/;
+        if (!hex.test(primaryColor)) return 'Primary color must be a 6-digit hex value like #0A2342.';
+        if (!hex.test(secondaryColor)) return 'Secondary color must be a 6-digit hex value like #0A2342.';
+
+        // Abbreviation is used as a display/market key — keep it unique.
+        const clash = state.teams.some(t => t.id !== teamId && t.abbreviation.toUpperCase() === abbreviation);
+        if (clash) return `Abbreviation ${abbreviation} is already in use by another team.`;
+
+        set({
+          teams: state.teams.map(t =>
+            t.id === teamId
+              ? { ...t, city, name, abbreviation, primaryColor, secondaryColor }
+              : t
+          ),
+        });
+        return '';
       },
 
       ensureDraftClassPreview: () => {

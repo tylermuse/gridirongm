@@ -3,8 +3,8 @@
  *
  * Two stages with very different costs:
  *  1. The script: Claude writes the conversation, the composer lays out the
- *     episode. A few cents; ~30s. Done ahead of time when a premium user
- *     opens the Spotlight (POST /api/spotlight-show/script) and cached.
+ *     episode. A few cents; ~30s. Done when someone presses Watch Show
+ *     (inside POST /api/spotlight-show) and cached.
  *  2. The voices: ElevenLabs v3 voices each topic's conversation. The real
  *     cost; only when someone presses Watch Show (one podcast credit), and
  *     streamed to the player block by block so playback starts at once.

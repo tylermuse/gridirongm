@@ -12,7 +12,7 @@
  * are compact and JSON-safe so they double as the LLM prompt + cache key.
  */
 
-import type { Player, Team, Position } from '@/types';
+import type { Player, PlayoffMatchup, Team, Position } from '@/types';
 import type { DebateExchange } from './debate';
 import { buildMatchupMetrics, rankForMetric } from './matchupRanks';
 import { meanStarterOvr } from './simTelemetry';
@@ -40,11 +40,17 @@ export interface PregameTeamFacts {
   city: string;
   name: string;
   abbr: string;
+  /** Regular-season record (playoff games don't count toward it). */
   record: string;
   wins: number;
   losses: number;
-  /** Positive = win streak, negative = losing streak. */
+  /** Positive = win streak, negative = losing streak — including this
+   *  postseason's wins, so a team in the title game is never "on a losing
+   *  streak" because it lost its last few regular-season games. */
   streak: number;
+  /** Playoff games already won this postseason, in order (empty in the
+   *  regular season and before a team's first playoff game). */
+  playoffRun: string[];
   gamesPlayed: number;
   ppg: number;
   papg: number;
@@ -277,6 +283,7 @@ function teamFacts(
     wins: r.wins,
     losses: r.losses,
     streak: r.streak,
+    playoffRun: [],
     gamesPlayed: gp,
     ppg: gp > 0 ? Math.round((r.pointsFor / gp) * 10) / 10 : 0,
     papg: gp > 0 ? Math.round((r.pointsAgainst / gp) * 10) / 10 : 0,
@@ -288,6 +295,29 @@ function teamFacts(
     defender: fact(defender, defenderLine, allPlayers, defStat),
     injuries,
   };
+}
+
+const PLAYOFF_ROUND: Record<number, string> = { 1: 'Wild Card', 2: 'Divisional Round', 3: 'Conference Championship', 4: 'Championship' };
+
+/**
+ * The team's record only covers the regular season, and so does its streak.
+ * In the playoffs, fold in the games it has already won this postseason:
+ * list them, and count them toward the streak (a playoff team that's still
+ * alive has won every playoff game it played).
+ */
+export function playoffAdjusted(f: PregameTeamFacts, gameId: string, bracket: PlayoffMatchup[] | null | undefined, teams: Team[]): PregameTeamFacts {
+  const won = (bracket ?? [])
+    .filter(m => m.id !== gameId && m.winnerId === f.id && (m.homeTeamId === f.id || m.awayTeamId === f.id))
+    .sort((a, b) => a.round - b.round);
+  if (won.length === 0) return f;
+  const playoffRun = won.map(m => {
+    const home = m.homeTeamId === f.id;
+    const opp = teams.find(t => t.id === (home ? m.awayTeamId : m.homeTeamId));
+    const us = (home ? m.homeScore : m.awayScore) ?? 0;
+    const them = (home ? m.awayScore : m.homeScore) ?? 0;
+    return `${PLAYOFF_ROUND[m.round] ?? 'Playoffs'}: beat ${opp ? `${opp.city} ${opp.name}` : 'their opponent'} ${us}-${them}`;
+  });
+  return { ...f, playoffRun, streak: won.length + Math.max(0, f.streak) };
 }
 
 export function buildPregameFacts(args: {
@@ -302,10 +332,13 @@ export function buildPregameFacts(args: {
   /** Whole league, for ranks. */
   teams: Team[];
   players: Player[];
+  /** The bracket, for what each team has already won this postseason. */
+  playoffBracket?: PlayoffMatchup[] | null;
 }): PregameFacts {
   const metrics = buildMatchupMetrics(args.players);
-  const home = teamFacts(args.homeTeam, args.homePlayers, args.teams, args.players, metrics);
-  const away = teamFacts(args.awayTeam, args.awayPlayers, args.teams, args.players, metrics);
+  const withRun = (f: PregameTeamFacts) => playoffAdjusted(f, args.gameId, args.playoffBracket, args.teams);
+  const home = withRun(teamFacts(args.homeTeam, args.homePlayers, args.teams, args.players, metrics));
+  const away = withRun(teamFacts(args.awayTeam, args.awayPlayers, args.teams, args.players, metrics));
   return {
     gameId: args.gameId,
     season: args.season,
@@ -383,6 +416,11 @@ export function generateTemplatedPregame(f: PregameFacts): PregameShow {
       `Win or go HOME, Marcus! Nobody cares about the regular season anymore. This is where legends are MADE.`,
       `Playoff football, baby! Throw the records out the window — it's about who WANTS it more tonight.`,
     ], rng));
+    // How each team got here (games already won this postseason).
+    const ran = [away, home].filter(t => t.playoffRun.length > 0);
+    if (ran.length) {
+      say('stats', ran.map(t => `${t.city} is ${t.streak} straight, ${t.playoffRun.length} of them in the playoffs: ${t.playoffRun.map(r => r.replace(/^[^:]+: /, '')).join(', then ')}.`).join(' '));
+    }
   } else if (Math.abs(home.streak) >= 3 || Math.abs(away.streak) >= 3) {
     const hot = Math.abs(home.streak) >= Math.abs(away.streak) ? home : away;
     say('hottake', hot.streak > 0

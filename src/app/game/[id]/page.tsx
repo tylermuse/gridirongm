@@ -1068,7 +1068,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     if (!pregameOpen || !game || !homeTeam || !awayTeam) return null;
     return buildPregameFacts({
       gameId: game.id, season: game.season, week: game.week, isPlayoff: isPlayoffGame,
-      homeTeam, awayTeam, homePlayers, awayPlayers, teams, players,
+      homeTeam, awayTeam, homePlayers, awayPlayers, teams, players, playoffBracket,
     });
     // Built once when the show opens; roster churn mid-show shouldn't reshuffle it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
