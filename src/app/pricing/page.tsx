@@ -63,6 +63,9 @@ export default function PricingPage() {
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
+      } else if (data.alreadySubscribed) {
+        alert(data.error);
+        router.push('/settings');
       } else {
         alert(data.error || 'Failed to start checkout. Please try again.');
       }
