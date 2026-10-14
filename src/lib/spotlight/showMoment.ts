@@ -63,6 +63,6 @@ export function momentNote(m: EpisodeMoment | undefined, record?: string | null)
   if (m.phase === 'preseason') return 'PRESEASON — no games have been played yet this season. Talk about expectations and questions, not results.';
   if (m.phase === 'playoffs') return m.narrative === 'seasonOver' ? `PLAYOFFS — the team's season just ended (eliminated, or won it all — see the notes). Final record${rec}.` : `PLAYOFFS — the team is still alive; the next game is win or go home. Record${rec}.`;
   if (m.narrative === 'seasonOver') return `END OF REGULAR SEASON — the team missed the playoffs. Final record${rec}.`;
-  if (m.narrative === 'tradeDeadline') return `REGULAR SEASON — trade deadline week. Record so far${rec}.`;
+  if (m.narrative === 'tradeDeadline') return `REGULAR SEASON — trade deadline week. Record so far${rec}. This episode is about what the team needs and who to go get: the holes in the roster, the kind of player that fills each one, specific targets, the price. The last game gets one quick topic and is not mentioned again — every other topic is needs and moves.`;
   return `REGULAR SEASON. Record so far${rec}.`;
 }

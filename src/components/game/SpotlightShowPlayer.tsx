@@ -18,6 +18,7 @@ import { computeShowStatLine, ordinal, rankTone, statsMentioned, type ShowStat, 
 import { topicTeam } from '@/lib/spotlight/showVisuals';
 import { focusForLine, measurableIn, type Focus } from '@/lib/spotlight/showFocus';
 import { planShots } from '@/lib/spotlight/showShots';
+import { clipLevel, levelGain, speechDb } from '@/lib/spotlight/loudness';
 import type { TileStat } from '@/lib/spotlight/playerStats';
 import type { GameTopic } from '@/lib/spotlight/showGame';
 import { conferenceRace, divisionTable } from '@/lib/spotlight/showStandings';
@@ -181,6 +182,8 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   const topicStart = useRef(0);
   const endTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const spansRef = useRef<Map<number, { start: number; end: number }>>(new Map());
+  /** Speech loudness (dBFS) of each generated line, for leveling. */
+  const levelsRef = useRef<Map<number, number | null>>(new Map());
 
   // Only mount <video> elements for clips this episode actually uses.
   const videoSegs = useMemo(() => {
@@ -280,6 +283,19 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     }
   }, []);
 
+  /** Output bus: everything goes through a limiter (leveling boosts quiet
+   *  lines up to ~+14 dB; this keeps any peak from clipping). */
+  const outRef = useRef<AudioNode | null>(null);
+  const out = useCallback((ctx: AudioContext): AudioNode => {
+    if (!outRef.current || outRef.current.context !== ctx) {
+      const c = ctx.createDynamicsCompressor();
+      c.threshold.value = -6; c.knee.value = 4; c.ratio.value = 12; c.attack.value = 0.003; c.release.value = 0.2;
+      c.connect(ctx.destination);
+      outRef.current = c;
+    }
+    return outRef.current;
+  }, []);
+
   const gainFor = useCallback((key: string, v: HTMLVideoElement) => {
     const ctx = ctxRef.current;
     if (!ctx) return null;
@@ -287,11 +303,11 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     if (!g) {
       g = ctx.createGain();
       ctx.createMediaElementSource(v).connect(g);
-      g.connect(ctx.destination);
+      g.connect(out(ctx));
       videoGains.current.set(key, g);
     }
     return g;
-  }, []);
+  }, [out]);
 
   /** What the voiceover at segment `i` is about (a player, a unit, a team
    *  stat, or nothing measurable) — decides the graphic. */
@@ -396,6 +412,10 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       v.onended = advance; // fallback
       resumeClip.current = () => armClipEnd(v, until, advance);
       const isVo = seg.kind === 'clip' && !!seg.voiceover;
+      // Level this clip (fixed clips route through the graph too).
+      const g = gainFor(key, v);
+      const lvl = levelGain(clipLevel(videoSrc(seg)));
+      if (ctx && g) { g.gain.cancelScheduledValues(ctx.currentTime); g.gain.setValueAtTime(lvl, ctx.currentTime); }
       v.addEventListener('playing', () => {
         if (tokenRef.current !== token) return;
         armClipEnd(v, until, advance);
@@ -408,7 +428,6 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       }
       if (seg.kind === 'phrase') {
         if (!prev || prev.speaker !== seg.speaker || prev.kind === 'tts') showLowerThird();
-        const g = gainFor(key, v);
         const buf = seg.slot ? ordinalBufs.current.get(`${seg.speaker}/${seg.slot.rank}`) : undefined;
         if (ctx && g && seg.slot && buf) {
           // Replace the placeholder rank: duck the clip, play the real one.
@@ -422,16 +441,18 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
           const rate = Math.min(1.06, Math.max(1, buf.duration / Math.max(0.2, win)));
           const hold = Math.max(win, buf.duration / rate);
           g.gain.cancelScheduledValues(ctx.currentTime);
-          g.gain.setValueAtTime(slot.start - from < 0.08 ? 0 : 1, ctx.currentTime);
+          g.gain.setValueAtTime(slot.start - from < 0.08 ? 0 : lvl, ctx.currentTime);
           const schedule = () => {
             if (tokenRef.current !== token) return;
             const at = ctx.currentTime + Math.max(0, slot.start - v.currentTime);
             const s = ctx.createBufferSource();
             s.buffer = buf;
             s.playbackRate.value = rate;
-            s.connect(ctx.destination);
+            const sg = ctx.createGain();
+            sg.gain.value = lvl; // the rank is cut from the same host's speech
+            s.connect(sg).connect(out(ctx));
             g.gain.setValueAtTime(0, at);
-            g.gain.setValueAtTime(1, at + hold);
+            g.gain.setValueAtTime(lvl, at + hold);
             s.start(at);
             slotSrcRef.current = s;
           };
@@ -461,11 +482,13 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     const to = Math.min(buf.duration, span.end + TAIL_PAD);
     const src = ctx.createBufferSource();
     src.buffer = buf;
-    src.connect(ctx.destination);
+    const lg = ctx.createGain();
+    lg.gain.value = levelGain(levelsRef.current.get(i));
+    src.connect(lg).connect(out(ctx));
     src.onended = advance;
     srcRef.current = src;
     src.start(0, from, to - from);
-  }, [armClipEnd, enterGraphic, gainFor, showLowerThird, stopAll]);
+  }, [armClipEnd, enterGraphic, gainFor, out, showLowerThird, stopAll]);
   // Latest sequencer and phase for callbacks that outlive a render (voices
   // arriving from the stream).
   const playSegmentRef = useRef(playSegment);
@@ -487,7 +510,9 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       const line = ctx.createBuffer(block.numberOfChannels, to - from, sr);
       for (let c = 0; c < block.numberOfChannels; c++) line.copyToChannel(block.getChannelData(c).subarray(from, to), c);
       buffersRef.current.set(l.seg, line);
-      spansRef.current.set(l.seg, speechSpan(line));
+      const span = speechSpan(line);
+      spansRef.current.set(l.seg, span);
+      levelsRef.current.set(l.seg, speechDb(line, span.start, span.end));
     }
     setAudioVersion(v => v + 1);
     resumeWaiting();
@@ -596,6 +621,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
       ctxRef.current = ctx;
       buffersRef.current = new Map();
       spansRef.current = new Map();
+      levelsRef.current = new Map();
       ordinalBufs.current = new Map();
 
       if (!(res.headers.get('content-type') ?? '').includes('ndjson')) {

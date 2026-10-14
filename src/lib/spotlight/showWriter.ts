@@ -126,6 +126,36 @@ const EXCHANGES: { id: string; when: string; fits: (stats?: ShowStatLine | null)
     when: 'Only when the notes say they have won several games in a row or are on a hot stretch, in a topic about whether they are for real. Tony opens "This team is for real."',
     fits: stats => { const [w, l] = recordOf(stats); return w >= l; },
   },
+  {
+    id: 'weak_link',
+    when: 'A topic about the one position group or unit holding the team back (the notes name a weak unit or a bad rank). Marcus opens "Every team has one spot that keeps showing up on the tape for the wrong reasons", so set it up with a line about that unit; it ends on fixing it in the offseason.',
+    fits: () => true,
+  },
+  {
+    id: 'trade_grade',
+    when: 'Only when the notes say the team made a trade this season, in a topic grading it. Tony opens "Let\'s talk about the trade… I loved it", so set it up with Marcus bringing up the trade they made.',
+    fits: () => true,
+  },
+  {
+    id: 'window',
+    when: 'A winning team, in a topic about how long their contending window stays open (an aging core, the cap, going all-in). Marcus opens "How long is this window actually open?"',
+    fits: stats => { const [w, l] = recordOf(stats); return w > l; },
+  },
+  {
+    id: 'january',
+    when: 'A winning team late in the season or in the playoffs, in a topic about whether they can win in the postseason. Tony opens "This team can win in January."',
+    fits: stats => { const [w, l] = recordOf(stats); return w > l; },
+  },
+  {
+    id: 'close_game',
+    when: 'Only when the notes show the game just played was decided by one score (8 points or fewer), in the game breakdown or right after it. Marcus opens "Close games are funny… closer to a coin flip than anybody wants to admit."',
+    fits: () => true,
+  },
+  {
+    id: 'defense_qb',
+    when: 'A topic about the team\'s identity: whether their defense or their quarterback/offense is what wins for them. Tony opens "You want to know what wins in this league? Defense."',
+    fits: () => true,
+  },
 ];
 
 const recordOf = (stats?: ShowStatLine | null): [number, number] => {

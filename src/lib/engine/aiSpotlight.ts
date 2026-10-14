@@ -13,6 +13,7 @@
  *  - weekly: standard weekly analysis (default)
  */
 
+import { computeTradeNeeds } from '@/lib/spotlight/tradeNeeds';
 import type { Team, Player, NewsItem, PlayoffMatchup, DraftSelection } from '@/types';
 
 export type NarrativeMoment = 'preseason' | 'tradeDeadline' | 'playoffsStart' | 'seasonOver' | 'weekly';
@@ -336,15 +337,9 @@ export function fetchAiSpotlight(opts: FetchOptions): Promise<void> {
       .map(n => n.headline);
     teamData.tradesThisSeason = seasonTrades;
 
-    // Roster needs: find weakest position groups
-    const posGroups: Record<string, Player[]> = {};
-    for (const p of activeRoster) {
-      (posGroups[p.position] ??= []).push(p);
-    }
-    const groupAvgs = Object.entries(posGroups).map(([pos, players]) => ({
-      pos, avgOvr: Math.round(players.reduce((s, p) => s + p.ratings.overall, 0) / players.length), count: players.length,
-    })).sort((a, b) => a.avgOvr - b.avgOvr);
-    teamData.positionGroupStrength = groupAvgs;
+    // Roster needs: where each starting group ranks in the league, and real
+    // players on non-contenders who'd be an upgrade at the biggest holes.
+    teamData.tradeNeeds = computeTradeNeeds(team, allTeams, allPlayers);
   }
 
   if (narrative === 'playoffsStart') {

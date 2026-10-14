@@ -48,12 +48,17 @@ def main(wt):
             print(f"{take}: no render yet — skipped (its phrases stay out of the manifest)")
             continue
         # The generators animate the football player on the studio TVs;
-        # freeze those screens to the first frame before cutting.
+        # freeze those screens before cutting.
         vid = os.path.join(ROOT, "takes", take + ".frozen.mp4")
         if not os.path.exists(vid):
             print("freezing studio screens in", take, flush=True)
             side = take.endswith("_side")
-            freeze(raw, vid, screens=SIDE_SCREENS[take.split("_")[0]] if side else None)
+            host = take.split("_")[0]
+            # Every take of a host/angle gets its TVs from the same still (the
+            # image the take was rendered from), so a cut from one take to
+            # another doesn't make the player on the screen jump.
+            still = os.path.join(ROOT, "side", host + "_side.png") if side else os.path.join(ROOT, "portraits", host + ".png")
+            freeze(raw, vid, screens=SIDE_SCREENS[host] if side else None, plate_img=still)
         vd = dur(vid)
         drift = vd - t["duration"]
         print(f"{take}: video {vd:.2f}s vs audio {t['duration']:.2f}s (drift {drift:+.2f}s)")

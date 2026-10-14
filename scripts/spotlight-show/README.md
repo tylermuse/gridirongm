@@ -13,6 +13,11 @@ Working files go to the gitignored `<repo>/show-assets/`.
    `public/show/phrases/`, copies ordinals to `public/show/ordinals/`, writes
    `src/lib/spotlight/phraseManifest.json` (with slot windows).
 
+5. `python3 measure_levels.py <worktree>` — measures every clip's speech loudness into
+   `src/lib/spotlight/clipLevels.json`; the player levels every clip and generated line to
+   one target (`TARGET_DB` in `src/lib/spotlight/loudness.ts`). Rerun after any new or
+   re-cut clips (the loudness test fails if a clip has no level).
+
 Adding a phrase = add it to `phrases.json`, then rerun 1–4 (only new phrases are voiced; you
 can render just a small take for the new ones).
 
