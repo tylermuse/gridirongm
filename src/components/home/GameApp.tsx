@@ -30,6 +30,7 @@ import { getAiSpotlightState, subscribeAiSpotlight, fetchAiSpotlight, detectNarr
 import { ALL_ACHIEVEMENTS } from '@/lib/engine/achievements';
 import { DebateBubble } from '@/components/game/DebateBubble';
 import { formatRecord, findRivalry } from '@/types';
+import OwnerMeter from '@/components/OwnerMeter';
 import { ProgressRing } from '@/components/shared/ProgressRing';
 import { AdSlot } from '@/components/AdSlot';
 
@@ -1196,6 +1197,14 @@ function Dashboard() {
                 <Badge variant={userTeam.record.wins > userTeam.record.losses ? 'green' : userTeam.record.wins < userTeam.record.losses ? 'red' : 'default'} size="md">
                   {formatRecord(userTeam.record)}
                 </Badge>
+                {phase === 'regular' && (
+                  <OwnerMeter
+                    wins={userTeam.record.wins}
+                    losses={userTeam.record.losses}
+                    teamOvr={roster.length > 0 ? Math.round(roster.reduce((s, p) => s + p.ratings.overall, 0) / roster.length) : 60}
+                    ownerPersonality={userTeam.ownerPersonality}
+                  />
+                )}
                 <span className="text-xs sm:text-sm whitespace-nowrap" style={{ color: 'var(--team-text-on-primary)', opacity: 0.85 }}>
                   {userTeam.conference} {userTeam.division}
                 </span>
