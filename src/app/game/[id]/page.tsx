@@ -53,6 +53,8 @@ function mergePlayerStats(
 // below + server-side in /api/game-audio). This env flag is only a local-dev
 // override so it can be tested on localhost without a premium account.
 const GAME_AUDIO_DEV_OVERRIDE = process.env.NEXT_PUBLIC_GAME_AUDIO === '1';
+/** A 50ms silent MP3: played inside the tap to unlock audio on phones. */
+const HALFTIME_UNLOCK_AUDIO = 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA//NwwAAAAAAAAAAAAEluZm8AAAAPAAAABAAAAlgAenp6enp6enp6enp6enp6enp6enp6enp6pqampqampqampqampqampqampqampqamptPT09PT09PT09PT09PT09PT09PT09PT09P/////////////////////////////////AAAAAExhdmM2MC4zMQAAAAAAAAAAAAAAACQCcQAAAAAAAAJY+/rsqgAAAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NCxKMAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
 
 // ---------------------------------------------------------------------------
 // Speed settings
@@ -725,6 +727,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // Premium spoken halftime breakdown (Marcus + Tony).
   const [htAudio, setHtAudio] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle');
   const htAudioRef = useRef<HTMLAudioElement | null>(null);
+  // The rendered breakdown for this game's half (object URL): replays are
+  // instant and never regenerate.
+  const htUrlRef = useRef<string | null>(null);
+  // False once the report is closed, so a breakdown that finishes rendering
+  // after the user left doesn't start talking.
+  const htWantedRef = useRef(false);
 
   // Persist the confirmed game plan across a mobile back-nav remount. Without it,
   // gamePlanReady + livePlan (ephemeral React state) reset to the modal's defaults
@@ -988,8 +996,24 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   }, [halftimeReached, isFinished]);
 
   // Premium: generate + play the in-depth spoken halftime breakdown.
+  // Phones only let audio start inside the tap itself; the old version started
+  // it after the (slow) generation request, so the first tap or two were
+  // silently blocked. Now the tap starts (unlocks) the audio element right
+  // away with a tiny silent clip, and the same element plays the breakdown
+  // when it arrives.
   const playHalftimeAudio = useCallback(async () => {
-    if (htAudio === 'playing') { htAudioRef.current?.pause(); setHtAudio('idle'); return; }
+    const audio = htAudioRef.current ?? (htAudioRef.current = new Audio());
+    if (htAudio === 'playing') { audio.pause(); setHtAudio('idle'); return; }
+    if (htAudio === 'loading') return;
+    htWantedRef.current = true;
+    if (htUrlRef.current) {
+      audio.src = htUrlRef.current;
+      audio.currentTime = 0;
+      audio.play().then(() => setHtAudio('playing')).catch(() => setHtAudio('error'));
+      return;
+    }
+    audio.src = HALFTIME_UNLOCK_AUDIO;
+    audio.play().catch(() => { /* unlock only */ });
     const ev = allEvents[halftimeEventIdx];
     if (!ev || !homeTeam || !awayTeam) return;
     setHtAudio('loading');
@@ -1000,22 +1024,27 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         homeScore: ev.homeScore, awayScore: ev.awayScore,
         stats, players: [...homePlayers, ...awayPlayers],
       });
-      const res = await fetch('/api/game-audio', {
+      const res = await fetch('/api/halftime-audio', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lines }),
       });
       if (!res.ok) { setHtAudio('error'); return; }
       const url = URL.createObjectURL(await res.blob());
-      const audio = htAudioRef.current ?? (htAudioRef.current = new Audio());
-      audio.onended = () => { setHtAudio('idle'); URL.revokeObjectURL(url); };
+      htUrlRef.current = url;
+      audio.onended = () => setHtAudio('idle');
+      if (!htWantedRef.current) { setHtAudio('idle'); return; }
       audio.src = url;
       await audio.play();
       setHtAudio('playing');
     } catch { setHtAudio('error'); }
-  }, [htAudio, allEvents, halftimeEventIdx, homeTeam, awayTeam, halftimeStatsFor]);
-  useEffect(() => () => { htAudioRef.current?.pause(); }, []); // stop on unmount
+  }, [htAudio, allEvents, halftimeEventIdx, homeTeam, awayTeam, homePlayers, awayPlayers, halftimeStatsFor]);
+  useEffect(() => () => {
+    htAudioRef.current?.pause();
+    if (htUrlRef.current) URL.revokeObjectURL(htUrlRef.current);
+  }, []); // stop on unmount
   const closeHalftimeReport = () => {
     setShowHalftimeReport(false);
+    htWantedRef.current = false;
     if (htAudio === 'playing') { htAudioRef.current?.pause(); setHtAudio('idle'); }
     if (resumeAfterHalftimeRef.current && !isFinished) setIsPlaying(true);
     resumeAfterHalftimeRef.current = false;
@@ -1039,7 +1068,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     if (!pregameOpen || !game || !homeTeam || !awayTeam) return null;
     return buildPregameFacts({
       gameId: game.id, season: game.season, week: game.week, isPlayoff: isPlayoffGame,
-      homeTeam, awayTeam, homePlayers, awayPlayers, teams, players,
+      homeTeam, awayTeam, homePlayers, awayPlayers, teams, players, playoffBracket,
     });
     // Built once when the show opens; roster churn mid-show shouldn't reshuffle it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3103,14 +3132,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 })}
               </div>
 
-              {canBroadcast ? (
+              {isPremium ? (
                 <button
                   onClick={playHalftimeAudio}
                   disabled={htAudio === 'loading'}
                   className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-60 transition-all"
                   title="Marcus & Tony break down both teams and the second-half adjustments"
                 >
-                  {htAudio === 'loading' ? '🔊 Generating breakdown…'
+                  {htAudio === 'loading' ? '🔊 Marcus & Tony are recording it…'
                     : htAudio === 'playing' ? '⏸ Stop breakdown'
                     : htAudio === 'error' ? '🔊 Retry audio breakdown'
                     : '🔊 Listen — in-depth breakdown'}

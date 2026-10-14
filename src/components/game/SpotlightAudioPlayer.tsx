@@ -171,13 +171,17 @@ export function SpotlightAudioPlayer({ topics, teamName }: SpotlightAudioPlayerP
   }
 
   if (view === 'exhausted') {
+    // Credits-exhausted used to be a dead-end gray label with no path forward.
+    // Mirror the `locked` state: make it a clickable link to /pricing so the
+    // monetization moment sells the upgrade instead of going silent. (vampkitty_07)
     return (
-      <div
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-500"
-        title={`You've used this month's ${podcastCredits.limit} podcast episodes`}
+      <Link
+        href="/pricing"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700 hover:bg-purple-600 hover:text-white transition-colors"
+        title={`You've used this month's ${podcastCredits.limit} podcast episodes · resets ${resetLabel}`}
       >
-        <span>🎧</span> Out of episodes · resets {resetLabel}
-      </div>
+        <span>🎧</span> Credits used up — Upgrade for more
+      </Link>
     );
   }
 
