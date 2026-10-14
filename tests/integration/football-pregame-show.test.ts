@@ -118,3 +118,43 @@ describe('parseAiPregame', () => {
     expect(['HOM', 'AWY']).toContain(show.picks.hottake.abbr);
   });
 });
+
+describe('pregame facts in the playoffs', () => {
+  // Houston lost its last three regular-season games, then won two playoff
+  // games to reach the title game. It is not "on a three-game losing streak".
+  const hou = makeTeam('HOU', 'Houston', 11, 6, 410, 350, -3);
+  const dal = makeTeam('DAL', 'Dallas', 10, 7, 400, 360, -1);
+  const kc = makeTeam('KC', 'Kansas City', 12, 5, 0, 0);
+  const buf = makeTeam('BUF', 'Buffalo', 13, 4, 0, 0);
+  const phi = makeTeam('PHI', 'Philadelphia', 12, 5, 0, 0);
+  const bracket = [
+    { id: 'div-a', round: 2, conference: 'AC', homeTeamId: 'KC', awayTeamId: 'HOU', homeSeed: 1, awaySeed: 4, homeScore: 20, awayScore: 23, winnerId: 'HOU' },
+    { id: 'conf-a', round: 3, conference: 'AC', homeTeamId: 'BUF', awayTeamId: 'HOU', homeSeed: 2, awaySeed: 4, homeScore: 17, awayScore: 24, winnerId: 'HOU' },
+    { id: 'conf-n', round: 3, conference: 'NC', homeTeamId: 'PHI', awayTeamId: 'DAL', homeSeed: 1, awaySeed: 5, homeScore: 19, awayScore: 30, winnerId: 'DAL' },
+    { id: 'final', round: 4, conference: 'Championship', homeTeamId: 'HOU', awayTeamId: 'DAL', homeSeed: 4, awaySeed: 5, homeScore: null, awayScore: null, winnerId: null },
+  ] as never;
+  const f = buildPregameFacts({
+    gameId: 'final', season: 2026, week: 104, isPlayoff: true,
+    homeTeam: hou, awayTeam: dal, homePlayers: [], awayPlayers: [], teams: [hou, dal, kc, buf, phi], players: [],
+    playoffBracket: bracket,
+  });
+
+  it('counts playoff wins in the streak and lists the run', () => {
+    expect(f.home.streak).toBe(2);
+    expect(f.home.playoffRun).toEqual(['Divisional Round: beat Kansas City Kansas Citys 23-20', 'Conference Championship: beat Buffalo Buffalos 24-17']);
+    expect(f.away.streak).toBe(1);
+    expect(f.home.record).toBe('11-6'); // still the regular-season mark
+  });
+
+  it('the templated show talks about the run, never a losing streak', () => {
+    const text = generateTemplatedPregame(f).exchanges.map(e => e.text).join('\n');
+    expect(text).toMatch(/Houston is 2 straight/);
+    expect(text).not.toMatch(/in a row|losing/i);
+  });
+
+  it('leaves regular-season games alone', () => {
+    const r = buildPregameFacts({ gameId: 'g', season: 2026, week: 10, isPlayoff: false, homeTeam: hou, awayTeam: dal, homePlayers: [], awayPlayers: [], teams: [hou, dal], players: [] });
+    expect(r.home.streak).toBe(-3);
+    expect(r.home.playoffRun).toEqual([]);
+  });
+});
