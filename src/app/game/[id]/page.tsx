@@ -2095,14 +2095,17 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             </div>
           </div>
 
-          {/* Row 2: game toggles, left-aligned under a divider. Full-width
-              buttons on phones, natural width on desktop. Hidden when empty. */}
+          {/* Row 2: game toggles, left-aligned under a divider. On phones each
+              button keeps its label on one line and the row wraps, with the
+              buttons stretching to fill each line (the defensive Timeout makes
+              five, which didn't fit one row and clipped the labels); natural
+              width on desktop. Hidden when empty. */}
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--border)] empty:hidden">
           {/* Game Plan — only when user is in this game and game isn't done */}
           {userInGame && !isFinished && (
             <button
               onClick={() => { setIsPlaying(false); setShowMidGamePlan(true); }}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center h-8 px-3 rounded-md text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-all"
+              className="flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-all"
               title="Adjust your game plan (pauses the game)"
             >
               📋 Game Plan
@@ -2125,7 +2128,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   trackLiveCoach('live_coach_off', { source: 'toolbar' });
                 }
               }}
-              className={`flex-1 sm:flex-none inline-flex items-center justify-center h-8 px-3 rounded-md text-xs font-semibold transition-all ${
+              className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
                 liveCoachOn
                   ? 'bg-green-600 text-white hover:bg-green-700'
                   : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
@@ -2140,7 +2143,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             <button
               onClick={callDefensiveTimeout}
               disabled={userTimeoutsLeft <= 0}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center h-8 px-3 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-all"
+              className="flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-all"
               title={userTimeoutsLeft <= 0 ? 'No timeouts left this half'
                 : defensiveTimeoutSaves > 0 ? `Stop the clock — saves ${defensiveTimeoutSaves}s of runoff`
                 : 'Clock is already stopped — a timeout won\'t save time right now'}
@@ -2153,7 +2156,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           {!isFinished && (
             <button
               onClick={() => setAutoSubsOn(v => !v)}
-              className={`flex-1 sm:flex-none inline-flex items-center justify-center h-8 px-3 rounded-md text-xs font-semibold transition-all ${
+              className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
                 autoSubsOn
                   ? 'bg-teal-600 text-white hover:bg-teal-700'
                   : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
@@ -2168,7 +2171,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           {halftimeReached && (
             <button
               onClick={() => { resumeAfterHalftimeRef.current = isPlaying; setIsPlaying(false); setShowHalftimeReport(true); }}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center h-8 px-3 rounded-md text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-all"
+              className="flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-all"
               title="First-half leaders + the Gridiron Debate take (pauses the game)"
             >
               📻 Halftime Report
@@ -2178,7 +2181,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           {canBroadcast && (
             <button
               onClick={toggleBroadcast}
-              className={`flex-1 sm:flex-none inline-flex items-center justify-center h-8 px-3 rounded-md text-xs font-semibold transition-all ${
+              className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
                 broadcastOn ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
               }`}
               title="Audio play-by-play broadcast (beta — the call drives the play reveal)"
