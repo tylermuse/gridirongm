@@ -68,9 +68,6 @@ const CLIP_IDS = Object.keys(SHOW_CLIPS) as ShowClipId[];
  *  stream in behind playback, in the order they're needed. */
 const CLIPS_BEFORE_START = 6;
 
-/** Episodes whose script has been requested ahead of time (per page load). */
-const prefetched = new Set<string>();
-
 interface BlockMsg { index: number; audio: string; lines: { seg: number; start: number; duration: number }[] }
 
 
@@ -224,18 +221,10 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     return () => { for (const u of urls.values()) URL.revokeObjectURL(u); };
   }, []);
 
-  // Write the script ahead of time, once the Spotlight's topics settle, so
-  // Watch Show starts right away (server-side it's writing only — no voices,
-  // no credit — and only for viewers who can watch).
+  // Nothing is written or voiced until the viewer presses play (handleOpen).
+  // The old mount-time script prefetch (/api/spotlight-show/script) billed a
+  // Claude write on every dashboard visit and every new week, watched or not.
   const requestBody = useMemo(() => JSON.stringify({ topics, teamName, stats, moment }), [topics, teamName, stats, moment]);
-  useEffect(() => {
-    if (!topics.length || prefetched.has(requestBody)) return;
-    const t = setTimeout(() => {
-      prefetched.add(requestBody);
-      void fetch('/api/spotlight-show/script', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: requestBody }).catch(() => {});
-    }, 4000);
-    return () => clearTimeout(t);
-  }, [requestBody, topics.length]);
 
   // Cleanup on unmount; pause on route change.
   useEffect(() => () => {
