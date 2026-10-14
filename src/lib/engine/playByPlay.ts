@@ -1,6 +1,7 @@
 import type { Player, PlayerStats, GameResult, Team } from '@/types';
 import { computeQBTier, getQBTierModifier } from './qbTierPyramid';
 import { fieldGoalMakeProbability } from './simulate';
+import { getBestReturner } from './specialTeams';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -815,9 +816,30 @@ export function simulatePlayByPlay(
       return;
     }
 
-    addEvent('kickoff', descKickoff(), 0, false, 25);
-    // receiving team starts at own 25
-    switchPossession(25);
+    // Standard-mode kick return (ported from mcafeeMode): receiving team gets
+    // a variable return scaled by its best returner instead of a flat own-25.
+    const receivingRoster = state.possession === 'home' ? awayPlayers : homePlayers;
+    const returner = getBestReturner(receivingRoster);
+    const returnerRating = returner
+      ? (returner.ratings.speed * 2 + returner.ratings.agility) / 3
+      : 50;
+    // Base 18-28, plus up to ~7 yards scaled by how far the returner is above
+    // a 50-OVR baseline. Clamped so standard field position stays ~18-35.
+    const baseReturn = 18 + Math.floor(Math.random() * 11); // 18-28
+    const ratingBonus = Math.round(Math.max(0, (returnerRating - 50) / 50) * 7 * Math.random());
+    const returnYards = Math.min(35, baseReturn + ratingBonus);
+
+    // Rare kick return TD (~0.5%).
+    if (Math.random() < 0.005) {
+      addEvent('kickoff', 'Kick return TOUCHDOWN! Taken all the way back!', 100, true);
+      if (state.possession === 'home') state.awayScore += 7;
+      else state.homeScore += 7;
+      doKickoff(); // re-kick after the return TD
+      return;
+    }
+
+    addEvent('kickoff', `${descKickoff()} Kick returned to the ${returnYards}.`, 0, false, returnYards);
+    switchPossession(returnYards);
   }
 
   function shiftMomentum(amount: number) {
