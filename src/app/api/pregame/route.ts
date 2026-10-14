@@ -60,6 +60,9 @@ Each "text" is 1-3 sentences. Refer to teams by city or nickname, not abbreviati
 
 RULES:
 - Use ONLY the facts provided. Never invent stats, players, injuries or history.
+- "record" is the REGULAR-SEASON record. In the playoffs, say so ("went eleven and six in the regular season"),
+  and use "playoffRun" for how they got here (who they beat, the scores). "streak" already includes playoff
+  wins: a team in a playoff game after round one has won its way there, so never call it a losing streak.
 - Go deep on player production. Each player fact has a "statLine" (full season line), "season" (raw +
   per-game + efficiency numbers: completion %, yards per attempt, passer rating, yards per carry, catch rate,
   per-game averages, etc.) and "leagueRank" (league rank in his headline stat). Quote those numbers and say
