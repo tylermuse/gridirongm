@@ -13,6 +13,7 @@ import { pushSimTelemetryRecord, meanStarterOvr } from '@/lib/engine/simTelemetr
 import { createLiveCoachEngine, type LiveCoachEngine } from '@/lib/engine/liveCoachEngine';
 import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
+import { LiveSim3D, useSim3DMode } from '@/components/game/LiveSim3D';
 import { ScoreBug } from '@/components/game/ScoreBug';
 import { GamePlanModal } from '@/components/game/GamePlanModal';
 import { buildMatchupMetrics, rankForMetric } from '@/lib/engine/matchupRanks';
@@ -822,6 +823,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   // field animation has finished. ScoreBug shows previous event's numbers
   // until this becomes true.
   const [animationComplete, setAnimationComplete] = useState(true);
+  // 3D live sim: while a play is animating in the sim the page holds its advance (same idea as the broadcast gate)
+  const [sim3dOn, setSim3dOn] = useSim3DMode();
+  const [sim3dActive, setSim3dActive] = useState(false);
 
   // Combined event stream — use pre-computed events up to the pivot,
   // then engine-generated events after Live Coach took over.
@@ -1180,6 +1184,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   useEffect(() => {
     if (broadcastOn) return; // broadcast drives the reveal; don't auto-run plays
     if (pregameOpen) return; // nothing plays behind the Pregame Show
+    if (sim3dActive) return; // the 3D sim is still showing the last play
     if (liveEngineRef.current === null) return;
     if (liveEngineRef.current.isFinished()) return;
     if (liveCoachPaused) return;
@@ -1245,7 +1250,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         setAutoRunTick(t => t + 1);
       }, delay);
     }
-  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick, broadcastOn, pregameOpen, animationComplete, allEvents]);
+  }, [revealedCount, totalEvents, liveCoachPaused, liveCoachOn, userTeamSide, isPlaying, speed, autoRunTick, broadcastOn, pregameOpen, animationComplete, allEvents, sim3dActive]);
 
   // ── Live Coach: detect if the NEXT event is a user offensive play snap ──
   // We check after an event reveals and before scheduling the next one.
@@ -1272,6 +1277,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     if (broadcastOn) return;
     if (pregameOpen) return; // hold until Kick Off
     if (!animationComplete || !isPlaying || isFinished || speed === 'max') return;
+    if (sim3dActive) return; // wait for the 3D sim to finish the play
     // Live Coach pause: stop here, surface the play call menu instead of advancing
     if (shouldPauseForLiveCoach) {
       setLiveCoachPaused(true);
@@ -1307,7 +1313,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       setAnimationComplete(false);
     }, pause);
     return clearNextPlayTimer;
-  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach, currentEvent, broadcastOn, pregameOpen]);
+  }, [animationComplete, isPlaying, isFinished, speed, totalEvents, clearNextPlayTimer, shouldPauseForLiveCoach, currentEvent, broadcastOn, pregameOpen, sim3dActive]);
 
   // ── Live game clock: tick the scorebug clock down between play reveals ──
   // 2026-09-20/21 spec (gojostyttt, 4 votes on #football-feature-vote). Each
@@ -1961,8 +1967,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             enough. Having a second banner above the field was pushing the
             Call the Play panel down each play. */}
 
-        {/* Animated field + outcome chip overlay */}
-        <div className="relative">
+        {/* Animated field + outcome chip overlay. While the 3D sim is showing a play on desktop the box
+            stretches to 16:9 so the sim fills it edge to edge. */}
+        <div className={`relative ${sim3dActive ? 'md:aspect-video' : ''}`}>
           <AnimatedField
             event={engineSnapshot ? {
               id: -1,
@@ -1990,6 +1997,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             driveYards={currentDrive.yards}
             drivePossession={engineSnapshot?.possession ?? currentEvent?.possession}
             userSide={userTeamSide ?? 'home'}
+          />
+
+          {/* 3D live sim over the field (every scrimmage / special-teams play while it is on) */}
+          <LiveSim3D
+            enabled={sim3dOn && !pregameOpen}
+            event={currentEvent}
+            disabled={speed === 'max' || broadcastOn}
+            homeTeam={homeTeam}
+            awayTeam={awayTeam}
+            onActiveChange={setSim3dActive}
           />
 
           {/* Post-play outcome chip */}
@@ -2101,6 +2118,20 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               five, which didn't fit one row and clipped the labels); natural
               width on desktop. Hidden when empty. */}
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--border)] empty:hidden">
+          {/* 3D live sim toggle — plays every snap in the three.js chase-cam sim */}
+          {!isFinished && (
+            <button
+              onClick={() => setSim3dOn(!sim3dOn)}
+              className={`flex-auto sm:flex-none inline-flex items-center justify-center whitespace-nowrap h-8 px-3 rounded-md text-xs font-semibold transition-all ${
+                sim3dOn
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-[var(--surface-2)] text-[var(--text-sec)] hover:text-[var(--text)]'
+              }`}
+              title="Watch every play in the 3D sim (loads a 10 MB player model once)"
+            >
+              🎥 3D Sim {sim3dOn ? 'ON' : 'OFF'}
+            </button>
+          )}
           {/* Game Plan — only when user is in this game and game isn't done */}
           {userInGame && !isFinished && (
             <button
