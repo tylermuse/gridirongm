@@ -158,7 +158,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16c'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16d'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];   /* set by the game page in embed mode (bsgm:setup) */
 const team = i => EMB_TEAMS[i] || TEAMS[+(i===0?selA.value:selB.value)];
@@ -440,8 +440,8 @@ function teamMaterial(src, part, t, skin){
   else if(part==='trim'){ m.color.set(t.jersey); U.uMode.value=3; }
   else if(part==='visor'){ m.color.set('#141a22'); m.metalness=.5; m.roughness=.12; U.uMode.value=3; }
   else if(part==='plain'){ U.uMode.value=3; }
-  else if(modelChoice==='fp27' && t.id==='REF' && part==='torso'){ U.uMode.value = 4; U.uRef.value.setScalar(lin(.93)); m.roughness=.9; m.roughnessMap=null; if(m.normalMap) m.normalScale.setScalar(.3); m.envMapIntensity=.3; }   // official: 1" black/white vertical stripes cut from the bind-space x of the shirt
-  else if(modelChoice==='fp27' && t.id==='REF' && part==='shoe'){ U.uMode.value = 3; m.color.set('#1d1f23'); }
+  else if(t.id==='REF' && part==='torso'){ U.uMode.value = 4; U.uRef.value.setScalar(lin(.93)); m.roughness=.9; m.roughnessMap=null; if(m.normalMap) m.normalScale.setScalar(.3); m.envMapIntensity=.3; }   // official: 1" black/white vertical stripes cut from the bind-space x of the shirt
+  else if(t.id==='REF' && part==='shoe'){ U.uMode.value = 3; m.color.set('#1d1f23'); }
   else if(modelChoice==='fp27'){ // white uniform with navy trim: white -> colour A, navy -> colour B, gold trim keeps its baked colour
     const AB = { torso:[t.jersey, t.num], pants:[t.pants, t.stripe], shoe:[null,null] }[part]||[null,null];
     if(AB[0]){ U.uA.value.copy(C(AB[0])); U.uB.value.copy(C(AB[1])); U.uRefW.value.setScalar(lin(.93)); U.uRef.value.setScalar(lin(.16)); U.uMode.value = 2; } else U.uMode.value = 3;
@@ -454,7 +454,7 @@ function teamMaterial(src, part, t, skin){
     sh.vertexShader = 'varying vec3 vBind;\n' + sh.vertexShader.replace('#include <skinning_vertex>', '#include <skinning_vertex>\n vBind = position;');
     sh.fragmentShader = 'uniform vec3 uA, uB, uRef, uRefW; uniform float uMode; varying vec3 vBind;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
       { vec3 c = diffuseColor.rgb;
-        if (uMode > 3.5) { float lum = dot(c, vec3(0.3, 0.59, 0.11)); float shade = clamp(0.3 + 0.7 * lum / uRef.r, 0.0, 1.05);
+        if (uMode > 3.5) { float mx = max(c.r, max(c.g, c.b)); float shade = clamp(0.3 + 0.7 * mx / uRef.r, 0.0, 1.05);
           float st = step(0.5, fract(vBind.x / 0.054)); float w = fwidth(vBind.x / 0.054) * 1.5; st = mix(st, 0.5, clamp(w - 0.25, 0.0, 1.0));   // stripes fade to grey when they alias at distance
           diffuseColor.rgb = mix(vec3(0.03), vec3(0.92), st) * shade; }
         else if (uMode > 2.5) { }
@@ -502,20 +502,23 @@ function makePlayer(t, number, big, opts={}){
     if(o.isBone) bones[o.name.replace('mixamorig','')] = o;
     if(o.isSkinnedMesh){ o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
       const part = PART[o.name.replace(/[^A-Za-z0-9]/g,'_').replace('SHOE_001','SHOE001')] || 'torso';
-      if(opts.ref && modelChoice==='fp27' && ['helmetSolid','mask','trim','visor'].includes(part)){ o.visible=false; return; }
+      if(opts.ref && (['helmetSolid','mask','trim','visor'].includes(part) || /HELMET|FACEMASK|CHINSTRAP/.test(o.name))){ o.visible=false; return; }
       if(opts.ref && modelChoice==='fp27' && part==='plain'){ // this group mixes helmet shell pieces with socks and pads: keep only the triangles not bound to the Head bone
         const g=o.geometry.clone(), hi=o.skeleton.bones.findIndex(b=>/Head$/.test(b.name)), si=g.attributes.skinIndex.array, idx=g.index.array, keep=[];
         const py=g.attributes.position; for(let i=0;i<idx.length;i+=3){ let head=false; for(let k=0;k<3;k++){ if(si[idx[i+k]*4]===hi || py.getY(idx[i+k])>1.58) head=true; } if(!head) keep.push(idx[i],idx[i+1],idx[i+2]); }
         g.setIndex(keep); o.geometry=g; }
       o.material = teamMaterial(o.material, part, t, part==='hand' && kit.gloves ? kit.gloveCol : skin); }
   });
-  if(opts.ref && modelChoice==='fp27'){ // official's cap: crown + band + brim on the Head bone (head top is ~22 cm above the bone on this rig)
+  if(opts.ref){ // official's cap: crown + band + brim on the Head bone, seated from the measured top of the head (bind space)
+    let top=-1e9, headY=0; model.traverse(o=>{ if(!o.isSkinnedMesh || !o.visible) return; const hi=o.skeleton.bones.findIndex(b=>/Head$/.test(b.name)); if(hi<0) return; headY=new THREE.Vector3().setFromMatrixPosition(o.skeleton.boneInverses[hi].clone().invert()).y; const pos=o.geometry.attributes.position, si=o.geometry.attributes.skinIndex.array;
+      for(let i=0;i<pos.count;i++){ if(si[i*4]===hi) top=Math.max(top, pos.getY(i)); } });
+    const capY = top>-1e8? (top-headY)*100-8.7 : 13.5;
     const capMat=new THREE.MeshLambertMaterial({color:opts.cap||'#f4f4f4'}); const cap=new THREE.Group();
     const crown=new THREE.Mesh(new THREE.SphereGeometry(.124,20,12,0,Math.PI*2,0,Math.PI*.5), capMat); crown.scale.set(1,.85,1.04); cap.add(crown);
     const band=new THREE.Mesh(new THREE.CylinderGeometry(.124,.12,.04,20,1,true), capMat); band.position.y=-.018; cap.add(band);
     const brim=new THREE.Mesh(new THREE.SphereGeometry(.11,20,6,0,Math.PI*2,Math.PI*.44,Math.PI*.12), capMat); brim.scale.set(1.02,.35,1.05); brim.position.set(0,-.025,.06); cap.add(brim);
     cap.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.material.side=THREE.DoubleSide; } });
-    attach(bones.Head, cap, new THREE.Vector3(0,13.5,.5), sc); }
+    attach(bones.Head, cap, new THREE.Vector3(0,capY,.5), sc); }
   // proportions (broad shoulders, thick limbs, smaller helmet, shorter arms) are baked into player.glb by model/proportion.py — no runtime bone scaling, which sheared the limbs
   // jersey numbers: decal planes just off the chest and back (model chest is ~0.32 m wide at number height)
   if(!opts.ref){
@@ -581,7 +584,7 @@ function makeRiggedRef(x,z,face,opts){
   r.update(0, 1/60); refObjs.push(r); return r;
 }
 function makeRef(x,z,face,opts={}){
-  if(modelChoice==='fp27' && BOT && !opts.shirt) return makeRiggedRef(x,z,face,opts);
+  if(modelChoice!=='procedural' && BOT && !opts.shirt) return makeRiggedRef(x,z,face,opts);
   // Original articulated official: tailored short-sleeve shirt, bare forearms, cap and adult anatomy.
   const root=new THREE.Group();root.position.set(x,0,z);root.rotation.y=face;
   const M=c=>new THREE.MeshLambertMaterial({color:c});
