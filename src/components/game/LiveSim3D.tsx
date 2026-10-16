@@ -169,7 +169,7 @@ export function LiveSim3D({
         </div>
       )}
       {ready && !failed && (
-        <div className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-black/55 p-1 text-[11px] font-bold text-white">
+        <div className="absolute bottom-3 left-3 flex items-center gap-1 rounded-full bg-black/55 p-1 text-[11px] font-bold text-white">
           {CAM_LABELS.map(([c, label]) => (
             <button key={c} type="button" onClick={() => setView({ cam: c })} aria-pressed={view.cam === c}
               className={`rounded-full px-2 py-0.5 ${view.cam === c ? 'bg-white text-black' : 'hover:bg-white/20'}`}>{label}</button>

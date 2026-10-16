@@ -138,7 +138,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 window.THREE = THREE;
 (() => {
-let modelChoice = 'fp27';   /* public build: only the CC BY model ships (the licensed TurboSquid player stays private) */ 
+let modelChoice = 'fp27';   /* public build: only the CC BY model ships (the licensed TurboSquid player stays private) */
 const modelSelect = document.getElementById('modelSelect');
 { const mc=document.getElementById('modelCredit'); if(mc) mc.hidden = modelChoice!=='fp27'; }
 if(modelSelect){ modelSelect.value = modelChoice; modelSelect.addEventListener('change',()=>{ try{ localStorage.setItem('chaseModel', modelSelect.value); }catch(e){} const url=new URL(location.href); if(url.searchParams.get('model')){ url.searchParams.set('model',modelSelect.value); location.href=url.href; } else location.reload(); }); }
@@ -197,14 +197,14 @@ window.setLighting = setLighting;
 function setLighting(mode){ lightMode=mode; const night = mode==='night';
   paintSky(night?'#070b16':'#5d93cc', night?'#1a2436':'#dfe8f0');
   scene.background.set(night?'#0a0f1a':'#9cc3e6'); scene.fog.color.set(night?'#141b28':'#c7d6e4');
-  hemi.color.set(night?'#3e4a62':'#d6e3f2'); hemi.groundColor.set(night?'#141a12':'#2f4726'); hemi.intensity = night? .55 : LIGHT.hemi;
+  hemi.color.set(night?'#8f9db8':'#d6e3f2'); hemi.groundColor.set(night?'#1c2418':'#2f4726'); hemi.intensity = night? .55 : LIGHT.hemi;
   sun.color.set(night?'#e9f0ff':'#fff1d6'); sun.intensity = night? 1.25 : LIGHT.sun; sunOff = night? [-10,78,-14] : [-25,60,-30];
   renderer.toneMappingExposure = night? 1.0 : .96;
   (window.__floods||[]).forEach(f=>{ f.material.color.set(night?'#ffffff':'#fff6d8'); });
-  [crowd.seats,crowd.torsos,crowd.heads].forEach(m=>m.material.color.set(night?'#4e535e':'#c4c4c4'));   /* the crowd sits in the dark behind the lights */
-  concreteMeshes.forEach(m=>m.material.color.set(night?'#555a66':'#ffffff'));
-  structMats.forEach(m=>m.color.copy(m.userData.day).multiplyScalar(night?.45:1));
-  hemi.intensity = night? .35 : LIGHT.hemi; sun.intensity = night? 1.45 : LIGHT.sun;
+  [crowd.seats,crowd.torsos,crowd.heads].forEach(m=>m.material.color.set(night?'#b9bcc4':'#c4c4c4'));   /* the stands catch the floodlights' spill — a night crowd is lit, just cooler and flatter than daylight */
+  concreteMeshes.forEach(m=>m.material.color.set(night?'#9aa0ad':'#ffffff'));
+  structMats.forEach(m=>m.color.copy(m.userData.day).multiplyScalar(night?.8:1));
+  hemi.intensity = night? 1.1 : LIGHT.hemi; sun.intensity = night? 1.45 : LIGHT.sun;   /* night hemi carries the stands (the floods' bounce); the 'sun' is the floodlight key on the field */
   document.querySelectorAll('[data-light]').forEach(b=>b.classList.toggle('on', b.dataset.light===mode)); }
 sun.position.set(-30, 60, -20); sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = .02; sun.shadow.radius = 2;

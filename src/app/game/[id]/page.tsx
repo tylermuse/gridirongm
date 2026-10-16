@@ -2018,6 +2018,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             </div>
           )}
         </div>
+        {sim3dOn && !pregameOpen && (
+          <p className="-mt-1 text-right text-[10px] text-[var(--text-sec)]">
+            3D player model: “American Football Player” by Stuffed Dog Digital,{' '}
+            <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className="underline">CC BY 4.0</a>
+          </p>
+        )}
 
         {/* Drive summary ribbon — uses the same live* vars as the scorebug
             so it always matches (including engine state during Live Coach) */}
