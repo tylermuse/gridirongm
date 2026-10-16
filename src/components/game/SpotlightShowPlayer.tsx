@@ -818,7 +818,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
   if (phase === 'exhausted') {
     return (
       <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-500">
-        <span>📺</span> Show credits exhausted
+        <span>📺</span> Out of episodes this month
       </div>
     );
   }
