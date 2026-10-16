@@ -109,11 +109,24 @@ function ProspectCard({
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white"
-            style={{ backgroundColor: teamColor }}
-          >
-            {player.position}
+          <div className="flex flex-col items-center gap-1">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white"
+              style={{ backgroundColor: teamColor }}
+            >
+              {player.position}
+            </div>
+            {/* Scouted sub-position (e.g. OT, EDGE, SS) — only when it refines
+                the base position, so users can tell a tackle from a guard, an
+                edge rusher from an interior lineman, etc. Pure display. */}
+            {player.subPosition && player.subPosition !== player.position && (
+              <span
+                className="px-1.5 py-0.5 rounded bg-[var(--surface-2)] border border-[var(--border)] text-[9px] font-bold text-[var(--text-sec)] uppercase tracking-wide leading-none"
+                title="Scouted sub-position"
+              >
+                {player.subPosition}
+              </span>
+            )}
           </div>
           <div className="text-center">
             <div className="text-lg font-black">{posRank}</div>
@@ -1195,8 +1208,8 @@ export default function DraftPage() {
              "The draft hasn't started yet."}
           </p>
           <div className="flex gap-3 justify-center items-center">
-            <a href="/" className="text-sm text-blue-600 hover:underline">Go to Dashboard</a>
-            <a href="/standings" className="text-sm text-blue-600 hover:underline">View Schedule</a>
+            <Link href="/" className="text-sm text-blue-600 hover:underline">Go to Dashboard</Link>
+            <Link href="/standings" className="text-sm text-blue-600 hover:underline">View Schedule</Link>
             <button
               onClick={() => setShowImportModal(true)}
               className="text-sm font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1"
