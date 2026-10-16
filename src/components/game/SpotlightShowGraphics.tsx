@@ -547,7 +547,7 @@ export function ShowGraphic(p: GraphicProps) {
                           className={`flex items-center gap-[0.6em] px-[0.8em] py-[0.06em] text-[0.7em] ${r.result ? 'bg-slate-50 text-slate-400' : next ? 'bg-orange-100 font-extrabold text-[#0f1f35]' : 'text-slate-700'}`}
                           style={{ opacity: enter, transform: `translateX(${(1 - enter) * -1}em)` }}
                         >
-                          <span className="w-[3.2em] text-[0.85em] font-bold uppercase tracking-[0.1em] text-slate-400">Wk {r.week}</span>
+                          <span className="w-[3.6em] shrink-0 whitespace-nowrap text-[0.8em] font-bold uppercase tracking-[0.08em] text-slate-400">Wk {r.week}</span>
                           <span className={`w-[1.4em] text-center text-[0.8em] font-bold ${r.home ? 'text-slate-400' : 'text-orange-600'}`}>{r.home ? 'vs' : '@'}</span>
                           <span className="h-[1.4em] w-[1.4em] shrink-0">{r.art}</span>
                           <span className="min-w-0 flex-1 truncate font-semibold">{r.name}</span>

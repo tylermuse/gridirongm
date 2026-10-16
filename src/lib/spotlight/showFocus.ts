@@ -33,7 +33,7 @@ export type Focus =
   | { kind: 'none' };
 
 /** Playoff-race / standings talk → the standings board. */
-const STANDINGS = /\bplayoff (picture|race|spot|hunt|chances|line|push)|\bwild ?card|\bseeds?\b|\bseeding\b|\bgames? (back|out)\b|\bhalf (a )?game\b|\b(and a half|a half) back\b|\bstandings\b|\bin the hunt\b|\bclinch|\bdivision (lead|race|title|crown)|\bwin the division\b|\bthe division\b/i;
+const STANDINGS = /\bplayoff (picture|race|spot|hunt|chances|line|push)|\bwild ?card|\bseeds?\b|\bseeding\b|\bgames? (back|out)\b|\bhalf (a )?game\b|\b(and a half|a half) back\b|\bstandings\b|\bin the hunt\b|\bclinch|\bdivision (lead|race|title|crown)\b|\bwin the division\b|\bthe division\b/i;
 /** Talk about what's coming up → the schedule board. */
 const SCHEDULE = /\bschedule\b|\bnext (game|week|one|two|three|four|five|few|couple)\b|\b(next|coming|last|final) \w+ (games?|weeks?)\b|\bon the road\b|\broad (trip|games?|stretch|swing)\b|\bhome ?(stand|stretch|games?)\b|\brest of the (way|season|schedule)\b|\bupcoming\b|\b(games?|weeks?) (left|remaining|to go)\b|\bto play\b|\bstretch run\b|\bbye week\b/i;
 const scheduleOf = (text: string): Focus | null => (SCHEDULE.test(text) ? { kind: 'schedule' } : null);
