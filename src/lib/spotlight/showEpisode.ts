@@ -16,10 +16,11 @@ import { writeConversation, WRITER_MODEL } from './showWriter';
 import { buildShowScript, type ShowSegment, type ShowTopicInput, type TimedShowSegment } from './showScript';
 import type { ShowStatLine } from './teamStats';
 import type { EpisodeMoment } from './showMoment';
+import { planTheme, themeFor, verdictTopicNotes, VERDICT_HEADLINE, type ThemePlan } from './showThemes';
 
 export const CACHE_BUCKET = 'spotlight-audio';
 /** Bump when the episode format or the composer changes. */
-export const SHOW_VERSION = 'show-v17';
+export const SHOW_VERSION = 'show-v18';
 
 export interface EpisodeInput {
   topics: ShowTopicInput[];
@@ -39,6 +40,28 @@ export interface VoicedBlock {
   index: number;
   audio: string; // base64 mp3
   lines: { seg: number; start: number; duration: number }[];
+}
+
+/** The episode's theme (from where the team is) and its picks — the same
+ *  for the same team, record and moment, so cached scripts stay valid. */
+export const themePlan = (e: EpisodeInput): ThemePlan | null =>
+  planTheme(themeFor(e.moment, e.stats?.record), `${e.teamName}|${e.stats?.record ?? ''}`);
+
+/** The topics the writer gets: a verdict episode closes on a verdict topic. */
+// Memoized per episode: the stream tells a topic the writer has reached by
+// identity (a written topic is a new object), so it must see the same list.
+const themedTopics = new WeakMap<EpisodeInput, ShowTopicInput[]>();
+export function writerTopics(e: EpisodeInput, plan: ThemePlan | null): ShowTopicInput[] {
+  const notes = plan ? verdictTopicNotes(plan) : [];
+  if (!notes.length) return e.topics;
+  const memo = themedTopics.get(e);
+  if (memo) return memo;
+  const out = [...e.topics, {
+    headline: VERDICT_HEADLINE, icon: '⚖️', isVerdict: true as const,
+    exchanges: notes.map((text, k) => ({ speakerId: k % 2 ? 'hottake' : 'stats', text })),
+  }];
+  themedTopics.set(e, out);
+  return out;
 }
 
 function hash(data: unknown): string {
@@ -86,11 +109,16 @@ function startWriting(sb: SupabaseClient | null, e: EpisodeInput): Writing {
   if (running) return running;
   const w: Writing = { last: null, listeners: new Set(), result: null as unknown as Writing['result'] };
   w.result = (async () => {
-    const ep = await writeConversation(e.topics, e.teamName, e.stats, e.moment, (sofar, done) => {
+    const plan = themePlan(e);
+    const ep = await writeConversation(writerTopics(e, plan), e.teamName, e.stats, e.moment, (sofar, done) => {
       w.last = { sofar, done: new Set(done) };
       for (const l of w.listeners) l(sofar, done);
-    });
-    const segments = buildShowScript(ep.topics, e.teamName, e.stats, { written: ep.written, moment: e.moment });
+    }, plan);
+    // Writer unavailable: the original notes (never the verdict topic's
+    // instructions), composed the classic way.
+    const segments = ep.written
+      ? buildShowScript(ep.topics, e.teamName, e.stats, { written: true, moment: e.moment, theme: plan })
+      : buildShowScript(e.topics, e.teamName, e.stats, { moment: e.moment, theme: plan });
     // Only cache a written script: a fallback (writer down) gets retried.
     if (ep.written) await writeJson(sb, path, { segments });
     return { segments, written: ep.written };
@@ -200,13 +228,18 @@ export async function streamEpisode(sb: SupabaseClient | null, e: EpisodeInput, 
     publish(final, true);
   } else {
     // The opening needs nothing from the writer.
-    publish(buildShowScript([], e.teamName, e.stats, { written: true, partial: true, moment: e.moment }), false);
+    const plan = themePlan(e);
+    const topics = writerTopics(e, plan);
+    publish(buildShowScript([], e.teamName, e.stats, { written: true, partial: true, moment: e.moment, theme: plan }), false);
     let first = true;
     const onProgress = (sofar: ShowTopicInput[], done: Set<number>) => {
       if (first) { log('first line written'); first = false; }
       // Only the topics the writer has reached.
-      const reached = sofar.map((t, i) => (done.has(i) || t !== e.topics[i] ? i : -1)).reduce((m, i) => Math.max(m, i), -1);
-      publish(buildShowScript(sofar.slice(0, reached + 1), e.teamName, e.stats, { written: true, partial: true, moment: e.moment }), false, done);
+      // (The verdict topic is matched by content: a prefetch may have
+      // started the writing with its own copy of it.)
+      const untouched = (t: ShowTopicInput, i: number) => (i < e.topics.length ? t === e.topics[i] : t.exchanges.length > 0 && t.exchanges[0].text === topics[i]?.exchanges[0]?.text);
+      const reached = sofar.map((t, i) => (done.has(i) || !untouched(t, i) ? i : -1)).reduce((m, i) => Math.max(m, i), -1);
+      publish(buildShowScript(sofar.slice(0, reached + 1), e.teamName, e.stats, { written: true, partial: true, moment: e.moment, theme: plan }), false, done);
     };
     // Join the writing session (maybe already started by the prefetch):
     // catch up on what's written so far, then follow it.
@@ -218,7 +251,7 @@ export async function streamEpisode(sb: SupabaseClient | null, e: EpisodeInput, 
       log('script written');
       // Written: the final script. Writer unavailable: the original notes,
       // composed the classic way (same intro, so what's playing stays valid).
-      final = out.written ? out.segments : buildShowScript(e.topics, e.teamName, e.stats, { moment: e.moment });
+      final = out.segments;
     } finally {
       w.listeners.delete(onProgress);
     }

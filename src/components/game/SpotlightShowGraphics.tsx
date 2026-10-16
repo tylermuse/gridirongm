@@ -14,6 +14,7 @@ import { ordinal, rankTone, type ShowStatLine } from '@/lib/spotlight/teamStats'
 import type { TileStat } from '@/lib/spotlight/playerStats';
 import type { StandingsRow } from '@/lib/spotlight/showStandings';
 import type { GameFlow } from '@/lib/spotlight/showGame';
+import { THEMES, type Calls, type ShowThemeId, type Verdict } from '@/lib/spotlight/showThemes';
 
 export const TWO_SHOT_SRC = '/show/two_shot.jpg';
 export const avatarSrc = (h: Host) => `/show/avatars/${h}.jpg`;
@@ -83,6 +84,104 @@ interface GraphicProps {
   player?: { art: ReactNode; name: string; detail: string; key: string } | null;
   /** Since that player came on screen. */
   playerMs: number;
+  /** Themed episode: its name over the headline… */
+  theme?: ShowThemeId;
+  /** …this item's buy/sell calls (Buy or Sell)… */
+  calls?: Calls | null;
+  /** …and on the closing topic, what each host committed to. */
+  verdict?: Verdict | null;
+}
+
+/** Theme colors (light treatments: color on white). */
+export const THEME_STYLE: Record<ShowThemeId, { label: string; icon: string; color: string; band: string }> = {
+  panic: { label: 'Panic Mode', icon: '🚨', color: 'text-red-600', band: 'from-red-600 to-orange-500' },
+  buysell: { label: 'Buy or Sell', icon: '📈', color: 'text-emerald-600', band: 'from-emerald-600 to-teal-500' },
+  contender: { label: 'Contender or Pretender', icon: '🏆', color: 'text-amber-600', band: 'from-amber-500 to-yellow-400' },
+};
+
+function CallChip({ host, call, delay, ms }: { host: Host; call: 'buy' | 'sell'; delay: number; ms: number }) {
+  const p = anim(ms, delay, 350);
+  const buy = call === 'buy';
+  return (
+    <span
+      className={`inline-flex items-center gap-[0.4em] rounded-full border-[0.1em] bg-white px-[0.7em] py-[0.12em] text-[0.62em] font-extrabold uppercase tracking-[0.12em] shadow ${buy ? 'border-emerald-500 text-emerald-700' : 'border-red-500 text-red-600'}`}
+      style={{ opacity: p, transform: `scale(${0.6 + 0.4 * p})` }}
+    >
+      <span className="text-slate-500">{HOSTS[host].name.split(' ')[0]}</span>
+      {buy ? '▲ Buy' : '▼ Sell'}
+    </span>
+  );
+}
+
+/** The closing verdict: each host's panic meter (1–10) or stamp. */
+function VerdictBoard({ verdict, ms }: { verdict: Verdict; ms: number }) {
+  return (
+    <div className="my-auto grid grid-cols-2 gap-[1.2em] py-[0.4em]">
+      {(['marcus', 'tony'] as const).map((h, k) => {
+        const v = verdict[h];
+        const p = anim(ms, 250 + k * 450, 500);
+        return (
+          <div key={h} className="flex flex-col items-center rounded-[0.9em] bg-white px-[0.8em] py-[0.7em] shadow-[0_6px_18px_rgba(15,23,42,0.12)]" style={{ opacity: anim(ms, k * 450, 300) }}>
+            <div className="flex items-center gap-[0.5em]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={avatarSrc(h)} alt="" className="h-[1.9em] w-[1.9em] rounded-full border-[0.1em] border-orange-500 object-cover" />
+              <span className="text-[0.85em] font-extrabold text-[#1e3a5f]">{HOSTS[h].name}</span>
+            </div>
+            {typeof v === 'number' ? (
+              <>
+                <div className="mt-[0.2em] text-[2.6em] font-black leading-none tabular-nums text-red-600" style={{ transform: `scale(${0.5 + 0.5 * p})`, opacity: p }}>
+                  {Math.max(1, Math.round(v * p))}<span className="text-[0.4em] text-slate-400">/10</span>
+                </div>
+                <div className="mt-[0.35em] flex w-full gap-[0.12em]">
+                  {Array.from({ length: 10 }, (_, i) => (
+                    <span key={i} className="h-[0.55em] flex-1 rounded-sm" style={{ background: i < v * p ? `hsl(${120 - i * 13}, 75%, 45%)` : '#e2e8f0' }} />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div
+                className={`mt-[0.45em] rounded-[0.2em] border-[0.16em] px-[0.5em] py-[0.05em] text-[1.6em] font-black uppercase tracking-[0.08em] ${v === 'contender' ? 'border-emerald-600 text-emerald-600' : 'border-red-600 text-red-600'}`}
+                style={{ opacity: p, transform: `rotate(-8deg) scale(${2 - p})` }}
+              >
+                {String(v)}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Theme title card over the opener's two-shot: slams in, holds, slides out. */
+export function ThemeCard({ theme, ms }: { theme: ShowThemeId; ms: number }) {
+  const t = THEMES[theme];
+  const st = THEME_STYLE[theme];
+  const inP = anim(ms, 0, 450);
+  const outP = anim(ms, 4200, 500);
+  if (outP >= 1) return null;
+  // Panic Mode's band pulses like an alarm.
+  const pulse = theme === 'panic' ? 0.85 + 0.15 * Math.abs(Math.sin(ms / 260)) : 1;
+  return (
+    <div className="pointer-events-none absolute inset-0 [container-type:size]">
+      <div className="absolute inset-0 [font-size:1.85cqw]">
+        <div
+          className="absolute inset-x-0 top-[58%] overflow-hidden"
+          style={{ opacity: 1 - outP, transform: `translateX(${(1 - inP) * -100 + outP * 100}%)` }}
+        >
+          <div className={`bg-gradient-to-r ${st.band} px-[6%] py-[0.5em] shadow-2xl`} style={{ opacity: pulse }}>
+            <div className="text-[0.75em] font-extrabold uppercase tracking-[0.35em] text-white/90">Team Spotlight presents</div>
+            <div className="text-[3.2em] font-black uppercase leading-[1] tracking-[0.02em] text-white [text-shadow:0_3px_14px_rgba(0,0,0,0.25)]">
+              {st.icon} {t.title}
+            </div>
+          </div>
+          <div className="inline-block bg-white px-[6%] py-[0.3em] text-[1.05em] font-bold text-[#1e3a5f] shadow" style={{ opacity: anim(ms, 500, 400) }}>
+            {t.kicker}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function StatTile({ st, i, blockMs, lineMs, hot, dim }: {
@@ -365,8 +464,16 @@ export function ShowGraphic(p: GraphicProps) {
               style={{ opacity: anim(p.topicMs, 150, 450), transform: `translateX(${(1 - anim(p.topicMs, 150, 450)) * -1.5}em)` }}
             >
               <div className="min-w-0">
-                <div className="text-[0.62em] font-bold uppercase tracking-[0.28em] text-orange-600">The Breakdown</div>
+                <div className={`text-[0.62em] font-bold uppercase tracking-[0.28em] ${p.theme ? THEME_STYLE[p.theme].color : 'text-orange-600'}`}>
+                  {p.theme ? `${THEME_STYLE[p.theme].icon} ${THEME_STYLE[p.theme].label}${p.calls ? ' · On the board' : ''}` : 'The Breakdown'}
+                </div>
                 <div className="text-[1.55em] font-extrabold leading-[1.1] text-[#1e3a5f] [text-wrap:balance]">{noBreak(p.headline)}</div>
+                {p.calls && (
+                  <div className="mt-[0.3em] flex gap-[0.5em]">
+                    <CallChip host="marcus" call={p.calls.marcus} delay={300} ms={p.topicMs} />
+                    <CallChip host="tony" call={p.calls.tony} delay={650} ms={p.topicMs} />
+                  </div>
+                )}
               </div>
               <div className="ml-auto flex shrink-0 items-center gap-[0.5em] text-right">
                 <div key={p.corner?.name ?? 'team'} style={{ animation: 'spotlight-bug 300ms ease-out' }}>
@@ -376,7 +483,16 @@ export function ShowGraphic(p: GraphicProps) {
                 <div key={`logo-${p.corner?.name ?? 'team'}`} className="h-[2em] w-[2em] shrink-0">{p.corner?.logo ?? p.logo}</div>
               </div>
             </div>
-            {p.flow ? (
+            {p.verdict ? (
+              <>
+                <VerdictBoard verdict={p.verdict} ms={p.topicMs} />
+                {p.text && (
+                  <div key={p.text} className="line-clamp-2 text-[0.78em] font-semibold leading-snug text-slate-500" style={{ opacity: anim(p.lineMs, 120, 380) }}>
+                    {p.text}
+                  </div>
+                )}
+              </>
+            ) : p.flow ? (
               <FlowBoard f={p.flow} blockMs={p.tilesMs} lineMs={p.lineMs} text={p.text} />
             ) : p.compare ? (
               <>

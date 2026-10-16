@@ -16,6 +16,7 @@ import type { ShowStatLine } from './teamStats';
 import { momentNote, type EpisodeMoment } from './showMoment';
 import { ordinal, rankTone } from './teamStats';
 import { PHRASES, type Phrase, type PhraseTone } from './phrases';
+import { THEMES, WIDE_BANTER, WIDE_CLIPS, parseCalls, parseVerdict, type ThemePlan } from './showThemes';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 /** The writing is what makes the show sound human: use the strongest model.
@@ -81,6 +82,12 @@ The hosts have pre-recorded on-camera lines, listed with the notes as CLIPS (all
 - Clips marked "said to his co-host" are replies across the desk: use them right after the other host makes a point, as the answer to it. Many are long (15–20 seconds) and carry a whole turn: let the clip be that host's full answer, then have the other host respond to what it actually said.
 - A clip marked ONLY IF is true only in that situation: use it only when the notes show the situation is true for this game or team.
 
+THEMES
+Some episodes are a game the hosts play (Panic Mode, Buy or Sell, Contender or Pretender). When the user message has a THEME line, the whole episode plays that game, as it says, and the hosts keep coming back to its question.
+
+TWO-SHOT BANTER
+WIDE lists short pre-recorded back-and-forths shot on both hosts. Write {"t":<topic>,"wide":"<id>"} to cut to one exactly where its "when" is true: it plays in full, and your next line follows from its last line. At most one per episode, and only where it truly fits.
+
 PRE-RECORDED EXCHANGES
 Some whole back-and-forths are pre-recorded, shot with the hosts facing each other, listed as EXCHANGES with when each one fits. Write {"t":<topic>,"exchange":"<id>"} to play one: it stands in for all its lines, in order. Use one only when its condition is true for this team and topic, set it up so its first line follows naturally, and make your next line follow from its last line. Never more than one exchange per episode, and never repeat its lines in your own words.
 
@@ -92,6 +99,7 @@ One JSON object per spoken line, each on its own single line, nothing else (no a
 - Cover every topic in the notes, in order; "t" is its position in the notes (the first topic is 1).
 - The first topic comes right after the hosts' intros and Marcus's one-line hook (already written): get straight into it, no greeting, no restating the record. If it's a regular topic, keep it quick (2–4 lines).
 - Topics marked "depth":"deep" are the game they just played. Go deep, the way a real postgame show does: 8–12 lines each. Walk through how the game was won or lost (the flow, the turning points, the deciding drive), argue about what decided it, and put the real stat lines in the hosts' mouths — specific players, specific numbers, said the way people say them ("three touchdowns, no picks", "a hundred and twelve on the ground"). Here, numbers are welcome: one per line is fine.
+- A topic marked "verdict":true closes a themed episode: follow its notes exactly (they say who goes first and the JSON line to write first).
 - Other topics: 4–6 lines. Keep the whole episode tight — about two minutes of talk outside the game breakdown. A topic with little to say can be three lines.`;
 
 function teamNumbers(teamName: string, stats?: ShowStatLine | null): string {
@@ -100,7 +108,7 @@ function teamNumbers(teamName: string, stats?: ShowStatLine | null): string {
   return `${teamName}, record ${stats.record}. ${parts.join('; ')}.`;
 }
 
-interface WriterLine { speaker: string; text?: string; clip?: string; play?: unknown; exchange?: unknown }
+interface WriterLine { speaker: string; text?: string; clip?: string; play?: unknown; exchange?: unknown; wide?: unknown; verdict?: unknown; calls?: unknown }
 
 /** Pre-recorded back-and-forths (lines are the manifest's `exchange` phrases,
  *  in order): when the writer may use each, and whether it's true for the
@@ -250,6 +258,7 @@ export async function writeConversation(
   stats?: ShowStatLine | null,
   moment?: EpisodeMoment,
   onProgress?: OnProgress,
+  theme?: ThemePlan | null,
 ): Promise<WrittenEpisode> {
   // No writer at all: the notes are voiced as they are, toned down
   // (no shouted ALL-CAPS words, no exclamation pile-ups).
@@ -265,18 +274,25 @@ export async function writeConversation(
   const notes = liveIdx.map(i => ({
     headline: topics[i].headline,
     ...(topics[i].depth === 'deep' ? { depth: 'deep' } : {}),
+    ...(topics[i].isVerdict ? { verdict: true } : {}),
     notes: debateOf(topics[i]).map(e => `${e.speakerId === 'stats' ? 'Marcus' : 'Tony'}: ${e.text}`),
   }));
   const clipList = catalog.map(c => `${c.phrase.id} (${c.phrase.host}${c.phrase.angle === 'side' ? ', said to his co-host' : ''}${c.phrase.when ? `; ONLY IF: ${c.phrase.when}` : ''}): ${c.words}`).join('\n');
-  const user = `MOMENT: ${momentNote(moment, stats?.record)}\n\nTeam numbers: ${teamNumbers(teamName, stats)}\n\nProducer's notes for this episode (topics 1–${liveIdx.length}):\n${JSON.stringify(notes, null, 1)}`
+  const themeLine = theme ? `\n\nTHEME: ${THEMES[theme.id].note}` : '';
+  const wideList = WIDE_BANTER.map(b => `${b.id} — ${b.when}\n${WIDE_CLIPS[b.id].lines.map(l => `  ${l.host === 'marcus' ? 'MARCUS' : 'TONY'}: ${l.text}`).join('\n')}`).join('\n');
+  const user = `MOMENT: ${momentNote(moment, stats?.record)}${themeLine}\n\nTeam numbers: ${teamNumbers(teamName, stats)}\n\nProducer's notes for this episode (topics 1–${liveIdx.length}):\n${JSON.stringify(notes, null, 1)}`
     + (clipList ? `\n\nCLIPS (id (host): words):\n${clipList}` : '')
+    + `\n\nWIDE (id — when — lines):\n${wideList}`
     + (exchanges.size ? `\n\nEXCHANGES (id — when — lines):\n${[...exchanges.values()].map(x => `${x.id} — ${x.when}\n${x.lines.map(p => `  ${p.host === 'marcus' ? 'MARCUS' : 'TONY'}: ${p.text}`).join('\n')}`).join('\n')}` : '');
 
   // The episode as written so far.
   const written = new Map<number, ShowTopicInput['exchanges']>(); // topic index → lines
+  /** What the writer committed to per topic (themed episodes). */
+  const marks = new Map<number, Pick<ShowTopicInput, 'verdict' | 'calls'>>();
+  let wideUsed = false;
   const done = new Set<number>();
   let current = -1; // position in liveIdx being written
-  const sofar = () => topics.map((t, i) => (written.has(i) ? { ...t, exchanges: written.get(i)! } : t));
+  const sofar = () => topics.map((t, i) => (written.has(i) || marks.has(i) ? { ...t, ...(marks.get(i) ?? {}), exchanges: written.get(i) ?? [] } : t));
 
   const take = (jsonLine: string) => {
     const start = jsonLine.indexOf('{');
@@ -293,6 +309,24 @@ export async function writeConversation(
       current = pos;
       const i = liveIdx[pos];
       written.set(i, [...(written.get(i) ?? []), ...x.lines.map(p => ({ speakerId: (p.host === 'marcus' ? 'stats' : 'hottake') as 'stats' | 'hottake', text: p.text, clipId: p.id }))]);
+      onProgress?.(sofar(), done);
+      return;
+    }
+    if (theme && (l.verdict || l.calls)) {
+      const i = liveIdx[pos];
+      const verdict = l.verdict ? parseVerdict(theme.id, l.verdict) : null;
+      const calls = l.calls ? parseCalls(theme.id, l.calls) : null;
+      if (verdict && topics[i].isVerdict) marks.set(i, { ...marks.get(i), verdict });
+      if (calls) marks.set(i, { ...marks.get(i), calls });
+      return;
+    }
+    if (typeof l.wide === 'string') {
+      if (wideUsed || !WIDE_BANTER.some(b => b.id === l.wide)) return;
+      wideUsed = true;
+      for (let k = Math.max(0, current); k < pos; k++) done.add(liveIdx[k]);
+      current = pos;
+      const i = liveIdx[pos];
+      written.set(i, [...(written.get(i) ?? []), { speakerId: 'stats', text: '', wideId: l.wide }]);
       onProgress?.(sofar(), done);
       return;
     }
