@@ -16,6 +16,8 @@ export interface SimPlayResult {
   yards?: number;
   depth?: 'short' | 'deep';
   good?: boolean;
+  /** 'scramble': the QB drops, the pocket collapses and he takes off; 'screen': the back takes a soft throw behind the line with blockers out front */
+  style?: 'scramble' | 'screen';
 }
 
 export interface SimPlayMessage {
@@ -29,6 +31,9 @@ export interface SimPlayMessage {
 export interface SimTeam { id: string; name: string; jersey: string; num: string; pants: string; helmet: string; stripe: string }
 
 const RUSH_TD_RE = /punches it in|crosses the goal line|-yard rush|stretches across|pylon|runs it in/i;
+const SCRAMBLE_RE = /scramble/i;
+const SCREEN_RE = /screen/i;
+const TWO_POINT_RE = /^2-PT|two-point/i;
 const KNEEL_RE = /takes a knee|kneels|victory formation/i;
 const FAKE_RE = /FAKE PUNT|ONSIDE/i;
 
@@ -49,9 +54,9 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
   switch (e.type) {
     case 'run':
       if (KNEEL_RE.test(e.description)) return null;
-      return { kind: 'run', yards: e.isScoring ? td(y) : y };
+      return { kind: 'run', yards: e.isScoring ? td(y) : y, ...(SCRAMBLE_RE.test(e.description) ? { style: 'scramble' as const } : {}) };
     case 'pass_complete':
-      return { kind: 'complete', depth: y >= 20 ? 'deep' : 'short', yards: e.isScoring ? td(y) : y };
+      return { kind: 'complete', depth: y >= 20 ? 'deep' : 'short', yards: e.isScoring ? td(y) : y, ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };
     case 'pass_incomplete':
       return { kind: 'incomplete', depth: /deep|bomb|downfield|long/i.test(e.description) ? 'deep' : 'short' };
     case 'touchdown':
@@ -68,6 +73,10 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
       return { kind: 'fg', good: false };
     case 'punt':
       return { kind: 'punt' };
+    case 'extra_point':
+      // an XP is a 33-yard kick from the 15; the result of a two-point try is already pictured by the play itself
+      if (TWO_POINT_RE.test(e.description)) return null;
+      return { kind: 'fg', good: /GOOD/.test(e.description) && !/no good/i.test(e.description) };
     default:
       return null;
   }
@@ -76,6 +85,8 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
 /** Points this event put on the board, so the sim can show the pre-snap score. */
 function pointsScored(e: PlayEvent): number {
   if (e.type === 'field_goal_good') return 3;
+  if (e.type === 'extra_point') return /GOOD/.test(e.description) && !/no good/i.test(e.description) ? 1 : 0;
+  if (TWO_POINT_RE.test(e.description) && e.isScoring) return 2;
   if (e.type === 'touchdown' || e.isScoring) return 6;   // the XP is its own event
   return 0;
 }
@@ -89,7 +100,7 @@ export function toSimPlay(e: PlayEvent): SimPlayMessage | null {
     id: e.id,
     possession: e.possession,
     pre: {
-      fieldPos: e.fieldPos,
+      fieldPos: e.type === 'extra_point' ? 85 : e.fieldPos,
       down: e.down,
       toGo: e.yardsToGo,
       quarter: e.quarter,

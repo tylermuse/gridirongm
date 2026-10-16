@@ -1193,7 +1193,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     // Check if next play is user offensive OR awaiting XP/2PT choice
     const engineState = liveEngineRef.current.getState();
     const isUserOffenseNow = !!userTeamSide && engineState.possession === userTeamSide && !engineState.isGameOver;
-    const needsUserInput = isUserOffenseNow || engineState.awaitingXpChoice || engineState.awaitingKickoffChoice;
+    const needsUserInput = isUserOffenseNow || engineState.awaitingXpChoice || engineState.awaitingKickoffChoice || !!engineState.awaitingTwoPointCall;
     if (liveCoachOn && needsUserInput) {
       // Let the play that was just revealed finish animating first. Pausing
       // swaps the field to the static engine snapshot (id -1), which cancelled
@@ -1867,7 +1867,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           mobile (between controls and tabs) and in the sticky sidebar on
           desktop. See renderPlayCallPanel below. */}
 
-      <div className="max-w-6xl mx-auto flex flex-col lg:flex-row items-start gap-4">
+      <div className={`${sim3dOn && !pregameOpen ? 'max-w-7xl' : 'max-w-6xl'} mx-auto flex flex-col lg:flex-row items-start gap-4`}>
       {/* Main game content */}
       <div className="flex-1 min-w-0 space-y-3">
 
@@ -2267,6 +2267,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 }}
                 isFourthDown={es.down === 4}
                 awaitingXpChoice={es.awaitingXpChoice}
+                awaitingTwoPointCall={!!es.awaitingTwoPointCall}
                 awaitingKickoffChoice={es.awaitingKickoffChoice}
                 timeoutsRemaining={userTeamSide === "home" ? es.homeTimeouts : es.awayTimeouts}
                 pendingRunoff={es.pendingRunoff ?? 0}
@@ -2820,6 +2821,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 }}
                 isFourthDown={es.down === 4}
                 awaitingXpChoice={es.awaitingXpChoice}
+                awaitingTwoPointCall={!!es.awaitingTwoPointCall}
                 awaitingKickoffChoice={es.awaitingKickoffChoice}
                 timeoutsRemaining={userTeamSide === "home" ? es.homeTimeouts : es.awayTimeouts}
                 pendingRunoff={es.pendingRunoff ?? 0}

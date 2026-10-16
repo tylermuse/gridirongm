@@ -58,6 +58,7 @@ export function LiveSim3D({
   onActiveChange: (active: boolean) => void;
 }) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const boxRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const [active, setActive] = useState(false);
@@ -122,7 +123,7 @@ export function LiveSim3D({
 
   if (!enabled) return null;
   return (
-    <div className="absolute inset-0 z-30 overflow-hidden rounded-lg bg-black">
+    <div ref={boxRef} className="absolute inset-0 z-30 overflow-hidden rounded-lg bg-black">
       <iframe
         ref={frameRef}
         src={SIM_URL}
@@ -139,6 +140,16 @@ export function LiveSim3D({
         <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-xs text-white">
           3D sim unavailable ({failed}) — showing the 2D field
         </div>
+      )}
+      {ready && !failed && (
+        <button
+          type="button"
+          title="Full screen"
+          onClick={() => { const el = boxRef.current; if (!el) return; if (document.fullscreenElement) void document.exitFullscreen(); else void el.requestFullscreen?.(); }}
+          className="absolute right-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-xs font-bold text-white shadow hover:bg-black/75"
+        >
+          ⛶
+        </button>
       )}
       {active && (
         <button

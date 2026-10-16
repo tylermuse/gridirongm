@@ -100,7 +100,7 @@ select{font:inherit;font-size:14px;padding:6px 8px;border-radius:6px;border:1px 
         <button data-force="incomplete">Incomplete</button>
         <button data-force="sack">Sack</button>
         <button data-force="fg_good">FG good</button>
-        <button data-force="fg_miss">FG miss</button>
+        <button data-force="fg_miss">FG miss</button><button data-force="scramble">QB scramble</button><button data-force="screen">Screen</button>
         <button data-force="punt">Punt</button>
         <button data-force="int">Interception</button>
       </div>
@@ -787,11 +787,12 @@ function choreograph(res){
   ballPlan.push({t0:snap, t1:qbRecv, flight:{x0:0,y0:.4,z0:z0-.3, x1:0,y1:1.2,z1:z0-4.7, h:.2}});
   let tEnd, carrier, tackleT=null, tackler=null, td=false, endPos, tHole=0, tackleAtFn=null;
 
-  const isRun = res.kind==='run';
+  const isRun = res.kind==='run'; const scr = isRun && res.style==='scramble', scn = res.kind==='complete' && res.style==='screen';
+  const runBlock = isRun && !scr;   /* scramble: the line and the receivers play it as a pass until the QB takes off */
   // eyes downfield: linemen never turn around, DL stay square while engaged, DBs backpedal before turning to run
   O.ol.forEach(a=>a.faceLock={angle:0, until:99});
-  D.dl.forEach(a=>a.faceLock={angle:Math.PI, until: isRun? snap+1.5 : snap+2.6});
-  if(!isRun){ [D.cbL,D.cbR,D.sL,D.sR].forEach(a=>a.faceLock={angle:Math.PI, until:snap+.9}); D.lb.forEach(a=>a.faceLock={angle:Math.PI, until:snap+1.3}); }
+  D.dl.forEach(a=>a.faceLock={angle:Math.PI, until: runBlock? snap+1.5 : snap+2.6});
+  if(!runBlock){ [D.cbL,D.cbR,D.sL,D.sR].forEach(a=>a.faceLock={angle:Math.PI, until:snap+.9}); D.lb.forEach(a=>a.faceLock={angle:Math.PI, until:snap+1.3}); }
   O.qb.faceLock = {angle:0, until:99};
   // linemen
   // Line play: each defensive lineman is locked up with a blocker. The pair's contact point drifts
@@ -801,27 +802,27 @@ function choreograph(res){
   pairs.forEach(([di,oi],k)=>{
     if(isSack && di===0) return;              // the sacking end beats his man (scripted below)
     const dl=D.dl[di], ol=O.ol[oi];
-    const pr = { bx:(dl.x+ol.x)/2, bz:z0+.05, dv: isRun? (res.yards<=0? -1.1 : 1.3) : -.9, dur: isRun? 1.6 : 2.6, seed:k*1.7+R(0,3), start:snap };
+    const pr = { bx:(dl.x+ol.x)/2, bz:z0+.05, dv: runBlock? (res.yards<=0? -1.1 : 1.3) : -.9, dur: runBlock? 1.6 : 2.6, seed:k*1.7+R(0,3), start:snap };
     ol.behav = {type:'line', pr, side:-1, x0:ol.x, z0:ol.z, dx:0}; dl.behav = {type:'line', pr, side:1, x0:dl.x, z0:dl.z, dx:0};
     ol.engage = dl; dl.engage = ol;
   });
   { const c=O.ol[2], mate=O.ol[3]; c.behav = {type:'line', pr: mate.behav.pr, side:-1, x0:c.x, z0:c.z, dx:-.55}; c.engage = D.dl[2]; }
-  O.te.behav = isRun? P([snap,6.2,z0-1],[snap+.6,6,z0+.9],[snap+1.4,5.2,z0+2.6]) : P([snap,6.2,z0-1],[snap+1.1,6.8,z0+3],[snap+2.2,4,z0+7],[snap+4,-1,z0+15]);
+  O.te.behav = runBlock? P([snap,6.2,z0-1],[snap+.6,6,z0+.9],[snap+1.4,5.2,z0+2.6]) : P([snap,6.2,z0-1],[snap+1.1,6.8,z0+3],[snap+2.2,4,z0+7],[snap+4,-1,z0+15]);
   // default receiver routes
   const goRoute=(a,dx=0)=>{ const zEndR=Math.min(a.z+27, 58.5); return P([snap,a.x,a.z],[snap+3.6*(zEndR-a.z)/27,a.x+dx,zEndR]); };
-  O.wrL.behav = isRun? F(D.cbL, snap+.1, 6.6, [0,-.9], 1.0) : goRoute(O.wrL,1.5);
-  O.wrR.behav = isRun? F(D.cbR, snap+.1, 6.6, [0,-.9], 1.0) : P([snap,19.5,z0-.9],[snap+1.2,19.5,z0+8],[snap+1.6,22,z0+8],[snap+3.4,21,z0+19]);
-  O.slot.behav = isRun? F(D.sL, snap+.2, 6.4, [0,-.9], 1.0) : P([snap,-11.5,z0-1.1],[snap+.7,-10.5,z0+3],[snap+1.8,-4,z0+9],[snap+3.6,3,z0+20]);
+  O.wrL.behav = runBlock? F(D.cbL, snap+.1, 6.6, [0,-.9], 1.0) : goRoute(O.wrL,1.5);
+  O.wrR.behav = runBlock? F(D.cbR, snap+.1, 6.6, [0,-.9], 1.0) : P([snap,19.5,z0-.9],[snap+1.2,19.5,z0+8],[snap+1.6,22,z0+8],[snap+3.4,21,z0+19]);
+  O.slot.behav = runBlock? F(D.sL, snap+.2, 6.4, [0,-.9], 1.0) : P([snap,-11.5,z0-1.1],[snap+.7,-10.5,z0+3],[snap+1.8,-4,z0+9],[snap+3.6,3,z0+20]);
   // coverage
-  if(isRun){ // corners read run: short backpedal facing the play, then come up to support
+  if(runBlock){ // corners read run: short backpedal facing the play, then come up to support
     [D.cbL, D.cbR].forEach(c=>{ c.behav = P([snap,c.x,c.z],[snap+.7,c.x*.94,c.z+.7]); c.faceLock = {angle:Math.PI, until:snap+1.1}; });
   } else {
     D.cbL.behav = F(O.wrL, snap+.15, 7.3, [1.1,1.6], 1.0);
     D.cbR.behav = F(O.wrR, snap+.15, 7.3, [-1.1,1.6], 1.0);
   }
-  D.sL.behav = isRun? F(O.rb, snap+.5, 6.5) : F(O.slot, snap+.35, 7, [0,3], 1.5);
-  D.sR.behav = isRun? F(O.rb, snap+.6, 6.5) : P([snap,D.sR.x,D.sR.z],[snap+1.6,D.sR.x-2,D.sR.z+3],[snap+3.2,D.sR.x-5,D.sR.z+5]);
-  D.lb.forEach((a,i)=>{ a.behav = isRun
+  D.sL.behav = runBlock? F(O.rb, snap+.5, 6.5) : F(O.slot, snap+.35, 7, [0,3], 1.5);
+  D.sR.behav = runBlock? F(O.rb, snap+.6, 6.5) : P([snap,D.sR.x,D.sR.z],[snap+1.6,D.sR.x-2,D.sR.z+3],[snap+3.2,D.sR.x-5,D.sR.z+5]);
+  D.lb.forEach((a,i)=>{ a.behav = runBlock
     ? P([snap,a.x,a.z],[snap+.45,a.x+Math.sign(res.gap ?? 1)*1.6,a.z-.4],[snap+.95,a.x+Math.sign(res.gap ?? 1)*3.2+(i-1)*.8,a.z-1.6])   // read, scrape to the play-side gap, fill
     : P([snap,a.x,a.z],[snap+1.3,a.x*1.3,a.z+4.5],[snap+2.2,a.x*1.3+(i-1)*2.2,a.z+5.5],[snap+3.4,a.x*1.1,a.z+6.5]); });
 
@@ -887,29 +888,37 @@ function choreograph(res){
     }
   } else if(isRun){
     let Y = res.yards; td = Y>=toGoal; if(td) Y = toGoal;
-    const gapX = res.gap ?? [-3,-1,1,3][Math.floor(Math.random()*4)];
-    const tHand = snap+.62; tHole = tHand + Math.max(.5, Math.hypot(gapX-.7, 3.8)/6.8);   // mesh -> hole at a real speed (was a 12-20 yd/s burst)
+    const C = scr? O.qb : O.rb;   /* the carrier */
+    const gapX = scr? (res.gap ?? (Math.random()<.5?-1:1)*R(4.5,6.5)) : (res.gap ?? [-3,-1,1,3][Math.floor(Math.random()*4)]);
+    const tHand = snap+.62; tHole = scr? snap+2.25 : tHand + Math.max(.5, Math.hypot(gapX-.7, 3.8)/6.8);   // mesh -> hole at a real speed (was a 12-20 yd/s burst); scramble: drop, pocket collapses, take off at ~2.2 s
     const zEnd = td? 52.5 : z0+Y; const endX = Math.max(-24, Math.min(24, gapX + (Y>12? Math.sign(gapX||1)*R(4,9) : R(-1.5,1.5))));
     tEnd = tHole + Math.max(.35, Math.abs(Y+.6)/ (Y>12? 8.2:7));
-    carrier = O.rb;
-    const keys = [[0,1.6,z0-6.6],[snap,1.6,z0-6.6],[tHand,.7,z0-4.4],[tHole,gapX,z0-.6]];
+    carrier = C;
+    const keys = scr
+      ? [[qbRecv,0,z0-4.7],[snap+1.0,0,z0-6.8],[snap+1.55,Math.sign(gapX)*1.2,z0-6.6],[tHole,gapX,z0-.6]]                      // drop, feel the rush, escape the pocket to the edge
+      : [[0,1.6,z0-6.6],[snap,1.6,z0-6.6],[tHand,.7,z0-4.4],[tHole,gapX,z0-.6]];
     if(Y>4) keys.push([tHole+(tEnd-tHole)*.45, gapX+(endX-gapX)*.3 + R(-1.2,1.2), z0+Y*.45]);
     keys.push([tEnd, endX, zEnd]);
-    O.rb.behav = P(...keys);
-    O.qb.behav = P([qbRecv,0,z0-4.7],[tHand,.35,z0-4.6],[tHand+1.2,-3.5,z0-7]);
-    O.qb.faceLock = {angle:0, until:tHand+.15};
-    ballPlan.push({t0:qbRecv, t1:tHand, held:O.qb}, {t0:tHand, t1:1e9, held:O.rb});
+    C.behav = P(...keys);
+    if(scr){ O.rb.behav = P([snap,1.6,z0-6.6],[snap+.55,2.6,z0-5.2],[snap+1.2,Math.sign(gapX)*-2.4,z0-5.4],[tHole+.6,Math.sign(gapX)*-3,z0-2]);   /* stays in to block, picks up the backside rusher */
+      O.qb.faceLock = {angle:0, until:snap+1.6}; ballPlan.push({t0:qbRecv, t1:1e9, held:O.qb});
+      ev(snap+1.7, ()=>{ D.dl.forEach((d,i)=>{ if(i===0 || i===3){ d.faceLock=null; d.engage=null; d.behav = F(O.qb, playT, 7.2, [0,0], 1.0); } }); });   /* the edge comes free — that's why he leaves */
+      ev(tHole+.2, ()=>{ [D.sL, D.sR, D.cbL, D.cbR].forEach((d,i)=>{ if(d!==tackler) d.behav = F(O.qb, playT+.1*i, 6.8, [0,0], 1.1); }); }); }
+    else {
+      O.qb.behav = P([qbRecv,0,z0-4.7],[tHand,.35,z0-4.6],[tHand+1.2,-3.5,z0-7]);
+      O.qb.faceLock = {angle:0, until:tHand+.15};
+      ballPlan.push({t0:qbRecv, t1:tHand, held:O.qb}, {t0:tHand, t1:1e9, held:O.rb}); }
     endPos=[endX,zEnd];
     if(!td){
       const pool = Y<=0? [...D.dl,...D.lb] : [...D.lb, D.sL, D.sR, D.cbL, D.cbR];
       if(Y>0){
         const plan = planTackle(keys, 3, pool.map(a=>({a, t:snap+.3, x:a.x, z:a.z})), 0, z0+toGoal-.8);
-        tackler = plan.a; tEnd = tackleT = plan.tEnd; O.rb.behav = P(...keys); endPos=[endX,zEnd];
+        tackler = plan.a; tEnd = tackleT = plan.tEnd; C.behav = P(...keys); endPos=[endX,zEnd];
         tackler.behav = P(...plan.path);
-        if(plan.chase) ev(plan.lt, ()=>{ tackler.behav = chaseB(O.rb, playT, tEnd-.42, tackler); });
+        if(plan.chase) ev(plan.lt, ()=>{ tackler.behav = chaseB(C, playT, tEnd-.42, tackler); });
       } else { tackler = pool.reduce((b,a)=> (Math.hypot(a.x-endX,a.z-zEnd) < Math.hypot(b.x-endX,b.z-zEnd)? a:b)); tackleT = tEnd; }
       if(Y<=0){ // stuffed: carrier gets driven back into the pile
-        O.rb.behav = P([0,1.6,z0-6.6],[snap,1.6,z0-6.6],[tHand,.7,z0-4.4],[tHole,gapX,z0-.9],[tHole+.4,gapX,z0+Y-.2]);
+        C.behav = scr? P([qbRecv,0,z0-4.7],[snap+1.0,0,z0-6.8],[tHole,gapX*.6,z0-3],[tHole+.4,gapX*.6,z0+Y-.2]) : P([0,1.6,z0-6.6],[snap,1.6,z0-6.6],[tHand,.7,z0-4.4],[tHole,gapX,z0-.9],[tHole+.4,gapX,z0+Y-.2]);
         tEnd = tackleT = tHole+.4;
       }
     }
@@ -926,20 +935,22 @@ function choreograph(res){
     carrier = O.qb; tackler = sacker; tackleT = tEnd = tSack; endPos=[.6,z0+Y];
   } else { // passes: complete / incomplete / int
     const deep = res.depth==='deep';
-    const dropZ = z0-(deep?7.6:6.4), tSet = snap+(deep?1.25:1.0); let tThrow = snap+(deep?1.85:1.35);
+    const dropZ = z0-(deep?7.6: scn? 5.6 : 6.4), tSet = snap+(deep?1.25: scn? .8 : 1.0); let tThrow = snap+(deep?1.85: scn? 1.3 : 1.35);
     O.rb.behav = P([snap,1.6,z0-6.6],[snap+.55,2.6,z0-5.2],[snap+.95,3.4,z0-5],[snap+1.9,9.5,z0-2.5],[snap+3.6,17,z0+5.5]);   // check, then release to the flat
     let rec, catchX, Yc, routeKeys;
     let Y = res.yards||0; td = res.kind==='complete' && Y>=toGoal; if(td) Y = toGoal;
     if(deep){ rec = Math.random()<.5 ? O.wrL : O.wrR; Yc = res.kind==='complete'? Math.max(12, Math.min(Y, Y-R(1,6), 24+R(0,4))) : R(18,27); if(td) Yc=Math.min(Yc, toGoal+R(0,6));
       Yc = Math.min(Yc, toGoal + 7.5);   // catch point stays inside the end zone
       catchX = rec===O.wrL ? -17.5 : 17.5; }
+    else if(scn){ // screen: the back slips out behind the rush and takes a soft throw 2 yd behind the line, blockers out in front
+      rec = O.rb; const side = Math.random()<.5? -1 : 1; Yc = -2.2; catchX = side*6.5; res.screenSide = side; }
     else { const pick = Math.random();
       rec = pick<.3? O.slot : pick<.5? O.te : pick<.75? O.wrR : O.wrL; Yc = res.kind==='complete'? Math.max(1,Math.min(Y, R(3,8))) : R(4,9);
       catchX = rec===O.slot? -4.5 : rec===O.te? 5 : rec===O.wrR? 22.5 : -22.5; }
     Yc = Math.min(Yc, toGoal + 7.5); const cz = z0+Yc; const [hx,,hz] = [0,0,dropZ+.2];
     const flight = Math.max(.45, Math.min(1.7, Math.hypot(catchX-hx, cz-hz)/(deep?21:19)));
     { // the QB holds the ball until the receiver can actually get there at a real sprint (deep shots are thrown late, not fast)
-      const rx0 = rec===O.wrL? -20 : rec===O.slot? -11.5 : 19.5, rz0 = z0-1; const need = Math.hypot(catchX-rx0, cz-rz0)/7.4 + ACCEL_T/2 + .05;
+      const rx0 = rec===O.rb? 1.6 : rec===O.wrL? -20 : rec===O.slot? -11.5 : 19.5, rz0 = rec===O.rb? z0-6.6 : z0-1; const need = Math.hypot(catchX-rx0, cz-rz0)/7.4 + ACCEL_T/2 + .05;
       tThrow = Math.max(tThrow, snap + need - flight); }
     const tCatch = tThrow + flight;
     // drop, settle, rock back to load, then step into the throw on the front foot
@@ -951,7 +962,13 @@ function choreograph(res){
     O.qb.faceLock={angle:0,until:tThrow+.9};
     ev(tThrow-loadTime-.12,()=>{O.qb.faceLock={angle:aimAngle,until:tThrow+.9};});
     // receiver route arrives at catch spot on time
-    if(deep) routeKeys = [[snap,rec.x,rec.z],[tCatch,catchX,cz]];                                                   // go route
+    if(scn){ const side=res.screenSide; routeKeys = [[snap,1.6,z0-6.6],[snap+.55,side*2.2,z0-5.4],[tCatch,catchX,cz]];   // chip, then leak to the flat behind the line
+      // the play-side guard and tackle let their men through and get out in front of the back; those rushers come free at the QB and are a step late
+      const lead = side<0? [O.ol[0],O.ol[1]] : [O.ol[4],O.ol[3]]; const freed = side<0? [D.dl[0],D.dl[1]] : [D.dl[3],D.dl[2]];
+      ev(snap+.75, ()=>{ lead.forEach((o,i)=>{ o.engage=null; o.faceLock=null; o.behav = P([playT,o.x,o.z],[tCatch+.3,catchX+side*(1.5+i*1.5),cz+3.5+i*1.5],[tCatch+2.2,catchX+side*(2+i*2),cz+12+i*2]); });
+        freed.forEach((d,i)=>{ d.engage=null; d.faceLock=null; d.behav = F(O.qb, playT+.1*i, 6.8, [0,0], 1.2); }); });
+      ev(tThrow+.15, ()=>{ freed.forEach((d,i)=>{ d.behav = F(rec, playT+.2*i, 6.4, [0,0], 1.1); }); }); }
+    else if(deep) routeKeys = [[snap,rec.x,rec.z],[tCatch,catchX,cz]];                                                   // go route
     else { // stem up, then break to the ball — stem depth chosen so the whole route is run at ~6.5 yd/s and he arrives on time
       const rx=rec.x, rz=rec.z, avail = Math.max(2, 6.5*(tCatch-snap) - 2.0), direct = Math.hypot(catchX-rx, cz-rz);
       let ds = 1.0; for(let d=1; d<=cz-rz+3; d+=.25){ const L = d + Math.hypot(catchX-rx, cz-(rz+d)); if(L <= avail) ds = d; else break; }
@@ -959,7 +976,7 @@ function choreograph(res){
       routeKeys = [[snap,rx,rz],[snap + (tCatch-snap)*L1/tot, rx, stemZ],[tCatch,catchX,cz]]; }
     rec.behav = P(...routeKeys);
     ballPlan.push({t0:qbRecv, t1:tThrow, held:O.qb, off:[.35,1.75,.05]});
-    const flightSeg = {t0:tThrow, t1:tCatch, flight:{x0:hx+.35,y0:1.9,z0:hz, x1:catchX,y1:1.35,z1:cz, h:deep?7:2.4}};
+    const flightSeg = {t0:tThrow, t1:tCatch, flight:{x0:hx+.35,y0:1.9,z0:hz, x1:catchX,y1:1.35,z1:cz, h:deep?7: scn? 1.6 : 2.4}};
     ballPlan.push(flightSeg);
     O.qb.throwScale = deep ? 1.6 : 1.2; O.qb.throwT0 = tThrow - .5*O.qb.throwScale; O.qb.aimAt = [catchX, cz];   // deep shots get a longer wind-up; release stays at tThrow
     if(tThrow - snap > 2.1 && res.kind!=='int'){ const rush = D.dl[3], blk = O.ol[4];
@@ -971,7 +988,7 @@ function choreograph(res){
         if(playT < tThrow+1.1) events.push({t:playT+.03, fn:qbHit, done:false}); else { rush.wrap=null; rush.behav = F(O.qb, playT, 5, [0,0], 1.2); } };
       ev(tThrow+.08, qbHit); }
     ev(tThrow,()=>{flightSeg.captureHand=O.qb;});
-    const cover = rec===O.wrL? D.cbL : rec===O.wrR? D.cbR : rec===O.te? D.lb[1] : D.sL;
+    const cover = rec===O.rb? D.lb[res.screenSide<0? 0 : 2] : rec===O.wrL? D.cbL : rec===O.wrR? D.cbR : rec===O.te? D.lb[1] : D.sL;
     rec.catchT = tCatch;
     // contested ball: deep shots, picks, breakups and tight coverage -> both players elevate for it
     let contested = res.kind!=='complete' || (deep && Math.random() < .4);   /* short completions are a man who won separation (the DB plays off); only deep balls are contested */   /* a completion is usually a receiver who won separation; sometimes a contested catch */
@@ -1107,20 +1124,20 @@ function choreograph(res){
   // knocked onto his back and slid a yard — while the carrier lowers a shoulder and keeps going.
   if(isRun && carrier && tackler && res.yards > 4 && !td){
     const pool = [...D.lb, D.sL, D.sR, D.cbL, D.cbR].filter(a=>a!==tackler); let tr=null;
-    for(const d of pool){ for(let tt=tHole+.2; tt<tackleT-.75; tt+=.05){ const [cx,cz]=pathAt(O.rb.behav.k, tt);
+    for(const d of pool){ for(let tt=tHole+.2; tt<tackleT-.75; tt+=.05){ const [cx,cz]=pathAt(carrier.behav.k, tt);
       if(cz >= d.z-.4){ const dist=Math.hypot(cx-d.x, cz-d.z); if(dist < 7.5 && dist/MAX_SPRINT < (tt-(snap+.35))*.9 && (!tr || tt<tr.t)) tr={d, t:tt, cx, cz}; break; } } }
     // A long run is a hole and a bad angle, not a man getting run over: on a breakaway the second-level defender usually dives and grabs grass (whiff)
     // or is simply sealed off and chases; trucking is rare. Shorter chunk runs truck a little more often.
     if(tr && res.yards>=8){ const {d,t:tm,cx,cz}=tr; const big=res.yards>=18, r=Math.random(); const TR=window.__truckP ?? (big? .15 : .25), WH=window.__whiffP ?? (big? .55 : .35);
-      if(r<TR){ d.behav = P([snap+.35,d.x,d.z],[tm,cx,cz-.3]); d.faceLock=null; d.truck={t:tm, carrier:O.rb}; O.rb.truckT = tm;
-        ev(tm+.6, ()=>{ if(d.down==null){ d.truck=null; d.behav = F(O.rb, playT, 6.4, [0,0], 1.1); } }); }   // never met him: just pursue
-      else if(r<TR+WH){ const side = Math.sign(d.x-cx) || (Math.random()<.5?-1:1); const [px,pz] = pathAt(O.rb.behav.k, tm-.3);   /* he arrives a step late, dives at where the runner was */
+      if(r<TR){ d.behav = P([snap+.35,d.x,d.z],[tm,cx,cz-.3]); d.faceLock=null; d.truck={t:tm, carrier:carrier}; carrier.truckT = tm;
+        ev(tm+.6, ()=>{ if(d.down==null){ d.truck=null; d.behav = F(carrier, playT, 6.4, [0,0], 1.1); } }); }   // never met him: just pursue
+      else if(r<TR+WH){ const side = Math.sign(d.x-cx) || (Math.random()<.5?-1:1); const [px,pz] = pathAt(carrier.behav.k, tm-.3);   /* he arrives a step late, dives at where the runner was */
         d.whiff=true; d.behav = P([snap+.35,d.x,d.z],[tm-.2, px+side*1.1, pz-1.0]); d.faceLock=null;
         ev(tm-.2, ()=>{ if(d.down!=null) return; d.face=Math.atan2(cx-d.x, cz-d.z); d.down=playT; d.fallDir=1; d.mocapFall={clip:'football_tackle', t0:playT, start:(window.__tackStart??.58), side:-side}; sndThump(.4,.3); }); }
     }
   }
   // everyone else pursues after the ball carrier changes hands (runs)
-  if(isRun && carrier){ ev(snap+.9, ()=>{ D.all.forEach((d,i)=>{ if(d!==tackler && !d.truck && !d.whiff && d.behav?.type!=='lunge' && !D.dl.includes(d)) d.behav = F(O.rb, playT+.1+(i%3)*.1, 6.6+(i%3)*.35, [0,0], 1.1); }); }); }
+  if(isRun && carrier){ ev(snap+.9, ()=>{ D.all.forEach((d,i)=>{ if(d!==tackler && !d.truck && !d.whiff && d.behav?.type!=='lunge' && !D.dl.includes(d)) d.behav = F(carrier, playT+.1+(i%3)*.1, 6.6+(i%3)*.35, [0,0], 1.1); }); }); }
   play = {res, tEnd: tEnd ?? 3, carrier, td, endPos, whistleT: res.kind==='incomplete' ? tEnd-.55 : tEnd, whistled:false, goalZ: z0+toGoal};
   if(tackler && carrier){ play.tackler = tackler; play.tackleAt = tackleAtFn; }
   cameraTarget = null;
@@ -1615,6 +1632,7 @@ function rollCall(call){
   return {kind:'incomplete', depth:call};
 }
 const FORCED = {
+  scramble:()=>({kind:'run', yards:9, style:'scramble'}), scrambleshort:()=>({kind:'run', yards:2, style:'scramble'}), screen:()=>({kind:'complete', depth:'short', yards:11, style:'screen'}), screenstuff:()=>({kind:'complete', depth:'short', yards:1, style:'screen'}),
   stuffed:()=>({kind:'run', yards:-Math.round(R(0,2))}),
   fg_good:()=>({kind:'fg', good:true}),
   fg_miss:()=>({kind:'fg', good:false}),
