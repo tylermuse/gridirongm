@@ -158,7 +158,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16d'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16e'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];   /* set by the game page in embed mode (bsgm:setup) */
 const team = i => EMB_TEAMS[i] || TEAMS[+(i===0?selA.value:selB.value)];
@@ -1135,13 +1135,20 @@ function choreograph(res){
         const sdx=Math.cos(carrier.face), sdz=-Math.sin(carrier.face); const lx=(tackler.x-carrier.x)*sdx+(tackler.z-carrier.z)*sdz;
         const back=(window.__behindD??1.06), side=Math.max(-.2,Math.min(.2,lx));
         tackler.behind={of:carrier, back:.25, side:0, pair:true}; tackler.x=carrier.x-ux*back+sdx*side; tackler.z=carrier.z-uz*back+sdz*side; tackler.face=carrier.face;
-        carrier.mocapFall={clip:'football_fall', t0:playT, start:S, pair:true}; }
+        const MX = window.__mxPair ?? true;
+        carrier.mocapFall= MX? {clip:'mx_fall_flat', t0:playT, start:(window.__mxCarrierStart ?? .45), pair:true, mx:true} : {clip:'football_fall', t0:playT, start:S, pair:true}; }
       const spotIt = ()=>{ if(td) return; const bz = ball.position.z, spot = Math.round(bz - z0);
         if((res.kind==='run' || res.kind==='complete') && !res.lock) res.yards = clamp(spot, -15, toGoal-1);   /* lock: the game already decided the yardage (embed) — the sim only pictures it */
         else if(res.kind==='int') res.intEndZ = bz; };
-      spotIt(); events.push({t:playT+(pair? 1.1 : .6), fn:spotIt, done:false}); if(pair){ play.tEnd = Math.max(play.tEnd, playT+1.2); play.whistleT = Math.max(play.whistleT ?? 0, playT+1.2); }
+      spotIt(); events.push({t:playT+(pair? 1.1 : .6), fn:spotIt, done:false}); if(pair){ const hold=(window.__mxPair ?? true)? 1.6 : 1.2; play.tEnd = Math.max(play.tEnd, playT+hold); play.whistleT = Math.max(play.whistleT ?? 0, playT+hold); }
       // captured motion: a man hit from behind/side goes down in the captured forward fall (scheduled above, after the drag), the tackler in the captured dive; a head-on hit keeps the procedural back fall
-      if(pair) tackler.mocapFall = {clip:'football_tackle', t0:playT, start:S, pair:true};
+      if(pair) tackler.mocapFall = (window.__mxPair ?? true)? {clip:'mx_defender_tackle', t0:playT, start:(window.__mxTacklerStart ?? 1.05), pair:true, mx:true} : {clip:'football_tackle', t0:playT, start:S, pair:true};
+      else if(window.__mxHead ?? true){ // head-on, captured pair: the runner is knocked onto his back ('Knocked Out'), the tackler drives through with the shoulder ('Running To Tackle') from in front and rolls past
+        const cs=Math.hypot(carrier.vx||0,carrier.vz||0)||1, ux=(carrier.vx||0)/cs, uz=(carrier.vz||0)/cs, front=(window.__frontD ?? .95);
+        tackler.behind=null; tackler.x=carrier.x+ux*front; tackler.z=carrier.z+uz*front; tackler.face=carrier.face+Math.PI; tackler.wrap=null;
+        carrier.mocapFall={clip:'mx_knocked_back', t0:playT, start:(window.__mxHeadCarrierStart ?? 1.25), pair:true, mx:true};
+        tackler.mocapFall={clip:'mx_defender_tackle', t0:playT, start:(window.__mxTacklerStart ?? 1.05), pair:true, mx:true, maxTravel:(window.__mxHeadTravel ?? .9)};
+        play.tEnd = Math.max(play.tEnd, playT+1.6); play.whistleT = Math.max(play.whistleT ?? 0, playT+1.6); }
       else { const f=tackler.face, lx=(tackler.x-carrier.x)*Math.cos(f)-(tackler.z-carrier.z)*Math.sin(f); tackler.mocapFall = {clip:'football_tackle', t0:playT, start:(window.__tackStart??.58), side: Math.abs(lx)<.15? (Math.random()<.5?-1:1) : Math.sign(lx)}; } };
   }
   if(td && carrier){ ev(tEnd, ()=>{ carrier.celebrate = playT;
@@ -1326,19 +1333,19 @@ function mocapAct(a,t){ const m=a.mocapAct; if(!m) return false; const ct=m.star
 function mocapFall(a,t){
   const m=a.mocapFall; if(!m) return false; const kReal=Math.max(0,t-m.t0);
   const HOLD = (m.clip==='football_tackle' ? window.__pairHoldT : window.__pairHoldC) ?? (m.clip==='football_tackle' ? .55 : .85);   /* paired tackle: freeze both captures at the pile (tackler across the runner's hips) instead of playing on into two men sprawled a metre apart */
-  const k = m.pair ? Math.min(kReal, HOLD) : kReal;
-  const tackle=m.clip==='football_tackle'; const lat = tackle && !m.pair? (m.side||0)*42*smooth01((m.start+k-.62)/.4) : 0;   /* the tackler lands beside and across him, not straight up his back (cm, model-local) */
+  const k = (m.pair && !m.mx) ? Math.min(kReal, HOLD) : kReal;
+  const tackle=m.clip==='football_tackle' || m.clip==='mx_defender_tackle'; const lat = tackle && !m.pair? (m.side||0)*42*smooth01((m.start+k-.62)/.4) : 0;   /* the tackler lands beside and across him, not straight up his back (cm, model-local) */
   let maxF=null; if(!tackle && a.carrying && play && !play.td && play.goalZ!=null){ maxF = Math.max(0, play.goalZ-.5-a.z)*86/ (a.model.scale.x/1.158) - 95; }   /* short of the goal line: the ball (≈.6 m ahead of the hips) stays out of the end zone when the sim said no score */
   if(tackle && a.behind && !m.pair){ const c=a.behind.of, al=(c.x-a.x)*Math.sin(c.face)+(c.z-a.z)*Math.cos(c.face); maxF = Math.max(0, al-a.behind.back)*86/(a.model.scale.x/1.158); }   /* the dive's root travel stops at the runner's hips: he lands on the legs, not on the man */
   let originT=m.start;
   if(m.pair){ // paired capture: the clip's root travel moves the player's real position (camera, spot and pile all follow), not just the mesh under a frozen root
     const h0=clipHips(m.clip,m.start), h1=clipHips(m.clip,m.start+k); if(h0 && h1){ const sc=(a.model.scale.x/1.158)/86; let fz=(h1[2]-h0[2])*sc; const fx=(h1[0]-h0[0])*sc;
-      if(m.ox==null){ m.ox=a.x; m.oz=a.z; m.f=a.face; } if(a.carrying && play && !play.td && play.goalZ!=null) fz=Math.min(fz, Math.max(0, play.goalZ-1.05-m.oz));
+      if(m.ox==null){ m.ox=a.x; m.oz=a.z; m.f=a.face; } if(a.carrying && play && !play.td && play.goalZ!=null) fz=Math.min(fz, Math.max(0, play.goalZ-1.05-m.oz)); if(m.maxTravel!=null) fz=Math.min(fz, m.maxTravel);   /* head-on: the tackler's roll stops on the runner, not two metres past him */
       a.x=m.ox+Math.sin(m.f)*fz+Math.cos(m.f)*fx; a.z=m.oz+Math.cos(m.f)*fz-Math.sin(m.f)*fx; originT=m.start+k; maxF=null; } }
   if(!footballMotion(a,m.clip,m.start+k,smooth01(k/.12),0,originT, m.pair? null : tackle? 1.05 : 1.0, lat, maxF)) return false;
   // settle: once he is on the ground the legs go flat behind him (the capture kicks them up on impact) and the tackler flattens out across him instead of staying up on hands and knees
   const T=window.__settleTune||{fall:[.78,.3,.9],tackle:[1.0,.35,.75],pairTackle:[1.2,.4,.35]}, st=T[m.clip==='football_fall'?'fall': m.pair?'pairTackle':'tackle'];
-  const u = m.pair ? smooth01((kReal-HOLD)/.45)*.3 : smooth01((m.start+k-st[0])/st[1])*st[2];   /* pair: a small relax of the legs once the pile is held */
+  const u = m.mx ? 0 : m.pair ? smooth01((kReal-HOLD)/.45)*.3 : smooth01((m.start+k-st[0])/st[1])*st[2];   /* pair: a small relax of the legs once the pile is held */
   if(u>0){ const B=a.bones, I=new THREE.Quaternion();
     for(const n of ['LeftUpLeg','RightUpLeg','LeftLeg','RightLeg','LeftFoot','RightFoot']) B[n].quaternion.slerp(I,u);
     if(m.clip==='football_tackle' && !m.pair){ for(const n of ['Spine','Spine1']) B[n].quaternion.slerp(I,u*.6); } }
@@ -1506,8 +1513,8 @@ function stepActor(a, t, dt){
     a.model.updateMatrixWorld(true); const fr = frameOf(a);
     if(a.down!=null && a.mocapActive){ const mf=a.mocapFall, k=mf? t-mf.t0 : 0;
       if(a.carrying){ const tf=torsoFrame(a); poseArm(a,'R',torsoPose(tf,POSE.tuck,1),tf,.9);
-        if(mf && mf.pair){ const w=smooth01(k/.18); poseArm(a,'L',torsoPose(tf,(window.__bracePose||[[.75,.35,-.45],[.85,.05,-.5]]),-1),tf,w); } }   /* ridden down from behind: the free arm goes out to brace, not up in the air (the solo capture has him throwing both hands up) */
-      else if(mf && mf.pair && a.behind){ const c=a.behind.of; c.bones.Hips.getWorldPosition(_t1); _t1.y+=.05; const w=smooth01(k/.15)*(1-smooth01((k-1.4)/.4)); if(w>0) armsAt(a,_t1,_t1,w,.3,-.6); } }   /* the tackler's arms stay wrapped around the runner's hips through the ride and the fall */
+        if(mf && mf.pair && !mf.mx){ const w=smooth01(k/.18); poseArm(a,'L',torsoPose(tf,(window.__bracePose||[[.75,.35,-.45],[.85,.05,-.5]]),-1),tf,w); } }   /* ridden down from behind: the free arm goes out to brace, not up in the air (the solo capture has him throwing both hands up) */
+      else if(mf && mf.pair && a.behind){ const c=a.behind.of; c.bones.Hips.getWorldPosition(_t1); _t1.y+=.05; const w=smooth01(k/.15)*(1-smooth01((k-(mf.mx? .4 : 1.4))/.4)); if(w>0) armsAt(a,_t1,_t1,w,.3,-.6); } }   /* the tackler's arms stay wrapped around the runner's hips through the ride and the fall */
     else if(a.mocapActive && a.mocapAct){ /* captured catch / kick / hold owns the arms */ }
     else if(a.down!=null)fallingArms(a,t,fr);
     else if(throwing && a.mocapThrow){ /* Full-body clip owns shoulders, elbows and off hand. */ }
