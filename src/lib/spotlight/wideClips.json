@@ -87,23 +87,23 @@
  },
  "panic_verdict_1": {
   "src": "/show/wide/panic_verdict_1.mp4",
-  "duration": 5.24,
+  "duration": 6.24,
   "speech": {
-   "start": 0.0,
-   "end": 4.88
+   "start": 0.35,
+   "end": 5.48
   },
   "lines": [
    {
     "host": "marcus",
     "text": "Alright. Panic meter. One to ten, where are you?",
-    "start": 0.0,
-    "end": 2.88
+    "start": 0.6,
+    "end": 3.48
    },
    {
     "host": "tony",
     "text": "Oh, I've had my number ready for ten minutes.",
-    "start": 2.88,
-    "end": 4.88
+    "start": 3.48,
+    "end": 5.48
    }
   ]
  },
@@ -341,29 +341,29 @@
  },
  "signoff_2": {
   "src": "/show/wide/signoff_2.mp4",
-  "duration": 4.6,
+  "duration": 5.6,
   "speech": {
-   "start": 0.0,
-   "end": 4.24
+   "start": 0.35,
+   "end": 4.84
   },
   "lines": [
    {
     "host": "tony",
     "text": "Alright, that's it. I'm done yelling.",
-    "start": 0.0,
-    "end": 1.76
+    "start": 0.6,
+    "end": 2.36
    },
    {
     "host": "marcus",
     "text": "For today.",
-    "start": 1.76,
-    "end": 2.4
+    "start": 2.36,
+    "end": 3.0
    },
    {
     "host": "tony",
     "text": "For today. We'll see you next week.",
-    "start": 2.4,
-    "end": 4.24
+    "start": 3.0,
+    "end": 4.84
    }
   ]
  },

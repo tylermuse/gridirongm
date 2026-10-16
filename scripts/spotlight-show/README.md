@@ -68,7 +68,11 @@ two-shot and both are composited back over the still:
 
 1. Add the back-and-forth to `wide/scripts.json` (`[["marcus","…"],["tony","…"]]`).
 2. Voice it: `python3 dlg.py <key>.json <key>.mp3` (ElevenLabs v3 dialogue; also
-   writes `<key>.mp3.spans.json`, each line's time span).
+   writes `<key>.mp3.spans.json`, each line's time span). Then give it a lead-in —
+   HeyGen's lips start late when speech begins at 0s:
+   `ffmpeg -i <key>.mp3 -af "adelay=600|600,apad=pad_dur=0.4" <key>_p.mp3` and shift
+   the spans by 0.6s; use the padded files from here on, with `speech.start: 0.35`
+   in wideClips.json.
 3. `python3 split_tracks.py <key>` → `<key>.marcus.mp3` / `<key>.tony.mp3`
    (the other host's turns silenced).
 4. Render each track in HeyGen Avatar 4 (Expressive) on its crop:

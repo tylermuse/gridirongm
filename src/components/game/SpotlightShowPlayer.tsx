@@ -21,8 +21,8 @@ import { planShots } from '@/lib/spotlight/showShots';
 import { clipLevel, levelGain, speechDb } from '@/lib/spotlight/loudness';
 import type { TileStat } from '@/lib/spotlight/playerStats';
 import type { GameTopic } from '@/lib/spotlight/showGame';
-import { conferenceRace, divisionTable } from '@/lib/spotlight/showStandings';
-import type { Player, Team } from '@/types';
+import { conferenceRace, divisionTable, upcomingSchedule } from '@/lib/spotlight/showStandings';
+import type { GameResult, Player, Team } from '@/types';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { ShowCaption, ShowGraphic, ThemeCard, TWO_SHOT_SRC, avatarSrc } from './SpotlightShowGraphics';
@@ -52,6 +52,9 @@ interface SpotlightShowPlayerProps {
   team?: Team;
   teams?: Team[];
   players?: Player[];
+  /** The season's schedule, for the "road ahead" graphic. */
+  schedule?: GameResult[];
+  season?: number;
   /** Render as the big broadcast poster (dashboard) instead of a small button. */
   poster?: { episodeLabel: string; ready: boolean };
   /** Where the season is ({phase, narrative}); validated server-side. */
@@ -118,7 +121,7 @@ function toneClass(st: ShowStat) {
   return t === 'good' ? 'text-emerald-600' : t === 'bad' ? 'text-red-600' : 'text-slate-500';
 }
 
-export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats, team, teams = [], players = [], poster, moment }: SpotlightShowPlayerProps) {
+export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats, team, teams = [], players = [], schedule = [], season, poster, moment }: SpotlightShowPlayerProps) {
   const sub = useSubscription();
   const access = listenState({
     loading: sub.loading,
@@ -910,7 +913,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
         : focusTeam ? `${focusTeam.abbreviation} · League ranks`
           : gfxTopic?.gameTeam ? gfxTopic.gameLabel
             : stats ? `${team?.abbreviation ?? teamName} · League ranks` : undefined;
-  const mentioned: string[] = !tts || !focus || focus.kind === 'none' || focus.kind === 'standings' || focus.kind === 'moment' ? [] : focus.mentioned;
+  const mentioned: string[] = !tts || !focus || focus.kind === 'none' || focus.kind === 'standings' || focus.kind === 'schedule' || focus.kind === 'moment' ? [] : focus.mentioned;
   // Game breakdown: the scores on a timeline, the one being discussed called out.
   const flowData = focus?.kind === 'moment' ? gfxTopic?.gameFlow ?? null : null;
   const flow = flowData && focus?.kind === 'moment' ? (() => {
@@ -935,6 +938,12 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
     right: { abbreviation: cmpData.right.abbreviation, art: teamOf(cmpData.right.teamId) ? logoOf(teamOf(cmpData.right.teamId)!) : null },
     rows: cmpData.rows,
   } : null;
+  const sched = focus?.kind === 'schedule' && team && teams.length && season != null
+    ? (() => {
+      const b = upcomingSchedule(team, teams, schedule, season);
+      return b ? { ...b, rows: b.rows.map(r => { const t = teams.find(x => x.id === r.teamId)!; return { ...r, art: logoOf(t) }; }) } : null;
+    })()
+    : null;
   const board = focus?.kind === 'standings' && team && teams.length
     ? (() => {
       const b = focus.scope === 'division' ? divisionTable(team, teams) : conferenceRace(team, teams);
@@ -1011,6 +1020,7 @@ export function SpotlightShowPlayer({ topics: storyTopics, game, teamName, stats
                 stats={stats}
                 tiles={tiles}
                 board={board}
+                sched={sched}
                 compare={compare}
                 flow={flow}
                 tilesLabel={tilesLabel}
@@ -1196,6 +1206,7 @@ function lookOf(f: Focus): string {
     case 'unit': return `unit:${f.unit}`;
     case 'team': return `team:${f.teamId ?? ''}`;
     case 'standings': return `standings:${f.scope}`;
+    case 'schedule': return 'schedule';
     case 'moment': return `moment:${f.play ?? ''}`;
     default: return 'none';
   }
