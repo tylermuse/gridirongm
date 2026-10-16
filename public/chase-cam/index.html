@@ -158,6 +158,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
+const SIM_BUILD='b16c'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];   /* set by the game page in embed mode (bsgm:setup) */
 const team = i => EMB_TEAMS[i] || TEAMS[+(i===0?selA.value:selB.value)];
@@ -510,11 +511,11 @@ function makePlayer(t, number, big, opts={}){
   });
   if(opts.ref && modelChoice==='fp27'){ // official's cap: crown + band + brim on the Head bone (head top is ~22 cm above the bone on this rig)
     const capMat=new THREE.MeshLambertMaterial({color:opts.cap||'#f4f4f4'}); const cap=new THREE.Group();
-    const crown=new THREE.Mesh(new THREE.SphereGeometry(.118,20,12,0,Math.PI*2,0,Math.PI*.5), capMat); crown.scale.set(1,.8,1.04); cap.add(crown);
-    const band=new THREE.Mesh(new THREE.CylinderGeometry(.118,.115,.035,20,1,true), capMat); band.position.y=-.015; cap.add(band);
+    const crown=new THREE.Mesh(new THREE.SphereGeometry(.124,20,12,0,Math.PI*2,0,Math.PI*.5), capMat); crown.scale.set(1,.85,1.04); cap.add(crown);
+    const band=new THREE.Mesh(new THREE.CylinderGeometry(.124,.12,.04,20,1,true), capMat); band.position.y=-.018; cap.add(band);
     const brim=new THREE.Mesh(new THREE.SphereGeometry(.11,20,6,0,Math.PI*2,Math.PI*.44,Math.PI*.12), capMat); brim.scale.set(1.02,.35,1.05); brim.position.set(0,-.025,.06); cap.add(brim);
     cap.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.material.side=THREE.DoubleSide; } });
-    attach(bones.Head, cap, new THREE.Vector3(0,12,.5), sc); }
+    attach(bones.Head, cap, new THREE.Vector3(0,13.5,.5), sc); }
   // proportions (broad shoulders, thick limbs, smaller helmet, shorter arms) are baked into player.glb by model/proportion.py — no runtime bone scaling, which sheared the limbs
   // jersey numbers: decal planes just off the chest and back (model chest is ~0.32 m wide at number height)
   if(!opts.ref){
@@ -1702,7 +1703,7 @@ function renderBug(){
 }
 function banner(text, cls){ const el=$('banner'); el.textContent=text; el.className='banner'+(cls?' '+cls:''); el.hidden=false; }
 function log(text){ const li=document.createElement('li'); li.textContent=text; $('log').prepend(li); }
-function setBusy(b){ G.busy=b; if(!b && window.__onIdle) setTimeout(window.__onIdle, 0); document.querySelectorAll('button[data-call],button[data-force]').forEach(x=>x.disabled=b); $('hint').textContent = b? 'Live' : 'Pre-snap'; }
+function setBusy(b){ G.busy=b; if(!b && window.__onIdle) setTimeout(window.__onIdle, 0); document.querySelectorAll('button[data-call],button[data-force]').forEach(x=>x.disabled=b); $('hint').textContent = b? 'Live' : EMBED? 'Pre-snap · '+SIM_BUILD : 'Pre-snap'; }   /* build tag so a stale cached sim is obvious */
 
 // Keep standing players out of each other's bodies (blocking pairs, wraps and dives are meant to touch)
 function separate(){
