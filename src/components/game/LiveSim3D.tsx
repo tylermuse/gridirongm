@@ -20,6 +20,26 @@ import { toSimPlay, toSimTeam, type SimTeam } from '@/lib/engine/liveSim3d';
 
 const SIM_URL = '/chase-cam/index.html?embed=1&model=fp27';
 const STORAGE_KEY = 'bsgm.sim3d';
+const VIEW_KEY = 'bsgm.sim3d.view';
+
+type SimCam = 'low' | 'wide' | 'broadcast' | 'high';
+type SimLighting = 'day' | 'night';
+const CAM_LABELS: [SimCam, string][] = [['low', 'Chase'], ['wide', 'Wide'], ['broadcast', 'Broadcast'], ['high', 'High']];
+
+/** Camera angle + day/night for the sim, remembered per browser. */
+function useSimView(): [{ cam: SimCam; lighting: SimLighting }, (v: Partial<{ cam: SimCam; lighting: SimLighting }>) => void] {
+  const [view, setViewState] = useState<{ cam: SimCam; lighting: SimLighting }>({ cam: 'low', lighting: 'day' });
+  useEffect(() => {
+    let saved: { cam?: SimCam; lighting?: SimLighting } | null = null;
+    try { saved = JSON.parse(window.localStorage.getItem(VIEW_KEY) || 'null'); } catch { /* storage blocked / bad json */ }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time sync from browser state on mount
+    if (saved) setViewState(v => ({ cam: saved?.cam ?? v.cam, lighting: saved?.lighting ?? v.lighting }));
+  }, []);
+  const setView = useCallback((patch: Partial<{ cam: SimCam; lighting: SimLighting }>) => {
+    setViewState(v => { const next = { ...v, ...patch }; try { window.localStorage.setItem(VIEW_KEY, JSON.stringify(next)); } catch { /* storage blocked */ } return next; });
+  }, []);
+  return [view, setView];
+}
 
 export function useSim3DMode(): [boolean, (on: boolean) => void] {
   const [on, setOnState] = useState(false);
@@ -62,6 +82,7 @@ export function LiveSim3D({
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const [active, setActive] = useState(false);
+  const [view, setView] = useSimView();
   const activeIdRef = useRef<number | null>(null);
   const lastIdRef = useRef<number | null>(null);
   const activeRef = useRef(false);
@@ -101,6 +122,12 @@ export function LiveSim3D({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, ready, homeKey, awayKey, post]);
 
+  // Camera angle / lighting → sim (on ready and whenever they change)
+  useEffect(() => {
+    if (!enabled || !ready) return;
+    post({ type: 'bsgm:view', cam: view.cam, lighting: view.lighting });
+  }, [enabled, ready, view.cam, view.lighting, post]);
+
   // New event → send it to the sim and hold the game until it reports done
   useEffect(() => {
     if (!enabled || !event || disabled || !ready || failed) return;
@@ -139,6 +166,17 @@ export function LiveSim3D({
       {failed && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-xs text-white">
           3D sim unavailable ({failed}) — showing the 2D field
+        </div>
+      )}
+      {ready && !failed && (
+        <div className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-black/55 p-1 text-[11px] font-bold text-white">
+          {CAM_LABELS.map(([c, label]) => (
+            <button key={c} type="button" onClick={() => setView({ cam: c })} aria-pressed={view.cam === c}
+              className={`rounded-full px-2 py-0.5 ${view.cam === c ? 'bg-white text-black' : 'hover:bg-white/20'}`}>{label}</button>
+          ))}
+          <span className="mx-1 h-4 w-px bg-white/30" />
+          <button type="button" onClick={() => setView({ lighting: view.lighting === 'day' ? 'night' : 'day' })} title="Day / night"
+            className="rounded-full px-2 py-0.5 hover:bg-white/20">{view.lighting === 'day' ? '☀️ Day' : '🌙 Night'}</button>
         </div>
       )}
       {ready && !failed && (
