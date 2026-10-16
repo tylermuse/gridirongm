@@ -14,6 +14,7 @@ import { createLiveCoachEngine, type LiveCoachEngine } from '@/lib/engine/liveCo
 import { Confetti } from '@/components/ui/Confetti';
 import { AnimatedField } from '@/components/game/AnimatedField';
 import { LiveSim3D, useSim3DMode } from '@/components/game/LiveSim3D';
+import { clockSeconds } from '@/lib/engine/liveSim3d';
 import { ScoreBug } from '@/components/game/ScoreBug';
 import { GamePlanModal } from '@/components/game/GamePlanModal';
 import { buildMatchupMetrics, rankForMetric } from '@/lib/engine/matchupRanks';
@@ -2006,6 +2007,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             disabled={speed === 'max' || broadcastOn}
             homeTeam={homeTeam}
             awayTeam={awayTeam}
+            state={{ possession: livePoss, fieldPos: liveFieldPos, down: liveDown, toGo: liveYtg, quarter: liveQuarter,
+              clock: engineSnapshot ? engineSnapshot.timeSecs : clockSeconds(currentEvent?.timeStr ?? ''), homeScore: liveHomeScore, awayScore: liveAwayScore }}
             onActiveChange={setSim3dActive}
           />
 
@@ -3084,21 +3087,49 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           onClick={closeHalftimeReport}
         >
           <div
-            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-2xl"
+            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-4xl w-full max-h-[85vh] overflow-y-auto shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] sticky top-0 bg-[var(--surface)] z-10">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">📻</span>
-                <h2 className="text-lg font-black">Halftime Report</h2>
+            <div className="sticky top-0 z-10 bg-[var(--surface)] border-b border-[var(--border)]">
+              <div className="flex items-center justify-between px-5 py-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">📻</span>
+                  <h2 className="text-lg font-black">Halftime Report</h2>
+                </div>
+                <button
+                  onClick={closeHalftimeReport}
+                  aria-label="Close"
+                  className="text-[var(--text-sec)] hover:text-[var(--text)] text-xl leading-none"
+                >
+                  ✕
+                </button>
               </div>
-              <button
-                onClick={closeHalftimeReport}
-                aria-label="Close"
-                className="text-[var(--text-sec)] hover:text-[var(--text)] text-xl leading-none"
-              >
-                ✕
-              </button>
+              {/* Premium breakdown CTA / audio button pinned under the title so it is visible without scrolling */}
+              <div className="px-5 pb-4">
+                {isPremium ? (
+                  <button
+                    onClick={playHalftimeAudio}
+                    disabled={htAudio === 'loading'}
+                    className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-60 transition-all"
+                    title="Marcus & Tony break down both teams and the second-half adjustments"
+                  >
+                    {htAudio === 'loading' ? '🔊 Marcus & Tony are recording it…'
+                      : htAudio === 'playing' ? '⏸ Stop breakdown'
+                      : htAudio === 'error' ? '🔊 Retry audio breakdown'
+                      : '🔊 Listen — in-depth breakdown'}
+                  </button>
+                ) : (
+                  <Link
+                    href="/pricing"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-purple-500/40 bg-purple-500/10 px-4 py-2.5 hover:bg-purple-500/20 transition-colors"
+                  >
+                    <span className="text-xs sm:text-sm text-[var(--text)]">
+                      🔊 <span className="font-bold">Go Premium</span> to hear Marcus &amp; Tony break down both teams and the second-half adjustments — plus the live audio broadcast.
+                    </span>
+                    <span className="shrink-0 text-xs font-bold text-purple-500 whitespace-nowrap">Upgrade →</span>
+                  </Link>
+                )}
+              </div>
             </div>
             <div className="p-5 space-y-5">
               <div className="text-center">
@@ -3114,7 +3145,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 return (
                   <div className="space-y-2">
                     <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">Around the League — At the Half</div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {others.map(g => {
                         const at = teams.find(t => t.id === g.awayTeamId);
                         const ht = teams.find(t => t.id === g.homeTeamId);
@@ -3171,29 +3202,6 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 })}
               </div>
 
-              {isPremium ? (
-                <button
-                  onClick={playHalftimeAudio}
-                  disabled={htAudio === 'loading'}
-                  className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-60 transition-all"
-                  title="Marcus & Tony break down both teams and the second-half adjustments"
-                >
-                  {htAudio === 'loading' ? '🔊 Marcus & Tony are recording it…'
-                    : htAudio === 'playing' ? '⏸ Stop breakdown'
-                    : htAudio === 'error' ? '🔊 Retry audio breakdown'
-                    : '🔊 Listen — in-depth breakdown'}
-                </button>
-              ) : (
-                <Link
-                  href="/pricing"
-                  className="flex items-center justify-between gap-3 rounded-lg border border-purple-500/40 bg-purple-500/10 px-4 py-2.5 hover:bg-purple-500/20 transition-colors"
-                >
-                  <span className="text-xs sm:text-sm text-[var(--text)]">
-                    🔊 <span className="font-bold">Go Premium</span> to hear Marcus &amp; Tony break down both teams and the second-half adjustments — plus the live audio broadcast.
-                  </span>
-                  <span className="shrink-0 text-xs font-bold text-purple-500 whitespace-nowrap">Upgrade →</span>
-                </Link>
-              )}
             </div>
           </div>
         </div>

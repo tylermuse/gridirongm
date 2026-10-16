@@ -143,7 +143,7 @@ const modelSelect = document.getElementById('modelSelect');
 { const mc=document.getElementById('modelCredit'); if(mc) mc.hidden = modelChoice!=='fp27'; }
 if(modelSelect){ modelSelect.value = modelChoice; modelSelect.addEventListener('change',()=>{ try{ localStorage.setItem('chaseModel', modelSelect.value); }catch(e){} const url=new URL(location.href); if(url.searchParams.get('model')){ url.searchParams.set('model',modelSelect.value); location.href=url.href; } else location.reload(); }); }
 // ---------- Teams (fictional palettes; production would read team colors) ----------
-const REF = {id:'REF', name:'Officials', jersey:'#f4f4f4', num:'#222222', pants:'#1a1a1a', helmet:'#f4f4f4', stripe:'#1a1a1a'};   // officials: white top, black pants, white cap
+const REF = {id:'REF', name:'Officials', jersey:'#f4f4f4', num:'#222222', pants:'#1a1a1a', helmet:'#f4f4f4', stripe:'#d9d9d9'};   // officials: white top, black pants, white cap
 const TEAMS = [
   {id:'HAR', name:'Harbor',   jersey:'#1f3a68', num:'#ffffff', pants:'#c9ced6', helmet:'#1f3a68', stripe:'#e8b33a'},
   {id:'CAN', name:'Canyon',   jersey:'#f4f1ea', num:'#b4471f', pants:'#f4f1ea', helmet:'#b4471f', stripe:'#2c2c2c'},
@@ -439,17 +439,24 @@ function teamMaterial(src, part, t, skin){
   else if(part==='trim'){ m.color.set(t.jersey); U.uMode.value=3; }
   else if(part==='visor'){ m.color.set('#141a22'); m.metalness=.5; m.roughness=.12; U.uMode.value=3; }
   else if(part==='plain'){ U.uMode.value=3; }
+  else if(modelChoice==='fp27' && t.id==='REF' && part==='torso'){ U.uMode.value = 4; U.uRef.value.setScalar(lin(.93)); m.roughness=.9; m.roughnessMap=null; if(m.normalMap) m.normalScale.setScalar(.3); m.envMapIntensity=.3; }   // official: 1" black/white vertical stripes cut from the bind-space x of the shirt
+  else if(modelChoice==='fp27' && t.id==='REF' && part==='shoe'){ U.uMode.value = 3; m.color.set('#1d1f23'); }
   else if(modelChoice==='fp27'){ // white uniform with navy trim: white -> colour A, navy -> colour B, gold trim keeps its baked colour
     const AB = { torso:[t.jersey, t.num], pants:[t.pants, t.stripe], shoe:[null,null] }[part]||[null,null];
-    if(AB[0]){ U.uA.value.copy(C(AB[0])); U.uB.value.copy(C(AB[1])); U.uRefW.value.setScalar(lin(.93)); U.uRef.value.setScalar(lin(.16)); U.uMode.value = 2; } else U.uMode.value = 3; }
+    if(AB[0]){ U.uA.value.copy(C(AB[0])); U.uB.value.copy(C(AB[1])); U.uRefW.value.setScalar(lin(.93)); U.uRef.value.setScalar(lin(.16)); U.uMode.value = 2; } else U.uMode.value = 3;
+    if(part==='torso' || part==='pants'){ m.roughnessMap=null; m.roughness=.9; if(m.normalMap) m.normalScale.setScalar(.4); m.envMapIntensity=.3; } }   /* cloth: the baked roughness map + full-strength normal map sparkle into white specks at distance (specular aliasing the bloom then amplifies) */
   else { const r=KEYREF[part]; U.uRef.value.fromArray(r[0].map(lin)); U.uRefW.value.fromArray(r[1].map(lin));
     const AB = { torso:[t.jersey, t.num], pants:[t.stripe, t.pants], helmet:[t.helmet, t.stripe], shoe:[t.helmet, '#f2f2f2'] }[part];
     U.uA.value.copy(C(AB[0])); U.uB.value.copy(C(AB[1])); }
   m.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, U);
-    sh.fragmentShader = 'uniform vec3 uA, uB, uRef, uRefW; uniform float uMode;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+    sh.vertexShader = 'varying vec3 vBind;\n' + sh.vertexShader.replace('#include <skinning_vertex>', '#include <skinning_vertex>\n vBind = position;');
+    sh.fragmentShader = 'uniform vec3 uA, uB, uRef, uRefW; uniform float uMode; varying vec3 vBind;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
       { vec3 c = diffuseColor.rgb;
-        if (uMode > 2.5) { }
+        if (uMode > 3.5) { float lum = dot(c, vec3(0.3, 0.59, 0.11)); float shade = clamp(0.3 + 0.7 * lum / uRef.r, 0.0, 1.05);
+          float st = step(0.5, fract(vBind.x / 0.054)); float w = fwidth(vBind.x / 0.054) * 1.5; st = mix(st, 0.5, clamp(w - 0.25, 0.0, 1.0));   // stripes fade to grey when they alias at distance
+          diffuseColor.rgb = mix(vec3(0.03), vec3(0.92), st) * shade; }
+        else if (uMode > 2.5) { }
         else if (uMode > 1.5) { // white/navy keyed uniform
           float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b)); float sat = (mx - mn) / max(mx, 1e-4); float lum = dot(c, vec3(0.3, 0.59, 0.11));
           float isWhite = (1.0 - smoothstep(0.10, 0.28, sat)) * smoothstep(0.18, 0.40, mx);
@@ -494,8 +501,20 @@ function makePlayer(t, number, big, opts={}){
     if(o.isBone) bones[o.name.replace('mixamorig','')] = o;
     if(o.isSkinnedMesh){ o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
       const part = PART[o.name.replace(/[^A-Za-z0-9]/g,'_').replace('SHOE_001','SHOE001')] || 'torso';
+      if(opts.ref && modelChoice==='fp27' && ['helmetSolid','mask','trim','visor'].includes(part)){ o.visible=false; return; }
+      if(opts.ref && modelChoice==='fp27' && part==='plain'){ // this group mixes helmet shell pieces with socks and pads: keep only the triangles not bound to the Head bone
+        const g=o.geometry.clone(), hi=o.skeleton.bones.findIndex(b=>/Head$/.test(b.name)), si=g.attributes.skinIndex.array, idx=g.index.array, keep=[];
+        const py=g.attributes.position; for(let i=0;i<idx.length;i+=3){ let head=false; for(let k=0;k<3;k++){ if(si[idx[i+k]*4]===hi || py.getY(idx[i+k])>1.58) head=true; } if(!head) keep.push(idx[i],idx[i+1],idx[i+2]); }
+        g.setIndex(keep); o.geometry=g; }
       o.material = teamMaterial(o.material, part, t, part==='hand' && kit.gloves ? kit.gloveCol : skin); }
   });
+  if(opts.ref && modelChoice==='fp27'){ // official's cap: crown + band + brim on the Head bone (head top is ~22 cm above the bone on this rig)
+    const capMat=new THREE.MeshLambertMaterial({color:opts.cap||'#f4f4f4'}); const cap=new THREE.Group();
+    const crown=new THREE.Mesh(new THREE.SphereGeometry(.118,20,12,0,Math.PI*2,0,Math.PI*.5), capMat); crown.scale.set(1,.8,1.04); cap.add(crown);
+    const band=new THREE.Mesh(new THREE.CylinderGeometry(.118,.115,.035,20,1,true), capMat); band.position.y=-.015; cap.add(band);
+    const brim=new THREE.Mesh(new THREE.SphereGeometry(.11,20,6,0,Math.PI*2,Math.PI*.44,Math.PI*.12), capMat); brim.scale.set(1.02,.35,1.05); brim.position.set(0,-.025,.06); cap.add(brim);
+    cap.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.material.side=THREE.DoubleSide; } });
+    attach(bones.Head, cap, new THREE.Vector3(0,12,.5), sc); }
   // proportions (broad shoulders, thick limbs, smaller helmet, shorter arms) are baked into player.glb by model/proportion.py — no runtime bone scaling, which sheared the limbs
   // jersey numbers: decal planes just off the chest and back (model chest is ~0.32 m wide at number height)
   if(!opts.ref){
@@ -552,7 +571,16 @@ let preSnap=false, actors=[], O={}, D={}, T0=0, playT=0, events=[], ballPlan=[],
 function clearPlayers(){ actors.forEach(a=>scene.remove(a.root)); actors=[]; refObjs.forEach(r=>scene.remove(r.root)); refObjs=[]; }
 let refObjs = [];
 const stripeTex = (()=>{ const c=document.createElement('canvas'); c.width=64; c.height=8; const g=c.getContext('2d'); for(let i=0;i<8;i++){ g.fillStyle = i%2? '#111':'#f6f6f6'; g.fillRect(i*8,0,8,8); } const t=canvasTex(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(2,1); return t; })();
+function makeRiggedRef(x,z,face,opts){
+  // Officials on the gameplay rig: full head under a cap, striped shirt, the idle clip, and the referee arm signals in stepActor (refgood / refno)
+  const a = makePlayer(REF, 0, false, {ref:true, profile:'skill'}); a.isRef=true; a.x=x; a.z=z; a.face=face; a.y=0; a.stance=''; place(a); a.mixer.update(Math.random()*2);
+  const r={root:a.root, actor:a, x, z, signal:null, t0:0, update(t,dt){
+    if(this.signal && (a.celebrate==null || a.celebrate===false)){ a.celebrate=this.t0; a.celebStyle = this.signal==='good'? 'refgood' : 'refno'; }
+    stepActor(a, t, dt||1/60); }};
+  r.update(0, 1/60); refObjs.push(r); return r;
+}
 function makeRef(x,z,face,opts={}){
+  if(modelChoice==='fp27' && BOT && !opts.shirt) return makeRiggedRef(x,z,face,opts);
   // Original articulated official: tailored short-sleeve shirt, bare forearms, cap and adult anatomy.
   const root=new THREE.Group();root.position.set(x,0,z);root.rotation.y=face;
   const M=c=>new THREE.MeshLambertMaterial({color:c});
@@ -708,7 +736,7 @@ function updateBall(t){
       if(throwingNow){ const q=qbPhase(a,t); const k = q<.35? q/.35 : q<.5? 1 : Math.max(0,1-(q-.5)/.14); ball.rotation.set(-.5-1.1*k, a.face, .4*k); }
       else ball.rotation.set(-.5,a.face,0); }
     else { ball.position.set(a.x + c*o[0] + s*o[2], o[1]+fallLift+a.y, a.z - s*o[0] + c*o[2]); ball.rotation.set(0,a.face,0); } }
-  else if(seg.flight){ if(seg.captureHand){seg.captureHand.model.updateMatrixWorld(true);seg.captureHand.bones.RightHand.getWorldPosition(_b);Object.assign(seg.flight,{x0:_b.x,y0:_b.y,z0:_b.z});delete seg.captureHand;} const f=seg.flight, u=Math.min(1,Math.max(0,(t-seg.t0)/(seg.t1-seg.t0)));
+  else if(seg.flight){ if(seg.captureBall){ Object.assign(seg.flight,{x0:ball.position.x,y0:ball.position.y,z0:ball.position.z}); delete seg.captureBall; } if(seg.captureHand){seg.captureHand.model.updateMatrixWorld(true);seg.captureHand.bones.RightHand.getWorldPosition(_b);Object.assign(seg.flight,{x0:_b.x,y0:_b.y,z0:_b.z});delete seg.captureHand;} const f=seg.flight, u=Math.min(1,Math.max(0,(t-seg.t0)/(seg.t1-seg.t0)));
     ball.position.set(f.x0+(f.x1-f.x0)*u, f.y0+(f.y1-f.y0)*u + f.h*4*u*(1-u), f.z0+(f.z1-f.z0)*u);
     ball.rotation.set(-0.4+0.8*u, Math.atan2(f.x1-f.x0, f.z1-f.z0), t*18); }
   else if(seg.rest){ ball.position.set(seg.rest[0], .16, seg.rest[1]); ball.rotation.set(0,0,Math.PI/2); }
@@ -861,16 +889,20 @@ function choreograph(res){
     } else {
       // punt: long snap, two-step punt, a 4-second hang, the returner fields it and gets a few yards before the gunner arrives
       const Pn=O.rb, PP=O.qb, tPunt = snap+2.05, ret=D.sR;
+      /* the punt rides the captured place-kick (two-step approach + swing) instead of the stiff procedural leg: the clip's root travel carries him from the catch to the contact point */
+      const kd0=clipHips('football_kick',0), kd1=clipHips('football_kick',1.05), ksc=Pn.model.scale.x*.01, useClip=!!(kd0&&kd1);
+      const kx = useClip? Pn.x+(kd1[0]-kd0[0])*ksc-.1 : .55, kz = useClip? Pn.z+(kd1[2]-kd0[2])*ksc-.4 : Pn.z+2.95;   /* measured: the swinging foot is ~.4 m behind the hips' clip travel at contact */   /* where the foot meets the ball */
       ballPlan = [{t0:-1, t1:snap, held:O.ol[2], off:[0,.25,.45]},
         {t0:snap, t1:snap+.85, flight:{x0:0,y0:.4,z0:z0-.3, x1:0,y1:1.1,z1:Pn.z+.3, h:.35}},
-        {t0:snap+.85, t1:tPunt-.28, held:Pn, off:[.3,1.05,.45]},
-        {t0:tPunt-.28, t1:tPunt, flight:{x0:.5,y0:1.0,z0:Pn.z+2.55, x1:.55,y1:.45,z1:Pn.z+2.95, h:0}}];   /* the drop onto the foot */
+        {t0:snap+.85, t1:tPunt-.28, held:Pn, off:[.3,1.05,.45]},   /* in both hands out front, riding the body through the approach */
+        {t0:tPunt-.28, t1:tPunt, captureBall:true, flight:{x0:kx-.05,y0:1.0,z0:kz-.45, x1:kx,y1:.38,z1:kz, h:0}}];   /* the drop onto the foot, from wherever the hands are */
       Pn.catchT = snap+.85; Pn.faceLock={angle:0, until:99}; ev(snap+.95, ()=>{ Pn.puntHold=true; }); ev(tPunt-.28, ()=>{ Pn.puntHold=false; });
-      Pn.behav = P([0,Pn.x,Pn.z],[snap+.85,Pn.x,Pn.z],[snap+1.45,.25,Pn.z+1.0],[tPunt,.5,Pn.z+2.2],[tPunt+.5,.6,Pn.z+3.2]);
+      if(useClip){ Pn.behav = P([0,Pn.x,Pn.z],[tPunt+1.1,Pn.x,Pn.z]); Pn.mocapAct = {clip:'football_kick', t0:tPunt-1.05, start:0, end:2.1}; }
+      else Pn.behav = P([0,Pn.x,Pn.z],[snap+.85,Pn.x,Pn.z],[snap+1.45,.25,Pn.z+1.0],[tPunt,.5,Pn.z+2.2],[tPunt+.5,.6,Pn.z+3.2]);
       Pn.kickT = tPunt; res.puntT = tPunt; ev(tPunt, ()=>sndThump(.8,.9));
       PP.faceLock={angle:0, until:99}; PP.behav = P([snap,PP.x,PP.z],[snap+.4,PP.x-.6,PP.z-.8],[tPunt+.6,PP.x-1.2,PP.z-1.4]);
       const xr = clamp(ret.x + R(-4,4), -14, 14), zr = ret.z - R(0,3), hang = 4.0, tCatch = tPunt+hang;
-      ballPlan.push({t0:tPunt, t1:tCatch, flight:{x0:.55,y0:.45,z0:Pn.z+2.95, x1:xr,y1:1.45,z1:zr, h:15}});
+      ballPlan.push({t0:tPunt, t1:tCatch, flight:{x0:kx,y0:.38,z0:kz, x1:xr,y1:1.45,z1:zr, h:15}});
       ret.catchT = tCatch; ret.faceLock={angle:Math.PI, until:tCatch+.1}; ret.mocapAct = {clip:'football_puntcatch', t0:tCatch-1.6, start:0, end:2.3};
       const retY = res.ret ?? Math.round(R(2,10)), zEnd = zr - retY, endX = clamp(xr + R(-2.5,2.5), -22, 22);
       tEnd = tCatch + .35 + retY/6.6;
@@ -888,8 +920,12 @@ function choreograph(res){
     }
   } else if(isRun){
     let Y = res.yards; td = Y>=toGoal; if(td) Y = toGoal;
+    /* the back reads the front: a gain goes through the gap with the most room (nearest down lineman / stacked backer), a stuff runs into the crowd */
+    const pickGap = y => { const gaps = y>=12? [-5,-3,-1,1,3,5] : [-3,-1,1,3]; const front=[...D.dl.map(d=>({x:d.x,w:1})), ...D.lb.map(d=>({x:d.x,w:.65}))];
+      const room = g => Math.min(...front.map(d=>Math.abs(d.x-g)/d.w)); const sc = gaps.map(g=>({g, r:room(g)+R(0,.6)})).sort((a,b)=>b.r-a.r);
+      return y>0? sc[Math.random()<.7? 0 : 1].g : sc[sc.length-1].g; };
     const C = scr? O.qb : O.rb;   /* the carrier */
-    const gapX = scr? (res.gap ?? (Math.random()<.5?-1:1)*R(2.5,4.5)) : (res.gap ?? [-3,-1,1,3][Math.floor(Math.random()*4)]);
+    const gapX = scr? (res.gap ?? (Math.random()<.5?-1:1)*R(2.5,4.5)) : (res.gap ?? pickGap(Y));
     const tHand = snap+.62; tHole = scr? snap+1.45 : tHand + Math.max(.5, Math.hypot(gapX-.7, 3.8)/6.8);   // mesh -> hole at a real speed (was a 12-20 yd/s burst); scramble: snap and go, at the line by ~1.45 s
     const zEnd = td? 52.5 : z0+Y; const endX = Math.max(-24, Math.min(24, gapX + (Y>12? Math.sign(gapX||1)*R(4,9) : R(-1.5,1.5))));
     tEnd = tHole + Math.max(.35, Math.abs(Y+.6)/ (Y>12? 8.2:7));
@@ -1011,7 +1047,7 @@ function choreograph(res){
       ev(tCatch+1.0, ()=>{ D.all.forEach(d=>{ if(d!==cover) d.behav = {type:'coast', vx:(d.vx||0)*.5, vz:(d.vz||0)*.5, t0:playT}; }); });
     } else if(res.kind==='complete'){
       const zEnd = td? 52.5 : z0+Y; const dzRun = zEnd-cz;   // run after the catch: upfield, never sideways — on an out the lean inside is at most ~20°, and a catch at the sticks is a quick tackle
-      const endX = Math.max(-22.5, Math.min(22.5, catchX + (dzRun<1.5? R(-.3,.3) : (catchX>14? -Math.min(R(.5,2.5), dzRun*.35) : catchX<-14? Math.min(R(.5,2.5), dzRun*.35) : clamp(R(-3,3), -dzRun*.4, dzRun*.4)))));
+      const endX = Math.max(-22.5, Math.min(22.5, catchX + (dzRun<1.5? R(-.3,.3) : scn? res.screenSide*clamp(R(1.5,4.5), 0, dzRun*.4) : (catchX>14? -Math.min(R(.5,2.5), dzRun*.35) : catchX<-14? Math.min(R(.5,2.5), dzRun*.35) : clamp(R(-3,3), -dzRun*.4, dzRun*.4)))));
       tEnd = tCatch + Math.max(.3, Math.hypot(endX-catchX, zEnd-cz)/7.2);
       const recKeys = [...routeKeys.map(k=>[...k]), [tEnd, endX, zEnd]];
       ballPlan.push({t0:tCatch, t1:1e9, held:rec});
@@ -1118,7 +1154,7 @@ function choreograph(res){
         const ol=slowMates.includes(o), dist=Math.hypot(o.x-carrier.x, o.z-carrier.z); o.behav = F(carrier, playT+.1+(i%3)*.1, ol? 5.8 : 7.3, [R(-2.5,2.5),-R(1.2,2.6)], 2.0);
         const tArr = .4 + Math.max(0, dist-2)/(ol? 5.4 : 6.9); arrivals.push(tArr); o.celebAt = playT + tArr + R(0,.3); o.celebStyle = 'mocapLoop'; o.celebPhase = R(0,1.2); });
       /* hold the shot until the mob gets there: the 3rd-closest teammate's arrival plus a beat, capped so a breakaway doesn't drag */
-      arrivals.sort((a,b)=>a-b); play.tdHold = clamp((arrivals[2] ?? 1.5) + 2.6, 4.8, 6.5); }); }   /* long enough to see the spike */
+      arrivals.sort((a,b)=>a-b); play.tdHold = EMBED? clamp((arrivals[2] ?? 1.5) + 1.6, 3.2, 4.2) : clamp((arrivals[2] ?? 1.5) + 2.6, 4.8, 6.5); }); }   /* long enough to see the spike */
   // Broken tackle: on a run of any length, the first defender the carrier meets squares up and gets trucked —
   // knocked onto his back and slid a yard — while the carrier lowers a shoulder and keeps going.
   if(isRun && carrier && tackler && res.yards > 4 && !td){
@@ -1284,7 +1320,9 @@ function mocapAct(a,t){ const m=a.mocapAct; if(!m) return false; const ct=m.star
   a.body.position.y=0; a.body.rotation.x=0; a.mocapActive=true; a.mocapActW=w; a.mocapActT=ct; return true; }
 // Downed player on a captured clip: blends in from the run pose over .12 s, then the clip owns every joint and the hips travel.
 function mocapFall(a,t){
-  const m=a.mocapFall; if(!m) return false; const k=Math.max(0,t-m.t0);
+  const m=a.mocapFall; if(!m) return false; const kReal=Math.max(0,t-m.t0);
+  const HOLD = (m.clip==='football_tackle' ? window.__pairHoldT : window.__pairHoldC) ?? (m.clip==='football_tackle' ? .55 : .85);   /* paired tackle: freeze both captures at the pile (tackler across the runner's hips) instead of playing on into two men sprawled a metre apart */
+  const k = m.pair ? Math.min(kReal, HOLD) : kReal;
   const tackle=m.clip==='football_tackle'; const lat = tackle && !m.pair? (m.side||0)*42*smooth01((m.start+k-.62)/.4) : 0;   /* the tackler lands beside and across him, not straight up his back (cm, model-local) */
   let maxF=null; if(!tackle && a.carrying && play && !play.td && play.goalZ!=null){ maxF = Math.max(0, play.goalZ-.5-a.z)*86/ (a.model.scale.x/1.158) - 95; }   /* short of the goal line: the ball (≈.6 m ahead of the hips) stays out of the end zone when the sim said no score */
   if(tackle && a.behind && !m.pair){ const c=a.behind.of, al=(c.x-a.x)*Math.sin(c.face)+(c.z-a.z)*Math.cos(c.face); maxF = Math.max(0, al-a.behind.back)*86/(a.model.scale.x/1.158); }   /* the dive's root travel stops at the runner's hips: he lands on the legs, not on the man */
@@ -1295,7 +1333,8 @@ function mocapFall(a,t){
       a.x=m.ox+Math.sin(m.f)*fz+Math.cos(m.f)*fx; a.z=m.oz+Math.cos(m.f)*fz-Math.sin(m.f)*fx; originT=m.start+k; maxF=null; } }
   if(!footballMotion(a,m.clip,m.start+k,smooth01(k/.12),0,originT, m.pair? null : tackle? 1.05 : 1.0, lat, maxF)) return false;
   // settle: once he is on the ground the legs go flat behind him (the capture kicks them up on impact) and the tackler flattens out across him instead of staying up on hands and knees
-  const T=window.__settleTune||{fall:[.78,.3,.9],tackle:[1.0,.35,.75],pairTackle:[1.2,.4,.35]}, st=T[m.clip==='football_fall'?'fall': m.pair?'pairTackle':'tackle'], u=smooth01((m.start+k-st[0])/st[1])*st[2];
+  const T=window.__settleTune||{fall:[.78,.3,.9],tackle:[1.0,.35,.75],pairTackle:[1.2,.4,.35]}, st=T[m.clip==='football_fall'?'fall': m.pair?'pairTackle':'tackle'];
+  const u = m.pair ? smooth01((kReal-HOLD)/.45)*.3 : smooth01((m.start+k-st[0])/st[1])*st[2];   /* pair: a small relax of the legs once the pile is held */
   if(u>0){ const B=a.bones, I=new THREE.Quaternion();
     for(const n of ['LeftUpLeg','RightUpLeg','LeftLeg','RightLeg','LeftFoot','RightFoot']) B[n].quaternion.slerp(I,u);
     if(m.clip==='football_tackle' && !m.pair){ for(const n of ['Spine','Spine1']) B[n].quaternion.slerp(I,u*.6); } }
@@ -1358,6 +1397,8 @@ function stepActor(a, t, dt){
           const back = 1.8 + k*1.1, lat = (k-1)*1.4;
           tx = tg.x - fx*back + fz*lat; tz = tg.z - fz*back - fx*lat;
           spd = cs>3 ? Math.min(b.speed, cs*(.9 - k*.04)) : b.speed; } }
+      if(tg.carrying && tg.vx!=null && !b.off[0] && !b.off[1] && play && play.tackler!==a && !a.wrap && !a.engage){ const cs=Math.hypot(tg.vx,tg.vz); if(cs>1.5){ const fx=tg.vx/cs, fz=tg.vz/cs, rx=a.x-tg.x, rz=a.z-tg.z, al=rx*fx+rz*fz, lat=rx*fz-rz*fx;
+        if(al>-.3 && al<3.4 && Math.abs(lat)<1.4){ const sd=Math.sign(lat)||(actors.indexOf(a)%2? 1:-1); tx=tg.x+fz*sd*1.8-fx*.4; tz=tg.z-fx*sd*1.8-fz*.4; spd=Math.min(spd, cs*.85); a.slipT=t; } } }   /* no tackle planned here: he reaches and the runner slides off his shoulder, no standing in his lane */
       const dx=tx-a.x, dz=tz-a.z, d=Math.hypot(dx,dz);
       if(d>b.reach){ const s=Math.min(d-b.reach, spd*dt); nx=a.x+dx/d*s; nz=a.z+dz/d*s; } }
     else if(b.type==='chase' && t>=b.start){ const c=b.tgt, cvx=c.vx||0, cvz=c.vz||0, cs=Math.hypot(cvx,cvz);
@@ -1392,7 +1433,7 @@ function stepActor(a, t, dt){
     let dh = Math.atan2(Math.sin(hd-ho), Math.cos(hd-ho)); dh = clamp(dh, -5*dt, 5*dt); const h = ho+dh;   // heading: ≤5 rad/s
     if(sd<.1) sp2 = Math.max(0, so-16*dt);
     nx=a.x+Math.sin(h)*sp2*dt; nz=a.z+Math.cos(h)*sp2*dt; }
-  nz = clamp(nz, -59.6, 59.6); nx = clamp(nx, -28, 28);   // stay on the field (incl. end zones)
+  if(!a.isRef){ nz = clamp(nz, -59.6, 59.6); nx = clamp(nx, -28, 28); }   // stay on the field (incl. end zones); officials stand behind the end line
   if(a.truck && a.down==null && t >= a.truck.t-.3){ const c=a.truck.carrier; const dx=c.x-nx, dz=c.z-nz;
     if(Math.hypot(dx,dz) < 1.0){ // trucked: onto his back, sliding in the carrier's direction
       const cs=Math.hypot(c.vx||0,c.vz||0)||1; a.down=t; a.fallDir=-1; a.face=Math.atan2(dx,dz); sndThump(1.2,.3); sndRoar(.4,.25,.6,2);
@@ -1407,7 +1448,7 @@ function stepActor(a, t, dt){
     let target=null;
     if(a.wrap) target = Math.atan2(a.wrap.x-a.x, a.wrap.z-a.z);
     else if(a.faceLock && t < a.faceLock.until) target = a.faceLock.angle;
-    else if(sp>.6){ const drivenBack = a.carrying && sp < 2.4 && vx*Math.sin(a.face)+vz*Math.cos(a.face) < 0 && actors.some(o=>o.wrap===a); if(!drivenBack) target = Math.atan2(vx,vz); }   /* a ball carrier driven backwards keeps facing the way he was going; nobody turns his back to the tackler */
+    else if(sp>.6 && Math.hypot(vx,vz)>.3){ const drivenBack = a.carrying && sp < 2.4 && vx*Math.sin(a.face)+vz*Math.cos(a.face) < 0 && actors.some(o=>o.wrap===a); if(!drivenBack) target = Math.atan2(vx,vz); }   /* a ball carrier driven backwards keeps facing the way he was going; nobody turns his back to the tackler */
     else if(b && b.type==='coast') target = Math.atan2(ball.position.x-a.x, ball.position.z-a.z);
     else if(a.celebrate!=null && a.celebrate!==false && ['hop','point','dance','heisman','flexes'].includes(a.celebStyle)){ if(a.celebFace0==null) a.celebFace0=a.face; target = a.celebFace0 + clamp((t-a.celebrate-.3)/1.3, 0, 1)*2.6; }
     if(target!=null){ let d=target-a.face; d=Math.atan2(Math.sin(d),Math.cos(d)); a.face += d*Math.min(1,dt*(a.wrap?16:9)); }
@@ -1551,10 +1592,10 @@ function frame(now){
     events.forEach(e=>{ if(!e.done && playT>=e.t){ e.done=true; e.fn(); } });
     if(!play.whistled && playT >= (play.whistleT ?? play.tEnd)) blowWhistle();
     actors.forEach(a=>{ if(a.celebAt!=null && playT>=a.celebAt && (a.celebrate==null || a.celebrate===false)){ a.celebrate=playT; a.celebAt=null; a.behav={type:'coast', vx:(a.vx||0)*.5, vz:(a.vz||0)*.5, t0:playT}; } });
-    actors.forEach(a=>stepActor(a, playT, dt)); refObjs.forEach(r=>r.update(playT)); sideline.players.forEach(a=>{ a.mixer.update(dt); });
+    actors.forEach(a=>stepActor(a, playT, dt)); refObjs.forEach(r=>r.update(playT, dt)); sideline.players.forEach(a=>{ a.mixer.update(dt); });
     separate();
     updateBall(playT);
-    if(playT > play.tEnd + (play.td ? (play.tdHold ?? 3.4) : 1.3)){ running=false; finishPlay(); }
+    if(playT > play.tEnd + (play.td ? (play.tdHold ?? 3.4) : EMBED? 1.0 : 1.3)){ running=false; finishPlay(); }
   } else if(preSnap){ preT += dtReal; actors.forEach(a=>stepActor(a, 0, dtReal)); sideline.players.forEach(a=>{ a.mixer.update(dtReal); });
     if(O.qb){ const B=O.qb.bones; B.Head.rotation.y += .55*Math.sin(preT*1.7); B.Spine1.rotation.y += .12*Math.sin(preT*1.7); O.qb.model.updateMatrixWorld(true); }
     D.dl?.forEach((d,i)=>{ d.body.position.x = .05*Math.sin(preT*2.3+i); });
@@ -1754,8 +1795,7 @@ function runPlay(res){
 }
 function finishPlay(){
   const r = play.res, t=team(G.off); let text, cls='', newDrive=false;
-  const tick = Math.round(R(24,40)); G.clock -= tick;
-  if(G.clock<=0){ G.quarter = G.quarter<4? G.quarter+1 : 1; G.clock = 900; }
+  if(!EMBED){ const tick = Math.round(R(24,40)); G.clock -= tick; if(G.clock<=0){ G.quarter = G.quarter<4? G.quarter+1 : 1; G.clock = 900; } }   /* in-game the engine owns the clock (bsgm:state); a local tick only drifts the bug away from the scoreboard */
   if(r.kind==='fg'){
     if(r.good){ text='Field goal is GOOD'; cls='good'; G.score[G.off]+=3; log(`${t.id}: ${100-G.fieldPos+17}-yd field goal is good`); G.off=1-G.off; G.fieldPos=25; }
     else { text='No good!'; cls='big'; log(`${t.id}: ${100-G.fieldPos+17}-yd field goal is no good`); G.off=1-G.off; G.fieldPos=Math.max(20, 100-G.fieldPos+7); }
@@ -1765,7 +1805,7 @@ function finishPlay(){
     text='Punt'; log(`${t.id}: punt, returned to the ${newFP<=50? team(1-G.off).id+' '+newFP : t.id+' '+(100-newFP)}`);
     G.off=1-G.off; G.fieldPos=newFP; G.down=1; G.toGo=Math.min(10,100-newFP); newDrive=true;
   } else if(r.kind==='int' && play.td){
-    text='Pick six!'; cls='big'; G.score[1-G.off]+=7; log(`${team(1-G.off).id}: interception returned for a TOUCHDOWN (XP good)`);
+    text='Pick six!'; cls='big'; G.score[1-G.off]+=EMBED?6:7; log(`${team(1-G.off).id}: interception returned for a TOUCHDOWN (XP good)`);
     G.fieldPos=25; G.down=1; G.toGo=10; newDrive=true;   /* the team that threw it gets the kickoff */
   } else if(r.kind==='int'){
     text='Intercepted!'; cls='big';
@@ -1776,7 +1816,7 @@ function finishPlay(){
     text='Incomplete'; log(`${t.id}: ${r.depth} pass incomplete`); advance(0);
   } else {
     let y = r.yards; if(play.td) y = 100-G.fieldPos;
-    if(play.td){ text='Touchdown!'; cls='good'; G.score[G.off]+=7; log(`${t.id}: ${r.kind==='run'?'run':'pass'} ${y} yds, TOUCHDOWN (XP good)`);
+    if(play.td){ text='Touchdown!'; cls='good'; G.score[G.off]+=EMBED?6:7; log(`${t.id}: ${r.kind==='run'?'run':'pass'} ${y} yds, TOUCHDOWN (XP good)`);   /* in-game the try is its own play */
       G.off=1-G.off; G.fieldPos=25; G.down=1; G.toGo=10; newDrive=true; }
     else {
       const what = r.kind==='sack'? 'Sacked' : r.kind==='run'? (y<=0?'Stuffed':'Run') : (r.depth==='deep'?'Deep catch':'Catch');
@@ -1792,7 +1832,7 @@ function finishPlay(){
     const num = play.carrier? ' by number '+(play.carrier.number||'') : '';
     const words = play.td? (r.kind==='int'? `Pick six! Touchdown, ${team(1-G.off).name}!` : `Touchdown, ${t.name}!`) : r.kind==='fg'? (r.good? `The kick is good.` : `The kick is no good.`) : r.kind==='int'? `Pass intercepted by ${team(G.off).name}.` : r.kind==='sack'? `Quarterback sacked.` : r.kind==='incomplete'? `Pass incomplete.` : r.kind==='punt'? `Punt.` : text.replace('·',',').replace('−','minus ').replace('+','gain of ');
     setTimeout(()=>sndSay(words), 500); }
-  setTimeout(()=>{ setupFormation(); setBusy(false); renderBug(); }, 1500/G.speed + 300);
+  setTimeout(()=>{ setupFormation(); setBusy(false); renderBug(); }, EMBED? 700 : 1500/G.speed + 300);
   function advance(y){
     G.fieldPos = Math.max(1, Math.min(99, G.fieldPos + y)); G.toGo -= y;
     if(G.toGo<=0){ G.down=1; G.toGo=Math.min(10,100-G.fieldPos); return true; }
@@ -1834,18 +1874,21 @@ Promise.all([document.fonts?.ready ?? Promise.resolve(), botReady]).then(()=>{
 // ---------- Embed protocol (the BS Football game page drives the sim through postMessage) ----------
 // in:  {type:'bsgm:setup', home:{id,name,jersey,num,pants,helmet,stripe}, away:{...}}
 //      {type:'bsgm:play', id, possession:'home'|'away', pre:{fieldPos,down,toGo,quarter,clock,homeScore,awayScore}, res:{kind,yards,depth,good}}
+//      {type:'bsgm:state', possession, pre:{...}}   (idle only: pre-snap formation + scorebug for the current situation)
 //      {type:'bsgm:skip'}
 // out: {type:'bsgm:ready'} once the model is loaded; {type:'bsgm:done', id} when the play (and its post-play beat) is over; {type:'bsgm:error'}
 function embedStart(){
   const post = m => { try{ window.parent.postMessage(m, '*'); }catch(e){} };
   let pending=null, current=null; window.__embedQueue = ()=>pending;
+  const applyPre = m => { G.off = m.possession==='away'? 1 : 0; const pr=m.pre||{}; G.fieldPos = clamp(Math.round(pr.fieldPos ?? 25),1,99); G.down = pr.down ?? 1; G.toGo = pr.toGo ?? 10; G.quarter = pr.quarter ?? 1; G.clock = pr.clock ?? 900; G.score = [pr.homeScore ?? 0, pr.awayScore ?? 0]; };
   const runNext = ()=>{ if(G.busy || !pending) return; const m=pending; pending=null; current=m.id;
-    G.off = m.possession==='away'? 1 : 0; const pr=m.pre||{}; G.fieldPos = clamp(Math.round(pr.fieldPos ?? 25),1,99); G.down = pr.down ?? 1; G.toGo = pr.toGo ?? 10; G.quarter = pr.quarter ?? 1; G.clock = pr.clock ?? 900; G.score = [pr.homeScore ?? 0, pr.awayScore ?? 0];
+    applyPre(m);
     if(G.fieldPos >= 99 && (m.res.kind==='run' || m.res.kind==='complete') && m.res.yards >= 1) m.res.yards = 99;   /* at the 1: any gain is a score */
     m.res.lock = true; renderBug(); setupFormation((m.res.kind==='fg' || m.res.kind==='punt')? m.res.kind : null); runPlay(m.res); };
   window.addEventListener('message', ev=>{ const m=ev.data; if(!m || typeof m!=='object') return;
     if(m.type==='bsgm:setup'){ EMB_TEAMS[0]=m.home||null; EMB_TEAMS[1]=m.away||null; if(fieldMat.map) fieldMat.map.dispose(); fieldMat.map = fieldTexture(team(0)); fieldMat.needsUpdate=true; if(!G.busy) setupFormation(); paintBoards(); renderBug(); }
     else if(m.type==='bsgm:play'){ pending=m; sndInit(); runNext(); }
+    else if(m.type==='bsgm:state'){ if(!G.busy && !pending){ applyPre(m); $('banner').hidden=true; renderBug(); setupFormation(null); snapCamera(); } }   /* idle between plays: re-form at the game's real situation (e.g. the 3 for a two-point try) */
     else if(m.type==='bsgm:skip'){ pending=null; if(G.busy){ G.speed = 12; } }   /* fast-forward to the end; the done message still fires, the page has already hidden us */
     else if(m.type==='bsgm:view'){ if(m.cam && CAMS[m.cam]){ window.__camProfile = CAMS[m.cam]; if(!running) snapCamera(); } if(m.lighting==='day' || m.lighting==='night') setLighting(m.lighting); }   /* camera angle + day/night from the game's controls */
     else if(m.type==='bsgm:crowd'){ if(m.level!=null) sndCrowd(m.level, 1); } });

@@ -28,6 +28,13 @@ export interface SimPlayMessage {
   res: SimPlayResult;
 }
 
+/** Pre-snap situation for the idle sim (no play running): it re-forms at this spot with this scorebug. */
+export interface SimStateMessage {
+  type: 'bsgm:state';
+  possession: 'home' | 'away';
+  pre: { fieldPos: number; down: number; toGo: number; quarter: number; clock: number; homeScore: number; awayScore: number };
+}
+
 export interface SimTeam { id: string; name: string; jersey: string; num: string; pants: string; helmet: string; stripe: string }
 
 const RUSH_TD_RE = /punches it in|crosses the goal line|-yard rush|stretches across|pylon|runs it in/i;
@@ -36,6 +43,7 @@ const SCREEN_RE = /screen/i;
 const TWO_POINT_RE = /^2-PT|two-point/i;
 const KNEEL_RE = /takes a knee|kneels|victory formation/i;
 const FAKE_RE = /FAKE PUNT|ONSIDE/i;
+const NON_PLAY_RE = /timeout called|turnover on downs|^⏱/i;   // engine bookkeeping that rides on the 'run' type: no snap happened
 
 /** "12:34" -> seconds; anything unparseable -> 900. */
 export function clockSeconds(timeStr: string): number {
@@ -53,7 +61,7 @@ export function toSimResult(e: PlayEvent): SimPlayResult | null {
   const td = (yards: number) => Math.max(yards, toGoal);   // the sim scores when yards >= yards-to-goal
   switch (e.type) {
     case 'run':
-      if (KNEEL_RE.test(e.description)) return null;
+      if (KNEEL_RE.test(e.description) || NON_PLAY_RE.test(e.description)) return null;
       return { kind: 'run', yards: e.isScoring ? td(y) : y, ...(SCRAMBLE_RE.test(e.description) ? { style: 'scramble' as const } : {}) };
     case 'pass_complete':
       return { kind: 'complete', depth: y >= 20 ? 'deep' : 'short', yards: e.isScoring ? td(y) : y, ...(SCREEN_RE.test(e.description) ? { style: 'screen' as const } : {}) };

@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
-import { toSimPlay, toSimTeam, type SimTeam } from '@/lib/engine/liveSim3d';
+import { toSimPlay, toSimTeam, type SimStateMessage, type SimTeam } from '@/lib/engine/liveSim3d';
 
 const SIM_URL = '/chase-cam/index.html?embed=1&model=fp27';
 const STORAGE_KEY = 'bsgm.sim3d';
@@ -67,10 +67,13 @@ export function LiveSim3D({
   disabled,
   homeTeam,
   awayTeam,
+  state,
   onActiveChange,
 }: {
   enabled: boolean;
   event: PlayEvent | null;
+  /** Current situation (spot, down, score, clock) for the pre-snap formation between plays — e.g. the two-point try at the 3 while the user picks a play */
+  state: SimStateMessage['pre'] & { possession: 'home' | 'away' } | null;
   /** e.g. speed === 'max' or the user skipped to the end: never hold the game */
   disabled?: boolean;
   homeTeam: TeamLike | null;
@@ -128,6 +131,16 @@ export function LiveSim3D({
     post({ type: 'bsgm:view', cam: view.cam, lighting: view.lighting });
   }, [enabled, ready, view.cam, view.lighting, post]);
 
+  // Situation → sim while idle, so the formation between plays sits at the real spot (after a score, at the 3 for a two-point try…)
+  const stateKey = state ? JSON.stringify(state) : '';
+  const lastPlayPreRef = useRef('');
+  useEffect(() => {
+    if (!enabled || !ready || !state || active) return;
+    if (stateKey === lastPlayPreRef.current) return;   // still the situation of the play just shown: the sim already moved on to its result
+    const { possession, ...pre } = state;
+    post({ type: 'bsgm:state', possession, pre } satisfies SimStateMessage);
+  }, [enabled, ready, stateKey, active, post]);   // eslint-disable-line react-hooks/exhaustive-deps -- state is keyed by stateKey
+
   // New event → send it to the sim and hold the game until it reports done
   useEffect(() => {
     if (!enabled || !event || disabled || !ready || failed) return;
@@ -136,6 +149,7 @@ export function LiveSim3D({
     const play = toSimPlay(event);
     if (!play) return;   // nothing to picture (kickoff, fumble, XP, penalty…): the 2D field carries it
     activeIdRef.current = play.id;
+    lastPlayPreRef.current = JSON.stringify({ possession: play.possession, ...play.pre });
     post(play);
     setActiveBoth(true);
   }, [enabled, event, disabled, ready, failed, post, setActiveBoth]);
