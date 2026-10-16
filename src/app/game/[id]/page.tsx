@@ -1967,9 +1967,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             enough. Having a second banner above the field was pushing the
             Call the Play panel down each play. */}
 
-        {/* Animated field + outcome chip overlay. While the 3D sim is showing a play on desktop the box
-            stretches to 16:9 so the sim fills it edge to edge. */}
-        <div className={`relative ${sim3dActive ? 'md:aspect-video' : ''}`}>
+        {/* Animated field + outcome chip overlay. While the 3D sim is on (desktop) the box is 16:9 so the
+            sim gets a real broadcast frame instead of the field's wide, short box. */}
+        <div className={`relative ${sim3dOn && !pregameOpen ? 'md:aspect-video' : ''}`}>
           <AnimatedField
             event={engineSnapshot ? {
               id: -1,

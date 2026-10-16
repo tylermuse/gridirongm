@@ -1657,7 +1657,7 @@ function separate(){
 }
 // Whistle: the play is over — blockers let go and step apart, everyone slows to a stop and looks at the ball.
 // ---------- Audio: recorded SFX (sfx/*.mp3, ElevenLabs) over a procedural Web Audio fallback + PA announcer (speech synthesis). ----------
-window.SND = { on:true, pa:false, ctx:null, master:null, crowd:null, crowdGain:null, roar:null, roarGain:null, level:.18, target:.18 };
+window.SND = { on: !EMBED && new URLSearchParams(location.search).get('sound')!=='0', pa:false,   /* silent inside the game (the page has its own audio); ?sound=0 elsewhere */ ctx:null, master:null, crowd:null, crowdGain:null, roar:null, roarGain:null, level:.18, target:.18 };
 window.sndWhistle=()=>sndWhistle(); window.sndThump=(a,b)=>sndThump(a,b); window.sndRoar=(a,k)=>sndRoar(a,.35,1.5,2.5,k);
 window.addEventListener('pointerdown', ()=>sndInit(), {once:true, capture:true});
 function sndInit(){ if(SND.ctx || !SND.on) return; try{ const C=new (window.AudioContext||window.webkitAudioContext)(); SND.ctx=C;

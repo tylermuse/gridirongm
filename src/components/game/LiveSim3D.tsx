@@ -11,7 +11,8 @@
  * Toggle lives in the game controls ("3D Sim"); the choice is remembered per
  * browser. `?sim3d=1|0` in the URL overrides it. The iframe is created once
  * when the mode is on (≈10 MB: model + three.js) and stays mounted so later
- * plays start instantly.
+ * plays start instantly and stays on screen between plays (pre-snap formation at
+ * the current spot) so the view never flips back and forth with the 2D field.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
@@ -121,7 +122,7 @@ export function LiveSim3D({
 
   if (!enabled) return null;
   return (
-    <div className={`absolute inset-0 z-30 overflow-hidden rounded-lg bg-black ${active || !ready ? '' : 'pointer-events-none opacity-0'}`} aria-hidden={!active}>
+    <div className="absolute inset-0 z-30 overflow-hidden rounded-lg bg-black">
       <iframe
         ref={frameRef}
         src={SIM_URL}
