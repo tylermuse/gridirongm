@@ -25,7 +25,8 @@ import { evaluateTrade, isExecutable, proposeTrade, type TradeSideInput } from '
 import { findDealsForPlayer, type DealSuggestion } from './finder';
 import { getTeamPicks, pickValue } from './picks';
 import { teamStrategy } from './strategy';
-import { TRADE_DEADLINE_DAY, tradeWindowClosed } from '../sim/simRange';
+import { tradeWindowClosed } from '../sim/simRange';
+import { getTradeDeadlineDay } from '../rules/leagueRules';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -206,8 +207,8 @@ const PROPOSAL_TARGET_EDGE = 0.05;
 const PROPOSAL_MAX_EDGE = 0.2;
 const PROPOSAL_MIN_EDGE = 0.1;
 
-function dailyChance(day: number): number {
-  const toDeadline = TRADE_DEADLINE_DAY - day;
+function dailyChance(day: number, deadline: number): number {
+  const toDeadline = deadline - day;
   if (toDeadline <= 10) return 45;
   if (toDeadline <= 25) return 30;
   return 18;
@@ -307,7 +308,7 @@ export function refreshTradeProposals(league: LeagueState): LeagueState {
   const existing = data(league).tradeProposals;
   if (!uid) return league;
   const day = league.currentTick;
-  const closed = tradeWindowClosed(league).closed || day > TRADE_DEADLINE_DAY || league.currentPhase !== 'regular_season';
+  const closed = tradeWindowClosed(league).closed || day > getTradeDeadlineDay(league) || league.currentPhase !== 'regular_season';
   let list = expire(league, day, closed);
   if (!existing && list.length === 0 && closed) return league;
 
@@ -315,7 +316,7 @@ export function refreshTradeProposals(league: LeagueState): LeagueState {
   const lastCreated = list.filter(p => p.season === league.currentSeason).reduce((m, p) => Math.max(m, p.createdDay), -99);
   if (!closed && day >= FIRST_PROPOSAL_DAY && pending.length < MAX_PENDING_PROPOSALS && day - lastCreated >= 2) {
     const seed = hash(`${league.id}-${league.currentSeason}-${day}-proposal`);
-    if (seed % 100 < dailyChance(day)) {
+    if (seed % 100 < dailyChance(day, getTradeDeadlineDay(league))) {
       const prop = buildProposal(withProposals(league, list), day, pending, seed);
       if (prop) list = [...list, prop];
     }

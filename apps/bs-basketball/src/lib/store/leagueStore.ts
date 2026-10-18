@@ -39,7 +39,7 @@ import {
 } from '../persistence/db';
 import { simNextGameForTeam } from '../sim/runNextGame';
 import { simNextDay } from '../sim/runSimDay';
-import { simThroughDay, TRADE_DEADLINE_DAY } from '../sim/simRange';
+import { simThroughDay } from '../sim/simRange';
 import {
   initializePlayoffs,
   simPlayoffDay,
@@ -56,12 +56,20 @@ import {
   revealLottery as revealLotteryState,
   getDraft,
   currentSlot,
-  SCOUTS_PER_DRAFT,
+  SCOUT_POINTS_PER_DRAFT,
   type DraftState,
   type DraftPickSlot,
 } from '../draft';
 import { pickKey, currentOwner } from '../trade/picks';
-import { basketballPickTradeValue, basketballTradeValue, setSalaryCapOverride } from '@bs/sport-basketball';
+import { basketballPickTradeValue, basketballTradeValue } from '@bs/sport-basketball';
+import {
+  applyCapRules,
+  getMaxRoster,
+  getTradeDeadlineDay,
+  withCommissionerSettings,
+  resetCommissionerSettings,
+  type CommissionerSettings,
+} from '../rules/leagueRules';
 import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, runAiFreeAgency, isSeasonUnderway, FA_DAYS, type Offer, type OfferResult, type Negotiation } from '../freeAgency';
 import { applyRelease } from '../roster/release';
 import { playThroughInjury as playThroughInjuryState } from '../injuries';
@@ -75,7 +83,8 @@ import { setGodMode as setGodModeLib, editPlayer as editPlayerLib, type PlayerEd
 import { forceUserGameResult } from '../godMode/forceGame';
 import { relocateTeam as relocateTeamLib, type FranchiseEdit } from '../godMode/relocate';
 import { buildGmSyncPayload, syncGmStats, computeUserDraftGrade } from '../gm/gmSync';
-import { scoutProspect as scoutProspectState } from '../scouting';
+import { scoutProspect as scoutProspectState, scoutMany as scoutManyState, toggleWatchlist as toggleWatchlistState } from '../scouting';
+import type { ScoutLevel } from '../draft/types';
 import { markChangelogSeen as markChangelogSeenState } from '../ui/changelog';
 import type { TeamId, BaseCoach } from '@bs/core/adapter';
 import type { BasketballLineup, BasketballPlayer, BasketballTeam, BasketballGamePlan } from '@bs/sport-basketball';
@@ -120,6 +129,13 @@ interface LeagueStore {
   /** Commissioner setting: set a flat salary cap for the league (null clears it,
    *  reverting to the standard inflation-based cap). Persisted on the league. */
   setCommissionerSalaryCap: (cap: number | null) => Promise<void>;
+
+  /** League Rules: merge a patch into sportData.commissionerSettings (undefined
+   *  = back to default) and persist. */
+  updateLeagueRules: (patch: Partial<CommissionerSettings>) => Promise<void>;
+
+  /** League Rules: clear every commissioner rule back to stock. */
+  resetLeagueRules: () => Promise<void>;
 
   /** Drop the active league from memory (does NOT delete the save). */
   clearActive: () => void;
@@ -192,8 +208,14 @@ interface LeagueStore {
   /** Reveal the lottery order (cosmetic gate). */
   revealLottery: () => Promise<void>;
 
-  /** Spend a scout to reveal a draft prospect's true potential. */
-  scoutProspect: (prospectId: string) => Promise<void>;
+  /** Scout a draft prospect up to a tier (default full evaluation), spending points. */
+  scoutProspect: (prospectId: string, level?: Exclude<ScoutLevel, 0>) => Promise<void>;
+
+  /** Scout several prospects to one tier in a single save (auto-scout). */
+  scoutProspects: (prospectIds: string[], level: Exclude<ScoutLevel, 0>) => Promise<void>;
+
+  /** Star / unstar a prospect on the draft watchlist. */
+  toggleWatchlist: (prospectId: string) => Promise<void>;
 
   /** Finalize the offseason and tip off the next season. Returns the new
    *  season number, or null if the draft isn't complete. */
@@ -257,9 +279,9 @@ interface LeagueStore {
  *  cache (§1.5). Called on every load/create so the pure basketballSalaryCap()
  *  honors it, and cleared (null) for a league that hasn't set one. */
 function syncCapOverride(league: BasketballLeagueState | null): void {
-  const cap = (league?.sportData as { commissionerSettings?: { salaryCap?: number } } | undefined)
-    ?.commissionerSettings?.salaryCap;
-  setSalaryCapOverride(typeof cap === 'number' && cap > 0 ? cap : null);
+  // League Rules: the flat cap override plus cap growth, tax line/rate, aprons,
+  // max-contract % and minimum-salary scale — all through one resolver.
+  applyCapRules(league);
 }
 
 function simSummary(league: BasketballLeagueState, gamesSimmed: number): string {
@@ -364,8 +386,9 @@ function leagueFromImport(imported: ImportedHoopsLeague): BasketballLeagueState 
       currentPick: 0,
       complete: false,
       lotteryRevealed: true,
-      scoutsRemaining: SCOUTS_PER_DRAFT,
-      scoutedIds: [],
+      scoutPoints: SCOUT_POINTS_PER_DRAFT,
+      scoutLevels: {},
+      watchlist: [],
       inaugural: true,
     };
     league = { ...league, sportData: { ...(league.sportData as object), draft }, currentPhase: 'offseason' };
@@ -527,17 +550,25 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
   },
 
   async setCommissionerSalaryCap(cap) {
+    await get().updateLeagueRules({ salaryCap: typeof cap === 'number' && cap > 0 ? cap : undefined });
+  },
+
+  async updateLeagueRules(patch) {
     const current = get().league;
     if (!current) return;
-    const sd = (current.sportData ?? {}) as Record<string, unknown>;
-    const commissionerSettings = {
-      ...((sd.commissionerSettings as Record<string, unknown>) ?? {}),
-      salaryCap: typeof cap === 'number' && cap > 0 ? cap : undefined,
-    };
-    const league = { ...current, sportData: { ...sd, commissionerSettings } } as BasketballLeagueState;
-    // The store subscription pushes this into the engine's cap override; save it.
+    // Pure merge (+ cap-growth re-anchoring) lives in lib/rules; the store
+    // subscription pushes the cap rules into the engine. Just set + save.
+    const league = withCommissionerSettings(current, patch) as BasketballLeagueState;
     set({ league });
-    try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] setCommissionerSalaryCap failed:', err); }
+    try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] updateLeagueRules failed:', err); }
+  },
+
+  async resetLeagueRules() {
+    const current = get().league;
+    if (!current) return;
+    const league = resetCommissionerSettings(current) as BasketballLeagueState;
+    set({ league });
+    try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] resetLeagueRules failed:', err); }
   },
 
   clearActive() {
@@ -981,15 +1012,43 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
   },
 
-  async scoutProspect(prospectId) {
+  async scoutProspect(prospectId, level) {
     const current = get().league;
     if (!current || !getDraft(current)) return;
     try {
-      const league = scoutProspectState(current, prospectId);
+      const league = scoutProspectState(current, prospectId, level);
+      if (league === current) return;
       await saveLeague(league);
       set({ league });
     } catch (err) {
       console.error('[bs-hoops] scoutProspect failed:', err);
+      set({ error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  async scoutProspects(prospectIds, level) {
+    const current = get().league;
+    if (!current || !getDraft(current)) return;
+    try {
+      const league = scoutManyState(current, prospectIds, level);
+      if (league === current) return;
+      await saveLeague(league);
+      set({ league });
+    } catch (err) {
+      console.error('[bs-hoops] scoutProspects failed:', err);
+      set({ error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  async toggleWatchlist(prospectId) {
+    const current = get().league;
+    if (!current || !getDraft(current)) return;
+    try {
+      const league = toggleWatchlistState(current, prospectId);
+      await saveLeague(league);
+      set({ league });
+    } catch (err) {
+      console.error('[bs-hoops] toggleWatchlist failed:', err);
       set({ error: err instanceof Error ? err.message : String(err) });
     }
   },
@@ -1034,8 +1093,9 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     if (!draft.inaugural && current.userTeamId) {
       const userTeam = current.teams.find(t => t.id === current.userTeamId);
       const n = userTeam?.playerIds.length ?? 0;
-      if (n > 15) {
-        set({ error: `Trim your roster to 15 before starting the season (currently ${n}). Cut players in the Re-sign window.` });
+      const maxRoster = getMaxRoster(current);
+      if (n > maxRoster) {
+        set({ error: `Trim your roster to ${maxRoster} before starting the season (currently ${n}). Cut players in the Re-sign window.` });
         return null;
       }
     }
@@ -1525,7 +1585,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
     const targetDay =
       target === 'week' ? current.currentTick + 7 :
-      target === 'deadline' ? TRADE_DEADLINE_DAY :
+      target === 'deadline' ? getTradeDeadlineDay(current) :
       null;
     set({ loading: true, error: null });
     try {

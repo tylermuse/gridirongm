@@ -22,7 +22,7 @@ import {
 import type { BaseLeagueState, TeamId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { getTransactions } from '../transactions';
-import { TRADE_DEADLINE_DAY } from '../sim/simRange';
+import { getTradeDeadlineDay } from '../rules/leagueRules';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -88,9 +88,9 @@ function winPct(team: { record: { wins: number; losses: number } }): number {
 }
 
 /** Target number of active rumors for a given day — ramps toward the deadline. */
-function targetCount(day: number): number {
-  if (day > TRADE_DEADLINE_DAY) return 0;
-  const toDeadline = TRADE_DEADLINE_DAY - day;
+function targetCount(day: number, deadline: number): number {
+  if (day > deadline) return 0;
+  const toDeadline = deadline - day;
   if (toDeadline <= 15) return 8;
   if (toDeadline <= 35) return 6;
   if (toDeadline <= 70) return 4;
@@ -139,7 +139,8 @@ function generateRumor(
   usedTeams: Set<TeamId>,
   usedPlayers: Set<string>,
 ): TradeRumor | null {
-  const toDeadline = TRADE_DEADLINE_DAY - day;
+  const deadline = getTradeDeadlineDay(league);
+  const toDeadline = deadline - day;
   const hotBias = toDeadline <= 30;
 
   // Candidate archetype order varies by seed so the mill feels varied.
@@ -178,7 +179,7 @@ function buildOfType(
     season: league.currentSeason,
     day,
     teamId: team.id,
-    resolveDay: Math.min(TRADE_DEADLINE_DAY + 1, day + RUMOR_TTL),
+    resolveDay: Math.min(getTradeDeadlineDay(league) + 1, day + RUMOR_TTL),
     resolved: false,
     ...partial,
   });
@@ -249,7 +250,8 @@ export function refreshTradeRumors(league: LeagueState): LeagueState {
   const existing = (sport.tradeRumors ?? []).filter(r => r.season === league.currentSeason);
 
   // 1) Resolve: a rumor that came true → accurate; one past its window → false.
-  const deadlinePassed = day > TRADE_DEADLINE_DAY;
+  const deadline = getTradeDeadlineDay(league);
+  const deadlinePassed = day > deadline;
   const resolved: TradeRumor[] = existing.map(r => {
     if (r.resolved) return r;
     if (cameTrue(league, r)) return { ...r, resolved: true, outcome: 'accurate' };
@@ -259,7 +261,7 @@ export function refreshTradeRumors(league: LeagueState): LeagueState {
 
   // 2) Generate: top up active rumors to the day's target on a cadence.
   const active = resolved.filter(r => !r.resolved);
-  const target = targetCount(day);
+  const target = targetCount(day, deadline);
   const lastGen = resolved.reduce((m, r) => Math.max(m, r.day), -GEN_CADENCE);
   let next = resolved;
   if (active.length < target && day - lastGen >= GEN_CADENCE && !deadlinePassed) {

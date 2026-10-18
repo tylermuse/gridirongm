@@ -16,7 +16,8 @@ import { teamStrategy, getTeamPicks, pickFromId, pickShort, pickValue, protectio
 import { getActiveRumors, rumorAccuracy, rumorPlayerMeta, type TradeRumor } from '@/lib/trade';
 import { computeTradeGrade, getProposalHistory, type TradeGrade, type ProposalRecord } from '@/lib/trade';
 import { getPendingProposals, getTradeProposals, getTradeBlock, pendingProposalCount, proposalToDeal, type TradeProposal } from '@/lib/trade/proposals';
-import { tradeWindowClosed, TRADE_DEADLINE_DAY } from '@/lib/sim/simRange';
+import { tradeWindowClosed } from '@/lib/sim/simRange';
+import { getTradeDeadlineDay } from '@/lib/rules/leagueRules';
 import { basketballTradeValue, type BasketballPlayer, type BasketballPosition, type BasketballStats, type BasketballTeam, type TeamTradeOutcome, type TeamCapStatus } from '@bs/sport-basketball';
 import { regularSeasonStatsByPlayer } from '@/lib/stats/seasonStats';
 
@@ -596,10 +597,11 @@ function DeadlineBanner({ league, window }: { league: League; window: { closed: 
       </div>
     );
   }
-  const daysLeft = Math.max(0, TRADE_DEADLINE_DAY - league.currentTick);
+  const deadlineDay = getTradeDeadlineDay(league);
+  const daysLeft = Math.max(0, deadlineDay - league.currentTick);
   return (
     <div className="mb-5 px-4 py-2.5 rounded-lg text-sm border flex flex-wrap items-center gap-x-3 gap-y-1" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-      <span className="font-semibold">📆 Trade deadline: Day {TRADE_DEADLINE_DAY}</span>
+      <span className="font-semibold">📆 Trade deadline: Day {deadlineDay}</span>
       <span className="text-[var(--text-sec)]">
         {daysLeft === 0 ? 'Deadline day — last chance to deal.' : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left to make a move.`}
       </span>

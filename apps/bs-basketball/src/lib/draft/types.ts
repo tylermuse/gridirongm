@@ -5,8 +5,17 @@
 
 import type { PlayerId, TeamId } from '@bs/core/adapter';
 
-/** Scouting reveals a prospect's true potential; you get this many per draft. */
+/**
+ * LEGACY: the old flat budget (8 scouts, each revealing true potential). Kept so
+ * saves made before tiered scouting can be converted — see scoutPointsLeft().
+ */
 export const SCOUTS_PER_DRAFT = 8;
+
+/** Tiered scouting budget (points) per draft. */
+export const SCOUT_POINTS_PER_DRAFT = 30;
+
+/** 1 = Quick look, 2 = Workout, 3 = Full evaluation. 0 = unscouted. */
+export type ScoutLevel = 0 | 1 | 2 | 3;
 
 export interface DraftPickSlot {
   /** 1..60 overall pick number. */
@@ -66,10 +75,17 @@ export interface DraftState {
    * reveal landed.
    */
   lotteryOrder?: TeamId[];
-  /** Scouting budget left for this draft. */
+  /** LEGACY flat-scout budget (pre-tiered saves). Read only for conversion. */
   scoutsRemaining?: number;
-  /** Prospect ids whose true potential has been revealed. */
+  /** LEGACY: prospects revealed under the flat system — treated as fully
+   *  evaluated (level 3). Never written by new code. */
   scoutedIds?: PlayerId[];
+  /** Tiered scouting points left. Absent on legacy saves (derived lazily). */
+  scoutPoints?: number;
+  /** Highest scouting tier reached per prospect id. */
+  scoutLevels?: Record<string, ScoutLevel>;
+  /** User's starred prospects (watchlist). */
+  watchlist?: PlayerId[];
   /** Pick/player swaps the user made during the draft, oldest first. Drives the
    *  post-draft report's Trade Activity panel. Absent on saves with no trades. */
   trades?: DraftTradeRecord[];

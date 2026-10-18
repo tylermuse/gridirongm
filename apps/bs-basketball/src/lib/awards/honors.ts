@@ -18,6 +18,7 @@ import {
 } from '@bs/sport-basketball';
 import type { BaseLeagueState, PlayerId, TeamId } from '@bs/core/adapter';
 import type { BasketballRatings } from '@bs/sport-basketball';
+import { getLeagueRules } from '../rules/leagueRules';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -153,10 +154,14 @@ export function computeHonors(league: LeagueState): SeasonHonors | null {
 
   // Projected retirements: age each rostered player a year and ask the engine.
   const retirements: RetirementEntry[] = [];
+  const rules = getLeagueRules(league);
   for (const x of players) {
     if (!x.p.rosterSlot) continue;
-    const aged = developBasketballPlayer(x.p, league.currentSeason + 1);
-    if (shouldBasketballPlayerRetire(aged)) {
+    const aged = developBasketballPlayer(x.p, league.currentSeason + 1, {
+      progressionScale: rules.progressionMult,
+      regressionScale: rules.regressionMult,
+    });
+    if (shouldBasketballPlayerRetire(aged, { retirementAgeOffset: rules.retirementAgeOffset })) {
       retirements.push({
         playerId: x.p.id, name: name(x.p), teamId: teamOf(x.p),
         position: x.p.sportData.position, age: aged.age, overall: x.p.ratings.overall,
