@@ -99,7 +99,7 @@ function NewsPageInner() {
   );
 }
 
-const KIND_ICON: Record<string, string> = { trade: '🔄', signing: '🖊️', release: '✂️', draft: '🎯' };
+const KIND_ICON: Record<string, string> = { trade: '🔄', signing: '🖊️', release: '✂️', draft: '🎯', coaching: '📋' };
 
 function TransactionsList({ txns }: { txns: TransactionEntry[] }) {
   if (txns.length === 0) {

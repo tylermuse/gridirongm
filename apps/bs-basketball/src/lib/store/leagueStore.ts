@@ -78,6 +78,10 @@ import { executeTrade, proposeTrade as proposeTradeLib, type TradeSideInput, typ
 import { acceptTradeProposal, declineTradeProposal, counterTradeProposal, setTradeBlock as setTradeBlockLib, newProposalNote, type ProposalResponse, type CounterResult } from '../trade/proposals';
 import type { DealSuggestion } from '../trade/finder';
 import { setTeamLineup } from '../lineup';
+import { installCoach, fireCoach as fireCoachLib, extendCoach as extendCoachLib, type ExtensionResult } from '../coaching/contracts';
+import { userExpiringCoaches } from '../coaching/carousel';
+import type { StaffRole } from '../coaching/coaches';
+import { createRng } from '@bs/sport-basketball';
 import { clearGmFired } from '../approval';
 import { setGodMode as setGodModeLib, editPlayer as editPlayerLib, createPlayer as createPlayerLib, type PlayerEdit, type CreatePlayerOpts } from '../godMode/godMode';
 import { revealFaIntel } from '../freeAgency/intel';
@@ -257,8 +261,14 @@ interface LeagueStore {
   /** Persist a team's pre-game plan (the sim biases the box score by it). */
   saveGamePlan: (teamId: string, plan: BasketballGamePlan) => Promise<boolean>;
 
-  /** Hire a head coach for a team (the outgoing coach leaves). */
+  /** Hire a coach (head or dev) for a team on a market deal. An incumbent in
+   *  that role is fired — his remaining guaranteed salary becomes dead money. */
   hireCoach: (teamId: string, coach: BaseCoach) => Promise<boolean>;
+  /** Fire a team's coach (dead money = remaining salary). A fired head coach is
+   *  replaced by an interim until a hire. */
+  fireCoach: (teamId: string, role: StaffRole) => Promise<boolean>;
+  /** Offer an extension of `years`; returns the coach's verdict. */
+  extendCoach: (teamId: string, role: StaffRole, years: number) => Promise<ExtensionResult | null>;
 
   /** Waive a rostered player to free agency (opens a roster spot). */
   releasePlayer: (playerId: string, stretch?: boolean) => Promise<boolean>;
@@ -845,10 +855,15 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       // Immediate heads-up if ownership just fired the GM (userTeamId cleared).
       const justFired = !!current.userTeamId && !league.userTeamId;
       const fired = (league.sportData as { gmFired?: { teamName: string } }).gmFired;
+      // Contract-expiry prompt: the user's coaches whose deals are up.
+      const expiringStaff = userExpiringCoaches(league, league.currentSeason + 1);
+      const staffToast = expiringStaff.length
+        ? { text: `📋 ${expiringStaff.map(c => `${c.firstName} ${c.lastName}`).join(' & ')}'s contract${expiringStaff.length > 1 ? 's are' : ' is'} up — extend or replace on the Staff page.` }
+        : undefined;
       set({
         league,
         loading: false,
-        simToast: justFired && fired ? { text: `📉 You've been fired by the ${fired.teamName}. Pick a new GM job from Home.` } : undefined,
+        simToast: justFired && fired ? { text: `📉 You've been fired by the ${fired.teamName}. Pick a new GM job from Home.` } : staffToast,
       });
       return true;
     } catch (err) {
@@ -1405,13 +1420,8 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     if (!current) { set({ error: 'No league loaded.' }); return false; }
     set({ loading: true, error: null });
     try {
-      const team = current.teams.find(t => t.id === teamId);
-      const coaches = { ...current.coaches } as Record<string, BaseCoach>;
-      if (team) for (const id of team.coachIds) delete coaches[id]; // outgoing coach leaves
-      const hired: BaseCoach = { ...coach, teamId: teamId as TeamId, role: 'HC' };
-      coaches[hired.id] = hired;
-      const teams = current.teams.map(t => (t.id === teamId ? ({ ...t, coachIds: [hired.id] } as typeof t) : t));
-      const league = { ...current, coaches, teams };
+      const rng = createRng(`${current.id}-hire-${teamId}-${coach.id}-${current.currentSeason}`);
+      const league = installCoach(current, teamId, coach, rng);
       await saveLeague(league);
       set({ league, loading: false });
       return true;
@@ -1419,6 +1429,38 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       console.error('[bs-hoops] hireCoach failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return false;
+    }
+  },
+
+  async fireCoach(teamId, role) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return false; }
+    set({ loading: true, error: null });
+    try {
+      const { league } = fireCoachLib(current, teamId, role);
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] fireCoach failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
+  async extendCoach(teamId, role, years) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return null; }
+    set({ loading: true, error: null });
+    try {
+      const { league, result } = extendCoachLib(current, teamId, role, years);
+      if (league !== current) await saveLeague(league);
+      set({ league, loading: false });
+      return result;
+    } catch (err) {
+      console.error('[bs-hoops] extendCoach failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return null;
     }
   },
 

@@ -41,7 +41,8 @@ import type { BaseLeagueState, PlayerId, TeamId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { getBracket } from '../playoffs';
 import { marketContract, hasContractForSeason } from '../league/contracts';
-import { getHeadCoach } from '../coaching/coaches';
+import { getHeadCoach, getDevCoach, devCoachMultiplier } from '../coaching/coaches';
+import { runCoachingCarousel, renewLapsedUserCoaches } from '../coaching/carousel';
 import { setupDraft, getDraft, autoPickUntilUser } from '../draft';
 import { computeSeasonAwards } from '../awards';
 import { buildSeasonHistoryEntry, buildRetireeEntry, type HistoryRetiree } from '../history';
@@ -129,11 +130,15 @@ export function enterOffseason(input: LeagueState): LeagueState {
   // Each team's head-coach development rating drives how fast its young players
   // grow over the offseason (parity: coaching matters for the rebuild loop).
   const teamDevRating = new Map<string, number>();
+  const teamDevCoachRating = new Map<string, number>();
   // League Rules: progression / regression speed + retirement-age bias.
   const rules = getLeagueRules(league);
   for (const t of league.teams) {
     const hc = getHeadCoach(league, t.id);
     if (hc) teamDevRating.set(t.id, hc.ratings.development);
+    // Player-development assistant: a separate ±15% growth multiplier for <25s.
+    const pdc = getDevCoach(league, t.id);
+    if (pdc) teamDevCoachRating.set(t.id, pdc.ratings.development);
   }
 
   // Develop everyone; drop retirees (the schedule is replaced later, so nothing
@@ -171,10 +176,13 @@ export function enterOffseason(input: LeagueState): LeagueState {
       sportData: { ...p.sportData, prevRatings: p.ratings, seasonLog },
     };
 
-    const devRating = p.rosterSlot?.teamId ? teamDevRating.get(p.rosterSlot.teamId) : undefined;
-    const developmentMultiplier = devRating != null
-      ? resolveBasketballPDCEffect(devRating, p.age)
-      : undefined;
+    const teamId = p.rosterSlot?.teamId;
+    const devRating = teamId ? teamDevRating.get(teamId) : undefined;
+    const hcMult = devRating != null ? resolveBasketballPDCEffect(devRating, p.age) : undefined;
+    // Dev coach stacks multiplicatively on the head coach's effect; League
+    // Rules' progressionScale multiplies on top of both inside the engine.
+    const pdcMult = devCoachMultiplier(teamId ? teamDevCoachRating.get(teamId) : undefined, p.age);
+    const developmentMultiplier = hcMult == null && pdcMult === 1 ? undefined : (hcMult ?? 1) * pdcMult;
     // Seed development with the SAVE (league.id is a fresh uuid per save) so a
     // player's boom/bust fate varies across saves of the same league — a 90-POT
     // pick might hit in one save and bust in another (BUG-15). Without league.id
@@ -320,6 +328,9 @@ export function enterOffseason(input: LeagueState): LeagueState {
       detail: t.detail,
     });
   }
+  // AI coaching carousel (team records still hold the season just played).
+  // The user's staff is untouched — they decide on /staff.
+  result = runCoachingCarousel(result, historyEntry, nextSeason).league;
   return result;
 }
 
@@ -549,8 +560,9 @@ export function startNextSeason(league: LeagueState): LeagueState {
   sportData.seasonStarted = false; // user hasn't tipped off the regular season yet
 
   // Season history was recorded in enterOffseason (before aging) — don't
-  // overwrite it here.
-  return {
+  // overwrite it here. User coaches whose deals lapsed without a decision stay
+  // on a 1-year deal so the team is never left without staff.
+  return renewLapsedUserCoaches({
     ...league,
     currentSeason: season,
     currentPhase: 'preseason',
@@ -561,7 +573,7 @@ export function startNextSeason(league: LeagueState): LeagueState {
     competitions,
     games,
     sportData,
-  };
+  }, season);
 }
 
 // ===========================================================================
