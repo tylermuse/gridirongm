@@ -307,19 +307,26 @@ export function acceptanceProbability(
   return clamp((userTotal / threshold - 0.8) / 0.25, 0.02, 0.99);
 }
 
-/** The best competing AI offer: a team that can afford the player (cap room or
- *  an exception) and either has an open spot at a need or would waive its weakest
- *  player to add a clear upgrade. Null if no one is interested. Mirrors the logic
- *  in `runAiFreeAgency`, so the displayed "Competition" matches who would sign. */
-export function bestCompetingOffer(
-  league: LeagueState,
-  info: FreeAgentInfo,
-): { teamId: TeamId; total: number } | null {
-  const pos = info.player.sportData.position;
-  const total = info.marketSalary * info.desiredYears;
-  const ovr = info.player.ratings.overall;
+/** One AI team that would bid on a free agent, with the interest score
+ *  `bestCompetingOffer` ranks by (need·100 + OVR, +250 for the Bird team). */
+export interface AiSuitor {
+  teamId: TeamId;
+  score: number;
+  /** Position need at the team: 2 = glaring, 1 = moderate, 0 = none. */
+  need: number;
+  /** How the team would fit him in. */
+  via: 'open_spot' | 'waive_upgrade' | 'bird_rights';
+}
 
-  let best: { teamId: TeamId; score: number } | null = null;
+/** Every AI team that would bid on the player: it can afford him (cap room or an
+ *  exception) and either has an open spot at a need or would waive its weakest
+ *  player to add a clear upgrade — plus his Bird-rights team, which can exceed the
+ *  cap to keep him. League team order. Mirrors `runAiFreeAgency`, and is the
+ *  single source for both `bestCompetingOffer` and the FA intel report. */
+export function aiSuitors(league: LeagueState, info: FreeAgentInfo): AiSuitor[] {
+  const pos = info.player.sportData.position;
+  const ovr = info.player.ratings.overall;
+  const out: AiSuitor[] = [];
   for (const team of league.teams) {
     if (team.id === league.userTeamId) continue;
     const roster = team.playerIds
@@ -329,37 +336,55 @@ export function bestCompetingOffer(
     const need = atPos <= 1 ? 2 : atPos === 2 ? 1 : 0;
 
     let affordable: boolean;
+    let via: AiSuitor['via'];
     if (team.playerIds.length < getMaxRoster(league)) {
       // Open spot: afford straight from the budget; bid on a need, clear talent,
       // or — below a full roster — the best available depth (mirrors runAiFreeAgency).
       const needsDepth = team.playerIds.length < getAiRosterTarget(league);
       if (need === 0 && ovr < 75 && !(needsDepth && atPos < 3)) continue;
       affordable = signingBudget(league, team.id) >= info.marketSalary;
+      via = 'open_spot';
     } else {
       // Full roster: a contender waives its weakest player for a clear upgrade.
       const worst = roster.length ? Math.min(...roster.map(p => p.ratings.overall)) : 99;
       if (ovr < worst + 4) continue; // not enough of an upgrade to bother
       const worstSalary = [...roster].sort((a, b) => a.ratings.overall - b.ratings.overall)[0]?.contract?.years[0]?.baseSalary ?? 0;
       affordable = signingBudget(league, team.id) + worstSalary >= info.marketSalary;
+      via = 'waive_upgrade';
     }
     if (!affordable) continue;
 
     let score = need * 100 + ovr;
     // Bird rights: a player's former team can exceed the cap to keep him, and
     // fights to do so. Give that team a strong re-sign edge regardless of budget.
-    if (info.birdRights !== 'none' && team.id === info.lastTeamId) score += 250;
-    if (!best || score > best.score) best = { teamId: team.id, score };
+    if (info.birdRights !== 'none' && team.id === info.lastTeamId) { score += 250; via = 'bird_rights'; }
+    out.push({ teamId: team.id, score, need, via });
   }
 
   // Even a capped-out former team with Bird rights stays in the hunt — model it
-  // as a competitor at market when nobody else qualified (or it'd outbid them).
-  if (info.birdRights !== 'none' && info.lastTeamId && info.lastTeamId !== league.userTeamId) {
+  // as a competitor at market (score 250 + OVR beats any non-Bird suitor's
+  // max of 200 + OVR, so it is always the best offer when present).
+  if (info.birdRights !== 'none' && info.lastTeamId && info.lastTeamId !== league.userTeamId
+      && !out.some(s => s.teamId === info.lastTeamId)) {
     const holder = league.teams.find(t => t.id === info.lastTeamId);
-    if (holder && holder.playerIds.length < getMaxRoster(league) && (!best || best.teamId !== info.lastTeamId)) {
-      // Bird team's effective pull beats a non-Bird suitor of similar interest.
-      const bestScore = best ? best.score : 0;
-      if (250 + ovr >= bestScore) best = { teamId: info.lastTeamId, score: 250 + ovr };
+    if (holder && holder.playerIds.length < getMaxRoster(league)) {
+      out.push({ teamId: info.lastTeamId, score: 250 + ovr, need: 0, via: 'bird_rights' });
     }
+  }
+  return out;
+}
+
+/** The best competing AI offer — the highest-interest suitor from `aiSuitors`
+ *  (first in league order on ties). Null if no one is interested, so the
+ *  displayed "Competition" matches who would sign. */
+export function bestCompetingOffer(
+  league: LeagueState,
+  info: FreeAgentInfo,
+): { teamId: TeamId; total: number } | null {
+  const total = info.marketSalary * info.desiredYears;
+  let best: AiSuitor | null = null;
+  for (const s of aiSuitors(league, info)) {
+    if (!best || s.score > best.score) best = s;
   }
   return best ? { teamId: best.teamId, total } : null;
 }

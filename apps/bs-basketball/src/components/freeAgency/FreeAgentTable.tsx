@@ -8,6 +8,7 @@ import { acceptanceProbability, bestCompetingOffer, rosterCount, getMaxRoster, t
 import type { BasketballLeagueState } from '@/lib/persistence/db';
 import type { BasketballTeam } from '@bs/sport-basketball';
 import { careerPerGameLine } from '@/lib/stats/statLine';
+import { SuitorIntel } from './SuitorIntel';
 
 /**
  * Sortable free-agent table with an expandable intel panel (parity with
@@ -200,6 +201,7 @@ function FaIntel({ league, info, room, budget, appeal, teamById }: { league: Bas
       <div className="text-xs italic text-[var(--text-sec)]">
         GM take: {accept >= 60 ? 'Should sign at market.' : accept >= 35 ? 'May need to beat the market or his ask.' : 'Will likely take a better offer elsewhere.'}{!affordable ? ' Over your cap room — clear space first.' : ''}
       </div>
+      <SuitorIntel league={league} playerId={info.player.id} teamById={teamById} />
     </div>
   );
 }

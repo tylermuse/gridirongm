@@ -37,6 +37,7 @@ import type {
   BasketballStats,
 } from '@bs/sport-basketball';
 import { trimPlayLogs } from '../live/trimPlayLogs';
+import { ensureSeasonObjectives } from '../owner/objectives';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 type GameResult = BaseGameResult<BasketballStats>;
@@ -48,9 +49,10 @@ export interface SimNextGameResult {
 }
 
 export function simNextGameForTeam(
-  league: LeagueState,
+  input: LeagueState,
   teamId: TeamId,
 ): SimNextGameResult | null {
+  const league = ensureSeasonObjectives(input);
   // Find the next 'scheduled' game for this team. games is roughly schedule-
   // ordered; we walk to be safe.
   const nextIdx = league.games.findIndex(g =>

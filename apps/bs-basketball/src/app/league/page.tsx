@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
- * /league — all 30 teams grouped by conference + division.
+ * /league — every team grouped by conference + division.
  *
  * v1: simple visual grid; no standings yet (season hasn't been simmed).
  * Each team card is a Link to /team/[id].

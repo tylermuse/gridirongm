@@ -18,11 +18,11 @@ export const SCOUT_POINTS_PER_DRAFT = 30;
 export type ScoutLevel = 0 | 1 | 2 | 3;
 
 export interface DraftPickSlot {
-  /** 1..60 overall pick number. */
+  /** 1..2N overall pick number (60 in a 30-team league). */
   overall: number;
   /** 1 or 2. */
   round: number;
-  /** 1..30 within the round. */
+  /** 1..N within the round (N = team count). */
   pickInRound: number;
   /** Team currently making this pick. Re-resolved from the pick-ownership
    *  registry on every read (see getDraft), so a mid-draft pick trade takes
@@ -32,7 +32,7 @@ export interface DraftPickSlot {
    *  pick-ownership registry. Lets ownership be re-resolved after trades.
    *  (Optional at runtime for saves made before this field existed.) */
   originalTeamId: TeamId;
-  /** Lottery picks are 1..14. */
+  /** Lottery picks: every non-playoff team (1..14 at 30 teams, 1..16 at 32). */
   isLottery: boolean;
   /** Prospect taken, or null if not yet made. */
   prospectId: PlayerId | null;
@@ -56,7 +56,7 @@ export interface DraftTradeRecord {
 export interface DraftState {
   /** Season the rookies sign for (the upcoming season). */
   season: number;
-  /** 60 picks in order. */
+  /** 2 × team-count picks in order (60 in a 30-team league). */
   picks: DraftPickSlot[];
   /** Remaining undrafted prospect ids. */
   poolIds: PlayerId[];

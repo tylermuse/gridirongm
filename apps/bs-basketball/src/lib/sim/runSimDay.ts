@@ -38,6 +38,7 @@ import type {
   BasketballStats,
 } from '@bs/sport-basketball';
 import { trimPlayLogs } from '../live/trimPlayLogs';
+import { ensureSeasonObjectives } from '../owner/objectives';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 type GameResult = BaseGameResult<BasketballStats>;
@@ -56,7 +57,10 @@ function gameDay(g: GameResult): number {
   return typeof d === 'number' ? d : Infinity;
 }
 
-export function simNextDay(league: LeagueState): SimDayResult | null {
+export function simNextDay(input: LeagueState): SimDayResult | null {
+  // Old saves (and fresh leagues) freeze this season's owner objectives on the
+  // first simmed day — a no-op once they're stored.
+  const league = ensureSeasonObjectives(input);
   // Find the earliest dayOfSeason with at least one scheduled game. Day 0 is a
   // real opening-night day in legacy 0-indexed saves — do NOT skip it, or those
   // games never play and the regular season can't complete (blocking playoffs).

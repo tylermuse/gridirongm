@@ -111,6 +111,8 @@ export default function DraftPage() {
     // BUG-33: was `skipForever` and persisted the choice to localStorage.
     // Now strictly one-shot — matches the "Skip — reveal instantly" label.
     const skipNow = finishReveal;
+    // 14 in a 30-team league; 15/16 after expansion.
+    const lotteryCount = draft.picks.filter(p => p.isLottery).length || 14;
     // Mid-ceremony: inline broadcast panel + the board filling in live.
     if (showCeremony && revealCards.length > 0) {
       return (
@@ -126,10 +128,10 @@ export default function DraftPage() {
           <div className="text-5xl mb-3">🎰</div>
           <h2 className="text-xl font-black mb-1">The Draft Lottery</h2>
           <p className="text-sm text-[var(--text-sec)] max-w-md mx-auto mb-6">
-            Fourteen envelopes, fourteen non-playoff teams. Reveal the order live — pick by pick, #14 down to #1 — and watch who jumped the odds and who fell.
+            {lotteryCount === 14 ? 'Fourteen envelopes, fourteen non-playoff teams.' : `${lotteryCount} envelopes, ${lotteryCount} non-playoff teams.`} Reveal the order live — pick by pick, #{lotteryCount} down to #1 — and watch who jumped the odds and who fell.
           </p>
           <div className="flex flex-wrap justify-center gap-2 mb-6">
-            {draft.picks.slice(0, 14).map(p => (
+            {draft.picks.slice(0, lotteryCount).map(p => (
               <div
                 key={p.overall}
                 className="w-12 h-16 rounded-lg border flex items-center justify-center text-2xl"

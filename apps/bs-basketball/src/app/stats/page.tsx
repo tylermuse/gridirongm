@@ -8,6 +8,7 @@ import { PlayerModal } from '@/components/modals/PlayerModal';
 import { regularSeasonStatsByPlayer } from '@/lib/stats/seasonStats';
 import { regularSeasonStatsByTeam, type TeamSeasonAggregate } from '@/lib/stats/teamSeasonStats';
 import { powerScore } from '@/lib/stats/powerScore';
+import { buildAdvancedContext, type AdvancedLine } from '@/lib/stats/advancedLeague';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import type { BasketballPlayer, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
 
@@ -27,7 +28,7 @@ interface Cat {
   key: string;
   label: string;
   unit?: string;
-  value: (s: BasketballStats) => number;
+  value: (s: BasketballStats, adv: AdvancedLine) => number;
   /** Minimum attempts to qualify (per game, scaled by the leader's games). */
   qualify?: (s: BasketballStats, gpMin: number) => boolean;
   fmt: (v: number) => string;
@@ -35,6 +36,7 @@ interface Cat {
 
 const ONE = (v: number) => v.toFixed(1);
 const PCT = (v: number) => `${(v * 100).toFixed(1)}%`;
+const SIGNED = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}`;
 
 const CATEGORIES: Cat[] = [
   { key: 'pts', label: 'Points', unit: 'PPG', value: s => s.points / s.gamesPlayed, fmt: ONE },
@@ -46,6 +48,13 @@ const CATEGORIES: Cat[] = [
   { key: 'fg', label: 'FG%', value: s => (s.fieldGoalsAttempted ? s.fieldGoalsMade / s.fieldGoalsAttempted : 0), qualify: (s, gp) => s.fieldGoalsAttempted >= gp * 5, fmt: PCT },
   { key: '3p', label: '3P%', value: s => (s.threePointsAttempted ? s.threePointsMade / s.threePointsAttempted : 0), qualify: (s, gp) => s.threePointsAttempted >= gp * 1.5, fmt: PCT },
   { key: 'ft', label: 'FT%', value: s => (s.freeThrowsAttempted ? s.freeThrowsMade / s.freeThrowsAttempted : 0), qualify: (s, gp) => s.freeThrowsAttempted >= gp * 1.5, fmt: PCT },
+  // Advanced (formulas: lib/stats/advanced.ts). Qualifiers keep low-volume
+  // shooters / garbage-time guys off the boards.
+  { key: 'ts', label: 'TS%', value: (_s, a) => a.ts, qualify: (s, gp) => s.fieldGoalsAttempted >= gp * 6, fmt: PCT },
+  { key: 'efg', label: 'eFG%', value: (_s, a) => a.efg, qualify: (s, gp) => s.fieldGoalsAttempted >= gp * 6, fmt: PCT },
+  { key: 'pm', label: '+/−', unit: '+/− per game', value: (_s, a) => a.plusMinusPg, qualify: (s) => s.minutes / Math.max(1, s.gamesPlayed) >= 15, fmt: SIGNED },
+  { key: 'usg', label: 'USG%', value: (_s, a) => a.usg / 100, qualify: (s) => s.minutes / Math.max(1, s.gamesPlayed) >= 20, fmt: PCT },
+  { key: 'per', label: 'PER', value: (_s, a) => a.per, qualify: (s) => s.minutes / Math.max(1, s.gamesPlayed) >= 15, fmt: ONE },
 ];
 
 type Tab = 'leaders' | 'teams' | 'power';
@@ -57,6 +66,7 @@ export default function StatsPage() {
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
 
   const statsMap = useMemo(() => (league ? regularSeasonStatsByPlayer(league) : new Map()), [league]);
+  const adv = useMemo(() => (league ? buildAdvancedContext(league) : null), [league]);
   const teamStatsMap = useMemo(() => (league ? regularSeasonStatsByTeam(league) : new Map<string, TeamSeasonAggregate>()), [league]);
   const teamById = useMemo(() => {
     const m = new Map<string, BasketballTeam>();
@@ -75,10 +85,10 @@ export default function StatsPage() {
       const p = players[pid];
       if (!p || s.gamesPlayed < gpMin) continue;
       if (cat.qualify && !cat.qualify(s, gpMin)) continue;
-      rows.push({ player: p, value: cat.value(s), gp: s.gamesPlayed });
+      rows.push({ player: p, value: cat.value(s, adv!.forPlayer(pid, s)), gp: s.gamesPlayed });
     }
     return rows.sort((a, b) => b.value - a.value).slice(0, 20);
-  }, [league, statsMap, catKey]);
+  }, [league, statsMap, catKey, adv]);
 
   if (loading) return <Shell><SkeletonList rows={8} /></Shell>;
   if (!league) return <Shell><p>{error ?? 'No league loaded.'}</p></Shell>;
@@ -105,7 +115,9 @@ export default function StatsPage() {
     const tovPg = off && gp ? off.turnovers / gp : 0;
     const stlPg = off && gp ? off.steals / gp : 0;
     const blkPg = off && gp ? off.blocks / gp : 0;
-    return { team: t, gp, ppg, oppPpg, diff, fgPct, tpPct, oppFgPct, oppTpPct, astPg, tovPg, stlPg, blkPg };
+    const rt = adv?.teamRatings.get(t.id);
+    return { team: t, gp, ppg, oppPpg, diff, fgPct, tpPct, oppFgPct, oppTpPct, astPg, tovPg, stlPg, blkPg,
+      ortg: rt?.ortg ?? 0, drtg: rt?.drtg ?? 0, net: rt?.net ?? 0, pace: rt?.pace ?? 0 };
   }).sort((a, b) => b.diff - a.diff);
 
   // Power Rankings — shared `powerScore` helper so this compact tab and the
@@ -198,13 +210,17 @@ export default function StatsPage() {
         </>
       ) : tab === 'teams' ? (
         <div className="rounded-xl border bg-[var(--surface)] overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
-          <table className="w-full text-sm min-w-[760px]">
+          <table className="w-full text-sm min-w-[960px]">
             <thead>
               <tr className="text-[var(--text-sec)] text-xs border-b" style={{ borderColor: 'var(--border)' }}>
                 <th className="px-3 py-2 text-left">Team</th>
                 <th className="px-2 py-2 text-right">PPG</th>
                 <th className="px-2 py-2 text-right">Opp</th>
                 <th className="px-2 py-2 text-right">Diff</th>
+                <th className="px-2 py-2 text-right" title="Points scored per 100 possessions">ORtg</th>
+                <th className="px-2 py-2 text-right" title="Points allowed per 100 possessions">DRtg</th>
+                <th className="px-2 py-2 text-right" title="ORtg − DRtg">Net</th>
+                <th className="px-2 py-2 text-right" title="Possessions per 48 minutes">Pace</th>
                 <th className="px-2 py-2 text-right hidden sm:table-cell">FG%</th>
                 <th className="px-2 py-2 text-right hidden sm:table-cell">3P%</th>
                 <th className="px-2 py-2 text-right hidden md:table-cell">AST</th>
@@ -228,6 +244,10 @@ export default function StatsPage() {
                   <td className="px-2 py-2 text-right tabular-nums">{r.ppg.toFixed(1)}</td>
                   <td className="px-2 py-2 text-right tabular-nums">{r.oppPpg.toFixed(1)}</td>
                   <td className="px-2 py-2 text-right tabular-nums font-semibold" style={{ color: r.diff >= 0 ? '#10b981' : '#dc2626' }}>{r.diff >= 0 ? '+' : ''}{r.diff.toFixed(1)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{r.ortg.toFixed(1)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{r.drtg.toFixed(1)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums font-semibold" style={{ color: r.net >= 0 ? '#10b981' : '#dc2626' }}>{r.net >= 0 ? '+' : ''}{r.net.toFixed(1)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums text-[var(--text-sec)]">{r.pace.toFixed(1)}</td>
                   <td className="px-2 py-2 text-right tabular-nums hidden sm:table-cell">{(r.fgPct * 100).toFixed(1)}</td>
                   <td className="px-2 py-2 text-right tabular-nums hidden sm:table-cell">{(r.tpPct * 100).toFixed(1)}</td>
                   <td className="px-2 py-2 text-right tabular-nums hidden md:table-cell">{r.astPg.toFixed(1)}</td>

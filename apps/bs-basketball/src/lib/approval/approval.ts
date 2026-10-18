@@ -6,20 +6,34 @@
  * Owner approval drives job security; a low enough rating gets the GM fired,
  * which clears `userTeamId` and flags a "pick a new team" state.
  *
+ * Owner objectives (lib/owner/objectives.ts) add a SEPARATE, bounded term on
+ * top of the results swing: met +4 / partial +1 / missed −4 each, clamped to
+ * ±10, added after the ±30 results clamp. Results still dominate; objectives
+ * decide borderline seasons. Saves with no stored objectives for the season
+ * get a 0 term (exactly the pre-objectives behavior).
+ *
  * Only the user team is tracked (job security is a user concept). Fan approval
  * driving revenue is a v1 placeholder — the number is surfaced, not yet spent.
  */
 
 import type { BaseLeagueState, TeamId } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
-import { getBracket } from '../playoffs';
+import { userPlayoffResult, type PlayoffResult } from './playoffResult';
+import {
+  gradeSeasonObjectives,
+  objectiveApprovalDelta,
+  storeObjectiveGrades,
+  type GradeOptions,
+  type ObjectiveGrade,
+} from '../owner/objectives';
+
+export { userPlayoffResult };
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
 export type JobSecurity = 'safe' | 'warm' | 'hot' | 'final_warning';
 
-export type PlayoffResult =
-  | 'champion' | 'finals' | 'conf_finals' | 'second_round' | 'first_round' | 'missed';
+export type { PlayoffResult } from './playoffResult';
 
 /** Baseline win expectation (a .500-ish playoff push). */
 const EXPECTED_WINS = 41;
@@ -60,28 +74,13 @@ export function jobSecurityFor(ownerApproval: number): JobSecurity {
   return 'final_warning';
 }
 
-/** How far `teamId` advanced in the (completed) playoff bracket. */
-export function userPlayoffResult(league: LeagueState, teamId: TeamId): PlayoffResult {
-  const bracket = getBracket(league);
-  if (!bracket) return 'missed';
-  if (bracket.championTeamId === teamId) return 'champion';
-  if (bracket.runnerUpTeamId === teamId) return 'finals';
-  const inField = [...bracket.seeds.Eastern, ...bracket.seeds.Western].includes(teamId);
-  if (!inField) return 'missed';
-
-  let maxRound = 0;
-  for (const series of bracket.rounds.flat()) {
-    if (series.teamA === teamId || series.teamB === teamId) maxRound = Math.max(maxRound, series.round);
-  }
-  if (maxRound >= 3) return 'conf_finals';
-  if (maxRound === 2) return 'second_round';
-  return 'first_round';
-}
-
 export interface ApprovalUpdate {
   league: LeagueState;
   fired: boolean;
   summary: string;
+  /** Owner-approval points from objective grades (0 when none were set). */
+  objectiveDelta: number;
+  objectiveGrades: ObjectiveGrade[];
 }
 
 /**
@@ -89,17 +88,24 @@ export interface ApprovalUpdate {
  * league (with the team's approval + jobSecurity), and whether the GM was fired
  * (in which case userTeamId is cleared and a gmFired flag is set).
  */
-export function applySeasonApproval(league: LeagueState): ApprovalUpdate {
-  const teamId = league.userTeamId;
-  if (!teamId) return { league, fired: false, summary: '' };
-  const team = league.teams.find(t => t.id === teamId);
-  if (!team) return { league, fired: false, summary: '' };
+export function applySeasonApproval(input: LeagueState, opts: GradeOptions = {}): ApprovalUpdate {
+  const teamId = input.userTeamId;
+  if (!teamId) return { league: input, fired: false, summary: '', objectiveDelta: 0, objectiveGrades: [] };
+  const team = input.teams.find(t => t.id === teamId);
+  if (!team) return { league: input, fired: false, summary: '', objectiveDelta: 0, objectiveGrades: [] };
+
+  // Grade this season's owner objectives (if any were set) and archive them.
+  const graded = gradeSeasonObjectives(input, opts);
+  const objectiveGrades = graded?.grades ?? [];
+  const objectiveDelta = objectiveApprovalDelta(objectiveGrades);
+  const league = graded ? storeObjectiveGrades(input, graded.set, objectiveGrades, objectiveDelta) : input;
 
   const result = userPlayoffResult(league, teamId);
   const winsDelta = team.record.wins - EXPECTED_WINS;
   const playoffScore = PLAYOFF_SCORE[result];
 
-  const ownerDelta = clamp(Math.round(winsDelta * 0.6 + playoffScore), -30, 30);
+  const resultsDelta = clamp(Math.round(winsDelta * 0.6 + playoffScore), -30, 30);
+  const ownerDelta = resultsDelta + objectiveDelta;
   const fanDelta = clamp(Math.round(winsDelta * 0.5 + playoffScore * 1.3), -30, 35);
 
   const ownerApproval = clamp(team.approval.ownerApproval + ownerDelta, 0, 100);
@@ -151,14 +157,19 @@ export function applySeasonApproval(league: LeagueState): ApprovalUpdate {
   };
 
   const onFinalWarning = belowLine && !fired;
+  const metCount = objectiveGrades.filter(g => g.grade === 'met').length;
+  const objectiveNote = objectiveGrades.length
+    ? ` Objectives: ${metCount}/${objectiveGrades.length} met (${objectiveDelta >= 0 ? '+' : ''}${objectiveDelta}).`
+    : '';
   const summary = `Your team ${PLAYOFF_LABEL[result]} (${team.record.wins}–${team.record.losses}). ` +
     (fired
       ? `Ownership has let you go.`
       : onFinalWarning
         ? `Owner approval ${ownerDelta >= 0 ? '+' : ''}${ownerDelta} — ownership has put you on notice. One more season like this and you're out.`
-        : `Owner approval ${ownerDelta >= 0 ? '+' : ''}${ownerDelta}, fan approval ${fanDelta >= 0 ? '+' : ''}${fanDelta}.`);
+        : `Owner approval ${ownerDelta >= 0 ? '+' : ''}${ownerDelta}, fan approval ${fanDelta >= 0 ? '+' : ''}${fanDelta}.`) +
+    objectiveNote;
 
-  return { league: updated, fired, summary };
+  return { league: updated, fired, summary, objectiveDelta, objectiveGrades };
 }
 
 export function getGmFired(league: LeagueState): LeagueSportData['gmFired'] {

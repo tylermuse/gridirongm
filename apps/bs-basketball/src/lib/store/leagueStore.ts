@@ -74,19 +74,35 @@ import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, 
 import { applyRelease } from '../roster/release';
 import { playThroughInjury as playThroughInjuryState } from '../injuries';
 import { extensionMarket, extensionAccepted, buildExtension } from '../roster/extension';
+import { negotiateExtension, acceptExtensionAsk, getTalk, openTalk, currentAsk, type OfferResponse } from '../roster/negotiation';
 import { executeTrade, proposeTrade as proposeTradeLib, type TradeSideInput, type ProposeResult } from '../trade';
 import { acceptTradeProposal, declineTradeProposal, counterTradeProposal, setTradeBlock as setTradeBlockLib, newProposalNote, type ProposalResponse, type CounterResult } from '../trade/proposals';
 import type { DealSuggestion } from '../trade/finder';
 import { setTeamLineup } from '../lineup';
+import { installCoach, fireCoach as fireCoachLib, extendCoach as extendCoachLib, type ExtensionResult } from '../coaching/contracts';
+import { userExpiringCoaches } from '../coaching/carousel';
+import type { StaffRole } from '../coaching/coaches';
+import { createRng } from '@bs/sport-basketball';
 import { clearGmFired } from '../approval';
-import { setGodMode as setGodModeLib, editPlayer as editPlayerLib, type PlayerEdit } from '../godMode/godMode';
+import { setGodMode as setGodModeLib, editPlayer as editPlayerLib, createPlayer as createPlayerLib, type PlayerEdit, type CreatePlayerOpts } from '../godMode/godMode';
+import { revealFaIntel } from '../freeAgency/intel';
 import { forceUserGameResult } from '../godMode/forceGame';
 import { relocateTeam as relocateTeamLib, type FranchiseEdit } from '../godMode/relocate';
+import {
+  startExpansion as startExpansionLib,
+  setUserProtection,
+  beginExpansionDraft as beginExpansionDraftLib,
+  makeExpansionPick,
+  autoExpansionUntilUser,
+  finishExpansion as finishExpansionLib,
+  type ExpansionTeamConfig,
+  type RealignmentPlan,
+} from '../expansion';
 import { buildGmSyncPayload, syncGmStats, computeUserDraftGrade } from '../gm/gmSync';
 import { scoutProspect as scoutProspectState, scoutMany as scoutManyState, toggleWatchlist as toggleWatchlistState } from '../scouting';
 import type { ScoutLevel } from '../draft/types';
 import { markChangelogSeen as markChangelogSeenState } from '../ui/changelog';
-import type { TeamId, BaseCoach } from '@bs/core/adapter';
+import type { TeamId, BaseCoach, PlayerId } from '@bs/core/adapter';
 import type { BasketballLineup, BasketballPlayer, BasketballTeam, BasketballGamePlan } from '@bs/sport-basketball';
 
 interface LeagueStore {
@@ -146,6 +162,10 @@ interface LeagueStore {
   /** God Mode (save-level): toggle, and edit a player's overall/age/potential. */
   setGodMode: (on: boolean) => Promise<void>;
   godEditPlayer: (playerId: string, patch: PlayerEdit) => Promise<void>;
+  /** God Mode: generate a new player onto a team or into free agency. */
+  godCreatePlayer: (opts: CreatePlayerOpts) => Promise<string | null>;
+  /** FA intel: spend one of this window's intel reports on a free agent. */
+  revealFaIntel: (playerId: string) => Promise<void>;
   /** God Mode: force the user's next scheduled game to a win/loss. */
   forceUserGame: (win: boolean) => Promise<boolean>;
   /** God Mode: relocate / rebrand a franchise (city, name, abbrev, colors). */
@@ -252,8 +272,14 @@ interface LeagueStore {
   /** Persist a team's pre-game plan (the sim biases the box score by it). */
   saveGamePlan: (teamId: string, plan: BasketballGamePlan) => Promise<boolean>;
 
-  /** Hire a head coach for a team (the outgoing coach leaves). */
+  /** Hire a coach (head or dev) for a team on a market deal. An incumbent in
+   *  that role is fired — his remaining guaranteed salary becomes dead money. */
   hireCoach: (teamId: string, coach: BaseCoach) => Promise<boolean>;
+  /** Fire a team's coach (dead money = remaining salary). A fired head coach is
+   *  replaced by an interim until a hire. */
+  fireCoach: (teamId: string, role: StaffRole) => Promise<boolean>;
+  /** Offer an extension of `years`; returns the coach's verdict. */
+  extendCoach: (teamId: string, role: StaffRole, years: number) => Promise<ExtensionResult | null>;
 
   /** Waive a rostered player to free agency (opens a roster spot). */
   releasePlayer: (playerId: string, stretch?: boolean) => Promise<boolean>;
@@ -266,11 +292,51 @@ interface LeagueStore {
   /** R2-1: batch-extend N players in a single state update + single save. Used
    *  by Re-sign All so we don't fire N sequential extendPlayer calls (each
    *  rebuilds + persists league state, visibly stalling on a full class). */
+  /** Multi-round re-sign/extension talks: one offer = one round (accept /
+   *  counter / offended / walks). Persists the talk state per player. */
+  negotiateExtension: (playerId: string, offer: Offer) => Promise<OfferResponse | null>;
+  /** "Offer what he wants" — sign at his current ask (always cap-legal). */
+  acceptExtensionAsk: (playerId: string) => Promise<OfferResponse | null>;
   extendPlayersBulk: (signings: { playerId: string; offer: Offer }[]) => Promise<{ accepted: number; declined: number }>;
 
   /** R2-1: batch-release N players in one pass — pair to extendPlayersBulk for
    *  the "Let All Walk" action. Returns the count released. */
   releasePlayersBulk: (playerIds: string[]) => Promise<number>;
+
+  /** Expansion (offseason, after the draft): create 1-2 franchises with the
+   *  accepted realignment; optionally take over one of them. */
+  startExpansion: (configs: ExpansionTeamConfig[], plan: RealignmentPlan, takeOverIndex: number | null) => Promise<boolean>;
+  /** Submit the user team's protected list (≤ 8). */
+  protectPlayers: (playerIds: string[]) => Promise<boolean>;
+  /** Lock protections and open the expansion draft. */
+  beginExpansionDraft: () => Promise<boolean>;
+  /** User's pick for their (taken-over) expansion team. */
+  expansionPick: (playerId: string) => Promise<boolean>;
+  /** Sim expansion picks until the user is on the clock (or `all` to the end). */
+  simExpansionDraft: (all?: boolean) => Promise<boolean>;
+  /** Fill new rosters to the minimum and close the expansion. */
+  finishExpansion: () => Promise<boolean>;
+}
+
+/** Shared wrapper for the pure expansion transitions: apply, persist, report. */
+async function applyLeague(
+  get: () => LeagueStore,
+  set: (p: Partial<LeagueStore>) => void,
+  label: string,
+  fn: (league: BasketballLeagueState) => BasketballLeagueState,
+): Promise<boolean> {
+  const current = get().league;
+  if (!current) { set({ error: 'No league loaded.' }); return false; }
+  try {
+    const league = fn(current);
+    await saveLeague(league);
+    set({ league, error: null });
+    return true;
+  } catch (err) {
+    console.error(`[bs-hoops] ${label} failed:`, err);
+    set({ error: err instanceof Error ? err.message : String(err) });
+    return false;
+  }
 }
 
 /** One-line summary for the sim toast: games simmed + the user team's most
@@ -616,6 +682,25 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] godEditPlayer failed:', err); }
   },
 
+  async godCreatePlayer(opts) {
+    const current = get().league;
+    if (!current) return null;
+    const { league, playerId } = createPlayerLib(current, opts);
+    if (!playerId) return null;
+    set({ league });
+    try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] godCreatePlayer failed:', err); }
+    return playerId;
+  },
+
+  async revealFaIntel(playerId) {
+    const current = get().league;
+    if (!current) return;
+    const league = revealFaIntel(current, playerId);
+    if (league === current) return;
+    set({ league });
+    try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] revealFaIntel failed:', err); }
+  },
+
   async forceUserGame(win) {
     const current = get().league;
     if (!current) return false;
@@ -625,6 +710,19 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] forceUserGame failed:', err); }
     return true;
   },
+
+  startExpansion: (configs, plan, takeOverIndex) =>
+    applyLeague(get, set, 'startExpansion', l => startExpansionLib(l, configs, plan, { takeOverIndex })),
+  protectPlayers: (playerIds) =>
+    applyLeague(get, set, 'protectPlayers', l => setUserProtection(l, playerIds as PlayerId[])),
+  beginExpansionDraft: () =>
+    applyLeague(get, set, 'beginExpansionDraft', l => autoExpansionUntilUser(beginExpansionDraftLib(l), l.userTeamId)),
+  expansionPick: (playerId) =>
+    applyLeague(get, set, 'expansionPick', l => autoExpansionUntilUser(makeExpansionPick(l, playerId as PlayerId), l.userTeamId)),
+  simExpansionDraft: (all) =>
+    applyLeague(get, set, 'simExpansionDraft', l => autoExpansionUntilUser(l, all ? null : l.userTeamId)),
+  finishExpansion: () =>
+    applyLeague(get, set, 'finishExpansion', l => finishExpansionLib(l)),
 
   async relocateTeam(teamId, edit) {
     const current = get().league;
@@ -821,10 +919,15 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       // Immediate heads-up if ownership just fired the GM (userTeamId cleared).
       const justFired = !!current.userTeamId && !league.userTeamId;
       const fired = (league.sportData as { gmFired?: { teamName: string } }).gmFired;
+      // Contract-expiry prompt: the user's coaches whose deals are up.
+      const expiringStaff = userExpiringCoaches(league, league.currentSeason + 1);
+      const staffToast = expiringStaff.length
+        ? { text: `📋 ${expiringStaff.map(c => `${c.firstName} ${c.lastName}`).join(' & ')}'s contract${expiringStaff.length > 1 ? 's are' : ' is'} up — extend or replace on the Staff page.` }
+        : undefined;
       set({
         league,
         loading: false,
-        simToast: justFired && fired ? { text: `📉 You've been fired by the ${fired.teamName}. Pick a new GM job from Home.` } : undefined,
+        simToast: justFired && fired ? { text: `📉 You've been fired by the ${fired.teamName}. Pick a new GM job from Home.` } : staffToast,
       });
       return true;
     } catch (err) {
@@ -1381,13 +1484,8 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     if (!current) { set({ error: 'No league loaded.' }); return false; }
     set({ loading: true, error: null });
     try {
-      const team = current.teams.find(t => t.id === teamId);
-      const coaches = { ...current.coaches } as Record<string, BaseCoach>;
-      if (team) for (const id of team.coachIds) delete coaches[id]; // outgoing coach leaves
-      const hired: BaseCoach = { ...coach, teamId: teamId as TeamId, role: 'HC' };
-      coaches[hired.id] = hired;
-      const teams = current.teams.map(t => (t.id === teamId ? ({ ...t, coachIds: [hired.id] } as typeof t) : t));
-      const league = { ...current, coaches, teams };
+      const rng = createRng(`${current.id}-hire-${teamId}-${coach.id}-${current.currentSeason}`);
+      const league = installCoach(current, teamId, coach, rng);
       await saveLeague(league);
       set({ league, loading: false });
       return true;
@@ -1395,6 +1493,38 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
       console.error('[bs-hoops] hireCoach failed:', err);
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       return false;
+    }
+  },
+
+  async fireCoach(teamId, role) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return false; }
+    set({ loading: true, error: null });
+    try {
+      const { league } = fireCoachLib(current, teamId, role);
+      await saveLeague(league);
+      set({ league, loading: false });
+      return true;
+    } catch (err) {
+      console.error('[bs-hoops] fireCoach failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
+  async extendCoach(teamId, role, years) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return null; }
+    set({ loading: true, error: null });
+    try {
+      const { league, result } = extendCoachLib(current, teamId, role, years);
+      if (league !== current) await saveLeague(league);
+      set({ league, loading: false });
+      return result;
+    } catch (err) {
+      console.error('[bs-hoops] extendCoach failed:', err);
+      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      return null;
     }
   },
 
@@ -1478,6 +1608,40 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
   },
 
+  async negotiateExtension(playerId, offer) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return null; }
+    const out = negotiateExtension(current, playerId, offer);
+    if (!out) { set({ error: 'Player not found.' }); return null; }
+    if (out.league === current) return out.response; // invalid offer — nothing changed
+    try {
+      await saveLeague(out.league);
+      set({ league: out.league, ...(out.response.kind === 'accepted' ? { simToast: { text: `✅ ${out.response.message}` } } : {}) });
+      return out.response;
+    } catch (err) {
+      console.error('[bs-hoops] negotiateExtension failed:', err);
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  },
+
+  async acceptExtensionAsk(playerId) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return null; }
+    const out = acceptExtensionAsk(current, playerId);
+    if (!out) { set({ error: 'Player not found.' }); return null; }
+    if (out.league === current) return out.response;
+    try {
+      await saveLeague(out.league);
+      set({ league: out.league, simToast: { text: `✅ ${out.response.message}` } });
+      return out.response;
+    } catch (err) {
+      console.error('[bs-hoops] acceptExtensionAsk failed:', err);
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  },
+
   // R2-1: batch-extend N players in one in-memory pass + a single save. The
   // re-sign page's old "Re-sign All" loop awaited extendPlayer per player —
   // each call rebuilt + persisted the full league state, visibly stalling
@@ -1488,19 +1652,29 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     if (!current) { set({ error: 'No league loaded.' }); return { accepted: 0, declined: 0 }; }
     set({ loading: true, error: null });
     try {
-      const players = { ...current.players } as Record<string, BasketballPlayer>;
+      let league = current;
       let accepted = 0;
       let declined = 0;
       for (const { playerId, offer } of signings) {
-        const player = players[playerId] as BasketballPlayer | undefined;
+        // An offer at (or above) his negotiated ask goes through the same
+        // "Offer what he wants" path as the modal — so a player who ended talks
+        // or is mid-negotiation is priced consistently. Other offers keep the
+        // legacy market-acceptance check.
+        const talk = getTalk(league, playerId);
+        const player = league.players[playerId as Parameters<typeof releasePlayerState>[1]] as BasketballPlayer | undefined;
         if (!player) { declined++; continue; }
+        const ask = currentAsk(talk ?? openTalk(league, player));
+        if (offer.salaryPerYear >= ask.salaryPerYear && offer.years === ask.years) {
+          const out = acceptExtensionAsk(league, playerId);
+          if (out && out.response.kind === 'accepted') { league = out.league; accepted++; } else declined++;
+          continue;
+        }
         const market = extensionMarket(player, current.currentSeason);
         if (!extensionAccepted(market, offer)) { declined++; continue; }
         const contract = buildExtension(player, offer, market);
-        players[playerId] = { ...player, contract };
+        league = { ...league, players: { ...league.players, [playerId]: { ...player, contract } } };
         accepted++;
       }
-      const league = { ...current, players };
       await saveLeague(league);
       set({
         league,

@@ -45,6 +45,8 @@ export interface SimLineup {
   /** Game-state make-rate nudge for this possession's offense (score effects:
    *  a big second-half lead → leader eases off, trailer presses). 0 = none. */
   makeAdj?: number;
+  /** End-game: the offense must take a three (down 3 late, etc.). */
+  forceThree?: boolean;
 }
 
 // Game-plan effect multipliers — all 1.0 at the 'balanced' default, so an unset
@@ -126,6 +128,8 @@ export interface PossessionResult {
   shotType?: ShotType;
   /** Whether that shot was contested. */
   contested?: boolean;
+  /** End-game intentional foul (no shot; two free throws). */
+  intentional?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -220,13 +224,14 @@ export function simPossession(
     }
   }
 
-  // Step 2: Pick a shooter — weighted by usage
-  const shooter = selectShooter(offense, rng);
+  // Step 2: Pick a shooter — weighted by usage (a must-make three goes to the
+  // best shooter far more often).
+  const shooter = offense.forceThree ? selectThreeShooter(offense, rng) : selectShooter(offense, rng);
   const shooterIdx = offense.players.indexOf(shooter);
   const defender = defense.players[shooterIdx]; // same-position matchup, v1 simplification
 
   // Step 3: Pick shot type (game plan + coach scheme bias 3-point / post lean)
-  const threeMult = threeBias(offense.plan) * (offense.schemeEffect?.threePointAttemptMultiplier ?? 1);
+  const threeMult = threeBias(offense.plan) * (offense.schemeEffect?.threePointAttemptMultiplier ?? 1) * (offense.forceThree ? 40 : 1);
   const postMult = offense.schemeEffect?.postAttemptMultiplier ?? 1;
   const shotType = selectShotType(shooter.sportData.position, shooter.ratings, rng, threeMult, postMult);
   const isThree = shotType === 'three';
@@ -401,6 +406,23 @@ function sharpen(weights: number[], exponent: number): number[] {
 function selectShooter(lineup: SimLineup, rng: Rng): BasketballPlayer {
   const weights = sharpen(lineup.players.map(usageWeight), USAGE_EXPONENT);
   return rng.pickWeighted(lineup.players, weights);
+}
+
+function selectThreeShooter(lineup: SimLineup, rng: Rng): BasketballPlayer {
+  return rng.pickWeighted(lineup.players, sharpen(lineup.players.map(p => p.ratings.threePoint + usageWeight(p) / 2), 6));
+}
+
+/**
+ * End-game intentional foul: the trailing defense fouls before a shot. Teams
+ * hunt the worst free-throw shooter on the floor; two shots, clock barely moves.
+ */
+export function simIntentionalFoul(offense: SimLineup, defense: SimLineup, rng: Rng): PossessionResult {
+  const events: StatEvent[] = [];
+  const fouler = rng.pickWeighted(defense.players, defense.players.map(() => 1));
+  events.push({ playerId: fouler.id, field: 'personalFouls' });
+  const fouled = rng.pickWeighted(offense.players, offense.players.map(p => Math.max(5, 100 - p.ratings.freeThrow) ** 1.5));
+  const made = resolveFreeThrows(fouled, 2, events, rng);
+  return { events, possessionFlipsToDefense: true, secondsElapsed: 1 + rng.random() * 3, pointsScored: made, intentional: true };
 }
 
 /** 0.6-1.6 multiplier on block chance from the defense's shot-blocking. */
