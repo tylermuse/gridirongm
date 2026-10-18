@@ -201,6 +201,11 @@ export function setTradeBlock(league: LeagueState, ids: string[]): LeagueState {
 // ---------------------------------------------------------------------------
 
 /** Chance (0-100) of a new offer arriving today — ramps toward the deadline. */
+/** User-side value edge (as a fraction of what the user sends) an AI pitch aims for. */
+const PROPOSAL_TARGET_EDGE = 0.05;
+const PROPOSAL_MAX_EDGE = 0.2;
+const PROPOSAL_MIN_EDGE = 0.1;
+
 function dailyChance(day: number): number {
   const toDeadline = TRADE_DEADLINE_DAY - day;
   if (toDeadline <= 10) return 45;
@@ -259,13 +264,22 @@ function buildProposal(league: LeagueState, day: number, pending: TradeProposal[
     const deals = findDealsForPlayer(league, pid, 8)
       .filter(d => !busyTeams.has(d.partnerTeamId) && !seen.has(dealKey(d)));
     if (deals.length === 0) continue;
-    // Score from the user's side: incoming minus outgoing PTS.
+    // Score from the user's side as a ratio of what they give up. The AI is
+    // pitching, so it leads with a deal that's roughly fair with a small
+    // sweetener (~+5%) — never a giveaway (capped at +20%) and never an
+    // obvious fleece (floor −10%). Picking the user-best deal made every
+    // offer grade A+ and turned AI teams into a farmable value pump.
     const scored = deals.map(d => {
       const sides = dealToSides(uid, d);
       const ev = evaluateTrade(league, sides);
       const me = ev.perTeam.find(x => x.teamId === uid);
-      return { d, net: me ? me.valueIn - me.valueOut : 0 };
-    }).sort((a, b) => b.net - a.net);
+      const out = Math.max(1, me?.valueOut ?? 1);
+      const ratio = me ? (me.valueIn - me.valueOut) / out : 0;
+      return { d, ratio };
+    })
+      .filter(x => x.ratio >= -PROPOSAL_MIN_EDGE && x.ratio <= PROPOSAL_MAX_EDGE)
+      .sort((a, b) => Math.abs(a.ratio - PROPOSAL_TARGET_EDGE) - Math.abs(b.ratio - PROPOSAL_TARGET_EDGE));
+    if (scored.length === 0) continue;
     const choice = scored[(seed >>> 8) % Math.min(2, scored.length)].d;
     const target = players[pid];
     return {
