@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import { Barlow_Condensed, Inter } from 'next/font/google';
 import { Providers } from '@/components/providers/Providers';
 import { AppShell } from '@/components/shell/AppShell';
@@ -15,20 +16,26 @@ const inter = Inter({
   variable: '--font-body',
 });
 
+const DESCRIPTION =
+  'Free browser basketball GM game. Draft, trade, sign free agents, and watch every game simulated possession by possession. No download, no account required.';
+
 export const metadata: Metadata = {
-  metadataBase: new URL('https://bs-basketball.vercel.app'),
-  title: 'BS Hoops',
-  description: 'Build your dynasty. Run the franchise.',
+  metadataBase: new URL('https://bs-basketball.com'),
+  title: { default: 'BS Hoops — Free Basketball GM Game', template: '%s · BS Hoops' },
+  description: DESCRIPTION,
+  applicationName: 'BS Hoops',
+  keywords: ['basketball GM', 'basketball general manager game', 'basketball sim', 'browser basketball game', 'NBA GM simulator'],
   openGraph: {
-    title: 'BS Hoops',
-    description: 'Build your dynasty. Run the franchise.',
+    title: 'BS Hoops — Free Basketball GM Game',
+    description: DESCRIPTION,
     siteName: 'BS Hoops',
+    url: 'https://bs-basketball.com',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'BS Hoops',
-    description: 'Build your dynasty. Run the franchise.',
+    title: 'BS Hoops — Free Basketball GM Game',
+    description: DESCRIPTION,
   },
 };
 
@@ -53,6 +60,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>
+        {/* Vercel Web Analytics (cookieless) — same as BS Football. Requires Web
+            Analytics enabled on the Vercel project; 404s harmlessly otherwise. */}
+        <Script src="/_vercel/insights/script.js" strategy="afterInteractive" />
       </body>
     </html>
   );

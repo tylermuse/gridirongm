@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { listLeagues, deleteLeague, renameLeague, type LeagueSaveMeta } from '@/lib/persistence/db';
@@ -17,6 +17,7 @@ import { EditorialWidgets } from '@/components/dashboard/EditorialWidgets';
 import { TeamSpotlight } from '@/components/show/TeamSpotlight';
 import { TeamLeaders } from '@/components/dashboard/TeamLeaders';
 import { LiveViewer } from '@/components/live/LiveViewer';
+import { CloudRestoreBanner } from '@/components/settings/CloudRestoreBanner';
 import { ApprovalRings, TrophyCase } from '@/components/dashboard/MetaWidgets';
 import { InjuryReport } from '@/components/dashboard/InjuryReport';
 import { GamePlanModal } from '@/components/modals/GamePlanModal';
@@ -55,6 +56,7 @@ export default function HomePage() {
     if (res) setWatching({ userGameId: res.userGameId, dayGameIds: res.dayGameIds });
   }
   const [saves, setSaves] = useState<LeagueSaveMeta[]>([]);
+  const saveIds = useMemo(() => saves.map(s => s.id), [saves]);
   const [showLoadList, setShowLoadList] = useState(false);
   const [search, setSearch] = useState('');
   const [pickingAbbr, setPickingAbbr] = useState<string | null>(null);
@@ -407,6 +409,8 @@ export default function HomePage() {
           {error}
         </div>
       )}
+
+      <CloudRestoreBanner localIds={saveIds} />
 
       {/* Resume saved game */}
       {saves.length > 0 && (

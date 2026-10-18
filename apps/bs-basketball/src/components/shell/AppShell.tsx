@@ -7,6 +7,7 @@ import { useLeagueStore } from '@/lib/store/leagueStore';
 import { Button } from '@/components/ui/Button';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Sidebar } from './Sidebar';
+import { LegalLinks } from '@/components/legal/LegalPage';
 import { SimToast } from '@/components/ui/Toast';
 import { WhatsNew } from '@/components/ui/WhatsNew';
 import { GameSounds } from '@/components/ui/GameSounds';
@@ -54,6 +55,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     return (
       <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
         <main className="flex-1 bs-animate-fade">{children}</main>
+        <footer className="px-4 pb-5 flex flex-col items-center">
+          <LegalLinks className="justify-center" />
+          <p className="text-[10px] text-[var(--text-sec)] mt-1.5 opacity-70">BS Hoops is a parody — not affiliated with the NBA.</p>
+        </footer>
         <ErrorBanner />
       </div>
     );

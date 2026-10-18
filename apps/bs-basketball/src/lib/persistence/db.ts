@@ -19,6 +19,7 @@ import type { BaseLeagueState } from '@bs/core/adapter';
 import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { repairRosterPositions } from './repair';
 import { migrateSave } from './migrations';
+import { scheduleLeagueCloudPush } from './cloud';
 
 // ===========================================================================
 // Types
@@ -90,6 +91,45 @@ export async function saveLeague(state: BasketballLeagueState): Promise<void> {
     state: JSON.stringify(state),
   };
   await db().leagues.put(row);
+  // Mirror to the user's account when Cloud Saves is on (debounced; no-op otherwise).
+  scheduleLeagueCloudPush(row.state, {
+    id: row.id, displayName: row.displayName, currentSeason: row.currentSeason,
+    currentPhase: row.currentPhase, updatedAt: row.updatedAt,
+  });
+}
+
+/**
+ * Write a league pulled from the cloud into IndexedDB (overwrites a local copy
+ * with the same id). Validates it parses and looks like a league first.
+ * Returns the league id, or null when the payload is unusable.
+ */
+export async function importLeagueJson(json: string): Promise<string | null> {
+  try {
+    const parsed = JSON.parse(json) as BasketballLeagueState;
+    if (!parsed?.id || !Array.isArray(parsed.teams) || !parsed.players) return null;
+    await db().leagues.put({
+      id: parsed.id,
+      displayName: parsed.displayName,
+      currentSeason: parsed.currentSeason,
+      currentPhase: parsed.currentPhase,
+      teamCount: parsed.teams.length,
+      playerCount: Object.keys(parsed.players).length,
+      updatedAt: Date.now(),
+      state: json,
+    });
+    return parsed.id;
+  } catch (err) {
+    console.error('[bs-hoops] cloud import failed:', err);
+    return null;
+  }
+}
+
+/** Serialized state of a local league (for an immediate cloud push), or null. */
+export async function getLeagueJson(id: string): Promise<{ json: string; meta: LeagueSaveMeta } | null> {
+  const row = await db().leagues.get(id);
+  if (!row) return null;
+  const { state, ...meta } = row;
+  return { json: state, meta };
 }
 
 /** Load a single league by id. Returns null if it doesn't exist or fails to parse. */
