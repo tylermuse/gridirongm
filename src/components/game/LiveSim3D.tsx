@@ -16,7 +16,20 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
-import { toSimPlay, toSimTeam, type SimPlayerLike, type SimStateMessage, type SimTeam } from '@/lib/engine/liveSim3d';
+import { isRealPhoto, sampleSkinFromPhoto, toSimPlay, toSimTeam, type SimPlayerLike, type SimStateMessage, type SimTeam } from '@/lib/engine/liveSim3d';
+
+/** Skin tones measured from real headshots, per photo URL, for the whole session (null = couldn't read it). */
+const photoSkinCache = new Map<string, string | null>();
+const STARTERS: Record<string, number> = { QB: 1, RB: 1, WR: 3, TE: 1, OL: 5, DL: 4, LB: 3, CB: 2, S: 2, K: 1, P: 1 };
+function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
+  const seen: Record<string, number> = {}; const out: string[] = [];
+  for (const p of players ?? []) {
+    const k = STARTERS[p.position]; if (!k) continue;
+    seen[p.position] = (seen[p.position] ?? 0) + 1;
+    if (seen[p.position] <= k && isRealPhoto(p.photoUrl)) out.push(p.photoUrl);
+  }
+  return out;
+}
 
 const SIM_BUILD = 'b16o';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&v=${SIM_BUILD}`;
@@ -131,8 +144,20 @@ export function LiveSim3D({
   }, [enabled, ready, post]);
 
   // Team colours → sim (once ready, and whenever the matchup changes)
-  const homeSim: SimTeam | null = homeTeam ? toSimTeam(homeTeam, 'home', homePlayers) : null;
-  const awaySim: SimTeam | null = awayTeam ? toSimTeam(awayTeam, 'away', awayPlayers) : null;
+  // Real-roster players (imported photos): read each starter's skin tone off his headshot once, then re-send the lineup
+  const [photoSkins, setPhotoSkins] = useState<Record<string, string>>({});
+  const photoKey = [...starterPhotos(homePlayers), ...starterPhotos(awayPlayers)].join('|');
+  useEffect(() => {
+    if (!enabled || !photoKey) return;
+    let live = true;
+    const urls = photoKey.split('|').filter(u => !photoSkinCache.has(u));
+    const known = () => Object.fromEntries([...photoSkinCache].filter((e): e is [string, string] => !!e[1]));
+    if (!urls.length) { setPhotoSkins(known()); return; }
+    Promise.all(urls.map(u => sampleSkinFromPhoto(u).then(s => { photoSkinCache.set(u, s); }))).then(() => { if (live) setPhotoSkins(known()); });
+    return () => { live = false; };
+  }, [enabled, photoKey]);
+  const homeSim: SimTeam | null = homeTeam ? toSimTeam(homeTeam, 'home', homePlayers, photoSkins) : null;
+  const awaySim: SimTeam | null = awayTeam ? toSimTeam(awayTeam, 'away', awayPlayers, photoSkins) : null;
   const homeKey = JSON.stringify(homeSim), awayKey = JSON.stringify(awaySim);
   useEffect(() => {
     if (!enabled || !ready || !homeSim || !awaySim) return;

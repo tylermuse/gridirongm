@@ -90,3 +90,17 @@ describe('liveSim3d lineup', () => {
     expect(Object.values(portraitSkin)).toContain(skinToneFor(real));
   });
 });
+
+describe('reconcileJerseys keeps real numbers', () => {
+  it('a backup without a number never takes a starter\'s real number', async () => {
+    const { reconcileJerseys } = await import('@/types');
+    type P = Parameters<typeof reconcileJerseys>[0][number];
+    const mk = (id: string, n: number | undefined, ovr: number, draftPick: number) =>
+      ({ id, teamId: 't', position: 'QB', jerseyNumber: n, draftPick, lastName: id, ratings: { overall: ovr } }) as unknown as P;
+    const out = reconcileJerseys([mk('backup', undefined, 50, 1), mk('starter', 4, 82, 135), mk('dup', 4, 40, 2)], [{ id: 't', retiredNumbers: [] } as never]);
+    const by = Object.fromEntries(out.map(p => [p.id, p.jerseyNumber]));
+    expect(by.starter).toBe(4);
+    expect(by.backup).not.toBe(4);
+    expect(by.dup).not.toBe(4);
+  });
+});

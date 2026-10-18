@@ -150,8 +150,9 @@ export interface SimPlayerLike { id: string; position: string; jerseyNumber?: nu
  *  rest of the game shows for him (scripts: portraitSkin.json, cheeks + nose
  *  bridge, beard/shadow/highlights dropped). Players with an imported photo get
  *  a stable tone drawn from the pool's real distribution. */
-export function skinToneFor(p: SimPlayerLike): string {
+export function skinToneFor(p: SimPlayerLike, photoSkins?: Record<string, string>): string {
   const seed = p.portraitSeedOverride ?? p.id;
+  if (p.photoUrl && photoSkins?.[p.photoUrl]) return photoSkins[p.photoUrl];
   if (!p.photoUrl) {
     const file = portraitFileFor(seed, p.position);
     if (file && SKIN[file]) return SKIN[file];
@@ -159,15 +160,59 @@ export function skinToneFor(p: SimPlayerLike): string {
   return SKIN_TONES.length ? SKIN_TONES[hash(seed) % SKIN_TONES.length] : '#b07a55';
 }
 
+/** A real headshot worth measuring (not the blank-face placeholder some imports carry). */
+export function isRealPhoto(url: string | undefined): url is string {
+  return !!url && /^https?:\/\//.test(url) && !/blank-face/i.test(url);
+}
+
+/** Skin tone read from a real headshot in the browser: cheeks + nose bridge of
+ *  a centred, cut-out portrait (ESPN / NFL style); transparent, non-skin, shadow
+ *  and highlight pixels dropped, median of the rest. Null when the image can't
+ *  be read (no CORS, load error) — the caller keeps the fallback tone. */
+export function sampleSkinFromPhoto(url: string): Promise<string | null> {
+  if (typeof document === 'undefined') return Promise.resolve(null);
+  return new Promise(resolve => {
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onerror = () => resolve(null);
+    im.onload = () => {
+      try {
+        const W = im.naturalWidth, H = im.naturalHeight;
+        const c = document.createElement('canvas'); c.width = W; c.height = H;
+        const g = c.getContext('2d'); if (!g) return resolve(null);
+        g.drawImage(im, 0, 0);
+        const d = g.getImageData(0, 0, W, H).data;
+        const px: [number, number, number][] = [];
+        for (const [x0, y0, x1, y1] of [[.33, .40, .42, .47], [.58, .40, .67, .47], [.46, .36, .54, .43]]) {
+          for (let y = Math.floor(y0 * H); y < Math.floor(y1 * H); y++) for (let x = Math.floor(x0 * W); x < Math.floor(x1 * W); x++) {
+            const i = (y * W + x) * 4; if (d[i + 3] < 200) continue; px.push([d[i], d[i + 1], d[i + 2]]);
+          }
+        }
+        const lum = (p: [number, number, number]) => .3 * p[0] + .59 * p[1] + .11 * p[2];
+        let sel = px.filter(p => p[0] >= p[1] - 4 && p[1] >= p[2] - 8 && lum(p) > 25 && lum(p) < 245);
+        if (sel.length < 50) sel = px;
+        if (sel.length < 20) return resolve(null);
+        const ls = sel.map(lum).sort((a, b) => a - b);
+        const lo = ls[Math.floor(ls.length * .05)], hi = ls[Math.floor(ls.length * .55)];   // studio key light lifts cheeks: the lower half reads truer, most of all on dark skin
+        sel = sel.filter(p => lum(p) >= lo && lum(p) <= hi);
+        const med = (k: 0 | 1 | 2) => { const v = sel.map(p => p[k]).sort((a, b) => a - b); return v[v.length >> 1]; };
+        resolve('#' + ([0, 1, 2] as const).map(k => Math.round(med(k)).toString(16).padStart(2, '0')).join(''));
+      } catch { resolve(null); }   // tainted canvas: the host doesn't allow CORS
+    };
+    im.src = url;
+  });
+}
+
 /** Starters for the sim from a roster already in depth-chart order. */
-export function toSimLineup(players: SimPlayerLike[]): SimLineup {
+export function toSimLineup(players: SimPlayerLike[], photoSkins?: Record<string, string>): SimLineup {
   const used = new Set<number>();
   const man = (p: SimPlayerLike | undefined): SimMan | undefined => {
     if (!p) return undefined;
-    let n = p.jerseyNumber ?? -1;
+    let n = Number(p.jerseyNumber ?? -1);
+    if (!Number.isInteger(n)) n = -1;
     if (n < 0 || n > 99 || used.has(n)) n = -1;          // no number (or a duplicate): the sim keeps its default for that slot
     if (n >= 0) used.add(n);
-    return n >= 0 ? { n, s: skinToneFor(p) } : undefined;
+    return n >= 0 ? { n, s: skinToneFor(p, photoSkins) } : undefined;
   };
   const at = (pos: string, k: number) => players.filter(p => p.position === pos).slice(0, k).map(man).filter((m): m is SimMan => !!m);
   const one = (pos: string) => man(players.find(p => p.position === pos));
@@ -181,9 +226,10 @@ export function toSimTeam(
   t: { abbreviation: string; name: string; primaryColor: string; secondaryColor: string },
   side: 'home' | 'away',
   players?: SimPlayerLike[],
+  photoSkins?: Record<string, string>,
 ): SimTeam {
   const kit = simKit(t, side);
-  return players && players.length ? { ...kit, lineup: toSimLineup(players) } : kit;
+  return players && players.length ? { ...kit, lineup: toSimLineup(players, photoSkins) } : kit;
 }
 
 function simKit(

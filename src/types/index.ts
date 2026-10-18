@@ -740,13 +740,21 @@ export function reconcileJerseys(players: Player[], teams: Team[]): Player[] {
       if (ap !== bp) return ap - bp;
       return a.lastName.localeCompare(b.lastName);
     });
-    for (const p of sorted) {
+    // Two passes: everyone whose number is valid keeps it first (on a duplicate, the
+    // better player keeps it — a starter keeps his real number from an imported
+    // roster), and only then do the missing / conflicting ones get a new number.
+    // One pass let a backup without a number take a starter's real one before
+    // the starter came up in the order (Dak Prescott #4 → #8).
+    const keepOrder = [...sorted].sort((a, b) => (b.ratings?.overall ?? 0) - (a.ratings?.overall ?? 0));
+    const needs: Player[] = [];
+    for (const p of keepOrder) {
       const num = p.jerseyNumber;
-      if (typeof num === 'number' && !taken.has(num) && !retired.has(num)) {
-        // Existing number is still unique + not retired — keep it.
-        taken.add(num);
-        continue;
-      }
+      if (typeof num === 'number' && !taken.has(num) && !retired.has(num)) taken.add(num);
+      else needs.push(p);
+    }
+    const needIds = new Set(needs.map(p => p.id));
+    for (const p of sorted) {
+      if (!needIds.has(p.id)) continue;
       const n = assignJerseyNumber(p.position, taken, retired);
       patches.set(p.id, n);
       taken.add(n);
