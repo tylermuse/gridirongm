@@ -16,9 +16,9 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
-import { toSimPlay, toSimTeam, type SimStateMessage, type SimTeam } from '@/lib/engine/liveSim3d';
+import { toSimPlay, toSimTeam, type SimPlayerLike, type SimStateMessage, type SimTeam } from '@/lib/engine/liveSim3d';
 
-const SIM_BUILD = 'b16n';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b16o';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsgm.sim3d';
 const VIEW_KEY = 'bsgm.sim3d.view';
@@ -68,6 +68,8 @@ export function LiveSim3D({
   disabled,
   homeTeam,
   awayTeam,
+  homePlayers,
+  awayPlayers,
   state,
   onActiveChange,
 }: {
@@ -79,6 +81,9 @@ export function LiveSim3D({
   disabled?: boolean;
   homeTeam: TeamLike | null;
   awayTeam: TeamLike | null;
+  /** Rosters in depth-chart order: starters' jersey numbers and skin tones go on the 3D players */
+  homePlayers?: SimPlayerLike[];
+  awayPlayers?: SimPlayerLike[];
   onActiveChange: (active: boolean) => void;
 }) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -126,8 +131,8 @@ export function LiveSim3D({
   }, [enabled, ready, post]);
 
   // Team colours → sim (once ready, and whenever the matchup changes)
-  const homeSim: SimTeam | null = homeTeam ? toSimTeam(homeTeam, 'home') : null;
-  const awaySim: SimTeam | null = awayTeam ? toSimTeam(awayTeam, 'away') : null;
+  const homeSim: SimTeam | null = homeTeam ? toSimTeam(homeTeam, 'home', homePlayers) : null;
+  const awaySim: SimTeam | null = awayTeam ? toSimTeam(awayTeam, 'away', awayPlayers) : null;
   const homeKey = JSON.stringify(homeSim), awayKey = JSON.stringify(awaySim);
   useEffect(() => {
     if (!enabled || !ready || !homeSim || !awaySim) return;

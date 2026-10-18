@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { toSimResult, toSimPlay, toSimTeam, clockSeconds } from '@/lib/engine/liveSim3d';
+import { toSimResult, toSimPlay, toSimTeam, clockSeconds, toSimLineup, skinToneFor } from '@/lib/engine/liveSim3d';
+import portraitSkin from '@/lib/portraits/portraitSkin.json';
+import { portraitFileFor } from '@/lib/portraits/portraitPool';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
 
 function ev(p: Partial<PlayEvent>): PlayEvent {
@@ -62,5 +64,29 @@ describe('liveSim3d.toSimTeam', () => {
   it('home wears its primary, away wears white with the primary as the accent', () => {
     expect(toSimTeam(t, 'home')).toMatchObject({ id: 'BUF', jersey: '#1A1A1A', num: '#ffffff', helmet: '#1A1A1A' });
     expect(toSimTeam(t, 'away')).toMatchObject({ id: 'BUF', jersey: '#f4f1ea', num: '#1A1A1A', helmet: '#1A1A1A' });
+  });
+});
+
+describe('liveSim3d lineup', () => {
+  const mk = (id: string, position: string, jerseyNumber?: number, photoUrl?: string) => ({ id, position, jerseyNumber, photoUrl });
+  it('starters by slot in depth-chart order, with numbers and a skin tone each', () => {
+    const roster = [mk('q1', 'QB', 9), mk('q2', 'QB', 12), mk('r1', 'RB', 26), mk('w1', 'WR', 81), mk('w2', 'WR', 13), mk('w3', 'WR', 17), mk('w4', 'WR', 19),
+      ...[70, 71, 72, 73, 74, 75].map((n, i) => mk('o' + i, 'OL', n)), mk('k1', 'K', 3), mk('d1', 'DL', 90), mk('c1', 'CB', 9)];
+    const L = toSimLineup(roster);
+    expect(L.qb?.n).toBe(9);
+    expect(L.wr.map(m => m.n)).toEqual([81, 13, 17]);
+    expect(L.ol.map(m => m.n)).toEqual([70, 71, 72, 73, 74]);
+    expect(L.k?.n).toBe(3);
+    expect(L.cb).toEqual([]);                      // #9 is already the QB's: the sim keeps its default there
+    for (const m of [L.qb!, ...L.wr, ...L.ol]) expect(m.s).toMatch(/^#[0-9a-f]{6}$/);
+    expect(toSimTeam({ abbreviation: 'BUF', name: 'B', primaryColor: '#1A1A1A', secondaryColor: '#C8A82E' }, 'home', roster).lineup?.rb?.n).toBe(26);
+  });
+  it('skin tone matches the generated headshot, stable for imported photos', () => {
+    const p = mk('player-abc', 'RB', 22);
+    const file = portraitFileFor('player-abc', 'RB')!;
+    expect(skinToneFor(p)).toBe((portraitSkin as Record<string, string>)[file]);
+    const real = mk('real-1', 'WR', 11, 'https://example.com/x.png');
+    expect(skinToneFor(real)).toBe(skinToneFor(real));
+    expect(Object.values(portraitSkin)).toContain(skinToneFor(real));
   });
 });

@@ -158,10 +158,11 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16n'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16o'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];   /* set by the game page in embed mode (bsgm:setup) */
 const team = i => EMB_TEAMS[i] || TEAMS[+(i===0?selA.value:selB.value)];
+window.__setTeams = (h,a) => { EMB_TEAMS[0]=h; EMB_TEAMS[1]=a; if(!G.busy) setupFormation(); };   /* QA: what bsgm:setup does */
 
 // ---------- Three setup ----------
 const canvas = document.getElementById('c'), stage = document.getElementById('stage');
@@ -484,7 +485,7 @@ function attach(bone, mesh, pos, rootScale){ // add a world-sized mesh to a bone
   const holder = new THREE.Group(); const s = 100/rootScale; holder.scale.setScalar(s); holder.position.copy(pos); bone.add(holder); holder.add(mesh); return holder; }
 function makePlayer(t, number, big, opts={}){
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
-  const skin = SKIN[(number*3+1)%SKIN.length];
+  const skin = opts.skin || SKIN[(number*3+1)%SKIN.length];   /* in-game: the player's own tone, read from his headshot */
   // per-player kit: deterministic from number + team so a man looks the same every play — size, visor, gloves, towel
   const hsh = ((number*2654435761) ^ (t.id.charCodeAt(0)*97 + t.id.charCodeAt(1)*31)) >>> 0;
   const kit = opts.ref? {} : { size: 1 + ((((hsh>>>7)%9)-4)*.009), visor: !big && (hsh%100)<35, gloves: big? ((hsh>>>3)%100)<30 : ((hsh>>>3)%100)<65, gloveCol: ((hsh>>>11)%3)===0? t.jersey : '#f1f1f1', towel: !big && ((hsh>>>5)%100)<30 };
@@ -684,15 +685,19 @@ function setupFormation(kind){
   clearPlayers(); G.formKind = kind || null; buildSideline();
   const to = team(G.off), td = team(1-G.off);
   const z0 = G.fieldPos - 50; placeChain(z0);
-  const add=(t,n,big,x,z,face,opts)=>{ const a=makePlayer(t,n,big,opts); a.x=x; a.z=z; a.face=face; actors.push(a); return a; };
-  O = { ol:[-5.1,-2.55,0,2.55,5.1].map((x,i)=>add(to,[72,66,55,61,78][i],true,x,z0-.75,0)),
-        te: add(to,87,false,6.2,z0-1,0,{profile:'power'}), wrL: add(to,11,false,-20,z0-.9,0), slot: add(to,15,false,-11.5,z0-1.1,0),
-        wrR: add(to,84,false,19.5,z0-.9,0), qb: add(to,7,false,0,z0-5,0,{profile:'qb'}), rb: add(to,28,false,1.6,z0-6.6,0,{profile:'power'}) };
+  /* in-game the page sends each side's starters (depth chart order) as {n: jersey number, s: skin tone}; slot key + index picks the man */
+  const who=(t,key,i)=>{ const L=t.lineup, v=L && L[key]; const e=Array.isArray(v)? v[i||0] : v; return e && e.n!=null? e : null; };
+  const add=(t,n,big,x,z,face,opts,key,i)=>{ const e=key? who(t,key,i) : null; const o={...(opts||{})}; if(e){ n=+e.n; if(e.s) o.skin=e.s; }
+    const a=makePlayer(t,n,big,o); a.x=x; a.z=z; a.face=face; a.num=n; actors.push(a); return a; };
+  const rbKey = kind==='fg'? 'k' : kind==='punt'? 'p' : 'rb';   /* the kicker / punter stands in the back's spot on special teams */
+  O = { ol:[-5.1,-2.55,0,2.55,5.1].map((x,i)=>add(to,[72,66,55,61,78][i],true,x,z0-.75,0,null,'ol',i)),
+        te: add(to,87,false,6.2,z0-1,0,{profile:'power'},'te'), wrL: add(to,11,false,-20,z0-.9,0,null,'wr',1), slot: add(to,15,false,-11.5,z0-1.1,0,null,'wr',2),
+        wrR: add(to,84,false,19.5,z0-.9,0,null,'wr',0), qb: add(to,7,false,0,z0-5,0,{profile:'qb'},'qb'), rb: add(to,28,false,1.6,z0-6.6,0,{profile:'power'},rbKey) };
   const zs = Math.min(z0+13, 58), zl=Math.min(z0+4.8, 57), zc=Math.min(z0+6.5, 57);
-  D = { dl:[-6.4,-2.2,2.2,6.4].map((x,i)=>add(td,[91,97,93,99][i],true,x,z0+1.7,Math.PI)),
-        lb:[-5,0,5].map((x,i)=>add(td,[52,54,58][i],false,x,zl,Math.PI,{profile:'power'})),
-        cbL: add(td,24,false,-20,zc,Math.PI), cbR: add(td,21,false,19.5,zc,Math.PI),
-        sL: add(td,31,false,-9,zs,Math.PI), sR: add(td,33,false,7.5,zs-1,Math.PI) };
+  D = { dl:[-6.4,-2.2,2.2,6.4].map((x,i)=>add(td,[91,97,93,99][i],true,x,z0+1.7,Math.PI,null,'dl',i)),
+        lb:[-5,0,5].map((x,i)=>add(td,[52,54,58][i],false,x,zl,Math.PI,{profile:'power'},'lb',[1,0,2][i])),
+        cbL: add(td,24,false,-20,zc,Math.PI,null,'cb',1), cbR: add(td,21,false,19.5,zc,Math.PI,null,'cb',0),
+        sL: add(td,31,false,-9,zs,Math.PI,null,'s',1), sR: add(td,33,false,7.5,zs-1,Math.PI,null,'s',0) };
   D.all = [...D.dl, ...D.lb, D.cbL, D.cbR, D.sL, D.sR];
   O.all = [...O.ol, O.te, O.wrL, O.slot, O.wrR, O.qb, O.rb];
   [...O.ol, ...D.dl].forEach(a=>a.stance='three'); O.qb.stance='qb'; [D.cbL,D.cbR,D.sL,D.sR].forEach(a=>a.stance='db');
@@ -1956,7 +1961,7 @@ Promise.all([document.fonts?.ready ?? Promise.resolve(), botReady]).then(()=>{
   if(EMBED) embedStart();
 }).catch(e=>{ $('hint').textContent='Player model failed to load: '+(e&&e.message||e); console.error(e); if(EMBED && window.parent) window.parent.postMessage({type:'bsgm:error', message:String(e&&e.message||e)}, '*'); });
 // ---------- Embed protocol (the BS Football game page drives the sim through postMessage) ----------
-// in:  {type:'bsgm:setup', home:{id,name,jersey,num,pants,helmet,stripe}, away:{...}}
+// in:  {type:'bsgm:setup', home:{id,name,jersey,num,pants,helmet,stripe,lineup?}, away:{...}}   lineup: {qb,rb,te,k,p:{n,s}, wr[3],ol[5],dl[4],lb[3],cb[2],s[2]:[{n,s}]} (n jersey, s skin hex)
 //      {type:'bsgm:play', id, possession:'home'|'away', pre:{fieldPos,down,toGo,quarter,clock,homeScore,awayScore}, res:{kind,yards,depth,good}}
 //      {type:'bsgm:state', possession, pre:{...}}   (idle only: pre-snap formation + scorebug for the current situation)
 //      {type:'bsgm:skip'}

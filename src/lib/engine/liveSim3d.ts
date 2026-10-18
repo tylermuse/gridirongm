@@ -10,6 +10,8 @@
  * down / yardsToGo / fieldPos are PRE-snap; homeScore / awayScore are POST-play.
  */
 import type { PlayEvent } from './playByPlay';
+import { portraitFileFor } from '@/lib/portraits/portraitPool';
+import portraitSkin from '@/lib/portraits/portraitSkin.json';
 
 export interface SimPlayResult {
   kind: 'run' | 'complete' | 'incomplete' | 'sack' | 'int' | 'fg' | 'punt';
@@ -35,7 +37,14 @@ export interface SimStateMessage {
   pre: { fieldPos: number; down: number; toGo: number; quarter: number; clock: number; homeScore: number; awayScore: number };
 }
 
-export interface SimTeam { id: string; name: string; jersey: string; num: string; pants: string; helmet: string; stripe: string }
+/** One man on the field: jersey number + skin tone (hex). */
+export interface SimMan { n: number; s: string }
+/** Starters by slot, depth-chart order (wr[0] = WR1 …). Missing slots fall back to the sim's defaults. */
+export interface SimLineup {
+  qb?: SimMan; rb?: SimMan; te?: SimMan; k?: SimMan; p?: SimMan;
+  wr: SimMan[]; ol: SimMan[]; dl: SimMan[]; lb: SimMan[]; cb: SimMan[]; s: SimMan[];
+}
+export interface SimTeam { id: string; name: string; jersey: string; num: string; pants: string; helmet: string; stripe: string; lineup?: SimLineup }
 
 const RUSH_TD_RE = /punches it in|crosses the goal line|-yard rush|stretches across|pylon|runs it in/i;
 const SCRAMBLE_RE = /scramble/i;
@@ -125,9 +134,59 @@ function luminance(hex: string): number {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 }
 
+const SKIN = portraitSkin as Record<string, string>;
+const SKIN_TONES = Object.values(SKIN);
+
+/** FNV-1a: small, stable string hash. */
+function hash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+export interface SimPlayerLike { id: string; position: string; jerseyNumber?: number; photoUrl?: string; portraitSeedOverride?: string }
+
+/** Skin tone for the 3D player: measured from the same generated headshot the
+ *  rest of the game shows for him (scripts: portraitSkin.json, cheeks + nose
+ *  bridge, beard/shadow/highlights dropped). Players with an imported photo get
+ *  a stable tone drawn from the pool's real distribution. */
+export function skinToneFor(p: SimPlayerLike): string {
+  const seed = p.portraitSeedOverride ?? p.id;
+  if (!p.photoUrl) {
+    const file = portraitFileFor(seed, p.position);
+    if (file && SKIN[file]) return SKIN[file];
+  }
+  return SKIN_TONES.length ? SKIN_TONES[hash(seed) % SKIN_TONES.length] : '#b07a55';
+}
+
+/** Starters for the sim from a roster already in depth-chart order. */
+export function toSimLineup(players: SimPlayerLike[]): SimLineup {
+  const used = new Set<number>();
+  const man = (p: SimPlayerLike | undefined): SimMan | undefined => {
+    if (!p) return undefined;
+    let n = p.jerseyNumber ?? -1;
+    if (n < 0 || n > 99 || used.has(n)) n = -1;          // no number (or a duplicate): the sim keeps its default for that slot
+    if (n >= 0) used.add(n);
+    return n >= 0 ? { n, s: skinToneFor(p) } : undefined;
+  };
+  const at = (pos: string, k: number) => players.filter(p => p.position === pos).slice(0, k).map(man).filter((m): m is SimMan => !!m);
+  const one = (pos: string) => man(players.find(p => p.position === pos));
+  return { qb: one('QB'), rb: one('RB'), te: one('TE'), k: one('K'), p: one('P'),
+    wr: at('WR', 3), ol: at('OL', 5), dl: at('DL', 4), lb: at('LB', 3), cb: at('CB', 2), s: at('S', 2) };
+}
+
 /** Uniform palette for the sim from a team's two colours. Home wears its primary;
  *  away wears white with its primary as the number / helmet colour (NFL convention). */
 export function toSimTeam(
+  t: { abbreviation: string; name: string; primaryColor: string; secondaryColor: string },
+  side: 'home' | 'away',
+  players?: SimPlayerLike[],
+): SimTeam {
+  const kit = simKit(t, side);
+  return players && players.length ? { ...kit, lineup: toSimLineup(players) } : kit;
+}
+
+function simKit(
   t: { abbreviation: string; name: string; primaryColor: string; secondaryColor: string },
   side: 'home' | 'away',
 ): SimTeam {
