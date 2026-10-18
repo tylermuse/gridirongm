@@ -12,7 +12,10 @@ const withSerwist = withSerwistInit({
 });
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Dev runs on Turbopack (Next 16 default) with Serwist disabled, but the
+  // Serwist wrapper still contributes a webpack hook — without an (empty)
+  // turbopack config `next dev` errors on startup and serves nothing.
+  turbopack: {},
   // Workspace packages live as TS source files (no build step). Next.js
   // needs to compile them at consumer build time. Added during Sub-phase 1D
   // when @bs/core/analytics became the first cross-package import.
