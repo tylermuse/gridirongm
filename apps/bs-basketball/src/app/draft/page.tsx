@@ -21,6 +21,7 @@ import { DraftPickTradeModal } from '@/components/draft/DraftPickTradeModal';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { LotteryRevealCeremony } from '@/components/draft/LotteryReveal';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
+import { getMaxRoster } from '@/lib/rules/leagueRules';
 
 /**
  * /draft — the NBA draft board (Phase 2D-4).
@@ -169,7 +170,7 @@ export default function DraftPage() {
   // Inaugural imported drafts now run the full offseason too (BUG-20): Draft →
   // Re-sign → Free Agency, same as a normal post-draft flow.
   const expiringCount = userExpiringCount(league, draft.season);
-  const overLimit = !!userTeam && userTeam.playerIds.length > 15;
+  const overLimit = !!userTeam && userTeam.playerIds.length > getMaxRoster(league);
   const recommendedId = !draft.complete ? recommendedProspectId(league, draft) : null;
 
   const pool = draft.poolIds

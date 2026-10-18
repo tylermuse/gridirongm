@@ -8,7 +8,7 @@ import { TeamLogo } from '@/components/ui/TeamLogo';
 import { TeamRosterModal } from '@/components/modals/TeamRosterModal';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { TRADE_DEADLINE_DAY } from '@/lib/sim/simRange';
+import { getTradeDeadlineDay } from '@/lib/rules/leagueRules';
 import { clinchMarks, CLINCH_LEGEND, type ClinchMark } from '@/lib/standings/clinch';
 import {
   computeExtendedStandings, defaultScoreboardDay, scoreboardDays, scoreboardForDay, fmtWL, gamesBehind,
@@ -143,7 +143,7 @@ export default function StandingsPage() {
             >
               Sim Week
             </button>
-            {league.currentTick <= TRADE_DEADLINE_DAY && (
+            {league.currentTick <= getTradeDeadlineDay(league) && (
               <button
                 onClick={() => void simRange('deadline')}
                 disabled={storeLoading}

@@ -18,7 +18,7 @@ import { ratingColor } from '@/lib/ui/ratingColor';
 import { contractYearsLeft } from '@/lib/roster/playerActions';
 import { extensionMarket } from '@/lib/roster/extension';
 import { keepValueOf } from '@/lib/season/advanceSeason';
-import { MAX_ROSTER } from '@/lib/freeAgency';
+import { getMaxRoster } from '@/lib/freeAgency';
 import { getDraft } from '@/lib/draft';
 import { resignProjection, hasSalaryForSeason, salaryForSeason } from '@/lib/roster/resignProjection';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
@@ -101,7 +101,8 @@ export default function ReSignPage() {
   const active = candidates.filter(p => !hasSalaryForSeason(p, nextSeason));
   const resigned = candidates.filter(p => hasSalaryForSeason(p, nextSeason));
 
-  const over = roster.length - MAX_ROSTER;
+  const maxRoster = getMaxRoster(league);
+  const over = roster.length - maxRoster;
 
   // R2-1: walk is gated by ConfirmModal for 78+ OVR vets, immediate otherwise.
   async function performLetWalk(p: BasketballPlayer) {
@@ -280,8 +281,8 @@ export default function ReSignPage() {
         <header className="flex flex-wrap items-baseline gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
           <h2 className="text-sm font-black uppercase tracking-tight">Finalize Roster</h2>
           {over > 0
-            ? <span className="text-xs font-bold" style={{ color: '#dc2626' }}>Trim {over} — {roster.length}/{MAX_ROSTER}</span>
-            : <span className="text-xs font-bold" style={{ color: '#10b981' }}>At the limit — {roster.length}/{MAX_ROSTER} ✓</span>}
+            ? <span className="text-xs font-bold" style={{ color: '#dc2626' }}>Trim {over} — {roster.length}/{maxRoster}</span>
+            : <span className="text-xs font-bold" style={{ color: '#10b981' }}>At the limit — {roster.length}/{maxRoster} ✓</span>}
         </header>
         {over > 0 && (
           <div className="px-2 py-1">

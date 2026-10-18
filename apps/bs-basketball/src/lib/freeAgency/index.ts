@@ -19,6 +19,7 @@ export {
   faPhase,
   FA_DAYS,
   MAX_ROSTER,
+  getMaxRoster,
   LEAGUE_MINIMUM_SALARY,
   type FreeAgentInfo,
   type Offer,
