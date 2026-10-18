@@ -158,7 +158,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16k'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16l'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];   /* set by the game page in embed mode (bsgm:setup) */
 const team = i => EMB_TEAMS[i] || TEAMS[+(i===0?selA.value:selB.value)];
@@ -1716,7 +1716,7 @@ function rollCall(call){
   return {kind:'incomplete', depth:call};
 }
 const FORCED = {
-  scramble:()=>({kind:'run', yards:9, style:'scramble'}), scrambleshort:()=>({kind:'run', yards:2, style:'scramble'}), screen:()=>({kind:'complete', depth:'short', yards:11, style:'screen'}), screenstuff:()=>({kind:'complete', depth:'short', yards:1, style:'screen'}),
+  scramble:()=>{ const r=Math.random(); return {kind:'run', style:'scramble', yards: r<.15? Math.round(R(-2,1)) : r<.75? Math.round(R(2,9)) : r<.93? Math.round(R(10,18)) : Math.round(R(19,35))}; },   /* a real scramble: sometimes bottled up, usually a chunk, now and then it breaks */ scrambleshort:()=>({kind:'run', yards:2, style:'scramble'}), screen:()=>{ const r=Math.random(); return {kind:'complete', depth:'short', style:'screen', yards: r<.25? Math.round(R(-3,2)) : r<.8? Math.round(R(3,10)) : Math.round(R(11,30))}; }, screenstuff:()=>({kind:'complete', depth:'short', yards:1, style:'screen'}),
   stuffed:()=>({kind:'run', yards:-Math.round(R(0,2))}),
   fg_good:()=>({kind:'fg', good:true}),
   fg_miss:()=>({kind:'fg', good:false}),
