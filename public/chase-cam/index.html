@@ -158,7 +158,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16g'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16h'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];   /* set by the game page in embed mode (bsgm:setup) */
 const team = i => EMB_TEAMS[i] || TEAMS[+(i===0?selA.value:selB.value)];
@@ -719,6 +719,8 @@ function setupFormation(kind){
     }
   }
   actors.forEach(a=>{ a.behav=null; a.fall=0; a.mocapFall=null; a.mocapAct=null; a.mocapActive=false; a.truck=null; a.truckT=null; a.knock=null; a.behind=null; a.whiff=false; a.celebAt=null; a.kickT=null; a.puntHold=false; if(kind!=='fg') a.hold=false; place(a); });
+  if((window.__mxStance ?? true) && BOT && BOT.animations.some(c=>c.name==='mx_stance')){ // second level: the captured pre-snap stance (hands on knees, weight forward) held until the snap, then released into the clip blend
+    [D.cbL,D.cbR,D.sL,D.sR,...D.lb].forEach(a=>{ if(a.stance==='db' || a.stance==='two') a.mocapAct = {clip:'mx_stance', t0:-.15, start:2.0, end:2.45}; }); }
   ballPlan = [{t0:-1, t1:1e9, held:O.ol[2], off:[0,.25,.45]}];
   losLine.position.z = z0; ltgLine.position.z = Math.min(z0+G.toGo, 50); ltgLine.visible = z0+G.toGo < 50;
   updateBall(0); cameraTarget = {x:0, z:z0}; snapCamera(); preSnap = true; preT = 0;
@@ -1018,6 +1020,9 @@ function choreograph(res){
     const flightSeg = {t0:tThrow, t1:tCatch, flight:{x0:hx+.35,y0:1.9,z0:hz, x1:catchX,y1:1.35,z1:cz, h:deep?7: scn? 1.6 : 2.4}};
     ballPlan.push(flightSeg);
     O.qb.throwScale = deep ? 1.6 : 1.2; O.qb.throwT0 = tThrow - .5*O.qb.throwScale; O.qb.aimAt = [catchX, cz];   // deep shots get a longer wind-up; release stays at tThrow
+    if((window.__mxQb ?? true) && !scn && res.kind!=='int' && (tThrow - snap) >= 1.9 && Math.random() < (window.__mxQbP ?? .8)){ // a QB holding it ≥1.9 s: the captured scramble-and-throw (slides left out of the pocket, sets, throws; release 1.02 s in)
+      ev(tThrow-1.03, ()=>{ const hd = Math.atan2(catchX-O.qb.x, cz-O.qb.z) - O.qb.face; O.qb.behav = P([playT,O.qb.x,O.qb.z],[tThrow+2,O.qb.x,O.qb.z]); O.qb.faceLock={angle:O.qb.face, until:tThrow+.6};
+        O.qb.mocapAct = {clip:'mx_qb_pass', t0:tThrow-1.02, start:4.4, end:5.95, heading:hd, moveRoot:true}; }); }
     if(tThrow - snap > 2.1 && res.kind!=='int'){ const rush = D.dl[3], blk = O.ol[4];
       ev(tThrow-1.0, ()=>{ rush.engage=null; blk.engage=null; rush.faceLock=null; rush.behav = F(O.qb, playT, 7.0, [0,0], .9); blk.behav = P([playT,blk.x,blk.z],[playT+.5,blk.x-.6,blk.z-1.2]); });
       ev(tThrow+.05, ()=>{ if(Math.hypot(rush.x-O.qb.x, rush.z-O.qb.z) < 3.2){ rush.wrap=O.qb; rush.wrapT=playT; rush.behav={type:'lunge', x0:rush.x, z0:rush.z, t0:playT, t1:playT+.4, tgt:O.qb}; } });
@@ -1348,7 +1353,11 @@ function clipHips(name,t){ const c=BOT.animations.find(c=>c.name===name); if(!c)
 function mocapAct(a,t){ const m=a.mocapAct; if(!m) return false; const ct=m.start+(t-m.t0);
   if(ct<m.start-.15) return false; if(ct>m.end+.15){ a.mocapAct=null; return false; }
   let w=smooth01((ct-m.start+.15)/.15)*smooth01((m.end+.15-ct)/.15); if(m.fadeAt!=null) w*=smooth01((t-m.fadeAt)/.3);
-  if(!footballMotion(a,m.clip,clamp(ct,m.start,m.end),w,m.heading||0,m.start,m.holdRootAfter??null,0,null,m.yScale??1)) return false;
+  let originT=m.start;
+  if(m.moveRoot){ // the clip's root travel moves the player's real position (rushers, camera and the ball's hand all follow), not just the mesh under a frozen root
+    const tt=clamp(ct,m.start,m.end), h0=clipHips(m.clip,m.start), h1=clipHips(m.clip,tt); if(h0 && h1){ const sc=(a.model.scale.x/1.158)/86, fz=(h1[2]-h0[2])*sc, fx=(h1[0]-h0[0])*sc, f=a.face+(m.heading||0);
+      if(m.ox==null){ m.ox=a.x; m.oz=a.z; } a.x=m.ox+Math.sin(f)*fz+Math.cos(f)*fx; a.z=m.oz+Math.cos(f)*fz-Math.sin(f)*fx; place(a); originT=tt; } }
+  if(!footballMotion(a,m.clip,clamp(ct,m.start,m.end),w,m.heading||0,originT,m.holdRootAfter??null,0,null,m.yScale??1)) return false;
   a.body.position.y=0; a.body.rotation.x=0; a.mocapActive=true; a.mocapActW=w; a.mocapActT=ct; return true; }
 // Downed player on a captured clip: blends in from the run pose over .12 s, then the clip owns every joint and the hips travel.
 function mocapFall(a,t){
