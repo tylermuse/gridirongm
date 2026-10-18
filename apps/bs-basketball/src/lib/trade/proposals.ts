@@ -306,7 +306,19 @@ export function refreshTradeProposals(league: LeagueState): LeagueState {
       if (prop) list = [...list, prop];
     }
   }
-  return withProposals(league, list);
+  return withProposals(league, pruneResolved(list, league.currentSeason));
+}
+
+/** Keep every pending offer plus the 20 most recent resolved ones from this
+ *  season — the inbox history — so the list can't grow across seasons. */
+const KEEP_RESOLVED = 20;
+function pruneResolved(list: TradeProposal[], season: number): TradeProposal[] {
+  const resolved = list
+    .filter(p => p.status !== 'pending' && p.season === season)
+    .sort((a, b) => (b.resolvedDay ?? b.createdDay) - (a.resolvedDay ?? a.createdDay))
+    .slice(0, KEEP_RESOLVED);
+  const keep = new Set(resolved.map(p => p.id));
+  return list.filter(p => p.status === 'pending' || keep.has(p.id));
 }
 
 // ---------------------------------------------------------------------------
