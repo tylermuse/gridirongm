@@ -1,4 +1,4 @@
-# 3D live sim — QA pass (build b16m)
+# 3D live sim — QA pass (builds b16m, b16n)
 
 **Scope.** Every outcome the sim draws (inside run, chunk run, breakaway, stuffed run, short completion, deep ball, out route, incompletion, interception, sack, screen, QB scramble, rushing TD, passing TD), 6 seeds each = 84 plays, on the in-game Sketchfab player. Regression soaks on the licensed player too.
 
@@ -28,6 +28,17 @@
 | 8 | Head-on: runner floats up before falling | "Knocked Out" capture lifts 15 cm first | Entered past the lift | fall in 0.35 s |
 
 Also shipped earlier in this round: real-time pace at low frame rates (slow-motion root cause), punter hands on the ball, holder timing, scramble/screen yardage variety, QB pivot-only capture.
+
+## Runs (b16n)
+
+`qa/runqa.mjs`: 8 run outcomes × 6 seeds = 48 plays. Per play: nearest defender when the back crosses the line, time spent within 0.8 m of a defender who isn't tackling, snap cuts, top speed, OL engagement.
+
+| # | Issue (as seen) | Measured cause | Fix | Before → after |
+|---|---|---|---|---|
+| 9 | Back runs right past a linebacker standing in the hole, nothing happens | Nobody blocked the play-side backer: he scraped into the hole and the back passed him at arm's length | Center (inside runs) or tight end (outside right) climbs to the second level and blocks him off the lane; he sheds once the back is by and chases from behind | defender at the line 0.56–0.99 m on 17 of 30 gains → **2.3–3.3 m on 29 of 30** |
+| 10 | 3-yard runs tackled by a backer from across the field | Tackler chosen from the whole back seven | Short gains: the backer nearest the gap makes the stop | — |
+
+Unchanged and fine: OL engaged 80–94% of the first 2 s, top speeds 7.3–8.7 yd/s, no snap cuts. Left: chunk#4 (one seed) still has a defender at 0.9 m; stuffed runs brush the pile for up to 0.3 s (that's the pile).
 
 ## Remaining (known)
 

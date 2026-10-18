@@ -158,7 +158,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16m'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16n'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];   /* set by the game page in embed mode (bsgm:setup) */
 const team = i => EMB_TEAMS[i] || TEAMS[+(i===0?selA.value:selB.value)];
@@ -820,6 +820,7 @@ function choreograph(res){
   const qbRecv = snap+.28;
   ballPlan.push({t0:snap, t1:qbRecv, flight:{x0:0,y0:.4,z0:z0-.3, x1:0,y1:1.2,z1:z0-4.7, h:.2}});
   let tEnd, carrier, tackleT=null, tackler=null, td=false, endPos, tHole=0, tackleAtFn=null;
+  const climbed = new Set();   /* backers picked up by a climbing blocker on a run: they don't join the pursuit until they shed */
 
   const isRun = res.kind==='run'; const scr = isRun && res.style==='scramble', scn = res.kind==='complete' && res.style==='screen';
   const runBlock = isRun;   /* a QB scramble is blocked like a run: he takes the snap and goes straight at the line, slides to the gap, then upfield */
@@ -950,7 +951,8 @@ function choreograph(res){
       ballPlan.push({t0:qbRecv, t1:tHand, held:O.qb}, {t0:tHand, t1:1e9, held:O.rb}); }
     endPos=[endX,zEnd];
     if(!td){
-      const pool = Y<=0? [...D.dl,...D.lb] : [...D.lb, D.sL, D.sR, D.cbL, D.cbR];
+      let pool = Y<=0? [...D.dl,...D.lb] : [...D.lb, D.sL, D.sR, D.cbL, D.cbR];
+      if(Y>0 && Y<=4) pool = [[...D.lb].sort((p,q)=>Math.abs(p.x-gapX)-Math.abs(q.x-gapX))[0]];   /* short gain: the backer filling that gap makes the stop, not one from across the field */
       if(Y>0){
         const plan = planTackle(keys, 3, pool.map(a=>({a, t:snap+.3, x:a.x, z:a.z})), 0, z0+toGoal-.8);
         tackler = plan.a; tEnd = tackleT = plan.tEnd; C.behav = P(...keys); endPos=[endX,zEnd];
@@ -961,6 +963,27 @@ function choreograph(res){
         C.behav = scr? P([qbRecv,0,z0-4.7],[snap+.95,gapX*.3,z0-2.3],[tHole,gapX*.8,z0-.9],[tHole+.4,gapX*.8,z0+Y-.2]) : P([0,1.6,z0-6.6],[snap,1.6,z0-6.6],[tHand,.7,z0-4.4],[tHole,gapX,z0-.9],[tHole+.4,gapX,z0+Y-.2]);
         tEnd = tackleT = tHole+.4;
       }
+    }
+    /* second level: a gain needs the play-side backer blocked. Without this he scrapes straight into the hole and the back runs past him
+       at arm's length with nothing happening. The center (inside) or tight end (outside right) climbs to him; the backer takes on the block
+       off the lane, then sheds once the back is by and pursues. Stuffs and short gains leave him free to fill. */
+    if(Y>3 && (window.__climb ?? true)){
+      const hole=[gapX, z0+1.2]; const climbers = gapX>3? [O.te, O.ol[2]] : [O.ol[2], O.te]; let ci=0;
+      [...D.lb].sort((p,q)=>Math.abs(p.x-gapX)-Math.abs(q.x-gapX)).forEach(lb=>{ if(lb===tackler || ci>=climbers.length) return;
+        if(Math.abs(lb.x-gapX) > 5.5) return;   /* only the backers who can get to the hole */
+        const bl = climbers[ci++]; const away = Math.sign((lb.x-gapX) || -gapX || 1);
+        const mx = gapX + away*1.9, mz = z0+1.5;
+        const tMeet = Math.min(Math.max(snap+.85, snap+.25+Math.hypot(mx-bl.x, mz-bl.z)/6.6), Math.max(snap+.85, tHole-.1));
+        climbed.add(lb);
+        lb.behav = P([snap,lb.x,lb.z],[snap+.45,lb.x+Math.sign(res.gap ?? 1)*1.2,lb.z-.3],[tMeet,mx,mz+.5]);
+        if(bl===O.ol[2]){ bl.engage=null; D.dl[2].engage=O.ol[3]; }
+        bl.faceLock = null; bl.behav = P([snap,bl.x,bl.z],[snap+.12,bl.x,bl.z],[tMeet,mx,mz-.45]);
+        ev(tMeet, ()=>{ const pr={bx:(lb.x+bl.x)/2, bz:(lb.z+bl.z)/2, dv:.5, dur:.8, seed:R(0,3), start:playT};
+          bl.behav={type:'line', pr, side:-1, x0:bl.x, z0:bl.z, dx:0}; lb.behav={type:'line', pr, side:1, x0:lb.x, z0:lb.z, dx:0};
+          bl.engage=lb; lb.engage=bl; bl.faceLock={angle:0, until:99}; lb.faceLock={angle:Math.PI, until:tHole+.55}; });
+        ev(tHole+.55, ()=>{ if(!carrier || carrier.down!=null) return; lb.engage=null; bl.engage=null; lb.faceLock=null;   /* sheds once the back is by, chases from behind */
+          lb.behav = F(carrier, playT+.05, 6.4, [0,0], 1.1); });
+      });
     }
   } else if(res.kind==='sack'){
     const Y = res.yards; // negative
@@ -1215,7 +1238,7 @@ function choreograph(res){
     }
   }
   // everyone else pursues after the ball carrier changes hands (runs)
-  if(isRun && carrier){ ev(snap+.9, ()=>{ D.all.forEach((d,i)=>{ if(d!==tackler && !d.truck && !d.whiff && d.behav?.type!=='lunge' && !D.dl.includes(d)) d.behav = F(carrier, playT+.1+(i%3)*.1, 6.6+(i%3)*.35, [0,0], 1.1); }); }); }
+  if(isRun && carrier){ ev(snap+.9, ()=>{ D.all.forEach((d,i)=>{ if(d!==tackler && !d.truck && !d.whiff && d.behav?.type!=='lunge' && !D.dl.includes(d) && !climbed.has(d)) d.behav = F(carrier, playT+.1+(i%3)*.1, 6.6+(i%3)*.35, [0,0], 1.1); }); }); }
   play = {res, tEnd: tEnd ?? 3, carrier, td, endPos, whistleT: res.kind==='incomplete' ? tEnd-.55 : tEnd, whistled:false, goalZ: z0+toGoal};
   if(tackler && carrier){ play.tackler = tackler; play.tackleAt = tackleAtFn; }
   cameraTarget = null;
