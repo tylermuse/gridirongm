@@ -158,7 +158,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16l'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16m'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];   /* set by the game page in embed mode (bsgm:setup) */
 const team = i => EMB_TEAMS[i] || TEAMS[+(i===0?selA.value:selB.value)];
@@ -1035,27 +1035,33 @@ function choreograph(res){
     const cover = rec===O.rb? D.lb[res.screenSide<0? 0 : 2] : rec===O.wrL? D.cbL : rec===O.wrR? D.cbR : rec===O.te? D.lb[1] : D.sL;
     rec.catchT = tCatch;
     // contested ball: deep shots, picks, breakups and tight coverage -> both players elevate for it
-    let contested = res.kind!=='complete' || (deep && Math.random() < .4);   /* short completions are a man who won separation (the DB plays off); only deep balls are contested */   /* a completion is usually a receiver who won separation; sometimes a contested catch */
+    let contested = res.kind!=='complete' || (deep && Math.random() < .4); if(window.__contest!=null && res.kind==='complete') contested = window.__contest;   /* QA override */   /* short completions are a man who won separation (the DB plays off); only deep balls are contested */   /* a completion is usually a receiver who won separation; sometimes a contested catch */
     // a contested catch ends where he lands (the jump-and-roll capture is a down-by-contact ending). On a TD it only fits when the catch itself is at the goal line;
     // a long catch-and-run score is an open man in stride — never a man rolling 20 yards into the end zone
     const rollCatch = res.kind==='complete' && contested && (!td || cz >= z0+toGoal-2.5); if(res.kind==='complete' && contested && !rollCatch) contested=false;
     const side = catchX<0? 1 : -1;   /* DB works from the inside */
-    if(contested){ rec.jumpT = tCatch; flightSeg.flight.y1 = 2.25; }
+    if(contested){ rec.jumpT = tCatch; flightSeg.flight.y1 = 2.05; }
     // captured catches: a contested ball is the jump-catch-and-roll (he comes down with it and is down by contact); a deep uncontested ball is the in-stride leap
     // an open receiver hit in stride just catches it (procedural hands, ball at the chest) — the leap is only for a ball a defender is also going for
     const capCatch = res.kind==='complete' && contested;
-    const upended = capCatch && rollCatch && (window.__mxUpend ?? true) && Math.random() < (window.__upendP ?? .5);   /* Mixamo 'Football Catch': the high catch, the hit, flipped onto his back */
+    const upended = capCatch && rollCatch && (window.__mxUpend ?? false) && Math.random() < (window.__upendP ?? .5);   /* off: he is flipped onto his back — reads as a somersault */   /* Mixamo 'Football Catch': the high catch, the hit, flipped onto his back */
     if(upended){ rec.mocapAct = {clip:'mx_catch_tackled', t0:tCatch-.6, start:.9, end:3.6, yScale:.6}; flightSeg.flight.y1 = 2.15; }
-    else if(capCatch){ rec.mocapAct = {clip:'football_jumpcatch', t0:tCatch-.65, start:0, end:2.7, yScale:.72}; flightSeg.flight.y1 = 2.75; }   /* the capture's leap is ~1.2 m; scaled to a believable .85 */
+    else if(capCatch && (window.__rollCatch ?? false)){ rec.mocapAct = {clip:'football_jumpcatch', t0:tCatch-.65, start:0, end:2.7, yScale:.72}; flightSeg.flight.y1 = 2.75; }   /* off: 1.2 m leap then a forward roll */
+    else if(capCatch){ rec.mocapAct = {clip:'mx_catch_onehand', t0:tCatch-.55, start:1.0, end:1.9, yScale:.8, moveRoot:true}; flightSeg.flight.y1 = 2.1; }   /* only the leap: he comes down on his feet with it and the DB wraps him up */   /* Mixamo high catch: 0.5 m leap, ball at the top (1.55 s), comes down with it and goes to the turf */
 
     if(rollCatch){
       // jump catch and roll: the receiver's path ends a stride short of the spot and the capture carries him through it; he is down by contact where he lands
       const r0=routeKeys[0]; const ux=catchX-r0[1], uz=(cz-2.3)-r0[2], L=Math.hypot(ux,uz)||1;   /* straight to a point a stride short of the spot; the capture's own run carries him through it */
       if(upended){ rec.behav = P([r0[0],r0[1],r0[2]],[tCatch-.6, catchX-.3, cz],[tCatch+4, catchX-.3+ux/L*.01, cz+uz/L*.01]); rec.faceLock={angle:Math.atan2(ux,uz), until:tCatch+4}; }   /* this capture leaps from a standstill: the route ends under the ball */
+      else if(!(window.__rollCatch ?? false)){ const th=Math.atan2(ux,uz); rec.behav = P([r0[0],r0[1],r0[2]],[tCatch-.55, catchX-Math.sin(th)*.3, cz-Math.cos(th)*.3],[tCatch+4, catchX-Math.sin(th)*.29, cz-Math.cos(th)*.29]); rec.faceLock={angle:th, until:tCatch+4}; }   /* the high catch: he gets under it and goes up; the capture carries him the last .3 m */
       else rec.behav = P([r0[0],r0[1],r0[2]],[tCatch-.65, catchX, cz-2.3],[tCatch+3, catchX+ux/L*.01, cz-2.3+uz/L*.01]);
-      ballPlan.push({t0:tCatch, t1:1e9, held:rec}); carrier = rec; endPos=[catchX, cz+(upended? 1.6 : 1)]; tEnd = tCatch+(upended? 1.5 : 1.15); tackler=null;
+      ballPlan.push({t0:tCatch, t1:1e9, held:rec}); carrier = rec; endPos=[catchX, cz+(upended? 1.6 : 1)]; tEnd = tCatch+(upended? 1.5 : 1.3); tackler=null;
+      const highCatch = !upended && !(window.__rollCatch ?? false);
+      if(highCatch && !td){ tackler = cover; tackleT = tCatch + .78; tEnd = tackleT; }   /* lands at +.35 s, the DB who contested it wraps him from behind .4 s later */
       if(!td && !res.lock) res.yards = clamp(Math.round(Yc+1), 1, toGoal-1); else if(td) endPos=[catchX, Math.max(cz+1, z0+toGoal+.5)];
-      if(upended){ // the hit that flips him: the DB comes through his legs from behind at the top of the leap and dives on past
+      if(highCatch){ const th=Math.atan2(ux,uz);
+        ev(tCatch-.6, ()=>{ cover.behav = P([playT, cover.x, cover.z], [tCatch, catchX + side*.9 - Math.sin(th)*.9, cz - Math.cos(th)*.9], [tCatch+.36, catchX + side*.5 - Math.sin(th)*.6, cz - Math.cos(th)*.6]); }); cover.catchT = tCatch; cover.jumpT = tCatch; }
+      else if(upended){ // the hit that flips him: the DB comes through his legs from behind at the top of the leap and dives on past
         ev(tCatch-.6, ()=>{ cover.behav = P([playT, cover.x, cover.z], [tCatch+.15, catchX + side*.5, cz - .6]); cover.faceLock={angle:Math.atan2(ux,uz), until:tCatch+3}; });
         ev(tCatch+.15, ()=>{ cover.down=playT; cover.fallDir=1; cover.behav=null; cover.mocapFall={clip:'football_tackle', t0:playT, start:(window.__tackStart??.58), side:side}; sndThump(1,.5); }); }
       else { cover.catchT = tCatch; cover.jumpT = tCatch; ev(tCatch-.6, ()=>{ cover.behav = P([playT, cover.x, cover.z], [tCatch, catchX + side*1.0, cz - .9]); }); }
@@ -1162,18 +1168,18 @@ function choreograph(res){
         const back=(window.__behindD??1.06), side=Math.max(-.2,Math.min(.2,lx));
         tackler.behind={of:carrier, back:.25, side:0, pair:true}; tackler.x=carrier.x-ux*back+sdx*side; tackler.z=carrier.z-uz*back+sdz*side; tackler.face=carrier.face;
         const MX = window.__mxPair ?? true;
-        carrier.mocapFall= MX? {clip:'mx_fall_flat', t0:playT, start:(window.__mxCarrierStart ?? .45), pair:true, mx:true} : {clip:'football_fall', t0:playT, start:S, pair:true}; }
+        carrier.mocapFall= MX? {clip:'mx_fall_flat', t0:playT, start:(window.__mxCarrierStart ?? .45), pair:true, mx:true, hold:(window.__mxCarrierHold ?? .55)} : {clip:'football_fall', t0:playT, start:S, pair:true}; }
       const spotIt = ()=>{ if(td) return; const bz = ball.position.z, spot = Math.round(bz - z0);
         if((res.kind==='run' || res.kind==='complete') && !res.lock) res.yards = clamp(spot, -15, toGoal-1);   /* lock: the game already decided the yardage (embed) — the sim only pictures it */
         else if(res.kind==='int') res.intEndZ = bz; };
       spotIt(); events.push({t:playT+(pair? 1.1 : .6), fn:spotIt, done:false}); if(pair){ const hold=(window.__mxPair ?? true)? 1.6 : 1.2; play.tEnd = Math.max(play.tEnd, playT+hold); play.whistleT = Math.max(play.whistleT ?? 0, playT+hold); }
       // captured motion: a man hit from behind/side goes down in the captured forward fall (scheduled above, after the drag), the tackler in the captured dive; a head-on hit keeps the procedural back fall
-      if(pair) tackler.mocapFall = (window.__mxPair ?? true)? {clip:'mx_defender_tackle', t0:playT, start:(window.__mxTacklerStart ?? 1.05), pair:true, mx:true} : {clip:'football_tackle', t0:playT, start:S, pair:true};
+      if(pair){ tackler.behind=null; tackler.mocapFall = (window.__mxPair ?? true)? {clip:'mx_defender_tackle', t0:playT, start:(window.__mxTacklerStart ?? 1.05), pair:true, mx:true, hold:(window.__mxTacklerHold ?? .40), glue:{to:carrier, bone:'Hips', along:-.32}} : {clip:'football_tackle', t0:playT, start:S, pair:true}; }
       else if(window.__mxHead ?? true){ // head-on, captured pair: the runner is knocked onto his back ('Knocked Out'), the tackler drives through with the shoulder ('Running To Tackle') from in front and rolls past
         const cs=Math.hypot(carrier.vx||0,carrier.vz||0)||1, ux=(carrier.vx||0)/cs, uz=(carrier.vz||0)/cs, front=(window.__frontD ?? .95);
         tackler.behind=null; tackler.x=carrier.x+ux*front; tackler.z=carrier.z+uz*front; tackler.face=carrier.face+Math.PI; tackler.wrap=null;
-        carrier.mocapFall={clip:'mx_knocked_back', t0:playT, start:(window.__mxHeadCarrierStart ?? 1.55), pair:true, mx:true, rate:(window.__mxHeadRate ?? 1.35)};   /* in at the top of the lift: hips hit the turf ~.45 s after contact, not a full second */
-        tackler.mocapFall={clip:'mx_defender_tackle', t0:playT, start:(window.__mxTacklerStart ?? 1.05), pair:true, mx:true, maxTravel:(window.__mxHeadTravel ?? .9)};
+        carrier.mocapFall={clip:'mx_knocked_back', t0:playT, start:(window.__mxHeadCarrierStart ?? 1.75), pair:true, mx:true, rate:(window.__mxHeadRate ?? 1.35), hold:.6};   /* in as the knees give: hips hit the turf ~.35 s after contact (the capture's lift is skipped) */
+        tackler.mocapFall={clip:'mx_defender_tackle', t0:playT, start:(window.__mxTacklerStart ?? 1.05), pair:true, mx:true, hold:(window.__mxTacklerHold ?? .40), glue:{to:carrier, bone:'Spine', along:0}};
         play.tEnd = Math.max(play.tEnd, playT+1.6); play.whistleT = Math.max(play.whistleT ?? 0, playT+1.6); }
       else { const f=tackler.face, lx=(tackler.x-carrier.x)*Math.cos(f)-(tackler.z-carrier.z)*Math.sin(f); tackler.mocapFall = {clip:'football_tackle', t0:playT, start:(window.__tackStart??.58), side: Math.abs(lx)<.15? (Math.random()<.5?-1:1) : Math.sign(lx)}; } };
   }
@@ -1363,7 +1369,8 @@ function mocapAct(a,t){ const m=a.mocapAct; if(!m) return false; const ct=m.star
 function mocapFall(a,t){
   const m=a.mocapFall; if(!m) return false; const kReal=Math.max(0,t-m.t0);
   const HOLD = (m.clip==='football_tackle' ? window.__pairHoldT : window.__pairHoldC) ?? (m.clip==='football_tackle' ? .55 : .85);   /* paired tackle: freeze both captures at the pile (tackler across the runner's hips) instead of playing on into two men sprawled a metre apart */
-  const k = (m.pair && !m.mx) ? Math.min(kReal, HOLD) : kReal*(m.rate||1);   /* rate: a capture that floats (the knock-down lifts him for .35 s) is played faster so the fall takes real time */
+  let k = (m.pair && !m.mx) ? Math.min(kReal, HOLD) : kReal*(m.rate||1);
+  if(m.hold!=null) k = Math.min(k, m.hold);   /* freeze where the body has just hit the turf: the captures carry on into bounces, rolls and legs kicking up */   /* rate: a capture that floats (the knock-down lifts him for .35 s) is played faster so the fall takes real time */
   const tackle=m.clip==='football_tackle' || m.clip==='mx_defender_tackle'; const lat = tackle && !m.pair? (m.side||0)*42*smooth01((m.start+k-.62)/.4) : 0;   /* the tackler lands beside and across him, not straight up his back (cm, model-local) */
   let maxF=null; if(!tackle && a.carrying && play && !play.td && play.goalZ!=null){ maxF = Math.max(0, play.goalZ-.5-a.z)*86/ (a.model.scale.x/1.158) - 95; }   /* short of the goal line: the ball (≈.6 m ahead of the hips) stays out of the end zone when the sim said no score */
   if(tackle && a.behind && !m.pair){ const c=a.behind.of, al=(c.x-a.x)*Math.sin(c.face)+(c.z-a.z)*Math.cos(c.face); maxF = Math.max(0, al-a.behind.back)*86/(a.model.scale.x/1.158); }   /* the dive's root travel stops at the runner's hips: he lands on the legs, not on the man */
@@ -1375,11 +1382,20 @@ function mocapFall(a,t){
   if(!footballMotion(a,m.clip,m.start+k,smooth01(k/.12),0,originT, m.pair? null : tackle? 1.05 : 1.0, lat, maxF)) return false;
   // settle: once he is on the ground the legs go flat behind him (the capture kicks them up on impact) and the tackler flattens out across him instead of staying up on hands and knees
   const T=window.__settleTune||{fall:[.78,.3,.9],tackle:[1.0,.35,.75],pairTackle:[1.2,.4,.35]}, st=T[m.clip==='football_fall'?'fall': m.pair?'pairTackle':'tackle'];
-  const u = m.mx ? 0 : m.pair ? smooth01((kReal-HOLD)/.45)*.3 : smooth01((m.start+k-st[0])/st[1])*st[2];   /* pair: a small relax of the legs once the pile is held */
+  const u = m.mx ? (m.hold!=null ? smooth01((kReal*(m.rate||1)-m.hold)/.35)*.55 : 0) : m.pair ? smooth01((kReal-HOLD)/.45)*.3 : smooth01((m.start+k-st[0])/st[1])*st[2];   /* frozen mx capture: legs settle flat on the turf */   /* pair: a small relax of the legs once the pile is held */
   if(u>0){ const B=a.bones, I=new THREE.Quaternion();
     for(const n of ['LeftUpLeg','RightUpLeg','LeftLeg','RightLeg','LeftFoot','RightFoot']) B[n].quaternion.slerp(I,u);
     if(m.clip==='football_tackle' && !m.pair){ for(const n of ['Spine','Spine1']) B[n].quaternion.slerp(I,u*.6); } }
-  a.body.rotation.x=0; a.body.position.y=0; a.mocapActive=true; return true;
+  a.body.rotation.x=0; a.body.position.y=0; a.mocapActive=true;
+  if(m.glue && m.glue.to){ // tackler glued to the runner: his chest is pulled onto the runner's body every frame, so the two go down as one pile instead of two clips sliding apart
+    const c=m.glue.to, w=smooth01(kReal/.22); a.model.updateMatrixWorld(true); c.model.updateMatrixWorld(true);
+    const ch=new THREE.Vector3(), tg=new THREE.Vector3(); a.bones.Spine2.getWorldPosition(ch); c.bones[m.glue.bone||'Hips'].getWorldPosition(tg);
+    const fx=Math.sin(c.face), fz=Math.cos(c.face); tg.x += fx*(m.glue.along||0); tg.z += fz*(m.glue.along||0);
+    m.gx = (m.gx||0) + (tg.x-ch.x)*w; m.gz = (m.gz||0) + (tg.z-ch.z)*w;   /* accumulated correction (the clip pose is re-evaluated from the root each frame) */
+    a.x += (tg.x-ch.x)*w; a.z += (tg.z-ch.z)*w;
+    const lift = Math.max(0, Math.min(.32, (tg.y+.18) - ch.y)); a.y = (a.y||0)*(1-w) + lift*w;   /* lies on top of him, not through him */
+    place(a); }
+  return true;
 }
 // Arm frame from the torso itself (forward/right/up of the spine), for posing arms on a body that is pitched over by a clip
 function torsoFrame(a){ const q=a.bones.Spine1.getWorldQuaternion(new THREE.Quaternion()); const F=new THREE.Vector3(0,0,1).applyQuaternion(q), R=new THREE.Vector3(-1,0,0).applyQuaternion(q), U=new THREE.Vector3().crossVectors(R,F); return {F,R,U}; }
@@ -1544,7 +1560,7 @@ function stepActor(a, t, dt){
   if(a.carrying || throwing || celeb || catching || wrapping || engaged || dejected || a.down!=null || readyArms || dirtHand){
     a.model.updateMatrixWorld(true); const fr = frameOf(a);
     if(a.down!=null && a.mocapActive){ const mf=a.mocapFall, k=mf? t-mf.t0 : 0;
-      if(a.carrying){ const tf=torsoFrame(a); poseArm(a,'R',torsoPose(tf,POSE.tuck,1),tf,.9);
+      if(a.carrying){ const tf=torsoFrame(a); poseArm(a,'R',torsoPose(tf,POSE.tuck,1),tf, mf&&mf.mx? .5 : .9);   /* captured face-down fall: a lighter tuck, or the ball arm drives through the turf and props him up */
         if(mf && mf.pair && !mf.mx){ const w=smooth01(k/.18); poseArm(a,'L',torsoPose(tf,(window.__bracePose||[[.75,.35,-.45],[.85,.05,-.5]]),-1),tf,w); } }   /* ridden down from behind: the free arm goes out to brace, not up in the air (the solo capture has him throwing both hands up) */
       else if(mf && mf.pair && a.behind){ const c=a.behind.of; c.bones.Hips.getWorldPosition(_t1); _t1.y+=.05; const w=smooth01(k/.15)*(1-smooth01((k-(mf.mx? .4 : 1.4))/.4)); if(w>0) armsAt(a,_t1,_t1,w,.3,-.6); } }   /* the tackler's arms stay wrapped around the runner's hips through the ride and the fall */
     else if(a.mocapActive && a.mocapAct){ /* captured catch / kick / hold owns the arms */ }
@@ -1589,7 +1605,7 @@ function stepActor(a, t, dt){
     else if(readyArms){ poseArm(a,'R',POSE.ready,fr,w*.9); poseArm(a,'L',POSE.ready,fr,w*.9); }   /* set in the stance: hands out front, elbows bent */
   }
   a.y = 0;
-  if(a.jumpT!=null && !(a.mocapActive && a.mocapAct)){ const k=(t-(a.jumpT-.32))/.6; if(k>0 && k<1) a.y = .55*Math.sin(Math.PI*k); }
+  if(a.jumpT!=null && !(a.mocapActive && a.mocapAct)){ const k=(t-(a.jumpT-.32))/.6; if(k>0 && k<1) a.y = (window.__jumpH ?? .3)*Math.sin(Math.PI*k); }
   if(a.celebrate!=null && a.celebrate!==false){ const k=t-a.celebrate; const st=a.celebStyle||'hop';
     if(st==='mocap'){ footballMotion(a,'football_spike', 7.6+k, smooth01(k/.25), 0, 7.6); a.mocapCeleb=true; }
     else if(st==='mocapLoop'){ const kk=((k+(a.celebPhase||0))%2.3); footballMotion(a,'football_spike', 7.6+kk, smooth01(k/.25)*(kk<2.1?1:smooth01((2.3-kk)/.2)), 0, 7.6); a.mocapCeleb=true; }   /* teammates: the arms-up / pointing stretch, looped */
@@ -1619,7 +1635,8 @@ function stepActor(a, t, dt){
   if(a.mocapThrow || (a.mocapCeleb && a.celebStyle!=='mocapLoop') || (a.mocapActive && a.mocapAct) || a.down!=null || (a.celebrate!==false && a.celebStyle==='nap')){
     a.root.updateMatrixWorld(true); let low=Infinity;
     for(const p of a.contact){_v.copy(p.pos);p.mesh.applyBoneTransform(p.index,_v);_v.applyMatrix4(p.mesh.matrixWorld);low=Math.min(low,_v.y);}
-    a.body.position.y += Math.max(0,.025-low);
+    let lift = Math.max(0,.025-low); if(a.mocapFall && a.mocapFall.mx) lift = Math.min(lift, .06);   /* a man on the turf is not propped up by a forearm a few cm under it */
+    a.body.position.y += lift;
   }
 }
 
