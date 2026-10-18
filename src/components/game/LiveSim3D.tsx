@@ -31,7 +31,7 @@ function starterPhotos(players: SimPlayerLike[] | undefined): string[] {
   return out;
 }
 
-const SIM_BUILD = 'b16q';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b16r';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsgm.sim3d';
 const VIEW_KEY = 'bsgm.sim3d.view';
@@ -78,6 +78,7 @@ type TeamLike = { abbreviation: string; name: string; primaryColor: string; seco
 export function LiveSim3D({
   enabled,
   event,
+  nextEvent,
   disabled,
   homeTeam,
   awayTeam,
@@ -89,6 +90,8 @@ export function LiveSim3D({
 }: {
   enabled: boolean;
   event: PlayEvent | null;
+  /** the event after this one, when the page already has it (a lost fumble is logged right after its run) */
+  nextEvent?: PlayEvent | null;
   /** Current situation (spot, down, score, clock) for the pre-snap formation between plays — e.g. the two-point try at the 3 while the user picks a play */
   state: SimStateMessage['pre'] & { possession: 'home' | 'away' } | null;
   /** e.g. speed === 'max' or the user skipped to the end: never hold the game */
@@ -196,7 +199,7 @@ export function LiveSim3D({
     if (!enabled || !event || disabled || !ready || failed) return;
     if (lastIdRef.current === event.id) return;
     lastIdRef.current = event.id;
-    const play = toSimPlay(event, { home: homePlayers ?? [], away: awayPlayers ?? [], photoSkins });
+    const play = toSimPlay(event, { home: homePlayers ?? [], away: awayPlayers ?? [], photoSkins }, nextEvent);
     if (!play) return;   // nothing to picture (kickoff, fumble, XP, penalty…): the 2D field carries it
     activeIdRef.current = play.id;
     lastPlayPreRef.current = JSON.stringify({ possession: play.possession, ...play.pre });

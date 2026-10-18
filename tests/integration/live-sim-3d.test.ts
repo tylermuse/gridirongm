@@ -142,3 +142,19 @@ describe('whoMadeThePlay', () => {
     expect(whoMadeThePlay(ev('run', 'J. Smithson runs for 2.'), off, def)?.ball?.n).toBe(80);
   });
 });
+
+describe('fumble after a run', () => {
+  const p = (id: string, firstName: string, lastName: string, position: string, jerseyNumber: number) => ({ id, firstName, lastName, position, jerseyNumber });
+  const home = [p('r', 'Javonte', 'Williams', 'RB', 33)], away = [p('l', 'Zack', 'Baun', 'LB', 53)];
+  const base = { id: 7, quarter: 1, timeStr: '12:00', possession: 'home', fieldPos: 40, down: 1, yardsToGo: 10, homeScore: 0, awayScore: 0, isScoring: false };
+  it('pictures the run and the lost fumble as one play, the recoverer wearing his number', () => {
+    const run = { ...base, type: 'run', description: 'J. Williams runs for 4 yards.', yardsGained: 4 } as unknown as Parameters<typeof toSimPlay>[0];
+    const fum = { ...base, id: 8, fieldPos: 44, type: 'fumble', description: 'Fumble! J. Williams RB loses the ball — recovered by Z. Baun LB!', yardsGained: 0 } as unknown as Parameters<typeof toSimPlay>[0];
+    const m = toSimPlay(run, { home, away }, fum)!;
+    expect(m.res).toMatchObject({ kind: 'run', yards: 4, fumble: true });
+    expect(m.who?.ball?.n).toBe(33);
+    expect(m.who?.def?.n).toBe(53);
+    expect(toSimPlay(fum, { home, away })).toBeNull();          // the fumble line itself is not a second play
+    expect(toSimPlay(run, { home, away }, null)!.res.fumble).toBeUndefined();
+  });
+});

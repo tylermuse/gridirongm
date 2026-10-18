@@ -20,6 +20,8 @@ export interface SimPlayResult {
   good?: boolean;
   /** 'scramble': the QB drops, the pocket collapses and he takes off; 'screen': the back takes a soft throw behind the line with blockers out front */
   style?: 'scramble' | 'screen';
+  /** the run ends in a lost fumble (the engine logs it as the next event): stripped at the tackle, the defense falls on it */
+  fumble?: boolean;
 }
 
 export interface SimPlayMessage {
@@ -113,9 +115,14 @@ function pointsScored(e: PlayEvent): number {
 export function toSimPlay(
   e: PlayEvent,
   rosters?: { home: SimNamedPlayer[]; away: SimNamedPlayer[]; photoSkins?: Record<string, string> },
+  next?: PlayEvent | null,
 ): SimPlayMessage | null {
   const res = toSimResult(e);
   if (!res) return null;
+  // The engine logs a lost fumble as its own event right after the run ("Fumble! X loses the ball — recovered by Y"):
+  // picture both as one play — the run ends with the strip and the defense on the ball.
+  const fumbleNext = !!next && next.type === 'fumble' && res.kind === 'run' && !e.isScoring;
+  if (fumbleNext) res.fumble = true;
   const pts = pointsScored(e);
   return {
     type: 'bsgm:play',
@@ -131,7 +138,8 @@ export function toSimPlay(
       awayScore: e.awayScore - (e.possession === 'away' ? pts : 0),
     },
     res,
-    ...(rosters ? { who: whoMadeThePlay(e, e.possession === 'home' ? rosters.home : rosters.away, e.possession === 'home' ? rosters.away : rosters.home, rosters.photoSkins) } : {}),
+    ...(rosters ? { who: withRecoverer(whoMadeThePlay(e, e.possession === 'home' ? rosters.home : rosters.away, e.possession === 'home' ? rosters.away : rosters.home, rosters.photoSkins),
+      fumbleNext ? next : null, e.possession === 'home' ? rosters.away : rosters.home, rosters.photoSkins) } : {}),
   };
 }
 
@@ -289,4 +297,13 @@ export function whoMadeThePlay(
     if (ball) who.ball = man(ball.p);
   }
   return who.ball || who.def ? who : undefined;
+}
+
+/** The defender who falls on a fumble (named in the fumble line) goes in who.def. */
+function withRecoverer(who: SimWho | undefined, fumble: PlayEvent | null | undefined, defense: SimNamedPlayer[], photoSkins?: Record<string, string>): SimWho | undefined {
+  if (!fumble) return who;
+  const rec = namesIn(fumble.description, defense)[0]?.p;
+  const n = Number(rec?.jerseyNumber);
+  if (!rec || !Number.isInteger(n)) return who;
+  return { ...(who ?? {}), def: { n, s: skinToneFor(rec, photoSkins), pos: rec.position } };
 }

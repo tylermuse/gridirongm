@@ -2004,6 +2004,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
           <LiveSim3D
             enabled={sim3dOn && !pregameOpen}
             event={currentEvent}
+            nextEvent={engineSnapshot ? null : (allEvents[revealedCount] ?? null)}
             disabled={speed === 'max' || broadcastOn}
             homeTeam={homeTeam}
             awayTeam={awayTeam}

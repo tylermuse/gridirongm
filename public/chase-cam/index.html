@@ -158,7 +158,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16q'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16r'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];
 let PLAY_OVR = [];   /* in-game: put the man the play-by-play names on the body that makes the play (set per play, cleared after) */
@@ -180,6 +180,7 @@ function planWho(m){
     out.push({side:'o',key:c[0],i:c[1],man:b}); r.recKey=c[2];
   }
   if(w.def && r.kind==='sack') out.push({side:'d',key:'dl',i:0,man:w.def});
+  if(w.def && r.fumble) out.push({side:'d',key:'lb',i:0,man:w.def});   /* the middle backer is the one who falls on it */
   if(w.def && r.kind==='int' && r.recKey && r.recKey!=='rb'){
     const k = r.depth==='deep'? (r.recKey==='wrR'? ['s',0] : ['s',1]) : ({wrL:['cb',1], wrR:['cb',0], te:['lb',0], slot:['s',1]})[r.recKey];
     if(k) out.push({side:'d',key:k[0],i:k[1],man:w.def});
@@ -852,7 +853,7 @@ function choreograph(res){
   ballPlan = [{t0:-1, t1:snap, held:O.ol[2], off:[0,.25,.45]}];
   const qbRecv = snap+.28;
   ballPlan.push({t0:snap, t1:qbRecv, flight:{x0:0,y0:.4,z0:z0-.3, x1:0,y1:1.2,z1:z0-4.7, h:.2}});
-  let tEnd, carrier, tackleT=null, tackler=null, td=false, endPos, tHole=0, tackleAtFn=null;
+  let tEnd, carrier, tackleT=null, tackler=null, td=false, endPos, tHole=0, tackleAtFn=null, play_oob=false;
   const climbed = new Set();   /* backers picked up by a climbing blocker on a run: they don't join the pursuit until they shed */
 
   const isRun = res.kind==='run'; const scr = isRun && res.style==='scramble', scn = res.kind==='complete' && res.style==='screen';
@@ -967,8 +968,13 @@ function choreograph(res){
     const C = scr? O.qb : O.rb;   /* the carrier */
     const gapX = scr? (res.gap ?? (Math.random()<.5?-1:1)*R(2.5,4.5)) : (res.gap ?? pickGap(Y));
     const tHand = snap+.62; tHole = scr? snap+1.45 : tHand + Math.max(.5, Math.hypot(gapX-.7, 3.8)/6.8);   // mesh -> hole at a real speed (was a 12-20 yd/s burst); scramble: snap and go, at the line by ~1.45 s
-    const zEnd = td? 52.5 : z0+Y; const endX = Math.max(-24, Math.min(24, gapX + (Y>12? Math.sign(gapX||1)*R(4,9) : R(-1.5,1.5))));
+    const zEnd = td? 52.5 : z0+Y; let endX = Math.max(-24, Math.min(24, gapX + (Y>12? Math.sign(gapX||1)*R(4,9) : R(-1.5,1.5))));
     tEnd = tHole + Math.max(.35, Math.abs(Y+.6)/ (Y>12? 8.2:7));
+    /* Out of bounds: a scramble (and some outside runs) bends to the sideline and he steps out at the end of the run instead of
+       taking the hit — the chaser runs him to the boundary and pulls up (reference: QB scramble up the sideline for the first down) */
+    const oob = !td && !res.fumble && Y>=3 && (res.oob ?? (window.__oob ?? (scr? Math.random()<.55 : (Math.abs(gapX)>=5 && Math.random()<.3))));
+    const oobSide = Math.sign(gapX) || (Math.random()<.5? -1 : 1);
+    if(oob){ endX = oobSide*28.2; tEnd = tHole + Math.max(.6, Math.hypot(endX-gapX, Y+.6)/6.9); res.oob = true; }
     carrier = C;
     const keys = scr
       ? [[qbRecv,0,z0-4.7],[snap+.95,gapX*.3,z0-2.3],[tHole,gapX,z0-.6]]                      // straight downhill from the snap, a slide to the gap at the line, then upfield
@@ -985,14 +991,21 @@ function choreograph(res){
     endPos=[endX,zEnd];
     if(!td){
       let pool = Y<=0? [...D.dl,...D.lb] : [...D.lb, D.sL, D.sR, D.cbL, D.cbR];
-      if(Y>0 && Y<=4) pool = [[...D.lb].sort((p,q)=>Math.abs(p.x-gapX)-Math.abs(q.x-gapX))[0]];   /* short gain: the backer filling that gap makes the stop, not one from across the field */
-      if(Y>0){
+      if(res.fumble) pool = pool.filter(a=>a!==D.lb[1]);   /* fumble: the middle backer (lineup lb[0]) is the man who falls on the ball, not the tackler */
+      if(Y>0 && Y<=4) pool = [[...D.lb].filter(a=>!res.fumble || a!==D.lb[1]).sort((p,q)=>Math.abs(p.x-gapX)-Math.abs(q.x-gapX))[0]];   /* short gain: the backer filling that gap makes the stop, not one from across the field */
+      if(oob){ // nobody makes the tackle: the nearest DB on that side runs him out and pulls up at the line; the whistle blows as he crosses
+        C.behav = P(...keys); endPos=[endX,zEnd];
+        const chaser = [D.cbL, D.cbR, D.sL, D.sR, ...D.lb].sort((a,b)=>Math.hypot(a.x-oobSide*24,a.z-zEnd)-Math.hypot(b.x-oobSide*24,b.z-zEnd))[0];
+        chaser.behav = P([snap+.35, chaser.x, chaser.z], [tEnd-.35, oobSide*25.3, zEnd+.9], [tEnd+.6, oobSide*26.1, zEnd+.4]); chaser.faceLock=null;
+        ev(tEnd-.2, ()=>{ C.behav = {type:'coast', vx:(C.vx||0)*.8, vz:(C.vz||0)*.8, t0:playT}; });
+        tackler = null; tackleT = null; play_oob = true;
+      } else if(Y>0){
         const plan = planTackle(keys, 3, pool.map(a=>({a, t:snap+.3, x:a.x, z:a.z})), 0, z0+toGoal-.8);
         tackler = plan.a; tEnd = tackleT = plan.tEnd; C.behav = P(...keys); endPos=[endX,zEnd];
         tackler.behav = P(...plan.path);
         if(plan.chase) ev(plan.lt, ()=>{ tackler.behav = chaseB(C, playT, tEnd-.42, tackler); });
       } else { tackler = pool.reduce((b,a)=> (Math.hypot(a.x-endX,a.z-zEnd) < Math.hypot(b.x-endX,b.z-zEnd)? a:b)); tackleT = tEnd; }
-      if(Y<=0){ // stuffed: carrier gets driven back into the pile
+      if(Y<=0 && !oob){ // stuffed: carrier gets driven back into the pile
         C.behav = scr? P([qbRecv,0,z0-4.7],[snap+.95,gapX*.3,z0-2.3],[tHole,gapX*.8,z0-.9],[tHole+.4,gapX*.8,z0+Y-.2]) : P([0,1.6,z0-6.6],[snap,1.6,z0-6.6],[tHand,.7,z0-4.4],[tHole,gapX,z0-.9],[tHole+.4,gapX,z0+Y-.2]);
         tEnd = tackleT = tHole+.4;
       }
@@ -1237,7 +1250,40 @@ function choreograph(res){
         carrier.mocapFall={clip:'mx_knocked_back', t0:playT, start:(window.__mxHeadCarrierStart ?? 1.75), pair:true, mx:true, rate:(window.__mxHeadRate ?? 1.35), hold:.6};   /* in as the knees give: hips hit the turf ~.35 s after contact (the capture's lift is skipped) */
         tackler.mocapFall={clip:'mx_defender_tackle', t0:playT, start:(window.__mxTacklerStart ?? 1.05), pair:true, mx:true, hold:(window.__mxTacklerHold ?? .40), glue:{to:carrier, bone:'Spine', along:0}};
         play.tEnd = Math.max(play.tEnd, playT+1.6); play.whistleT = Math.max(play.whistleT ?? 0, playT+1.6); }
-      else { const f=tackler.face, lx=(tackler.x-carrier.x)*Math.cos(f)-(tackler.z-carrier.z)*Math.sin(f); tackler.mocapFall = {clip:'football_tackle', t0:playT, start:(window.__tackStart??.58), side: Math.abs(lx)<.15? (Math.random()<.5?-1:1) : Math.sign(lx)}; } };
+      else { const f=tackler.face, lx=(tackler.x-carrier.x)*Math.cos(f)-(tackler.z-carrier.z)*Math.sin(f); tackler.mocapFall = {clip:'football_tackle', t0:playT, start:(window.__tackStart??.58), side: Math.abs(lx)<.15? (Math.random()<.5?-1:1) : Math.sign(lx)}; }
+      if(res.fumble && !play.fumbled) fumbleOut(); };
+    /* Fumble (the game's run is followed by a lost fumble): as he's wrapped up the ball is punched out, squirts a couple of yards
+       and takes two hops — a football never rolls true — then the middle backer runs it down and falls on it, two more men
+       dive on top from other sides and everyone near converges on the pile. Reference: a real strip-and-recover clip. */
+    const fumbleOut = ()=>{ play.fumbled = true;
+      const t0 = playT + .2, fx=Math.sin(carrier.face), fz=Math.cos(carrier.face);
+      const bx0 = carrier.x+fx*.35, bz0 = carrier.z+fz*.35;
+      const a1 = carrier.face + (Math.random()<.5?-1:1)*R(.35,1.5), a2 = a1 + R(-.9,.9), a3 = a2 + R(-.6,.6);
+      const cx = x => Math.max(-25.5, Math.min(25.5, x));
+      const d1=R(1.5,2.6), d2=R(.8,1.6), d3=R(.3,.8);
+      const p1=[cx(bx0+Math.sin(a1)*d1), bz0+Math.cos(a1)*d1], p2=[cx(p1[0]+Math.sin(a2)*d2), p1[1]+Math.cos(a2)*d2], p3=[cx(p2[0]+Math.sin(a3)*d3), p2[1]+Math.cos(a3)*d3];
+      ballPlan.forEach(sg=>{ if(sg.t1>1e8) sg.t1 = t0; });
+      ballPlan.push({t0, t1:t0+.42, flight:{x0:bx0,y0:.85,z0:bz0, x1:p1[0],y1:.16,z1:p1[1], h:.45}},
+        {t0:t0+.42, t1:t0+.78, flight:{x0:p1[0],y0:.16,z0:p1[1], x1:p2[0],y1:.16,z1:p2[1], h:.28}},
+        {t0:t0+.78, t1:t0+1.02, flight:{x0:p2[0],y0:.16,z0:p2[1], x1:p3[0],y1:.16,z1:p3[1], h:.07}},
+        {t0:t0+1.02, t1:1e9, rest:[p3[0],p3[1]]});
+      sndThump(.5,.3);
+      const rc = D.lb[1]!==tackler? D.lb[1] : D.lb[0];
+      const tLand = t0 + 1.1, tDive = tLand - .42;   /* the dive (football_tackle from .58) puts his chest down ~.4 s after it starts */
+      const dive = (a, t, back, side, ang)=>{ const ux=Math.sin(ang), uz=Math.cos(ang);
+        a.engage=null; a.wrap=null; a.faceLock=null; a.truck=null; a.whiff=true;
+        a.behav = P([playT, a.x, a.z], [Math.max(playT+.15, t), p3[0]-ux*back, p3[1]-uz*back]);
+        ev(t, ()=>{ if(a.down!=null) return; a.face=Math.atan2(p3[0]-a.x, p3[1]-a.z); a.down=playT; a.fallDir=1; a.mocapFall={clip:'football_tackle', t0:playT, start:(window.__tackStart??.58), side}; sndThump(.45,.3); }); };
+      const angOf = a => Math.atan2(p3[0]-a.x, p3[1]-a.z);
+      dive(rc, tDive, 1.25, 1, angOf(rc));
+      ev(tLand+.05, ()=>{ ballPlan.forEach(sg=>{ if(sg.t1>1e8) sg.t1 = playT; }); ballPlan.push({t0:playT, t1:1e9, held:rc, off:[0,.22,.3]}); });   /* he's on it */
+      const near = [...O.all, ...D.all].filter(a=>a!==carrier && a!==tackler && a!==rc && a.down==null && !O.ol.includes(a) && !D.dl.includes(a))
+        .sort((a,b)=>Math.hypot(a.x-p3[0],a.z-p3[1])-Math.hypot(b.x-p3[0],b.z-p3[1]));
+      near.slice(0,2).forEach((a,i)=>dive(a, tDive+.28+i*.24, 1.45, i? -1 : 1, angOf(a)+(i? .5 : -.5)));
+      near.slice(2,7).forEach((a,i)=>{ const ang=angOf(a), r=R(2.2,3.6); a.engage=null; a.wrap=null; a.faceLock=null;   /* the rest converge and pull up around the pile */
+        a.behav = P([playT, a.x, a.z], [tLand+.4+i*.15, p3[0]-Math.sin(ang)*r, p3[1]-Math.cos(ang)*r]); });
+      res.fumbleZ = p3[1]; play.fumbleRec = rc;
+      play.tEnd = Math.max(play.tEnd, tLand+1.7); play.whistleT = Math.max(play.whistleT ?? 0, tLand+1.7); };
   }
   if(td && carrier){ ev(tEnd, ()=>{ carrier.celebrate = playT;
       carrier.celebStyle = 'mocap';   /* captured end-zone celebration (the procedural hand poses read wrong on this rig) */
@@ -1796,6 +1842,8 @@ const FORCED = {
   punt:()=>({kind:'punt'}),
   breakaway:()=>({kind:'run', yards:Math.round(R(22,48)), gap:Math.random()<.5?-7:7}),
   complete:()=>({kind:'complete', depth:'short', yards:Math.round(R(6,14))}),
+  oob:()=>({kind:'run', style:'scramble', yards:Math.round(R(7,12)), oob:true}),
+  fumble:()=>({kind:'run', yards:Math.round(R(3,7)), fumble:true}),
   bomb:()=>({kind:'complete', depth:'deep', yards:Math.round(R(24,45))}),
   incomplete:()=>({kind:'incomplete', depth:Math.random()<.5?'short':'deep'}),
   sack:()=>({kind:'sack', yards:-Math.round(R(4,9)), depth:'short'}),
@@ -1921,6 +1969,12 @@ function finishPlay(){
     const newFP = Math.max(1, Math.min(99, Math.round(50 - r.puntEndZ)));
     text='Punt'; log(`${t.id}: punt, returned to the ${newFP<=50? team(1-G.off).id+' '+newFP : t.id+' '+(100-newFP)}`);
     G.off=1-G.off; G.fieldPos=newFP; G.down=1; G.toGo=Math.min(10,100-newFP); newDrive=true;
+  } else if(r.fumble && play.fumbled){
+    text='Fumble! Recovered'; cls='big';
+    const at = Math.round(G.fieldPos + ((r.fumbleZ ?? (G.fieldPos-50)) - (G.fieldPos-50)));   /* spot of the recovery, offense yards */
+    const newFP = Math.max(1, Math.min(99, 100 - at));
+    log(`${t.id}: fumble, recovered by ${team(1-G.off).id} at the ${newFP<=50? team(1-G.off).id+' '+newFP : t.id+' '+(100-newFP)}`);
+    G.off = 1-G.off; G.fieldPos=newFP; G.down=1; G.toGo=Math.min(10,100-newFP); newDrive=true;
   } else if(r.kind==='int' && play.td){
     text='Pick six!'; cls='big'; G.score[1-G.off]+=EMBED?6:7; log(`${team(1-G.off).id}: interception returned for a TOUCHDOWN (XP good)`);
     G.fieldPos=25; G.down=1; G.toGo=10; newDrive=true;   /* the team that threw it gets the kickoff */

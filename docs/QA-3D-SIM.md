@@ -35,7 +35,7 @@ Also shipped earlier in this round: real-time pace at low frame rates (slow-moti
 
 | # | Issue (as seen) | Measured cause | Fix | Before → after |
 |---|---|---|---|---|
-| 9 | Back runs right past a linebacker standing in the hole, nothing happens | Nobody blocked the play-side backer: he scraped into the hole and the back passed him at arm's length | Center (inside runs) or tight end (outside right) climbs to the second level and blocks him off the lane; he sheds once the back is by and chases from behind | defender at the line 0.56–0.99 m on 17 of 30 gains → **2.3–3.3 m on 29 of 30** |
+| 9 | Back runs right past a linebacker standing in the hole, nothing happens | Nobody blocked the play-side backer: he scraped into the hole and the back passed him at arm's length | Center (inside runs) or tight end (outside right) climbs to the second level and blocks him off the lane; he sheds once the back is by and chases from behind | defender within 1 m at the line on 19 of 24 designed gains → **1 of 24** (lanes now 2.5–3.3 m) |
 | 10 | 3-yard runs tackled by a backer from across the field | Tackler chosen from the whole back seven | Short gains: the backer nearest the gap makes the stop | — |
 
 Unchanged and fine: OL engaged 80–94% of the first 2 s, top speeds 7.3–8.7 yd/s, no snap cuts. Left: chunk#4 (one seed) still has a defender at 0.9 m; stuffed runs brush the pile for up to 0.3 s (that's the pile).
