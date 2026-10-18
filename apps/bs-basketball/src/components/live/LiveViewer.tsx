@@ -19,7 +19,7 @@ type Players = Record<string, BasketballPlayer>;
 
 const EVENT_ICON: Record<LiveEventKind, string> = {
   make3: '🎯', make2: '●', ft: '○', block: '🚫', steal: '🖐', turnover: '🔄', rebound: '⬆',
-  miss: '·', sub: '⇄', period: '⏱',
+  miss: '·', sub: '⇄', period: '⏱', foul: '✋',
 };
 
 const TONE: Record<MomentTone, string> = {

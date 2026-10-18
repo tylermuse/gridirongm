@@ -187,7 +187,12 @@ function narratePossession(
   const to = by('to')[0];
   const orb = by('orb')[0];
   const drb = by('drb')[0];
-  const pf = by('pf')[0];
+  // Fouls logged BEFORE the shot are non-shooting fouls (reach-ins / bonus);
+  // only a foul after the attempt is a shooting foul.
+  const firstFga = p.e.findIndex(x => x[1] === 'fga' || x[1] === 'blk'); // engine logs a block before its FGA
+  const shotStart = firstFga === -1 ? p.e.length : firstFga;
+  const pf = p.e.slice(shotStart).filter(x => x[1] === 'pf').map(x => ids[x[0]])[0];
+  const preFouls = p.e.slice(0, shotStart).filter(x => x[1] === 'pf').map(x => ids[x[0]]);
   const fta = by('fta').length;
   const ftm = by('ftm').length;
 
@@ -206,6 +211,30 @@ function narratePossession(
     return;
   }
 
+  // Non-shooting foul(s). With no shot after it, the offense was in the bonus
+  // and shot two; otherwise it's a quiet foul line before the shot.
+  if (preFouls.length) {
+    const fouler = preFouls[0];
+    const shooterAtLine = by('fta')[0];
+    if (fga.length === 0) {
+      setScore(finalScore.home, finalScore.away);
+      push({
+        quarter: p.q, clock, side, kind: 'ft', scoring: ftm > 0, points: p.pts, playerId: shooterAtLine,
+        stats,
+        text: shooterAtLine
+          ? `${nm(players, fouler)} reaches in — ${nm(players, shooterAtLine)} to the line in the bonus, ${ftm} of ${fta}`
+          : `${nm(players, fouler)} picks up a foul`,
+      });
+      return;
+    }
+    const cur0 = score();
+    push({
+      quarter: p.q, clock, side: defSide, kind: 'foul', scoring: false, points: 0, playerId: fouler, quiet: true,
+      stats: stats.slice(0, shotStart), home: cur0.home, away: cur0.away,
+      text: `${nm(players, fouler)} ${pick(['reach-in foul', 'off-ball foul', 'loose-ball foul'], seed >>> 5)}`,
+    });
+  }
+
   if (fga.length === 0) return; // defensive: nothing happened (shouldn't occur)
 
   const shooter = fga[0];
@@ -216,8 +245,9 @@ function narratePossession(
   const pts = p.pts;
 
   // Split stat deltas: shot-phase stats go on the shot event, the board on the rebound event.
-  const shotStats = stats.filter(s => s[1] !== 'orb' && s[1] !== 'drb' && s[1] !== 'reb');
-  const boardStats = stats.filter(s => s[1] === 'orb' || s[1] === 'drb' || s[1] === 'reb');
+  const shotPhase = stats.slice(shotStart);
+  const shotStats = shotPhase.filter(s => s[1] !== 'orb' && s[1] !== 'drb' && s[1] !== 'reb');
+  const boardStats = shotPhase.filter(s => s[1] === 'orb' || s[1] === 'drb' || s[1] === 'reb');
 
   if (made) {
     const and1 = !!pf && fta === 1;

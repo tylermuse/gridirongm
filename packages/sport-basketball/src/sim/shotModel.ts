@@ -55,11 +55,12 @@ export interface ShotResolution {
  *  Override examples: Steph Curry (PG with 95+ threePoint) shoots 60%+ threes;
  *  Nikola Jokic (C with elite postScoring + passing) shifts toward post + midrange. */
 const BASE_SHOT_MIX: Record<BasketballPosition, Record<ShotType, number>> = {
-  PG:  { three: 45, midrange: 25, at_rim: 25, post: 5 },
-  SG:  { three: 50, midrange: 25, at_rim: 22, post: 3 },
-  SF:  { three: 42, midrange: 25, at_rim: 28, post: 5 },
-  PF:  { three: 32, midrange: 25, at_rim: 33, post: 10 },
-  C:   { three: 15, midrange: 22, at_rim: 45, post: 18 },
+  // Modern-era mix (2024-25): midrange share trimmed toward threes + rim.
+  PG:  { three: 47, midrange: 21, at_rim: 27, post: 5 },
+  SG:  { three: 52, midrange: 21, at_rim: 24, post: 3 },
+  SF:  { three: 45, midrange: 21, at_rim: 29, post: 5 },
+  PF:  { three: 36, midrange: 20, at_rim: 34, post: 10 },
+  C:   { three: 18, midrange: 18, at_rim: 46, post: 18 },
 };
 
 export function selectShotType(
@@ -109,9 +110,9 @@ function ratingMultiplier(rating: number): number {
  *  reflect contested shots) and small defender-rating effects. Sim runs at
  *  league-realistic 35-37% 3PT% with these constants. */
 const LEAGUE_AVG_MAKE: Record<ShotType, number> = {
-  three: 0.39,
-  midrange: 0.44,
-  at_rim: 0.67,
+  three: 0.36,
+  midrange: 0.43,
+  at_rim: 0.69,
   post: 0.50,
 };
 
@@ -200,10 +201,10 @@ export function isContested(
  *  the arc. Aggressive defenders foul more; skilled offensive players draw
  *  more (rip-throughs, ball-fakes). */
 const SHOOTING_FOUL_BASE: Record<ShotType, number> = {
-  at_rim: 0.18,
-  post: 0.12,
-  midrange: 0.04,
-  three: 0.025,
+  at_rim: 0.24,
+  post: 0.16,
+  midrange: 0.055,
+  three: 0.028,
 };
 
 export function drewShootingFoul(

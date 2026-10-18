@@ -42,6 +42,9 @@ export interface SimLineup {
   plan?: BasketballGamePlan;
   /** The head coach's scheme effect, if any (neutral when absent). */
   schemeEffect?: CoachSchemeEffect;
+  /** Game-state make-rate nudge for this possession's offense (score effects:
+   *  a big second-half lead → leader eases off, trailer presses). 0 = none. */
+  makeAdj?: number;
 }
 
 // Game-plan effect multipliers — all 1.0 at the 'balanced' default, so an unset
@@ -130,14 +133,39 @@ export interface PossessionResult {
 // ---------------------------------------------------------------------------
 
 /** League average turnover rate per possession (~14 TOs / ~100 possessions). */
-const BASE_TURNOVER_RATE = 0.135;
+const BASE_TURNOVER_RATE = 0.128;
 
 /** Fraction of turnovers that come from steals (the rest are live-ball
  *  errors — bad passes, dribble offs, traveling, etc.). */
 const STEAL_FRACTION_OF_TURNOVERS = 0.55;
 
 /** Per-team offensive rebound rate on missed shots. League average ~26%. */
-const BASE_OFFENSIVE_REBOUND_RATE = 0.26;
+const BASE_OFFENSIVE_REBOUND_RATE = 0.245;
+
+// ---- Calibration (2024-25 NBA targets, per team-game: ~114 PTS, 46.7 FG%,
+// 36% 3P, 21.7 FTA, 4.9 BLK, 26.5 AST, 18 PF; leaders ~32 PPG / 13.5 RPG /
+// 11 APG / 3.5 BPG). Measured with a full-season harness across seeds. ----
+
+/** Exponent on usage weight when picking a shooter. Linear weights made a
+ *  65-usage role player and an 88 star nearly equal (top PPG ~21, zero 25-ppg
+ *  scorers). Raised to this power relative to the lineup mean so stars carry
+ *  ~30% usage like real primary options. */
+const USAGE_EXPONENT = 3.4;
+/** Same idea for assists (passing + IQ) and rebounds (rebounding + size). */
+const ASSIST_EXPONENT = 3.3;
+const REBOUND_EXPONENT = 1.8;
+/** Fraction of made FGs assisted, by shot type (NBA: catch-and-shoot threes
+ *  are mostly assisted; post-ups and pull-ups mostly aren't). ~60% overall. */
+const ASSIST_RATE: Record<ShotType, number> = { three: 0.82, midrange: 0.45, at_rim: 0.62, post: 0.38 };
+/** Base block chance by shot type, before the defense's rim-protection factor.
+ *  Was rim/post only and gated on the matched defender's block > 65, which
+ *  produced ~0.6 blocks per team-game (NBA ~4.9). */
+const BLOCK_BASE: Record<ShotType, number> = { at_rim: 0.105, post: 0.075, midrange: 0.018, three: 0.0065 };
+/** Non-shooting (reach-in, off-ball, loose-ball) fouls per possession, and the
+ *  share that send the offense to the line (team in the bonus). Shooting fouls
+ *  alone left teams at ~12.7 FTA and 8.5 PF per game. */
+const NON_SHOOTING_FOUL_RATE = 0.095;
+const BONUS_FT_SHARE = 0.4;
 
 /** Average seconds per possession. Pace adjustments happen at game level. */
 const AVG_POSSESSION_SECONDS = 14.5;
@@ -174,6 +202,24 @@ export function simPossession(
     };
   }
 
+  // Step 1b: Non-shooting foul. Charged to a defender; in the bonus it sends
+  // the fouled player to the line for two (possession ends), otherwise play
+  // continues to a shot.
+  if (rng.chance(NON_SHOOTING_FOUL_RATE)) {
+    const fouler = rng.pickWeighted(defense.players, defense.players.map(p => Math.max(10, 120 - p.ratings.basketballIQ)));
+    events.push({ playerId: fouler.id, field: 'personalFouls' });
+    if (rng.chance(BONUS_FT_SHARE)) {
+      const fouledPlayer = selectShooter(offense, rng);
+      const ftMade = resolveFreeThrows(fouledPlayer, 2, events, rng);
+      return {
+        events,
+        possessionFlipsToDefense: true,
+        secondsElapsed: turnoverSeconds(rng),
+        pointsScored: ftMade,
+      };
+    }
+  }
+
   // Step 2: Pick a shooter — weighted by usage
   const shooter = selectShooter(offense, rng);
   const shooterIdx = offense.players.indexOf(shooter);
@@ -189,11 +235,13 @@ export function simPossession(
 
   // Step 4: Did the defender block it? (Only relevant at the rim, and only
   // for shots not already going to be made through traffic.)
-  const blockChance = (shotType === 'at_rim' || shotType === 'post')
-    ? Math.max(0, (defender.ratings.block - 65) * 0.0035)
-    : 0;
+  // Help defense counts: the lineup's rim protection (block rating, weighted
+  // toward its best shot-blocker) scales the shot type's base rate.
+  const rimProtect = lineupRimProtection(defense);
+  const blockChance = BLOCK_BASE[shotType] * rimProtect;
   if (rng.chance(blockChance)) {
-    events.push({ playerId: defender.id, field: 'blocks' });
+    const blocker = selectBlocker(defense, defender, shotType, rng);
+    events.push({ playerId: blocker.id, field: 'blocks' });
     events.push({ playerId: shooter.id, field: 'fieldGoalsAttempted' });
     if (isThree) events.push({ playerId: shooter.id, field: 'threePointsAttempted' });
     // Blocked shot → live ball → rebound
@@ -205,6 +253,7 @@ export function simPossession(
   const makeP = Math.max(0.02, Math.min(0.99,
     makeProbability(shotType, shooter.ratings, defender.ratings, contested)
       * makeMult(offense.plan, defense.plan)
+      * (1 + (offense.makeAdj ?? 0))
       * (1 - (defIntensity - 1) * 0.3),
   ));
   const made = rng.chance(makeP);
@@ -222,7 +271,7 @@ export function simPossession(
 
     // Credit an assist ~55% of the time (NBA league average for made FGs).
     // Assister is one of the other 4 offensive players, weighted by passing.
-    if (rng.chance(0.55)) {
+    if (rng.chance(ASSIST_RATE[shotType])) {
       const assister = selectAssister(offense, shooter, rng);
       events.push({ playerId: assister.id, field: 'assists' });
     }
@@ -312,7 +361,7 @@ function resolveFreeThrows(
   rng: Rng,
 ): number {
   // Free throw % derived from FT rating. 70 rating = 78% (league avg).
-  const ftPct = 0.78 + (shooter.ratings.freeThrow - 70) * 0.006;
+  const ftPct = 0.745 + (shooter.ratings.freeThrow - 70) * 0.006;
   const ftMakeProb = Math.max(0.4, Math.min(0.95, ftPct));
   let made = 0;
   for (let i = 0; i < count; i++) {
@@ -343,14 +392,44 @@ function usageWeight(p: BasketballPlayer): number {
   );
 }
 
+/** Raise weights to a power relative to their mean (keeps magnitudes sane). */
+function sharpen(weights: number[], exponent: number): number[] {
+  const mean = weights.reduce((a, b) => a + b, 0) / Math.max(1, weights.length) || 1;
+  return weights.map(w => Math.pow(Math.max(0.01, w) / mean, exponent));
+}
+
 function selectShooter(lineup: SimLineup, rng: Rng): BasketballPlayer {
-  const weights = lineup.players.map(usageWeight);
+  const weights = sharpen(lineup.players.map(usageWeight), USAGE_EXPONENT);
   return rng.pickWeighted(lineup.players, weights);
+}
+
+/** 0.6-1.6 multiplier on block chance from the defense's shot-blocking. */
+function lineupRimProtection(defense: SimLineup): number {
+  const blocks = defense.players.map(p => p.ratings.block).sort((a, b) => b - a);
+  const anchor = blocks[0] * 0.6 + blocks[1] * 0.25 + blocks[2] * 0.15;
+  return Math.max(0.6, Math.min(1.6, 1 + (anchor - 65) * 0.03));
+}
+
+/** Who gets the block: rim protectors dominate inside; on jumpers the
+ *  closest defender matters more. */
+function selectBlocker(defense: SimLineup, matched: BasketballPlayer, shot: ShotType, rng: Rng): BasketballPlayer {
+  const inside = shot === 'at_rim' || shot === 'post';
+  const weights = sharpen(defense.players.map(p => {
+    const pos = p.sportData.position;
+    const posBoost = pos === 'C' ? 1.5 : pos === 'PF' ? 1.25 : 1;
+    const matchBoost = p === matched ? (inside ? 1.3 : 3) : 1;
+    return (p.ratings.block + p.ratings.height / 4) * (inside ? posBoost : 1) * matchBoost;
+  }), 3);
+  return rng.pickWeighted(defense.players, weights);
 }
 
 function selectAssister(lineup: SimLineup, exclude: BasketballPlayer, rng: Rng): BasketballPlayer {
   const others = lineup.players.filter(p => p !== exclude);
-  const weights = others.map(p => p.ratings.passing * 1.5 + p.ratings.basketballIQ);
+  const weights = sharpen(others.map(p => {
+    const pos = p.sportData.position;
+    const role = pos === 'PG' ? 1.25 : pos === 'SG' || pos === 'SF' ? 1.0 : 0.85;
+    return (p.ratings.passing * 1.5 + p.ratings.basketballIQ) * role;
+  }), ASSIST_EXPONENT);
   return rng.pickWeighted(others, weights);
 }
 
@@ -375,7 +454,7 @@ function selectRebounder(lineup: SimLineup, rng: Rng): BasketballPlayer {
     const positionBoost = pos === 'C' ? 1.3 : pos === 'PF' ? 1.15 : 1.0;
     return (p.ratings.rebounding + p.ratings.height / 3) * positionBoost;
   });
-  return rng.pickWeighted(lineup.players, weights);
+  return rng.pickWeighted(lineup.players, sharpen(weights, REBOUND_EXPONENT));
 }
 
 // ---------------------------------------------------------------------------

@@ -18,7 +18,7 @@ export type Side = 'home' | 'away';
 export type LiveEventKind =
   | 'make3' | 'make2' | 'ft' | 'block' | 'steal' | 'turnover' | 'rebound'
   // Real-log only (fromPlayLog.ts):
-  | 'miss' | 'sub' | 'period';
+  | 'miss' | 'sub' | 'period' | 'foul';
 
 /** A shot plotted on the court canvas (viewBox 200×100). */
 export interface LiveShot { x: number; y: number; made: boolean; type: 'three' | 'midrange' | 'at_rim' | 'post' }
