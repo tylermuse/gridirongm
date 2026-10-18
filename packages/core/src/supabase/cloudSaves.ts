@@ -29,7 +29,9 @@ export const CLOUD_SAVE_SLOTS = [
   'gridiron-gm-save-1',
   'gridiron-gm-save-2',
 ] as const;
-export type CloudSaveSlot = (typeof CLOUD_SAVE_SLOTS)[number];
+/** Football's fixed slots, plus BS Hoops' per-league slots (`bs-hoops:<leagueId>`
+ *  and the `bs-hoops:index` league list). The `slot` column is free text. */
+export type CloudSaveSlot = (typeof CLOUD_SAVE_SLOTS)[number] | `bs-hoops:${string}`;
 
 export interface CloudSaveRow {
   user_id: string;
@@ -158,6 +160,26 @@ export async function pullCloudSave(slot: CloudSaveSlot): Promise<CloudSaveRow |
   } catch {
     return null;
   }
+}
+
+/** Delete one slot's cloud row (the user removing a cloud copy). Never throws. */
+export async function deleteCloudSave(slot: CloudSaveSlot): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    const client = createClient();
+    if (!client) return { ok: false, reason: 'no-client' };
+    const userId = await getUserId();
+    if (!userId) return { ok: false, reason: 'signed-out' };
+    const { error } = await client.from('cloud_saves').delete().eq('user_id', userId).eq('slot', slot);
+    if (error) return { ok: false, reason: error.message };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : 'unknown' };
+  }
+}
+
+/** Whether a user is signed in (Supabase configured + session). Never throws. */
+export async function isSignedIn(): Promise<boolean> {
+  try { return (await getUserId()) !== null; } catch { return false; }
 }
 
 // Per-slot debounce so a burst of writes coalesces into one network push.

@@ -15,6 +15,7 @@ import { findDealsForPlayer, findDealsForPick, incomingOffers, type DealSuggesti
 import { teamStrategy, getTeamPicks, pickFromId, pickShort, pickValue, protectionShort, type ProtectionTerms } from '@/lib/trade';
 import { getActiveRumors, rumorAccuracy, rumorPlayerMeta, type TradeRumor } from '@/lib/trade';
 import { computeTradeGrade, getProposalHistory, type TradeGrade, type ProposalRecord } from '@/lib/trade';
+import { getPendingProposals, getTradeProposals, getTradeBlock, pendingProposalCount, proposalToDeal, type TradeProposal } from '@/lib/trade/proposals';
 import { tradeWindowClosed, TRADE_DEADLINE_DAY } from '@/lib/sim/simRange';
 import { basketballTradeValue, type BasketballPlayer, type BasketballPosition, type BasketballStats, type BasketballTeam, type TeamTradeOutcome, type TeamCapStatus } from '@bs/sport-basketball';
 import { regularSeasonStatsByPlayer } from '@/lib/stats/seasonStats';
@@ -73,8 +74,12 @@ function TradePage() {
   const [resultMsg, setResultMsg] = useState<string | null>(null);
   const [pinnedRumor, setPinnedRumor] = useState<{ headline: string; detail: string } | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [tab, setTab] = useState<'build' | 'finder' | 'offers' | 'block'>(() => (initBlockPlayer ? 'block' : 'build'));
+  // ?tab=offers deep-links the inbox (sidebar badge / dashboard banner).
+  const initTab = searchParams.get('tab');
+  const [tab, setTab] = useState<'build' | 'finder' | 'offers' | 'block'>(() => (initBlockPlayer ? 'block' : initTab === 'offers' ? 'offers' : 'build'));
   const [finderId, setFinderId] = useState('');
+  // Set while the builder is editing a counter to a persisted AI proposal.
+  const [counterId, setCounterId] = useState<string | null>(null);
 
   const teamById = useMemo(() => {
     const m = new Map<string, BasketballTeam>();
@@ -83,7 +88,7 @@ function TradePage() {
   }, [league]);
 
   const userTeamId = league?.userTeamId ?? null;
-  const pendingCount = useMemo(() => (league ? incomingOffers(league).length : 0), [league]);
+  const pendingCount = useMemo(() => pendingProposalCount(league), [league]);
 
   // Keep protections only for picks still in the deal.
   const pruneProt = (sel: Set<string>, prot: Record<string, ProtectionTerms>) => {
@@ -188,6 +193,28 @@ function TradePage() {
 
   async function propose() {
     const partnerName = targetTeam?.city ?? 'They';
+    if (counterId) {
+      const d: DealSuggestion = {
+        partnerTeamId: targetId,
+        giveIds: [...mine],
+        getIds: [...theirs],
+        givePickIds: [...myPicks],
+        getPickIds: [...theirPicks],
+      };
+      const r = await store.counterProposal(counterId, d);
+      if (!r) return;
+      if (r.outcome === 'accepted') {
+        setResultMsg(`✅ ${r.message}`);
+        clearAll(); setTargetId(''); setCounterId(null);
+      } else if (r.outcome === 'countered') {
+        setCounterId(null); clearAll(); setTargetId('');
+        setTab('offers');
+      } else {
+        setResultMsg(`❌ ${r.message}`);
+        if (getTradeProposals(r.league).find(p => p.id === counterId)?.status !== 'pending') setCounterId(null);
+      }
+      return;
+    }
     const result = await store.proposeTrade(sides);
     if (!result) return;
     if (result.accepted) {
@@ -208,8 +235,15 @@ function TradePage() {
     if (result?.accepted) { setResultMsg('✅ Trade accepted and executed.'); setTab('build'); }
   }
 
+  // Counter a persisted AI proposal: load it into the builder in counter mode.
+  function counterOffer(p: TradeProposal) {
+    loadDeal(proposalToDeal(p));
+    setCounterId(p.id);
+  }
+
   // Load a suggested/offered deal into the builder for tweaking (counter-offer).
   function loadDeal(d: DealSuggestion) {
+    setCounterId(null);
     setTargetId(d.partnerTeamId);
     setMine(new Set(d.giveIds));
     setTheirs(new Set(d.getIds));
@@ -260,7 +294,7 @@ function TradePage() {
         <TradeFinderPanel league={league} userTeam={userTeam} teamById={teamById} playerById={playerById} season={season} finderId={finderId} setFinderId={setFinderId} onPropose={proposeDeal} onLoad={loadDeal} loading={store.loading} />
       )}
       {tab === 'offers' && (
-        <OffersPanel league={league} teamById={teamById} playerById={playerById} season={season} onPropose={proposeDeal} onLoad={loadDeal} loading={store.loading} />
+        <OffersPanel league={league} teamById={teamById} playerById={playerById} season={season} onPropose={proposeDeal} onLoad={loadDeal} onCounter={counterOffer} closed={window.closed} loading={store.loading} />
       )}
       {tab === 'block' && (
         <TradingBlockTab league={league} userTeam={userTeam} teamById={teamById} playerById={playerById} season={season} onPropose={proposeDeal} onLoad={loadDeal} loading={store.loading} initialBlock={initBlockPlayer ?? undefined} />
@@ -268,6 +302,16 @@ function TradePage() {
 
       {tab === 'build' && (
       <>
+      {counterId && targetTeam && (
+        <div className="mb-3 rounded-lg border px-4 py-2.5 flex items-start gap-3" style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>
+          <span className="text-lg shrink-0">📨</span>
+          <div className="min-w-0 flex-1">
+            <div className="font-bold text-sm">Countering {targetTeam.city}&apos;s offer</div>
+            <div className="text-xs text-[var(--text-sec)]">Adjust either side and send. If they like it the deal goes through; otherwise they&apos;ll come back with one final offer.</div>
+          </div>
+          <button onClick={() => setCounterId(null)} className="text-xs font-semibold opacity-60 hover:opacity-100 shrink-0" title="Stop countering">✕</button>
+        </div>
+      )}
       {pinnedRumor && (
         <div className="mb-3 rounded-lg border px-4 py-2.5 flex items-start gap-3" style={{ borderColor: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>
           <span className="text-lg shrink-0">🗞️</span>
@@ -286,7 +330,7 @@ function TradePage() {
         <span className="opacity-50">↔</span>
         <select
           value={targetId}
-          onChange={e => { setTargetId(e.target.value); setTheirs(new Set()); setTheirPicks(new Set()); setResultMsg(null); }}
+          onChange={e => { setTargetId(e.target.value); setTheirs(new Set()); setTheirPicks(new Set()); setResultMsg(null); setCounterId(null); }}
           className="px-2 py-1.5 rounded-lg border bg-[var(--surface)] text-sm"
           style={{ borderColor: 'var(--border)' }}
         >
@@ -405,9 +449,9 @@ function TradePage() {
                 )}
 
                 <Button variant="primary" className="w-full mt-4" disabled={!canSend || store.loading} onClick={() => void propose()}>
-                  {store.loading ? 'Processing…' : !evaluation.legal ? 'Salary doesn’t match' : accepted ? 'Propose Trade' : 'Send Offer'}
+                  {store.loading ? 'Processing…' : !evaluation.legal ? 'Salary doesn’t match' : counterId ? 'Send Counter' : accepted ? 'Propose Trade' : 'Send Offer'}
                 </Button>
-                {canSend && !accepted && (
+                {canSend && !accepted && !counterId && (
                   <p className="text-[11px] text-center mt-1.5 opacity-60">They&apos;ll likely decline — send anyway to make your case.</p>
                 )}
               </>
@@ -735,7 +779,7 @@ function TradeFinderPanel({
 }
 
 function OffersPanel({
-  league, teamById, playerById, season, onPropose, onLoad, loading,
+  league, teamById, playerById, season, onPropose, onLoad, onCounter, closed, loading,
 }: {
   league: League;
   teamById: Map<string, BasketballTeam>;
@@ -743,16 +787,159 @@ function OffersPanel({
   season: number;
   onPropose: (d: DealSuggestion) => void;
   onLoad: (d: DealSuggestion) => void;
+  onCounter: (p: TradeProposal) => void;
+  closed: boolean;
   loading: boolean;
 }) {
-  const offers = useMemo(() => incomingOffers(league), [league]);
-  if (offers.length === 0) {
-    return <p className="text-sm text-[var(--text-sec)]">No offers on the table — no rival is calling about your roster right now.</p>;
+  const store = useLeagueStore();
+  const [note, setNote] = useState<string | null>(null);
+  const [showMore, setShowMore] = useState(false);
+  const pending = useMemo(() => getPendingProposals(league), [league]);
+  const recent = useMemo(
+    () => getTradeProposals(league)
+      .filter(p => p.status !== 'pending')
+      .sort((a, b) => (b.resolvedDay ?? b.createdDay) - (a.resolvedDay ?? a.createdDay))
+      .slice(0, 6),
+    [league],
+  );
+  // Ad-hoc interest (computed live) — secondary to the persisted inbox.
+  const interest = useMemo(() => (showMore ? incomingOffers(league) : []), [league, showMore]);
+
+  async function respond(p: TradeProposal, action: 'accept' | 'decline') {
+    const r = await store.respondToProposal(p.id, action);
+    if (r) setNote(r.ok ? (action === 'accept' ? `✅ ${r.message}` : r.message) : `❌ ${r.message}`);
   }
+
   return (
-    <div className="space-y-2">
-      <p className="text-sm text-[var(--text-sec)] mb-2">Rivals are interested in your players — accept the deal, or counter it in the builder.</p>
-      {offers.map((d, i) => <DealCard key={i} league={league} d={d} teamById={teamById} playerById={playerById} season={season} primaryLabel="Accept" secondaryLabel="Counter" onPropose={onPropose} onLoad={onLoad} loading={loading} />)}
+    <div className="space-y-4">
+      {note && (
+        <div className="rounded-lg border px-4 py-2.5 text-sm flex items-center gap-3" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+          <span className="flex-1">{note}</span>
+          <button onClick={() => setNote(null)} className="text-xs font-semibold opacity-60 hover:opacity-100" title="Dismiss">✕</button>
+        </div>
+      )}
+      <section>
+        <h3 className="text-sm font-bold mb-1">Offers inbox</h3>
+        <p className="text-xs text-[var(--text-sec)] mb-3">Rival GMs call with real offers during the season. Each stays on the table for a few days — accept, decline, or counter once.</p>
+        {pending.length === 0 ? (
+          <div className="rounded-xl border bg-[var(--surface)] p-5 text-sm text-[var(--text-sec)]" style={{ borderColor: 'var(--border)' }}>
+            {closed
+              ? 'The trade window is closed — no new offers until it reopens.'
+              : 'No offers right now. Sim a few days — interest picks up toward the deadline, and players on your Trading Block get shopped first.'}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {pending.map(p => (
+              <ProposalCard
+                key={p.id}
+                league={league}
+                p={p}
+                teamById={teamById}
+                playerById={playerById}
+                season={season}
+                disabled={loading || closed}
+                onAccept={() => void respond(p, 'accept')}
+                onDecline={() => void respond(p, 'decline')}
+                onCounter={() => onCounter(p)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {recent.length > 0 && (
+        <section className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+          <div className="px-4 py-2 text-xs font-bold border-b" style={{ borderColor: 'var(--border)', background: 'var(--muted)' }}>Recent offers</div>
+          <ul>
+            {recent.map(p => (
+              <li key={p.id} className="px-4 py-2 text-xs border-t first:border-t-0 flex items-center gap-2" style={{ borderColor: 'var(--border)' }}>
+                <span className="font-semibold">{teamById.get(p.fromTeamId)?.city ?? '—'}</span>
+                <span className="opacity-50">Day {p.createdDay}</span>
+                <span className="truncate text-[var(--text-sec)]">{p.resolutionNote ?? ''}</span>
+                <span className="ml-auto font-semibold capitalize" style={{ color: STATUS_COLOR[p.status] }}>{p.status}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <section>
+        <button onClick={() => setShowMore(v => !v)} className="text-xs font-semibold" style={{ color: 'var(--accent)' }}>
+          {showMore ? '▾ Hide' : '▸ Show'} other interest around the league
+        </button>
+        {showMore && (
+          <div className="space-y-2 mt-2">
+            {interest.length === 0
+              ? <p className="text-sm text-[var(--text-sec)]">No one else is calling about your roster right now.</p>
+              : interest.map((d, i) => <DealCard key={i} league={league} d={d} teamById={teamById} playerById={playerById} season={season} primaryLabel="Propose" secondaryLabel="Load & tweak" onPropose={onPropose} onLoad={onLoad} loading={loading} />)}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+const STATUS_COLOR: Record<TradeProposal['status'], string> = {
+  pending: 'var(--accent)',
+  accepted: '#10b981',
+  declined: '#dc2626',
+  expired: 'var(--text-sec)',
+  countered: '#d97706',
+};
+
+function ProposalCard({
+  league, p, teamById, playerById, season, disabled, onAccept, onDecline, onCounter,
+}: {
+  league: League;
+  p: TradeProposal;
+  teamById: Map<string, BasketballTeam>;
+  playerById: Record<string, BasketballPlayer>;
+  season: number;
+  disabled: boolean;
+  onAccept: () => void;
+  onDecline: () => void;
+  onCounter: () => void;
+}) {
+  const partner = teamById.get(p.fromTeamId);
+  const d = proposalToDeal(p);
+  const assetText = (ids: string[], pickIds?: string[]) => {
+    const names = ids.map(id => {
+      const pl = playerById[id];
+      return pl ? `${pl.firstName[0]}. ${pl.lastName} (${pl.sportData.position} · ${pl.ratings.overall})` : '—';
+    });
+    const picks = (pickIds ?? []).map(id => { const pk = pickFromId(league, id); return pk ? `🎟️ ${pickShort(league, pk)}` : '🎟️'; });
+    return [...names, ...picks].join(', ') || '—';
+  };
+  const valOf = (ids: string[], pickIds?: string[]) =>
+    ids.reduce((s, id) => s + (playerById[id] ? basketballTradeValue(playerById[id], { season }) : 0), 0) +
+    (pickIds ?? []).reduce((s, id) => s + pickValueById(league, id), 0);
+  const getVal = valOf(d.getIds, d.getPickIds);
+  const giveVal = valOf(d.giveIds, d.givePickIds);
+  const grade = computeTradeGrade(getVal, giveVal);
+  const daysLeft = Math.max(0, p.expiresDay - league.currentTick);
+  return (
+    <div className="rounded-xl border bg-[var(--surface)] p-3" style={{ borderColor: p.counterOf ? '#d97706' : 'var(--border)' }}>
+      <div className="flex flex-wrap items-start gap-3">
+        {partner && <TeamLogo abbreviation={partner.abbreviation} primaryColor={partner.primaryColor} secondaryColor={partner.secondaryColor} size="sm" />}
+        <div className="min-w-0 flex-1 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-bold">{partner ? `${partner.city} ${partner.name}` : '—'}</span>
+            <span className="text-sm font-black" style={{ color: gradeColor(grade) }}>{grade}</span>
+            {p.counterOf && (
+              <span className="text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5" style={{ background: 'var(--surface-2)', color: '#b45309' }}>Final offer</span>
+            )}
+            <span className="text-[11px] text-[var(--text-sec)]">{daysLeft === 0 ? 'Expires today' : `Expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`}</span>
+          </div>
+          <div className="text-xs italic text-[var(--text-sec)] mt-0.5">“{p.rationale}”</div>
+          <div className="text-xs mt-1"><span className="font-semibold" style={{ color: '#10b981' }}>You get:</span> {assetText(d.getIds, d.getPickIds)} <span className="opacity-50 tabular-nums">· {fmtPts(getVal)} pts</span></div>
+          <div className="text-xs"><span className="font-semibold" style={{ color: '#dc2626' }}>You give:</span> {assetText(d.giveIds, d.givePickIds)} <span className="opacity-50 tabular-nums">· {fmtPts(giveVal)} pts</span></div>
+        </div>
+        <div className="flex sm:flex-col gap-1.5 ml-auto">
+          <Button variant="primary" disabled={disabled} onClick={onAccept}>Accept</Button>
+          {!p.counterOf && <Button variant="secondary" disabled={disabled} onClick={onCounter}>Counter</Button>}
+          <Button variant="ghost" disabled={disabled} onClick={onDecline}>Decline</Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -842,7 +1029,14 @@ function TradingBlockTab({
    *  "Trade…" deep-link). */
   initialBlock?: string;
 }) {
-  const [block, setBlock] = useState<Set<string>>(() => (initialBlock ? new Set([initialBlock]) : new Set()));
+  const store = useLeagueStore();
+  // The block persists on the league so AI proposals target these players.
+  const [block, setBlockState] = useState<Set<string>>(() => {
+    const saved = new Set(getTradeBlock(league).filter(id => userTeam.playerIds.some(pid => pid === id)));
+    if (initialBlock) saved.add(initialBlock);
+    return saved;
+  });
+  const setBlock = (next: Set<string>) => { setBlockState(next); void store.setTradeBlock([...next]); };
   const [blockPicks, setBlockPicks] = useState<Set<string>>(new Set());
   const [seekPos, setSeekPos] = useState<Set<BasketballPosition>>(new Set());
   const [seekTags, setSeekTags] = useState<Set<SeekTag>>(new Set());

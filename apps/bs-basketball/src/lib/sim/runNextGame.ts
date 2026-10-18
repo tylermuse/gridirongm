@@ -36,6 +36,7 @@ import type {
   BasketballRatings,
   BasketballStats,
 } from '@bs/sport-basketball';
+import { trimPlayLogs } from '../live/trimPlayLogs';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 type GameResult = BaseGameResult<BasketballStats>;
@@ -106,7 +107,7 @@ export function simNextGameForTeam(
   const finalScore = playedGame.finalScore ?? { home: 0, away: 0 };
   const updatedTeams = updateTeamRecords(league.teams, playedGame, finalScore);
 
-  const simmed: LeagueState = { ...league, games: updatedGames, teams: updatedTeams, currentPhase: 'regular_season' };
+  const simmed: LeagueState = { ...league, games: trimPlayLogs(updatedGames, league.userTeamId), teams: updatedTeams, currentPhase: 'regular_season' };
   const withInjuries = applyInjuryRolls(simmed, [playedGame], gameDayNum, league.currentSeason);
   const withDiscipline = applyDisciplineRolls(withInjuries, [playedGame], gameDayNum, league.currentSeason);
 

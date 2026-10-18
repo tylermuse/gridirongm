@@ -8,6 +8,8 @@ import { useLeagueStore } from '@/lib/store/leagueStore';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { dropConfetti } from '@/lib/ui/confetti';
+import { LiveViewer } from '@/components/live/LiveViewer';
+import { hasPlayLog } from '@/lib/live/fromPlayLog';
 import type {
   BasketballGameData,
   BasketballPlayer,
@@ -44,6 +46,7 @@ export default function GamePage() {
   const store = useLeagueStore();
   const { league, loading, error } = useLeagueOrHydrate();
   const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
+  const [replaying, setReplaying] = useState(false);
 
   const game = useMemo(() => {
     if (!league) return null;
@@ -185,8 +188,20 @@ export default function GamePage() {
           won={!homeWon}
           align="left"
         />
-        <div className="text-center text-sm opacity-60 uppercase tracking-wide">
-          {gameData?.wentToOvertime ? `Final / ${gameData.periodsPlayed - 4} OT` : 'Final'}
+        <div className="text-center">
+          <div className="text-sm opacity-60 uppercase tracking-wide">
+            {gameData?.wentToOvertime ? `Final / ${gameData.periodsPlayed - 4} OT` : 'Final'}
+          </div>
+          {hasPlayLog(game.sportData) && (
+            <button
+              onClick={() => setReplaying(true)}
+              className="mt-2 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
+              style={{ background: 'var(--accent)' }}
+              title="Replay the actual game possession by possession"
+            >
+              ▶ Watch replay
+            </button>
+          )}
         </div>
         <TeamScoreCell
           team={homeTeam}
@@ -215,6 +230,9 @@ export default function GamePage() {
       </div>
 
       <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
+      {replaying && (
+        <LiveViewer userGameId={game.id} dayGameIds={[game.id]} onClose={() => setReplaying(false)} />
+      )}
     </main>
   );
 }
