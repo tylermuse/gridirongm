@@ -10,6 +10,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { NewsFeed } from '@/components/feed/NewsFeed';
 import { TeamHero } from '@/components/dashboard/TeamHero';
+import { TradeOffersBanner } from '@/components/dashboard/TradeOffersBanner';
 import { OwnerObjectives } from '@/components/dashboard/OwnerObjectives';
 import { NextMatchupCard } from '@/components/dashboard/NextMatchup';
 import { DashboardRow } from '@/components/dashboard/DashboardRow';
@@ -130,7 +131,10 @@ export default function HomePage() {
     return (
       <div className="max-w-6xl mx-auto px-5 py-12">
         {userTeam ? (
-          <TeamHero league={league} team={userTeam as BasketballTeam} />
+          <>
+            <TeamHero league={league} team={userTeam as BasketballTeam} />
+            <TradeOffersBanner league={league} />
+          </>
         ) : (
           // R2-4: lead with the current season so the headline reads as the
           // active state, not the league founding year. League name was
