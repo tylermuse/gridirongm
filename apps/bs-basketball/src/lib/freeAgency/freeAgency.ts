@@ -32,6 +32,7 @@ import { upcomingSeason } from '../draft/draft';
 import { channelForSalary, consumeChannel, signingChannels } from './exceptions';
 import { lastSeasonLog } from '../stats/statLine';
 import { teamDeadCap } from '../roster/deadCap';
+import { getMaxRoster, getAiRosterTarget } from '../rules/leagueRules';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -44,7 +45,10 @@ function playerLabel(league: LeagueState, playerId: PlayerId): string {
   return p ? `${p.firstName} ${p.lastName}` : playerId;
 }
 
+/** DEFAULT max roster. A league can change it (League Rules) — every gate reads
+ *  `getMaxRoster(league)`; this constant is only the stock value. */
 export const MAX_ROSTER = 15;
+export { getMaxRoster };
 /** AI teams keep signing the best-available depth until they reach this many
  *  men, even without a strict positional need — so the free-agent pool actually
  *  drains each offseason and the user can't scoop a full bench of unsigned
@@ -325,10 +329,10 @@ export function bestCompetingOffer(
     const need = atPos <= 1 ? 2 : atPos === 2 ? 1 : 0;
 
     let affordable: boolean;
-    if (team.playerIds.length < MAX_ROSTER) {
+    if (team.playerIds.length < getMaxRoster(league)) {
       // Open spot: afford straight from the budget; bid on a need, clear talent,
       // or — below a full roster — the best available depth (mirrors runAiFreeAgency).
-      const needsDepth = team.playerIds.length < TARGET_ROSTER;
+      const needsDepth = team.playerIds.length < getAiRosterTarget(league);
       if (need === 0 && ovr < 75 && !(needsDepth && atPos < 3)) continue;
       affordable = signingBudget(league, team.id) >= info.marketSalary;
     } else {
@@ -351,7 +355,7 @@ export function bestCompetingOffer(
   // as a competitor at market when nobody else qualified (or it'd outbid them).
   if (info.birdRights !== 'none' && info.lastTeamId && info.lastTeamId !== league.userTeamId) {
     const holder = league.teams.find(t => t.id === info.lastTeamId);
-    if (holder && holder.playerIds.length < MAX_ROSTER && (!best || best.teamId !== info.lastTeamId)) {
+    if (holder && holder.playerIds.length < getMaxRoster(league) && (!best || best.teamId !== info.lastTeamId)) {
       // Bird team's effective pull beats a non-Bird suitor of similar interest.
       const bestScore = best ? best.score : 0;
       if (250 + ovr >= bestScore) best = { teamId: info.lastTeamId, score: 250 + ovr };
@@ -534,7 +538,7 @@ export function resolveUserOffer(
   const isMinOffer = offer.years <= 1
     && offer.salaryPerYear >= playerMin        // a real (service-scaled) minimum, not a sub-min lowball
     && offer.salaryPerYear <= playerMin * 1.5;
-  const hasOpenSpot = rosterCount(league, userTeamId) < MAX_ROSTER;
+  const hasOpenSpot = rosterCount(league, userTeamId) < getMaxRoster(league);
   const minSigning = isMinOffer && hasOpenSpot && competingTotal === 0;
   const userWins = userTotal >= threshold || minSigning;
 
@@ -551,12 +555,13 @@ export function resolveUserOffer(
 
   if (userWins) {
     let l = league;
-    if (rosterCount(l, userTeamId) >= MAX_ROSTER) {
+    const maxRoster = getMaxRoster(l);
+    if (rosterCount(l, userTeamId) >= maxRoster) {
       if (!releaseId) {
         return {
           outcome: 'rejected', league, signedTeamId: null,
           competingTeamId: competing?.teamId ?? null, competingOfferTotal: competingTotal,
-          message: 'Your roster is full (15/15) — release a player to make room.',
+          message: `Your roster is full (${maxRoster}/${maxRoster}) — release a player to make room.`,
         };
       }
       l = releasePlayer(l, releaseId);
@@ -743,10 +748,10 @@ export function runAiFreeAgency(league: LeagueState, opts?: { rounds?: number; f
       //    qualify; below a full roster the team also keeps adding the best
       //    available depth (up to 3 deep at a position) so the pool drains instead
       //    of leaving a benchful of useful veterans for the user to scoop.
-      if (rosterCount(l, teamId) < MAX_ROSTER) {
+      if (rosterCount(l, teamId) < getMaxRoster(l)) {
         const budget = signingBudget(l, teamId);
         const roster = rosterPlayers(l, teamId);
-        const needsDepth = rosterCount(l, teamId) < TARGET_ROSTER;
+        const needsDepth = rosterCount(l, teamId) < getAiRosterTarget(l);
         const fill = freeAgentPool(l).find(f => {
           if (f.marketSalary > budget) return false;
           const atPos = countAtPos(roster, f.player.sportData.position);

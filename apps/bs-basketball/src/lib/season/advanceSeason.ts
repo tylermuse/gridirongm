@@ -48,10 +48,10 @@ import { buildSeasonHistoryEntry, buildRetireeEntry, type HistoryRetiree } from 
 import { applySeasonApproval } from '../approval';
 import { resolveProtectedPicks, describeConveyance, pickKey, type PickProtection } from '../trade';
 import { appendTransaction } from '../transactions';
+import { getLeagueRules } from '../rules/leagueRules';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
-const TARGET_ROSTER = 15;
 const MIN_LEGAL_ROSTER = 13;
 const DRAFT_CLASS_SIZE = 60;
 
@@ -129,6 +129,8 @@ export function enterOffseason(input: LeagueState): LeagueState {
   // Each team's head-coach development rating drives how fast its young players
   // grow over the offseason (parity: coaching matters for the rebuild loop).
   const teamDevRating = new Map<string, number>();
+  // League Rules: progression / regression speed + retirement-age bias.
+  const rules = getLeagueRules(league);
   for (const t of league.teams) {
     const hc = getHeadCoach(league, t.id);
     if (hc) teamDevRating.set(t.id, hc.ratings.development);
@@ -179,13 +181,15 @@ export function enterOffseason(input: LeagueState): LeagueState {
     // the seed is just player+season, so every save replays identical outcomes.
     const developed = developBasketballPlayer(snapshot, nextSeason, {
       developmentMultiplier,
+      progressionScale: rules.progressionMult,
+      regressionScale: rules.regressionMult,
       rngSeed: `${league.id}-${id}-${nextSeason}`,
       // Career-stable boom/bust trait: per save + per player, NO season — so the
       // prospect's development DNA is fixed for his whole career, not re-rolled
       // each offseason.
       devTraitSeed: `${league.id}-${id}`,
     });
-    if (shouldBasketballPlayerRetire(developed)) {
+    if (shouldBasketballPlayerRetire(developed, { retirementAgeOffset: rules.retirementAgeOffset })) {
       retired.add(id as PlayerId);
       // Only archive real players (skip unsigned, never-rostered prospects).
       if (p.rosterSlot || snapshot.careerStats.gamesPlayed > 0) retirees.push(buildRetireeEntry(snapshot, developed.age));
@@ -329,6 +333,8 @@ export function startNextSeason(league: LeagueState): LeagueState {
     throw new Error('The draft must be complete before starting the season.');
   }
   const season = draft.season;
+  // League Rules: the roster ceiling every team is trimmed to (stock 15).
+  const TARGET_ROSTER = getLeagueRules(league).maxRoster;
 
   const players = { ...league.players } as Record<string, BasketballPlayer>;
   // Trim by *keep value*, not raw current overall — rookies enter deliberately

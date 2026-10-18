@@ -10,6 +10,8 @@ import { type FranchiseEdit } from '@/lib/godMode/relocate';
 import type { BasketballTeam } from '@bs/sport-basketball';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { CloudSavesPanel } from '@/components/settings/CloudSavesPanel';
+import { LeagueRulesPanel } from '@/components/settings/LeagueRulesPanel';
+import { Section } from '@/components/settings/Section';
 
 /**
  * /settings — appearance + sound preferences (Tier 3.1 + 3.7).
@@ -55,7 +57,7 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-black tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
           Settings
         </h1>
-        <p className="text-sm text-[var(--text-sec)]">Appearance and sound saved on this device. Account + billing synced to your BS account.</p>
+        <p className="text-sm text-[var(--text-sec)]">Appearance and sound saved on this device. League rules saved with this league. Account + billing synced to your BS account.</p>
       </header>
 
       {/* STRIPE-4: account + subscription card — only renders when Supabase is
@@ -109,55 +111,13 @@ export default function SettingsPage() {
         </Section>
       )}
 
-      {/* Commissioner salary-cap override (God Mode) */}
-      {league && godOn && <SalaryCapPanel />}
+      {/* League Rules — cap, calendar, health/development, roster. Always
+          available (like BS Football's league settings); not a God Mode power. */}
+      {league && <LeagueRulesPanel />}
 
       {/* Franchise relocation / rebrand (God Mode) */}
       {league && godOn && <RelocatePanel />}
     </main>
-  );
-}
-
-// ===========================================================================
-// Commissioner: custom salary cap (§1.5 — feature parity with football)
-// ===========================================================================
-
-function SalaryCapPanel() {
-  const league = useLeagueStore(s => s.league);
-  const setCap = useLeagueStore(s => s.setCommissionerSalaryCap);
-  const current = (league?.sportData as { commissionerSettings?: { salaryCap?: number } } | undefined)
-    ?.commissionerSettings?.salaryCap;
-  const [value, setValue] = useState(current ? String(Math.round(current / 1_000_000)) : '');
-
-  function apply() {
-    const m = parseFloat(value);
-    if (Number.isFinite(m) && m > 0) void setCap(Math.round(m * 1_000_000));
-  }
-  function clear() {
-    void setCap(null);
-    setValue('');
-  }
-
-  return (
-    <Section
-      title="Salary Cap"
-      desc="Commissioner override — set a flat league salary cap in $M (the tax line and aprons scale from it). Clear to use the standard inflation-based cap."
-    >
-      <div className="flex items-end gap-2">
-        <div className="flex-1">
-          <Field label="Cap ($M)" value={value} onChange={setValue} />
-        </div>
-        <button onClick={apply} className="px-3 py-2 rounded bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700">
-          Set
-        </button>
-        <button onClick={clear} className="px-3 py-2 rounded border border-[var(--border)] text-sm font-semibold hover:bg-[var(--surface-2)]">
-          Clear
-        </button>
-      </div>
-      <p className="text-xs text-[var(--text-sec)] mt-2">
-        {current ? `Active override: $${Math.round(current / 1_000_000)}M` : 'Using the standard inflation-based cap.'}
-      </p>
-    </Section>
   );
 }
 
@@ -327,19 +287,6 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
       <input type="color" value={value} onChange={e => onChange(e.target.value)} className="h-8 w-10 rounded border" style={{ borderColor: 'var(--border)' }} />
       <span className="text-[10px] uppercase tracking-wide opacity-60">{label}</span>
     </label>
-  );
-}
-
-function Section({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
-  return (
-    <section
-      className="mb-4 rounded-xl border bg-[var(--surface)] p-5"
-      style={{ borderColor: 'var(--border)' }}
-    >
-      <h2 className="font-bold">{title}</h2>
-      <p className="text-sm text-[var(--text-sec)] mt-0.5 mb-3">{desc}</p>
-      {children}
-    </section>
   );
 }
 

@@ -12,6 +12,7 @@ import { userExpiringCount } from '@/lib/ui/nextAction';
 import { LotteryBoard } from '@/components/draft/LotteryBoard';
 import { OnTheClockSection } from '@/components/draft/OnTheClockSection';
 import { DraftBoardCard } from '@/components/draft/DraftBoardCard';
+import { MockDraftCard } from '@/components/draft/MockDraftCard';
 import { DraftResultsCard } from '@/components/draft/DraftResultsCard';
 import { DraftFooter } from '@/components/draft/DraftFooter';
 import { DraftRecapInline } from '@/components/draft/DraftRecapInline';
@@ -20,6 +21,7 @@ import { DraftPickTradeModal } from '@/components/draft/DraftPickTradeModal';
 import { PlayerModal } from '@/components/modals/PlayerModal';
 import { LotteryRevealCeremony } from '@/components/draft/LotteryReveal';
 import type { BasketballPlayer, BasketballTeam } from '@bs/sport-basketball';
+import { getMaxRoster } from '@/lib/rules/leagueRules';
 
 /**
  * /draft — the NBA draft board (Phase 2D-4).
@@ -49,6 +51,7 @@ export default function DraftPage() {
   });
   const [tradeOpen, setTradeOpen] = useState(false);
   const [reportModalId, setReportModalId] = useState<string | null>(null);
+  const [boardTab, setBoardTab] = useState<'board' | 'mock'>('board');
   const autoSkippedRef = useRef(false);
 
   const draft = league ? getDraft(league) : null;
@@ -167,7 +170,7 @@ export default function DraftPage() {
   // Inaugural imported drafts now run the full offseason too (BUG-20): Draft →
   // Re-sign → Free Agency, same as a normal post-draft flow.
   const expiringCount = userExpiringCount(league, draft.season);
-  const overLimit = !!userTeam && userTeam.playerIds.length > 15;
+  const overLimit = !!userTeam && userTeam.playerIds.length > getMaxRoster(league);
   const recommendedId = !draft.complete ? recommendedProspectId(league, draft) : null;
 
   const pool = draft.poolIds
@@ -262,17 +265,33 @@ export default function DraftPage() {
       </div>
 
       <div className="grid lg:grid-cols-[1.1fr_1fr] gap-6">
-        {/* Prospect board (search/filter/scout + inline expansion) */}
-        <DraftBoardCard
-          league={league}
-          draft={draft}
-          pool={pool}
-          recommendedId={recommendedId}
-          userOnClock={userOnClock && !draft.complete}
-          loading={store.loading}
-          onScout={(id) => void store.scoutProspect(id)}
-          onDraft={(id) => { void store.draftPick(id); }}
-        />
+        {/* Prospect board (search/filter/scout + inline expansion), or the
+            mock-draft projection, behind a tab. */}
+        <div className="min-w-0">
+          {!draft.complete && (
+            <div className="flex rounded-lg p-0.5 text-xs font-bold mb-2 w-fit" style={{ background: 'var(--surface-2)' }} role="tablist">
+              {([['board', 'Draft Board'], ['mock', 'Mock Draft']] as const).map(([k, label]) => (
+                <button key={k} role="tab" aria-selected={boardTab === k} onClick={() => setBoardTab(k)} className="px-3 py-1 rounded-md" style={boardTab === k ? { background: 'var(--surface)', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' } : { color: 'var(--text-sec)' }}>{label}</button>
+              ))}
+            </div>
+          )}
+          {boardTab === 'mock' && !draft.complete ? (
+            <MockDraftCard league={league} onSelectProspect={setReportModalId} />
+          ) : (
+            <DraftBoardCard
+              league={league}
+              draft={draft}
+              pool={pool}
+              recommendedId={recommendedId}
+              userOnClock={userOnClock && !draft.complete}
+              loading={store.loading}
+              onScout={(id, level) => void store.scoutProspect(id, level)}
+              onScoutMany={(ids, level) => void store.scoutProspects(ids, level)}
+              onToggleWatch={(id) => void store.toggleWatchlist(id)}
+              onDraft={(id) => { void store.draftPick(id); }}
+            />
+          )}
+        </div>
 
         {/* Draft results running board */}
         <DraftResultsCard league={league} draft={draft} teamById={teamById} playerById={playerById} />

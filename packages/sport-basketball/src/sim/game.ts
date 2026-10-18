@@ -349,6 +349,10 @@ export function simBasketballGame(
       const defUnit = offenseIsHome ? awayUnit : homeUnit;
       const offLineup = buildActiveLineup(offense, offUnit, offenseById);
       const defLineup = buildActiveLineup(defense, defUnit, defenseById);
+      offLineup.makeAdj = scoreEffect(
+        offenseIsHome ? homeScore : awayScore, offenseIsHome ? awayScore : homeScore,
+        quarter, secondsRemaining, settings.quarterLengthSeconds,
+      );
 
       // Sim a possession
       const result = simPossession(offLineup, defLineup, rng);
@@ -564,6 +568,29 @@ export function simBasketballGame(
     boxScores: finalBoxScores,
     sportData: gameData,
   };
+}
+
+
+// ===========================================================================
+// Score effects
+// ===========================================================================
+
+/** Second-half score effects: the leading offense eases off and the trailing
+ *  offense presses, scaled by the lead and how late it is. Real NBA games show
+ *  this (garbage time, prevent-ish defense, urgency); without it the sim ran
+ *  ~15-point average margins and ~2% overtime games (NBA ≈12 and ≈6%). Pure
+ *  function of the score — no RNG, so seeds stay stable apart from outcomes. */
+const SCORE_EFFECT_PER_POINT = 0.0036;
+const SCORE_EFFECT_CAP = 0.08;
+export function scoreEffect(offenseScore: number, defenseScore: number, period: number, secondsLeft: number, periodLength: number): number {
+  if (period < 3) return 0;
+  const lead = offenseScore - defenseScore;
+  // Linear ramp across the second half: 0.5 at the start of Q3 → 1.0 at the
+  // final horn (overtime runs at full strength).
+  const through = Math.min(1, Math.max(0, 1 - secondsLeft / periodLength));
+  const ramp = period >= 5 ? 1 : 0.5 + 0.25 * ((period - 3) + through);
+  const adj = -lead * SCORE_EFFECT_PER_POINT * ramp;
+  return Math.max(-SCORE_EFFECT_CAP, Math.min(SCORE_EFFECT_CAP, adj));
 }
 
 // ===========================================================================
