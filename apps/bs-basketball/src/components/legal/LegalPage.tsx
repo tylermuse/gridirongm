@@ -42,6 +42,8 @@ export function LegalLinks({ className = '' }: { className?: string }) {
   return (
     <div className={`flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-sec)] mt-6 ${className}`}>
       <Link href="/about" className="hover:text-[var(--foreground)]">About</Link>
+      <Link href="/blog" className="hover:text-[var(--foreground)]">Blog</Link>
+      <Link href="/rosters/2026" className="hover:text-[var(--foreground)]">Rosters</Link>
       <Link href="/privacy" className="hover:text-[var(--foreground)]">Privacy</Link>
       <Link href="/terms" className="hover:text-[var(--foreground)]">Terms</Link>
       <a href="https://bs-football.com" className="hover:text-[var(--foreground)]">BS Football</a>
