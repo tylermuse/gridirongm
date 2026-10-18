@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { createNewBasketballLeague } from '@/../apps/bs-basketball/src/lib/league/createLeague';
 import { simNextDay } from '@/../apps/bs-basketball/src/lib/sim/runSimDay';
-import { endgamePlan, createRng } from '@bs/sport-basketball';
+import { endgamePlan, createRng, clutchEffect } from '@bs/sport-basketball';
 import type { BasketballStats } from '@bs/sport-basketball';
 
 describe('end-game decisions', () => {
@@ -27,6 +27,13 @@ describe('end-game decisions', () => {
     const p = endgamePlan(-3, 15, true, rng);
     expect(p.kind === 'hurry' && p.forceThree).toBe(true);
     expect(endgamePlan(0, 3, true, rng).kind).toBe('heave');
+  });
+  it('clutch convergence only bites late in close games, toward the trailer', () => {
+    expect(clutchEffect(4, 600)).toBe(0);   // too early
+    expect(clutchEffect(15, 60)).toBe(0);   // blowout
+    expect(clutchEffect(0, 30)).toBe(0);    // tied
+    expect(clutchEffect(4, 60)).toBeLessThan(0);   // leader eases off
+    expect(clutchEffect(-4, 60)).toBeGreaterThan(0); // trailer presses
   });
   it('never fouls when the game is out of reach', () => {
     for (let i = 0; i < 30; i++) expect(endgamePlan(15, 20, true, rng).kind).not.toBe('foul');
@@ -74,6 +81,7 @@ describe('season calibration bands', () => {
   });
   it('games are competitive and sometimes go to overtime', () => {
     expect(marginSum / games.length).toBeLessThan(14); // NBA ~12
-    expect(ot / games.length).toBeGreaterThan(0.02);   // NBA ~6%; sim ~4%
+    expect(ot / games.length).toBeGreaterThan(0.03);   // NBA ~6%; sim ~5-6%
+    expect(ot / games.length).toBeLessThan(0.09);
   });
 });
