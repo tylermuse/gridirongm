@@ -13,9 +13,15 @@ import type { BaseGameResult } from '@bs/core/adapter';
 import type { BasketballPlayer, BasketballStats, BasketballTeam } from '@bs/sport-basketball';
 
 type GameResult = BaseGameResult<BasketballStats>;
-type Side = 'home' | 'away';
+export type Side = 'home' | 'away';
 
-export type LiveEventKind = 'make3' | 'make2' | 'ft' | 'block' | 'steal' | 'turnover' | 'rebound';
+export type LiveEventKind =
+  | 'make3' | 'make2' | 'ft' | 'block' | 'steal' | 'turnover' | 'rebound'
+  // Real-log only (fromPlayLog.ts):
+  | 'miss' | 'sub' | 'period';
+
+/** A shot plotted on the court canvas (viewBox 200×100). */
+export interface LiveShot { x: number; y: number; made: boolean; type: 'three' | 'midrange' | 'at_rim' | 'post' }
 
 export interface LiveEvent {
   quarter: number;     // 1-4, 5+ = OT
@@ -27,6 +33,18 @@ export interface LiveEvent {
   scoring: boolean;
   kind: LiveEventKind;
   points: number;      // points scored on this event (0 for non-scoring)
+  // ---- Present on events built from the engine's real play log ----
+  playerId?: string;
+  assistId?: string;
+  shot?: LiveShot;
+  /** Stat deltas this event applies: [playerId, fieldCode, delta]. */
+  stats?: [string, string, number][];
+  and1?: boolean;
+  offensive?: boolean;
+  /** For 'sub' events: the five now on the floor for `side`. */
+  onFloor?: string[];
+  /** Real but low-signal (e.g. a rapid-fire sub) — feed hides it, state still applies. */
+  quiet?: boolean;
 }
 
 interface Basket { side: Side; playerId: string; pts: number; kind: '3' | '2' | 'ft' }

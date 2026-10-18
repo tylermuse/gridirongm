@@ -42,4 +42,8 @@ export type {
   BasketballGameContext,
   BasketballGameSettings,
   BasketballGameData,
+  PlayLog,
+  PlayLogEntry,
+  PlayLogFieldCode,
 } from './game';
+export { PLAY_LOG_FIELDS } from './game';
