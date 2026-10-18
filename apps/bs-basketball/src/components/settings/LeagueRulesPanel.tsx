@@ -234,8 +234,7 @@ function RuleSlider({
         step={range.step}
         value={value}
         onChange={e => onChange(Number(e.target.value))}
-        className="w-full mt-1"
-        style={{ accentColor: 'var(--accent)' }}
+        className="bs-range w-full mt-1"
       />
       <div className="flex flex-wrap items-center justify-between gap-x-3 text-xs text-[var(--text-sec)]">
         <span>{spec.hint}</span>
@@ -309,8 +308,7 @@ function SalaryCapControl({
             step={1}
             value={valueM ?? curM}
             onChange={e => onChange(Number(e.target.value))}
-            className="w-full mt-1"
-            style={{ accentColor: 'var(--accent)' }}
+            className="bs-range w-full mt-1"
           />
         </div>
       )}

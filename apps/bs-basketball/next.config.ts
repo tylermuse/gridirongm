@@ -51,6 +51,10 @@ const withSerwist = withSerwistInit({
 
 const nextConfig: NextConfig = {
   transpilePackages: ['@bs/core', '@bs/sport-basketball'],
+  // Dev runs on Turbopack (Next 16 default) with Serwist disabled; the Serwist
+  // wrapper still contributes a webpack hook, so declare an (empty) Turbopack
+  // config or `next dev` refuses to start. Production builds use --webpack.
+  turbopack: {},
   ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   async headers() {
     return [
