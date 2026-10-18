@@ -158,7 +158,7 @@ selA.value = 0; selB.value = 1;
 
 // ---------- Game state ----------
 const G = { fieldPos:25, down:1, toGo:10, quarter:1, clock:900, score:[0,0], off:0, busy:false, speed:1.5 };
-const SIM_BUILD='b16i'; window.__SIM_BUILD=SIM_BUILD;
+const SIM_BUILD='b16j'; window.__SIM_BUILD=SIM_BUILD;
 const EMBED = new URLSearchParams(location.search).get('embed')==='1'; if(EMBED) document.body.classList.add('embed');   // the 1x button plays at 1.5x real time
 const EMB_TEAMS = [null,null];   /* set by the game page in embed mode (bsgm:setup) */
 const team = i => EMB_TEAMS[i] || TEAMS[+(i===0?selA.value:selB.value)];
@@ -1020,9 +1020,9 @@ function choreograph(res){
     const flightSeg = {t0:tThrow, t1:tCatch, flight:{x0:hx+.35,y0:1.9,z0:hz, x1:catchX,y1:1.35,z1:cz, h:deep?7: scn? 1.6 : 2.4}};
     ballPlan.push(flightSeg);
     O.qb.throwScale = deep ? 1.6 : 1.2; O.qb.throwT0 = tThrow - .5*O.qb.throwScale; O.qb.aimAt = [catchX, cz];   // deep shots get a longer wind-up; release stays at tThrow
-    if((window.__mxQb ?? true) && !scn && res.kind!=='int' && (tThrow - snap) >= 1.9 && Math.random() < (window.__mxQbP ?? .8)){ // a QB holding it ≥1.9 s: the captured scramble-and-throw (slides left out of the pocket, sets, throws; release 1.02 s in)
-      ev(tThrow-1.03, ()=>{ const hd = Math.atan2(catchX-O.qb.x, cz-O.qb.z) - O.qb.face; O.qb.behav = P([playT,O.qb.x,O.qb.z],[tThrow+2,O.qb.x,O.qb.z]); O.qb.faceLock={angle:O.qb.face, until:tThrow+.6};
-        O.qb.mocapAct = {clip:'mx_qb_pass', t0:tThrow-1.02, start:4.4, end:5.95, heading:hd, moveRoot:true}; }); }
+    if((window.__mxQb ?? true) && !scn && !deep && res.kind!=='int' && (tThrow - snap) >= 1.9 && Math.random() < (window.__mxQbP ?? .8)){ // a QB holding a short/medium throw ≥1.9 s: the captured pivot-and-throw (the clip's roll-out has him side-on until 5.2 s, so only the last .42 s before the release is used; deep shots keep the set-and-fire capture)
+      ev(tThrow-.43, ()=>{ const hd = Math.atan2(catchX-O.qb.x, cz-O.qb.z) - O.qb.face; O.qb.behav = P([playT,O.qb.x,O.qb.z],[tThrow+2,O.qb.x,O.qb.z]); O.qb.faceLock={angle:O.qb.face, until:tThrow+.6};
+        O.qb.mocapAct = {clip:'mx_qb_pass', t0:tThrow-.42, start:5.0, end:5.95, heading:hd, moveRoot:true}; }); }
     if(tThrow - snap > 2.1 && res.kind!=='int'){ const rush = D.dl[3], blk = O.ol[4];
       ev(tThrow-1.0, ()=>{ rush.engage=null; blk.engage=null; rush.faceLock=null; rush.behav = F(O.qb, playT, 7.0, [0,0], .9); blk.behav = P([playT,blk.x,blk.z],[playT+.5,blk.x-.6,blk.z-1.2]); });
       ev(tThrow+.05, ()=>{ if(Math.hypot(rush.x-O.qb.x, rush.z-O.qb.z) < 3.2){ rush.wrap=O.qb; rush.wrapT=playT; rush.behav={type:'lunge', x0:rush.x, z0:rush.z, t0:playT, t1:playT+.4, tgt:O.qb}; } });
@@ -1628,17 +1628,18 @@ if(new URLSearchParams(location.search).get('perf')==='1'){ const el=document.cr
   setInterval(()=>{ el.textContent=`${PERF.fps.toFixed(0)} fps · sim ${PERF.sim.toFixed(1)} ms · render ${PERF.render.toFixed(1)} ms · dpr ${renderer.getPixelRatio()} · ${renderer.getSize(new THREE.Vector2()).x|0}×${renderer.getSize(new THREE.Vector2()).y|0}`; }, 500); }
 function frame(now){
   const _p0 = performance.now(); const dtRaw=(now-last)/1000;
-  const dtReal = Math.min(.05,dtRaw); last=now; crowdU.uTime.value=now/1000; ribbonTex.offset.x=(ribbonTex.offset.x+dtReal*.03)%1;
+  const dtReal = Math.min(.2,dtRaw); last=now;   /* real elapsed time (capped for tab switches): a slow frame no longer slows the play down — the sim sub-steps below */ crowdU.uTime.value=now/1000; ribbonTex.offset.x=(ribbonTex.offset.x+dtReal*.03)%1;
   crowdU.uCheer.value += ((running && play && play.td && playT>=play.tEnd ? 1 : 0) - crowdU.uCheer.value)*Math.min(1,dtReal*1.6);
-  if(running){
-    const dt = dtReal*G.speed; playT += dt;
+  if(running){ // fixed-size sub-steps (≤50 ms of play time each) so contact checks and the captures stay stable whatever the frame rate; wall-clock pace is kept
+    let rem = dtReal*G.speed;
+    while(rem > 1e-6 && running){ const dt = Math.min(rem, .05); rem -= dt; playT += dt;
     events.forEach(e=>{ if(!e.done && playT>=e.t){ e.done=true; e.fn(); } });
     if(!play.whistled && playT >= (play.whistleT ?? play.tEnd)) blowWhistle();
     actors.forEach(a=>{ if(a.celebAt!=null && playT>=a.celebAt && (a.celebrate==null || a.celebrate===false)){ a.celebrate=playT; a.celebAt=null; a.behav={type:'coast', vx:(a.vx||0)*.5, vz:(a.vz||0)*.5, t0:playT}; } });
     actors.forEach(a=>stepActor(a, playT, dt)); refObjs.forEach(r=>r.update(playT, dt)); sideline.players.forEach(a=>{ a.mixer.update(dt); });
     separate();
     updateBall(playT);
-    if(playT > play.tEnd + (play.td ? (play.tdHold ?? 3.4) : EMBED? 1.0 : 1.3)){ running=false; finishPlay(); }
+    if(playT > play.tEnd + (play.td ? (play.tdHold ?? 3.4) : EMBED? 1.0 : 1.3)){ running=false; finishPlay(); } }
   } else if(preSnap){ preT += dtReal; actors.forEach(a=>stepActor(a, 0, dtReal)); sideline.players.forEach(a=>{ a.mixer.update(dtReal); });
     if(O.qb){ const B=O.qb.bones; B.Head.rotation.y += .55*Math.sin(preT*1.7); B.Spine1.rotation.y += .12*Math.sin(preT*1.7); O.qb.model.updateMatrixWorld(true); }
     D.dl?.forEach((d,i)=>{ d.body.position.x = .05*Math.sin(preT*2.3+i); });
@@ -1932,6 +1933,7 @@ function embedStart(){
     if(m.type==='bsgm:setup'){ EMB_TEAMS[0]=m.home||null; EMB_TEAMS[1]=m.away||null; if(fieldMat.map) fieldMat.map.dispose(); fieldMat.map = fieldTexture(team(0)); fieldMat.needsUpdate=true; if(!G.busy) setupFormation(); paintBoards(); renderBug(); }
     else if(m.type==='bsgm:play'){ pending=m; sndInit(); runNext(); }
     else if(m.type==='bsgm:state'){ if(!G.busy && !pending){ applyPre(m); $('banner').hidden=true; renderBug(); setupFormation(null); snapCamera(); } }   /* idle between plays: re-form at the game's real situation (e.g. the 3 for a two-point try) */
+    else if(m.type==='bsgm:hello'){ post({type:'bsgm:ready'}); }   /* the page asks again after a (re)mount: a ready sent before its listener was up is lost */
     else if(m.type==='bsgm:skip'){ pending=null; if(G.busy){ G.speed = 12; } }   /* fast-forward to the end; the done message still fires, the page has already hidden us */
     else if(m.type==='bsgm:view'){ if(m.cam && CAMS[m.cam]){ window.__camProfile = CAMS[m.cam]; if(!running) snapCamera(); } if(m.lighting==='day' || m.lighting==='night') setLighting(m.lighting); }   /* camera angle + day/night from the game's controls */
     else if(m.type==='bsgm:crowd'){ if(m.level!=null) sndCrowd(m.level, 1); } });

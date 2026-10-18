@@ -18,7 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayEvent } from '@/lib/engine/playByPlay';
 import { toSimPlay, toSimTeam, type SimStateMessage, type SimTeam } from '@/lib/engine/liveSim3d';
 
-const SIM_BUILD = 'b16i';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
+const SIM_BUILD = 'b16j';   // bump with public/chase-cam/index.html so browsers never serve a cached sim
 const SIM_URL = `/chase-cam/index.html?embed=1&model=fp27&v=${SIM_BUILD}`;
 const STORAGE_KEY = 'bsgm.sim3d';
 const VIEW_KEY = 'bsgm.sim3d.view';
@@ -115,6 +115,15 @@ export function LiveSim3D({
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
   }, [enabled, setActiveBoth]);
+
+  // Until the sim says ready, ask it every second: its ready message can land before this
+  // listener exists (dev double-mount, a cached iframe), and a lost ready meant the sim ran the
+  // whole game as its demo teams at the wrong spot.
+  useEffect(() => {
+    if (!enabled || ready) return;
+    const iv = window.setInterval(() => post({ type: 'bsgm:hello' }), 1000);
+    return () => window.clearInterval(iv);
+  }, [enabled, ready, post]);
 
   // Team colours → sim (once ready, and whenever the matchup changes)
   const homeSim: SimTeam | null = homeTeam ? toSimTeam(homeTeam, 'home') : null;
