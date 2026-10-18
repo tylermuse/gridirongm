@@ -43,7 +43,8 @@ import type {
 import { emptyBasketballStats, addBasketballStats } from '../types';
 import type { CoachSchemeEffect } from '../coachingSystem';
 import { createRng, type Rng } from './rng';
-import { simPossession, type SimLineup, type StatEvent } from './possession';
+import { simPossession, simIntentionalFoul, type SimLineup, type StatEvent } from './possession';
+import { endgamePlan, type EndgamePlan } from './endgame';
 
 // ===========================================================================
 // Public types
@@ -154,6 +155,8 @@ export type PlayLogEntry =
       st?: 'three' | 'midrange' | 'at_rim' | 'post';
       /** Contested shot. */
       c?: 1;
+      /** End-game intentional foul (two FTs, no shot). */
+      f?: 'int';
       /** Running score after the possession. */
       h: number;
       a: number;
@@ -301,12 +304,19 @@ export function simBasketballGame(
       pts: result.pointsScored,
       ...(result.shotType ? { st: result.shotType } : {}),
       ...(result.contested ? { c: 1 as const } : {}),
+      ...(result.intentional ? { f: 'int' as const } : {}),
       h: homeScore, a: awayScore,
     });
   };
   const logSub = (q: number, secondsLeft: number, isHome: boolean, lineup: SimLineup) => {
     playLog.push({ k: 's', q, t: Math.max(0, Math.round(secondsLeft)), side: isHome ? 'h' : 'a', ids: lineup.players.map(p => intern(p.id)) });
   };
+
+  // Shared shooting environment for this game (officiating, tempo, a hot or
+  // cold night in the building). Applied to BOTH offenses, it correlates the
+  // two teams' scores like real games (r ≈ 0.35-0.4) — independent teams made
+  // margins too wide (SD 16 vs NBA ~14.5) and overtime too rare.
+  const gameEnv = (rng.random() + rng.random() + rng.random() - 1.5) * GAME_ENV_SPREAD;
 
   // Pace + possession-length tuning
   const pace = gamePace(home, away);
@@ -349,16 +359,26 @@ export function simBasketballGame(
       const defUnit = offenseIsHome ? awayUnit : homeUnit;
       const offLineup = buildActiveLineup(offense, offUnit, offenseById);
       const defLineup = buildActiveLineup(defense, defUnit, defenseById);
-      offLineup.makeAdj = scoreEffect(
+      offLineup.makeAdj = gameEnv + scoreEffect(
         offenseIsHome ? homeScore : awayScore, offenseIsHome ? awayScore : homeScore,
         quarter, secondsRemaining, settings.quarterLengthSeconds,
       );
 
+      // End-game decisions (final quarter only): fouls, clock, last shot.
+      const plan = endgamePlan(
+        (offenseIsHome ? homeScore : awayScore) - (offenseIsHome ? awayScore : homeScore),
+        secondsRemaining, quarter >= settings.numQuarters, rng,
+      );
+      if (plan.kind === 'hurry' || plan.kind === 'heave') offLineup.forceThree = plan.forceThree;
+      if (plan.kind === 'heave') offLineup.makeAdj = HEAVE_MAKE_ADJ;
+
       // Sim a possession
-      const result = simPossession(offLineup, defLineup, rng);
+      const result = plan.kind === 'foul'
+        ? simIntentionalFoul(offLineup, defLineup, rng)
+        : simPossession(offLineup, defLineup, rng);
 
       // Clamp seconds if we'd overshoot the clock
-      const secondsUsed = Math.min(result.secondsElapsed, secondsRemaining);
+      const secondsUsed = Math.min(planSeconds(plan, result.secondsElapsed), secondsRemaining);
       secondsRemaining -= secondsUsed;
 
       // Accumulate stats for all 10 players on the floor (minutes + plus/minus)
@@ -411,9 +431,10 @@ export function simBasketballGame(
         break;
       }
 
-      // If the average possession length means we'd run negative seconds
-      // ~half the time, end the quarter when remaining < half avg.
-      if (secondsRemaining < avgPossessionSeconds * 0.5) break;
+      // Early quarters end when less than half an average possession is left.
+      // The final quarter plays to the horn — those seconds decide close games.
+      if (quarter < settings.numQuarters && secondsRemaining < avgPossessionSeconds * 0.5) break;
+      if (secondsRemaining < 1) break;
     }
 
     quarterScores.push({
@@ -452,9 +473,18 @@ export function simBasketballGame(
       const defUnit = offenseIsHome ? awayUnit : homeUnit;
       const offLineup = buildActiveLineup(offense, offUnit, offenseById);
       const defLineup = buildActiveLineup(defense, defUnit, defenseById);
+      offLineup.makeAdj = gameEnv;
 
-      const result = simPossession(offLineup, defLineup, rng);
-      const secondsUsed = Math.min(result.secondsElapsed, secondsRemaining);
+      const plan = endgamePlan(
+        (offenseIsHome ? homeScore : awayScore) - (offenseIsHome ? awayScore : homeScore),
+        secondsRemaining, true, rng,
+      );
+      if (plan.kind === 'hurry' || plan.kind === 'heave') offLineup.forceThree = plan.forceThree;
+      if (plan.kind === 'heave') offLineup.makeAdj = HEAVE_MAKE_ADJ;
+      const result = plan.kind === 'foul'
+        ? simIntentionalFoul(offLineup, defLineup, rng)
+        : simPossession(offLineup, defLineup, rng);
+      const secondsUsed = Math.min(planSeconds(plan, result.secondsElapsed), secondsRemaining);
       secondsRemaining -= secondsUsed;
 
       for (const p of offLineup.players) {
@@ -476,7 +506,7 @@ export function simBasketballGame(
       if (result.possessionFlipsToDefense) offenseIsHome = !offenseIsHome;
       totalPossessions++;
 
-      if (secondsRemaining < avgPossessionSeconds * 0.5) break;
+      if (secondsRemaining < 1) break;
     }
 
     quarterScores.push({
@@ -571,6 +601,24 @@ export function simBasketballGame(
 }
 
 
+/** Width of the shared per-game shooting environment (sum of 3 uniforms →
+ *  roughly normal, SD ≈ GAME_ENV_SPREAD / 2). */
+const GAME_ENV_SPREAD = 0.05;
+
+/** Make-rate multiplier delta for a rushed last-second shot (≈ −70%). */
+const HEAVE_MAKE_ADJ = -0.7;
+
+/** Clock used by a possession under an end-game plan. */
+function planSeconds(plan: EndgamePlan, natural: number): number {
+  switch (plan.kind) {
+    case 'hold': return Math.max(natural, plan.minSeconds);
+    case 'hurry': return plan.seconds;
+    case 'lastShot': return plan.seconds;
+    case 'heave': return Number.POSITIVE_INFINITY; // clamped to the time left
+    default: return natural;
+  }
+}
+
 // ===========================================================================
 // Score effects
 // ===========================================================================
@@ -580,8 +628,8 @@ export function simBasketballGame(
  *  this (garbage time, prevent-ish defense, urgency); without it the sim ran
  *  ~15-point average margins and ~2% overtime games (NBA ≈12 and ≈6%). Pure
  *  function of the score — no RNG, so seeds stay stable apart from outcomes. */
-const SCORE_EFFECT_PER_POINT = 0.0036;
-const SCORE_EFFECT_CAP = 0.08;
+const SCORE_EFFECT_PER_POINT = 0.005;
+const SCORE_EFFECT_CAP = 0.1;
 export function scoreEffect(offenseScore: number, defenseScore: number, period: number, secondsLeft: number, periodLength: number): number {
   if (period < 3) return 0;
   const lead = offenseScore - defenseScore;

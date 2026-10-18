@@ -221,9 +221,11 @@ function narratePossession(
       push({
         quarter: p.q, clock, side, kind: 'ft', scoring: ftm > 0, points: p.pts, playerId: shooterAtLine,
         stats,
-        text: shooterAtLine
-          ? `${nm(players, fouler)} reaches in — ${nm(players, shooterAtLine)} to the line in the bonus, ${ftm} of ${fta}`
-          : `${nm(players, fouler)} picks up a foul`,
+        text: !shooterAtLine
+          ? `${nm(players, fouler)} picks up a foul`
+          : p.f === 'int'
+            ? `${nm(players, fouler)} fouls on purpose to stop the clock — ${nm(players, shooterAtLine)} hits ${ftm} of ${fta}`
+            : `${nm(players, fouler)} reaches in — ${nm(players, shooterAtLine)} to the line in the bonus, ${ftm} of ${fta}`,
       });
       return;
     }
