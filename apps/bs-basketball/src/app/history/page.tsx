@@ -295,7 +295,7 @@ function SeasonDetail({ league, d }: { league: League; d: SeasonDrillDown }) {
                     <span className="font-semibold truncate">{r.name}</span>
                     {r.teamId && <TeamChip team={teams.get(r.teamId)} />}
                     <span className="ml-auto text-xs tabular-nums text-[var(--text-sec)]">
-                      age {r.age} · {Math.round(r.pts).toLocaleString()} career pts
+                      age {r.age}{r.pts > 0 ? ` · ${Math.round(r.pts).toLocaleString()} career pts` : ""}
                     </span>
                   </Row>
                 ))}
