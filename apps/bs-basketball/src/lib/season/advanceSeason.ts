@@ -47,6 +47,7 @@ import { setupDraft, getDraft, autoPickUntilUser } from '../draft';
 import { computeSeasonAwards } from '../awards';
 import { buildSeasonHistoryEntry, buildRetireeEntry, type HistoryRetiree } from '../history';
 import { applySeasonApproval } from '../approval';
+import { developObjectivePlayerIds, ensureSeasonObjectives } from '../owner/objectives';
 import { resolveProtectedPicks, describeConveyance, pickKey, type PickProtection } from '../trade';
 import { appendTransaction } from '../transactions';
 import { getLeagueRules } from '../rules/leagueRules';
@@ -117,29 +118,61 @@ export function canAdvanceSeason(league: LeagueState): boolean {
 // ===========================================================================
 
 export function enterOffseason(input: LeagueState): LeagueState {
+  const nextSeason = input.currentSeason + 1;
+
+  // Each team's head-coach development rating drives how fast its young players
+  // grow over the offseason (parity: coaching matters for the rebuild loop),
+  // the player-development assistant adds its own ±15% for under-25s, and
+  // League Rules scale progression/regression on top. One helper so the owner
+  // objective grading and the real offseason roll are identical.
+  const teamDevRating = new Map<string, number>();
+  const teamDevCoachRating = new Map<string, number>();
+  const rules = getLeagueRules(input);
+  for (const t of input.teams) {
+    const hc = getHeadCoach(input, t.id);
+    if (hc) teamDevRating.set(t.id, hc.ratings.development);
+    const pdc = getDevCoach(input, t.id);
+    if (pdc) teamDevCoachRating.set(t.id, pdc.ratings.development);
+  }
+  const developForOffseason = (p: BasketballPlayer, saveId: string): BasketballPlayer => {
+    const teamId = p.rosterSlot?.teamId;
+    const devRating = teamId ? teamDevRating.get(teamId) : undefined;
+    const hcMult = devRating != null ? resolveBasketballPDCEffect(devRating, p.age) : undefined;
+    const pdcMult = devCoachMultiplier(teamId ? teamDevCoachRating.get(teamId) : undefined, p.age);
+    const developmentMultiplier = hcMult == null && pdcMult === 1 ? undefined : (hcMult ?? 1) * pdcMult;
+    // Seed development with the SAVE (league.id is a fresh uuid per save) so a
+    // player's boom/bust fate varies across saves of the same league — a 90-POT
+    // pick might hit in one save and bust in another (BUG-15). Without league.id
+    // the seed is just player+season, so every save replays identical outcomes.
+    return developBasketballPlayer(p, nextSeason, {
+      developmentMultiplier,
+      progressionScale: rules.progressionMult,
+      regressionScale: rules.regressionMult,
+      rngSeed: `${saveId}-${p.id}-${nextSeason}`,
+      // Career-stable boom/bust trait: per save + per player, NO season — so the
+      // prospect's development DNA is fixed for his whole career, not re-rolled
+      // each offseason.
+      devTraitSeed: `${saveId}-${p.id}`,
+    });
+  };
+
+  // "Develop a young player" owner objectives grade on the player's
+  // post-development OVR — the same deterministic roll applied below (ratings
+  // are untouched by the season snapshot, so the result is identical).
+  const developedOverall: Record<string, number> = {};
+  for (const pid of developObjectivePlayerIds(input)) {
+    const p = input.players[pid as PlayerId] as BasketballPlayer | undefined;
+    if (p) developedOverall[pid] = developForOffseason(p, input.id).ratings.overall;
+  }
+
   // End-of-season approval swing for the user team (may fire the GM, which
   // clears userTeamId). Done first, while record + bracket are intact.
-  const league = applySeasonApproval(input).league;
-  const nextSeason = league.currentSeason + 1;
+  const league = applySeasonApproval(input, { developedOverall }).league;
 
   // Snapshot the finished season into history + accumulate career stats — both
   // done BEFORE aging, so they reflect the season just played.
   const historyEntry = buildSeasonHistoryEntry(league);
   const seasonStats = computeSeasonAwards(league)?.seasonStats;
-
-  // Each team's head-coach development rating drives how fast its young players
-  // grow over the offseason (parity: coaching matters for the rebuild loop).
-  const teamDevRating = new Map<string, number>();
-  const teamDevCoachRating = new Map<string, number>();
-  // League Rules: progression / regression speed + retirement-age bias.
-  const rules = getLeagueRules(league);
-  for (const t of league.teams) {
-    const hc = getHeadCoach(league, t.id);
-    if (hc) teamDevRating.set(t.id, hc.ratings.development);
-    // Player-development assistant: a separate ±15% growth multiplier for <25s.
-    const pdc = getDevCoach(league, t.id);
-    if (pdc) teamDevCoachRating.set(t.id, pdc.ratings.development);
-  }
 
   // Develop everyone; drop retirees (the schedule is replaced later, so nothing
   // references them once the season starts).
@@ -176,27 +209,7 @@ export function enterOffseason(input: LeagueState): LeagueState {
       sportData: { ...p.sportData, prevRatings: p.ratings, seasonLog },
     };
 
-    const teamId = p.rosterSlot?.teamId;
-    const devRating = teamId ? teamDevRating.get(teamId) : undefined;
-    const hcMult = devRating != null ? resolveBasketballPDCEffect(devRating, p.age) : undefined;
-    // Dev coach stacks multiplicatively on the head coach's effect; League
-    // Rules' progressionScale multiplies on top of both inside the engine.
-    const pdcMult = devCoachMultiplier(teamId ? teamDevCoachRating.get(teamId) : undefined, p.age);
-    const developmentMultiplier = hcMult == null && pdcMult === 1 ? undefined : (hcMult ?? 1) * pdcMult;
-    // Seed development with the SAVE (league.id is a fresh uuid per save) so a
-    // player's boom/bust fate varies across saves of the same league — a 90-POT
-    // pick might hit in one save and bust in another (BUG-15). Without league.id
-    // the seed is just player+season, so every save replays identical outcomes.
-    const developed = developBasketballPlayer(snapshot, nextSeason, {
-      developmentMultiplier,
-      progressionScale: rules.progressionMult,
-      regressionScale: rules.regressionMult,
-      rngSeed: `${league.id}-${id}-${nextSeason}`,
-      // Career-stable boom/bust trait: per save + per player, NO season — so the
-      // prospect's development DNA is fixed for his whole career, not re-rolled
-      // each offseason.
-      devTraitSeed: `${league.id}-${id}`,
-    });
+    const developed = developForOffseason(snapshot, league.id);
     if (shouldBasketballPlayerRetire(developed, { retirementAgeOffset: rules.retirementAgeOffset })) {
       retired.add(id as PlayerId);
       // Only archive real players (skip unsigned, never-rostered prospects).
@@ -561,8 +574,10 @@ export function startNextSeason(league: LeagueState): LeagueState {
 
   // Season history was recorded in enterOffseason (before aging) — don't
   // overwrite it here. User coaches whose deals lapsed without a decision stay
-  // on a 1-year deal so the team is never left without staff.
-  return renewLapsedUserCoaches({
+  // on a 1-year deal so the team is never left without staff, and the owner
+  // hands out the new season's objectives (preseason) from the rolled-over
+  // roster + last season's result.
+  return ensureSeasonObjectives(renewLapsedUserCoaches({
     ...league,
     currentSeason: season,
     currentPhase: 'preseason',
@@ -573,7 +588,7 @@ export function startNextSeason(league: LeagueState): LeagueState {
     competitions,
     games,
     sportData,
-  }, season);
+  }, season));
 }
 
 // ===========================================================================

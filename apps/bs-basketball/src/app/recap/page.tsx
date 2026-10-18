@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { buildRecap, type RecapAward, type SeasonRecap } from '@/lib/recap';
 import { RecapShow } from '@/components/recap/RecapShow';
+import { seasonObjectiveGrades } from '@/lib/owner/objectives';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -69,6 +70,31 @@ export default function RecapPage() {
           </div>
         )}
       </section>
+
+      {/* Owner objectives — how the front office graded out this season. */}
+      {(() => {
+        const { grades, delta } = seasonObjectiveGrades(league, recap.season);
+        if (!grades.length) return null;
+        const met = grades.filter(g => g.grade === 'met').length;
+        const color = (g: string) => g === 'met' ? '#059669' : g === 'partial' ? '#d97706' : g === 'missed' ? '#dc2626' : 'var(--text-sec)';
+        return (
+          <section className="rounded-xl border bg-[var(--surface)] p-4 mb-6" style={{ borderColor: 'var(--border)' }}>
+            <div className="flex items-baseline justify-between mb-2">
+              <h2 className="text-xs uppercase tracking-widest text-[var(--text-sec)]">Owner objectives · {met}/{grades.length} met</h2>
+              <span className="text-xs font-bold tabular-nums" style={{ color: delta >= 0 ? '#059669' : '#dc2626' }}>{delta >= 0 ? '+' : ''}{delta} owner approval</span>
+            </div>
+            <ul className="space-y-1.5">
+              {grades.map(g => (
+                <li key={g.id} className="flex items-center gap-2 text-sm">
+                  <span className="text-[10px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0" style={{ background: `color-mix(in srgb, ${color(g.grade)} 14%, transparent)`, color: color(g.grade) }}>{g.grade}</span>
+                  <span className="flex-1 min-w-0 truncate">{g.description}</span>
+                  <span className="text-xs text-[var(--text-sec)] tabular-nums shrink-0">{g.detail}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })()}
 
       {/* Episodic recap show (#15) */}
       <RecapShow league={league} recap={recap} />

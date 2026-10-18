@@ -74,6 +74,7 @@ import { resolveUserOffer, negotiateOffer, releasePlayer as releasePlayerState, 
 import { applyRelease } from '../roster/release';
 import { playThroughInjury as playThroughInjuryState } from '../injuries';
 import { extensionMarket, extensionAccepted, buildExtension } from '../roster/extension';
+import { negotiateExtension, acceptExtensionAsk, getTalk, openTalk, currentAsk, type OfferResponse } from '../roster/negotiation';
 import { executeTrade, proposeTrade as proposeTradeLib, type TradeSideInput, type ProposeResult } from '../trade';
 import { acceptTradeProposal, declineTradeProposal, counterTradeProposal, setTradeBlock as setTradeBlockLib, newProposalNote, type ProposalResponse, type CounterResult } from '../trade/proposals';
 import type { DealSuggestion } from '../trade/finder';
@@ -281,6 +282,11 @@ interface LeagueStore {
   /** R2-1: batch-extend N players in a single state update + single save. Used
    *  by Re-sign All so we don't fire N sequential extendPlayer calls (each
    *  rebuilds + persists league state, visibly stalling on a full class). */
+  /** Multi-round re-sign/extension talks: one offer = one round (accept /
+   *  counter / offended / walks). Persists the talk state per player. */
+  negotiateExtension: (playerId: string, offer: Offer) => Promise<OfferResponse | null>;
+  /** "Offer what he wants" — sign at his current ask (always cap-legal). */
+  acceptExtensionAsk: (playerId: string) => Promise<OfferResponse | null>;
   extendPlayersBulk: (signings: { playerId: string; offer: Offer }[]) => Promise<{ accepted: number; declined: number }>;
 
   /** R2-1: batch-release N players in one pass — pair to extendPlayersBulk for
@@ -1544,6 +1550,40 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
   },
 
+  async negotiateExtension(playerId, offer) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return null; }
+    const out = negotiateExtension(current, playerId, offer);
+    if (!out) { set({ error: 'Player not found.' }); return null; }
+    if (out.league === current) return out.response; // invalid offer — nothing changed
+    try {
+      await saveLeague(out.league);
+      set({ league: out.league, ...(out.response.kind === 'accepted' ? { simToast: { text: `✅ ${out.response.message}` } } : {}) });
+      return out.response;
+    } catch (err) {
+      console.error('[bs-hoops] negotiateExtension failed:', err);
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  },
+
+  async acceptExtensionAsk(playerId) {
+    const current = get().league;
+    if (!current) { set({ error: 'No league loaded.' }); return null; }
+    const out = acceptExtensionAsk(current, playerId);
+    if (!out) { set({ error: 'Player not found.' }); return null; }
+    if (out.league === current) return out.response;
+    try {
+      await saveLeague(out.league);
+      set({ league: out.league, simToast: { text: `✅ ${out.response.message}` } });
+      return out.response;
+    } catch (err) {
+      console.error('[bs-hoops] acceptExtensionAsk failed:', err);
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  },
+
   // R2-1: batch-extend N players in one in-memory pass + a single save. The
   // re-sign page's old "Re-sign All" loop awaited extendPlayer per player —
   // each call rebuilt + persisted the full league state, visibly stalling
@@ -1554,19 +1594,29 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     if (!current) { set({ error: 'No league loaded.' }); return { accepted: 0, declined: 0 }; }
     set({ loading: true, error: null });
     try {
-      const players = { ...current.players } as Record<string, BasketballPlayer>;
+      let league = current;
       let accepted = 0;
       let declined = 0;
       for (const { playerId, offer } of signings) {
-        const player = players[playerId] as BasketballPlayer | undefined;
+        // An offer at (or above) his negotiated ask goes through the same
+        // "Offer what he wants" path as the modal — so a player who ended talks
+        // or is mid-negotiation is priced consistently. Other offers keep the
+        // legacy market-acceptance check.
+        const talk = getTalk(league, playerId);
+        const player = league.players[playerId as Parameters<typeof releasePlayerState>[1]] as BasketballPlayer | undefined;
         if (!player) { declined++; continue; }
+        const ask = currentAsk(talk ?? openTalk(league, player));
+        if (offer.salaryPerYear >= ask.salaryPerYear && offer.years === ask.years) {
+          const out = acceptExtensionAsk(league, playerId);
+          if (out && out.response.kind === 'accepted') { league = out.league; accepted++; } else declined++;
+          continue;
+        }
         const market = extensionMarket(player, current.currentSeason);
         if (!extensionAccepted(market, offer)) { declined++; continue; }
         const contract = buildExtension(player, offer, market);
-        players[playerId] = { ...player, contract };
+        league = { ...league, players: { ...league.players, [playerId]: { ...player, contract } } };
         accepted++;
       }
-      const league = { ...current, players };
       await saveLeague(league);
       set({
         league,
