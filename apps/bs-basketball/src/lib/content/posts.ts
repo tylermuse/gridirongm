@@ -616,9 +616,9 @@ export const blogPosts: BlogPost[] = [
 <p>Hero ball is a variance play: more threes, slightly worse shots, slightly more turnovers. It makes sense late in a game you are losing, or for an underdog that needs a hot shooting night. Conservative is the favorite's setting: fewer giveaways and slightly better looks.</p>
 
 <h2>Pressure: press vs. pack the paint</h2>
-<p>The base turnover rate in BS Hoops is 13.5% of possessions. Defensive pressure changes it:</p>
+<p>The base turnover rate in BS Hoops is about 12.8% of possessions. Defensive pressure changes it:</p>
 <ul>
-<li><strong>Full-court press:</strong> opponents turn it over 40% more often (about 18.9% of possessions instead of 13.5%) — but when the press is beaten, they shoot 5% better.</li>
+<li><strong>Full-court press:</strong> opponents turn it over 40% more often (about 17.9% of possessions instead of 12.8%) — but when the press is beaten, they shoot 5% better.</li>
 <li><strong>Pack the paint:</strong> opponents shoot 4% worse, but force 8% fewer turnovers.</li>
 </ul>
 <p>The press pays off when your roster has high steal ratings (steals are credited to defenders weighted by their steal rating) and the opponent's ball-handlers have weak handles — turnovers are assigned by usage minus handles, so a team with a shaky primary ball-handler bleeds possessions. Pack the paint against interior-heavy teams that rely on finishing at the rim.</p>
