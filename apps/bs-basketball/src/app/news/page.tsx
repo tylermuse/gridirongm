@@ -1,20 +1,38 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { NewsFeed } from '@/components/feed/NewsFeed';
+import { BuzzFeed } from '@/components/feed/BuzzFeed';
+import { PlayerModal } from '@/components/modals/PlayerModal';
 import { getTransactions, type TransactionEntry } from '@/lib/transactions';
 
 /**
- * /news — league moments feed with All / My Team / Injuries / Transactions tabs.
+ * /news — league moments feed with All / My Team / Transactions / Injuries /
+ * Social tabs. Social renders the Hoops Buzz timeline (same generator as /buzz).
+ * Deep-linkable via ?tab=social etc.
  */
-type Tab = 'all' | 'my_team' | 'injuries' | 'transactions';
+type Tab = 'all' | 'my_team' | 'injuries' | 'transactions' | 'social';
+const TABS: readonly Tab[] = ['all', 'my_team', 'injuries', 'transactions', 'social'];
 const INJURY_KINDS = new Set(['injury', 'suspension', 'fine']);
 
+// useSearchParams() needs a Suspense boundary for static export.
 export default function NewsPage() {
+  return (
+    <Suspense fallback={<main className="max-w-2xl mx-auto p-8"><p className="opacity-60">Loading…</p></main>}>
+      <NewsPageInner />
+    </Suspense>
+  );
+}
+
+function NewsPageInner() {
   const { league, loading, error } = useLeagueOrHydrate();
-  const [tab, setTab] = useState<Tab>('all');
+  const sp = useSearchParams();
+  const initial = sp.get('tab');
+  const [tab, setTab] = useState<Tab>(TABS.includes(initial as Tab) ? (initial as Tab) : 'all');
+  const [modalPlayerId, setModalPlayerId] = useState<string | null>(null);
 
   // Game ids involving the user team — for the My Team filter.
   const userGameIds = useMemo(() => {
@@ -41,6 +59,7 @@ export default function NewsPage() {
     ...(hasTeam ? [{ key: 'my_team' as Tab, label: 'My Team' }] : []),
     { key: 'injuries', label: 'Injuries' },
     { key: 'transactions', label: 'Transactions' },
+    { key: 'social', label: 'Social' },
   ];
 
   return (
@@ -57,10 +76,11 @@ export default function NewsPage() {
             <button key={t.key} onClick={() => setTab(t.key)} className="px-3 py-1.5" style={tab === t.key ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}>{t.label}</button>
           ))}
         </div>
-        <Link href="/buzz" className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>💬 Social timeline →</Link>
       </div>
 
-      {tab === 'transactions' ? (
+      {tab === 'social' ? (
+        <BuzzFeed league={league} onPlayer={setModalPlayerId} />
+      ) : tab === 'transactions' ? (
         <TransactionsList txns={txns} />
       ) : tab === 'my_team' ? (
         <NewsFeed league={league} filter={item => (!!item.gameId && userGameIds.has(item.gameId)) || (!!item.teamId && item.teamId === league.userTeamId)} />
@@ -73,6 +93,8 @@ export default function NewsPage() {
       <footer className="mt-8 rounded-xl border bg-[var(--surface)] p-4 text-xs leading-relaxed text-[var(--text-sec)]" style={{ borderColor: 'var(--border)' }}>
         🏀 Player ratings are adapted from <span className="font-semibold text-[var(--text)]">AlexNoob</span>&rsquo;s 2025&ndash;26 NBA roster (synced to current overalls). Huge thanks to AlexNoob for the base roster that makes this league possible.
       </footer>
+
+      <PlayerModal playerId={modalPlayerId} onClose={() => setModalPlayerId(null)} />
     </main>
   );
 }

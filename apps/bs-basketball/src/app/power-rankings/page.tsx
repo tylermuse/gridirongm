@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useLeagueOrHydrate } from '@/lib/store/useLeagueOrHydrate';
 import { TeamLogo } from '@/components/ui/TeamLogo';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { powerScore } from '@/lib/stats/powerScore';
+import { powerBreakdown, rankByGroup, GROUP_LABEL, type GroupKey, type TeamBreakdown } from '@/lib/rankings/powerBreakdown';
 import type { BasketballTeam } from '@bs/sport-basketball';
 
 /**
@@ -40,6 +41,10 @@ function commentary(team: BasketballTeam): string {
 
 export default function PowerRankingsPage() {
   const { league, loading, error } = useLeagueOrHydrate();
+  const [view, setView] = useState<'overall' | 'groups'>('overall');
+  const [group, setGroup] = useState<GroupKey>('backcourt');
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const breakdown = useMemo(() => (league ? powerBreakdown(league) : new Map<string, TeamBreakdown>()), [league]);
 
   const ranked = useMemo(() => {
     if (!league) return [] as { team: BasketballTeam; score: number }[];
@@ -70,7 +75,18 @@ export default function PowerRankingsPage() {
         <span className="text-sm text-[var(--text-sec)]">
           Season {league.currentSeason} · Day {league.currentTick}
         </span>
+        <div className="ml-auto inline-flex rounded-lg border overflow-hidden text-sm font-semibold" style={{ borderColor: 'var(--border)' }}>
+          {(['overall', 'groups'] as const).map(v => (
+            <button key={v} onClick={() => setView(v)} className="px-3 py-1.5" style={view === v ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-sec)' }}>
+              {v === 'overall' ? 'Overall' : 'By group'}
+            </button>
+          ))}
+        </div>
       </header>
+
+      {view === 'groups' && (
+        <GroupView league={league} breakdown={breakdown} group={group} setGroup={setGroup} />
+      )}
 
       {gamesPlayed === 0 && (
         <div className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--surface)]">
@@ -82,10 +98,12 @@ export default function PowerRankingsPage() {
         </div>
       )}
 
-      <ol className="space-y-2">
+      {view === 'overall' && <ol className="space-y-2">
         {ranked.map(({ team, score }, i) => {
           const sd = team.sportData as TeamSportData;
           const isUser = league.userTeamId === team.id;
+          const bd = breakdown.get(team.id);
+          const open = expanded === team.id;
           return (
             <li key={team.id}>
               <Link
@@ -119,11 +137,106 @@ export default function PowerRankingsPage() {
                   <div className="font-mono text-sm font-semibold tabular-nums">{score.toFixed(1)}</div>
                   <div className="text-xs text-[var(--text-sec)]">{team.record.wins}–{team.record.losses}</div>
                 </div>
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  aria-label={open ? 'Hide breakdown' : 'Show breakdown'}
+                  onClick={e => { e.preventDefault(); e.stopPropagation(); setExpanded(open ? null : team.id); }}
+                  className="shrink-0 h-7 w-7 rounded-md border text-xs font-bold text-[var(--text-sec)] hover:text-[var(--accent)] hover:border-[var(--accent)]"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  {open ? '−' : '+'}
+                </button>
               </Link>
+              {open && bd && <BreakdownPanel bd={bd} total={league.teams.length} />}
             </li>
           );
         })}
-      </ol>
+      </ol>}
     </main>
+  );
+}
+
+const CARD_GROUPS: GroupKey[] = ['backcourt', 'wings', 'frontcourt', 'bench', 'offense', 'defense', 'ortg', 'drtg', 'net'];
+
+function rankColor(rank: number, total: number): string {
+  if (rank <= Math.ceil(total * 0.2)) return '#10b981';
+  if (rank > Math.floor(total * 0.8)) return '#dc2626';
+  return 'var(--text-sec)';
+}
+
+function fmtValue(key: GroupKey, v: number, gp: number): string {
+  if ((key === 'ortg' || key === 'drtg' || key === 'net') && gp === 0) return '—';
+  if (key === 'net') return `${v >= 0 ? '+' : ''}${v.toFixed(1)}`;
+  return v.toFixed(1);
+}
+
+function BreakdownPanel({ bd, total }: { bd: TeamBreakdown; total: number }) {
+  return (
+    <div className="mt-1 mx-2 rounded-lg border bg-[var(--surface-2)] p-3" style={{ borderColor: 'var(--border)' }}>
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+        {CARD_GROUPS.map(k => (
+          <div key={k} className="rounded-md bg-[var(--surface)] border px-2 py-1.5" style={{ borderColor: 'var(--border)' }}>
+            <div className="text-[10px] uppercase tracking-wider text-[var(--text-sec)]">{GROUP_LABEL[k]}</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-mono text-sm font-semibold tabular-nums">{fmtValue(k, bd.values[k], bd.gamesPlayed)}</span>
+              <span className="text-[10px] font-bold tabular-nums" style={{ color: rankColor(bd.ranks[k], total) }}>#{bd.ranks[k]}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-3 text-[11px] text-[var(--text-sec)]">
+        {(['backcourt', 'wings', 'frontcourt', 'bench'] as const).map(k => (
+          <div key={k} className="truncate"><span className="font-semibold text-[var(--foreground)]">{GROUP_LABEL[k]}:</span> {bd.leaders[k].join(', ') || '—'}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GroupView({ league, breakdown, group, setGroup }: {
+  league: { teams: unknown[]; userTeamId?: string | null };
+  breakdown: Map<string, TeamBreakdown>;
+  group: GroupKey;
+  setGroup: (g: GroupKey) => void;
+}) {
+  const teams = new Map<string, BasketballTeam>((league.teams as BasketballTeam[]).map(t => [t.id, t]));
+  const rows = rankByGroup(breakdown, group);
+  const total = rows.length;
+  return (
+    <>
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {CARD_GROUPS.map(k => (
+          <button key={k} onClick={() => setGroup(k)} className="text-xs font-bold rounded-full px-3 py-1 border transition active:scale-95"
+            style={group === k ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { borderColor: 'var(--border)', color: 'var(--text-sec)' }}>
+            {GROUP_LABEL[k]}
+          </button>
+        ))}
+      </div>
+      <div className="rounded-xl border bg-[var(--surface)] overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+        {rows.map(r => {
+          const t = teams.get(r.teamId);
+          if (!t) return null;
+          const isUser = league.userTeamId === t.id;
+          const lead = group in r.leaders ? r.leaders[group as keyof TeamBreakdown['leaders']] : [];
+          return (
+            <Link key={r.teamId} href={`/team/${t.id}`}
+              className="flex items-center gap-3 px-4 py-2 border-t first:border-t-0 text-sm hover:bg-[var(--surface-2)] transition-colors"
+              style={{ borderColor: 'var(--border)', background: isUser ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : undefined }}>
+              <span className="w-6 text-xs font-bold tabular-nums" style={{ color: rankColor(r.ranks[group], total) }}>{r.ranks[group]}</span>
+              <TeamLogo abbreviation={t.abbreviation} primaryColor={t.primaryColor} secondaryColor={t.secondaryColor} size="xs" />
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold truncate">{t.city} {t.name}</div>
+                {lead.length > 0 && <div className="text-[10px] text-[var(--text-sec)] truncate">{lead.join(', ')}</div>}
+              </div>
+              <span className="font-mono text-sm font-semibold tabular-nums" style={{ color: 'var(--accent)' }}>{fmtValue(group, r.values[group], r.gamesPlayed)}</span>
+            </Link>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-[11px] text-[var(--text-sec)]">
+        Groups use healthy-roster ratings (weighted top players; thin groups are padded with replacement level). ORtg/DRtg are points per 100 possessions from played games.
+      </p>
+    </>
   );
 }

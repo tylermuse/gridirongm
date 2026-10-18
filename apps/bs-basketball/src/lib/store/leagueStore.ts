@@ -79,7 +79,8 @@ import { acceptTradeProposal, declineTradeProposal, counterTradeProposal, setTra
 import type { DealSuggestion } from '../trade/finder';
 import { setTeamLineup } from '../lineup';
 import { clearGmFired } from '../approval';
-import { setGodMode as setGodModeLib, editPlayer as editPlayerLib, type PlayerEdit } from '../godMode/godMode';
+import { setGodMode as setGodModeLib, editPlayer as editPlayerLib, createPlayer as createPlayerLib, type PlayerEdit, type CreatePlayerOpts } from '../godMode/godMode';
+import { revealFaIntel } from '../freeAgency/intel';
 import { forceUserGameResult } from '../godMode/forceGame';
 import { relocateTeam as relocateTeamLib, type FranchiseEdit } from '../godMode/relocate';
 import { buildGmSyncPayload, syncGmStats, computeUserDraftGrade } from '../gm/gmSync';
@@ -146,6 +147,10 @@ interface LeagueStore {
   /** God Mode (save-level): toggle, and edit a player's overall/age/potential. */
   setGodMode: (on: boolean) => Promise<void>;
   godEditPlayer: (playerId: string, patch: PlayerEdit) => Promise<void>;
+  /** God Mode: generate a new player onto a team or into free agency. */
+  godCreatePlayer: (opts: CreatePlayerOpts) => Promise<string | null>;
+  /** FA intel: spend one of this window's intel reports on a free agent. */
+  revealFaIntel: (playerId: string) => Promise<void>;
   /** God Mode: force the user's next scheduled game to a win/loss. */
   forceUserGame: (win: boolean) => Promise<boolean>;
   /** God Mode: relocate / rebrand a franchise (city, name, abbrev, colors). */
@@ -614,6 +619,25 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     const league = editPlayerLib(current, playerId, patch);
     set({ league });
     try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] godEditPlayer failed:', err); }
+  },
+
+  async godCreatePlayer(opts) {
+    const current = get().league;
+    if (!current) return null;
+    const { league, playerId } = createPlayerLib(current, opts);
+    if (!playerId) return null;
+    set({ league });
+    try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] godCreatePlayer failed:', err); }
+    return playerId;
+  },
+
+  async revealFaIntel(playerId) {
+    const current = get().league;
+    if (!current) return;
+    const league = revealFaIntel(current, playerId);
+    if (league === current) return;
+    set({ league });
+    try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] revealFaIntel failed:', err); }
   },
 
   async forceUserGame(win) {

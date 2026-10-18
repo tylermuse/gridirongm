@@ -7,6 +7,7 @@ import { isSoundEnabled, setSoundEnabled, playSound } from '@/lib/ui/sound';
 import { useLeagueStore } from '@/lib/store/leagueStore';
 import { isGodMode } from '@/lib/godMode/godMode';
 import { type FranchiseEdit } from '@/lib/godMode/relocate';
+import { GodModeCreatePlayer } from '@/components/godMode/GodModePlayerEditor';
 import type { BasketballTeam } from '@bs/sport-basketball';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
 import { CloudSavesPanel } from '@/components/settings/CloudSavesPanel';
@@ -99,7 +100,7 @@ export default function SettingsPage() {
       {league && (
         <Section
           title="God Mode"
-          desc="Commissioner powers — edit any player's overall, age, and potential from their card. Saved with this league."
+          desc="Commissioner powers — edit any player's ratings, age, potential, position, contract, injury, and trade request from their card, or create new players. Saved with this league."
         >
           <div className="flex gap-2">
             <Choice active={!godOn} onClick={() => void setGodMode(false)} icon="🔒" label="Off" />
@@ -114,6 +115,13 @@ export default function SettingsPage() {
       {/* League Rules — cap, calendar, health/development, roster. Always
           available (like BS Football's league settings); not a God Mode power. */}
       {league && <LeagueRulesPanel />}
+
+      {/* Create player (God Mode) */}
+      {league && godOn && (
+        <Section title="Create Player" desc="Generate a new player at a chosen position, age, and overall — added to a team or the free-agent pool.">
+          <GodModeCreatePlayer />
+        </Section>
+      )}
 
       {/* Franchise relocation / rebrand (God Mode) */}
       {league && godOn && <RelocatePanel />}
