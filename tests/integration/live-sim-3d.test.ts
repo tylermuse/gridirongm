@@ -122,3 +122,23 @@ describe('liveSim3d who made the play', () => {
     expect(whoMadeThePlay(ev('run', 'The running back runs for 2 yards.'), phi, dal)).toBeUndefined();
   });
 });
+
+describe('whoMadeThePlay', () => {
+  const p = (id: string, firstName: string, lastName: string, position: string, jerseyNumber: number) => ({ id, firstName, lastName, position, jerseyNumber });
+  const off = [p('q', 'Dak', 'Prescott', 'QB', 4), p('r', 'Javonte', 'Williams', 'RB', 33), p('w', 'George', 'Pickens', 'WR', 3), p('w2', 'Amon-Ra', 'St. Brown', 'WR', 14), p('s', 'Joe', 'Smithson', 'WR', 80), p('s2', 'Jaylen', 'Smith', 'WR', 81)];
+  const def = [p('d', 'Micah', 'Parsons', 'DL', 11), p('c', 'Trevon', 'Diggs', 'CB', 7)];
+  const ev = (type: string, description: string) => ({ type, description }) as unknown as Parameters<typeof whoMadeThePlay>[0];
+  it('finds the target on a throw, not the passer', () => {
+    expect(whoMadeThePlay(ev('pass_complete', 'Short Pass — D. Prescott completes to G. Pickens for 5 yards.'), off, def)?.ball?.n).toBe(3);
+    expect(whoMadeThePlay(ev('pass_complete', 'D. Prescott QB hits A. St. Brown WR over the middle.'), off, def)?.ball?.n).toBe(14);
+  });
+  it('runner, QB keeper, sacker, picker', () => {
+    expect(whoMadeThePlay(ev('run', 'J. Williams runs for 4 yards.'), off, def)?.ball?.n).toBe(33);
+    expect(whoMadeThePlay(ev('run', 'D. Prescott scrambles for 6.'), off, def)?.ball).toMatchObject({ n: 4, pos: 'QB' });
+    expect(whoMadeThePlay(ev('sack', '💥 Sack! M. Parsons brings down D. Prescott for a 7-yard loss!'), off, def)?.def?.n).toBe(11);
+    expect(whoMadeThePlay(ev('interception', '🚨 Intercepted! T. Diggs picks off D. Prescott!'), off, def)?.def?.n).toBe(7);
+  });
+  it('a name inside a longer name does not match', () => {
+    expect(whoMadeThePlay(ev('run', 'J. Smithson runs for 2.'), off, def)?.ball?.n).toBe(80);
+  });
+});

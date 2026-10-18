@@ -2009,6 +2009,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             awayTeam={awayTeam}
             homePlayers={homePlayers}
             awayPlayers={awayPlayers}
+            clock={{ secs: clockSeconds(tickingTime), quarter: liveQuarter }}
             state={{ possession: livePoss, fieldPos: liveFieldPos, down: liveDown, toGo: liveYtg, quarter: liveQuarter,
               clock: engineSnapshot ? engineSnapshot.timeSecs : clockSeconds(currentEvent?.timeStr ?? ''), homeScore: liveHomeScore, awayScore: liveAwayScore }}
             onActiveChange={setSim3dActive}

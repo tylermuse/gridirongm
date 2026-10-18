@@ -187,7 +187,7 @@ function planWho(m){
   return out;
 }   /* set by the game page in embed mode (bsgm:setup) */
 const team = i => EMB_TEAMS[i] || TEAMS[+(i===0?selA.value:selB.value)];
-window.__onField = () => ({ o: (O.all||[]).map(a=>[a.teamId,a.num,a.skinTone]), d: (D.all||[]).map(a=>[a.teamId,a.num,a.skinTone]), car: play && play.carrier ? [play.carrier.teamId, play.carrier.num, play.carrier.skinTone] : null, tk: play && play.tackler ? [play.tackler.teamId, play.tackler.num] : null, kind: play && play.res ? play.res.kind : null, running });   /* QA: who the sim put on the field */
+window.__onField = () => ({ o: (O.all||[]).map(a=>[a.teamId,a.num,a.skinTone]), d: (D.all||[]).map(a=>[a.teamId,a.num,a.skinTone]), car: play && play.carrier ? [play.carrier.teamId, play.carrier.num, play.carrier.skinTone] : null, tk: play && play.tackler ? [play.tackler.teamId, play.tackler.num] : null, kind: play && play.res ? play.res.kind : null, running, bug: {q:G.quarter, clock:G.clock, down:G.down, toGo:G.toGo, fp:G.fieldPos, off:G.off, score:G.score} });   /* QA: who the sim put on the field */
 window.__setTeams = (h,a) => { EMB_TEAMS[0]=h; EMB_TEAMS[1]=a; if(!G.busy) setupFormation(); };   /* QA: what bsgm:setup does */
 
 // ---------- Three setup ----------
@@ -1991,6 +1991,7 @@ Promise.all([document.fonts?.ready ?? Promise.resolve(), botReady]).then(()=>{
 // ---------- Embed protocol (the BS Football game page drives the sim through postMessage) ----------
 // in:  {type:'bsgm:setup', home:{id,name,jersey,num,pants,helmet,stripe,lineup?}, away:{...}}   lineup: {qb,rb,te,k,p:{n,s}, wr[3],ol[5],dl[4],lb[3],cb[2],s[2]:[{n,s}]} (n jersey, s skin hex)
 //      {type:'bsgm:play', id, possession:'home'|'away', pre:{fieldPos,down,toGo,quarter,clock,homeScore,awayScore}, res:{kind,yards,depth,good}}
+//      {type:'bsgm:clock', clock, quarter}   (any time: the 3D scorebug clock mirrors the page's)
 //      {type:'bsgm:state', possession, pre:{...}}   (idle only: pre-snap formation + scorebug for the current situation)
 //      {type:'bsgm:skip'}
 // out: {type:'bsgm:ready'} once the model is loaded; {type:'bsgm:done', id} when the play (and its post-play beat) is over; {type:'bsgm:error'}
@@ -1998,13 +1999,14 @@ function embedStart(){
   const post = m => { try{ window.parent.postMessage(m, '*'); }catch(e){} };
   let pending=null, current=null; window.__embedQueue = ()=>pending;
   const applyPre = m => { G.off = m.possession==='away'? 1 : 0; const pr=m.pre||{}; G.fieldPos = clamp(Math.round(pr.fieldPos ?? 25),1,99); G.down = pr.down ?? 1; G.toGo = pr.toGo ?? 10; G.quarter = pr.quarter ?? 1; G.clock = pr.clock ?? 900; G.score = [pr.homeScore ?? 0, pr.awayScore ?? 0]; };
-  const runNext = ()=>{ if(G.busy || !pending) return; const m=pending; pending=null; current=m.id;
+  const runNext = ()=>{ if(G.busy || !pending) return; const m=pending; pending=null; current=m.id; window.__curPlayId=m.id;
     applyPre(m);
     if(G.fieldPos >= 99 && (m.res.kind==='run' || m.res.kind==='complete') && m.res.yards >= 1) m.res.yards = 99;   /* at the 1: any gain is a score */
     m.res.lock = true; renderBug(); PLAY_OVR = planWho(m); setupFormation((m.res.kind==='fg' || m.res.kind==='punt')? m.res.kind : null); runPlay(m.res); PLAY_OVR = []; };
   window.addEventListener('message', ev=>{ const m=ev.data; if(!m || typeof m!=='object') return;
     if(m.type==='bsgm:setup'){ EMB_TEAMS[0]=m.home||null; EMB_TEAMS[1]=m.away||null; if(fieldMat.map) fieldMat.map.dispose(); fieldMat.map = fieldTexture(team(0)); fieldMat.needsUpdate=true; if(!G.busy) setupFormation(); paintBoards(); renderBug(); }
     else if(m.type==='bsgm:play'){ pending=m; sndInit(); runNext(); }
+    else if(m.type==='bsgm:clock'){ if(m.clock!=null) G.clock = m.clock; if(m.quarter) G.quarter = m.quarter; renderBug(); }   /* the page's game clock, as its scorebug shows it (it runs during the play too): the 3D bug mirrors it */
     else if(m.type==='bsgm:state'){ if(!G.busy && !pending){ applyPre(m); $('banner').hidden=true; renderBug(); setupFormation(null); snapCamera(); } }   /* idle between plays: re-form at the game's real situation (e.g. the 3 for a two-point try) */
     else if(m.type==='bsgm:hello'){ post({type:'bsgm:ready'}); }   /* the page asks again after a (re)mount: a ready sent before its listener was up is lost */
     else if(m.type==='bsgm:skip'){ pending=null; if(G.busy){ G.speed = 12; } }   /* fast-forward to the end; the done message still fires, the page has already hidden us */

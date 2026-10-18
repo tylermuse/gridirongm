@@ -83,6 +83,7 @@ export function LiveSim3D({
   awayTeam,
   homePlayers,
   awayPlayers,
+  clock,
   state,
   onActiveChange,
 }: {
@@ -97,6 +98,8 @@ export function LiveSim3D({
   /** Rosters in depth-chart order: starters' jersey numbers and skin tones go on the 3D players */
   homePlayers?: SimNamedPlayer[];
   awayPlayers?: SimNamedPlayer[];
+  /** The clock the page's scorebug shows right now (it runs between plays) — mirrored on the 3D scorebug */
+  clock?: { secs: number; quarter: number } | null;
   onActiveChange: (active: boolean) => void;
 }) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -180,6 +183,13 @@ export function LiveSim3D({
     const { possession, ...pre } = state;
     post({ type: 'bsgm:state', possession, pre } satisfies SimStateMessage);
   }, [enabled, ready, stateKey, active, post]);   // eslint-disable-line react-hooks/exhaustive-deps -- state is keyed by stateKey
+
+  // Game clock → 3D scorebug, always (the page's clock runs during the play; without this the 3D bug sat at the snap time)
+  const clockKey = clock ? `${clock.quarter}:${clock.secs}` : '';
+  useEffect(() => {
+    if (!enabled || !ready || !clock) return;
+    post({ type: 'bsgm:clock', clock: clock.secs, quarter: clock.quarter });
+  }, [enabled, ready, clockKey, post]);   // eslint-disable-line react-hooks/exhaustive-deps -- clock is keyed by clockKey
 
   // New event → send it to the sim and hold the game until it reports done
   useEffect(() => {
