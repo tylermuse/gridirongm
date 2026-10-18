@@ -24,7 +24,7 @@ import type { BasketballRatings, BasketballStats } from '@bs/sport-basketball';
 import { getBracket } from '../playoffs';
 import { appendTransaction } from '../transactions';
 import { currentOwner } from '../trade/picks';
-import { SCOUTS_PER_DRAFT, type DraftPickSlot, type DraftState } from './types';
+import { SCOUT_POINTS_PER_DRAFT, type DraftPickSlot, type DraftState } from './types';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 
@@ -129,9 +129,33 @@ export function setupDraft(league: LeagueState, season: number, poolIds: PlayerI
     complete: false,
     lotteryRevealed: false,
     lotteryOrder,
-    scoutsRemaining: SCOUTS_PER_DRAFT,
-    scoutedIds: [],
+    scoutPoints: SCOUT_POINTS_PER_DRAFT,
+    scoutLevels: {},
+    watchlist: [],
   };
+}
+
+/**
+ * THE AI draft choice — the single pure function behind both a real AI pick
+ * (autoPickCurrent → recommendedProspectId) and the mock-draft projection
+ * (buildMockDraft), so the projection can never drift from what the AI does.
+ * The engine's pick RNG is seeded off teamId + pool size, so it's deterministic.
+ */
+export function aiChooseProspect(
+  teamId: TeamId,
+  rosterPlayers: BasketballPlayer[],
+  pool: BasketballPlayer[],
+): PlayerId | null {
+  if (pool.length === 0) return null;
+  return aiBasketballDraftPick({ teamId, rosterPlayers }, pool);
+}
+
+/** Players currently rostered by a team (any bucket). */
+export function teamRosterPlayers(league: LeagueState, teamId: TeamId): BasketballPlayer[] {
+  const team = league.teams.find(t => t.id === teamId);
+  return (team?.playerIds ?? [])
+    .map(id => league.players[id] as BasketballPlayer | undefined)
+    .filter((p): p is BasketballPlayer => !!p);
 }
 
 /** Prospect the AI would take for whoever is on the clock (also used to flag a
@@ -139,15 +163,10 @@ export function setupDraft(league: LeagueState, season: number, poolIds: PlayerI
 export function recommendedProspectId(league: LeagueState, draft: DraftState): PlayerId | null {
   const slot = currentSlot(draft);
   if (!slot || draft.poolIds.length === 0) return null;
-  const team = league.teams.find(t => t.id === slot.teamId);
-  const roster = (team?.playerIds ?? [])
-    .map(id => league.players[id] as BasketballPlayer | undefined)
-    .filter((p): p is BasketballPlayer => !!p);
   const pool = draft.poolIds
     .map(id => league.players[id] as BasketballPlayer | undefined)
     .filter((p): p is BasketballPlayer => !!p);
-  if (pool.length === 0) return null;
-  return aiBasketballDraftPick({ teamId: slot.teamId, rosterPlayers: roster }, pool);
+  return aiChooseProspect(slot.teamId, teamRosterPlayers(league, slot.teamId), pool);
 }
 
 /**

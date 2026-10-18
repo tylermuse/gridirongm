@@ -184,7 +184,8 @@ const POSITION_KEY_RATINGS: Record<BasketballPosition, (keyof BasketballRatings)
   C: ['finishing', 'rebounding', 'interiorDefense', 'block', 'postScoring'],
 };
 
-function archetypeFor(p: BasketballPlayer): string {
+/** Role archetype from ratings ("3-and-D wing", "Stretch four"…). */
+export function archetypeFor(p: BasketballPlayer): string {
   const r = p.ratings;
   const pos = p.sportData.position;
   const shooter = r.threePoint >= 75;

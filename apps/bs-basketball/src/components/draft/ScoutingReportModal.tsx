@@ -14,7 +14,7 @@ import type { BasketballScoutingReport, TeamFit } from '@/lib/scouting/scoutingR
  * drafted straight from the auto-opened report.
  */
 export function ScoutingReportModal({
-  player, report, teamFit, onClose, onScout, canScout, userOnClock, onDraft,
+  player, report, teamFit, onClose, onScout, canScout, userOnClock, onDraft, tiered,
 }: {
   player: BasketballPlayer;
   report: BasketballScoutingReport;
@@ -24,6 +24,9 @@ export function ScoutingReportModal({
   canScout?: boolean;
   userOnClock?: boolean;
   onDraft?: () => void;
+  /** Tiered scouting panel. When given, it leads the body and the full report
+   *  below only renders once the prospect is fully evaluated (report.scouted). */
+  tiered?: React.ReactNode;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -40,7 +43,7 @@ export function ScoutingReportModal({
             <div className="text-[10px] uppercase tracking-widest text-[var(--text-sec)]">Scouting Report</div>
             <PlayerName playerId={player.id} firstName={player.firstName} lastName={player.lastName} className="text-xl font-black truncate" />
             <div className="text-xs text-[var(--text-sec)] flex items-center gap-1.5 mt-0.5">
-              <Chip>{player.sportData.position}</Chip> · Age {player.age} · {report.archetype}
+              <Chip>{player.sportData.position}</Chip> · Age {player.age}{(!tiered || report.scouted) ? ` · ${report.archetype}` : ''}
             </div>
           </div>
           <div className="text-center shrink-0">
@@ -52,7 +55,12 @@ export function ScoutingReportModal({
 
         {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 min-h-0 p-5">
-          <ScoutingReportBody player={player} report={report} teamFit={teamFit} onScout={onScout} canScout={canScout} />
+          {tiered}
+          {(!tiered || report.scouted) && (
+            <div className={tiered ? 'mt-5 pt-5 border-t' : undefined} style={tiered ? { borderColor: 'var(--border)' } : undefined}>
+              <ScoutingReportBody player={player} report={report} teamFit={teamFit} onScout={onScout} canScout={canScout} />
+            </div>
+          )}
         </div>
 
         {/* Sticky footer — draft from the report when on the clock */}
