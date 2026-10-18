@@ -36,6 +36,7 @@ import type {
   BasketballRatings,
   BasketballStats,
 } from '@bs/sport-basketball';
+import { trimPlayLogs } from '../live/trimPlayLogs';
 
 type LeagueState = BaseLeagueState<BasketballRatings, BasketballStats>;
 type GameResult = BaseGameResult<BasketballStats>;
@@ -141,7 +142,7 @@ export function simNextDay(league: LeagueState): SimDayResult | null {
 
   const simmed: LeagueState = {
     ...league,
-    games: updatedGames,
+    games: trimPlayLogs(updatedGames, league.userTeamId),
     teams: updatedTeams,
     // Simming a scheduled regular-season day means we're in the regular season.
     // `currentPhase` was stamped 'preseason' at creation and never advanced, so

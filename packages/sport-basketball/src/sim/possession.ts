@@ -26,7 +26,7 @@ import type { BasketballPlayer, BasketballGamePlan } from '../types';
 import type { CoachSchemeEffect } from '../coachingSystem';
 import type { PlayerId } from '@bs/core/adapter';
 import type { Rng } from './rng';
-import { selectShotType, makeProbability, isContested, drewShootingFoul } from './shotModel';
+import { selectShotType, makeProbability, isContested, drewShootingFoul, type ShotType } from './shotModel';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -118,6 +118,11 @@ export interface PossessionResult {
   secondsElapsed: number;
   /** Points scored on this possession (for game-state tracking + plus-minus). */
   pointsScored: number;
+  /** Shot type when the possession produced a field-goal attempt (absent on
+   *  turnovers). Used by the live viewer's play log + shot chart. */
+  shotType?: ShotType;
+  /** Whether that shot was contested. */
+  contested?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -180,6 +185,7 @@ export function simPossession(
   const shotType = selectShotType(shooter.sportData.position, shooter.ratings, rng, threeMult, postMult);
   const isThree = shotType === 'three';
   const contested = isContested(shooter.ratings, defender.ratings, rng);
+  const tag = (r: PossessionResult): PossessionResult => ({ ...r, shotType, contested });
 
   // Step 4: Did the defender block it? (Only relevant at the rim, and only
   // for shots not already going to be made through traffic.)
@@ -191,7 +197,7 @@ export function simPossession(
     events.push({ playerId: shooter.id, field: 'fieldGoalsAttempted' });
     if (isThree) events.push({ playerId: shooter.id, field: 'threePointsAttempted' });
     // Blocked shot → live ball → rebound
-    return resolveRebound(events, offense, defense, contested, rng, 0, false);
+    return tag(resolveRebound(events, offense, defense, contested, rng, 0, false));
   }
 
   // Step 5: Resolve shot make/miss (game plan + a tighter defensive scheme nudge
@@ -227,12 +233,12 @@ export function simPossession(
       const ftMade = resolveFreeThrows(shooter, 1, events, rng);
       pointsScored += ftMade;
     }
-    return {
+    return tag({
       events,
       possessionFlipsToDefense: true,
       secondsElapsed: shotSeconds(rng),
       pointsScored,
-    };
+    });
   }
 
   // Missed shot
@@ -243,16 +249,16 @@ export function simPossession(
     const ftMade = resolveFreeThrows(shooter, ftCount, events, rng);
     pointsScored += ftMade;
     // Last FT outcome doesn't trigger a rebound in this simplified v1
-    return {
+    return tag({
       events,
       possessionFlipsToDefense: true,
       secondsElapsed: shotSeconds(rng),
       pointsScored,
-    };
+    });
   }
 
   // Plain missed shot → rebound battle
-  return resolveRebound(events, offense, defense, contested, rng, pointsScored, false);
+  return tag(resolveRebound(events, offense, defense, contested, rng, pointsScored, false));
 }
 
 // ---------------------------------------------------------------------------

@@ -111,7 +111,54 @@ export interface BasketballGameData {
   quarterScores: { home: number; away: number }[];
   /** Largest lead by either team at any point. */
   biggestLead: { team: 'home' | 'away'; points: number };
+  /** Possession-by-possession log for the live viewer. The engine always
+   *  produces it; callers strip it from games nobody will watch (it's ~20KB
+   *  per game) — see `trimPlayLogs` in the app. Absent on older saves. */
+  playLog?: PlayLog;
 }
+
+/** Player ids are interned into `ids`; entries reference them by index
+ *  (cuts the serialized log from ~58KB to ~25KB per game). */
+export interface PlayLog {
+  ids: string[];
+  entries: PlayLogEntry[];
+}
+
+/** Compact stat-field codes for the play log (keeps saves small). */
+export const PLAY_LOG_FIELDS = {
+  points: 'pts', fieldGoalsMade: 'fgm', fieldGoalsAttempted: 'fga',
+  threePointsMade: '3pm', threePointsAttempted: '3pa',
+  freeThrowsMade: 'ftm', freeThrowsAttempted: 'fta', assists: 'ast',
+  turnovers: 'to', offensiveRebounds: 'orb', defensiveRebounds: 'drb',
+  totalRebounds: 'reb', steals: 'stl', blocks: 'blk', personalFouls: 'pf',
+  minutes: 'min',
+} as const;
+export type PlayLogFieldCode = typeof PLAY_LOG_FIELDS[keyof typeof PLAY_LOG_FIELDS];
+
+/** One logged moment. `k:'p'` = a possession (with its ordered stat events),
+ *  `k:'s'` = a substitution (the five now on the floor for a side). */
+export type PlayLogEntry =
+  | {
+      k: 'p';
+      /** Period (1-4 regulation, 5+ overtime). */
+      q: number;
+      /** Seconds left in the period when the possession ENDED. */
+      t: number;
+      /** Side with the ball. */
+      o: 'h' | 'a';
+      /** Ordered stat events: [playerIndex, fieldCode, delta?] (index into PlayLog.ids). */
+      e: [number, PlayLogFieldCode, number?][];
+      /** Points scored. */
+      pts: number;
+      /** Shot type, when a shot went up. */
+      st?: 'three' | 'midrange' | 'at_rim' | 'post';
+      /** Contested shot. */
+      c?: 1;
+      /** Running score after the possession. */
+      h: number;
+      a: number;
+    }
+  | { k: 's'; q: number; t: number; side: 'h' | 'a'; ids: number[] };
 
 // ===========================================================================
 // Pace tuning
@@ -234,6 +281,33 @@ export function simBasketballGame(
     if (-diff > biggestLead.points) biggestLead = { team: 'away', points: -diff };
   };
 
+  const playLog: PlayLogEntry[] = [];
+  const logIds: string[] = [];
+  const logIdx = new Map<string, number>();
+  const intern = (id: string): number => {
+    let i = logIdx.get(id);
+    if (i === undefined) { i = logIds.length; logIds.push(id); logIdx.set(id, i); }
+    return i;
+  };
+  const logPossession = (
+    q: number, secondsLeft: number, offenseIsHome: boolean,
+    result: ReturnType<typeof simPossession>,
+  ) => {
+    playLog.push({
+      k: 'p', q, t: Math.max(0, Math.round(secondsLeft)), o: offenseIsHome ? 'h' : 'a',
+      e: result.events.map(ev => (ev.delta !== undefined && ev.delta !== 1
+        ? [intern(ev.playerId), PLAY_LOG_FIELDS[ev.field], ev.delta]
+        : [intern(ev.playerId), PLAY_LOG_FIELDS[ev.field]])),
+      pts: result.pointsScored,
+      ...(result.shotType ? { st: result.shotType } : {}),
+      ...(result.contested ? { c: 1 as const } : {}),
+      h: homeScore, a: awayScore,
+    });
+  };
+  const logSub = (q: number, secondsLeft: number, isHome: boolean, lineup: SimLineup) => {
+    playLog.push({ k: 's', q, t: Math.max(0, Math.round(secondsLeft)), side: isHome ? 'h' : 'a', ids: lineup.players.map(p => intern(p.id)) });
+  };
+
   // Pace + possession-length tuning
   const pace = gamePace(home, away);
   // Coach scheme nudges tempo on top of the discrete pace tier — a faster scheme
@@ -255,6 +329,10 @@ export function simBasketballGame(
   for (let quarter = 1; quarter <= settings.numQuarters; quarter++) {
     const quarterStart = { home: homeScore, away: awayScore };
     let secondsRemaining = settings.quarterLengthSeconds;
+    if (quarter === 1) {
+      logSub(1, secondsRemaining, true, buildActiveLineup(home, homeUnit, homePlayerById));
+      logSub(1, secondsRemaining, false, buildActiveLineup(away, awayUnit, awayPlayerById));
+    }
 
     // Possession arrow: in NBA, alternates between halves. v1 simplification:
     // home starts Q1, away starts Q2, home starts Q3, away starts Q4.
@@ -299,6 +377,7 @@ export function simBasketballGame(
       if (offenseIsHome) homeScore += result.pointsScored;
       else awayScore += result.pointsScored;
       trackLead(homeScore, awayScore);
+      logPossession(quarter, secondsRemaining, offenseIsHome, result);
 
       // Flip possession if needed
       if (result.possessionFlipsToDefense) offenseIsHome = !offenseIsHome;
@@ -309,12 +388,14 @@ export function simBasketballGame(
         if (homeStintRemaining <= 0) {
           homeUnit = (homeUnit === 'starters') ? 'bench' : 'starters';
           homeStintRemaining = stintLength(home, homeUnit);
+          logSub(quarter, secondsRemaining, true, buildActiveLineup(home, homeUnit, homePlayerById));
         }
       } else {
         awayStintRemaining--;
         if (awayStintRemaining <= 0) {
           awayUnit = (awayUnit === 'starters') ? 'bench' : 'starters';
           awayStintRemaining = stintLength(away, awayUnit);
+          logSub(quarter, secondsRemaining, false, buildActiveLineup(away, awayUnit, awayPlayerById));
         }
       }
 
@@ -386,6 +467,7 @@ export function simBasketballGame(
       if (offenseIsHome) homeScore += result.pointsScored;
       else awayScore += result.pointsScored;
       trackLead(homeScore, awayScore);
+      logPossession(settings.numQuarters + overtimePeriods, secondsRemaining, offenseIsHome, result);
 
       if (result.possessionFlipsToDefense) offenseIsHome = !offenseIsHome;
       totalPossessions++;
@@ -467,6 +549,7 @@ export function simBasketballGame(
     wentToOvertime: overtimePeriods > 0,
     quarterScores,
     biggestLead,
+    playLog: { ids: logIds, entries: playLog },
   };
 
   return {
