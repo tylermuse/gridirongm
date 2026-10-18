@@ -40,3 +40,23 @@ export {
   type RumorType,
   type RumorAccuracy,
 } from './rumors';
+export {
+  refreshTradeProposals,
+  getTradeProposals,
+  getPendingProposals,
+  pendingProposalCount,
+  getTradeBlock,
+  setTradeBlock,
+  acceptTradeProposal,
+  declineTradeProposal,
+  counterTradeProposal,
+  proposalToDeal,
+  isDealStillValid,
+  MAX_PENDING_PROPOSALS,
+  PROPOSAL_TTL_DAYS,
+  type TradeProposal,
+  type TradeProposalStatus,
+  type TradeProposalAssets,
+  type ProposalResponse,
+  type CounterResult,
+} from './proposals';

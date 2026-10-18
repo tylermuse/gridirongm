@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@bs/core/supabase/client';
 import { useLeagueStore } from '@/lib/store/leagueStore';
@@ -73,7 +74,12 @@ export function SidebarFooter({ onNavigate }: { onNavigate?: () => void }) {
         </button>
       </div>
 
-      <div className="text-center text-[9px] text-[var(--text-sec)] opacity-50 pt-0.5">BS Hoops {APP_VERSION}</div>
+      <div className="flex items-center justify-center gap-2.5 text-[10px] text-[var(--text-sec)] pt-0.5">
+        <Link href="/about" onClick={onNavigate} className="hover:text-[var(--foreground)]">About</Link>
+        <Link href="/privacy" onClick={onNavigate} className="hover:text-[var(--foreground)]">Privacy</Link>
+        <Link href="/terms" onClick={onNavigate} className="hover:text-[var(--foreground)]">Terms</Link>
+        <span className="opacity-50">{APP_VERSION}</span>
+      </div>
     </div>
   );
 }

@@ -44,7 +44,7 @@ import { marketContract, hasContractForSeason } from '../league/contracts';
 import { getHeadCoach } from '../coaching/coaches';
 import { setupDraft, getDraft, autoPickUntilUser } from '../draft';
 import { computeSeasonAwards } from '../awards';
-import { buildSeasonHistoryEntry } from '../history';
+import { buildSeasonHistoryEntry, buildRetireeEntry, type HistoryRetiree } from '../history';
 import { applySeasonApproval } from '../approval';
 import { resolveProtectedPicks, describeConveyance, pickKey, type PickProtection } from '../trade';
 import { appendTransaction } from '../transactions';
@@ -138,6 +138,7 @@ export function enterOffseason(input: LeagueState): LeagueState {
   // references them once the season starts).
   const players: Record<string, BasketballPlayer> = {};
   const retired = new Set<PlayerId>();
+  const retirees: HistoryRetiree[] = [];
   for (const [id, raw] of Object.entries(league.players)) {
     const p = raw as BasketballPlayer;
     const stats = seasonStats?.get(id as PlayerId) ?? emptyBasketballStats();
@@ -186,6 +187,8 @@ export function enterOffseason(input: LeagueState): LeagueState {
     });
     if (shouldBasketballPlayerRetire(developed)) {
       retired.add(id as PlayerId);
+      // Only archive real players (skip unsigned, never-rostered prospects).
+      if (p.rosterSlot || snapshot.careerStats.gamesPlayed > 0) retirees.push(buildRetireeEntry(snapshot, developed.age));
       continue;
     }
     players[id] = developed;
@@ -283,7 +286,10 @@ export function enterOffseason(input: LeagueState): LeagueState {
     freeAgentIds: stalePros.size === 0
       ? interim.freeAgentIds
       : interim.freeAgentIds.filter(id => !stalePros.has(id)),
-    seasonHistory: { ...league.seasonHistory, [league.currentSeason]: historyEntry },
+    seasonHistory: {
+      ...league.seasonHistory,
+      [league.currentSeason]: { ...historyEntry, retired: retirees.sort((a, b) => b.overall - a.overall) },
+    },
     sportData: {
       ...(league.sportData as LeagueSportData),
       draft,

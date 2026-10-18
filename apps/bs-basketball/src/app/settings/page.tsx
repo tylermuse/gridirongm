@@ -9,6 +9,7 @@ import { isGodMode } from '@/lib/godMode/godMode';
 import { type FranchiseEdit } from '@/lib/godMode/relocate';
 import type { BasketballTeam } from '@bs/sport-basketball';
 import { useSubscription } from '@/components/providers/SubscriptionProvider';
+import { CloudSavesPanel } from '@/components/settings/CloudSavesPanel';
 
 /**
  * /settings — appearance + sound preferences (Tier 3.1 + 3.7).
@@ -61,6 +62,9 @@ export default function SettingsPage() {
           configured. Mirrors the football settings page's AccountCard but slim:
           email, tier badge, manage-subscription / upgrade button, sign-out. */}
       <SubscriptionCard />
+
+      {/* Cloud Saves — opt-in cross-device backup (parity with BS Football). */}
+      <CloudSavesPanel />
 
       {/* Appearance */}
       <Section title="Appearance" desc="Switch between the warm light theme and a low-glare dark mode.">

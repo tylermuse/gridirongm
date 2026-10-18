@@ -67,6 +67,8 @@ import { applyRelease } from '../roster/release';
 import { playThroughInjury as playThroughInjuryState } from '../injuries';
 import { extensionMarket, extensionAccepted, buildExtension } from '../roster/extension';
 import { executeTrade, proposeTrade as proposeTradeLib, type TradeSideInput, type ProposeResult } from '../trade';
+import { acceptTradeProposal, declineTradeProposal, counterTradeProposal, setTradeBlock as setTradeBlockLib, newProposalNote, type ProposalResponse, type CounterResult } from '../trade/proposals';
+import type { DealSuggestion } from '../trade/finder';
 import { setTeamLineup } from '../lineup';
 import { clearGmFired } from '../approval';
 import { setGodMode as setGodModeLib, editPlayer as editPlayerLib, type PlayerEdit } from '../godMode/godMode';
@@ -215,6 +217,12 @@ interface LeagueStore {
   /** Execute a (pre-validated) two-team trade. Returns true on success. */
   executeTrade: (sides: TradeSideInput[]) => Promise<boolean>;
   proposeTrade: (sides: TradeSideInput[]) => Promise<ProposeResult | null>;
+  /** Accept / decline a persisted AI trade proposal. */
+  respondToProposal: (id: string, action: 'accept' | 'decline') => Promise<ProposalResponse | null>;
+  /** Counter an AI proposal with an edited (user-perspective) package. */
+  counterProposal: (id: string, deal: DealSuggestion) => Promise<CounterResult | null>;
+  /** Persist the user's trading block (AI offers target these players). */
+  setTradeBlock: (playerIds: string[]) => Promise<void>;
 
   /** Persist a team's lineup (the sim uses it when valid). Returns true on success. */
   saveLineup: (teamId: string, lineup: BasketballLineup) => Promise<boolean>;
@@ -631,7 +639,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         return null;
       }
       await saveLeague(outcome.league);
-      set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) } });
+      set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) + newProposalNote(current, outcome.league) } });
       return { day: outcome.day, gamesSimmed: outcome.gamesSimmed };
     } catch (err) {
       console.error('[bs-hoops] simDay failed:', err);
@@ -1263,6 +1271,32 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
     }
   },
 
+  async respondToProposal(id, action) {
+    const current = get().league;
+    if (!current) return null;
+    const result = action === 'accept' ? acceptTradeProposal(current, id) : declineTradeProposal(current, id);
+    set({ league: result.league });
+    try { await saveLeague(result.league); } catch (err) { console.error('[bs-hoops] respondToProposal save failed:', err); }
+    return result;
+  },
+
+  async counterProposal(id, deal) {
+    const current = get().league;
+    if (!current) return null;
+    const result = counterTradeProposal(current, id, deal);
+    set({ league: result.league });
+    try { await saveLeague(result.league); } catch (err) { console.error('[bs-hoops] counterProposal save failed:', err); }
+    return result;
+  },
+
+  async setTradeBlock(playerIds) {
+    const current = get().league;
+    if (!current) return;
+    const league = setTradeBlockLib(current, playerIds);
+    set({ league });
+    try { await saveLeague(league); } catch (err) { console.error('[bs-hoops] setTradeBlock save failed:', err); }
+  },
+
   async saveLineup(teamId, lineup) {
     const current = get().league;
     if (!current) {
@@ -1502,7 +1536,7 @@ export const useLeagueStore = create<LeagueStore>((set, get) => ({
         return null;
       }
       await saveLeague(outcome.league);
-      set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) } });
+      set({ league: outcome.league, loading: false, simToast: { text: simSummary(outcome.league, outcome.gamesSimmed) + newProposalNote(current, outcome.league) } });
       return { daysSimmed: outcome.daysSimmed, gamesSimmed: outcome.gamesSimmed };
     } catch (err) {
       console.error('[bs-hoops] simRange failed:', err);
